@@ -12,7 +12,7 @@ These would actively bite real users on day one if missing. Discuss + bake befor
 
 - [ ] **Calibration frames management** — darks/flats/bias library; capture as sequence steps; storage on Pi; library matching to lights by gain/temp/exposure; auto-flats at dusk with flat panel; dark library auto-generation overnight; NINA's Flat Wizard preserved.
 - [ ] **Captured-image library workflow** — WILMA's Image Library tab browse/tag/filter/rate; metadata schema (target, filter, integration time, conditions, location); quick previews; export-to-app integrations (PixInsight, Siril, GraXpert); deletion + bulk operations.
-- [ ] **Sequence file format + NINA `.json` import** — JSON schema for ARA sequence files; NINA sequence compatibility (parse NINA's existing `.json` sequence files and convert); template variable system (`$$TARGET$$`, `$$FILTER$$`, etc.); validation rules.
+- [x] ~~**Sequence file format + NINA `.json` import**~~ → **Resolved §38**. NINA schema verbatim + `schemaVersion: "openastroara-sequence-v1"`; OpenAPI-documented; import endpoint with equipment-remap + unsupported-instruction handling; 4 bundled starter templates; sequence-template variable system.
 - [ ] **Hardware fault recovery (per-equipment)** — mount loses tracking, camera disconnects mid-exposure, focuser stalls, filter wheel jam; retry logic; auto-abort thresholds; per-failure user notifications. NINA has logic; this is "preserve + document" rather than "design from scratch."
 - [ ] **Backup / restore of profiles + sequences** — export profile as `.profile.json`; export sequence library as `.sequences.zip`; import on new install; automatic local backups; cloud backup considerations (future).
 
@@ -67,6 +67,7 @@ These came up in conversation and ARE in the playbook. Listed here so we don't a
 - ✅ Safety policies — user-configurable per profile (§35)
 - ✅ Sky imagery + 21-survey downloader + Tonight's Sky planetarium (§36)
 - ✅ Profile setup wizard (18 screens, 7 stages) (§37)
+- ✅ Sequence file format + NINA `.json` import (§38)
 - ✅ Aladin Lite license boundary (GPLv3 via WebView process boundary) (§36.11)
 - ✅ NINA-style UI clone with bitmap-asset placeholders (§25)
 - ✅ Fork hygiene — naming, identifiers, MPL preservation (§17)

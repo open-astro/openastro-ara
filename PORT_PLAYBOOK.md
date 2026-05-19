@@ -2208,3 +2208,145 @@ Full editor is available later in Settings → Safety.
 - Skipped screens are flagged in the profile: "Default — please review in Settings"
 - Wizard can be re-run from Settings → Profile → "Run Wizard Again" (useful when changing rigs)
 - Each "Use device GPS" / "Pull from driver" / "Auto-detect" interaction is non-blocking — wizard never hangs waiting on equipment
+
+---
+
+## 38. Sequence file format + NINA `.json` import
+
+ARA adopts NINA's sequence JSON schema verbatim as the canonical storage format, adds a `schemaVersion` field for forward compatibility, exposes a validated OpenAPI schema, and imports existing NINA `.json` sequence files with equipment-remap + unsupported-instruction handling.
+
+### 38.1 Canonical schema
+
+- Top-level field: `"schemaVersion": "openastroara-sequence-v1"`
+- All NINA container types preserved verbatim: `SequenceRootContainer`, `DeepSkyObjectContainer`, `SequentialContainer`, `ParallelContainer`, `ConditionalContainer`, etc.
+- All NINA instruction types preserved verbatim where they have ARA equivalents (capture, slew, switch filter, run autofocus, plate solve, center, wait, etc.)
+- Trigger system (BeforeEach, AfterEach) and condition system (ConditionalRunner, LoopCondition) preserved
+- Schema documented in `OpenAstroAra.Server/openapi.yaml` (or `OpenAstroAra.Server/schemas/sequence.yaml` if pulled out for size). Used for:
+  - Server-side validation on `POST`/`PUT` upload
+  - IntelliSense in editors that consume OpenAPI
+  - Swagger UI rendering at `/api/v1/docs`
+
+### 38.2 Storage layout
+
+**Pi side** (`/var/lib/openastroara/sequences/`):
+```
+sequences/
+├── library/           user's saved/pushed sequences (canonical, served via API)
+├── imported/          NINA imports, source preserved per dated subfolder
+│   └── from-nina-YYYY-MM-DD/<original-name>.json
+├── templates/         starter templates shipped with the .deb
+│   ├── lrgb-dso.json
+│   ├── narrowband-shoo.json
+│   ├── lunar.json
+│   └── planetary.json
+└── active/            checkpoint state of currently-running sequence (per §28)
+    └── current.json
+```
+
+**WILMA side** (app data `/sequences/`):
+```
+sequences/
+├── drafts/            locally-edited sequences not yet pushed to Pi
+└── synced/            read-only cache of last-fetched Pi library
+```
+
+When connected, WILMA periodically refreshes `synced/` from `GET /api/v1/sequences`. Drafts live only locally until user explicitly pushes via "Save to Server" or "Run on Pi" buttons.
+
+### 38.3 Endpoints
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/api/v1/sequences` | List saved sequences on Pi (id, name, target, last-modified, last-run) |
+| `GET` | `/api/v1/sequences/{id}` | Fetch one sequence (full JSON) |
+| `POST` | `/api/v1/sequences` | Upload new sequence (validates, assigns id, saves to library/) |
+| `PUT` | `/api/v1/sequences/{id}` | Update existing |
+| `DELETE` | `/api/v1/sequences/{id}` | Remove |
+| `POST` | `/api/v1/sequences/import` | Multipart upload of a NINA `.json` file → returns parsed sequence + warnings array |
+| `POST` | `/api/v1/sequences/{id}/start` | Start running (kicks off the sequence executor) |
+| `GET` | `/api/v1/sequences/templates` | List bundled starter templates |
+| `POST` | `/api/v1/sequences/templates/{name}/instantiate` | Copy a template into the user's library, optionally fill in target via request body |
+
+### 38.4 NINA import flow
+
+1. WILMA: Sequencer tab → [Import from NINA] → file picker → user selects `.json`
+2. WILMA uploads via multipart to `POST /api/v1/sequences/import`
+3. Server processing:
+   - Parse JSON
+   - Detect NINA format (no `schemaVersion`, has NINA container/instruction type names)
+   - Add `"schemaVersion": "openastroara-sequence-v1"`
+   - **Equipment-ID remapping**: any `CameraId`, `MountId`, `FilterId`, `FocuserId`, `RotatorId`, `DomeId`, `GuiderId` etc. referencing NINA's ASCOM ProgIDs are:
+     - Fuzzy-matched to user's currently-connected Alpaca devices by name where possible
+     - Otherwise set to `null` and added to the `warnings` array
+   - **Unsupported instruction types** (MGEN-specific, plugin instructions, vendor-specific commands not exposed via Alpaca) are wrapped in a `SkippedInstruction { reason: "...", originalPayload: {...} }` placeholder
+   - Save under `imported/from-nina-YYYY-MM-DD/<original-filename>.json`
+   - Return the parsed sequence + `warnings: [...]` array shape:
+     ```json
+     {
+       "sequence": { ... },
+       "warnings": [
+         { "type": "equipment_unmatched", "instruction": "...", "field": "CameraId", "originalValue": "ASCOM.QHYCCD.Camera" },
+         { "type": "instruction_skipped", "originalType": "MGENGuiderInstruction", "reason": "MGEN not supported in ARA" },
+         { "type": "filter_unknown", "filterName": "OIII6nm" }
+       ]
+     }
+     ```
+4. WILMA: displays sequence in editor with a warnings banner — *"3 issues need attention: 2 cameras need reassignment, 1 instruction skipped (MGEN)"* — user clicks through each warning to resolve in the editor
+5. Once user resolves all warnings (or accepts them), sequence is functional and can be saved to library + run
+
+### 38.5 Validation rules (server-side on `POST` / `PUT`)
+
+- `schemaVersion` recognized (v1 currently; future schemas added incrementally)
+- All referenced equipment IDs resolve to known Alpaca devices in the active profile, OR explicitly `null` with user acknowledgment
+- All referenced filters exist in active profile's filter wheel slot configuration
+- At least one capturable instruction reachable from root
+- Time-based conditions reference valid astronomical events (`dusk`, `dawn`, `astronomical_twilight_start`, etc.)
+- No infinite loops (a `LoopContainer` must have a terminating condition that evaluates to false reachably)
+- Equipment slot uses match capability — e.g., `RunAutofocus` requires a focuser slot filled
+
+Validation failures return 422 with detailed errors per failing instruction path.
+
+### 38.6 Template variable system
+
+Inherits NINA's syntax:
+
+**Filename templates** (per §37 wizard, screen 13):
+- `$$TARGETNAME$$`, `$$FILTER$$`, `$$EXPOSURETIME$$`, `$$DATE$$`, `$$DATETIME$$`, `$$DATEMINUS12$$`, `$$SENSORTEMP$$`, `$$FRAMENR$$`, `$$IMAGETYPE$$`, `$$BINNING$$`, `$$GAIN$$`, `$$OFFSET$$`
+
+**Sequence template variables** (for `templates/` files that get instantiated against a user-picked target):
+- `{{target_name}}`, `{{target_ra}}`, `{{target_dec}}`, `{{target_rotation}}`
+- `{{integration_minutes}}`, `{{frames_per_filter}}`
+- `{{filter_set}}` (a named filter combination from the profile, e.g., "LRGB" or "SHO")
+- Substituted server-side at `POST /api/v1/sequences/templates/{name}/instantiate`
+
+### 38.7 Bundled starter templates (v0.0.1)
+
+Ship 4 templates with the `openastroara-server` .deb at `/opt/openastroara/templates/`:
+
+| Template | Use case |
+|---|---|
+| `lrgb-dso.json` | LRGB on a DSO — luminance + RGB filters, dither cadence, auto-focus on temp change |
+| `narrowband-shoo.json` | SHO narrowband — Ha, OIII, SII filters with longer exposures |
+| `lunar.json` | Short-exposure lunar capture, no guiding required, high frame count |
+| `planetary.json` | High-frame-rate planetary with ROI cropping (small subframe), no guiding |
+
+Each template uses placeholder target slots. User picks target via WILMA's "Apply Template" → "Pick Target" flow, which calls `POST /api/v1/sequences/templates/{name}/instantiate` with the target details.
+
+### 38.8 Schema evolution policy
+
+- v0.0.1 ships `openastroara-sequence-v1` (NINA-compatible)
+- Backwards-compatible additions within v1 (new optional fields) are allowed; ARA bumps a `protocol_minor` in `/api/v1/server/info` and clients respect missing-field defaults
+- Breaking changes go to `openastroara-sequence-v2` — server reads both, writes current; user-managed migration only if they want new v2-only features
+- Schema version is independent from API version and from app version
+
+### 38.9 WILMA sequence editor essentials (Phase 12)
+
+- Tree view of: Sequence → Targets → Containers → Instructions
+- Drag-drop reordering within a level
+- Per-instruction editor pane on the right when selected
+- Validation runs live as user edits; warnings shown inline
+- "Push to Pi" button (validates + uploads + tracks server id)
+- "Run Now" button (push + start; shortcut)
+- "Apply Template" entry point in the sequence picker
+- "Import from NINA" entry point in the same picker
+- Local draft auto-save every 30 seconds to WILMA app data
+- Conflict resolution: if WILMA's draft diverges from Pi's saved version, prompt user [Keep Local] / [Keep Pi] / [View Diff]
