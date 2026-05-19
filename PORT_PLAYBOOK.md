@@ -3804,3 +3804,203 @@ The user said it best: "user may not have internet." In-app-only means:
 - Pi imaging continues regardless — the sequence doesn't pause just because WILMA isn't subscribing
 - User wakes up, opens WILMA, sees the full feed of overnight events sorted by severity
 - Critical events (USB unmount, safety abort) are still acted on by the Pi at the moment they happen (via safety policies §35); the notification just records "this happened and the policy fired"
+
+---
+
+## 47. Mosaic imaging (multi-panel)
+
+Astrophotographers shoot multi-panel mosaics when a target is too large for one frame at their focal length — Andromeda at 2000mm, the Veil Nebula, Heart-and-Soul region, etc. NINA's Framing Assistant supports this; ARA preserves and modernizes the workflow with Aladin Lite integration + mosaic-aware tracking.
+
+### 47.1 What mosaic mode does
+
+User defines an N×M grid of overlapping panels centered on a target. Each panel becomes a sub-target with a computed RA/Dec offset. The sequencer captures all panels (light + calibration). Stitching happens later in post-processing (PixInsight, Siril, AstroPixelProcessor — ARA does not stitch).
+
+### 47.2 Building a mosaic in WILMA's Framing Assistant
+
+UI flow:
+
+1. User searches for a target in Framing Assistant (Aladin Lite — §25.5)
+2. Sets **Mosaic** mode: defines grid cols × rows (e.g., 3 × 2)
+3. Sets overlap percentage (default **10%**; configurable 5-25%)
+4. Optionally sets rotation angle (defaults to 0 if no rotator; else profile default)
+5. Aladin Lite overlay renders the panel grid as colored rectangles on the sky map — user sees exactly which areas each panel covers, can drag the whole mosaic to recenter, can rotate
+6. User confirms → mosaic saved as a single logical entity with N×M panels
+
+### 47.3 Panel math (computed server-side)
+
+Given:
+- `f` = telescope focal length (mm)
+- `w_sensor`, `h_sensor` = sensor dimensions (mm) — derived from camera's pixel size × pixel count
+- `overlap` = fractional overlap (0.10 = 10%)
+- `cols`, `rows` = grid dimensions
+- `center_ra`, `center_dec`, `rotation` = mosaic anchor
+
+Per-panel field of view: `panel_fov_x = atan(w_sensor / f)`, `panel_fov_y = atan(h_sensor / f)` (radians)
+
+Inter-panel center offset: `step_x = panel_fov_x * (1 - overlap)`, `step_y = panel_fov_y * (1 - overlap)`
+
+Panel `(c, r)` center (where `c ∈ [0, cols-1]`, `r ∈ [0, rows-1]`):
+```
+dx = (c - (cols-1)/2) * step_x
+dy = (r - (rows-1)/2) * step_y
+
+# Rotate (dx, dy) by mosaic rotation
+dx', dy' = rotate(dx, dy, mosaic_rotation)
+
+# Convert to spherical offset from center
+panel_ra  = center_ra  + dx' / cos(center_dec)
+panel_dec = center_dec + dy'
+```
+
+(Spherical-projection corrections for large mosaics near the poles are needed in practice; ARA uses standard tangent-plane projection per NINA's existing math.)
+
+### 47.4 Panel scheduling — interleaved
+
+ARA's sequencer runs panels in **interleaved order** by default (not sequential):
+
+```
+Instead of: panel(0,0) all-filters all-frames → panel(0,1) all-filters → ...
+ARA does:   for filter in filters:
+              for frame_index in range(per_panel_count):
+                for (c,r) in panels:
+                  slew to panel(c,r), capture 1 frame, dither
+```
+
+Why interleaved:
+- All panels see roughly the same airmass, seeing, sky brightness at each stage
+- Calibrating + stitching is more consistent
+- Mid-session abort = each panel has roughly proportional data, not "panel 1 done, panel 6 zero"
+
+Cost:
+- More slews between panels (each transition = slew + plate-solve, ~30 s)
+- Plate-solve verification per panel transition ensures position is correct
+
+User can switch to **sequential** mode in the mosaic's settings if they prefer (e.g., very tight schedule, prefers to "finish" panels one at a time). Setting per-mosaic, not global.
+
+### 47.5 Per-panel sub-target handling
+
+Each panel is a target in the existing target system (§40) with:
+- `name`: `"M31 Mosaic — panel 0,0"`, `"M31 Mosaic — panel 0,1"`, etc.
+- `mosaic_id`: foreign key to the parent mosaic
+- `panel_col`, `panel_row`: position within grid
+- `center_ra`, `center_dec`, `rotation`: computed coordinates
+
+Plate solving, autofocus, frame loop, dithering — all run per panel exactly as for any other target. The recovery flow (§28) works per panel.
+
+### 47.6 Schema
+
+```sql
+CREATE TABLE mosaics (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,            -- "M31 Mosaic", "Heart and Soul"
+  center_ra REAL NOT NULL,
+  center_dec REAL NOT NULL,
+  rotation REAL DEFAULT 0,
+  grid_cols INT NOT NULL,
+  grid_rows INT NOT NULL,
+  overlap_pct REAL DEFAULT 0.10,
+  panel_fov_x_arcmin REAL,        -- computed at creation
+  panel_fov_y_arcmin REAL,
+  scheduling TEXT DEFAULT 'interleaved',  -- 'interleaved' | 'sequential'
+  created_at TIMESTAMP,
+  notes TEXT
+);
+
+CREATE TABLE mosaic_panels (
+  mosaic_id TEXT REFERENCES mosaics(id),
+  panel_col INT,
+  panel_row INT,
+  center_ra REAL,
+  center_dec REAL,
+  -- target row in `targets` table is created on demand; lookup by mosaic_id + panel_col + panel_row
+  PRIMARY KEY (mosaic_id, panel_col, panel_row)
+);
+```
+
+### 47.7 API endpoints
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/api/v1/mosaics` | Create a mosaic (body: name, center coords, grid, overlap, rotation) |
+| `GET` | `/api/v1/mosaics` | List user's mosaics |
+| `GET` | `/api/v1/mosaics/{id}` | Full state — grid, panels, completion % per panel |
+| `GET` | `/api/v1/mosaics/{id}/panels` | Per-panel detail with frame counts per filter |
+| `PATCH` | `/api/v1/mosaics/{id}` | Update overlap / rotation / scheduling (only if no frames captured yet) |
+| `DELETE` | `/api/v1/mosaics/{id}` | Remove (panels remain as standalone targets if user wants) |
+| `POST` | `/api/v1/mosaics/{id}/build-sequence` | Generate a sequence for the mosaic with the user's filter list + per-filter frame count |
+| `POST` | `/api/v1/mosaics/{id}/resume` | Generate a sequence for **incomplete panels only** (per §47.9) |
+
+### 47.8 Storage layout for mosaic captures
+
+Under the session's captures dir:
+
+```
+captures/<session-id>/
+└── M31-mosaic/
+    ├── panel-0-0/
+    │   ├── L/   (all light frames for panel 0,0 with filter L)
+    │   ├── R/
+    │   ├── G/
+    │   └── B/
+    ├── panel-0-1/
+    ├── panel-1-0/
+    └── panel-1-1/
+```
+
+FITS headers include `MOSAIC` (mosaic name), `PANEL` (`"0,0"`), `PANELRA`, `PANELDEC`, plus all the standard session metadata from §39.3. Post-processing tools can use `MOSAIC` + `PANEL` to identify and group frames.
+
+### 47.9 Mosaic-aware Resume Target
+
+The §40.6 "Resume Target" workflow extends naturally to mosaics:
+
+1. User picks a mosaic from the Image Library
+2. WILMA calls `POST /api/v1/mosaics/{id}/resume`
+3. Server analyzes panel completion:
+   - Per panel, per filter: count frames vs target frame count from the original sequence
+   - "Complete" = at least N frames per filter (configurable per panel/filter via "per-filter target count")
+   - "Incomplete" = below threshold
+4. Server returns a sequence draft that contains ONLY incomplete panels' filter passes, interleaved
+5. New frames write to the same `captures/<session-id>/M31-mosaic/panel-X-Y/<filter>/` structure with `MOSAIC`/`PANEL` headers — they roll up cleanly into the existing mosaic rather than creating a duplicate
+
+This means **a mosaic project across years**: user can shoot 2 panels one night, 2 more the next clear week, 2 more 6 months later, and ARA tracks panel-completion across sessions. WILMA's mosaic detail view shows the grid colored by completion (red = 0 frames, yellow = partial, green = complete).
+
+### 47.10 Image Library — mosaic rollup view
+
+In §40 Image Library, mosaics appear as a top-level grouping (alongside individual targets):
+
+```
+▼ M31 Mosaic — 3×2 grid, 10% overlap
+   17h 42min total · 6 panels, 5 complete, 1 partial
+   [Visualize Grid]  [Resume Mosaic]  [Capture Matching Flats — All Panels]
+
+   ┌────┬────┬────┐
+   │ ✅ │ ✅ │ ✅ │   row 1 — fully complete
+   ├────┼────┼────┤
+   │ ✅ │ ✅ │ 🟡 │   row 0 — panel (2,0) needs 6 more L + 4 R
+   └────┴────┴────┘
+
+   [drill-in: per-panel frame lists]
+```
+
+The visualization is the actual sky layout (rotated per mosaic rotation) so user sees the spatial relationship of completed vs incomplete panels.
+
+### 47.11 What ARA does NOT do (post-processing concerns)
+
+- **Stitching** — combining the N×M panels into a single image. User does this in PixInsight (mosaic plugin), Siril, ICE, AstroPixelProcessor, etc. ARA's job is capture + metadata; stitching is the user's processing pipeline.
+- **Star matching across panel overlap regions** — same as above
+- **Color calibration across panels** — same
+
+ARA's contribution: ensure every panel's FITS file has consistent metadata, panels are captured under similar conditions (interleaved scheduling), and the user can return for missing data years later.
+
+### 47.12 Profile defaults (set in §37 wizard or post-hoc Settings)
+
+- Default mosaic overlap: 10%
+- Default scheduling: interleaved
+- Default per-filter frame count per panel: inherit from user's standard sequence preferences
+- Mosaic naming pattern: `<target> Mosaic` (e.g., "M31 Mosaic")
+
+### 47.13 v0.1.0 expansion paths
+
+- Adaptive panel sizing (variable focal length / FOV per panel — for super-wide mosaics combining wide-field and tighter panels)
+- ARA-side stitching preview (low-res, just for sanity-check before user processes in PixInsight)
+- Drift mosaicking (target drifts through FOV without slewing — for fast wide-field captures)

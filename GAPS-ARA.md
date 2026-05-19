@@ -22,7 +22,7 @@ Important workflows but won't crash anything on night-one. Can be specced after 
 
 - [x] ~~**Polar alignment routine**~~ → **Resolved §45**. TPPA dropped entirely (fragile + slow over Alpaca). Replaced with iPolar-style continuous-loop PA using main camera with optimizations: autofocus first, dark-frame caching, aggressive binning (3×3 or 4×4) for fast transfer, ~500 ms loop cadence, zooming bullseye UI in WILMA. Same math as iPolar (RA-axis vs pole offset from rotated plate solves). v0.1.0 adds native dedicated PA camera support.
 - [x] ~~**Notifications system**~~ → **Resolved §46**. In-app only (no push/email/webhook for v0.0.1 — field users often have no internet). Full event catalog (~45 event kinds spanning sequence/equipment/safety/calibration/recovery/storage/time/meridian flip/PA/dew/etc.). Four severity levels with distinct UX (info → feed only; warning → toast; critical → sticky toast + chime; urgent → modal + alarm per §35.5). Per-event opt-in/out + severity override + quiet hours (urgent always delivers). Persistent SQLite log on Pi with 30-day prune for info/warning. Notification feed UI with severity icons, filter pills, action buttons. v0.1.0 paths noted: push, email, webhooks, scripting.
-- [ ] **Mosaic / multi-panel imaging** — NINA's framing-assistant mosaic panel grid; preserve through port; ensure Aladin Lite layer supports panel overlays.
+- [x] ~~**Mosaic / multi-panel imaging**~~ → **Resolved §47**. N×M grid built in Framing Assistant with Aladin Lite panel-overlay preview. Server computes per-panel RA/Dec via tangent-plane projection (10% default overlap, configurable). Interleaved scheduling (one frame per panel rotating per filter — balances airmass + sky conditions across all panels). Per-panel sub-targets in existing target system. Mosaic-aware Resume workflow: years-spanning projects supported — server tracks completion per panel per filter, new sessions roll up cleanly into the same mosaic. Image Library shows visual grid colored by completion. ARA captures + tags; stitching is post-processing (PixInsight/Siril) per user's choice.
 - [ ] **Auto-flats / auto-darks** — sequence step types that automate calibration at dusk/dawn; flat panel coordination; sky-flats fallback if no panel.
 - [ ] **API documentation serving** — Pi serves Swagger UI at `/api/v1/docs` from the OpenAPI spec; helps power users + plugin authors (v0.1.0).
 - [ ] **Astrometry.net star index downloads** — separate from ASTAP star database; if Astrometry.net is kept as a solver option, the index files (4100-series, 4200-series) need a download/manage workflow. ~5-100 GB depending on index set.
@@ -77,6 +77,7 @@ These came up in conversation and ARE in the playbook. Listed here so we don't a
 - ✅ Real-time backup stream from Pi to desktop WILMA (§44 — protects against mid-session USB failure)
 - ✅ Polar alignment — iPolar-style continuous loop with binned main camera (§45)
 - ✅ Notifications system — in-app feed with 4 severity levels + quiet hours + per-event prefs (§46)
+- ✅ Mosaic / multi-panel imaging — N×M grid in Aladin, interleaved scheduling, mosaic-aware Resume across years (§47)
 - ✅ Aladin Lite license boundary (GPLv3 via WebView process boundary) (§36.11)
 - ✅ NINA-style UI clone with bitmap-asset placeholders (§25)
 - ✅ Fork hygiene — naming, identifiers, MPL preservation (§17)
