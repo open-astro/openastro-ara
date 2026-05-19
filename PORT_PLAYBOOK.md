@@ -4236,3 +4236,536 @@ WILMA's About panel can link to `<server>/api/v1/docs` so users discover it.
 
 - Generated SDK packages from the OpenAPI spec for popular languages (Python, JavaScript, Go) — useful for plugin authors + community integrations
 - Versioned doc browser (current v0.0.1, future v0.1.0, etc.) — Swagger UI supports multi-spec selection
+
+---
+
+## 50. Session analytics + Stats dashboard
+
+ARA's analytics layer is the v0.0.1 feature designed to **leave NINA in the dust**. NINA captures rich session metadata but exposes almost none of it as insight. ARA mines that data to surface trends, correlations, equipment health, and milestones users have never had access to.
+
+### 50.1 Why this matters as a differentiator
+
+Astrophotography is high-effort, low-feedback. A user images for 6 hours, processes for another 6, and only then discovers their focuser drifted, their guiding got worse after midnight, or they wasted half the session on a target that was setting. ARA's analytics layer **closes that feedback loop**:
+
+- "Your HFR creeps up 0.4 per 10°C drop — your tempcomp slope is wrong"
+- "Guiding RMS doubles below 25° altitude — stop imaging Dragons before they're up that high"
+- "Your camera's cooler power has crept up 18% over 6 months — sensor may be degrading"
+- "You've spent 47h on Andromeda this year. Total integration target: 60h. ETA at your pace: 3 more clear weekends."
+- "Tonight's frames have 0.3 better median HFR than your last M42 session — conditions are excellent"
+
+NINA shows none of this. ARA does. It's a real differentiator because **the data is already captured** (per §39.3 session DB schema) — we just compute over it.
+
+### 50.2 Data foundation — no new collection
+
+All analytics derive from data already captured:
+
+- `sessions` table (per §39.3): start/end, target, total frames, faults, recovery events
+- `frames` table (per §39.3): per-frame HFR, star count, ADU stats, focus position, rotator angle, temp, filter, gain, offset, captured-at
+- `polar_alignments` table (per §45.13): final error, iterations
+- `faults` table (per §42.5): timeline of equipment issues
+- `notifications` table (per §46.5): event log
+- PHD2 guide log: imported into a `guide_samples` table during session (RMS values per sample)
+- Weather station data: ambient temp, humidity, dew point at capture time (already in FITS headers per §39.3, also indexed)
+
+The analytics layer adds **one** new computation step: a per-frame **composite quality score** (per §50.10), stored as `frames.quality_score` REAL column. Computed at capture time + on-demand recomputation if scoring algorithm updates.
+
+### 50.3 Stats dashboard structure
+
+New top-level tab in WILMA's main app shell, alongside Sequence/Imaging/Sky Atlas/Image Library/Logs: **Stats**.
+
+Sub-views (left rail navigation):
+
+```
+Stats
+├── Overview              — landing page, recent-night summary + headline metrics
+├── Targets               — per-target rollups, progress tracking
+├── Focus & Temperature   — HFR-vs-temp analysis per filter
+├── Guiding               — RMS trends, correlations
+├── Frame Quality         — distribution + composite score histograms
+├── Equipment Health      — cooler power trend, mount accuracy, fault rates
+├── Session Efficiency    — time breakdown, frame yield
+├── Conditions            — frame quality correlated with weather + lunar
+├── Achievements          — milestones + records (lightly gamified)
+├── Calendar              — heatmap of imaging nights
+└── Exports               — PDF/CSV/Astrobin output
+```
+
+### 50.4 Overview landing page
+
+The default landing when user opens Stats. Six tiles:
+
+```
+┌────────────────┬────────────────┬────────────────┐
+│  Last Night    │  This Month    │  This Year     │
+│  4h 12m        │  47 hours      │  312 hours     │
+│  144 frames    │  9 sessions    │  84 sessions   │
+│  M42 + NGC6188 │  4 targets     │  18 targets    │
+├────────────────┼────────────────┼────────────────┤
+│  Best Target   │  Health Status │  Streak        │
+│  Andromeda     │  All systems   │  🔥 4 nights   │
+│  47h total     │  green         │  in a row      │
+└────────────────┴────────────────┴────────────────┘
+```
+
+Below the tiles: 3-4 recent notifications + 1 hero chart (the year's monthly integration totals as a bar chart).
+
+### 50.5 Targets view
+
+Per-target rollups, sortable + searchable list:
+
+| Target | Total Int. | Sessions | First Imaged | Last Imaged | Filters | Top HFR |
+|---|---|---|---|---|---|---|
+| Andromeda (M31) | 47h 12m | 14 | 2024-08-12 | 2026-05-15 | L,R,G,B,Hα | 1.18 |
+| Dragons of Ara (NGC 6188) | 18h 30m | 6 | 2025-03-22 | 2026-04-30 | Hα,OIII,SII | 1.42 |
+
+Tap a target → target detail page with:
+- Per-filter integration breakdown (stacked bar)
+- Cumulative integration over time (line chart)
+- Per-session quality trend (HFR + star count over sessions)
+- Plate-solve consistency check: did rotation/center drift across sessions? (important for multi-year stacking per §40.6)
+- "Capture more data" CTA → §40.6 Resume Target flow
+- "Capture matching flats" CTA → §39.5 flow
+
+### 50.6 Focus & Temperature view
+
+Killer chart: **HFR vs sensor temperature, scatter plot per filter, with linear regression**.
+
+```
+Filter L:  HFR
+1.8 ┤              ●●
+1.5 ┤        ●●● ●●●         ← regression: HFR = 1.2 + 0.05 × (T₀ - T)
+1.2 ┤●●●●●●●●●                slope = 0.05 per °C
+    └────────────────► sensor temp °C
+   -15  -10  -5  0  +5
+```
+
+- Each dot = one captured frame
+- Linear regression line + R² value
+- Configured tempcomp slope from profile shown as reference (different color line)
+- Insight callout: *"Measured slope is 0.05; your profile says 0.04. Consider updating to match reality."*
+
+Across all filters: stacked or per-filter subplots. Filter-specific insights expose focus offsets that may need recalibration.
+
+### 50.7 Guiding view
+
+PHD2 RMS data over time:
+
+- **RMS over recent sessions** — line chart per night, separate RA + Dec
+- **RMS distribution histogram** — most sessions cluster around 0.5"; outliers reveal bad nights
+- **RMS vs altitude** — scatter, reveals "guiding gets worse at low alt"
+- **RMS vs wind speed** (if weather connected) — scatter, reveals wind sensitivity
+- Per-session detail: RMS over the night with annotations for dithers / meridian flips / focus events
+
+Insight examples:
+- *"Your last 5 sessions averaged 0.42" RMS. The 5 before averaged 0.31". Something has changed — check belt tension, balance, cable drag."*
+- *"RMS doubles when wind > 12 km/h. You may want to add a wind threshold to your safety policy (§35)."*
+
+### 50.8 Frame Quality view
+
+Composite quality score per frame (computed by §50.10). Three sub-views:
+
+- **Distribution histogram** — quality score across all frames in selected date range, per filter
+- **Quality over time of night** — scatter or rolling average; reveals transparency degradation patterns
+- **Quality vs HFR + star count + ADU** — multi-dimensional view; lets user see what drove low scores
+
+Pulls from this: the **"Best Frames" auto-sort filter** in the Image Library (§40) — user clicks "Show top 80%" and ARA filters frames by composite score.
+
+### 50.9 Equipment Health view
+
+Trends per equipment type. Cards:
+
+- **Camera cooler power** — power draw to maintain set temp, trended over months. Rising = sensor degradation or thermal grease aging.
+- **Mount tracking accuracy** — guide RMS as a proxy; trend over time. Reveals lubricant aging, belt stretch.
+- **Filter wheel position errors** — frequency of EFW retries from §42. Rising = mechanical wear.
+- **Focuser drift** — position drift between sessions at same temp. Reveals slop / backlash growing.
+- **Disconnect frequency** — equipment disconnect events per type, per session. Reveals cable/connector issues.
+
+Each card has a sparkline + a status indicator (green/yellow/red based on configurable thresholds) + a "View Detail" button drilling into the underlying data.
+
+### 50.10 Composite quality score algorithm
+
+For each captured frame:
+
+```
+quality_score = w1 * normalize(hfr_inverse)
+              + w2 * normalize(star_count)
+              + w3 * normalize(roundness)
+              + w4 * normalize(median_adu_score)
+              - w5 * normalize(eccentricity)
+```
+
+Where:
+- `hfr_inverse` = 1 / HFR (lower HFR = better)
+- `star_count` = stars detected
+- `roundness` = average star roundness (1.0 = perfect circles)
+- `median_adu_score` = closeness to user-configured ideal ADU (peaks at ideal, drops on either side)
+- `eccentricity` = average star eccentricity (lower = better tracking)
+
+Weights `w1..w5` default to `[0.4, 0.2, 0.15, 0.1, 0.15]` — configurable per profile. Normalized to 0-100 scale per filter (since narrowband filters have inherently fewer stars than broadband).
+
+Stored as `frames.quality_score` REAL. Recomputed on capture. Algorithm version tracked so we can recompute if formula evolves.
+
+### 50.11 Session Efficiency view
+
+Time breakdown per session:
+
+```
+M42 session 2026-05-18 — 4h 32m total
+████████████████████████████░░░░░░░░░░  Light frames (75%, 3h 24m)
+███░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  Autofocus (5%, 14m)
+██░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  Dither + settle (3%, 8m)
+██░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  Plate solve (3%, 8m)
+█████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  Meridian flip (8%, 22m)
+█░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  Slew + filter changes (2%, 5m)
+██░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  Idle / waiting (4%, 11m)
+```
+
+Insight callout examples:
+- *"Your meridian flip took 22 minutes; typical is 8-12. Plate-solve retried 3 times — check polar alignment."*
+- *"Autofocus consumed 14 minutes across 4 runs. Consider lowering AF cadence (e.g., trigger only on >3°C temp change instead of every 90 min)."*
+
+Per-session efficiency score (% light-frame time) plotted over recent sessions.
+
+### 50.12 Conditions view
+
+Frame quality correlated with environmental factors (when weather + lunar data available):
+
+- **Quality vs ambient temperature**
+- **Quality vs humidity**
+- **Quality vs lunar illumination + lunar distance from target**
+- **Quality vs altitude of target (airmass)**
+
+These are scatter plots with smoothed trend lines. Surfaces insights like:
+- *"Your imaging is consistently 15% worse when Moon > 60% illuminated and within 30° of target. Consider scheduling those nights for narrowband only."*
+- *"Quality drops 8% per 10°C ambient temp drop — your dew heater may not be keeping up. Increase its power output."*
+
+### 50.13 Achievements + milestones (lightly gamified)
+
+Small ARA-flair feature for engagement. Tracks:
+
+- **Streaks**: consecutive nights with imaging (encourages clear-night follow-through)
+- **Records**: longest single session, most frames in one night, most targets in one session
+- **Milestones**: first 10h on a target, first 100h total, first imaging across all 12 Messier seasons, etc.
+- **Discovery badges**: first plate solve, first mosaic, first narrowband filter used, etc.
+
+Achievements appear in a dedicated panel; recent achievements show as notification celebrations (info severity, never blocking).
+
+Not heavy gamification — no points, no leaderboards. Just light "milestones along your astro journey" surfacing.
+
+### 50.14 Calendar heatmap
+
+GitHub-contributions-style calendar of imaging activity:
+
+```
+        Jan  Feb  Mar  Apr  May  Jun  Jul  Aug  Sep  Oct  Nov  Dec
+Mon    ░░░  ▒▒░  ▓▓▓  ░▒▒  ▓▒░  ░░░  ░░░  ▓▒▒  ▓▓▓  ▒▒░  ▒▒▒  ▓▓▒
+Tue    ░░░  ░▒░  ▒▓▓  ▒▒░  ▓▒▒  ░░░  ░░░  ▒▒▒  ▓▓▒  ▓▒░  ▒▓▓  ▓▓▒
+...
+```
+
+Color intensity = frames captured (or hours integrated). Hover a day → session summary popup. Reveals patterns: "I always image on Thursdays" / "summer monsoon kills June for me" / "I peaked in October last year."
+
+### 50.15 Exports
+
+User can export analytics for sharing, archival, or external processing:
+
+- **PDF report per target** — "Andromeda Imaging Summary" with all charts, sessions, sample frames. Useful for documenting projects or sharing with imaging groups.
+- **CSV export of session data** — `sessions.csv`, `frames.csv`, `quality_scores.csv`. Power users analyze in Python/R/Excel.
+- **Astrobin-format JSON** — pre-fills target + integration + filters for Astrobin posting. Saves the user from manually entering the info.
+- **Equipment health PDF** — useful for warranty claims or mechanic consultations
+
+### 50.16 API endpoints
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/api/v1/stats/overview` | Tile data for §50.4 (last night, this month, this year, etc.) |
+| `GET` | `/api/v1/stats/targets` | Per-target rollups |
+| `GET` | `/api/v1/stats/targets/{name}` | Single-target detail (filter breakdown, cumulative integration, quality trend) |
+| `GET` | `/api/v1/stats/focus-temp` | HFR-vs-temp data per filter for §50.6 |
+| `GET` | `/api/v1/stats/guiding` | Guide RMS data per session + aggregates |
+| `GET` | `/api/v1/stats/quality` | Quality score distributions + over-time |
+| `GET` | `/api/v1/stats/equipment-health` | Per-equipment health metrics |
+| `GET` | `/api/v1/stats/efficiency/{session_id}` | Time-breakdown analysis |
+| `GET` | `/api/v1/stats/conditions` | Quality-vs-conditions correlations |
+| `GET` | `/api/v1/stats/achievements` | List of unlocked milestones |
+| `GET` | `/api/v1/stats/calendar` | Heatmap data (frames/hours per day) |
+| `POST` | `/api/v1/stats/exports` | Generate an export (body: type + filters); returns download URL |
+
+All endpoints accept date-range filters (`from`, `to`) for time-bounded analysis.
+
+### 50.17 Charting + rendering
+
+Flutter charting via **`fl_chart`** package — open-source, MIT, mature, covers line/bar/scatter/pie. Handles all chart types in §50.
+
+For the calendar heatmap (§50.14): custom widget via Flutter `CustomPaint` since no off-the-shelf package matches GitHub-contributions-style well.
+
+PDF generation: **`pdf`** package (Flutter, pure Dart). Generates client-side from the analytics data, no server round-trip needed.
+
+### 50.18 Performance + caching
+
+Analytics queries can be expensive on large datasets (years of frames). Two-tier caching:
+
+- **Server-side materialized views** — daily aggregates pre-computed nightly into `stats_daily` table. Most queries hit the materialized view, not raw `frames`. Refreshed by a nightly background job.
+- **Client-side response cache** — WILMA caches API responses with TTL (5 min for "Overview" tile data; 1 hour for trend charts). User pull-to-refresh forces a fresh fetch.
+
+Heaviest charts (HFR-vs-temp with all-history) downsample on the server side (max 10k data points per chart) to keep frontend rendering snappy.
+
+### 50.19 v0.0.1 vs v0.1.0 honest scope split
+
+User wants the full dashboard. Here's the honest split given the engineering reality:
+
+**Ship in v0.0.1:**
+- §50.2 data foundation (already captured)
+- §50.4 Overview tiles
+- §50.5 Targets view + per-target detail
+- §50.6 Focus & Temperature charts
+- §50.7 Guiding charts
+- §50.8 Frame Quality histogram + Best Frames auto-sort
+- §50.10 Composite quality score (computed on capture)
+- §50.14 Calendar heatmap
+- §50.15 CSV export
+- §50.16 API endpoints (all of them — server-side is straightforward)
+
+**Defer to v0.0.2 / v0.1.0:**
+- §50.9 Equipment Health (requires careful threshold-tuning per equipment type)
+- §50.11 Session Efficiency (requires instrumenting per-instruction timing in the sequencer — preserved from NINA but needs analytics hookup)
+- §50.12 Conditions correlation (requires reliable weather data; many users don't have weather stations)
+- §50.13 Achievements (nice but not essential; defining "interesting" milestones takes design iteration)
+- §50.15 PDF + Astrobin exports (PDF generation is real work; Astrobin format is small)
+
+That's still a substantial v0.0.1 — leaves NINA's "no analytics" approach in the dust without overscoping.
+
+### 50.20 Privacy
+
+All analytics computed and stored locally on the Pi. **No telemetry leaves the user's network** (per §18.C). Calendar heatmaps, target lists, equipment health — all stay on the user's USB drive. ARA never aggregates user data across users.
+
+If a user wants to share their analytics (e.g., PDF report to an astrophotography group), it's their explicit action via §50.15 exports.
+
+---
+
+## 51. Real-time acquisition diagnostics + smart corrections
+
+§50 mines historical session data for retrospective insight. **§51 does the same analysis at the moment of capture and acts on it.** As each frame completes, ARA Core analyzes the multiple quality signals together, diagnoses WHY conditions changed, and either auto-corrects the rig or surfaces a precise, actionable notification — not "HFR went up" but **"clouds passing — pause until they clear"** or **"focuser drifted, refocusing"** or **"target at 7° altitude in the trees — advance to next target."**
+
+This is the section designed to leave NINA, ASIAir, SharpCap, and competitors visibly behind. NINA detects HFR drift; ARA *diagnoses what caused it* and acts.
+
+### 51.1 The signals (per-frame, already captured)
+
+Each completed frame writes these metrics to the session DB (per §39.3 + §50.10):
+
+| Signal | What it tracks |
+|---|---|
+| `hfr` | Half-Flux Radius (focus quality) |
+| `star_count` | Stars detected above threshold |
+| `roundness` | Average star roundness (1.0 = circular) |
+| `eccentricity` | Average star eccentricity (0 = round, 1 = streak) |
+| `median_adu` | Median background ADU |
+| `background_gradient` | Vignette/light-pollution gradient steepness |
+| `gain` / `offset` / `exposure` | Capture parameters |
+| `set_temp` / `ccd_temp` | Cooler state |
+| `ambient_temp` / `humidity` / `dew_point` | Weather (if connected) |
+| `altitude` | Target altitude at exposure midpoint |
+| `airmass` | Computed from altitude |
+| `lunar_illumination` / `lunar_separation_deg` | Moon state |
+| `plate_solve_result` | Solve success/failure for the frame |
+| `guide_rms_total` / `guide_rms_ra` / `guide_rms_dec` | PHD2 RMS during exposure |
+| `guide_star_lost_events` | Times guide star was lost during exposure |
+| `composite_quality_score` | Per §50.10 |
+
+Server keeps a **rolling buffer** of the last 10 frames' signals in memory for pattern detection.
+
+### 51.2 The diagnostic decision tree
+
+After each frame, server runs a rule-based diagnostic. The key insight: **multi-signal patterns disambiguate causes** that single signals can't.
+
+| Pattern (current frame + rolling buffer) | Likely cause | Severity | Auto-action |
+|---|---|---|---|
+| HFR rising over 3 frames, star count stable, background stable, eccentricity stable | **Focuser drift** | warning | **Auto-refocus** on the current filter |
+| Star count dropped >40% over 2 frames, HFR rising, background stable | **Clouds passing** | warning | Pause sequence; resume when star count recovers |
+| Star count dropped to <5 (essentially zero), no HFR/background info reliable | **Aperture blocked** (tree, dome shutter, dew, cable across scope) | critical | Pause + notify *"Aperture may be blocked — check for trees, dew, or obstructions"* |
+| Stars + HFR + roundness all stable, but median_adu rising over 5+ frames | **Light pollution increasing** (dawn approaching, Moon rising, neighbor's lights) | warning | Notify; suggest switching to narrowband if available |
+| Eccentricity rising, HFR + star count + background stable | **Wind or tracking issue** | warning | Pause + check guide RMS; if guide RMS also up → pause until conditions improve |
+| Guide RMS spike + guide_star_lost_events > 0 | **Clouds blocking guide star** | warning | Pause; resume when star reacquired |
+| Plate solve failed N consecutive times mid-sequence | **Off-target or heavy clouds** | warning | Re-slew + blind plate solve; if still fails → notify |
+| Target altitude < profile soft threshold (default 30°), trending down | **Target setting** | info | Notify "M42 at 22° and dropping — consider advancing to next target" |
+| Target altitude < profile hard threshold (default 5°), trending down | **Target below horizon** | warning | Auto-advance to next target in sequence (per §28 logic) |
+| HFR rising + cycling-degradation pattern (good after AF, degrades, AF retriggers, repeats) | **Transient atmospheric** (already covered §40.7) | warning | Notify "Autofocus isn't catching this — likely clouds or seeing" |
+| CCD temp drifting from set_temp by >3°C | **Cooler struggling** (warm ambient, cooler failure) | warning | Notify; if persistent, suggest pausing |
+| Humidity near 100% + ambient at dew point + HFR rising gradually | **Dew formation** (already covered §42) | warning | Notify "Dew suspected — check optics and heaters" |
+| Frame quality score dropping monotonically over 5+ frames, no clear single-signal cause | **General degradation** (unknown) | info | Notify with current signal readout; let user investigate |
+
+Decision-tree implementation: ~200 lines of Dart-port-of-C# in `OpenAstroAra.Sequencer/Diagnostics/AcquisitionDiagnostics.cs`. Pure-function: takes current frame metrics + rolling buffer, returns a `Diagnosis { cause, severity, suggested_action }`.
+
+### 51.3 Auto-correction actions
+
+When diagnosis returns an action, server may execute it autonomously, depending on user policy (§51.5):
+
+| Action | What it does |
+|---|---|
+| `auto_refocus` | Triggers autofocus on the current filter; resumes capture after |
+| `pause_until_recovery` | Pauses sequence; resumes when the inverse-signal recovers (star count > threshold again, etc.) |
+| `skip_to_next_target` | Marks current target as "skipped due to altitude/conditions" in session log; advances to next |
+| `re_slew_and_plate_solve` | Forces a fresh slew + plate solve to recover from off-target |
+| `notify_only` | No autonomous action; just informs user with diagnosis |
+| `safety_abort` | Hands off to §35 safety policy (only triggered by truly bad conditions, e.g., sustained dew + tracking loss + altitude below hard floor) |
+
+### 51.4 Real-time UI in WILMA
+
+Two surfaces:
+
+**Health Indicator in main app shell (always visible during sequence):**
+
+```
+┌─────────────────────────────┐
+│  🟢 All systems nominal     │
+│  HFR 1.42 | Stars 487       │
+│  Guide 0.42" | Air 1.1      │
+└─────────────────────────────┘
+```
+
+Three states:
+- 🟢 **Green** — all signals within nominal ranges
+- 🟡 **Yellow** — one or more signals degraded, advisory only (or auto-action being taken, e.g., refocus running)
+- 🔴 **Red** — significant degradation; sequence paused or action recommended
+
+Tap → opens the Diagnostic Panel.
+
+**Diagnostic Panel** (slide-over or modal):
+
+```
+┌──────────────────────────────────────────────────────┐
+│  Acquisition Diagnostics                              │
+│  ──────────────────────────────────────────────────  │
+│  🟡 Clouds passing — pause until clear                │
+│                                                       │
+│  Last 5 frames star count: 487 → 432 → 290 → 156 → 47│
+│  HFR rising: 1.42 → 1.55 → 1.78 → 2.41 → 3.20         │
+│  Background ADU stable: ~1100                         │
+│  → Pattern matches "transient clouds"                 │
+│                                                       │
+│  ARA will: pause sequence; resume when star count     │
+│            recovers to >300 (currently 47)            │
+│                                                       │
+│  Recent live preview:                                 │
+│    [thumbnail of latest frame — visibly cloudy]       │
+│                                                       │
+│  [Override — keep imaging]  [Stop sequence]           │
+└──────────────────────────────────────────────────────┘
+```
+
+The diagnostic explains the WHY in plain language and shows the underlying numbers. Builds user trust ("how does ARA know it's clouds?") and teaches users to read the same signals themselves over time.
+
+### 51.5 User policy — aggression dial
+
+Profile gains a `realtime_diagnostics` block:
+
+```json
+{
+  "realtime_diagnostics": {
+    "mode": "balanced",        // "aggressive" | "balanced" | "conservative" | "notify_only"
+    "auto_refocus_threshold": 1.5,   // HFR multiplier triggering refocus
+    "auto_skip_target_below_alt_deg": null,  // null = use profile hard threshold (§28)
+    "pause_on_cloud_detection": true,
+    "pause_threshold_star_count_drop_pct": 40,
+    "max_consecutive_solve_failures_before_reslew": 3
+  }
+}
+```
+
+Modes:
+
+- **aggressive** — ARA acts on warnings (auto-refocus, auto-pause, auto-skip) without asking; maximizes uptime
+- **balanced** *(default)* — acts on critical signals (pause for clouds, refocus for focus drift); notifies on warnings; user decides
+- **conservative** — notifies only; doesn't auto-correct; user takes action manually
+- **notify_only** — alerts but never acts; for users who want full manual control
+
+Wizard's §37 safety screen offers this with defaults.
+
+### 51.6 Server-side monitor loop
+
+After each frame is finalized (post-FITS-write, post-preview-generation, post-quality-score-computation):
+
+```
+1. Append frame metrics to rolling buffer (drop oldest if > 10 frames)
+2. Run diagnostic decision tree → returns Diagnosis object
+3. If Diagnosis.severity != none:
+     a. Log to faults table + notifications table
+     b. If diagnostics.mode permits auto-action AND action is autonomous:
+          - Execute the action (refocus / pause / skip)
+          - Emit `diagnostic.action_taken` WebSocket event
+     c. If action is "notify_only":
+          - Emit `diagnostic.advisory` WebSocket event
+4. Continue with next exposure
+```
+
+Total overhead per frame: < 50ms on Pi 5. Negligible vs the 30+ seconds of exposure.
+
+### 51.7 API endpoints
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/api/v1/diagnostics/current` | Current health status + most-recent diagnosis (for the Health Indicator) |
+| `GET` | `/api/v1/diagnostics/buffer` | Rolling buffer of last N frames' metrics (for the Diagnostic Panel) |
+| `GET` | `/api/v1/diagnostics/history?session_id=...` | All diagnostics fired in a session |
+| `POST` | `/api/v1/diagnostics/override` | User overrides an auto-action ("no, keep imaging") |
+| `PUT` | `/api/v1/diagnostics/policy` | Update user's diagnostic policy (mode + thresholds) |
+
+WebSocket event types:
+
+```json
+{ "type": "diagnostic.advisory", "payload": { "cause": "clouds_passing", "severity": "warning", "signals": {...}, "suggested_action": "pause_until_recovery", "auto_action_taken": false } }
+{ "type": "diagnostic.action_taken", "payload": { "cause": "focuser_drift", "action": "auto_refocus", "details": "Triggered AF on filter L" } }
+{ "type": "diagnostic.recovered", "payload": { "cause": "clouds_passing", "duration_seconds": 423 } }
+```
+
+### 51.8 Per-frame metadata enrichment
+
+Each frame's FITS header (per §39.3) is enriched with the diagnostic context at capture time:
+
+| New FITS keyword | Value |
+|---|---|
+| `ARA-DIAG` | Active diagnosis name if non-nominal (e.g., `"clouds_passing"`); empty if green |
+| `ARA-QSCORE` | Composite quality score (from §50.10) |
+
+Post-processing tools and ARA's own §50 Frame Quality view can filter by diagnostic state — e.g., "show me all frames captured during cloudy windows" or "exclude all `clouds_passing` frames from stacking."
+
+### 51.9 Learning over time (v0.1.0)
+
+Rule-based diagnosis is v0.0.1. v0.1.0 adds:
+
+- **Per-user calibration** — threshold-tuning from observed normal ranges. After a few sessions, ARA learns what "normal" star count looks like for the user's gear, sky, location; adjusts diagnostic thresholds rather than relying on global defaults.
+- **ML pattern detection** — small on-device model trained on user's labeled diagnostic events ("yes, that was clouds" / "no, that was just dew"); improves diagnosis accuracy
+- **Predictive alerts** — e.g., "based on the last 3 nights, you usually hit dew formation around 03:30 — your dew heaters typically don't keep up" → suggest enabling heaters proactively
+
+All optional; user explicitly opts in to the learning system (no silent ML on private data).
+
+### 51.10 Comparison to competitors
+
+| Capability | ASIAir | NINA | SharpCap | ARA |
+|---|---|---|---|---|
+| HFR threshold alert | Yes | Yes | Yes | Yes |
+| Multi-signal pattern diagnosis | No | No | Limited | **Yes** (§51.2) |
+| Cause-naming notifications ("clouds passing" vs just "HFR up") | No | No | No | **Yes** |
+| Auto-pause on cloud detection | No | No | No | **Yes** |
+| Auto-correction (refocus, skip target, re-slew) | Limited | Manual | No | **Yes** |
+| Configurable aggression level | No | Threshold settings only | Limited | **Yes** (§51.5) |
+| Per-frame diagnostic FITS metadata | No | No | No | **Yes** (§51.8) |
+| Learning over time (v0.1.0) | No | No | No | **Planned** |
+
+This is the section that's worth showing in marketing screenshots: a side-by-side of "ARA detected: clouds passing, pausing until recovery (4 frames in queue)" vs ASIAir's "HFR is high."
+
+### 51.11 v0.0.1 vs v0.1.0 honest scope split
+
+**v0.0.1 ships:**
+- Diagnostic decision tree (§51.2) with all 12 patterns
+- Auto-actions: `auto_refocus`, `pause_until_recovery`, `skip_to_next_target`, `re_slew_and_plate_solve`, `notify_only`
+- Real-time Health Indicator + Diagnostic Panel UI (§51.4)
+- User policy / aggression dial (§51.5)
+- Per-frame FITS metadata enrichment (§51.8)
+- API endpoints + WebSocket events (§51.7)
+
+**v0.1.0:**
+- Per-user threshold calibration (§51.9 first bullet)
+- ML pattern detection (§51.9 second bullet)
+- Predictive alerts (§51.9 third bullet)
+- More sophisticated patterns (we'll learn what works from real user feedback)

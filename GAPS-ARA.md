@@ -30,7 +30,7 @@ Important workflows but won't crash anything on night-one. Can be specced after 
 ## Tier 3 — Polish / deferred
 
 - [x] ~~**Sequence templates**~~ → **Resolved §38.7**. v0.0.1 ships 4: `lrgb-dso.json`, `narrowband-shoo.json`, `lunar.json`, `planetary.json`. Additional templates (comet wide-field, mosaic-specific, etc.) added in v0.1.0+ as the community shapes preferences.
-- [ ] **Session analytics** — integration time per target across sessions; guide RMS trends; HFR-vs-temperature curves; star count + roundness over a night; "best frames" auto-sort.
+- [x] ~~**Session analytics**~~ → **Resolved §50**. Full analytics dashboard as a flagship differentiator vs NINA. Stats top-level tab with 11 sub-views: Overview tiles, Targets rollup + per-target detail, Focus & Temperature (HFR-vs-temp scatter + regression per filter), Guiding (RMS trends + altitude/wind correlations), Frame Quality (composite quality score + Best Frames auto-sort), Equipment Health (cooler-power trend, fault rates), Session Efficiency (time-breakdown), Conditions (weather/lunar correlations), Achievements/milestones, Calendar heatmap, Exports (CSV/PDF/Astrobin). Composite quality score formula specced (HFR + star count + roundness + ADU + eccentricity, profile-weighted). Materialized daily aggregates for performance. All local — no telemetry. v0.0.1 ships Overview, Targets, Focus&Temp, Guiding, Frame Quality, Best Frames, Composite Score, Calendar, CSV export, all API endpoints. Equipment Health, Session Efficiency, Conditions, Achievements, PDF/Astrobin exports → v0.0.2/v0.1.0.
 - [ ] **Mount-specific behavior profiles** — per-mount quirks (EQMod, iOptron CEM, SiTech, OnStep); homing protocols; slew speed limits; cable-wrap detection; meridian-limit configuration. Mostly Alpaca abstracts this; mention preserved.
 - [x] ~~**Multi-user / read-only spectators**~~ → **Deferred to v0.1.0** (§27.4 already notes this). Single-client policy is correct for v0.0.1; spectator mode adds complexity (auth roles, read-only API surface, UI mode toggle) that isn't needed yet.
 - [x] ~~**Live stacking**~~ → **Committed v0.1.0 feature** (not optional — explicit roadmap commitment). Star registration + sigma-clipped running stack + live preview during integration. Provides EAA (Electronically Assisted Astronomy) and "is this target worth tonight" instant feedback. ASIAir/SharpCap parity. Engineering work: real-time star detection, frame alignment, calibration application, memory management on Pi.
@@ -81,6 +81,8 @@ These came up in conversation and ARE in the playbook. Listed here so we don't a
 - ✅ Auto-flats / auto-darks + sequence-start prompt offering "capture later via §39.5" (§48)
 - ✅ API documentation serving — Swagger UI matching ASCOM Alpaca's convention (§49)
 - ✅ Astrometry.net star index downloads → deferred to v0.1.0 (§18.I updated)
+- ✅ Session analytics + Stats dashboard (§50 — flagship NINA differentiator)
+- ✅ Real-time acquisition diagnostics + smart corrections (§51 — pattern-based cause diagnosis ["clouds vs focus drift vs trees"], auto-actions, user-policy aggression dial, per-frame FITS metadata enrichment, configurable from balanced default → aggressive/conservative/notify-only)
 - ✅ Aladin Lite license boundary (GPLv3 via WebView process boundary) (§36.11)
 - ✅ NINA-style UI clone with bitmap-asset placeholders (§25)
 - ✅ Fork hygiene — naming, identifiers, MPL preservation (§17)
