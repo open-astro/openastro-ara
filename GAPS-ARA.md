@@ -25,7 +25,7 @@ Important workflows but won't crash anything on night-one. Can be specced after 
 - [x] ~~**Mosaic / multi-panel imaging**~~ → **Resolved §47**. N×M grid built in Framing Assistant with Aladin Lite panel-overlay preview. Server computes per-panel RA/Dec via tangent-plane projection (10% default overlap, configurable). Interleaved scheduling (one frame per panel rotating per filter — balances airmass + sky conditions across all panels). Per-panel sub-targets in existing target system. Mosaic-aware Resume workflow: years-spanning projects supported — server tracks completion per panel per filter, new sessions roll up cleanly into the same mosaic. Image Library shows visual grid colored by completion. ARA captures + tags; stitching is post-processing (PixInsight/Siril) per user's choice.
 - [x] ~~**Auto-flats / auto-darks**~~ → **Resolved §48**. Sequence-start prompt asks user: capture flats tonight (panel or sky) or capture them later via §39.5 session-matching workflow. User preference saved per profile ("ask each time" default, or "always panel", "always sky", "never"). `FlatPanelFlats` + `SkyFlats` instructions preserved from NINA. Dark library is NOT in the prompt (different scope — built separately by user as a multi-hour overnight task using `DarkLibraryInstruction`). Bias library similarly user-initiated.
 - [x] ~~**API documentation serving**~~ → **Resolved §49**. Swagger UI v5 (matching ASCOM Alpaca's convention — both ecosystems use the same tool). Served open (no token) at `/api/v1/docs`. Raw OpenAPI 3.1 spec at `/api/v1/openapi.yaml` + `.json`. Swagger UI's "Authorize" lets power users paste their token to test auth'd endpoints. ASCOM-style CSS customizations.
-- [ ] **Astrometry.net star index downloads** — separate from ASTAP star database; if Astrometry.net is kept as a solver option, the index files (4100-series, 4200-series) need a download/manage workflow. ~5-100 GB depending on index set.
+- [x] ~~**Astrometry.net star index downloads**~~ → **Deferred to v0.1.0** (§18.I updated). ASTAP covers 99% of solving needs; astrometry.net adds another binary + index-file management workflow not worth v0.0.1 complexity. Phase 8 strips astrometry.net call sites from inherited NINA code. v0.1.0 may add it back if demand emerges, with a Survey-Manager-style UI for 4100/4200/5000-series index downloads.
 
 ## Tier 3 — Polish / deferred
 
@@ -80,6 +80,7 @@ These came up in conversation and ARE in the playbook. Listed here so we don't a
 - ✅ Mosaic / multi-panel imaging — N×M grid in Aladin, interleaved scheduling, mosaic-aware Resume across years (§47)
 - ✅ Auto-flats / auto-darks + sequence-start prompt offering "capture later via §39.5" (§48)
 - ✅ API documentation serving — Swagger UI matching ASCOM Alpaca's convention (§49)
+- ✅ Astrometry.net star index downloads → deferred to v0.1.0 (§18.I updated)
 - ✅ Aladin Lite license boundary (GPLv3 via WebView process boundary) (§36.11)
 - ✅ NINA-style UI clone with bitmap-asset placeholders (§25)
 - ✅ Fork hygiene — naming, identifiers, MPL preservation (§17)

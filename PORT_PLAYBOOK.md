@@ -762,7 +762,7 @@ Placeholders during port. Every icon/splash/logo reference carries `TODO(brandin
   - Linux: `which astap` → `/usr/bin/astap` or `/opt/astap/astap`
   - macOS: `/Applications/ASTAP.app/Contents/MacOS/astap`
   - Windows: `%PROGRAMFILES%\astap\astap.exe`
-- **Astrometry.net**: kept if NINA's existing integration works without WPF deps; audit during Phase 8.
+- **Astrometry.net**: **deferred to v0.1.0.** ASTAP covers 99% of astrophotography solving needs and is well-maintained, ARM64-native, cross-platform. Adding astrometry.net means another binary management workflow, another index-file download manager (4100 / 4200 / 5000-series catalogs, ~1-30 GB each), and another solver-tuning surface — not worth the complexity for v0.0.1. Phase 8 strips astrometry.net call sites from inherited NINA code; v0.1.0 may add it back if there's user demand.
 - **PlateSolve2**: deleted entirely (Windows-only legacy).
 
 ---
