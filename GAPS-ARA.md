@@ -13,7 +13,7 @@ These would actively bite real users on day one if missing. Discuss + bake befor
 - [x] ~~**Calibration frames management**~~ → **Resolved §39**. Light/Dark/Bias/Flat sequence types preserved; capture-only philosophy (no calibration at capture); rich FITS session metadata; session library API; **session-metadata-driven matching-flats workflow** (pick past session → server generates flat sequence matching exact equipment state); temp-mismatch handling; dark library auto-generation; calibration library browsing in WILMA.
 - [x] ~~**Captured-image library workflow**~~ → **Resolved §40 + §41**. By-session organization with by-target rollups; two-tier preview JPEGs (thumb + full-res for pixel peep); rate/tag/notes; bulk operations; "Resume Target" workflow for multi-year project alignment (records plate-solve + rotator for reproducibility); auto-rating + HFR drift pattern detection ("clouds, not focus"); OS file-association handoff for FITS export. §41 adds mobile companion mode scope: phone/tablet does monitoring + library viewing + pinch-to-zoom + GPS push + emergency stop, NOT sequence editing or full sky atlas (desktop-only).
 - [x] ~~**Sequence file format + NINA `.json` import**~~ → **Resolved §38**. NINA schema verbatim + `schemaVersion: "openastroara-sequence-v1"`; OpenAPI-documented; import endpoint with equipment-remap + unsupported-instruction handling; 4 bundled starter templates; sequence-template variable system.
-- [ ] **Hardware fault recovery (per-equipment)** — mount loses tracking, camera disconnects mid-exposure, focuser stalls, filter wheel jam; retry logic; auto-abort thresholds; per-failure user notifications. NINA has logic; this is "preserve + document" rather than "design from scratch."
+- [x] ~~**Hardware fault recovery (per-equipment)**~~ → **Resolved §42**. Universal retry-then-action pattern (Continue/Notify/Pause/Abort+park), per-fault configurable in profile safety policies. 16-row fault matrix covering camera/mount/focuser/EFW/rotator/guider/plate-solve/ASTAP/dew-heater/switch-value-mismatch/dew-formation. Hot-reconnect with backoff schedule. Switch value tolerance for PWM/dimmable devices. Faults logged to session DB and visible per-frame in image library. NINA's retry semantics preserved; ARA adds value-tolerance + dew detection + unified retry pattern.
 - [ ] **Backup / restore of profiles + sequences** — export profile as `.profile.json`; export sequence library as `.sequences.zip`; import on new install; automatic local backups; cloud backup considerations (future).
 
 ## Tier 2 — Open, medium-impact
@@ -38,6 +38,7 @@ Important workflows but won't crash anything on night-one. Can be specced after 
 - [ ] **Pi RTC hardware option** — battery-backed RTC modules (DS3231, etc.) avoid the time-sync waterfall in §31 entirely; document supported modules in DEPLOY.md / wiki.
 - [ ] **Pre-built RPi OS image** — alternative to .deb install; pre-flashed SD card with everything ready. v0.1.0 / v0.2.0; CI image-build pipeline required.
 - [ ] **AlpacaBridge + openastro-phd2 WILMA-push updates** — same pattern as §33 for ARA Core, extended to siblings. Mentioned in §33.6 as v0.1.0 scope.
+- [ ] **AlpacaBridge enhancement: switch power levels for RPi devices** — outside ARA Core scope (AlpacaBridge-side work). Support PWM / value-based switches for RPi-attached devices like dew heaters with variable output, dimmable flat panels, voltage-controlled outputs. ARA Core (§42.4) already consumes the full Alpaca `ISwitch` interface so it's ready when AlpacaBridge supports it.
 - [ ] **Bulk asteroid catalog** — currently targeted lookup only per §36.8; v0.1.0 adds smart-culled MPC asteroid layer.
 - [ ] **Survey downloader polish** — parallel downloads with resume across app restarts; background download on mobile; incremental updates via `If-Modified-Since`. v0.1.0 (v0.0.1 ships single-threaded sequential).
 
@@ -71,6 +72,7 @@ These came up in conversation and ARE in the playbook. Listed here so we don't a
 - ✅ Calibration frames + session-metadata-driven matching flats (§39)
 - ✅ Captured-image library workflow + "Resume Target" multi-year alignment + HFR drift detection (§40)
 - ✅ Mobile companion mode scope — phones/tablets do monitor + library + GPS-push only, no editing (§41)
+- ✅ Hardware fault recovery (per-equipment) + switch value tolerance + dew detection (§42)
 - ✅ Aladin Lite license boundary (GPLv3 via WebView process boundary) (§36.11)
 - ✅ NINA-style UI clone with bitmap-asset placeholders (§25)
 - ✅ Fork hygiene — naming, identifiers, MPL preservation (§17)

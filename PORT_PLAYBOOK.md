@@ -2810,3 +2810,126 @@ Two flows that exist ONLY on mobile:
 WILMA (Windows / iOS / Linux / Mac / Android) acronym is preserved. Mobile platforms (iOS, Android) explicitly run in Companion Mode by default. Desktop platforms (Windows, macOS, Linux) run the full client.
 
 In practice this means a single `flutter build` per platform, with platform-detection-driven shell selection at runtime.
+
+---
+
+## 42. Hardware fault recovery (per-equipment)
+
+Distinct from §28 (server crash recovery). This section covers per-equipment "something went wrong while the server was running" handling: camera disconnects mid-exposure, mount loses tracking, focuser stalls, EFW jams, dew heaters fail, etc. Most of this logic is preserved from NINA; this section documents what's preserved + the few ARA-native additions (switch value-tolerance, dew detection, hot-reconnect).
+
+### 42.1 Retry-then-action pattern (universal)
+
+Every fault uses the same flow:
+
+```
+Fault detected
+   ↓
+Retry N times with exponential backoff (default: 3 attempts, 5s/15s/30s)
+   ↓ all retries failed
+   ↓
+Execute fault's configured action per profile
+   ↓
+   Continue   = log, keep going (use for benign / informational faults)
+   Notify     = queued WebSocket event, sequence continues
+   Pause      = sequence pauses at next safe point, equipment stays connected, user resumes manually
+   Abort+park = full §35.3 emergency stop sequence (camera abort, guider stop, mount park, etc.)
+```
+
+Per-fault action is configurable in profile safety policies (§35 extension), with the defaults below.
+
+### 42.2 Fault matrix
+
+| Fault | Detection | Default action | Notes |
+|---|---|---|---|
+| Camera disconnect / capture error mid-exposure | Alpaca connection error or capture timeout | Reconnect → Pause if persistent | In-flight frame lost; next frame retries |
+| Camera cooling failure (set temp not reached after timeout) | `CCDTemp` vs `SetCCDTemperature` drift > 5°C for > 5 min | Notify | Don't abort — user may want to image at warmer temp |
+| Camera dew heater unexpectedly OFF | Alpaca `DewHeaterPower` queried, expected vs reported | Re-command ON → Notify if still off | Camera-integrated heaters only |
+| Mount loses tracking | Alpaca `Tracking = false` unexpectedly during exposure | Re-enable → Pause if rejected | Common cause of trailed stars |
+| Mount slew error / refuses command | Alpaca slew returns error or doesn't complete | Retry → Abort + park | May indicate physical obstruction |
+| Mount unexpected park / disconnect | Alpaca connection lost or mount auto-parks | Reconnect → Abort + park if persistent | Cable disconnect is most common |
+| Focuser stalls | Commanded position not reached within timeout | Retry → recalibrate backlash → Notify | Common in cold weather (lubricant viscosity) |
+| **EFW (filter wheel) jam / position not reached** | Commanded slot not reached within timeout | Retry → Notify | User must intervene physically |
+| Rotator (CAA) runaway / position drift | Reported angle differs from commanded > tolerance (default 0.5°) | Re-issue → Notify | Mechanical issues |
+| Guider (PHD2): loses calibration | PHD2 calibration-failed event | Recalibrate → Pause if persistent | Common after meridian flip |
+| Guider (PHD2): loses guide star | PHD2 star-lost event for > 30s | Pause → wait for recovery (clouds passing) | Often transient |
+| Guider (PHD2): dither timeout | Dither not settled within 60s | Continue (log warning) | Skip dither, keep imaging |
+| Plate solve failure | After §28.2 retries (3 attempts) | Pause + notify | User can re-frame target or skip |
+| ASTAP / Astrometry.net executable crash | Process exit code != 0 | Retry once → Notify | Re-invoke; bad images usually cause this |
+| **External dew heater (Alpaca Switch) commanded ON but reporting OFF** (boolean switch) | Switch read-back mismatch | Re-command → Notify if still off | Power-port dew straps |
+| **External switch value mismatch** (PWM heater, dimmable flat panel, etc. — value-based ISwitch) | Commanded value vs read-back outside tolerance (default ±5%) | Re-command → Notify | Pegasus PowerBox-style devices |
+| **Dew formation suspected** | Pattern: humidity near 100% AND ambient at dew point AND HFR rising gradually (halos forming) | Notify | Advisory only — no auto-abort. User intervention required (wipe optics, enable heaters) |
+
+### 42.3 Hot-reconnect on disconnect
+
+When any device disconnects mid-session, ARA Core attempts automatic reconnect with backoff before pausing the sequence:
+
+```
+Disconnect detected
+   ↓
+Attempt 1: reconnect immediately
+   ↓ fail
+Attempt 2: wait 5s, reconnect
+   ↓ fail
+Attempt 3: wait 15s, reconnect
+   ↓ fail
+Attempt 4: wait 30s, reconnect
+   ↓ fail
+Attempt 5: wait 60s, reconnect
+   ↓ fail
+Pause sequence + queue notification to WILMA
+```
+
+Most disconnects are transient (USB hub hiccup, AlpacaBridge restart, WiFi blip) and recover by attempt 2 or 3.
+
+### 42.4 Switch value tolerance (Alpaca `ISwitch`)
+
+ARA treats Alpaca Switch devices using the full `ISwitch` interface:
+
+- **Boolean switches** (port on/off): fault if commanded state ≠ read-back state
+- **Value-based switches** (PWM, dimmable): fault if `|commanded − readBack| > tolerance × range`
+  - Default tolerance: 5% of the switch's min/max range
+  - Tolerance configurable per switch in profile (some devices have 10%+ inherent noise)
+  - Useful for: dew heater PWM, flat panel brightness, focuser temperature setpoint on heated focusers
+
+### 42.5 Fault logging
+
+Every detected fault is logged to the Pi session database:
+
+```sql
+CREATE TABLE faults (
+  id TEXT PRIMARY KEY,
+  session_id TEXT REFERENCES sessions(id),
+  detected_at TIMESTAMP,
+  equipment_type TEXT,       -- "camera", "mount", "focuser", "efw", "dewheater", etc.
+  equipment_id TEXT,         -- Alpaca device id
+  fault_type TEXT,           -- "disconnect", "tracking_lost", "value_mismatch", etc.
+  details JSON,              -- fault-specific payload
+  action_taken TEXT,         -- "retry", "reconnect", "pause", "abort"
+  resolved_at TIMESTAMP,     -- null if unresolved
+  affected_frames JSON       -- list of frame IDs that may have been impacted
+);
+```
+
+### 42.6 Fault visibility in WILMA
+
+- **Live**: dashboard equipment chip turns yellow/red on fault detection; tap → fault details modal with retry attempt count, last error message
+- **Session library**: per-session fault count badge; tap session → "Faults" tab shows timeline with each fault, action taken, frame impact
+- **Image library** (§40): individual frames captured during a fault window are marked with a fault icon overlay (e.g., "captured while mount tracking was lost — likely trailed")
+- **Per-fault recommendation**: WILMA shows brief advice ("Mount lost tracking — check cable, weight balance, slew limits")
+
+### 42.7 What's preserved verbatim from NINA
+
+- Backlash compensation algorithm + per-direction step counts
+- Focuser temperature compensation curves
+- Autofocus retry logic + step pattern
+- PHD2 calibration retry semantics
+- Plate-solve retry strategy
+- Per-instruction retry counts in the sequencer
+
+### 42.8 What's ARA-native
+
+- Switch value-tolerance for PWM/dimmable devices
+- Dew formation detection from weather + HFR pattern (§40.7 + this section)
+- Hot-reconnect with explicit backoff schedule (NINA had partial; ARA formalizes)
+- Per-frame fault flagging in the image library
+- Unified retry-then-action pattern across all fault types (NINA varies by subsystem)
