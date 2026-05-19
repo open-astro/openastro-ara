@@ -14,7 +14,7 @@ These would actively bite real users on day one if missing. Discuss + bake befor
 - [x] ~~**Captured-image library workflow**~~ → **Resolved §40 + §41**. By-session organization with by-target rollups; two-tier preview JPEGs (thumb + full-res for pixel peep); rate/tag/notes; bulk operations; "Resume Target" workflow for multi-year project alignment (records plate-solve + rotator for reproducibility); auto-rating + HFR drift pattern detection ("clouds, not focus"); OS file-association handoff for FITS export. §41 adds mobile companion mode scope: phone/tablet does monitoring + library viewing + pinch-to-zoom + GPS push + emergency stop, NOT sequence editing or full sky atlas (desktop-only).
 - [x] ~~**Sequence file format + NINA `.json` import**~~ → **Resolved §38**. NINA schema verbatim + `schemaVersion: "openastroara-sequence-v1"`; OpenAPI-documented; import endpoint with equipment-remap + unsupported-instruction handling; 4 bundled starter templates; sequence-template variable system.
 - [x] ~~**Hardware fault recovery (per-equipment)**~~ → **Resolved §42**. Universal retry-then-action pattern (Continue/Notify/Pause/Abort+park), per-fault configurable in profile safety policies. 16-row fault matrix covering camera/mount/focuser/EFW/rotator/guider/plate-solve/ASTAP/dew-heater/switch-value-mismatch/dew-formation. Hot-reconnect with backoff schedule. Switch value tolerance for PWM/dimmable devices. Faults logged to session DB and visible per-frame in image library. NINA's retry semantics preserved; ARA adds value-tolerance + dew detection + unified retry pattern.
-- [ ] **Backup / restore of profiles + sequences** — export profile as `.profile.json`; export sequence library as `.sequences.zip`; import on new install; automatic local backups; cloud backup considerations (future).
+- [x] ~~**Backup / restore of profiles + sequences**~~ → **Resolved §29 + §43 + §44**. §29 updated to make USB drive MANDATORY (SD card OS-only — protects against SD wear from sustained FITS writes). Because everything (profiles, sequences, session DB, calibration, FITS, logs) lives on USB, the drive itself is portable — pull it out, plug into another Pi, ARA resumes exactly. §43 covers four backup layers: drive-to-drive clone (primary, user-managed), **real-time stream to desktop WILMA (§44 — pull-based, throttled, capture-aware backoff)**, server-generated lightweight ZIP (profiles + sequences + DB + calibration metadata), auto-snapshots on the USB. Restore flows for same-drive-new-Pi, fresh-USB-with-ZIP, and fresh-start.
 
 ## Tier 2 — Open, medium-impact
 
@@ -73,6 +73,8 @@ These came up in conversation and ARE in the playbook. Listed here so we don't a
 - ✅ Captured-image library workflow + "Resume Target" multi-year alignment + HFR drift detection (§40)
 - ✅ Mobile companion mode scope — phones/tablets do monitor + library + GPS-push only, no editing (§41)
 - ✅ Hardware fault recovery (per-equipment) + switch value tolerance + dew detection (§42)
+- ✅ Mandatory USB storage + backup/restore + drive portability across Pis (§29 updated + §43)
+- ✅ Real-time backup stream from Pi to desktop WILMA (§44 — protects against mid-session USB failure)
 - ✅ Aladin Lite license boundary (GPLv3 via WebView process boundary) (§36.11)
 - ✅ NINA-style UI clone with bitmap-asset placeholders (§25)
 - ✅ Fork hygiene — naming, identifiers, MPL preservation (§17)

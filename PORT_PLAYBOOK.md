@@ -1282,7 +1282,16 @@ The same warning pattern fires during normal sequence execution, not just recove
 
 ## 29. Storage / disk-space policy
 
-Two distinct storage domains: **Pi side** (FITS frames + session state + profiles, server-managed) and **WILMA side** (bundled catalogs + downloaded sky imagery surveys + cached tiles + draft sequences, client-managed).
+Two distinct storage domains: **Pi side** (FITS frames + session state + profiles + sequences + calibration library + logs, server-managed, **on a mandatory USB drive**) and **WILMA side** (bundled catalogs + downloaded sky imagery surveys + cached tiles + draft sequences, client-managed).
+
+**Pi-side storage is on a USB drive — REQUIRED, not optional.** The Pi's SD card holds only the OS, the `openastroara-server` binary, the systemd unit, and `/etc/openastroara/`. All ARA persistent data (frames, DB, profiles, sequences, logs) lives on an external USB drive that the user provides and configures during first-run setup. Reasons:
+
+- SD cards have limited write endurance (typically 1,000-10,000 P/E cycles on consumer cards). A typical astrophotography night writes 50-100+ GB of FITS data; on an SD card that's months-to-a-year of life before failure.
+- SD card failure during a session = lost imaging data plus a bricked Pi.
+- USB SSDs (or even quality USB 3.0 sticks) handle sustained writes orders of magnitude better.
+- DEPLOY.md recommends USB 3.0 SSDs or quality USB 3.0 sticks from reputable brands. Strongly discourages "free promotional" USB sticks of unknown provenance.
+
+The server refuses to enter "ready" state without a configured USB drive (§29.1.1).
 
 ### 29.0 WILMA-side storage (Flutter client)
 
@@ -1308,7 +1317,57 @@ Settings → Storage on WILMA shows total usage, per-survey breakdown, "Clear ca
 
 ### 29.1 Save location (Pi side)
 
-Uses the existing NINA image-save-path setting from the active profile, exposed via API. Server default if unset: `${data_dir}/captures/` (`/var/lib/openastroara/captures/` on Linux). Users are strongly encouraged to point this at a USB drive (see DEPLOY.md) rather than the Pi's SD card.
+Server stores ALL persistent data on the configured USB drive at `/media/openastroara/`. Layout:
+
+```
+/media/openastroara/                            (mandatory USB drive)
+├── captures/<session-id>/<target>/<filter>/    FITS frames
+│   └── <frame>.fits + .thumb.jpg + .preview.jpg
+├── calibration/                                Calibration library (§39.9)
+│   ├── darks/<camera-id>/<gain>_<temp>_<exp>/
+│   ├── bias/<camera-id>/<gain>_<offset>/
+│   └── flats/<camera-id>/<filter>_<rot>_<focus>/
+├── db/openastroara.db                          SQLite session + frames + profiles + sequences + faults DB
+├── profiles/                                   Profile JSON files (canonical)
+├── sequences/                                  Sequence library (§38.2)
+│   ├── library/
+│   ├── imported/
+│   └── active/
+├── templates/                                  User-customized templates
+├── logs/                                       Serilog rotating output, capped 14 days
+└── .araback/                                   Auto-generated backup zips (per §43)
+```
+
+The Pi's SD card holds only: OS, `openastroara-server` binary (under `/opt/openastroara/`), systemd unit, `/etc/openastroara/{token, storage.conf}`, and a tiny placeholder `/var/lib/openastroara/` (used only briefly during first-run before USB is configured).
+
+### 29.1.1 USB drive configuration (first-run)
+
+After `sudo apt install openastroara-server` completes:
+
+1. Server starts in **`needs_storage`** mode. `GET /api/v1/server/info` returns `{ "status": "needs_storage", "available_usb_drives": [{...}, {...}] }`.
+2. `GET /api/v1/server/storage/candidates` enumerates mounted USB block devices (via `lsblk -J --output NAME,UUID,SIZE,MOUNTPOINT,LABEL`) excluding the OS root + boot partitions.
+3. WILMA prompts user: *"Select a USB drive for ARA data:"* with size + label + free space per option.
+4. User picks → WILMA calls `POST /api/v1/server/storage/configure { "uuid": "..." }`.
+5. Server:
+   - Writes UUID to `/etc/openastroara/storage.conf` (permanent pin)
+   - Creates directory structure on the USB drive
+   - Initializes the SQLite DB
+   - If USB already has existing ARA data (re-using a drive from another Pi): asks WILMA `"Found existing ARA data on this drive (12 profiles, 47 sessions). Use this data?"` → either continue with existing data or initialize fresh
+   - Transitions to **`ready`** mode
+
+The configured UUID is pinned. If the user replaces the USB drive, they go back through the configuration flow.
+
+### 29.1.2 USB unplug detection
+
+Server watches the USB mount point (filesystem watcher on the parent dir). On unmount/disconnect:
+
+- Active sequence pauses immediately at next safe point (no new exposures)
+- Active capture: in-flight frame's bytes go to a tmpfs buffer, flushed once the drive returns OR discarded after 60s
+- WebSocket event: `{ "type": "storage.unmounted", "severity": "critical" }`
+- WILMA shows full-screen alert: *"USB drive disconnected. Sequence paused. Reconnect the drive to resume."*
+- On remount (same UUID): server detects, resumes sequence; users sees "Storage reconnected" toast
+
+If a different UUID mounts: server ignores it (not the configured drive).
 
 ### 29.2 Storage info endpoint
 
@@ -1373,30 +1432,39 @@ Or if low / on SD card:
 
 ### 29.6 Settings → Storage panel (client)
 
-- Current save path, free space, USB / SD indicator
-- "Browse" picker → opens server-side folder browser endpoint (`GET /api/v1/server/filesystem?path=...`) so user picks a directory on the Pi
-- "Reset to default" button
-- Link to DEPLOY.md USB-mount instructions
+- Current USB drive: label, total / free space, throughput meter, "Healthy" indicator
+- **Configured UUID** display (so user knows which drive is "the one")
+- "Switch storage drive" → re-runs the §29.1.1 configuration flow (warns about migrating data)
+- "Eject safely" → unmounts the drive cleanly so user can swap (sequence must not be running)
+- Link to DEPLOY.md USB hardware recommendations + backup instructions
+- Auto-prune policy editor (per §29.5): never / monthly / weekly with rating-based rules
 
-### 29.7 DEPLOY.md content (USB on Raspberry Pi OS)
+### 29.7 DEPLOY.md content (USB drive setup)
 
-```
-# Install auto-mount tooling
-sudo apt install -y usbmount
+```bash
+# 1. Plug in your USB drive (USB 3.0 SSD recommended; quality USB 3.0 stick acceptable).
+#    DO NOT use a cheap promotional USB stick — they fail.
 
-# Create a stable mount point
+# 2. Find the drive's UUID:
+lsblk -f
+# Look for your drive (e.g., /dev/sda1) and note its UUID.
+
+# 3. (Optional, recommended) Format the drive as ext4 for best Linux performance
+#    and reliability. This WIPES the drive — back up first.
+sudo mkfs.ext4 -L openastroara /dev/sda1
+
+# 4. Create the mount point + persistent mount:
 sudo mkdir -p /media/openastroara
+echo 'UUID=<your-uuid> /media/openastroara ext4 defaults,nofail,x-systemd.device-timeout=10 0 0' \
+  | sudo tee -a /etc/fstab
+sudo systemctl daemon-reload
+sudo mount -a
 
-# Identify your USB drive (e.g., /dev/sda1)
-lsblk
+# 5. Set ownership so the openastroara user can write:
+sudo chown -R openastroara:openastroara /media/openastroara
 
-# Mount at a known path
-sudo mount /dev/sda1 /media/openastroara
-
-# Persistent via fstab (replace UUID with output of `blkid /dev/sda1`):
-echo 'UUID=<uuid> /media/openastroara ext4 defaults,nofail,user 0 0' | sudo tee -a /etc/fstab
-
-# Tell ARA to save there:
+# 6. Tell ARA to use this drive (via WILMA's first-run storage config —
+#    or manually edit /etc/openastroara/storage.conf):
 sudo nano /etc/openastroara/server.env
 # Add: STORAGE_PATH=/media/openastroara/captures
 sudo mkdir -p /media/openastroara/captures
@@ -2933,3 +3001,287 @@ CREATE TABLE faults (
 - Hot-reconnect with explicit backoff schedule (NINA had partial; ARA formalizes)
 - Per-frame fault flagging in the image library
 - Unified retry-then-action pattern across all fault types (NINA varies by subsystem)
+
+---
+
+## 43. Backup + restore
+
+ARA's backup model is **"the USB drive IS the backup unit"** because §29 makes USB storage mandatory and ALL persistent state (profiles, sequences, session DB, calibration library, FITS frames, logs) lives there. The Pi's SD card is disposable.
+
+### 43.1 The portability story
+
+Because everything lives on USB, ARA Core gets a powerful invariant for free: **pull the USB drive out, plug it into a different Pi, and ARA picks up exactly where you left off.** Same profiles, same sessions, same calibration library, same in-flight sequence state.
+
+This makes:
+- **Pi replacement** trivial — SD card died? Buy a new one, flash Trixie, `apt install openastroara-server`, plug your USB in, you're back.
+- **Field-to-home migration** seamless — image at a dark site on Pi A, drive home, plug the USB into Pi B (your home observatory Pi) for processing without moving files.
+- **Hardware testing** safe — try a different Pi or Orange Pi or RockChip, swap USB between them, no data risk.
+
+### 43.2 What backups protect against
+
+The USB-IS-the-data model is fast and portable, but it has one failure mode: **the USB drive itself dies or is lost/stolen**. Backups address only this.
+
+Four backup layers, in priority order:
+
+| Layer | What it protects | Scope |
+|---|---|---|
+| **1. Drive-to-drive clone** (recommended primary) | USB drive failure, loss, theft | Everything: FITS + DB + profiles + sequences + calibration |
+| **2. Real-time backup stream to desktop WILMA** (see §44) | USB drive failure mid-session — frames already streamed are safe on the PC | FITS files trickled to desktop in real time during imaging |
+| **3. Server-generated backup ZIP** (downloadable via WILMA) | Profile/sequence/setting loss; quick portability | Profiles + sequences + DB + calibration metadata. **NOT FITS files** (too large). |
+| **4. Auto-snapshots on the same USB** (low-value but cheap) | "I accidentally deleted my profile" / catastrophic bug in ARA writes bad DB | Profiles + sequences + DB snapshot. Stored under `.araback/` on the same drive. |
+
+### 43.3 Drive-to-drive clone (primary backup mechanism)
+
+The recommended user workflow: every few weeks, clone the working USB drive to a second drive kept in a separate location.
+
+DEPLOY.md documents the procedure:
+
+```bash
+# Identify both drives:
+lsblk -f
+# Working drive = /dev/sda, backup drive = /dev/sdb (example)
+
+# Clone, drive-to-drive (full block-level copy):
+sudo dd if=/dev/sda of=/dev/sdb bs=4M status=progress
+
+# Or, file-level mirror (faster, only changed files):
+sudo rsync -aAXxv --delete /media/openastroara/ /mnt/backup-drive/openastroara/
+```
+
+ARA does not automate this — the user manages their backup drive(s). v0.1.0 may add a "backup wizard" that guides the user through this with checks (drive size, free space, integrity verify) but stays out of the user's hardware.
+
+### 43.4 Server-generated backup ZIP
+
+For lightweight portability + WILMA-driven backup convenience:
+
+`POST /api/v1/server/backup/create`
+- Server zips: `profiles/`, `sequences/library/`, `templates/`, `db/openastroara.db` (snapshot), `calibration/` metadata sidecar JSONs only (not the FITS frames)
+- Writes to `/media/openastroara/.araback/openastroara-backup-YYYY-MM-DDTHH-MM-SS.zip`
+- Returns the zip's metadata + download URL
+
+`GET /api/v1/server/backup/{filename}` → downloads the zip to WILMA.
+
+`POST /api/v1/server/backup/restore` (multipart upload of a zip)
+- Server validates zip integrity
+- Pre-flight: lists what's in the zip + version compatibility
+- User confirms via WILMA
+- Server: stops sequence if running, backs up current state to a "pre-restore" snapshot, then unzips the backup zip over the current data, restarts to pick up new state
+- WILMA reconnects
+
+Typical zip size: 5-50 MB depending on history (vs the full USB which is GB to TB).
+
+### 43.5 Auto-snapshots on the USB drive
+
+Lowest-priority but cheap insurance against accidental corruption:
+
+- Configurable in Settings → Backup:
+  - "Auto-snapshot: Off / Daily at 2 AM / After every sequence"
+- Server creates a backup zip (per §43.4) into `/media/openastroara/.araback/` with the daily/sequence-end timestamp
+- Auto-prune: keeps last 14 snapshots, oldest auto-deleted
+
+This protects against "my profile got corrupted by a bug" but does NOT protect against drive failure (snapshots are on the same drive).
+
+### 43.6 Restore flow on a fresh Pi
+
+User scenarios:
+
+**Scenario A: Same USB drive, new Pi (most common)**
+1. Flash Trixie on the new Pi's SD card, configure Wi-Fi, install openastroara-server per §34.1
+2. Plug in the USB drive
+3. First-run wizard detects existing ARA data on the drive, prompts: *"Found existing ARA data: 12 profiles, 47 sessions, 3.2 GB calibration library. Use this data?"* → [Use Existing Data] / [Initialize Fresh]
+4. Server pins the UUID, registers existing structure, starts in `ready` mode with full history
+5. WILMA prompts for the new token (regenerated per-Pi), reconnects
+
+**Scenario B: Fresh USB drive + backup zip**
+1. Same as above, but the USB is fresh
+2. Plug in USB, run first-run wizard → server initializes empty structure
+3. In WILMA: Settings → Backup → Restore from ZIP → upload `openastroara-backup-*.zip`
+4. Server restores profiles + sequences + DB metadata
+5. Note: calibration FITS files NOT in the backup zip; only the metadata. User must separately recover those from a drive clone if needed.
+
+**Scenario C: Fresh USB drive + no backup (rebuilding from scratch)**
+1. Plug in fresh USB, first-run wizard initializes
+2. User goes through profile-setup wizard (§37) fresh
+3. No historical data; user starts from zero
+
+### 43.7 Backup metadata
+
+Every backup zip has a top-level `manifest.json`:
+
+```json
+{
+  "schemaVersion": "openastroara-backup-v1",
+  "createdAt": "2026-05-19T03:14:15Z",
+  "createdBy": "ara-pi-observatory",
+  "serverVersion": "0.0.1-ara.1",
+  "contents": {
+    "profiles": 12,
+    "sequences": 47,
+    "templates": 4,
+    "frames_metadata_rows": 18420,
+    "calibration_metadata_files": 153
+  },
+  "totalSizeBytes": 24123456
+}
+```
+
+Restore endpoint validates `schemaVersion` against current ARA Core's known versions before proceeding.
+
+### 43.8 What's NOT backed up
+
+These are deliberately excluded:
+
+- **FITS frames** (`captures/` and `calibration/` FITS files) — too large for a portable ZIP. User backs these up via drive clone (§43.3). The DB has all metadata pointing at the frame paths, so restoring a backup with no FITS files leaves the DB "pointing at missing files" — WILMA shows these frames with a missing-file indicator and a "scan for files" button to relocate (e.g., user manually copied FITS to a different USB).
+- **HiPS tile downloads on WILMA** — re-downloadable from CDS (§36)
+- **WILMA bundled catalogs** — re-installable from app build (§36.1)
+- **System logs older than 14 days** — pruned
+
+### 43.9 Settings → Backup panel (WILMA)
+
+```
+┌──────────────────────────────────────────────────────┐
+│  Backup                                              │
+│  ──────────────────────────────────────────────────  │
+│  Primary backup: clone the USB drive periodically    │
+│  → [Open DEPLOY.md instructions]                     │
+│                                                       │
+│  Server backup ZIP:                                   │
+│    Last created: 2 days ago (24 MB)                   │
+│    [Create Backup Now]  [Download Last Backup]        │
+│                                                       │
+│  Auto-snapshot to USB:                                │
+│    [ Off ▼ ]                                          │
+│    Options: Off / Daily at 2 AM / After every session │
+│                                                       │
+│  Restore:                                             │
+│    [Restore from ZIP] (select a .zip from this device)│
+└──────────────────────────────────────────────────────┘
+```
+
+### 43.10 Best-practice recommendation in README
+
+> **Back up your USB drive.** ARA stores everything on your USB drive — profiles, sequences, sessions, calibration, frames. It's portable and durable, but USB drives can still fail. We strongly recommend cloning your working drive to a second drive every few weeks, and keeping the backup drive in a separate location (or at least a separate room). The drive-to-drive clone takes a few minutes and protects against the one failure mode the "everything on USB" model has: the drive itself dying. **For users with a desktop running WILMA on the same LAN, enable real-time backup streaming (§44) to get a continuously-mirrored copy of new frames on your PC, so even an unexpected USB failure mid-session loses at most the last in-flight frame.**
+
+---
+
+## 44. Real-time backup stream to desktop WILMA
+
+Layer 2 of the backup strategy from §43.2. Optional, opt-in feature that pulls each newly-captured FITS file from the Pi to a desktop WILMA in real time during imaging. Result: the PC has a continuously-updating mirror of the Pi's frames. If the USB drive dies overnight, the user wakes up to find every captured frame already on their desktop.
+
+### 44.1 What it does
+
+- After each FITS file is finalized on the Pi (post-capture, post-preview-generation), the Pi enqueues the file for backup streaming
+- A desktop WILMA, if connected with backup-stream enabled, polls the queue and pulls each file via HTTP
+- WILMA writes to a user-configured local directory (default `~/Documents/OpenAstroAra/Backups/<pi-hostname>/<session>/<filter>/`)
+- Verifies SHA-256 after download; re-requests on mismatch
+- Acknowledges Pi when stored locally so the Pi can mark "synced to this WILMA"
+
+### 44.2 Why pull-based, not push
+
+WILMA could theoretically expose an HTTP endpoint for the Pi to POST to, but:
+- WILMA on macOS/Windows behind home NAT has no stable inbound port
+- WILMA mobile may be on cellular with no inbound connectivity
+- Browser-style firewalls block inbound by default
+
+WILMA pulling FROM the Pi (Pi is the LAN-stable listener) just works. No port forwarding, no firewall exceptions on the desktop.
+
+### 44.3 Restrictions
+
+- **Desktop WILMA only** (Windows, macOS, Linux desktop). Mobile companion mode (§41) does NOT participate — phones don't have terabytes of storage and would burn cellular data.
+- **Same LAN recommended** but not required (can work over VPN, just slower)
+- **Single active stream target per Pi for v0.0.1** — only one WILMA at a time is the "backup target." If two desktops both enable backup stream, Pi designates whichever connects first as the active one and tells the other "another WILMA is already streaming."
+- v0.1.0 may add multi-target (mirror to two PCs simultaneously)
+
+### 44.4 Bandwidth throttling
+
+Streaming runs in the background and must not interfere with primary operations (live preview, WebSocket status, current sequence capture). Two control mechanisms:
+
+**Token bucket bandwidth limit** (default 50% of measured uplink):
+- WILMA measures effective bandwidth on first connection (one-time HTTP throughput test)
+- Bucket refill rate: configurable in Settings → Backup → "Stream bandwidth limit"
+- User can override to a fixed value (e.g., "10 Mbps") or set to "Use all available bandwidth"
+
+**Capture-aware backoff**:
+- During an active exposure: streaming throttles to ~10% of normal rate (avoid USB I/O competition on the Pi)
+- Between exposures (filter changes, dithering, idle): streaming runs at full configured rate
+- During dawn/dusk idle: full rate
+- WILMA + Pi coordinate via the existing WebSocket events (`exposure.started`, `exposure.complete`)
+
+### 44.5 Endpoints
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/api/v1/server/backup-stream/status` | Returns `{ "enabled": bool, "active_target": "wilma-hostname", "pending_count": N, "synced_count": M, "queue_size_bytes": N }` |
+| `POST` | `/api/v1/server/backup-stream/claim` | WILMA claims the stream slot for this Pi (returns 200 + target token, or 409 if another WILMA is active) |
+| `POST` | `/api/v1/server/backup-stream/release` | WILMA voluntarily releases the slot (e.g., disk full, user opted out) |
+| `GET` | `/api/v1/server/backup-stream/queue?limit=N` | Returns list of pending frames: `[ { "id", "sha256", "size_bytes", "captured_at", "session_id" } ]`, ordered oldest first |
+| `GET` | `/api/v1/frames/{id}/fits` | (existing per §40.3) — Pulls the FITS bytes |
+| `POST` | `/api/v1/server/backup-stream/ack` | WILMA acknowledges successful storage. Body: `{ "frame_id", "sha256_verified" }`. Pi marks the frame `synced_to_target: <wilma>`. |
+
+### 44.6 State on the Pi
+
+Sessions DB gains per-frame columns:
+```sql
+ALTER TABLE frames ADD COLUMN sync_target TEXT;       -- e.g., "wilma-mac-joey"
+ALTER TABLE frames ADD COLUMN synced_at TIMESTAMP;    -- null if not yet synced
+ALTER TABLE frames ADD COLUMN sha256 TEXT;            -- computed at capture time
+```
+
+Queue is implicit: `SELECT * FROM frames WHERE sync_target = '<active>' AND synced_at IS NULL ORDER BY captured_at`.
+
+### 44.7 State on WILMA
+
+WILMA's local DB (SQLite at `<wilma-data>/backup-stream.db`):
+```sql
+CREATE TABLE stream_state (
+  pi_hostname TEXT PRIMARY KEY,
+  local_root TEXT,           -- where to write files
+  last_synced_frame_id TEXT,
+  total_bytes_received INT,
+  enabled BOOLEAN
+);
+
+CREATE TABLE local_frames (
+  frame_id TEXT PRIMARY KEY,
+  local_path TEXT,
+  sha256 TEXT,
+  pulled_at TIMESTAMP
+);
+```
+
+### 44.8 User flow
+
+1. User opens WILMA on desktop, navigates to Settings → Backup → Stream from Pi
+2. Toggle: "Stream new frames to this device": [Off / On]
+3. If turned On: WILMA calls `POST /api/v1/server/backup-stream/claim`. If another WILMA is already claimed: error "Another desktop is already streaming from this Pi (<hostname>). Disconnect it first."
+4. User picks a local storage path (default `~/Documents/OpenAstroAra/Backups/<pi-hostname>/`)
+5. WILMA shows storage estimate: "Pi has 47 GB of frames not yet on this device. Estimated download time at current bandwidth: 2h 14m. Free space on chosen drive: 412 GB."
+6. Streaming begins; status visible in:
+   - Persistent footer indicator: *"Backup stream: 12 of 144 frames synced (8.4 GB)"*
+   - Dashboard tile: progress bar + estimated time remaining
+   - Per-frame icon in Image Library: 🟢 (synced to this PC) / ⚪ (on Pi only)
+
+### 44.9 Failure modes
+
+| Failure | Behavior |
+|---|---|
+| WILMA closed mid-stream | Pi keeps frames; queue waits; resumes when WILMA reconnects |
+| Network drops | Both sides retry with backoff; queue persists on Pi |
+| SHA-256 mismatch on download | WILMA re-requests the file; logs an integrity error |
+| WILMA disk fills | WILMA stops pulling, releases the slot, surfaces a clear notification: *"Backup stream paused — only 1.2 GB free on backup drive. Free space and re-enable."* |
+| Pi USB unmounts mid-stream | §29.1.2 handles; stream pauses; resumes on remount |
+| User unplugs Pi entirely | Frames already streamed are safe on WILMA. Frames not yet streamed are gone if the USB was the only copy. |
+
+### 44.10 What this protects against (the headline benefit)
+
+Compared to drive-clone backups (which happen weekly) and ZIP backups (which happen on user demand), the real-time stream protects against **mid-session USB drive failure**. The worst case becomes: lose the in-flight FITS frame (the one being captured at the instant of failure). All previously-captured frames are safe on the PC.
+
+Combined with §29's mandatory-USB design, this makes ARA's reliability model significantly stronger than NINA's (where the only protection against drive failure is the user remembering to copy files off).
+
+### 44.11 NOT in v0.0.1 scope
+
+Deferred to v0.1.0:
+- **Multi-target streaming** (mirror to two desktops simultaneously)
+- **Cloud streaming** (rclone-based push to S3, Google Drive, etc.) — same protocol model but pull from a third-party endpoint
+- **Selective stream** (only stream frames matching certain filters / rated 3⭐+) — initial version streams everything
+- **WAN-friendly stream** (compressed transfer, delta-encoding, etc.) — initial version uses raw FITS over plain HTTP
