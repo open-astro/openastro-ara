@@ -6,9 +6,23 @@
 
 1. **OpenAstroAra.Server** — a headless ASP.NET Core daemon on .NET 10, running on a Raspberry Pi 4/5 (ARM64 Linux). Owns all imaging-session state. Speaks ASCOM Alpaca to equipment (typically via AlpacaBridge on the same Pi). Exposes a REST + WebSocket API.
 
-2. **OpenAstroAra.Client** — a Flutter + Dart application targeting Windows, macOS, Linux, Android, iOS from one codebase. Stateless. Connects to a server, hydrates UI from server state, can disconnect at any time without affecting imaging.
+2. **OpenAstroAra.Client** — a Flutter + Dart application running on **WILMA** (= Windows, iOS, Linux, Mac, Android — the five client platforms, one codebase). Connects to a server when imaging; otherwise self-sufficient for planning, browsing the sky atlas, editing sequences, viewing past frames.
 
 The product model is ASIAir-like: server runs the night, client is for planning and monitoring. Close the laptop, imaging keeps going.
+
+**Responsibility split (important — informs all later sections):**
+
+| WILMA owns ("plan + view") | ARA Core owns ("hardware orchestration") |
+|---|---|
+| Sky atlas (Aladin Lite + bundled catalogs) | Equipment control (Alpaca devices) |
+| Sequence editor (build offline, push when ready) | Sequence execution (receives + runs) |
+| Framing assistant (FOV overlay, client compute) | Plate solving (during the actual session) |
+| Profile editor (drafts local, sync to Pi) | Guiding (PHD2) |
+| Image library viewer (downloaded frames) | Image capture + FITS storage on disk |
+| Catalog data (HYG, NGC/IC, Caldwell, comets) | Session state, telemetry, recovery |
+| Settings UI + safety policy editor | Equipment-side state machine |
+
+This split is why **WILMA is not a thin client** — it's a planning workstation that can do real work without the Pi connected. The Pi is the hardware orchestrator that runs at night.
 
 **Naming:** all references to `NINA.X` in this document describe the *current* project layout you'll find on disk. Phase 0.5 renames everything to `OpenAstroAra.X` (server-side) or carves it out for deletion. See §17.
 
@@ -1011,9 +1025,11 @@ Five tabs along the top of the center area:
    - Per-instruction editor pane on the right when selected
    - Top toolbar: New / Load / Save / Validate / Run / Pause / Abort
    - Below toolbar: progress bar + currently-executing instruction label
-4. **Sky Atlas**
-   - DSO catalog browser with filter pills (Messier, NGC, IC, Caldwell)
+4. **Sky Atlas** — **embedded Aladin Lite (CDS) with bundled catalogs + Tonight's Sky planetarium view**. See §36 for full spec. Two sub-modes:
+   - **Catalog View** — Aladin Lite in standard equatorial mode, free pan/zoom, full HiPS survey browsing (21 surveys, see §36), universal search (Simbad online + bundled name index offline)
+   - **Tonight's Sky** — same Aladin instance, zenith-centered, horizon-aware, time-controlled, solar system (Sun/Moon/planets) + comets overlaid, planetarium-style. Replaces NINA's external-planetarium integration (Cartes du Ciel, Stellarium) — ARA is the planetarium.
    - Tap an object → details panel + "Set as Target in Framing Assistant" CTA
+   - Aladin logo + CDS attribution preserved at bottom-right per Aladin's GPLv3 license terms (see §17 + §36)
 5. **Options**
    - Tree-based settings: Equipment (per device type), Imaging, Plate Solving, Astrometry, File Saving, Telescope, Astronomy, Sequence, Application
    - Right pane: settings for selected node
@@ -1266,7 +1282,31 @@ The same warning pattern fires during normal sequence execution, not just recove
 
 ## 29. Storage / disk-space policy
 
-### 29.1 Save location
+Two distinct storage domains: **Pi side** (FITS frames + session state + profiles, server-managed) and **WILMA side** (bundled catalogs + downloaded sky imagery surveys + cached tiles + draft sequences, client-managed).
+
+### 29.0 WILMA-side storage (Flutter client)
+
+Goes in platform-default app data directory:
+- macOS: `~/Library/Application Support/OpenAstroAra/`
+- iOS: app sandbox documents
+- Android: app sandbox files dir
+- Windows: `%APPDATA%\OpenAstroAra\`
+- Linux: `~/.local/share/openastroara/`
+
+Contents:
+| Sub-directory | Contents | Size budget |
+|---|---|---|
+| `catalogs/` | Bundled HYG, Tycho-2, NGC/IC, Caldwell, Sharpless, MPC comets, constellation art, nebula vectors | ~200 MB (bundled, immutable) |
+| `hips/<survey>/` | Downloaded HiPS tile sets per §36 (DSS2, Mellinger, eROSITA, etc.) | Variable — 0 GB to TB depending on what user downloads |
+| `aladin-cache/` | Live-fetched HiPS tiles from CDS (auto-managed by Aladin Lite) | LRU-capped at user-configurable size (default 2 GB) |
+| `sequences/` | Draft + saved sequence JSON files built in WILMA | Tiny (KB per file) |
+| `profiles/` | Profile drafts (sync to Pi when connected) | Tiny |
+| `frames-downloaded/` | FITS files the user pulled from the Pi for review | Variable, user-managed |
+| `logs/` | Client-side logs | Rolling, capped at 100 MB |
+
+Settings → Storage on WILMA shows total usage, per-survey breakdown, "Clear cache" button per category.
+
+### 29.1 Save location (Pi side)
 
 Uses the existing NINA image-save-path setting from the active profile, exposed via API. Server default if unset: `${data_dir}/captures/` (`/var/lib/openastroara/captures/` on Linux). Users are strongly encouraged to point this at a USB drive (see DEPLOY.md) rather than the Pi's SD card.
 
@@ -1432,3 +1472,739 @@ Modal with a file picker:
 - Token saved per-server in `flutter_secure_storage`
 - Settings → Server panel: shows current server + connection state, "Forget this server" / "Re-enter token" buttons
 - Forget = wipes saved token; next launch shows the connect screen for that server again
+
+---
+
+## 31. Time + location sync (WILMA waterfall)
+
+ARA Core needs accurate UTC time and lat/long/altitude for: sidereal time, alt/az transforms, dawn/dusk schedules, plate-solve search, sequence triggers. A Pi without internet doesn't keep time (no RTC by default). WILMA helps via a waterfall of sync sources.
+
+### 31.1 Flow
+
+After profile selection on WILMA:
+
+```
+GET /api/v1/server/time-sync  → server reports sync state
+     │
+     ├─ synced & fresh (< 1h ago, trust ≥ medium) → proceed
+     │
+     └─ unsynced or stale → walk the waterfall:
+
+         1. WILMA has internet?           push device clock + GPS/location
+                                          POST /api/v1/server/time-sync
+              (modern phones/laptops on Wi-Fi or cellular are NTP-synced)
+              │ no
+              ↓
+         2. Server detects USB GPS on Pi? server self-syncs from /dev/ttyUSB* or /dev/ttyACM*
+              (gpsd or direct NMEA read; no user action required)
+              │ no
+              ↓
+         3. WILMA is mobile (iOS/Android)? push device clock + GPS (Flutter geolocator)
+              │ no
+              ↓
+         4. Prompt: "Plug a USB GPS into the Pi" + [Retry]
+              │ user skips
+              ↓
+         5. Manual entry modal: UTC date/time + lat/long/altitude
+```
+
+### 31.2 Trust levels
+
+| Source | Trust |
+|---|---|
+| Pi NTP (if internet reaches the Pi directly) | high |
+| USB GPS via gpsd / NMEA | high |
+| WILMA on Wi-Fi or cellular with internet (NTP-synced device clock) | medium |
+| Mobile GPS (no internet, device geo-fix only) | medium |
+| Manual entry | low |
+
+Trust is stored alongside the sync. Soft warnings fire when:
+- Trust = `low` and the sequence about to run uses schedule-based instructions (`Wait until dusk`, etc.)
+- Drift > 30s detected during a session
+
+### 31.3 Endpoints
+
+```
+GET /api/v1/server/time-sync
+Response:
+{
+  "synced": true,
+  "source": "ntp|gps-internal|gps-external|client|manual|none",
+  "trust": "high|medium|low|none",
+  "current_time_utc": "2026-05-19T03:14:15.123Z",
+  "system_time_offset_seconds": 0.0,
+  "location": { "lat": 30.27, "lng": -97.74, "alt": 165.0 },
+  "internet_available_on_pi": false,
+  "internal_gps_available": false
+}
+
+POST /api/v1/server/time-sync
+{
+  "source": "client|gps-mobile|manual",
+  "time_utc": "2026-05-19T03:14:15.123Z",
+  "location": { "lat": 30.27, "lng": -97.74, "alt": 165.0 },
+  "trust": "medium"
+}
+Response: {
+  "before": { "time_utc": "...", "offset_seconds": -42.5 },
+  "after":  { "time_utc": "...", "offset_seconds": 0.0 },
+  "location_updated": true
+}
+```
+
+### 31.4 Implementation notes
+
+- Server sets the system clock via a CAP_SYS_TIME-granted helper. DEPLOY.md adds `sudo setcap cap_sys_time+ep /opt/openastroara/OpenAstroAra.Server` post-install.
+- USB GPS detection: server scans `/dev/ttyUSB*` and `/dev/ttyACM*` on startup for NMEA `$GPRMC` / `$GPGGA` sentences. If detected, server self-syncs without WILMA involvement.
+- WILMA mobile GPS: `geolocator` Flutter plugin, permission-prompts on first use. Cached for the session.
+- All astronomy computations use **UTC internally**; client displays in user's local TZ.
+- Time-sync state is cached per-session; doesn't re-prompt unless the Pi reboots or > 12 hours pass.
+
+---
+
+## 32. Network resilience (WILMA ↔ Pi)
+
+WILMA loses Wi-Fi mid-session. WebSocket dies. The sequence keeps running on the Pi regardless — disconnect ≠ pause. WILMA's job is to detect, communicate, and recover.
+
+### 32.1 Disconnect detection
+
+- WebSocket close event OR no pong within 60s (per §27.2)
+- Client first attempts **silent reconnect for 5 seconds** (handles transient drops)
+- After 5s of failed silent attempts, show the disconnect modal
+
+### 32.2 Disconnect modal
+
+```
+┌──────────────────────────────────────────┐
+│  ⚠ Disconnected from Ara Core            │
+│                                          │
+│  Your device lost connection. Check that │
+│  you're still on the Ara Core Wi-Fi      │
+│  network.                                │
+│                                          │
+│  [ Verify Network ]    [ Try Again ]     │
+└──────────────────────────────────────────┘
+```
+
+### 32.3 [Verify Network] flow
+
+1. Spinner: *"Searching for Ara Core..."*
+2. Client runs mDNS scan for `_openastroara._tcp.local` + direct probe of last-known server IP/hostname (parallel)
+3. Outcomes:
+   - **Found + reachable** → *"Found Ara Core. Reconnecting..."* → re-open WebSocket → fetch server state snapshot → rehydrate UI → dismiss modal
+   - **Not found** → *"Ara Core not found on this network. Make sure you're connected to the 'Ara Core' Wi-Fi network, then try again."* with [Verify Again]
+   - **Found but unreachable** (mDNS resolves; ping/TCP fails) → *"Ara Core is on the network but not responding — it may have crashed or rebooted. Wait a moment and try again."*
+
+### 32.4 During disconnect (no modal yet, 5s silent retry)
+
+- Status bar shows a yellow indicator: *"Reconnecting..."*
+- All mutating actions disabled
+- Read-only views show last-known state (cached from prior WebSocket events)
+
+### 32.5 Reconnect behavior
+
+- Server is source of truth — client fetches `GET /api/v1/server/state` snapshot on reconnect and rehydrates UI
+- Client-side in-flight mutations that didn't receive an HTTP response are **dropped** (v0.0.1) rather than retried — avoids double-execution risk
+- Sequence keeps running on the Pi throughout — disconnect doesn't pause
+
+### 32.6 Pi Wi-Fi mode (operational, not in scope for ARA Core .deb)
+
+The Pi runs in one of two Wi-Fi modes, **configured outside ARA Core** per the [OpenAstro wiki](https://wiki.openastro.org):
+
+- **AP mode (default for portable field use)** — Pi runs `hostapd`, creates network "Ara Core" (or whatever SSID user picks), WILMA devices connect to that
+- **Client mode (indoor / observatory)** — Pi joins user's home Wi-Fi, accessible from any device on that network
+
+Either way, the modal copy "Ara Core Wi-Fi network" works — it means whichever network the Pi is reachable on. ARA Core's .deb does **not** touch hostapd or Wi-Fi config — networking is user-managed per the wiki.
+
+---
+
+## 33. Version compatibility + WILMA-pushed updates (ASIAir model)
+
+Update mechanism for ARA Core that doesn't require internet on the Pi. The WILMA app embeds the server binary as an asset and pushes it to the Pi over the local network. Field-friendly.
+
+### 33.1 Embedded binary
+
+- WILMA app bundles `linux-arm64` self-contained .NET 10 publish of `OpenAstroAra.Server`
+- Trimmed + Native AOT to ~30-50 MB
+- Stored at `assets/server/openastroara-server-linux-arm64.tar.gz`
+- App build pipeline embeds this from CI before each release
+
+### 33.2 Version check on every connection
+
+Client embeds its own version (`OpenAstroAra.Client.AppInfo.version`). After WebSocket handshake:
+
+```
+GET /api/v1/server/info → { server_version: "0.0.1", api_version: "v1", protocol_minor: 3 }
+```
+
+Compare:
+
+| Client vs Server | Action |
+|---|---|
+| Equal | Proceed normally |
+| **Client newer** (semver) | Modal: *"Ara Core (v0.0.1) needs to update to match your app (v0.0.2). Update now?"* → [Update Ara Core] / [Cancel] |
+| **Client older** | Modal: *"Your app (v0.0.1) is older than Ara Core (v0.0.2). Update via App Store / GitHub Releases — features may misbehave until you do."* → [Continue Anyway] / [Cancel] |
+| API major mismatch | Hard block: *"This app cannot talk to Ara Core v1.0.0. Update your app to continue."* |
+
+### 33.3 Update push flow
+
+```
+[Update Ara Core] clicked
+     ↓
+WILMA streams bundled tarball to POST /api/v1/server/update
+   Headers: X-OpenAstroAra-Token, X-Update-Version, X-Update-Sha256
+   Body: gzipped tarball, Content-Type: application/octet-stream
+     ↓
+Server:
+  1. Validate token, version, sha256
+  2. Save tarball to /opt/openastroara/staging/
+  3. Verify checksum
+  4. Extract to /opt/openastroara/staging/extracted/
+  5. Pre-flight: run "new-binary --version" — must succeed in 5s
+  6. Invoke /opt/openastroara/update.sh (privileged helper)
+  7. Reply 202 Accepted, begin shutdown
+     ↓
+update.sh (run as root via NOPASSWD sudoers — see DEPLOY.md):
+  - dpkg-divert old binary so APT respects local override
+  - Atomic: mv current → previous; mv staging/extracted → current
+  - systemctl restart openastroara-server
+     ↓
+New binary boots → smoke test (responds to /api/v1/server/info within 30s)
+     ↓
+   succeeds                          fails to start
+     ↓                                      ↓
+Client reconnects, versions match.    systemd watchdog triggers rollback:
+Modal closes.                           mv previous → current; restart
+                                       Client sees old version still; modal:
+                                       "Update failed, rolled back."
+```
+
+### 33.4 Trust & integrity (v0.0.1)
+
+- Token auth on the endpoint (existing)
+- SHA-256 checksum match before swap
+- **v0.1.0 addition**: Ed25519 signature verification with Open Astro's pinned public key (so the user can't push a tampered binary to their own Pi by accident or malice)
+
+### 33.5 Coexistence with APT updates (per §34)
+
+`update.sh` runs `dpkg-divert --add /opt/openastroara/OpenAstroAra.Server` so APT knows the binary is locally-overridden. On subsequent `apt upgrade`, the new APT version stages as a `.dpkg-new` file but does not replace the WILMA-pushed binary. User can manually clear the divert (`dpkg-divert --remove`) to return to APT-managed state.
+
+### 33.6 v0.1.0 scope (noted, not implemented yet)
+
+Same push-from-WILMA mechanism extended to:
+- **AlpacaBridge** — bundled binary, `/opt/alpaca-bridge/`, restart via systemd
+- **openastro-phd2** — same pattern, `/opt/openastro-phd2/`
+- Endpoints: `POST /api/v1/server/components/{name}/update`
+- Server detects component versions via the component's own status API (AlpacaBridge `/version`, PHD2 `get_app_state` JSON-RPC)
+
+---
+
+## 34. Distribution + install (apt.openastro.net)
+
+### 34.1 Primary install path
+
+```bash
+# 1. User flashes Trixie (Debian 13) on RPi 4/5, Orange Pi, or RockChip SBC — see OpenAstro wiki
+# 2. User configures Wi-Fi or Ethernet — see wiki
+# 3. Add the OpenAstro APT repo (one-time):
+curl -fsSL https://apt.openastro.net/gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/openastro.gpg
+echo "deb [signed-by=/usr/share/keyrings/openastro.gpg] https://apt.openastro.net stable main" \
+  | sudo tee /etc/apt/sources.list.d/openastro.list
+sudo apt update
+
+# 4. Install (single command, pulls everything via Recommends):
+sudo apt install openastroara-server
+```
+
+### 34.2 Package details
+
+- Name: `openastroara-server` (lowercase, hyphens per Debian convention)
+- Arch: **arm64** (works on RPi 4/5, Orange Pi 5, RockChip SBCs — anywhere Debian-family + ARM64 runs)
+- Depends: `libc6`, `libgcc-s1`, `libstdc++6`, runtime essentials
+- Recommends: `alpaca-bridge`, `openastro-phd2` (pulled in by default; opt-out with `--no-install-recommends`)
+- Suggests: `gpsd` (for USB GPS time sync per §31)
+
+### 34.3 Post-install hooks (handled by .deb's postinst script)
+
+- Creates `openastroara` user + group (system user, no shell)
+- Drops `/etc/systemd/system/openastroara-server.service`
+- Sets `CAP_SYS_TIME` on the binary: `setcap cap_sys_time+ep /opt/openastroara/OpenAstroAra.Server`
+- Installs sudoers drop-in: `openastroara ALL=(root) NOPASSWD: /opt/openastroara/update.sh` (for §33 WILMA push)
+- Creates data + log + config dirs at proper permissions
+- Generates initial token, writes to `/etc/openastroara/token` (mode 0640, owned by root:openastroara), prints it once to `journalctl -u openastroara-server`
+- Enables + starts the service: `systemctl enable --now openastroara-server.service`
+
+ARA Core's .deb does **only** these things. It does **not** touch:
+- Wi-Fi or hostapd (per §32.6 — wiki handles this)
+- OS install (wiki)
+- Equipment driver configuration
+
+### 34.4 Two update paths coexist
+
+| Path | Internet required on Pi | Use case |
+|---|---|---|
+| **APT (primary)** | Yes | Home / observatory with internet — `sudo apt upgrade` |
+| **WILMA push (§33)** | No | Field / offline — binary streamed from app |
+
+Both coexist via `dpkg-divert` (§33.5). User can flip back to APT-managed state by clearing the divert.
+
+### 34.5 Repo layout
+
+```
+apt.openastro.net/
+├── dists/
+│   └── stable/
+│       ├── Release  Release.gpg  InRelease
+│       └── main/
+│           └── binary-arm64/
+│               ├── Packages
+│               └── Packages.gz
+└── pool/
+    └── main/
+        ├── o/openastroara-server/
+        │   └── openastroara-server_0.0.1-ara.1_arm64.deb
+        ├── a/alpaca-bridge/
+        │   └── alpaca-bridge_X.Y.Z_arm64.deb
+        └── o/openastro-phd2/
+            └── openastro-phd2_X.Y.Z_arm64.deb
+```
+
+GitHub Actions builds the .deb and publishes to the apt repo via `reprepro` (or `aptly`) on every `v0.0.1-*` tag push.
+
+### 34.6 DEPLOY.md becomes lean
+
+DEPLOY.md content:
+1. Link to OpenAstro wiki for OS install + Wi-Fi/networking
+2. The 4 commands from §34.1
+3. Where to find the initial token (`journalctl -u openastroara-server`)
+4. How to connect WILMA (already covered in §30)
+5. USB drive setup for FITS storage (existing §29.7)
+6. USB GPS plug-in (auto-detected per §31, no config needed)
+
+That's it. No tarball install, no manual systemd setup, no manual user creation — all handled by the .deb.
+
+---
+
+## 35. Safety policies (user-configurable per profile)
+
+ARA gives the user policy controls; the AI does not decide. Every safety reaction is set in the profile wizard or Settings → Safety. Sensible defaults pre-filled.
+
+### 35.1 Configurable trigger → action matrix
+
+| Trigger | Available actions | Threshold field |
+|---|---|---|
+| Cloud sensor unsafe (Alpaca SafetyMonitor or weather station) | Continue / Notify / Pause / Abort + park | — |
+| Rain detected | Continue / Notify / Pause / Abort + park *(default abort)* | — |
+| Wind speed | Continue / Notify / Pause / Abort + park | km/h or mph |
+| Humidity | Continue / Notify / Pause / Abort + park | % |
+| Dew point − ambient | Continue / Notify / Pause / Abort + park | °C delta |
+| Generic SafetyMonitor `IsSafe = false` | Notify / Pause / Abort + park | — |
+| Mount tracking error / lost guide star (>N seconds) | Continue / Pause / Abort + park | seconds |
+| WILMA disconnected during a safety event | Wait for reconnect / Auto-abort after N min / Auto-abort immediately | minutes |
+| Server unexpected restart | Auto-resume per §28 / Stop and wait for user | — |
+| User unreachable (alarm unanswered after delay) | Loop alarm forever / Auto-abort after N min / Sequence continues | minutes |
+
+Each trigger also has:
+- **Audible alarm** toggle
+- **Alarm delay** (seconds of silent popup before audio starts; default 5s)
+- **Alarm sound** (pick from 3-4 bundled tones)
+- **Vibration** (mobile only)
+
+### 35.2 Sensible defaults (pre-fill in wizard)
+
+| Event | Default |
+|---|---|
+| Cloud | Pause |
+| Rain | Abort + park |
+| Wind > 30 km/h | Pause |
+| Humidity > 95% | Notify |
+| Dew within 2°C | Notify |
+| Generic IsSafe = false | Pause + alert |
+| WILMA disconnected + unsafe condition | Auto-abort after 5 min |
+| User unreachable | Continue alarm |
+| Alarm | On, 5s delay, default tone |
+
+User can override every single default.
+
+### 35.3 User-triggered emergency abort
+
+Persistent **[Emergency Stop]** button in WILMA's main app shell (top-right of status bar). Single tap = immediate abort, no confirmation (the button IS the confirmation). Fires `POST /api/v1/server/emergency-stop`:
+
+Server shutdown sequence:
+1. Camera: abort current exposure
+2. Guider (PHD2): stop guiding
+3. Mount: park (or home if no park position configured)
+4. Filter wheel / focuser / rotator: leave in place (no auto-move; user can intervene)
+5. Flat panel: turn off (if connected, and configured to do so)
+6. Sequence state → `aborted`
+7. WebSocket event `sequence.aborted` to all connected clients
+
+### 35.4 SafetyMonitor poll loop (server-side)
+
+- Server polls `IsSafe` on every connected `SafetyMonitor` device every 10 seconds (configurable)
+- Subscribes to weather-station Alpaca events if available (push instead of poll)
+- On transition to unsafe → triggers profile-configured action
+- WebSocket event: `safety.unsafe` with details, fired before action so client can display alarm modal
+
+### 35.5 Audible alarm asset
+
+Bundle small audio in WILMA app: `assets/audio/safety_alarm.wav` (~30s loop, ~50 KB), plus 3-4 alternative tones. Use `audioplayers` Flutter plugin. Volume forced to max during alert. Vibration on mobile via `vibration` plugin.
+
+### 35.6 API
+
+Profile schema gains a `safety_policy` object:
+```json
+{
+  "cloud":     { "action": "pause" },
+  "rain":      { "action": "abort" },
+  "wind":      { "action": "pause",  "threshold_kph": 30 },
+  "humidity":  { "action": "notify", "threshold_pct": 95 },
+  "dew_delta": { "action": "notify", "threshold_c": 2 },
+  "is_safe_generic": { "action": "pause" },
+  "tracking_error":  { "action": "pause", "threshold_seconds": 60 },
+  "wilma_disconnect_during_unsafe": { "action": "abort", "timeout_min": 5 },
+  "server_restart":  { "action": "auto_resume" },
+  "user_unreachable": { "action": "alarm" },
+  "alarm": { "enabled": true, "delay_sec": 5, "sound": "default", "vibrate": true }
+}
+```
+
+Server reads this at session start and behaves accordingly.
+
+---
+
+## 36. Sky imagery + survey management (WILMA)
+
+WILMA owns the sky atlas (per §2 responsibility split). This section specifies the bundled assets, the Survey Manager UI, the Tonight's Sky planetarium, and the universal search.
+
+### 36.1 Bundled assets (ship with the app)
+
+| Bundle | Approximate size | Purpose |
+|---|---|---|
+| HYG star database (~120k Hipparcos stars) | ~10 MB | Naked-eye and binocular-class stars |
+| Tycho-2 brightest subset (~2.5M stars, packed binary) | ~30-50 MB | Smooth rendering at all zooms |
+| GAIA DR3 brightest subset (~10M stars, packed binary) | ~80-100 MB | High-density backdrops |
+| NGC + IC + Caldwell + Sharpless + Abell + UGC supplementary catalogs | ~30 MB | All DSO targeting |
+| MPC comet snapshot (`CometEls.txt`) | ~5 MB | Bundled at app build time |
+| Constellation art (Urania's Mirror or modern art) | ~10 MB | Beautiful overlay at low zoom |
+| Nebula contour vectors | ~20 MB | Crisp outlines for HII / planetary nebulae |
+| Pre-baked DSO target thumbnails (~500 famous targets) | ~150 MB | Aladin-quality previews offline |
+| Bundled HiPS tiles: DSS2 color + Mellinger at HEALPix orders 4-6 | ~500 MB | Offline navigation imagery out of the box |
+| Solar system: DE440 analytical model (truncated) OR full DE440 | ~50 KB or ~50 MB | Sun/Moon/planets ephemerides for Tonight's Sky |
+| Common name resolver index (~50-100k entries) | ~5-10 MB | Universal search offline |
+| Bundled audio (safety alarms per §35) | ~200 KB | — |
+| **Total bundled app** | **~900 MB-1 GB** | — |
+
+Users see a one-time "large download" warning on cellular install and can proceed (App Store + Play Store both allow this). Desktop installer ships the full bundle directly.
+
+### 36.2 Survey Manager UI
+
+Settings → Sky Imagery → Survey Manager:
+
+```
+┌────────────────────────────────────────────────────────────┐
+│  Sky Imagery                       412 GB used / 1.2 TB    │
+│                                                             │
+│  Optical (broadband)                                        │
+│  ☑ DSS2 (color)             order 8, 47 GB        [Update] │
+│  ☐ DSS2 blue                not downloaded, ~30 GB [Download]│
+│  ☐ DSS2 red                 not downloaded, ~30 GB [Download]│
+│  ☑ Mellinger (color)        order 6, 4 GB          [Update]│
+│  ☐ SDSS9                    not downloaded, ~120 GB[Download]│
+│  ☐ PanSTARRS DR1 color      not downloaded, ~280 GB[Download]│
+│  ☐ DECaPS DR2               not downloaded, ~150 GB[Download]│
+│  ☐ DESI Legacy DR10         not downloaded, ~290 GB[Download]│
+│                                                             │
+│  Hα                                                         │
+│  ☑ Finkbeiner Hα            order 7, 8 GB          [Update]│
+│  ☐ VTSS Hα                  not downloaded, ~6 GB  [Download]│
+│                                                             │
+│  Infrared                                                   │
+│  ☑ 2MASS (J+H+K)            order 8, 38 GB         [Update]│
+│  ☐ GLIMPSE360               not downloaded, ~52 GB [Download]│
+│  ☐ Spitzer                  not downloaded, ~58 GB [Download]│
+│  ☐ allWISE                  not downloaded, ~64 GB [Download]│
+│  ☐ IRIS                     not downloaded, ~7 GB  [Download]│
+│  ☐ AKARI FIS                not downloaded, ~14 GB [Download]│
+│                                                             │
+│  Ultraviolet                                                │
+│  ☐ GALEX GR6/7              not downloaded, ~16 GB [Download]│
+│                                                             │
+│  X-ray                                                      │
+│  ☐ eROSITA DR1              not downloaded, ~8 GB  [Download]│
+│  ☐ XMM-Newton (PN)          not downloaded, ~7 GB  [Download]│
+│  ☐ Chandra                  not downloaded, ~5 GB  [Download]│
+│                                                             │
+│  Gamma-ray                                                  │
+│  ☐ Fermi                    not downloaded, ~3 GB  [Download]│
+│                                                             │
+│  [Download All]  [Pick a Preset ▼]  [Clear All]             │
+└────────────────────────────────────────────────────────────┘
+```
+
+### 36.3 Per-survey controls
+
+- Choose HEALPix resolution depth (e.g., order 4 = ~6 GB DSS2 color; order 8 = ~47 GB)
+- Download / Pause / Resume / Cancel / Remove
+- Verify integrity (SHA-256 against CDS manifest)
+- Storage location (default app data dir; user can point at external drive on desktop)
+
+### 36.4 Presets
+
+- **"Optical only"** — DSS2 color + Mellinger + Finkbeiner Hα (~60 GB)
+- **"All-wavelength essentials"** — one survey per band (~150 GB)
+- **"Everything full resolution"** — ~2 TB. Confirmation gate. For real users with real storage.
+
+### 36.5 Politeness considerations (CDS bandwidth)
+
+- Parallel tile fetcher with per-CDS-host rate limiting (default 8 parallel connections, user-configurable)
+- README + Settings explainer notes: CDS infrastructure is shared by astronomers worldwide. Download "Everything full res" only when you actually need it, preferably overnight.
+- Implement HTTP `If-Modified-Since` so updates only fetch changed tiles
+
+### 36.6 Survey-serving to Aladin Lite
+
+Once a survey is downloaded:
+- Tiles stored at `<wilma data>/hips/<survey-id>/Norder<n>/Dir<m>/Npix<k>.jpg` (standard HiPS layout)
+- WILMA runs an embedded local HTTP server (Dart `shelf` package) on a random localhost port, serving from the hips dir
+- Aladin Lite's `hipsUrl` config points at that local server when WILMA is offline OR when the user prefers local
+- Online + survey not downloaded → falls back to CDS
+
+### 36.7 Tonight's Sky (planetarium mode)
+
+The Sky Atlas tab has a sub-mode toggle: **[Catalog View]** ↔ **[Tonight's Sky]**.
+
+**Tonight's Sky implementation:**
+- Aladin Lite driven by WILMA — view centered programmatically on current zenith RA/Dec, stereographic projection
+- WILMA computes (Dart, using inherited Astrometry library):
+  - Current zenith RA/Dec from profile lat/long + UTC
+  - Alt/az for every bundled catalog object
+  - Horizon great-circle in equatorial coordinates
+- WILMA pushes overlays into Aladin via JS bridge:
+  - **Horizon polyline** as a catalog
+  - **Cardinal direction markers** (N/E/S/W) at the horizon edge
+  - **Below-horizon shading** (darken half-sky via custom overlay)
+  - **Solar system bodies** — Sun, Moon (with phase glyph), 8 planets, computed from DE440, fed as a custom Aladin catalog updated every 60s
+  - **Comets** — visible comets from bundled MPC snapshot, with motion trails for next N days
+  - **Currently-tracked target** — highlighted if user has one picked
+- Time slider — scrub forward/backward. Each frame recomputes. "Now" button snaps to current real time. Auto-advance every 60s by default.
+- Object filtering — catalog browser shows only objects above the horizon (or user-configurable altitude limit) at the current time. "Best transit tonight" sort option.
+
+### 36.8 Universal search
+
+Search bar at the top of the Sky Atlas tab:
+
+- **Online** (WILMA has internet): query Aladin's Simbad integration. Type "wolf" → resolves to Wolf 359, Wolf-Rayet stars, candidate matches. Type "M31" / "NGC 6188" / "Andromeda Galaxy" / coordinates → resolves.
+- **Offline**: fall back to bundled name resolver index (HYG common names + NGC/IC/M/HD/HIP/Tycho-2 designations + Bayer/Flamsteed + bundled comets). ~5-10 MB index, ~50-100k entries.
+- **Coordinate parsing**: accept RA/Dec strings in multiple formats (HH:MM:SS / decimal degrees / mixed).
+- **Comets**: searchable by designation (`C/2023 A3`) or common name (`Tsuchinshan-ATLAS`).
+- **Asteroids** (v0.0.1): targeted lookup only (type "Ceres", "(1) Ceres", "433 Eros" → WILMA fetches that single object from MPC on demand). Bulk asteroid catalog deferred to v0.1.0.
+
+### 36.9 Comet support
+
+- Bundled `CometEls.txt` snapshot at app build time (~5 MB, ~5,000 comets)
+- WILMA computes positions from Keplerian elements (a, e, i, Ω, ω, M, T) in Dart — ~500 lines, well-documented math
+- Fed to Aladin as a catalog with custom marker (comet glyph + name + magnitude)
+- **"Refresh comet data"** button (Settings → Sky Imagery) pulls latest `CometEls.txt` from MPC (requires WILMA internet, ~5 MB download, seconds)
+- **Motion trail** option — shows comet's path over next 7/30/90 days as polyline overlay
+
+### 36.10 Recommended catalog depth based on telescope (wizard hint per user's spec)
+
+In the wizard's Telescope screen, after the user enters focal length:
+- Short focal length (< 500mm): recommend "Optical essentials" preset (~60 GB)
+- Medium (500-1500mm): recommend "Optical + Infrared essentials" (~110 GB)
+- Long (> 1500mm): recommend "All-wavelength essentials" (~150 GB) + deeper PanSTARRS or DECaPS if storage allows
+- Recommendation is a *suggestion*, not enforced. User can still pick anything.
+
+### 36.11 Aladin Lite license requirements
+
+- Aladin Lite v3 is **GPL v3**; ARA is MPL 2.0
+- These mix because the WebView is a separate process boundary — Aladin JS and Dart code communicate via `postMessage`, not statically linked. GPL FAQ explicitly permits this pattern.
+- **Required by Aladin license**: keep Aladin logo + link visible bottom-right of the view. Don't strip the attribution.
+- Credit in NOTICE.md: "Sky Atlas rendering powered by [Aladin Lite](https://aladin.cds.unistra.fr/) (CDS, Strasbourg) under GPL v3."
+
+---
+
+## 37. Profile setup wizard
+
+The wizard is **mandatory on first launch** (after server connect + profile creation entry from §30). It walks the user through every essential configuration with sensible defaults and per-screen [Skip — use defaults]. Each screen also has [< Back] and [Next >]. Progress bar at top: "Step X of N." User can [Save & Exit Wizard] at any point — profile saves with what's been configured, defaults for the rest.
+
+### 37.1 Stage 1 — Profile basics
+
+**Screen 1 — Profile name + location**
+
+- Profile name (required)
+- Site latitude / longitude / altitude (optional)
+  - "Use device GPS" button (WILMA mobile) — `geolocator` Flutter plugin
+  - Manual entry alternative
+  - "Skip — set later" fallback
+- Site name (optional, e.g., "Backyard Texas", "Bortle 4 site")
+- Timezone (auto-detect from location, or pick from list)
+
+### 37.2 Stage 2 — Equipment discovery
+
+**Screen 2 — Connect to AlpacaBridge**
+
+- Field: AlpacaBridge address (default: auto-discover via Alpaca's broadcast UDP on port 32227)
+- "Test Connection" button — server pings AlpacaBridge, shows results
+- (v0.0.1: protocol is Alpaca only; INDI/INDIGO listed as "future" placeholder)
+
+**Screen 3 — Discover + assign equipment**
+
+Server enumerates Alpaca devices, groups by type. User assigns each device-type slot (or leaves "— None"):
+- Camera
+- Filter Wheel
+- Focuser
+- Mount (Telescope)
+- Rotator
+- Dome
+- Observing Conditions (weather)
+- Switch
+- Safety Monitor
+- Flat Panel
+- Guider (PHD2 — server reaches out to PHD2's JSON-RPC, not Alpaca)
+
+### 37.3 Stage 3 — Per-device setup (one screen per connected slot; skipped if "— None")
+
+**Screen 4 — Telescope**
+
+- Telescope name (free text, e.g., "ES ED102")
+- Focal length (mm) — required
+- Aperture (mm) — required
+- Focal ratio — auto-computed but editable
+- **Aladin survey recommendation** appears here based on focal length (per §36.10) — user can [Download recommended] or [Skip — configure in Sky Imagery later]
+
+**Screen 5 — Camera**
+
+- Cooling target temperature (°C, default −10° or "ambient minus 30°")
+- Cooler ramp rate (°C/min, default 1°C/min)
+- Default gain
+- Default offset
+- Default bin
+- Pixel size (mm) — auto-filled from Alpaca, editable
+- Image scale computed and displayed: "1.49 arcsec/pixel — wide-field DSO" (or similar)
+
+**Screen 6 — Filter Wheel**
+
+- For each slot detected by Alpaca:
+  - Name (L / R / G / B / Hα / OIII / SII / Clear / etc.)
+  - Type (broadband / narrowband / clear / luminance)
+  - Wavelength (nm) — optional metadata
+  - Focus offset (steps) — left blank; populated automatically by first autofocus run per §28.5
+
+**Screen 7 — Focuser**
+
+- Step size (microns/step) — pulled from Alpaca if reported
+- Backlash compensation: in / out steps
+- Temperature compensation toggle + slope (steps/°C, defaults to 0 = disabled)
+- Max travel — pulled from Alpaca
+
+**Screen 8 — Mount**
+
+- Mount name — auto-pulled from Alpaca driver
+- Slew rate (deg/sec)
+- Park position: [Sync to current pointing] / [Define manually]
+- Meridian flip behavior: Auto / Prompt / Never
+- **Settle time after slew** — auto-pulled from Alpaca driver's `SlewSettleTime` property (per user's spec), editable
+
+**Screen 9 — Rotator** (if connected)
+
+- Mechanical limits (min/max angle)
+- Angle step size
+- Reverse direction toggle
+
+**Screen 10 — Guider (PHD2)**
+
+- Host:port (default `localhost:4400`)
+- Dither pixels (default 5 px)
+- Settle threshold (default 1.5 px for 10s)
+- Calibration cadence: [Each session] / [Once, then reuse] / [Never recalibrate]
+
+### 37.4 Stage 4 — Imaging tools
+
+**Screen 11 — Plate solving (ASTAP)**
+
+- ASTAP binary path — auto-detect per OS (Linux: `which astap`; macOS: `/Applications/ASTAP.app/...`; Windows: `%PROGRAMFILES%\astap\astap.exe`), editable
+- Star database path — browse, recommend external/USB drive
+- Search radius (deg, default 30)
+- Downsample factor (default 2)
+- Test button: "Solve a test image" — feeds a bundled known image, verifies ASTAP works
+
+**Screen 12 — Autofocus**
+
+- Exposure time (default 5s)
+- Step size (microns)
+- Max retries (default 3)
+- "Auto-discover filter offsets" toggle (default on — first AF run per filter populates filter wheel offset)
+
+**Screen 13 — File saving + naming**
+
+- Save directory (browse — USB drive recommended per §29; shows free space warning if SD card)
+- File format: [FITS] / [XISF]
+- Compression on/off (default on)
+- Filename template — default per user's spec:
+  ```
+  $$DATEMINUS12$$\$$IMAGETYPE$$\$$DATETIME$$_$$FILTER$$_$$SENSORTEMP$$_$$EXPOSURETIME$$s_$$FRAMENR$$
+  ```
+- Template variable reference shown inline
+
+**Screen 14 — Imaging defaults**
+
+- Default exposure (s)
+- Default gain / offset
+- Default frame type: [Light] / [Dark] / [Bias] / [Flat]
+- Cooling target inherited from camera screen
+
+### 37.5 Stage 5 — Safety + site
+
+**Screen 15 — Safety policies** (per §35)
+
+Compact wizard layout:
+```
+When weather goes bad:
+  Clouds: [Pause ▼]
+  Wind:   [Pause ▼] above [30] km/h
+  Rain:   [Abort + Park ▼]
+
+When something's wrong and I'm not here:
+  WILMA offline:        [Auto-abort after  5 ] min
+  Alarm unanswered:     [Continue alarm ▼]
+
+Alarm:
+  Sound: [Default ▼]  [▶ test]
+  Vibrate: ☑
+```
+
+Full editor is available later in Settings → Safety.
+
+**Screen 16 — Site preferences**
+
+- Hard min altitude (default 5°)
+- Soft warning altitude (default 30°)
+- Astronomical twilight margins (default: start at end-of-evening-astro, stop at start-of-morning-astro)
+- Max sequence runtime (default: no limit)
+
+### 37.6 Stage 6 — Sky Imagery
+
+**Screen 17 — Survey downloads** (per §36)
+
+- Shows bundled imagery state ("DSS2 color + Mellinger pre-loaded — ~500 MB")
+- Recommended additional surveys based on focal length (echo of Screen 4 recommendation)
+- Quick preset buttons + "Open Survey Manager for full control"
+- Skip to defer all survey downloads to Settings → Sky Imagery
+
+### 37.7 Stage 7 — Done
+
+**Screen 18 — Review + Save**
+
+- Single-page summary of every setting (per stage)
+- [Make Changes — jump to any screen]
+- [Save Profile]
+- After save: navigate to main app shell
+
+### 37.8 Wizard behavior rules
+
+- Every screen has [Skip — use defaults] and [< Back] [Next >]
+- User can [Save & Exit] at any point — profile saves partial state, defaults fill the rest
+- Skipped screens are flagged in the profile: "Default — please review in Settings"
+- Wizard can be re-run from Settings → Profile → "Run Wizard Again" (useful when changing rigs)
+- Each "Use device GPS" / "Pull from driver" / "Auto-detect" interaction is non-blocking — wizard never hangs waiting on equipment
