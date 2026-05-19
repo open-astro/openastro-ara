@@ -2577,3 +2577,236 @@ Settings → Calibration Library:
 | Library browsing UI | Limited | Sequencer view | Rich (Settings → Calibration Library) |
 
 The "matching flats from past session" is genuinely a unique-to-ARA improvement over NINA, inspired by ASIAir's workflow.
+
+---
+
+## 40. Captured-image library workflow
+
+WILMA's Image Library tab is the user's window into everything the Pi has captured. Frames are organized by session (the user's mental unit) and cross-indexed by target (so multi-night, multi-year projects line up perfectly). Available on desktop with full UX, on mobile with view-only UX (per §41).
+
+### 40.1 Frame storage on Pi (recap)
+
+Per §29 + §39: FITS frames live at the configured save path (USB drive recommended) at `<save-path>/captures/<session-id>/<target>/<filter>/<frame>.fits`. Sidecar previews at `<frame>.preview.jpg`. Metadata indexed in Pi-side SQLite `frames` table (see §39.3).
+
+### 40.2 Preview tiers
+
+Server generates two JPEG previews per captured FITS:
+
+| Preview | Resolution | Size | Purpose |
+|---|---|---|---|
+| `<frame>.thumb.jpg` | Max 480×360 | ~50 KB | List views, dashboard tiles, search results |
+| `<frame>.preview.jpg` | Native sensor resolution, quality 90 | ~3-8 MB | Full pinch-to-zoom pixel peep on mobile + desktop |
+
+Both generated server-side at capture time (per §28.5 / §39 — already in the capture pipeline). Stretched per the user's profile-default stretch setting; user can request alternative stretches via API.
+
+### 40.3 API endpoints
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/api/v1/sessions` | List sessions (id, target, date, frame count, total integration, filters used) |
+| `GET` | `/api/v1/sessions/{id}` | Full session metadata |
+| `GET` | `/api/v1/sessions/{id}/frames` | List frames in session, filterable by frame type / filter / rating |
+| `GET` | `/api/v1/frames/{id}` | Single frame metadata |
+| `GET` | `/api/v1/frames/{id}/thumb` | Tiny JPEG (for lists) |
+| `GET` | `/api/v1/frames/{id}/preview` | Full-resolution JPEG (for pixel peep) |
+| `GET` | `/api/v1/frames/{id}/fits` | Original FITS file (full bytes, large) |
+| `PATCH` | `/api/v1/frames/{id}` | Update rating, tags, notes |
+| `DELETE` | `/api/v1/frames/{id}` | Delete frame (FITS + previews + DB row) |
+| `POST` | `/api/v1/frames/bulk` | Bulk operations (multi-rate, multi-tag, multi-delete) |
+| `GET` | `/api/v1/targets` | Roll-up by target: cumulative integration time, sessions count, filter breakdown |
+| `GET` | `/api/v1/targets/{name}/sessions` | List all sessions that imaged a given target |
+| `POST` | `/api/v1/targets/{name}/resume` | Create a new sequence template seeded from the most-recent session's plate-solve + rotator + filter usage (per §40.6) |
+
+### 40.4 Image Library tab UI (desktop)
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  Image Library                                                │
+│  [By Session ▼]  [▼ All filters]  [⭐ Any rating]  [🔎 Search] │
+│  ────────────────────────────────────────────────────────────  │
+│  ▼ 2026-05-18 — M42 Orion Nebula (Backyard Texas)              │
+│    4h 12min total · L:48 R:32 G:32 B:32 (144 frames)           │
+│    [Capture Matching Flats]  [Resume Target]                   │
+│                                                                │
+│    ┌──┐┌──┐┌──┐┌──┐┌──┐┌──┐┌──┐┌──┐                            │
+│    │  ││  ││  ││  ││  ││  ││  ││  │   ... 144 thumbnails       │
+│    └──┘└──┘└──┘└──┘└──┘└──┘└──┘└──┘                            │
+│                                                                │
+│  ▼ 2026-05-12 — NGC 6188 Fighting Dragons (Backyard Texas)    │
+│    2h 30min total · Hα:30 OIII:30 SII:30 (90 frames)          │
+│    [Capture Matching Flats]  [Resume Target]                   │
+│    ...                                                         │
+└──────────────────────────────────────────────────────────────┘
+```
+
+- **Group toggle**: [By Session] / [By Target] / [By Date]
+- **Filter pills**: filter band, frame type (Light/Dark/Bias/Flat), rating
+- **Search**: target name, filter, date range, free-text in notes
+- **Per-session row**: [Capture Matching Flats] (§39.5) and **[Resume Target]** (§40.6)
+- **Thumbnail strip**: tap any → full frame viewer
+
+### 40.5 Frame viewer (desktop + mobile)
+
+```
+┌──────────────────────────────────────────────────┐
+│  M42_L_2026-05-18T22:14:32_120s.fits      ⭐⭐⭐⭐  │
+│  ──────────────────────────────────────────────  │
+│                                                  │
+│       [full preview image, pinch/scroll to zoom] │
+│                                                  │
+│  ──────────────────────────────────────────────  │
+│  Exposure: 120s  Gain: 100  Offset: 50           │
+│  Filter: L       Bin: 1×1                        │
+│  HFR: 1.42       Stars: 487                      │
+│  Median ADU: 1284   Background: 1102             │
+│  Sensor temp: −10.0°C  Focus: 14820 steps        │
+│  Captured: 2026-05-18 22:14:32 UTC               │
+│                                                  │
+│  Notes: [...]                                    │
+│  Tags: [good_seeing]                             │
+│                                                  │
+│  [Rate]  [Tag]  [Open in App]  [Show in Folder]  │
+│  [Download FITS]  [Delete]                       │
+└──────────────────────────────────────────────────┘
+```
+
+- Pinch-to-zoom + pan on desktop (trackpad gestures) and mobile (touch)
+- Full-resolution JPEG preview by default; **[Download FITS]** pulls original 50MB file
+- **[Open in App]** invokes OS file-association (system "open with" → PixInsight / Siril / GraXpert / etc. based on user's default FITS handler)
+- **[Show in Folder]** opens the file's location in Finder/Explorer (desktop only)
+- 0–5 star rating; free-text tags; optional notes
+- HFR / star count / median ADU shown inline (read from the session DB, originally computed server-side at capture time)
+
+### 40.6 "Resume Target" workflow — multi-year project alignment
+
+Critical for users building up integration on a target across months or years. The button on the per-session row in the library:
+
+1. User picks a target with prior history (e.g., M42 with 4 sessions over 18 months)
+2. WILMA calls `POST /api/v1/targets/M42/resume`
+3. Server returns a **new sequence draft** pre-configured to align exactly with the most-recent session:
+   - Plate-solve target = recorded center RA/Dec from that session
+   - Rotator angle = recorded ROTANG from that session
+   - Filter list = filters historically used (sorted by frequency)
+   - Exposure / gain / offset defaults = pulled from that session
+   - Profile reference = same equipment expected (warn if profile has changed substantially)
+4. User reviews + tweaks (add/remove filters, change exposure count) → [Save] / [Run]
+5. When the sequence runs, the **§28 recovery flow runs in reverse**: mount slews to target, plate-solves to the *recorded* RA/Dec/rotation (not just "close enough"), refines until within tight tolerance (default 30 arcsec position, 0.5° rotation — half the recovery defaults), then begins capturing
+6. New frames written with `OBJECT` matching the target name, so they roll up into the same per-target aggregate
+
+This is what makes "come back in 3 years and add more data" work: the rotator and plate-solve solution are reproducible because we recorded them precisely.
+
+### 40.7 Auto-rating + HFR drift detection (the "clouds, not focus" pattern)
+
+Server analyzes HFR and star count after each frame:
+
+**Auto-rating (per-frame, inherited from NINA logic):**
+- HFR > profile threshold (default 2× session-median) → frame rated 1⭐ (auto-reject suggested)
+- Star count < profile threshold → rated 1⭐
+- Median ADU below floor (severely underexposed) or above ceiling (saturation) → rated 2⭐
+- Otherwise → rated 3⭐ by default; user upgrades to 4⭐/5⭐ if they pixel-peep and like it
+
+**Pattern detection (ARA-native — flagged "clouds, not focus"):**
+After each autofocus completes, server tracks:
+- Frame immediately post-AF: HFR
+- N consecutive subsequent frames: HFR
+- If pattern emerges (good HFR → degraded HFR → AF retriggers → good HFR → degraded HFR again, within a short window), pattern is `cycling_degradation`
+- Queue notification: *"Autofocus completed twice in 12 minutes but HFR degrades immediately after each focus run — likely transient clouds or seeing, not a focus mechanism issue. Check sky conditions."*
+- Optional: pause the sequence after N consecutive bad frames (configurable in safety policies §35; default off)
+- Bad frames during the cycle are auto-rated 1⭐ for post-processing rejection
+
+### 40.8 Bulk operations
+
+Multi-select frames via Shift+Click (desktop) or long-press + tap (mobile):
+- **Rate selection** — set 0-5 stars on all
+- **Tag selection** — add/remove tags on all
+- **Delete selection** — confirm + remove from disk + DB
+- **Download FITS for selection** — zip + download to WILMA
+- **Export** — copy to a folder picked by the user (desktop only; on mobile this is "Save to Files" or share sheet)
+
+### 40.9 Storage management
+
+- Per-session row shows total disk used
+- Filter view: "Show only frames > 30 days old, < 3⭐ rating" → bulk-prune candidates
+- Auto-prune policy (Settings → Storage on the Pi): never / weekly / monthly, with rules ("delete frames < 2⭐ older than X days, never delete frames marked 4⭐+")
+- All destructive operations confirm + are logged
+
+---
+
+## 41. Mobile companion mode (iOS / Android)
+
+WILMA on iOS/Android runs in **Companion Mode** — same Flutter codebase as the desktop client, but the UI is tailored for phone/tablet form factors and many "configuration" workflows are intentionally absent (replaced by a "Open ARA on your desktop to do this" prompt). The phone is for monitoring, viewing, and emergencies — not for planning tomorrow's session.
+
+### 41.1 Mobile companion — what it CAN do
+
+| Capability | Notes |
+|---|---|
+| Connect to Pi (mDNS discovery + token) | Same flow as desktop (§30) |
+| **GPS + time push to Pi** | Primary value-add when user has no USB GPS dongle (§31) |
+| **Dashboard** | Current sequence, target, last frame thumbnail, time-to-next-frame, equipment connection state, sky safety status |
+| **Image library browsing** | Same data as desktop (§40), responsive layout — grouped by session, scrollable thumbnail strips |
+| **Frame viewer with pinch-to-zoom** | Full-resolution JPEG preview, native gestures, HFR + star count + temp displayed |
+| **Live preview during active session** | Subscribes to WebSocket `frame.complete` events, latest frame appears automatically |
+| **Emergency stop button** | Always visible in the persistent bottom bar; same flow as desktop (§35.3) |
+| **Safety alarm response** | Receives `safety.unsafe` WebSocket events; full-screen alarm modal with audio + vibration (§35.5); [Emergency Abort] / [Override] |
+| **Push notifications** | Sequence complete, safety alerts, HFR drift detection, recovery events |
+| **Log tail** | Read-only live log stream |
+| **Rate + tag frames** | Touch-friendly star rating + tag chips |
+| **Download FITS for off-device processing** | Save to platform Files / Photos / share sheet |
+| **Server / token management** | Same Settings → Server panel as desktop |
+
+### 41.2 Mobile companion — what it explicitly does NOT do
+
+| Capability | Why excluded | What user sees |
+|---|---|---|
+| Sequence editor | Drag-drop instruction tree is bad UX on a 6-inch screen | "Sequence editing requires the ARA desktop app — open WILMA on your Mac, PC, or Linux machine to edit sequences." Quick-share link button to open desktop on the same Wi-Fi. |
+| Profile / equipment configuration wizard | 18-screen wizard cramming into phone = pain | Same redirect message |
+| Sky Atlas (full Aladin Lite + Tonight's Sky) | Aladin Lite WebView with 21-survey browsing is computationally heavy on phones + 500MB+ tile bundling cost | Same redirect; users who want sky atlas on mobile run Stellarium or SkySafari standalone |
+| ASTAP path / autofocus / plate-solve config | Settings | Same redirect |
+| Sequence templates / instantiation | Editor-adjacent | Same redirect |
+
+When a mobile user taps something disallowed, they get a polite modal with a "Copy link to send to your desktop" option that puts an ARA-protocol URL on the clipboard (e.g., `araapp://session/123/edit`) that the desktop app can pick up.
+
+### 41.3 Mobile-specific UX considerations
+
+- **Always-on bottom bar**: [Dashboard] [Library] [Logs] [Emergency Stop] — emergency button is permanently visible regardless of which tab is active
+- **Push notifications**: Firebase Cloud Messaging on Android, APNs on iOS, **but only between WILMA and the Pi** — no third-party telemetry path; Pi sends webhook to client's notification endpoint. (v0.0.1 may defer push and rely on in-app foreground notifications only — depends on Apple/Google account setup effort)
+- **Background mode caveat**: iOS aggressively suspends backgrounded apps; Android less so. App in background may miss WebSocket events; user opens app → fresh state pulled via REST snapshot. Push notifications wake the user for critical events even if app is suspended.
+- **Tablet (iPad / Android tablet)**: companion mode renders with more density (split view: dashboard + library side-by-side); pinch-to-zoom on frames goes huge; otherwise same scope as phone. iPad Pro users get a perfectly usable casual-monitor experience.
+- **Apple Watch / Wear OS**: out of scope for v0.0.1. Could be a future "notifications only" companion app.
+
+### 41.4 Shared Flutter codebase, conditional shell
+
+```dart
+// pseudocode
+final isCompanionMode = (Platform.isIOS || Platform.isAndroid);
+
+Widget appShell() => isCompanionMode
+    ? CompanionShell(routes: companionRoutes)
+    : DesktopShell(routes: desktopRoutes);
+```
+
+Shared:
+- API client (auto-generated from OpenAPI)
+- State management (Riverpod providers)
+- WebSocket connection + event handlers
+- Authentication + token storage
+- Common widgets (frame viewer, dashboard tiles, status indicators)
+
+Different:
+- Top-level navigation (tabs vs nav rail)
+- Some screens entirely (sequence editor absent on mobile, Aladin tab absent)
+- Modal sizing (full-screen on mobile, dialog on desktop)
+- Gesture handling (touch-first on mobile, mouse-first on desktop)
+
+### 41.5 Mobile-only entry points
+
+Two flows that exist ONLY on mobile:
+
+- **First-launch GPS push** — if user opens mobile app and the Pi reports no recent time-sync, mobile companion auto-prompts to push device GPS+time without requiring profile-screen entry. Matches the "I just want to give the Pi a clock and go" use case.
+- **Wake-from-notification → live frame view** — push notification "Frame 47 captured" → tap → opens directly to that frame in the viewer.
+
+### 41.6 Versioning + acronym
+
+WILMA (Windows / iOS / Linux / Mac / Android) acronym is preserved. Mobile platforms (iOS, Android) explicitly run in Companion Mode by default. Desktop platforms (Windows, macOS, Linux) run the full client.
+
+In practice this means a single `flutter build` per platform, with platform-detection-driven shell selection at runtime.
