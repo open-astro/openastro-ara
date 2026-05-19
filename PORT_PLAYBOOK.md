@@ -4004,3 +4004,155 @@ ARA's contribution: ensure every panel's FITS file has consistent metadata, pane
 - Adaptive panel sizing (variable focal length / FOV per panel — for super-wide mosaics combining wide-field and tighter panels)
 - ARA-side stitching preview (low-res, just for sanity-check before user processes in PixInsight)
 - Drift mosaicking (target drifts through FOV without slewing — for fast wide-field captures)
+
+---
+
+## 48. Auto-flats and dark library (sequence automation)
+
+§39 covers the calibration philosophy + session-metadata-driven matching flats from past sessions. This section covers the *automation* layer — sequence step types that capture calibration during/after the imaging session without user intervention.
+
+### 48.1 The "calibrate now or later" prompt (sequence start)
+
+When a user starts a sequence, WILMA presents a one-time prompt asking whether to capture flats tonight:
+
+```
+┌──────────────────────────────────────────────────────┐
+│  Capture calibration tonight?                        │
+│  ──────────────────────────────────────────────────  │
+│  Your sequence will use: L, R, G, B filters          │
+│                                                       │
+│  ○ Yes — flat panel at end of session                │
+│  ○ Yes — sky flats at twilight                       │
+│  ● No — capture them later                           │
+│                                                       │
+│  💡 ARA can recreate your exact equipment state —    │
+│  focus per filter, rotator angle, sensor temp,       │
+│  gain, offset — anytime from the Image Library.      │
+│  Pick a past session → "Capture Matching Flats" and  │
+│  the rig replays the geometry. (§39.5)               │
+│                                                       │
+│  ☑ Don't ask again — remember my preference          │
+│                                                       │
+│  [Start Sequence]                                     │
+└──────────────────────────────────────────────────────┘
+```
+
+Three choices for flats:
+- **Yes — flat panel at end of session** → server appends a `FlatPanelFlats` instruction to the sequence after the last imaging instruction
+- **Yes — sky flats at twilight** → server appends a `SkyFlats` instruction triggered by morning astronomical twilight
+- **No — capture them later** → no auto-append; user understands they can run §39.5 anytime to recreate
+
+This prompt surfaces the §39.5 superpower at exactly the right moment — when the user is deciding whether to spend extra rig-time tonight on calibration or defer with confidence.
+
+### 48.2 Preference persistence
+
+User can opt out of the prompt with "Don't ask again — remember my preference":
+- Profile gains a `calibration_capture_default` setting: `"ask" | "panel_at_end" | "sky_at_twilight" | "never"`
+- Default = `"ask"` (the prompt is shown each sequence)
+- Settings → Calibration in WILMA lets user change later
+
+If "never" is set and user wants to capture occasionally, they manually add a `FlatPanelFlats` or `SkyFlats` instruction to the sequence editor.
+
+### 48.3 Auto-flat step — `FlatPanelFlats` (preserved from NINA)
+
+When the sequence reaches the `FlatPanelFlats` instruction (typically appended at end-of-night):
+
+1. Server queries the sequence's prior instructions to detect which filters were used (live, from session DB)
+2. For each filter:
+   - Slew mount to the flat-friendly position (default: park position, or user-configured flat target)
+   - Switch filter wheel to current filter
+   - Move focuser to that filter's focus offset (so flats match imaging conditions)
+   - Hold rotator at current angle (CAA)
+   - Turn on flat panel, set brightness, wait for stabilization
+   - **Auto-exposure**: capture short test exposure, measure median ADU, adjust panel brightness OR exposure time until target ADU is reached (default ~30000 for 16-bit cameras = ~45% full scale)
+   - Capture N flats (default 30)
+3. After all filters: turn off panel, park mount (optionally), log completion notification
+
+Inherits NINA's existing implementation; ARA preserves verbatim.
+
+### 48.4 Sky flats variant — `SkyFlats` (preserved from NINA)
+
+When user picks sky flats:
+
+- Sequencer waits until morning astronomical twilight starts (or evening if running backwards)
+- Slews to zenith (or user-configured sky-flat target — typically east in evening, west in morning to avoid the brightening/darkening direction)
+- For each filter:
+  - Auto-exposure to target ADU (sky brightness changes rapidly during twilight, so exposure time must adapt frame-to-frame)
+  - Capture N flats per filter; adjust exposure as sky brightens/darkens
+  - Stop if sky becomes too bright (overexposure) or too dim (insufficient stars-to-skybackground)
+
+Inherits NINA's implementation.
+
+### 48.5 Dark library — manual user-initiated, not prompted
+
+Darks are NOT included in the sequence-start prompt for v0.0.1 because:
+- Darks don't match a specific session (they match camera + gain + temp + exposure — much more reusable)
+- Building a dark library is typically a multi-hour overnight task, NOT a "tack onto tonight's imaging" thing
+- Users typically build darks on cloudy/moony/full-moon nights when DSO imaging is impossible
+
+User builds a dark library by:
+1. Creating a new sequence in WILMA
+2. Adding a `DarkLibraryInstruction` (NINA's existing instruction type, preserved)
+3. Defining the matrix: list of (exposure, gain, temp) tuples + frames-per-combination
+4. Running the sequence (typically overnight, unattended)
+
+`DarkLibraryInstruction` semantics (preserved from NINA):
+- For each (exposure, gain, temp) combination:
+  - Set cooler target temp, wait for stabilization
+  - Capture N frames with the camera's shutter closed (or in front of a dark cap)
+  - Move to next combination
+- Total runtime: hours to a full overnight, depending on matrix size
+
+Bundled `dark-library.json` template (§38.7) gives users a starting point: typical CMOS combinations (30s × 5 gains × 3 temps × 50 frames = ~7,500 darks, ~7 hours).
+
+### 48.6 Bias library
+
+Bias frames are short-as-possible exposures with shutter closed — captures readout pattern. NINA's `TakeBiasExposures` instruction preserved. Typically:
+- One bias library per camera + gain combination
+- 100-500 frames per combo (stacks well, easy to capture in 1-2 minutes)
+- Updated when user changes gain settings or replaces camera
+
+User initiates manually; not part of the sequence-start prompt.
+
+### 48.7 Calibration preference in profile schema
+
+Profile JSON gains a `calibration` block (inside the existing safety/preferences area):
+
+```json
+{
+  "calibration": {
+    "capture_default": "ask",           // "ask" | "panel_at_end" | "sky_at_twilight" | "never"
+    "flat_panel": {
+      "target_adu": 30000,              // half of 16-bit full scale
+      "target_adu_tolerance_pct": 5,
+      "frames_per_filter": 30,
+      "post_flat_park_mount": true
+    },
+    "sky_flat": {
+      "target_adu": 25000,
+      "frames_per_filter": 20,
+      "sky_target_azimuth": 90,          // east in morning, west in evening
+      "sky_target_altitude": 75,
+      "stop_at_max_adu": 50000,         // bail if oversaturated
+      "stop_at_min_adu": 5000           // bail if too dark
+    },
+    "dark_library": {
+      "default_frames_per_combination": 50,
+      "default_temp_tolerance_c": 0.5
+    }
+  }
+}
+```
+
+### 48.8 Settings → Calibration panel (WILMA)
+
+Mirrors the schema above with editable fields, plus:
+- "What ARA will do at sequence start" preview ("Will ask each time" / "Will capture sky flats automatically" / etc.)
+- Link to §39.5 "Capture Matching Flats" workflow in Image Library
+
+### 48.9 v0.1.0 expansion paths
+
+- **Scheduled dark library** — "build dark library every Sunday night if no sequence planned" — runs automatically when imaging is impossible
+- **Smart dark management** — server identifies when dark library is stale (camera replaced, gain settings changed since last darks captured) and prompts user
+- **Bias automation** — same model as flats prompt
+- **Sky flat optimal target tracking** — server picks the best position by computing brightness gradient direction at the current twilight time (eastern sky brightens in dawn, western in dusk)
