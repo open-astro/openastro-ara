@@ -2350,3 +2350,230 @@ Each template uses placeholder target slots. User picks target via WILMA's "Appl
 - "Import from NINA" entry point in the same picker
 - Local draft auto-save every 30 seconds to WILMA app data
 - Conflict resolution: if WILMA's draft diverges from Pi's saved version, prompt user [Keep Local] / [Keep Pi] / [View Diff]
+
+---
+
+## 39. Calibration frames + session-metadata-driven auto-flats
+
+ARA preserves NINA's separate `Light`/`Dark`/`Bias`/`Flat` instruction types and adds a workflow unique to ARA: **automatically generate a flat (or dark) sequence that matches the exact equipment state of a past imaging session.** Filter, focus position, rotator angle (CAA), gain, offset, cooler target — all replayed from the session's recorded metadata.
+
+### 39.1 Frame types and instructions
+
+Sequence instruction types (all inherited from NINA verbatim per §38):
+
+| Instruction | Purpose |
+|---|---|
+| `TakeManyExposures` (light frames) | Standard imaging captures during a session |
+| `TakeDarkExposures` | Dark frames at specified exposure + gain + temp |
+| `TakeBiasExposures` | Bias frames (shortest possible exposure, shutter closed) |
+| `TakeFlatExposures` | Flat frames at user-specified exposure |
+| `FlatPanelFlats` | Coordinates with flat panel: turn on, set brightness, capture flats per filter, turn off |
+| `DarkLibraryInstruction` | Builds a dark library across a matrix of (exposure × gain × temp) tuples |
+| `SkyFlats` | Captures sky flats during twilight using auto-exposure to target ADU |
+
+### 39.2 Calibration philosophy: capture-only
+
+ARA Core captures calibration frames and writes them to disk with rich FITS headers. ARA Core does **not** apply calibration during capture (no live dark subtraction, no live flat division). Calibration is the responsibility of the user's post-processing tools (PixInsight, Siril, GraXpert, AstroPixelProcessor, etc.) which read the FITS headers to match calibration frames to lights.
+
+Rationale: applying calibration at capture-time doubles disk usage, locks the user into a calibration strategy chosen at capture-time, slows the imaging cadence, and removes the user's ability to re-calibrate with improved master frames later. NINA does not do this either; ARA matches that behavior.
+
+### 39.3 Session metadata (the foundation for matching flats)
+
+Every captured frame's FITS header includes the complete equipment state at capture time:
+
+| FITS keyword | Meaning |
+|---|---|
+| `DATE-OBS` | UTC capture start |
+| `INSTRUME` | Camera name (Alpaca-reported) |
+| `FILTER` | Filter slot name |
+| `FOCUSPOS` | Focuser absolute position |
+| `ROTANG` | Rotator angle (degrees) — the "CAA" |
+| `SET-TEMP` | Cooler target temp (°C) |
+| `CCD-TEMP` | Achieved sensor temp (°C) |
+| `AMBTEMP` | Ambient temp from weather (if connected) |
+| `HUMIDITY` | Ambient humidity from weather (if connected) |
+| `EXPTIME` | Exposure duration (s) |
+| `GAIN` | Sensor gain |
+| `OFFSET` | Sensor offset |
+| `XBINNING` / `YBINNING` | Binning |
+| `OBJECT` | Target name (from sequence) |
+| `OBJCTRA` / `OBJCTDEC` | Target RA / Dec |
+| `OBJCTROT` | Target rotation angle |
+| `IMAGETYP` | `LIGHT` / `DARK` / `BIAS` / `FLAT` |
+| `SESSIONID` | UUID linking to Pi's session database row |
+| `FRAMENR` | Frame number within the session |
+| `SITELAT` / `SITELON` / `SITEALT` | Observatory location |
+
+Pi-side session database (SQLite) mirrors this data in queryable form for cross-session analytics:
+
+```sql
+CREATE TABLE sessions (
+  id TEXT PRIMARY KEY,
+  profile_id TEXT,
+  started_at TIMESTAMP,
+  ended_at TIMESTAMP,
+  target_name TEXT,
+  target_ra REAL,
+  target_dec REAL,
+  target_rotation REAL,
+  rotator_angle REAL,
+  total_frames INT,
+  notes TEXT
+);
+
+CREATE TABLE frames (
+  id TEXT PRIMARY KEY,
+  session_id TEXT REFERENCES sessions(id),
+  fits_path TEXT,
+  captured_at TIMESTAMP,
+  image_type TEXT,
+  filter TEXT,
+  focus_pos INT,
+  rotator_angle REAL,
+  set_temp REAL,
+  ccd_temp REAL,
+  ambient_temp REAL,
+  exposure_seconds REAL,
+  gain INT,
+  offset INT,
+  binning TEXT
+);
+```
+
+### 39.4 Session library API
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/api/v1/sessions` | List sessions (id, target, date, frame count, filters used) |
+| `GET` | `/api/v1/sessions/{id}` | Full session metadata + summary stats |
+| `GET` | `/api/v1/sessions/{id}/frames` | List frames within the session |
+| `GET` | `/api/v1/sessions/{id}/calibration-suggestions` | Server analyzes session and returns a suggested calibration sequence (flats per filter, darks for the session's exposures, bias) |
+| `POST` | `/api/v1/sessions/{id}/generate-flat-sequence` | Server constructs a `TakeFlatExposures` sequence matching this session's equipment state, returns the sequence JSON (user can review + push + run) |
+| `POST` | `/api/v1/sessions/{id}/generate-dark-sequence` | Same, for darks |
+
+### 39.5 "Capture matching flats from session" workflow (the killer feature)
+
+User flow in WILMA:
+
+1. Open the **Image Library** tab → list of past sessions, grouped by target + date
+2. Pick a session → details page shows frame counts per filter, total integration, equipment used
+3. Click **[Capture Matching Flats]** button
+4. Server analyzes the session and returns a suggested flat sequence. **Because the server recorded the per-filter equipment state during the session, it physically commands the equipment back to those exact positions before capturing flats** — no manual reconfiguration required:
+
+   ```
+   For each filter used (L, R, G, B, Hα):
+     1. Filter wheel: rotate to the same slot used during the session
+     2. Focuser: move to the focus position recorded for THAT filter in
+        the session (focus often differs per filter — server pulls the
+        right value from the session's per-frame metadata)
+     3. Rotator (CAA): slew to the same angle used during the session,
+        so dust mote shadows align with the lights
+     4. Cooler: set target to the session's SET-TEMP and wait for
+        stabilization (subject to ambient limits — see §39.6)
+     5. Camera: configure same gain, offset, binning
+     6. Flat panel: turn on, auto-adjust brightness to target ADU
+        (~30000 for 16-bit), capture 30 flat frames
+     7. Flat panel: turn off
+   Mount can stay parked or wherever — flats don't depend on sky position
+   ```
+
+   The result: a flat library that calibrates the original lights exactly, because every optical-train variable that affects vignetting and dust shadows (filter, rotation, focus distance) is identical between lights and flats.
+5. WILMA displays the suggested sequence for review with any **warnings**:
+   - "Session sensor temp was −10°C; current cooler achievable max is −3°C — flats will be captured at −3°C instead (post-processing tools may show minor calibration noise)"
+   - "Rotator angle differs from current position by 47° — will rotate before flat capture"
+   - "Filter wheel position for 'OIII' was slot 3; current slot 3 is 'SII' — please verify filter wheel hasn't been reconfigured since the session"
+6. User confirms (or adjusts) → sequence pushed to Pi → runs
+7. Captured flats are tagged with `SESSIONID` matching the original lights, plus a sidecar JSON noting "calibration-for-session: <id>"
+
+### 39.6 Temp mismatch handling
+
+The cooler-temp problem the user flagged is real: a session at −10°C in winter (ambient 5°C, delta 15°C) cannot be exactly replicated in summer (ambient 30°C, cooler max delta ~30°C → achievable target ~0°C).
+
+Strategy:
+
+- Server queries the camera's reported cooler capability (typically max delta below ambient, ~30-40°C for most CMOS cameras)
+- Computes whether session's `SET-TEMP` is achievable at current ambient
+- If not: warn user, offer:
+  - **[Use closest achievable temp]** (recommended) — flats at the new temp; FITS header records both target and achieved
+  - **[Wait until conditions allow]** — sequence scheduled for early morning when ambient is coolest, or deferred
+  - **[Cancel — capture flats during the next imaging session instead]**
+- The achieved temp is recorded in `CCD-TEMP` regardless; post-processing tools will handle the mismatch (they may warn the user, but most modern stacking pipelines handle small temp deltas gracefully)
+
+### 39.7 Auto-flats at dusk (during a session)
+
+Inherits NINA's `FlatPanelFlats` instruction. Typical sequence structure:
+
+```
+Container: Tonight's Session
+  Instructions:
+    - WaitForTimeOf(astronomical_dusk)
+    - Container: Lights
+        - TakeManyExposures (× target1, all filters)
+    - WaitForTimeOf(astronomical_dawn)
+    - Container: Flats
+        - FlatPanelFlats (× each filter used tonight, 30 frames each)
+```
+
+Server-side `FlatPanelFlats` reads which filters were used in the session (live), automatically generates the flat captures for each.
+
+### 39.8 Dark library auto-generation
+
+Inherits NINA's `DarkLibraryInstruction`. User defines a matrix:
+
+```json
+{
+  "type": "DarkLibraryInstruction",
+  "exposures": [30, 60, 120, 300, 600],
+  "gains": [0, 100, 200],
+  "temps": [-10, -5, 0],
+  "framesPerCombination": 50
+}
+```
+
+Server captures `5 × 3 × 3 × 50 = 2,250` dark frames over many hours (typically a moonless or cloudy night when imaging is impossible anyway). Stores at `/var/lib/openastroara/calibration/darks/`.
+
+### 39.9 Calibration library storage on Pi
+
+```
+/var/lib/openastroara/calibration/
+├── darks/
+│   └── <camera-id>/
+│       └── exp_<seconds>_gain_<n>_temp_<c>/
+│           └── frame_001.fits
+├── bias/
+│   └── <camera-id>/
+│       └── gain_<n>_offset_<n>/
+│           └── frame_001.fits
+└── flats/
+    └── <camera-id>/
+        └── filter_<name>_rot_<angle>_focus_<pos>/
+            └── frame_001.fits
+```
+
+Filenames + sidecar JSONs make matching by metadata easy for both ARA's session-matching workflow and external post-processing tools.
+
+### 39.10 Calibration library browsing in WILMA
+
+Settings → Calibration Library:
+
+- Tab per frame type (Darks / Bias / Flats)
+- Browseable table: filter / exposure / gain / temp / rotator / focus / count / date
+- "Verify integrity" button (read FITS, check for corruption)
+- "Match to session" — reverse direction: pick a session, see which calibration frames in the library match it
+- "Export" — download a tarball of selected frames to WILMA for use in PixInsight etc.
+- "Delete" — remove old/superseded frames
+- Storage usage indicator + auto-prune option (e.g., "keep latest 30 days, prune older if >50 GB")
+
+### 39.11 Comparison to ASIAir / NINA / SharpCap
+
+| Capability | ASIAir | NINA | ARA |
+|---|---|---|---|
+| Light/Dark/Bias/Flat as sequence types | Yes | Yes | Yes |
+| Apply calibration at capture | No | No | No (capture-only philosophy) |
+| Auto-flats at dusk with flat panel | Yes | Yes (FlatPanelFlats) | Yes (inherited) |
+| Dark library auto-generation | Limited | Yes (DarkLibraryInstruction) | Yes (inherited) |
+| Session metadata recorded in FITS | Yes | Yes | Yes (richer — full equipment state) |
+| **Generate flats matching a past session** | **Yes** | **No** | **Yes (ARA-native feature)** |
+| Library browsing UI | Limited | Sequencer view | Rich (Settings → Calibration Library) |
+
+The "matching flats from past session" is genuinely a unique-to-ARA improvement over NINA, inspired by ASIAir's workflow.
