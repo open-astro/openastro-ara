@@ -4156,3 +4156,83 @@ Mirrors the schema above with editable fields, plus:
 - **Smart dark management** — server identifies when dark library is stale (camera replaced, gain settings changed since last darks captured) and prompts user
 - **Bias automation** — same model as flats prompt
 - **Sky flat optimal target tracking** — server picks the best position by computing brightness gradient direction at the current twilight time (eastern sky brightens in dawn, western in dusk)
+
+---
+
+## 49. API documentation serving
+
+ARA Core serves interactive Swagger UI documentation from its OpenAPI spec. Open access (no token) to match ASCOM Alpaca's convention.
+
+### 49.1 Tool choice — Swagger UI
+
+ARA uses **Swagger UI v5.x** for the same reason ASCOM Alpaca does ([ascom-standards.org/api/](https://ascom-standards.org/api/)): it's the de-facto standard for OpenAPI-spec docs, ecosystem-familiar to anyone working with Alpaca APIs, and ASP.NET Core has first-class support via `Swashbuckle.AspNetCore` (already in §8.1's csproj).
+
+Source-of-truth spec lives at `OpenAstroAra.Server/openapi.yaml` (per §9 + §38). Swagger UI renders it interactively.
+
+### 49.2 Endpoints
+
+| Path | Returns |
+|---|---|
+| `/api/v1/docs` | Swagger UI HTML page (interactive API explorer) |
+| `/api/v1/openapi.yaml` | Raw OpenAPI 3.1 spec (YAML) — for tools that consume the spec directly |
+| `/api/v1/openapi.json` | Same spec, JSON format — Swagger UI fetches this |
+
+All three are **open** — no token required. The auth protects state-mutating operations, not documentation.
+
+### 49.3 Swagger UI styling
+
+Match ASCOM's customizations for visual consistency:
+- Hide the "base URL" input field (it's always the host the user is browsing)
+- Hide the Swagger file description text
+- Custom CSS pulled in via `Swashbuckle.AspNetCore`'s `InjectStylesheet` option
+- Custom title: "OpenAstro Ara API"
+
+```csharp
+app.UseSwaggerUI(c => {
+    c.SwaggerEndpoint("/api/v1/openapi.json", "OpenAstro Ara v0.0.1");
+    c.RoutePrefix = "api/v1/docs";
+    c.DocumentTitle = "OpenAstro Ara API";
+    c.InjectStylesheet("/swagger-custom.css");
+    c.DisplayRequestDuration();
+    c.EnableFilter();
+});
+```
+
+### 49.4 What the spec contains
+
+Per §9 endpoint groups + later additions:
+
+- Server (info, handshake, time-sync, storage, backup-stream, update)
+- Equipment (per device type per Alpaca interface)
+- Sequence (CRUD + run + import)
+- Image (frames + previews + FITS + thumbnails)
+- Session (history + matching-flats)
+- Polar alignment
+- Notifications
+- Mosaic
+- Calibration library
+- Profiles
+
+All request/response shapes typed via OpenAPI components. Authentication scheme declared (`X-OpenAstroAra-Token` header) so Swagger UI's "Authorize" button works for users who want to test authenticated endpoints from the docs page.
+
+### 49.5 "Try It Out" with token from the docs page
+
+Swagger UI's built-in "Authorize" lets users paste their token once; subsequent "Try It Out" requests include it automatically. Useful for:
+- Debugging during development
+- Power users exploring the API
+- Plugin authors testing endpoints before integrating (when plugin SDK ships in v0.1.0)
+
+The token is stored in browser session storage (not persisted across browser restarts) — secure-by-default.
+
+### 49.6 Where Swagger UI is reachable
+
+Same port as the API (default 5400). On a Pi at `pi-observatory.local`:
+- `http://pi-observatory.local:5400/api/v1/docs` — interactive docs
+- `http://pi-observatory.local:5400/api/v1/openapi.yaml` — spec
+
+WILMA's About panel can link to `<server>/api/v1/docs` so users discover it.
+
+### 49.7 v0.1.0 expansion
+
+- Generated SDK packages from the OpenAPI spec for popular languages (Python, JavaScript, Go) — useful for plugin authors + community integrations
+- Versioned doc browser (current v0.0.1, future v0.1.0, etc.) — Swagger UI supports multi-spec selection
