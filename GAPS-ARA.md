@@ -20,7 +20,7 @@ These would actively bite real users on day one if missing. Discuss + bake befor
 
 Important workflows but won't crash anything on night-one. Can be specced after Tier 1 or in parallel.
 
-- [ ] **Polar alignment routine** — TPPA-style 3-point polar alignment; alternative Sharpcap-style PA workflow; preserve from NINA or defer to v0.1.0? Decide.
+- [x] ~~**Polar alignment routine**~~ → **Resolved §45**. TPPA dropped entirely (fragile + slow over Alpaca). Replaced with iPolar-style continuous-loop PA using main camera with optimizations: autofocus first, dark-frame caching, aggressive binning (3×3 or 4×4) for fast transfer, ~500 ms loop cadence, zooming bullseye UI in WILMA. Same math as iPolar (RA-axis vs pole offset from rotated plate solves). v0.1.0 adds native dedicated PA camera support.
 - [ ] **Notifications system** — beyond in-app WebSocket events: push notifications on mobile when sequence completes or errors; email integration (future); Discord/Slack webhook (future); notification preferences per event type.
 - [ ] **Mosaic / multi-panel imaging** — NINA's framing-assistant mosaic panel grid; preserve through port; ensure Aladin Lite layer supports panel overlays.
 - [ ] **Auto-flats / auto-darks** — sequence step types that automate calibration at dusk/dawn; flat panel coordination; sky-flats fallback if no panel.
@@ -75,6 +75,7 @@ These came up in conversation and ARE in the playbook. Listed here so we don't a
 - ✅ Hardware fault recovery (per-equipment) + switch value tolerance + dew detection (§42)
 - ✅ Mandatory USB storage + backup/restore + drive portability across Pis (§29 updated + §43)
 - ✅ Real-time backup stream from Pi to desktop WILMA (§44 — protects against mid-session USB failure)
+- ✅ Polar alignment — iPolar-style continuous loop with binned main camera (§45)
 - ✅ Aladin Lite license boundary (GPLv3 via WebView process boundary) (§36.11)
 - ✅ NINA-style UI clone with bitmap-asset placeholders (§25)
 - ✅ Fork hygiene — naming, identifiers, MPL preservation (§17)

@@ -3285,3 +3285,251 @@ Deferred to v0.1.0:
 - **Cloud streaming** (rclone-based push to S3, Google Drive, etc.) — same protocol model but pull from a third-party endpoint
 - **Selective stream** (only stream frames matching certain filters / rated 3⭐+) — initial version streams everything
 - **WAN-friendly stream** (compressed transfer, delta-encoding, etc.) — initial version uses raw FITS over plain HTTP
+
+---
+
+## 45. Polar alignment — iPolar-style continuous loop
+
+### 45.1 Why not three-point polar alignment (TPPA)
+
+NINA's TPPA plugin slews to 3 widely-separated points, plate-solves each, and computes alignment from the geometric inconsistencies. It works, but:
+
+- **Fragile** — tiny mount adjustments cause wild reported-error swings because each plate-solve carries solver noise, and that noise propagates into the alignment vector
+- **Slow over Alpaca/HTTP** — main camera at full resolution = 50+ MB FITS per point × 3 points × multiple iterations = lots of waiting on transfers
+- **Bad UX** — adjust the knob, wait 30s for the next solve, see the error jumped instead of decreased, adjust again, repeat
+
+ARA drops TPPA entirely. The user's tip-of-the-spear hardware (iPolar) shows the better path: a tight feedback loop with small images and a visual aim point.
+
+### 45.2 iPolar's approach + ARA's adaptation
+
+iPolar uses a **dedicated small camera on the RA axis with a ~13° FOV pointed at the pole**. It plate-solves locally, shows a simple bullseye that turns green when aligned. Continuous loop, snappy, accurate because it measures the RA axis directly.
+
+ARA does the same workflow but **with the user's main imaging camera** (no extra hardware required), using optimizations to overcome the size/speed problem:
+
+1. **Autofocus first** — sharp stars solve faster and more reliably
+2. **One dark-frame capture for noise subtraction** — clean signal at short exposures
+3. **Bin frames aggressively** (2×2, 3×3, or 4×4 depending on camera capability) — drastically smaller FITS, fast transfer, plate-solve still works because the few stars needed for PA are bright
+4. **Loop at ~500 ms** like iPolar — fast feedback, smoothed errors
+5. **Zooming bullseye UI** — magnifies as the user converges toward the pole
+
+This gives ARA users iPolar-quality alignment WITHOUT requiring a dedicated PA camera. v0.1.0 will add native support for an actual iPolar / PoleMaster / dedicated PA camera (see §45.10).
+
+### 45.3 Workflow
+
+```
+1. User taps "Polar Align" in WILMA
+2. Server prompts: "Roughly point your mount at the celestial pole"
+   (Polaris in N hemisphere, Sigma Octantis area in S hemisphere)
+3. User confirms rough alignment
+4. Server: runs autofocus on main camera (fast — uses bundled exposure
+   defaults from profile)
+5. Server: captures 1 dark frame at the PA exposure/bin/temp (~3 sec)
+6. Server: enters continuous loop:
+     a. Capture frame at PA exposure (typically 0.5-1s), apply binning
+     b. Dark-subtract using the cached dark from step 5
+     c. Plate solve (ASTAP, small downsampled FITS)
+     d. Compute mount RA axis vs celestial pole offset
+     e. Push WebSocket event with offset vector + small JPEG preview
+7. WILMA renders zooming bullseye:
+     - Red zone when error > 1°
+     - Yellow when 10' to 1°
+     - Green when < 10'
+     - Arrow indicates which way to adjust altitude/azimuth knobs
+     - Numerical readout: "Az: -23' Alt: +14'"
+     - Live frame preview in corner (small)
+8. User adjusts mount alt/az knobs while watching bullseye live
+9. When error is within user's target tolerance (default 1 arcmin),
+   user taps [Done] — server logs the achieved error to session DB
+   and the polar-alignment workflow ends
+10. If user aborts or backs out: server kills the loop, mount stays
+    where it was (no slewing back to "home" or anything)
+```
+
+### 45.4 Binning per camera
+
+Server queries the camera's `MaxBinX` / `MaxBinY` (Alpaca) to pick a sensible PA binning:
+
+| Camera sensor size | Recommended bin | Resulting frame | Transfer time (USB 3.0) |
+|---|---|---|---|
+| Small (e.g., ASI120MM, 1.3 MP) | 1×1 (already small) | ~2.5 MB FITS | ~50 ms |
+| Mid (e.g., ASI294MM, ~12 MP) | 3×3 | ~3 MB FITS | ~60 ms |
+| Large (e.g., ASI2600MM, ~26 MP) | 4×4 | ~3 MB FITS | ~60 ms |
+| Very large (e.g., QHY600M, ~62 MP) | 4×4 (cap) | ~8 MB FITS | ~150 ms |
+
+User can override in Settings → Polar Align if their camera misbehaves at higher bin. Default works for 95% of cameras.
+
+### 45.5 Dark frame caching
+
+- One dark captured at the start of each PA session (~3 seconds with the chosen exposure/bin)
+- Cached in-memory on the Pi for the duration of the PA session
+- Discarded when PA workflow ends (don't pollute the regular calibration library)
+- Optionally save to calibration library if user toggles "Save PA dark to library" — useful for users who do PA at consistent settings
+
+### 45.6 Plate-solve tuning for PA
+
+ASTAP can solve the binned, dark-subtracted, small-FOV PA frames much faster than full sequence frames:
+
+- Search radius: tight (start at last-known pole RA/Dec)
+- Downsample factor: 1 (already small)
+- Star detection: aggressive (we don't need precise centroids; we need rough plate solution)
+- Solve timeout: 5 seconds (if it can't solve in 5s with these stars + small FOV, something's wrong)
+
+### 45.7 Latency budget per loop iteration
+
+| Stage | Time |
+|---|---|
+| Exposure (binned, short) | 200-500 ms |
+| Sensor download from camera over USB | 50-100 ms |
+| Dark subtraction | <10 ms |
+| Plate solve (ASTAP, RPi 5 CPU) | 100-300 ms |
+| Error computation | <5 ms |
+| WebSocket push to WILMA | ~10 ms (LAN) |
+| WILMA bullseye update | instant |
+| **Total per iteration** | **~400-1000 ms** |
+
+The 500 ms aspiration is achievable on Pi 5 with most cameras; older Pi 4 + heavier sensors may land at 700-900 ms. Either way, an order of magnitude better than TPPA's "wait 30s per measurement" loop.
+
+### 45.8 Math — error vector from plate solve
+
+Given:
+- `P_pole` = celestial pole position (NCP: RA=0, Dec=+90 for J2000; SCP: RA=0, Dec=−90)
+- `P_solved` = where the mount's optical axis currently points (RA/Dec from plate solve)
+- `P_mount_axis` = direction the RA axis is pointing (≠ P_solved if mount isn't perfectly polar-aligned)
+
+To find `P_mount_axis`, server captures two frames with the mount rotated in RA by Δ (e.g., 30°). The two solved positions form a great-circle arc; the center of that arc is `P_mount_axis`. Difference between `P_mount_axis` and `P_pole` is the alignment error, decomposed into altitude + azimuth components per the user's site latitude.
+
+Once `P_mount_axis` is known (after the initial 2-frame seed), subsequent single frames update the estimate via plate-solve + reverse-projection (no need to re-rotate the mount continuously).
+
+This is the same math iPolar uses internally; we're just running it on the main camera at lower resolution instead of a dedicated PA cam.
+
+### 45.9 API endpoints + WebSocket events
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/api/v1/polar-align/start` | Initiate PA workflow. Body: `{ "exposure_seconds": 0.5, "bin": 4, "target_tolerance_arcmin": 1.0 }`. Defaults from profile. |
+| `POST` | `/api/v1/polar-align/refocus` | Re-run autofocus (e.g., user adjusted focus knob) |
+| `POST` | `/api/v1/polar-align/recapture-dark` | Capture a fresh dark (e.g., temp drifted) |
+| `POST` | `/api/v1/polar-align/complete` | User marks done; server logs achieved error |
+| `POST` | `/api/v1/polar-align/abort` | Cancel; mount stays in place |
+
+WebSocket events broadcast continuously while PA loop is active:
+
+```json
+{
+  "type": "polar_align.progress",
+  "ts": "2026-05-19T03:14:15.234Z",
+  "payload": {
+    "iteration": 47,
+    "azimuth_error_arcmin": -23.4,
+    "altitude_error_arcmin": 14.2,
+    "total_error_arcmin": 27.3,
+    "direction_arrow_deg": 247,
+    "zone": "yellow",       // red | yellow | green
+    "preview_jpeg_url": "/api/v1/polar-align/preview/47",
+    "last_solve_seconds": 0.13,
+    "stars_detected": 32
+  }
+}
+```
+
+Failure events:
+
+```json
+{
+  "type": "polar_align.error",
+  "payload": { "reason": "solve_failed", "iteration": 47, "stars_detected": 4 }
+}
+```
+
+### 45.10 WILMA UI — zooming bullseye
+
+```
+┌──────────────────────────────────────────┐
+│  Polar Alignment                          │
+│  ────────────────────────────────────────  │
+│                                            │
+│        ╭──────────────────╮                │
+│        │   ╭──────────╮   │                │
+│        │   │  ╭────╮  │   │                │
+│        │   │  │  ↗ │  │   │   ← bullseye   │
+│        │   │  │ ●  │  │   │     (zooms in  │
+│        │   │  ╰────╯  │   │      as error  │
+│        │   │   3.7'   │   │      shrinks)  │
+│        │   ╰──────────╯   │                │
+│        ╰──────────────────╯                │
+│                                            │
+│  Az: -23'   Alt: +14'   Total: 27'         │
+│  ●●●○○  (red — adjust mount knobs)         │
+│                                            │
+│  ┌─────┐  ┌─────────┐  ┌────────────┐     │
+│  │frame│  │Recapture│  │  Refocus   │     │
+│  └─────┘  │  Dark   │  └────────────┘     │
+│           └─────────┘                       │
+│  [Done — mount is aligned]  [Abort]        │
+└──────────────────────────────────────────┘
+```
+
+- Bullseye **dynamically zooms** based on current error magnitude: outer ring covers ~5° at start, shrinks to 30' when error < 1°, shrinks to 1' when error < 5'. User always sees their dot near the center with the right scale.
+- Arrow inside the dot points the direction the user should move the alt/az knobs
+- Color zones: red (>1°), yellow (1° → 10'), green (<10' — within tolerance)
+- [Done] button enabled only when in the green zone (configurable)
+- [Recapture Dark] for when ambient temp drifts mid-session
+- [Refocus] if user re-bumped the focuser
+- Live frame preview in the bottom-left corner (small, just confirms "we have stars")
+
+### 45.11 Failure modes
+
+| Failure | Handling |
+|---|---|
+| Plate solve fails (clouds, no stars) | Loop pauses; WILMA shows "No solve — check sky and try again" with retry counter. After 5 consecutive failures, suggest user check focus / point closer to pole |
+| Mount can't rotate in RA for initial 30° seed | Cap to whatever rotation is possible; user shown warning that estimate may be less precise |
+| Camera reports cooler instability mid-PA | Notify, recapture dark, continue |
+| User's site latitude too far from pole (extreme polar latitudes) | Workflow allows; bullseye math still works; just narrower workable window |
+| Southern hemisphere | Same workflow, just plate-solving against SCP region instead of NCP — no code difference; the math uses lat/long from profile |
+
+### 45.12 Profile settings
+
+Polar Alignment section of profile (default values shown):
+
+- Exposure time: 0.5 sec
+- Binning: auto (per §45.4)
+- Target tolerance: 1 arcmin (controls when [Done] enables)
+- Initial RA rotation for seed: 30°
+- Loop cadence (target): 500 ms
+- Save PA dark to library: off
+
+Configurable in Settings → Polar Align AND in the profile wizard (could go as a brief screen, or as part of the mount config screen — TBD per wizard design).
+
+### 45.13 Session log
+
+After PA completes (or aborts), one row added to a `polar_alignments` table on the Pi:
+
+```sql
+CREATE TABLE polar_alignments (
+  id TEXT PRIMARY KEY,
+  session_id TEXT REFERENCES sessions(id),
+  started_at TIMESTAMP,
+  ended_at TIMESTAMP,
+  final_error_arcmin REAL,
+  iterations INT,
+  outcome TEXT,             -- "complete" | "aborted" | "failed"
+  notes TEXT
+);
+```
+
+WILMA's Image Library + Dashboard can display: *"Polar alignment quality: 0.7' (last performed 2 nights ago)"* as a small status chip. Gives users awareness of when re-alignment might help.
+
+### 45.14 v0.1.0 — dedicated PA camera support
+
+When v0.1.0 adds support for an iPolar / PoleMaster / dedicated PA camera attached via Alpaca:
+
+- Polar Align workflow auto-detects an Alpaca camera tagged as "PolarAlignCamera" (separate from main imaging camera)
+- Uses that camera's FOV / pixel scale for the math instead of binning the main camera
+- Same UI, same loop, same math — just smaller frames and faster (no need for main camera autofocus or large transfer)
+- User toggles in Settings: "Use dedicated PA camera if available"
+
+### 45.15 What we're explicitly NOT doing
+
+- Three-point polar alignment (TPPA) — dropped per §45.1
+- Drift-alignment method (the historical hour-of-RA-drift technique) — too slow + obsolete given plate-solve approach
+- Pre-canned "well-known star" alignments (Polaris reticle patterns) — manual workflows, replaced by automated continuous loop
