@@ -15,7 +15,7 @@ The product model is ASIAir-like: server runs the night, client is for planning 
 **Repository:** single monorepo at `github.com/open-astro/openastro-ara`. Server (.NET) and client (Flutter) live in the same repo because the client is generated from the server's OpenAPI spec — they must move together. Final layout after the port:
 
 ```
-openastro-ara/                              (repo root, branch: port/avalonia)
+openastro-ara/                              (repo root, branch: port/ara)
 ├── README.md  NOTICE.md  LICENSE.txt  COPYING  AUTHORS
 ├── PORT_PLAYBOOK.md  PORT_DECISIONS.md  PORT_TODO.md  PORT_PROGRESS.md
 ├── API_CONTRACT.md  DEPLOY.md  RELEASE_NOTES.md  3rd-party-licenses.txt
@@ -55,7 +55,7 @@ openastro-ara/                              (repo root, branch: port/avalonia)
 
 1. **No questions.** If you would otherwise ask "which option do you prefer?", pick the option this document recommends. If silent, pick the option that minimizes diff size, write a one-line note in `PORT_DECISIONS.md`, and continue.
 2. **No scope creep.** This is a *port + restructure*, not a redesign. The sequencer, equipment state machines, profile schema, coordinate math, plate-solver integration, PHD2 client, and image processing logic all come from NINA as-is. Do not "improve" working logic — just move it across the new boundary.
-3. **No half-finished states.** Always work on `port/avalonia` (legacy branch name from when the plan was an Avalonia port — keep as the working branch). Each commit must leave the solution buildable for everything ported so far.
+3. **No half-finished states.** Always work on `port/ara` (the working branch for the entire port). Each commit must leave the solution buildable for everything ported so far.
 4. **Cite when stuck.** When you genuinely cannot translate a construct, leave a `// TODO(port): <one sentence>` and a placeholder that compiles, log it in `PORT_TODO.md`, and move on. Sweep TODOs in Phase 15.
 5. **Verify continuously.** After every phase, run the build + tests gate in §15. Do not start the next phase until the gate is green for everything completed so far.
 6. **Commit cadence.** One commit per logical unit (one project converted, one endpoint implemented, one view ported). Commit messages: `port(<area>): <what>`. Never amend; always new commits. Never `--no-verify`.
@@ -70,7 +70,7 @@ openastro-ara/                              (repo root, branch: port/avalonia)
 
 ```bash
 git fetch origin
-git checkout port/avalonia   # branch already exists
+git checkout port/ara   # branch already exists
 ```
 
 Create four tracking files at the repo root and commit them empty:
@@ -757,7 +757,7 @@ Placeholders during port. Every icon/splash/logo reference carries `TODO(brandin
 
 ### 19.1 Git safety
 
-- Branch locked to **`port/avalonia`** (legacy name, kept). No commits/pushes elsewhere.
+- Branch locked to **`port/ara`**. No commits/pushes elsewhere.
 - No `git push --force` or `--force-with-lease`. Plain `git push` only.
 - No `--no-verify` on commits.
 - No `git reset --hard` without first creating `backup-<timestamp>` tag.
@@ -855,7 +855,7 @@ When porting NINA logic into ASP.NET Core endpoints, replace `Loc.Instance[...]`
    - Lineage attribution
    - Known issues, install instructions
 5. Bump `CommonAssemblyInfo.cs` to `0.0.1.0`; informational `0.0.1-ara.1`. Bump `pubspec.yaml` to `0.0.1+1`.
-6. Open PR from `port/avalonia` to `master` (or fresh `develop`) with `PORT_DECISIONS.md` contents as description. **Do not merge** — user reviews.
+6. Open PR from `port/ara` to `master` (or fresh `develop`) with `PORT_DECISIONS.md` contents as description. **Do not merge** — user reviews.
 
 ---
 
