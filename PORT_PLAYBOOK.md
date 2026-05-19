@@ -2114,7 +2114,7 @@ The wizard is **mandatory on first launch** (after server connect + profile crea
 
 - Field: AlpacaBridge address (default: auto-discover via Alpaca's broadcast UDP on port 32227)
 - "Test Connection" button — server pings AlpacaBridge, shows results
-- (v0.0.1: protocol is Alpaca only; INDI/INDIGO listed as "future" placeholder)
+- Protocol is **ASCOM Alpaca only** — permanent architectural commitment per §52. INDI/INDIGO users use bridges (AlpacaPi, INDIGO Sky's `-A` Alpaca server). No "future native INDI" placeholder in the UI; the wizard screen explains the bridge path in a tooltip.
 
 **Screen 3 — Discover + assign equipment**
 
@@ -4769,3 +4769,101 @@ This is the section that's worth showing in marketing screenshots: a side-by-sid
 - ML pattern detection (§51.9 second bullet)
 - Predictive alerts (§51.9 third bullet)
 - More sophisticated patterns (we'll learn what works from real user feedback)
+
+---
+
+## 52. Mount handling — Alpaca-only commitment + feature detection
+
+### 52.1 Alpaca-only is a permanent architectural commitment
+
+ARA speaks ASCOM Alpaca exclusively. **INDI and INDIGO are not, and will not become, native protocols.** This is not "deferred to v0.1.0" — it's a permanent design choice. Reasons:
+
+| Standard | Conformance validation | Driver quality bar |
+|---|---|---|
+| **ASCOM Alpaca** | [ConformU](https://github.com/ASCOMInitiative/ConformU) — formal test suite operated by the ASCOM Initiative; required for certified drivers | Consistently high; non-conformance is detectable + reportable |
+| INDI | None (community-curated) | Variable; quirks must be discovered + worked around per-driver |
+| INDIGO | Limited (some validation but no equivalent ConformU-style certification) | Better than INDI but still inconsistent |
+
+Supporting INDI/INDIGO natively means accumulating brand-quirk workarounds forever — exactly the maintenance burden ARA exists to avoid. NINA learned this the hard way; we don't repeat it.
+
+### 52.2 Bridge path for INDI / INDIGO users
+
+Users with INDI or INDIGO equipment connect via a bridge that exposes the equipment as Alpaca:
+
+- **INDIGO native Alpaca server** — INDIGO ships with an `-A` flag that exposes all connected INDIGO drivers as Alpaca devices on the local network. Zero-config for users already running INDIGO. Recommended path.
+- **AlpacaPi** ([github.com/msproul/AlpacaPi](https://github.com/msproul/AlpacaPi)) — INDI → Alpaca bridge. Runs alongside INDI on the same Pi.
+- **AlpacaBridge** ([github.com/AlpacaBridge](https://github.com/AlpacaBridge)) — bridges ASCOM COM (Windows) + USB drivers → Alpaca. Already the canonical equipment hub for ARA per §2.
+
+ARA documentation (DEPLOY.md + README) makes the bridge path explicit. Users coming from INDI ecosystems are pointed at these tools, not asked to wait for native ARA support that isn't coming.
+
+### 52.3 Feature detection — no brand-specific code in ARA
+
+ARA does **not** maintain a "known mount quirks database." Mount-specific logic is anti-pattern that defeats the abstraction layer. Instead, ARA queries Alpaca's standard capability flags + properties:
+
+| What ARA needs to know | Standard Alpaca property |
+|---|---|
+| Can the mount Find Home? | `CanFindHome` |
+| Can the mount park? | `CanPark` / `CanSetPark` |
+| Slew speed options? | `AxisRates(TelescopeAxis)` |
+| Settle time? | `SlewSettleTime` |
+| Coordinate system? | `EquatorialSystem` |
+| Alignment mode? | `AlignmentMode` |
+| Tracking rates supported? | `TrackingRates` |
+| Side of pier sensing? | `CanSetPierSide` / `SideOfPier` |
+| Pulse guiding? | `CanPulseGuide` / `MaxPulseGuideRate` |
+| Async slew? | `CanSlewAsync` / `CanSlewAltAzAsync` |
+| Custom vendor commands? | `SupportedActions` (array of strings) |
+
+ARA's UI adapts at runtime: if `CanFindHome = false`, the "Find Home" button is hidden. If `CanPulseGuide = false`, PHD2 is configured for ST4 guiding instead. Etc.
+
+This is the standard Alpaca workflow. ARA doesn't second-guess it.
+
+### 52.4 Sensible defaults, not brand-specific overrides
+
+The wizard (§37) sets sensible defaults that work for any conformant Alpaca driver. Examples:
+
+- Default slew settle time: 5 seconds (overridden by `SlewSettleTime` if the driver provides it)
+- Default plate-solve tolerance after slew: 60 arcsec (per §28.2)
+- Default meridian flip behavior: auto if `CanSetTracking = true` + `CanSlewAsync = true`, otherwise prompt
+- Default tracking rate: sidereal
+
+These are generic. Users override per-profile if needed. **Nothing in ARA's code says "if mount name contains 'iOptron CEM' then…"** — that path leads to brand-quirk cruft.
+
+### 52.5 Optional first-connect conformance check
+
+When ARA connects to an Alpaca mount for the first time, it can optionally run a lightweight conformance check (subset of ConformU's tests) and surface results:
+
+- **Pass**: silent; mount is added normally
+- **Warning**: e.g., *"Driver reports tracking but `CanSetTracking = false` — vendor bug? Behavior may be undefined."* — mount added but flagged
+- **Fail (critical)**: e.g., driver returns malformed JSON or wrong types — surface error to user with link to driver project's issue tracker
+
+This is **optional, off by default** in v0.0.1 (requires implementation work). User toggle in Settings → Equipment → "Run conformance check on connection." v0.1.0 may turn it on by default as ARA's compliance testing matures.
+
+Reporting workflow when a driver fails: ARA shows a "Report this issue" button that opens the driver's GitHub issues with a pre-filled bug report including the failing tests + Alpaca conformance test number. Encourages users to push driver quality upstream rather than have ARA work around bugs.
+
+### 52.6 What about NINA's mount-specific code?
+
+NINA contains a fair amount of brand-specific mount handling — special-case branches for EQMod, iOptron CEM park modes, SiTech axis limits, OnStep extensions, etc. **During the Phase 8 port, ARA strips this brand-specific code.** Generic Alpaca handling replaces it.
+
+If a brand-specific behavior turns out to genuinely require special handling, the path is:
+1. Report the discrepancy to the driver author
+2. Wait for the driver to be updated to handle the case via standard Alpaca calls
+3. NOT add special-case code to ARA
+
+This is firm. The maintenance burden of one mount-quirk-database is genuinely worse than the inconvenience of waiting for a driver update.
+
+### 52.7 What v0.1.0 may add (without changing the core philosophy)
+
+- **Community-curated tips file** — shared markdown file (e.g., `MOUNT_TIPS.md` in the open-astro/openastro-ara-community repo) where users contribute *user-knowledge* tips for specific mounts ("On Mach3, I found setting X helps for my setup"). This is documentation, not hardcoded behavior — ARA doesn't read it programmatically.
+- **First-connect ConformU integration** — optional auto-run of the official ASCOM ConformU tool against connected mount, with results saved to the session log. Tightens feedback loop for surfacing driver bugs.
+- **Driver version awareness** — show user a notification if a connected driver has a known bug fixed in a newer version (community-curated registry of "driver X v1.2.3 has issue Y, fixed in v1.2.4").
+
+None of these change the core: **ARA stays Alpaca-only, trusts the standard, and pushes driver bugs upstream rather than working around them.**
+
+### 52.8 Cross-section updates this commitment implies
+
+- **§2.1** Equipment row — "Alpaca only" language is now permanent (not v0.0.1-only)
+- **§6 / §20.3** Equipment provider abstraction stays at one implementation (`AlpacaEquipmentProvider`); the `IEquipmentProvider` interface need never be re-implemented
+- **§37.2** Wizard's "Protocol choice" screen — drop INDI/INDIGO entirely (no "future support" placeholder). Just shows "ASCOM Alpaca" with a tooltip explaining the bridge path
+- **§24 done criteria** — confirms Alpaca-only-forever as the architectural baseline
+- **DEPLOY.md / README** — explicit "If you have INDI/INDIGO equipment, run a bridge" guidance; link to AlpacaBridge, AlpacaPi, INDIGO Sky options
