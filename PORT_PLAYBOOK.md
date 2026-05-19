@@ -3533,3 +3533,274 @@ When v0.1.0 adds support for an iPolar / PoleMaster / dedicated PA camera attach
 - Three-point polar alignment (TPPA) — dropped per §45.1
 - Drift-alignment method (the historical hour-of-RA-drift technique) — too slow + obsolete given plate-solve approach
 - Pre-canned "well-known star" alignments (Polaris reticle patterns) — manual workflows, replaced by automated continuous loop
+
+---
+
+## 46. Notifications system
+
+In-app notifications only — no push, no email, no webhooks in v0.0.1 (field users often have no internet). Every meaningful server event becomes a notification. Per-event opt-in/out, quiet hours, four severity levels with distinct UX treatments.
+
+### 46.1 Delivery model
+
+- Server emits events via existing WebSocket connection (the `/api/v1/stream` channel from §9.4)
+- WILMA caches events locally; the **Notification Feed** is the persistent in-app view
+- If WILMA is disconnected when an event fires: event is queued in Pi's SQLite `notifications` table; delivered on reconnect (oldest first)
+- No third-party services (no FCM, no APNs, no SendGrid). Everything is LAN-local.
+
+### 46.2 Severity levels and UX treatment
+
+| Severity | Toast in WILMA | Audio | Vibration (mobile) | Feed entry | Badge | Acknowledgment |
+|---|---|---|---|---|---|---|
+| **info** | none (feed only) | — | — | yes | — | passive — auto-marked-read on view |
+| **warning** | auto-dismiss toast (5 s) | — | — | yes | +1 | passive |
+| **critical** | sticky toast until tapped | one chime | short pulse | yes | +1 | tap to acknowledge |
+| **urgent** | full-screen modal | looping alarm (per §35.5) | continuous | yes | +1 | explicit user action required (e.g., [Emergency Abort] or [Acknowledge]) |
+
+Quiet hours suppress info + warning (queue silently). Critical + urgent ALWAYS deliver regardless (safety + equipment failure can't wait).
+
+### 46.3 Event catalog
+
+The complete list of server events that produce notifications, with default severity. All severities are user-overridable per-event (§46.6).
+
+**Sequence lifecycle:**
+| Event kind | Default severity |
+|---|---|
+| `sequence.started` | info |
+| `sequence.complete` | info |
+| `sequence.paused` | warning |
+| `sequence.resumed` | info |
+| `sequence.aborted_manual` | warning |
+| `sequence.aborted_safety` | critical |
+| `target.switched` | info |
+
+**Equipment:**
+| Event kind | Default severity |
+|---|---|
+| `equipment.connected` | info |
+| `equipment.disconnected` | warning |
+| `equipment.reconnected` | info |
+| `equipment.fault` | critical |
+
+**Safety (also handled by §35 alarm system):**
+| Event kind | Default severity |
+|---|---|
+| `safety.unsafe` | urgent |
+| `safety.alarm` | urgent |
+
+**Autofocus / plate solve:**
+| Event kind | Default severity |
+|---|---|
+| `autofocus.complete` | info |
+| `autofocus.failed` | warning |
+| `platesolve.complete` | info |
+| `platesolve.failed` | warning |
+
+**Frames + quality:**
+| Event kind | Default severity |
+|---|---|
+| `frame.captured` | **suppressed by default** (would be noisy — opt-in only) |
+| `frame.quality_drift` | warning (per §40.7 HFR drift detection) |
+
+**Cooler + guider:**
+| Event kind | Default severity |
+|---|---|
+| `cooler.target_reached` | info |
+| `cooler.target_failed` | warning |
+| `guider.started` | info |
+| `guider.lost_star` | warning |
+| `guider.recovered` | info |
+| `guider.dither_complete` | info |
+
+**Meridian flip:**
+| Event kind | Default severity |
+|---|---|
+| `meridian_flip.imminent` | info (with user-configurable advance warning, default 15 min) |
+| `meridian_flip.starting` | info |
+| `meridian_flip.complete` | info |
+| `meridian_flip.failed` | critical |
+
+**Polar align:**
+| Event kind | Default severity |
+|---|---|
+| `polar_align.complete` | info |
+| `polar_align.failed` | warning |
+
+**Recovery (post-crash, per §28):**
+| Event kind | Default severity |
+|---|---|
+| `recovery.started` | warning |
+| `recovery.complete` | info |
+| `recovery.failed` | critical |
+
+**Storage (per §29 + §43):**
+| Event kind | Default severity |
+|---|---|
+| `storage.low_space` | warning (configurable threshold; default <5% free) |
+| `storage.unmounted` | urgent |
+| `storage.remounted` | info |
+| `backup.complete` | info |
+| `backup.failed` | warning |
+| `backup_stream.paused` | warning (§44 — disk full on WILMA, etc.) |
+
+**Time / location:**
+| Event kind | Default severity |
+|---|---|
+| `time_sync.required` | warning |
+| `time_sync.drift_detected` | warning (drift > 30 s mid-session per §31) |
+
+**Server lifecycle:**
+| Event kind | Default severity |
+|---|---|
+| `server.starting` | info |
+| `server.shutdown_imminent` | warning |
+| `update.available` | info (per §33) |
+| `update.applied` | info |
+| `update.failed` | warning |
+
+**Environmental:**
+| Event kind | Default severity |
+|---|---|
+| `dew_detected` | warning (per §42) |
+| `network.weak_signal` | warning (WILMA-side connection quality) |
+
+### 46.4 WebSocket event shape
+
+```json
+{
+  "type": "notification",
+  "ts": "2026-05-19T03:14:15.234Z",
+  "payload": {
+    "id": "ntf_8K2x...",
+    "event_kind": "frame.quality_drift",
+    "severity": "warning",
+    "title": "Image quality degrading",
+    "body": "Autofocus completed twice in 12 min but HFR keeps rising — possible clouds. Check sky conditions.",
+    "related": {
+      "session_id": "sess_abc",
+      "frame_id": "frm_xyz",
+      "equipment_id": null
+    },
+    "actions": [
+      { "label": "Pause Sequence", "endpoint": "/api/v1/sequence/pause" },
+      { "label": "Dismiss", "endpoint": null }
+    ]
+  }
+}
+```
+
+Some events come with optional action buttons (e.g., a `frame.quality_drift` notification offers [Pause Sequence] right in the toast).
+
+### 46.5 Persistent storage on the Pi
+
+```sql
+CREATE TABLE notifications (
+  id TEXT PRIMARY KEY,
+  ts TIMESTAMP NOT NULL,
+  event_kind TEXT NOT NULL,
+  severity TEXT NOT NULL,           -- "info"|"warning"|"critical"|"urgent"
+  title TEXT,
+  body TEXT,
+  payload JSON,                     -- full event-specific data
+  related_session_id TEXT,
+  related_frame_id TEXT,
+  related_equipment_id TEXT,
+  acknowledged BOOLEAN DEFAULT 0,
+  acknowledged_at TIMESTAMP,
+  acknowledged_by TEXT              -- which WILMA acknowledged
+);
+```
+
+Auto-prune: keep last 30 days of info + warning; keep all critical + urgent indefinitely.
+
+### 46.6 User preferences
+
+Settings → Notifications panel in WILMA:
+
+**Per-event opt-in/out** — list of all event kinds (§46.3) with:
+- Toggle: notify yes/no
+- Severity override: dropdown (info / warning / critical / urgent / suppressed)
+- e.g., user can promote `frame.quality_drift` to critical, demote `cooler.target_reached` to suppressed
+
+**Quiet hours:**
+- Toggle: enable quiet hours
+- Time range: start time → end time (server's local TZ)
+- During quiet hours:
+  - info: suppressed (still goes to feed; no toast/audio)
+  - warning: suppressed (still goes to feed; no toast/audio)
+  - critical: delivered with reduced volume audio (50%)
+  - urgent: delivered at full volume
+
+**Defaults pre-filled** by the §37 wizard's notification screen (or implicitly with sensible defaults if user skips):
+
+```json
+{
+  "quiet_hours": { "enabled": false, "start": "23:00", "end": "06:00" },
+  "events": {
+    "frame.captured": { "enabled": false },           // opt-in
+    "target.switched": { "enabled": true, "severity": "info" },
+    "sequence.complete": { "enabled": true, "severity": "info" },
+    "safety.unsafe": { "enabled": true, "severity": "urgent" },
+    "storage.unmounted": { "enabled": true, "severity": "urgent" },
+    // ... rest at default per §46.3
+  }
+}
+```
+
+### 46.7 Notification feed UI (WILMA)
+
+```
+┌──────────────────────────────────────────────────────┐
+│  Notifications                            ⚙  Mark all read  │
+│  ──────────────────────────────────────────────────  │
+│  🔴  Storage disconnected             3 min ago      │
+│      USB drive disconnected. Sequence paused.        │
+│      [Open Storage Settings]                          │
+│                                                       │
+│  🟠  Image quality degrading          12 min ago     │
+│      Autofocus ran twice; HFR keeps rising —          │
+│      possible clouds. [Pause Sequence]                │
+│                                                       │
+│  🔵  Target switched: M42 → NGC 6188  47 min ago     │
+│                                                       │
+│  🔵  Autofocus complete on L          1h 12m ago     │
+│      HFR 1.42 → 1.18                                  │
+│                                                       │
+│  ... (older entries below, virtualized scroll)        │
+└──────────────────────────────────────────────────────┘
+```
+
+- Severity icons: 🔵 info, 🟡 warning, 🟠 critical, 🔴 urgent
+- Tap action button → executes the linked endpoint, marks acknowledged
+- Tap row body → opens related session/frame if applicable
+- Filter pills at top: [All] [Unread] [Critical+] [Last hour] [Last 24h]
+- Persistent badge count in main app shell's notifications icon
+
+### 46.8 API endpoints
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/api/v1/notifications` | List notifications (paginated, filterable by severity / acknowledged / event_kind / date range) |
+| `GET` | `/api/v1/notifications/{id}` | Single notification full payload |
+| `POST` | `/api/v1/notifications/{id}/acknowledge` | Mark acknowledged |
+| `POST` | `/api/v1/notifications/acknowledge-all` | Bulk acknowledge by filter |
+| `DELETE` | `/api/v1/notifications/{id}` | Remove (rare — typically auto-pruned) |
+| `GET` | `/api/v1/notifications/preferences` | Get user's notification preferences |
+| `PUT` | `/api/v1/notifications/preferences` | Update preferences |
+
+### 46.9 v0.1.0 expansion paths
+
+Out of scope for v0.0.1, queued in GAPS-ARA for future:
+
+- **Push notifications** (FCM / APNs) — requires Firebase + Apple Developer accounts + privacy review
+- **Email integration** — outbound SMTP from Pi (requires user to configure their mail server)
+- **Discord / Slack webhooks** — POST notification payloads to user-configured webhook URLs
+- **Generic webhook** — same shape, user-pasted URL
+- **Notification scripting** — user-defined IFTTT-style "when X happens, do Y" rules (e.g., "when sequence.complete fires after 11pm, send IFTTT trigger to turn off observatory lights")
+
+### 46.10 What "in-app only" means for unattended operation
+
+The user said it best: "user may not have internet." In-app-only means:
+- All notifications are deferred until WILMA reconnects
+- Pi imaging continues regardless — the sequence doesn't pause just because WILMA isn't subscribing
+- User wakes up, opens WILMA, sees the full feed of overnight events sorted by severity
+- Critical events (USB unmount, safety abort) are still acted on by the Pi at the moment they happen (via safety policies §35); the notification just records "this happened and the policy fired"
