@@ -29,18 +29,18 @@ Important workflows but won't crash anything on night-one. Can be specced after 
 
 ## Tier 3 — Polish / deferred
 
-- [ ] **Sequence templates** — ship starter templates: LRGB DSO, narrowband Ha-OIII-SII, lunar mosaic, planetary, comet wide-field; user can customize/duplicate. Faster onboarding.
+- [x] ~~**Sequence templates**~~ → **Resolved §38.7**. v0.0.1 ships 4: `lrgb-dso.json`, `narrowband-shoo.json`, `lunar.json`, `planetary.json`. Additional templates (comet wide-field, mosaic-specific, etc.) added in v0.1.0+ as the community shapes preferences.
 - [ ] **Session analytics** — integration time per target across sessions; guide RMS trends; HFR-vs-temperature curves; star count + roundness over a night; "best frames" auto-sort.
 - [ ] **Mount-specific behavior profiles** — per-mount quirks (EQMod, iOptron CEM, SiTech, OnStep); homing protocols; slew speed limits; cable-wrap detection; meridian-limit configuration. Mostly Alpaca abstracts this; mention preserved.
-- [ ] **Multi-user / read-only spectators** — currently single-client per §27; v0.1.0 could add read-only "spectator" connections (e.g., remote-observatory client viewing without controlling).
-- [ ] **Live stacking** — real-time integration of incoming frames into a stacked preview; SharpCap/ASIAir feature; v0.1.0.
+- [x] ~~**Multi-user / read-only spectators**~~ → **Deferred to v0.1.0** (§27.4 already notes this). Single-client policy is correct for v0.0.1; spectator mode adds complexity (auth roles, read-only API surface, UI mode toggle) that isn't needed yet.
+- [x] ~~**Live stacking**~~ → **Committed v0.1.0 feature** (not optional — explicit roadmap commitment). Star registration + sigma-clipped running stack + live preview during integration. Provides EAA (Electronically Assisted Astronomy) and "is this target worth tonight" instant feedback. ASIAir/SharpCap parity. Engineering work: real-time star detection, frame alignment, calibration application, memory management on Pi.
 - [ ] **Equipment scripting / custom hooks** — pre-sequence and post-frame hook scripts; v0.1.0.
-- [ ] **Pi RTC hardware option** — battery-backed RTC modules (DS3231, etc.) avoid the time-sync waterfall in §31 entirely; document supported modules in DEPLOY.md / wiki.
-- [ ] **Pre-built RPi OS image** — alternative to .deb install; pre-flashed SD card with everything ready. v0.1.0 / v0.2.0; CI image-build pipeline required.
-- [ ] **AlpacaBridge + openastro-phd2 WILMA-push updates** — same pattern as §33 for ARA Core, extended to siblings. Mentioned in §33.6 as v0.1.0 scope.
+- [x] ~~**Pi RTC hardware option**~~ → **DEPLOY.md documentation item.** Documented as optional hardware add-on (DS3231 / PiRTC modules); avoids the §31 time-sync waterfall when present. AI writes this into DEPLOY.md during the Phase 11 documentation pass.
+- [x] ~~**Pre-built RPi OS image**~~ → **Deferred to v0.2.0** (per §34 — .deb on apt.openastro.net is v0.0.1 path; pre-flashed image is a polish-tier "make onboarding zero-friction" feature requiring CI image-build pipeline).
+- [x] ~~**AlpacaBridge + openastro-phd2 WILMA-push updates**~~ → **Deferred to v0.1.0** (§33.6 already specs this). Same atomic-swap + rollback pattern; new endpoints per component; bundled binaries grow WILMA app size another ~50-100 MB combined.
 - [ ] **AlpacaBridge enhancement: switch power levels for RPi devices** — outside ARA Core scope (AlpacaBridge-side work). Support PWM / value-based switches for RPi-attached devices like dew heaters with variable output, dimmable flat panels, voltage-controlled outputs. ARA Core (§42.4) already consumes the full Alpaca `ISwitch` interface so it's ready when AlpacaBridge supports it.
-- [ ] **Bulk asteroid catalog** — currently targeted lookup only per §36.8; v0.1.0 adds smart-culled MPC asteroid layer.
-- [ ] **Survey downloader polish** — parallel downloads with resume across app restarts; background download on mobile; incremental updates via `If-Modified-Since`. v0.1.0 (v0.0.1 ships single-threaded sequential).
+- [x] ~~**Bulk asteroid catalog**~~ → **Deferred to v0.1.0** (§36.8 already specs this). Targeted lookup ("Ceres", "433 Eros") works in v0.0.1; bulk MPC asteroid layer (~1.4M numbered asteroids) with smart-culling by magnitude/visibility is v0.1.0.
+- [x] ~~**Survey downloader polish**~~ → **Deferred to v0.1.0** (§36 already calls this out). v0.0.1 ships functional-but-rough single-threaded sequential downloader; v0.1.0 adds parallel + resume-across-restarts + background mobile + `If-Modified-Since` incremental updates.
 
 ## Documentation — separate effort, post-Phase 15
 
