@@ -4867,3 +4867,97 @@ None of these change the core: **ARA stays Alpaca-only, trusts the standard, and
 - **§37.2** Wizard's "Protocol choice" screen — drop INDI/INDIGO entirely (no "future support" placeholder). Just shows "ASCOM Alpaca" with a tooltip explaining the bridge path
 - **§24 done criteria** — confirms Alpaca-only-forever as the architectural baseline
 - **DEPLOY.md / README** — explicit "If you have INDI/INDIGO equipment, run a bridge" guidance; link to AlpacaBridge, AlpacaPi, INDIGO Sky options
+
+---
+
+## 53. Accessibility (WCAG 2.1 AA-leaning baseline)
+
+ARA commits to a **targeted accessibility baseline** that benefits many user groups beyond formally-impaired users — color-blind users (~8% of males), aging astrophotographers (median demographic is 50+), low-vision users, anyone using the app in bright dawn glare, anyone preserving night vision with a red headlamp, anyone keyboard-navigating on desktop, and observatories/outreach orgs that need to comply with ADA / Section 508 / EU EAA.
+
+**Scope: WCAG 2.1 AA-leaning, not formally certified.** We follow the standard where it's cheap and broadly beneficial; we don't pursue paid audits or marketing the compliance.
+
+### 53.1 What's in scope
+
+| Requirement | Implementation |
+|---|---|
+| Color contrast 4.5:1 minimum for text | Verified across all `AraColors` tokens (§25.2) during Phase 12; failing combinations adjusted |
+| Color + symbol on status indicators | Per §53.2 below |
+| Font scaling honored | Flutter's `MediaQuery.textScaleFactor` respected automatically by `Text` widgets; ARA does not override |
+| High-contrast theme variant | Per §53.3 below — opt-in via Settings → Display |
+| Reduce-motion OS setting honored | Wrap animations in a check on `MediaQuery.disableAnimations`; transitions become instant when user has reduced motion enabled |
+| Keyboard navigation on desktop | Flutter Material widgets handle this by default; ARA verifies tab order on every screen |
+| Visible focus indicators | Flutter Material default (focus ring on focused element); ARA does not strip them |
+| Touch targets ≥ 44pt | Flutter Material default for most controls; verified on custom controls |
+| Semantic widget annotations on custom controls | Custom CustomPaint widgets (e.g., polar-align bullseye, frame viewer, sky atlas overlays) wrapped in `Semantics(label: ...)` to give screen readers a description |
+| Screen reader smoke test | Manual test of major flows on VoiceOver (macOS/iOS) + TalkBack (Android) before v0.0.1 release. Verify nav rail, equipment chips, sequence editor, settings are announceable. |
+
+### 53.2 Color-blind friendly status indicators
+
+Every status indicator uses **shape/symbol AND color**, never color alone:
+
+| State | Color | Symbol | Used in |
+|---|---|---|---|
+| Nominal / healthy / connected | 🟢 Green (`#4CAF50`) | ✓ check | Equipment chips, health indicator, frame quality |
+| Busy / in-progress / advisory | 🟡 Yellow (`#FFB300`) | ⚠ warning triangle | Active autofocus, recovery, soft warnings |
+| Error / critical / disconnected | 🔴 Red (`#E53935`) | ⛔ no-entry circle | Faults, urgent safety, disconnected equipment |
+| Disconnected / disabled / unknown | ⚪ Gray (`#606060`) | ○ empty circle | Equipment not connected, feature disabled |
+| Info | 🔵 Blue (`#42A5F5`) | ⓘ info circle | Notifications, hints |
+
+Defined as a reusable `StatusIndicator` Flutter widget that takes a state enum and renders both. Used consistently throughout the app (Health Indicator, equipment chips, notifications, frame quality icons, etc.).
+
+### 53.3 High-contrast theme variant
+
+In addition to the default dark theme (`AraColors` tokens from §25.2), ARA ships a high-contrast dark variant:
+
+| Token | Default dark | High-contrast |
+|---|---|---|
+| Background primary | `#1A1A1A` | `#000000` |
+| Panel background | `#262626` | `#0A0A0A` |
+| Panel alternate | `#2E2E2E` | `#1A1A1A` |
+| Text primary | `#E0E0E0` | `#FFFFFF` |
+| Text secondary | `#A0A0A0` | `#D0D0D0` |
+| Border | `#404040` | `#888888` (thicker borders too) |
+| Accent (connected) | `#4CAF50` | `#00FF00` |
+| Accent (busy) | `#FFB300` | `#FFCC00` |
+| Accent (error) | `#E53935` | `#FF3333` |
+
+Toggle: Settings → Display → "High contrast mode" (on/off). Persisted per-WILMA-device.
+
+Also includes:
+- Slightly larger default font (110% of base) when high contrast is enabled
+- Thicker focus indicator borders
+- Disable subtle hover/elevation effects that low-contrast users can't perceive
+
+No light-theme variant in v0.0.1 — observatory astrophotography is universally dark-themed (preserves night vision). Light theme is a v0.1.0+ consideration if users ask.
+
+### 53.4 Implementation notes
+
+**Flutter accessibility primitives ARA leans on:**
+- `Semantics(label: ..., hint: ..., onTap: ...)` for custom controls' screen-reader descriptions
+- `MergeSemantics` to combine related controls into logical units (e.g., the equipment chip's icon + label + status)
+- `ExcludeSemantics` for purely decorative elements (e.g., logo placeholder)
+- `MediaQuery.of(context).textScaleFactor` — auto-applied by `Text` widgets; ARA doesn't override
+- `MediaQuery.of(context).disableAnimations` — wrap animation builders in a check; default to instant when true
+- `Focus` + `FocusableActionDetector` for keyboard-navigable custom widgets
+
+**Per-screen review during Phase 12:** every screen the AI builds is verified for:
+- Tab order is logical (top-left → bottom-right reading order, mostly)
+- All actionable elements reachable by keyboard
+- Visible focus indicator on every focusable element
+- Custom CustomPaint widgets wrapped in Semantics
+
+### 53.5 What's explicitly NOT in v0.0.1
+
+- Formal WCAG 2.1 AA certification or compliance audit
+- Paid third-party accessibility testing
+- Compliance attestation documentation
+- AAA-level requirements (e.g., 7:1 contrast, sign-language alternatives, etc.)
+- "WCAG Compliant" marketing claims
+- Light theme variant (observatory software is dark-themed)
+- Voice control or Switch Control specific testing beyond what Flutter handles automatically
+
+These are deferred to v0.1.0+ if user demand or legal requirements emerge (e.g., observatory deploying ARA for public outreach may need formal compliance).
+
+### 53.6 Acknowledgment
+
+The honest case for this baseline: it's cheap, it's the right thing to do, and the people who benefit are mostly *not* fully-blind astrophotographers — they're color-blind, aging, low-vision, glare-affected, and night-vision-preserving users who form a meaningful fraction of every demographic that uses astrophotography software. ARA does the baseline because it's craftsmanship, not because we're pursuing certifications.

@@ -6,6 +6,14 @@
 
 ---
 
+## Tier 1 (late additions — from review pass, 2026-05-19)
+
+Found during a final review of the playbook. Worth v0.0.1 attention because they're foundational hygiene the AI would otherwise skip.
+
+- [x] ~~**Accessibility (a11y) commitment**~~ → **Resolved §53**. WCAG 2.1 AA-leaning baseline (not formally certified). Color + symbol on status indicators (covers color-blind item), high-contrast theme variant (toggle in Settings → Display), Flutter Semantic widgets on custom controls, font scaling honored, reduce-motion respected, keyboard navigation on desktop, visible focus indicators, 4.5:1 minimum text contrast verified across `AraColors` tokens, screen-reader smoke test in Phase 11. Benefits color-blind users, aging astrophotographers, low-vision users, glare/night-vision conditions, keyboard users, outreach orgs needing ADA/Section 508/EAA compliance.
+- [x] ~~**Color-blind friendly status indicators**~~ → **Resolved §53.2** (folded into a11y section). Shape + color on every status indicator: ✓ check / ⚠ warning / ⛔ no-entry / ○ disabled / ⓘ info. Reusable `StatusIndicator` Flutter widget used everywhere.
+- [ ] **PII redaction in bug reports** — §18.C's "Submit Bug Report" zips logs that may contain GPS coords, equipment serial numbers, internal IPs, file paths. Need either user-facing warning ("review before submitting") or auto-redaction of obvious patterns.
+
 ## Tier 1 — Open, high-impact
 
 These would actively bite real users on day one if missing. Discuss + bake before turning the AI loose on Phase 0.5.
@@ -41,6 +49,13 @@ Important workflows but won't crash anything on night-one. Can be specced after 
 - [ ] **AlpacaBridge enhancement: switch power levels for RPi devices** — outside ARA Core scope (AlpacaBridge-side work). Support PWM / value-based switches for RPi-attached devices like dew heaters with variable output, dimmable flat panels, voltage-controlled outputs. ARA Core (§42.4) already consumes the full Alpaca `ISwitch` interface so it's ready when AlpacaBridge supports it.
 - [x] ~~**Bulk asteroid catalog**~~ → **Deferred to v0.1.0** (§36.8 already specs this). Targeted lookup ("Ceres", "433 Eros") works in v0.0.1; bulk MPC asteroid layer (~1.4M numbered asteroids) with smart-culling by magnitude/visibility is v0.1.0.
 - [x] ~~**Survey downloader polish**~~ → **Deferred to v0.1.0** (§36 already calls this out). v0.0.1 ships functional-but-rough single-threaded sequential downloader; v0.1.0 adds parallel + resume-across-restarts + background mobile + `If-Modified-Since` incremental updates.
+
+## Tier 3 (late additions — deferred to v0.1.0+, from review pass)
+
+- [ ] **Planetary / lunar imaging workflow specifics** — `lunar.json` + `planetary.json` templates ship in v0.0.1 (§38.7) but specific workflows are NOT detailed: high-frame-rate ROI capture, SER file format for planetary stacking pipelines, surface-feature tracking. DSO is v0.0.1 primary; planetary becomes a dedicated v0.1.0 design pass.
+- [ ] **Comet motion tracking during exposure** — comets move appreciably during long exposures (minutes). Pro tools update RA/Dec per exposure from orbital elements. We have comet catalog data (§36.9) and motion math but no motion-aware tracking during capture. v0.1.0.
+- [ ] **Multi-device WILMA settings sync** — user with Mac + iPad + phone configures each separately in v0.0.1. v0.1.0 could store WILMA UI preferences server-side and sync across devices on connect.
+- [ ] **TLS / remote-internet access** — §2.3 explicitly says no TLS in v0.0.1, LAN-only. Some users want to image from remote observatories over internet. v0.1.0 path: TLS termination + optional remote-access mode (with appropriate warnings); v0.0.1 documented workaround is VPN.
 
 ## Documentation — separate effort, post-Phase 15
 
@@ -85,6 +100,7 @@ These came up in conversation and ARE in the playbook. Listed here so we don't a
 - ✅ Real-time acquisition diagnostics + smart corrections (§51 — pattern-based cause diagnosis ["clouds vs focus drift vs trees"], auto-actions, user-policy aggression dial, per-frame FITS metadata enrichment, configurable from balanced default → aggressive/conservative/notify-only)
 - ✅ Alpaca-only commitment + feature-detection mount handling (§52 — INDI/INDIGO never native; bridges only)
 - ✅ Equipment scripting / custom hooks → deferred to v0.1.0 (folds into plugin SDK design from §10)
+- ✅ Accessibility (a11y) baseline + color-blind friendly status indicators (§53)
 - ✅ Aladin Lite license boundary (GPLv3 via WebView process boundary) (§36.11)
 - ✅ NINA-style UI clone with bitmap-asset placeholders (§25)
 - ✅ Fork hygiene — naming, identifiers, MPL preservation (§17)
