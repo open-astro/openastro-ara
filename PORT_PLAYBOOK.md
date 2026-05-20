@@ -65,6 +65,97 @@ openastro-ara/                              (repo root, branch: port/ara)
 
 ---
 
+## Table of Contents
+
+**Operating rules + tracking (§0–1)**
+- [§0 Read this first — operating rules](#0-read-this-first--operating-rules)
+- [§1 Branch + tracking files](#1-branch--tracking-files)
+
+**Architecture + phased plan (§2–3)**
+- [§2 Target stack (locked)](#2-target-stack-locked--do-not-deviate)
+- [§3 Phased plan (execute strictly in order)](#3-phased-plan-execute-strictly-in-order)
+
+**Per-phase implementation (§4–15)**
+- [§4 Phase 0.5 — Fork hygiene + project demolition](#4-phase-05--fork-hygiene--project-demolition)
+- [§5 Phase 1 — Bump non-UI projects to .NET 10](#5-phase-1--bump-non-ui-projects-to-net-10)
+- [§6 Phase 2 — Equipment to Alpaca-only](#6-phase-2--equipment-to-alpaca-only)
+- [§7 Phase 3 — PHD2 client repoint](#7-phase-3--phd2-client-repoint)
+- [§8 Phase 4 — OpenAstroAra.Server scaffold](#8-phase-4--openastroaraserver-scaffold)
+- [§9 Phase 5 — API contract](#9-phase-5--api-contract)
+- [§10 Phases 6–9 — Implement endpoints](#10-phases-69--implement-endpoints)
+- [§11 Phase 10 — Server smoke test](#11-phase-10--server-smoke-test)
+- [§12 Phases 11–13 — Flutter client](#12-phases-1113--flutter-client)
+- [§13 RPi deployment](#13-rpi-deployment-phase-10--phase-15)
+- [§14 Testing (Phase 14)](#14-testing-phase-14)
+- [§15 Build + verification gate](#15-build--verification-gate-run-after-every-phase)
+
+**Governance + cross-cutting (§16–24)**
+- [§16 Stuck-state policy](#16-stuck-state-policy)
+- [§17 Fork hygiene — naming, MPL preservation](#17-fork-hygiene--naming-identifiers-mpl-preservation)
+- [§18 Feature decisions (baked-in A–I)](#18-feature-decisions-baked-in)
+- [§19 Auto-approve safety rails](#19-auto-approve-safety-rails)
+- [§20 Quota-resume protocol](#20-quota-resume-protocol)
+- [§21 Localization](#21-localization)
+- [§22 Final pass (Phase 15)](#22-final-pass-phase-15)
+- [§23 Quick reference — bash one-liners](#23-quick-reference--bash-one-liners)
+- [§24 What "done" looks like](#24-what-done-looks-like)
+
+**UI + design (§25)**
+- [§25 Visual design reference — cloning NINA's UX](#25-visual-design-reference--cloning-ninas-ux)
+
+**Technical deep-dives (§26–28)**
+- [§26 Image processing on Linux — OpenCvSharp4](#26-image-processing-on-linux--opencvsharp4-migration)
+- [§27 Connection policy — single-client at a time](#27-connection-policy--single-client-at-a-time)
+- [§28 Sequence durability & crash recovery](#28-sequence-durability--crash-recovery)
+
+**Storage + first-run + sync (§29–31)**
+- [§29 Storage / disk-space policy (USB MANDATORY)](#29-storage--disk-space-policy)
+- [§30 First-run + launch flow (client)](#30-first-run--launch-flow-client)
+- [§31 Time + location sync (WILMA waterfall)](#31-time--location-sync-wilma-waterfall)
+
+**Resilience + updates + distribution (§32–34)**
+- [§32 Network resilience (WILMA ↔ Pi)](#32-network-resilience-wilma--pi)
+- [§33 Version compatibility + WILMA-pushed updates](#33-version-compatibility--wilma-pushed-updates-asiair-model)
+- [§34 Distribution + install (apt.openastro.net)](#34-distribution--install-aptopenastronet)
+
+**Safety + sky atlas + wizard (§35–37)**
+- [§35 Safety policies (user-configurable)](#35-safety-policies-user-configurable-per-profile)
+- [§36 Sky imagery + survey management](#36-sky-imagery--survey-management-wilma)
+- [§37 Profile setup wizard](#37-profile-setup-wizard)
+
+**Sequence + calibration + image library (§38–41)**
+- [§38 Sequence file format + NINA import](#38-sequence-file-format--nina-json-import)
+- [§39 Calibration frames + session-matching flats](#39-calibration-frames--session-metadata-driven-auto-flats)
+- [§40 Captured-image library workflow](#40-captured-image-library-workflow)
+- [§41 Mobile companion mode (iOS/Android)](#41-mobile-companion-mode-ios--android)
+
+**Operational features (§42–44)**
+- [§42 Hardware fault recovery](#42-hardware-fault-recovery-per-equipment)
+- [§43 Backup + restore](#43-backup--restore)
+- [§44 Real-time backup stream to desktop WILMA](#44-real-time-backup-stream-to-desktop-wilma)
+
+**Polar alignment + notifications + mosaic + auto-cal (§45–48)**
+- [§45 Polar alignment — iPolar-style loop](#45-polar-alignment--ipolar-style-continuous-loop)
+- [§46 Notifications system](#46-notifications-system)
+- [§47 Mosaic imaging (multi-panel)](#47-mosaic-imaging-multi-panel)
+- [§48 Auto-flats and dark library](#48-auto-flats-and-dark-library-sequence-automation)
+
+**API docs + analytics + diagnostics (§49–51)**
+- [§49 API documentation serving (Swagger UI)](#49-api-documentation-serving)
+- [§50 Session analytics + Stats dashboard](#50-session-analytics--stats-dashboard)
+- [§51 Real-time acquisition diagnostics](#51-real-time-acquisition-diagnostics--smart-corrections)
+
+**Hardware philosophy + a11y + privacy (§52–54)**
+- [§52 Mount handling — Alpaca-only commitment](#52-mount-handling--alpaca-only-commitment--feature-detection)
+- [§53 Accessibility (WCAG AA-leaning)](#53-accessibility-wcag-21-aa-leaning-baseline)
+- [§54 Bug report submission + PII handling](#54-bug-report-submission--pii-handling)
+
+**Forward-looking (§55–56)**
+- [§55 v0.1.0+ Roadmap (consolidated)](#55-v010-roadmap-consolidated)
+- [§56 Migrating from NINA](#56-migrating-from-nina)
+
+---
+
 ## 0. Read this first — operating rules
 
 1. **No questions.** If you would otherwise ask "which option do you prefer?", pick the option this document recommends. If silent, pick the option that minimizes diff size, write a one-line note in `PORT_DECISIONS.md`, and continue.
@@ -158,26 +249,44 @@ Create four tracking files at the repo root and commit them empty:
 
 ```
 Phase 0.5 — Fork hygiene + project demolition
-            (rename, license headers, delete WPF UI, delete plugin loader,
-             delete vendor SDKs, delete WiX, delete WebView2, delete MGEN, delete ASCOM COM)
+            §4, §17, §18 (decisions) — rename, license headers, delete WPF/plugins/vendor SDKs/WiX/WebView2/MGEN/COM
 Phase 1   — Bump non-UI projects to .NET 10
+            §5
 Phase 2   — Equipment layer to Alpaca-only
+            §6, §52 (Alpaca-only philosophy)
 Phase 3   — Repoint PHD2 client at openastro-phd2
-Phase 4   — Create OpenAstroAra.Server project (ASP.NET Core skeleton)
-Phase 5   — Define API contract (OpenAPI v1)
-Phase 6   — Implement equipment endpoints
-Phase 7   — Implement sequence endpoints
-Phase 8   — Implement image endpoints
-Phase 9   — Implement log + status endpoints + WebSocket stream
-Phase 10  — Server smoke test on Linux x64 + ARM64 (Docker container + actual Pi if available)
-Phase 11  — Flutter client scaffold (mDNS discovery, token prompt, handshake)
-Phase 12  — Flutter views: equipment dashboard, sequence editor, image viewer, log tail
-Phase 13  — Image preview pipeline (server-side JPEG generation, client-side display)
-Phase 14  — Tests + GitHub Actions CI
-Phase 15  — TODO sweep + smoke test + release v0.0.1-ara.1
+            §7
+Phase 4   — Create OpenAstroAra.Server (ASP.NET Core skeleton)
+            §8, §29 (storage config flow, USB-mandatory), §31 (time-sync foundation)
+Phase 5   — Define API contract + OpenAPI spec + Swagger UI
+            §9, §38 (sequence schema), §49 (Swagger UI)
+Phase 6   — Equipment endpoints + fault detection + dew/switch handling
+            §6, §42 (per-equipment fault recovery), §45 (polar alignment endpoints)
+Phase 7   — Sequence endpoints + calibration + mosaic + auto-flats prompt
+            §38, §39, §47, §48
+Phase 8   — Image endpoints + previews + composite quality score + real-time diagnostics monitor loop
+            §40 (server side), §44 (backup stream queue), §50.10 (composite score), §51 (diagnostic loop)
+Phase 9   — Log/status endpoints + WebSocket stream + notifications + Stats endpoints
+            §46, §50 (server-side analytics), §28 (recovery)
+Phase 10  — Server smoke test on Linux x64 + ARM64
+            §11, gate checks for all server-side endpoints + linux-arm64 publish
+Phase 11  — Flutter client scaffold + first-run + server connect + handshake + a11y baseline
+            §12, §30, §53 (a11y from the start; StatusIndicator widget)
+Phase 12  — Flutter views: app shell + all main tabs (Imaging, Framing, Sequencer, Sky Atlas, Image Library, Stats, Settings)
+            §25, §36 (Sky Atlas/Aladin), §37 (wizard), §40 (image library UI), §50 (Stats dashboard UI),
+            §51 (Health Indicator + Diagnostic Panel UI), §41 (mobile companion shell selection),
+            §32 (disconnect modal), §35 (safety UI), §54 (bug report flow)
+Phase 13  — Image preview pipeline end-to-end (server JPEG gen + client display + pinch-zoom)
+            §12.5, §40.2
+Phase 14  — Tests + GitHub Actions CI matrix
+            §14, §14.3
+Phase 15  — TODO sweep + RPi smoke test + release v0.0.1-ara.1
+            §22, DEPLOY.md + README written, .deb published, .dmg/.apk/.aab/.exe/.AppImage on GitHub Releases
 ```
 
 Do **not** start Phase N+1 until Phase N passes the gate in §15.
+
+**Cross-cutting work:** distribution path (§34 .deb on apt.openastro.net) is set up during Phase 14 CI. Documentation (DEPLOY.md, NOTICE.md, README, MOUNT_TIPS.md) is written incrementally during the relevant phases — the AI updates docs as each feature lands, not at the end. Migration guide (§56) is written during Phase 15.
 
 ---
 
@@ -904,7 +1013,7 @@ cd client/openastroara_client && OPENASTROARA_DEFAULT_HOST=localhost:5400 flutte
 - Client builds on macOS (Apple Silicon), iOS, Android, Windows, Linux desktop via `flutter build`. Every platform produces a working binary.
 - `OpenAstroAra.Server` runs as a systemd daemon on a Pi, discovered via mDNS, accepts authenticated client connections.
 - `OpenAstro Ara` (Flutter client) on a Mac discovers the server, connects with a token, displays equipment status, runs a sequence to completion, displays preview JPEGs as frames complete, supports clean disconnect/reconnect mid-sequence.
-- Smoke test in §22.3 passes end-to-end on a Mac + RPi setup with simulator equipment and openastro-phd2.
+- Smoke test in §22 (step 3) passes end-to-end on a Mac + RPi setup with simulator equipment and openastro-phd2.
 - No bundled native vendor SDKs, no WPF UI code, no plugin loader, no upstream-NINA branding (except attributions in NOTICE.md, AUTHORS, About, README per §17).
 - All MPL license headers preserved per §17.3.
 - `PORT_DECISIONS.md`, `PORT_TODO.md`, `PORT_PROGRESS.md`, `API_CONTRACT.md` reflect the full history.
@@ -3542,7 +3651,7 @@ In-app notifications only — no push, no email, no webhooks in v0.0.1 (field us
 
 ### 46.1 Delivery model
 
-- Server emits events via existing WebSocket connection (the `/api/v1/stream` channel from §9.4)
+- Server emits events via existing WebSocket connection (the `/api/v1/stream` channel from §9)
 - WILMA caches events locally; the **Notification Feed** is the persistent in-app view
 - If WILMA is disconnected when an event fires: event is queued in Pi's SQLite `notifications` table; delivered on reconnect (oldest first)
 - No third-party services (no FCM, no APNs, no SendGrid). Everything is LAN-local.
@@ -4165,7 +4274,7 @@ ARA Core serves interactive Swagger UI documentation from its OpenAPI spec. Open
 
 ### 49.1 Tool choice — Swagger UI
 
-ARA uses **Swagger UI v5.x** for the same reason ASCOM Alpaca does ([ascom-standards.org/api/](https://ascom-standards.org/api/)): it's the de-facto standard for OpenAPI-spec docs, ecosystem-familiar to anyone working with Alpaca APIs, and ASP.NET Core has first-class support via `Swashbuckle.AspNetCore` (already in §8.1's csproj).
+ARA uses **Swagger UI v5.x** for the same reason ASCOM Alpaca does ([ascom-standards.org/api/](https://ascom-standards.org/api/)): it's the de-facto standard for OpenAPI-spec docs, ecosystem-familiar to anyone working with Alpaca APIs, and ASP.NET Core has first-class support via `Swashbuckle.AspNetCore` (already in §8's csproj snippet).
 
 Source-of-truth spec lives at `OpenAstroAra.Server/openapi.yaml` (per §9 + §38). Swagger UI renders it interactively.
 
@@ -5120,3 +5229,163 @@ For users who absolutely don't want any info on a public GitHub issue, v0.0.1 ha
 - Credentials/secrets are blacklisted regardless of user choice — these never leak
 
 This matches the §18.C "no network telemetry" commitment: anything leaving the user's network is a deliberate user action.
+
+---
+
+## 55. v0.1.0+ Roadmap (consolidated)
+
+Items deferred to v0.1.0+ are scattered across the playbook as one-liner notes. This section aggregates them so the AI (and the user) can see the post-v0.0.1 trajectory in one place.
+
+### 55.1 v0.1.0 — Committed features
+
+These were explicitly marked as v0.1.0 commitments during planning (not "maybe"):
+
+| Feature | Source | Notes |
+|---|---|---|
+| **Live stacking** | GAPS-ARA Tier 3 | User explicit: "will do it for sure just later." Real-time integration preview during imaging; star registration + sigma-clipped running stack. EAA + "is this target worth tonight" feedback. ASIAir/SharpCap parity. |
+| **Plugin SDK + equipment scripting hooks** | §10, GAPS-ARA Tier 3 | Bundled together; same v0.1.0 design pass. Pre-sequence / post-frame hook scripts; custom equipment control; community plugin ecosystem. Fresh Avalonia-native SDK schema. |
+| **AlpacaBridge + openastro-phd2 WILMA-push updates** | §33.6 | Same atomic-swap + rollback pattern as ARA Core's WILMA push, extended to siblings. WILMA app size grows ~50-100 MB combined. |
+| **Bulk asteroid catalog** | §36.8 | Currently targeted-lookup-only ("Ceres", "433 Eros"). v0.1.0 adds smart-culled MPC asteroid layer (~1.4M numbered asteroids) with visibility/magnitude filtering. |
+| **Survey downloader polish** | §36 | Parallel downloads with resume across app restarts; background download on mobile; incremental updates via `If-Modified-Since`. |
+| **Dedicated polar-alignment camera support** | §45.14 | Native handling for iPolar / PoleMaster / other Alpaca-tagged "PolarAlignCamera" devices. Same UI + math, just smaller frames. |
+| **Per-user diagnostic threshold calibration** | §51.9 | ARA learns user's normal HFR / star-count / etc. baselines from observed sessions; adjusts diagnostic thresholds rather than relying on global defaults. |
+| **ML pattern detection for diagnostics** | §51.9 | Small on-device model trained on user-labeled diagnostic events; improves cause-diagnosis accuracy over rule-based approach. Opt-in. |
+| **Predictive alerts** | §51.9 | "Based on the last 3 nights you usually hit dew formation around 03:30 — your heaters aren't keeping up." Proactive vs reactive. |
+| **Multi-target stream backup** | §44.11 | Mirror frames to two desktop WILMAs simultaneously. |
+| **Cloud streaming backup** | §44.11 | rclone-based push to S3 / Google Drive / etc. for off-site backup. |
+| **Stats: Equipment Health view** | §50.19 | Cooler power trend, fault-rate analytics, mechanical-drift detection. Threshold tuning per equipment type. |
+| **Stats: Session Efficiency view** | §50.19 | Time-breakdown analysis (light vs autofocus vs slewing vs faults). Requires sequencer instrumentation. |
+| **Stats: Conditions correlation view** | §50.19 | Quality vs weather + lunar correlations. Requires reliable weather data. |
+| **Stats: Achievements / milestones** | §50.19 | Light gamification (streaks, records, discovery badges). |
+| **Stats exports: PDF + Astrobin format** | §50.19 | Per-target PDF reports; Astrobin-ready JSON for direct posting. |
+| **Notification channels: push, email, Discord/Slack webhooks** | §46.9 | Outbound integrations beyond in-app feed. Requires FCM/APNs setup (push) or SMTP config (email). |
+| **Notification scripting** | §46.9 | User-defined "when X happens, do Y" rules (IFTTT-style). |
+| **TLS / remote-internet access** | GAPS-ARA Tier 3 late | TLS termination + remote-access mode with warnings. v0.0.1 documented workaround is VPN. |
+| **Multi-device WILMA settings sync** | GAPS-ARA Tier 3 late | Server-side storage of WILMA UI preferences; sync across user's Mac + iPad + phone on connect. |
+| **Read-only multi-client / spectator mode** | §27.4 | Beyond single-client; add "spectator" connections (e.g., remote-observatory viewer). |
+| **First-connect conformance check (default on)** | §52.5 | Currently optional + off; v0.1.0 turns on by default once compliance testing matures. |
+| **Driver-version-awareness registry** | §52.7 | Community-curated registry of "driver X v1.2.3 has bug Y, fixed in v1.2.4." |
+| **Community-curated MOUNT_TIPS.md** | §52.7 | User-contributed mount-specific tips, as documentation (not hardcoded behavior). |
+| **Comet motion tracking during exposure** | GAPS-ARA Tier 3 late | Update RA/Dec per exposure from orbital elements for moving targets. |
+| **Astrometry.net solver support** | §18.I | If user demand emerges, with Survey-Manager-style UI for 4100/4200/5000-series index downloads. |
+| **OpenAPI-generated SDKs** | §49.7 | Auto-generated client packages for Python/JS/Go from the OpenAPI spec. Useful for community integrations. |
+| **Generated docs for multiple versions** | §49.7 | Swagger UI multi-spec selector showing v0.0.1, v0.1.0, etc. |
+| **Sequence templates expansion** | GAPS-ARA Tier 3 | Beyond the 4 v0.0.1 templates (LRGB, SHO, lunar, planetary). Community-contributed templates registry. |
+
+### 55.2 v0.2.0 — Larger projects
+
+Genuinely ambitious work for the v0.2.0 milestone:
+
+| Feature | Notes |
+|---|---|
+| **Pre-built RPi OS image** | Alternative to .deb install — flashable image with everything pre-configured. Requires CI image-build pipeline. ASIAir-level zero-friction install. |
+| **Planetary / lunar imaging workflow specifics** | High-frame-rate ROI capture, SER file format for stacking pipelines, surface-feature tracking, lucky-imaging support. Distinct from DSO mental model; needs dedicated design pass. |
+| **WCAG 2.1 AA formal certification** | Move from "AA-leaning baseline" (§53) to formal compliance with third-party audit. Only if observatory/outreach use justifies the cost. |
+| **Light-mode theme variant** | Most users want dark; this is for daytime planning + outreach demo contexts. |
+| **Web UI option** | A web frontend (Vue/React/Svelte) for users who don't want a desktop app. Same OpenAPI client + API surface. |
+| **Native Flutter sky-renderer** | Replace Aladin Lite WebView with a pure-Flutter sky atlas using Skia direct rendering. SharpCap/SkySafari quality, no WebView overhead. |
+| **Imaging campaigns / adaptive scheduling** | Multi-target survey programs; "image whichever target is best right now" scheduler. Beyond manual sequences. |
+| **Plugin marketplace UI** | Once SDK is stable, an in-app browsable plugin store (the plugin browser UI §10 ships in v0.0.1 but pointing at an empty manifest). |
+
+### 55.3 Out of scope indefinitely
+
+Items deliberately not on any roadmap (avoid scope-creep pull):
+
+- **Native INDI / INDIGO protocol support** — committed Alpaca-only forever per §52. Bridges only.
+- **In-app FITS post-processing** (stacking, integration, gradient removal, etc.) — out of scope; users use PixInsight/Siril/AstroPixelProcessor for that. ARA captures + organizes; processing is its own tool category.
+- **Solar imaging specifics** (solar filter detection, prominence tracking) — niche; not on roadmap. Solar imagers can use ARA but ARA won't specialize for them.
+- **Mount homing mechanical-knob automation** — physical altitude/azimuth knob automation requires hardware. ARA guides the human; doesn't drive knobs.
+- **Astrometric measurement tools** (asteroid astrometry submission to MPC, supernovae search workflows) — research-grade workflows; out of scope for the imaging tool.
+
+### 55.4 What's NOT on this list (and why)
+
+If a feature seems missing from this roadmap, it's likely either:
+1. **Already in v0.0.1** — check the TOC; many things you might expect to be "future" are already in scope
+2. **AI-handled during the port** — documentation, NINA-feature preservation verification, NOTICE.md, README rewrite, CONTRIBUTING.md updates
+3. **A user-policy decision rather than a feature** — anything the user can already configure via existing settings (e.g., "make autofocus more aggressive") isn't a roadmap item
+4. **Outside ARA's product scope** — see §55.3
+
+---
+
+## 56. Migrating from NINA
+
+For existing NINA users coming to ARA, here's what's different and how to bring your work over. This section becomes the basis for a "Migrating from NINA" guide on the openastro-ara wiki/README during Phase 15.
+
+### 56.1 What carries over
+
+| What | How |
+|---|---|
+| Your sequence `.json` files | Import via WILMA → Sequencer → "Import from NINA" (§38.4). Server remaps equipment IDs to your current Alpaca devices; flags any unsupported instruction types for review. |
+| Your imaging targets | Re-add manually in WILMA's Framing Assistant (Aladin Lite); search by name or coords; save as a target template. Existing FITS files keep their RA/Dec metadata, so old captures still align via §40.6 Resume Target. |
+| Your imaging style (filters, exposures, gain/offset) | Configured fresh in the §37 wizard. Takes ~10 minutes for a standard rig. |
+| Your existing FITS files | Drop them on the Pi's USB drive under any session folder; ARA's library scanner picks them up. Or process them externally in PixInsight/Siril unchanged. |
+| Your bias/dark/flat libraries | Manually copy to `/media/openastroara/calibration/` matching the layout from §39.9. Or just re-capture fresh — for many users this is easier than migrating. |
+
+### 56.2 What does NOT carry over
+
+| Lost | Why |
+|---|---|
+| Your NINA profile | Different schema; rebuild in the wizard (§37) — ~10-15 minutes for a typical rig |
+| Your AvalonDock UI layout | ARA's UI is fixed (§25); no dockable panels in v0.0.1 |
+| NINA plugins | No plugin support in v0.0.1; plugin SDK in v0.1.0 (per §55.1) and authors must port to Avalonia-native API |
+| Crowdin translations | English-only in v0.0.1 (§18.E); other languages may return in future versions |
+| ASCOM COM equipment | Use AlpacaBridge on Windows to expose COM drivers as Alpaca (§52.2). Direct COM is gone permanently. |
+| Native vendor SDK support | All native SDKs removed (Nikon, Canon, ZWO direct, QHY direct, etc.). Use the vendor's Alpaca driver (most vendors ship one) or AlpacaBridge. |
+| MGEN guider integration | Removed; use PHD2 (via openastro-phd2 for cross-platform) |
+| PlateSolve2 | Removed; use ASTAP (§18.I) |
+| In-app updater | Removed (§18.A); update via APT (`sudo apt upgrade openastroara-server`) or WILMA-push (§33) |
+
+### 56.3 What's BETTER in ARA
+
+The reasons to migrate, honestly:
+
+| Feature | NINA | ARA |
+|---|---|---|
+| **Cross-platform client** | Windows only | Mac, Linux, Windows desktop + iOS/Android companion |
+| **Headless server architecture** | No — laptop must stay running | Yes — Pi runs unattended; close your laptop, imaging keeps going |
+| **Disconnect-resilient imaging** | No | Yes — §27 + §32 |
+| **Per-frame quality analytics** | Basic | Comprehensive (§50 Stats dashboard + §51 real-time diagnostics) |
+| **Real-time cause diagnosis** | No | Yes — "clouds passing" vs "focus drift" vs "trees" auto-detected (§51) |
+| **Session-matching flats (replay equipment state)** | No | Yes — §39.5 |
+| **Multi-year target alignment via Resume Target** | Manual | Automated — server replays plate-solve + rotator angle (§40.6) |
+| **Real-time backup stream to desktop** | No | Yes — §44 |
+| **Multi-wavelength sky atlas (21 surveys, X-ray to far-IR)** | External tool needed | Native via Aladin Lite (§36) |
+| **First-launch wizard guides full setup** | Sprawling settings tree | 18-screen guided wizard (§37) |
+| **WILMA-pushed updates from app to Pi** | N/A | Yes — no internet on Pi needed (§33) |
+
+### 56.4 Migration paths
+
+**Quick start (most users)** — give it ~30 minutes for first session:
+1. Install Pi OS Trixie + USB drive
+2. `sudo apt install openastroara-server` (§34.1)
+3. Open WILMA on your Mac, connect to the Pi
+4. Run through the wizard (§37) — fresh profile setup
+5. Import your one or two most-used NINA sequence files (§38.4)
+6. First imaging session
+
+**Deep migration (power users)** — bring everything over:
+1. Quick-start steps 1-4
+2. Manually copy `calibration/` from your old NINA setup to `/media/openastroara/calibration/`
+3. Import all NINA sequence files
+4. Run §40.6 Resume Target on existing target captures to verify alignment math still works
+5. Spend a session validating that ARA's behavior matches what you expected from NINA
+
+**Try-without-committing** — run both side by side:
+1. Set up ARA Core on a Pi
+2. Use ARA for one target, NINA for another in parallel (same night)
+3. Compare results
+4. Migrate fully once confident
+
+### 56.5 Where to ask questions
+
+- GitHub Discussions: `github.com/open-astro/openastro-ara/discussions`
+- GitHub Issues for bugs: `github.com/open-astro/openastro-ara/issues`
+- (Future) Discord / community channels when established
+
+### 56.6 What ARA does NOT promise
+
+In the interest of setting accurate expectations:
+- ARA is not "NINA on Mac." It's a different architecture (headless server + cross-platform client) with different strengths and trade-offs.
+- ARA is in v0.0.1. Polished UX takes iteration. Expect some rough edges that NINA-3.2 doesn't have.
+- ARA is open-source and donation-supported. There's no commercial backing or guaranteed support timeline.
+- Some NINA users will find ARA isn't right for them and will stay on NINA — that's a perfectly fine outcome. Stefan's NINA continues to be excellent for Windows users.
