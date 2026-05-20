@@ -4961,3 +4961,162 @@ These are deferred to v0.1.0+ if user demand or legal requirements emerge (e.g.,
 ### 53.6 Acknowledgment
 
 The honest case for this baseline: it's cheap, it's the right thing to do, and the people who benefit are mostly *not* fully-blind astrophotographers — they're color-blind, aging, low-vision, glare-affected, and night-vision-preserving users who form a meaningful fraction of every demographic that uses astrophotography software. ARA does the baseline because it's craftsmanship, not because we're pursuing certifications.
+
+---
+
+## 54. Bug report submission + PII handling
+
+§18.C established the "Submit Bug Report" feature: zip logs + open GitHub issue. This section specs how that handles potentially-sensitive information.
+
+### 54.1 Design principle: logs keep full info on disk, sharing is review-first
+
+ARA's local logs include data that's **useful for debugging** but potentially **sensitive when shared publicly**: GPS coordinates, equipment serial numbers, hostnames, paths with usernames. This data stays in logs locally — it helps the user diagnose their own issues — and is also genuinely useful for maintainer debugging (e.g., "the user's GPS shows the target was below horizon at that timestamp, which explains why the slew failed").
+
+Removing this data from logs entirely would hurt debugging. The solution is **review-first submission**: the user sees what's about to be shared and chooses how much detail to include.
+
+### 54.2 Submission flow
+
+```
+User taps [Submit Bug Report] in About panel
+   ↓
+WILMA generates a bug-report zip:
+  - Last 5 log files
+  - System info (OS, app version, .NET version, hardware)
+  - server-info.json: equipment connected, capabilities, current state
+  - notifications-recent.json: last 50 notifications
+   ↓
+WILMA scans the zip contents for sensitive patterns (per §54.4)
+   ↓
+WILMA shows the Review modal (per §54.3)
+   ↓
+User picks redaction mode + confirms
+   ↓
+WILMA applies the chosen redaction; produces final zip
+   ↓
+WILMA saves the final zip to user's Desktop OR offers it via system share sheet
+   ↓
+WILMA opens https://github.com/open-astro/openastro-ara/issues/new?template=bug_report.md
+   in the system browser with a pre-filled template and a reminder to attach the zip
+```
+
+User attaches the zip manually in GitHub — ARA cannot upload directly via API (would require auth + would feel sneaky for a public issue tracker).
+
+### 54.3 Review modal
+
+```
+┌──────────────────────────────────────────────────────┐
+│  Review Before Submitting                             │
+│  ──────────────────────────────────────────────────  │
+│  Your bug report will include:                        │
+│                                                       │
+│  📁 5 log files (24 MB)                               │
+│  📋 System info (OS, app version, hardware)           │
+│  📋 Equipment connection state                        │
+│  📋 Recent notifications (50)                         │
+│                                                       │
+│  ⚠ Potentially sensitive information found:           │
+│    • GPS coordinates: 30.27°N, 97.74°W (your site)    │
+│    • Equipment serial numbers: 3 devices              │
+│    • Hostname: pi-observatory.local                   │
+│    • Username in paths: /home/joey/...                │
+│                                                       │
+│  GitHub issues are PUBLIC. Anyone can see this info.  │
+│                                                       │
+│  Sharing mode:                                        │
+│   ● Include everything (best for debugging) — default │
+│   ○ Coarse GPS only (round to ~111 km, city-level)    │
+│   ○ Redact all sensitive items                        │
+│   ○ Let me edit the zip first                         │
+│                                                       │
+│  [Cancel]              [Continue with selection]      │
+└──────────────────────────────────────────────────────┘
+```
+
+### 54.4 Sensitivity detection
+
+The scan looks for these patterns:
+
+| Pattern | Detection | Sensitivity |
+|---|---|---|
+| GPS coordinates near user's known site (from profile) | Floating-point lat/long in logs within 1° of profile coords | Medium-high |
+| Equipment serial numbers | Vendor-known patterns (e.g., ZWO ASI cameras have `ASIyy-cccc-ddee` format); cross-reference active profile's equipment | Medium |
+| Hostnames | Strings ending in `.local`, `.lan`, or matching profile hostname | Low |
+| User home paths | `/home/<name>/`, `/Users/<name>/`, `C:\Users\<name>\` | Low |
+| Internal IPs | RFC 1918 ranges (`10.x`, `192.168.x`, `172.16-31.x`) | Low |
+
+The scan is best-effort regex — surfaces detections to the user but doesn't claim completeness. The modal copy explicitly says *"potentially sensitive information found"* — implies "this is what we noticed" not "guaranteed exhaustive."
+
+### 54.5 Sharing modes
+
+**1. Include everything (default)** — highest debug fidelity. Zip contains original log content. Maintainer can replay exactly what the user saw.
+
+**2. Coarse GPS only** — round latitude/longitude to nearest 1° (~111 km) in all log lines. Removes the "I just told the internet where my expensive observatory is" risk. Still useful for "was target above horizon" math at city/region scale (e.g., 30°N is enough to know Andromeda is high-sky from Texas in October). Equipment serial numbers, hostnames, paths preserved.
+
+**3. Redact all sensitive items** — replaces every detected item with placeholders:
+- GPS → `[REDACTED-GPS]`
+- Serial numbers → `[REDACTED-SN]`
+- Hostnames → `[REDACTED-HOST]`
+- Usernames → `[REDACTED-USER]`
+- IPs → `[REDACTED-IP]`
+
+Maintainer sees structure of the issue (which device, which API call, etc.) but not identifying details. Less useful for debugging; safest for users who don't want any PII shared.
+
+**4. Let me edit the zip first** — WILMA saves the zip to Desktop, opens the containing folder in the file manager, shows: *"Edit the zip's contents however you like, then attach it on GitHub. Drag the zip into the GitHub issue page once you're ready."* Power-user escape hatch.
+
+### 54.6 Always-blacklisted patterns (regardless of mode)
+
+These are stripped from every submission, every mode:
+
+- **Token-like strings**: anything matching `X-OpenAstroAra-Token: [a-zA-Z0-9_-]{20,}` or `Bearer [a-zA-Z0-9_-]{20,}`
+- **API keys / secrets**: patterns like `[A-Za-z0-9_-]{32,}=` (base64-like), `sk_[a-zA-Z0-9]+`, `ghp_[a-zA-Z0-9]+` (GitHub PATs that someone might accidentally have in their environment), `xoxb-` (Slack), etc.
+- **SSH keys**: `-----BEGIN ... PRIVATE KEY-----` blocks
+- **File contents from outside ARA data dirs** — bug zips never include `/etc/passwd`, `/etc/shadow`, `~/.ssh/`, browser-cookies, etc. ARA only zips files under `/var/log/openastroara/`, `/etc/openastroara/`, and `/media/openastroara/.araback/`. Hard whitelist.
+
+This is the one thing that's NOT user-toggleable. Sneaking through credentials should be impossible regardless of user choice.
+
+### 54.7 Bug report template
+
+GitHub issue auto-opened with this template pre-filled:
+
+```markdown
+## Description
+<!-- What were you doing when this happened? -->
+
+## Expected Behavior
+<!-- What did you expect to happen? -->
+
+## Actual Behavior
+<!-- What happened instead? -->
+
+## Steps to Reproduce
+1. 
+2. 
+3. 
+
+## Attachments
+<!-- Drag the bug-report zip from your Desktop here. -->
+
+## System Info
+ARA Server version: 0.0.1-ara.X
+WILMA client version: 0.0.1+X
+OS: <auto-filled>
+.NET / Flutter version: <auto-filled>
+Sharing mode used: include-everything | coarse-gps | redacted | manual-edit
+```
+
+The "Sharing mode used" line tells the maintainer how much redaction was applied — so they don't waste time asking the user "what was your GPS?" if they chose "redacted."
+
+### 54.8 What about private bug reports?
+
+For users who absolutely don't want any info on a public GitHub issue, v0.0.1 has no built-in private channel. Recommended path documented in About → Help: email the maintainer directly with the zip. v0.1.0+ may add a private-submission backend (with TLS, auth, rate-limiting) if user demand justifies the infrastructure.
+
+### 54.9 Privacy-by-default summary
+
+- Logs locally contain full info (useful for the user themselves)
+- Logs are NEVER transmitted automatically
+- Submission requires explicit user action + explicit review of contents
+- Default mode (include-everything) is debug-friendly, but the user sees what they're sharing
+- Power users can always hand-edit the zip
+- Credentials/secrets are blacklisted regardless of user choice — these never leak
+
+This matches the §18.C "no network telemetry" commitment: anything leaving the user's network is a deliberate user action.

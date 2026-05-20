@@ -12,7 +12,7 @@ Found during a final review of the playbook. Worth v0.0.1 attention because they
 
 - [x] ~~**Accessibility (a11y) commitment**~~ → **Resolved §53**. WCAG 2.1 AA-leaning baseline (not formally certified). Color + symbol on status indicators (covers color-blind item), high-contrast theme variant (toggle in Settings → Display), Flutter Semantic widgets on custom controls, font scaling honored, reduce-motion respected, keyboard navigation on desktop, visible focus indicators, 4.5:1 minimum text contrast verified across `AraColors` tokens, screen-reader smoke test in Phase 11. Benefits color-blind users, aging astrophotographers, low-vision users, glare/night-vision conditions, keyboard users, outreach orgs needing ADA/Section 508/EAA compliance.
 - [x] ~~**Color-blind friendly status indicators**~~ → **Resolved §53.2** (folded into a11y section). Shape + color on every status indicator: ✓ check / ⚠ warning / ⛔ no-entry / ○ disabled / ⓘ info. Reusable `StatusIndicator` Flutter widget used everywhere.
-- [ ] **PII redaction in bug reports** — §18.C's "Submit Bug Report" zips logs that may contain GPS coords, equipment serial numbers, internal IPs, file paths. Need either user-facing warning ("review before submitting") or auto-redaction of obvious patterns.
+- [x] ~~**PII redaction in bug reports**~~ → **Resolved §54**. Review-first submission, not auto-redact-first (GPS data is genuinely useful for debug). User sees what's in the zip before submitting, with sensitivity-detected items highlighted (GPS, serial numbers, hostnames, paths, internal IPs). Four sharing modes: include-everything (default, best debug), coarse-GPS-only (round to ~111 km), redact-all (placeholder substitution), let-me-edit-zip-first (power-user escape). Always-blacklisted regardless of mode: API tokens, secrets, SSH keys, files outside ARA data dirs. Bug template auto-records "sharing mode used" so maintainer knows redaction level.
 
 ## Tier 1 — Open, high-impact
 
@@ -101,6 +101,7 @@ These came up in conversation and ARE in the playbook. Listed here so we don't a
 - ✅ Alpaca-only commitment + feature-detection mount handling (§52 — INDI/INDIGO never native; bridges only)
 - ✅ Equipment scripting / custom hooks → deferred to v0.1.0 (folds into plugin SDK design from §10)
 - ✅ Accessibility (a11y) baseline + color-blind friendly status indicators (§53)
+- ✅ Bug report submission + PII handling (§54 — review-first, four sharing modes, always-blacklisted secrets)
 - ✅ Aladin Lite license boundary (GPLv3 via WebView process boundary) (§36.11)
 - ✅ NINA-style UI clone with bitmap-asset placeholders (§25)
 - ✅ Fork hygiene — naming, identifiers, MPL preservation (§17)
