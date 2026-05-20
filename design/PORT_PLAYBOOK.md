@@ -31,10 +31,18 @@ This split is why **WILMA is not a thin client** — it's a planning workstation
 ```
 openastro-ara/                              (repo root, branch: port/ara)
 ├── README.md  NOTICE.md  LICENSE.txt  COPYING  AUTHORS
-├── PORT_PLAYBOOK.md  PORT_DECISIONS.md  PORT_TODO.md  PORT_PROGRESS.md
-├── API_CONTRACT.md  DEPLOY.md  RELEASE_NOTES.md  3rd-party-licenses.txt
+├── DEPLOY.md  RELEASE_NOTES.md  3rd-party-licenses.txt
 ├── global.json  OpenAstroAra.sln  .gitignore  Dockerfile
 ├── .github/workflows/   (ci.yml, release.yml)
+│
+├── design/                                 ← working/design docs (NOT shipped)
+│   ├── PORT_PLAYBOOK.md                    ← this file
+│   ├── GAPS-ARA.md                         ← gap-tracking
+│   ├── COMMIT-PR-RULES.md                  ← per-PR strategy (in progress)
+│   ├── PORT_DECISIONS.md                   ← created Phase 0.5 (append-only log)
+│   ├── PORT_TODO.md                        ← created Phase 0.5
+│   ├── PORT_PROGRESS.md                    ← created Phase 0.5
+│   └── API_CONTRACT.md                     ← created Phase 5
 │
 ├── OpenAstroAra.Core/                      ← server-side .NET projects at repo root
 ├── OpenAstroAra.Astrometry/                  (kept at root, matching NINA's layout —
@@ -158,16 +166,16 @@ openastro-ara/                              (repo root, branch: port/ara)
 
 ## 0. Read this first — operating rules
 
-1. **No questions.** If you would otherwise ask "which option do you prefer?", pick the option this document recommends. If silent, pick the option that minimizes diff size, write a one-line note in `PORT_DECISIONS.md`, and continue.
+1. **No questions.** If you would otherwise ask "which option do you prefer?", pick the option this document recommends. If silent, pick the option that minimizes diff size, write a one-line note in `design/PORT_DECISIONS.md`, and continue.
 2. **No scope creep.** This is a *port + restructure*, not a redesign. The sequencer, equipment state machines, profile schema, coordinate math, plate-solver integration, PHD2 client, and image processing logic all come from NINA as-is. Do not "improve" working logic — just move it across the new boundary.
 3. **No half-finished states.** Always work on `port/ara` (the working branch for the entire port). Each commit must leave the solution buildable for everything ported so far.
-4. **Cite when stuck.** When you genuinely cannot translate a construct, leave a `// TODO(port): <one sentence>` and a placeholder that compiles, log it in `PORT_TODO.md`, and move on. Sweep TODOs in Phase 15.
+4. **Cite when stuck.** When you genuinely cannot translate a construct, leave a `// TODO(port): <one sentence>` and a placeholder that compiles, log it in `design/PORT_TODO.md`, and move on. Sweep TODOs in Phase 15.
 5. **Verify continuously.** After every phase, run the build + tests gate in §15. Do not start the next phase until the gate is green for everything completed so far.
 6. **Commit cadence.** One commit per logical unit (one project converted, one endpoint implemented, one view ported). Commit messages: `port(<area>): <what>`. Never amend; always new commits. Never `--no-verify`.
 7. **No upstream plugin compatibility.** ARA is a hard fork. The plugin SDK is **deferred to v0.1.0** — Phase 0.5 deletes the plugin loader and plugin browser UI entirely. Do not preserve any compatibility with NINA plugins.
 8. **Full-auto operation.** You are running with auto-approve on. Hard git safety rails (§19) apply unconditionally — no force pushes, no `--no-verify`, no destructive ops outside the explicit deletion lists.
-9. **Tag every phase boundary, never stop.** At the end of each phase, after the gate is green, run `git tag phase-N-complete && git push --tags`, update `PORT_PROGRESS.md`, and immediately begin the next phase. The tag IS the rollback point if something goes wrong.
-10. **Quota interruption is normal.** When the model session hits its weekly limit and resumes, the first action is to read `PORT_PROGRESS.md` to find out where to continue. See §20.
+9. **Tag every phase boundary, never stop.** At the end of each phase, after the gate is green, run `git tag phase-N-complete && git push --tags`, update `design/PORT_PROGRESS.md`, and immediately begin the next phase. The tag IS the rollback point if something goes wrong.
+10. **Quota interruption is normal.** When the model session hits its weekly limit and resumes, the first action is to read `design/PORT_PROGRESS.md` to find out where to continue. See §20.
 
 ---
 
@@ -178,12 +186,12 @@ git fetch origin
 git checkout port/ara   # branch already exists
 ```
 
-Create four tracking files at the repo root and commit them empty:
+Create four tracking files in the `design/` directory and commit them empty (`design/` already exists and contains `PORT_PLAYBOOK.md`, `GAPS-ARA.md`, `COMMIT-PR-RULES.md`):
 
-- `PORT_DECISIONS.md` — append-only log of every non-obvious decision, with file:line refs.
-- `PORT_TODO.md` — append-only list of every `TODO(port)` and `PORT_BLOCKED` you leave in code, grouped by phase.
-- `PORT_PROGRESS.md` — single-page status, see §20.1.
-- `API_CONTRACT.md` — append-only design log for the server↔client API; one entry per endpoint or wire-shape decision.
+- `design/PORT_DECISIONS.md` — append-only log of every non-obvious decision, with file:line refs.
+- `design/PORT_TODO.md` — append-only list of every `TODO(port)` and `PORT_BLOCKED` you leave in code, grouped by phase.
+- `design/PORT_PROGRESS.md` — single-page status, see §20.1.
+- `design/API_CONTRACT.md` — append-only design log for the server↔client API; one entry per endpoint or wire-shape decision.
 
 **First commit:** `port(setup): add port tracking files`.
 
@@ -511,7 +519,7 @@ Hand-write `OpenAstroAra.Server/openapi.yaml`. Endpoint groups:
 
 **Auth:** every endpoint except `/api/v1/server/info` and `/api/v1/server/handshake` requires `X-OpenAstroAra-Token` header. Constant-time comparison. After 3 failed attempts from one IP within 60 s, return 429 for 5 minutes.
 
-**Versioning:** URL versioning (`/api/v1/...`). Within v0.x, breaking changes within `/api/v1/` permitted and documented in `API_CONTRACT.md`.
+**Versioning:** URL versioning (`/api/v1/...`). Within v0.x, breaking changes within `/api/v1/` permitted and documented in `design/API_CONTRACT.md`.
 
 **WebSocket protocol:** client connects with `?token=...`. Server sends JSON `{ "type": "equipment.state" | "sequence.progress" | "log.line" | "frame.complete" | ..., "ts": "...", "payload": {...} }`. Client may send `{"type":"subscribe","channels":["log","frames"]}` to filter. Default: all channels.
 
@@ -730,7 +738,7 @@ dotnet publish OpenAstroAra.Server -c Release -r linux-arm64 --self-contained -o
 ```
 
 Gate is green when:
-1. `dotnet build` succeeds with zero errors. Warnings logged in `PORT_DECISIONS.md`.
+1. `dotnet build` succeeds with zero errors. Warnings logged in `design/PORT_DECISIONS.md`.
 2. `dotnet test` green for every previously-passing test. Tests dependent on deleted WPF UI types from §4.2 are deleted (not skipped).
 3. `flutter analyze` returns no errors (warnings OK, logged).
 4. `flutter test` passes.
@@ -738,14 +746,14 @@ Gate is green when:
 6. From Phase 10: published server responds to `/api/v1/server/info`.
 7. From Phase 11: `flutter run -d macos` reaches the server-discovery screen without exceptions.
 
-If the gate fails and you cannot fix it within ~5 attempts, revert the last commit, write up the failure in `PORT_DECISIONS.md`, try a different approach. **Do not push a broken commit.**
+If the gate fails and you cannot fix it within ~5 attempts, revert the last commit, write up the failure in `design/PORT_DECISIONS.md`, try a different approach. **Do not push a broken commit.**
 
 ---
 
 ## 16. Stuck-state policy
 
-- **Compile error you can't immediately solve:** comment out the smallest region with `// PORT_BLOCKED: <reason>`, make the file compile with `throw new NotImplementedException("PORT_BLOCKED: <reason>")`, log to `PORT_TODO.md`. Move on.
-- **API design ambiguity:** pick a REST-conventional shape (nouns for resources, HTTP status codes per semantics), document in `API_CONTRACT.md`. Do not paralyze.
+- **Compile error you can't immediately solve:** comment out the smallest region with `// PORT_BLOCKED: <reason>`, make the file compile with `throw new NotImplementedException("PORT_BLOCKED: <reason>")`, log to `design/PORT_TODO.md`. Move on.
+- **API design ambiguity:** pick a REST-conventional shape (nouns for resources, HTTP status codes per semantics), document in `design/API_CONTRACT.md`. Do not paralyze.
 - **Flutter package missing for a need (e.g., FITS parsing):** vendor a minimal implementation in `client/openastroara_client/lib/<feature>/` rather than depending on an unmaintained package.
 - **NINA logic depends on a WPF type internally (Dispatcher, RoutedEventArgs, etc.):** replace with `SynchronizationContext` or plain async/await. Patch in place.
 - **Tempted to ask the user:** pick the option this document or §0 rule 1 prescribes. Write the decision down. Continue.
@@ -784,9 +792,12 @@ If the gate fails and you cannot fix it within ~5 attempts, revert the last comm
 **Add at repo root:**
 - `NOTICE.md`:
   > OpenAstro Ara (ARA) is a derivative work of [N.I.N.A. (Nighttime Imaging 'N' Astronomy)](https://github.com/isbeorn/nina) by Stefan Berg and contributors, used under the Mozilla Public License 2.0. Original copyrights are preserved in every source file. ARA is not affiliated with or endorsed by the N.I.N.A. project.
-- `README.md` rewrite (first paragraph mentions the lineage)
+- `README.md` rewrite (first paragraph mentions the lineage; links to `design/PORT_PLAYBOOK.md` for contributors curious about the port's planning)
 - `DEPLOY.md` (RPi server install)
-- `API_CONTRACT.md` (API design log)
+
+**Add in `design/`** (working/design docs, not shipped):
+- `design/API_CONTRACT.md` (API design log)
+- (Plus the existing `design/PORT_PLAYBOOK.md`, `design/GAPS-ARA.md`, `design/COMMIT-PR-RULES.md`, and the four tracking files created in §1.)
 
 ### 17.3 Per-file headers
 
@@ -910,14 +921,14 @@ Placeholders during port. Every icon/splash/logo reference carries `TODO(brandin
 
 ### 19.5 Scope safety
 
-- Do not edit `PORT_PLAYBOOK.md`, `PORT_DECISIONS.md`, `PORT_TODO.md`, `PORT_PROGRESS.md`, `API_CONTRACT.md` except to append entries per documented rules.
+- Do not edit `design/PORT_PLAYBOOK.md`, `design/PORT_DECISIONS.md`, `design/PORT_TODO.md`, `design/PORT_PROGRESS.md`, `design/API_CONTRACT.md` except to append entries per documented rules.
 - Do not edit `.git/`, `.github/workflows/` (until Phase 14), `.claude/`.
 
 ---
 
 ## 20. Quota-resume protocol
 
-### 20.1 `PORT_PROGRESS.md` format
+### 20.1 `design/PORT_PROGRESS.md` format
 
 ```markdown
 # OpenAstro Ara — Port Progress
@@ -947,7 +958,7 @@ On session start (fresh or resumed):
 2. `cat PORT_PROGRESS.md`.
 3. `cat PORT_TODO.md`.
 
-Then resume the current task. If `git diff HEAD` shows uncommitted changes, finish them and commit. Otherwise pick up at the next file/endpoint per `PORT_PROGRESS.md`.
+Then resume the current task. If `git diff HEAD` shows uncommitted changes, finish them and commit. Otherwise pick up at the next file/endpoint per `design/PORT_PROGRESS.md`.
 
 ---
 
@@ -961,7 +972,7 @@ When porting NINA logic into ASP.NET Core endpoints, replace `Loc.Instance[...]`
 
 ## 22. Final pass (Phase 15)
 
-1. Sweep `PORT_TODO.md`: every `// TODO(port)` and `// PORT_BLOCKED` resolved or explicitly accepted in `PORT_DECISIONS.md`.
+1. Sweep `design/PORT_TODO.md`: every `// TODO(port)` and `// PORT_BLOCKED` resolved or explicitly accepted in `design/PORT_DECISIONS.md`.
 2. Run the gate one more time including `-c Release` and `flutter build` for every platform.
 3. Smoke test end-to-end:
    - Bring up `OpenAstroAra.Server` on a Linux ARM64 host (Pi or Docker).
@@ -978,7 +989,7 @@ When porting NINA logic into ASP.NET Core endpoints, replace `Loc.Instance[...]`
    - Lineage attribution
    - Known issues, install instructions
 5. Bump `CommonAssemblyInfo.cs` to `0.0.1.0`; informational `0.0.1-ara.1`. Bump `pubspec.yaml` to `0.0.1+1`.
-6. Open PR from `port/ara` to `master` (or fresh `develop`) with `PORT_DECISIONS.md` contents as description. **Do not merge** — user reviews.
+6. Open PR from `port/ara` to `master` (or fresh `develop`) with `design/PORT_DECISIONS.md` contents as description. **Do not merge** — user reviews.
 
 ---
 
@@ -1016,7 +1027,7 @@ cd client/openastroara_client && OPENASTROARA_DEFAULT_HOST=localhost:5400 flutte
 - Smoke test in §22 (step 3) passes end-to-end on a Mac + RPi setup with simulator equipment and openastro-phd2.
 - No bundled native vendor SDKs, no WPF UI code, no plugin loader, no upstream-NINA branding (except attributions in NOTICE.md, AUTHORS, About, README per §17).
 - All MPL license headers preserved per §17.3.
-- `PORT_DECISIONS.md`, `PORT_TODO.md`, `PORT_PROGRESS.md`, `API_CONTRACT.md` reflect the full history.
+- `design/PORT_DECISIONS.md`, `design/PORT_TODO.md`, `design/PORT_PROGRESS.md`, `design/API_CONTRACT.md` reflect the full history.
 - PR description summarizes the work and links the four tracking files.
 
 Begin Phase 0.5.
