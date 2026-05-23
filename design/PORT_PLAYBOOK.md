@@ -258,7 +258,7 @@ Create four tracking files in the `design/` directory and commit them empty (`de
 | Concern | Value |
 |---|---|
 | Language | Dart |
-| Framework | Flutter (stable channel, 3.x+ — pick latest at port time) |
+| Framework | Flutter stable, **pinned to 3.27.x** (latest stable at port time, 2026-05-23). Pin enforced via `client/openastroara_client/.flutter-version` + `pubspec.yaml`'s `environment.flutter:` constraint. CI uses `subosito/flutter-action` with the version-from-file pattern. Auto-PR upgrade workflow per §12.X mirrors the OpenCvSharp4 + Alpaca simulator pinning pattern (weekly check; opens PR on new stable; major-version bumps need manual review). |
 | Target platforms | macOS, iOS, Android, Windows, Linux desktop |
 | HTTP client | `dio` (supports interceptors and progress callbacks for image downloads) |
 | WebSocket | `web_socket_channel` |
@@ -648,9 +648,109 @@ dotnet new web -n OpenAstroAra.Server -f net10.0
 </Project>
 ```
 
-`Program.cs` skeleton — mirror NINA's `CompositionRoot` DI registrations for non-UI services, CORS, WebSocket support, mDNS announce. No auth middleware (per §67). Endpoints are mapped in subsequent phases. AOT discipline per §71 — all DTOs go through `AraJsonContext` source generator; no runtime reflection.
+`Program.cs` skeleton — translate NINA's `CompositionRoot` DI registrations per §8.1 mapping table below (NOT a verbatim port). Wires CORS (§60.7.1), WebSocket support, mDNS announce, exception middleware (§73), Serilog enrichment, AraJsonContext (§71.2). No auth middleware (per §67). Endpoints are mapped in subsequent phases.
 
-Commit: `port(server): scaffold OpenAstroAra.Server with DI from NINA CompositionRoot`.
+Commit: `port(server): scaffold OpenAstroAra.Server with translated DI registrations`.
+
+### 8.1 DI registration mapping — NINA CompositionRoot → ASP.NET Core
+
+NINA's `CompositionRoot.cs` is deeply WPF-entangled (UI VMs, dispatcher-affinity mediators, app-lifecycle services, plugin loaders). It cannot be ported verbatim. The mapping below shows fate of each major registration. **Lifetime translation rule:** WPF singletons become ASP.NET Core singletons; WPF-thread-affinity services must be made thread-safe (typically via `Channel<T>` for event flow or `ConcurrentDictionary` for state); UI VMs are dropped wholesale; per-request scoped services are introduced only where state is genuinely request-scoped (which is rare — most ARA state is session-scoped, served by singletons).
+
+**Equipment mediators → services (UI-thread-affinity removed):**
+
+| NINA registration | ARA fate | ARA lifetime | Notes |
+|---|---|---|---|
+| `ICameraMediator` | Replace with `ICameraService` | Singleton | UI-callbacks (`OnImageReceived`, etc.) become `Channel<CameraEvent>` consumed by WS broadcaster |
+| `ITelescopeMediator` | → `ITelescopeService` | Singleton | Same channel pattern; slew progress + park/unpark events |
+| `IFocuserMediator` | → `IFocuserService` | Singleton | Move-complete + temp-comp events |
+| `IFilterWheelMediator` | → `IFilterWheelService` | Singleton | Filter-change events |
+| `IRotatorMediator` | → `IRotatorService` | Singleton | Mech-vs-sky angle events |
+| `IDomeMediator` | → `IDomeService` | Singleton | Slew + park events |
+| `ISwitchMediator` | → `ISwitchService` | Singleton | Value-changed + value-mismatch events (per §42.4 tolerance) |
+| `IWeatherDataMediator` / `IObservingConditionsMediator` | → `IObservingConditionsService` | Singleton | Reading events + unsafe transitions for §35 safety policy |
+| `ISafetyMonitorMediator` | → `ISafetyMonitorService` | Singleton | Safe/unsafe state |
+| `IFlatDeviceMediator` | → `IFlatDeviceService` | Singleton | Cover + light events for §48 |
+| `IGuiderMediator` | → `IGuiderService` | Singleton | Wraps PHD2 JSON-RPC per §63; calibration + guide-step + dither events |
+
+**Domain services — kept (most are already thread-safe):**
+
+| NINA registration | ARA fate | ARA lifetime | Notes |
+|---|---|---|---|
+| `IProfileService` | Keep | Singleton | Already thread-safe in NINA; profile load/save + change events become `Channel<ProfileEvent>` |
+| `IDeepSkyObjectSearchVM` → `IDeepSkyObjectSearchService` | Rename + keep | Singleton | Drop the VM suffix; pure query logic |
+| `IFramingAssistantVM` → `IFramingAssistantService` | Rename + keep core; drop UI bits | Singleton | Coordinate math kept; WPF panel painting dropped |
+| `IPlateSolverFactory` | Keep | Singleton | Already a factory; just ASTAP impl per §18.I |
+| `IImageDataFactory` | Keep | Singleton | OpenCvSharp4 path per §26; FITS via §72 cfitsio |
+| `IExposureDataFactory` | Keep | Singleton | Pure data shaping |
+| `IImageHistoryVM` → `IFrameRepository` | Rename + reimplement against EF Core | Singleton | EF Core DbContext-backed per §28.14 |
+| `ISequenceMediator` | → `ISequenceService` | Singleton | Decouple from WPF threading; sequencer engine kept |
+| `IApplicationStatusMediator` | → `IServerStatusService` | Singleton | Translates inherited "app status" concept to server-state per §60.4 |
+| `INighttimeCalculator` | Keep | Singleton | Pure math (twilight, moon phase) |
+| `IAstrometryMath` / `IDeepSkyObjectCacheService` | Keep | Singleton | Pure |
+| `IFileNameRecognizer` | Keep | Singleton | Pure; used by NINA file-import for §40 library |
+
+**Services renamed + lifetime-adjusted (WPF context removed):**
+
+| NINA registration | ARA fate | ARA lifetime | Notes |
+|---|---|---|---|
+| `IImagingMediator` | → `ICaptureOrchestratorService` | Singleton | UI-coupling stripped; channel-based progress events |
+| `IPlanetariumMediator` | → `IPlanetariumService` | Singleton | Tonight's Sky + Aladin integration per §36 |
+| `IDeepSkyObjectSearchSyncBehavior` | Drop | — | WPF binding mechanism; replaced by API endpoint |
+| `ITwoPointPolarAlignmentVM` | Drop | — | TPPA removed per §45 (replaced with iPolar-style continuous loop) |
+
+**Dropped entirely (WPF / UI / plugin only):**
+
+| NINA registration | Why dropped |
+|---|---|
+| `IApplicationMediator` | WPF app-lifecycle; no equivalent in headless server |
+| `IPluginProvider` / `IPluginLoader` | Plugin SDK deferred to v0.1.0 per §18.B |
+| All `*ViewModel` / `*VM` classes | UI layer; replaced by REST + WS event API |
+| `IDockManager` | AvalonDock layout; N/A (Flutter client) |
+| `IInputDialogService` / `IDialogService` | UI modal services; client handles modals |
+| `INotificationManager` (WPF toast) | Replaced by `INotificationService` writing to §46 in-app notification feed (Singleton) |
+| `IThemeManager` | UI theming; Flutter handles per §25 |
+| `ITabService` | UI tab routing; N/A |
+| `IUpdateCheckService` (WPF in-app updater) | Dropped per §18.A; replaced by §33 WILMA-push + §34 apt |
+| `IWebProxyService` | Dropped; ARA doesn't make outbound HTTP calls in v0.0.1 (per §18.C local-only telemetry) |
+
+**Added net-new for ARA (no NINA equivalent):**
+
+| ARA registration | Lifetime | Purpose |
+|---|---|---|
+| `IWsBroadcaster` | Singleton | WebSocket connection registry + event fan-out per §60.9 |
+| `IWsEventChannel` | Singleton | `Channel<AraWsEvent>` aggregating events from all sources |
+| `IAraDbContext` (`AraDbContext`) | Scoped (per-request) | EF Core context per §28.14; AOT-friendly via compiled model |
+| `IBackupStreamService` | Singleton | §44 real-time backup stream |
+| `IDiagnosticsService` | Singleton | §51 real-time acquisition diagnostics |
+| `IServerStateSnapshotService` | Singleton | §60.4 hydration snapshot |
+| `IMigrationService` | Singleton | §28.14 EF Core migration runner + pre-migration backup pipeline |
+| `IFitsImageService` | Singleton | §72 cfitsio wrapper |
+| `ISmartSettingsSearchService` | Singleton | §61 settings search registry |
+| `INotificationService` | Singleton | §46 in-app feed (different shape from NINA's WPF `INotificationManager`) |
+| `IShareExportService` / `IShareImportService` | Singleton | §70 profile/sequence sharing |
+| `IDataManagerService` | Singleton | §36.2 sky-data downloader |
+| `ISdNotifyWatchdog` | Singleton | §13 systemd watchdog heartbeat hosted-service |
+| `ISequenceLockService` | Singleton | §34.7 sequence.lock writer |
+
+**Background workers (registered as `IHostedService` per §66):**
+
+| Worker | Lifetime | Purpose |
+|---|---|---|
+| `ImageProcessorWorker` | HostedService | §66.1 single image-processor worker; consumes capture pipeline |
+| `AltStretchWorker` | HostedService | §65 alt-stretch generation |
+| `DiagnosticsWorker` | HostedService | §51 per-frame diagnostics enrichment |
+| `BackupStreamWorker` | HostedService | §44 backup-stream consumer |
+| `NotificationDispatchWorker` | HostedService | §46 notification dispatch + quiet-hours enforcement |
+| `WsEventDispatchWorker` | HostedService | drains `IWsEventChannel` to connected `IWsBroadcaster` clients |
+| `SdNotifyWatchdogWorker` | HostedService | pings `sd_notify("WATCHDOG=1")` every 30 s per §13 |
+| `LogRotationPressureMonitor` | HostedService | watches /var/log/openastroara/ disk free per §29.9 |
+| `StatsAggregationWorker` | HostedService | §50 materialized daily aggregates |
+
+**AOT compatibility check:** the built-in `Microsoft.Extensions.DependencyInjection` container is AOT-friendly per §71.5. All registrations use explicit `services.AddSingleton<TInterface, TImpl>()` calls — no `services.Scan(...)` auto-discovery (would break AOT trimming). Hosted services use `services.AddHostedService<TImpl>()`.
+
+**Lifetime mismatch detection (test gate):** §14.1 adds a unit test that builds the DI container at startup + asserts every registered type's `ServiceLifetime` matches the table above. Catches accidental scope drift during Phase 4-9 refactors.
+
+**Commit (Phase 4):** the §8.1 mapping is implemented in `OpenAstroAra.Server/Program.cs`'s service registration block; commit message `port(server): translate CompositionRoot DI per §8.1 mapping`.
 
 ---
 
@@ -679,16 +779,103 @@ Commit: `port(api): define OpenAPI v1 contract`.
 
 ## 10. Phases 6–9 — Implement endpoints
 
-Each phase implements one endpoint group. Pattern per endpoint:
+Each phase implements one endpoint group. Pattern per endpoint (universal — applies to every row in every per-phase table below):
 
 1. Add route in the appropriate `Map*Endpoints` extension.
 2. Inject the existing NINA service that owns the underlying state (e.g., `IEquipmentMediator` → rename to `IEquipmentService`, drop the UI-flavored "Mediator" naming).
 3. Map request DTOs to internal types; map internal types back to response DTOs. DTOs live in `OpenAstroAra.Server/Contracts/`.
-4. Hook progress/state-change events into the WebSocket broadcaster.
-5. Write a `WebApplicationFactory`-based test in `OpenAstroAra.Test`.
-6. Update `openapi.yaml`.
+4. Register every DTO in `AraJsonContext` per §71.2 (build will fail otherwise under AOT).
+5. Hook progress/state-change events into the WebSocket broadcaster per §60.9 wire protocol.
+6. Write a `WebApplicationFactory`-based integration test in `OpenAstroAra.Test` (per §14.1).
+7. Update `openapi.yaml` (auto-regenerated from endpoint metadata per §71.3 code-first; CI gates on no-diff).
 
 Commit per endpoint group: `port(api): equipment endpoints`, etc.
+
+The per-phase tables below are the **completeness reference** — each row's endpoint + DTO + WS events must be implemented + tested before the phase gate passes (§15 extended with per-phase row-counting check).
+
+### 10.6 Phase 6 — Equipment endpoints + fault detection
+
+Wraps every Alpaca equipment type ARA supports (per §52, §68). Cross-refs §6 (provider model), §42 (fault recovery), §45 (polar align), §57 (Stop Mount + safety-speed slews).
+
+| NINA service | REST endpoint base | DTO type(s) | WS events | Governing §X |
+|---|---|---|---|---|
+| `ICameraMediator` | `/api/v1/equipment/camera/{n}` | `CameraDto`, `CameraStateDto`, `ExposureRequestDto`, `ExposureResponseDto` | `equipment.camera.{connected,disconnected,state,error}`, `capture.{started,progress,complete,aborted}` | §6, §42, §28 |
+| `ITelescopeMediator` | `/api/v1/equipment/telescope/{n}` | `TelescopeDto`, `SlewRequestDto`, `ParkRequestDto` | `equipment.telescope.{connected,disconnected,state,error}`, `mount.{slewing,settled,parked,unparked,abort_requested}` | §6, §42, §57, §58 |
+| `IFocuserMediator` | `/api/v1/equipment/focuser/{n}` | `FocuserDto`, `FocuserMoveRequestDto` | `equipment.focuser.{connected,disconnected,state,error}`, `focuser.{moving,settled,backlash_compensating}` | §6, §59 |
+| `IFilterWheelMediator` | `/api/v1/equipment/filterwheel/{n}` | `FilterWheelDto`, `FilterChangeRequestDto` | `equipment.filterwheel.{connected,disconnected,state,error}`, `filterwheel.{rotating,settled}` | §6, §42 |
+| `IRotatorMediator` | `/api/v1/equipment/rotator/{n}` | `RotatorDto`, `RotatorMoveRequestDto` | `equipment.rotator.{connected,disconnected,state,error}`, `rotator.{moving,settled}` | §6, §47 |
+| `IDomeMediator` | `/api/v1/equipment/dome/{n}` | `DomeDto`, `DomeSlewRequestDto` | `equipment.dome.{connected,disconnected,state,error}`, `dome.{slewing,settled,parked}` | §6 |
+| `ISwitchMediator` | `/api/v1/equipment/switch/{n}` | `SwitchDto`, `SwitchValueRequestDto` | `equipment.switch.{connected,disconnected,state,error}`, `switch.{value_changed,value_mismatch}` | §6, §42 (value tolerance) |
+| `IWeatherMediator` (`IObservingConditions`) | `/api/v1/equipment/observingconditions/{n}` | `ObservingConditionsDto` | `equipment.observingconditions.{connected,disconnected,reading,unsafe}` | §6, §35 (weather safety) |
+| `ISafetyMonitorMediator` | `/api/v1/equipment/safetymonitor/{n}` | `SafetyMonitorDto` | `equipment.safetymonitor.{connected,disconnected,safe,unsafe}` | §6, §35 |
+| `IFlatDeviceMediator` (flat panel) | `/api/v1/equipment/flatdevice/{n}` | `FlatDeviceDto`, `FlatPanelRequestDto` | `equipment.flatdevice.{connected,disconnected,state,error}`, `flatpanel.{cover_moving,cover_settled,light_changed}` | §6, §48 |
+| (PHD2 — wrapped, not Alpaca) | `/api/v1/equipment/guider` | `GuiderDto`, `GuiderConnectRequestDto` | `equipment.guider.{connected,disconnected,state,error}`, `guider.{calibrating,calibrated,guiding,paused,star_lost,settled,dither_started,dither_settled}` | §6, §63, §62 |
+| (Polar alignment — uses camera) | `/api/v1/equipment/polaralign/{start,stop,status}` | `PolarAlignStateDto`, `PolarAlignFrameDto` | `polar_align.{started,frame_complete,paused,stopped,solved,unsolved}` | §45 |
+
+**Phase 6 gate (per §15):** every row implemented + integration-tested against the §14.5 Alpaca simulators + at least one §42 fault scenario per equipment type covered + WS event payload shapes registered in `AraJsonContext`.
+
+### 10.7 Phase 7 — Sequence endpoints + calibration + mosaic + auto-flats
+
+Cross-refs §38 (sequence schema + NINA import), §39 (calibration + matching flats), §47 (mosaic), §48 (auto-flats/darks).
+
+| NINA service | REST endpoint base | DTO type(s) | WS events | Governing §X |
+|---|---|---|---|---|
+| `ISequenceMediator` | `/api/v1/sequences` (CRUD) | `SequenceDto`, `SequenceCreateRequestDto`, `SequenceUpdateRequestDto`, `SequenceListItemDto` | `sequence.{created,updated,deleted}` | §38 |
+| `ISequencer` (runtime) | `/api/v1/sequences/{id}/{start,pause,resume,abort,stop}` | `SequenceRunStateDto`, `SequenceStartRequestDto`, `InstructionProgressDto` | `sequence.{started,paused,resumed,aborted,stopped,complete,instruction_started,instruction_complete,instruction_failed,progress}` | §38, §28 (durability), §28.12 (paused semantics) |
+| Sequence template management | `/api/v1/sequences/templates`, `/api/v1/sequences/templates/{name}/instantiate` | `SequenceTemplateDto`, `TemplateInstantiateRequestDto` | (none — synchronous response) | §38.6, §38.7 |
+| NINA import | `/api/v1/sequences/import` | `SequenceImportRequestDto`, `SequenceImportResultDto` | `sequence.imported`, `sequence.import_warning` | §38.4 |
+| Sequence sharing | `/api/v1/sequences/{id}/share-export` | `SequenceShareDto` | (none) | §70 |
+| Calibration session lookup | `/api/v1/calibration/sessions`, `/api/v1/calibration/sessions/{id}/matching-flats` | `CalibrationSessionDto`, `MatchingFlatsRequestDto`, `GeneratedFlatSequenceDto` | `calibration.flats_generated` | §39 |
+| Dark library | `/api/v1/calibration/dark-library/{build,status,list}` | `DarkLibraryBuildRequestDto`, `DarkLibraryStateDto`, `DarkLibraryEntryDto` | `calibration.dark_library.{build_started,frame_complete,build_complete,build_failed}` | §39, §63 (PHD2 dark-library) |
+| Auto-flats prompt | `/api/v1/sequences/{id}/auto-flats-decision` | `AutoFlatsDecisionRequestDto` | `sequence.auto_flats_prompt`, `sequence.auto_flats_decided` | §48 |
+| Mosaic planning | `/api/v1/mosaics`, `/api/v1/mosaics/{id}/{panels,progress}` | `MosaicDto`, `MosaicPanelDto`, `MosaicProgressDto` | `mosaic.{created,panel_complete,complete}` | §47 |
+
+**Phase 7 gate:** sequence lifecycle (create → start → pause → resume → complete) end-to-end against simulators; NINA import round-trips at least one real NINA sequence file; mosaic-across-RA-wrap integration test passes (§47.3).
+
+### 10.8 Phase 8 — Image endpoints + previews + composite quality + diagnostics monitor
+
+Cross-refs §40 (library), §44 (backup stream), §50.10 (composite score), §51 (diagnostics), §65 (stretching), §72 (FITS I/O).
+
+| NINA service | REST endpoint base | DTO type(s) | WS events | Governing §X |
+|---|---|---|---|---|
+| `IImageHistoryVM` → `IFrameRepository` | `/api/v1/frames` (list/get), `/api/v1/frames/{id}/{preview,thumbnail,download}` | `FrameDto`, `FrameListItemDto`, `FramePreviewRequestDto` | `frame.{complete,recovered_orphan,preview.ready,preview.variant.ready,preview.variant.evicted}` | §40, §65 |
+| Session library | `/api/v1/sessions`, `/api/v1/sessions/{id}/{frames,resume-target,restretch}` | `SessionDto`, `ResumeTargetRequestDto`, `SessionRestretchRequestDto` | `session.{started,ended,restretch.progress,restretch.complete,restretch.failed}` | §40, §65 |
+| Frame bulk ops | `/api/v1/frames/bulk/{rate,tag,delete}` | `BulkRateRequestDto`, `BulkTagRequestDto`, `BulkDeleteRequestDto` | `frames.bulk_operation_complete` | §40.8 |
+| HFR drift detection | `/api/v1/sessions/{id}/hfr-analysis` | `HfrAnalysisDto` | (synchronous response only) | §40.7, §51 |
+| Composite quality score | (per-frame field in `FrameDto`) | `QualityScoreBreakdownDto` | `frame.quality_scored` | §50.10 |
+| Backup stream | `/api/v1/backup/stream/{subscribe,claim}` | `BackupSubscriptionDto`, `BackupFrameDto` | `backup.stream.{frame_available,frame_claimed,backpressure}` | §44 |
+| Diagnostics monitor loop | `/api/v1/diagnostics/{state,mode,history}` | `DiagnosticsStateDto`, `DiagnosticsModeRequestDto`, `DiagnosticEventDto` | `diagnostics.{health_changed,issue_detected,auto_action_taken,auto_action_skipped,cleared}` | §51 |
+| Stretch palette + restretch | (covered above in session restretch) | (covered above) | (covered above) | §65 |
+
+**Phase 8 gate:** capture pipeline produces FITS + preview JPEGs through full pipeline against simulators; composite quality score within ±5% of NINA's reference values on a fixture frame; diagnostics monitor emits expected events on synthetic HFR-drift fixture.
+
+### 10.9 Phase 9 — Log/status endpoints + WebSocket stream + notifications + Stats
+
+Cross-refs §28 (recovery + state), §46 (notifications), §50 (Stats), §60.4 (server state snapshot), §60.8 (health endpoints), §60.9 (WS protocol).
+
+| NINA service | REST endpoint base | DTO type(s) | WS events | Governing §X |
+|---|---|---|---|---|
+| Server state snapshot | `/api/v1/server/state` | `ServerStateDto`, `PendingRestartDto`, `ApiVersionsDto` | (none — pure REST) | §60.4, §34.7 |
+| Server lifecycle | `/api/v1/server/{restart,restart-on-idle,release-notes,info}` | `ReleaseNotesDto`, `ServerInfoDto` | `server.{pending_restart,restart_imminent,migrating_database,migration_complete,migration_failed}` | §33.7, §34.7, §28.14, §30.8 |
+| Log endpoints + rotation | `/api/v1/server/logs/{rotate,download,tail}` | `LogTailRequestDto`, `LogEntryDto` | `storage.log_pressure` | §29.9 |
+| Health (root paths, NOT /api/v1) | `/healthz`, `/readyz` | (text + JSON) | (none) | §60.8 |
+| WebSocket stream root | `/api/v1/ws` | (event envelopes per §60.9) | ALL event types emitted from prior phases route through here | §60.9 |
+| Notifications | `/api/v1/notifications` (list/dismiss/mark-read), `/api/v1/notifications/preferences` | `NotificationDto`, `NotificationPreferenceDto`, `QuietHoursDto` | `notification.{posted,dismissed,cleared}`, `notification.alarm.{started,stopped}` | §46, §35.5 |
+| Stats — top-level | `/api/v1/stats/overview` | `StatsOverviewDto` | (synchronous) | §50 |
+| Stats — sub-views | `/api/v1/stats/{targets,focus-temp,guiding,frame-quality,best-frames,calendar}` | per-view DTOs | (synchronous) | §50 |
+| Stats — exports | `/api/v1/stats/export/{csv}` | (file download) | (none) | §50.16 |
+| Bug report | `/api/v1/bugreport/{prepare,download}` | `BugReportPreparationDto` | `bugreport.{prepared,sharing_mode_set}` | §54 |
+| Data Manager (sky data) | `/api/v1/data-manager/{packages,download,cancel,delete}`, `/api/v1/profiles/{id}/sky-data-recommendations` | `DataPackageDto`, `DownloadRequestDto`, `DataManagerStateDto` | `data_manager.download.{progress,complete,failed}` | §36.2 |
+| Backup (full disk + ZIP) | `/api/v1/backup/{create-zip,restore-zip,snapshots,clone-status}` | `BackupZipDto`, `RestoreRequestDto` | `backup.{zip_created,restore_progress,restore_complete}` | §43 |
+| Share export (profile-side) | `/api/v1/profiles/{id}/share-export`, `/api/v1/profiles/share-import`, `/api/v1/profiles/share-import/commit` | `ProfileShareDto`, `ProfileShareImportPreviewDto` | (synchronous) | §70 |
+
+**Phase 9 gate:** `/api/v1/server/state` returns a fully-populated snapshot that hydrates a fresh WILMA from cold; WebSocket connect → resume protocol works end-to-end; notification feed delivers + persists for 30 d; Stats overview returns within §66.10 SLO; `/healthz` + `/readyz` operational.
+
+### 10.10 Cross-phase: WebSocket event catalog
+
+The consolidated `AraWsEvent` type catalog lives in `OpenAstroAra.Server/Contracts/WsEvents/` — every WS event type from Phases 6-9 (and the §-feature sections that introduce others post-Phase-9) is registered in a single `WsEventCatalog.cs` file. The catalog is the source-of-truth for OpenAPI/AsyncAPI generation (per §71.3) and for the AI to validate "is this event documented?" during Phase 12 client work.
+
+(Per the fifth-pass gap on consolidated WS message catalog — see §60.10 once written.)
 
 ---
 
@@ -718,8 +905,8 @@ ENTRYPOINT ["./OpenAstroAra.Server"]
 
 ```bash
 docker build -t openastroara-server:arm64 .
-docker run --rm -p 5400:5400 openastroara-server:arm64
-curl http://localhost:5400/api/v1/server/info     # expect 200
+docker run --rm -p 5400:5555 openastroara-server:arm64
+curl http://localhost:5555/api/v1/server/info     # expect 200
 ```
 
 ### 11.3 Real Pi (if available)
@@ -736,18 +923,34 @@ Commit: `port(server): smoke test on linux-arm64`.
 
 ### 12.1 Scaffold
 
+Flutter SDK pin: **3.27.1** (or latest 3.27.x at port time) per §2.2. Pinned via:
+
+1. `client/openastroara_client/.flutter-version` — single line `3.27.1`. Consumed by `subosito/flutter-action@v2` in CI + by FVM (Flutter Version Manager) for local dev.
+2. `client/openastroara_client/pubspec.yaml` — `environment.flutter: '>=3.27.0 <3.28.0'` (allows patch updates within minor; major/minor bumps need explicit PR).
+
 ```bash
 mkdir client
 cd client
 flutter create --org org.openastro --project-name openastroara \
-    --platforms macos,ios,android,windows,linux openastroara_client
+    --platforms macos,windows,linux openastroara_client
+# Note: iOS + Android platforms NOT added in v0.0.1 per §18.G mobile-deferred-to-v0.1.0;
+# Flutter codebase supports adding them later via `flutter create --platforms=ios,android .`
 cd openastroara_client
+echo "3.27.1" > .flutter-version
 flutter pub add dio web_socket_channel multicast_dns riverpod flutter_riverpod \
     flutter_secure_storage file_picker
 flutter pub add --dev openapi_generator build_runner
 ```
 
 Configure `openapi_generator` to read `../../OpenAstroAra.Server/openapi.yaml`, generate Dart client into `lib/api/generated/`. Run via `dart run build_runner build`.
+
+**Auto-PR upgrade workflow** (`.github/workflows/check-flutter.yml`) mirrors §14.5.1 simulator pinning + §26.2.1 OpenCvSharp4 pinning patterns:
+
+- Weekly cron Mondays 08:00 UTC alongside other version checks
+- Queries Flutter SDK release feed for latest stable in `3.x` series
+- If newer 3.x stable than pinned, opens PR bumping `.flutter-version` + `pubspec.yaml` constraint + runs widget + integration tests + posts regression report
+- Major version bumps (3.x → 4.x) NOT automated — those typically include breaking API changes
+- User reviews + merges if green
 
 ### 12.2 First-run flow
 
@@ -1126,6 +1329,74 @@ When AI can't run the UI locally (e.g., CI environment, headless), AI states thi
 ### 14.8 §61 search registry entries
 
 - `testing.run_pre_pr_gate` — keywords: `run tests, pre-pr check, test before commit, gate, verify code, check before pr`
+- `testing.e2e_smoke` — keywords: `e2e test, end to end test, smoke test, integration smoke, real server real client`
+
+### 14.9 End-to-end smoke test — headless Flutter against real server
+
+§14.1 (server unit + integration) and §14.2 (Flutter widget + integration with mocked server) test each side independently. §14.9 closes the gap: a CI-gated test that runs the **real** server + **real** Flutter desktop client + **real** Alpaca simulators all together. Catches contract drift (DTO shape mismatches, WS event-type typos, idempotency-key collisions) before Phase 15 manual RPi smoke.
+
+**Location:** `client/openastroara_client/integration_test/e2e_*.dart` files. Uses Flutter's `integration_test` package (already added in §12.1's `flutter pub add`).
+
+**Test inventory (v0.0.1):**
+
+| Test | Coverage |
+|---|---|
+| `e2e_connect_and_idle.dart` | mDNS discovery → connect → server-state hydration → §60.4 snapshot matches WILMA's reconstructed state |
+| `e2e_run_mock_sequence.dart` | Connect → wizard with simulator profile → start 2-frame sequence → preview JPEGs appear → sequence completes cleanly |
+| `e2e_disconnect_reconnect_resume.dart` | Mid-sequence WS disconnect → wait 30 s → reconnect → resume protocol per §60.9 → caught-up state matches expected |
+| `e2e_emergency_stop.dart` | Start sequence → trigger emergency stop per §35.3 → mount parks, camera aborts, alarm fires per §35.5 |
+| `e2e_changelog_modal.dart` | Update server version mid-session simulation → reconnect → changelog modal appears per §33.7 |
+
+**Test environment** (CI job):
+
+```yaml
+e2e-smoke:
+  runs-on: ubuntu-latest    # Linux x64; mobile deferred per §18.G
+  needs: [server-build, client-build]
+  services:
+    alpaca-sims:
+      image: ghcr.io/openastro/alpaca-sims:v0.4.0    # bundled sims per §14.5.1
+      ports: ["32227/udp:32227/udp", "11111-11119:11111-11119"]
+  steps:
+    - uses: actions/checkout@v4
+    - name: Start OpenAstroAra.Server
+      run: |
+        ./scripts/start-server-for-e2e.sh &
+        ./scripts/wait-for-server-ready.sh    # polls /healthz
+    - name: Run Flutter E2E suite
+      working-directory: client/openastroara_client
+      run: |
+        flutter test integration_test/ --device-id=linux
+    - name: Stop services
+      if: always()
+      run: ./scripts/stop-server-for-e2e.sh
+    - name: Upload screenshots on failure
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: e2e-failure-screenshots
+        path: client/openastroara_client/integration_test/screenshots/
+```
+
+**Why Linux x64 only in v0.0.1:**
+
+- Mobile builds deferred to v0.1.0 per §18.G (no iOS/Android in CI)
+- macOS + Windows E2E adds runner cost without much new coverage (UI is Flutter — identical rendering across desktop platforms)
+- Linux x64 is the native CI environment + matches the production Pi (Linux ARM64) closely enough that platform-specific UI bugs are caught in §14.2 widget tests + §14.6 manual UI screenshots
+- v0.1.0 may expand to macOS + Windows runners if Flutter platform-specific bugs emerge
+
+**Runtime:** ~3-5 min per E2E test; 5 tests ≈ 15-25 min total CI time. Runs in parallel with other CI jobs to keep total wall-clock within ~30 min budget.
+
+**Cost vs. value:** real bugs caught by E2E that unit + widget tests miss:
+- DTO shape changes that compile fine on both sides but mismatch at JSON boundary
+- WS event-type typos (`frame.complete` vs `frame.completed`)
+- Race conditions in §32 reconnect flow
+- Idempotency-key collisions between sequence start retries
+- Wizard → profile-load → sequence-start happy path regressions
+
+**§14.9 gate:** Phase 14 doesn't pass until all 5 E2E tests are green on Linux x64 CI. Phase 15 manual RPi smoke (per §22.3) is unchanged — it tests real hardware including ARM64-specific behavior.
+
+**§14.9 search registry entry:** added under §14.8 above (`testing.e2e_smoke`).
 
 ---
 
@@ -1466,7 +1737,7 @@ ssh pi 'sudo journalctl -u openastroara-server -f'
 cd client/openastroara_client && dart run build_runner build --delete-conflicting-outputs
 
 # Run client against a local-running server during dev
-cd client/openastroara_client && OPENASTROARA_DEFAULT_HOST=localhost:5400 flutter run -d macos
+cd client/openastroara_client && OPENASTROARA_DEFAULT_HOST=localhost:5555 flutter run -d macos
 ```
 
 ---
@@ -1475,7 +1746,7 @@ cd client/openastroara_client && OPENASTROARA_DEFAULT_HOST=localhost:5400 flutte
 
 - Server builds on Linux ARM64, x64, Windows, macOS via `dotnet build`. Linux ARM64 publish is the canonical artifact.
 - Client builds on macOS (Apple Silicon), iOS, Android, Windows, Linux desktop via `flutter build`. Every platform produces a working binary.
-- `OpenAstroAra.Server` runs as a systemd daemon on a Pi, discovered via mDNS, accepts authenticated client connections.
+- `OpenAstroAra.Server` runs as a systemd daemon on a Pi, discovered via mDNS, accepts **unauthenticated** client connections per the §67 trusted-LAN security model (no auth in v0.0.1; v0.1.0 remote-access mode reintroduces token + TLS on the remote interface only).
 - `OpenAstro Ara` (Flutter client) on a Mac discovers the server via mDNS, connects (no auth per §67), displays equipment status, runs a sequence to completion, displays preview JPEGs as frames complete, supports clean disconnect/reconnect mid-sequence.
 - Smoke test in §22 (step 3) passes end-to-end on a Mac + RPi setup with simulator equipment and openastro-phd2.
 - No bundled native vendor SDKs, no WPF UI code, no plugin loader, no upstream-NINA branding (except attributions in NOTICE.md, AUTHORS, About, README per §17).
@@ -1669,13 +1940,40 @@ Neither approach works for an ARM64 Linux daemon.
 
 PI.N.S. proved this path: replace `System.Drawing` + `System.Windows.Media.Imaging` calls with **OpenCvSharp4** (`Mat`, `Cv2.ImEncode`, etc.). OpenCV is the standard image-processing library in astronomy (used by INDI, KStars, PixInsight scripts), ARM64 binaries ship in the NuGet package, license is BSD-3 (clean for MPL).
 
+**Pinned version: `4.11.0.20250507`** (or latest stable 4.11.x at port time — see §26.2.1 for the auto-PR upgrade workflow). Latest is `4.11.x` as of 2026-05-23; pin in the csproj as a specific version (not wildcard) for reproducible AOT builds:
+
 ```xml
-<PackageReference Include="OpenCvSharp4" Version="4.11.*" />
-<PackageReference Include="OpenCvSharp4.runtime.linux-arm64" Version="4.11.*" Condition="'$(RuntimeIdentifier)' == 'linux-arm64'" />
-<PackageReference Include="OpenCvSharp4.runtime.linux-x64"   Version="4.11.*" Condition="'$(RuntimeIdentifier)' == 'linux-x64'" />
-<PackageReference Include="OpenCvSharp4.runtime.win"         Version="4.11.*" Condition="$([MSBuild]::IsOSPlatform('Windows'))" />
-<PackageReference Include="OpenCvSharp4.runtime.osx"         Version="4.11.*" Condition="$([MSBuild]::IsOSPlatform('OSX'))" />
+<!-- Main API binding (managed; AOT-compatible) -->
+<PackageReference Include="OpenCvSharp4" Version="4.11.0.20250507" />
+
+<!-- Native runtime — exactly one of these per published platform.
+     RuntimeIdentifier condition ensures Pi publish only bundles arm64 native;
+     dev machines bundle their own. AOT-friendly: native libs loaded via
+     standard P/Invoke, no JIT involved. -->
+<PackageReference Include="OpenCvSharp4.runtime.linux-arm64" Version="4.11.0.20250507"
+                  Condition="'$(RuntimeIdentifier)' == 'linux-arm64'" />
+<PackageReference Include="OpenCvSharp4.runtime.linux-x64"   Version="4.11.0.20250507"
+                  Condition="'$(RuntimeIdentifier)' == 'linux-x64'" />
+<PackageReference Include="OpenCvSharp4.runtime.win"         Version="4.11.0.20250507"
+                  Condition="$([MSBuild]::IsOSPlatform('Windows'))" />
+<PackageReference Include="OpenCvSharp4.runtime.osx"         Version="4.11.0.20250507"
+                  Condition="$([MSBuild]::IsOSPlatform('OSX'))" />
 ```
+
+**AOT compatibility** (per §71): OpenCvSharp4's managed binding uses LibraryImport-style P/Invoke under the hood; works under Native AOT without warnings. Tests under `dotnet publish -p:PublishAot=true` for Phase 5 verify zero IL2026/IL2104/IL3050 warnings on the `OpenAstroAra.Image` project.
+
+**Failure mode:** wrong runtime package = `DllNotFoundException: Unable to load shared library 'OpenCvSharpExtern'` at first OpenCV call. The csproj `Condition` attributes guard against bundling the wrong arch; if encountered, the error message in `OpenAstroAra.Server`'s startup self-test surfaces it with the install instruction.
+
+### 26.2.1 Auto-PR upgrade workflow
+
+OpenCvSharp4 releases follow upstream OpenCV (≈4-8 month cadence). Same auto-PR pattern as §14.5.1 simulator pinning:
+
+- `.github/workflows/check-opencvsharp.yml` runs weekly (Mondays alongside the sim check)
+- Queries NuGet for latest `OpenCvSharp4` stable in the `4.x` series (avoids 5.x major upgrades — those need a manual decision)
+- If newer than the pinned version, opens PR bumping the version in all 5 PackageReference lines + runs the §14.1 image pipeline integration tests + posts regression report
+- User reviews + merges if green
+
+Major version bumps (4.x → 5.x) intentionally NOT automated — those typically include API changes that need human review.
 
 ### 26.3 Translation cheatsheet
 
@@ -1723,6 +2021,11 @@ The OpenCvSharp4 *technique* we borrow. The compat layer we don't.
 `NOTICE.md` adds a paragraph crediting PI.N.S. for proving the Linux feasibility:
 
 > The Linux image-processing approach (OpenCvSharp4 in place of System.Drawing.Common) was pioneered by [PI.N.S. (PI 'N' Stars)](https://github.com/nitr57/pins), a separate Linux fork of N.I.N.A. by nitr57. ARA uses the same library choice but does not depend on or fork the PI.N.S. codebase; we start fresh from NINA 3.2 master.
+
+### 26.8 §61 search registry entries
+
+- `image.processing.library` — keywords: `image processing, opencv, opencvsharp, image library, jpeg encoding, fits to jpeg, bitmap`
+- `image.processing.troubleshoot_native` — keywords: `dllnotfoundexception, opencvsharpextern, native library, opencv install, image processing error`
 
 ---
 
@@ -1774,6 +2077,11 @@ new client → POST /api/v1/server/connect  (no auth per §67)
 
 - Multi-client read-only spectator mode (a "watch only" connection) — could be v0.1.0
 - Persistent admin override / force-disconnect mechanism — could be v0.1.0 (paired with §67.4 remote-access mode where auth re-enters)
+
+### 27.5 §61 search registry entries
+
+- `connection.single_client_policy` — keywords: `single client, one client, multi client, takeover, hand off, who is connected, in use, slot, session ownership`
+- `connection.disconnect` — keywords: `disconnect, log out, release, free session, force disconnect, take over`
 
 ---
 
@@ -2631,6 +2939,15 @@ Modal with a file picker:
 - Settings → Server panel: shows current server + connection state, "Forget this server" button
 - Forget = removes the saved server entry; next launch shows the discovery flow for that server again (Pi-side state is unaffected)
 - v0.1.0 introduces remote-access mode (§67.4) — that's when tokens come back, scoped to remote endpoints only
+
+§61 search registry entries (§30.2-§30.6 coverage):
+
+- `profiles.list` — keywords: `profiles, profile list, current profile, switch profile, change profile`
+- `profiles.add` — keywords: `add profile, new profile, create profile, new rig, fresh profile`
+- `profiles.import` — keywords: `import profile, nina profile, .profile.xml, .profile.json, load profile`
+- `profiles.duplicate` — keywords: `duplicate profile, copy profile, clone profile, branch profile`
+- `profiles.forget_server` — keywords: `forget server, remove server, delete server, clear saved server, untrust server`
+- `connection.servers_list` — keywords: `servers, saved servers, server list, known servers, available servers` (NOTE: detailed multi-server UX in §30.8)
 
 ### 30.7 Equipment-change check on profile load
 
@@ -6241,8 +6558,8 @@ Swagger UI's built-in "Try It Out" works on every endpoint immediately — no au
 ### 49.6 Where Swagger UI is reachable
 
 Same port as the API (default 5400). On a Pi at `pi-observatory.local`:
-- `http://pi-observatory.local:5400/api/v1/docs` — interactive docs
-- `http://pi-observatory.local:5400/api/v1/openapi.yaml` — spec
+- `http://pi-observatory.local:5555/api/v1/docs` — interactive docs
+- `http://pi-observatory.local:5555/api/v1/openapi.yaml` — spec
 
 WILMA's About panel can link to `<server>/api/v1/docs` so users discover it.
 
@@ -7260,6 +7577,38 @@ For existing NINA users coming to ARA, here's what's different and how to bring 
 | MGEN guider integration | Removed; use PHD2 (via openastro-phd2 for cross-platform) |
 | PlateSolve2 | Removed; use ASTAP (§18.I) |
 | In-app updater | Removed (§18.A); update via APT (`sudo apt upgrade openastroara-server`) or WILMA-push (§33) |
+| **NINA's session database (data.db)** | **ARA v0.0.1 ships with a greenfield EF Core schema (per §28.14); NINA's session/frame/calibration history is NOT imported.** Profiles + sequence files ARE importable per §56.4. Keep NINA installed if you need historical session lookups. v0.0.2+ may add a NINA-DB importer if user demand emerges. |
+
+### 56.2.1 Why no NINA database import in v0.0.1
+
+The choice was deliberate, not an oversight. Three reasons:
+
+1. **NINA's schema is not designed for export.** It evolved organically across NINA versions; field meanings shifted; some tables are normalized differently per release. A faithful importer would need per-version schema detection + per-version mapping code, plus thorough manual testing against multiple real NINA databases. Significant ongoing maintenance burden.
+
+2. **ARA's schema is greenfield-ARA-tuned.** Per §28.14 (EF Core migrations) + §50 (Stats schema) + §40 (library schema), ARA's data model includes fields NINA doesn't track (calibration_state signatures per §30.7, composite quality scores per §50.10, diagnostics flags per §51) and omits fields NINA tracks but ARA doesn't use. A faithful import would either fabricate values for ARA fields (misleading) or drop them (broken-feeling library).
+
+3. **Greenfield is honest about the break.** ARA is a hard fork (per §0), not a continuation. A database import would suggest seamless migration that isn't actually true (no calibration history, no per-session HFR-vs-temp curves to compare to, no resume-target chains that span NINA → ARA). Saying "fresh start" explicitly lets users plan: keep NINA for historical lookups, start ARA for forward work.
+
+What the user retains across the boundary:
+
+- **All profile knowledge** is portable via §38 NINA profile import + §37 wizard (which is mandatory in ARA, so re-walks the user through ARA's superset of profile fields anyway)
+- **All sequence files** import directly via §38.4 (NINA JSON sequence schema is preserved)
+- **All FITS frames** are filesystem-portable (copy them into ARA's `/media/openastroara/` and use §40 library's "Resume Target" workflow to re-associate)
+- **Calibration frames (FITS)** copy over the same way; ARA reads them via §39's session-metadata-driven matching even though it didn't capture them
+
+### 56.2.2 v0.0.2+ NINA database importer (deferred)
+
+If real users ask for it post-v0.0.1, the path is:
+
+- Single-shot CLI: `openastroara-server import-nina --source /path/to/nina/data.db`
+- Read-only on the NINA DB; ARA's DB is the write target
+- Per-NINA-version branching: detect NINA's schema version from the DB itself; apply the matching mapping
+- Conservative: when in doubt, skip the row + log it (don't fabricate)
+- Documented mapping: published list of "this NINA field → this ARA field; these NINA fields dropped because ARA doesn't track them; these ARA fields fabricated as null because NINA didn't track them"
+- Idempotent: re-running the import doesn't double-create rows (keyed by NINA's original timestamps)
+- Importer is **always optional** — never run automatically. User triggers explicitly.
+
+Not in v0.0.1. Tracked in §55 v0.1.0+ roadmap if the user-demand signal materializes.
 
 ### 56.3 What's BETTER in ARA
 
@@ -8654,6 +9003,235 @@ Codes 4000-4099 reserved for ARA-specific close reasons; 4100+ available for fut
 - §66.4 — backpressure → code 1011 reason `client_too_slow`
 - §67 — no auth in v0.0.1; 4001 reserved for v0.1.0 remote-access mode
 - §27 — code 4004 single-client takeover
+
+### 60.10 WebSocket event catalog — consolidated reference
+
+Events are introduced across many sections (§28, §30.7, §32, §33.7, §34.7, §38, §39, §42, §44, §45, §46, §51, §57, §58, §61, §63, §64, §65, §66, §70, ...). This table consolidates them so client + server stay in sync; community contributors have a single reference; OpenAPI/AsyncAPI generation reads from one place.
+
+**Code-side source of truth:** `OpenAstroAra.Server/Contracts/WsEvents/WsEventCatalog.cs` holds `public static readonly IReadOnlyDictionary<string, EventDef> All` mapping event type → `EventDef(string type, Type payloadType, string sourceSection, EventSeverity severity, string sinceVersion)`. The DI container registers this catalog (per §8.1); the WS broadcaster validates outgoing event types against it (unknown type → exception + log + drop, no silent transmission).
+
+**Pre-PR gate (§14.4)** scans the codebase for `broadcaster.SendAsync(...)` / `_wsChannel.Writer.WriteAsync(...)` calls + extracts the event-type string + checks it's in the catalog. Fails the build if any WS-emit call references an event-type not registered. Same enforcement style as §61 settings-registry gate.
+
+**OpenAPI/AsyncAPI generation** reads from `WsEventCatalog`: the `openapi.yaml` (per §71.3) gets `x-asyncapi` extension fields referencing each event type's payload schema; a separate `asyncapi.yaml` (also build-time-generated) provides the full AsyncAPI 3.0 spec for clients that consume it natively (Dart client generation per §14 uses both).
+
+#### 60.10.1 Event severity convention
+
+Each event has a `severity` field used by WILMA to route + style + persist:
+
+| Severity | UX treatment | Persisted? |
+|---|---|---|
+| `debug` | Hidden by default; visible in dev mode | Yes (rotates with logs) |
+| `info` | Feed entry only; no toast | Yes (30 d per §46) |
+| `warning` | Feed + transient toast | Yes (30 d) |
+| `critical` | Feed + sticky toast + chime | Yes (30 d) |
+| `urgent` | Feed + modal + alarm per §35.5 | Yes (30 d) |
+
+Severity is intrinsic to the event type (e.g., `capture.backpressure` is always `warning`); WILMA cannot override.
+
+#### 60.10.2 Event categories + naming convention
+
+Hierarchical dot-notation: `<domain>.<entity>.<action>`. Domains group functionality; entities are nouns; actions are past-tense verbs (state changes) or present-progressive (in-flight). Example: `equipment.camera.connected`, `capture.frame.started`, `mount.slewing`.
+
+Domain reservations (so AI doesn't invent overlapping namespaces):
+
+| Domain | Used by | Example |
+|---|---|---|
+| `capture` | Image capture pipeline + queue | `capture.started`, `capture.backpressure` |
+| `frame` | Per-frame events | `frame.complete`, `frame.preview.ready` |
+| `sequence` | Sequencer runtime | `sequence.started`, `sequence.instruction_complete` |
+| `equipment.{type}` | Per-equipment-type | `equipment.camera.connected` |
+| `mount`, `focuser`, `filterwheel`, etc. | Per-equipment-type detail events | `mount.slewing`, `focuser.moving` |
+| `guider` | PHD2 wrapper | `guider.guiding`, `guider.dither_settled` |
+| `polar_align` | §45 PA loop | `polar_align.frame_complete` |
+| `meridian_flip` | §58 flip orchestration | `meridian_flip.starting` |
+| `calibration` | §39 calibration + dark library | `calibration.dark_library.build_started` |
+| `mosaic` | §47 mosaic | `mosaic.panel_complete` |
+| `session` | §40 session events | `session.started`, `session.restretch.progress` |
+| `notification` | §46 in-app feed | `notification.posted` |
+| `diagnostics` | §51 diagnostics | `diagnostics.health_changed` |
+| `safety` | §35 safety triggers | `safety.policy_triggered` |
+| `storage` | §29 storage events | `storage.usb_unplugged`, `storage.log_pressure` |
+| `backup` | §43/§44 backup | `backup.stream.frame_available` |
+| `data_manager` | §36.2 downloads | `data_manager.download.progress` |
+| `server` | Lifecycle events | `server.pending_restart`, `server.migrating_database` |
+| `worker` | §66 worker pool events | `worker.repeated_failure` |
+| `live_view` | §64 live view | `live_view.frame_ready` |
+| `bugreport` | §54 bug report | `bugreport.prepared` |
+| `share` | §70 share | `share.export_complete` |
+| `api` | API-level meta-events | `api.deprecation_used` |
+
+#### 60.10.3 Catalog table (v0.0.1 baseline)
+
+Catalog is implementation source-of-truth in code; table here is the human-readable reference. Severity column key: D=debug, I=info, W=warning, C=critical, U=urgent.
+
+| Event type | Payload type | §Source | Sev | Since |
+|---|---|---|---|---|
+| **Capture pipeline** | | | | |
+| `capture.started` | `CaptureStartedPayload` | §28 | I | v0.0.1 |
+| `capture.progress` | `CaptureProgressPayload` | §28 | D | v0.0.1 |
+| `capture.complete` | `CaptureCompletePayload` | §28 | I | v0.0.1 |
+| `capture.aborted` | `CaptureAbortedPayload` | §28 | W | v0.0.1 |
+| `capture.backpressure` | `BackpressurePayload` | §66 | W | v0.0.1 |
+| **Frames + previews** | | | | |
+| `frame.complete` | `FrameCompletePayload` | §28, §40 | I | v0.0.1 |
+| `frame.recovered_orphan` | `FrameRecoveredPayload` | §28.8 | I | v0.0.1 |
+| `frame.preview.ready` | `FramePreviewReadyPayload` | §65 | I | v0.0.1 |
+| `frame.preview.variant.ready` | `FramePreviewVariantPayload` | §65 | I | v0.0.1 |
+| `frame.preview.variant.evicted` | `FramePreviewVariantPayload` | §65 | D | v0.0.1 |
+| `frame.quality_scored` | `FrameQualityPayload` | §50.10 | I | v0.0.1 |
+| `frame.quality_drift_detected` | `FrameQualityDriftPayload` | §51 | W | v0.0.1 |
+| `frame.filename_truncated` | `FilenameTruncatedPayload` | §38.6.1 | W | v0.0.1 |
+| **Sequence runtime** | | | | |
+| `sequence.created` | `SequenceCreatedPayload` | §38 | I | v0.0.1 |
+| `sequence.updated` | `SequenceUpdatedPayload` | §38 | I | v0.0.1 |
+| `sequence.deleted` | `SequenceDeletedPayload` | §38 | I | v0.0.1 |
+| `sequence.started` | `SequenceStartedPayload` | §38 | I | v0.0.1 |
+| `sequence.paused` | `SequencePausedPayload` | §28.12 | I | v0.0.1 |
+| `sequence.resumed` | `SequenceResumedPayload` | §28.12 | I | v0.0.1 |
+| `sequence.aborted` | `SequenceAbortedPayload` | §38 | W | v0.0.1 |
+| `sequence.stopped` | `SequenceStoppedPayload` | §38 | I | v0.0.1 |
+| `sequence.complete` | `SequenceCompletePayload` | §38 | I | v0.0.1 |
+| `sequence.instruction_started` | `InstructionEventPayload` | §38 | D | v0.0.1 |
+| `sequence.instruction_complete` | `InstructionEventPayload` | §38 | D | v0.0.1 |
+| `sequence.instruction_failed` | `InstructionEventPayload` | §38 | W | v0.0.1 |
+| `sequence.progress` | `SequenceProgressPayload` | §38 | D | v0.0.1 |
+| `sequence.imported` | `SequenceImportedPayload` | §38.4 | I | v0.0.1 |
+| `sequence.import_warning` | `SequenceImportWarningPayload` | §38.4 | W | v0.0.1 |
+| `sequence.auto_flats_prompt` | `AutoFlatsPromptPayload` | §48 | I | v0.0.1 |
+| `sequence.auto_flats_decided` | `AutoFlatsDecisionPayload` | §48 | I | v0.0.1 |
+| **Equipment lifecycle (per-type repeats: camera/telescope/focuser/filterwheel/rotator/dome/switch/observingconditions/safetymonitor/flatdevice/guider)** | | | | |
+| `equipment.{type}.connected` | `EquipmentConnectedPayload` | §6, §42 | I | v0.0.1 |
+| `equipment.{type}.disconnected` | `EquipmentDisconnectedPayload` | §6, §42 | W | v0.0.1 |
+| `equipment.{type}.state` | `Equipment{Type}StatePayload` | §6 | D | v0.0.1 |
+| `equipment.{type}.error` | `EquipmentErrorPayload` | §42 | W | v0.0.1 |
+| `equipment.{type}.reconnected` | `EquipmentReconnectedPayload` | §42 | I | v0.0.1 |
+| `equipment.signature_changed` | `EquipmentSignaturePayload` | §30.7 | W | v0.0.1 |
+| `equipment.alpaca_bridge_outdated_warn` | `AlpacaBridgeVersionPayload` | §68.1 | W | v0.0.1 |
+| **Equipment detail events** | | | | |
+| `mount.slewing` | `MountSlewPayload` | §57 | I | v0.0.1 |
+| `mount.slew_complete` | `MountSlewPayload` | §57 | I | v0.0.1 |
+| `mount.slew_aborted` | `MountSlewAbortedPayload` | §57 | W | v0.0.1 |
+| `mount.parked` | `MountParkPayload` | §57 | I | v0.0.1 |
+| `mount.unparked` | `MountParkPayload` | §57 | I | v0.0.1 |
+| `focuser.moving` | `FocuserMovePayload` | §59 | D | v0.0.1 |
+| `focuser.settled` | `FocuserMovePayload` | §59 | D | v0.0.1 |
+| `focuser.backlash_compensating` | `FocuserBacklashPayload` | §59 | D | v0.0.1 |
+| `filterwheel.rotating` | `FilterWheelChangePayload` | §6 | D | v0.0.1 |
+| `filterwheel.settled` | `FilterWheelChangePayload` | §6 | D | v0.0.1 |
+| `rotator.moving` | `RotatorMovePayload` | §47 | D | v0.0.1 |
+| `rotator.settled` | `RotatorMovePayload` | §47 | D | v0.0.1 |
+| `dome.slewing` | `DomeSlewPayload` | §6 | D | v0.0.1 |
+| `dome.settled` | `DomeSlewPayload` | §6 | D | v0.0.1 |
+| `switch.value_changed` | `SwitchValueChangedPayload` | §6 | D | v0.0.1 |
+| `switch.value_mismatch` | `SwitchValueMismatchPayload` | §42.4 | W | v0.0.1 |
+| `flatpanel.cover_moving` | `FlatPanelCoverPayload` | §48 | D | v0.0.1 |
+| `flatpanel.cover_settled` | `FlatPanelCoverPayload` | §48 | D | v0.0.1 |
+| `flatpanel.light_changed` | `FlatPanelLightPayload` | §48 | D | v0.0.1 |
+| `observingconditions.reading` | `ObservingConditionsPayload` | §6 | D | v0.0.1 |
+| `observingconditions.unsafe` | `ObservingConditionsUnsafePayload` | §35 | C | v0.0.1 |
+| `safetymonitor.safe` | `SafetyMonitorPayload` | §35 | I | v0.0.1 |
+| `safetymonitor.unsafe` | `SafetyMonitorPayload` | §35 | C | v0.0.1 |
+| **Guider (PHD2 wrapper)** | | | | |
+| `guider.calibrating` | `GuiderCalibratingPayload` | §63 | I | v0.0.1 |
+| `guider.calibrated` | `GuiderCalibratedPayload` | §63 | I | v0.0.1 |
+| `guider.guiding` | `GuiderGuidingPayload` | §63 | I | v0.0.1 |
+| `guider.paused` | `GuiderPausedPayload` | §63 | I | v0.0.1 |
+| `guider.star_lost` | `GuiderStarLostPayload` | §63 | W | v0.0.1 |
+| `guider.settled` | `GuiderSettledPayload` | §63 | D | v0.0.1 |
+| `guider.dither_started` | `GuiderDitherPayload` | §62 | D | v0.0.1 |
+| `guider.dither_settled` | `GuiderDitherPayload` | §62 | D | v0.0.1 |
+| `guider.recovered` | `GuiderRecoveredPayload` | §63 | I | v0.0.1 |
+| `guider.crashed` | `GuiderCrashedPayload` | §63 | C | v0.0.1 |
+| `guider.restart` | `GuiderRestartPayload` | §63 | W | v0.0.1 |
+| **Polar alignment** | | | | |
+| `polar_align.started` | `PolarAlignStartedPayload` | §45 | I | v0.0.1 |
+| `polar_align.frame_complete` | `PolarAlignFramePayload` | §45 | D | v0.0.1 |
+| `polar_align.paused` | `PolarAlignPausedPayload` | §45 | I | v0.0.1 |
+| `polar_align.stopped` | `PolarAlignStoppedPayload` | §45 | I | v0.0.1 |
+| `polar_align.solved` | `PolarAlignSolvedPayload` | §45 | I | v0.0.1 |
+| `polar_align.unsolved` | `PolarAlignUnsolvedPayload` | §45 | W | v0.0.1 |
+| **Meridian flip** | | | | |
+| `meridian_flip.imminent` | `MeridianFlipImminentPayload` | §58 | I | v0.0.1 |
+| `meridian_flip.preflight_failed` | `MeridianFlipPreflightPayload` | §58 | W | v0.0.1 |
+| `meridian_flip.starting` | `MeridianFlipStartingPayload` | §58 | I | v0.0.1 |
+| `meridian_flip.watchdog_aborted` | `MeridianFlipWatchdogPayload` | §58 | C | v0.0.1 |
+| `meridian_flip.postflip_solve_failed` | `MeridianFlipSolvePayload` | §58 | W | v0.0.1 |
+| `meridian_flip.complete` | `MeridianFlipCompletePayload` | §58 | I | v0.0.1 |
+| `meridian_flip.failed` | `MeridianFlipFailedPayload` | §58 | C | v0.0.1 |
+| **Calibration + dark library** | | | | |
+| `calibration.flats_generated` | `CalibrationFlatsGeneratedPayload` | §39 | I | v0.0.1 |
+| `calibration.dark_library.build_started` | `DarkLibraryBuildPayload` | §39, §63 | I | v0.0.1 |
+| `calibration.dark_library.frame_complete` | `DarkLibraryFramePayload` | §39 | D | v0.0.1 |
+| `calibration.dark_library.build_complete` | `DarkLibraryBuildPayload` | §39 | I | v0.0.1 |
+| `calibration.dark_library.build_failed` | `DarkLibraryBuildPayload` | §39 | W | v0.0.1 |
+| **Mosaic** | | | | |
+| `mosaic.created` | `MosaicCreatedPayload` | §47 | I | v0.0.1 |
+| `mosaic.panel_complete` | `MosaicPanelPayload` | §47 | I | v0.0.1 |
+| `mosaic.complete` | `MosaicCompletePayload` | §47 | I | v0.0.1 |
+| **Sessions + restretch** | | | | |
+| `session.started` | `SessionStartedPayload` | §40 | I | v0.0.1 |
+| `session.ended` | `SessionEndedPayload` | §40 | I | v0.0.1 |
+| `session.restretch.progress` | `RestretchProgressPayload` | §65 | D | v0.0.1 |
+| `session.restretch.complete` | `RestretchCompletePayload` | §65 | I | v0.0.1 |
+| `session.restretch.failed` | `RestretchFailedPayload` | §65 | W | v0.0.1 |
+| **Notifications + alarms** | | | | |
+| `notification.posted` | `NotificationPayload` | §46 | varies | v0.0.1 |
+| `notification.dismissed` | `NotificationDismissedPayload` | §46 | D | v0.0.1 |
+| `notification.cleared` | `NotificationClearedPayload` | §46 | D | v0.0.1 |
+| `notification.alarm.started` | `AlarmStartedPayload` | §35.5 | U | v0.0.1 |
+| `notification.alarm.stopped` | `AlarmStoppedPayload` | §35.5 | I | v0.0.1 |
+| **Safety triggers** | | | | |
+| `safety.policy_triggered` | `SafetyPolicyPayload` | §35 | C | v0.0.1 |
+| `safety.emergency_stop` | `EmergencyStopPayload` | §35.3 | U | v0.0.1 |
+| **Diagnostics** | | | | |
+| `diagnostics.health_changed` | `DiagnosticsHealthPayload` | §51 | varies | v0.0.1 |
+| `diagnostics.issue_detected` | `DiagnosticsIssuePayload` | §51 | W | v0.0.1 |
+| `diagnostics.auto_action_taken` | `DiagnosticsActionPayload` | §51 | I | v0.0.1 |
+| `diagnostics.auto_action_skipped` | `DiagnosticsActionPayload` | §51 | D | v0.0.1 |
+| `diagnostics.cleared` | `DiagnosticsClearedPayload` | §51 | I | v0.0.1 |
+| **Storage** | | | | |
+| `storage.usb_unplugged` | `StorageUsbPayload` | §29.1.2 | C | v0.0.1 |
+| `storage.log_pressure` | `StorageLogPressurePayload` | §29.9 | varies | v0.0.1 |
+| `storage.unavailable` | `StorageUnavailablePayload` | §28 | C | v0.0.1 |
+| `storage.full_warning` | `StorageFullPayload` | §29 | W | v0.0.1 |
+| **Backup + data manager** | | | | |
+| `backup.zip_created` | `BackupZipPayload` | §43 | I | v0.0.1 |
+| `backup.restore_progress` | `BackupRestorePayload` | §43 | D | v0.0.1 |
+| `backup.restore_complete` | `BackupRestorePayload` | §43 | I | v0.0.1 |
+| `backup.stream.frame_available` | `BackupStreamPayload` | §44 | D | v0.0.1 |
+| `backup.stream.frame_claimed` | `BackupStreamPayload` | §44 | D | v0.0.1 |
+| `backup.stream.backpressure` | `BackupStreamPayload` | §44 | W | v0.0.1 |
+| `data_manager.download.progress` | `DataDownloadPayload` | §36.2 | D | v0.0.1 |
+| `data_manager.download.complete` | `DataDownloadPayload` | §36.2 | I | v0.0.1 |
+| `data_manager.download.failed` | `DataDownloadPayload` | §36.2 | W | v0.0.1 |
+| **Server lifecycle** | | | | |
+| `server.pending_restart` | `PendingRestartPayload` | §34.7 | I | v0.0.1 |
+| `server.restart_imminent` | `RestartImminentPayload` | §34.7 | C | v0.0.1 |
+| `server.migrating_database` | `MigrationProgressPayload` | §28.14 | I | v0.0.1 |
+| `server.migration_complete` | `MigrationCompletePayload` | §28.14 | I | v0.0.1 |
+| `server.migration_failed` | `MigrationFailedPayload` | §28.14 | C | v0.0.1 |
+| **Workers + meta** | | | | |
+| `worker.repeated_failure` | `WorkerFailurePayload` | §73.4 | W | v0.0.1 |
+| `api.deprecation_used` | `ApiDeprecationPayload` | §60.8.1 | I | v0.0.1 |
+| **Live View** | | | | |
+| `live_view.started` | `LiveViewStatePayload` | §64 | I | v0.0.1 |
+| `live_view.frame_ready` | `LiveViewFramePayload` | §64 | D | v0.0.1 |
+| `live_view.stopped` | `LiveViewStatePayload` | §64 | I | v0.0.1 |
+| `live_view.aborted` | `LiveViewAbortedPayload` | §64 | W | v0.0.1 |
+| **Bug report + share** | | | | |
+| `bugreport.prepared` | `BugReportPreparedPayload` | §54 | I | v0.0.1 |
+| `bugreport.sharing_mode_set` | `BugReportModePayload` | §54 | D | v0.0.1 |
+
+#### 60.10.4 §14 test cases
+
+- `ws_emit_with_uncatalogued_event_type_throws_during_test_run`
+- `every_section_referenced_event_type_present_in_catalog` — scans the playbook + WsEventCatalog.cs + asserts every event type referenced in either is registered
+- `severity_field_matches_table_in_60.10.3`
+- `asyncapi_yaml_regen_matches_committed_version` — same diff-gate pattern as OpenAPI per §71.3
+
+#### 60.10.5 §61 search registry entries
+
+- `monitoring.ws_event_catalog` — keywords: `websocket events, event list, event catalog, ws message types, event types`
 
 ---
 
@@ -10949,5 +11527,360 @@ ARA writes the same FITS header tags NINA writes, so downstream tools that recog
 - §51 — diagnostics enrichment writes additional header tags via `FitsImage.SetHeader`
 - §65 — image stretching reads pixel data via `FitsImage.ReadImageData*`
 - §71 — AOT compatibility maintained via `[LibraryImport]` source generators
+
+---
+
+## 73. Exception handling strategy
+
+§60.1 specs the wire-format for errors (RFC 7807 problem+json). This section specs the in-process handling that produces those responses: middleware, exception taxonomy, Serilog enrichment, and background-worker conventions.
+
+### 73.1 ASP.NET Core middleware-based handling
+
+`Program.cs` registers global exception handling via the modern `IExceptionHandler` pattern (built into ASP.NET Core 8+, AOT-compatible per §71):
+
+```csharp
+builder.Services.AddExceptionHandler<AraExceptionHandler>();
+builder.Services.AddProblemDetails();  // wires problem+json content negotiation
+// ...
+app.UseExceptionHandler();
+app.UseStatusCodePages();              // 404/405/etc. also get problem+json
+```
+
+`AraExceptionHandler` implements `IExceptionHandler.TryHandleAsync` — translates exceptions into `ProblemDetails` per §60.1 + extension fields, returns `true` to short-circuit the pipeline. The middleware catches **every** unhandled exception from endpoint handlers + middleware below it; endpoints don't need their own try/catch unless they have a specific reason to translate a domain error.
+
+### 73.2 Exception taxonomy
+
+ARA Core defines a small set of domain exception types that map cleanly to HTTP status codes. All inherit from `AraException` (base type carrying problem+json `type` URI + `title` + extension fields):
+
+| Exception type | HTTP status | When to throw |
+|---|---|---|
+| `AraValidationException` | 422 | Request body / params fail validation (`errors` map keyed by JSON-pointer per §60.1) |
+| `AraNotFoundException` | 404 | Referenced resource (frame, sequence, profile, session, target ID) doesn't exist |
+| `AraConflictException` | 409 | State conflict (sequence already running, idempotency-key collision, equipment-change conflict) |
+| `AraPreconditionFailedException` | 412 | Precondition header check failed |
+| `AraServiceUnavailableException` | 503 | Equipment disconnected / AlpacaBridge unreachable / dependent service down (per §68 / §42) |
+| `AraGoneException` | 410 | Deprecated v1 endpoint past sunset (per §60.8.1) |
+| `AraRateLimitedException` | 429 | Rate limit exceeded (v0.1.0 only — v0.0.1 doesn't rate-limit per §60.6) |
+| **Any other `Exception`** | 500 | Unhandled / unexpected — middleware logs as critical + returns generic problem+json without leaking exception details to client |
+
+All domain exception types live in `OpenAstroAra.Server.Contracts/Exceptions/`. Each carries the `problem+json type URI` + `title` constants — the middleware just calls `ex.ToProblemDetails()` to construct the response.
+
+**Endpoint usage:**
+
+```csharp
+app.MapPost("/api/v1/sequences/{id}/start", async (string id, SequenceStartRequestDto req, ISequenceService svc, CancellationToken ct) =>
+{
+    // No try/catch — let middleware handle anything thrown
+    var state = await svc.StartAsync(id, req, ct);
+    return Results.Ok(state, AraJsonContext.Default.SequenceRunStateDto);
+})
+.WithName("StartSequence")
+.Produces<SequenceRunStateDto>(200)
+.ProducesProblem(404)
+.ProducesProblem(409)
+.ProducesProblem(422);
+```
+
+Service layer throws the right domain exception (e.g., `throw new AraConflictException("Sequence already running", "sequence_already_running")`); middleware translates.
+
+### 73.3 Serilog structured-exception logging
+
+Serilog (already in §2 stack) handles structured logging including exception serialization. Pi-side logs go to `/var/log/openastroara/` per §29.9; structured fields enable jq/grep filtering.
+
+**Per-exception log structure:**
+
+```json
+{
+  "@t": "2026-05-23T19:14:33.123Z",
+  "@l": "Error",
+  "@mt": "Unhandled {ExceptionType} on {RequestMethod} {RequestPath}",
+  "@x": "<full exception with stack>",
+  "ExceptionType": "AraNotFoundException",
+  "RequestMethod": "POST",
+  "RequestPath": "/api/v1/sequences/abc-123/start",
+  "CorrelationId": "01H8K3X9...",
+  "ClientIp": "192.168.1.50",
+  "UserAgent": "OpenAstroAra-WILMA/0.0.1-ara.6 (macOS)",
+  "DurationMs": 142
+}
+```
+
+**Correlation ID** is sourced from the W3C `traceparent` header if present, else generated by the server at request entry (ULID format for monotonic IDs). Propagates through:
+- HTTP response header `X-Correlation-Id: <id>` on every response (including errors)
+- All log lines emitted during the request (via Serilog's `LogContext.PushProperty("CorrelationId", id)`)
+- WebSocket events emitted as a side-effect of the request (in the event envelope's `correlation_id` field)
+- Bug report zip (§54) captures recent correlation IDs so users + maintainers can cross-reference WILMA-side errors with server logs
+
+**Enricher chain:**
+
+```csharp
+builder.Host.UseSerilog((ctx, cfg) => cfg
+    .Enrich.FromLogContext()
+    .Enrich.WithProperty("Application", "OpenAstroAra.Server")
+    .Enrich.WithProperty("Version", AssemblyVersion)
+    .Enrich.With<CorrelationIdEnricher>()
+    .Enrich.With<ClientIpEnricher>()        // LAN-only per §67
+    .WriteTo.Console()                       // journald per §13
+    .WriteTo.File("/var/log/openastroara/ara-.log",
+        rollingInterval: RollingInterval.Day,
+        fileSizeLimitBytes: 100 * 1024 * 1024,
+        retainedFileCountLimit: 30,
+        formatter: new Serilog.Formatting.Json.JsonFormatter()));
+```
+
+**Log levels:**
+
+| Level | When |
+|---|---|
+| `Verbose` | Per-frame diagnostic noise; off by default; on under `OPENASTROARA_LOG_LEVEL=Verbose` |
+| `Debug` | Capture pipeline state transitions, equipment polls; on in dev; off in production .deb |
+| `Information` | Sequence start/stop, equipment connect/disconnect, profile load, request entry/exit with timing |
+| `Warning` | Recoverable issues — retry attempts, deprecated API use, capacity warnings, simulator detected (dev only), pre-restart deferral per §34.7 |
+| `Error` | Unhandled exceptions at endpoint boundary, equipment connection failures after exhausted retries, sequence aborts due to faults |
+| `Fatal` | Startup failures preventing service from accepting connections — storage unavailable, DB migration aborted, cfitsio missing |
+
+Production .deb defaults to `Information` minimum. Log pressure handling per §29.9 downgrades to `Warning` under disk pressure.
+
+### 73.4 Background worker exception handling
+
+`§66` worker pools (image processor, alt-stretch, diagnostics, backup stream, notification dispatcher, etc.) wrap each iteration body in try/catch so a per-iteration failure doesn't crash the worker:
+
+```csharp
+public sealed class ImageProcessorWorker : BackgroundService
+{
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            try
+            {
+                var job = await _queue.DequeueAsync(stoppingToken);
+                await ProcessFrameAsync(job, stoppingToken);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                // Graceful shutdown — break the loop
+                break;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex,
+                    "Image processor worker iteration failed for job {JobId}; continuing", job?.Id);
+                // Continue to next iteration; don't crash the worker
+            }
+        }
+    }
+}
+```
+
+**Crash-vs-continue policy:** workers ALWAYS continue on per-iteration exceptions in v0.0.1 (resilience over loud failure). The exception is logged at Error level; if the same exception type recurs > 10× per minute on the same worker, a `worker.repeated_failure` WS event fires (severity: warning) so the user knows something is wrong even though the worker is still "running".
+
+systemd watchdog (per §13) is the safety net if a worker locks up entirely — at the 45 s last-tick-stale threshold, the heartbeat skips its ping, systemd kills + restarts the whole daemon. Workers' loops update a per-worker last-tick timestamp every iteration.
+
+### 73.5 NINA inherited code — exception translation
+
+Inherited NINA service code may throw exception types we don't want to surface as-is (their messages reference NINA-specific concepts, contain WPF-thread context, etc.). The pattern:
+
+- Service-layer wrappers around NINA code catch the inherited exception + translate to an `Ara*Exception` with a friendly message
+- Stack traces preserved (`throw new AraConflictException(..., innerException: nina_ex)`) so debug context isn't lost
+- Endpoint-layer code only ever sees `Ara*` exception types
+
+Phase 6-9 implementation per §10.6-§10.9 specs which NINA service per row gets wrapped; wrapping = adding an `OpenAstroAra.Server/Services/*Service.cs` adapter that translates exceptions.
+
+### 73.6 What NOT to do
+
+- **Don't** swallow exceptions with empty catch blocks. Every catch logs OR rethrows OR translates.
+- **Don't** catch `Exception` in endpoints. Let middleware handle. Only catch in workers (per §73.4) and in service-layer translation (per §73.5).
+- **Don't** put try/catch around DI resolution / startup. If DI fails, the server should crash hard and systemd's restart loop logs it loudly.
+- **Don't** include exception stack traces in problem+json responses sent to the client. The `detail` field is for human-readable messages; correlation ID is how the user + maintainer cross-reference to logs.
+- **Don't** use exceptions for control flow (e.g., `try { Parse... } catch { return default }`). Performance hit + clutters logs.
+
+### 73.7 §14 test cases
+
+**§14.1 server integration tests:**
+
+- `unhandled_endpoint_exception_returns_500_problem_json_with_correlation_id`
+- `validation_exception_returns_422_with_errors_map_per_60.1`
+- `not_found_returns_404_problem_json`
+- `conflict_exception_returns_409_with_code_extension`
+- `correlation_id_from_traceparent_header_propagates_to_log_lines`
+- `correlation_id_generated_when_traceparent_absent`
+- `background_worker_exception_logged_but_worker_continues_processing`
+- `repeated_worker_failures_emit_worker_repeated_failure_ws_event`
+- `exception_stack_trace_does_not_leak_to_client_response`
+
+### 73.8 §61 search registry entries
+
+- `monitoring.correlation_ids` — keywords: `correlation id, trace id, request id, error correlation, debugging, log correlation`
+- `monitoring.error_responses` — keywords: `error response, error format, problem json, problem+json, RFC 7807`
+
+### 73.9 Cross-references
+
+- §60.1 — RFC 7807 wire format (this section specs how exceptions become §60.1 responses)
+- §29.9 — log rotation + pressure handling (downgrades log level under disk pressure)
+- §54 — bug report zip captures correlation IDs
+- §60.9 — WS event envelope includes correlation_id field for side-effect events
+- §66 — background worker pools use the §73.4 exception-handling pattern
+- §13 — systemd watchdog is the safety net for fully-stuck workers
+- §71 — `IExceptionHandler` pattern is AOT-compatible (built-in, no reflection)
+
+---
+
+## 74. Contributor / dev-onboarding doc spec
+
+CONTRIBUTING.md is in the post-Phase-15 documentation queue (§55 + post-port doc list). This section specs what it must cover so the AI's Phase 15 doc-writing pass produces a complete, usable onboarding guide rather than a generic placeholder.
+
+ARA's tech stack — .NET 10 Native AOT (§71) + Flutter 3.27 (§12) + cfitsio via P/Invoke (§72) + ASTAP external process (§18.I) + Alpaca simulators (§14.5) — is wider than a typical hobby astronomy project. Without a clear onboarding doc, contributors hit dep-install friction in their first hour and bounce.
+
+### 74.1 Required CONTRIBUTING.md sections
+
+**1. Prerequisites per OS** — concrete commands for each:
+
+- **macOS** (Apple Silicon primary, Intel supported):
+  ```
+  # .NET 10 SDK
+  brew install --cask dotnet-sdk
+  # OR Microsoft's installer from dot.net
+
+  # Flutter 3.27.x (pinned per §12.1)
+  brew install --cask flutter
+  # OR FVM for version pinning per project:
+  brew tap leoafarias/fvm && brew install fvm
+  cd client/openastroara_client && fvm install
+
+  # CFITSIO (per §72.2)
+  brew install cfitsio
+
+  # ASTAP (per §18.I)
+  # Download from astap.nl, install into /Applications/ASTAP.app
+  ```
+
+- **Linux (Debian/Ubuntu)** — primary dev environment matching production:
+  ```
+  # .NET 10 SDK (Microsoft package feed)
+  curl -sSL https://dot.net/install.sh | bash -s -- --channel 10.0
+
+  # Flutter 3.27.x via FVM
+  curl -fsSL https://fvm.app/install.sh | bash
+  cd client/openastroara_client && fvm install
+
+  # CFITSIO + ASTAP
+  sudo apt install libcfitsio-dev astap
+  ```
+
+- **Windows** — secondary; works but less tested:
+  ```
+  # .NET 10 SDK
+  winget install Microsoft.DotNet.SDK.10
+  # OR choco install dotnet-sdk
+
+  # Flutter
+  choco install flutter
+
+  # CFITSIO
+  vcpkg install cfitsio:x64-windows
+  # set OPENASTROARA_CFITSIO_PATH env var
+
+  # ASTAP
+  # Download installer from astap.nl
+  ```
+
+**2. Bootstrap script** — `scripts/bootstrap-dev.sh` (also called by §14.4 pre-PR gate's first run):
+- Detects OS + installs missing deps via OS package manager
+- Pulls Alpaca simulators per §14.5.1 (SHA-256 checksum verification)
+- Pulls test fixtures
+- Runs `dotnet restore` + `flutter pub get` + `dart run build_runner build` for codegen
+- Verifies build succeeds: `dotnet build` + `flutter build linux` (or platform native)
+- Outputs a "✓ Ready to develop" summary OR explicit per-failure remediation steps
+
+**3. Build verification** — quick smoke commands to confirm setup:
+```
+dotnet build OpenAstroAra.sln -c Debug
+cd client/openastroara_client && flutter test test/    # widget tests
+cd client/openastroara_client && flutter build linux   # or macos/windows
+```
+
+**4. Running tests** — per §14 layer breakdown:
+- Server unit + integration: `dotnet test OpenAstroAra.sln`
+- Server E2E smoke (§14.9): `./scripts/run-e2e.sh` (starts sims + server + runs Flutter integration tests)
+- Flutter widget: `cd client/openastroara_client && flutter test test/`
+- Flutter integration with mocked server: `flutter test integration_test/mocked/`
+- Coverage report: `./scripts/coverage-report.sh`
+
+**5. Running simulators locally** — for dev work without real hardware:
+- Alpaca simulators: `./scripts/start-sims.sh` (binds standard ports per §14.5.1)
+- PHD2 simulator: `./scripts/start-phd2-sim.sh` (headless via xvfb-run)
+- Combined: `./scripts/start-dev-env.sh` (starts sims + PHD2 + server; tears down on Ctrl+C)
+
+**6. IDE configuration** — recommended setups:
+- **VS Code**: bundled `.vscode/extensions.json` recommends C# Dev Kit + Flutter + GitLens + CodeRabbit; `.vscode/settings.json` (committed) sets format-on-save + omnisharp config
+- **JetBrains Rider**: open `OpenAstroAra.sln`; install Flutter plugin from JetBrains Marketplace; recommended Rider settings exported in `design/rider-settings.zip`
+- **Cursor / Windsurf**: VS Code config works; bundled `.cursor/rules` files provide ARA-specific context (link to playbook, COMMIT-PR-RULES, settings + help registries)
+- **Claude Code**: bundled `CLAUDE.md` at repo root provides project-specific instructions per the [Anthropic docs convention](https://docs.claude.com/en/docs/claude-code/memory)
+
+**7. CodeRabbit + pre-commit hook setup**:
+- CodeRabbit config at `.coderabbit.yaml` per COMMIT-PR-RULES.md — works automatically on PRs
+- Local pre-commit hook setup: `./scripts/install-hooks.sh` installs Husky or lefthook + wires the §61 settings-registry gate, §69 help-registry gate, AOT-warning check, and other pre-commit checks per §14.4
+- Bypass policy: **no `--no-verify`** per §19.1 git safety; if a hook fails, fix the root cause
+
+**8. PR workflow** — links to COMMIT-PR-RULES.md authoritative spec:
+- Branch naming: `feature/<short-name>`, `fix/<short-name>`, `chore/<short-name>` per COMMIT-PR-RULES.md community section
+- Pre-PR gate (§14.4) MUST pass green before opening
+- Screenshots required for any user-visible Flutter UI change per §14.6
+- §61 settings-registry + §69 help-registry entries required for new settings/controls
+- CodeRabbit poll-and-fix loop runs automatically; address findings via additional commits
+- Maintainer reviews + merges
+
+**9. Where to ask questions** — community surfaces:
+- GitHub Discussions for design questions
+- GitHub Issues for bug reports (use bundled bug-report template per §54)
+- Cross-link to openastro.net wiki for end-user help
+
+**10. Common gotchas** — accumulated knowledge:
+- "AOT build warnings" → see §71.7 troubleshooting
+- "CFITSIO not loaded" → see §72.2 dev setup
+- "Alpaca simulators won't start" → see §14.5.1 checksum verification path
+- "Flutter version mismatch" → see §12.1 FVM setup
+- "Settings-registry gate failing" → see COMMIT-PR-RULES.md gate spec
+- "Tests pass locally but fail in CI" → check that bootstrap-dev.sh has been re-run since the last dep change
+
+### 74.2 Bootstrap script (`scripts/bootstrap-dev.sh`) requirements
+
+Phase 15 deliverable. Must:
+- Detect OS via `uname` / `$OSTYPE`
+- Use the OS's package manager (`brew`, `apt`, `winget`/`choco`) — fail clearly if missing
+- Be idempotent (re-runnable safely; checks existing installs before re-installing)
+- Have a `--check-only` mode (lists what's missing without installing)
+- Have a `--verbose` mode for debugging
+- Exit with clear remediation message on any failure
+- Total run time on a fresh machine: < 10 minutes (excluding network speed for downloads)
+
+### 74.3 What CONTRIBUTING.md does NOT cover
+
+- Design rationale — that's in `design/PORT_PLAYBOOK.md` (link prominently)
+- Per-feature implementation guidance — in playbook sections
+- Architecture decisions — in playbook + GAPS-ARA.md
+- PR review criteria — in COMMIT-PR-RULES.md
+- Code style — enforced by `dotnet format` + `dart format` in the pre-PR gate; CONTRIBUTING.md just says "run them"
+
+CONTRIBUTING.md is **purely operational** — "how do I set up + work on the code." Conceptual docs live elsewhere; the reader should be able to skip CONTRIBUTING.md once they're set up.
+
+### 74.4 v2 community contributor extensions
+
+COMMIT-PR-RULES.md's "Future scope — community contributor workflow" section (already drafted) defines the post-v0.0.1 contributor PR workflow. CONTRIBUTING.md links to that for the PR section; Phase 15 doesn't write it (it's a v0.1.0+ scope).
+
+### 74.5 §61 search registry entry
+
+- `contributing.dev_setup` — keywords: `contribute, dev environment, setup, build, develop, contributor, onboarding, prerequisites`
+
+### 74.6 Cross-references
+
+- §14 — testing strategy (CONTRIBUTING references for "how to run tests")
+- §19.1 — git safety (CONTRIBUTING references for "what NOT to do")
+- §61 — settings-registry gate (CONTRIBUTING references for "registry compliance")
+- §69 — help-registry gate (CONTRIBUTING references for "help compliance")
+- §71 — AOT discipline (CONTRIBUTING points to §71.1 + §71.2 + §71.7)
+- §72 — cfitsio dev setup (CONTRIBUTING references for "FITS lib install")
+- COMMIT-PR-RULES.md — PR workflow + CodeRabbit loop
 
 ---
