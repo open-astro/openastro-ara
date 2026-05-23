@@ -1763,6 +1763,146 @@ When a sequence ends (graceful completion, user abort, emergency stop) or the us
 - **Detect-camera-type default** — auto-pick `off` for CMOS / `ramp` for CCD via Alpaca `CameraType` property. Some cameras misreport, so override stays available.
 - **Humidity-aware ramp** — if observing-conditions reports humidity > 80%, force `ramp` regardless of setting.
 
+### 28.14 SQLite schema migrations across releases — EF Core + mandatory pre-migration backup
+
+When a new ARA Core version ships with schema changes (new columns on `frames`, new tables for v0.1.0 Live Stacking, etc.), existing users' databases must migrate forward without data loss. ARA uses **EF Core migrations** as the migration framework, with a **mandatory pre-migration backup** policy that always runs before any schema change touches the database.
+
+**Why EF Core (not hand-rolled SQL or recreate-on-mismatch):**
+
+- Tooling generates migrations from model changes (`dotnet ef migrations add <Name>`) — code-review surface is a versioned C# file with explicit `Up()` / `Down()` methods
+- Migration history table (`__EFMigrationsHistory`) is the schema-version source of truth
+- Idempotent application (`Database.Migrate()` no-ops if all migrations are applied) — safe to run on every startup
+- Battle-tested in production at scale; community knowledge for diagnosing failures
+- Cost: ~10 MB runtime dependency (`Microsoft.EntityFrameworkCore.Sqlite` + provider) — acceptable on the Pi's 4 GB headroom
+
+NINA's data layer is replaced wholesale during Phase 4 (server scaffold) — the OpenAstroAra.Data project is greenfield, so introducing EF Core has no migration cost from inherited code.
+
+**Mandatory pre-migration backup — the user requirement:**
+
+Before applying any pending migration on startup, ARA always backs up the current database. This is non-optional, not configurable, and not skippable. The backup is the safety net for: migration bugs, partially-applied transactions due to power loss mid-migration, schema regressions discovered after a version is released, and the user wanting to roll back to the prior server version.
+
+**Backup pipeline (runs in §28.2 startup recovery routine, before EF Core's `Database.Migrate()`):**
+
+1. **Detect pending migrations.** Server calls `db.Database.GetPendingMigrationsAsync()`. If empty, skip the entire backup + migration block; proceed to normal startup.
+2. **WAL checkpoint.** Run `PRAGMA wal_checkpoint(TRUNCATE)` to flush pending writes into the main DB file. Ensures the backup captures a consistent state.
+3. **Backup the DB.** Use SQLite's online backup API (`SqliteConnection.BackupDatabase()`) — safe with WAL, doesn't require closing the DB. Backup destination is on the USB drive (not SD card) at:
+
+   ```
+   /media/openastroara/.araback/migrations/data_pre-v<from>-to-v<to>_<iso8601>.db
+   ```
+
+   Example: `data_pre-v0.0.1-to-v0.0.2_20260601T142733Z.db`. Naming embeds both the source version (running ARA's reported version) and the target version (the assembly version we're about to migrate into) so rollback is unambiguous.
+
+4. **Backup integrity check.** Run `PRAGMA integrity_check` on the backup file. If it returns anything other than `ok`, abort the migration entirely:
+   - Server logs `MIGRATION_BACKUP_INTEGRITY_FAIL` (critical)
+   - Server refuses to start; systemd will retry per `RestartSec=3` but the failure persists
+   - WILMA on next connect sees `pending_restart` flag style state: a critical notification "Database migration aborted — backup integrity check failed. Contact support; do not retry without expert help."
+   - This guards against migrating into a corrupted state if the source DB has subtle damage
+
+5. **Retention policy.** Keep the last 5 migration backups; older backups are auto-deleted at this step. (Users wanting longer retention can copy backups out manually via WILMA's backup UI per §43.)
+
+6. **Apply EF Core migrations.** Server calls `await db.Database.MigrateAsync()`. EF Core wraps each migration in its own transaction; if any migration throws, the partial transaction rolls back, the DB remains at the prior schema version, and an exception bubbles up to step 7.
+
+7. **Failure handling — automatic restore.** If `MigrateAsync` throws:
+   - Server logs `MIGRATION_FAILED` (critical) with the full exception + migration name
+   - Server copies the backup from step 3 back over the live DB path (preserving WAL by copying `data.db` only — the WAL was already checkpointed in step 2, so the backup is self-contained)
+   - Server re-checks `__EFMigrationsHistory` to confirm we're back at the source schema version
+   - Server emits a startup-failure WS event (queued for next WILMA connect) with: source version, target version, failed migration name, exception summary
+   - Server starts up on the **prior** schema version (old code paths still work because we haven't loaded the new binary's data-layer assumptions yet — caveat: this only works if the new binary's code is backward-compatible-readable on the old schema; see "Failure on mixed-version mismatch" below)
+   - WILMA shows critical notification with [Roll back server to v<previous>] action — which kicks the user to a manual `apt install openastroara-server=<previous version>` flow via DEPLOY.md
+
+8. **Success path.** On clean migration, server logs `MIGRATION_APPLIED` per migration with timing, emits `server.migration_complete` WS event (`{from_version, to_version, migrations_applied: [...], backup_path, elapsed_ms}`), and proceeds with normal startup.
+
+**Migration UX from the user's perspective:**
+
+For most upgrades (small schema changes — adding a nullable column, creating a new table), the entire backup + migrate flow completes in 1–5 seconds. The user sees nothing different from a normal restart.
+
+For larger migrations (e.g., a v0.1.0 backfill that touches every row in `frames`), startup time can stretch to 30–60+ seconds. To prevent the user thinking the server crashed:
+
+- Server emits `server.migrating_database` WS events with progress (per-migration name + estimated row count + completed count) — but this is best-effort since most clients are disconnected during startup
+- WILMA's connect screen detects "server unreachable for > 10 seconds after expected boot" and shows: "Server is taking longer than usual to start — it may be applying a database upgrade. Wait up to 5 minutes before troubleshooting."
+- After connect, `pending_restart`-style banner shows briefly: "Database migrated from v0.0.1 to v0.0.2 — backup saved to .araback/migrations/" then auto-dismisses after 10 s
+
+**Forward-compatibility policy (downgrade attempts):**
+
+Server refuses to start if the DB's `__EFMigrationsHistory` contains migrations the running binary doesn't know about (i.e., user installed v0.0.3, ran it once, then downgraded to v0.0.2). Behavior:
+
+- Server logs `DB_SCHEMA_AHEAD_OF_BINARY: db_max_migration=<name>, binary_max_migration=<name>` (critical)
+- Server exits with non-zero status; systemd restart loop keeps trying but failure persists
+- WILMA on next connect sees this via a `/healthz` (per Tier 2 health-check gap) or `/api/v1/server/state` 503 with `code: "schema_ahead_of_binary"`
+- User's path forward: re-install the newer server version (data is intact) OR restore a pre-migration backup from `.araback/migrations/` via `/api/v1/server/restore-from-backup {path}` (deferred to v0.1.0 — for v0.0.1, this is a DEPLOY.md manual SSH instruction)
+
+ARA does **not** generate down-migrations in v0.0.1. EF Core supports `Down()` methods but maintaining them doubles the testing surface and the realistic recovery path is "restore backup, downgrade binary" — not "run a down-migration that the dev team only partially tested." If a user needs to roll back schema, they restore the pre-migration backup. v0.1.0 may reconsider for specific high-risk migration types.
+
+**Bundled migrations structure:**
+
+```
+src/OpenAstroAra.Data/
+├── OpenAstroAra.Data.csproj  (refs Microsoft.EntityFrameworkCore.Sqlite)
+├── AraDbContext.cs           (DbContext with DbSet<Frame>, DbSet<Session>, ...)
+├── Entities/
+│   ├── Frame.cs
+│   ├── Session.cs
+│   └── ...
+└── Migrations/               (auto-generated, hand-reviewed)
+    ├── 20260101_InitialCreate.cs        (Phase 4 baseline)
+    ├── 20260101_InitialCreate.Designer.cs
+    ├── 20260601_AddSessionNotes.cs      (example v0.0.2)
+    └── AraDbContextModelSnapshot.cs
+```
+
+Migration files are bundled into the assembly; no external `.sql` files to ship. The .deb's `/opt/openastroara/` install path stays clean.
+
+**Workflow for adding a migration (developer / AI during the port):**
+
+1. Modify entity class or DbContext (e.g., add property `public string? Notes { get; set; }` to `Session`)
+2. Run `dotnet ef migrations add AddSessionNotes --project src/OpenAstroAra.Data` — generates the `Up()`/`Down()` migration file
+3. Hand-review the generated SQL via `dotnet ef migrations script --idempotent`
+4. Run `dotnet ef database update` against a test DB to verify
+5. Add an integration test in §14.1 covering: start with prior-version DB fixture → run server → assert migration applied + data preserved
+6. Commit (migration file + entity change + test in same commit per the settings-registry-style discipline)
+
+The pre-PR gate (§14.4) runs the integration tests, which exercise the migration flow against bundled prior-version DB fixtures (`OpenAstroAra.Test/fixtures/migrations/v0.0.1.db`, etc.).
+
+**Cross-platform consideration (dev machines):**
+
+On macOS/Windows dev machines where there's no USB drive, backups go to `~/Library/Application Support/OpenAstroAra/Backups/migrations/` (macOS) or `%LOCALAPPDATA%\OpenAstroAra\Backups\migrations\` (Windows). Same retention policy (last 5). The integration test suite (§14.1) runs migrations against ephemeral SQLite files in `/tmp` per test — no real backups created.
+
+**API surface added:**
+
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/api/v1/server/migrations/history` | GET | Returns ordered list of applied migrations + timestamps from `__EFMigrationsHistory` + paths to corresponding backups still on disk |
+| `/api/v1/server/migrations/backups` | GET | Lists existing pre-migration backups in `/media/openastroara/.araback/migrations/` with size + timestamp + source/target versions |
+| `/api/v1/server/restore-from-backup` | POST | v0.1.0 — pointer-only endpoint in v0.0.1 returning 501 "use manual restore procedure in DEPLOY.md" |
+
+**WebSocket events added:**
+
+| Event | Payload | When |
+|---|---|---|
+| `server.migrating_database` | `{migration_name, rows_processed, rows_total, elapsed_ms}` | Per-migration progress during long migrations (best-effort; most clients disconnected during startup) |
+| `server.migration_complete` | `{from_version, to_version, migrations_applied: [...], backup_path, elapsed_ms}` | Once after all pending migrations applied successfully |
+| `server.migration_failed` | `{from_version, attempted_to_version, failed_migration, exception_summary, backup_path, restored: bool}` | If migration throws; queued for next WILMA connect |
+
+**§61 search registry entries** (added in 12h Settings sub-PR):
+
+- `server.migrations.history` — keywords: `database version, schema version, migration history, db upgrade, what migrations`
+- `server.migrations.backups` — keywords: `database backup, migration backup, pre-upgrade backup, restore database, roll back schema`
+
+**§14.1 integration test cases (added):**
+
+- `migration_applies_on_startup` — fixture DB at v0.0.1 schema → start v0.0.2 server → assert schema upgraded + backup present + data intact
+- `migration_failure_restores_backup` — inject deliberately-failing migration → assert backup restored + server exits cleanly + WS event queued
+- `forward_compat_refuses_unknown_migrations` — fixture DB at v0.0.3 schema → start v0.0.2 server → assert refuses to start with `schema_ahead_of_binary` error
+- `pre_migration_backup_integrity_check_fails_aborts` — corrupt the source DB → start server → assert migration aborts + no schema change + critical log line
+- `backup_retention_keeps_last_5` — apply 7 sequential migrations with backups → assert 5 most-recent remain + 2 oldest deleted
+
+**v0.1.0 follow-ups:**
+
+- WILMA UI for browsing backups + one-click restore (currently DEPLOY.md manual SSH path)
+- Server-side downgrade flow: when user explicitly requests rollback, server stops + binary swaps + DB restores from pre-migration backup atomically
+- Optional encrypted backups (`PRAGMA key`) for the v0.1.0 remote-access mode
+
 ---
 
 ## 29. Storage / disk-space policy
@@ -2065,6 +2205,101 @@ sudo chown -R openastroara:openastroara /media/openastroara
 - `storage.switch_drive` — keywords: `change drive, swap drive, new usb, migrate data, switch storage`
 - `storage.eject` — keywords: `eject, unmount, safely remove, disconnect drive, take drive out`
 - `storage.troubleshoot` — keywords: `drive disappeared, mount failed, permission denied, can't write to drive, storage error, not ext4`
+- `storage.logs.location` — keywords: `log files, server logs, where are logs, /var/log, journal`
+- `storage.logs.retention` — keywords: `log rotation, log retention, log cleanup, disk usage logs, clear old logs`
+
+### 29.9 Log rotation + retention (Pi side)
+
+Logs live at `/var/log/openastroara/` (on the Pi's SD card, not the USB drive — keeps log writes off the data-write path and survives USB unmount). Serilog file sink writes one file per startup with daily rolling; `logrotate` handles compression + retention.
+
+**Disk budget:** worst case ~3 GB (30 daily files × 100 MB pre-compress); realistic ~200–500 MB after gzip (~10:1 on text logs). Fits comfortably on a 16 GB SD card alongside the OS + binaries.
+
+**.deb installs `/etc/logrotate.d/openastroara`:**
+
+```
+/var/log/openastroara/*.log {
+    daily
+    rotate 30
+    size 100M
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+    create 0640 openastroara openastroara
+    sharedscripts
+}
+```
+
+Key choices explained:
+- `daily` — rotation cadence aligned with imaging session boundaries
+- `rotate 30` — 30 days of history (enough to capture seasonal hardware quirks + bug-report context per §54)
+- `size 100M` — safety cap; daily rotation usually triggers first, but a runaway-error scenario can't blow past 100 MB before rotation
+- `compress` + `delaycompress` — gzip yesterday's file but keep today's uncompressed for live `tail -f` debugging
+- `copytruncate` — Serilog keeps its file descriptor open; we copy + truncate instead of rename + reopen (would lose live writes during the gap)
+- `create 0640 openastroara openastroara` — recreated file has correct ownership + tight read perms (bug-report zip per §54 reads via the openastroara group)
+- `sharedscripts` — defensive; doesn't matter for the single-glob case but harmless
+
+logrotate runs daily via `/etc/cron.daily/logrotate` (standard Debian — no extra unit needed).
+
+**Pressure handling (storage approaches full):**
+
+When `/var/log/openastroara/` free space drops below 500 MB:
+- Server downgrades log level from Debug → Info (drops verbose-mode traffic)
+- Emits `storage.log_pressure` WS event (severity: warning) with current free + threshold
+- WILMA surfaces a non-modal notification in the §46 feed: "Server log volume low — consider checking SD card capacity"
+
+When free space drops below 100 MB:
+- Server downgrades log level further to Warning (drops Info except critical lines)
+- Force-runs logrotate immediately (`logrotate -f /etc/logrotate.d/openastroara`)
+- Emits `storage.log_pressure` (severity: critical)
+- If post-rotation free space is still < 100 MB, server logs `LOG_VOLUME_CRITICAL_DROPPING_INFO_LOGS` once + stops writing Info entirely
+
+At no point does log pressure block sequence operation — capture, dither, plate-solve, etc. all continue. The diagnostic value of logs is secondary to keeping the session running. The §66 backpressure model and the §28 atomic-write pipeline are unaffected; only Serilog's verbosity is throttled.
+
+**Bug-report zip behavior (§54 cross-ref):**
+
+The §54 bug-report zip's "logs" tier already pulls from `/var/log/openastroara/*.log*` (the `*` covers both rotated `.log.1`, `.log.2.gz`, etc. and the live `.log`). No change needed — logrotate's output is naturally bug-report-ready. Zip size estimate updated in §54 to "10–500 MB depending on retention window" (was "10–100 MB").
+
+**Journal (systemd) coexists:**
+
+systemd-journal captures stdout/stderr from the service unit; ARA Core writes structured logs to Serilog files for searchability + journal text logs as a backup. Journal rotation is system-managed (default `SystemMaxUse=4G` on Trixie); DEPLOY.md adds an optional `/etc/systemd/journald.conf.d/openastroara.conf` recommendation:
+
+```
+[Journal]
+SystemMaxUse=1G
+SystemMaxFileSize=50M
+```
+
+— but not required; default journal behavior is fine for typical Pis.
+
+**Log location summary (cross-platform):**
+
+| Platform | Path | Set by |
+|---|---|---|
+| Pi (production) | `/var/log/openastroara/ara-YYYYMMDD.log` | .deb postinst + logrotate |
+| Linux dev | `/var/log/openastroara/` (if running as `openastroara` user) OR `~/.local/share/openastroara/logs/` (user dev) | env var `OPENASTROARA_LOG_DIR` |
+| macOS dev | `~/Library/Logs/OpenAstroAra/ara-YYYYMMDD.log` | platform default; logrotate N/A; manual cleanup |
+| Windows dev | `%LOCALAPPDATA%\OpenAstroAra\Logs\ara-YYYYMMDD.log` | platform default; logrotate N/A; manual cleanup |
+
+On dev platforms (macOS/Windows), Serilog's own `retainedFileCountLimit=30` + `fileSizeLimitBytes=100MB` enforces the same caps in-process (no logrotate available). Production Pi relies on logrotate exclusively.
+
+**WILMA UI surface:**
+
+Settings → Storage adds a "Logs" sub-panel showing:
+- Current log volume size (`du -sh /var/log/openastroara/`)
+- Retention window (read-only display: "30 days, daily rotation, 100 MB max per day")
+- [Open in file manager] (on Linux/macOS desktop)
+- [Force rotate now] (calls `POST /api/v1/server/logs/rotate` — runs `logrotate -f`; returns 200 + new disk usage)
+- [Download current log] (streams `/var/log/openastroara/ara-<today>.log`)
+
+No user-facing knobs for rotation cadence / size cap in v0.0.1 — Linux logrotate defaults are battle-tested; per-user tuning has no real demand. v0.1.0 could expose them if observatory operators ask.
+
+**§14.5 integration test cases (added):**
+
+- `logrotate_rotates_at_size_cap` — write 100 MB of synthetic log lines, run `logrotate -f`, assert two files exist + new one is empty
+- `log_pressure_event_fires_below_threshold` — fill log volume to 400 MB free, assert `storage.log_pressure` WS event emitted
+- `log_pressure_does_not_block_capture` — under 100 MB free, start a 30 s exposure, assert frame completes + FITS file written
 
 ---
 
@@ -2981,6 +3216,165 @@ Same push-from-WILMA mechanism extended to:
 - Endpoints: `POST /api/v1/server/components/{name}/update`
 - Server detects component versions via the component's own status API (AlpacaBridge `/version`, PHD2 `get_app_state` JSON-RPC)
 
+### 33.7 "What's new" — in-app changelog viewer
+
+After any server version change (WILMA push per §33.3, apt upgrade per §34.7, or fresh install), WILMA surfaces a one-time modal showing release notes for the new version. Single discoverability surface for: new features the user might want to enable, breaking changes that affect existing workflows, safety-relevant fixes that change autonomous behavior, and the "where did X go?" questions that follow renames.
+
+**Bundled CHANGELOG.md (Keep-a-Changelog format):**
+
+ARA Core's repository root holds `CHANGELOG.md`. The .deb installs it at `/opt/openastroara/CHANGELOG.md` (read-only, owned by `root:openastroara`). Format follows [keepachangelog.com 1.1.0](https://keepachangelog.com/) — section headers per version, type subsections (Added / Changed / Deprecated / Removed / Fixed / Security).
+
+Example structure:
+
+```markdown
+# Changelog
+
+## [Unreleased]
+
+## [0.0.1-ara.6] — 2026-06-01
+
+### Added
+- Smart Focus collimation detection (§59.4)
+- Health check endpoints `/healthz` and `/readyz` (§60.8)
+
+### Fixed
+- PHD2 reconnect after USB hub sleep (§63.3)
+- Mosaic RA-wrap math for panels crossing 0h (§47.3)
+
+### Security
+- AlpacaBridge version handshake now enforced (§68.1)
+
+## [0.0.1-ara.5] — 2026-05-25
+
+### Added
+- Initial release of OpenAstroAra
+...
+```
+
+Entry-writing discipline: every PR that ships a user-visible change adds a `### <Type>` line under `## [Unreleased]`. The release tag-cut process (Phase 15 + future releases) renames `## [Unreleased]` → `## [<version>] — <date>` and creates a fresh `## [Unreleased]` placeholder.
+
+**Server-side endpoint** (already declared in §34.7):
+
+`GET /api/v1/server/release-notes?version=<X.Y.Z>` — parses `/opt/openastroara/CHANGELOG.md`, extracts the section matching `<X.Y.Z>`, returns Markdown:
+
+```json
+{
+  "version": "0.0.1-ara.6",
+  "date": "2026-06-01",
+  "markdown": "### Added\n- Smart Focus collimation detection (§59.4)\n...",
+  "is_current": true
+}
+```
+
+Optional query: `?since=<X.Y.Z>` returns all entries between `<since>` (exclusive) and current (inclusive), useful when the user skipped versions:
+
+```json
+{
+  "current_version": "0.0.1-ara.6",
+  "since_version": "0.0.1-ara.3",
+  "versions": [
+    { "version": "0.0.1-ara.6", "date": "...", "markdown": "..." },
+    { "version": "0.0.1-ara.5", "date": "...", "markdown": "..." },
+    { "version": "0.0.1-ara.4", "date": "...", "markdown": "..." }
+  ]
+}
+```
+
+404 with `code: "unknown_version"` if the version isn't in CHANGELOG.md (typically means manual install of an unofficial build).
+
+**WILMA-side state + trigger:**
+
+WILMA persists `last_seen_server_version` in `flutter_secure_storage`, keyed per-server (server UUID from `/api/v1/server/state`). On every connect:
+
+1. Fetch current server version from `/api/v1/server/state.version`
+2. Read `last_seen_server_version` for this server UUID
+3. If `current > last_seen` (semver compare): fetch `/api/v1/server/release-notes?since=<last_seen>`
+4. Render the modal (see below)
+5. On user dismiss (close, confirm, "don't show again"): write `last_seen_server_version = current`
+6. If `current == last_seen`: no modal
+7. If `current < last_seen` (downgrade): no modal (rare — DEPLOY.md / DB schema concerns dominate)
+8. If `last_seen` is unset (fresh WILMA / first connect to this server): no modal; silently set `last_seen = current` (don't dump the full history on first connect — would be overwhelming)
+
+**Modal layout (Flutter):**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ ✨ What's new in 0.0.1-ara.6                       [✕]  │
+├─────────────────────────────────────────────────────────┤
+│ Released June 1, 2026 — 7 days ago                      │
+│                                                         │
+│ ── Added ──────────────────────────────────────────     │
+│ • Smart Focus collimation detection (§59.4)            │
+│   → Settings → Equipment → Focuser → Collimation       │
+│                                                         │
+│ • Health check endpoints /healthz and /readyz (§60.8)  │
+│                                                         │
+│ ── Fixed ──────────────────────────────────────────     │
+│ • PHD2 reconnect after USB hub sleep                    │
+│                                                         │
+│ ── Security ───────────────────────────────────────     │
+│ • AlpacaBridge version handshake now enforced          │
+│   → Equipment screen blocks if bridge < 1.2.0          │
+│                                                         │
+│                                                         │
+│ [View full changelog]               [Don't show again]  │
+│                                              [Close]    │
+└─────────────────────────────────────────────────────────┘
+```
+
+Interactions:
+- **[Close]** dismisses + writes `last_seen_server_version`. Modal won't re-appear next connect.
+- **[Don't show again]** writes a permanent `suppress_changelog_modal = true` in user preferences. Future updates skip the modal entirely; the changelog remains accessible via Help → Release notes.
+- **[View full changelog]** opens a scrollable side panel showing the entire CHANGELOG.md (all versions, not just the new ones).
+- **§-references** in changelog markdown render as clickable deep-links into the appropriate Settings panel via §61's deep-link mechanism — clicking "§59.4" jumps to the Smart Focus collimation setting.
+
+**Skipped-versions handling:**
+
+If the user was on 0.0.1-ara.3 and now sees 0.0.1-ara.6 (missed .4 and .5), modal aggregates all three versions, sorted newest-first, each as a collapsible section:
+
+```
+✨ What's new — you missed 3 updates (.4 .5 .6)
+[▼ 0.0.1-ara.6 — June 1] (expanded)
+  ... entries ...
+[▶ 0.0.1-ara.5 — May 25] (collapsed; click to expand)
+[▶ 0.0.1-ara.4 — May 18] (collapsed)
+
+[View full changelog] [Don't show again] [Close]
+```
+
+Caps at 20 versions; if user skipped more (extreme case), modal shows "Many updates skipped — see [View full changelog] for full history" and aggregates the most recent 20.
+
+**Help → Release notes (always-available surface):**
+
+WILMA's Help menu adds "Release notes" → opens the side panel with the full changelog. Always available regardless of update history. Selectable version dropdown + search box. Supports the [Don't show again]-pressed user who later wants to look something up.
+
+**§61 search registry entries** (added in 12h Settings sub-PR):
+
+- `app.changelog.view` — keywords: `changelog, release notes, what's new, version history, updates, what changed`
+- `app.changelog.suppress` — keywords: `disable changelog popup, don't show what's new, stop release notes modal, hide version popup`
+
+**§14.2 widget test cases (added):**
+
+- `changelog_modal_shown_when_version_changes` — set last_seen=X, mock current=Y > X, assert modal renders with Y's content
+- `changelog_modal_skipped_on_first_connect` — last_seen=null, current=Y, assert no modal but last_seen updated to Y
+- `changelog_modal_aggregates_skipped_versions` — last_seen=A, current=D, mock release-notes?since=A returning B+C+D, assert all 3 sections rendered
+- `dont_show_again_suppresses_future_modals` — set suppress flag, change version, assert no modal but Help → Release notes still works
+
+**Release process integration:**
+
+- The Phase 15 PR (final port → master) adds the initial CHANGELOG.md with `## [0.0.1-ara.1] — <date>` entry
+- COMMIT-PR-RULES.md's per-phase PR rhythm (future bake) adds "update CHANGELOG.md [Unreleased] section" to the pre-PR gate (§14.4) for any PR with user-visible changes — same enforcement style as the settings-registry gate
+- Release tags (manual, user-driven): rename `[Unreleased]` → `[<version>] — <date>`, create fresh `[Unreleased]`, push tag, GitHub Actions builds the .deb with the updated CHANGELOG.md
+- Cross-ref with COMMIT-PR-RULES "Things still to decide" — release cadence post-v0.0.1 entry (future-scope section) inherits the changelog discipline
+
+**Cross-references:**
+
+- §33.3 — WILMA-push update flow triggers the post-update changelog modal
+- §34.7 — apt-upgrade-deferred restart's [View release notes] button calls the same endpoint
+- §30 — first-run flow's "fresh WILMA / first connect" path silently sets last_seen without modal
+- §61 — deep-links from changelog §-refs use the search registry
+- §0.5 — discoverability pillar reinforced (users discover new features they didn't know to look for)
+
 ---
 
 ## 34. Distribution + install (apt.openastro.net)
@@ -3073,6 +3467,144 @@ DEPLOY.md content:
 7. Recommended hardware sidebar (optional UPS per §28.10, USB SSD per §29)
 
 That's it. No tarball install, no manual systemd setup, no manual user creation — all handled by the .deb.
+
+### 34.7 `apt upgrade` mid-session safety — lock file + deferred-restart flag
+
+**The risk:** unlike WILMA-pushed updates (§33), which are sequence-aware (server refuses restart while integrating), an `apt upgrade openastroara-server` runs the .deb postinst directly and restarts the daemon via `deb-systemd-invoke`. If a sequence is mid-exposure (e.g., 600 s integration), the restart kills the exposure with no warning. Real-world trigger: user runs unattended-upgrades, cron job, or a manual `apt upgrade` between two frames.
+
+**The mechanism: server-managed lock file + postinst defer + WILMA-surfaced banner.**
+
+**Server-side (writes the lock):**
+
+- On sequence START (or transition to `paused`): server writes `/var/run/openastroara/sequence.lock` (mode 0644, owned by `openastroara:openastroara`). Content is a single line: `<sequence_id> <start_iso8601> <last_heartbeat_iso8601>`. Updated every 30 s while sequence is active.
+- On sequence STOP / ABORT / COMPLETE: server removes the lock atomically.
+- On server graceful shutdown (SIGTERM): server removes the lock as part of cleanup.
+- On server crash: lock remains stale; server's startup routine (§28.2) detects + removes any lock whose `last_heartbeat` is > 5 min old before starting recovery.
+
+`/var/run/openastroara/` is a tmpfs created at boot via `/usr/lib/tmpfiles.d/openastroara.conf` (shipped by .deb postinst):
+
+```
+d /var/run/openastroara 0755 openastroara openastroara - -
+```
+
+**postinst-side (reads the lock, defers restart):**
+
+The .deb postinst's restart block runs:
+
+```bash
+LOCKFILE=/var/run/openastroara/sequence.lock
+FLAGFILE=/var/lib/openastroara/.needs-restart
+
+if [ -e "$LOCKFILE" ]; then
+  # Verify lock isn't stale (heartbeat within 5 min)
+  last_hb=$(awk '{print $3}' "$LOCKFILE")
+  if [ -n "$last_hb" ] && [ "$(date -d "$last_hb" +%s 2>/dev/null)" -gt "$(date -d '5 minutes ago' +%s)" ]; then
+    echo "openastroara: sequence active — deferring restart of openastroara-server" | systemd-cat -t openastroara-postinst -p warning
+    touch "$FLAGFILE"
+    chown openastroara:openastroara "$FLAGFILE"
+    exit 0    # Successful postinst; new binary on disk, restart deferred
+  fi
+fi
+
+# Lock absent or stale — safe to restart
+deb-systemd-invoke restart openastroara-server.service
+```
+
+Net effect of a deferred-restart:
+- New binary is in place on disk (the .deb has been unpacked)
+- Old binary is still running (systemd hasn't been triggered to restart)
+- `.needs-restart` flag is set
+- Sequence continues uninterrupted on the old binary
+- The new binary will take effect on the next restart (manual via WILMA, automatic at next reboot, or systemd-prompted)
+
+**Server-side (surfaces the flag):**
+
+On every WS handshake + on every `GET /api/v1/server/state` (§60.4), server checks for `/var/lib/openastroara/.needs-restart` and includes:
+
+```json
+{
+  ...
+  "pending_restart": {
+    "reason": "package_update",
+    "since_iso8601": "2026-05-23T19:14:02Z",
+    "current_version": "0.0.1-ara.5",
+    "pending_version": "0.0.1-ara.6",
+    "release_notes_url": "/api/v1/server/release-notes?version=0.0.1-ara.6"
+  }
+}
+```
+
+`pending_version` is read from the .deb's status file (`dpkg-query -W -f='${Version}' openastroara-server`); `current_version` is the running binary's `--version` string.
+
+**WILMA-side (banner + restart UX):**
+
+Reuses the §30.7.3 banner shell (same component, different content). Shown on connect when `pending_restart` is non-null:
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│ ℹ Server update pending — 0.0.1-ara.5 → 0.0.1-ara.6              │
+│   A new server version was installed (apt upgrade) but the      │
+│   restart was deferred because a sequence was active.            │
+│   [Restart now]  [Restart when sequence ends]  [View release notes] │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+Buttons:
+- **Restart now** — calls `POST /api/v1/server/restart {reason: "user_acknowledged_pending_update"}`. Server emits WS `server.restart_imminent` with 5 s warning, then exits cleanly. systemd's `Restart=on-failure` brings the new binary up. (If a sequence is still active, this button shows a confirmation dialog: "A sequence is currently running. Restart will pause + abort the in-flight exposure. Continue?")
+- **Restart when sequence ends** — server sets `auto_restart_on_idle = true` in its in-memory state. After the next sequence ends (or if no sequence is running, immediately at the next 60 s idle tick), server self-restarts gracefully.
+- **View release notes** — fetches `/api/v1/server/release-notes?version=<pending>`, shows a modal with the changelog (see §X.Y for the in-app changelog viewer — TODO, separate gap).
+
+After successful restart, server boots on the new version, deletes `.needs-restart`, and WILMA's banner clears on next state poll.
+
+**Edge cases:**
+
+| Case | Behavior |
+|---|---|
+| Multiple apt upgrades stacked while deferred | `.needs-restart` flag is idempotent (just `touch`); `pending_version` always reflects the latest installed-but-not-running version. |
+| Server crashed; lock is stale; postinst sees stale lock | Stale-detection (5 min heartbeat) prevents indefinite deferral. postinst restarts normally. |
+| User runs `systemctl restart openastroara-server` manually while deferred | Restart goes through; new binary loads; `.needs-restart` is cleared on startup. |
+| Sequence has been active > 24 hours (very long mosaic) | Banner shows continuously; server keeps deferring. No auto-force-restart — user agency wins. |
+| WILMA never connects (headless / abandoned Pi) | New binary sits in `.dpkg-new` indefinitely; will activate on next reboot. Same outcome as if user simply never logged in. |
+| postinst itself fails (e.g., disk full) | Standard dpkg failure path; user sees apt error; lock file untouched; running daemon unaffected. |
+
+**Logging:**
+
+- Postinst writes one journal line per deferral: `openastroara-postinst: sequence active — deferring restart of openastroara-server`
+- Server logs `pending_restart_flag_set` (info level) on startup if the flag exists; logs `pending_restart_cleared` (info level) on successful restart with new version
+- Bug-report zip (§54) includes `journalctl -t openastroara-postinst --since=30d` to surface deferral history
+
+**API surface added:**
+
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/api/v1/server/state` | GET | Existing — now includes `pending_restart` field |
+| `/api/v1/server/restart` | POST | Immediate restart (with optional `reason` for telemetry). Returns 200 immediately; server schedules restart 5 s out |
+| `/api/v1/server/restart-on-idle` | POST | Sets in-memory `auto_restart_on_idle=true`. Returns 200. Idempotent. |
+| `/api/v1/server/release-notes` | GET | Query: `?version=<v>`. Returns bundled `CHANGELOG.md` section for that version (per the in-app changelog viewer gap — Tier 2). |
+
+**WebSocket events added:**
+
+| Event | Payload | When |
+|---|---|---|
+| `server.pending_restart` | `{current_version, pending_version, reason}` | Emitted once on WS connect if flag is set; emitted again when postinst sets the flag on an already-connected WILMA |
+| `server.restart_imminent` | `{in_seconds, reason}` | 5 s before a planned graceful restart |
+
+**§61 search registry entries** (added in 12h Settings sub-PR):
+
+- `server.update.pending_restart_banner` — keywords: `pending update, restart server, deferred update, apt update, update banner`
+- `server.update.restart_now` — keywords: `restart server, apply update, reboot daemon`
+- `server.update.restart_on_idle` — keywords: `restart later, apply update at end, restart when sequence ends`
+
+**§14.5 integration test cases (added):**
+
+- `apt_upgrade_during_sequence_defers_restart` — simulate sequence active, run postinst, assert daemon PID unchanged + flag set + WS event fired
+- `stale_lock_does_not_defer_restart` — lock file with old heartbeat, postinst restarts normally
+- `pending_restart_clears_on_successful_restart` — flag set, user triggers restart, new binary starts, flag is gone
+
+**v0.1.0 follow-ups:**
+
+- WILMA UI for "Auto-restart at astronomical dawn" — for users who run long unattended sessions and want updates to apply between nights
+- Telemetry on deferral patterns (per §67 local-only) to inform whether default behavior should change
 
 ---
 
@@ -6853,6 +7385,107 @@ v0.1.0 may add per-endpoint limits once §67.4 remote-access mode lands — at t
 - **§40.3, §44.5, §46.8, §47.7, §50.16** — list endpoints inherit cursor pagination from §60.2 without restating.
 - **OpenAPI spec (`openapi.yaml`)** — every endpoint documents its error shape via `application/problem+json` responses, declares whether `Idempotency-Key` is required, and references the shared component schemas for the pagination wrapper.
 
+### 60.8 Liveness + readiness endpoints — `/healthz` + `/readyz`
+
+Lightweight HTTP probes for external monitoring (uptime-kuma, Prometheus blackbox, Pingdom, etc.). Distinct from `/api/v1/server/state` (which is the heavy UI-rehydrate snapshot per §60.4) — these are cheap, low-latency, no-auth checks designed for high-frequency polling.
+
+**Path convention.** Both endpoints live at the root, NOT under `/api/v1/` — they exist outside the versioned API surface because external monitors expect well-known names regardless of API version, and we want them callable even during partial startup states when the v1 router may not be fully mounted.
+
+**Authentication.** None, matching §67 (trusted-LAN posture). Both endpoints are safe to expose on any interface the server binds to. v0.1.0 remote-access mode keeps them open on the LAN interface but adds auth on the remote interface.
+
+**`GET /healthz` — liveness:**
+
+- **Purpose:** "is the process alive and able to respond to HTTP?"
+- **Response time target:** < 10 ms. No DB queries, no disk I/O, no equipment probing.
+- **Logic:** if the HTTP handler runs, return 200. That's it. The fact that the response was produced proves liveness.
+- **Response (200 OK):**
+  ```
+  Content-Type: text/plain
+  ok
+  ```
+- **Cache headers:** `Cache-Control: no-store` so monitors get a fresh result every time.
+- **Use case:** monitor's primary "is the server up?" check. Suitable for poll intervals as fast as every 5 s with negligible server cost.
+
+**`GET /readyz` — readiness:**
+
+- **Purpose:** "is the server able to do real work right now?" Checks the dependencies that must be healthy for capture, mount control, etc. to succeed.
+- **Response time target:** < 100 ms (one DB ping, one storage stat, one cached AlpacaBridge handshake result — no fresh AlpacaBridge probe per request).
+- **Checks performed:**
+  | Check | Pass condition | Why it matters |
+  |---|---|---|
+  | `database` | `SELECT 1` returns within 50 ms | Capture pipeline writes to DB per §28.6; failure = no new frames recorded |
+  | `storage` | `/media/openastroara` is mounted + writable (stat + a 1-byte test write to `.araback/.readyz_probe`, cleaned up next probe) | FITS writes per §28.7 fail without writable storage |
+  | `alpaca_bridge` | Cached handshake result from §68.1 within last 30 s shows version-acceptable status | Equipment ops fail without a healthy bridge |
+  | `pending_restart` | `/var/lib/openastroara/.needs-restart` flag is NOT set (per §34.7) | Server is running on stale binary; user should be aware |
+  | `migration_state` | `__EFMigrationsHistory` matches expected current version (per §28.14) | Confirms schema is consistent with running binary |
+- **Response (200 OK — all checks pass):**
+  ```json
+  {
+    "status": "ready",
+    "version": "0.0.1-ara.5",
+    "uptime_s": 14523,
+    "checks": {
+      "database": "ok",
+      "storage": "ok",
+      "alpaca_bridge": "ok",
+      "pending_restart": "ok",
+      "migration_state": "ok"
+    }
+  }
+  ```
+- **Response (503 Service Unavailable — any check fails):**
+  ```json
+  {
+    "status": "not_ready",
+    "version": "0.0.1-ara.5",
+    "uptime_s": 14523,
+    "checks": {
+      "database": "ok",
+      "storage": "ok",
+      "alpaca_bridge": {
+        "status": "unreachable",
+        "detail": "Last successful handshake 412s ago; min version 1.2.0 required"
+      },
+      "pending_restart": "ok",
+      "migration_state": "ok"
+    },
+    "last_frame_age_s": 41
+  }
+  ```
+  Failing checks include a `detail` string for human-readable troubleshooting. Passing checks collapse to the scalar `"ok"` to keep the response small.
+- **HTTP status mapping:** `200` if all checks pass; `503` if any check fails. (`pending_restart` set to non-null reduces severity — see below.)
+- **Severity nuance:** `pending_restart` set to true does NOT push readiness to 503 by default — the server is still doing real work, just on a stale binary. Reports `pending_restart: { status: "pending", new_version: "..." }` but `status` stays `"ready"`. Operators wanting strict readiness can interpret the nested status.
+
+**Cache headers:** `Cache-Control: no-store` on both endpoints; `readyz` results are not cached server-side either (each request re-runs the checks against current state).
+
+**Logging:** both endpoints log at Trace level (lower than Debug) to avoid drowning the log file when polled every 5 s. logrotate handles any residual volume per §29.9.
+
+**Implementation surface:**
+
+- ~30 LOC C# for the two handlers in `OpenAstroAra.Server/Endpoints/Health.cs`
+- Storage write probe uses the same path as §28.7's atomic-write pipeline but with a single tiny file under `.araback/` so it doesn't pollute the FITS tree
+- AlpacaBridge handshake cache is shared with §68.1 — `/readyz` reads the cache; the handshake itself runs on connect + periodically every 30 s
+
+**§14.1 integration test cases (added):**
+
+- `healthz_responds_200_ok_during_normal_operation`
+- `healthz_responds_during_database_unavailable` — kill DB connection mid-test; `/healthz` still 200 (it doesn't check DB)
+- `readyz_returns_503_when_alpaca_bridge_unreachable`
+- `readyz_returns_503_when_storage_unwritable` — chmod 000 storage dir; `/readyz` returns 503 with `storage` failing
+- `readyz_returns_200_with_pending_restart_status` — set `.needs-restart` flag; `/readyz` returns 200 but `pending_restart: pending`
+
+**§61 search registry entry** (added in 12h Settings sub-PR — these are operator-facing endpoints surfaced in the in-app help):
+
+- `monitoring.health_endpoints` — keywords: `health check, healthz, readyz, uptime monitor, prometheus, monitoring, uptime kuma, pingdom, status endpoint`
+
+**DEPLOY.md addition** (in §34.6's content list, item 8):
+
+8. Monitoring sidebar — for users running uptime monitors or observatory dashboards:
+   - `GET http://<pi>:5555/healthz` — liveness, poll every 30–60 s
+   - `GET http://<pi>:5555/readyz` — readiness with check breakdown, poll every 5–10 min
+   - Both are unauthenticated per §67 trusted-LAN posture
+   - Example Prometheus blackbox config snippet (one-liner)
+
 ---
 
 ## 57. Stop Mount + slew safety
@@ -8570,5 +9203,261 @@ The §54 bug report flow's redaction list still scrubs hostnames, paths, interna
 - `security.deployment_recommendations` — keywords: `security, network safety, star party, public wifi, vpn, remote access, threat model, alpaca security, asiair security`
 - `security.no_authentication` — keywords: `auth, authentication, token, password, login, why no password, secure server`
 - `security.remote_access_v010` — keywords: `internet access, remote imaging, tls, auth, token, https, over internet, vpn alternative`
+
+---
+
+## 68. AlpacaBridge integration contract
+
+ARA Core depends on [AlpacaBridge](https://github.com/AlpacaBridge) as the canonical equipment hub — it bridges ASCOM COM drivers (Windows) and direct USB drivers to standard ASCOM Alpaca, exposing devices over HTTP that ARA consumes. ARA does NOT re-document the ASCOM Alpaca protocol; for the authoritative protocol reference see [ascom-standards.org/api/](https://ascom-standards.org/api/) and the Alpaca DeviceAPI specification.
+
+This section specs only the AlpacaBridge-specific assumptions ARA makes (minimum version, handshake, missing-bridge UX, upgrade path) — everything else is "whatever ASCOM Alpaca says."
+
+### 68.1 Minimum version + handshake
+
+**Minimum supported version:** `alpaca-bridge >= 1.2.0`. Pinned in the .deb's `Recommends` (per §34.2) and verified at runtime via handshake.
+
+**Handshake on connect** (runs in §63.2-style state machine, every time ARA's equipment layer establishes a connection to AlpacaBridge):
+
+1. **Discovery.** Either auto-discover via Alpaca's standard UDP broadcast on port 32227 (default) or use the static address user entered in wizard Screen 2 (§37.3).
+2. **Probe `/version`.** ARA fetches `GET <bridge>/version` (AlpacaBridge-specific endpoint, not standard Alpaca). Expected response:
+   ```json
+   { "alpaca_bridge_version": "1.2.3", "alpaca_api_version": "1", "build": "..." }
+   ```
+3. **Version gate.**
+   | Version | Behavior |
+   |---|---|
+   | `>= 1.5.0` | Accept; full feature support. |
+   | `>= 1.2.0` and `< 1.5.0` | Accept with warning. WILMA's Equipment screen shows non-modal banner: "AlpacaBridge 1.x.x detected — version 1.5.0+ recommended. [Update]". Banner dismissible per-session. |
+   | `< 1.2.0` | Refuse. Block the Equipment screen entirely; show modal: "AlpacaBridge version 1.x.x is too old. ARA requires 1.2.0 or newer. [How to update]". Equipment-dependent features (capture, mount control, focuser, etc.) all return 503 with `code: "alpaca_bridge_outdated"` until upgrade. |
+   | `/version` unreachable / non-JSON / missing field | Treat as missing AlpacaBridge per §68.2. |
+4. **Capability listing.** ARA calls standard Alpaca `GET /management/v1/configureddevices` to learn what devices the bridge exposes. ARA does NOT assume any specific devices are present — per-device capabilities are read from each device's standard Alpaca interface (`CanCool`, `CanSetCCDTemperature`, `CanPark`, etc.). All graceful-degrade behavior is per the ASCOM Alpaca spec, not ARA-specific.
+
+The handshake completes in < 200 ms on a healthy Pi-local AlpacaBridge. Cached for the duration of the session; re-runs on every reconnect.
+
+### 68.2 Missing AlpacaBridge UX
+
+If AlpacaBridge isn't reachable at all (no `/version` response, no devices discoverable, connection refused):
+
+- **Wizard Screen 2** (§37.3 — Connect to AlpacaBridge) shows the install command prominently:
+  ```
+  AlpacaBridge not detected.
+
+  AlpacaBridge is ARA's equipment hub. It should have been installed
+  alongside ARA Core via apt. If it wasn't, install it now:
+
+      sudo apt install alpaca-bridge
+
+  Then click [Retry detection].
+  ```
+- Wizard cannot advance past Screen 2 without a successful handshake. User can [Skip to manual entry] only if they need to point to a non-standard AlpacaBridge install (different host, custom port).
+- After first-run setup, if AlpacaBridge goes missing (uninstalled, service stopped), WILMA's Equipment screen shows a critical notification with the same install command + `systemctl status alpaca-bridge` diagnostic snippet.
+
+### 68.3 Upgrade path
+
+**v0.0.1:** apt-managed. ARA Core's .deb lists `alpaca-bridge` in `Recommends`, so `apt install openastroara-server` pulls it in by default. Updates flow naturally via `sudo apt upgrade`. Subject to the apt-mid-session safety policy in §34.7 — AlpacaBridge restart during a capture is gated by the same lock file mechanism (the sequence.lock check covers any service that integrates with ARA mid-flight).
+
+**v0.1.0:** WILMA-pushed updates per §33.6 — bundled AlpacaBridge binary streamable from WILMA, atomic-swap + rollback, no internet on the Pi required.
+
+### 68.4 §61 search registry entries
+
+- `equipment.alpacabridge.version` — keywords: `alpaca bridge version, equipment hub version, update alpaca bridge, alpaca bridge outdated`
+- `equipment.alpacabridge.troubleshoot` — keywords: `alpaca bridge missing, equipment not found, alpaca bridge not detected, install alpaca bridge, equipment hub down`
+
+### 68.5 §14.5 integration test cases (added)
+
+- `alpacabridge_version_below_minimum_blocks_equipment` — start ARA with mocked AlpacaBridge returning `/version` 1.1.0 → assert Equipment endpoints return 503 with `code: "alpaca_bridge_outdated"`
+- `alpacabridge_version_in_warn_band_emits_banner` — mocked AlpacaBridge 1.3.0 → assert connect succeeds + `equipment.alpaca_bridge_outdated_warn` notification queued
+- `alpacabridge_missing_blocks_wizard_advance` — wizard Screen 2 with no AlpacaBridge running → assert [Next] is disabled + install instructions visible
+
+### 68.6 Cross-references
+
+- §2 — target stack lists AlpacaBridge as required dep
+- §34.2 — .deb Recommends pulls AlpacaBridge in
+- §37.3 — wizard Screen 2 wires the user-visible side of the handshake
+- §52 — Alpaca-only commitment (architectural rationale for the dependency)
+- §33.6 + §55 — v0.1.0 WILMA-push extension
+- §34.7 — apt-mid-session safety covers AlpacaBridge restart during sequence
+
+---
+
+## 69. In-app contextual help — tooltip registry
+
+§61 makes settings searchable; this section makes individual *controls* explainable. The two registries are deliberately parallel — same enforcement model, same discoverability pillar (§0.5), distinct domains: §61 answers *"how do I find the setting for X?"*; §69 answers *"what does this control actually do?"*
+
+### 69.1 Scope — what gets a help entry
+
+Help is opt-in per control. The default is **no tooltip** — most controls' labels are self-explanatory and adding ? icons to every field produces visual noise without information value. A help entry is appropriate when:
+
+- The label can't carry the full meaning without becoming verbose ("Pulse guide duration ms" — what's a reasonable value? Why would you change it?)
+- The control's effect is non-obvious or has hidden side effects (toggling Smart Focus changes the entire focus pipeline behavior, not just one knob)
+- The setting interacts with other settings in ways that aren't visible in the panel
+- A novice user would not know whether to enable it
+- A power user might want to know the underlying algorithm
+
+A help entry is **not** appropriate when:
+
+- The label is self-explanatory ("Camera connection address" — the field name says it all)
+- The setting's effect is fully captured by its current value (a slider showing "Exposure: 60 s" needs no help)
+- The control is a display-only status indicator (use a `?`-icon-style affordance only if there's a meaningful explanation; otherwise nothing)
+
+When in doubt: **omit the help entry**. The cost of a missing helpful tooltip is one user reading the wiki; the cost of a help icon on every control is the visual sprawl that NINA suffers from.
+
+### 69.2 Help registry — `lib/help/registry.dart`
+
+Parallel structure to §61's settings registry. Single source of truth for all in-app help content.
+
+```dart
+// client/openastroara_client/lib/help/registry.dart
+
+class Help {
+  final String key;            // unique identifier, dotted path (mirrors §61 setting IDs where applicable)
+  final String title;          // short header for the tooltip + modal
+  final String body;           // 1-3 paragraph explanation, Markdown supported
+  final String? learnMoreUrl;  // optional deep link to wiki at openastro.net/wiki/...
+  final List<String> relatedHelpKeys;  // cross-links to related entries
+  final List<String> relatedSettings;  // cross-links into §61 registry by setting ID
+}
+
+const Map<String, Help> helpRegistry = {
+  'guider.use_advanced_algorithms': Help(
+    key: 'guider.use_advanced_algorithms',
+    title: 'Advanced guiding algorithms',
+    body: '''
+When enabled, PHD2 uses the predictive PEC algorithm instead of
+the default hysteresis controller. Predictive PEC tracks periodic
+error in your mount's worm gear and feeds corrections forward,
+reducing RA RMS by 30-60% on mounts with smooth, repeatable PE.
+
+Recommended **on** for: belt-driven mounts, strain-wave mounts after
+PEC training, GEMs with characterized periodic error.
+
+Recommended **off** for: mounts you haven't trained, mounts with
+stiction or sticking, debugging poor guiding (rule out the algorithm
+before tuning it).
+''',
+    learnMoreUrl: 'wiki/guiding/predictive-pec',
+    relatedHelpKeys: ['guider.aggressiveness', 'guider.min_move'],
+    relatedSettings: ['guider.aggressiveness_ra', 'guider.aggressiveness_dec'],
+  ),
+
+  // ... more entries
+};
+```
+
+### 69.3 Widget integration
+
+Every Flutter control that carries help references it via `helpKey`:
+
+```dart
+SwitchListTile(
+  title: const Text('Use advanced guiding algorithms'),
+  value: profile.guider.useAdvanced,
+  onChanged: (v) => ...,
+  secondary: HelpIcon(helpKey: 'guider.use_advanced_algorithms'),
+)
+```
+
+`HelpIcon` is a reusable widget:
+
+- Renders as a small ⓘ glyph (consistent with §53 a11y's symbol-+-color convention — has a `Semantics(label: 'Help')` wrapper)
+- On hover (desktop) or long-press (mobile/touch): shows tooltip with `Help.title` + first sentence of `body`
+- On tap/click: opens a modal sheet with full `body` (Markdown rendered), [Learn more] button if `learnMoreUrl` is set, and a "Related" section listing `relatedHelpKeys` and `relatedSettings` as clickable chips (jump to that help entry or deep-link to the setting per §61)
+- Modal sheet is dismissible; never blocks
+- Modal width caps at 600 px to avoid line-length issues on wide screens
+
+Controls without a `helpKey` render no icon — the default is silence.
+
+### 69.4 Enforcement gate (mirrors COMMIT-PR-RULES.md §61 settings-registry gate)
+
+Same defense-in-depth four layers, applied to the help registry:
+
+**Layer 1 — Local pre-commit hook** (`.husky/pre-commit`):
+```bash
+node scripts/check-help-registry.mjs --staged
+```
+
+The script scans the diff for widgets that use `helpKey:` and verifies each referenced key exists in `lib/help/registry.dart` with non-empty `title` + non-empty `body`. Fails commit on:
+- Widget references a `helpKey` that doesn't exist in the registry
+- Registry entry has empty `title`, empty `body`, or `body` < 50 chars (too terse to be useful)
+- Duplicate `key` across registry entries
+- `learnMoreUrl` doesn't start with `wiki/` or `https://openastro.net/`
+
+**Layer 2 — CI check** (GitHub Actions): same script runs against PR diff.
+
+**Layer 3 — PR template checkbox** (`.github/PULL_REQUEST_TEMPLATE.md`):
+```markdown
+## Help registry (mandatory checkbox if applicable)
+
+- [ ] This PR adds NO new controls that reference helpKey (skip remaining boxes)
+- [ ] This PR adds controls with helpKey AND all referenced keys are registered in `lib/help/registry.dart` with meaningful title + body (50+ chars)
+- [ ] Body text passes the "novice user reading this would know whether to use the setting" test
+- [ ] Cross-links via `relatedHelpKeys` / `relatedSettings` added where applicable
+```
+
+**Layer 4 — CodeRabbit review focus** (`.coderabbit.yaml`):
+```yaml
+path_instructions:
+  - path: "client/openastroara_client/lib/help/registry.dart"
+    instructions: |
+      Verify every Help entry has a body that would help a novice user decide
+      whether to use the setting. Flag entries where body just restates the label
+      or refers to "this setting" without explaining WHAT it does. Body should
+      explain effect, recommendation (when to enable / when not to), and any
+      surprising interactions with other settings.
+  - path: "client/openastroara_client/lib/screens/**"
+    instructions: |
+      For widgets that use helpKey, verify the key exists in lib/help/registry.dart.
+      For widgets that DON'T use helpKey but feel like they would benefit from one
+      (non-obvious effect, novice would be confused), suggest adding a help entry.
+      Don't suggest help entries for obvious labels (e.g., "Camera address" needs none).
+```
+
+### 69.5 Per-screen "Learn more" link (complementary to per-control help)
+
+Independent of per-control help, every major screen header includes a single `[Learn more]` link in the top-right:
+
+```
+┌──────────────────────────────────────────────────┐
+│ Sequencer                       [Learn more ↗]   │
+├──────────────────────────────────────────────────┤
+│ ... screen content ...                            │
+```
+
+This links to the relevant openastro.net wiki section at a per-screen anchor (e.g., `wiki/wilma/sequencer`). For *workflow* and *concept* explanations (what is a meridian flip? why dither? how does session metadata work?) that don't belong attached to any one control. Always opens in the user's default browser via `url_launcher`.
+
+The per-screen link is unconditional and always present; the per-control help icons are opt-in per the §69.1 scope rules.
+
+### 69.6 Coverage during the port itself
+
+Same activation gate as the settings registry per COMMIT-PR-RULES.md:
+
+- Phases 0.5–11 — no Flutter UI yet; rule does not apply
+- **Phase 12 — gate is live.** Phase 12 sub-PRs that add controls must register any help they reference
+- Phase 12 sub-PR 12h (Settings) is the natural home for the registry's initial bulk-population — every help entry referenced by earlier 12a-12g sub-PRs is consolidated in 12h alongside the §61 registry
+
+### 69.7 §61 search registry entries
+
+The help registry surfaces itself via §61 search (searching for "guiding" should surface both the *setting* and the *help entry*):
+
+- `app.help.search` — keywords: `help, what does this do, explain, learn more, tooltip, how does this work`
+- `app.help.disable_tooltips` — keywords: `hide tooltips, disable help icons, less visual clutter, stop popups`
+
+(The `disable_tooltips` setting lets power users globally suppress the ⓘ icons app-wide once they've learned the UI. Persisted in user prefs; defaults to `show`.)
+
+### 69.8 §14.2 widget test cases (added)
+
+- `help_icon_renders_when_helpkey_present`
+- `help_icon_absent_when_helpkey_unset`
+- `help_modal_opens_on_tap_with_body_content`
+- `help_modal_related_chips_navigate_to_settings` — chip click triggers §61 deep-link
+- `disable_tooltips_setting_hides_all_icons_globally`
+
+### 69.9 Cross-references
+
+- §0.5 — discoverability pillar (search for settings via §61, explanations via §69, concepts via wiki)
+- §25 — visual design (HelpIcon glyph + tooltip styling matches AraColors theme)
+- §53 — a11y (HelpIcon has Semantics label; tooltip respects reduce-motion)
+- §61 — settings search registry (parallel enforcement model)
+- COMMIT-PR-RULES.md — help registry gate parallel to settings registry gate
 
 ---

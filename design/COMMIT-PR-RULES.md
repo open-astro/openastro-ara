@@ -303,6 +303,18 @@ Phase 12 sub-PR 12h (Settings) is the natural home for the registry's initial bu
 
 `CONTRIBUTING.md` (created post-v0.0.1, see future-scope section below) reproduces this rule prominently. Until then, the port playbook §0.5 + §61.4 + this document are the canonical references.
 
+## Help-registry gate (BAKED — parallel to settings-registry gate)
+
+**Status: settled rule. Applies immediately starting Phase 12 alongside the settings-registry gate.**
+
+The help registry (`client/openastroara_client/lib/help/registry.dart`, specced in `PORT_PLAYBOOK.md` §69) follows the **same enforcement model** as the settings registry: pre-commit hook + CI check + PR template checkbox + CodeRabbit path instructions. Mechanism is fully described in §69.4; this section just affirms it applies to community contributions identically to maintainer commits, with no opt-out.
+
+Detection script: `scripts/check-help-registry.mjs --staged` (parallel to `check-settings-registry.mjs`). Same activation timing (Phase 12 onward), same blocking behavior on fail, same per-PR template checkboxes.
+
+The two gates are independent — a PR may fail one and pass the other; both must pass to merge.
+
+Settings registry covers *findability* of controls; help registry covers *explainability* of controls. Together they enforce §0.5's discoverability pillar mechanically rather than relying on reviewer vigilance.
+
 ### Applies to
 
 - The AI during Phase 12 + Phase 12 sub-PRs of the port
