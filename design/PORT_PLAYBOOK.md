@@ -1016,23 +1016,28 @@ Delete `crowdin.yml`. Delete non-English `Locale.*.resx`. No language picker. Ha
 
 ### 18.F — Code signing: **SHIP UNSIGNED**
 - Server: no signing (Linux daemons don't typically sign).
-- Client: unsigned macOS/iOS/Android/Windows. README documents per-OS bypass:
+- Client: unsigned macOS/Windows desktop. README documents per-OS bypass:
   - macOS: right-click → Open, or `xattr -d com.apple.quarantine "/Applications/OpenAstro Ara.app"`
-  - iOS: out of scope for v0.0.1 (needs Apple Developer ID)
-  - Android: enable "Install from unknown sources," install APK
   - Windows: SmartScreen → More info → Run anyway
   - Linux: `chmod +x` the AppImage and run
+- iOS/Android out of scope for v0.0.1 (per §18.G + §41 mobile-deferred-to-v0.1.0 decision)
 - `TODO(signing): revisit when project has funding` in release workflow
 
-### 18.G — Distribution formats
-- **Server**: `.tar.gz` of self-contained publish (`linux-arm64`, `linux-x64`). Optional `.deb` later.
-- **Client**:
-  - macOS: `.dmg` via `create-dmg`
-  - iOS: `.ipa` unsigned (TestFlight is future work)
-  - Android: `.apk` (sideload) + `.aab` (Play Store future)
-  - Windows: `.zip` of release build; `.msix` future
-  - Linux desktop: AppImage
-- All built by GitHub Actions on tag push.
+### 18.G — Distribution formats: **DESKTOP ONLY in v0.0.1; mobile deferred to v0.1.0**
+- **Server**: `.deb` for `arm64` via apt.openastro.net per §34 (primary); `.tar.gz` of self-contained publish (`linux-arm64`, `linux-x64`) as a fallback tarball for manual installs.
+- **Client (v0.0.1 — desktop only)**:
+  - macOS: `.dmg` via `create-dmg`, unsigned (per §18.F)
+  - Windows: `.zip` of release build (later `.msix`), unsigned
+  - Linux desktop: AppImage (Flatpak optional)
+- **Client mobile (iOS / Android): deferred to v0.1.0.** Mobile distribution requires:
+  - Apple Developer Program account ($99/yr) for any iOS distribution including TestFlight
+  - Google Play Console account ($25 one-time) for Play Store distribution
+  - Per-platform review processes (App Store ~2–7 days, Play Store ~hours-to-days)
+  - Ongoing signing-cert + privacy-manifest + capabilities maintenance per OS update
+  - Per-platform manual QA each release (Flutter web-target isn't a substitute — different code paths trigger different bugs)
+  - This effort is real but disproportionate to v0.0.1's "validate the architecture" goals. Pushing it to v0.1.0 lets the desktop client + server stabilize first and lets the project decide whether to fund the accounts based on early-adopter signal.
+- The §41 mobile companion *spec* still informs v0.0.1 API design (so v0.1.0 mobile doesn't require server changes) — but no mobile builds ship in v0.0.1.
+- All built by GitHub Actions on tag push (desktop platforms only in v0.0.1).
 
 ### 18.H — Branding assets
 Placeholders during port. Every icon/splash/logo reference carries `TODO(branding): replace with ARA asset before public release`. User supplies real assets.
@@ -2491,6 +2496,165 @@ Invalidation = set the `valid` flag to false. The relevant subsystem checks this
 - `equipment.signatures` — keywords: `equipment fingerprint, driver info, camera model, mount model`
 
 User can search "equipment changed" and jump to the equipment-change-check screen even after dismissing it.
+
+### 30.8 Multi-server support (observatory with 2+ Pis)
+
+ARA's typical deployment is one Pi per rig. Observatory operators sometimes run two scopes on two Pis simultaneously, controlled from a single WILMA app. v0.0.1 supports this via **one-server-at-a-time** with explicit server switching — distinct from §27's per-server single-client policy, which governs how many WILMAs can talk to one Pi. This section governs how one WILMA tracks multiple Pis.
+
+**v0.0.1 model: known servers list + one active connection at a time.**
+
+WILMA maintains a local list of known servers (per §30.6) with per-server metadata: nickname, last-seen address, last-seen version, last-connected timestamp, last-known online state. WILMA is connected to exactly one server at any moment; switching disconnects the current connection cleanly before establishing the new one.
+
+**Why not concurrent connections in v0.0.1:**
+
+Multi-server-concurrent introduces per-server state forking throughout WILMA (per-server notification feeds, per-server diagnostics state, per-server WS reconnect logic, per-server pending_restart banners, cross-rig dashboards, "which Pi is this safety modal coming from" disambiguation). Each addition is small; together they touch nearly every screen. The engineering payoff is real but disproportionate to the v0.0.1 user count. Single-active-server is shippable in Phase 12a (existing connection flow scales trivially); concurrent multi-server becomes a clean v0.1.0 effort once the v0.0.1 baseline is proven.
+
+**Discovery model:**
+
+- mDNS discovery (§32.4) finds *all* ARA servers on the LAN, not just the previously-connected ones
+- Discovery flow runs continuously in the background (low-frequency) so the Servers menu shows up-to-date online/offline indicators for known servers + any newly-discovered ones
+- A discovered-but-unsaved server appears in the menu as "Available: <name>" with [Save + Connect]
+
+**Servers menu UI (always available in WILMA app shell, top-left next to server name):**
+
+```
+┌─ Servers ───────────────────────────────────────┐
+│                                                  │
+│ Active                                           │
+│ ✓ joey-north (192.168.1.42:5555)  v0.0.1-ara.6  │
+│                                                  │
+│ Known                                            │
+│ ○ joey-south (offline, last seen 2h ago)        │
+│ ○ joey-grab-and-go (offline, last seen 6d ago)  │
+│                                                  │
+│ Available on this LAN                            │
+│ ⊙ ara-pi-test.local (10.0.0.55:5555) v0.0.1-ara.6│
+│                                                  │
+│ ─────────────────────────────────────────────    │
+│ [+ Add server manually]                          │
+│ [⚙ Manage servers]                               │
+└──────────────────────────────────────────────────┘
+```
+
+Status glyph conventions (per §53 color+symbol):
+- `✓` (green) — connected
+- `○` (gray) — known but currently offline
+- `⊙` (blue) — discovered on LAN, not yet saved
+- `⚠` (yellow) — known + online but version mismatch with WILMA
+
+**Server switching flow:**
+
+When user clicks a non-active server:
+
+1. **Check current server state.** If a sequence is active on the currently-connected server, show modal:
+   ```
+   ⚠ A sequence is running on joey-north.
+
+   Switching servers will keep joey-north's sequence
+   running (the Pi is autonomous), but you won't see
+   notifications from it while connected to joey-south.
+
+   [Cancel]  [Switch + monitor joey-north via notifications]  [Switch now]
+   ```
+   - **[Cancel]** — no switch
+   - **[Switch + monitor]** — switches, but enables a "background watcher" (see below)
+   - **[Switch now]** — switches without watcher
+
+2. **If no active sequence,** silent switch: tear down WS, close REST connections, persist last-known state for the leaving server, connect to the new server, run §32.5 hydration (`/api/v1/server/state` snapshot + ws_resume_token replay if available).
+
+3. **Background watcher mode** (when [Switch + monitor]):
+   - WILMA opens a *minimal* WS connection to the leaving server (low-traffic — only `notification.critical` and `notification.urgent` events; no frames, no telemetry, no stats)
+   - Cross-server notifications surface in a separate "Other rigs" section of the §46 notification feed with the source server prefixed (`[joey-north] Sequence completed: NGC 7000 — 47 frames`)
+   - Background watcher auto-closes if WILMA's process is killed or if the user switches WILMA's primary connection a second time (only one background watcher at a time in v0.0.1)
+   - Critical/urgent notifications from the watched server can pop a modal in the active context — the user is reminded which Pi it's from
+   - This is the minimum-viable cross-rig awareness for v0.0.1; full concurrent multi-server arrives in v0.1.0
+
+**Settings → Servers panel (`[⚙ Manage servers]`):**
+
+Full list with per-server metadata + actions:
+- Rename (per-server nickname)
+- Forget (removes from saved list; Pi-side state untouched per §30.6)
+- Set as default-on-launch (WILMA auto-connects to this server on next launch)
+- View last 7 days of connection history (helpful for debugging "did my Pi go offline last night?")
+
+**Per-server WILMA state (what gets keyed by server UUID):**
+
+- `last_seen_server_version` (per §33.7 changelog modal)
+- Background-stream subscriptions (notifications + watcher mode)
+- User preferences that are server-specific (Settings → Display ordering of equipment tabs, etc.)
+- WS resume tokens (per §60.4)
+- Bug-report draft state per-server (per §54)
+
+WILMA preferences that are *user-global* (theme, font size, reduce-motion, ⌘K shortcut, suppress-changelog-modal, suppress-tooltips, etc.) live in a separate scope and apply across all servers.
+
+**Conflict cases:**
+
+| Scenario | Behavior |
+|---|---|
+| User has joey-north + joey-south saved; both come up after rebooting WILMA | Auto-connect to default-on-launch if set; otherwise show server picker (no auto-connect). Don't surprise users by auto-connecting to a random Pi. |
+| Two saved servers have the same nickname (user typo) | Disambiguated by stable server UUID; menu shows hostname + IP as discriminator |
+| Saved server's hostname/IP changes (DHCP lease moved it) | mDNS rediscovery finds it by service name + UUID, updates the saved address; user sees one momentary "reconnecting…" toast, no manual action |
+| Saved server reports a different UUID than expected (Pi was reflashed) | Modal: "joey-south reports a new server identity. This usually means the Pi was reflashed. [Use as new] / [Forget old] / [Cancel]". Prevents silent association with a stranger's Pi at a star party |
+
+**Notification scoping:**
+
+- Active server's notifications behave per §46 (in-app feed, severity-driven UX)
+- Background-watcher server's notifications go to the "Other rigs" section of the same feed, prefixed with the source server's nickname
+- Quiet hours (§46.5) apply globally regardless of source server
+- Emergency alarms (§35.5) from a watched server still fire the alarm modal — safety wins over context-switching cost
+
+**v0.0.1 limitations (documented in DEPLOY.md):**
+
+- One active server + one optional background watcher; no >2-server concurrent monitoring
+- No cross-rig stats rollups (§50 Stats are per-server only)
+- No cross-rig sequence orchestration ("alternate N frames on north, M frames on south")
+- No cross-rig single-emergency-stop button (each server has its own §35.3)
+
+**v0.1.0+ concurrent multi-server roadmap** (added to §55):
+
+- Concurrent WebSocket connections, one per server
+- Tabbed top-level UI (one tab per server, plus a "Rigs overview" tab)
+- Cross-rig stats dashboard with per-rig + aggregated views
+- Aggregated notification feed with optional per-rig filtering
+- Cross-rig single-emergency-stop affecting all connected rigs simultaneously
+- Optional cross-rig sequence orchestration (mosaic split across rigs, alternating targets, etc.)
+
+### 30.8.1 API + WebSocket additions
+
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/api/v1/server/info` | GET | Lightweight identity probe — returns `{server_uuid, nickname, version, mDNS_name, started_at}`. Called by WILMA's background discovery loop to confirm a saved server's identity. Cheap (no DB hit); separate from `/healthz`. |
+
+WebSocket events from background-watcher mode use the same shapes as §46 notification events; WILMA's client-side routing distinguishes them by the connection they arrived on, not by event structure.
+
+### 30.8.2 §61 search registry
+
+- `app.servers.switch` — keywords: `switch server, change pi, multi-pi, multi-rig, observatory, two scopes, multiple servers`
+- `app.servers.manage` — keywords: `manage servers, forget server, rename pi, server list, default server, auto-connect`
+- `app.servers.watcher` — keywords: `background watcher, monitor other rig, notifications from other pi, cross-rig notifications`
+
+### 30.8.3 §14 test cases
+
+**§14.1 server integration tests:**
+- `server_info_endpoint_returns_uuid_and_nickname`
+
+**§14.2 widget tests:**
+- `servers_menu_shows_active_known_and_discovered_servers`
+- `switching_server_during_active_sequence_prompts_for_watcher_mode`
+- `switching_server_with_no_active_sequence_silently_switches`
+- `background_watcher_receives_critical_notifications_only`
+- `reflashed_pi_uuid_mismatch_blocks_silent_reconnect`
+- `default_server_auto_connects_on_launch`
+
+### 30.8.4 Cross-references
+
+- §27 — single-client policy (per-server; complementary to §30.8 single-active-server-per-WILMA)
+- §30.6 — saved servers list (§30.8 extends with switching UX + discovery + watcher mode)
+- §32.4 + §32.5 — mDNS discovery + state hydration on connect
+- §35.5 — emergency alarms from watched servers still fire
+- §46 — notification feed (background-watcher notifications are a section within the same feed)
+- §55 — v0.1.0+ concurrent multi-server roadmap entry
+- §67 — security model (no auth between WILMA and any Pi in v0.0.1; switching adds no new attack surface)
 
 ---
 
@@ -4740,6 +4904,10 @@ Multi-select frames via Shift+Click (desktop) or long-press + tap (mobile):
 ---
 
 ## 41. Mobile companion mode (iOS / Android)
+
+**v0.0.1 scope status: SPEC ONLY — no mobile builds ship.** Mobile distribution is deferred to v0.1.0 per §18.G (requires funded Apple Developer + Play Console accounts + per-platform review workflow + ongoing signing maintenance). The §41 spec stays in the playbook because it informs v0.0.1 API decisions (WebSocket event shapes, single-client policy semantics, mDNS discovery, GPS-push endpoint, emergency-stop authentication-free semantics) — so the server-side API surface is correct when v0.1.0 turns on mobile builds. Flutter codebase already supports iOS/Android targets; what's missing is the distribution + signing + review pipeline, not the code.
+
+When v0.1.0 enables mobile builds, no server changes are needed — the same WILMA codebase compiles for iOS/Android with platform-detection-driven shell selection per §41.4. The spec below describes the *intended* mobile UX; treat as v0.1.0 design with v0.0.1 API forward-compatibility.
 
 WILMA on iOS/Android runs in **Companion Mode** — same Flutter codebase as the desktop client, but the UI is tailored for phone/tablet form factors and many "configuration" workflows are intentionally absent (replaced by a "Open ARA on your desktop to do this" prompt). The phone is for monitoring, viewing, and emergencies — not for planning tomorrow's session.
 
@@ -7119,6 +7287,9 @@ These were explicitly marked as v0.1.0 commitments during planning (not "maybe")
 | **OpenAPI-generated SDKs** | §49.7 | Auto-generated client packages for Python/JS/Go from the OpenAPI spec. Useful for community integrations. |
 | **Generated docs for multiple versions** | §49.7 | Swagger UI multi-spec selector showing v0.0.1, v0.1.0, etc. |
 | **Sequence templates expansion** | GAPS-ARA Tier 3 | Beyond the 3 v0.0.1 templates (LRGB, SHO, comet). Community-contributed templates registry for DSO + comet workflows. |
+| **WILMA mobile builds (iOS + Android)** | §18.G, §41 | Mobile companion mode (§41) shipped as iOS App Store + Google Play listings. Requires Apple Developer Program ($99/yr) + Play Console ($25 one-time) + per-platform review processes + signing-cert + privacy-manifest maintenance. v0.0.1 spec'd the mobile companion API surface so no server changes needed when v0.1.0 turns this on. TestFlight public beta as the iOS rollout-staging mechanism; Play Store open-testing track as the Android equivalent. |
+| **OpenAstro Hub (community profile + sequence sharing)** | §70.6 | Central catalog at openastro.net/hub for browsing/rating/contributing share files. WILMA browse-and-import in-app. Curated starter packs per scope class. Builds on the v0.0.1 `profile-share-v1` / `.araseq.json` wire formats — no breaking changes. |
+| **Concurrent multi-server (observatory mode)** | §30.8 | One WILMA managing N Pis with concurrent WS connections + tabbed UI + cross-rig stats rollups + aggregated notification feed + cross-rig single-emergency-stop + optional cross-rig sequence orchestration (mosaic-split, alternating targets). Engineering touch is per-server state forking throughout the app shell. |
 
 ### 55.2 v0.2.0 — Larger projects
 
@@ -9459,5 +9630,269 @@ The help registry surfaces itself via §61 search (searching for "guiding" shoul
 - §53 — a11y (HelpIcon has Semantics label; tooltip respects reduce-motion)
 - §61 — settings search registry (parallel enforcement model)
 - COMMIT-PR-RULES.md — help registry gate parallel to settings registry gate
+
+---
+
+## 70. Profile + sequence sharing between users
+
+Distinct from §43 backup/restore (same-user disaster recovery) and from §38 NINA import (one-time format migration). This is the *"my friend has a similar rig and wants my settings"* flow — peer-to-peer file sharing of templates, not central infrastructure.
+
+§38 already makes sequences shareable by construction (NINA-compatible JSON with no equipment-specific calibration baked in). §70 adds the profile side: an equipment-stripped export format + import flow that walks the recipient through wizard'ing their own gear into the donated template.
+
+v0.0.1 ships file-based sharing only (email, USB stick, Discord attachments) — no central registry, no rating system, no curation. v0.1.0+ "OpenAstro Hub" is the bigger lift (see §55 roadmap).
+
+### 70.1 What gets stripped — the share-vs-backup distinction
+
+| Field | Backup (§43) | Share (§70) | Reason |
+|---|---|---|---|
+| Profile name | ✓ | ✓ | Donor's name is helpful context ("Bortle 4 wide-field setup") |
+| Equipment **types** (camera model, focal length, filter wheel slot count, etc.) | ✓ | ✓ | Recipient needs to know what gear this template was designed for |
+| Equipment **UUIDs / serial numbers / Alpaca device IDs** | ✓ | ✗ stripped | Donor's serial numbers don't match recipient's hardware |
+| `calibration_state` block (per §30.7) | ✓ | ✗ stripped | Calibration is donor-rig-specific; reusing it on recipient's gear would be actively wrong |
+| Filter offsets per-temperature curves | ✓ | ✗ stripped | Filter-stack-specific to donor; recipient must re-derive |
+| PHD2 calibration vectors (per §63) | ✓ | ✗ stripped | Mount-specific |
+| Dark library references | ✓ | ✗ stripped | Tied to donor's camera + sensor temp history |
+| Sky data download manifest (§36 Data Manager state) | ✓ | ✗ stripped | Recipient picks their own surveys based on their FL |
+| General settings (dither cadence, AF triggers, meridian-flip timing knobs, safety policy, diagnostic mode, etc.) | ✓ | ✓ | The interesting part of the donation — donor's tuning judgement |
+| Sequence templates referenced by profile | ✓ | ✓ (bundled in share file) | Recipient gets the full picture |
+| Custom keyboard shortcuts, WILMA UI prefs | ✓ | ✗ stripped | Per-user, not per-rig |
+| Notes / comments fields | ✓ | ✓ optional (opt-out at export time) | Donor may have annotated rationale worth sharing |
+
+### 70.2 Share file format — `profile-share-v1`
+
+Bundled JSON with explicit schema versioning per §60-style conventions. Single self-contained file (not a zip — keeps email-attaching friction-free):
+
+```json
+{
+  "schemaVersion": "profile-share-v1",
+  "sharedAt": "2026-06-01T20:14:33Z",
+  "sourceAraVersion": "0.0.1-ara.6",
+  "donor": {
+    "displayName": "Joey's C8 Setup",
+    "comment": "Bortle 4 backyard, dew-prone summers"
+  },
+  "rigDescription": {
+    "telescope_type": "SCT",
+    "focal_length_mm": 2032,
+    "aperture_mm": 203,
+    "focal_ratio": 10.0,
+    "reducer_in_use": true,
+    "effective_focal_length_mm": 1280,
+    "camera_make": "ZWO",
+    "camera_model": "ASI2600MM Pro",
+    "sensor_type": "mono",
+    "pixel_size_um": 3.76,
+    "has_cooler": true,
+    "has_filter_wheel": true,
+    "filter_wheel_slots": 7,
+    "filter_names": ["L", "R", "G", "B", "Ha", "OIII", "SII"],
+    "has_focuser": true,
+    "focuser_type": "stepper",
+    "has_guider": true,
+    "guide_scope_focal_length_mm": 240,
+    "mount_class": "GEM"
+  },
+  "settings": {
+    "dither": { ... },
+    "autofocus": { ... },
+    "meridian_flip": { ... },
+    "safety": { ... },
+    "diagnostics": { ... }
+  },
+  "sequence_templates": [
+    {
+      "name": "LRGB DSO — donor's defaults",
+      "schemaVersion": "openastroara-sequence-v1",
+      ...
+    }
+  ]
+}
+```
+
+Key shape choices:
+- **`schemaVersion: "profile-share-v1"`** — distinct from `openastroara-sequence-v1` (§38) and from full-profile backup schema (§43). Import endpoint dispatches by schemaVersion.
+- **`rigDescription`** uses *types* and *capabilities*, never serials or driver IDs. Tells the recipient "this template was designed for a 200mm SCT with a cooled mono CMOS" so they can judge applicability.
+- **`settings`** is verbatim from the donor's profile, minus all calibration-state blocks (per §30.7's `calibration_state` schema). Everything that's purely user judgement passes through; everything derived from observation / hardware doesn't.
+- **`sequence_templates`** bundles any sequence templates the profile references inline, so the recipient gets a complete working template without separate file shuffling. Each is full §38 schema.
+- File extension: `.araprofile.json`. Magic prefix in the schemaVersion field makes it unambiguous on import.
+
+### 70.3 Export flow
+
+**WILMA UI:** Profile screen → `[...]` overflow menu → "Share profile (template)":
+
+```
+┌─ Share profile: "Joey's C8 Setup" ──────────────┐
+│                                                  │
+│ This creates a template that strips your        │
+│ equipment-specific data so a friend can use it  │
+│ as a starting point for their own setup.        │
+│                                                  │
+│ What's included:                                 │
+│   ✓ General settings (dithering, autofocus,    │
+│     meridian flip, safety, diagnostics)         │
+│   ✓ Rig description (scope type, FL, camera    │
+│     model — no serial numbers)                  │
+│   ✓ 3 sequence templates                       │
+│                                                  │
+│ What's stripped:                                 │
+│   ✗ Equipment serial numbers + Alpaca IDs      │
+│   ✗ Calibration data (focus, guider, filter   │
+│     offsets, dark library)                     │
+│   ✗ Your sky data downloads                    │
+│   ✗ WILMA UI preferences                       │
+│                                                  │
+│ Optional:                                        │
+│   [✓] Include donor name + comment             │
+│   Donor display name: [Joey's C8 Setup        ] │
+│   Comment (optional):  [Bortle 4 backyard...  ] │
+│                                                  │
+│              [Cancel]  [Export to file...]      │
+└──────────────────────────────────────────────────┘
+```
+
+`[Export to file...]` triggers a platform-native save dialog (Flutter `file_picker`) defaulting to `<profile_name>.araprofile.json`. File is written via `POST /api/v1/profiles/{id}/share-export` which returns the rendered JSON (server does the stripping; WILMA just hands it to the file picker). Server logs the export action (donor name + timestamp) at Info level so the donor has a record.
+
+**The "include donor name" toggle:** opt-out for users who want to share anonymously. Defaults checked because attribution is socially useful, but users sharing to public forums may prefer to strip.
+
+### 70.4 Import flow — "wizard the template"
+
+**WILMA UI:** Profiles screen → `[+ New profile]` → option "From shared template":
+
+```
+┌─ Import shared profile ────────────────────────┐
+│                                                 │
+│ Select an .araprofile.json file...             │
+│                          [Browse...]            │
+└─────────────────────────────────────────────────┘
+```
+
+After file selection, the share is parsed + validated server-side via `POST /api/v1/profiles/share-import {file_contents}` which returns a preview:
+
+```
+┌─ Imported template: "Joey's C8 Setup" ─────────┐
+│                                                 │
+│ Shared by: Joey                                 │
+│ Note: "Bortle 4 backyard, dew-prone summers"   │
+│ Exported: 2026-06-01 from ARA 0.0.1-ara.6      │
+│                                                 │
+│ ⚠ This is a template, not a complete profile.  │
+│   You'll need to wizard your own equipment     │
+│   to make it usable.                            │
+│                                                 │
+│ Original rig:                                   │
+│   • Telescope: SCT, 2032 mm @ f/10             │
+│     (with reducer: 1280 mm)                     │
+│   • Camera: ZWO ASI2600MM Pro (mono)            │
+│   • Filter wheel: 7-slot mono (L R G B Ha OIII │
+│     SII)                                        │
+│   • Mount: GEM                                  │
+│                                                 │
+│ Your equipment vs. this template:               │
+│   Telescope: SCT @ 2032mm vs. yours           │
+│              [Compatible — same scope type ✓]  │
+│   Camera:    Mono CMOS vs. yours              │
+│              [Compatible — same sensor type ✓]  │
+│                                                 │
+│ Settings to import:                             │
+│   ✓ Dither, autofocus, meridian flip, safety,  │
+│     diagnostics tuning                          │
+│   ✓ 3 sequence templates                       │
+│                                                 │
+│ Next steps after import:                        │
+│   1. Wizard's "Use existing template" path     │
+│   2. You fill in your equipment serial         │
+│      numbers + Alpaca addresses                 │
+│   3. Calibration runs on first session         │
+│                                                 │
+│           [Cancel]  [Import + start wizard]    │
+└─────────────────────────────────────────────────┘
+```
+
+**Compatibility check (best-effort).** Server compares the template's `rigDescription` against equipment WILMA has previously seen (any profile this user has set up). For each category (telescope type, camera sensor type, filter wheel slot count, mount class), it emits one of:
+- **Compatible ✓** — types match; template should apply cleanly
+- **Different ⚠** — types differ but template is still usable; donor's settings may need re-tuning (e.g., SCT vs refractor — focus algorithm choice may differ)
+- **Major mismatch ⛔** — fundamental incompatibility (e.g., template designed for mono w/ filter wheel; recipient has OSC and no filter wheel) — settings will import but several will need manual review
+
+The check is informational, never blocking. User decides whether to import.
+
+**`[Import + start wizard]` flow:**
+1. Server creates a draft profile from the template's settings, leaves all equipment fields empty
+2. WILMA jumps to wizard (§37) at Screen 1 (Welcome) with the draft profile pre-loaded
+3. Wizard runs in "use existing template" mode — equipment screens (2–14) ask the user to wire up their gear; settings screens (15–18) show the donor's values pre-filled with a small "from template" badge next to each (user can change before continuing)
+4. On wizard completion, profile is saved + calibration_state initialized empty (per §30.7) so first-session-with-this-profile triggers the equipment-change check and runs fresh calibration
+5. Donor name + comment surface in the profile metadata sidebar ("Imported from Joey's C8 Setup template — 2026-06-01")
+
+### 70.5 Sequence sharing — already covered, formalize the button
+
+Sequences are portable as-is per §38 (NINA-compatible JSON, no equipment-specific calibration). v0.0.1 adds the explicit share affordance:
+
+**Sequencer screen → `[...]` menu:**
+- Save sequence
+- Save as template
+- **Share sequence (.araseq.json)** ← new
+
+`POST /api/v1/sequences/{id}/share-export` returns a self-contained JSON bundling:
+- The sequence itself (full §38 schema, `schemaVersion: "openastroara-sequence-v1"`)
+- All referenced sequence templates (inlined)
+- Donor name + comment (optional, same toggle as profile share)
+- Source ARA version
+
+File extension `.araseq.json`. Import goes through the existing §38.4 import endpoint, which already handles equipment-remap + unsupported-instruction warnings — no new flow needed beyond a [Browse for .araseq.json file] entry point in the Sequencer screen.
+
+### 70.6 v0.1.0+ — OpenAstro Hub (deferred)
+
+Per §55 roadmap, v0.1.0+ adds central infrastructure:
+
+- **openastro.net/hub/profiles** — browseable catalog of community-shared profile templates with filters (rig class, FL range, sensor type, Bortle target)
+- **openastro.net/hub/sequences** — same for sequence templates
+- **WILMA browse + import in-app** — Settings → Hub → Browse Templates → preview + one-click import (which then runs the same wizard'ing flow as §70.4)
+- **Contributor model** — submitter accounts on openastro.net, moderation, ratings, comment threads, "tested by" badges
+- **Curated starter packs** — official "Beginner — small refractor + DSLR", "Intermediate — APO + cooled CMOS", "Advanced — RC + filter wheel + AO unit" templates published by the Open Astro maintainers
+- **Hub-side validation** — submissions go through a `validate-share-file` server that enforces schemaVersion + scope-type-coherence + no-PII checks before publishing
+
+The §70 v0.0.1 file format (`profile-share-v1`, `araseq.json`) is the on-disk wire format the Hub later wraps in catalog metadata — no breaking changes when the Hub ships.
+
+### 70.7 API + endpoints
+
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/api/v1/profiles/{id}/share-export` | POST | Body: `{ include_donor_name: bool, donor_display_name: string?, comment: string? }`. Returns the rendered share JSON (server strips equipment-specific fields). |
+| `/api/v1/profiles/share-import` | POST | Body: `{ file_contents: string }`. Parses + validates + returns preview JSON (compatibility check + settings summary). Does NOT create the profile yet — that happens via `share-import/commit`. |
+| `/api/v1/profiles/share-import/commit` | POST | Body: `{ preview_id: string }`. Creates the draft profile from the preview, returns the profile ID. WILMA then redirects to wizard. |
+| `/api/v1/sequences/{id}/share-export` | POST | Same shape as profile-share, scoped to sequences + their referenced templates. |
+| `/api/v1/sequences/share-import` | POST | Existing §38.4 endpoint accepts `.araseq.json` (recognized via schemaVersion field); no new endpoint needed. |
+
+### 70.8 §61 search registry entries
+
+- `profile.share.export` — keywords: `share profile, export template, send to friend, share my setup, donate template, profile template, share rig`
+- `profile.share.import` — keywords: `import template, friend's profile, use someone's profile, shared template, .araprofile, import setup`
+- `sequence.share.export` — keywords: `share sequence, export sequence, send sequence, .araseq, sequence template share`
+- `sequence.share.import` — keywords: `import sequence, friend's sequence, sequence from someone`
+
+### 70.9 §14 test cases
+
+**§14.1 server integration tests:**
+- `profile_share_export_strips_calibration_state`
+- `profile_share_export_strips_equipment_uuids`
+- `profile_share_export_includes_general_settings`
+- `profile_share_import_rejects_wrong_schemaVersion`
+- `profile_share_import_compatibility_check_flags_mono_to_osc_mismatch`
+- `sequence_share_export_bundles_referenced_templates`
+
+**§14.2 widget tests:**
+- `share_profile_dialog_shows_strip_summary`
+- `share_profile_donor_name_toggle_persists_setting`
+- `import_share_preview_renders_compatibility_badges`
+- `import_share_commit_redirects_to_wizard_with_draft_profile`
+
+### 70.10 Cross-references
+
+- §30.7 — `calibration_state` block is the canonical list of what gets stripped at export
+- §37 — wizard's "use existing template" mode is the import flow's landing destination
+- §38 — sequence file format is the basis for sequence sharing
+- §43 — backup/restore (same-user disaster recovery — keep distinct from §70's peer sharing)
+- §55 — v0.1.0+ OpenAstro Hub roadmap entry
+- §61 + §69 — search + help registries surface the share/import affordances
+- §67 — security model (no auth in v0.0.1; share files are user-mediated, no server-to-server trust assumed)
 
 ---
