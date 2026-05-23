@@ -369,13 +369,13 @@ Sleep on it. Continue tomorrow.
 - `.coderabbit.yaml` minimal config (excludes generated code + temp files only; detailed-review focus on settings files)
 - **No `develop` branch** — sub-PRs land on `port/ara` directly; Phase 15 final PR `port/ara → master`
 
-**Still to bake into `PORT_PLAYBOOK.md`:**
-- §0 rule 9 — tag every phase boundary + open PR (replace "never stop" with "wait for merge")
-- §3 phase plan — add sub-PR rows for Phase 0.5 (16 sub-PRs) and Phase 12 (8 sub-PRs)
-- §19.1 git safety — allow `port/ara/phase-N/<letter>` sub-branches; main `port/ara` becomes integration-only
-- §22 final pass — final PR `port/ara → master` (already specced; just confirm)
+**Baked into `PORT_PLAYBOOK.md` (2026-05-23):**
+- ✅ §0 rule 9 — "Tag every phase boundary; open the PR; wait for merge before the next phase." References this doc for the full rhythm + CodeRabbit loop. AI never merges; auto-continues to next sub-PR after user merge.
+- ✅ §3 phase plan — Phase 0.5 sub-PR rhythm references the 16-sub-PR mapping (0.5a–0.5p); Phase 12 references the 8-sub-PR mapping (12a–12h); cross-cutting sub-PR rhythm paragraph added after the phase list.
+- ✅ §19.1 git safety — branch allowlist now permits `port/ara` (integration) + `port/ara/phase-N[/<letter>]` (sub-PR feature branches). "AI never merges, ever" baked as permanent rule. Tag scheme extended to `phase-N-<letter>-complete` for sub-PRs.
+- ✅ §22 final pass — final PR confirmed `port/ara → master` (no `develop` branch); release notes step updated to use `CHANGELOG.md` per §33.7 + Keep-a-Changelog format + fresh `[Unreleased]` placeholder; mobile-deferred-to-v0.1.0 noted in CHANGELOG sections.
 
-The next bake pass into `PORT_PLAYBOOK.md` happens when the AI is ready to start Phase 0.5 execution (currently still in design phase per `GAPS-ARA.md`).
+The design phase is now fully complete. Phase 0.5 execution can begin per the rhythm above.
 
 ---
 

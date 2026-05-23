@@ -192,7 +192,7 @@ openastro-ara/                              (repo root, branch: port/ara)
 6. **Commit cadence.** One commit per logical unit (one project converted, one endpoint implemented, one view ported). Commit messages: `port(<area>): <what>`. Never amend; always new commits. Never `--no-verify`.
 7. **No upstream plugin compatibility.** ARA is a hard fork. The plugin SDK is **deferred to v0.1.0** — Phase 0.5 deletes the plugin loader and plugin browser UI entirely. Do not preserve any compatibility with NINA plugins.
 8. **Full-auto operation.** You are running with auto-approve on. Hard git safety rails (§19) apply unconditionally — no force pushes, no `--no-verify`, no destructive ops outside the explicit deletion lists.
-9. **Tag every phase boundary, never stop.** At the end of each phase, after the gate is green, run `git tag phase-N-complete && git push --tags`, update `design/PORT_PROGRESS.md`, and immediately begin the next phase. The tag IS the rollback point if something goes wrong.
+9. **Tag every phase boundary; open the PR; wait for merge before the next phase.** Per `design/COMMIT-PR-RULES.md`, the port ships as a sequence of phase PRs (plus sub-PRs within Phase 0.5 and Phase 12) targeting the `port/ara` integration branch. At the end of each phase or sub-phase, after the §15 gate is green: tag with `git tag phase-N[-letter]-complete && git push --tags`, update `design/PORT_PROGRESS.md`, push the sub-branch, open the PR, run the CodeRabbit poll-and-fix loop (see COMMIT-PR-RULES.md), then **wait for the user to merge** before pulling the updated `port/ara` and starting the next phase or sub-phase. AI never merges (permanent rule, see §19.1). Auto-continuation across sub-PRs within a phase happens automatically after merge; between phases the same auto-continuation applies unless the user has paused.
 10. **Quota interruption is normal.** When the model session hits its weekly limit and resumes, the first action is to read `design/PORT_PROGRESS.md` to find out where to continue. See §20.
 
 ---
@@ -290,8 +290,14 @@ Create four tracking files in the `design/` directory and commit them empty (`de
 ```
 Phase 0.5 — Fork hygiene + project demolition
             §4, §17, §18 (decisions) — rename, license headers, delete WPF/plugins/vendor SDKs/WiX/WebView2/MGEN/COM
+            **Split into 16 sub-PRs (0.5a–0.5p) per `design/COMMIT-PR-RULES.md`** — DELETE before RENAME pattern, each sub-PR
+            stays under CodeRabbit's 200-file free-tier limit. See COMMIT-PR-RULES.md for the full mapping. Order:
+            0.5a (delete WPF UI) → 0.5b (delete MGEN/nikoncswrapper/WiX/Plugin) → 0.5c (delete vendor SDKs, may sub-split) →
+            0.5d (delete ASCOM COM) → 0.5e (delete WebView2 refs) → 0.5f (strip Stefan branding + license headers) →
+            0.5g–0.5n (project renames: Core → Astrometry → Profile → Image → Equipment → Sequencer → PlateSolving → Test) →
+            0.5o (rename solution + global identifiers) → 0.5p (.NET 10 bump; may absorb Phase 1).
 Phase 1   — Bump non-UI projects to .NET 10
-            §5
+            §5 (may be absorbed into 0.5p per COMMIT-PR-RULES.md)
 Phase 2   — Equipment layer to Alpaca-only
             §6, §52 (Alpaca-only philosophy)
 Phase 3   — Repoint PHD2 client at openastro-phd2
@@ -324,10 +330,12 @@ Phase 13  — Image preview pipeline end-to-end (server JPEG gen + client displa
 Phase 14  — Tests + GitHub Actions CI matrix
             §14, §14.3
 Phase 15  — TODO sweep + RPi smoke test + release v0.0.1-ara.1
-            §22, DEPLOY.md + README written, .deb published, .dmg/.apk/.aab/.exe/.AppImage on GitHub Releases
+            §22, DEPLOY.md + README written, .deb published, .dmg/.exe/.AppImage on GitHub Releases (desktop only per §18.G; mobile deferred to v0.1.0)
 ```
 
-Do **not** start Phase N+1 until Phase N passes the gate in §15.
+**Sub-PR rhythm (Phase 0.5 + Phase 12):** Each sub-PR is opened as a separate GitHub PR targeting `port/ara`. AI runs `scripts/pre-pr-check.sh` (§14.4) → opens PR with screenshots if user-visible UI changed → CodeRabbit poll-and-fix loop runs (60 s polling per COMMIT-PR-RULES.md) → user merges → AI pulls updated `port/ara` and starts the next sub-PR automatically. Phase 15 final PR goes `port/ara → master`.
+
+Do **not** start Phase N+1 until Phase N (and all its sub-PRs) passes the §15 gate AND has been merged into `port/ara` by the user.
 
 **Cross-cutting work:** distribution path (§34 .deb on apt.openastro.net) is set up during Phase 14 CI. Documentation (DEPLOY.md, NOTICE.md, README, MOUNT_TIPS.md) is written incrementally during the relevant phases — the AI updates docs as each feature lands, not at the end. Migration guide (§56) is written during Phase 15.
 
@@ -1059,13 +1067,14 @@ ARA targets deep-sky objects and comets — the long-exposure (30 s – 900 s) c
 
 ### 19.1 Git safety
 
-- Branch locked to **`port/ara`**. No commits/pushes elsewhere.
+- **Branch allowlist:** AI may commit/push to `port/ara` (integration branch, where all phase PRs land) and to per-sub-PR feature branches matching the pattern `port/ara/phase-N[/<letter>]` (e.g., `port/ara/phase-0.5/a`, `port/ara/phase-12/h`). All other branches are off-limits without explicit user instruction. The main `port/ara` branch is integration-only — direct commits to it happen only after the user merges a sub-PR (AI pulls the merge commit; never authors directly).
+- **AI never merges, ever.** PR merges are a user action, no exceptions. AI opens PRs, drives the CodeRabbit poll-and-fix loop per COMMIT-PR-RULES.md, posts "Ready for human review @<user>" at quiescence, and waits.
 - No `git push --force` or `--force-with-lease`. Plain `git push` only.
 - No `--no-verify` on commits.
 - No `git reset --hard` without first creating `backup-<timestamp>` tag.
 - No deleting branches, remotes, or stashes on the remote.
 - No history rewriting (`filter-branch`, `filter-repo`, interactive rebase).
-- Tags: `phase-N-complete` at boundaries, `backup-<timestamp>` before destructive ops. Push via `git push --tags`.
+- Tags: `phase-N-complete` (or `phase-N-<letter>-complete` for sub-PRs) at boundaries, `backup-<timestamp>` before destructive ops. Push via `git push --tags`.
 
 ### 19.2 Filesystem safety
 
@@ -1140,7 +1149,7 @@ When porting NINA logic into ASP.NET Core endpoints, replace `Loc.Instance[...]`
 ## 22. Final pass (Phase 15)
 
 1. Sweep `design/PORT_TODO.md`: every `// TODO(port)` and `// PORT_BLOCKED` resolved or explicitly accepted in `design/PORT_DECISIONS.md`.
-2. Run the gate one more time including `-c Release` and `flutter build` for every platform.
+2. Run the gate one more time including `-c Release` and `flutter build` for every desktop platform (macOS / Windows / Linux per §18.G).
 3. Smoke test end-to-end:
    - Bring up `OpenAstroAra.Server` on a Linux ARM64 host (Pi or Docker).
    - Launch the Mac client. Discover via mDNS. Connect (no token; see §67).
@@ -1148,15 +1157,17 @@ When porting NINA logic into ASP.NET Core endpoints, replace `Loc.Instance[...]`
    - Run a 2-target sequence with simulator camera + simulator mount; openastro-phd2 connects and dithers.
    - Disconnect the client mid-sequence; wait 5 minutes; reconnect; verify session continued and frames were captured.
    - Open every section of the app. Note regressions.
-4. Update `RELEASE_NOTES.md` with `## 0.0.1-ara.1 — first release` section:
-   - Headless server + cross-platform client architecture
-   - Alpaca-only equipment
+4. Update `CHANGELOG.md` (per §33.7) — rename `## [Unreleased]` → `## [0.0.1-ara.1] — <date>` with sections:
+   - Headless server + cross-platform desktop client architecture
+   - Alpaca-only equipment (per §52, §68)
    - Plugin support deferred to v0.1.0
+   - Mobile (iOS / Android) deferred to v0.1.0 per §18.G + §41
    - Behavioral parity goals vs. upstream NINA where applicable
    - Lineage attribution
    - Known issues, install instructions
+   - Create fresh `## [Unreleased]` placeholder for v0.0.2 work
 5. Bump `CommonAssemblyInfo.cs` to `0.0.1.0`; informational `0.0.1-ara.1`. Bump `pubspec.yaml` to `0.0.1+1`.
-6. Open PR from `port/ara` to `master` (or fresh `develop`) with `design/PORT_DECISIONS.md` contents as description. **Do not merge** — user reviews.
+6. **Open final PR from `port/ara` to `master`** with `design/PORT_DECISIONS.md` contents as description. Per COMMIT-PR-RULES.md decision (2026-05-23): no `develop` branch; final PR goes directly `port/ara → master`. This PR is a fast-forward over the already-reviewed per-phase sub-PRs that landed on `port/ara` throughout the port — CodeRabbit's review burden is minimal because each constituent commit was already reviewed at its sub-PR. **Do not merge** — user reviews + merges.
 
 ---
 
