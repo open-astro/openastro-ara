@@ -416,6 +416,106 @@ Before tagging `phase-0.5-complete`:
 - Previously-passing tests in `OpenAstroAra.Test` still pass (tests that depended on deleted WPF code are deleted, not skipped).
 - `bin/Debug/` contains no vendor SDK DLLs, `nikoncswrapper.dll`, MGEN binaries, or WPF assemblies.
 
+### 4.6 `.gitignore` rewrite (Phase 0.5o sub-PR scope)
+
+NINA's `.gitignore` was tailored to a Visual Studio + WiX + ClickOnce + Windows-only workflow with no Flutter. ARA's `.gitignore` adds Flutter cache paths + ARA-specific outputs + tool caches and drops the Windows-specific patterns no longer relevant.
+
+Phase 0.5o sub-PR (rename solution + global identifiers) is the natural home — it already touches solution-level files. The complete replacement contents:
+
+```gitignore
+# === Build outputs ===
+**/bin/
+**/obj/
+**/publish/
+**/AppPackages/
+**/*.dll.config
+**/*.pdb
+**/*.user
+**/*.suo
+**/.vs/
+**/*.cache
+
+# === .NET tool / SDK caches ===
+.dotnet/
+.nuget/
+**/global.json.lock
+**/project.lock.json
+
+# === Flutter / Dart ===
+client/openastroara_client/.dart_tool/
+client/openastroara_client/build/
+client/openastroara_client/.flutter-plugins
+client/openastroara_client/.flutter-plugins-dependencies
+client/openastroara_client/.packages
+client/openastroara_client/pubspec.lock  # NOT ignored — keep for reproducibility (un-comment to ignore)
+client/openastroara_client/ios/Pods/
+client/openastroara_client/android/.gradle/
+client/openastroara_client/android/local.properties
+client/openastroara_client/linux/flutter/ephemeral/
+client/openastroara_client/macos/Flutter/ephemeral/
+client/openastroara_client/windows/flutter/ephemeral/
+client/openastroara_client/web/  # not built in v0.0.1 per §18.G
+
+# === ARA-specific runtime + dev paths ===
+/publish/
+/artifacts/
+/coverage/
+OpenAstroAra.Server/openapi.yaml.bak
+OpenAstroAra.Test/fixtures/alpaca-simulators/      # auto-downloaded per §14.5.1
+OpenAstroAra.Test/TestResults/
+
+# === Editor / IDE ===
+.vscode/*
+!.vscode/settings.json       # commit project-level settings
+!.vscode/extensions.json     # commit recommended extensions
+!.vscode/launch.json         # commit shared launch configs
+.idea/                       # JetBrains Rider — wholesale ignored
+*.iml
+*.swp
+*.swo
+*~
+
+# === macOS / Linux / Windows OS files ===
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# === Secrets (per §19.4 safety) ===
+*.pfx
+*.key
+*.pem
+*.env
+appsettings.Secrets.json
+secrets.dart
+
+# === Logs / runtime state (per §29.9) ===
+*.log
+*.log.*.gz
+*.tmp
+*.bak
+
+# === Local dev databases ===
+*.db-journal
+*.db-wal
+*.db-shm
+
+# === Removed-during-port artifacts (Phase 0.5 cleanup) ===
+# These directories no longer exist but ignore patterns
+# remain to catch any stray reintroduction:
+WiX/
+**/MGEN/
+**/nikoncswrapper/
+**/Setup/
+```
+
+**Notes for Phase 0.5o sub-PR:**
+
+- Replace NINA's existing `.gitignore` wholesale (don't append)
+- Run `git status` after to verify no previously-tracked files become untracked (an existing tracked file matching a new pattern keeps tracking; the pattern only affects untracked-future-additions)
+- If any tracked file should be removed AND ignored, do a separate explicit `git rm --cached <path>` step (don't conflate "stop tracking" with "ignore future")
+- `OpenAstroAra.Test/fixtures/alpaca-simulators/` is gitignored per §14.5.1 — the simulators are CI-downloaded at job start, not committed
+- `pubspec.lock` is intentionally NOT ignored — committed for reproducible Flutter builds (matches Dart's recommendation for apps; libraries differ but ARA is an app)
+
 ---
 
 ## 5. Phase 1 — Bump non-UI projects to .NET 10
@@ -886,13 +986,107 @@ echo "✓ Pre-PR gate green"
 
 ARA does NOT test against real hardware in CI. Three simulator sources:
 
-**Alpaca simulators (ASCOM Platform)** — Camera, Mount, Focuser, FilterWheel, Rotator, Dome, Switch, ObservingConditions, SafetyMonitor. Bundled into `OpenAstroAra.Test/fixtures/alpaca-simulators/` as portable executables (Linux x64 + ARM64 builds, ~50 MB combined). Test harness launches them as background processes on random ports + tears down post-test. Source: [ASCOMInitiative/ASCOMPlatform](https://github.com/ASCOMInitiative/ASCOMPlatform) simulators directory.
+**Alpaca simulators** — Camera, Mount, Focuser, FilterWheel, Rotator, Dome, Switch, ObservingConditions, SafetyMonitor. Source: [ASCOMInitiative/ASCOM.Alpaca.Simulators](https://github.com/ASCOMInitiative/ASCOM.Alpaca.Simulators) (separate repo from ASCOMPlatform — these are the Alpaca-native simulators specifically). Pre-built release artifacts downloaded from GitHub Releases; see §14.5.1 for pinning + upgrade policy.
 
 **PHD2 simulator** — PHD2's built-in `Simulator` camera + `Simulator` mount drivers. openastro-phd2 ships with the same. Test harness launches headless openastro-phd2 (`xvfb-run -a openastro-phd2 --headless --headless-auto-connect`) per §63.2, sets the profile to use simulators, connects via JSON-RPC.
 
 **Custom in-process fakes** — for fast unit tests where a real simulator is overkill (e.g., testing the §28 recovery state machine without actually polling Alpaca), tests use NSubstitute mocks of the Alpaca interfaces. Integration tests use the real simulators above.
 
 Real-hardware testing is maintainer-run at release boundaries (Phase 15 manual smoke on a real Pi with at least one real ZWO camera + one real mount). Not in CI.
+
+### 14.5.1 Alpaca simulator version pinning + auto-PR upgrade workflow
+
+The Alpaca simulators are a load-bearing test dependency — every integration + E2E test runs against them. Pin behavior is policy, not implementation detail.
+
+**Current pin: v0.4.0** (released by ASCOMInitiative, the most recent at the time of this section's authoring). Pinned via `OpenAstroAra.Test/fixtures/SIMULATORS_VERSION.md`:
+
+```markdown
+# Alpaca simulators — version pin
+
+Source: https://github.com/ASCOMInitiative/ASCOM.Alpaca.Simulators
+Pinned release: v0.4.0
+Pinned SHA: <full commit SHA at the release tag>
+Downloaded artifacts:
+  - ascom.alpaca.simulators-linux-x64.zip   sha256: <...>
+  - ascom.alpaca.simulators-linux-arm64.zip sha256: <...>
+  - ascom.alpaca.simulators-macos-x64.zip   sha256: <...> (dev only)
+  - ascom.alpaca.simulators-macos-arm64.zip sha256: <...> (dev only)
+  - ascom.alpaca.simulators-win-x64.zip     sha256: <...> (dev only)
+Last verified: 2026-05-23
+Verified by: <committer name + commit SHA>
+```
+
+Binaries themselves are gitignored at `OpenAstroAra.Test/fixtures/alpaca-simulators/`; CI + pre-PR gate downloads them on demand using the pinned SHA-256 checksums as the integrity gate.
+
+**Pre-PR gate behavior (§14.4):** the script checks for `fixtures/alpaca-simulators/` existence + checksum match; if missing or mismatched, auto-downloads from the pinned release URL + verifies SHA-256. Cached locally between runs.
+
+**CI workflow:** same auto-download step at the start of every CI job. Caches the download via GitHub Actions cache keyed by the pinned SHA so subsequent runs reuse the cached binaries.
+
+**Weekly upgrade-check workflow** (`.github/workflows/check-alpaca-simulators.yml`):
+
+```yaml
+name: Check Alpaca Simulators for updates
+on:
+  schedule:
+    - cron: '0 8 * * 1'  # Every Monday 08:00 UTC
+  workflow_dispatch:
+
+jobs:
+  check-upstream:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Query latest release
+        id: latest
+        run: |
+          latest=$(gh api repos/ASCOMInitiative/ASCOM.Alpaca.Simulators/releases/latest --jq .tag_name)
+          echo "tag=$latest" >> $GITHUB_OUTPUT
+      - name: Read pinned version
+        id: pinned
+        run: |
+          pinned=$(grep 'Pinned release:' OpenAstroAra.Test/fixtures/SIMULATORS_VERSION.md | awk '{print $3}')
+          echo "tag=$pinned" >> $GITHUB_OUTPUT
+      - name: Open upgrade PR if new release
+        if: steps.latest.outputs.tag != steps.pinned.outputs.tag
+        run: |
+          # Branch: chore/bump-alpaca-simulators-<new-tag>
+          # Downloads new artifacts, updates SIMULATORS_VERSION.md, runs smoke tests,
+          # opens PR with regression report
+          ./scripts/bump-alpaca-simulators.sh "${{ steps.latest.outputs.tag }}"
+```
+
+The script `scripts/bump-alpaca-simulators.sh`:
+1. Downloads the new release artifacts
+2. Updates `SIMULATORS_VERSION.md` with new tag + SHA + checksums + ISO date
+3. Runs the §14.1 server integration tests against the new simulators
+4. Generates a regression report (which existing test names pass/fail; new event shapes detected)
+5. Opens a PR with body: "Bump Alpaca simulators v0.4.0 → vX.Y.Z. Regression test results: N passed, N failed. Upstream changelog: <link>"
+6. PR follows the standard CodeRabbit poll-and-fix loop (COMMIT-PR-RULES.md); user reviews + merges if green
+
+If the upstream API has breaking changes, the PR's failing tests document exactly what changed — informs whether ARA needs adaptation code or whether the change is benign.
+
+**Manual override:** `workflow_dispatch` lets the maintainer trigger the upgrade-check on demand (e.g., to grab a security fix without waiting for Monday).
+
+**License clarity:** ASCOM.Alpaca.Simulators is MIT-licensed; we are NOT redistributing the binaries (they're CI-downloaded artifacts, not committed). Repository stays clean of upstream binaries.
+
+**§14.1 test cases (added):**
+
+- `simulator_version_pin_file_parses_and_matches_release` — CI step verifies SIMULATORS_VERSION.md is well-formed + the pinned tag exists upstream
+- `simulator_checksums_match_downloaded_artifacts` — pre-PR gate + CI checksum verification
+- `auto_pr_workflow_dry_run` — `workflow_dispatch` trigger with `--dry-run` exits 0 + emits a "would open PR for vX.Y.Z" log line
+
+**§61 search registry entries:**
+
+- `testing.simulator_pin` — keywords: `simulator version, alpaca simulator pin, fixture upgrade, simulator update workflow`
+- `testing.bump_simulators` — keywords: `bump simulators, upgrade alpaca simulators, simulator pr workflow`
+
+**Cross-references:**
+
+- §14.1 — server integration tests use these simulators
+- §14.3 — CI matrix downloads the pinned version at job start
+- §14.4 — pre-PR gate auto-downloads if missing
+- §14.5 — parent section (this is a subsection)
+- COMMIT-PR-RULES.md — bump PRs follow the standard CodeRabbit poll-and-fix loop
 
 ### 14.6 Manual UI verification + screenshots
 
@@ -3286,6 +3480,30 @@ Response: {
 - All astronomy computations use **UTC internally**; client displays in user's local TZ.
 - Time-sync state is cached per-session; doesn't re-prompt unless the Pi reboots or > 12 hours pass.
 
+### 31.4.1 Background NTP daemon — ARA does nothing
+
+ARA Core does NOT install, configure, or rely on a local NTP daemon (chrony, ntpd, systemd-timesyncd). The §31 waterfall is sufficient on its own: WILMA pushes time at session start; USB GPS feeds during the session; user can manually re-prime if needed.
+
+systemd-timesyncd ships enabled by default on Trixie and will keep the clock within a second of pool.ntp.org *when the Pi has internet* — ARA neither depends on it nor disables it. If the user has installed chrony or another daemon for their own reasons (observatory automation, multi-Pi sync, gpsd shared-memory ref-clock), ARA's waterfall happily coexists; WILMA push just becomes one more opportunistic time source on top.
+
+**What the user must know** (DEPLOY.md addition):
+
+> ARA's server gets its clock from (in priority order):
+> 1. USB GPS dongle plugged into the Pi (via NMEA `$GPRMC` parsing — always preferred when present)
+> 2. WILMA pushing time on every connect (handles ~95% of typical sessions)
+> 3. Whatever Debian's default NTP setup (systemd-timesyncd) maintains in the background when the Pi has internet
+>
+> For long unattended sessions (mosaic projects spanning days; remote observatory), a USB GPS dongle costs ~$20 and removes all clock-drift concerns. Without one, expect FITS DATE-OBS timestamps to drift by ~1 s/hour if WILMA disconnects mid-session and the Pi has no internet.
+
+**Why not bundle chrony or override timesyncd:**
+- 95% of users image at home with internet → systemd-timesyncd default is fine
+- Remote-observatory users typically already have GPS or PTP setups they prefer
+- Bundling chrony would replace systemd-timesyncd (user trust + diagnostic familiarity cost)
+- gpsd shared-memory ref-clock setup is a power-user workflow — wiki + DEPLOY.md document the path without ARA forcing the setup
+- ARA stays out of the OS-level time-sync stack; respects what the user (or distribution) chose
+
+**v0.1.0 reconsideration:** if remote-observatory users (the new v0.1.0 §67.4 remote-access mode) report systematic clock-drift issues, revisit. Possible v0.1.0 path: ARA optionally installs + configures chrony with gpsd ref-clock when the user opts into "observatory mode" during the wizard.
+
 ### 31.5 DST + timezone policy (explicit)
 
 The Pi side is timezone-free; the client side handles DST automatically. Detailed policy:
@@ -4575,6 +4793,82 @@ Inherits NINA's syntax:
 - `{{integration_minutes}}`, `{{frames_per_filter}}`
 - `{{filter_set}}` (a named filter combination from the profile, e.g., "LRGB" or "SHO")
 - Substituted server-side at `POST /api/v1/sequences/templates/{name}/instantiate`
+
+### 38.6.1 Filename template — sanitization + empty-token rules
+
+ARA applies consistent rules to every `$$TOKEN$$` substitution to keep filenames safe across Linux/macOS/Windows filesystems + downstream tools (PixInsight, Siril) + cross-share Windows mounts.
+
+**Illegal character handling.** The following characters are illegal on at least one common target filesystem and are unconditionally replaced with `_`:
+
+```
+/  \  :  *  ?  "  <  >  |
+```
+
+Plus: leading/trailing whitespace stripped; consecutive `_` collapsed to one; ASCII control chars (0x00–0x1F) replaced; non-printable Unicode replaced. Result is safe for ext4 (server), APFS/HFS (Mac WILMA), NTFS (Windows shares), and ZFS observatory NASes.
+
+Examples:
+- Target `"NGC 7000"` → `NGC_7000` (space kept; some users prefer underscores everywhere — see §38.6.2 user preference below)
+- Target `"M27 / Dumbbell"` → `M27___Dumbbell` (slash replaced)
+- Target `"C:Nebula"` → `C_Nebula` (colon replaced — would break Windows share path)
+- Filter `"Hα"` → `H_` (non-ASCII alpha replaced; user can rename filter in profile to `Ha` for cleaner naming)
+
+**Empty / null token policy.** Tokens that resolve to no value get an explicit placeholder rather than disappearing — keeps the filename structure consistent across captures and avoids accidental collisions:
+
+| Token | Empty/null placeholder |
+|---|---|
+| `$$SENSORTEMP$$` (camera without cooler) | `noTemp` |
+| `$$FILTER$$` (OSC camera or no filter wheel) | `noFilter` |
+| `$$GAIN$$` (camera doesn't report) | `noGain` |
+| `$$OFFSET$$` (camera doesn't report) | `noOffset` |
+| `$$BINNING$$` (driver doesn't report) | `1x1` (sensible default; matches Alpaca spec) |
+| `$$TARGETNAME$$` (no target set, e.g., Live View → Save Current) | `unnamed` |
+| `$$IMAGETYPE$$` (always set by sequencer; capture-without-context = `LIGHT`) | always present |
+| `$$EXPOSURETIME$$` | always present (zero exposure = bias; rendered `0s`) |
+| `$$DATE$$` / `$$DATETIME$$` / `$$DATEMINUS12$$` | always present (UTC per §31.5) |
+| `$$FRAMENR$$` | always present (sequencer-managed) |
+
+Placeholder strings (`noTemp`, `noFilter`, etc.) are not localized; English ASCII for forever-stable filenames.
+
+**Path length cap.** Total path (directory + filename + extension) capped at **200 characters**. Windows file shares historically capped at 260; staying under 200 leaves margin for share-mount prefixes (`\\server\share\path` adds ~30 chars typical). When approaching the cap, ARA truncates components in this priority order (preserving file uniqueness):
+
+1. Frame number suffix preserved at all costs (uniqueness)
+2. Date/time stamps preserved (chronological ordering)
+3. Filter / exposure / temp truncated last (acquisition context)
+4. `$$TARGETNAME$$` truncated FIRST when truncation needed (user-supplied; usually has fluff)
+
+Example: a 250-char path with a verbose target name collapses to ~190 chars by truncating `$$TARGETNAME$$` from `Andromeda_Galaxy_M31_NGC224_Bortle4_Backyard_2026` to `Andromeda_Galaxy_M31_NGC224_Bortle4_...`.
+
+Truncation emits a one-time WS event `frame.filename_truncated` (severity: warning) per session so the user knows their template is borderline.
+
+**Validation at sequence start.** The sequencer parses the active filename template before the first capture and validates:
+- All referenced tokens exist in the canonical list (unknown tokens → 422 with `code: "unknown_template_token"`, body: `{"unknown_tokens": ["$$BADTOKEN$$"]}`)
+- Required tokens for uniqueness present: at least one of `$$FRAMENR$$` / `$$DATETIME$$` MUST be in the template (otherwise sequential frames overwrite each other; 422 with `code: "template_lacks_uniqueness_token"`)
+- Estimated worst-case length with typical token values under 200 chars (warning, not error)
+
+Failed validation blocks sequence start; user sees the error in the Sequencer panel with a [Fix template] link to the per-profile setting.
+
+**Case preservation.** Token values pass through with original case (no auto-lowercasing or uppercasing). Filter names like `Ha`, `OIII`, `SII` retain their case as the user defined them in the profile.
+
+### 38.6.2 User preference: spaces in filenames
+
+By default, ARA preserves spaces in `$$TARGETNAME$$` (sanitization only replaces illegal chars). Users who want strictly-no-spaces (Linux command-line workflows, scripts that don't quote) can opt into a profile setting:
+
+- `filenames.replace_spaces_with_underscores` — default `false`
+- When `true`: spaces in `$$TARGETNAME$$` substitutions become `_` at the same step as illegal-char replacement
+
+§61 search registry entry: `filenames.replace_spaces` — keywords: `underscore filenames, no spaces, replace spaces in filenames, snake case files`.
+
+### 38.6.3 §14.1 integration test cases (added)
+
+- `template_substitution_replaces_illegal_chars_with_underscore`
+- `template_substitution_collapses_consecutive_underscores`
+- `template_empty_sensortemp_emits_noTemp_placeholder`
+- `template_empty_filter_emits_noFilter_placeholder`
+- `template_path_over_200_chars_truncates_targetname_first`
+- `template_truncation_emits_filename_truncated_ws_event_once_per_session`
+- `template_with_unknown_token_returns_422_at_sequence_start`
+- `template_lacking_framenr_and_datetime_returns_422`
+- `template_with_targetname_containing_unicode_normalizes_to_ascii_safe`
 
 ### 38.7 Bundled starter templates (v0.0.1)
 
@@ -7745,6 +8039,230 @@ Lightweight HTTP probes for external monitoring (uptime-kuma, Prometheus blackbo
    - Both are unauthenticated per §67 trusted-LAN posture
    - Example Prometheus blackbox config snippet (one-liner)
 
+### 60.7.1 CORS policy (allow any origin in v0.0.1)
+
+`OpenAstroAra.Server` applies the most permissive CORS policy in v0.0.1:
+
+```csharp
+builder.Services.AddCors(o => o.AddDefaultPolicy(p => p
+    .AllowAnyOrigin()
+    .AllowAnyMethod()
+    .AllowAnyHeader()));
+// ...
+app.UseCors();
+```
+
+This matches §67's trusted-LAN posture (no auth, all endpoints open). Cross-origin requests from any browser tool work freely:
+- WILMA desktop client (in-process Flutter, same-origin — works trivially)
+- Flutter web debug from `localhost:<dev-port>` during development
+- Swagger UI rendered by Scalar (§49) — works from any origin including Mac dev machines hitting a Pi
+- External monitoring dashboards (Grafana, Uptime Kuma) calling `/healthz` + `/readyz` (§60.8) from their own UI origins
+- curl / Postman / direct REST clients (no preflight needed; no CORS impact)
+
+**Why not tighter:**
+
+CORS protects against browser-mediated CSRF when a malicious site can trick the browser into making authenticated requests to a target with the user's credentials. v0.0.1 has no auth (§67) — there are no credentials to steal and no CSRF surface to protect. Tightening CORS in this environment just makes legitimate cross-origin tooling harder without adding any real security.
+
+**v0.1.0 remote-access mode (§67.4):**
+
+When auth + TLS enter via the v0.1.0 remote-access interface, CORS tightens on that interface only:
+- Remote interface: `AllowedOrigins` list configured by user (typically the URLs of dashboards / management consoles they trust)
+- LAN interface: keeps `AllowAnyOrigin` (trusted LAN posture unchanged)
+
+The split mirrors the auth split — same physical server binary, different policies per network interface.
+
+**Implementation note (AOT-friendly):**
+
+ASP.NET Core's `AddCors` middleware is fully AOT-compatible per §71. No reflection involved.
+
+### 60.8.1 API versioning policy (v1 forever-additive; v2 only for breaking changes)
+
+`/api/v1/` is the v0.0.1 API surface and stays additive-only forever. Breaking changes ship under `/api/v2/`; both versions coexist in the same binary for at least one release cycle (~1 year) after v2 GA, with explicit deprecation headers + CHANGELOG-documented sunset dates ≥ 6 months out.
+
+**Additive changes (stay in v1):**
+
+- New endpoints (`POST /api/v1/sequences/new-feature`)
+- New optional fields in response bodies (clients that don't know about the field ignore it)
+- New optional query parameters with safe defaults
+- New optional request body fields with server-side defaults
+- New WebSocket event types (clients that don't recognize them ignore per §60.9)
+- New severity levels in existing fields where the field is documented as extensible
+- New enum values in response fields documented as extensible
+
+**Breaking changes (require v2):**
+
+- Removing an endpoint entirely
+- Removing a field from a response body
+- Changing a field's type (e.g., `int` → `string`, scalar → array)
+- Changing a field's semantics (e.g., a "duration" field switches from seconds → milliseconds)
+- Making an optional field required in requests
+- Renaming an endpoint (also `v1/old` 308-redirects to `v1/old-renamed` only if the change is truly cosmetic — otherwise it's v2)
+- Changing authentication requirements on an endpoint (v0.1.0 only; v0.0.1 has no auth per §67)
+- Restructuring nested objects (e.g., flattening or deepening)
+- Changing pagination behavior (cursor format, page-size meaning)
+- Changing error code semantics for existing endpoints
+
+**Coexistence model:**
+
+When v2 ships, the server's route table maps both:
+
+```
+GET /api/v1/profiles/{id}  → ProfilesV1Endpoint.Get(id)     // legacy shape preserved
+GET /api/v2/profiles/{id}  → ProfilesV2Endpoint.Get(id)     // new shape
+```
+
+Both endpoints back onto the same underlying service layer; the version difference is purely the DTO + serialization boundary. Adapters translate the underlying domain model to the appropriate version shape — no duplicated business logic.
+
+OpenAPI spec (§71.3) generates `openapi.yaml` covering both — clients can choose which version to bind against (Dart client generation can produce v1 or v2 stubs).
+
+**Deprecation lifecycle:**
+
+When a v1 endpoint is targeted for removal:
+
+1. **GA + 0 months:** v2 ships; both endpoints respond identically (modulo the breaking change). CHANGELOG.md announces the deprecation; documents the v2 migration path.
+2. **GA + 1 month:** v1 endpoint responses include HTTP headers:
+   ```
+   Deprecation: true
+   Sunset: 2027-05-23T00:00:00Z
+   Link: <https://openastro.net/docs/migrating-from-v1>; rel="deprecation"
+   ```
+3. **GA + 3 months:** server emits `api.deprecation_used` WS event (severity: info) every time a deprecated v1 endpoint is called, including endpoint path + client User-Agent. Logged for the maintainer to know whether anyone still uses it.
+4. **GA + 6 months minimum:** v1 endpoint removal candidate. Final go/no-go based on telemetry from step 3 — if active users remain, slip the sunset date + announce.
+5. **Removal:** v1 endpoint returns `410 Gone` with `application/problem+json` body referencing the v2 endpoint. Removed from server route table at the next major server release.
+
+**API minimum-supported-version (MSV):**
+
+Client + server negotiate compatible API versions via `/api/v1/server/state`'s `api_versions` field (added in this section). Server reports:
+
+```json
+{
+  "api_versions": {
+    "supported": ["v1"],
+    "deprecated": [],
+    "removed": [],
+    "recommended": "v1"
+  }
+}
+```
+
+When v2 ships:
+
+```json
+{
+  "api_versions": {
+    "supported": ["v1", "v2"],
+    "deprecated": ["v1"],
+    "removed": [],
+    "recommended": "v2"
+  }
+}
+```
+
+WILMA picks `recommended` unless the user-installed WILMA version doesn't support it (then falls back to highest mutually-supported). Surfaces "Your WILMA is using an older API version" notification (severity: info) per §46 when on a deprecated version, with [Update WILMA] action.
+
+**Cross-references:**
+
+- §33.7 — CHANGELOG.md is the canonical announcement surface for deprecation timelines
+- §49 — Swagger UI shows both v1 + v2 specs side-by-side once v2 ships
+- §60.9 — WebSocket protocol versioning is independent (X-Ara-WS-Version header)
+- §71.3 — OpenAPI spec generated for both versions from endpoint metadata
+- §55 — v0.1.0+ roadmap entry: "First v2 API surface" added when known breaking changes accumulate
+
+### 60.9 WebSocket wire protocol
+
+§60.1–§60.8 govern the REST surface. WebSocket has its own conventions, pinned here so client + server stay consistent.
+
+**Endpoint:** `ws://<host>:5555/api/v1/ws` (no auth in v0.0.1 per §67; v0.1.0 remote-access mode adds `wss://` + token via `Authorization` header on the upgrade request).
+
+**Version negotiation:** the upgrade request includes header `X-Ara-WS-Version: 1`. Server responds:
+- `101 Switching Protocols` on success
+- `426 Upgrade Required` if the version is unsupported (with a `Sec-WebSocket-Version` body listing supported versions)
+- `400 Bad Request` if the header is malformed
+
+URL versioning (`/api/v1/ws`) and the header are belt-and-suspenders — different deprecation models. URL version changes for breaking event-shape changes; header version changes for breaking framing/heartbeat/compression conventions. Both rarely change.
+
+**Frame size:** 1 MB max. Higher than the REST 64 KB cap (§60.3) because WS events can include batched notification groups + WS-resume replay bursts. Single events stay small (typical JSON event: 200 bytes – 4 KB; only stress cases approach the cap).
+
+**Compression:** `permessage-deflate` extension enabled by default. Saves ~70% on JSON-heavy event traffic (which is most of it); negligible cost on already-compressed binary payloads (rare in WS — previews go over HTTP per §65). Clients can disable via the standard `Sec-WebSocket-Extensions: ` header omission; server falls back to uncompressed transparently.
+
+**Heartbeat:** server sends a WS ping every 30 s. Client must respond with pong within 60 s of the ping. If 2 consecutive pings go unanswered, server closes the connection with code 1011 (`server_initiated_disconnect_unresponsive_client`). Client should likewise close + trigger §32 reconnect modal if it sees no server activity (ping OR event) for 90 s.
+
+**Resume protocol:** after connect-upgrade succeeds, the client may send its FIRST message as a JSON resume request:
+
+```json
+{ "resume_token": "opaque-string-from-prior-ws_resume_token" }
+```
+
+Server responds with one of:
+- `{ "resumed": true, "missed_events": <count>, "last_event_id": "<id>" }` then immediately replays the missed events as normal events
+- `{ "resumed": false, "code": "resume_token_expired", "reason": "..." }` then continues as a fresh subscription (no replay)
+- `{ "resumed": false, "code": "resume_token_invalid" }` if token is unparseable; client should clear and reconnect fresh
+
+If the client's first message is anything OTHER than a resume request (e.g., immediately starts sending its own commands), server treats the connection as fresh (no replay). Resume is opt-in by sending the request as message #1.
+
+Resume tokens are issued by REST (`GET /api/v1/server/state` per §60.4) and have a 1-hour validity window. After that window, `resume_token_expired` and the client falls back to a fresh `/api/v1/server/state` rehydrate.
+
+**Event envelope:** every server-sent message follows:
+
+```json
+{
+  "type": "frame.complete",
+  "ts": "2026-05-23T19:14:33.123Z",
+  "id": "evt-7f3a9b",
+  "payload": { /* event-specific */ }
+}
+```
+
+`id` is a monotonically increasing opaque ID per server boot; used internally for resume bookkeeping (the server tracks last-acked-by-each-client). Clients echo no IDs; resume tokens encode the bookmark server-side.
+
+**Close codes:**
+
+| Code | Direction | Meaning |
+|---|---|---|
+| 1000 | both | Normal closure (client logout, server shutdown) |
+| 1001 | both | Going away (network change, app backgrounded) |
+| 1011 | server → client | Server-side error (unrecoverable; client should reconnect after backoff) |
+| 1012 | server → client | Service restart imminent (pairs with `server.restart_imminent` event from §34.7); client should reconnect after the configured delay |
+| 4000 | reserved | (placeholder, unused in v0.0.1) |
+| 4001 | server → client | (v0.1.0 only) Auth required / token invalid for remote-access mode (§67.4) |
+| 4002 | server → client | Resume token expired (client clears + reconnects with REST snapshot) |
+| 4003 | server → client | WS protocol version mismatch (client must downgrade or upgrade) |
+| 4004 | server → client | Single-client policy: another WILMA took over (§27) |
+
+Codes 4000-4099 reserved for ARA-specific close reasons; 4100+ available for future v0.1.0 additions (per-channel close, per-subscription close, etc.).
+
+**Backpressure** (per §60.6 + §66.4): if a client's WS send buffer exceeds 256 messages (per-client bound from §66.2), server closes the connection with code 1011 + reason `client_too_slow`. Client reconnect uses the resume protocol to catch up.
+
+**§14.1 server integration test cases (added):**
+
+- `ws_upgrade_with_version_1_accepted`
+- `ws_upgrade_with_version_2_returns_426`
+- `ws_heartbeat_pings_every_30s_under_load`
+- `ws_unresponsive_client_closes_with_1011_after_60s`
+- `ws_resume_with_valid_token_replays_missed_events`
+- `ws_resume_with_expired_token_returns_4002_close`
+- `ws_oversize_frame_above_1MB_rejects_with_1009`
+- `ws_compression_negotiation_works_with_permessage_deflate`
+
+**§14.2 widget test cases (added):**
+
+- `wilma_reconnects_after_ws_close_1012_with_configured_delay`
+- `wilma_falls_back_to_rest_snapshot_after_resume_token_expired`
+- `wilma_handles_4004_single_client_takeover_by_showing_session_transferred_modal`
+
+**§61 search registry entries:**
+
+- `monitoring.ws_protocol` — keywords: `websocket version, ws protocol, ws debugging, ws heartbeat, ws resume`
+
+**Cross-references:**
+
+- §32 — reconnect modal triggered by close codes 1001 / 1011 / 1012 / 1009
+- §34.7 — code 1012 pairs with `server.restart_imminent` event
+- §60.4 — `ws_resume_token` issued by `/api/v1/server/state`
+- §66.4 — backpressure → code 1011 reason `client_too_slow`
+- §67 — no auth in v0.0.1; 4001 reserved for v0.1.0 remote-access mode
+- §27 — code 4004 single-client takeover
+
 ---
 
 ## 57. Stop Mount + slew safety
@@ -9388,6 +9906,110 @@ Pool sizes + queue depths are not exposed as user-facing settings in v0.0.1 (fix
 The only related entry needed in v0.0.1:
 
 - `diagnostics.troubleshoot_storage_slow` — keywords: `storage slow, usb performance, fsync slow, capture pausing, backpressure, slow drive, upgrade ssd`
+
+### 66.10 Performance SLO / latency-budget table (v0.0.1 aspirational)
+
+Consolidates targets that exist scattered through the playbook into one reference. Two columns: **v0.0.1 target** (what we aim for on a Pi 4; what feels good in a session) and **hard limit** (degraded but acceptable — beyond this number, user experience suffers enough that we should investigate). All measurements are on Pi 4 with USB 3.0 SSD storage and AlpacaBridge + openastro-phd2 colocated unless noted; Pi 5 numbers are typically 1.5–3× better.
+
+In v0.0.1, these are **aspirational** — no automated gating in CI. Phase 14 may add opt-in perf tests that record measurements without failing the build; v0.1.0+ may promote specific operations to hard CI gates once we have baseline data. Community contributors and the AI use the table as the design bar: anything materially worse than the target should be investigated; anything worse than the hard limit is a regression and should be fixed before merge.
+
+**HTTP / WebSocket endpoints:**
+
+| Operation | v0.0.1 target | Hard limit | Source / cross-ref |
+|---|---|---|---|
+| `GET /healthz` response | < 10 ms | 100 ms | §60.8 |
+| `GET /readyz` response | < 100 ms | 500 ms | §60.8 |
+| `GET /api/v1/server/state` (snapshot) | < 200 ms | 1 s | §60.4 |
+| `POST /api/v1/sequences/start` accept | < 50 ms | 200 ms | §38 |
+| WebSocket event server → client (LAN, 1 KB JSON) | < 100 ms | 500 ms | §60.9 |
+| WebSocket connect + resume replay (100 events) | < 1 s | 5 s | §60.9 |
+| Idempotency dedup check (cached) | < 5 ms | 50 ms | §60.5 |
+
+**Image / capture pipeline:**
+
+| Operation | v0.0.1 target | Hard limit | Source / cross-ref |
+|---|---|---|---|
+| FITS atomic write (16 MP frame, USB 3.0 SSD) | < 200 ms | 1 s | §28.7 |
+| Frame → default-stretch preview JPEG (16 MP) | < 500 ms | 2 s | §65 |
+| Alt-stretch generation (one variant, 16 MP, Pi 4) | < 200 ms | 2 s | §65, §66.5 |
+| Alt-stretch generation (Pi 5) | < 100 ms | 1 s | §65 |
+| Diagnostics enrichment per frame (HFR + star count + roundness) | < 300 ms | 1 s | §51 |
+| Live View loop cadence (one frame) | 2–4 s | 8 s | §64 |
+| Stretch slider debounce (server round-trip) | 200 ms | 500 ms | §65 |
+
+**Equipment + integration:**
+
+| Operation | v0.0.1 target | Hard limit | Source / cross-ref |
+|---|---|---|---|
+| AlpacaBridge call (typical, LAN-local) | < 100 ms | 1 s | §68 |
+| AlpacaBridge handshake on connect | < 200 ms | 2 s | §68.1 |
+| PHD2 JSON-RPC roundtrip | < 50 ms | 500 ms | §63 |
+| PHD2 connect + initial state sync | < 2 s | 10 s | §63.2 |
+| Mount `AbortSlew()` round-trip (Stop Mount) | < 100 ms | 1 s | §57 |
+| Camera `AbortExposure()` (Live View stop) | < 100 ms | 500 ms | §64 |
+| ASTAP plate solve (1500×1000 px, typical sky) | < 3 s | 10 s | §18.I |
+| ASTAP plate solve (full 6000×4000 px, dense field) | < 10 s | 30 s | §18.I |
+
+**Polar alignment + autofocus:**
+
+| Operation | v0.0.1 target | Hard limit | Source / cross-ref |
+|---|---|---|---|
+| Polar-align loop (capture + solve + display, Pi 5) | < 500 ms | 1 s | §45 |
+| Polar-align loop (Pi 4) | < 800 ms | 1.5 s | §45 |
+| Smart Focus AF (calibrated, normal seeing) | 30–90 s | 5 min | §59 |
+| Classic AF fallback (9-step curve fit) | 3–5 min | 10 min | §59 |
+| Smart Focus calibration (per profile, one-time) | ~5 min | 10 min | §59 |
+
+**Server lifecycle:**
+
+| Operation | v0.0.1 target | Hard limit | Source / cross-ref |
+|---|---|---|---|
+| Server cold boot to `/readyz` 200 | < 5 s | 30 s | §71 (AOT helps), §60.8 |
+| EF Core migration (no pending migrations) | < 100 ms | 500 ms | §28.14 |
+| EF Core migration (typical small migration) | 1–5 s | 30 s | §28.14 |
+| Startup orphan scan (1 GB capture dir) | < 10 s | 60 s | §28.8 |
+| Server graceful shutdown (SIGTERM → exit) | < 5 s | 30 s | §28.7, §34.7 |
+| Sequence lock heartbeat interval | 30 s | n/a | §34.7 |
+| systemd watchdog interval | 30 s ping / 60 s deadline | n/a | §13 |
+
+**Memory / resource (steady-state on Pi 4 4 GB):**
+
+| Metric | v0.0.1 target | Hard limit | Source / cross-ref |
+|---|---|---|---|
+| Server idle RSS | ~50 MB | 200 MB | §66.5, §71 |
+| Server peak RSS (active capture + diagnostics + WS + backup) | ~600 MB | 1.5 GB | §66.5 |
+| .deb installed size | ~50 MB | 200 MB | §71 |
+| `/var/log/openastroara/` 30-day footprint | 200–500 MB | 3 GB | §29.9 |
+| Image processor queue depth | ≤ 5 jobs | 10 jobs (then backpressure) | §66.2 |
+
+**WILMA-side (desktop):**
+
+| Operation | v0.0.1 target | Hard limit | Source / cross-ref |
+|---|---|---|---|
+| App cold start to "Servers" menu | < 2 s | 10 s | §25 |
+| Connect to known server (mDNS cached) | < 1 s | 5 s | §30 |
+| §61 ⌘K search response (typing → results) | < 50 ms | 200 ms | §61 |
+| Settings panel paint after navigation | < 100 ms | 500 ms | §25 |
+| Image library scroll (full thumbnails, 1000 frames) | 60 fps | 30 fps | §40 |
+
+**Methodology:**
+
+- All targets assume a healthy network (LAN < 5 ms RTT), no concurrent OS-level pressure (no `apt upgrade` mid-measurement), and Pi 4 with quality USB 3.0 SSD (per §29 mandatory USB)
+- "Hard limit" exceeded → file an issue + add a regression test; treat as a bug
+- "Target" exceeded but under hard limit → investigate when convenient; no PR-blocking gate
+- Phase 14 testing strategy may add opt-in perf-recording in CI that posts measurements as PR comments without failing the build — gives contributors visibility without nag-blocking
+
+**v0.1.0 path:**
+
+- Hard CI gates on the highest-leverage targets (`/healthz`, capture accept, WS event latency, polar-align loop)
+- Per-Pi-model SLO variants (Pi 5 gets tighter targets; Orange Pi 5 / Rock Pi sensible defaults)
+- User-facing "performance health" view in §50 Stats showing rolling p50/p95/p99 against the table
+- Telemetry-driven SLO adjustment based on field measurements from opted-in users (per §18.C: local-only by default; v0.1.0 may add opt-in upload)
+
+**§61 search registry entries:**
+
+- `monitoring.performance_targets` — keywords: `performance, slo, latency budget, perf target, expected latency, how fast`
+- `monitoring.troubleshoot_slow` — keywords: `slow server, slow capture, latency, lag, performance problem, slow pi`
 
 ---
 
