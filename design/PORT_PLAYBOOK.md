@@ -1003,6 +1003,91 @@ Commit per stage: `port(client): mDNS discovery + connect`, `port(client): app s
 
 ## 13. RPi deployment (Phase 10 + Phase 15)
 
+DEPLOY.md is the user-facing version of this section (Phase 15 deliverable per §22 / §55.4). The subsections below define what DEPLOY.md must cover; everything from §13.3 onward is engineering-side detail that doesn't need to surface to end users verbatim.
+
+### 13.1 Hardware support matrix
+
+ARA Core targets the Raspberry Pi family on **64-bit Debian Trixie or newer**. The 32-bit Raspbian line is unsupported — .NET 10 publish targets `linux-arm64` only (per §13.3 build pipeline + §71 AOT), and there is no `linux-arm` (armhf) build artifact.
+
+| Pi model | Status | RAM | Notes |
+|---|---|---|---|
+| **Pi 5 (8 GB)** | ★ Ideal | 8 GB | First-class platform. USB3, PCIe 2.0 for optional NVMe HAT, faster CPU, better memory bandwidth. ASTAP solves + image processing per §66.10 SLO measure on this model. |
+| **Pi 5 (4 GB)** | ★ Recommended | 4 GB | Same I/O as the 8 GB; just less headroom for v0.1.0 expansions (live stacking, ML diagnostics). Fine for v0.0.1 DSO workloads. |
+| **Pi 4 (8 GB)** | ✓ Excellent | 8 GB | Per §66.5 memory budget table: comfortable peak RSS ~600 MB on AOT runtime; substantial idle headroom. |
+| **Pi 4 (4 GB)** | ✓ Recommended baseline | 4 GB | Reference platform for the §66.10 SLO table. All v0.0.1 features tested here. |
+| **Pi 4 (2 GB)** | ⚠ Works but tight | 2 GB | Boots and runs sessions, but the §66.5 budget leaves ~1.4 GB OS headroom — tight if user also runs AlpacaBridge + openastro-phd2 + ASTAP concurrently. Recommended only for users who already own one. |
+| **Pi 4 (1 GB)** | ✗ Unsupported | 1 GB | Below §66.5 working set; ASTAP + image processing will swap and crawl. Server refuses to start if it detects ≤ 1 GB total RAM (defense against accidental flash to wrong SKU). |
+| **Pi 3 B / B+** | ✗ Unsupported | 1 GB | No USB3 (USB2 caps SSD throughput, breaks the §28.7 atomic-write latency budget), no 64-bit-OS officially supported across the line, half the CPU per core. Server refuses to start. |
+| **Pi Zero / Zero 2 W** | ✗ Unsupported | 512 MB | Wildly under budget; ARM Cortex-A53 vs A72/A76. Server refuses to start. |
+| **Pi 400** | ⚠ Works | 4 GB | Same chip as Pi 4; mechanically inconvenient (keyboard built in) for an observatory mount, but the software runs identically. |
+| **Compute Module 4** (with carrier board) | ⚠ Untested | varies | Same CPU/RAM as Pi 4; should work but no Open Astro CI runs against CM4. Community-supported. |
+| **Non-Pi ARM64 SBC** (Orange Pi 5, Rock Pi, etc.) | ⚠ Best-effort | varies | If it boots Debian Trixie arm64 + has USB3, the binary runs. Not CI-tested; vendor-specific quirks (camera busses, GPIO, thermals) are user-debugged. v0.1.0 may add tested SBCs based on community signal. |
+
+**Hardware refuse logic** (server startup check, fails fast with a clear journal entry):
+1. `uname -m` → must equal `aarch64` (refuses 32-bit `armv7l`)
+2. `MemTotal` in `/proc/meminfo` → must be ≥ 1.5 GB (rejects Pi 3 and 1 GB Pi 4 SKUs)
+3. `/sys/devices/system/cpu/cpu0/of_node/compatible` → if it begins with `brcm,bcm2835` (Pi 1) or `brcm,bcm2836` (Pi 2) or `brcm,bcm2837` without `aarch64` confirmation, refuse with model name in the error
+4. CPU core count → must be ≥ 4 (Pi 3 and Pi 4 both have 4; this only fires on truly anemic boards mis-flashing the arm64 OS)
+
+Refusal is configurable via `ARA_SKIP_HARDWARE_CHECK=1` env var for advanced users testing on exotic boards (e.g., Pi 5 with externally-attached extra RAM, or a future SBC the CI hasn't validated). Documented in DEPLOY.md as "if you know what you're doing."
+
+**Pi 5 vs Pi 4 trade-offs** (informs §66.10 SLO target picking — Pi 4 is the "v0.0.1 target" column; Pi 5 numbers in parens):
+
+| Dimension | Pi 4 | Pi 5 |
+|---|---|---|
+| CPU | Cortex-A72 @ 1.5 GHz | Cortex-A76 @ 2.4 GHz (~2× per core) |
+| USB | 2× USB3 + 2× USB2 | Same |
+| Storage | USB SSD via USB3 only | USB SSD via USB3 OR NVMe via PCIe 2.0 HAT (~3× faster fsync) |
+| Networking | GigE + 2.4/5 GHz Wi-Fi | GigE + 2.4/5 GHz Wi-Fi 5 (slightly better range) |
+| Power | ~6 W idle / ~9 W peak | ~6 W idle / ~12 W peak (needs 5V/5A supply officially) |
+| Thermals | Heatsink usually enough | Active cooler strongly recommended; throttles aggressively above 80°C |
+| GPIO | Compatible | Compatible (RP1 chip shifts some addresses; libgpiod handles transparently) |
+| Best for | Field portable rig, USB SSD storage | Observatory rig, NVMe storage, faster plate-solve + image processing |
+
+**Required peripherals**:
+- USB SSD (NOT SD card; NOT USB stick) — per §28.9 ext4 enforcement + §29 mandatory-USB; minimum 256 GB, recommend 1 TB
+- Official 5V/3A (Pi 4) or 5V/5A (Pi 5) power supply — under-voltage triggers throttling and corrupts in-flight fsync
+- Passive heatsink (Pi 4) or active cooler (Pi 5) — sustained ASTAP solves + image processing will thermal-throttle bare boards
+- Ethernet OR reliable Wi-Fi (per §32.7 advisory; Ethernet preferred for nightlong sessions)
+- Optional but strongly recommended: powered USB3 hub (per §13.2)
+
+### 13.2 USB hub + cabling advisory
+
+Per-port USB current on the Pi 4/5 is capped at ~1.2 A total across all USB ports (1.5 A on Pi 5 with the official 5A PSU). A modern astrophotography rig easily exceeds that without a powered hub:
+
+| Device | Typical current draw |
+|---|---|
+| Cooled CMOS camera (ZWO ASI2600, etc.) | 0.8–1.5 A (cooler engaged) |
+| Filter wheel | 0.2–0.4 A |
+| Electronic focuser (EAF) | 0.1–0.3 A |
+| Mount handset (USB control + power-thru) | 0.5–1.5 A (varies wildly by mount) |
+| Guide camera | 0.3–0.5 A |
+| Dew heater controller (USB) | 0.2 A (heaters draw separately from 12V) |
+| Flat panel (USB-controlled) | 0.5–1.0 A when lit |
+| Polar-align camera (if separate per §45.14) | 0.3 A |
+
+**Recommendation in DEPLOY.md**:
+
+1. **Use a powered USB3 hub** for any rig with ≥ 3 devices. Specs to look for: external 12V/4A+ PSU, individual port switches a plus, ≥ 4 USB3 ports.
+2. **Power the Pi directly from its own PSU** — do NOT power the Pi from the hub's upstream port (back-powering causes Pi reboots when peripheral current spikes).
+3. **Cable length limits** — USB3 passive cables degrade past ~2 m. Use active USB3 extenders for runs > 2 m (typical for piers/observatory mounts). Active extenders should themselves be powered, not bus-powered.
+4. **12V → 5V buck converter** for marine/portable setups — running the Pi from a single 12V deep-cycle battery via a quality buck (Pololu, etc.) avoids two-supply complexity. Avoid cheap cigarette-lighter USB adapters (noisy supply, voltage sag under load).
+5. **Cable quality**: anything labeled "charge only" is USB2 + power; data-rated USB3 cables are essential for cameras (full readout speed) and SSD throughput.
+
+**Recommended hubs**: maintained as a community wiki page at `wiki.openastro.org/usb-hubs` rather than embedded here. Page is community-curated and updated as products come and go. This section just states the requirements.
+
+**Troubleshooting cascade** (DEPLOY.md):
+
+| Symptom | Likely cause |
+|---|---|
+| Camera disconnects randomly mid-exposure | Insufficient USB power → §42 fault recovery picks it up; user moves camera to powered hub |
+| Mount commands time out intermittently | USB voltage sag under simultaneous slew + camera readout → powered hub fixes it |
+| Pi reboots when peripherals plug in | Back-powering via hub → fix wiring per #2 above |
+| USB SSD throughput < 100 MB/s sustained | Bus-powered hub upstream → use powered hub OR plug SSD directly into Pi's USB3 port |
+| Devices enumerate but Alpaca driver can't open them | Permissions issue per §34.3 (user not in `dialout`/`video`/`plugdev` group) — NOT a hub problem |
+
+### 13.3 Per-Pi setup (one-time)
+
 Per-Pi setup (one-time — AI documents in `DEPLOY.md`):
 
 ```bash
@@ -2478,6 +2563,95 @@ On macOS/Windows dev machines where there's no USB drive, backups go to `~/Libra
 - Server-side downgrade flow: when user explicitly requests rollback, server stops + binary swaps + DB restores from pre-migration backup atomically
 - Optional encrypted backups (`PRAGMA key`) for the v0.1.0 remote-access mode
 
+### 28.15 Corrupted state recovery — beyond power loss
+
+§28.7 (atomic FITS writes) + §28.8 (orphan scan) + §28.11 (scenario matrix) handle the clean-failure-modes path: power yanked mid-operation, the filesystem replays a partial transaction, the server recovers cleanly. This subsection covers the **dirty-failure** path — state that *is* present on disk but is malformed, inconsistent, or truncated in ways the atomic-write pattern can't prevent:
+
+- A user (or buggy build) edited a checkpoint JSON by hand and produced invalid syntax
+- A disk-level FS error left a FITS file with a truncated header
+- A bug in v0.0.1-ara.N wrote a row with NULL where the schema expects non-null, exposed only after upgrading to v0.0.1-ara.N+1
+- SQLite WAL recovery succeeded but `PRAGMA integrity_check` reports `*** in database main *** corruption messages`
+- DB and filesystem disagree: row points at `frame-42.fits` but the file isn't there (different from §28.8 orphan — that's "file exists with no row"; this is "row exists with no file")
+
+The unifying principle: **never lose the user's data silently, but never block startup forever waiting for them to fix it.** Each failure mode has a deterministic quarantine-and-continue path.
+
+**Per-artifact failure matrix:**
+
+| Artifact | Failure mode | Server action | User visibility |
+|---|---|---|---|
+| **Sequence checkpoint JSON** (§28.1) | Parse fails or missing required fields | Rename to `<file>.corrupt.<unix-ts>`, log `CHECKPOINT_CORRUPT` (critical), continue startup *as if* no checkpoint existed → §28.2 recovery treats it as "no sequence was running" | Critical notification: "Couldn't recover the previous sequence — checkpoint file was damaged. Old file preserved at `<path>.corrupt.<ts>` for diagnostics." Sequence does not auto-resume; user must re-start it. |
+| **SQLite DB** (`data.db`) | `PRAGMA integrity_check` returns anything other than `ok` on startup | Move `data.db` to `data.db.corrupt.<unix-ts>` + WAL/SHM siblings; restore the most recent §28.14 pre-migration backup; if no backup, initialize a fresh empty DB and run §28.8 orphan scan over existing FITS to rebuild what's recoverable | Critical notification with explicit options: "Database was corrupted. Restored from backup taken <date>." OR (if no backup) "Database was corrupted with no backup available. Started fresh; <N> existing FITS files re-indexed via orphan scan. Sessions and notes from before the corruption are lost — old DB saved to `<path>.corrupt.<ts>`." |
+| **Profile JSON** | Parse fails OR schema-validation fails | Move profile to `profiles/<name>.corrupt.<ts>.json`; do NOT auto-recover; mark profile slot as invalid in DB | Critical notification when WILMA loads the profile list: "Profile '<name>' could not be loaded — file was damaged. Recreate from the wizard or restore from your backup ZIP." |
+| **Sequence JSON** (saved sequence file loaded by user) | Parse fails | Reject the load with HTTP 422 + `code: sequence_corrupt`; do not move the file (user may want to repair it manually) | WILMA shows error inline in sequence picker; offers [Show file location] for manual recovery |
+| **FITS file with malformed header** (orphan scan §28.8) | cfitsio `fits_open_file` returns non-zero | Skip the file; log `FITS_HEADER_CORRUPT` (warning) with path; do not delete (user may want to repair via external tools) | Aggregated: "Recovered <N> frames; <M> had malformed headers and were skipped — see <link to log>" |
+| **DB row → missing FITS file** | Row in `frames` table, file at the row's path doesn't exist | Mark the row's `missing` boolean true; do not delete the row (preserves session metadata + stats); WILMA shows the frame greyed-out with "missing file" indicator + relocate button (per §43.8 pattern) | Subtle: greyed-out frame in library; no alarming notification (could be user-moved files). Only escalates to critical if the missing-file rate jumps suddenly (>10% of expected frames in current session). |
+| **Calibration metadata JSON** (§39.3 session_meta.json) | Parse fails | Move to `<file>.corrupt.<ts>`; treat the calibration set as if it had no metadata (still usable as raw frames but won't match via §39.5 auto-match) | Notification scoped to calibration browsing UI: "<N> calibration sets have damaged metadata and won't auto-match — see Library → Calibration." |
+| **Notification feed DB rows** (§46.5) | Individual row JSON payload parse fails | Skip the row at read time; never block startup; log the row ID to journal | Silent unless every single row is corrupt (then critical notification "Notification history damaged"). |
+| **Settings registry-stored values** | Value type-coerce fails (e.g., string where bool expected) | Fall back to the registry's `defaultValue`; log a warning | Silent — user sees default; if they had previously set a non-default, the §61 search shows the default with a tooltip "Restored to default — previous value was invalid." |
+
+**Quarantine directory layout:**
+
+```
+/media/openastroara/
+├── .quarantine/
+│   ├── checkpoints/
+│   │   └── sequence-<id>.json.corrupt.<unix-ts>
+│   ├── databases/
+│   │   ├── data.db.corrupt.<unix-ts>
+│   │   ├── data.db-wal.corrupt.<unix-ts>
+│   │   └── data.db-shm.corrupt.<unix-ts>
+│   ├── profiles/
+│   │   └── <name>.json.corrupt.<unix-ts>
+│   └── calibration-meta/
+│       └── <session-id>/session_meta.json.corrupt.<unix-ts>
+```
+
+Quarantine is **append-only, never auto-pruned** in v0.0.1 — a damaged DB is the kind of thing a user might want to ship to support 6 months later. DEPLOY.md notes the user can `rm -rf /media/openastroara/.quarantine/<subdir>/` when they're done with diagnostics. v0.1.0 may add Settings → Storage → Quarantine browser with size + age + one-click delete.
+
+**Cross-quarantine consistency check** runs at the end of every startup:
+- If `data.db` was just restored from backup AND there are FITS files newer than the backup's timestamp → run an unscheduled §28.8 orphan scan over just the post-backup FITS to recover them into the restored DB
+- If a sequence checkpoint was quarantined → ensure no `frames` rows reference a `session_id` from that checkpoint that no longer exists in the DB (they become §28.8-style orphans automatically)
+
+**Distinguishing recoverable vs unrecoverable cleanly** — the key heuristic:
+
+| Property of damage | Treatment |
+|---|---|
+| File parses but values are out-of-range / schema-invalid | **Recoverable** — log the violation, apply the registry default OR skip the row, continue |
+| File doesn't parse at all (syntax error, truncated mid-byte) | **Quarantine + continue** — don't try to repair; the user may have backups |
+| DB integrity_check fails | **Restore from backup** if available; otherwise fresh-DB + orphan scan |
+| FITS body invalid but header valid | **Skip the file, preserve it** — user may want it for external recovery tools |
+| FITS body valid but DB row missing it | **Recover via §28.8 orphan scan** (the normal path) |
+| Both file missing AND row present | **Mark row `missing`** — don't delete; preserves stats + session continuity |
+
+**Bug-report integration** (§54): when any quarantine action fires during startup, the bug-report log capture per §54.2 includes the quarantined file paths in the "context" section so support has the diagnostic state in-hand from the first round trip.
+
+**§14.1 test cases (added):**
+
+- `corrupt_checkpoint_json_quarantines_and_continues` — write garbage to a checkpoint file → start server → assert quarantine file exists, `CHECKPOINT_CORRUPT` logged, server reaches ready state
+- `corrupt_db_restores_from_migration_backup` — corrupt `data.db` (zero out a page) → assert backup restored, post-backup FITS re-indexed
+- `corrupt_db_no_backup_fresh_start_with_orphan_scan` — corrupt `data.db` with no backup → assert fresh DB + N orphan-scanned frames present
+- `db_row_points_at_missing_fits` — insert frames row for non-existent file → assert row marked `missing=true` and not deleted
+- `malformed_fits_header_skipped_not_deleted` — write a "FITS" file with truncated header → assert orphan scan skips it + file still on disk + warning logged
+- `corrupt_profile_blocks_load_not_startup` — write garbage to profile JSON → assert server starts cleanly + profile load returns 422 + WILMA shows the per-profile error
+- `quarantine_directory_append_only` — quarantine 3 files at different timestamps → assert all 3 still present, none auto-deleted
+
+**§61 search registry entries:**
+
+- `storage.troubleshoot_quarantine` — keywords: `corrupted, quarantine, damaged file, recovered, restored backup, can't open profile, sequence corrupt, db corrupt`
+- `storage.quarantine_path` — keywords: `quarantine folder, damaged files location, recovery files`
+
+**Cross-references:**
+
+- §28.1 — sequence checkpointing (writes the JSON this section quarantines)
+- §28.7 — atomic FITS writes (prevents most dirty failures; this section handles what slips through)
+- §28.8 — orphan FITS scan (the partner mechanism — file exists, row missing; this section handles row exists, file missing)
+- §28.11 — power-loss scenario matrix (clean-failure path; this section is the dirty-failure path)
+- §28.14 — EF Core migrations + pre-migration backups (provides the backups this section restores from)
+- §43.8 — what's NOT backed up (FITS aren't auto-backed-up; influences row-points-at-missing-file behavior)
+- §46 — notification feed (delivery mechanism for the quarantine-fired-during-startup messages)
+- §54.2 — bug-report log capture (includes quarantine state)
+- §73 — exception handling strategy (the per-quarantine logging follows §73.3 structured-exception format)
+
 ---
 
 ## 29. Storage / disk-space policy
@@ -3425,6 +3599,110 @@ The Pi runs in one of two Wi-Fi modes, **configured outside ARA Core** per the [
 
 Either way, the modal copy "Ara Core Wi-Fi network" works — it means whichever network the Pi is reachable on. ARA Core's .deb does **not** touch hostapd or Wi-Fi config — networking is user-managed per the wiki.
 
+### 32.7 Network stack reliability advisory
+
+Disconnect handling (§32.1–§32.5) is what WILMA does *after* the link breaks. This subsection is the **pre-failure** advisory — hardware + OS-level guidance that DEPLOY.md publishes so users avoid the failure modes in the first place.
+
+**Ethernet vs Wi-Fi for nightlong sessions:**
+
+| Link | Recommendation | Why |
+|---|---|---|
+| **Gigabit Ethernet (Pi ↔ router)** | **Strongly preferred** for any unattended session | Stable latency, no PHY-level power-save, no roaming events, no random AP firmware reboots, no neighbor congestion. Cheapest way to make §32 disconnect modals essentially never fire. |
+| **5 GHz Wi-Fi (Pi joined to home AP)** | Acceptable for indoor observatory if Ethernet impractical | Tune Wi-Fi power-save off (`iw dev wlan0 set power_save off` at boot via systemd unit; DEPLOY.md provides the snippet). Pin the channel away from neighbors. |
+| **2.4 GHz Wi-Fi (Pi joined to home AP)** | Last resort | Range OK, but congestion + Bluetooth + microwave + neighbor APs cause drops. Power-save off + channel-pin same as above. Expect more §32 modal fires. |
+| **Pi AP mode (§32.6)** with WILMA on phone/laptop | Standard for field rigs | Best when there's no other network. Phone Wi-Fi power-save can drop the connection even with the Pi rock-solid — phone-side §32 reconnect is what saves it. |
+| **USB tethering** (phone-to-Pi) | Untested | May work; ARA doesn't test against it; community-supported. |
+| **Cellular hotspot upstream** | Not a thing for v0.0.1 | LAN-only architecture per §67; cellular for remote-internet imaging is v0.1.0 (§55.1). |
+
+**Wi-Fi power-save on the Pi side** (the dominant cause of "WS heartbeat missed" on Wi-Fi):
+
+The Pi's onboard Wi-Fi chipset enters power-save by default; this delays packets up to 100 ms while waking the radio. The §60.9 WS heartbeat is 30 s with a 60 s pong timeout, so power-save alone doesn't drop the connection — but combined with AP firmware quirks or marginal RSSI it tips over. DEPLOY.md ships the disable snippet:
+
+```bash
+# /etc/systemd/system/wifi-no-powersave.service
+[Unit]
+Description=Disable Wi-Fi power saving
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/iw dev wlan0 set power_save off
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+```
+
+This is **opt-in via DEPLOY.md**, not auto-installed by ARA Core's .deb (§13.3 keeps networking out of scope). Server logs a one-time `WIFI_POWERSAVE_ON` info entry at startup if it detects power-save active and the Pi is on Wi-Fi — so users see the advisory in the journal even if they skipped DEPLOY.md.
+
+**Pi-side wake-on-LAN:**
+
+Pi 4 / Pi 5 hardware **does not** support WoL on the onboard Ethernet (the Broadcom NICs lack the WoL magic-packet listener in firmware). Users who want "wake the Pi over the network" need either:
+- An external smart plug / network-attached PDU (recommended; per §57.7 hardware kill switch advisory pairs well)
+- A USB Ethernet adapter that supports WoL (some Realtek-based ones do; user's responsibility to verify)
+
+ARA does NOT advertise WoL support. v0.1.0 may add a Settings → System → "remote wake" UI surface IF the project picks up an external-wake-device integration; deferred to community signal.
+
+**DHCP behavior + "use saved server" reliability:**
+
+§30.6's "use saved server" persists `host` (IP or hostname) + port. If the Pi gets a new DHCP lease (router reboot, lease expiration, manual ifdown/up), the IP changes and saved hosts break. Two mitigations DEPLOY.md recommends:
+
+1. **DHCP reservation by MAC** on the home router (preferred) — Pi keeps the same IP across reboots
+2. **mDNS hostname `araserver.local`** (fallback) — `avahi-daemon` ships with Trixie; ARA Core publishes `_openastroara._tcp.local` per §30.7.1 + §32.3. WILMA's discovery falls back to mDNS when the cached IP fails.
+
+If both fail (LAN with no mDNS support — some enterprise networks block multicast), the user re-runs §30.7.1 auto-detect to find the Pi.
+
+**Per-WILMA-OS firewall config:**
+
+Outbound HTTP/WS from WILMA to the Pi is normally allowed by default firewalls, but some configurations block first-launch outbound connections to local-network targets:
+
+| OS | Default behavior | If blocked |
+|---|---|---|
+| **macOS** | Application Firewall prompts on first connect attempt | User clicks "Allow" — no manual config needed |
+| **Windows** | Windows Defender Firewall prompts on first connect attempt | User clicks "Allow access" for "Private networks" (NOT public) |
+| **Linux (ufw/firewalld)** | Outbound usually unrestricted | If `ufw status` shows outgoing restricted: `sudo ufw allow out to <pi-ip> port 5555` |
+
+WILMA does NOT request "make me reachable from the LAN" firewall changes — it's strictly the client side of the connection. (Server-side firewall on the Pi: §67 trusted-LAN posture says no inbound restriction by default; DEPLOY.md notes how to add `ufw allow 5555/tcp` if user enabled ufw.)
+
+**Network MTU + path-MTU-discovery quirks:**
+
+LAN imaging is uniformly 1500-byte MTU; ARA assumes this. If a VPN / WireGuard interposes (v0.1.0 remote-access mode), MTU drops to ~1420 and PMTU-D needs to work cleanly. Out of scope for v0.0.1 — flagged here so a v0.1.0 remote-access design picks it up.
+
+**The "midnight modem reboot" problem:**
+
+Consumer routers reboot for firmware updates at vendor-chosen times (often 02:00–04:00 local). Mid-session reboots are a real failure mode that no Pi-side change can prevent. Mitigations DEPLOY.md recommends:
+
+- Schedule router firmware updates during the day if the router admin UI allows it
+- Use a separate Pi-only switch on a UPS so router reboots don't take the Pi-WILMA path down (only the Pi-WAN path)
+- Run WILMA on the same physical LAN as the Pi rather than hopping through Wi-Fi → router → Pi — keeps the disconnect surface smaller
+
+These aren't ARA bugs; they're network reality. §32.5 reconnect-on-recovery handles them gracefully because §28 keeps the sequence running on the Pi regardless.
+
+**§14 test cases (added):**
+
+- `wifi_powersave_detected_at_startup_logs_advisory` — boot Pi with Wi-Fi power-save on → assert `WIFI_POWERSAVE_ON` info entry in journal
+- `mdns_fallback_resolves_when_dhcp_ip_changes` — change Pi's IP via DHCP → WILMA's cached IP fails → mDNS discovery finds the new IP → reconnect succeeds
+- `disconnect_60s_then_reconnect_resumes_session` — sever the link for 60 s mid-sequence → assert sequence kept running on Pi + WILMA reconnects + state snapshot rehydrates correctly
+
+**§61 search registry entries:**
+
+- `network.troubleshoot_wifi_drops` — keywords: `wifi disconnects, wifi unstable, drops connection, power save, wifi power, wireless drops`
+- `network.troubleshoot_ip_changed` — keywords: `lost server, IP changed, can't find server, DHCP, server moved, mDNS, hostname`
+- `network.troubleshoot_router_reboot` — keywords: `router rebooted, lost network, modem restart, midnight disconnect, scheduled reboot`
+- `network.wake_on_lan_not_supported` — keywords: `wake on lan, WoL, remote wake, turn on pi remotely, magic packet, network wake`
+
+**Cross-references:**
+
+- §13.1 — Pi hardware support (Ethernet vs Wi-Fi chipset behavior baseline)
+- §13.2 — USB hub advisory (related hardware-reliability theme)
+- §30.6 — "use saved server" (depends on stable IP / mDNS hostname)
+- §30.7.1 — Alpaca + ARA mDNS discovery (the fallback path)
+- §32.1–§32.5 — disconnect/reconnect handling (this section is the pre-failure advisory)
+- §32.6 — Pi Wi-Fi mode (AP vs client; this section adds power-save + DHCP guidance)
+- §57.7 — hardware kill switch (the network-wake adjacent concern)
+- §60.9 — WS heartbeat protocol (30 s heartbeat, 60 s pong timeout)
+- §67 — trusted-LAN security posture (no inbound restriction by default)
+
 ---
 
 ## 33. Version compatibility + WILMA-pushed updates (ASIAir model)
@@ -3454,6 +3732,90 @@ Compare:
 | **Client newer** (semver) | Modal: *"Ara Core (v0.0.1) needs to update to match your app (v0.0.2). Update now?"* → [Update Ara Core] / [Cancel] |
 | **Client older** | Modal: *"Your app (v0.0.1) is older than Ara Core (v0.0.2). Update via App Store / GitHub Releases — features may misbehave until you do."* → [Continue Anyway] / [Cancel] |
 | API major mismatch | Hard block: *"This app cannot talk to Ara Core v1.0.0. Update your app to continue."* |
+
+### 33.2.1 Compatibility matrix + graceful degradation
+
+The §33.2 table is the headline UX; this subsection is the full decision matrix when WILMA and server versions don't match exactly. The two main signals the server exposes:
+
+1. **`GET /api/v1/server/info`** → `{server_version, api_version, protocol_minor}` (per §33.2)
+2. **`GET /api/v1/server/state`** → includes `api_versions: ["v1"]` per §60.8.1 (the array advertises every API major the server still serves, since v1 is forever-additive and v2 may coexist during deprecation cycles)
+
+WILMA combines both at connect time to decide whether each feature surface is available, gracefully degraded, or hard-blocked.
+
+**Three-band semver compatibility** (assuming both client and server are on the same API major — i.e., either both v1 or both v2 once v2 ships; mismatched majors fall through to the hard-block row of §33.2):
+
+| Band | Definition | Banner UX | Feature behavior |
+|---|---|---|---|
+| **Match** | `client.server_version == server.version` (exact match including pre-release `-ara.N` suffix) | None | Full functionality. No degradation. |
+| **Server-ahead** (WILMA older than server) | `server.version > client.server_version` AND same API major | One-time per-version "What's new" modal (§33.7) + persistent yellow chip "Server v0.0.2 — update WILMA?" in top bar | WILMA uses only the endpoints + WS event types it was built knowing. New endpoints + new WS events the server emits get safely ignored (WILMA's WS event router has a `default: log_and_drop` arm per §60.9). Settings the new server has but WILMA's settings registry doesn't know about: silently skipped by §61 search; the server retains them but WILMA can't edit them through search. User reads release notes to know what's new. |
+| **WILMA-ahead** (server older than WILMA) | `client.server_version > server.version` AND same API major | Modal per §33.2 offering [Update Ara Core] from the embedded binary (§33.1 → §33.3). User can [Cancel] and continue at reduced functionality. | If user cancels: WILMA's per-feature graceful-degradation table (below) governs which screens hide UI vs show with a "requires server v0.0.2+" disabled indicator. |
+
+The **server-ahead** path is the normal case — apt upgrades land on Pis between WILMA releases. WILMA must continue to work; the only requirement is that the v1 contract is forever-additive (codified in §60.8.1).
+
+The **WILMA-ahead** path is the cross-version intersection of §75 (manual WILMA updates from GitHub Releases) + §34 (server APT updates that lag if user is on no-network Pi) + §33.3 (the resolve-by-push mechanism that bridges the gap).
+
+**Per-feature graceful-degradation table** (governs the WILMA-ahead case when the user defers the embedded-binary push):
+
+| Feature surface | If server doesn't support | Treatment |
+|---|---|---|
+| Core equipment connect / sequence run / capture / preview (§30, §38, §40) | Required forever (every server has this) | Never degraded; if these fail the connection is hard-blocked per the API-major-mismatch row of §33.2 |
+| §50 Stats view (per-version `/api/v1/stats/*` shapes) | Older server returns subset shape (no `composite_quality_score` field, etc.) | WILMA renders charts conditionally on field presence; missing fields collapse to "—" with no error |
+| §51 diagnostics (new sub-events added in 0.0.2+) | Older server emits only the base 6 sub-event types | WILMA's §51 panel filters out the missing severities client-side; never renders an empty slot expecting more |
+| §59 Smart Focus (new telescope-type heuristics may add fields per §59.4) | Older server uses old defaults | WILMA shows the older defaults in the picker; "(requires server v0.0.3+)" suffix on telescope types the older server doesn't recognize |
+| §45 polar align (new tuning fields per §45.6) | Older server ignores the new fields | WILMA detects via `OPTIONS /api/v1/polaralign` introspection (returns 404 if endpoint absent in pre-v0.0.2 servers) and hides the corresponding UI inputs |
+| §46 notifications (new event types added each release) | Older server doesn't emit them | Forward-compat fine (server emits subset); reverse-compat fine (WILMA's WS event router logs-and-drops unknown event types per §60.9) |
+| §65 stretch palette (new variants per release) | Older server lacks new variants | Picker shows variants the server reports via `GET /api/v1/preview/stretches`; unrecognized variants WILMA was built knowing render as "(unsupported on this server version)" disabled options |
+| §70 share imports targeting a newer schema | Older server rejects with 422 `code: schema_version_unsupported` | WILMA surfaces the rejection with explicit "this share file was made with v0.0.3 — update server to import" copy |
+| §28.14 migration status (`/api/v1/server/migrations/*`) | Older server may return 404 on these endpoints | WILMA's Settings → Storage → Database panel detects 404 and shows "Migration history unavailable on this server version" |
+
+**Introspection over guessing**: WILMA never branches on `server_version` directly to decide whether to call an endpoint. Instead, it calls and handles 404 + the §73 RFC 7807 error envelope. Reasons:
+- Forward-compat: a backport could land a feature in an older server line
+- Plugin v0.1.0 (§55.1): plugins extend the endpoint surface; version number alone doesn't reflect what's actually present
+- Testing: the 404 path needs coverage anyway, so making it the normal control flow eliminates a parallel "version-string-comparison" code path
+
+**Per-API-version negotiation** (deferred to v2 — informational here): once v2 ships per §60.8.1's coexistence policy, WILMA picks the highest API version present in `state.api_versions` it was built to consume and uses that prefix (`/api/v2/...`) for the session. Endpoints not yet rev'd to v2 fall through to v1 paths. The compatibility matrix above continues to apply within each API major.
+
+**Resolution flow** (what the user actually does):
+
+```
+WILMA connects → compatibility analyzer runs
+
+  match? ────────────────────────────────────► full UI, no banners
+     no
+     │
+  WILMA-ahead AND same API major? ────────────► §33.2 modal: [Update Ara Core] (preferred)
+     │                                                ├─ user accepts → §33.3 push flow
+     │                                                └─ user defers  → reduced UI per graceful-degradation table
+     │
+  server-ahead AND same API major? ───────────► soft yellow banner; full functional UI;
+     │                                              §33.7 changelog modal fires once
+     │
+  API major mismatch? ────────────────────────► §33.2 hard-block modal; no session opens
+```
+
+**§14 test cases (added):**
+
+- `wilma_older_server_newer_renders_unknown_ws_events_as_noop` — server emits a fictional `ws.event.future_type`; WILMA logs and drops without crash
+- `wilma_newer_server_older_404s_handled_per_feature` — call each WILMA-only endpoint against an older fixture server; assert §73 RFC 7807 response + correct per-feature UX
+- `api_major_mismatch_blocks_session` — server reports `api_version: "v2"`, WILMA built for v1 only → assert connect attempt produces the hard-block modal + WS not opened
+- `embedded_binary_push_resolves_wilma_ahead_band` — start session with WILMA-newer modal showing → user accepts push → assert §33.3 flow completes → reconnect lands in the Match band
+
+**§61 search registry entries:**
+
+- `server.version_mismatch_help` — keywords: `version mismatch, server outdated, update server, compatibility, wilma newer, server newer, embedded binary push`
+- `server.api_versions_supported` — keywords: `api version, what api, v1 v2, compatibility, supported versions`
+
+**Cross-references:**
+
+- §33.1 — embedded binary (the mechanism the WILMA-ahead band resolves through)
+- §33.2 — version check + four-row table (this section expands on)
+- §33.3 — update push flow (executed when user accepts the WILMA-ahead modal)
+- §33.7 — release-notes modal (fires in the server-ahead band after upgrade)
+- §60.8.1 — API versioning policy (v1 forever-additive; this matrix only matters within an API major)
+- §60.9 — WebSocket protocol (default-drop for unknown event types)
+- §68 — AlpacaBridge contract (same three-band compatibility pattern applied to ARA Core ↔ AlpacaBridge)
+- §73 — exception handling (RFC 7807 error shape WILMA consumes when detecting missing features)
+- §75 — client distribution (where users get newer WILMA from, creating the WILMA-ahead band)
 
 ### 33.3 Update push flow
 
@@ -5406,9 +5768,78 @@ Lowest-priority but cheap insurance against accidental corruption:
 - Configurable in Settings → Backup:
   - "Auto-snapshot: Off / Daily at 2 AM / After every sequence"
 - Server creates a backup zip (per §43.4) into `/media/openastroara/.araback/` with the daily/sequence-end timestamp
-- Auto-prune: keeps last 14 snapshots, oldest auto-deleted
+- Retention follows §43.5.1's grandfather-father-son policy (not a simple "last N")
 
 This protects against "my profile got corrupted by a bug" but does NOT protect against drive failure (snapshots are on the same drive).
+
+### 43.5.1 Retention + rotation policy
+
+Backup zips are cheap (typical size 5-50 MB; cap below) but they accumulate fast under the "After every sequence" cadence (an active observatory could produce 30+ per month). ARA uses a **grandfather-father-son (GFS) rotation** so users keep useful history without manual cleanup:
+
+| Tier | Cadence | Default retention | Source |
+|---|---|---|---|
+| **Daily** | One per calendar day (the latest snapshot from that day wins) | Last **14** | The most recent snapshot in each of the past 14 unique calendar days |
+| **Weekly** | One per ISO week (Monday-Sunday); the latest snapshot from that week wins | Last **8** | The most recent snapshot in each of the past 8 unique ISO weeks |
+| **Monthly** | One per calendar month; the latest snapshot from that month wins | Last **12** | The most recent snapshot in each of the past 12 unique months |
+| **Yearly** | One per calendar year | Last **5** | The most recent snapshot in each of the past 5 years |
+
+Net effect: up to ~39 snapshots kept across all tiers (14 + 8 + 12 + 5, minus overlaps when a recent snapshot satisfies multiple tiers). At ~50 MB max per snapshot, the worst-case retained total is ~2 GB — negligible against a multi-TB image library.
+
+**Pruning runs after every new snapshot creation** (atomic — won't delete the just-written backup until the new one has been verified):
+
+1. New snapshot lands at `/media/openastroara/.araback/snapshot-<unix-ts>.zip`
+2. Validate the new zip (open + verify `manifest.json` per §43.7)
+3. Compute the GFS-retained set from existing files in `.araback/` (sorted by mtime descending)
+4. Delete files NOT in the retained set
+5. Log `BACKUP_PRUNED` (info) with count + freed bytes
+
+If validation in step 2 fails, the new snapshot is moved to `.quarantine/backups/` per §28.15 quarantine policy and pruning is skipped for that run — defense in depth against a partial write taking out the entire history.
+
+**Per-snapshot size cap**:
+
+- Manifest target: under **50 MB compressed** for a typical observatory profile (12 profiles, 47 sequences, ~20k frames-metadata rows, 153 calibration metadata files — per the §43.7 example)
+- Hard ceiling: **200 MB compressed**. If a snapshot would exceed this, server logs `BACKUP_TOO_LARGE` and aborts that particular snapshot (other tiers continue) — likely indicates an out-of-policy growth (e.g., session notes accumulated as multi-MB blobs, or a bug). User sees a critical notification + advice to investigate.
+
+**User-configurable per profile** (Settings → Backup → Retention):
+
+| Setting | Default | Range |
+|---|---|---|
+| `auto_snapshot_cadence` | `daily_2am` | `off` / `daily_2am` / `after_each_sequence` / `both` |
+| `retention_daily` | 14 | 0–60 |
+| `retention_weekly` | 8 | 0–24 |
+| `retention_monthly` | 12 | 0–36 |
+| `retention_yearly` | 5 | 0–10 |
+| `max_total_retained` | (computed) | 1–200 (hard ceiling regardless of GFS math) |
+
+Setting a tier to `0` disables it for that tier. Setting `auto_snapshot_cadence: off` disables snapshots entirely (the GFS settings still apply if user manually invokes "Take snapshot now" from the Settings → Backup panel).
+
+**The FITS library is NOT auto-snapshotted** — too large for ZIP rotation. Explicit advice in DEPLOY.md + Settings → Backup panel:
+
+> Your FITS frames and calibration files are NOT included in these auto-snapshots — they would be too large (often hundreds of GB). Protect them by periodically cloning the USB drive to a second drive (§43.3 drive-to-drive clone) or copying the `captures/` and `calibration/` directories to a desktop/NAS via WILMA's real-time backup stream (§44).
+>
+> Recommended cadence:
+> - **Casual imagers**: clone the USB drive monthly
+> - **Active observatories**: enable §44 real-time stream to a desktop with always-on storage
+> - **Long-term projects**: copy seasonal snapshots to off-site backup (Backblaze, S3, physical drive in a different building)
+
+**Manual external backup** — alongside the GFS auto-snapshots, users can request a one-shot full backup (per §43.4) at any time. Auto-snapshots and manual backups land in the same `.araback/` directory but manual snapshots get filename prefix `manual-` so they're recognizable and exempt from GFS pruning (kept forever unless user deletes via Settings → Backup → Browse Snapshots).
+
+**§14 test cases (added):**
+
+- `gfs_rotation_retains_correct_set_after_60_days` — simulate 60 days of daily snapshots → assert 14 daily + 8 weekly + 12 monthly (minus overlaps) retained
+- `failed_snapshot_validation_quarantines_not_prunes` — inject corruption into a snapshot mid-write → assert quarantine + prior snapshots intact
+- `size_ceiling_triggers_alert` — produce a synthetic 250 MB snapshot → assert `BACKUP_TOO_LARGE` logged + critical notification queued + tier skipped
+- `manual_snapshots_exempt_from_gfs_pruning` — create 5 manual snapshots in a day → run pruning → assert all 5 retained
+
+**§61 search registry entries:**
+
+- `backup.auto_snapshot_cadence` — keywords: `auto backup, automatic snapshot, daily backup, after sequence backup, when does it back up`
+- `backup.retention_daily` — keywords: `keep daily backups, daily retention, how many days backups, rotation daily`
+- `backup.retention_weekly` — keywords: `weekly backups, retention weekly, grandfather father son, GFS, week rotation`
+- `backup.retention_monthly` — keywords: `monthly backups, retention monthly, long term backup, archive month`
+- `backup.retention_yearly` — keywords: `yearly backup, annual snapshot, long retention, year archive`
+- `backup.max_total_retained` — keywords: `total backups, max snapshots, cap backups, limit backup count`
+- `backup.fits_library_protection` — keywords: `back up frames, FITS backup, image backup, calibration backup, protect captures, why no auto backup frames`
 
 ### 43.6 Restore flow on a fresh Pi
 
@@ -7528,6 +7959,7 @@ Genuinely ambitious work for the v0.2.0 milestone:
 | **Native Flutter sky-renderer** | Replace Aladin Lite WebView with a pure-Flutter sky atlas using Skia direct rendering. SharpCap/SkySafari quality, no WebView overhead. |
 | **Imaging campaigns / adaptive scheduling** | Multi-target survey programs; "image whichever target is best right now" scheduler. Beyond manual sequences. |
 | **Plugin marketplace UI** | Once SDK is stable, an in-app browsable plugin store (the plugin browser UI §10 ships in v0.0.1 but pointing at an empty manifest). |
+| **In-app equipment database / curated gear registry** | Catalog of "tested + recommended" mounts/cameras/focusers per telescope class, surfaced inside the §37 wizard to pre-populate sensible defaults (autofocus step size for ZWO EAF on an 80mm refractor, dither magnitude for an ASI2600 + 350mm focal length, etc.). v0.0.1 deliberately punts: §52.3's brand-agnostic feature detection covers connection-time needs without hard-coding device knowledge; §37 wizard uses telescope-type heuristics only; per-device tuning is community-wiki territory at `wiki.openastro.org/recommended-gear`. v0.0.2+ may add an in-app catalog with curated defaults if the community wiki proves the format. Strict scope guard: ARA does NOT become an equipment-recommendation engine ("buy this camera!") — only a defaults-pre-fill convenience for already-owned gear. |
 
 ### 55.3 Out of scope indefinitely
 
@@ -11882,5 +12314,267 @@ COMMIT-PR-RULES.md's "Future scope — community contributor workflow" section (
 - §71 — AOT discipline (CONTRIBUTING points to §71.1 + §71.2 + §71.7)
 - §72 — cfitsio dev setup (CONTRIBUTING references for "FITS lib install")
 - COMMIT-PR-RULES.md — PR workflow + CodeRabbit loop
+
+---
+
+## 75. Client distribution — WILMA desktop packaging
+
+§18.G locks "desktop only in v0.0.1; mobile deferred to v0.1.0" and names the three formats (`.dmg`, `.zip`, AppImage). §18.F locks "ship unsigned." This section spells out the build pipeline, per-OS install + first-run UX, distribution channels, and update mechanism so Phase 12/15 doesn't have to improvise.
+
+Server-side distribution (.deb via apt.openastro.net) is §34 — completely separate concern, different release cadence, different audience (the Pi gets one binary; WILMA ships three per release tag).
+
+### 75.1 Build matrix
+
+GitHub Actions (`.github/workflows/release.yml`, fires on tag push matching `v0.0.1-ara.*`) produces three artifacts per release:
+
+| Platform | Artifact | Build runner | Build command | Approx size |
+|---|---|---|---|---|
+| **macOS** (universal: arm64 + x86_64) | `OpenAstroAra-{version}-macos.dmg` | `macos-14` (arm64; lipo's the x86_64 binary in) | `flutter build macos --release` → `create-dmg` wrap | ~80 MB |
+| **Windows** (x64) | `OpenAstroAra-{version}-windows-x64.zip` | `windows-2022` | `flutter build windows --release` → 7-zip the `build\windows\runner\Release\` tree | ~60 MB |
+| **Linux** (x86_64 AppImage) | `OpenAstroAra-{version}-linux-x86_64.AppImage` | `ubuntu-22.04` | `flutter build linux --release` → `appimagetool` wrap | ~80 MB |
+
+**Why these specific runner images:**
+- `macos-14` is Apple Silicon (M1) — native arm64 builds + can cross-compile x86_64 via Xcode toolchain
+- `windows-2022` has all the Visual Studio C++ runtime bits Flutter Windows builds need
+- `ubuntu-22.04` for the AppImage gives broad glibc compatibility (matches FUSE 2 era; AppImages built on 24.04 break on 22.04 user machines)
+
+**No Linux .deb, no Flatpak, no Snap for v0.0.1.** AppImage covers Linux without distro fragmentation; native package formats are v0.1.0 if users ask.
+
+**No Apple Silicon-only or Intel-only macOS variants.** Universal binary keeps the download story one-link-per-OS.
+
+**Flutter version pinning** per §12.1: every build runner uses `subosito/flutter-action@v2` with `flutter-version-file: client/openastroara_client/.flutter-version` to match dev environments byte-for-byte.
+
+### 75.2 macOS — .dmg via `create-dmg`
+
+```yaml
+- name: Build .dmg
+  run: |
+    cd client/openastroara_client
+    flutter build macos --release
+    npm install -g create-dmg
+    create-dmg \
+      'build/macos/Build/Products/Release/OpenAstro Ara.app' \
+      --dmg-title="OpenAstro Ara ${{ env.VERSION }}" \
+      --overwrite \
+      dist/
+```
+
+Contents of the .dmg:
+- `OpenAstro Ara.app` (the universal-binary application bundle)
+- Alias to `/Applications/` (drag-to-install pattern; idiomatic for macOS)
+- Background image with arrow showing the drag (TODO(branding): user supplies the PNG)
+
+`Info.plist` bundle identifier: `net.openastro.ara.client` (matches §17.1 reverse-DNS naming convention).
+
+**Gatekeeper warning is expected** — see §75.5.
+
+**No notarization in v0.0.1** — notarization requires an Apple Developer ID ($99/yr) per §18.F. README documents the right-click → Open or `xattr` workaround.
+
+### 75.3 Windows — .zip (with .msix in v0.1.0)
+
+```yaml
+- name: Build .zip
+  run: |
+    cd client/openastroara_client
+    flutter build windows --release
+    cd build/windows/x64/runner/Release
+    7z a -tzip ../../../../../../dist/OpenAstroAra-${{ env.VERSION }}-windows-x64.zip *
+```
+
+Contents of the .zip:
+- `openastroara_client.exe` (the main executable — renamed by Phase 12 to `OpenAstroAra.exe`)
+- Bundled DLLs (Flutter engine, Skia, ICU data)
+- `data/` (Flutter assets, fonts, embedded HiPS placeholder, etc.)
+
+Install pattern: user unzips anywhere (typically `C:\Program Files\OpenAstro Ara\` or their Downloads folder); runs the .exe. No installer, no registry writes, no Start Menu shortcut auto-creation in v0.0.1 — fully portable.
+
+**`.msix` deferred to v0.1.0** because it requires either an EV signing cert (~$400/yr) or the user enabling sideloading/developer mode. The `.zip` route works without either.
+
+**SmartScreen warning is expected** — see §75.5.
+
+### 75.4 Linux — AppImage via `appimagetool`
+
+```yaml
+- name: Build AppImage
+  run: |
+    cd client/openastroara_client
+    flutter build linux --release
+    # Stage AppDir layout
+    mkdir -p AppDir/usr/bin AppDir/usr/lib AppDir/usr/share
+    cp -r build/linux/x64/release/bundle/* AppDir/usr/bin/
+    cp linux/openastroara.desktop AppDir/
+    cp linux/openastroara.png AppDir/    # TODO(branding): user supplies
+    cp linux/AppRun AppDir/              # standard AppImage entrypoint
+    chmod +x AppDir/AppRun
+    # Wrap
+    wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+    chmod +x appimagetool-x86_64.AppImage
+    ARCH=x86_64 ./appimagetool-x86_64.AppImage AppDir dist/OpenAstroAra-${{ env.VERSION }}-linux-x86_64.AppImage
+```
+
+`openastroara.desktop` Type=Application + Categories=Science;Astronomy; + Icon=openastroara (matches openastro.org wiki conventions).
+
+**Optional Flatpak** is a separate v0.1.0 build target if community wants it — out of scope for v0.0.1 because the .deb-style sandbox declarations are their own learning curve and AppImage covers 90% of Linux desktop use.
+
+**No ARM64 Linux desktop AppImage in v0.0.1.** The Pi (ARM64) is server-only; ARM64 Linux desktop (Asahi-on-Mac, Pinebook) is a thin slice and can wait. If demand emerges, the same workflow runs on `ubuntu-22.04-arm64` (GitHub Actions ARM runners launched 2024-2025 timeframe).
+
+### 75.5 First-run gatekeeper / SmartScreen / Linux UX
+
+Because everything ships unsigned per §18.F, every platform shows a "this is from an unidentified developer" warning on first launch. README has a "First-run on each OS" section with copy-paste workarounds — duplicated in WILMA's GitHub Releases description for each release so users hit the workaround at download time:
+
+**macOS first-run:**
+```
+1. Open the .dmg → drag OpenAstro Ara.app to Applications
+2. First launch: System refuses ("OpenAstro Ara can't be opened — Apple cannot
+   check it for malicious software")
+3. Right-click the app in Finder → Open → confirm
+   OR run:  xattr -d com.apple.quarantine "/Applications/OpenAstro Ara.app"
+4. Subsequent launches: works normally
+```
+
+**Windows first-run:**
+```
+1. Unzip the .zip to your chosen folder (e.g., C:\Program Files\OpenAstro Ara\)
+2. Double-click OpenAstroAra.exe
+3. Windows SmartScreen: "Windows protected your PC"
+4. Click "More info" → "Run anyway"
+5. Subsequent launches: works normally
+```
+
+**Linux first-run:**
+```
+1. Download OpenAstroAra-*.AppImage
+2. chmod +x OpenAstroAra-*.AppImage
+3. ./OpenAstroAra-*.AppImage
+4. Optional: integrate into desktop env via appimaged or .desktop file
+```
+
+Per §54.7 the bug-report template includes a per-OS install-state field so users with first-run problems don't waste a round trip to clarify.
+
+### 75.6 Distribution channels
+
+v0.0.1 ships from **GitHub Releases only** — no Homebrew tap, no Chocolatey, no AUR, no Snap, no Mac App Store, no Microsoft Store, no Play Store, no App Store. Release-page URL is the single linkable distribution point: `https://github.com/open-astro/openastro-ara/releases/latest`.
+
+**v0.1.0 distribution expansions** (per §55.1 — committed but not in v0.0.1):
+- Homebrew cask (`brew install --cask openastroara`) — Cask submission is straightforward once a few releases have shipped
+- Chocolatey package (`choco install openastroara`) — Community repo submission
+- AUR (`yay -S openastroara-bin`) — Trivial PKGBUILD wrapping the AppImage
+- iOS / Android via App Store / Play Store (per §18.G mobile-deferred decision)
+
+**No auto-update inside the client** in v0.0.1 (matches §18.A's drop-the-updater decision; same rationale applies to the WILMA app). On launch WILMA checks its embedded server binary's bundled version vs. the connected server (§33.2); WILMA's own version check against GitHub Releases happens via the same `/server/release-notes` modal pattern extended to the client — deferred to v0.1.0 since v0.0.1 users are early adopters who pull from Releases directly.
+
+### 75.7 Update mechanism (v0.0.1 — manual)
+
+| Step | User action | What WILMA does |
+|---|---|---|
+| 1 | Visit GitHub Releases, download new artifact for their OS | (no involvement) |
+| 2 | Replace old artifact: drag new .app to Applications (macOS, overwrite prompt), unzip over old folder (Windows), `chmod +x` the new AppImage (Linux) | (no involvement) |
+| 3 | Launch the new WILMA | Same first-run UX as initial install **if the .dmg/zip is a fresh download** (macOS quarantine flag is per-file; AppImage requires re-chmod; Windows SmartScreen recognizes the path-and-hash combo and usually skips the prompt) |
+| 4 | Connect to Pi | §33.2 version check fires — if Pi runs older server, WILMA offers to push the embedded server binary per §33.3 |
+
+**Profile + settings persistence across updates**: WILMA reads/writes its state to per-OS user-data dirs (not inside the .app/.exe/.AppImage), so updating the app never loses preferences:
+- macOS: `~/Library/Application Support/net.openastro.ara/`
+- Windows: `%APPDATA%\OpenAstroAra\`
+- Linux: `${XDG_CONFIG_HOME:-~/.config}/openastroara/`
+
+Implementation: `path_provider` package's `getApplicationSupportDirectory()` returns the right path per OS. Bundled catalogs (§36) live in `getApplicationDocumentsDirectory()` so they're user-visible.
+
+### 75.8 CI release pipeline (`.github/workflows/release.yml`)
+
+Triggered by tag push matching `v*-ara.*`. Three parallel jobs (one per OS):
+
+```yaml
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*-ara.*'
+
+jobs:
+  build-macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version-file: client/openastroara_client/.flutter-version
+      - run: # build .dmg per §75.2
+
+  build-windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version-file: client/openastroara_client/.flutter-version
+      - run: # build .zip per §75.3
+
+  build-linux:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version-file: client/openastroara_client/.flutter-version
+      - run: # build AppImage per §75.4
+
+  publish:
+    needs: [build-macos, build-windows, build-linux]
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/download-artifact@v4   # pull all three artifacts
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.dmg
+            dist/*.zip
+            dist/*.AppImage
+          body_path: RELEASE_NOTES.md   # generated per release per §33.7
+          fail_on_unmatched_files: true
+```
+
+**SHA-256 checksums** published alongside each artifact (the publish job computes them and appends a `## Verification` section to the release notes — same pattern as the §33.3 server update gate).
+
+**Reproducible-ish builds**: same Flutter version, same SDK, same dependency lockfiles (per §12.1 pubspec.yaml + .flutter-version pinning). Not bit-for-bit reproducible (timestamps differ); reproducibility-as-an-audit-property is v0.1.0+ if anyone asks.
+
+### 75.9 Uninstall
+
+- **macOS**: drag `OpenAstro Ara.app` to Trash. Optional user-data cleanup: `rm -rf ~/Library/Application\ Support/net.openastro.ara/`
+- **Windows**: delete the unzipped folder. Optional: `rmdir /s %APPDATA%\OpenAstroAra`
+- **Linux**: delete the AppImage. Optional: `rm -rf ~/.config/openastroara/`
+
+README's "Uninstall" section documents this. No in-app uninstaller in v0.0.1; portable formats don't typically have one.
+
+### 75.10 §61 search registry entries
+
+Distribution + install settings aren't surfaced inside WILMA's Settings UI (they're install-time concerns, not runtime tunables), so no §61 entries are needed. The only WILMA-side update-related visibility is the §33.7 release-notes modal, which is already registered.
+
+If v0.1.0 adds an in-app updater for the client, register the related settings at that time (`updates.auto_check`, `updates.check_channel` for stable/beta, etc.).
+
+### 75.11 §14 test cases
+
+- `release_workflow_builds_all_three_platforms` — CI smoke: PR to `release.yml` triggers a dry-run build matrix on all three runners; gates merge on green
+- `dmg_contains_universal_binary` — `lipo -info` on the bundled binary asserts `arm64 x86_64`
+- `appimage_runs_on_clean_ubuntu_22_04_container` — Docker job pulls vanilla `ubuntu:22.04`, downloads the latest AppImage, runs `./OpenAstroAra-*.AppImage --version`, asserts exit 0
+- `windows_zip_extracts_and_launches_in_clean_windows_sandbox` — Windows Sandbox / fresh runner extracts the zip and asserts the .exe starts (headless mode flag `--check` returns exit 0 in 10s)
+- `user_data_dir_persists_across_app_replacement` — install v0.0.1-ara.1, write a sentinel preference, install v0.0.1-ara.2 (overwrite), launch, assert sentinel still present
+
+### 75.12 Cross-references
+
+- §12 — Flutter scaffold (build commands match Phase 12.1)
+- §12.1 — Flutter SDK pinning (.flutter-version drives the release matrix)
+- §17.1 — Reverse-DNS bundle identifier
+- §18.A — No in-app updater (applies to client too in v0.0.1)
+- §18.F — Ship unsigned (rationale)
+- §18.G — Distribution formats locked (this section elaborates)
+- §33.2 — Version check on connect (WILMA-vs-server version handshake)
+- §33.7 — Release-notes modal (extends to client-side once auto-update ships v0.1.0+)
+- §34 — Server-side .deb distribution (parallel, separate concern)
+- §36 — Bundled catalogs in `getApplicationDocumentsDirectory()`
+- §54.7 — Bug-report template (install-state field)
+- §55.1 — v0.1.0 expansions (Homebrew, Chocolatey, AUR, mobile stores)
+- §75.6 — Distribution channels
+- CONTRIBUTING.md (§74) — local build commands match the release workflow's
 
 ---
