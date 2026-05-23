@@ -2920,481 +2920,6 @@ WebSocket events from background-watcher mode use the same shapes as §46 notifi
 
 ---
 
-## 62. Dither policy
-
-PHD2 handles the actual mount nudging; ARA decides when/how/whether. Three "better than NINA" wins built in: auto-magnitude from pixel scale, auto-disable for short-exposure workflows, diagnostic-aware skip during bad conditions.
-
-### 62.1 What dithering does (60-second context)
-
-Between exposures, the mount nudges framing by a few pixels in random directions. Hot pixels and sensor artifacts then don't land on the same pixels in every frame; when frames stack, those artifacts average out. Without dither, hot pixels persist and you get walking-noise patterns in the integrated image.
-
-The actual nudge happens via PHD2 — ARA sends PHD2 a `dither` JSON-RPC command, PHD2 commands the mount, PHD2 waits for guiding to re-settle, PHD2 reports back. Settle wait is typically 5-15 seconds depending on mount + atmosphere.
-
-### 62.2 Default cadence — auto, based on exposure length
-
-| Exposure length | Default cadence |
-|---|---|
-| ≥ 60 s (typical DSO) | Every frame |
-| < 60 s (e.g., bright-target short subs, comet bursts) | Dither disabled |
-| Calibration frames (flats/darks/bias) | Never |
-
-Auto-determined from the sequence's exposure length per instruction. User override available per-instruction in the sequencer + per-profile as a default.
-
-### 62.3 Default magnitude — auto-computed from pixel scale
-
-NINA asks for "dither pixels" (typical answer: 5). The right answer depends on the rig — cameras with small pixels need more pixels to cover the same angular displacement.
-
-```
-target_angular_displacement = 5 arcsec    # rule of thumb for hot-pixel mitigation
-pixel_scale = (camera_pixel_size_microns × 206.265) / telescope_focal_length_mm
-dither_pixels = round(target_angular_displacement / pixel_scale)
-clamp to [3, 15]
-```
-
-Examples:
-- ZWO ASI2600MM (3.76 μm) on 540 mm refractor → 1.43"/px → ~3.5 px dither
-- ZWO ASI2600MC (3.76 μm) on 2000 mm SCT (C8 + 0.7 reducer) → 0.39"/px → ~13 px dither
-- ZWO ASI120MM (3.75 μm) on 1480 mm SCT (C8 native) → 0.52"/px → ~10 px dither
-
-Wizard shows: *"Dither magnitude: auto (~4 px for current rig)"*. Override available via slider in advanced disclosure.
-
-### 62.4 Default direction + pattern
-
-- **RA+Dec random** (default) — most thorough hot-pixel coverage
-- **RA-only** — available via advanced disclosure for users on mounts with unreliable Dec axis (rare)
-- **Spiral** — alternate pattern; useful for cameras with very localized fixed-pattern noise
-
-### 62.5 Settle parameters
-
-PHD2's settle behavior:
-
-- **Settle pixels:** 1.5 px (PHD2's RMS error must drop below this)
-- **Settle time:** 10 seconds (RMS must stay below threshold for this long)
-- **Settle timeout:** 60 seconds (give up + continue with warning)
-
-User can tighten/loosen in advanced. Most users never touch these.
-
-### 62.6 Cross-meridian-flip behavior
-
-When the §58 meridian flip's `guider_recal: auto_restore` path runs (PHD2's "Auto Restore Calibration" with reverse-Dec flag), dither direction handling is automatic — PHD2 knows the axes flipped and signs the dither commands correctly. Same path NINA uses.
-
-If `guider_recal: full` (full re-calibration after flip), dither resumes after the new calibration completes. Equally automatic.
-
-### 62.7 No-guider fallback (v0.0.1 = disabled)
-
-If the profile has no guider configured OR PHD2 is connected but unresponsive: dither is disabled with a one-time per-session notification:
-
-> *"Dither requires a guider — your sequence will continue without dithering. Hot pixels may persist in stacked images."*
-
-Direct-mount-pulse dither (without guider) is technically possible but only useful for short-exposure workflows where dither matters less anyway. Deferred to v0.1.0.
-
-### 62.8 Diagnostic-aware skip (the §59.9 pattern repeated)
-
-Every dither command consults `GET /api/v1/diagnostics/current` before firing. Non-nominal states (`clouds_passing`, `aperture_blocked`, `dew_formation`) skip the dither — no point spending 10-15 s settling when the next exposure is just going to be paused anyway.
-
-When diagnostic state recovers and exposures resume, the next dither cadence cycle picks up normally. Skipped dithers don't accumulate.
-
-NINA dithers regardless of conditions; this is sky-time savings per §0.5 pillar 1.
-
-### 62.9 Profile schema
-
-```json
-{
-  "dither": {
-    "enabled": true,
-    "cadence": "auto",                  // "auto" | "every_frame" | "every_n_frames" | "disabled"
-    "cadence_n_frames": 1,              // only used when cadence = "every_n_frames"
-    "magnitude": "auto",                // "auto" | numeric pixel count
-    "magnitude_target_arcsec": 5,       // when auto: target angular displacement
-    "direction": "ra_dec_random",       // "ra_dec_random" | "ra_only" | "spiral"
-    "settle": {
-      "pixels": 1.5,
-      "time_seconds": 10,
-      "timeout_seconds": 60
-    },
-    "diagnostic_skip_when_unstable": true,
-    "skip_for_short_exposures_threshold_sec": 60
-  }
-}
-```
-
-**Four user-visible settings** (enabled / cadence / magnitude / direction). Settle + diagnostic-skip + threshold are in the advanced disclosure.
-
-### 62.10 Per-target-type overrides
-
-Sequence instructions can override the profile defaults:
-
-- DSO target (default): inherit profile (`every_frame`, auto-magnitude, RA+Dec)
-- Short-exposure DSO bursts or comet cadence templates that opt out: `enabled: false`
-- Calibration frames (always): `enabled: false`
-
-A user with a DSO sequence followed by a quick lunar capture doesn't have to manually toggle dither off — the lunar instruction's template handles it.
-
-### 62.11 Wizard exposure — minimal
-
-Wizard's PHD2 / guider screen (§37.3 screen 10) updated to:
-
-```
-Dithering between exposures:
-
-  Mode:           [▼ Auto (recommended)         ]
-                     Auto (recommended)
-                     Every frame
-                     Every 3 frames
-                     Every 5 frames
-                     Disabled
-
-  Magnitude:      [▼ Auto — ~4 px for your rig  ]
-
-  Dithering nudges the mount slightly between exposures so hot
-  pixels don't persist in stacked images. Auto mode picks the
-  right cadence and magnitude based on your camera and scope.
-
-  [< Back]    [Skip — use defaults]    [Next >]
-```
-
-Two questions. Both default to "auto." Most users tap [Next].
-
-### 62.12 Failure handling
-
-| Failure | Action |
-|---|---|
-| PHD2 settle timeout exceeded | Log warning, continue with next exposure (don't abort — slight star elongation in next frame is recoverable in processing) |
-| PHD2 unresponsive to dither command | Per §42.2 retry, fall through to "no guider" path if persistent |
-| Three consecutive dither timeouts in a session | Notify *"Guiding is unstable — dithering is repeatedly timing out. Check mount balance, cable drag, or wind."* + temporarily reduce cadence to every 3 frames automatically |
-
-The "auto-reduce cadence on persistent failure" is an ARA-native graceful-degradation pattern.
-
-### 62.13 API endpoints + WebSocket events
-
-| Method | Path | Purpose |
-|---|---|---|
-| `POST` | `/api/v1/dither/trigger` | Manual dither (e.g., user observed walking noise); body: optional magnitude override |
-| `GET` | `/api/v1/dither/state` | Current dither state (idle / dithering / settling); last dither timestamp + magnitude |
-
-WebSocket events:
-
-```json
-{ "type": "dither.started",       "payload": { "magnitude_pixels": 4, "direction": "ra_dec_random" } }
-{ "type": "dither.settling",      "payload": { "current_rms_pixels": 2.3, "target": 1.5 } }
-{ "type": "dither.completed",     "payload": { "duration_seconds": 12, "final_rms_pixels": 0.9 } }
-{ "type": "dither.skipped",       "payload": { "reason": "diagnostic_unstable" | "short_exposure" | "no_guider" } }
-{ "type": "dither.timeout",       "payload": { "elapsed_seconds": 60, "final_rms_pixels": 2.1, "continued_anyway": true } }
-```
-
-### 62.14 §61 settings registry coverage
-
-- `dither.enabled` — keywords: `dither, dithering, hot pixel, walking noise, sensor noise`
-- `dither.cadence` — keywords: `dither frequency, dither every, dither interval, how often dither`
-- `dither.magnitude` — keywords: `dither pixels, dither size, dither amount, dither distance`
-- `dither.direction` — keywords: `dither direction, dither pattern, dither RA dec`
-- `dither.settle.*` — keywords: `dither settle, settle time, settle threshold, PHD2 settle`
-
-### 62.15 What's NINA-preserved vs ARA-changed
-
-**Preserved verbatim:** PHD2 JSON-RPC dither command + settle protocol, settle threshold math, dither pattern algorithms (random/spiral).
-
-**ARA additions:**
-- Auto-compute magnitude from camera + telescope (vs fixed user-input)
-- Auto-disable for short-exposure workflows (vs always-on)
-- Per-target-type defaults via sequence templates
-- Diagnostic-aware skip during bad conditions
-- Auto-reduce cadence on persistent timeout failures
-- Wizard reduced to 2 dither questions
-- §30.7 equipment-change check invalidates dither magnitude when camera or telescope changes
-
-### 62.16 v0.1.0 expansion paths
-
-- **Direct-mount-pulse dither** for no-guider workflows
-- **Adaptive magnitude** — if server detects walking-noise patterns persisting in stacked frames, auto-increase dither magnitude
-- **Per-filter cadence override** — narrowband dithered more aggressively than broadband
-- **Dither-quality scoring** — per-dither analytics surfaced in §50 Stats Guiding view (e.g., "your dithers settle in 8s avg, but the last 5 took 22s — guiding may be degrading")
-
----
-
-## 63. PHD2 lifecycle + profile/dark-library push
-
-ARA's guider integration depends on **openastro-phd2**, a separately-maintained Linux/Pi-friendly fork of PHD2 with the systemd headless lifecycle, JSON-RPC API surface, and ASCOM Alpaca + INDI transports already designed. This section specs how ARA Core integrates with it — process supervision, profile management, dark library, equipment-change handling. The implementation pattern is *"ARA assumes openastro-phd2 is present and uses its documented RPC surface"* — ARA does not modify PHD2.
-
-**Source of truth for the RPC surface:** [`openastro-phd2/doc/jsonrpc_api.md`](https://github.com/open-astro/openastro-phd2/blob/master/doc/jsonrpc_api.md) — 80+ documented methods. Pin to whatever version ships with the ARA Core .deb's Recommends (`openastro-phd2`).
-
-### 63.1 Lifecycle — managed by openastro-phd2's own systemd unit
-
-Installed by the `openastro-phd2` .deb (per §34.2 Recommends). ARA Core does **not** ship a competing systemd unit.
-
-Existing service (from the .deb):
-
-```ini
-[Unit]
-Description=OpenAstro PHD2 Headless Guiding Server
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=simple
-User=openastro-phd2
-Group=openastro-phd2
-WorkingDirectory=/var/lib/openastro-phd2
-Environment=LD_LIBRARY_PATH=/usr/lib/openastro-phd2
-ExecStart=/usr/bin/xvfb-run -a /usr/bin/openastro-phd2 --headless --headless-auto-connect
-Restart=on-failure
-RestartSec=3
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Notes for ARA:
-- **`xvfb-run` is required** — PHD2 uses wxWidgets which needs a display context even headless. xvfb-run provides a virtual X server. Not optional, not removable.
-- **`--headless --headless-auto-connect`** flags are PHD2 fork additions that make remote-RPC operation practical
-- Service runs as user `openastro-phd2` (separate from `openastroara` — they're sibling services)
-- PHD2's own logs + profiles + calibration data live under `/var/lib/openastro-phd2/`
-- `RestartSec=3` is more aggressive than ARA's own server (5s) — appropriate because PHD2 should recover quickly to keep guiding available
-
-ARA's Pi-side integration with the service:
-
-- **Connection target:** `localhost:4400` (PHD2 default JSON-RPC port)
-- **Restart authority:** ARA can request restart via `systemctl restart openastro-phd2` (privileged via NOPASSWD sudoers drop-in, similar to §33.5 update.sh pattern)
-- **Stop authority:** ARA can request stop via `systemctl stop openastro-phd2` (rare; mostly used by tests)
-- **Status observation:** ARA polls `systemctl is-active openastro-phd2` for service-level health alongside the JSON-RPC ping
-
-### 63.2 Connection lifecycle (ARA's PHD2 client state machine)
-
-ARA's `IGuider` client follows this state machine:
-
-```
-not_attempted
-   ↓ first guiding-relevant operation
-connecting (TCP connect to localhost:4400)
-   ↓ TCP ack
-connected_idle (RPC reachable, no equipment yet)
-   ↓ ensure correct PHD2 profile + connect_equipment via set_connected(true)
-connected_ready (camera + mount in PHD2, ready to guide)
-   ↓ guide (start_guiding RPC)
-calibrating
-   ↓ cal complete
-guiding
-   ↓ sequencer-controlled
-paused | settling-after-dither | star_lost | etc.
-```
-
-Surfaced via `/api/v1/guider/status` endpoint + `equipment.state` WebSocket events.
-
-### 63.3 Crash detection + auto-restart layered on top of systemd
-
-systemd's `Restart=on-failure` handles basic crash recovery. ARA layers additional monitoring:
-
-- ARA's PHD2 client polls `get_app_state` every 10 s when idle, every 2 s during guiding
-- 3 consecutive RPC failures → ARA classifies PHD2 as **down**
-- ARA queries `systemctl status openastro-phd2`:
-  - If `activating` (systemd restarting) → wait with backoff (1s → 5s → 15s → 30s → 60s → 120s)
-  - If `failed` (systemd gave up) → ARA fires **urgent** notification, guider-dependent ops disabled
-  - If `active` but RPC unresponsive → ARA classifies as **hung**, issues `systemctl restart openastro-phd2`
-- Mid-guiding crash → §42.2 fault flow: pause sequence at safe point, critical notification, systemd auto-restarts
-
-### 63.4 Per-ARA-profile to PHD2-profile mapping
-
-Each ARA profile maps 1:1 to a PHD2 profile by name. Mapping is `ara-<short-slug>`:
-
-```
-ARA profile "C14 on CEM120"     ↔ PHD2 profile "ara-c14-cem120"
-ARA profile "RedCat on HEQ5"    ↔ PHD2 profile "ara-redcat-heq5"
-ARA profile "Field rig AM5"     ↔ PHD2 profile "ara-field-am5"
-```
-
-**Profile lifecycle synced via RPC:**
-
-| ARA event | PHD2 RPC sequence |
-|---|---|
-| User creates an ARA profile (§30.4) and reaches the guider wizard screen | `create_profile(name="ara-...", select=true)` |
-| User loads an existing ARA profile (§30.2) | `set_profile_by_name(name="ara-...")` followed by validation of pushed params |
-| User updates ARA profile equipment in §30.7 | `set_connected(false)` → `set_selected_camera/mount/...` → `set_connected(true)` |
-| User deletes an ARA profile | `delete_profile(name="ara-...", delete_dark_files=true)` |
-| User clones an ARA profile | `clone_profile(source="ara-...", new_name="ara-...-copy", select=true)` |
-
-PHD2 preserves per-profile calibration + dark library data, so switching ARA profiles never loses guider state for either rig.
-
-### 63.5 Profile parameters ARA pushes to PHD2
-
-Captured by §37.3 Screen 10 wizard, pushed via `set_profile_setup` (which accepts any subset of fields):
-
-| ARA-side input | PHD2 RPC field |
-|---|---|
-| Guide camera (Alpaca discovery from `discover_alpaca_servers` + `query_alpaca_devices`, or INDI camera name) | `set_selected_camera` + `set_selected_camera_id` (for Alpaca-with-multiple-devices) OR `set_selected_indi_camera_driver` |
-| Guide camera pixel size | `get_alpaca_camera_pixelsize` auto-fetched, override via `set_profile_setup` if user manually entered |
-| Guide scope focal length | `set_profile_setup({focal_length: ...})` |
-| Mount (paired to ARA's mount selection) | `set_selected_mount` (Alpaca path uses `set_alpaca_server` + `set_selected_alpaca_device`) |
-| Calibration step size | Auto-computed from FL/pixel scale; pushed via `set_profile_setup({calibration_step_ms: ...})` |
-| RA aggressiveness | `set_algo_param(axis="ra", name="aggressiveness", value=0.75)` |
-| Dec aggressiveness | `set_algo_param(axis="dec", name="aggressiveness", value=0.65)` |
-| Min motion (RA + Dec) | `set_algo_param` per axis |
-| Dec guide mode (auto / always-positive / always-negative) | `set_dec_guide_mode` |
-
-**Important precondition:** PHD2 rejects `set_selected_*` and `set_profile_setup` while equipment is connected. ARA must:
-
-```
-1. set_connected(false)      # disconnect equipment
-2. set_selected_camera(...)  # push new selections
-   set_selected_mount(...)
-   set_alpaca_server(...)
-   set_profile_setup({...})  # push remaining params
-3. set_connected(true)       # reconnect with new config
-4. poll get_connected until true (with backoff + timeout)
-```
-
-ARA wraps this as a single atomic "update profile" operation; intermediate state isn't user-visible.
-
-### 63.6 Dark library + defect map management
-
-openastro-phd2 distinguishes two calibration-file types:
-
-- **Dark library** — multi-exposure stack used by PHD2 during normal operation for noise subtraction
-- **Defect map (hot-pixel map)** — per-pixel mask of consistently-bad pixels; PHD2 ignores those pixels during star detection
-
-ARA exposes both, with dark library as primary (defect map is advanced):
-
-**Build flow (initiated from wizard's Screen 10 or Settings → Guider → Build Dark Library):**
-
-1. User taps [Build dark library now (~2 min)]
-2. ARA prompts via modal: *"Cover the guide scope with a dark cap. Tap Continue when ready."*
-3. ARA issues `build_dark_library({frame_count: 10, clear_existing: true, load_after: true, notes: "ARA wizard"})`
-4. PHD2 captures the frame stack; WebSocket events stream progress (via PHD2's own event server, ingested by ARA — see §63.8)
-5. Completion event from PHD2 → ARA fires `guider.dark_library.complete` event → modal updates: *"Dark library built. Uncover the guide scope before guiding starts."*
-6. ARA records `calibration_state.guider.dark_library` in profile
-
-**Defect map** is built less frequently (typically once per camera, very stable). Wizard offers a [Also build defect map (~3 min, advanced)] checkbox; default unchecked. Power users can enable from Settings → Guider → Advanced.
-
-**Per-profile storage** — both dark library and defect map are stored per-PHD2-profile by PHD2 itself. ARA's per-ARA-profile mapping means each ARA profile gets its own dark library, automatically.
-
-### 63.7 Equipment-change invalidation (extends §30.7)
-
-The §30.7 invalidation matrix extends to invoke the PHD2 update sequence for guider-affecting changes:
-
-| Equipment change | PHD2 update action | Dark library effect |
-|---|---|---|
-| Guide camera | Disconnect → `set_selected_camera`/`_id` to new device → reconnect | Invalidated (different sensor = different hot pixels) → rebuild required |
-| Guide scope (focal length) | `set_profile_setup({focal_length: ...})`, no disconnect required for this specific field | Library still valid (geometry change doesn't affect dark frames) |
-| Mount | Disconnect → `set_selected_mount` / `set_alpaca_server` / `set_selected_alpaca_device` → reconnect | Library still valid (mount change doesn't affect guide camera noise) |
-| PHD2 config / aggressiveness / min-motion (user-edited in Settings → Guider → Advanced) | `set_algo_param` per changed param | Library still valid |
-
-When dark library invalidates, ARA surfaces a banner in the main shell:
-
-> *"Guide camera changed — PHD2's dark library is stale. Build a new one now (~2 min) or guiding will use unsubtracted frames."  [Build now]  [Later]*
-
-If user defers, guiding continues with no dark subtraction. Quality may degrade (more star-detection false positives from hot pixels) but it works.
-
-### 63.8 Log + event ingestion via PHD2's event stream
-
-PHD2's JSON-RPC socket carries both method responses AND asynchronous events on the same connection. ARA subscribes to the event stream and ingests guiding-relevant events into ARA's session log:
-
-- `StarLost` → ARA notification + session log entry
-- `Calibrating` / `CalibrationComplete` / `CalibrationFailed`
-- `SettleBegin` / `SettleDone` / `Settling`
-- `GuideStep` (frequent — per-frame guide correction; ARA samples for §50 Stats, doesn't notify per-step)
-- `Alert` (PHD2's own notification mechanism — passed through to ARA's notification feed)
-
-Implementation: ARA maintains the persistent TCP connection PHD2 uses, dispatching events to the appropriate ARA subsystem (logging, notifications, Stats DB).
-
-**ARA does NOT tail PHD2's log files.** The JSON-RPC event stream is the canonical channel. PHD2's `/var/lib/openastro-phd2/PHD2_GuideLog_*.txt` files are still written for forensic post-mortem use but ARA doesn't depend on them.
-
-### 63.9 PHD2 version detection + handshake
-
-On every (re)connect, ARA calls `get_app_state` and inspects PHD2 version info. The fork identifies itself distinctly from upstream PHD2:
-
-- If version reports `openastro-phd2 vX.Y.Z` → log "Connected to openastro-phd2 vX.Y.Z" + verify against ARA's known-compatible range
-- If version reports stock PHD2 → log warning *"Connected to upstream PHD2 — some Linux/headless features may be unavailable. Recommend installing openastro-phd2 from apt.openastro.net."* and continue (graceful degradation)
-- If version is older than ARA's tested minimum → log compatibility warning + continue
-
-ARA does not refuse to operate against upstream PHD2. The fork is recommended; not required.
-
-### 63.10 PHD2 not installed — graceful degradation
-
-If `openastro-phd2` is not installed (user opted out of Recommends, or removed it):
-
-- ARA server still starts cleanly; reports `guider_available: false` in `/api/v1/server/state`
-- Wizard's guider screen shows a banner: *"openastro-phd2 not detected. Install with `sudo apt install openastro-phd2`."*
-- Sequences with guiding requirements warn before start: *"This sequence requires guiding but openastro-phd2 is not installed. Continue without guiding (frames may show star trails)?"*
-- Dither auto-disables (per §62.7)
-
-### 63.11 Failure handling matrix
-
-| Failure | Action |
-|---|---|
-| openastro-phd2 not installed | `guider_available: false`; wizard banner; sequences warn before start |
-| Service won't start (systemd `failed`) | Urgent notification; guider features disabled until user fix |
-| RPC connect fails repeatedly | Backoff (1/5/15/30/60/120 s); after all fail, treat as hung, restart service |
-| `set_connected(true)` fails (equipment not present after profile push) | Per §42.3 hot-reconnect; surface to wizard as "Equipment not connected in PHD2 — check that the camera/mount you selected is reachable" |
-| Mid-session crash | Pause sequence per §42.2; critical notification; systemd auto-restarts; ARA reconnects |
-| Hung mid-guiding (RPC unresponsive, process alive) | Force `systemctl restart openastro-phd2`; treat as star_lost during recovery |
-| `build_dark_library` fails | Surface specific error (no camera / capture active / save failure); user retries from Settings |
-| Profile push fails (precondition violation) | Retry: send `set_connected(false)` first, then re-push; if still fails, surface explicit error |
-
-### 63.12 API endpoints + WebSocket events
-
-| Method | Path | Purpose |
-|---|---|---|
-| `GET` | `/api/v1/guider/status` | PHD2 lifecycle state + version + last-seen app state + connected equipment |
-| `POST` | `/api/v1/guider/restart` | Force `systemctl restart openastro-phd2`; idempotent per §60.5 |
-| `POST` | `/api/v1/guider/profile/push` | Push current ARA-profile params to PHD2; runs the disconnect-update-reconnect sequence |
-| `POST` | `/api/v1/guider/dark-library/build` | Initiate dark library build (with prompt-cover modal flow on client) |
-| `GET` | `/api/v1/guider/dark-library/state` | Returns `get_calibration_files_status` result (paths, exists, loaded, frame count) |
-| `DELETE` | `/api/v1/guider/dark-library` | `delete_calibration_files({delete_dark_library: true})` for current profile |
-| `POST` | `/api/v1/guider/defect-map/build` | Build defect map (advanced; opt-in) |
-| `GET` | `/api/v1/guider/equipment-choices` | Mirrors `get_equipment_choices` — lists available cameras/mounts for wizard dropdowns |
-| `POST` | `/api/v1/guider/discover-alpaca` | Mirrors `discover_alpaca_servers` — surfaces Alpaca servers PHD2 can see (useful when ARA's discovery and PHD2's discovery disagree about what's on the network) |
-
-WebSocket events:
-
-```json
-{ "type": "guider.lifecycle",      "payload": { "state": "connected_ready", "previous": "connecting", "phd2_version": "openastro-phd2 2.6.14" } }
-{ "type": "guider.crashed",        "payload": { "uptime_seconds": 14523, "restart_attempt": 1 } }
-{ "type": "guider.restart_failed", "payload": { "attempts": 5, "next_action": "user_intervention_required" } }
-{ "type": "guider.profile_pushed", "payload": { "ara_profile_id": "...", "phd2_profile_name": "ara-c14-cem120", "fields_changed": ["camera", "mount", "focal_length"] } }
-{ "type": "guider.dark_library.building", "payload": { "frame_index": 3, "total_frames": 10, "exposure_ms": 1500 } }
-{ "type": "guider.dark_library.complete", "payload": { "frame_count": 10, "took_seconds": 117, "path": "..." } }
-{ "type": "guider.dark_library.invalidated", "payload": { "reason": "guide_camera_changed" } }
-{ "type": "guider.event_passthrough", "payload": { "phd2_event": "StarLost", "raw": {...} } }
-```
-
-### 63.13 §61 search registry coverage
-
-- `guider.service_management` — keywords: `PHD2 service, openastro-phd2 systemd, guider service`
-- `guider.profile.camera` — keywords: `guide camera, PHD2 camera, guider camera, OAG camera`
-- `guider.profile.focal_length` — keywords: `guide scope focal length, guide scope FL, OAG focal length`
-- `guider.profile.aggressiveness` — keywords: `PHD2 aggressiveness, guide aggressiveness, RA aggressive, Dec aggressive`
-- `guider.dark_library_build` — keywords: `PHD2 dark, guide camera dark, hot pixel dark, dark library, build dark`
-- `guider.defect_map_build` — keywords: `PHD2 defect map, hot pixel map, bad pixel map, defect map`
-- `guider.restart` — keywords: `restart PHD2, restart guider, guider unresponsive, openastro-phd2 restart`
-
-### 63.14 DEPLOY.md updates
-
-Replace any earlier wording about "one-time VNC setup of PHD2" with:
-
-> *PHD2 is installed and managed automatically as the openastro-phd2 package (pulled in via Recommends when you install openastroara-server). It runs as a background service starting at Pi boot. ARA's wizard configures PHD2's profile, equipment selections, and dark library through PHD2's documented JSON-RPC API — you don't need to interact with PHD2 directly via VNC or a remote display.*
-
-### 63.15 What's NINA-preserved vs ARA-changed
-
-**Preserved (via openastro-phd2 itself, not ARA):** PHD2's JSON-RPC API contract (NINA depends on the same surface), settle event protocol, calibration data shape, guide algorithm internals.
-
-**ARA additions:**
-- systemd-managed PHD2 (via the openastro-phd2 .deb's own unit)
-- Auto-restart with exponential backoff layered on systemd
-- Hung-process detection via JSON-RPC ping
-- Per-ARA-profile to PHD2-profile mapping
-- Profile + dark-library push from ARA's wizard (vs NINA's "user runs PHD2 manually")
-- Event stream ingestion into ARA's session log + Stats (§50)
-- Equipment-change auto-update via the §30.7 invalidation pipeline
-- Graceful handling when openastro-phd2 not installed
-
-### 63.16 v0.1.0 expansion paths
-
-- **WILMA-pushed openastro-phd2 binary updates** (§33.6, §55.1) — same atomic-swap + rollback pattern as ARA Core's WILMA push, applied to the openastro-phd2 sibling package
-- **AI-driven calibration assistance** — ARA observes user's manual PHD2 calibration once; learns optimal params; suggests improvements in subsequent sessions
-- **Multi-guider support** — second OAG camera, dual-rig observatory setups
-- **PHD2 advanced algorithm tuner** — visual UI for `set_algo_param` parameters with explanations, since PHD2's own UI is dense and headless ARA users can't access it
-
----
-
 ## 31. Time + location sync (WILMA waterfall)
 
 ARA Core needs accurate UTC time and lat/long/altitude for: sidereal time, alt/az transforms, dawn/dusk schedules, plate-solve search, sequence triggers. A Pi without internet doesn't keep time (no RTC by default). WILMA helps via a waterfall of sync sources.
@@ -7793,6 +7318,873 @@ In the interest of setting accurate expectations:
 
 ---
 
+## 57. Stop Mount + slew safety
+
+Centered on one principle: **whenever the mount is moving autonomously, the user can stop it in one tap.** A complementary control to §35.3 Emergency Stop, scoped narrowly to mount motion rather than full session abort.
+
+### 57.1 Two distinct stop concepts, kept clearly separate
+
+| Control | What it does | When visible | After triggering |
+|---|---|---|---|
+| **Stop Mount** (§57) | Issues Alpaca `AbortSlew()` — mount halts in place; nothing else touched | Contextual — only during autonomous slews | Sequence pauses; mount stays where halted; cooler/guider/etc. keep running. Modal prompts [Verify Position] / [Resume] / [Skip Target] / [End Session] |
+| **Emergency Stop** (§35.3) | Full session abort — camera abort, guider stop, mount park, sequence aborted | Persistent — always visible in WILMA shell | Session over |
+
+Different buttons, different colors, different positions, different consequences. Stop Mount = "this slew is going somewhere I don't like." Emergency Stop = "kill everything now." Users learn the distinction quickly because each only appears when contextually relevant.
+
+### 57.2 When Stop Mount appears
+
+The button surfaces (as a large, prominent overlay near the top of the active view) any time the mount is autonomously slewing under server control:
+
+- **Sequencer-initiated slew** — slew to target, slew between mosaic panels, slew to flat target
+- **Meridian flip slew** — the actual flip movement (§58)
+- **Recovery slew** — §28 mount-home or slew-to-saved-target during crash recovery
+- **Plate-solve re-center slew** — post-slew correction
+- **Park / unpark / home** — these are also slews; the button appears
+- **Polar-align initial RA rotation** — §45's 30° RA rotation for the seed
+
+Does **not** appear for:
+- Sidereal tracking (not a slew event)
+- PHD2 guide corrections (sub-arcsecond, not user-visible motion)
+- Manual slewing initiated from WILMA's manual control panel (those controls have their own abort built into the jog buttons)
+
+The button disappears when the server detects `IsSlewing = false` plus a 1-second grace period (handles mounts that briefly stop between sub-slews).
+
+### 57.3 Visual treatment
+
+```
+┌──────────────────────────────────────────────────────┐
+│                                                       │
+│  Mount is slewing to M81 (RA 9h55m, Dec +69°)        │
+│  Est. arrival: 23 s                                   │
+│                                                       │
+│         ┌─────────────────────────┐                   │
+│         │                         │                   │
+│         │   ⛔  STOP MOUNT        │                   │
+│         │                         │                   │
+│         └─────────────────────────┘                   │
+│                                                       │
+│  Live position: RA 9h12m, Dec +52° → +69°             │
+│                                                       │
+└──────────────────────────────────────────────────────┘
+```
+
+Sized for panic-press: minimum 200×80 px on desktop, 280×80 pt on mobile. Red (`AraColors.accentError`). Single-tap, no confirmation gate (the button IS the confirmation). Z-index above modals so it's never hidden behind other UI.
+
+Keyboard shortcut on desktop: **Space bar** when any slew is in progress. Single-press is fine — the button is only present during slews, so accidental Space-presses on other screens don't trigger it. Configurable per profile via `mount_safety.stop_mount_keyboard_shortcut_desktop`.
+
+### 57.4 After the user taps Stop Mount
+
+1. Server immediately issues `AbortSlew()` via Alpaca — universal call, every mount supports it (mandatory in `ITelescope`)
+2. Server pauses the sequencer (in-flight instruction marked `paused`)
+3. WebSocket event `mount.slew_aborted` fires; all connected clients update
+4. WILMA shows a clear modal:
+
+```
+┌──────────────────────────────────────────────────────┐
+│  Mount stopped at user request                        │
+│  ──────────────────────────────────────────────────  │
+│  Current position: RA 9h34m, Dec +61°                 │
+│  Sequence paused at: "Slew to M81" (instruction 4/47) │
+│                                                       │
+│  Cooler, guider, and other equipment are still        │
+│  running. Verify the mount is in a safe position      │
+│  before resuming.                                     │
+│                                                       │
+│  [ Verify Position — show me an image ]               │
+│  [ Resume slew to M81 ]                               │
+│  [ Skip this target ]                                 │
+│  [ End session ]                                      │
+└──────────────────────────────────────────────────────┘
+```
+
+**[Verify Position — show me an image]** triggers a quick exposure (default 1-2 s) and plate-solves it; result shows where the mount is actually pointing vs where the slew intended. Lets the user confirm "OK, this is fine" before any further movement.
+
+### 57.5 Latency target
+
+Tap → `AbortSlew()` issued: **< 200 ms on LAN, < 500 ms over AP mode.** Tap → mount mechanically halted: depends on mount and slew speed but typically another 0.5-2 s. Total panic-to-stop budget: **< 3 seconds in the worst case.** Server logs the actual latency per Stop Mount incident in the `faults` table so we can tune.
+
+### 57.6 Safety-speed slews
+
+During all autonomous slews (sequencer, recovery, flip, plate-solve re-center, polar-align seed rotation), the server uses a **reduced slew rate** — default 50% of mount max, configurable per profile. Rationale: slower slew + fast Stop Mount = more time for the user to react before damage.
+
+Manual slews from WILMA's control panel use the user-selected rate (the user has hands on the rig and can see what's happening). The safety speed applies only to server-initiated autonomous motion.
+
+For mounts already at limited slew rates (some strain-wave mounts), this is a no-op. For fast mounts (CEM120, EQ8) it adds maybe 10-30 seconds per session transition, in exchange for meaningful "user can intervene before damage" headroom.
+
+Profile setting:
+
+```json
+{
+  "mount_safety": {
+    "autonomous_slew_rate_pct": 50,
+    "stop_mount_keyboard_shortcut_desktop": "Space"
+  }
+}
+```
+
+### 57.7 Hardware kill switch — DEPLOY.md recommendation
+
+Software stop has Alpaca + network + mount-controller + mechanical latency in series. For expensive rigs, DEPLOY.md documents the recommendation: wire a physical e-stop button to cut mount power (mains-side or 12V-side). That's the gold standard. ARA does not implement this; ARA recommends it in user-facing docs.
+
+### 57.8 API endpoints
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/api/v1/mount/stop` | Issue `AbortSlew()` + pause sequence. Body empty. Returns current mount state + sequence state. Idempotency-Key required (§60.5). |
+| `GET` | `/api/v1/mount/state` | Current mount state (slewing/idle/tracking/parked), position, predicted target if mid-slew |
+
+WebSocket events:
+
+```json
+{ "type": "mount.slew_started",  "payload": { "target_ra": ..., "target_dec": ..., "estimated_seconds": ... } }
+{ "type": "mount.slew_aborted",  "payload": { "halted_at_ra": ..., "halted_at_dec": ..., "reason": "user_request" } }
+{ "type": "mount.slew_complete", "payload": { "final_ra": ..., "final_dec": ..., "duration_seconds": ... } }
+```
+
+### 57.9 What's deferred to v0.1.0 (Mount Safety v2)
+
+The lean v0.0.1 scope addresses the panic-button gap. The following are deferred to a v0.1.0 "Mount Safety v2" pass once we see how lean §57 lands in practice:
+
+- Horizon profile (alt-vs-azimuth table for declared obstructions)
+- HA limit configuration (separate from `pause_after_min`)
+- No-go polygons (oddly-shaped obstructions)
+- High-dec slew warnings
+- First-slew-on-profile confirmation (separate from §58's first-flip-confirm)
+- Slew confirmation policy modes (`always_confirm` / `confirm_if_large` / `never`)
+- Park-between-targets option
+
+---
+
+## 58. Meridian flip workflow
+
+Builds on §57's primitives (Stop Mount, safety-speed slews, hardware-kill-switch recommendation). This section covers the specific orchestration of a meridian flip — pause windows, post-flip recovery, unattended-safety layers, graceful shutdown on failure.
+
+### 58.1 What a meridian flip is (and isn't)
+
+A German Equatorial Mount (GEM) — and every GEM-descendant including strain-wave mounts — tracks a target across the sky. When the target crosses the **meridian** (the N-S line through zenith), if the mount kept tracking, the OTA would eventually swing into the tripod, mount head, or pier. So the mount must flip — rotate the RA axis 180° and swing the camera to the other side — to keep imaging.
+
+Three things must happen in a flip:
+1. Stop imaging briefly (no exposures while the mount is moving)
+2. Mount executes the flip slew
+3. Re-acquire: plate-solve to confirm framing, optionally re-focus, restart guiding (PHD2 needs to know the axes are flipped)
+
+**Important:** every GEM-descendant must flip eventually. Strain-wave mounts (AM5, HEM27/45, RST-135, NYX-101) **delay** the flip — typically 45-75 minutes past meridian — but they still flip. The advantage is a longer window, not a permanent exemption. The only setups that genuinely never flip are alt-az mounts (different geometry, but suffer field rotation) and true fork-on-wedge equatorial mounts (rare today).
+
+### 58.2 Timing windows — three numbers, all configurable per profile
+
+| Knob | Default | What it means |
+|---|---|---|
+| `pause_before_min` | 1.0 min | Stop starting new exposures within 1 min of meridian crossing |
+| `pause_after_min` | 5.0 min | Wait this long *after* the crossing before flipping (target is safely past the meridian) |
+| `max_wait_after_min` | `pause_after_min + 10` | If something prevented the flip from happening within this window, give up on this target |
+
+**`pause_after_min` is a hardware constraint, not a user preference.** It expresses *"this is when my specific physical rig must flip by, before the OTA risks collision."* It depends on OTA length, dovetail saddle height, pier height, counterweight position. Get it wrong and the OTA can swing into the tripod.
+
+### 58.3 Rule-of-thumb table per rig class
+
+The wizard (§37.3 Screen 8) suggests a starting value based on rig class:
+
+| Rig class | Suggested `pause_after_min` |
+|---|---|
+| Long SCT (C11, C14) / Long Newtonian on GEM | 1-2 min |
+| Medium SCT/RC (8″) on GEM | 3-5 min |
+| Medium refractor (ED102, FSQ-85) on GEM | 5-10 min |
+| Tiny refractor (RedCat, FRA300) on GEM | 10-15 min |
+| Any OTA on strain-wave mount (AM5, HEM, RST, NYX) | 45-75 min (still flips, just much later) |
+| Fork-on-wedge equatorial (rare) | `enabled: false` |
+| Alt-az / fork alt-az | `enabled: false` |
+
+This is a starting suggestion; user adjusts for their specific setup. Pier height, saddle plate, dovetail length, and counterweight position all shift the actual safe value. Wizard prompts user to verify the first flip in-person.
+
+### 58.4 Post-flip recovery — what runs, in what order
+
+1. **Slew to target RA/Dec** — explicit slew after the flip completes, to clean up any drift
+2. **Plate-solve + re-center** — mandatory. Tolerance per §28.2 (60″ position, 1° rotation). Up to 3 retries.
+3. **Re-focus** — *conditional*. Default policy: re-focus only if sensor temp has drifted > 2°C since last AF run. Three options: `always` / `if_temp_drifted` / `never`.
+4. **Restart guiding** — PHD2 needs to know the axes flipped. Two modes:
+   - `auto_restore` (default) — PHD2's "Auto Restore Calibration" with reverse-Dec flag set. Fast (~30 s).
+   - `full` — full PHD2 recalibration. Slow (5-10 min) but most reliable for finicky mounts.
+
+### 58.5 Side-of-pier verification
+
+After the flip, ARA queries Alpaca's `SideOfPier`. If it didn't change (or driver returns `pierUnknown`), log a warning but continue — some Alpaca drivers lie about pier side. If the driver doesn't expose `SideOfPier` at all (`CanSetPierSide = false`), ARA infers pier side from hour angle. No brand-quirk database (per §52 Alpaca-only commitment).
+
+### 58.6 Profile schema
+
+Profile JSON gains a `meridian_flip` block (lives alongside §35.6 safety policy and §57 mount_safety):
+
+```json
+{
+  "meridian_flip": {
+    "enabled": true,
+    "mode": "auto",                          // "auto" | "prompt" | "never"
+    "pause_before_min": 1.0,
+    "pause_after_min": 5.0,
+    "max_wait_after_min": 15.0,
+    "recenter_after_flip": true,
+    "refocus_after_flip": "if_temp_drifted", // "always" | "if_temp_drifted" | "never"
+    "refocus_temp_threshold_c": 2.0,
+    "guider_recal": "auto_restore",          // "auto_restore" | "full" | "skip"
+    "skip_target_if_below_floor": true,
+    "first_flip_confirmed": false            // see §58.8
+  }
+}
+```
+
+For non-flipping setups (alt-az detected via Alpaca `AlignmentMode`, fork-on-wedge configured manually), set `enabled: false` and the meridian-flip UI is hidden from that profile's wizard + Settings.
+
+### 58.7 Failure handling matrix
+
+| Failure | Action |
+|---|---|
+| Mount slew error during flip | Retry 3× → pause sequence + critical notification |
+| Post-flip plate-solve fails after 3 retries | Pause + warning notification (user can manually re-center) |
+| Re-focus fails | Log warning, continue without re-focus (don't abort the night over a bad AF run) |
+| Guider re-cal fails | Retry → pause + warning |
+| Target below profile's hard altitude floor after flip | Skip target, advance to next; surface "M42 below horizon after flip" notification |
+
+All equipment-impacting failures are subject to the unattended-safety pipeline in §58.9 if no user is present.
+
+### 58.8 First-flip confirmation safety net
+
+When a profile fires its meridian-flip trigger **for the first time** (`first_flip_confirmed: false`), instead of flipping autonomously, ARA sends a critical notification ~60 seconds before the flip:
+
+> ⚠ **First meridian flip on this profile**
+>
+> About to flip in 60 seconds. This is the first flip ARA has run for "C14 on CEM120" — verify your `pause_after_min` value (currently 2 min after meridian) is safe for this rig.
+>
+> [Proceed] [Pause sequence — let me check]
+
+If user confirms or doesn't respond in 60 s, flip proceeds. Sets `first_flip_confirmed: true` on the profile so subsequent flips run silently. Reset on any equipment change in the profile (the safety net assumes the rig hasn't changed since user verified).
+
+Catches the one failure mode that actually breaks gear: user creates a new profile, gets the timing number wrong, OTA tries to flip into the tripod. The 60-second pause is cheap insurance.
+
+### 58.9 Unattended flip safety — four independent layers
+
+For overnight unattended sessions (the most common astrophotography use case), four layers of defense protect a sleeping user. Each layer catches a different failure mode independently.
+
+**Layer 1: Pre-flip flight check (runs ~2 minutes before the flip)**
+
+Before issuing the flip slew, server verifies:
+
+- **Endpoint prediction safe** — predict post-flip RA/Dec/alt/az. If below profile's hard altitude floor, skip target instead of flipping.
+- **Mount reports healthy state** — no Alpaca-reported faults, tracking active, not parked, communication OK
+- **Required equipment connected** — camera, guider (if re-cal enabled), focuser (if re-focus enabled). If anything is disconnected, attempt §42.3 hot-reconnect; if reconnect fails, abort the flip.
+- **Predicted slew duration sane** — if mount estimates the flip slew will take longer than expected (e.g., > 90 s for a typical mount), suspect a stuck axis or driver confusion; abort and notify.
+
+If any check fails, the flip does **not start**. Sequence pauses, urgent notification fires. Mount stays in pre-flip state (tracking sidereal) — a known-safe configuration.
+
+**Layer 2: Watchdog during the flip slew**
+
+Once the slew is in flight, a server-side watchdog samples mount state every 5 seconds:
+
+- **Position must be progressing** — if reported RA/Dec hasn't changed for 15 seconds, mount is stalled → issue `AbortSlew`, mark flip failed
+- **Hard timeout** — flip slew must complete within 3× predicted duration or 5 minutes, whichever is shorter. Exceeded → `AbortSlew`, fail.
+- **No Alpaca fault events** — driver reports a fault mid-slew → `AbortSlew`, fail
+- **Pier side must change** — if mount reports `SideOfPier` unchanged after `IsSlewing = false`, flip likely didn't actually flip → fail (don't resume imaging on a possibly-still-on-wrong-side mount)
+
+**Layer 3: Post-flip verification gate**
+
+After the slew completes, before *any* imaging resumes:
+
+- **Plate-solve mandatory** — up to 3 retries (per §58.4)
+- **If all retries fail: imaging does NOT resume.** Sequence paused, urgent notification fires. Better to lose the rest of the night than to image with a misaimed scope.
+- **Solved position must be within sanity bounds** of the intended target (default ± 2°). If solve succeeds but says "you're 30° off where you should be," fail rather than trust it.
+
+**Layer 4: Safe rest state on any failure**
+
+When any of Layers 1-3 trigger a failure, the mount goes to a known-safe state immediately:
+
+- If `Park` is configured and `CanPark = true` → **park the mount**. Safest possible position.
+- If `Park` is not available → stop tracking, leave mount where the abort caught it.
+- Cooler stays running (user may want to resume if conditions allow)
+- Guider stopped (PHD2 corrections on a mis-aimed scope can drift further)
+- Sequence marked paused; in-flight target's frames preserved
+- Urgent notification fires — bundled looping alarm audio plays on any connected WILMA device, per §35.5
+
+### 58.10 Severity escalation during unattended hours
+
+Profile gains an `unattended_hours` range (default: from astronomical dusk to astronomical dawn at site, or user-set time window). During unattended hours, all equipment-impacting event severities are **bumped one level**:
+
+- `warning` → `critical`
+- `critical` → `urgent`
+
+Same events, louder consequences, only when the user is presumed asleep. User adjusts the hours in profile if their schedule differs (e.g., a remote-observatory user with the observatory on a different timezone).
+
+### 58.11 Connecting to "how the user hears about it"
+
+v0.0.1's "no push notifications" limitation (§46.9) means the practical answer for the sleeping user is:
+
+**Keep a desktop or tablet running WILMA on a device that is audibly near where you sleep.** The bundled safety alarm (§35.5) loops at max volume on urgent notifications until acknowledged. A Mac in the bedroom, an iPad on the nightstand, or a Linux laptop downstairs — anything that can play audio and has WILMA running.
+
+DEPLOY.md adds explicit guidance: *"For unattended overnight sessions, keep at least one WILMA device running with audio enabled near where you sleep. The urgent-alarm pattern is your wake-up signal."*
+
+True push notifications (FCM/APNs to phone lock screen even with WILMA closed) are committed v0.1.0 per §46.9 and §55.1.
+
+### 58.12 Unattended-failure graceful shutdown (10-minute countdown)
+
+Triggers from **any** urgent-severity equipment-impacting failure where the sequence has paused awaiting user input. The flip failure case is one instance; mid-sequence equipment fault is another; storage unmount mid-night is another. Same pattern handles them all.
+
+**The countdown:** when an urgent failure fires and the sequence enters `paused_awaiting_user` state, server starts a 10-minute countdown.
+
+What resets the countdown (= "user has come back"):
+- User acknowledges the urgent notification via WILMA (tap [Acknowledge])
+- User issues any explicit API command (resume / abort / skip / Stop Mount / emergency stop / equipment control)
+- User opens a new WebSocket connection from any WILMA device
+
+What does NOT count as user attention:
+- WILMA polling `/state` in the background
+- Pre-existing WebSocket connections that have been quiet (heartbeat pings only)
+- Background automated processes
+
+If 10 consecutive unattended minutes elapse, **graceful shutdown executes**.
+
+**Shutdown sequence (in strict order, with timeouts):**
+
+1. **Stop guider** (PHD2 stop, ~1 s)
+2. **Warm cooler** — set target to ambient, ramp down at profile's configured rate (default 1°C/min, same as §28's ramp-up). Slow step — typically 10-30 min for a −10°C → +20°C ramp. Server doesn't block on this; warmup runs in background while subsequent steps execute.
+3. **Park mount** if `CanPark = true` and a park position is configured (~30-60 s)
+4. **Disconnect filter wheel / focuser / rotator / flat panel** (~5 s each)
+5. **Disconnect camera** — *after* warmup completes. Important: don't disconnect mid-warmup; that strands the cooler at a cold setting and the sensor warms violently when power drops. Camera disconnect waits for ramp completion or a hard 30-min cap, whichever comes first.
+6. **Mark session `ended_at`** in DB with reason `unattended_shutdown_after_failure`
+7. **Stop the urgent alarm** — situation is now stable; no more siren
+
+What stays running:
+- The ARA server itself (so user can reconnect, review logs, see what happened)
+- mDNS announce (so WILMA can still find the Pi)
+- Notification system (both the failure event and the shutdown event remain in the feed)
+
+**Why 10 minutes specifically** — Goldilocks zone. Long enough for an alarmed user to grab their phone, fumble to WILMA, and tap acknowledge. Short enough that a sleeping user who genuinely doesn't wake up doesn't burn 6 hours of battery. NINA has no equivalent (it just keeps running); ASIAir powers things off harder on some failures but the threshold isn't user-configurable. ARA splits the difference and gives the user the dial.
+
+**Configuration in profile:**
+
+```json
+{
+  "unattended_failure_shutdown": {
+    "enabled": true,
+    "wait_minutes": 10,
+    "actions": ["stop_guider", "warm_cooler", "park_mount", "disconnect_equipment"],
+    "keep_server_running": true,
+    "stop_alarm_after_shutdown": true
+  }
+}
+```
+
+The 10-min wait is configurable per profile (5 for battery-limited field rigs, 30 for wall-powered observatories). Disabling shutdown entirely is allowed but not recommended; wizard flags it as such.
+
+### 58.13 What the user sees when they come back
+
+When user reconnects to ARA the next morning, the first-screen-after-server-handshake shows a clear post-incident summary:
+
+```
+┌──────────────────────────────────────────────────────┐
+│  Session ended overnight                              │
+│  ──────────────────────────────────────────────────  │
+│                                                       │
+│  At 03:14 last night, meridian flip on M81 failed:    │
+│  plate-solve after flip could not converge (3/3       │
+│  retries failed).                                     │
+│                                                       │
+│  Sequence paused, urgent alarm fired for 10 min       │
+│  with no response → equipment shut down gracefully    │
+│  at 03:24.                                            │
+│                                                       │
+│  Frames captured: 47 (M81, all rated)                 │
+│  Cooler warmed and camera disconnected normally.      │
+│  Mount parked.                                        │
+│                                                       │
+│  [ Review failure details ]  [ View frames ]          │
+│  [ Resume session ]  [ End session ]                  │
+└──────────────────────────────────────────────────────┘
+```
+
+### 58.14 Pre-sleep checklist
+
+Just before astronomical dusk, ARA runs a one-shot self-test and surfaces a pre-sleep summary in WILMA:
+
+```
+Tonight's sequence — pre-flight check
+
+✓ All equipment connected and healthy
+✓ Storage: 412 GB free
+✓ Plate solver tested OK
+✓ Cooler at target (−10 °C)
+✓ Mount safety: tracking + slew rate verified
+
+Planned meridian flips tonight:
+  • 02:14 — M81 (alt 67° at flip, OK)
+  • 04:33 — NGC 6188 (alt 12° at flip — BELOW soft warning, above hard floor)
+
+Unattended hours: 23:00 — 06:30
+Alarm device: macbook-bedroom.local (verified audible)
+
+  [ All good — let me go to bed ]   [ Adjust ]
+```
+
+User taps "all good" once before sleeping. Catches mis-set thresholds, disconnected equipment, low storage, etc., before they become 3am alarms.
+
+### 58.15 WebSocket events
+
+Beyond the §46.3 catalog entries (`meridian_flip.imminent` info, `meridian_flip.starting` info, `meridian_flip.complete` info, `meridian_flip.failed` critical), §58 adds:
+
+```json
+{ "type": "meridian_flip.preflight_failed",   "payload": { "reason": "endpoint_below_floor", "target": "M42" } }
+{ "type": "meridian_flip.watchdog_aborted",   "payload": { "stage": "slew", "reason": "position_stalled" } }
+{ "type": "meridian_flip.postflip_solve_failed", "payload": { "retries": 3, "last_error": "..." } }
+{ "type": "unattended_shutdown.countdown_started", "payload": { "wait_minutes": 10, "trigger_event_id": "..." } }
+{ "type": "unattended_shutdown.completed",   "payload": { "actions_taken": [...], "duration_seconds": ... } }
+```
+
+### 58.16 API endpoints
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/api/v1/meridian-flip/state` | Current flip state (idle/imminent/executing/complete/failed); time-to-next-flip estimate |
+| `POST` | `/api/v1/meridian-flip/skip` | Skip the upcoming flip; advance to next target instead |
+| `POST` | `/api/v1/meridian-flip/confirm-first` | User confirms the first-flip prompt (§58.8) |
+| `GET` | `/api/v1/preflight/today` | Pre-sleep checklist data (§58.14) |
+| `POST` | `/api/v1/unattended-shutdown/acknowledge` | User acknowledges urgent failure, cancels countdown |
+
+All mutating endpoints require `Idempotency-Key` (§60.5).
+
+### 58.17 What's deferred to v0.1.0
+
+- Per-target flip overrides in the sequence (per-target "always re-focus after flip" etc.)
+- Custom `BeforeMeridianFlip` / `AfterMeridianFlip` user hook scripts (folds into plugin/scripting v0.1.0 per §55.1)
+- Mount-driven trigger mode (using mount's reported pier-side change instead of HA timing — relies on driver honesty; v0.1.0 once Alpaca driver compliance settles per §52.5)
+- "Permitted side of meridian" constraint (advanced — force always-east or always-west imaging)
+- Push notifications to phone lock screen (FCM/APNs — §46.9 v0.1.0)
+
+---
+
+## 59. Autofocus — Smart Focus + Classic AF fallback
+
+The most-tweaked NINA subsystem, redesigned. NINA's autofocus panel exposes 17 settings the user must understand before they can focus. **ARA exposes 6, and discovers the rest from observation.** This section is one of the §0.5 "better than NINA" wins.
+
+### 59.1 Two modes — Smart Focus (primary) + Classic AF (calibration + fallback)
+
+| Mode | When used | Duration per run |
+|---|---|---|
+| **Smart Focus** | After calibration. Every routine AF trigger uses this. | 30-90 s (2-3 exposures) |
+| **Classic AF** (9-step parabolic/hyperbolic curve, HocusFocus star detection, inherited from NINA) | First calibration on a new profile. Fallback when Smart Focus diverges. User-requested via manual "Run full focus curve" button. | 3-5 min (9-11 exposures) |
+
+Smart Focus is the visible mode; Classic AF runs only when needed. Users typically only see Classic AF on first night per profile (calibration) and almost never again.
+
+### 59.2 The core insight behind Smart Focus
+
+A defocused image carries information about *how far* and *which direction* it's out of focus, not just *that* it's out of focus. SCTs, Maksutovs, RCs, and Newtonians defocus into donuts whose diameter scales linearly with distance from focus; refractors broaden in characteristic FWHM patterns. Once we've learned the relationship between defocus distance and image features for a specific rig, **we don't need a 9-step curve every time — we need one image to read the rig's current state and predict the correct focuser move.**
+
+NINA doesn't do this. ASIAir doesn't either. PixInsight has a research-grade tool for it but it's offline-only. ARA brings it to the live capture pipeline.
+
+### 59.3 Smart Focus algorithm
+
+**Phase 1 — Calibration (once per profile, ~5 minutes, auto-runs on first AF trigger of a new profile):**
+
+Server runs a traditional 9-step Classic AF curve. At each step it records a feature vector richer than HFR alone:
+
+- HFR (Half-Flux Radius)
+- Star FWHM
+- **Donut outer diameter** (obstructed scopes — SCT, Mak, RC, Newtonian)
+- **Donut inner diameter** (central obstruction shadow)
+- **Donut ring thickness** = outer − inner
+- **Asymmetry coefficient** — intra-focal vs extra-focal star profiles differ; this disambiguates "which side of focus" we're on
+- **Median star roundness**
+- **Background-corrected star peak**
+- **Stars detected count**
+
+Server fits the curve as before and stores the **inverse mapping**: given a feature vector, what focuser offset would produce it? This calibration table persists in the profile across sessions.
+
+After the curve, a backlash probe routine runs (§59.7) — adds 60-90 s.
+
+After backlash probe, a collimation health check runs (§59.10) — adds zero time (uses calibration images already captured).
+
+Total calibration cost: **~5 minutes, one-time per profile.**
+
+**Phase 2 — Smart Focus run (every subsequent AF trigger):**
+
+```
+1. Take one exposure at current focuser position (5 s default)
+2. Extract feature vector from the frame (same metrics as calibration)
+3. Predict offset + direction by looking up the feature vector in the
+   calibration table — gives both magnitude AND sign
+4. Move focuser by predicted offset, applying backlash compensation
+   (§59.7 — auto-discovered, no user input)
+5. Take second exposure, measure HFR
+6. Done in TWO shots IF:
+     - HFR within target tolerance (default 5% above session-best
+       HFR for this filter)
+     - HFR improved vs shot 1
+7. Done in THREE shots IF: HFR improved but missed target →
+   small correction (±20% of step 3's magnitude), final exposure
+8. Fall back to Classic AF IF: HFR got worse after shot 2 (direction
+   prediction wrong) OR feature vector outside calibration range OR
+   fewer than 30 stars detected OR prediction confidence < threshold
+```
+
+Typical time: **30-90 seconds.** vs Classic AF's 3-5 minutes.
+
+### 59.4 Telescope-type model
+
+The features that matter differ by optical design. User declares once in the wizard:
+
+| Type | Primary defocus features used |
+|---|---|
+| **Refractor** (no central obstruction) | FWHM, asymmetry coefficient, peak-to-background ratio |
+| **Schmidt-Cassegrain (SCT)** | Donut outer/inner diameter, ring thickness, central shadow depth |
+| **Maksutov-Cassegrain** | Same as SCT but with tighter inner-hole expectations (smaller secondary) |
+| **Ritchey-Chrétien (RC)** | Donut features with smaller central obstruction model |
+| **Newtonian** | Donut features + diffraction spike length/angle (spider vanes shift visibly when defocused) |
+| **Other / unknown** | Fall back to HFR-only (Classic AF behavior) |
+
+Wizard's telescope screen captures this once. Server uses the right feature extractor automatically. Tooltip on the dropdown shows example out-of-focus star images per type so the user understands what they're picking.
+
+### 59.5 Triggers — when ARA auto-runs Smart Focus
+
+Six trigger conditions, OR'd together, individually configurable:
+
+| Trigger | Default | What it catches |
+|---|---|---|
+| **Sequence start** | ON | Establishes baseline |
+| **Time interval** | 90 min | Long-term drift catch-all |
+| **Sensor temp Δ** | 1.5 °C since last AF | Temperature is the dominant drift driver |
+| **HFR drift** | 15% above session median over 3 frames | Catches drift the time-interval missed |
+| **Post-meridian-flip** | per §58.4 `refocus_after_flip` policy | OTA flexure + temp drift during flip |
+| **First use of a filter** | ON | Discovers per-filter focus offsets |
+
+Each trigger consults `GET /api/v1/diagnostics/current` before firing (§59.9). Non-nominal diagnostic states defer the AF.
+
+### 59.6 Filter policy — `use_current_filter` only
+
+AF always runs on whichever filter is currently in the wheel. No swap-to-luminance behavior.
+
+**Why this matters:** users with non-parfocal filters would have their focuser positioned wrong if AF swapped to L and then back to (e.g.) Hα. Per-filter offsets are learned naturally as the sequencer uses each filter for the first time and triggers AF (per the "first use of a filter" trigger).
+
+If a filter has too few stars (< 30 detected at the calibration exposure time), server doubles exposure and retries once. Still fewer than 30 stars → AF skipped with a notification: *"Insufficient stars on this filter for autofocus. Continuing with previous focus position. Consider manual focus check from the equipment panel."*
+
+The `always_luminance` alternative was considered and rejected: too dangerous when filters aren't parfocal, too time-costly when they are (extra swap = extra delay = extra mount tracking variance).
+
+### 59.7 Backlash auto-discovery (three layers)
+
+Backlash is **never manually measured by the user**. Three layers handle it:
+
+**Layer 1 — Backlash probe routine (appended to first calibration, ~60-90 s):**
+
+After the calibration curve completes, server runs a dedicated probe:
+
+```
+1. Move focuser to predicted-best position P₀
+2. Capture, measure HFR_baseline (should be near curve minimum)
+3. Move IN by step_size × 4 → P₀ − 4·S
+4. Capture, measure HFR_in_check
+5. Move OUT by step_size × 4 → back to P₀ (in theory)
+6. Capture, measure HFR_return_attempt
+   ├─ If HFR_return ≈ HFR_baseline → zero backlash on OUT direction
+   └─ If HFR_return > HFR_baseline → focuser didn't actually return
+
+7. If backlash detected: move OUT additional small steps (10, 20, 40),
+   capture each, find the step count where HFR snaps back to baseline.
+   That step count = OUT-direction backlash.
+
+8. Once OUT backlash known, apply compensation and verify HFR returns
+   cleanly. Lock in OUT backlash value.
+
+9. Repeat with directions swapped (OUT first, IN correction) to
+   measure IN-direction backlash.
+
+10. Save both values to profile. Mark backlash_verified = false.
+```
+
+8-10 extra exposures × ~6 s each = 60-90 s. One-time per profile.
+
+**Layer 2 — Passive refinement during every Smart Focus run:**
+
+Every direction change is a backlash data point. Server tracks:
+- Commanded delta vs achieved HFR delta vs predicted HFR delta
+- If achieved HFR delta < predicted → backlash absorbed motion
+- Magnitude of discrepancy refines backlash estimate
+
+After N stable runs (default 5) with backlash variance < 10%, `backlash_verified = true` flips. Refinement still runs but only acts on >2σ anomalous observations.
+
+**Layer 3 — Equipment-change invalidation:**
+
+Server identifies focusers via Alpaca's `DriverInfo` + `Name` + device-ID. When any of those changes:
+- Profile's `focuser.device_signature` is updated
+- Backlash values invalidated (set to null, `auto_discover` reset to true)
+- Calibration curve invalidated
+- Next AF trigger triggers full re-calibration including backlash probe
+
+User-visible notification: *"Focuser changed — re-calibrating Smart Focus on next AF run."* User can also manually invalidate via Settings → Focuser → [Re-calibrate Smart Focus].
+
+Compensation mode defaults to `overshoot` (forgiving, works on focusers with non-linear backlash). `absolute` mode is available via the advanced disclosure for users on absolute-encoder focusers like ZWO EAF Pro.
+
+### 59.8 Curve fitting + Classic AF specifics (calibration + fallback path)
+
+When Classic AF runs (calibration or fallback):
+
+- **Primary algorithm:** parabolic with weighted least-squares
+- **Auto-fallback:** hyperbolic if parabolic R² < 0.85
+- **Trendlines:** available via advanced disclosure for unusual star profiles
+- **Steps per run:** 9 (4 above + center + 4 below)
+- **Step size:** auto from focuser's reported step size + previous curve width
+- **Exposure per step:** 5 s default
+- **Star detection:** HocusFocus algorithm (inherited from NINA), threshold 5σ above background, minimum 30 stars
+
+### 59.9 Diagnostic integration — smart skip during bad conditions
+
+Per §51 diagnostics: if the live signal pattern matches `clouds_passing`, `aperture_blocked`, or `dew_formation`, **AF triggers defer** rather than fire.
+
+Smart Focus run takes 30-90 s and Classic AF fallback takes 5 min; running either during clouds will just fail and waste sky time. Better to wait for conditions to recover, then fire AF, then resume imaging.
+
+Implementation: every AF trigger consults `GET /api/v1/diagnostics/current` before firing. If diagnostic state is non-nominal, queue the AF for "fire when state returns to green." User-visible notification: *"Autofocus deferred — clouds passing. Will run when conditions recover."*
+
+NINA fires AF regardless of conditions. This is a meaningful sky-time savings per §0.5 pillar 1.
+
+### 59.10 Collimation health detection — free byproduct of calibration
+
+Calibration already captures donut images at multiple defocus distances. For obstructed scopes (SCT / Mak / RC / Newtonian), server extracts:
+
+- Per-star donut outer-ring centroid
+- Per-star donut inner-ring centroid (central obstruction shadow center)
+- Per-step centroid offset vector (magnitude + direction)
+- Per-step ring asymmetry coefficient
+
+In perfect collimation, outer and inner centroids coincide. Offset → secondary tilt (SCT/Mak/RC) or primary+secondary tilt (Newtonian).
+
+**Robustness:** server averages measurements across many stars near the center of the FOV (off-axis stars are affected by coma/field-curvature), and across multiple defocus steps (real miscollimation grows linearly with defocus; atmospheric seeing produces random offsets). False-positive resistance is the priority.
+
+**Severity thresholds:**
+
+| Centroid offset (% of donut diameter) | Verdict | Surface |
+|---|---|---|
+| < 5% | "Collimation looks good" | Info line in calibration completion summary |
+| 5-15% | "Slight miscollimation detected" | Warning notification with clock-position direction |
+| > 15% | "Significant miscollimation — recommended to collimate before continuing" | Critical notification |
+
+**Direction reporting — clock position viewed from behind the eyepiece:**
+
+> *"Donut centroid offset: 12% of donut diameter, toward 4 o'clock (viewed from behind the eyepiece).
+> For your Schmidt-Cassegrain, this typically means the secondary mirror is tilted. Consult your scope's collimation procedure documentation.
+> [Acknowledge]  [Don't warn again this session]"*
+
+Notification stays in the feed; user can revisit anytime.
+
+**What v0.0.1 does NOT do:**
+
+- Prescriptive screw-turning guidance (per-scope-model + per-mount-orientation; consequences of bad guidance are real — wait for community-curated knowledge base in v0.1.0)
+- Auto-collimation routines (require motorized secondary or robotic collimation tools — out of scope)
+- Refractor collimation detection (signature is subtle in defocus images; deferred to v0.1.0 design pass)
+
+### 59.11 Failure handling
+
+| Failure | Action |
+|---|---|
+| Calibration curve quality bad (Classic AF couldn't fit even with hyperbolic fallback) | Notify user; abort calibration; Smart Focus disabled until manually re-attempted |
+| Smart Focus shot 1 → shot 2: HFR worsened | Direction prediction wrong; reverse direction with half magnitude; take shot 3. If still worse → fall back to full Classic AF |
+| Smart Focus diverges (3 shots, HFR still worse than start) | Restore original position; fall back to full Classic AF on next trigger; log; if happens twice in a session, mark calibration stale and queue re-calibration |
+| Feature vector outside calibrated range (severely defocused) | Fall back to Classic AF — calibration only covers ±N steps |
+| Diagnostic state non-nominal | Defer per §59.9 |
+| Fewer than 30 stars detected at current filter | Double exposure, retry once; still <30 → skip AF + notify |
+| Focuser stall (commanded position not reached) | Per §42.2 retry → recalibrate backlash → notify |
+| Three consecutive AF runs with declining curve quality | Per §40.7 cycling-degradation pattern — notify *"AF can't catch this — probably transient atmospheric, not a focus issue"* + pause AF triggers for next 30 min |
+
+### 59.12 UI during an AF run
+
+Silent multi-minute UI is bad UX. WILMA shows a live AF panel during both Smart Focus and Classic AF:
+
+```
+┌──────────────────────────────────────────────────────┐
+│  Smart Focus in progress (shot 2 of 2-3)             │
+│  Filter: L   Calibrated: 2026-05-12                  │
+│  ──────────────────────────────────────────────────  │
+│                                                       │
+│  Shot 1 — current position 14820:                     │
+│    HFR 1.85   Donut Ø 24 px → prediction: move OUT 38│
+│                                                       │
+│  Shot 2 — predicted position 14858:                   │
+│    HFR 1.42 ✓ (target ≤ 1.47)                         │
+│                                                       │
+│  [thumb of shot 2's frame]                            │
+│                                                       │
+│  [ Cancel — restore previous position ]               │
+└──────────────────────────────────────────────────────┘
+```
+
+Classic AF (calibration / fallback) shows the traditional HFR-vs-position curve plot in real-time (as I specced in the earlier §59 draft):
+
+```
+┌──────────────────────────────────────────────────────┐
+│  Calibrating Smart Focus (Classic AF, step 5 of 9)   │
+│  Filter: L   Telescope: Schmidt-Cassegrain           │
+│  ──────────────────────────────────────────────────  │
+│  HFR                                                  │
+│  3.5  ●                              ●                │
+│  3.0     ●                        ●                   │
+│  2.5        ●                  ●                      │
+│  2.0           ●  ←now      ●                         │
+│  1.5              ●  ?    ●                           │
+│        14600  14700  14800  14900  15000              │
+│  Stars: 487   Best so far: 14820 (HFR 1.4)            │
+│  ──                                                   │
+│  After this curve: backlash probe (~60s),             │
+│  then collimation check (instant), then ready.        │
+└──────────────────────────────────────────────────────┘
+```
+
+Implemented via existing WebSocket event stream — server emits `autofocus.shot_complete` / `autofocus.step_complete` events.
+
+### 59.13 Profile schema
+
+```json
+{
+  "autofocus": {
+    "enabled": true,
+    "telescope_type": "sct",                  // refractor | sct | mak | rc | newtonian | other
+    "triggers": {
+      "on_sequence_start": true,
+      "time_interval_min": 90,
+      "temp_delta_c": 1.5,
+      "hfr_drift_pct": 15,
+      "hfr_drift_consecutive_frames": 3,
+      "post_meridian_flip": "if_temp_drifted",
+      "first_use_of_filter": true
+    },
+    "target_hfr_tolerance_pct": 5,
+    "diagnostic_skip_when_unstable": true,
+    "classic_fallback_enabled": true,
+    "backlash": {
+      "auto_discover": true,
+      "in_steps": null,
+      "out_steps": null,
+      "compensation_mode": "overshoot",
+      "passive_refinement": true,
+      "verified": false,
+      "last_refined_at": null
+    },
+    "collimation_check": {
+      "enabled": true,
+      "warn_threshold_pct": 5,
+      "critical_threshold_pct": 15,
+      "last_check": null,
+      "last_offset_pct": null,
+      "last_offset_clock_position": null,
+      "last_severity": null
+    },
+    "advanced": {
+      "calibration_temp_delta_c": 8,
+      "exposure_seconds": 5,
+      "min_stars": 30,
+      "classic_algorithm_primary": "parabolic",
+      "classic_algorithm_fallback": "hyperbolic",
+      "classic_fallback_r2_threshold": 0.85,
+      "classic_steps_total": 9
+    }
+  }
+}
+```
+
+**Six user-visible knobs.** Everything else (advanced + backlash details + collimation thresholds) hidden behind a disclosure. Compare to NINA's 17-knob panel.
+
+### 59.14 Reformed wizard's focuser/telescope screen
+
+```
+Telescope type:        [▼ Schmidt-Cassegrain (SCT)             ]
+                          Refractor
+                          Schmidt-Cassegrain (SCT)
+                          Maksutov-Cassegrain
+                          Ritchey-Chrétien (RC)
+                          Newtonian
+                          Other / unknown
+
+Focuser step size:     0.5 microns/step  (auto-detected from Alpaca)
+
+Run focus on:          ☑ Sequence start
+                       ☑ Filter change
+                       ☑ Temp change > 1.5°C
+                       ☑ Every 90 minutes
+                       ☐ After meridian flip (configured per §58)
+
+ARA will calibrate Smart Focus on your first autofocus run of
+the night (~5 minutes, one-time per setup). It learns your rig
+including backlash, and also checks collimation while it's at
+it. After calibration, autofocus completes in 2-3 exposures.
+
+  [< Back]    [Skip — use defaults]    [Next >]
+```
+
+**Five user-facing questions.** Zero backlash questions. Zero algorithm-internals questions. Vs NINA's seventeen.
+
+### 59.15 API endpoints + WebSocket events
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/api/v1/autofocus/run` | Manual trigger (runs Smart Focus if calibrated, else Classic AF) |
+| `POST` | `/api/v1/autofocus/recalibrate` | Force full calibration (Classic curve + backlash probe + collimation check) |
+| `POST` | `/api/v1/autofocus/cancel` | Cancel in-flight AF; restore previous position |
+| `GET` | `/api/v1/autofocus/state` | Current state + current shot/step if running |
+| `GET` | `/api/v1/autofocus/calibration` | Current calibration table (for display/debug) |
+| `GET` | `/api/v1/autofocus/collimation` | Latest collimation check result |
+| `GET` | `/api/v1/autofocus/history` | Per-session list of AF runs with metrics (for §50 Stats Focus & Temperature view) |
+
+WebSocket events:
+
+```json
+{ "type": "autofocus.started",         "payload": { "mode": "smart" | "classic", "filter": "L", "trigger": "..." } }
+{ "type": "autofocus.shot_complete",   "payload": { "shot_index": 1, "hfr": 1.85, "predicted_offset": -38, "stars": 487 } }
+{ "type": "autofocus.step_complete",   "payload": { "step_index": 5, "position": 14820, "hfr": 1.43, "stars": 487 } }
+{ "type": "autofocus.curve_fit",       "payload": { "algorithm": "parabolic", "r_squared": 0.94, "best_position": 14817 } }
+{ "type": "autofocus.calibration_complete", "payload": { "best_position": 14817, "backlash_in": 23, "backlash_out": 18, "collimation_offset_pct": 4, "collimation_severity": "good" } }
+{ "type": "autofocus.completed",       "payload": { "mode": "smart", "final_position": 14858, "final_hfr": 1.40, "duration_seconds": 47, "shots": 2 } }
+{ "type": "autofocus.deferred",        "payload": { "reason": "clouds_passing" } }
+{ "type": "autofocus.fallback_classic","payload": { "reason": "smart_focus_diverged" } }
+{ "type": "autofocus.failed",          "payload": { "reason": "...", "restored_position": ... } }
+{ "type": "collimation.warning",       "payload": { "offset_pct": 12, "clock_position": "4 o'clock", "scope_type": "sct" } }
+```
+
+### 59.16 §61 settings registry coverage
+
+Every Smart Focus setting registered with appropriate `keywords`:
+
+- `autofocus.enabled` — keywords: `autofocus, AF, smart focus, focus, automatic`
+- `autofocus.telescope_type` — keywords: `telescope, scope, optical design, SCT, refractor, newtonian, RC, maksutov`
+- `autofocus.triggers.time_interval_min` — keywords: `autofocus interval, focus frequency, AF every`
+- `autofocus.triggers.temp_delta_c` — keywords: `temperature, temp, thermal, drift, focus on temp`
+- `autofocus.triggers.first_use_of_filter` — keywords: `filter offset, per filter, filter change focus`
+- `autofocus.collimation_check.enabled` — keywords: `collimation, alignment, donut, secondary mirror`
+- `autofocus.classic_fallback_enabled` — keywords: `classic AF, full curve, NINA-style focus, fallback`
+
+Search for "collimation" surfaces both the check-enabled toggle and the latest reading. Search for "backlash" surfaces the auto-discover toggle and current values in the advanced section.
+
+### 59.17 What's NINA-preserved vs ARA-changed
+
+**Preserved verbatim:** HocusFocus star detection algorithm, parabolic/hyperbolic/trendline curve fitting math, NINA's retry semantics within a Classic AF run, per-filter offset model, temp comp slope math.
+
+**ARA additions:**
+- Smart Focus feature-vector calibration table + inverse lookup
+- 2-3 shot focus pattern after calibration
+- Telescope-type model for feature selection
+- Three-layer backlash auto-discovery
+- Collimation health detection during calibration
+- Diagnostic-skip integration with §51
+- Equipment-change auto-invalidation
+- Live UI panel showing per-shot progress
+- Settings reduced from 17 to 6 visible
+- §50 Stats Focus & Temperature integration (every AF run's curve / shots stored)
+
+### 59.18 v0.1.0 expansion paths
+
+- **ML-driven feature extraction** — small on-device CNN trained on (out-of-focus image → focuser offset) pairs collected from v0.0.1 users' calibration runs (opt-in telemetry). Improves prediction accuracy and reduces shot count to 1-2 typical.
+- **Temperature-aware backlash model** — backlash varies with lubricant viscosity at cold temps. Build backlash-vs-temp curve per profile.
+- **Load-aware backlash** — vertical-hang imaging trains pull on the focuser differently than horizontal pointing. Account for mount altitude.
+- **Prescriptive collimation guidance** — per-scope-model + per-mounting-orientation screw-direction guidance, community-curated knowledge base (paired with `MOUNT_TIPS.md` pattern from §52.7).
+- **Star-test mode** — dedicated workflow for diagnosing collimation without running a sequence. User taps "Check Collimation"; server takes a single defocused image, shows annotated centroid offsets per star across the field.
+- **Refractor collimation detection** — research-grade signal extraction from out-of-focus Airy disk distortion.
+- **Collimation drift trending** — multi-session collimation tracking in §50 Stats Equipment Health.
+- **Tilt-aware focus** — focus position varies across the field. v0.1.0 measures sensor tilt and accounts for it.
+- **Adaptive step pattern in Classic AF** — start wide, narrow on subsequent steps once a rough minimum is found.
+- **Multi-star sampling** — track 5 specific named stars instead of bulk HFR median (better for non-uniform fields).
+
+---
+
 ## 60. API conventions
 
 Cross-cutting rules that apply to every endpoint defined in §9 and elsewhere in the playbook. Belongs alongside §9 (contract) and §49 (docs) conceptually; placed at the end to avoid renumbering existing cross-references.
@@ -8265,445 +8657,6 @@ Codes 4000-4099 reserved for ARA-specific close reasons; 4100+ available for fut
 
 ---
 
-## 57. Stop Mount + slew safety
-
-Centered on one principle: **whenever the mount is moving autonomously, the user can stop it in one tap.** A complementary control to §35.3 Emergency Stop, scoped narrowly to mount motion rather than full session abort.
-
-### 57.1 Two distinct stop concepts, kept clearly separate
-
-| Control | What it does | When visible | After triggering |
-|---|---|---|---|
-| **Stop Mount** (§57) | Issues Alpaca `AbortSlew()` — mount halts in place; nothing else touched | Contextual — only during autonomous slews | Sequence pauses; mount stays where halted; cooler/guider/etc. keep running. Modal prompts [Verify Position] / [Resume] / [Skip Target] / [End Session] |
-| **Emergency Stop** (§35.3) | Full session abort — camera abort, guider stop, mount park, sequence aborted | Persistent — always visible in WILMA shell | Session over |
-
-Different buttons, different colors, different positions, different consequences. Stop Mount = "this slew is going somewhere I don't like." Emergency Stop = "kill everything now." Users learn the distinction quickly because each only appears when contextually relevant.
-
-### 57.2 When Stop Mount appears
-
-The button surfaces (as a large, prominent overlay near the top of the active view) any time the mount is autonomously slewing under server control:
-
-- **Sequencer-initiated slew** — slew to target, slew between mosaic panels, slew to flat target
-- **Meridian flip slew** — the actual flip movement (§58)
-- **Recovery slew** — §28 mount-home or slew-to-saved-target during crash recovery
-- **Plate-solve re-center slew** — post-slew correction
-- **Park / unpark / home** — these are also slews; the button appears
-- **Polar-align initial RA rotation** — §45's 30° RA rotation for the seed
-
-Does **not** appear for:
-- Sidereal tracking (not a slew event)
-- PHD2 guide corrections (sub-arcsecond, not user-visible motion)
-- Manual slewing initiated from WILMA's manual control panel (those controls have their own abort built into the jog buttons)
-
-The button disappears when the server detects `IsSlewing = false` plus a 1-second grace period (handles mounts that briefly stop between sub-slews).
-
-### 57.3 Visual treatment
-
-```
-┌──────────────────────────────────────────────────────┐
-│                                                       │
-│  Mount is slewing to M81 (RA 9h55m, Dec +69°)        │
-│  Est. arrival: 23 s                                   │
-│                                                       │
-│         ┌─────────────────────────┐                   │
-│         │                         │                   │
-│         │   ⛔  STOP MOUNT        │                   │
-│         │                         │                   │
-│         └─────────────────────────┘                   │
-│                                                       │
-│  Live position: RA 9h12m, Dec +52° → +69°             │
-│                                                       │
-└──────────────────────────────────────────────────────┘
-```
-
-Sized for panic-press: minimum 200×80 px on desktop, 280×80 pt on mobile. Red (`AraColors.accentError`). Single-tap, no confirmation gate (the button IS the confirmation). Z-index above modals so it's never hidden behind other UI.
-
-Keyboard shortcut on desktop: **Space bar** when any slew is in progress. Single-press is fine — the button is only present during slews, so accidental Space-presses on other screens don't trigger it. Configurable per profile via `mount_safety.stop_mount_keyboard_shortcut_desktop`.
-
-### 57.4 After the user taps Stop Mount
-
-1. Server immediately issues `AbortSlew()` via Alpaca — universal call, every mount supports it (mandatory in `ITelescope`)
-2. Server pauses the sequencer (in-flight instruction marked `paused`)
-3. WebSocket event `mount.slew_aborted` fires; all connected clients update
-4. WILMA shows a clear modal:
-
-```
-┌──────────────────────────────────────────────────────┐
-│  Mount stopped at user request                        │
-│  ──────────────────────────────────────────────────  │
-│  Current position: RA 9h34m, Dec +61°                 │
-│  Sequence paused at: "Slew to M81" (instruction 4/47) │
-│                                                       │
-│  Cooler, guider, and other equipment are still        │
-│  running. Verify the mount is in a safe position      │
-│  before resuming.                                     │
-│                                                       │
-│  [ Verify Position — show me an image ]               │
-│  [ Resume slew to M81 ]                               │
-│  [ Skip this target ]                                 │
-│  [ End session ]                                      │
-└──────────────────────────────────────────────────────┘
-```
-
-**[Verify Position — show me an image]** triggers a quick exposure (default 1-2 s) and plate-solves it; result shows where the mount is actually pointing vs where the slew intended. Lets the user confirm "OK, this is fine" before any further movement.
-
-### 57.5 Latency target
-
-Tap → `AbortSlew()` issued: **< 200 ms on LAN, < 500 ms over AP mode.** Tap → mount mechanically halted: depends on mount and slew speed but typically another 0.5-2 s. Total panic-to-stop budget: **< 3 seconds in the worst case.** Server logs the actual latency per Stop Mount incident in the `faults` table so we can tune.
-
-### 57.6 Safety-speed slews
-
-During all autonomous slews (sequencer, recovery, flip, plate-solve re-center, polar-align seed rotation), the server uses a **reduced slew rate** — default 50% of mount max, configurable per profile. Rationale: slower slew + fast Stop Mount = more time for the user to react before damage.
-
-Manual slews from WILMA's control panel use the user-selected rate (the user has hands on the rig and can see what's happening). The safety speed applies only to server-initiated autonomous motion.
-
-For mounts already at limited slew rates (some strain-wave mounts), this is a no-op. For fast mounts (CEM120, EQ8) it adds maybe 10-30 seconds per session transition, in exchange for meaningful "user can intervene before damage" headroom.
-
-Profile setting:
-
-```json
-{
-  "mount_safety": {
-    "autonomous_slew_rate_pct": 50,
-    "stop_mount_keyboard_shortcut_desktop": "Space"
-  }
-}
-```
-
-### 57.7 Hardware kill switch — DEPLOY.md recommendation
-
-Software stop has Alpaca + network + mount-controller + mechanical latency in series. For expensive rigs, DEPLOY.md documents the recommendation: wire a physical e-stop button to cut mount power (mains-side or 12V-side). That's the gold standard. ARA does not implement this; ARA recommends it in user-facing docs.
-
-### 57.8 API endpoints
-
-| Method | Path | Purpose |
-|---|---|---|
-| `POST` | `/api/v1/mount/stop` | Issue `AbortSlew()` + pause sequence. Body empty. Returns current mount state + sequence state. Idempotency-Key required (§60.5). |
-| `GET` | `/api/v1/mount/state` | Current mount state (slewing/idle/tracking/parked), position, predicted target if mid-slew |
-
-WebSocket events:
-
-```json
-{ "type": "mount.slew_started",  "payload": { "target_ra": ..., "target_dec": ..., "estimated_seconds": ... } }
-{ "type": "mount.slew_aborted",  "payload": { "halted_at_ra": ..., "halted_at_dec": ..., "reason": "user_request" } }
-{ "type": "mount.slew_complete", "payload": { "final_ra": ..., "final_dec": ..., "duration_seconds": ... } }
-```
-
-### 57.9 What's deferred to v0.1.0 (Mount Safety v2)
-
-The lean v0.0.1 scope addresses the panic-button gap. The following are deferred to a v0.1.0 "Mount Safety v2" pass once we see how lean §57 lands in practice:
-
-- Horizon profile (alt-vs-azimuth table for declared obstructions)
-- HA limit configuration (separate from `pause_after_min`)
-- No-go polygons (oddly-shaped obstructions)
-- High-dec slew warnings
-- First-slew-on-profile confirmation (separate from §58's first-flip-confirm)
-- Slew confirmation policy modes (`always_confirm` / `confirm_if_large` / `never`)
-- Park-between-targets option
-
----
-
-## 58. Meridian flip workflow
-
-Builds on §57's primitives (Stop Mount, safety-speed slews, hardware-kill-switch recommendation). This section covers the specific orchestration of a meridian flip — pause windows, post-flip recovery, unattended-safety layers, graceful shutdown on failure.
-
-### 58.1 What a meridian flip is (and isn't)
-
-A German Equatorial Mount (GEM) — and every GEM-descendant including strain-wave mounts — tracks a target across the sky. When the target crosses the **meridian** (the N-S line through zenith), if the mount kept tracking, the OTA would eventually swing into the tripod, mount head, or pier. So the mount must flip — rotate the RA axis 180° and swing the camera to the other side — to keep imaging.
-
-Three things must happen in a flip:
-1. Stop imaging briefly (no exposures while the mount is moving)
-2. Mount executes the flip slew
-3. Re-acquire: plate-solve to confirm framing, optionally re-focus, restart guiding (PHD2 needs to know the axes are flipped)
-
-**Important:** every GEM-descendant must flip eventually. Strain-wave mounts (AM5, HEM27/45, RST-135, NYX-101) **delay** the flip — typically 45-75 minutes past meridian — but they still flip. The advantage is a longer window, not a permanent exemption. The only setups that genuinely never flip are alt-az mounts (different geometry, but suffer field rotation) and true fork-on-wedge equatorial mounts (rare today).
-
-### 58.2 Timing windows — three numbers, all configurable per profile
-
-| Knob | Default | What it means |
-|---|---|---|
-| `pause_before_min` | 1.0 min | Stop starting new exposures within 1 min of meridian crossing |
-| `pause_after_min` | 5.0 min | Wait this long *after* the crossing before flipping (target is safely past the meridian) |
-| `max_wait_after_min` | `pause_after_min + 10` | If something prevented the flip from happening within this window, give up on this target |
-
-**`pause_after_min` is a hardware constraint, not a user preference.** It expresses *"this is when my specific physical rig must flip by, before the OTA risks collision."* It depends on OTA length, dovetail saddle height, pier height, counterweight position. Get it wrong and the OTA can swing into the tripod.
-
-### 58.3 Rule-of-thumb table per rig class
-
-The wizard (§37.3 Screen 8) suggests a starting value based on rig class:
-
-| Rig class | Suggested `pause_after_min` |
-|---|---|
-| Long SCT (C11, C14) / Long Newtonian on GEM | 1-2 min |
-| Medium SCT/RC (8″) on GEM | 3-5 min |
-| Medium refractor (ED102, FSQ-85) on GEM | 5-10 min |
-| Tiny refractor (RedCat, FRA300) on GEM | 10-15 min |
-| Any OTA on strain-wave mount (AM5, HEM, RST, NYX) | 45-75 min (still flips, just much later) |
-| Fork-on-wedge equatorial (rare) | `enabled: false` |
-| Alt-az / fork alt-az | `enabled: false` |
-
-This is a starting suggestion; user adjusts for their specific setup. Pier height, saddle plate, dovetail length, and counterweight position all shift the actual safe value. Wizard prompts user to verify the first flip in-person.
-
-### 58.4 Post-flip recovery — what runs, in what order
-
-1. **Slew to target RA/Dec** — explicit slew after the flip completes, to clean up any drift
-2. **Plate-solve + re-center** — mandatory. Tolerance per §28.2 (60″ position, 1° rotation). Up to 3 retries.
-3. **Re-focus** — *conditional*. Default policy: re-focus only if sensor temp has drifted > 2°C since last AF run. Three options: `always` / `if_temp_drifted` / `never`.
-4. **Restart guiding** — PHD2 needs to know the axes flipped. Two modes:
-   - `auto_restore` (default) — PHD2's "Auto Restore Calibration" with reverse-Dec flag set. Fast (~30 s).
-   - `full` — full PHD2 recalibration. Slow (5-10 min) but most reliable for finicky mounts.
-
-### 58.5 Side-of-pier verification
-
-After the flip, ARA queries Alpaca's `SideOfPier`. If it didn't change (or driver returns `pierUnknown`), log a warning but continue — some Alpaca drivers lie about pier side. If the driver doesn't expose `SideOfPier` at all (`CanSetPierSide = false`), ARA infers pier side from hour angle. No brand-quirk database (per §52 Alpaca-only commitment).
-
-### 58.6 Profile schema
-
-Profile JSON gains a `meridian_flip` block (lives alongside §35.6 safety policy and §57 mount_safety):
-
-```json
-{
-  "meridian_flip": {
-    "enabled": true,
-    "mode": "auto",                          // "auto" | "prompt" | "never"
-    "pause_before_min": 1.0,
-    "pause_after_min": 5.0,
-    "max_wait_after_min": 15.0,
-    "recenter_after_flip": true,
-    "refocus_after_flip": "if_temp_drifted", // "always" | "if_temp_drifted" | "never"
-    "refocus_temp_threshold_c": 2.0,
-    "guider_recal": "auto_restore",          // "auto_restore" | "full" | "skip"
-    "skip_target_if_below_floor": true,
-    "first_flip_confirmed": false            // see §58.8
-  }
-}
-```
-
-For non-flipping setups (alt-az detected via Alpaca `AlignmentMode`, fork-on-wedge configured manually), set `enabled: false` and the meridian-flip UI is hidden from that profile's wizard + Settings.
-
-### 58.7 Failure handling matrix
-
-| Failure | Action |
-|---|---|
-| Mount slew error during flip | Retry 3× → pause sequence + critical notification |
-| Post-flip plate-solve fails after 3 retries | Pause + warning notification (user can manually re-center) |
-| Re-focus fails | Log warning, continue without re-focus (don't abort the night over a bad AF run) |
-| Guider re-cal fails | Retry → pause + warning |
-| Target below profile's hard altitude floor after flip | Skip target, advance to next; surface "M42 below horizon after flip" notification |
-
-All equipment-impacting failures are subject to the unattended-safety pipeline in §58.9 if no user is present.
-
-### 58.8 First-flip confirmation safety net
-
-When a profile fires its meridian-flip trigger **for the first time** (`first_flip_confirmed: false`), instead of flipping autonomously, ARA sends a critical notification ~60 seconds before the flip:
-
-> ⚠ **First meridian flip on this profile**
->
-> About to flip in 60 seconds. This is the first flip ARA has run for "C14 on CEM120" — verify your `pause_after_min` value (currently 2 min after meridian) is safe for this rig.
->
-> [Proceed] [Pause sequence — let me check]
-
-If user confirms or doesn't respond in 60 s, flip proceeds. Sets `first_flip_confirmed: true` on the profile so subsequent flips run silently. Reset on any equipment change in the profile (the safety net assumes the rig hasn't changed since user verified).
-
-Catches the one failure mode that actually breaks gear: user creates a new profile, gets the timing number wrong, OTA tries to flip into the tripod. The 60-second pause is cheap insurance.
-
-### 58.9 Unattended flip safety — four independent layers
-
-For overnight unattended sessions (the most common astrophotography use case), four layers of defense protect a sleeping user. Each layer catches a different failure mode independently.
-
-**Layer 1: Pre-flip flight check (runs ~2 minutes before the flip)**
-
-Before issuing the flip slew, server verifies:
-
-- **Endpoint prediction safe** — predict post-flip RA/Dec/alt/az. If below profile's hard altitude floor, skip target instead of flipping.
-- **Mount reports healthy state** — no Alpaca-reported faults, tracking active, not parked, communication OK
-- **Required equipment connected** — camera, guider (if re-cal enabled), focuser (if re-focus enabled). If anything is disconnected, attempt §42.3 hot-reconnect; if reconnect fails, abort the flip.
-- **Predicted slew duration sane** — if mount estimates the flip slew will take longer than expected (e.g., > 90 s for a typical mount), suspect a stuck axis or driver confusion; abort and notify.
-
-If any check fails, the flip does **not start**. Sequence pauses, urgent notification fires. Mount stays in pre-flip state (tracking sidereal) — a known-safe configuration.
-
-**Layer 2: Watchdog during the flip slew**
-
-Once the slew is in flight, a server-side watchdog samples mount state every 5 seconds:
-
-- **Position must be progressing** — if reported RA/Dec hasn't changed for 15 seconds, mount is stalled → issue `AbortSlew`, mark flip failed
-- **Hard timeout** — flip slew must complete within 3× predicted duration or 5 minutes, whichever is shorter. Exceeded → `AbortSlew`, fail.
-- **No Alpaca fault events** — driver reports a fault mid-slew → `AbortSlew`, fail
-- **Pier side must change** — if mount reports `SideOfPier` unchanged after `IsSlewing = false`, flip likely didn't actually flip → fail (don't resume imaging on a possibly-still-on-wrong-side mount)
-
-**Layer 3: Post-flip verification gate**
-
-After the slew completes, before *any* imaging resumes:
-
-- **Plate-solve mandatory** — up to 3 retries (per §58.4)
-- **If all retries fail: imaging does NOT resume.** Sequence paused, urgent notification fires. Better to lose the rest of the night than to image with a misaimed scope.
-- **Solved position must be within sanity bounds** of the intended target (default ± 2°). If solve succeeds but says "you're 30° off where you should be," fail rather than trust it.
-
-**Layer 4: Safe rest state on any failure**
-
-When any of Layers 1-3 trigger a failure, the mount goes to a known-safe state immediately:
-
-- If `Park` is configured and `CanPark = true` → **park the mount**. Safest possible position.
-- If `Park` is not available → stop tracking, leave mount where the abort caught it.
-- Cooler stays running (user may want to resume if conditions allow)
-- Guider stopped (PHD2 corrections on a mis-aimed scope can drift further)
-- Sequence marked paused; in-flight target's frames preserved
-- Urgent notification fires — bundled looping alarm audio plays on any connected WILMA device, per §35.5
-
-### 58.10 Severity escalation during unattended hours
-
-Profile gains an `unattended_hours` range (default: from astronomical dusk to astronomical dawn at site, or user-set time window). During unattended hours, all equipment-impacting event severities are **bumped one level**:
-
-- `warning` → `critical`
-- `critical` → `urgent`
-
-Same events, louder consequences, only when the user is presumed asleep. User adjusts the hours in profile if their schedule differs (e.g., a remote-observatory user with the observatory on a different timezone).
-
-### 58.11 Connecting to "how the user hears about it"
-
-v0.0.1's "no push notifications" limitation (§46.9) means the practical answer for the sleeping user is:
-
-**Keep a desktop or tablet running WILMA on a device that is audibly near where you sleep.** The bundled safety alarm (§35.5) loops at max volume on urgent notifications until acknowledged. A Mac in the bedroom, an iPad on the nightstand, or a Linux laptop downstairs — anything that can play audio and has WILMA running.
-
-DEPLOY.md adds explicit guidance: *"For unattended overnight sessions, keep at least one WILMA device running with audio enabled near where you sleep. The urgent-alarm pattern is your wake-up signal."*
-
-True push notifications (FCM/APNs to phone lock screen even with WILMA closed) are committed v0.1.0 per §46.9 and §55.1.
-
-### 58.12 Unattended-failure graceful shutdown (10-minute countdown)
-
-Triggers from **any** urgent-severity equipment-impacting failure where the sequence has paused awaiting user input. The flip failure case is one instance; mid-sequence equipment fault is another; storage unmount mid-night is another. Same pattern handles them all.
-
-**The countdown:** when an urgent failure fires and the sequence enters `paused_awaiting_user` state, server starts a 10-minute countdown.
-
-What resets the countdown (= "user has come back"):
-- User acknowledges the urgent notification via WILMA (tap [Acknowledge])
-- User issues any explicit API command (resume / abort / skip / Stop Mount / emergency stop / equipment control)
-- User opens a new WebSocket connection from any WILMA device
-
-What does NOT count as user attention:
-- WILMA polling `/state` in the background
-- Pre-existing WebSocket connections that have been quiet (heartbeat pings only)
-- Background automated processes
-
-If 10 consecutive unattended minutes elapse, **graceful shutdown executes**.
-
-**Shutdown sequence (in strict order, with timeouts):**
-
-1. **Stop guider** (PHD2 stop, ~1 s)
-2. **Warm cooler** — set target to ambient, ramp down at profile's configured rate (default 1°C/min, same as §28's ramp-up). Slow step — typically 10-30 min for a −10°C → +20°C ramp. Server doesn't block on this; warmup runs in background while subsequent steps execute.
-3. **Park mount** if `CanPark = true` and a park position is configured (~30-60 s)
-4. **Disconnect filter wheel / focuser / rotator / flat panel** (~5 s each)
-5. **Disconnect camera** — *after* warmup completes. Important: don't disconnect mid-warmup; that strands the cooler at a cold setting and the sensor warms violently when power drops. Camera disconnect waits for ramp completion or a hard 30-min cap, whichever comes first.
-6. **Mark session `ended_at`** in DB with reason `unattended_shutdown_after_failure`
-7. **Stop the urgent alarm** — situation is now stable; no more siren
-
-What stays running:
-- The ARA server itself (so user can reconnect, review logs, see what happened)
-- mDNS announce (so WILMA can still find the Pi)
-- Notification system (both the failure event and the shutdown event remain in the feed)
-
-**Why 10 minutes specifically** — Goldilocks zone. Long enough for an alarmed user to grab their phone, fumble to WILMA, and tap acknowledge. Short enough that a sleeping user who genuinely doesn't wake up doesn't burn 6 hours of battery. NINA has no equivalent (it just keeps running); ASIAir powers things off harder on some failures but the threshold isn't user-configurable. ARA splits the difference and gives the user the dial.
-
-**Configuration in profile:**
-
-```json
-{
-  "unattended_failure_shutdown": {
-    "enabled": true,
-    "wait_minutes": 10,
-    "actions": ["stop_guider", "warm_cooler", "park_mount", "disconnect_equipment"],
-    "keep_server_running": true,
-    "stop_alarm_after_shutdown": true
-  }
-}
-```
-
-The 10-min wait is configurable per profile (5 for battery-limited field rigs, 30 for wall-powered observatories). Disabling shutdown entirely is allowed but not recommended; wizard flags it as such.
-
-### 58.13 What the user sees when they come back
-
-When user reconnects to ARA the next morning, the first-screen-after-server-handshake shows a clear post-incident summary:
-
-```
-┌──────────────────────────────────────────────────────┐
-│  Session ended overnight                              │
-│  ──────────────────────────────────────────────────  │
-│                                                       │
-│  At 03:14 last night, meridian flip on M81 failed:    │
-│  plate-solve after flip could not converge (3/3       │
-│  retries failed).                                     │
-│                                                       │
-│  Sequence paused, urgent alarm fired for 10 min       │
-│  with no response → equipment shut down gracefully    │
-│  at 03:24.                                            │
-│                                                       │
-│  Frames captured: 47 (M81, all rated)                 │
-│  Cooler warmed and camera disconnected normally.      │
-│  Mount parked.                                        │
-│                                                       │
-│  [ Review failure details ]  [ View frames ]          │
-│  [ Resume session ]  [ End session ]                  │
-└──────────────────────────────────────────────────────┘
-```
-
-### 58.14 Pre-sleep checklist
-
-Just before astronomical dusk, ARA runs a one-shot self-test and surfaces a pre-sleep summary in WILMA:
-
-```
-Tonight's sequence — pre-flight check
-
-✓ All equipment connected and healthy
-✓ Storage: 412 GB free
-✓ Plate solver tested OK
-✓ Cooler at target (−10 °C)
-✓ Mount safety: tracking + slew rate verified
-
-Planned meridian flips tonight:
-  • 02:14 — M81 (alt 67° at flip, OK)
-  • 04:33 — NGC 6188 (alt 12° at flip — BELOW soft warning, above hard floor)
-
-Unattended hours: 23:00 — 06:30
-Alarm device: macbook-bedroom.local (verified audible)
-
-  [ All good — let me go to bed ]   [ Adjust ]
-```
-
-User taps "all good" once before sleeping. Catches mis-set thresholds, disconnected equipment, low storage, etc., before they become 3am alarms.
-
-### 58.15 WebSocket events
-
-Beyond the §46.3 catalog entries (`meridian_flip.imminent` info, `meridian_flip.starting` info, `meridian_flip.complete` info, `meridian_flip.failed` critical), §58 adds:
-
-```json
-{ "type": "meridian_flip.preflight_failed",   "payload": { "reason": "endpoint_below_floor", "target": "M42" } }
-{ "type": "meridian_flip.watchdog_aborted",   "payload": { "stage": "slew", "reason": "position_stalled" } }
-{ "type": "meridian_flip.postflip_solve_failed", "payload": { "retries": 3, "last_error": "..." } }
-{ "type": "unattended_shutdown.countdown_started", "payload": { "wait_minutes": 10, "trigger_event_id": "..." } }
-{ "type": "unattended_shutdown.completed",   "payload": { "actions_taken": [...], "duration_seconds": ... } }
-```
-
-### 58.16 API endpoints
-
-| Method | Path | Purpose |
-|---|---|---|
-| `GET` | `/api/v1/meridian-flip/state` | Current flip state (idle/imminent/executing/complete/failed); time-to-next-flip estimate |
-| `POST` | `/api/v1/meridian-flip/skip` | Skip the upcoming flip; advance to next target instead |
-| `POST` | `/api/v1/meridian-flip/confirm-first` | User confirms the first-flip prompt (§58.8) |
-| `GET` | `/api/v1/preflight/today` | Pre-sleep checklist data (§58.14) |
-| `POST` | `/api/v1/unattended-shutdown/acknowledge` | User acknowledges urgent failure, cancels countdown |
-
-All mutating endpoints require `Idempotency-Key` (§60.5).
-
-### 58.17 What's deferred to v0.1.0
-
-- Per-target flip overrides in the sequence (per-target "always re-focus after flip" etc.)
-- Custom `BeforeMeridianFlip` / `AfterMeridianFlip` user hook scripts (folds into plugin/scripting v0.1.0 per §55.1)
-- Mount-driven trigger mode (using mount's reported pier-side change instead of HA timing — relies on driver honesty; v0.1.0 once Alpaca driver compliance settles per §52.5)
-- "Permitted side of meridian" constraint (advanced — force always-east or always-west imaging)
-- Push notifications to phone lock screen (FCM/APNs — §46.9 v0.1.0)
-
----
-
 ## 61. Smart settings search
 
 Addresses NINA's single biggest UX weakness: settings are scattered across a deep tree and users cannot find them. ARA commits to making every setting **discoverable in under 10 seconds without prior knowledge of where it lives** (per §0.5 design principle 3).
@@ -8883,431 +8836,478 @@ Committed v0.1.0 per §55.1.
 
 ---
 
-## 59. Autofocus — Smart Focus + Classic AF fallback
+## 62. Dither policy
 
-The most-tweaked NINA subsystem, redesigned. NINA's autofocus panel exposes 17 settings the user must understand before they can focus. **ARA exposes 6, and discovers the rest from observation.** This section is one of the §0.5 "better than NINA" wins.
+PHD2 handles the actual mount nudging; ARA decides when/how/whether. Three "better than NINA" wins built in: auto-magnitude from pixel scale, auto-disable for short-exposure workflows, diagnostic-aware skip during bad conditions.
 
-### 59.1 Two modes — Smart Focus (primary) + Classic AF (calibration + fallback)
+### 62.1 What dithering does (60-second context)
 
-| Mode | When used | Duration per run |
-|---|---|---|
-| **Smart Focus** | After calibration. Every routine AF trigger uses this. | 30-90 s (2-3 exposures) |
-| **Classic AF** (9-step parabolic/hyperbolic curve, HocusFocus star detection, inherited from NINA) | First calibration on a new profile. Fallback when Smart Focus diverges. User-requested via manual "Run full focus curve" button. | 3-5 min (9-11 exposures) |
+Between exposures, the mount nudges framing by a few pixels in random directions. Hot pixels and sensor artifacts then don't land on the same pixels in every frame; when frames stack, those artifacts average out. Without dither, hot pixels persist and you get walking-noise patterns in the integrated image.
 
-Smart Focus is the visible mode; Classic AF runs only when needed. Users typically only see Classic AF on first night per profile (calibration) and almost never again.
+The actual nudge happens via PHD2 — ARA sends PHD2 a `dither` JSON-RPC command, PHD2 commands the mount, PHD2 waits for guiding to re-settle, PHD2 reports back. Settle wait is typically 5-15 seconds depending on mount + atmosphere.
 
-### 59.2 The core insight behind Smart Focus
+### 62.2 Default cadence — auto, based on exposure length
 
-A defocused image carries information about *how far* and *which direction* it's out of focus, not just *that* it's out of focus. SCTs, Maksutovs, RCs, and Newtonians defocus into donuts whose diameter scales linearly with distance from focus; refractors broaden in characteristic FWHM patterns. Once we've learned the relationship between defocus distance and image features for a specific rig, **we don't need a 9-step curve every time — we need one image to read the rig's current state and predict the correct focuser move.**
-
-NINA doesn't do this. ASIAir doesn't either. PixInsight has a research-grade tool for it but it's offline-only. ARA brings it to the live capture pipeline.
-
-### 59.3 Smart Focus algorithm
-
-**Phase 1 — Calibration (once per profile, ~5 minutes, auto-runs on first AF trigger of a new profile):**
-
-Server runs a traditional 9-step Classic AF curve. At each step it records a feature vector richer than HFR alone:
-
-- HFR (Half-Flux Radius)
-- Star FWHM
-- **Donut outer diameter** (obstructed scopes — SCT, Mak, RC, Newtonian)
-- **Donut inner diameter** (central obstruction shadow)
-- **Donut ring thickness** = outer − inner
-- **Asymmetry coefficient** — intra-focal vs extra-focal star profiles differ; this disambiguates "which side of focus" we're on
-- **Median star roundness**
-- **Background-corrected star peak**
-- **Stars detected count**
-
-Server fits the curve as before and stores the **inverse mapping**: given a feature vector, what focuser offset would produce it? This calibration table persists in the profile across sessions.
-
-After the curve, a backlash probe routine runs (§59.7) — adds 60-90 s.
-
-After backlash probe, a collimation health check runs (§59.10) — adds zero time (uses calibration images already captured).
-
-Total calibration cost: **~5 minutes, one-time per profile.**
-
-**Phase 2 — Smart Focus run (every subsequent AF trigger):**
-
-```
-1. Take one exposure at current focuser position (5 s default)
-2. Extract feature vector from the frame (same metrics as calibration)
-3. Predict offset + direction by looking up the feature vector in the
-   calibration table — gives both magnitude AND sign
-4. Move focuser by predicted offset, applying backlash compensation
-   (§59.7 — auto-discovered, no user input)
-5. Take second exposure, measure HFR
-6. Done in TWO shots IF:
-     - HFR within target tolerance (default 5% above session-best
-       HFR for this filter)
-     - HFR improved vs shot 1
-7. Done in THREE shots IF: HFR improved but missed target →
-   small correction (±20% of step 3's magnitude), final exposure
-8. Fall back to Classic AF IF: HFR got worse after shot 2 (direction
-   prediction wrong) OR feature vector outside calibration range OR
-   fewer than 30 stars detected OR prediction confidence < threshold
-```
-
-Typical time: **30-90 seconds.** vs Classic AF's 3-5 minutes.
-
-### 59.4 Telescope-type model
-
-The features that matter differ by optical design. User declares once in the wizard:
-
-| Type | Primary defocus features used |
+| Exposure length | Default cadence |
 |---|---|
-| **Refractor** (no central obstruction) | FWHM, asymmetry coefficient, peak-to-background ratio |
-| **Schmidt-Cassegrain (SCT)** | Donut outer/inner diameter, ring thickness, central shadow depth |
-| **Maksutov-Cassegrain** | Same as SCT but with tighter inner-hole expectations (smaller secondary) |
-| **Ritchey-Chrétien (RC)** | Donut features with smaller central obstruction model |
-| **Newtonian** | Donut features + diffraction spike length/angle (spider vanes shift visibly when defocused) |
-| **Other / unknown** | Fall back to HFR-only (Classic AF behavior) |
+| ≥ 60 s (typical DSO) | Every frame |
+| < 60 s (e.g., bright-target short subs, comet bursts) | Dither disabled |
+| Calibration frames (flats/darks/bias) | Never |
 
-Wizard's telescope screen captures this once. Server uses the right feature extractor automatically. Tooltip on the dropdown shows example out-of-focus star images per type so the user understands what they're picking.
+Auto-determined from the sequence's exposure length per instruction. User override available per-instruction in the sequencer + per-profile as a default.
 
-### 59.5 Triggers — when ARA auto-runs Smart Focus
+### 62.3 Default magnitude — auto-computed from pixel scale
 
-Six trigger conditions, OR'd together, individually configurable:
-
-| Trigger | Default | What it catches |
-|---|---|---|
-| **Sequence start** | ON | Establishes baseline |
-| **Time interval** | 90 min | Long-term drift catch-all |
-| **Sensor temp Δ** | 1.5 °C since last AF | Temperature is the dominant drift driver |
-| **HFR drift** | 15% above session median over 3 frames | Catches drift the time-interval missed |
-| **Post-meridian-flip** | per §58.4 `refocus_after_flip` policy | OTA flexure + temp drift during flip |
-| **First use of a filter** | ON | Discovers per-filter focus offsets |
-
-Each trigger consults `GET /api/v1/diagnostics/current` before firing (§59.9). Non-nominal diagnostic states defer the AF.
-
-### 59.6 Filter policy — `use_current_filter` only
-
-AF always runs on whichever filter is currently in the wheel. No swap-to-luminance behavior.
-
-**Why this matters:** users with non-parfocal filters would have their focuser positioned wrong if AF swapped to L and then back to (e.g.) Hα. Per-filter offsets are learned naturally as the sequencer uses each filter for the first time and triggers AF (per the "first use of a filter" trigger).
-
-If a filter has too few stars (< 30 detected at the calibration exposure time), server doubles exposure and retries once. Still fewer than 30 stars → AF skipped with a notification: *"Insufficient stars on this filter for autofocus. Continuing with previous focus position. Consider manual focus check from the equipment panel."*
-
-The `always_luminance` alternative was considered and rejected: too dangerous when filters aren't parfocal, too time-costly when they are (extra swap = extra delay = extra mount tracking variance).
-
-### 59.7 Backlash auto-discovery (three layers)
-
-Backlash is **never manually measured by the user**. Three layers handle it:
-
-**Layer 1 — Backlash probe routine (appended to first calibration, ~60-90 s):**
-
-After the calibration curve completes, server runs a dedicated probe:
+NINA asks for "dither pixels" (typical answer: 5). The right answer depends on the rig — cameras with small pixels need more pixels to cover the same angular displacement.
 
 ```
-1. Move focuser to predicted-best position P₀
-2. Capture, measure HFR_baseline (should be near curve minimum)
-3. Move IN by step_size × 4 → P₀ − 4·S
-4. Capture, measure HFR_in_check
-5. Move OUT by step_size × 4 → back to P₀ (in theory)
-6. Capture, measure HFR_return_attempt
-   ├─ If HFR_return ≈ HFR_baseline → zero backlash on OUT direction
-   └─ If HFR_return > HFR_baseline → focuser didn't actually return
-
-7. If backlash detected: move OUT additional small steps (10, 20, 40),
-   capture each, find the step count where HFR snaps back to baseline.
-   That step count = OUT-direction backlash.
-
-8. Once OUT backlash known, apply compensation and verify HFR returns
-   cleanly. Lock in OUT backlash value.
-
-9. Repeat with directions swapped (OUT first, IN correction) to
-   measure IN-direction backlash.
-
-10. Save both values to profile. Mark backlash_verified = false.
+target_angular_displacement = 5 arcsec    # rule of thumb for hot-pixel mitigation
+pixel_scale = (camera_pixel_size_microns × 206.265) / telescope_focal_length_mm
+dither_pixels = round(target_angular_displacement / pixel_scale)
+clamp to [3, 15]
 ```
 
-8-10 extra exposures × ~6 s each = 60-90 s. One-time per profile.
+Examples:
+- ZWO ASI2600MM (3.76 μm) on 540 mm refractor → 1.43"/px → ~3.5 px dither
+- ZWO ASI2600MC (3.76 μm) on 2000 mm SCT (C8 + 0.7 reducer) → 0.39"/px → ~13 px dither
+- ZWO ASI120MM (3.75 μm) on 1480 mm SCT (C8 native) → 0.52"/px → ~10 px dither
 
-**Layer 2 — Passive refinement during every Smart Focus run:**
+Wizard shows: *"Dither magnitude: auto (~4 px for current rig)"*. Override available via slider in advanced disclosure.
 
-Every direction change is a backlash data point. Server tracks:
-- Commanded delta vs achieved HFR delta vs predicted HFR delta
-- If achieved HFR delta < predicted → backlash absorbed motion
-- Magnitude of discrepancy refines backlash estimate
+### 62.4 Default direction + pattern
 
-After N stable runs (default 5) with backlash variance < 10%, `backlash_verified = true` flips. Refinement still runs but only acts on >2σ anomalous observations.
+- **RA+Dec random** (default) — most thorough hot-pixel coverage
+- **RA-only** — available via advanced disclosure for users on mounts with unreliable Dec axis (rare)
+- **Spiral** — alternate pattern; useful for cameras with very localized fixed-pattern noise
 
-**Layer 3 — Equipment-change invalidation:**
+### 62.5 Settle parameters
 
-Server identifies focusers via Alpaca's `DriverInfo` + `Name` + device-ID. When any of those changes:
-- Profile's `focuser.device_signature` is updated
-- Backlash values invalidated (set to null, `auto_discover` reset to true)
-- Calibration curve invalidated
-- Next AF trigger triggers full re-calibration including backlash probe
+PHD2's settle behavior:
 
-User-visible notification: *"Focuser changed — re-calibrating Smart Focus on next AF run."* User can also manually invalidate via Settings → Focuser → [Re-calibrate Smart Focus].
+- **Settle pixels:** 1.5 px (PHD2's RMS error must drop below this)
+- **Settle time:** 10 seconds (RMS must stay below threshold for this long)
+- **Settle timeout:** 60 seconds (give up + continue with warning)
 
-Compensation mode defaults to `overshoot` (forgiving, works on focusers with non-linear backlash). `absolute` mode is available via the advanced disclosure for users on absolute-encoder focusers like ZWO EAF Pro.
+User can tighten/loosen in advanced. Most users never touch these.
 
-### 59.8 Curve fitting + Classic AF specifics (calibration + fallback path)
+### 62.6 Cross-meridian-flip behavior
 
-When Classic AF runs (calibration or fallback):
+When the §58 meridian flip's `guider_recal: auto_restore` path runs (PHD2's "Auto Restore Calibration" with reverse-Dec flag), dither direction handling is automatic — PHD2 knows the axes flipped and signs the dither commands correctly. Same path NINA uses.
 
-- **Primary algorithm:** parabolic with weighted least-squares
-- **Auto-fallback:** hyperbolic if parabolic R² < 0.85
-- **Trendlines:** available via advanced disclosure for unusual star profiles
-- **Steps per run:** 9 (4 above + center + 4 below)
-- **Step size:** auto from focuser's reported step size + previous curve width
-- **Exposure per step:** 5 s default
-- **Star detection:** HocusFocus algorithm (inherited from NINA), threshold 5σ above background, minimum 30 stars
+If `guider_recal: full` (full re-calibration after flip), dither resumes after the new calibration completes. Equally automatic.
 
-### 59.9 Diagnostic integration — smart skip during bad conditions
+### 62.7 No-guider fallback (v0.0.1 = disabled)
 
-Per §51 diagnostics: if the live signal pattern matches `clouds_passing`, `aperture_blocked`, or `dew_formation`, **AF triggers defer** rather than fire.
+If the profile has no guider configured OR PHD2 is connected but unresponsive: dither is disabled with a one-time per-session notification:
 
-Smart Focus run takes 30-90 s and Classic AF fallback takes 5 min; running either during clouds will just fail and waste sky time. Better to wait for conditions to recover, then fire AF, then resume imaging.
+> *"Dither requires a guider — your sequence will continue without dithering. Hot pixels may persist in stacked images."*
 
-Implementation: every AF trigger consults `GET /api/v1/diagnostics/current` before firing. If diagnostic state is non-nominal, queue the AF for "fire when state returns to green." User-visible notification: *"Autofocus deferred — clouds passing. Will run when conditions recover."*
+Direct-mount-pulse dither (without guider) is technically possible but only useful for short-exposure workflows where dither matters less anyway. Deferred to v0.1.0.
 
-NINA fires AF regardless of conditions. This is a meaningful sky-time savings per §0.5 pillar 1.
+### 62.8 Diagnostic-aware skip (the §59.9 pattern repeated)
 
-### 59.10 Collimation health detection — free byproduct of calibration
+Every dither command consults `GET /api/v1/diagnostics/current` before firing. Non-nominal states (`clouds_passing`, `aperture_blocked`, `dew_formation`) skip the dither — no point spending 10-15 s settling when the next exposure is just going to be paused anyway.
 
-Calibration already captures donut images at multiple defocus distances. For obstructed scopes (SCT / Mak / RC / Newtonian), server extracts:
+When diagnostic state recovers and exposures resume, the next dither cadence cycle picks up normally. Skipped dithers don't accumulate.
 
-- Per-star donut outer-ring centroid
-- Per-star donut inner-ring centroid (central obstruction shadow center)
-- Per-step centroid offset vector (magnitude + direction)
-- Per-step ring asymmetry coefficient
+NINA dithers regardless of conditions; this is sky-time savings per §0.5 pillar 1.
 
-In perfect collimation, outer and inner centroids coincide. Offset → secondary tilt (SCT/Mak/RC) or primary+secondary tilt (Newtonian).
-
-**Robustness:** server averages measurements across many stars near the center of the FOV (off-axis stars are affected by coma/field-curvature), and across multiple defocus steps (real miscollimation grows linearly with defocus; atmospheric seeing produces random offsets). False-positive resistance is the priority.
-
-**Severity thresholds:**
-
-| Centroid offset (% of donut diameter) | Verdict | Surface |
-|---|---|---|
-| < 5% | "Collimation looks good" | Info line in calibration completion summary |
-| 5-15% | "Slight miscollimation detected" | Warning notification with clock-position direction |
-| > 15% | "Significant miscollimation — recommended to collimate before continuing" | Critical notification |
-
-**Direction reporting — clock position viewed from behind the eyepiece:**
-
-> *"Donut centroid offset: 12% of donut diameter, toward 4 o'clock (viewed from behind the eyepiece).
-> For your Schmidt-Cassegrain, this typically means the secondary mirror is tilted. Consult your scope's collimation procedure documentation.
-> [Acknowledge]  [Don't warn again this session]"*
-
-Notification stays in the feed; user can revisit anytime.
-
-**What v0.0.1 does NOT do:**
-
-- Prescriptive screw-turning guidance (per-scope-model + per-mount-orientation; consequences of bad guidance are real — wait for community-curated knowledge base in v0.1.0)
-- Auto-collimation routines (require motorized secondary or robotic collimation tools — out of scope)
-- Refractor collimation detection (signature is subtle in defocus images; deferred to v0.1.0 design pass)
-
-### 59.11 Failure handling
-
-| Failure | Action |
-|---|---|
-| Calibration curve quality bad (Classic AF couldn't fit even with hyperbolic fallback) | Notify user; abort calibration; Smart Focus disabled until manually re-attempted |
-| Smart Focus shot 1 → shot 2: HFR worsened | Direction prediction wrong; reverse direction with half magnitude; take shot 3. If still worse → fall back to full Classic AF |
-| Smart Focus diverges (3 shots, HFR still worse than start) | Restore original position; fall back to full Classic AF on next trigger; log; if happens twice in a session, mark calibration stale and queue re-calibration |
-| Feature vector outside calibrated range (severely defocused) | Fall back to Classic AF — calibration only covers ±N steps |
-| Diagnostic state non-nominal | Defer per §59.9 |
-| Fewer than 30 stars detected at current filter | Double exposure, retry once; still <30 → skip AF + notify |
-| Focuser stall (commanded position not reached) | Per §42.2 retry → recalibrate backlash → notify |
-| Three consecutive AF runs with declining curve quality | Per §40.7 cycling-degradation pattern — notify *"AF can't catch this — probably transient atmospheric, not a focus issue"* + pause AF triggers for next 30 min |
-
-### 59.12 UI during an AF run
-
-Silent multi-minute UI is bad UX. WILMA shows a live AF panel during both Smart Focus and Classic AF:
-
-```
-┌──────────────────────────────────────────────────────┐
-│  Smart Focus in progress (shot 2 of 2-3)             │
-│  Filter: L   Calibrated: 2026-05-12                  │
-│  ──────────────────────────────────────────────────  │
-│                                                       │
-│  Shot 1 — current position 14820:                     │
-│    HFR 1.85   Donut Ø 24 px → prediction: move OUT 38│
-│                                                       │
-│  Shot 2 — predicted position 14858:                   │
-│    HFR 1.42 ✓ (target ≤ 1.47)                         │
-│                                                       │
-│  [thumb of shot 2's frame]                            │
-│                                                       │
-│  [ Cancel — restore previous position ]               │
-└──────────────────────────────────────────────────────┘
-```
-
-Classic AF (calibration / fallback) shows the traditional HFR-vs-position curve plot in real-time (as I specced in the earlier §59 draft):
-
-```
-┌──────────────────────────────────────────────────────┐
-│  Calibrating Smart Focus (Classic AF, step 5 of 9)   │
-│  Filter: L   Telescope: Schmidt-Cassegrain           │
-│  ──────────────────────────────────────────────────  │
-│  HFR                                                  │
-│  3.5  ●                              ●                │
-│  3.0     ●                        ●                   │
-│  2.5        ●                  ●                      │
-│  2.0           ●  ←now      ●                         │
-│  1.5              ●  ?    ●                           │
-│        14600  14700  14800  14900  15000              │
-│  Stars: 487   Best so far: 14820 (HFR 1.4)            │
-│  ──                                                   │
-│  After this curve: backlash probe (~60s),             │
-│  then collimation check (instant), then ready.        │
-└──────────────────────────────────────────────────────┘
-```
-
-Implemented via existing WebSocket event stream — server emits `autofocus.shot_complete` / `autofocus.step_complete` events.
-
-### 59.13 Profile schema
+### 62.9 Profile schema
 
 ```json
 {
-  "autofocus": {
+  "dither": {
     "enabled": true,
-    "telescope_type": "sct",                  // refractor | sct | mak | rc | newtonian | other
-    "triggers": {
-      "on_sequence_start": true,
-      "time_interval_min": 90,
-      "temp_delta_c": 1.5,
-      "hfr_drift_pct": 15,
-      "hfr_drift_consecutive_frames": 3,
-      "post_meridian_flip": "if_temp_drifted",
-      "first_use_of_filter": true
+    "cadence": "auto",                  // "auto" | "every_frame" | "every_n_frames" | "disabled"
+    "cadence_n_frames": 1,              // only used when cadence = "every_n_frames"
+    "magnitude": "auto",                // "auto" | numeric pixel count
+    "magnitude_target_arcsec": 5,       // when auto: target angular displacement
+    "direction": "ra_dec_random",       // "ra_dec_random" | "ra_only" | "spiral"
+    "settle": {
+      "pixels": 1.5,
+      "time_seconds": 10,
+      "timeout_seconds": 60
     },
-    "target_hfr_tolerance_pct": 5,
     "diagnostic_skip_when_unstable": true,
-    "classic_fallback_enabled": true,
-    "backlash": {
-      "auto_discover": true,
-      "in_steps": null,
-      "out_steps": null,
-      "compensation_mode": "overshoot",
-      "passive_refinement": true,
-      "verified": false,
-      "last_refined_at": null
-    },
-    "collimation_check": {
-      "enabled": true,
-      "warn_threshold_pct": 5,
-      "critical_threshold_pct": 15,
-      "last_check": null,
-      "last_offset_pct": null,
-      "last_offset_clock_position": null,
-      "last_severity": null
-    },
-    "advanced": {
-      "calibration_temp_delta_c": 8,
-      "exposure_seconds": 5,
-      "min_stars": 30,
-      "classic_algorithm_primary": "parabolic",
-      "classic_algorithm_fallback": "hyperbolic",
-      "classic_fallback_r2_threshold": 0.85,
-      "classic_steps_total": 9
-    }
+    "skip_for_short_exposures_threshold_sec": 60
   }
 }
 ```
 
-**Six user-visible knobs.** Everything else (advanced + backlash details + collimation thresholds) hidden behind a disclosure. Compare to NINA's 17-knob panel.
+**Four user-visible settings** (enabled / cadence / magnitude / direction). Settle + diagnostic-skip + threshold are in the advanced disclosure.
 
-### 59.14 Reformed wizard's focuser/telescope screen
+### 62.10 Per-target-type overrides
+
+Sequence instructions can override the profile defaults:
+
+- DSO target (default): inherit profile (`every_frame`, auto-magnitude, RA+Dec)
+- Short-exposure DSO bursts or comet cadence templates that opt out: `enabled: false`
+- Calibration frames (always): `enabled: false`
+
+A user with a DSO sequence followed by a quick lunar capture doesn't have to manually toggle dither off — the lunar instruction's template handles it.
+
+### 62.11 Wizard exposure — minimal
+
+Wizard's PHD2 / guider screen (§37.3 screen 10) updated to:
 
 ```
-Telescope type:        [▼ Schmidt-Cassegrain (SCT)             ]
-                          Refractor
-                          Schmidt-Cassegrain (SCT)
-                          Maksutov-Cassegrain
-                          Ritchey-Chrétien (RC)
-                          Newtonian
-                          Other / unknown
+Dithering between exposures:
 
-Focuser step size:     0.5 microns/step  (auto-detected from Alpaca)
+  Mode:           [▼ Auto (recommended)         ]
+                     Auto (recommended)
+                     Every frame
+                     Every 3 frames
+                     Every 5 frames
+                     Disabled
 
-Run focus on:          ☑ Sequence start
-                       ☑ Filter change
-                       ☑ Temp change > 1.5°C
-                       ☑ Every 90 minutes
-                       ☐ After meridian flip (configured per §58)
+  Magnitude:      [▼ Auto — ~4 px for your rig  ]
 
-ARA will calibrate Smart Focus on your first autofocus run of
-the night (~5 minutes, one-time per setup). It learns your rig
-including backlash, and also checks collimation while it's at
-it. After calibration, autofocus completes in 2-3 exposures.
+  Dithering nudges the mount slightly between exposures so hot
+  pixels don't persist in stacked images. Auto mode picks the
+  right cadence and magnitude based on your camera and scope.
 
   [< Back]    [Skip — use defaults]    [Next >]
 ```
 
-**Five user-facing questions.** Zero backlash questions. Zero algorithm-internals questions. Vs NINA's seventeen.
+Two questions. Both default to "auto." Most users tap [Next].
 
-### 59.15 API endpoints + WebSocket events
+### 62.12 Failure handling
+
+| Failure | Action |
+|---|---|
+| PHD2 settle timeout exceeded | Log warning, continue with next exposure (don't abort — slight star elongation in next frame is recoverable in processing) |
+| PHD2 unresponsive to dither command | Per §42.2 retry, fall through to "no guider" path if persistent |
+| Three consecutive dither timeouts in a session | Notify *"Guiding is unstable — dithering is repeatedly timing out. Check mount balance, cable drag, or wind."* + temporarily reduce cadence to every 3 frames automatically |
+
+The "auto-reduce cadence on persistent failure" is an ARA-native graceful-degradation pattern.
+
+### 62.13 API endpoints + WebSocket events
 
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/api/v1/autofocus/run` | Manual trigger (runs Smart Focus if calibrated, else Classic AF) |
-| `POST` | `/api/v1/autofocus/recalibrate` | Force full calibration (Classic curve + backlash probe + collimation check) |
-| `POST` | `/api/v1/autofocus/cancel` | Cancel in-flight AF; restore previous position |
-| `GET` | `/api/v1/autofocus/state` | Current state + current shot/step if running |
-| `GET` | `/api/v1/autofocus/calibration` | Current calibration table (for display/debug) |
-| `GET` | `/api/v1/autofocus/collimation` | Latest collimation check result |
-| `GET` | `/api/v1/autofocus/history` | Per-session list of AF runs with metrics (for §50 Stats Focus & Temperature view) |
+| `POST` | `/api/v1/dither/trigger` | Manual dither (e.g., user observed walking noise); body: optional magnitude override |
+| `GET` | `/api/v1/dither/state` | Current dither state (idle / dithering / settling); last dither timestamp + magnitude |
 
 WebSocket events:
 
 ```json
-{ "type": "autofocus.started",         "payload": { "mode": "smart" | "classic", "filter": "L", "trigger": "..." } }
-{ "type": "autofocus.shot_complete",   "payload": { "shot_index": 1, "hfr": 1.85, "predicted_offset": -38, "stars": 487 } }
-{ "type": "autofocus.step_complete",   "payload": { "step_index": 5, "position": 14820, "hfr": 1.43, "stars": 487 } }
-{ "type": "autofocus.curve_fit",       "payload": { "algorithm": "parabolic", "r_squared": 0.94, "best_position": 14817 } }
-{ "type": "autofocus.calibration_complete", "payload": { "best_position": 14817, "backlash_in": 23, "backlash_out": 18, "collimation_offset_pct": 4, "collimation_severity": "good" } }
-{ "type": "autofocus.completed",       "payload": { "mode": "smart", "final_position": 14858, "final_hfr": 1.40, "duration_seconds": 47, "shots": 2 } }
-{ "type": "autofocus.deferred",        "payload": { "reason": "clouds_passing" } }
-{ "type": "autofocus.fallback_classic","payload": { "reason": "smart_focus_diverged" } }
-{ "type": "autofocus.failed",          "payload": { "reason": "...", "restored_position": ... } }
-{ "type": "collimation.warning",       "payload": { "offset_pct": 12, "clock_position": "4 o'clock", "scope_type": "sct" } }
+{ "type": "dither.started",       "payload": { "magnitude_pixels": 4, "direction": "ra_dec_random" } }
+{ "type": "dither.settling",      "payload": { "current_rms_pixels": 2.3, "target": 1.5 } }
+{ "type": "dither.completed",     "payload": { "duration_seconds": 12, "final_rms_pixels": 0.9 } }
+{ "type": "dither.skipped",       "payload": { "reason": "diagnostic_unstable" | "short_exposure" | "no_guider" } }
+{ "type": "dither.timeout",       "payload": { "elapsed_seconds": 60, "final_rms_pixels": 2.1, "continued_anyway": true } }
 ```
 
-### 59.16 §61 settings registry coverage
+### 62.14 §61 settings registry coverage
 
-Every Smart Focus setting registered with appropriate `keywords`:
+- `dither.enabled` — keywords: `dither, dithering, hot pixel, walking noise, sensor noise`
+- `dither.cadence` — keywords: `dither frequency, dither every, dither interval, how often dither`
+- `dither.magnitude` — keywords: `dither pixels, dither size, dither amount, dither distance`
+- `dither.direction` — keywords: `dither direction, dither pattern, dither RA dec`
+- `dither.settle.*` — keywords: `dither settle, settle time, settle threshold, PHD2 settle`
 
-- `autofocus.enabled` — keywords: `autofocus, AF, smart focus, focus, automatic`
-- `autofocus.telescope_type` — keywords: `telescope, scope, optical design, SCT, refractor, newtonian, RC, maksutov`
-- `autofocus.triggers.time_interval_min` — keywords: `autofocus interval, focus frequency, AF every`
-- `autofocus.triggers.temp_delta_c` — keywords: `temperature, temp, thermal, drift, focus on temp`
-- `autofocus.triggers.first_use_of_filter` — keywords: `filter offset, per filter, filter change focus`
-- `autofocus.collimation_check.enabled` — keywords: `collimation, alignment, donut, secondary mirror`
-- `autofocus.classic_fallback_enabled` — keywords: `classic AF, full curve, NINA-style focus, fallback`
+### 62.15 What's NINA-preserved vs ARA-changed
 
-Search for "collimation" surfaces both the check-enabled toggle and the latest reading. Search for "backlash" surfaces the auto-discover toggle and current values in the advanced section.
-
-### 59.17 What's NINA-preserved vs ARA-changed
-
-**Preserved verbatim:** HocusFocus star detection algorithm, parabolic/hyperbolic/trendline curve fitting math, NINA's retry semantics within a Classic AF run, per-filter offset model, temp comp slope math.
+**Preserved verbatim:** PHD2 JSON-RPC dither command + settle protocol, settle threshold math, dither pattern algorithms (random/spiral).
 
 **ARA additions:**
-- Smart Focus feature-vector calibration table + inverse lookup
-- 2-3 shot focus pattern after calibration
-- Telescope-type model for feature selection
-- Three-layer backlash auto-discovery
-- Collimation health detection during calibration
-- Diagnostic-skip integration with §51
-- Equipment-change auto-invalidation
-- Live UI panel showing per-shot progress
-- Settings reduced from 17 to 6 visible
-- §50 Stats Focus & Temperature integration (every AF run's curve / shots stored)
+- Auto-compute magnitude from camera + telescope (vs fixed user-input)
+- Auto-disable for short-exposure workflows (vs always-on)
+- Per-target-type defaults via sequence templates
+- Diagnostic-aware skip during bad conditions
+- Auto-reduce cadence on persistent timeout failures
+- Wizard reduced to 2 dither questions
+- §30.7 equipment-change check invalidates dither magnitude when camera or telescope changes
 
-### 59.18 v0.1.0 expansion paths
+### 62.16 v0.1.0 expansion paths
 
-- **ML-driven feature extraction** — small on-device CNN trained on (out-of-focus image → focuser offset) pairs collected from v0.0.1 users' calibration runs (opt-in telemetry). Improves prediction accuracy and reduces shot count to 1-2 typical.
-- **Temperature-aware backlash model** — backlash varies with lubricant viscosity at cold temps. Build backlash-vs-temp curve per profile.
-- **Load-aware backlash** — vertical-hang imaging trains pull on the focuser differently than horizontal pointing. Account for mount altitude.
-- **Prescriptive collimation guidance** — per-scope-model + per-mounting-orientation screw-direction guidance, community-curated knowledge base (paired with `MOUNT_TIPS.md` pattern from §52.7).
-- **Star-test mode** — dedicated workflow for diagnosing collimation without running a sequence. User taps "Check Collimation"; server takes a single defocused image, shows annotated centroid offsets per star across the field.
-- **Refractor collimation detection** — research-grade signal extraction from out-of-focus Airy disk distortion.
-- **Collimation drift trending** — multi-session collimation tracking in §50 Stats Equipment Health.
-- **Tilt-aware focus** — focus position varies across the field. v0.1.0 measures sensor tilt and accounts for it.
-- **Adaptive step pattern in Classic AF** — start wide, narrow on subsequent steps once a rough minimum is found.
-- **Multi-star sampling** — track 5 specific named stars instead of bulk HFR median (better for non-uniform fields).
+- **Direct-mount-pulse dither** for no-guider workflows
+- **Adaptive magnitude** — if server detects walking-noise patterns persisting in stacked frames, auto-increase dither magnitude
+- **Per-filter cadence override** — narrowband dithered more aggressively than broadband
+- **Dither-quality scoring** — per-dither analytics surfaced in §50 Stats Guiding view (e.g., "your dithers settle in 8s avg, but the last 5 took 22s — guiding may be degrading")
+
+---
+
+## 63. PHD2 lifecycle + profile/dark-library push
+
+ARA's guider integration depends on **openastro-phd2**, a separately-maintained Linux/Pi-friendly fork of PHD2 with the systemd headless lifecycle, JSON-RPC API surface, and ASCOM Alpaca + INDI transports already designed. This section specs how ARA Core integrates with it — process supervision, profile management, dark library, equipment-change handling. The implementation pattern is *"ARA assumes openastro-phd2 is present and uses its documented RPC surface"* — ARA does not modify PHD2.
+
+**Source of truth for the RPC surface:** [`openastro-phd2/doc/jsonrpc_api.md`](https://github.com/open-astro/openastro-phd2/blob/master/doc/jsonrpc_api.md) — 80+ documented methods. Pin to whatever version ships with the ARA Core .deb's Recommends (`openastro-phd2`).
+
+### 63.1 Lifecycle — managed by openastro-phd2's own systemd unit
+
+Installed by the `openastro-phd2` .deb (per §34.2 Recommends). ARA Core does **not** ship a competing systemd unit.
+
+Existing service (from the .deb):
+
+```ini
+[Unit]
+Description=OpenAstro PHD2 Headless Guiding Server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=openastro-phd2
+Group=openastro-phd2
+WorkingDirectory=/var/lib/openastro-phd2
+Environment=LD_LIBRARY_PATH=/usr/lib/openastro-phd2
+ExecStart=/usr/bin/xvfb-run -a /usr/bin/openastro-phd2 --headless --headless-auto-connect
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Notes for ARA:
+- **`xvfb-run` is required** — PHD2 uses wxWidgets which needs a display context even headless. xvfb-run provides a virtual X server. Not optional, not removable.
+- **`--headless --headless-auto-connect`** flags are PHD2 fork additions that make remote-RPC operation practical
+- Service runs as user `openastro-phd2` (separate from `openastroara` — they're sibling services)
+- PHD2's own logs + profiles + calibration data live under `/var/lib/openastro-phd2/`
+- `RestartSec=3` is more aggressive than ARA's own server (5s) — appropriate because PHD2 should recover quickly to keep guiding available
+
+ARA's Pi-side integration with the service:
+
+- **Connection target:** `localhost:4400` (PHD2 default JSON-RPC port)
+- **Restart authority:** ARA can request restart via `systemctl restart openastro-phd2` (privileged via NOPASSWD sudoers drop-in, similar to §33.5 update.sh pattern)
+- **Stop authority:** ARA can request stop via `systemctl stop openastro-phd2` (rare; mostly used by tests)
+- **Status observation:** ARA polls `systemctl is-active openastro-phd2` for service-level health alongside the JSON-RPC ping
+
+### 63.2 Connection lifecycle (ARA's PHD2 client state machine)
+
+ARA's `IGuider` client follows this state machine:
+
+```
+not_attempted
+   ↓ first guiding-relevant operation
+connecting (TCP connect to localhost:4400)
+   ↓ TCP ack
+connected_idle (RPC reachable, no equipment yet)
+   ↓ ensure correct PHD2 profile + connect_equipment via set_connected(true)
+connected_ready (camera + mount in PHD2, ready to guide)
+   ↓ guide (start_guiding RPC)
+calibrating
+   ↓ cal complete
+guiding
+   ↓ sequencer-controlled
+paused | settling-after-dither | star_lost | etc.
+```
+
+Surfaced via `/api/v1/guider/status` endpoint + `equipment.state` WebSocket events.
+
+### 63.3 Crash detection + auto-restart layered on top of systemd
+
+systemd's `Restart=on-failure` handles basic crash recovery. ARA layers additional monitoring:
+
+- ARA's PHD2 client polls `get_app_state` every 10 s when idle, every 2 s during guiding
+- 3 consecutive RPC failures → ARA classifies PHD2 as **down**
+- ARA queries `systemctl status openastro-phd2`:
+  - If `activating` (systemd restarting) → wait with backoff (1s → 5s → 15s → 30s → 60s → 120s)
+  - If `failed` (systemd gave up) → ARA fires **urgent** notification, guider-dependent ops disabled
+  - If `active` but RPC unresponsive → ARA classifies as **hung**, issues `systemctl restart openastro-phd2`
+- Mid-guiding crash → §42.2 fault flow: pause sequence at safe point, critical notification, systemd auto-restarts
+
+### 63.4 Per-ARA-profile to PHD2-profile mapping
+
+Each ARA profile maps 1:1 to a PHD2 profile by name. Mapping is `ara-<short-slug>`:
+
+```
+ARA profile "C14 on CEM120"     ↔ PHD2 profile "ara-c14-cem120"
+ARA profile "RedCat on HEQ5"    ↔ PHD2 profile "ara-redcat-heq5"
+ARA profile "Field rig AM5"     ↔ PHD2 profile "ara-field-am5"
+```
+
+**Profile lifecycle synced via RPC:**
+
+| ARA event | PHD2 RPC sequence |
+|---|---|
+| User creates an ARA profile (§30.4) and reaches the guider wizard screen | `create_profile(name="ara-...", select=true)` |
+| User loads an existing ARA profile (§30.2) | `set_profile_by_name(name="ara-...")` followed by validation of pushed params |
+| User updates ARA profile equipment in §30.7 | `set_connected(false)` → `set_selected_camera/mount/...` → `set_connected(true)` |
+| User deletes an ARA profile | `delete_profile(name="ara-...", delete_dark_files=true)` |
+| User clones an ARA profile | `clone_profile(source="ara-...", new_name="ara-...-copy", select=true)` |
+
+PHD2 preserves per-profile calibration + dark library data, so switching ARA profiles never loses guider state for either rig.
+
+### 63.5 Profile parameters ARA pushes to PHD2
+
+Captured by §37.3 Screen 10 wizard, pushed via `set_profile_setup` (which accepts any subset of fields):
+
+| ARA-side input | PHD2 RPC field |
+|---|---|
+| Guide camera (Alpaca discovery from `discover_alpaca_servers` + `query_alpaca_devices`, or INDI camera name) | `set_selected_camera` + `set_selected_camera_id` (for Alpaca-with-multiple-devices) OR `set_selected_indi_camera_driver` |
+| Guide camera pixel size | `get_alpaca_camera_pixelsize` auto-fetched, override via `set_profile_setup` if user manually entered |
+| Guide scope focal length | `set_profile_setup({focal_length: ...})` |
+| Mount (paired to ARA's mount selection) | `set_selected_mount` (Alpaca path uses `set_alpaca_server` + `set_selected_alpaca_device`) |
+| Calibration step size | Auto-computed from FL/pixel scale; pushed via `set_profile_setup({calibration_step_ms: ...})` |
+| RA aggressiveness | `set_algo_param(axis="ra", name="aggressiveness", value=0.75)` |
+| Dec aggressiveness | `set_algo_param(axis="dec", name="aggressiveness", value=0.65)` |
+| Min motion (RA + Dec) | `set_algo_param` per axis |
+| Dec guide mode (auto / always-positive / always-negative) | `set_dec_guide_mode` |
+
+**Important precondition:** PHD2 rejects `set_selected_*` and `set_profile_setup` while equipment is connected. ARA must:
+
+```
+1. set_connected(false)      # disconnect equipment
+2. set_selected_camera(...)  # push new selections
+   set_selected_mount(...)
+   set_alpaca_server(...)
+   set_profile_setup({...})  # push remaining params
+3. set_connected(true)       # reconnect with new config
+4. poll get_connected until true (with backoff + timeout)
+```
+
+ARA wraps this as a single atomic "update profile" operation; intermediate state isn't user-visible.
+
+### 63.6 Dark library + defect map management
+
+openastro-phd2 distinguishes two calibration-file types:
+
+- **Dark library** — multi-exposure stack used by PHD2 during normal operation for noise subtraction
+- **Defect map (hot-pixel map)** — per-pixel mask of consistently-bad pixels; PHD2 ignores those pixels during star detection
+
+ARA exposes both, with dark library as primary (defect map is advanced):
+
+**Build flow (initiated from wizard's Screen 10 or Settings → Guider → Build Dark Library):**
+
+1. User taps [Build dark library now (~2 min)]
+2. ARA prompts via modal: *"Cover the guide scope with a dark cap. Tap Continue when ready."*
+3. ARA issues `build_dark_library({frame_count: 10, clear_existing: true, load_after: true, notes: "ARA wizard"})`
+4. PHD2 captures the frame stack; WebSocket events stream progress (via PHD2's own event server, ingested by ARA — see §63.8)
+5. Completion event from PHD2 → ARA fires `guider.dark_library.complete` event → modal updates: *"Dark library built. Uncover the guide scope before guiding starts."*
+6. ARA records `calibration_state.guider.dark_library` in profile
+
+**Defect map** is built less frequently (typically once per camera, very stable). Wizard offers a [Also build defect map (~3 min, advanced)] checkbox; default unchecked. Power users can enable from Settings → Guider → Advanced.
+
+**Per-profile storage** — both dark library and defect map are stored per-PHD2-profile by PHD2 itself. ARA's per-ARA-profile mapping means each ARA profile gets its own dark library, automatically.
+
+### 63.7 Equipment-change invalidation (extends §30.7)
+
+The §30.7 invalidation matrix extends to invoke the PHD2 update sequence for guider-affecting changes:
+
+| Equipment change | PHD2 update action | Dark library effect |
+|---|---|---|
+| Guide camera | Disconnect → `set_selected_camera`/`_id` to new device → reconnect | Invalidated (different sensor = different hot pixels) → rebuild required |
+| Guide scope (focal length) | `set_profile_setup({focal_length: ...})`, no disconnect required for this specific field | Library still valid (geometry change doesn't affect dark frames) |
+| Mount | Disconnect → `set_selected_mount` / `set_alpaca_server` / `set_selected_alpaca_device` → reconnect | Library still valid (mount change doesn't affect guide camera noise) |
+| PHD2 config / aggressiveness / min-motion (user-edited in Settings → Guider → Advanced) | `set_algo_param` per changed param | Library still valid |
+
+When dark library invalidates, ARA surfaces a banner in the main shell:
+
+> *"Guide camera changed — PHD2's dark library is stale. Build a new one now (~2 min) or guiding will use unsubtracted frames."  [Build now]  [Later]*
+
+If user defers, guiding continues with no dark subtraction. Quality may degrade (more star-detection false positives from hot pixels) but it works.
+
+### 63.8 Log + event ingestion via PHD2's event stream
+
+PHD2's JSON-RPC socket carries both method responses AND asynchronous events on the same connection. ARA subscribes to the event stream and ingests guiding-relevant events into ARA's session log:
+
+- `StarLost` → ARA notification + session log entry
+- `Calibrating` / `CalibrationComplete` / `CalibrationFailed`
+- `SettleBegin` / `SettleDone` / `Settling`
+- `GuideStep` (frequent — per-frame guide correction; ARA samples for §50 Stats, doesn't notify per-step)
+- `Alert` (PHD2's own notification mechanism — passed through to ARA's notification feed)
+
+Implementation: ARA maintains the persistent TCP connection PHD2 uses, dispatching events to the appropriate ARA subsystem (logging, notifications, Stats DB).
+
+**ARA does NOT tail PHD2's log files.** The JSON-RPC event stream is the canonical channel. PHD2's `/var/lib/openastro-phd2/PHD2_GuideLog_*.txt` files are still written for forensic post-mortem use but ARA doesn't depend on them.
+
+### 63.9 PHD2 version detection + handshake
+
+On every (re)connect, ARA calls `get_app_state` and inspects PHD2 version info. The fork identifies itself distinctly from upstream PHD2:
+
+- If version reports `openastro-phd2 vX.Y.Z` → log "Connected to openastro-phd2 vX.Y.Z" + verify against ARA's known-compatible range
+- If version reports stock PHD2 → log warning *"Connected to upstream PHD2 — some Linux/headless features may be unavailable. Recommend installing openastro-phd2 from apt.openastro.net."* and continue (graceful degradation)
+- If version is older than ARA's tested minimum → log compatibility warning + continue
+
+ARA does not refuse to operate against upstream PHD2. The fork is recommended; not required.
+
+### 63.10 PHD2 not installed — graceful degradation
+
+If `openastro-phd2` is not installed (user opted out of Recommends, or removed it):
+
+- ARA server still starts cleanly; reports `guider_available: false` in `/api/v1/server/state`
+- Wizard's guider screen shows a banner: *"openastro-phd2 not detected. Install with `sudo apt install openastro-phd2`."*
+- Sequences with guiding requirements warn before start: *"This sequence requires guiding but openastro-phd2 is not installed. Continue without guiding (frames may show star trails)?"*
+- Dither auto-disables (per §62.7)
+
+### 63.11 Failure handling matrix
+
+| Failure | Action |
+|---|---|
+| openastro-phd2 not installed | `guider_available: false`; wizard banner; sequences warn before start |
+| Service won't start (systemd `failed`) | Urgent notification; guider features disabled until user fix |
+| RPC connect fails repeatedly | Backoff (1/5/15/30/60/120 s); after all fail, treat as hung, restart service |
+| `set_connected(true)` fails (equipment not present after profile push) | Per §42.3 hot-reconnect; surface to wizard as "Equipment not connected in PHD2 — check that the camera/mount you selected is reachable" |
+| Mid-session crash | Pause sequence per §42.2; critical notification; systemd auto-restarts; ARA reconnects |
+| Hung mid-guiding (RPC unresponsive, process alive) | Force `systemctl restart openastro-phd2`; treat as star_lost during recovery |
+| `build_dark_library` fails | Surface specific error (no camera / capture active / save failure); user retries from Settings |
+| Profile push fails (precondition violation) | Retry: send `set_connected(false)` first, then re-push; if still fails, surface explicit error |
+
+### 63.12 API endpoints + WebSocket events
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/api/v1/guider/status` | PHD2 lifecycle state + version + last-seen app state + connected equipment |
+| `POST` | `/api/v1/guider/restart` | Force `systemctl restart openastro-phd2`; idempotent per §60.5 |
+| `POST` | `/api/v1/guider/profile/push` | Push current ARA-profile params to PHD2; runs the disconnect-update-reconnect sequence |
+| `POST` | `/api/v1/guider/dark-library/build` | Initiate dark library build (with prompt-cover modal flow on client) |
+| `GET` | `/api/v1/guider/dark-library/state` | Returns `get_calibration_files_status` result (paths, exists, loaded, frame count) |
+| `DELETE` | `/api/v1/guider/dark-library` | `delete_calibration_files({delete_dark_library: true})` for current profile |
+| `POST` | `/api/v1/guider/defect-map/build` | Build defect map (advanced; opt-in) |
+| `GET` | `/api/v1/guider/equipment-choices` | Mirrors `get_equipment_choices` — lists available cameras/mounts for wizard dropdowns |
+| `POST` | `/api/v1/guider/discover-alpaca` | Mirrors `discover_alpaca_servers` — surfaces Alpaca servers PHD2 can see (useful when ARA's discovery and PHD2's discovery disagree about what's on the network) |
+
+WebSocket events:
+
+```json
+{ "type": "guider.lifecycle",      "payload": { "state": "connected_ready", "previous": "connecting", "phd2_version": "openastro-phd2 2.6.14" } }
+{ "type": "guider.crashed",        "payload": { "uptime_seconds": 14523, "restart_attempt": 1 } }
+{ "type": "guider.restart_failed", "payload": { "attempts": 5, "next_action": "user_intervention_required" } }
+{ "type": "guider.profile_pushed", "payload": { "ara_profile_id": "...", "phd2_profile_name": "ara-c14-cem120", "fields_changed": ["camera", "mount", "focal_length"] } }
+{ "type": "guider.dark_library.building", "payload": { "frame_index": 3, "total_frames": 10, "exposure_ms": 1500 } }
+{ "type": "guider.dark_library.complete", "payload": { "frame_count": 10, "took_seconds": 117, "path": "..." } }
+{ "type": "guider.dark_library.invalidated", "payload": { "reason": "guide_camera_changed" } }
+{ "type": "guider.event_passthrough", "payload": { "phd2_event": "StarLost", "raw": {...} } }
+```
+
+### 63.13 §61 search registry coverage
+
+- `guider.service_management` — keywords: `PHD2 service, openastro-phd2 systemd, guider service`
+- `guider.profile.camera` — keywords: `guide camera, PHD2 camera, guider camera, OAG camera`
+- `guider.profile.focal_length` — keywords: `guide scope focal length, guide scope FL, OAG focal length`
+- `guider.profile.aggressiveness` — keywords: `PHD2 aggressiveness, guide aggressiveness, RA aggressive, Dec aggressive`
+- `guider.dark_library_build` — keywords: `PHD2 dark, guide camera dark, hot pixel dark, dark library, build dark`
+- `guider.defect_map_build` — keywords: `PHD2 defect map, hot pixel map, bad pixel map, defect map`
+- `guider.restart` — keywords: `restart PHD2, restart guider, guider unresponsive, openastro-phd2 restart`
+
+### 63.14 DEPLOY.md updates
+
+Replace any earlier wording about "one-time VNC setup of PHD2" with:
+
+> *PHD2 is installed and managed automatically as the openastro-phd2 package (pulled in via Recommends when you install openastroara-server). It runs as a background service starting at Pi boot. ARA's wizard configures PHD2's profile, equipment selections, and dark library through PHD2's documented JSON-RPC API — you don't need to interact with PHD2 directly via VNC or a remote display.*
+
+### 63.15 What's NINA-preserved vs ARA-changed
+
+**Preserved (via openastro-phd2 itself, not ARA):** PHD2's JSON-RPC API contract (NINA depends on the same surface), settle event protocol, calibration data shape, guide algorithm internals.
+
+**ARA additions:**
+- systemd-managed PHD2 (via the openastro-phd2 .deb's own unit)
+- Auto-restart with exponential backoff layered on systemd
+- Hung-process detection via JSON-RPC ping
+- Per-ARA-profile to PHD2-profile mapping
+- Profile + dark-library push from ARA's wizard (vs NINA's "user runs PHD2 manually")
+- Event stream ingestion into ARA's session log + Stats (§50)
+- Equipment-change auto-update via the §30.7 invalidation pipeline
+- Graceful handling when openastro-phd2 not installed
+
+### 63.16 v0.1.0 expansion paths
+
+- **WILMA-pushed openastro-phd2 binary updates** (§33.6, §55.1) — same atomic-swap + rollback pattern as ARA Core's WILMA push, applied to the openastro-phd2 sibling package
+- **AI-driven calibration assistance** — ARA observes user's manual PHD2 calibration once; learns optimal params; suggests improvements in subsequent sessions
+- **Multi-guider support** — second OAG camera, dual-rig observatory setups
+- **PHD2 advanced algorithm tuner** — visual UI for `set_algo_param` parameters with explanations, since PHD2's own UI is dense and headless ARA users can't access it
 
 ---
 
