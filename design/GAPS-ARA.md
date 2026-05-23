@@ -25,7 +25,7 @@
 
 ### Tier 1 items still to discuss next session (in suggested order)
 
-1. **Live view / loop imaging** — small section; naturally pairs with the imaging-pipeline work already done. Easy win.
+1. ~~**Live view / loop imaging**~~ → **Resolved §64** (2026-05-22).
 2. **§36 Sky Atlas rescope** — scope-honesty call. Important to decide before Phase 12 since the AI will overbuild otherwise. (21 surveys + Tonight's Sky planetarium + Aladin Lite all in v0.0.1 is unrealistic; v0.0.1 should be DSS2 + Mellinger + basic catalog browsing only.)
 3. **Image stretching pipeline + preview API knobs** — what stretches WILMA offers (linear / log / MTF/STF / asinh / manual), server-side cache strategy when user requests alternative stretches.
 4. **Power loss durability** — SQLite WAL settings (`journal_mode=WAL`, `synchronous=NORMAL` vs `FULL`), fsync policy after FITS writes.
@@ -68,7 +68,7 @@ Found during a second end-to-end review of the playbook. These are gaps the AI w
 
 **Operational features referenced but unspec'd:**
 
-- [ ] **Live view / loop imaging mode** — §25.5 mentions a "Live View toggle" in the Imaging tab; nothing else. Users need continuous capture-without-sequence for framing and focus checks. Need: endpoint (`POST /api/v1/imaging/live/start` etc.), frame cadence, frame discard policy (no FITS persistence), WS event shape, interaction with cooler / guider / sequence state.
+- [x] ~~**Live view / loop imaging mode**~~ → **Resolved §64**. NINA's Live View is driver-specific (QHY native video mode, Canon EOS Live View) and unavailable for Alpaca cameras — `Generic`/ASCOM/Alpaca all return `CanShowLiveView => false`. ASCOM `IVideo` is deprecated. ARA implements Live View from scratch as a server-side loop of short normal captures via standard Alpaca `ICamera`, with previews delivered as single-overwrite tmpfile JPEG + cache-busted URL. Cadence ~1 frame per 2-4 s (bounded by exposure + Alpaca readout) — adequate for framing/focus-check, inadequate for planetary (deferred to v0.1.0 with a custom AlpacaBridge video extension since IVideo is dead). Scope: continuous loop, no FITS, no library entry, mid-loop settings change aborts in-flight exposure (same pattern as Stop). **Save Current Frame** promotes the next finished frame through the normal capture pipeline (FITS write, library row, `frame.complete` event); tagged `capture_source = "live_view"`, routed to synthetic `live-view-<date>` session by default to keep Stats clean. Hard upper bound: 30s exposure. Stop is immediate via `AbortExposure` (~< 100 ms). Auto-stop on sequence start / plate-solve / AF / PA / Take One / camera disconnect / WILMA idle > 5 min. **No §51 diagnostics on live frames** (interactive with human present, not session-integrity workflow). Cooler/guider/mount/focuser/filter wheel/rotator all untouched (user manually adjusts during framing). Mobile companion (§41) is read-only — desktop-only controls. Single-session enforced via §27 single-client policy. Profile schema is 6 settings (registered in §61); wizard touchpoint = none (camera-aware defaults). v0.1.0 paths: native SDK video via custom AlpacaBridge endpoints (5-30 fps for planetary), ROI capture, SER output, live-stacking integration (folds into §55 v0.1.0 commitment), mobile full control, Bahtinov focus indicator.
 - [ ] **Image stretching pipeline + preview API knobs** — §40.2 says "stretched per the user's profile-default stretch setting" and "user can request alternative stretches via API," but the API isn't there. Need: which stretches WILMA offers (linear / log / MTF/STF / asinh / manual blackpoint+gamma), server-side preview cache strategy when user requests alternative stretches, who computes stretch (server for previews, client for re-stretch on cached image?), default per-filter or per-profile.
 
 **API conventions — bundled (one short section unblocks every endpoint spec):**
@@ -195,6 +195,7 @@ These came up in conversation and ARE in the playbook. Listed here so we don't a
 - ✅ Equipment scripting / custom hooks → deferred to v0.1.0 (folds into plugin SDK design from §10)
 - ✅ Accessibility (a11y) baseline + color-blind friendly status indicators (§53)
 - ✅ Bug report submission + PII handling (§54 — review-first, four sharing modes, always-blacklisted secrets)
+- ✅ Live View / Loop Imaging (§64 — ARA-built loop of standard Alpaca captures, ephemeral previews, Save Current promotion, mobile read-only)
 - ✅ Aladin Lite license boundary (GPLv3 via WebView process boundary) (§36.11)
 - ✅ NINA-style UI clone with bitmap-asset placeholders (§25)
 - ✅ Fork hygiene — naming, identifiers, MPL preservation (§17)

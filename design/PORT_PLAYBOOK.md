@@ -7220,3 +7220,292 @@ Search for "collimation" surfaces both the check-enabled toggle and the latest r
 - **Tilt-aware focus** — focus position varies across the field. v0.1.0 measures sensor tilt and accounts for it.
 - **Adaptive step pattern in Classic AF** — start wide, narrow on subsequent steps once a rough minimum is found.
 - **Multi-star sampling** — track 5 specific named stars instead of bulk HFR median (better for non-uniform fields).
+
+---
+
+## 64. Live View / Loop Imaging
+
+A continuous loop of short exposures with previews pushed straight to WILMA and no FITS persistence. Used for **framing a target, eyeball focus checks, sky/cloud assessment, and dusk setup** — interactive workflows where the user is sitting at the screen and wants near-real-time visual feedback, but doesn't want to commit frames to the library.
+
+Separate from running a Sequence (§38), Take One (single saved frame), Polar Alignment (§45, also a loop but with PA-specific overlay), and Smart Focus (§59, also short exposures but goal-directed).
+
+### 64.1 What Live View is — 60-second context
+
+The user opens the Imaging tab (§25.5), sets exposure / gain / binning, and taps **Live View**. The server starts capturing short frames in a loop, pushing each preview JPEG to WILMA as it finishes. Cadence is typically one frame every 2-4 seconds (bounded by exposure + Alpaca readout). No FITS files are written; no library entries are created. The user nudges the mount, turns a Bahtinov mask, or watches for clouds. When done, they tap **Stop** and the loop ends (current exposure aborted if mid-flight).
+
+If they see a frame they want to keep, they tap **Save Current** and the next finished frame is promoted through the normal capture pipeline (FITS write, preview generation, library indexing, §40 + §51 metadata enrichment).
+
+### 64.2 Why ARA has to build this from scratch (no NINA code to port)
+
+NINA's existing Live View (`ImagingVM.StartLiveView`) is **driver-specific**: QHY uses native `BeginQHYCCDLive()` video-stream mode, Canon DSLRs use EOS native Live View, and `Generic` / ASCOM / Alpaca cameras return `CanShowLiveView => false` — the button is grayed out and the feature doesn't exist.
+
+ARA is Alpaca-only forever (§52). Standard Alpaca `ICamera` has no streaming mode, and **ASCOM `IVideo` is deprecated** (kept only for backward compatibility). There is no standards path to native video streaming.
+
+So ARA implements Live View as a server-side loop of short normal captures with previews routed straight to WebSocket and no FITS save. This works with every Alpaca camera — AlpacaBridge-driven (ZWO, QHY, SVBONY, ToupTek, PlayerOne), third-party ASCOM-Alpaca drivers, simulators for CI/dev. Cadence is bounded but adequate for the framing/focus-check use case.
+
+v0.1.0 may add a custom AlpacaBridge video extension (non-standard but acceptable given ARA controls both sides of the wire) when planetary / high-frame-rate workflows arrive. v0.0.1 is loop-only.
+
+### 64.3 Scope — framing + focus-check, not stacking
+
+**In scope for v0.0.1:**
+- Continuous loop of single short exposures
+- Live preview JPEG per frame via WS
+- Inline frame stats (HFR, star count, mean ADU) on each frame
+- Exposure / gain / offset / binning controls, changeable mid-loop
+- Single Save Current Frame action
+- Mutual exclusion with Sequence, Polar Align, Smart Focus, plate-solve (all use the same camera)
+
+**Out of scope for v0.0.1 (deferred to v0.1.0):**
+- Running-average / live stacking (covered by v0.1.0 live stacking commitment in §55)
+- Native SDK video mode (high frame rates — covered by v0.1.0 planetary pass + custom AlpacaBridge IVideo-replacement extension)
+- ROI (region-of-interest) live capture for planetary
+- SER file format support (planetary stack input format)
+- Multi-frame averaging for visible noise reduction during display
+
+### 64.4 The loop — how it actually works
+
+Server-side state machine:
+
+```
+IDLE → (start request) → STARTING → LOOPING → STOPPING → IDLE
+                              ↑          │
+                              └──── (frame complete, restart) ─────┘
+```
+
+Inside `LOOPING`:
+
+1. Server calls Alpaca `StartExposure(duration, light=true)` with the configured exposure
+2. Polls `ImageReady` until true (or `ExposureAbort` fires from a Stop request)
+3. Calls `ImageArray`, downloads the bytes
+4. In-memory: extracts a quick **frame stat block** (mean, median, std, HFR via Hocus Focus star detector, star count)
+5. Generates a stretched JPEG (OpenCvSharp4, same stretch pipeline as §26 / §40.2 preview tier, no separate thumb — single JPEG only)
+6. Writes JPEG to `/var/lib/openastroara/tmp/live-current.jpg` (overwrites previous)
+7. Fires WS event `live.frame` with frame metadata + URL + frame counter
+8. Loops back to step 1 immediately (no inter-frame sleep — Alpaca readout is the only cadence floor)
+
+No FITS file is written. No SQLite row. No backup-stream enqueue. No §51 diagnostics. The frame exists only in `/tmp/` and is overwritten by the next one.
+
+### 64.5 Exposure controls + cadence
+
+Defaults from profile (see §64.12). User can change mid-loop:
+
+| Control | Type | Range | Default | Notes |
+|---|---|---|---|---|
+| `exposure_seconds` | float | 0.001 - 30.0 | 2.0 | Short = fast cadence; long = better S/N for dim targets |
+| `gain` | int | camera-dependent | profile default | Hot-mutable |
+| `offset` | int | camera-dependent | profile default | Hot-mutable |
+| `binning` | int (1, 2, 3, 4) | per camera caps | 1 | 2×2 or 3×3 useful for very dim framing |
+| `filter_id` | string \| null | from filter wheel | current | Optional override; defaults to whatever's loaded |
+
+**Mid-loop change behavior**: when a setting changes via `PATCH /api/v1/imaging/live/settings`, the in-flight exposure is **aborted** and the next loop iteration uses the new settings. Same abort semantics as Stop — fast response over completed-frame quality.
+
+**Hard upper bound**: `exposure_seconds` capped at 30s. Longer than that defeats the interactive premise; user should use Take One instead. Server rejects requests > 30s with 422 (per §60 error conventions).
+
+**Realistic cadence:**
+| Exposure | Camera readout | Total per frame | Frames per minute |
+|---|---|---|---|
+| 0.5s | ~0.8s (ASI2600 16-bit) | ~1.3s | ~46/min |
+| 2s | ~0.8s | ~2.8s | ~21/min |
+| 10s | ~0.8s | ~10.8s | ~5.5/min |
+| 30s | ~0.8s | ~30.8s | ~2/min |
+
+Pi 4 can keep up with JPEG generation at this cadence with OpenCvSharp4 (full-sensor stretch + encode is ~200-500 ms on a 26 MP frame; bin-2 takes ~80-150 ms).
+
+### 64.6 JPEG delivery + frame storage
+
+**Storage**: single file at `/var/lib/openastroara/tmp/live-current.jpg`, overwritten every frame. The `tmp` directory is on the OS SD card (not the mandatory USB drive from §29) because:
+- It's ephemeral and small (~150-800 KB per overwrite)
+- USB drive should be reserved for FITS writes (SD wear protection per §29 is satisfied because we never accumulate; we just overwrite the same inode)
+- A tmpfs mount would be ideal (zero SD wear) but tmpfs is RAM, and we want this to survive a brief WILMA disconnect without re-capture
+
+**HTTP endpoint**: `GET /api/v1/imaging/live/current.jpg` serves the file. `Cache-Control: no-store` so WILMA always fetches fresh.
+
+**Cache-busting**: each WS `live.frame` event carries an incrementing `frame_seq` counter. WILMA's `Image.network` URL is `/api/v1/imaging/live/current.jpg?seq=<N>` so Flutter's image cache treats each frame as a new resource.
+
+**Why not WS binary frames**: tmpfile + URL preserves the same delivery pattern as `frame.complete` (§40), simplifies WILMA's `Image.network` wiring, and keeps WS messages small (just metadata + URL). The HTTP round-trip on LAN is 5-20 ms — well under per-frame readout. Trade-off accepted; v0.1.0 may revisit if native video mode lands and frame rates climb above ~5 fps.
+
+**Cleanup**: server deletes the file on `live.stopped` and on server startup (in case of crash). The file is also harmless if it persists — it's just a stale preview.
+
+### 64.7 Save Current Frame
+
+Promotes the **next** finished frame through the normal capture pipeline. Not the *current* in-flight frame — the user has already seen it; they want the next one which presumably looks the same.
+
+Flow:
+1. WILMA: `POST /api/v1/imaging/live/save_current` (idempotency-key per §60)
+2. Server arms a one-shot flag. Next finished frame:
+   - Writes FITS to the configured session save path (§29, §39.3)
+   - Generates thumb + preview per §40.2
+   - Indexes in SQLite `frames` table with session metadata
+   - Fires standard `frame.complete` WS event (so it shows up in the Image Library)
+   - Tags the row with `capture_source = "live_view"` (so it's distinguishable in Stats and Library filters)
+3. Live View loop continues uninterrupted (the saved frame is just the next iteration of the loop, dual-routed to disk + tmpfile)
+4. Server fires `live.frame_saved` WS event with the saved frame's `id` and library URL
+
+Saved frames are NOT part of any active session by default — they go to a synthetic session named `live-view-<date>` so they don't pollute real session metrics in §50 Stats. User can later promote them to a real session via Image Library bulk operations (§40).
+
+If the user taps Save Current multiple times in quick succession, each tap arms a fresh one-shot (i.e., saves multiple consecutive frames). No coalescing — explicit intent each time.
+
+### 64.8 Stop semantics — abort mid-exposure
+
+Stop is **immediate**. When `POST /api/v1/imaging/live/stop` arrives mid-exposure:
+
+1. Server calls Alpaca `AbortExposure` (or `StopExposure` if `CanAbortExposure=false` — most modern cameras support abort)
+2. Discards any partial frame bytes (camera may or may not return them; either way they're dropped)
+3. Deletes `live-current.jpg`
+4. Fires `live.stopped` WS event with `reason: "user_requested"`
+5. State → `IDLE`
+
+Wait-time for Stop to take effect: typically < 100 ms. The user gets responsive UI even if they had set a 30s exposure.
+
+**Other auto-stop triggers** (same code path, different `reason`):
+| Trigger | `reason` | Notes |
+|---|---|---|
+| User Stop button | `user_requested` | Default |
+| Sequence start | `sequence_started` | Sequence has priority; Live View yields |
+| Plate solve invoked | `plate_solve_requested` | One-shot capture needs the camera |
+| Smart Focus / Classic AF triggered | `autofocus_started` | §59 takes priority |
+| Polar align invoked | `polar_align_started` | §45 takes priority |
+| Take One invoked | `take_one_requested` | Single capture preempts loop |
+| Camera disconnect | `equipment_disconnect` | Fault per §42 |
+| WILMA disconnects > 5 min | `client_idle` | No active client means no consumer for the frames |
+| Server shutdown | `server_shutdown` | Graceful via §57.8 / §35 |
+
+WILMA receives the reason and updates UI accordingly (e.g., "Live View stopped — sequence started" toast).
+
+### 64.9 Interaction with other systems
+
+| System | Live View behavior |
+|---|---|
+| **Cooler (§28)** | Untouched. Live View is interactive (user at screen); cooler can be at any temperature including warming, ramping, or off. Warning displayed if cooler delta > 5°C from target (informational only). |
+| **PHD2 / guider (§63)** | Untouched. If guiding is active, it stays active (probably useful — keeps target framed while user evaluates). User can stop guiding manually if it interferes. No auto-start. |
+| **Mount / tracking (§57)** | Untouched. Tracking continues. User can slew manually via Equipment panel during Live View — Live View doesn't fight slews, frames just blur during the slew and re-stabilize after. |
+| **Focuser** | Untouched. User can manually adjust focuser during Live View via Equipment panel — exactly the workflow for eyeball focus check with a Bahtinov mask. |
+| **Filter wheel** | Untouched. User can change filter mid-loop via Equipment panel; current in-flight frame discarded, next frame uses new filter (similar mid-loop abort behavior as exposure change). |
+| **Rotator** | Untouched. User can rotate during Live View for framing rotation checks. |
+| **Sequence (§38)** | Mutually exclusive. Sequence start auto-stops Live View. Live View blocked while sequence is active or paused. Server returns 409 with `code: "sequence_active"` (§60 error). |
+| **§51 diagnostics** | **Not run on live frames.** Diagnostics watch session integrity (clouds during a 4-hour run); Live View is interactive with a human present. The signals would be noisy and the auto-actions inappropriate. |
+| **§35 safety policies** | Mostly irrelevant. Live View is an attended workflow; the unattended-failure shutdown machinery (§35, §58.12) doesn't engage. Stop-Mount safety button (§57) still works normally if user invokes. |
+| **§42 equipment fault recovery** | Camera disconnect / fault aborts Live View per §64.8 auto-stop. Other equipment faults (mount, focuser, filter wheel) fire warnings via §46 but don't auto-stop Live View — user decides whether to continue. |
+| **§44 backup stream** | Live View frames are never enqueued (no FITS = nothing to back up). Save Current frames go through standard backup-stream enqueue per §44.2. |
+
+### 64.10 Single-session enforcement
+
+Only one Live View session at a time, enforced by single-client policy from §27. The first WILMA connected can start Live View; if a second WILMA tries to connect, §27.4's popup-transfer flow fires, and the new client inherits the active Live View session on accept.
+
+Server-side: in-memory `LiveViewService` is a singleton with a single state machine. Concurrent start requests get 409 with `code: "live_view_already_active"`.
+
+### 64.11 Mobile companion behavior (§41)
+
+Phones / tablets are **monitor-only** during Live View, consistent with §41's mobile companion mode philosophy. Specifically:
+
+- ✅ Subscribe to `live.frame` events and display the preview JPEG with pinch-to-zoom
+- ✅ Display frame stats overlay (HFR, star count, mean ADU)
+- ✅ See the Stop button (visible but disabled with tooltip "Use desktop to control Live View")
+- ❌ Cannot start Live View
+- ❌ Cannot change exposure / gain / binning / filter
+- ❌ Cannot tap Save Current (desktop-only action)
+
+Rationale: Live View is a setup workflow (framing, focus). The user is at the rig, not across the house. Mobile relevance is mostly "show the partner what I'm seeing." If mobile demand emerges, v0.1.0 can promote mobile to full control.
+
+Emergency Stop (§35.3) on mobile is **always active** and stops Live View as a side effect — same as it stops anything else.
+
+### 64.12 Profile schema
+
+Minimal — Live View doesn't need much per-profile customization. Sits under `imaging.live_view`:
+
+```yaml
+imaging:
+  live_view:
+    default_exposure_seconds: 2.0   # 0.001 - 30.0
+    default_gain: 100               # camera-dependent default
+    default_offset: 50              # camera-dependent default
+    default_binning: 1              # 1, 2, 3, 4 (clamped to camera caps)
+    auto_save_path: synthetic       # "synthetic" (live-view-<date>) | "current_session"
+    stretch: profile_default        # inherits §40.2 user stretch
+```
+
+`auto_save_path: current_session` is for power users who want Save Current frames to count toward an active session's metrics. Default `synthetic` keeps Live View saves out of session stats.
+
+Wizard touchpoint: **none**. Defaults are camera-aware (gain/offset come from the camera-class defaults set in §37.4 Stage 4 — Imaging Tools) and the user picks per-session anyway. Live View settings are reachable via §61 settings search ("live view exposure", "live view gain").
+
+### 64.13 API endpoints
+
+Per §60 conventions: RFC 7807 errors, idempotency-key on mutating endpoints, JSON-pointer 422 validation.
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/api/v1/imaging/live/start` | Start the loop. Body: `{ exposure_seconds, gain?, offset?, binning?, filter_id? }`. Returns `{ session_id, started_at, settings }`. Requires Idempotency-Key. |
+| `POST` | `/api/v1/imaging/live/stop` | Stop the loop. Empty body. Returns `{ stopped_at, reason, frames_delivered }`. Requires Idempotency-Key. |
+| `PATCH` | `/api/v1/imaging/live/settings` | Mid-loop settings change. Body is partial (any of `exposure_seconds`, `gain`, `offset`, `binning`, `filter_id`). Returns updated settings. Aborts in-flight exposure. |
+| `POST` | `/api/v1/imaging/live/save_current` | Arm one-shot save of next frame. Returns `{ armed_at }`. Idempotency-Key dedups multi-tap. |
+| `GET` | `/api/v1/imaging/live/state` | UI rehydrate. Returns `{ state: "idle"|"starting"|"looping"|"stopping", settings, frames_delivered, started_at, last_frame: { seq, hfr, stars, mean, timestamp } | null }`. Surfaced via `/api/v1/server/state` snapshot per §60 too. |
+| `GET` | `/api/v1/imaging/live/current.jpg` | Latest preview JPEG. `Cache-Control: no-store`. 404 if state != `looping`. Optional `?seq=N` query honored for cache-busting (server ignores the value). |
+
+All endpoints require token auth per §9. Rate-limiting deferred per §60 (token-retry only in v0.0.1).
+
+Errors (per §60 RFC 7807):
+| Code | Status | When |
+|---|---|---|
+| `sequence_active` | 409 | Sequence running or paused |
+| `polar_align_active` | 409 | §45 PA in progress |
+| `autofocus_active` | 409 | §59 Smart Focus / Classic AF in progress |
+| `live_view_already_active` | 409 | Existing Live View session active (single-client violation) |
+| `camera_disconnected` | 503 | Camera not connected |
+| `cooler_warming` | 503 | Cooler is in warmup mode per §28 (informational; can be overridden with `force=true` query) |
+| `invalid_exposure` | 422 | `exposure_seconds` out of [0.001, 30.0] |
+| `invalid_binning` | 422 | Binning exceeds camera caps |
+
+### 64.14 WebSocket events
+
+All events fire on the existing `/api/v1/ws` channel per §27. WS resume per §60 covers Live View events for the 1-hour replay window.
+
+| Event | Payload | When |
+|---|---|---|
+| `live.started` | `{ session_id, started_at, settings }` | Loop transitions to `LOOPING` |
+| `live.frame` | `{ frame_seq, url, hfr, stars, mean, median, std, exposure_used, timestamp }` | Each frame finalized + JPEG written |
+| `live.frame_saved` | `{ frame_seq, frame_id, library_url, saved_at }` | Save Current frame completes |
+| `live.settings_changed` | `{ settings, reason: "user_patch" }` | After successful PATCH |
+| `live.stopped` | `{ stopped_at, reason, frames_delivered }` | Loop transitions to `IDLE` |
+| `live.error` | `{ error: { type, title, detail }, recoverable: bool }` | Capture error mid-loop (e.g., camera fault); follows RFC 7807 shape per §60. If `recoverable: false`, loop stops; if `true`, loop continues and the error is informational. |
+
+WILMA subscribes by default when the Imaging tab is open; subscription persists when user switches tabs so frames continue arriving (frame counter visible in status bar).
+
+### 64.15 §61 settings registry coverage
+
+Per the registry gate in COMMIT-PR-RULES, every user-visible setting registered. Live View contributes 6:
+
+| Registry entry | Section | Type | Search keywords |
+|---|---|---|---|
+| `imaging.live_view.default_exposure_seconds` | §64.12 | float | live view, exposure, framing, loop |
+| `imaging.live_view.default_gain` | §64.12 | int | live view, gain |
+| `imaging.live_view.default_offset` | §64.12 | int | live view, offset |
+| `imaging.live_view.default_binning` | §64.12 | int (1-4) | live view, binning, framing |
+| `imaging.live_view.auto_save_path` | §64.12 | enum | live view, save, session |
+| `imaging.live_view.stretch` | §64.12 | enum | live view, stretch, preview |
+
+All searchable from the §61 omnibar.
+
+### 64.16 What's NINA-preserved vs ARA-new
+
+**NINA-preserved**: nothing — NINA's Live View is driver-specific (QHY/Canon native), unavailable on Alpaca, deleted in Phase 8 along with the rest of the non-Alpaca camera-driver code.
+
+**ARA-new**:
+- Server-side `LiveViewService` singleton with state machine
+- Loop-of-captures over Alpaca `ICamera` standard interface
+- Single-overwrite tmpfile JPEG delivery
+- WS `live.*` event family
+- Save Current Frame promotion path (re-routes one frame through standard capture pipeline)
+- Auto-stop on mutually-exclusive operations (sequence, AF, PA, plate-solve, Take One)
+- Mobile companion read-only view
+- §61 settings registry entries
+- Frame stat extraction reused from §51 / Hocus Focus (no new code, just calling existing analyzers)
+
+### 64.17 v0.1.0 expansion paths
+
+- **Native SDK video mode via AlpacaBridge custom extension** — for ZWO ASI / QHY / SVBONY / ToupTek / PlayerOne. Custom REST endpoints on the AlpacaBridge camera device (`/api/v1/video/start`, `/api/v1/video/frame`, `/api/v1/video/stop`) outside the Alpaca spec. ARA gates on a capability flag and uses video mode when present. Unlocks 5-30 fps cadence. Required for planetary / lucky imaging in v0.1.0.
+- **ROI (region-of-interest) capture** — for planetary, drop the full sensor and stream a 640×480 patch around the target. Bundled with native video mode.
+- **SER file format output** — when Save Current is tapped repeatedly during a high-cadence run, write a SER file (planetary stack format) instead of N individual FITS. Bundled with the planetary pass.
+- **Live stacking integration (§55 commitment)** — Live View becomes the realtime preview surface for the v0.1.0 live-stacking pipeline. User taps "Stack" instead of (or in addition to) Live View; same loop, but each frame is registered + integrated into a running stack; preview shows the integrated result, not the latest frame.
+- **Mobile full control** — if demand emerges, promote mobile companion from read-only to full Live View control.
+- **Multi-frame averaging for display** — server-side running average of last N frames for noise-reduced preview (display-only, doesn't change Save Current behavior). Trades latency for visible SNR.
+- **Bahtinov mask focus indicator** — automatic detection of Bahtinov mask diffraction pattern with a numeric "focus quality" score on each live frame. Power-user feature; small audience but high value for that audience.
