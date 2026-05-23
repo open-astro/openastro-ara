@@ -240,7 +240,7 @@ Create four tracking files in the `design/` directory and commit them empty (`de
 | Web framework | ASP.NET Core minimal API |
 | Target frameworks | pure `net10.0` — no multi-targeting, no `-windows` anywhere |
 | SDK pin | `global.json` pinning SDK 10.0.x with `rollForward: latestFeature` |
-| Hosting | Kestrel listening on configurable port (default 5400), no reverse proxy |
+| Hosting | Kestrel listening on configurable port (default **5555**), no reverse proxy. Overridable via `OPENASTROARA_PORT` env var or `appsettings.json`. mDNS advertises the actual bound port (§32.4). |
 | Persistence | SQLite via `Microsoft.Data.Sqlite` 10.0.x for session/profile; FITS files on disk |
 | Equipment | **Alpaca only.** `ASCOM.Alpaca.Components` 2.1.0+. No ASCOM COM, no native vendor SDKs. |
 | Guiding | PHD2 JSON-RPC client (existing NINA code, repointed to openastro-phd2) |
@@ -531,9 +531,16 @@ dotnet new web -n OpenAstroAra.Server -f net10.0
     <ProjectReference Include="..\OpenAstroAra.PlateSolving\OpenAstroAra.PlateSolving.csproj" />
   </ItemGroup>
 
+  <PropertyGroup>
+    <!-- AOT mode per §71 -->
+    <PublishAot>true</PublishAot>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.*" />
-    <PackageReference Include="Swashbuckle.AspNetCore" Version="7.*" />
+    <PackageReference Include="Scalar.AspNetCore" Version="2.*" />  <!-- AOT-friendly Swagger UI replacement per §71.3 -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.*" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.*" />
     <PackageReference Include="Serilog.AspNetCore" Version="9.*" />
     <PackageReference Include="Zeroconf" Version="3.*" />
@@ -541,7 +548,7 @@ dotnet new web -n OpenAstroAra.Server -f net10.0
 </Project>
 ```
 
-`Program.cs` skeleton — mirror NINA's `CompositionRoot` DI registrations for non-UI services, CORS, WebSocket support, mDNS announce. No auth middleware (per §67). Endpoints are mapped in subsequent phases.
+`Program.cs` skeleton — mirror NINA's `CompositionRoot` DI registrations for non-UI services, CORS, WebSocket support, mDNS announce. No auth middleware (per §67). Endpoints are mapped in subsequent phases. AOT discipline per §71 — all DTOs go through `AraJsonContext` source generator; no runtime reflection.
 
 Commit: `port(server): scaffold OpenAstroAra.Server with DI from NINA CompositionRoot`.
 
@@ -707,11 +714,12 @@ Per release, GitHub Actions builds:
 - `linux-arm64` self-contained, gzipped as `openastroara-server-0.0.1-ara.N-linux-arm64.tar.gz`.
 - Optional `.deb` via `dotnet-packaging` (lower priority; tarball works).
 
-systemd unit at `/etc/systemd/system/openastroara-server.service`:
+systemd unit at `/etc/systemd/system/openastroara-server.service` (installed by .deb postinst per §34.3):
 
 ```ini
 [Unit]
 Description=OpenAstro Ara Server
+Documentation=https://github.com/open-astro/openastro-ara
 After=network-online.target
 Wants=network-online.target
 
@@ -721,12 +729,61 @@ User=openastroara
 Group=openastroara
 ExecStart=/opt/openastroara/OpenAstroAra.Server
 EnvironmentFile=/etc/openastroara/server.env
+WorkingDirectory=/var/lib/openastroara
+
 Restart=on-failure
-RestartSec=5
+RestartSec=3
+
+# === Watchdog (per fourth-pass Tier 2 #8) ===
+# Server's hosted-service heartbeat task pings sd_notify("WATCHDOG=1")
+# every 30s; systemd auto-restarts if no ping for 60s.
+WatchdogSec=60
+
+# === Hardening per §67 (defense in depth on trusted LAN) ===
+
+# Process restrictions
+NoNewPrivileges=true
+LockPersonality=true
+
+# Filesystem isolation
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=false   # cameras + USB serial need /dev access via udev rules
+ReadWritePaths=/var/log/openastroara
+ReadWritePaths=/var/lib/openastroara
+ReadWritePaths=/media/openastroara
+ReadWritePaths=/var/run/openastroara
+ReadWritePaths=/etc/openastroara
+
+# Network restrictions
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+# Capability restrictions (CAP_SYS_TIME for §31 time sync; nothing else)
+CapabilityBoundingSet=CAP_SYS_TIME
+AmbientCapabilities=CAP_SYS_TIME
+
+# Syscall filter (allow standard service syscalls only)
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+
+# Standard output to journald (Serilog also writes to /var/log/openastroara per §29.9)
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=openastroara
 
 [Install]
 WantedBy=multi-user.target
 ```
+
+**Watchdog implementation note (Phase 4 / §66):** the server registers a background `IHostedService` that calls `Systemd.Notify("WATCHDOG=1")` every 30 seconds via the `Mono.Unix.Native` interop OR a thin P/Invoke wrapper around `sd_notify(0, "WATCHDOG=1")` from libsystemd. The heartbeat task checks that the main capture pipeline + WebSocket dispatcher are responsive (each maintains a last-tick timestamp; if any is > 45 s stale, the watchdog skips its ping — letting systemd kill + restart). Hung-daemon detection per §66.
+
+**Test cases (added §14.1):**
+- `watchdog_pings_systemd_every_30s` — verify sd_notify call rate against a mock systemd socket
+- `hung_capture_pipeline_stops_watchdog_ping` — inject a hang into the capture worker, assert watchdog stops pinging within 45 s
+- `systemd_unit_passes_systemd-analyze_security` — CI runs `systemd-analyze security openastroara-server.service`; gates on exposure level ≤ 3.0 (medium)
+
+**Audit:** run `systemd-analyze security openastroara-server.service` after install — should report exposure level around 2.0-3.0 (medium safety) with the hardening above. Going lower requires the paranoid hardening set; deferred per the §13.X decision but considered if/when a security review prompts it.
 
 ---
 
@@ -3580,7 +3637,12 @@ sudo apt install openastroara-server
 ### 34.3 Post-install hooks (handled by .deb's postinst script)
 
 - Creates `openastroara` user + group (system user, no shell)
-- Drops `/etc/systemd/system/openastroara-server.service`
+- **Adds `openastroara` to standard device groups:** `usermod -aG dialout,video,plugdev openastroara`
+  - `dialout` — USB serial devices (GPS receivers via gpsd per §31, FTDI dew heaters, simple USB switches)
+  - `video` — V4L2 cameras + some vendor cameras that use kernel video interfaces
+  - `plugdev` — USB hotplug events (cleaner device enumeration)
+- Drops `/etc/systemd/system/openastroara-server.service` (hardened unit per §13)
+- Drops `/usr/lib/tmpfiles.d/openastroara.conf` for `/var/run/openastroara/` (per §34.7 sequence lock)
 - Sets `CAP_SYS_TIME` on the binary: `setcap cap_sys_time+ep /opt/openastroara/OpenAstroAra.Server`
 - Installs `/opt/openastroara/scripts/configure-storage.sh` (mode 0750, owned by root:openastroara) — per §29.1.4
 - Installs sudoers drop-in `/etc/sudoers.d/openastroara` (mode 0440, validated with `visudo -cf`):
@@ -3589,6 +3651,7 @@ sudo apt install openastroara-server
   openastroara ALL=(root) NOPASSWD: /opt/openastroara/scripts/configure-storage.sh
   ```
 - Creates data + log + config dirs at proper permissions
+- Installs `/etc/logrotate.d/openastroara` per §29.9
 - Enables + starts the service: `systemctl enable --now openastroara-server.service`
 
 (No token generation per §67 — v0.0.1 has no auth. v0.1.0 remote-access mode adds a token-generation step at enable time.)
@@ -3596,7 +3659,19 @@ sudo apt install openastroara-server
 ARA Core's .deb does **only** these things. It does **not** touch:
 - Wi-Fi or hostapd (per §32.6 — wiki handles this)
 - OS install (wiki)
-- Equipment driver configuration
+- Equipment driver configuration (camera-specific udev rules ship with AlpacaBridge's .deb per §68 + the vendor SDK packages it depends on; ARA Core stays vendor-agnostic)
+
+**Device permission philosophy (per fourth-pass Tier 1 #6):** ARA Core ships NO vendor-specific udev rules in v0.0.1. The split of responsibilities:
+- **AlpacaBridge** ships udev rules for the cameras it directly supports (or pulls them in via vendor-SDK .debs it depends on)
+- **ARA Core** ensures its `openastroara` user is in the standard device groups so it inherits access to whatever AlpacaBridge or the kernel exposes
+- **The user** can `sudo usermod -aG <group> openastroara` for non-standard devices; DEPLOY.md troubleshooting documents this
+
+If a camera doesn't enumerate, the troubleshooting flow in DEPLOY.md (§34.6) walks the user through:
+1. `apt list --installed alpaca-bridge` — confirm AlpacaBridge is installed
+2. `ls -la /dev/bus/usb/*/* | grep <vendor>` — confirm device is visible
+3. `groups openastroara` — confirm openastroara is in the expected groups
+4. `journalctl -u openastroara-server -n 50` — check for permission errors
+5. If still failing: file an issue per §54 bug report flow (includes group membership + udev rule snapshot in the zip)
 
 ### 34.4 Two update paths coexist
 
@@ -6283,11 +6358,13 @@ Mirrors the schema above with editable fields, plus:
 
 ARA Core serves interactive Swagger UI documentation from its OpenAPI spec. Open access (no auth, per §67) — both the docs and the API itself, matching ASCOM Alpaca's convention.
 
-### 49.1 Tool choice — Swagger UI
+### 49.1 Tool choice — Scalar (AOT-compatible Swagger UI replacement)
 
-ARA uses **Swagger UI v5.x** for the same reason ASCOM Alpaca does ([ascom-standards.org/api/](https://ascom-standards.org/api/)): it's the de-facto standard for OpenAPI-spec docs, ecosystem-familiar to anyone working with Alpaca APIs, and ASP.NET Core has first-class support via `Swashbuckle.AspNetCore` (already in §8's csproj snippet).
+Original plan was `Swashbuckle.AspNetCore` + classic Swagger UI v5.x. Revised per §71 AOT decision: Swashbuckle relies on runtime reflection over MVC controllers, which is incompatible with `PublishAot=true`.
 
-Source-of-truth spec lives at `OpenAstroAra.Server/openapi.yaml` (per §9 + §38). Swagger UI renders it interactively.
+ARA uses **Microsoft.AspNetCore.OpenApi** (built-in, AOT-friendly, generates the spec at build time from endpoint metadata) to produce the OpenAPI document, and **Scalar.AspNetCore** to render the interactive docs UI. Scalar's rendering is visually similar to Swagger UI v5.x and equally familiar to ASCOM Alpaca consumers ([ascom-standards.org/api/](https://ascom-standards.org/api/) uses the same conceptual surface).
+
+Source-of-truth spec is **generated** from endpoint metadata at build time (code-first per §71.3); `OpenAstroAra.Server/openapi.yaml` is committed for change tracking + Dart client generation but regenerated on every build (CI fails if regen produces a diff).
 
 ### 49.2 Endpoints
 
@@ -9255,9 +9332,11 @@ Other backpressure-adjacent events:
 
 ### 66.5 Memory budget on Pi 4 (4 GB)
 
+Updated 2026-05-23 per §71 Native AOT decision — runtime baseline dropped from ~200 MB (JIT + ICU + full BCL) to ~50 MB (AOT, no JIT, InvariantGlobalization).
+
 | Component | RAM | Notes |
 |---|---|---|
-| .NET runtime baseline | ~200 MB | Server + AlpacaBridge proxying |
+| .NET runtime baseline (AOT) | ~50 MB | Native AOT publish per §71; no JIT, no ICU |
 | Image processor working set | ~100 MB | 1 worker × FITS + intermediate Mats |
 | Image processor queue | ~50 MB | Worst case: 10 jobs × ~5 MB Alpaca readout buffer (FITS itself written via atomic-rename, not held in memory) |
 | Alt-stretch working buffers | ~100 MB | OpenCvSharp4 temp Mats |
@@ -9266,10 +9345,11 @@ Other backpressure-adjacent events:
 | PHD2 client | ~10 MB | Lightweight |
 | Backup stream | ~50 MB | 1 frame buffered |
 | Diagnostics worker | ~50 MB | 1 frame |
-| Notification dispatch + REST handlers + logs | ~150 MB | |
-| **Estimated peak RSS** | **~1.0 GB** | Comfortable on 4 GB Pi; ~3 GB OS headroom |
+| Notification dispatch + REST handlers + logs | ~50 MB | Reduced from ~150 MB under JIT |
+| **Estimated peak RSS** | **~600 MB** | Comfortable on 4 GB Pi; ~3.4 GB OS headroom |
+| **Estimated idle RSS** | **~50 MB** | Boots and stays small when nothing is happening |
 
-8 GB Pi 4 / Pi 5 has additional comfort; 2 GB SBC variants (some Orange Pi / RockChip) are borderline — DEPLOY.md notes 4 GB minimum recommended.
+8 GB Pi 4 / Pi 5 has substantial additional comfort; 2 GB SBC variants (some Orange Pi / RockChip) now move from borderline to comfortable — DEPLOY.md still recommends 4 GB minimum for cooler-thermal-stable Pis but 2 GB works in a pinch.
 
 ### 66.6 Storage I/O cascade
 
@@ -9905,5 +9985,347 @@ The §70 v0.0.1 file format (`profile-share-v1`, `araseq.json`) is the on-disk w
 - §55 — v0.1.0+ OpenAstro Hub roadmap entry
 - §61 + §69 — search + help registries surface the share/import affordances
 - §67 — security model (no auth in v0.0.1; share files are user-mediated, no server-to-server trust assumed)
+
+---
+
+## 71. Native AOT compilation — server build mode
+
+The .deb-installed ARA Core server publishes as **.NET Native AOT** (ahead-of-time native code, no JIT, no IL runtime). The decision was made for Pi 4 startup speed + memory headroom — a fully AOT-compiled binary boots in ~100 ms and idles at ~50 MB RSS vs the ~1-2 s startup + ~150-200 MB RSS of a plain JIT publish. On a 4 GB Pi 4 that runs ARA + openastro-phd2 + AlpacaBridge + system services, the headroom matters.
+
+This decision propagates as a constraint discipline across every server-side library choice and every code pattern that touches runtime reflection.
+
+### 71.1 What AOT requires
+
+The `OpenAstroAra.Server.csproj` sets:
+
+```xml
+<PropertyGroup>
+  <PublishAot>true</PublishAot>
+  <InvariantGlobalization>true</InvariantGlobalization>
+  <TrimmerSingleWarn>false</TrimmerSingleWarn>
+  <SuppressTrimAnalysisWarnings>false</SuppressTrimAnalysisWarnings>
+</PropertyGroup>
+```
+
+`InvariantGlobalization=true` drops the ICU library (~30 MB savings) — ARA is English-only per §18.E so locale-sensitive comparisons aren't needed. UTC throughout per §31.5 means no timezone math relies on ICU.
+
+**No runtime reflection or code generation.** That rules out:
+- `System.Reflection.Emit` (no dynamic IL)
+- Reflection-based serialization (must use source-generated `JsonSerializerContext`)
+- Reflection-based DI containers (Autofac, Castle.Windsor) — stick with `Microsoft.Extensions.DependencyInjection`
+- Reflection-based ORMs that don't have source-gen variants
+- Reflection-based validators (FluentValidation's reflection mode — must use compiled validators or hand-written)
+- `Activator.CreateInstance(Type)` patterns without `[DynamicallyAccessedMembers]` annotations
+- Dynamic assembly loading (rules out the v0.1.0 plugin SDK in its current sketched form — see §71.6)
+
+### 71.2 JSON serialization — source generators everywhere
+
+Every DTO that crosses an API boundary or WS event boundary needs a `[JsonSerializable]` entry in a `JsonSerializerContext`-derived class. ARA Core ships a single root context that aggregates all serializable types:
+
+```csharp
+namespace OpenAstroAra.Server.Serialization;
+
+[JsonSourceGenerationOptions(
+    WriteIndented = false,
+    PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower,
+    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
+[JsonSerializable(typeof(FrameDto))]
+[JsonSerializable(typeof(SessionDto))]
+[JsonSerializable(typeof(ProfileDto))]
+[JsonSerializable(typeof(EquipmentStateDto))]
+[JsonSerializable(typeof(NotificationDto))]
+[JsonSerializable(typeof(WsEventEnvelope))]
+[JsonSerializable(typeof(ProblemDetails))]  // §60.1 errors
+// ... every public DTO
+public partial class AraJsonContext : JsonSerializerContext { }
+```
+
+Usage in endpoint handlers:
+
+```csharp
+app.MapGet("/api/v1/frames/{id}", async (string id, AraDb db) =>
+{
+    var frame = await db.Frames.FindAsync(id);
+    return Results.Json(frame, AraJsonContext.Default.FrameDto);
+});
+```
+
+Build-time source-gen emits all serialization code; no reflection at runtime. The settings-registry-gate-style enforcement: any DTO returned from an endpoint must have a `[JsonSerializable]` entry, or the build fails (compiler error). No runtime surprise.
+
+**Discipline cost:** every new DTO type touches `AraJsonContext`. ~30 seconds per DTO. Pre-commit gate (per §14.4) scans endpoint return types + verifies they're in the context — fails build before PR if missed.
+
+### 71.3 OpenAPI spec generation — Microsoft.AspNetCore.OpenApi, not Swashbuckle
+
+Swashbuckle (current de-facto Swagger generator) uses runtime reflection over MVC controllers to discover endpoints — incompatible with AOT.
+
+ARA uses **Microsoft.AspNetCore.OpenApi** (built into ASP.NET Core 8+, AOT-compatible) which generates the OpenAPI document at build time via source generators. Swagger UI is served via the lightweight `Scalar.AspNetCore` package (also AOT-friendly) rather than Swashbuckle.UI.
+
+```csharp
+builder.Services.AddOpenApi();
+// ...
+app.MapOpenApi();              // /openapi/v1.json at runtime (cached, AOT-friendly)
+app.MapScalarApiReference();   // /api/v1/docs UI
+```
+
+Endpoint metadata (descriptions, tags, response shapes) declared inline via `.WithName("GetFrame")`, `.WithDescription("...")`, `.Produces<FrameDto>(200, "application/json")`. §49 Swagger UI conventions carry over; the renderer changes from `swagger-ui` to Scalar's renderer (visually similar, ASCOM-ecosystem-friendly).
+
+**Phase 5 implication:** the OpenAPI generation approach is **code-first via endpoint metadata** — the source code is the source of truth; `openapi.yaml` is the generated artifact (committed for change tracking + Dart client generation, regenerated on every build, CI fails if regen produces a diff against committed version). Closes Tier-1 gap #3 from the fourth review pass.
+
+### 71.4 EF Core migrations — compiled models + source-gen migrations
+
+§28.14 specs EF Core for SQLite schema management. AOT requires:
+
+```xml
+<PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+<PackageReference Include="Microsoft.EntityFrameworkCore.Design" PrivateAssets="all" />
+```
+
+`AraDbContext` uses `[DynamicallyAccessedMembers]` annotations on entity types + a **compiled model** generated at build time:
+
+```bash
+# Generate compiled model (run after model changes; commit the output)
+dotnet ef dbcontext optimize --output-dir CompiledModels --namespace OpenAstroAra.Data.CompiledModels
+```
+
+```csharp
+public class AraDbContext : DbContext
+{
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
+        optionsBuilder
+            .UseModel(AraDbContextModel.Instance)  // compiled-model entry point
+            .UseSqlite(connectionString);
+    }
+}
+```
+
+Migrations are still generated via `dotnet ef migrations add` — the migration files are pure C# code (no reflection at runtime). `Database.MigrateAsync()` on startup works under AOT because EF Core's migration runner uses the compiled model + source-gen.
+
+**One subtle gotcha:** EF Core's automatic SQL query translation uses some reflection. For complex LINQ queries, prefer raw SQL via `db.Database.ExecuteSqlRaw` or `db.Frames.FromSql(...)` when the query is hot-path or complex. Simple queries (`db.Frames.Where(f => f.SessionId == id)`) work fine — the AOT toolchain warns about anything it can't translate at compile time.
+
+§28.14 §14.1 test cases extended:
+- `migrations_apply_under_aot` — run `dotnet publish -c Release` then `./OpenAstroAra.Server` + verify all migrations apply
+- `linq_query_aot_compatible` — every repository method's LINQ verified at compile time via trimmer warnings (CI fails on any new IL2026/IL2104/IL3050 warnings)
+
+### 71.5 Dependency injection + middleware
+
+The built-in `Microsoft.Extensions.DependencyInjection` container is AOT-compatible. No need for Autofac, Castle, SimpleInjector, etc.
+
+Services registered explicitly (no auto-scan-and-register patterns):
+
+```csharp
+builder.Services.AddSingleton<IFrameRepository, FrameRepository>();
+builder.Services.AddSingleton<ISessionService, SessionService>();
+builder.Services.AddScoped<ICaptureOrchestrator, CaptureOrchestrator>();
+// ... etc
+```
+
+Middleware works normally (AOT-compatible). Hosted services (background workers per §66) work normally.
+
+### 71.6 Plugin SDK (v0.1.0) — AOT constraint propagates
+
+§10 + §55.1 commit to a plugin SDK in v0.1.0. AOT rules out dynamic-load-of-arbitrary-DLLs-at-runtime — `Assembly.Load(string path)` doesn't work in a Native AOT executable.
+
+The v0.1.0 design pass for plugins (already deferred) must pick an AOT-compatible model:
+- **Option A:** plugins as separate processes communicating over a local UNIX socket / named pipe (process boundary; ARA Core stays pure AOT)
+- **Option B:** plugins compiled into a per-build "with-plugins" variant — community-contributed plugins go through a curation + per-build-rebuild cycle
+- **Option C:** drop dynamic plugins entirely; offer scripting hooks (Lua / Wasm) instead — Wasm runtimes are AOT-compatible and provide sandbox isolation
+
+This decision is captured here as a constraint, deferred to the v0.1.0 plugin SDK design session per §55.1.
+
+### 71.7 Build pipeline
+
+The Phase 10 publish command (§13) becomes:
+
+```bash
+dotnet publish OpenAstroAra.Server \
+  -c Release \
+  -r linux-arm64 \
+  -p:PublishAot=true \
+  -p:InvariantGlobalization=true \
+  -o ./publish/arm64
+```
+
+Cross-compilation from x64 to ARM64 works for AOT via the `Microsoft.DotNet.ILCompiler` cross-targeting package (auto-pulled by `-r linux-arm64`). CI matrix uses Linux ARM64 self-hosted runner OR x64 with QEMU + the cross-toolchain. Build time is ~3-5x longer than plain JIT publish (ILC + linker are slower than CSC) — acceptable given it runs per-tag, not per-commit.
+
+**Pre-PR gate (§14.4)** adds an AOT-warning check: `dotnet publish -p:PublishAot=true` exit 0 + no IL2026/IL2104/IL3050 warnings. Suppressions require `[UnconditionalSuppressMessage]` with justification text — caught by CodeRabbit review (`.coderabbit.yaml` path instruction added).
+
+### 71.8 §61 search registry entries
+
+Operational surface for developers + curious users:
+
+- `server.build.aot_mode` — keywords: `aot, native aot, ahead of time compilation, publish mode, build type, server runtime`
+- `server.build.troubleshoot_trim_warnings` — keywords: `trim warning, aot warning, IL2026, IL3050, dynamicallyaccessedmembers, reflection error`
+
+### 71.9 Cross-references — sections updated by this decision
+
+- **§2** target stack — note "PublishAot=true" added to "Hosting" row
+- **§5** Phase 1 — .NET 10 bump includes AOT-mode setup (Phase 0.5p / Phase 1 absorbed per §3)
+- **§10 / §13** publish commands — add `-p:PublishAot=true -p:InvariantGlobalization=true`
+- **§14.4** pre-PR gate — add AOT publish + warning check
+- **§28.14** EF Core migrations — compiled-model requirement (subsection added per §71.4)
+- **§49** Swagger UI — replace Swashbuckle with Microsoft.AspNetCore.OpenApi + Scalar.AspNetCore
+- **§60** API conventions — OpenAPI generation mode (code-first via endpoint metadata; spec is a generated artifact)
+- **§66** server concurrency — RSS budget revised: ~50 MB idle (was implicit ~150 MB), ~600 MB peak (was ~1 GB) — even more headroom on Pi 4
+- **§10 / §55.1** plugin SDK — AOT constraints propagate (§71.6)
+
+---
+
+## 72. FITS library — P/Invoke wrap of cfitsio
+
+ARA Core reads and writes FITS files via P/Invoke into **CFITSIO** ([heasarc.gsfc.nasa.gov/fitsio/](https://heasarc.gsfc.nasa.gov/fitsio/)), NASA's reference C implementation. Chosen for correctness — CFITSIO is the de-facto correct FITS implementation, used by every major astronomy tool. Tradeoffs: native dependency adds distribution + dev-setup steps; P/Invoke layer needs maintenance.
+
+### 72.1 Why cfitsio over alternatives
+
+| Option | Rejected because |
+|---|---|
+| In-house minimal writer | We'd own correctness for FITS header conventions, integer/float bytewidth handling, BSCALE/BZERO scaling, COMMENT/HISTORY card formatting. Downstream tools (PixInsight, Siril, Astrobin) have hard expectations; getting a corner case wrong silently corrupts data. CFITSIO has 30 years of validation against these. |
+| nom.tam.fits port | 2-3 weeks of Phase 6/7 work for a comprehensive library where we'd use ~10%. Ongoing maintenance to track Java upstream. |
+| CSharpFITS package | Last upstream commit ~2018; AOT compatibility unverified; .NET 10 compatibility unverified. Risk of discovering blockers late in Phase 6. |
+
+### 72.2 Distribution
+
+**Pi (.deb path):** add `libcfitsio10` to `Depends` in §34.2:
+
+```
+Depends: libc6, libgcc-s1, libstdc++6, libcfitsio10
+```
+
+`libcfitsio10` ships in Debian Trixie's repos — `apt install` pulls it transparently. No build step required on the Pi.
+
+**Dev machines (Linux/macOS/Windows):**
+
+- **Linux dev:** `sudo apt install libcfitsio-dev` (Debian/Ubuntu) or distro equivalent. CFITSIO version 4.x+.
+- **macOS dev:** `brew install cfitsio` — installs to `/opt/homebrew/lib/libcfitsio.dylib` (Apple Silicon) or `/usr/local/lib/libcfitsio.dylib` (Intel).
+- **Windows dev:** vcpkg recommended (`vcpkg install cfitsio:x64-windows`) or pre-built binary from heasarc. Path goes in `OPENASTROARA_CFITSIO_PATH` env var.
+
+DEPLOY.md adds a "Development setup" section listing platform-specific install commands. README's developer-onboarding section links to it.
+
+**CI matrix (per §14.3):** every runner (Linux x64, Linux ARM64, macOS, Windows) installs cfitsio in the setup step. Add to `.github/workflows/ci.yml`:
+
+```yaml
+- name: Install CFITSIO (Linux)
+  if: runner.os == 'Linux'
+  run: sudo apt-get install -y libcfitsio-dev
+- name: Install CFITSIO (macOS)
+  if: runner.os == 'macOS'
+  run: brew install cfitsio
+- name: Install CFITSIO (Windows)
+  if: runner.os == 'Windows'
+  run: vcpkg install cfitsio:x64-windows
+```
+
+### 72.3 P/Invoke wrapper layer
+
+`src/OpenAstroAra.Image/Fits/` holds the wrapper. Uses `[LibraryImport]` source generators (AOT-compatible per §71):
+
+```csharp
+// src/OpenAstroAra.Image/Fits/CFitsIO.cs
+using System.Runtime.InteropServices;
+
+namespace OpenAstroAra.Image.Fits;
+
+internal static partial class CFitsIO
+{
+    private const string LibraryName = "cfitsio";
+
+    [LibraryImport(LibraryName, EntryPoint = "ffinit", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int CreateFile(out IntPtr fptr, string filename, out int status);
+
+    [LibraryImport(LibraryName, EntryPoint = "ffopen", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int OpenFile(out IntPtr fptr, string filename, int mode, out int status);
+
+    [LibraryImport(LibraryName, EntryPoint = "ffclos")]
+    internal static partial int CloseFile(IntPtr fptr, out int status);
+
+    [LibraryImport(LibraryName, EntryPoint = "ffcrim")]
+    internal static partial int CreateImage(IntPtr fptr, int bitpix, int naxis, long[] naxes, out int status);
+
+    [LibraryImport(LibraryName, EntryPoint = "ffppx")]
+    internal static partial int WritePixels(IntPtr fptr, int datatype, long[] firstpix, long nelements, IntPtr buffer, out int status);
+
+    [LibraryImport(LibraryName, EntryPoint = "ffpky", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int WriteKey(IntPtr fptr, int datatype, string keyname, IntPtr value, string comment, out int status);
+
+    // ~20-25 functions total; the subset ARA actually uses
+}
+```
+
+Platform-specific name resolution (handled automatically by .NET):
+- Linux: `libcfitsio.so` → `libcfitsio.so.10`
+- macOS: `libcfitsio.dylib`
+- Windows: `cfitsio.dll`
+
+If the OS can't find the library, ARA Core fails to start with a clear error: `LOG: Cannot load libcfitsio. Install via: sudo apt install libcfitsio10` (Linux) or platform-equivalent message. Error references the §72.2 install docs.
+
+### 72.4 Managed wrapper layer
+
+Above the raw P/Invoke, a typed managed API ARA code uses:
+
+```csharp
+// src/OpenAstroAra.Image/Fits/FitsImage.cs
+namespace OpenAstroAra.Image.Fits;
+
+public sealed class FitsImage : IDisposable
+{
+    public static FitsImage Create(string path, int width, int height, FitsBitDepth bitDepth) { ... }
+    public static FitsImage Open(string path, FitsOpenMode mode = FitsOpenMode.ReadOnly) { ... }
+
+    public IReadOnlyDictionary<string, FitsHeaderValue> Headers { get; }
+    public void SetHeader(string key, object value, string? comment = null);
+
+    public void WriteImageData(ReadOnlySpan<ushort> data);  // 16-bit data path
+    public void WriteImageData(ReadOnlySpan<float> data);   // float path
+    public ushort[] ReadImageData16();
+    public float[] ReadImageDataFloat();
+
+    public void Dispose();  // closes file handle
+}
+```
+
+All ARA capture / library / diagnostic code uses `FitsImage` — never raw P/Invoke directly. Keeps the surface clean + testable + lets us swap the underlying library later if needed (e.g., move to in-house if cfitsio P/Invoke proves problematic).
+
+### 72.5 Atomic write integration (§28.7)
+
+`FitsImage.Create()` writes to `<path>.tmp` internally; `Dispose()` flushes + closes + atomically renames to the final path + fsyncs the directory. The §28.7 atomic-write pipeline is implemented inside `FitsImage` rather than scattered across call sites — guarantees no torn FITS under the real name even if callers forget the pattern.
+
+```csharp
+using (var fits = FitsImage.Create(framePath, w, h, FitsBitDepth.UnsignedInt16))
+{
+    fits.SetHeader("EXPOSURE", exposureSeconds, "Exposure time in seconds");
+    fits.SetHeader("CCD-TEMP", sensorTemp, "CCD temperature (C)");
+    fits.SetHeader("INSTRUME", cameraName, "Camera model");
+    fits.WriteImageData(pixelBuffer);
+}
+// Dispose() runs atomic rename + fsync; if any step throws, .tmp is cleaned up
+```
+
+### 72.6 NINA-compatible header tags
+
+ARA writes the same FITS header tags NINA writes, so downstream tools that recognize NINA's conventions (PixInsight scripts, Astrobin upload, Siril metadata extraction) work transparently with ARA-produced files. `AraFitsTags.cs` holds the canonical list inherited from NINA's `FitsHeader.cs` — equivalent to §17.2 fork hygiene (preserve NINA's externally-visible conventions for downstream tool compatibility).
+
+### 72.7 §14 test cases
+
+**§14.1 server integration tests:**
+- `cfitsio_loads_on_startup` — assert `LoadLibrary` succeeds; fails with clear error on missing lib
+- `fits_create_writes_valid_file_per_pixinsight_round_trip` — write FITS via ARA, read back via reference Python `astropy.io.fits`, assert all headers + pixel data match
+- `fits_atomic_write_no_torn_file_on_crash` — start a FITS write, kill the process mid-write, assert no file appears under the real name (only `.tmp` remains, cleanup by §28.8 orphan scan)
+- `fits_headers_preserve_nina_conventions` — fixture FITS from NINA, read via ARA, assert all standard tags (DATE-OBS, EXPOSURE, CCD-TEMP, INSTRUME, etc.) preserve verbatim
+
+### 72.8 §61 search registry entries
+
+- `image.fits.library` — keywords: `fits library, cfitsio, fits writer, fits reader, fits format`
+- `image.fits.troubleshoot_missing_cfitsio` — keywords: `cfitsio not found, libcfitsio missing, cfitsio install, fits library not loaded`
+
+### 72.9 Cross-references
+
+- §17.2 — fork hygiene (NINA-compatible FITS conventions preserved for downstream tool compatibility)
+- §28.7 — atomic FITS write pipeline (implemented inside `FitsImage`)
+- §28.8 — startup orphan scan (cleans up stale `.tmp` files)
+- §34.2 — .deb Depends adds `libcfitsio10`
+- §40 — image library reads FITS via `FitsImage.Open`
+- §51 — diagnostics enrichment writes additional header tags via `FitsImage.SetHeader`
+- §65 — image stretching reads pixel data via `FitsImage.ReadImageData*`
+- §71 — AOT compatibility maintained via `[LibraryImport]` source generators
 
 ---
