@@ -50,52 +50,134 @@ Final integration: `port/ara → master` PR at Phase 15 = a fast-forward over al
 
 **Key insight: DELETE before RENAME.** Deleting thousands of files first means renames only touch what's left.
 
-| Sub-PR | Touches | Approx files | CodeRabbit |
-|---|---|---|---|
-| 0.5a — Delete WPF UI | `NINA/`, `NINA.WPF.Base/`, `NINA.CustomControlLibrary/` | ~400-600 (deletes) | **skip-review** (mechanical) — or split by directory |
-| 0.5b — Delete MGEN + nikoncswrapper + WiX + Plugin | Whole projects | ~150-200 | skip-review |
-| 0.5c — Delete vendor SDKs (Canon/Nikon/ZWO/QHY/etc.) | Per-vendor SDK folders | ~300-500 | skip-review, possibly split by 2-3 vendor batches |
-| 0.5d — Delete ASCOM COM glue | Specific files in Equipment | ~30-50 | **review** (substantive) |
-| 0.5e — Delete WebView2 references | Per-project edits | ~10-20 | review |
-| 0.5f — Strip Stefan branding + license headers | Locale.resx, URLs, README, NOTICE.md, headers | ~50-100 | **review** (text changes user-visible) |
-| 0.5g — Rename `NINA.Core` → `OpenAstroAra.Core` | One project | ~30-50 | skip-review |
-| 0.5h — Rename `NINA.Astrometry` | Similar | ~20-40 | skip-review |
-| 0.5i — Rename `NINA.Profile` | Similar | ~30-50 | skip-review |
-| 0.5j — Rename `NINA.Image` | Similar | ~30-50 | skip-review |
-| 0.5k — Rename `NINA.Equipment` | Post-vendor-delete | ~50-100 | skip-review |
-| 0.5l — Rename `NINA.Sequencer` | Similar | ~80-150 | skip-review (borderline; may need split) |
-| 0.5m — Rename `NINA.PlateSolving` | Similar | ~20-30 | skip-review |
-| 0.5n — Rename `NINA.Test` | Similar | ~30-60 | skip-review |
-| 0.5o — Rename solution + global identifiers | sln, sln.licenseheader, etc. | ~5-15 | review |
-| 0.5p — .NET 10 bump + global.json (might absorb Phase 1) | csproj TFM changes | ~10-15 | **review** (semantic) |
+| Sub-PR | Touches | Approx files |
+|---|---|---|
+| 0.5a — Delete WPF UI | `NINA/`, `NINA.WPF.Base/`, `NINA.CustomControlLibrary/` | ~400-600 (deletes) — may sub-split by directory if any single PR exceeds 200 |
+| 0.5b — Delete MGEN + nikoncswrapper + WiX + Plugin | Whole projects | ~150-200 |
+| 0.5c — Delete vendor SDKs (Canon/Nikon/ZWO/QHY/etc.) | Per-vendor SDK folders | ~300-500 — likely sub-split into 2-3 vendor batches |
+| 0.5d — Delete ASCOM COM glue | Specific files in Equipment | ~30-50 |
+| 0.5e — Delete WebView2 references | Per-project edits | ~10-20 |
+| 0.5f — Strip Stefan branding + license headers | Locale.resx, URLs, README, NOTICE.md, headers | ~50-100 |
+| 0.5g — Rename `NINA.Core` → `OpenAstroAra.Core` | One project | ~30-50 |
+| 0.5h — Rename `NINA.Astrometry` | Similar | ~20-40 |
+| 0.5i — Rename `NINA.Profile` | Similar | ~30-50 |
+| 0.5j — Rename `NINA.Image` | Similar | ~30-50 |
+| 0.5k — Rename `NINA.Equipment` | Post-vendor-delete | ~50-100 |
+| 0.5l — Rename `NINA.Sequencer` | Similar | ~80-150 — may sub-split if over 200 |
+| 0.5m — Rename `NINA.PlateSolving` | Similar | ~20-30 |
+| 0.5n — Rename `NINA.Test` | Similar | ~30-60 |
+| 0.5o — Rename solution + global identifiers | sln, sln.licenseheader, etc. | ~5-15 |
+| 0.5p — .NET 10 bump + global.json (might absorb Phase 1) | csproj TFM changes | ~10-15 |
 
-### Skip-review pattern
+### `.coderabbit.yaml` minimal config (DECIDED 2026-05-23)
 
-CodeRabbit honors `@coderabbitai ignore` in PR description, OR path-based config in `.coderabbit.yaml`. Mechanical PRs (renames-only, deletes-only) get marked, reducing review burden from 16 PRs to ~4-5 substantive ones.
+Committed at repo root. Excludes only truly-generated code + temp files; focuses detailed review on settings files (per Layer 4 of the Settings-registry gate below).
 
-Substantive PRs that get full CodeRabbit review:
-- 0.5d (ASCOM COM removal)
-- 0.5e (WebView2 removal)
-- 0.5f (branding + headers)
-- 0.5o (solution-level identifiers)
-- 0.5p (.NET 10 bump)
+```yaml
+# .coderabbit.yaml
+# Lives at repo root.
+# Policy: review every PR fully (no skip markers).
+# This config narrows what gets reviewed (excludes generated code) and
+# focuses extra attention on settings files.
 
-That's 5 PRs CodeRabbit cares about for Phase 0.5. Tractable.
+reviews:
+  profile: chill           # default review depth — adjust if too noisy
+  request_changes_workflow: false   # don't auto-block merges; user decides
 
-### Phase 12 (Flutter views) — possible split
+  path_filters:
+    # Exclude generated code (don't review machine output)
+    - "!client/openastroara_client/lib/api/generated/**"
+    - "!**/*.g.dart"
+    - "!**/*.freezed.dart"
+    - "!**/*.mocks.dart"
+    # Exclude temp + backup files (shouldn't be committed anyway)
+    - "!**/*.bak"
+    - "!**/*.tmp"
+    - "!/tmp/**"
+    # Exclude built artifacts
+    - "!**/bin/**"
+    - "!**/obj/**"
+    - "!**/build/**"
+    # Everything else: full review
 
-If Phase 12 builds the entire client UI in one swing, it'll likely exceed 200 files. Likely sub-splits:
+  path_instructions:
+    # Focused review on settings files per Layer 4 of the registry gate
+    - path: "client/openastroara_client/lib/settings/registry.dart"
+      instructions: |
+        Verify every Setting entry has a meaningful description and at least 3 keywords.
+        Flag any entry where keywords look auto-generated or trivially derived from the id.
+        Flag any entry whose path[] doesn't match an actual Settings panel hierarchy.
+    - path: "client/openastroara_client/lib/screens/settings/**"
+      instructions: |
+        For every new setting widget (toggle, slider, dropdown, text input, color picker),
+        verify a corresponding entry exists in lib/settings/registry.dart with non-empty
+        description + keywords. Flag any widget that adds user-facing state without a
+        registry entry — this should also be caught by check-settings-registry.mjs but
+        catch any miss here.
+    - path: "client/openastroara_client/lib/wizard/**"
+      instructions: |
+        Wizard screens often introduce settings — verify any persisted value is registered.
+```
 
-- 12a — App shell + nav rail + theme + StatusIndicator widget (§25 + §53)
-- 12b — Wizard flow (§37)
-- 12c — Imaging + Framing Assistant tabs
-- 12d — Sequencer tab (§38 editor UI)
-- 12e — Sky Atlas tab (§36 + Aladin Lite integration)
-- 12f — Image Library + frame viewer (§40)
-- 12g — Stats dashboard (§50)
-- 12h — Settings (all sub-screens)
+### CodeRabbit review policy (DECIDED 2026-05-23): every PR gets reviewed
 
-8 sub-PRs, each focused, each reviewable.
+**No skip-review markers.** Every Phase 0.5 sub-PR — mechanical or substantive, deletes or renames or branding — goes through full CodeRabbit review before merge. Rationale: mechanical PRs can hide real issues (wrong files renamed, missed exclusions, broken references after a rename) that only a careful pass catches. Belt-and-suspenders is worth the review-burden cost for a port of this size.
+
+This means:
+- The AI does NOT add `@coderabbitai ignore` to any PR description
+- The AI does NOT add `coderabbit-skip` labels (we don't use that workflow)
+- All 16+ Phase 0.5 sub-PRs + all 8 Phase 12 sub-PRs + every other phase PR get CodeRabbit reviews
+- AI follows the standard CodeRabbit poll-and-fix loop (see "CodeRabbit review loop" section below) on every PR — no fast-path for any PR type
+
+If review burden becomes truly unmanageable on certain PR types in practice, the policy can be revisited mid-port — but the default is **review everything**.
+
+### Phase 12 (Flutter views) — DECIDED 8-PR split (2026-05-23)
+
+**Status: settled.** 8 sub-PRs (12a–12h). Each stays under CodeRabbit's 200-file free-tier limit. Order: 12a → 12b → 12c–12g (independent feature tabs, any order) → 12h last (consolidates §61 search registry across all settings panels).
+
+| Sub-PR | Scope | Approx file count |
+|---|---|---|
+| **12a** App shell + global infrastructure | §25 visual design (NINA-style layout, nav rail, dark theme), §53 a11y + StatusIndicator widget, §41 mobile companion conditional shell, §30 first-run + saved-server management, §30.7 banner shell (shared by equipment-change + sky-data-missing variants), §32 disconnect modal, §35 emergency stop + alarm modal (§35.5), §46 notification feed (global), §54 bug report flow entry point (Help) | ~120 |
+| **12b** Wizard (§37) | All 18 screens / 7 stages, mandatory profile-creation policy (§37 preamble + §30.4), §37.6 sky data downloads integration with §36.12 | ~80 |
+| **12c** Imaging + Framing tabs | Main image viewer, exposure controls, histogram, plate-solve overlay, §51 Health Indicator (always visible) + Diagnostic Panel, §64 Live View / loop imaging UI, §45 polar alignment iPolar-style continuous loop UI, §47 mosaic Aladin panel-overlay preview | ~150 |
+| **12d** Sequencer tab (§38) | Tree-based instruction editor, conditional logic UI, template instantiation, Resume Target seeding (§40.6), NINA import flow (§38.4), §42 hardware fault recovery surface | ~140 |
+| **12e** Sky Atlas tab + Data Manager | §36 Aladin Lite integration, §36.7 Tonight's Sky, §36.8 universal search, §36.9 comet support, **§36.2 Data Manager 4-tab UI** (Sky Imagery / Star Catalogs / Target Thumbnails / Solar System), §36.13 sky-data-missing banner integration | ~130 |
+| **12f** Image Library + frame viewer | §40 by-session organization, §40.5 frame viewer + §65 stretch picker + manual sliders, §40.6 Resume Target workflow, §40.7 auto-rating + HFR drift display, §40.8 bulk operations, §43 backup UI, §44 real-time backup stream UI | ~120 |
+| **12g** Stats dashboard (§50) | Overview tiles, Targets rollup + per-target detail, Focus & Temperature scatter + regression, Guiding RMS trends, Frame Quality + composite score, Best Frames auto-sort, Calendar heatmap, CSV export | ~100 |
+| **12h** Settings + smart search | All settings sub-screens (Equipment, Imaging, Plate Solving, Safety, Diagnostics, Storage, Sky Atlas, Notifications, Profile, PHD2), §29.1.3 ext4 reformat UX, §35 safety policies editor, §51 diagnostics mode picker (notify_only default), §63 PHD2 settings, **§61 smart settings search (⌘K)** cross-cutting all panels | ~150 |
+
+**Data Manager placement decision (2026-05-23):** lives in 12e Sky Atlas, not 12h Settings, because the AI doing the survey-list UI naturally wires the downloader at the same time (cohesion with HiPS surveys + Aladin integration). Settings panel mounts a "Open Data Manager" link only.
+
+**Sub-PRs that exceed 200 files mid-port:** any sub-PR that turns out larger than estimated gets ad-hoc sub-split before opening (e.g., 12d → 12d.1 editor + 12d.2 template instantiation if it bloats). Decision made at PR-prep time, not pre-planned.
+
+### CodeRabbit review loop (AI-driven, 60-second polling)
+
+**Pre-PR gate (always runs before opening the PR):** AI invokes `scripts/pre-pr-check.sh` per playbook §14.4. Exits non-zero on any failure (build error, test failure, format issue, settings-registry miss, etc.). AI fixes failures + re-runs the script + opens the PR only when green. For PRs touching user-visible Flutter UI, AI also captures screenshots per §14.6 and attaches them to the PR description.
+
+After the AI opens any PR (Phase 0.5 sub-PRs, Phase 12 sub-PRs, or any other phase):
+
+1. **AI opens the PR** (with green pre-PR gate + screenshots if applicable), waits for CodeRabbit's initial review pass (~2–10 minutes depending on PR size + queue depth)
+2. **AI polls every 60 seconds** for new CodeRabbit comments via `gh api repos/<owner>/<repo>/pulls/<pr>/comments` (and the issue-comments endpoint for top-level review summaries)
+3. **AI processes each finding:**
+   | Finding type | AI action |
+   |---|---|
+   | Trivial / nit (formatting, naming, minor clarity) | Fix immediately, push commit, post reply: *"Fixed in `<sha>`"* |
+   | Real bug or correctness issue | Fix immediately, push commit, post reply: *"Addressed in `<sha>`"* |
+   | Disagreement (CodeRabbit suggests something wrong, contradicts the playbook spec, or is beyond PR scope) | Post reply with reasoning + link to the relevant playbook section; do not change code |
+   | Out-of-scope suggestion (broader refactor, future feature) | Append entry to `design/PORT_TODO.md` with PR reference; reply: *"Acknowledged — tracked in design/PORT_TODO.md for follow-up"* |
+4. **CodeRabbit re-reviews after each fix push.** AI handles round-2 findings the same way. If the same issue ping-pongs more than twice, AI defers: posts *"Deferring this to human review — see comments above"* and stops auto-fixing that thread
+5. **Quiescence detection:** when 3 consecutive polls (= 3 minutes idle) return no new comments, AI posts *"Ready for human review @<user>"* on the PR and stops polling
+6. **User reviews + merges** at their convenience. AI does not merge anything, ever (this rule is permanent — see §19.1 git safety in the playbook)
+7. **After user merge**, AI pulls the updated integration branch (`port/ara`) and starts the next sub-PR from there
+
+**Parallel work:** while waiting for CodeRabbit on an open PR, the AI may start drafting the next sub-PR's work in the same session. Polling for the open PR continues in the background via the harness's natural notification flow — no busy-waiting needed.
+
+**Failure modes:**
+- **CodeRabbit doesn't respond within 30 minutes** → AI posts *"CodeRabbit hasn't responded in 30 min; flagging for manual review"* and stops polling; user investigates (rate-limit, queue, etc.)
+- **Push hooks fail during a fix commit** → AI does NOT use `--no-verify`; reports the failure to the user via PR comment + waits for guidance
+- **Repeated CI failure on a fix** → after 2 failed fix attempts on the same finding, AI defers to user
+
+This loop applies to all PRs the AI opens, not just Phase 12 sub-PRs. Phase 0.5 sub-PRs, individual phase PRs, and any follow-up PRs all use the same workflow.
 
 ## Settings-registry gate (BAKED — applies to port AND community)
 
@@ -232,14 +314,14 @@ There is intentionally no opt-out mechanism. The gate exists because reviewer vi
 
 ## Things still to decide
 
-- [ ] Confirm per-phase PR rhythm OR alternative (paid CodeRabbit tier? Group multiple phases per PR?)
-- [ ] Confirm sub-PR letter scheme (a/b/c/...) and branch naming
-- [ ] Confirm skip-review marker syntax (CodeRabbit-specific)
-- [ ] Decide on `.coderabbit.yaml` config (path exclusions for known-mechanical changes)
-- [ ] Decide on `develop` branch (between `port/ara` and `master`) — yes or no?
-- [ ] Should AI auto-continue to next phase after PR merge, OR wait for explicit user nudge?
-- [ ] What happens if CodeRabbit flags a real issue mid-port — does AI fix in a follow-up PR or amend the open PR?
-- [ ] Push cadence — push after every commit (current expectation) vs batched
+- [x] ~~Confirm per-phase PR rhythm OR alternative~~ → **Decided 2026-05-23**: per-phase + sub-PR splitting, free CodeRabbit tier, no paid escalation
+- [x] ~~Confirm sub-PR letter scheme (a/b/c/...) and branch naming~~ → **Decided 2026-05-23**: letter scheme `a-h`; branch naming `port/ara/phase-N/<letter>` (e.g., `port/ara/phase-12/e`)
+- [x] ~~Confirm skip-review marker syntax~~ → **Decided 2026-05-23**: **no skip-review markers; every PR gets reviewed**. Belt-and-suspenders catches subtle issues that mechanical PRs can hide. See "CodeRabbit review policy" section above.
+- [x] ~~Decide on `.coderabbit.yaml` config~~ → **Decided 2026-05-23**: minimal exclusions only. Exclude truly-generated code (`client/openastroara_client/lib/api/generated/**`, `**/*.g.dart`) + temp/backup files (`*.bak`, `*.tmp`). Enable detailed-review focus on settings files (`lib/settings/registry.dart`, `lib/screens/settings/**`, profile-schema files) per Layer 4 of the Settings-registry gate above. Nothing else excluded — every other path goes through full review per the policy above.
+- [x] ~~Decide on `develop` branch~~ → **Decided 2026-05-23**: **no**. The integration branch `port/ara` already plays that role; adding `develop` adds a merge step without benefit for a single-developer port. Final phase-15 PR goes `port/ara → master` directly.
+- [x] ~~Should AI auto-continue to next phase after PR merge~~ → **Decided 2026-05-23**: AI pulls updated `port/ara` after user merges, then auto-starts the next sub-PR (no human nudge needed between sub-PRs within the same phase). Between phases (e.g., after Phase 12 fully merges and Phase 13 begins), AI auto-starts unless user has paused
+- [x] ~~What happens if CodeRabbit flags a real issue mid-port~~ → **Decided 2026-05-23**: AI fixes via additional commits on the same sub-branch (not a follow-up PR; not an amend that destroys history). See "CodeRabbit review loop" section above for the full pattern
+- [x] ~~Push cadence — push after every commit vs batched~~ → **Decided 2026-05-23**: push after every commit (visibility for user + enables CodeRabbit incremental review)
 
 ## Once decided, baking targets
 
@@ -261,16 +343,27 @@ Sleep on it. Continue tomorrow.
 
 ---
 
-## Status: parked — coming back
+## Status: mostly settled (2026-05-23)
 
-**Status as of 2026-05-21:** the per-phase PR rhythm + sub-PR splitting design above is **approved in principle** by user. Not yet baked into `PORT_PLAYBOOK.md` because we still need to decide the "Things still to decide" list above. Picking back up in a future session.
+**Decisions made 2026-05-23:**
+- Phase 12 split shape confirmed (8 sub-PRs, 12a–12h, augmented mapping with all session decisions integrated; see table above)
+- Sub-PR letter scheme + branch naming confirmed (`port/ara/phase-N/<letter>`)
+- AI auto-continues to next sub-PR after user merge (no nudge between sub-PRs)
+- CodeRabbit poll-and-fix workflow specced (60 s polling, AI handles trivial + correctness findings, user handles merge)
+- Push cadence: after every commit
 
-Approval covers:
-- Per-phase PR rhythm (16-20 PRs across the port)
-- Phase 0.5 sub-split into 16 sub-PRs with delete-before-rename ordering
-- Phase 12 sub-split into 8 sub-PRs (12a–12h)
-- CodeRabbit skip-review markers on mechanical PRs
-- Final integration: `port/ara → master` PR at Phase 15
+**Decisions made 2026-05-23 (continued):**
+- **No skip-review markers** — every PR gets full CodeRabbit review, including mechanical Phase 0.5 deletes/renames (belt-and-suspenders for subtle issues)
+- `.coderabbit.yaml` minimal config (excludes generated code + temp files only; detailed-review focus on settings files)
+- **No `develop` branch** — sub-PRs land on `port/ara` directly; Phase 15 final PR `port/ara → master`
+
+**Still to bake into `PORT_PLAYBOOK.md`:**
+- §0 rule 9 — tag every phase boundary + open PR (replace "never stop" with "wait for merge")
+- §3 phase plan — add sub-PR rows for Phase 0.5 (16 sub-PRs) and Phase 12 (8 sub-PRs)
+- §19.1 git safety — allow `port/ara/phase-N/<letter>` sub-branches; main `port/ara` becomes integration-only
+- §22 final pass — final PR `port/ara → master` (already specced; just confirm)
+
+The next bake pass into `PORT_PLAYBOOK.md` happens when the AI is ready to start Phase 0.5 execution (currently still in design phase per `GAPS-ARA.md`).
 
 ---
 

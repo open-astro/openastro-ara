@@ -128,6 +128,26 @@ The 3 real gaps + the doc clarifications cluster into a single small workstream.
 
 ---
 
+## Decision (2026-05-23): Path A, deferred to post-Phase-12
+
+**Status: settled.** Path A is the plan — file an upstream PR to `openastro-phd2` adding the 3 real gaps (`DarkLibraryProgress` event family, `EquipmentDisconnected`/`EquipmentReconnected` events, `get_version` RPC) plus the 7 doc clarifications.
+
+**Timing: defer the actual PR filing until ARA Phase 12 integration is in place.** Reasoning:
+- Phase 12 builds the WILMA wizard's dark-library + equipment-fault flows that consume these events; integration will inform exactly what payload shape + event semantics are most useful
+- Specifying RPC shapes ahead of integration risks shipping something subtly wrong upstream that's painful to revise once other PHD2 clients depend on it
+- The 3 nice-to-haves + 7 doc clarifications can also be batched into the same upstream PR — total ~1 small PR's worth of work
+- ARA v0.0.1 doesn't block on these gaps; the workarounds in the "Nice-to-haves" table above are fine for v0.0.1
+
+**Triggers for filing the upstream PR:**
+- ARA Phase 12 sub-PR 12c (Imaging + Framing tab — owns the §51 Health Indicator + §42 fault recovery surface) is merged AND
+- Phase 12 sub-PR 12b (Wizard — owns the dark-library build flow per §63.6) is merged
+
+Once those two land, the AI files the upstream openastro-phd2 PR with the validated event/RPC shapes informed by actual integration. The user reviews + merges the upstream PR; ARA then switches its internal workarounds to use the new events/RPCs in a follow-up ARA PR.
+
+**v0.1.0 alignment:** the upstream openastro-phd2 PR ships within ARA's v0.1.0 window. ARA v0.0.1 ships with workarounds; ARA v0.1.0 switches to the new events.
+
+---
+
 ## Cross-references
 
 - `design/PORT_PLAYBOOK.md` §63 — PHD2 lifecycle integration spec (assumes current RPC surface; will reference the gaps once they're either filled or worked-around)

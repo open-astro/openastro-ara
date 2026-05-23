@@ -129,7 +129,7 @@ openastro-ara/                              (repo root, branch: port/ara)
 
 **Safety + sky atlas + wizard (§35–37)**
 - [§35 Safety policies (user-configurable)](#35-safety-policies-user-configurable-per-profile)
-- [§36 Sky imagery + survey management](#36-sky-imagery--survey-management-wilma)
+- [§36 Sky imagery + Data Manager](#36-sky-imagery--data-manager-wilma)
 - [§37 Profile setup wizard](#37-profile-setup-wizard)
 
 **Sequence + calibration + image library (§38–41)**
@@ -173,6 +173,12 @@ openastro-ara/                              (repo root, branch: port/ara)
 - [§61 Smart settings search](#61-smart-settings-search)
 - [§62 Dither policy](#62-dither-policy)
 - [§63 PHD2 lifecycle + profile/dark-library push](#63-phd2-lifecycle--profiledark-library-push)
+
+**Live view + image stretching + concurrency + security (§64–67)**
+- [§64 Live View / Loop Imaging](#64-live-view--loop-imaging)
+- [§65 Image stretching pipeline + preview API](#65-image-stretching-pipeline--preview-api)
+- [§66 Server concurrency model](#66-server-concurrency-model)
+- [§67 Security model](#67-security-model)
 
 ---
 
@@ -259,7 +265,7 @@ Create four tracking files in the `design/` directory and commit them empty (`de
 | State management | Riverpod |
 | API client | generated from server's OpenAPI spec via `openapi_generator` |
 | mDNS discovery | `multicast_dns` plugin (cross-platform) |
-| Secure storage | `flutter_secure_storage` for the auth token |
+| Secure storage | `flutter_secure_storage` reserved for future v0.1.0 remote-access tokens (§67.4); not used in v0.0.1 |
 | File picker | `file_picker` plugin |
 | Image rendering | Flutter's built-in `Image` widget for JPEG previews; FITS handled by a Dart FITS package (or inline parser if no suitable package exists) |
 | Build outputs | macOS `.app` + `.dmg`, iOS `.ipa`, Android `.apk`/`.aab`, Windows `.exe`/`.zip`, Linux AppImage |
@@ -273,7 +279,7 @@ Create four tracking files in the `design/` directory and commit them empty (`de
 | Encoding | JSON for ops; JPEG bytes for image previews; FITS bytes for full-frame downloads |
 | Operations | REST endpoints under `/api/v1/...` |
 | Live updates | WebSocket at `/api/v1/stream` — server pushes sequence progress, frame complete, log lines, equipment state changes |
-| Authentication | Shared token in `X-OpenAstroAra-Token` header. Token generated on first server startup, written to `/etc/openastroara/token`, also printed once in server logs. Client prompts user for token on first connect. |
+| Authentication | **None in v0.0.1.** Trusted-LAN posture matching ASCOM Alpaca + ZWO ASIAir; see §67 for the full security model. All endpoints open. v0.1.0 introduces opt-in remote-access mode with TLS + token auth for over-internet deployments. |
 | Discovery | mDNS service type `_openastroara._tcp.local`; TXT records expose version, hostname, port |
 | Contract | OpenAPI 3.1 spec at `OpenAstroAra.Server/openapi.yaml` — source of truth; Dart client and server-side validation both derive from it |
 
@@ -307,9 +313,12 @@ Phase 10  — Server smoke test on Linux x64 + ARM64
 Phase 11  — Flutter client scaffold + first-run + server connect + handshake + a11y baseline
             §12, §30, §53 (a11y from the start; StatusIndicator widget)
 Phase 12  — Flutter views: app shell + all main tabs (Imaging, Framing, Sequencer, Sky Atlas, Image Library, Stats, Settings)
-            §25, §36 (Sky Atlas/Aladin), §37 (wizard), §40 (image library UI), §50 (Stats dashboard UI),
+            §25, §36 (Sky Atlas/Aladin + Data Manager), §37 (wizard), §40 (image library UI), §50 (Stats dashboard UI),
             §51 (Health Indicator + Diagnostic Panel UI), §41 (mobile companion shell selection),
-            §32 (disconnect modal), §35 (safety UI), §54 (bug report flow)
+            §32 (disconnect modal), §35 (safety UI), §54 (bug report flow), §61 (smart settings search),
+            §63 (PHD2 settings), §64 (Live View UI), §65 (stretch picker + manual sliders)
+            **Split into 8 sub-PRs (12a–12h) per `design/COMMIT-PR-RULES.md` — see that doc for the full mapping table.**
+            Order: 12a (shell) → 12b (wizard) → 12c–12g (independent feature tabs, any order) → 12h (Settings + search registry, last to consolidate).
 Phase 13  — Image preview pipeline end-to-end (server JPEG gen + client display + pinch-zoom)
             §12.5, §40.2
 Phase 14  — Tests + GitHub Actions CI matrix
@@ -524,7 +533,7 @@ dotnet new web -n OpenAstroAra.Server -f net10.0
 </Project>
 ```
 
-`Program.cs` skeleton — mirror NINA's `CompositionRoot` DI registrations for non-UI services, add token auth, CORS, WebSocket support, mDNS announce. Endpoints are mapped in subsequent phases.
+`Program.cs` skeleton — mirror NINA's `CompositionRoot` DI registrations for non-UI services, CORS, WebSocket support, mDNS announce. No auth middleware (per §67). Endpoints are mapped in subsequent phases.
 
 Commit: `port(server): scaffold OpenAstroAra.Server with DI from NINA CompositionRoot`.
 
@@ -543,11 +552,11 @@ Hand-write `OpenAstroAra.Server/openapi.yaml`. Endpoint groups:
 | Log | `/api/v1/log` | Recent log lines |
 | Stream | `/api/v1/stream` | Single WebSocket for live updates |
 
-**Auth:** every endpoint except `/api/v1/server/info` and `/api/v1/server/handshake` requires `X-OpenAstroAra-Token` header. Constant-time comparison. After 3 failed attempts from one IP within 60 s, return 429 for 5 minutes.
+**Auth:** none in v0.0.1 per §67 (trusted-LAN posture matching ASCOM Alpaca + ZWO ASIAir). All endpoints open. No `X-OpenAstroAra-Token` header, no rate limiting on auth attempts, no `/api/v1/server/handshake` token-validation endpoint. v0.1.0 introduces opt-in remote-access mode that re-adds TLS + token auth for over-internet deployments.
 
 **Versioning:** URL versioning (`/api/v1/...`). Within v0.x, breaking changes within `/api/v1/` permitted and documented in `design/API_CONTRACT.md`.
 
-**WebSocket protocol:** client connects with `?token=...`. Server sends JSON `{ "type": "equipment.state" | "sequence.progress" | "log.line" | "frame.complete" | ..., "ts": "...", "payload": {...} }`. Client may send `{"type":"subscribe","channels":["log","frames"]}` to filter. Default: all channels.
+**WebSocket protocol:** client connects without auth (per §67). Server sends JSON `{ "type": "equipment.state" | "sequence.progress" | "log.line" | "frame.complete" | ..., "ts": "...", "payload": {...} }`. Client may send `{"type":"subscribe","channels":["log","frames"]}` to filter. Default: all channels.
 
 Commit: `port(api): define OpenAPI v1 contract`.
 
@@ -629,7 +638,7 @@ Configure `openapi_generator` to read `../../OpenAstroAra.Server/openapi.yaml`, 
 
 The first screen:
 1. **Server discovery** — mDNS scan for `_openastroara._tcp.local`. List discovered servers with hostname, version. Manual "Add server by IP:port" option below.
-2. **Token entry** — once a server is selected, prompt for the token. Test with `/api/v1/server/handshake`. On 200, save token to `flutter_secure_storage`. On 401, allow re-entry.
+2. **Connect** — once a server is selected, WILMA calls `/api/v1/server/info` to confirm reachability + version compatibility (§33). On 200, save server's hostname + port to local state and connect. No token, no auth (§67).
 3. **Connected** — navigate to the main app shell.
 
 ### 12.3 App shell — clone NINA's layout
@@ -670,7 +679,7 @@ Server side, on capture complete:
 3. WebSocket sends `{"type":"frame.complete","payload":{"id":"...","previewUrl":"/api/v1/image/{id}/preview","fitsUrl":"/api/v1/image/{id}/fits","previewBytes":N}}`.
 4. Client receives event, fetches preview JPEG, displays. Full FITS pulled only on user-initiated download.
 
-Commit per stage: `port(client): mDNS discovery + token`, `port(client): app shell`, `port(client): equipment view`, etc.
+Commit per stage: `port(client): mDNS discovery + connect`, `port(client): app shell`, `port(client): equipment view`, etc.
 
 ---
 
@@ -715,39 +724,162 @@ WantedBy=multi-user.target
 
 ## 14. Testing (Phase 14)
 
-### 14.1 Server tests
+Three test layers per component, plus a pre-PR gate the AI runs before opening any PR. Coverage is soft (no hard %); equipment simulators provide all hardware fixtures.
 
-`OpenAstroAra.Test` (already exists). Add:
-- `WebApplicationFactory<Program>`-based integration tests per endpoint group.
-- In-process mock Alpaca server for equipment endpoint tests.
-- Sequencer unit tests: load known JSON sequence, step through, verify state transitions.
+### 14.1 Server tests — three layers
 
-### 14.2 Flutter tests
+`OpenAstroAra.Test` (already exists from NINA — preserved per §17). Layers:
+
+**Unit tests** — xUnit + NSubstitute. Per-class business logic, mocked dependencies. Fast (~ms). Inherited NINA tests stay in place; new code adds unit tests at the same time.
+
+**Integration tests** — xUnit + `WebApplicationFactory<Program>`. Real SQLite, real file I/O, in-process Alpaca simulators per §14.5. Tests the slices that unit tests can't (e.g., §28.2 recovery flow, §28.7 FITS atomic-write, §29.1.4 configure-storage helper invocation, §39 calibration matching, §63 PHD2 lifecycle). Mid-speed (~hundreds of ms per test).
+
+**E2E smoke tests** — actual published binary on Linux ARM64 (Docker container or Pi). Runs the full server + a real openastro-phd2 + Alpaca simulators, exercises a 2-target sequence end-to-end, verifies frames land + DB rows match + previews generate. Slow (~minutes). Runs in CI per phase (gated) and manually on a real Pi at Phase 15.
+
+**Settings registry tests** — `scripts/check-settings-registry.mjs` invoked from `dotnet test` for any PR that touches profile schema (per COMMIT-PR-RULES.md settings-registry gate). Verifies every new setting has a registry entry with `id`, `label`, `description`, non-empty `keywords`, valid `path`.
+
+### 14.2 Flutter tests — three layers
 
 In `client/openastroara_client/`:
-- Widget tests per screen (`flutter_test`).
-- Integration tests for the first-run flow (`integration_test`).
-- Mock the generated API client (it takes a `Dio` — inject a mock).
+
+**Widget tests** — `flutter_test` + `mocktail`. Per-widget rendering + interaction. API client mocked (the generated client accepts a `Dio` — inject `MockDio`). Fast.
+
+**Integration tests** — `integration_test` package. Full app on a Flutter test device, mocked server responses. Tests user flows: first-run → server discovery → connect → wizard → main app; sequence editor → save → run; frame viewer → stretch picker. Mid-speed.
+
+**Manual UI verification** — for any PR touching user-visible UI (per §14.6), AI launches `flutter run -d linux`, exercises the changed flow, captures screenshots (golden path + at least one edge case), attaches to PR description before opening. Catches visual regressions widget tests miss (layout shifts, theme issues, accessibility regressions).
+
+**Settings registry tests** — same `scripts/check-settings-registry.mjs` runs in `flutter test` for any PR touching settings UI (per COMMIT-PR-RULES.md gate).
 
 ### 14.3 CI matrix (`.github/workflows/ci.yml`)
 
 | Job | Runner | Steps |
 |---|---|---|
-| server-build | `ubuntu-latest` | `dotnet build`, `dotnet test`, publish `linux-arm64` + `linux-x64` |
+| server-build | `ubuntu-latest` | `dotnet build`, `dotnet test` (unit + integration), publish `linux-arm64` + `linux-x64` |
+| server-e2e | `ubuntu-latest` | Docker-based E2E smoke against a Linux ARM64 image (qemu) — runs on phase boundaries only |
 | client-macos | `macos-latest` | `flutter build macos --release`, `flutter build ios --no-codesign` |
 | client-windows | `windows-latest` | `flutter build windows --release` |
 | client-linux | `ubuntu-latest` | `flutter build linux --release`, `flutter build apk --release` |
-| client-test | `ubuntu-latest` | `flutter test`, `flutter analyze` |
+| client-test | `ubuntu-latest` | `flutter test`, `flutter test integration_test/`, `flutter analyze` |
+| settings-registry | `ubuntu-latest` | `node scripts/check-settings-registry.mjs --pr-diff` — fails PR if new settings lack registry entries |
 
 On tag `v0.0.1-ara.*`, also a `release` job uploading artifacts to a GitHub Release.
 
-Commit: `port(ci): GitHub Actions for server + Flutter client`.
+Commit: `port(ci): GitHub Actions for server + Flutter client + registry gate`.
+
+### 14.4 Pre-PR gate (`scripts/pre-pr-check.sh`)
+
+The AI runs this before every `gh pr create`. Exit code 0 = green; anything else = AI fixes + reruns before opening the PR. Same checks run in CI, so a green pre-PR gate predicts a green CI run.
+
+```bash
+#!/usr/bin/env bash
+# scripts/pre-pr-check.sh
+# Runs the same checks CI runs, locally, before opening a PR.
+# Exit non-zero on any failure.
+set -euo pipefail
+
+CHANGED_FILES="$(git diff --name-only origin/port/ara...HEAD)"
+
+if echo "$CHANGED_FILES" | grep -qE '\.cs$|\.csproj$|\.sln$|openapi\.yaml$'; then
+  echo "→ Server changes detected; running C# gate..."
+  dotnet format --verify-no-changes
+  dotnet build -c Release --nologo
+  dotnet test -c Release --logger "console;verbosity=minimal"
+  dotnet publish OpenAstroAra.Server -c Release -r linux-arm64 --self-contained -o /tmp/pre-pr-publish
+  if echo "$CHANGED_FILES" | grep -q 'openapi\.yaml$'; then
+    scripts/check-openapi-lint.sh
+  fi
+fi
+
+if echo "$CHANGED_FILES" | grep -qE '^client/.*\.(dart|yaml)$|pubspec\.yaml$'; then
+  echo "→ Client changes detected; running Flutter gate..."
+  pushd client/openastroara_client >/dev/null
+  dart format --set-exit-if-changed .
+  flutter analyze
+  flutter test
+  if find integration_test/ -name '*.dart' -newer ../../.git/HEAD 2>/dev/null | grep -q .; then
+    flutter test integration_test/
+  fi
+  flutter build linux --release
+  popd >/dev/null
+fi
+
+if echo "$CHANGED_FILES" | grep -qE 'lib/screens/settings/|lib/settings/registry\.dart$|profile\.schema\.json$'; then
+  echo "→ Settings change detected; running registry gate..."
+  node scripts/check-settings-registry.mjs --staged
+fi
+
+echo "✓ Pre-PR gate green"
+```
+
+**For PRs touching user-visible Flutter UI:** the AI additionally runs §14.6 manual UI verification (screenshots), which the script doesn't automate — that step happens outside `pre-pr-check.sh` and the AI attaches screenshots to the PR description manually.
+
+**Runtime budget:** typical full run ~2–5 minutes on a modern laptop. Acceptable cost before opening a PR.
+
+**Failure handling:** script exits non-zero with a clear message; AI fixes the failure + reruns the script; only opens the PR once green. No `--no-verify`-style bypass.
+
+### 14.5 Equipment simulators (test fixtures)
+
+ARA does NOT test against real hardware in CI. Three simulator sources:
+
+**Alpaca simulators (ASCOM Platform)** — Camera, Mount, Focuser, FilterWheel, Rotator, Dome, Switch, ObservingConditions, SafetyMonitor. Bundled into `OpenAstroAra.Test/fixtures/alpaca-simulators/` as portable executables (Linux x64 + ARM64 builds, ~50 MB combined). Test harness launches them as background processes on random ports + tears down post-test. Source: [ASCOMInitiative/ASCOMPlatform](https://github.com/ASCOMInitiative/ASCOMPlatform) simulators directory.
+
+**PHD2 simulator** — PHD2's built-in `Simulator` camera + `Simulator` mount drivers. openastro-phd2 ships with the same. Test harness launches headless openastro-phd2 (`xvfb-run -a openastro-phd2 --headless --headless-auto-connect`) per §63.2, sets the profile to use simulators, connects via JSON-RPC.
+
+**Custom in-process fakes** — for fast unit tests where a real simulator is overkill (e.g., testing the §28 recovery state machine without actually polling Alpaca), tests use NSubstitute mocks of the Alpaca interfaces. Integration tests use the real simulators above.
+
+Real-hardware testing is maintainer-run at release boundaries (Phase 15 manual smoke on a real Pi with at least one real ZWO camera + one real mount). Not in CI.
+
+### 14.6 Manual UI verification + screenshots
+
+For any Flutter PR that touches user-visible UI, AI runs:
+
+```bash
+cd client/openastroara_client
+flutter run -d linux &
+# Exercise the changed flow + capture screenshots
+# Tools: scrot, gnome-screenshot, or Flutter's built-in screenshot
+```
+
+Required screenshots:
+- **Golden path** — the primary changed flow as the user would experience it
+- **At least one edge case** — empty state, error state, narrow layout, or whatever's relevant
+
+Screenshots attached to PR description in a `## Screenshots` section. AI captions each: what it shows + what was changed.
+
+When to skip screenshots:
+- PR touches only server code, only tests, only docs, only build config
+- PR touches Flutter code but exclusively non-UI (e.g., model classes, generated API client, state-management plumbing)
+- PR is a pure refactor with no visual change (AI must explicitly state "no visual change" in PR description)
+
+When AI can't run the UI locally (e.g., CI environment, headless), AI states this explicitly in the PR: *"Manual UI verification could not run in this environment; flagging for human screenshot during review."* User is expected to do screenshots before merging.
+
+### 14.7 Coverage policy
+
+**v0.0.1: soft target.** No hard percentage. Requirements:
+
+1. **All existing NINA tests still pass.** The inherited test suite stays green throughout the port; a passing baseline is non-negotiable.
+2. **New or substantively changed code ships with tests.** "Substantively changed" means logic changed; pure renames, pure formatting, pure import-path adjustments don't require new tests.
+3. **Integration tests for cross-cutting features.** §28 recovery, §28.7 FITS atomic-write, §29.1 storage configure, §39 calibration matching, §63 PHD2 lifecycle, §65 stretch palette — each gets at least one integration test exercising the happy path + one for each documented failure mode.
+4. **UI flows hit by integration tests.** First-run, wizard completion, sequence start, frame capture-to-library, settings change-and-save.
+
+**v0.1.0+ may add hard coverage thresholds** once the codebase stabilizes and the inherited NINA code has been pruned. Until then, the soft target keeps friction low during the port.
+
+### 14.8 §61 search registry entries
+
+- `testing.run_pre_pr_gate` — keywords: `run tests, pre-pr check, test before commit, gate, verify code, check before pr`
 
 ---
 
 ## 15. Build + verification gate (run after every phase)
 
+Run `scripts/pre-pr-check.sh` (per §14.4) — same script the AI runs before every PR, exercises the full gate.
+
 ```bash
+# All-in-one, exits non-zero on any failure:
+scripts/pre-pr-check.sh
+
+# Or, equivalently, run the pieces manually:
+
 # Server
 dotnet restore OpenAstroAra.sln
 dotnet build OpenAstroAra.sln -c Debug --nologo
@@ -765,11 +897,13 @@ dotnet publish OpenAstroAra.Server -c Release -r linux-arm64 --self-contained -o
 
 Gate is green when:
 1. `dotnet build` succeeds with zero errors. Warnings logged in `design/PORT_DECISIONS.md`.
-2. `dotnet test` green for every previously-passing test. Tests dependent on deleted WPF UI types from §4.2 are deleted (not skipped).
+2. `dotnet test` green for every previously-passing test (unit + integration per §14.1). Tests dependent on deleted WPF UI types from §4.2 are deleted (not skipped).
 3. `flutter analyze` returns no errors (warnings OK, logged).
-4. `flutter test` passes.
+4. `flutter test` + `flutter test integration_test/` pass (per §14.2).
 5. `dotnet publish -r linux-arm64` succeeds.
 6. From Phase 10: published server responds to `/api/v1/server/info`.
+7. Settings-registry check passes if any PR in the phase touched profile schema or settings UI (per §14.1 + COMMIT-PR-RULES.md).
+8. For PRs touching user-visible Flutter UI: manual screenshots attached to the PR (per §14.6).
 7. From Phase 11: `flutter run -d macos` reaches the server-discovery screen without exceptions.
 
 If the gate fails and you cannot fix it within ~5 attempts, revert the last commit, write up the failure in `design/PORT_DECISIONS.md`, try a different approach. **Do not push a broken commit.**
@@ -903,6 +1037,9 @@ Delete `crowdin.yml`. Delete non-English `Locale.*.resx`. No language picker. Ha
 ### 18.H — Branding assets
 Placeholders during port. Every icon/splash/logo reference carries `TODO(branding): replace with ARA asset before public release`. User supplies real assets.
 
+### 18.J — Imaging scope: **DSO + COMETS ONLY**
+ARA targets deep-sky objects and comets — the long-exposure (30 s – 900 s) capture workflow where Alpaca's image-grab API is the right primitive. **Planetary and lunar lucky-imaging are out of scope, permanently, not deferred.** The architectural reason: ASCOM Alpaca has no video API (the `IVideo` interface is deprecated and unsupported by Alpaca), so high-frame-rate (5–30 fps) capture isn't possible through the protocol ARA has committed to (§52). NINA has the same limitation; this isn't an ARA-specific gap. Users who want planetary capture use FireCapture, SharpCap, or AstroDMx with vendor-native drivers — different tool category. ARA's sky atlas (§36) still browses planets and moon for educational purposes, but capture is DSO + comets. This decision propagates: no `lunar.json` / `planetary.json` sequence templates (§38.7), no SER file format support, no ROI capture, no high-frame-rate workflows. Anything reading "v0.1.0 planetary support" in older revisions of this doc is wrong — corrected by this section.
+
 ### 18.I — Plate solving
 - **ASTAP**: only solver. Cross-platform; users download per OS from astap.nl. Server config exposes ASTAP binary path + star-database path; per-OS defaults attempted on first run:
   - Linux: `which astap` → `/usr/bin/astap` or `/opt/astap/astap`
@@ -941,9 +1078,8 @@ Placeholders during port. Every icon/splash/logo reference carries `TODO(brandin
 
 ### 19.4 Secrets safety
 
-- Do not commit `.pfx`, `.key`, `.pem`, `.env`, `appsettings.Secrets.json`, `secrets.dart`, or files containing `password`/`secret`/`token`. Add patterns to `.gitignore` if found.
-- Server bootstrap token generated at first run on the deployment machine; never committed.
-- Do not echo or log API keys, tokens, auth headers.
+- Do not commit `.pfx`, `.key`, `.pem`, `.env`, `appsettings.Secrets.json`, `secrets.dart`, or files containing `password`/`secret`/`token`. Add patterns to `.gitignore` if found. (v0.0.1 has no server auth per §67, but the rule still applies — protects against future v0.1.0 remote-access tokens, plus any third-party API keys that may show up in dependencies or example configs.)
+- Do not echo or log API keys, tokens, auth headers that may exist in third-party integrations or v0.1.0+ remote-access mode.
 
 ### 19.5 Scope safety
 
@@ -1002,7 +1138,7 @@ When porting NINA logic into ASP.NET Core endpoints, replace `Loc.Instance[...]`
 2. Run the gate one more time including `-c Release` and `flutter build` for every platform.
 3. Smoke test end-to-end:
    - Bring up `OpenAstroAra.Server` on a Linux ARM64 host (Pi or Docker).
-   - Launch the Mac client. Discover via mDNS. Connect with the token.
+   - Launch the Mac client. Discover via mDNS. Connect (no token; see §67).
    - Verify equipment dashboard shows AlpacaBridge-exposed simulator devices.
    - Run a 2-target sequence with simulator camera + simulator mount; openastro-phd2 connects and dithers.
    - Disconnect the client mid-sequence; wait 5 minutes; reconnect; verify session continued and frames were captured.
@@ -1025,9 +1161,33 @@ When porting NINA logic into ASP.NET Core endpoints, replace `Loc.Instance[...]`
 # Find leftovers from deleted things
 grep -rln "System\.Windows\|UseWPF\|Microsoft\.Web\.WebView2\|ASCOM\.Com\|nikoncswrapper" --include="*.cs" --include="*.csproj" .
 
-# Bulk-rename NINA → OpenAstroAra inside a directory
-find $DIR -name "*.cs" -exec sed -i.bak 's/NINA\./OpenAstroAra\./g' {} \;
-find $DIR -name "*.cs.bak" -delete
+# Bulk-rename NINA → OpenAstroAra inside a directory.
+# IMPORTANT: this only renames namespace/type references in .cs files.
+# Skips license headers + NOTICE files + markdown — those contain user-visible
+# NINA references (attributions, lineage notes) that should be edited deliberately,
+# not by find-and-replace. Always dry-run first:
+DRY_RUN_PATCH=$(find $DIR \
+  \( -name "*.cs" -o -name "*.csproj" \) \
+  -not -path '*/LICENSE*' \
+  -not -path '*/NOTICE*' \
+  -not -path '*/AUTHORS*' \
+  -exec grep -l 'NINA\.' {} \;)
+echo "Files that would be modified:"
+echo "$DRY_RUN_PATCH"
+echo "---"
+echo "Sample of changes (first 10 lines):"
+echo "$DRY_RUN_PATCH" | head -5 | xargs -I {} sh -c 'echo "=== {} ===" && grep -n "NINA\." {} | head -2'
+echo "---"
+read -p "Apply renames? [y/N] " confirm
+if [ "$confirm" = "y" ]; then
+  echo "$DRY_RUN_PATCH" | xargs -I {} sed -i.bak 's/NINA\./OpenAstroAra\./g' {}
+  echo "$DRY_RUN_PATCH" | xargs -I {} mv {}.bak {}.bak.delete
+  find $DIR -name "*.bak.delete" -delete
+fi
+
+# License headers + user-visible strings (error messages, log strings, resource files)
+# get edited DELIBERATELY — see §17.2 fork hygiene rules + §4.3 Stefan branding strip.
+# Phase 0.5 sub-PR 0.5f covers the deliberate string sweep (per COMMIT-PR-RULES.md).
 
 # Verify server builds for ARM64
 dotnet publish OpenAstroAra.Server -c Release -r linux-arm64 --self-contained
@@ -1049,7 +1209,7 @@ cd client/openastroara_client && OPENASTROARA_DEFAULT_HOST=localhost:5400 flutte
 - Server builds on Linux ARM64, x64, Windows, macOS via `dotnet build`. Linux ARM64 publish is the canonical artifact.
 - Client builds on macOS (Apple Silicon), iOS, Android, Windows, Linux desktop via `flutter build`. Every platform produces a working binary.
 - `OpenAstroAra.Server` runs as a systemd daemon on a Pi, discovered via mDNS, accepts authenticated client connections.
-- `OpenAstro Ara` (Flutter client) on a Mac discovers the server, connects with a token, displays equipment status, runs a sequence to completion, displays preview JPEGs as frames complete, supports clean disconnect/reconnect mid-sequence.
+- `OpenAstro Ara` (Flutter client) on a Mac discovers the server via mDNS, connects (no auth per §67), displays equipment status, runs a sequence to completion, displays preview JPEGs as frames complete, supports clean disconnect/reconnect mid-sequence.
 - Smoke test in §22 (step 3) passes end-to-end on a Mac + RPi setup with simulator equipment and openastro-phd2.
 - No bundled native vendor SDKs, no WPF UI code, no plugin loader, no upstream-NINA branding (except attributions in NOTICE.md, AUTHORS, About, README per §17).
 - All MPL license headers preserved per §17.3.
@@ -1194,7 +1354,7 @@ Three stacked sections, each collapsible:
 `Row` along the bottom of the main window:
 - Left: local time + sidereal time (computed from server's reported lat/long)
 - Center: current operation ("Capturing target M42 — frame 4/20, 180s") + progress bar
-- Right: server connection state ("Connected: pi-observatory.local — v0.0.1-ara.1") + token-reset button
+- Right: server connection state ("Connected: pi-observatory.local — v0.0.1-ara.1") + "Forget this server" button (clears the saved server entry; doesn't affect Pi-side state)
 
 ### 25.8 Mobile differences
 
@@ -1306,7 +1466,7 @@ ARA serves **one connected client at a time** to eliminate command-conflict edge
 ### 27.1 Flow
 
 ```
-new client → POST /api/v1/server/connect (token)
+new client → POST /api/v1/server/connect  (no auth per §67)
    │
    ├─ no current client      → 200 + session ID, new client takes over
    │
@@ -1339,14 +1499,14 @@ new client → POST /api/v1/server/connect (token)
 
 ### 27.3 Endpoints
 
-- `POST /api/v1/server/connect` (token in body) → 200 + session, or 409 (in-use), or 503 (server starting / sequence-only mode)
+- `POST /api/v1/server/connect` (no auth per §67; body identifies the connecting client by hostname for the takeover UX) → 200 + session, or 409 (in-use), or 503 (server starting / sequence-only mode)
 - `POST /api/v1/server/disconnect` → graceful disconnect, releases the slot
 - `GET /api/v1/server/session` → current session info (controller hostname, since when, idle time)
 
 ### 27.4 Out of scope for v0.0.1
 
 - Multi-client read-only spectator mode (a "watch only" connection) — could be v0.1.0
-- Persistent admin override token (force-disconnect anyone) — could be v0.1.0
+- Persistent admin override / force-disconnect mechanism — could be v0.1.0 (paired with §67.4 remote-access mode where auth re-enters)
 
 ---
 
@@ -1423,6 +1583,185 @@ The same warning pattern fires during normal sequence execution, not just recove
 - Resume mid-instruction (e.g., picking up frame 4 of 10 when the crash happened at frame 3 of 10). For v0.0.1 we resume at instruction granularity; the in-progress instruction restarts from its first frame.
 - Multi-mount / multi-camera sessions.
 - Resume across multiple nights with target re-acquisition based on actual time skew (assumes user resumes the same night).
+- `durability_mode` config knob (paranoid / balanced / fast) — single fixed safe mode in v0.0.1; v0.1.0 if users ask for paranoid (synchronous=FULL) or fast (no fsync, test-only).
+- Active power-loss detection (UPS GPIO signal triggers proactive checkpoint + park) — v0.1.0.
+- Background scrubbing of FITS files against checksums — v0.1.0.
+- Multi-disk RAID-style redundancy — out of scope entirely; §44 backup stream covers the "second copy" use case.
+
+### 28.6 Data durability — SQLite settings
+
+§28.1's checkpoint table assumes durable writes. ARA applies these PRAGMAs on every server startup, before any session begins:
+
+```sql
+PRAGMA journal_mode = WAL;            -- Write-Ahead Logging for concurrent reads + faster writes
+PRAGMA synchronous = NORMAL;          -- fsync at critical moments; zero corruption with WAL; modern standard
+PRAGMA temp_store = MEMORY;           -- temp tables in RAM
+PRAGMA mmap_size = 268435456;         -- 256 MB memory-mapped I/O for perf
+PRAGMA wal_autocheckpoint = 1000;     -- default 1000 pages (~4 MB) before automatic checkpoint
+PRAGMA busy_timeout = 5000;           -- 5 s timeout on contended writes (instead of immediate SQLITE_BUSY)
+PRAGMA foreign_keys = ON;             -- enforce FK constraints
+```
+
+**Why NORMAL not FULL:** WAL + NORMAL is the modern standard (used by Firefox, Chrome, iOS, Android, etc.). Zero corruption guarantee on power loss — the WAL ensures the database file always represents either the pre-transaction state or the committed state, never a torn write. The trade-off: the **last few seconds of committed transactions** may be lost on power loss (anything not yet WAL-checkpointed back into the main DB file). For ARA this is acceptable because:
+
+1. Frames are checkpointed individually via §28.1, so losing the last few seconds means losing at most the last 1–2 frame metadata writes
+2. The corresponding FITS files persist through §28.7's atomic-write pattern and get re-discovered by the §28.8 startup scan
+3. The net "data lost" is therefore typically zero — only the DB row gap, which auto-heals
+
+ARA explicitly manually invokes `PRAGMA wal_checkpoint(PASSIVE);` at session start, session end, and every 10 minutes during active capture — bounds the WAL replay cost on next startup.
+
+### 28.7 Data durability — FITS atomic-write pipeline
+
+After every captured exposure, the server writes the FITS file using an **atomic-rename pattern** so that no partially-written file ever appears under its real name:
+
+1. Write FITS bytes to `<frame>.fits.tmp`
+2. `fsync()` the file descriptor — force bytes to platter/flash
+3. Atomic rename `<frame>.fits.tmp` → `<frame>.fits`
+4. `fsync()` the parent directory — make the rename itself durable
+5. Insert row in SQLite `frames` table (§28.1) — its own WAL fsync via `synchronous=NORMAL`
+
+Steps 1–4 take ~5–200 ms on USB SSD (typically 10–50 ms on quality SSDs; longer on USB sticks — which §29 already warns against). Since typical exposures are 60–300 s, fsync overhead is **< 1% of exposure time** in practice — effectively free.
+
+**Same pattern applies to**:
+- Preview JPEGs (`<frame>.preview.jpg`, alt-stretch variants per §65)
+- Thumbnails (`<frame>.thumb.jpg`)
+- Sequence files saved by the user
+- Profile JSON exports
+- Calibration metadata writes
+
+**Does NOT apply to** (lossy is acceptable):
+- Diagnostic logs (rotated, append-only, lossy)
+- Cache directories (preview variants regenerable from FITS, surveys re-downloadable, etc.)
+
+### 28.8 Startup scan + orphan recovery
+
+Before §28.2's equipment-reconnect routine runs, the server performs a quick filesystem audit:
+
+1. **Mount + writability check** — verify the configured save path (default `/media/openastroara`) is mounted and writable. If not, abort startup with a clear error logged to systemd journal + a `storage.unavailable` critical notification queued for next WILMA connect. Server does NOT proceed without writable storage.
+2. **Filesystem type check** — per §28.9, refuse to start if FS is not ext4 (hard refuse, not warning).
+3. **`.tmp` sweep** — `find <captures>/ -name '*.tmp' -mmin +5 -delete`. Any `.tmp` file older than 5 minutes is assumed crashed-mid-write and deleted. (Live writes finish in seconds; 5 minutes is generous slack for slow USB sticks.)
+4. **Orphan FITS scan** — for every `.fits` file in `<captures>/`, check whether a corresponding `frames` row exists. If not (orphan), re-insert by parsing the FITS header:
+   - Required header fields: `DATE-OBS`, `EXPTIME`, `OBJECT` (or fall back to "Unknown Target"), `FILTER` (or "—"), `IMAGETYP`
+   - Optional metadata: `GAIN`, `OFFSET`, `XBINNING`, `CCD-TEMP`, `HFR`, `STARS`, etc. (recovered if present)
+   - The recovered row joins the frame's existing session (looked up by parent directory) or creates a synthetic `recovered-<timestamp>` session if the session is also missing.
+   - Emit WS event `frame.recovered_orphan` per recovered frame so WILMA reflects it in the library + Stats.
+5. **Orphan preview/thumb regeneration** — for any recovered FITS that lacks a preview or thumbnail, generate them async in the background (low priority worker, doesn't block recovery).
+
+Auto-recovery is **silent + notification-only** (per the bake decision): the user sees a single summary notification *"Recovered N frame(s) from previous session — added to library"* and detailed entries in the §46 notification feed. No banner; no quarantine; no per-frame prompt. The orphan-scan is bounded to the captures dir (won't recursively scan the whole drive); typical execution time on a Pi 4 with ~10k frames is under 2 seconds.
+
+### 28.9 Filesystem + mount requirements
+
+**ext4 is mandatory.** Two layers of enforcement:
+
+1. **At configure time** — the §29.1.4 helper script validates `blkid` reports ext4 before mounting; non-ext4 drives are rejected with `code: not_ext4`, surfaced to WILMA as the in-app reformat flow (§29.1.3).
+2. **At startup** — ARA refuses to start if the configured save path's filesystem is not ext4 (defense in depth against fstab edits, manual remounts of a different drive, or drives swapped while server was off).
+
+Rationale: NTFS / exFAT / FAT32 have weaker durability semantics (no journaling, weaker fsync guarantees, no proper Unix permissions), and Btrfs / ZFS while excellent are out of scope for v0.0.1 (untested + larger DEPLOY.md surface area).
+
+Detection: server queries `stat -f -c %T <save-path>` at startup; rejects anything other than `ext2/ext3` (which is the ext4 family name returned by stat). exFAT returns `msdos`, NTFS returns `fuseblk` or `ntfs`, etc.
+
+If the FS is wrong: server logs the error, queues a critical notification for next WILMA connect ("Storage drive is formatted as exFAT — please reformat as ext4 per DEPLOY.md"), and exits with non-zero status (systemd restart loop will keep retrying every `RestartSec=3` per §63's pattern, but the storage error persists until the user fixes it).
+
+**Recommended mount options** (DEPLOY.md fstab guidance):
+
+```
+UUID=<drive-uuid>  /media/openastroara  ext4  defaults,data=ordered,noatime,errors=remount-ro  0  2
+```
+
+- `data=ordered` — ext4 default; journals metadata before data
+- `noatime` — skip access-time updates (reduces writes; access time isn't useful here)
+- `errors=remount-ro` — if FS corruption detected mid-session, remount read-only instead of allowing further damage. Server detects this and emits `storage.error` critical notification.
+
+### 28.10 UPS recommendation (DEPLOY.md, advisory)
+
+A USB-attached UPS keeps the Pi alive long enough on power loss to finish the in-flight FITS atomic-write, checkpoint WAL, pause the sequence, park the mount per §35's safety policy, and clean-shutdown. Without a UPS, in-flight exposures are lost (the §28.7 + §28.8 design ensures no corruption — but the active exposure is gone).
+
+DEPLOY.md adds a "Recommended hardware" section listing options (Geekworm X728, PiJuice, generic 12 V UPS HATs) with one-line summaries. ARA works fine without a UPS — this is a "for night-long unattended runs, strongly consider" recommendation, not a requirement.
+
+Future (v0.1.0): UPS GPIO signal pin can trigger a proactive checkpoint + park sequence ahead of battery exhaustion. Out of scope for v0.0.1 because every UPS exposes its signal differently and ARA would need device-specific shims.
+
+### 28.11 Scenario matrix — what's lost vs preserved
+
+| Crash point | FITS state | DB state | Net effect after restart |
+|---|---|---|---|
+| Power loss during exposure | nothing written | nothing | Exposure lost (already documented §28.1). §28.2 recovery resumes from previous instruction. |
+| During FITS body write | `.tmp` partial | nothing | Startup §28.8 deletes `.tmp`; user sees nothing missing. |
+| Between fsync + rename | `.tmp` complete, no `.fits` | nothing | Startup §28.8 deletes `.tmp` (conservative; the rename hadn't committed). |
+| Between rename + dir fsync | `.fits` may or may not be visible after fs replay | nothing | If visible → §28.8 orphan-scan re-inserts; if invisible → as-if frame never happened. |
+| Between dir fsync + DB row | `.fits` visible | nothing | Orphan scan picks it up; user gets `frame.recovered_orphan` event. |
+| During DB row write | `.fits` durable | WAL guarantees no corruption; row may be missing | Orphan scan picks it up. |
+| After DB row inserted (steady state) | `.fits` durable | row durable | Full success. |
+| Mid-WAL-checkpoint | both durable | WAL replay completes on next open | No data loss. |
+| USB drive yanked mid-write | `.fits` partial in OS page cache, never reaches drive | DB write fails | Server logs `storage.unavailable`; on next mount + restart, §28.8 cleans up `.tmp` and any orphans. |
+
+**Net property of v0.0.1's durability design:** no partial FITS files ever appear under their real name; no orphan FITS file ever becomes invisible to the library; no SQLite corruption is possible on power loss; the maximum data loss from a power event is "the single exposure that was actively integrating when power died."
+
+### 28.12 "Paused sequence" semantics
+
+§28 + §35 (safety policies) + §42 (fault recovery) + §44 (backup stream) all reference "pause." This is what stays running vs holds vs aborts when a sequence pauses (whether via user action, safety event, or fault):
+
+| Component | Behavior during pause |
+|---|---|
+| **Cooler** (if active) | **Keeps running** at the current target temp — preserves thermal stability so resume doesn't need a re-stabilization wait |
+| **Guider** (PHD2) | **Keeps running** (`pause` RPC if user-paused; full `guiding` state if safety/fault paused) — keeps the mount settled so resume is immediate |
+| **Mount tracking** | **Keeps running** — target stays centered for free; no re-acquisition needed on resume |
+| **Filter wheel** | **Holds** at current position |
+| **Focuser** | **Holds** at current position |
+| **Rotator** | **Holds** at current position |
+| **Dome** | **Holds** at current position (no auto-park during pause) |
+| **In-flight exposure** | **Aborts** — the integrating frame is lost; partial bytes discarded per §28.7 atomic-write pattern (no `.tmp` ever appears as a real `.fits`) |
+| **WS broadcasts** | **Continue** — state changes, telemetry, frame events for already-completed frames all still flow |
+| **Diagnostics (§51)** | **Continue analyzing** completed frames but emit no auto-actions while paused (paused state is itself the user signal) |
+| **Notifications (§46)** | **Continue** — pause-cause notifications + any new safety / equipment events still raise |
+| **Backup stream (§44)** | **Resumes during pause** — paused = idle = backup runs at full configured bandwidth (no capture I/O competition) |
+| **Stats aggregator (§50)** | **Continues** — pause time is logged separately (counts as "downtime" in session-efficiency analytics) |
+| **REST API** | **Fully responsive** — user can edit safety policies, view library, change settings, etc. while paused |
+| **Storage monitoring** | **Continues** — disk-full / storage-slow events still raise |
+| **Equipment polling** | **Continues** at the §66 cadence — equipment-state changes still surface, just no exposures triggered |
+
+**Resume semantics:**
+- User taps **[Resume]** (or safety/fault condition clears) → server checks all "keeps running" components are still healthy → if healthy, advance sequencer to next instruction
+- If guider lost calibration during pause (rare — mount slipped, star drift) → resume triggers guider re-cal automatically, ~30s
+- If cooler drifted from target (warm ambient, cooler failed) → resume waits up to 60s for re-stabilization, then proceeds with warning notification
+
+**Pause vs Abort vs Stop:**
+- **Pause** — described above; everything stays connected and ready; resume restores the running state
+- **Abort** — sequence ends; mount stays where it is; cooler stays on; user controls what happens next
+- **Emergency Stop** (§35.3) — sequence ends; mount parks per §35 safety policy; cooler may warm or stay depending on `cooler_warmup_on_session_end` (§28.13); equipment disconnects per safety policy
+
+### 28.13 Cooler warmup at session end
+
+When a sequence ends (graceful completion, user abort, emergency stop) or the user explicitly disconnects the camera, ARA's behavior depends on the per-profile `cooler_warmup_on_session_end` setting:
+
+| Value | Behavior |
+|---|---|
+| `off` *(v0.0.1 default)* | Disconnect immediately. Camera reports warm-up complete when its internal thermal mass equalizes — ARA doesn't wait. Recommended for modern ZWO / QHY CMOS cameras, which tolerate rapid temperature change. |
+| `ramp` | Ramp the cooler power back toward 0% at the configured rate (default 1 °C/min, configurable via `cooler_warmup_rate_c_per_min`); when temp reaches ambient ± 1°C, disconnect. Adds ~30s–2min depending on the cold delta. Recommended for cooled CCDs and humid environments — prevents thermal-shock condensation on the sensor window. |
+| `immediate` | Explicit "warm now" command (sets cooler power to 0% directly), then disconnect. Functionally similar to `off` but issues the explicit Alpaca `CoolerOn = false` before disconnect for drivers that need it. |
+
+**Where set:** wizard Screen 5 (Camera, §37.3) defaults to `off`; user can change in Settings → Equipment → Camera. Searchable via §61 keywords.
+
+**Sequence integration:** when `ramp` is selected, the sequencer adds a post-sequence cooldown phase. WILMA shows a banner: *"Cooling down (12°C → 22°C ambient at 1°C/min)... ~10 min remaining."* User can [Skip warmup + disconnect] to abort the ramp.
+
+**Profile schema:**
+
+```json
+{
+  "camera": {
+    ...
+    "cooler_warmup_on_session_end": "off",
+    "cooler_warmup_rate_c_per_min": 1.0
+  }
+}
+```
+
+**§61 search registry:**
+- `camera.cooler_warmup_on_session_end` — keywords: `warmup, ramp down, session end, cooler shutdown, thermal shock, condensation, cooldown`
+- `camera.cooler_warmup_rate_c_per_min` — keywords: `warmup rate, ramp rate, cooldown speed`
+
+**v0.1.0 paths:**
+- **Detect-camera-type default** — auto-pick `off` for CMOS / `ramp` for CCD via Alpaca `CameraType` property. Some cameras misreport, so override stays available.
+- **Humidity-aware ramp** — if observing-conditions reports humidity > 80%, force `ramp` regardless of setting.
 
 ---
 
@@ -1484,24 +1823,124 @@ Server stores ALL persistent data on the configured USB drive at `/media/openast
 └── .araback/                                   Auto-generated backup zips (per §43)
 ```
 
-The Pi's SD card holds only: OS, `openastroara-server` binary (under `/opt/openastroara/`), systemd unit, `/etc/openastroara/{token, storage.conf}`, and a tiny placeholder `/var/lib/openastroara/` (used only briefly during first-run before USB is configured).
+The Pi's SD card holds only: OS, `openastroara-server` binary (under `/opt/openastroara/`), systemd unit, `/etc/openastroara/storage.conf`, and a tiny placeholder `/var/lib/openastroara/` (used only briefly during first-run before USB is configured).
 
 ### 29.1.1 USB drive configuration (first-run)
 
 After `sudo apt install openastroara-server` completes:
 
 1. Server starts in **`needs_storage`** mode. `GET /api/v1/server/info` returns `{ "status": "needs_storage", "available_usb_drives": [{...}, {...}] }`.
-2. `GET /api/v1/server/storage/candidates` enumerates mounted USB block devices (via `lsblk -J --output NAME,UUID,SIZE,MOUNTPOINT,LABEL`) excluding the OS root + boot partitions.
-3. WILMA prompts user: *"Select a USB drive for ARA data:"* with size + label + free space per option.
+2. `GET /api/v1/server/storage/candidates` enumerates connected USB block devices (via `lsblk -J --output NAME,UUID,SIZE,MOUNTPOINT,LABEL,FSTYPE`) excluding the OS root + boot partitions. Drives need not be mounted yet — the helper script handles mounting.
+3. WILMA prompts user: *"Select a USB drive for ARA data:"* with size + label + filesystem type + free space (if mounted) per option.
 4. User picks → WILMA calls `POST /api/v1/server/storage/configure { "uuid": "..." }`.
-5. Server:
+5. Server invokes the **configure-storage helper** (§29.1.4) via sudo:
+   - Helper validates the UUID, validates ext4, creates `/media/openastroara`, appends fstab line (idempotent), mounts the drive, chowns to `openastroara:openastroara`
+   - On `ERROR: not_ext4` → server responds 422 with `{ "code": "not_ext4", "fs": "exfat" }`; WILMA presents the reformat path (§29.1.3)
+   - On `ERROR: uuid_not_found` → server responds 422 with `{ "code": "uuid_not_found" }`; WILMA asks user to re-plug and retry
+   - On `OK` → continue
+6. Server:
    - Writes UUID to `/etc/openastroara/storage.conf` (permanent pin)
    - Creates directory structure on the USB drive
-   - Initializes the SQLite DB
+   - Initializes the SQLite DB per §28.6
    - If USB already has existing ARA data (re-using a drive from another Pi): asks WILMA `"Found existing ARA data on this drive (12 profiles, 47 sessions). Use this data?"` → either continue with existing data or initialize fresh
    - Transitions to **`ready`** mode
 
-The configured UUID is pinned. If the user replaces the USB drive, they go back through the configuration flow.
+The configured UUID is pinned. If the user replaces the USB drive, they go back through the configuration flow. The user experience is **plug drive in → pick in WILMA → done** — no SSH, no manual fstab editing, no terminal.
+
+### 29.1.3 ext4 reformat flow (in-app)
+
+When the user picks a non-ext4 drive in §29.1.1, WILMA presents a destructive-action confirmation:
+
+```
+┌────────────────────────────────────────────────────────────┐
+│  ⚠ Drive must be reformatted as ext4                        │
+│  ──────────────────────────────────────────────────────────  │
+│  Drive:     "WD My Passport"  (931 GB)                       │
+│  Current FS: exFAT                                            │
+│                                                               │
+│  ARA requires ext4 for the durability guarantees its capture │
+│  pipeline depends on (§28). To use this drive with ARA, it    │
+│  must be reformatted. **This will permanently erase           │
+│  everything on the drive.**                                   │
+│                                                               │
+│  To confirm, type the drive's label below:                    │
+│  ┌───────────────────────────────┐                            │
+│  │                                │                            │
+│  └───────────────────────────────┘                            │
+│  (case-sensitive)                                             │
+│                                                               │
+│  [Reformat as ext4 + use this drive]    [Pick another drive] │
+└────────────────────────────────────────────────────────────┘
+```
+
+The [Reformat] button is disabled until the typed label matches exactly. On click, WILMA calls `POST /api/v1/server/storage/reformat { "uuid": "...", "label_confirmation": "..." }`. Server validates the label echo, then invokes the helper with `--format`:
+
+- Helper double-checks the label against `blkid` output (defense in depth — the server already validated, but the helper validates independently)
+- Helper unmounts the drive if mounted, runs `mkfs.ext4 -L <label>` (preserves the original label), then proceeds with the §29.1.4 mount + chown flow
+- On success: returns `OK`; server transitions to **`ready`** and continues with §29.1.1 step 6
+
+If the label confirmation fails server-side OR helper-side: server returns 422 with `{ "code": "label_mismatch" }`; WILMA re-prompts. Reformat never proceeds without two layers of label validation.
+
+**Why label-echo confirmation:** stronger than a [Yes I'm sure] checkbox. Forces the user to look at the drive (or `lsblk` output) and copy the label deliberately. Prevents the "I clicked the wrong drive in the picker" disaster.
+
+### 29.1.4 configure-storage.sh helper (sudoers-invoked)
+
+Lives at `/opt/openastroara/scripts/configure-storage.sh`, installed by the .deb postinst (§34.3). Sudoers drop-in grants the `openastroara` user passwordless invocation.
+
+**Interface:**
+
+```
+sudo /opt/openastroara/scripts/configure-storage.sh <uuid>
+sudo /opt/openastroara/scripts/configure-storage.sh --format <uuid> <expected-label>
+```
+
+**Behavior (no `--format`):**
+
+1. Validate `<uuid>` exists in `blkid` output. If not → echo `ERROR: uuid_not_found` + exit 2.
+2. Look up the device's filesystem type via `blkid`. If not `ext4` → echo `ERROR: not_ext4 <fs-type>` + exit 3.
+3. Ensure `/media/openastroara` exists (`mkdir -p`).
+4. Check `/etc/fstab` for an existing line with this UUID. If absent, append:
+   ```
+   UUID=<uuid>  /media/openastroara  ext4  defaults,data=ordered,noatime,errors=remount-ro,nofail,x-systemd.device-timeout=10  0  2
+   ```
+5. `systemctl daemon-reload`.
+6. `mount /media/openastroara` (idempotent — no-op if already mounted at the right UUID).
+7. `chown -R openastroara:openastroara /media/openastroara`.
+8. Echo `OK /media/openastroara` + exit 0.
+
+**Behavior (`--format`):**
+
+1. Validate `<uuid>` exists in `blkid` output. If not → exit 2.
+2. Look up the device's current label via `blkid`. If `<expected-label>` doesn't match exactly → echo `ERROR: label_mismatch <actual-label>` + exit 4.
+3. If the device is currently mounted, attempt `umount` (fail if busy → echo `ERROR: device_busy` + exit 5).
+4. Run `mkfs.ext4 -F -L <expected-label> <device-path>` (preserves the label so subsequent ops see the same human-readable name).
+5. Continue from step 3 of the no-`--format` path (create mount point, append fstab line if missing — note that mkfs.ext4 changes the UUID, so the fstab line should use the new UUID returned by `blkid` post-format, not the one passed in).
+6. Echo `OK /media/openastroara <new-uuid>` + exit 0.
+
+**Sudoers drop-in** (`/etc/sudoers.d/openastroara`, added by postinst per §34.3):
+
+```
+openastroara ALL=(root) NOPASSWD: /opt/openastroara/update.sh
+openastroara ALL=(root) NOPASSWD: /opt/openastroara/scripts/configure-storage.sh
+```
+
+Scope is narrow: only these two scripts, only as root, only nopasswd. The `openastroara` user has no shell (system user per §34.3), isn't reachable interactively, and the scripts validate their own inputs. No direct `/usr/bin/mount` or `/sbin/mkfs.ext4` permissions are granted — all storage operations route through the helpers so their validation logic can't be bypassed.
+
+**Helper script exit codes:**
+
+| Code | Meaning |
+|---|---|
+| 0 | Success |
+| 2 | UUID not found in `blkid` |
+| 3 | Filesystem is not ext4 |
+| 4 | Label mismatch on `--format` |
+| 5 | Device busy (unmount failed) |
+| 6 | mkfs.ext4 failed |
+| 7 | mount failed |
+| 8 | chown failed |
+| 9 | fstab write failed (immutable / read-only `/etc`?) |
+
+Each code maps to a structured `code` field in the server's 422 response so WILMA can surface a specific user-facing message.
 
 ### 29.1.2 USB unplug detection
 
@@ -1587,6 +2026,10 @@ Or if low / on SD card:
 
 ### 29.7 DEPLOY.md content (USB drive setup)
 
+**The default path is automatic.** Plug a USB drive in, then in WILMA: Settings → Storage → Configure → pick the drive. If the drive isn't ext4, WILMA offers in-app reformat (§29.1.3 with label-echo confirmation). If the drive is already ext4, the §29.1.4 helper mounts + chowns it and ARA starts using it. No terminal needed.
+
+The manual fallback below is for advanced users with custom partitioning needs, immutable-distro setups where `/etc/fstab` isn't writable, or troubleshooting:
+
 ```bash
 # 1. Plug in your USB drive (USB 3.0 SSD recommended; quality USB 3.0 stick acceptable).
 #    DO NOT use a cheap promotional USB stick — they fail.
@@ -1595,13 +2038,14 @@ Or if low / on SD card:
 lsblk -f
 # Look for your drive (e.g., /dev/sda1) and note its UUID.
 
-# 3. (Optional, recommended) Format the drive as ext4 for best Linux performance
-#    and reliability. This WIPES the drive — back up first.
+# 3. Format the drive as ext4 — REQUIRED. ARA refuses to start on non-ext4
+#    filesystems per §28.9 (NTFS / exFAT / FAT32 lack the durability semantics
+#    ARA's atomic-write pipeline depends on). This WIPES the drive — back up first.
 sudo mkfs.ext4 -L openastroara /dev/sda1
 
-# 4. Create the mount point + persistent mount:
+# 4. Create the mount point + persistent mount with durability options per §28.9:
 sudo mkdir -p /media/openastroara
-echo 'UUID=<your-uuid> /media/openastroara ext4 defaults,nofail,x-systemd.device-timeout=10 0 0' \
+echo 'UUID=<your-uuid> /media/openastroara ext4 defaults,data=ordered,noatime,errors=remount-ro,nofail,x-systemd.device-timeout=10 0 2' \
   | sudo tee -a /etc/fstab
 sudo systemctl daemon-reload
 sudo mount -a
@@ -1609,14 +2053,18 @@ sudo mount -a
 # 5. Set ownership so the openastroara user can write:
 sudo chown -R openastroara:openastroara /media/openastroara
 
-# 6. Tell ARA to use this drive (via WILMA's first-run storage config —
-#    or manually edit /etc/openastroara/storage.conf):
-sudo nano /etc/openastroara/server.env
-# Add: STORAGE_PATH=/media/openastroara/captures
-sudo mkdir -p /media/openastroara/captures
-sudo chown openastroara:openastroara /media/openastroara/captures
-sudo systemctl restart openastroara-server
+# 6. Tell ARA to use this drive — open WILMA, Settings → Storage → Configure,
+#    pick the drive. ARA detects it's already mounted + ext4 + writable and
+#    skips the helper's mount/chown steps.
 ```
+
+### 29.8 §61 search registry entries
+
+- `storage.configure` — keywords: `usb drive, storage setup, mount, configure drive, ara data location, pick drive, where data goes`
+- `storage.reformat` — keywords: `reformat drive, format usb, ext4, wipe drive, erase storage, convert exfat`
+- `storage.switch_drive` — keywords: `change drive, swap drive, new usb, migrate data, switch storage`
+- `storage.eject` — keywords: `eject, unmount, safely remove, disconnect drive, take drive out`
+- `storage.troubleshoot` — keywords: `drive disappeared, mount failed, permission denied, can't write to drive, storage error, not ext4`
 
 ---
 
@@ -1627,9 +2075,8 @@ sudo systemctl restart openastroara-server
 1. **Splash screen** (1-2 seconds) — ARA logo placeholder. mDNS server discovery runs in background simultaneously.
 2. **Server connect** — only shown when:
    - mDNS finds 0 servers (manual IP/port entry), OR
-   - mDNS finds 2+ servers (user picks), OR
-   - no saved token for the chosen server
-   - If exactly 1 server is found AND a token is saved, skip this screen
+   - mDNS finds 2+ servers (user picks)
+   - If exactly 1 server is found, skip this screen and connect automatically (no auth per §67)
 3. **Profile box** — always shown, layout below
 4. **Main app** — the NINA-style shell from §25
 
@@ -1657,19 +2104,13 @@ sudo systemctl restart openastroara-server
 
 ### 30.3 Subsequent launches
 
-Splash → (auto-connect using saved server + token) → Profile box pre-selects last-used profile → click [Image] → main app. **Three taps from cold-launch to imaging.**
+Splash → (auto-connect to saved server, no auth per §67) → Profile box pre-selects last-used profile → click [Image] → main app. **Three taps from cold-launch to imaging.**
 
-### 30.4 Add a Profile (minimal walkthrough)
+### 30.4 Add a Profile
 
-Modal with three fields:
+[+ Add a Profile] launches the **mandatory profile setup wizard** (§37). The wizard is the only profile-creation path in ARA — there is no quick "minimal modal" alternative. The wizard supports [Skip — use defaults] on every screen and [Save & Exit Wizard] at any point, so users in a hurry can land in the main app within a few clicks while still going through the wizard's structure. On final save → `POST /api/v1/profiles` → returns new profile, becomes selected in the dropdown.
 
-- **Profile name** (required)
-- **Site latitude / longitude** (optional — also accepts "Use my device's location" if Flutter location permission granted; useful for alt/az calculations and dawn/dusk timing)
-- **Copy equipment settings from**: dropdown of existing profiles (optional; defaults to "None — start blank")
-
-[Save] → server endpoint `POST /api/v1/profiles` → returns new profile, becomes selected in dropdown, modal closes.
-
-**Equipment setup is intentionally NOT in the wizard.** Users add cameras / mounts / focusers / etc. via the Equipment tab once they're in the main app. Keeps the wizard from being overwhelming on first launch and gets users to "I'm in the app" quickly.
+**Rationale:** every user-facing setting needs to flow through one canonical setup path so that recommended downloads (§36.12), equipment signatures (§30.7.1), safety policies (§35), and site location all get captured consistently. A bypass modal would make ARA's §0.5 pillar 3 ("discoverable + safe by default") impossible to enforce.
 
 ### 30.5 Import a Profile
 
@@ -1681,11 +2122,13 @@ Modal with a file picker:
 - Imported profile becomes selected
 - If the import is a NINA profile that references equipment ARA can't replicate (e.g., a vendor-specific COM driver), profile imports successfully but those equipment slots are blanked with a one-time notification: *"Imported — your camera setting referenced ASCOM.QHYCCD.Camera which ARA doesn't support; please reselect via Alpaca."*
 
-### 30.6 Token management
+### 30.6 Server connection management
 
-- Token saved per-server in `flutter_secure_storage`
-- Settings → Server panel: shows current server + connection state, "Forget this server" / "Re-enter token" buttons
-- Forget = wipes saved token; next launch shows the connect screen for that server again
+- Saved servers list (hostname + last-seen IP/port + version) in WILMA's local state
+- No auth tokens to manage per §67
+- Settings → Server panel: shows current server + connection state, "Forget this server" button
+- Forget = removes the saved server entry; next launch shows the discovery flow for that server again (Pi-side state is unaffected)
+- v0.1.0 introduces remote-access mode (§67.4) — that's when tokens come back, scoped to remote endpoints only
 
 ### 30.7 Equipment-change check on profile load
 
@@ -1770,6 +2213,8 @@ If anything was invalidated, the main app shell shows a non-blocking banner acro
 
 Auto-dismisses when the relevant calibration completes naturally. User can also force calibrations now from each subsystem's Settings panel.
 
+The same banner shell also hosts the **sky-data-missing banner** described in §36.13 (recommended Data Manager downloads not yet completed for this profile's rig). Multiple banner variants can stack; each shows independently with its own [Dismiss] and CTA.
+
 ### 30.7.4 Profile schema additions
 
 ```json
@@ -1829,7 +2274,7 @@ The actual nudge happens via PHD2 — ARA sends PHD2 a `dither` JSON-RPC command
 | Exposure length | Default cadence |
 |---|---|
 | ≥ 60 s (typical DSO) | Every frame |
-| < 60 s (lunar / planetary / lucky imaging) | Dither disabled |
+| < 60 s (e.g., bright-target short subs, comet bursts) | Dither disabled |
 | Calibration frames (flats/darks/bias) | Never |
 
 Auto-determined from the sequence's exposure length per instruction. User override available per-instruction in the sequencer + per-profile as a default.
@@ -1919,7 +2364,7 @@ NINA dithers regardless of conditions; this is sky-time savings per §0.5 pillar
 Sequence instructions can override the profile defaults:
 
 - DSO target (default): inherit profile (`every_frame`, auto-magnitude, RA+Dec)
-- Lunar / planetary / lucky-imaging targets (sequence template tagged appropriately): `enabled: false`
+- Short-exposure DSO bursts or comet cadence templates that opt out: `enabled: false`
 - Calibration frames (always): `enabled: false`
 
 A user with a DSO sequence followed by a quick lunar capture doesn't have to manually toggle dither off — the lunar instruction's template handles it.
@@ -2374,6 +2819,29 @@ Response: {
 - All astronomy computations use **UTC internally**; client displays in user's local TZ.
 - Time-sync state is cached per-session; doesn't re-prompt unless the Pi reboots or > 12 hours pass.
 
+### 31.5 DST + timezone policy (explicit)
+
+The Pi side is timezone-free; the client side handles DST automatically. Detailed policy:
+
+| Surface | Timezone behavior |
+|---|---|
+| Server internal timestamps + SQLite writes + log timestamps | **UTC** always |
+| FITS header `DATE-OBS` | UTC (ISO 8601 with `Z` suffix per FITS standard) |
+| Filename template `$$DATE$$` / `$$DATETIME$$` | **UTC** (so file ordering is monotonic across DST transitions; users analyzing data across nights see consistent UTC timestamps) |
+| Filename template `$$DATEMINUS12$$` | UTC minus 12h, then date — already TZ-correct for night-observation use (groups frames captured on either side of midnight UTC into the same observing-night folder for any longitude) |
+| Astronomical twilight calculation | UTC + site lat/lng; **timezone-independent by construction** — dawn / dusk / astronomical-twilight times are computed from solar geometry, not from clock TZ |
+| USB GPS time-sync | UTC (`$GPRMC` / `$GPGGA` sentences carry UTC by spec) |
+| Manual time entry on WILMA | Client UI accepts local time, converts to UTC before sending |
+| Client display (timestamps, schedules, "next exposure in") | **Local TZ** via Flutter `intl` package — handles DST transitions automatically |
+| Pi system clock during DST transition | Not affected (Pi runs in UTC; OS-level DST is irrelevant) |
+
+**Edge cases:**
+- DST "spring forward" or "fall back" during an active sequence: server unaffected (UTC); client briefly displays the same local-time hour twice (fall back) or skips an hour (spring forward) — purely cosmetic, no sequence impact.
+- User travels mid-session (laptop crosses TZ): WILMA picks up the new local TZ on relaunch; running session continues unaffected since all server math is UTC.
+- Pi without RTC + no NTP + no GPS: per §31's existing waterfall, server enters `no_time_sync` mode and refuses time-dependent operations (twilight-based sequences, etc.) until a time source arrives.
+
+No additional configuration is exposed to the user — DST + TZ are handled automatically.
+
 ---
 
 ## 32. Network resilience (WILMA ↔ Pi)
@@ -2466,11 +2934,12 @@ Compare:
 [Update Ara Core] clicked
      ↓
 WILMA streams bundled tarball to POST /api/v1/server/update
-   Headers: X-OpenAstroAra-Token, X-Update-Version, X-Update-Sha256
+   Headers: X-Update-Version, X-Update-Sha256
    Body: gzipped tarball, Content-Type: application/octet-stream
+   (no auth per §67 — trusted LAN; SHA-256 verification is the integrity gate)
      ↓
 Server:
-  1. Validate token, version, sha256
+  1. Validate version + sha256
   2. Save tarball to /opt/openastroara/staging/
   3. Verify checksum
   4. Extract to /opt/openastroara/staging/extracted/
@@ -2495,9 +2964,10 @@ Modal closes.                           mv previous → current; restart
 
 ### 33.4 Trust & integrity (v0.0.1)
 
-- Token auth on the endpoint (existing)
-- SHA-256 checksum match before swap
-- **v0.1.0 addition**: Ed25519 signature verification with Open Astro's pinned public key (so the user can't push a tampered binary to their own Pi by accident or malice)
+- No auth on the endpoint per §67 (trusted-LAN posture); same as every other ARA endpoint
+- **SHA-256 checksum match before swap** — the integrity gate. An attacker would need to upload a binary whose SHA-256 matches the one they declared, which requires already possessing a legitimate signed binary; mere LAN access isn't enough
+- WILMA's UX requires the user to click [Update Ara Core] — opportunistic API access can't trigger an update silently
+- **v0.1.0 addition**: Ed25519 signature verification with Open Astro's pinned public key (so the user can't push a tampered binary to their own Pi by accident or malice; provides strong integrity even on hostile networks once remote-access mode ships)
 
 ### 33.5 Coexistence with APT updates (per §34)
 
@@ -2543,10 +3013,16 @@ sudo apt install openastroara-server
 - Creates `openastroara` user + group (system user, no shell)
 - Drops `/etc/systemd/system/openastroara-server.service`
 - Sets `CAP_SYS_TIME` on the binary: `setcap cap_sys_time+ep /opt/openastroara/OpenAstroAra.Server`
-- Installs sudoers drop-in: `openastroara ALL=(root) NOPASSWD: /opt/openastroara/update.sh` (for §33 WILMA push)
+- Installs `/opt/openastroara/scripts/configure-storage.sh` (mode 0750, owned by root:openastroara) — per §29.1.4
+- Installs sudoers drop-in `/etc/sudoers.d/openastroara` (mode 0440, validated with `visudo -cf`):
+  ```
+  openastroara ALL=(root) NOPASSWD: /opt/openastroara/update.sh
+  openastroara ALL=(root) NOPASSWD: /opt/openastroara/scripts/configure-storage.sh
+  ```
 - Creates data + log + config dirs at proper permissions
-- Generates initial token, writes to `/etc/openastroara/token` (mode 0640, owned by root:openastroara), prints it once to `journalctl -u openastroara-server`
 - Enables + starts the service: `systemctl enable --now openastroara-server.service`
+
+(No token generation per §67 — v0.0.1 has no auth. v0.1.0 remote-access mode adds a token-generation step at enable time.)
 
 ARA Core's .deb does **only** these things. It does **not** touch:
 - Wi-Fi or hostapd (per §32.6 — wiki handles this)
@@ -2590,10 +3066,11 @@ GitHub Actions builds the .deb and publishes to the apt repo via `reprepro` (or 
 DEPLOY.md content:
 1. Link to OpenAstro wiki for OS install + Wi-Fi/networking
 2. The 4 commands from §34.1
-3. Where to find the initial token (`journalctl -u openastroara-server`)
-4. How to connect WILMA (already covered in §30)
-5. USB drive setup for FITS storage (existing §29.7)
-6. USB GPS plug-in (auto-detected per §31, no config needed)
+3. How to connect WILMA (already covered in §30) — no token needed per §67
+4. USB drive setup for FITS storage (default: automatic via WILMA per §29.7; manual fallback documented for advanced users)
+5. USB GPS plug-in (auto-detected per §31, no config needed)
+6. Security posture summary (one paragraph linking to §67): trusted-LAN, no auth, matches Alpaca + ASIAir
+7. Recommended hardware sidebar (optional UPS per §28.10, USB SSD per §29)
 
 That's it. No tarball install, no manual systemd setup, no manual user creation — all handled by the .deb.
 
@@ -2687,38 +3164,61 @@ Server reads this at session start and behaves accordingly.
 
 ---
 
-## 36. Sky imagery + survey management (WILMA)
+## 36. Sky imagery + Data Manager (WILMA)
 
-WILMA owns the sky atlas (per §2 responsibility split). This section specifies the bundled assets, the Survey Manager UI, the Tonight's Sky planetarium, and the universal search.
+WILMA owns the sky atlas (per §2 responsibility split). ARA ships a **slim ~50 MB installer** and uses an in-app **Data Manager** for everything else, modeled on SkySafari's catalog-download pattern. The full feature surface ships in v0.0.1 — Tonight's Sky planetarium, all 21 surveys, full DE440 ephemerides, comet motion trails, star-catalog supplements — but as opt-in downloads rather than bundled assets. Users complete the mandatory wizard (§37) on first run; the wizard suggests downloads keyed to the user's focal length before any imaging begins. Aladin Lite is the differentiator vs NINA — by giving users the full atlas with on-demand depth, ARA delivers a sky-data experience NINA cannot match.
 
-### 36.1 Bundled assets (ship with the app)
+### 36.1 Installer base + Data Manager pattern
+
+**Installer base (~50 MB, shipped with WILMA):**
 
 | Bundle | Approximate size | Purpose |
 |---|---|---|
-| HYG star database (~120k Hipparcos stars) | ~10 MB | Naked-eye and binocular-class stars |
-| Tycho-2 brightest subset (~2.5M stars, packed binary) | ~30-50 MB | Smooth rendering at all zooms |
-| GAIA DR3 brightest subset (~10M stars, packed binary) | ~80-100 MB | High-density backdrops |
-| NGC + IC + Caldwell + Sharpless + Abell + UGC supplementary catalogs | ~30 MB | All DSO targeting |
-| MPC comet snapshot (`CometEls.txt`) | ~5 MB | Bundled at app build time |
-| Constellation art (Urania's Mirror or modern art) | ~10 MB | Beautiful overlay at low zoom |
-| Nebula contour vectors | ~20 MB | Crisp outlines for HII / planetary nebulae |
-| Pre-baked DSO target thumbnails (~500 famous targets) | ~150 MB | Aladin-quality previews offline |
-| Bundled HiPS tiles: DSS2 color + Mellinger at HEALPix orders 4-6 | ~500 MB | Offline navigation imagery out of the box |
-| Solar system: DE440 analytical model (truncated) OR full DE440 | ~50 KB or ~50 MB | Sun/Moon/planets ephemerides for Tonight's Sky |
-| Common name resolver index (~50-100k entries) | ~5-10 MB | Universal search offline |
+| Aladin Lite WebView + JS bundle | ~5 MB | Sky atlas renderer |
+| HYG star database (~120k Hipparcos stars) | ~10 MB | Naked-eye + binocular-class stars; minimum needed for Aladin to overlay something useful |
+| DSO catalogs: NGC + IC + Caldwell + Messier + Sharpless + Abell + UGC | ~30 MB | All DSO targeting; searchable + clickable in Aladin |
+| Common name resolver index (~50-100k entries) | ~5-10 MB | Offline universal search |
+| MPC comet snapshot (`CometEls.txt`) | ~5 MB | Bundled at app build time; user-refreshable later |
+| Constellation art (Urania's Mirror or modern art) | ~5 MB | Beautiful overlay at low zoom |
 | Bundled audio (safety alarms per §35) | ~200 KB | — |
-| **Total bundled app** | **~900 MB-1 GB** | — |
+| **Total installer base** | **~50-60 MB** | App opens, Aladin runs, search works, all DSO catalogs browsable; sky imagery is blank-with-grid until downloads complete |
 
-Users see a one-time "large download" warning on cellular install and can proceed (App Store + Play Store both allow this). Desktop installer ships the full bundle directly.
+**Data Manager downloads (opt-in, sized per content):**
 
-### 36.2 Survey Manager UI
+| Content | Size range | Tab |
+|---|---|---|
+| 21 HiPS surveys (per-survey HEALPix depth controls) | 4 GB – 290 GB each | Sky Imagery |
+| Tycho-2 brightest subset (~2.5M stars, packed binary) | ~30-50 MB | Star Catalogs |
+| GAIA DR3 brightest subset (~10M stars, packed binary) | ~80-100 MB | Star Catalogs |
+| UCAC4 / HD / HIP / Bayer + Flamsteed extensions | ~5-25 MB each | Star Catalogs |
+| Pre-baked DSO target thumbnails (~500 famous targets) | ~150 MB pack or per-target | Target Thumbnails |
+| Full DE440 ephemerides (sub-milliarcsec planet positions) | ~50 MB | Solar System |
+| Nebula contour vectors | ~20 MB | Sky Imagery (extras) |
 
-Settings → Sky Imagery → Survey Manager:
+**Why slim+downloader instead of fat install:** Bundling everything (~1 GB) inflates the installer and forces every user to carry data they may not need (e.g., X-ray surveys for visual-only users, deep narrowband surveys for someone shooting only broadband). The Data Manager pattern matches user expectations from SkySafari, Stellarium Mobile, and modern atlases. ARA's differentiator from NINA is **letting the user customize what their atlas knows** — not pre-deciding for them. There is no truncated/lite variant of any asset; the Data Manager always offers the full version.
+
+**Empty-download fallback:** If the user skips all downloads in the wizard, Aladin shows a blank-with-grid view + bundled DSO catalogs + working search. Framing assistant is degraded (no imagery for FOV preview) but plate-solving still works for capture. Tonight's Sky shows horizon + currently-tracked-target + sun/moon (approximate, from a minimal analytical formula); planet positions are hidden until Full DE440 is downloaded. Pure-offline first-night use is supported; quality improves as the user downloads more.
+
+### 36.2 Data Manager UI (unified, tabbed)
+
+Settings → Sky Atlas Data → Data Manager. Four tabs, each fronting an on-demand downloader. Also reachable from the wizard's Sky Imagery screen (§37.6) and from the §30.7-pattern sky-data-missing banner (§36.13).
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Data Manager                       412 GB used / 1.2 TB     │
+│                                                              │
+│  [ Sky Imagery ▼ ] [ Star Catalogs ] [ Thumbnails ] [ Solar Sys ] │
+│                                                              │
+│  ...contents of selected tab...                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### 36.2.1 Tab — Sky Imagery
+
+All 21 HiPS surveys, grouped by wavelength:
 
 ```
 ┌────────────────────────────────────────────────────────────┐
-│  Sky Imagery                       412 GB used / 1.2 TB    │
-│                                                             │
 │  Optical (broadband)                                        │
 │  ☑ DSS2 (color)             order 8, 47 GB        [Update] │
 │  ☐ DSS2 blue                not downloaded, ~30 GB [Download]│
@@ -2752,19 +3252,57 @@ Settings → Sky Imagery → Survey Manager:
 │  Gamma-ray                                                  │
 │  ☐ Fermi                    not downloaded, ~3 GB  [Download]│
 │                                                             │
-│  [Download All]  [Pick a Preset ▼]  [Clear All]             │
+│  Extras                                                     │
+│  ☐ Nebula contour vectors   not downloaded, ~20 MB [Download]│
+│                                                             │
+│  [Download Preset ▼]  [Clear All]                          │
 └────────────────────────────────────────────────────────────┘
 ```
 
-### 36.3 Per-survey controls
+#### 36.2.2 Tab — Star Catalogs
 
-- Choose HEALPix resolution depth (e.g., order 4 = ~6 GB DSS2 color; order 8 = ~47 GB)
+SkySafari-style on-demand catalog downloader. Bundled HYG covers the baseline (~120k Hipparcos stars); supplementary catalogs add density and naming depth:
+
+| Catalog | Approximate size | Purpose |
+|---|---|---|
+| Tycho-2 brightest subset (~2.5M stars, packed binary) | ~30-50 MB | Smooth rendering at all zooms |
+| GAIA DR3 brightest subset (~10M stars, packed binary) | ~80-100 MB | High-density backdrops, dim-star detail |
+| UCAC4 brightest | ~15-25 MB | Astrometric reference, common for finder workflows |
+| HD designation index | ~5 MB | Henry Draper number lookups + display |
+| HIP designation index | ~3 MB | Hipparcos catalog cross-reference |
+| Bayer + Flamsteed extensions | ~2 MB | Greek-letter + Flamsteed-number labels in constellations |
+
+Each catalog: integrity verified post-download via SHA-256 against the build manifest, ingestion progress visible, [Remove] to free space.
+
+#### 36.2.3 Tab — Target Thumbnails
+
+Pre-baked Aladin-quality previews for famous DSO targets (helpful for offline framing-preview UX):
+
+- **Famous Targets Pack** — ~500 popular DSOs (Messier + Caldwell + select NGC), one click ~150 MB. Default-recommended in the wizard for any rig.
+- **Per-target download** — search for a target, [Download Preview] for that one object. Useful for niche / obscure targets the famous pack doesn't include.
+
+When a thumbnail exists locally, framing assistant uses it. When absent, framing assistant falls back to Aladin's live HiPS render (requires Sky Imagery downloads or online CDS access).
+
+#### 36.2.4 Tab — Solar System
+
+| Asset | Size | Purpose |
+|---|---|---|
+| **Full DE440 ephemerides** | ~50 MB | Sub-milliarcsecond Sun/Moon/planet positions. Required for accurate Tonight's Sky planetarium planet rendering, comet motion-trail precision, occultation events. Without it, planetarium falls back to a minimal analytical formula for Sun/Moon only; planets are not shown. **Default-recommended in the wizard for any rig.** |
+| MPC asteroid catalog (bulk) | placeholder, v0.1.0 | Bulk asteroid layer (~1.4M numbered) — deferred to v0.1.0 per §36.8 |
+
+### 36.3 Per-asset controls
+
+Applies across all four tabs:
+
+- Surveys: choose HEALPix resolution depth (e.g., order 4 = ~6 GB DSS2 color; order 8 = ~47 GB)
 - Download / Pause / Resume / Cancel / Remove
-- Verify integrity (SHA-256 against CDS manifest)
+- Verify integrity — SHA-256 against CDS manifest for HiPS tiles; SHA-256 against ARA's build manifest for star catalogs, thumbnails, and DE440
 - Storage location (default app data dir; user can point at external drive on desktop)
+- Download history + size accounting per tab + global "size used" header
 
 ### 36.4 Presets
 
+- **"Famous Targets + Star Catalogs"** — Famous Targets Pack + Tycho-2 + GAIA brightest + UCAC4 + Full DE440 (~350 MB). **Default-recommended in the wizard for every rig** — small, fast, useful regardless of focal length.
 - **"Optical only"** — DSS2 color + Mellinger + Finkbeiner Hα (~60 GB)
 - **"All-wavelength essentials"** — one survey per band (~150 GB)
 - **"Everything full resolution"** — ~2 TB. Confirmation gate. For real users with real storage.
@@ -2772,15 +3310,19 @@ Settings → Sky Imagery → Survey Manager:
 ### 36.5 Politeness considerations (CDS bandwidth)
 
 - Parallel tile fetcher with per-CDS-host rate limiting (default 8 parallel connections, user-configurable)
-- README + Settings explainer notes: CDS infrastructure is shared by astronomers worldwide. Download "Everything full res" only when you actually need it, preferably overnight.
+- README + Data Manager explainer notes: CDS infrastructure is shared by astronomers worldwide. Download "Everything full res" only when you actually need it, preferably overnight.
 - Implement HTTP `If-Modified-Since` so updates only fetch changed tiles
+- Star catalogs, thumbnails, and DE440 are served from ARA's own release-asset hosting (GitHub Releases or similar; v0.0.1 picks a host, v0.1.0 may move to a CDN). Same politeness — parallel cap + `If-Modified-Since` — applies. These are static per-release assets, not live CDS pulls.
 
-### 36.6 Survey-serving to Aladin Lite
+### 36.6 Local asset serving to Aladin Lite
 
-Once a survey is downloaded:
-- Tiles stored at `<wilma data>/hips/<survey-id>/Norder<n>/Dir<m>/Npix<k>.jpg` (standard HiPS layout)
-- WILMA runs an embedded local HTTP server (Dart `shelf` package) on a random localhost port, serving from the hips dir
-- Aladin Lite's `hipsUrl` config points at that local server when WILMA is offline OR when the user prefers local
+Once an asset is downloaded:
+- HiPS tiles stored at `<wilma data>/hips/<survey-id>/Norder<n>/Dir<m>/Npix<k>.jpg` (standard HiPS layout)
+- Star catalogs stored at `<wilma data>/catalogs/<catalog-id>/...`
+- Thumbnails stored at `<wilma data>/thumbnails/<target-id>.jpg`
+- DE440 stored at `<wilma data>/ephemerides/de440.bsp`
+- WILMA runs an embedded local HTTP server (Dart `shelf` package) on a random localhost port, serving from the data dirs via path prefixes (`/hips/...`, `/catalogs/...`, `/thumbnails/...`, `/ephemerides/...`)
+- Aladin Lite's `hipsUrl` config points at the local server when WILMA is offline OR when the user prefers local
 - Online + survey not downloaded → falls back to CDS
 
 ### 36.7 Tonight's Sky (planetarium mode)
@@ -2797,8 +3339,8 @@ The Sky Atlas tab has a sub-mode toggle: **[Catalog View]** ↔ **[Tonight's Sky
   - **Horizon polyline** as a catalog
   - **Cardinal direction markers** (N/E/S/W) at the horizon edge
   - **Below-horizon shading** (darken half-sky via custom overlay)
-  - **Solar system bodies** — Sun, Moon (with phase glyph), 8 planets, computed from DE440, fed as a custom Aladin catalog updated every 60s
-  - **Comets** — visible comets from bundled MPC snapshot, with motion trails for next N days
+  - **Solar system bodies** — Sun, Moon (with phase glyph), 8 planets, computed from Full DE440, fed as a custom Aladin catalog updated every 60s. If Full DE440 is not downloaded (Data Manager → Solar System per §36.2.4), planets are omitted; Sun/Moon fall back to a minimal analytical formula with reduced accuracy. The §36.13 banner surfaces this state until the user downloads.
+  - **Comets** — visible comets from bundled MPC snapshot, with motion trails for next N days (trail precision improves with Full DE440 downloaded)
   - **Currently-tracked target** — highlighted if user has one picked
 - Time slider — scrub forward/backward. Each frame recomputes. "Now" button snaps to current real time. Auto-advance every 60s by default.
 - Object filtering — catalog browser shows only objects above the horizon (or user-configurable altitude limit) at the current time. "Best transit tonight" sort option.
@@ -2818,16 +3360,59 @@ Search bar at the top of the Sky Atlas tab:
 - Bundled `CometEls.txt` snapshot at app build time (~5 MB, ~5,000 comets)
 - WILMA computes positions from Keplerian elements (a, e, i, Ω, ω, M, T) in Dart — ~500 lines, well-documented math
 - Fed to Aladin as a catalog with custom marker (comet glyph + name + magnitude)
-- **"Refresh comet data"** button (Settings → Sky Imagery) pulls latest `CometEls.txt` from MPC (requires WILMA internet, ~5 MB download, seconds)
+- **"Refresh comet data"** button (Data Manager → Sky Imagery → Extras) pulls latest `CometEls.txt` from MPC (requires WILMA internet, ~5 MB download, seconds)
 - **Motion trail** option — shows comet's path over next 7/30/90 days as polyline overlay
 
-### 36.10 Recommended catalog depth based on telescope (wizard hint per user's spec)
+### 36.10 Recommended downloads based on telescope (wizard hint)
 
-In the wizard's Telescope screen, after the user enters focal length:
-- Short focal length (< 500mm): recommend "Optical essentials" preset (~60 GB)
-- Medium (500-1500mm): recommend "Optical + Infrared essentials" (~110 GB)
-- Long (> 1500mm): recommend "All-wavelength essentials" (~150 GB) + deeper PanSTARRS or DECaPS if storage allows
-- Recommendation is a *suggestion*, not enforced. User can still pick anything.
+In the wizard's Telescope screen (Screen 4 per §37.3), after the user enters focal length, the wizard later assembles a recommendation set for the Sky data downloads screen (Screen 17 per §37.6).
+
+**Always recommended** (default-checked regardless of rig):
+- Famous Targets + Star Catalogs preset per §36.4 (~350 MB)
+
+**Recommended for the rig's focal length:**
+- **Short (< 500mm)**: "Optical essentials" — DSS2 color + Mellinger + Finkbeiner Hα (~60 GB)
+- **Medium (500-1500mm)**: "Optical + Infrared essentials" — adds 2MASS (~110 GB)
+- **Long (> 1500mm)**: "All-wavelength essentials" — one survey per band (~150 GB) + deeper PanSTARRS or DECaPS if storage allows
+
+Recommendations are *suggestions*, not enforced. User can accept, customize, or skip entirely. All downloads are opt-in; ARA initiates nothing without user [OK]. The Data Manager (§36.2) is always reachable from Settings for adjustments later.
+
+### 36.10.5 Linux desktop WebView fallback (Aladin)
+
+Flutter's desktop WebView story on Linux is patchy across packages (`webview_flutter`, `flutter_inappwebview`, `desktop_webview_window`). ARA uses `webview_flutter` (Google-official, best long-term support) for the embedded Sky Atlas WebView, but a fallback path exists for Linux desktops where the WebView fails to initialize.
+
+**Phase 11 verification step:** before declaring Phase 11 complete, the AI runs `flutter build linux --release` and exercises the Sky Atlas tab. If the WebView loads Aladin Lite + renders the bundled DSO catalog overlay, primary path is green. If it fails (missing system library, package incompatibility, etc.), the fallback path activates.
+
+**Fallback UX when WebView fails on Linux desktop:**
+
+```
+┌────────────────────────────────────────────────────────────┐
+│  Sky Atlas — WebView unavailable on your Linux desktop      │
+│  ──────────────────────────────────────────────────────────  │
+│  Your Linux desktop is missing a WebView component ARA       │
+│  needs to render Aladin Lite inline. You can still use the   │
+│  Sky Atlas in your browser — ARA serves it from this device.  │
+│                                                              │
+│  [ Open Sky Atlas in your browser ]                          │
+│  [ Show URL to open manually ] (for copy-paste)              │
+│                                                              │
+│  [ Help: install WebView dependencies ] (links to wiki)      │
+└────────────────────────────────────────────────────────────┘
+```
+
+**Technical details:**
+- The same Dart `shelf` HTTP server that serves downloaded HiPS tiles (§36.6) also serves a minimal HTML wrapper that loads the bundled Aladin Lite JS + WILMA's downloaded catalogs + tiles
+- URL: `http://localhost:<port>/aladin/` where `<port>` is the random localhost port WILMA allocated at startup
+- [Open Sky Atlas in your browser] uses Flutter's `url_launcher` package (cross-platform) — invokes the user's default browser
+- [Show URL to open manually] copies the URL to clipboard + displays it on screen (for users on minimal desktops without a default browser configured)
+- **Offline behavior is unchanged** — the localhost server works with no internet as long as the Aladin Lite JS bundle is bundled (which it is, per §36.1 installer base ~5 MB) and surveys are downloaded via §36.2 Data Manager. If no surveys are downloaded AND no internet, Aladin shows the same blank-with-grid + bundled DSO catalog overlays state the embedded WebView would have shown
+- Bundled Aladin Lite JS + CSS lives at `/opt/openastroara/aladin/` (or the equivalent on Mac/Windows)
+
+**Mobile + Mac + Windows + iOS + Android:** always use the embedded WebView (those platforms have robust WebView support).  The fallback path is Linux-desktop only.
+
+**Help-wiki entry:** the OpenAstro wiki documents the Linux WebView dependency install steps (typically `sudo apt install libwebkit2gtk-4.0-dev libgtk-3-dev` or equivalent per distro). If the user installs the missing deps + restarts WILMA, the embedded WebView typically works on the next launch.
+
+**v0.1.0 path:** the §55.2 v0.2.0 "Native Flutter sky-renderer" entry (replace Aladin WebView with pure-Flutter Skia rendering) eliminates this Linux-only issue entirely — but that's a substantial v0.2.0 design pass.
 
 ### 36.11 Aladin Lite license requirements
 
@@ -2836,11 +3421,82 @@ In the wizard's Telescope screen, after the user enters focal length:
 - **Required by Aladin license**: keep Aladin logo + link visible bottom-right of the view. Don't strip the attribution.
 - Credit in NOTICE.md: "Sky Atlas rendering powered by [Aladin Lite](https://aladin.cds.unistra.fr/) (CDS, Strasbourg) under GPL v3."
 
+### 36.12 Wizard integration
+
+The mandatory wizard (§37) gates initial downloads:
+
+- **Wizard is the only profile-creation path** — users cannot use ARA without completing it at least once. See §37 preamble + §30.4 for the no-bypass policy.
+- **Stage 6 (Sky data downloads, Screen 17 per §37.6)** is where downloads are offered. The screen shows:
+  - What's currently downloaded (initially: ~50 MB installer base, no downloads yet)
+  - Recommended set per §36.10 (default-checked, based on the focal length entered in Screen 4)
+  - "Famous Targets + Star Catalogs" preset (default-checked, always recommended)
+  - Full DE440 (default-checked, always recommended)
+  - Total size estimate that updates as user toggles checkboxes
+  - [Open Data Manager for full control] → opens §36.2 inline (returns to wizard on close)
+  - [Start downloads + continue] → kicks off background downloads, proceeds to Stage 7
+  - [Skip — set up later in Data Manager] → proceeds with no downloads; §36.13 silent banner appears in main app
+- **Downloads execute in the background** — wizard proceeds to Stage 7 (Review + Save) while downloads run. Progress shows in the main app shell after wizard completion.
+- **Offline-at-wizard case** — if WILMA has no internet at this step, the screen switches to "Internet unavailable — we'll download when you're online." Recommended set is recorded in the profile; downloads queue silently and execute when connectivity returns. The §36.13 banner surfaces if any download is still missing after first connectivity restoration.
+
+### 36.13 Profile-creation verification (silent banner)
+
+On profile load, the server compares the profile's recommended download set (computed per §36.10 from focal length) against the actual Data Manager state. If recommended assets are missing, a **silent banner** appears at the top of the main app shell:
+
+```
+ℹ For your 2000mm rig, we recommend downloading PanSTARRS DR1 and the
+  Famous Targets Pack for better framing-preview quality. [Open Data Manager] [Dismiss]
+```
+
+Same pattern as §30.7.3's equipment-change banner. Non-blocking. Dismissible. Reappears after a configurable cool-down (default 7 days) until the user either downloads or marks "don't suggest again for this profile."
+
+**Triggers:**
+- Profile created with skipped downloads → banner appears immediately on first main-app entry
+- Profile rig changes (per §30.7) → if new focal length recommends additional assets, banner re-evaluates
+- New surveys added in a future ARA release → banner alerts existing profiles if the new asset matches their rig
+
+**Storage schema additions** (added to the profile's `calibration_state` block per §30.7.4):
+
+```json
+{
+  "sky_data_state": {
+    "recommended_set_for_profile": ["dss2_color_o6", "mellinger_o5", "finkbeiner_ha_o6", "famous_targets_pack", "tycho2", "gaia_dr3_brightest", "de440_full"],
+    "downloaded_set": ["dss2_color_o4"],
+    "last_banner_dismissed_at": "...",
+    "dont_suggest_again": false
+  }
+}
+```
+
+**API + WebSocket:**
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/api/v1/data-manager/state` | Lists all downloaded assets by tab + sizes + integrity status |
+| `POST` | `/api/v1/data-manager/downloads` | Queue one or more downloads (body: `{ ids: [...] }`) |
+| `DELETE` | `/api/v1/data-manager/downloads/{id}` | Cancel an active download |
+| `DELETE` | `/api/v1/data-manager/assets/{id}` | Remove a downloaded asset |
+| `GET` | `/api/v1/profiles/{id}/sky-data-recommendations` | Returns recommended set for the profile's rig |
+| `POST` | `/api/v1/profiles/{id}/sky-data-banner/dismiss` | Marks banner dismissed; optional `dont_suggest_again` body flag |
+
+```json
+{ "type": "data_manager.download.progress", "payload": { "asset_id": "panstarrs_dr1_o6", "bytes_done": 12345678, "bytes_total": 280000000000, "eta_seconds": 3640 } }
+{ "type": "data_manager.download.complete", "payload": { "asset_id": "panstarrs_dr1_o6" } }
+{ "type": "data_manager.download.failed", "payload": { "asset_id": "panstarrs_dr1_o6", "error": "...", "retry_after_seconds": 60 } }
+```
+
+### 36.14 §61 search registry
+
+- `data_manager.open` — keywords: `download surveys, sky imagery, star catalogs, hips, dss2, panstarrs, gaia, tycho, ucac, thumbnails, de440, ephemerides, data manager, downloads`
+- `data_manager.recommendations` — keywords: `recommended downloads, what surveys do i need, focal length recommendations`
+- `data_manager.banner_dismiss` — keywords: `sky data banner, hide download suggestions, don't suggest again`
+
 ---
 
 ## 37. Profile setup wizard
 
-The wizard is **mandatory on first launch** (after server connect + profile creation entry from §30). It walks the user through every essential configuration with sensible defaults and per-screen [Skip — use defaults]. Each screen also has [< Back] and [Next >]. Progress bar at top: "Step X of N." User can [Save & Exit Wizard] at any point — profile saves with what's been configured, defaults for the rest.
+The wizard is **mandatory and the only profile-creation path**. Users cannot use ARA without at least one profile, and the wizard is the only mechanism for creating one — there is no quick "Add a Profile" modal. Every [+ Add a Profile] action (from §30) and every "Run Wizard Again" action launches the full wizard flow described below. The wizard walks the user through every essential configuration with sensible defaults and per-screen [Skip — use defaults]. Each screen also has [< Back] and [Next >]. Progress bar at top: "Step X of N." User can [Save & Exit Wizard] at any point — profile saves with what's been configured, defaults for the rest. The "save partial state and exit" path still counts as wizard completion for the purpose of the no-bypass policy; defaults fill anything the user skipped.
+
+This design enforces ARA's §0.5 pillar 3 (discoverable + safe by default): every user-facing setting flows through one canonical setup path, so recommended downloads (§36.12), equipment signatures (§30.7.1), safety policies (§35), and site location all get captured consistently for every profile.
 
 ### 37.1 Stage 1 — Profile basics
 
@@ -2891,6 +3547,7 @@ Server enumerates Alpaca devices, groups by type. User assigns each device-type 
 
 - Cooling target temperature (°C, default −10° or "ambient minus 30°")
 - Cooler ramp rate (°C/min, default 1°C/min)
+- **Cooler warmup at session end** (per §28.13): [off (default)] / [ramp at 1°C/min] / [immediate]
 - Default gain
 - Default offset
 - Default bin
@@ -2997,14 +3654,20 @@ Full editor is available later in Settings → Safety.
 - Astronomical twilight margins (default: start at end-of-evening-astro, stop at start-of-morning-astro)
 - Max sequence runtime (default: no limit)
 
-### 37.6 Stage 6 — Sky Imagery
+### 37.6 Stage 6 — Sky data downloads
 
-**Screen 17 — Survey downloads** (per §36)
+**Screen 17 — Sky data downloads** (per §36.12)
 
-- Shows bundled imagery state ("DSS2 color + Mellinger pre-loaded — ~500 MB")
-- Recommended additional surveys based on focal length (echo of Screen 4 recommendation)
-- Quick preset buttons + "Open Survey Manager for full control"
-- Skip to defer all survey downloads to Settings → Sky Imagery
+- Shows current Data Manager state (initially: ~50 MB installer base, nothing downloaded yet)
+- Recommended download set, **default-checked**:
+  - **Always recommended** (regardless of rig) — Famous Targets + Star Catalogs preset (~350 MB combined: Famous Targets Pack + Tycho-2 + GAIA brightest + UCAC4 + Full DE440)
+  - **Recommended for your rig** — surveys keyed to Screen 4's focal length per §36.10
+- Total size estimate updates live as user toggles checkboxes
+- [Open Data Manager for full control] → opens §36.2 inline (returns to wizard on close)
+- [Start downloads + continue] → kicks off background downloads, proceeds to Stage 7
+- [Skip — set up later in Data Manager] → proceeds with no downloads; §36.13 silent banner appears in main app
+
+If WILMA has no internet at this step, the screen shows "Internet unavailable — we'll download when you're online." The recommended set is recorded in the profile; downloads queue silently and execute when connectivity returns.
 
 ### 37.7 Stage 7 — Done
 
@@ -3051,8 +3714,7 @@ sequences/
 ├── templates/         starter templates shipped with the .deb
 │   ├── lrgb-dso.json
 │   ├── narrowband-shoo.json
-│   ├── lunar.json
-│   └── planetary.json
+│   └── comet.json
 └── active/            checkpoint state of currently-running sequence (per §28)
     └── current.json
 ```
@@ -3134,16 +3796,15 @@ Inherits NINA's syntax:
 
 ### 38.7 Bundled starter templates (v0.0.1)
 
-Ship 4 templates with the `openastroara-server` .deb at `/opt/openastroara/templates/`:
+Ship 3 templates with the `openastroara-server` .deb at `/opt/openastroara/templates/`. Templates cover the DSO + comet imaging workflows ARA supports (per §18.J):
 
 | Template | Use case |
 |---|---|
 | `lrgb-dso.json` | LRGB on a DSO — luminance + RGB filters, dither cadence, auto-focus on temp change |
-| `narrowband-shoo.json` | SHO narrowband — Ha, OIII, SII filters with longer exposures |
-| `lunar.json` | Short-exposure lunar capture, no guiding required, high frame count |
-| `planetary.json` | High-frame-rate planetary with ROI cropping (small subframe), no guiding |
+| `narrowband-shoo.json` | SHO narrowband — Hα, OIII, SII filters with longer exposures |
+| `comet.json` | Comet capture — shorter sub-exposures (60–120 s typical) to limit comet-motion smearing, no per-frame guiding correction for comet motion in v0.0.1 (deferred per §55.2). User points at a comet from the §36.9 catalog. |
 
-Each template uses placeholder target slots. User picks target via WILMA's "Apply Template" → "Pick Target" flow, which calls `POST /api/v1/sequences/templates/{name}/instantiate` with the target details.
+No lunar / planetary templates — per §18.J, ARA's scope is DSO + comets only because Alpaca lacks a video API. Lunar/planetary lucky-imaging is permanently out of scope, not deferred. Each template uses placeholder target slots. User picks target via WILMA's "Apply Template" → "Pick Target" flow, which calls `POST /api/v1/sequences/templates/{name}/instantiate` with the target details.
 
 ### 38.8 Schema evolution policy
 
@@ -3411,7 +4072,7 @@ Server generates two JPEG previews per captured FITS:
 | `<frame>.thumb.jpg` | Max 480×360 | ~50 KB | List views, dashboard tiles, search results |
 | `<frame>.preview.jpg` | Native sensor resolution, quality 90 | ~3-8 MB | Full pinch-to-zoom pixel peep on mobile + desktop |
 
-Both generated server-side at capture time (per §28.5 / §39 — already in the capture pipeline). Stretched per the user's profile-default stretch setting; user can request alternative stretches via API.
+Both generated server-side at capture time (per §28.5 / §39 — already in the capture pipeline). Stretched per the user's profile-default stretch setting (see §65 for the full stretch palette, defaults policy, manual-stretch sliders, and cache strategy). Alternative stretches are available on demand via `?stretch=` on the preview endpoint (§65.6) and via the frame viewer's stretch picker (§65.9).
 
 ### 40.3 API endpoints
 
@@ -3422,7 +4083,7 @@ Both generated server-side at capture time (per §28.5 / §39 — already in the
 | `GET` | `/api/v1/sessions/{id}/frames` | List frames in session, filterable by frame type / filter / rating |
 | `GET` | `/api/v1/frames/{id}` | Single frame metadata |
 | `GET` | `/api/v1/frames/{id}/thumb` | Tiny JPEG (for lists) |
-| `GET` | `/api/v1/frames/{id}/preview` | Full-resolution JPEG (for pixel peep) |
+| `GET` | `/api/v1/frames/{id}/preview` | Full-resolution JPEG (for pixel peep). Accepts `?stretch=` + manual params per §65.6 |
 | `GET` | `/api/v1/frames/{id}/fits` | Original FITS file (full bytes, large) |
 | `PATCH` | `/api/v1/frames/{id}` | Update rating, tags, notes |
 | `DELETE` | `/api/v1/frames/{id}` | Delete frame (FITS + previews + DB row) |
@@ -3554,7 +4215,7 @@ WILMA on iOS/Android runs in **Companion Mode** — same Flutter codebase as the
 
 | Capability | Notes |
 |---|---|
-| Connect to Pi (mDNS discovery + token) | Same flow as desktop (§30) |
+| Connect to Pi (mDNS discovery, no auth per §67) | Same flow as desktop (§30) |
 | **GPS + time push to Pi** | Primary value-add when user has no USB GPS dongle (§31) |
 | **Dashboard** | Current sequence, target, last frame thumbnail, time-to-next-frame, equipment connection state, sky safety status |
 | **Image library browsing** | Same data as desktop (§40), responsive layout — grouped by session, scrollable thumbnail strips |
@@ -3566,7 +4227,7 @@ WILMA on iOS/Android runs in **Companion Mode** — same Flutter codebase as the
 | **Log tail** | Read-only live log stream |
 | **Rate + tag frames** | Touch-friendly star rating + tag chips |
 | **Download FITS for off-device processing** | Save to platform Files / Photos / share sheet |
-| **Server / token management** | Same Settings → Server panel as desktop |
+| **Server connection management** | Same Settings → Server panel as desktop (§30.6); no token UX per §67 |
 
 ### 41.2 Mobile companion — what it explicitly does NOT do
 
@@ -3603,7 +4264,7 @@ Shared:
 - API client (auto-generated from OpenAPI)
 - State management (Riverpod providers)
 - WebSocket connection + event handlers
-- Authentication + token storage
+- Saved-server state (no auth tokens in v0.0.1 per §67; storage layer is reserved for v0.1.0 remote-access tokens)
 - Common widgets (frame viewer, dashboard tiles, status indicators)
 
 Different:
@@ -3836,7 +4497,7 @@ User scenarios:
 2. Plug in the USB drive
 3. First-run wizard detects existing ARA data on the drive, prompts: *"Found existing ARA data: 12 profiles, 47 sessions, 3.2 GB calibration library. Use this data?"* → [Use Existing Data] / [Initialize Fresh]
 4. Server pins the UUID, registers existing structure, starts in `ready` mode with full history
-5. WILMA prompts for the new token (regenerated per-Pi), reconnects
+5. WILMA reconnects automatically (no token per §67)
 
 **Scenario B: Fresh USB drive + backup zip**
 1. Same as above, but the USB is fresh
@@ -3958,7 +4619,7 @@ Streaming runs in the background and must not interfere with primary operations 
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/api/v1/server/backup-stream/status` | Returns `{ "enabled": bool, "active_target": "wilma-hostname", "pending_count": N, "synced_count": M, "queue_size_bytes": N }` |
-| `POST` | `/api/v1/server/backup-stream/claim` | WILMA claims the stream slot for this Pi (returns 200 + target token, or 409 if another WILMA is active) |
+| `POST` | `/api/v1/server/backup-stream/claim` | WILMA claims the stream slot for this Pi (returns 200 + slot ID + active target hostname for the takeover UX, or 409 if another WILMA is active). No auth per §67. |
 | `POST` | `/api/v1/server/backup-stream/release` | WILMA voluntarily releases the slot (e.g., disk full, user opted out) |
 | `GET` | `/api/v1/server/backup-stream/queue?limit=N` | Returns list of pending frames: `[ { "id", "sha256", "size_bytes", "captured_at", "session_id" } ]`, ordered oldest first |
 | `GET` | `/api/v1/frames/{id}/fits` | (existing per §40.3) — Pulls the FITS bytes |
@@ -4600,6 +5261,8 @@ panel_dec = center_dec + dy'
 
 (Spherical-projection corrections for large mosaics near the poles are needed in practice; ARA uses standard tangent-plane projection per NINA's existing math.)
 
+**RA wrap handling (0h / 24h boundary):** per-panel `center_ra` is normalized via `((computed_ra + 360) % 360) % 360` before being passed to the mount or stored. Panels straddling RA 0h work correctly — e.g., a 6-panel mosaic centered at RA 23h45m with 1° panel spacing produces panel centers spanning 23h42m, 23h44m, 23h46m, 23h48m, 23h50m, 23h52m (and possibly wrapping into 00h01m, 00h03m for wider mosaics). NINA's `Coordinates` class handles this normalization correctly per the inherited math (`OpenAstroAra.Astrometry/Coordinates.cs`). §14.5 integration test suite includes a mosaic-across-RA-wrap test case (e.g., 5×5 mosaic centered at RA 23h55m) to prevent regression.
+
 ### 47.4 Panel scheduling — interleaved
 
 ARA's sequencer runs panels in **interleaved order** by default (not sequential):
@@ -4907,7 +5570,7 @@ Mirrors the schema above with editable fields, plus:
 
 ## 49. API documentation serving
 
-ARA Core serves interactive Swagger UI documentation from its OpenAPI spec. Open access (no token) to match ASCOM Alpaca's convention.
+ARA Core serves interactive Swagger UI documentation from its OpenAPI spec. Open access (no auth, per §67) — both the docs and the API itself, matching ASCOM Alpaca's convention.
 
 ### 49.1 Tool choice — Swagger UI
 
@@ -4923,7 +5586,7 @@ Source-of-truth spec lives at `OpenAstroAra.Server/openapi.yaml` (per §9 + §38
 | `/api/v1/openapi.yaml` | Raw OpenAPI 3.1 spec (YAML) — for tools that consume the spec directly |
 | `/api/v1/openapi.json` | Same spec, JSON format — Swagger UI fetches this |
 
-All three are **open** — no token required. The auth protects state-mutating operations, not documentation.
+All three are **open** — no auth required. Per §67, *all* endpoints (not just docs) are open in v0.0.1. v0.1.0 remote-access mode will gate state-mutating operations behind TLS + token.
 
 ### 49.3 Swagger UI styling
 
@@ -4959,16 +5622,14 @@ Per §9 endpoint groups + later additions:
 - Calibration library
 - Profiles
 
-All request/response shapes typed via OpenAPI components. Authentication scheme declared (`X-OpenAstroAra-Token` header) so Swagger UI's "Authorize" button works for users who want to test authenticated endpoints from the docs page.
+All request/response shapes typed via OpenAPI components. No authentication scheme declared in v0.0.1 per §67. v0.1.0 remote-access mode will add a bearer-token scheme so Swagger UI's "Authorize" button works against remote endpoints.
 
-### 49.5 "Try It Out" with token from the docs page
+### 49.5 "Try It Out" from the docs page
 
-Swagger UI's built-in "Authorize" lets users paste their token once; subsequent "Try It Out" requests include it automatically. Useful for:
+Swagger UI's built-in "Try It Out" works on every endpoint immediately — no auth setup required in v0.0.1 per §67. Useful for:
 - Debugging during development
 - Power users exploring the API
 - Plugin authors testing endpoints before integrating (when plugin SDK ships in v0.1.0)
-
-The token is stored in browser session storage (not persisted across browser restarts) — secure-by-default.
 
 ### 49.6 Where Swagger UI is reachable
 
@@ -5408,7 +6069,7 @@ Profile gains a `realtime_diagnostics` block:
 ```json
 {
   "realtime_diagnostics": {
-    "mode": "balanced",        // "aggressive" | "balanced" | "conservative" | "notify_only"
+    "mode": "notify_only",     // "aggressive" | "balanced" | "conservative" | "notify_only"
     "auto_refocus_threshold": 1.5,   // HFR multiplier triggering refocus
     "auto_skip_target_below_alt_deg": null,  // null = use profile hard threshold (§28)
     "pause_on_cloud_detection": true,
@@ -5421,11 +6082,19 @@ Profile gains a `realtime_diagnostics` block:
 Modes:
 
 - **aggressive** — ARA acts on warnings (auto-refocus, auto-pause, auto-skip) without asking; maximizes uptime
-- **balanced** *(default)* — acts on critical signals (pause for clouds, refocus for focus drift); notifies on warnings; user decides
+- **balanced** — acts on critical signals (pause for clouds, refocus for focus drift); notifies on warnings; user decides
 - **conservative** — notifies only; doesn't auto-correct; user takes action manually
-- **notify_only** — alerts but never acts; for users who want full manual control
+- **notify_only** *(v0.0.1 default)* — alerts but never acts; for users who want full manual control. The Diagnostic Panel + Health Indicator + per-frame FITS metadata enrichment all still run; ARA simply doesn't take autonomous corrective action
 
-Wizard's §37 safety screen offers this with defaults.
+**Why notify_only is the v0.0.1 default (instead of balanced):**
+
+1. **Thresholds are uncalibrated.** The 40% star-drop threshold, HFR 1.5× refocus trigger, etc. are educated defaults — not per-user-tuned values. v0.1.0 ships per-user threshold calibration (§51.9); until then, the risk of false-positive auto-actions outweighs the benefit. A spurious auto-pause during a clean Bortle 1 session would teach users to distrust + disable the feature entirely.
+2. **Matches competitor posture.** NINA has no smart corrections at all. ZWO ASIAir auto-pauses only on hardware safety signals (cloud sensor, rain). `notify_only` aligns ARA's out-of-box behavior with what users already expect from the rest of the ecosystem.
+3. **First-do-no-harm.** The diagnostic value (you see WHY a frame went bad) is preserved without surprise behavior. Power users who want auto-correction opt into `balanced` / `aggressive` in Settings → Diagnostics; that's a deliberate "I trust the smart features" choice rather than a default surprise.
+
+When `balanced` graduates to v0.0.2 / v0.1.0 default depends on telemetry from real users (per-user calibration must work reliably first). Until then, opt-in.
+
+Settings → Diagnostics has the mode picker; no wizard screen added in v0.0.1 (the default of `notify_only` is safe; users discover the picker via §61 search or while exploring Settings). Mode picker is registered in §51.12.
 
 ### 51.6 Server-side monitor loop
 
@@ -5503,18 +6172,28 @@ This is the section that's worth showing in marketing screenshots: a side-by-sid
 ### 51.11 v0.0.1 vs v0.1.0 honest scope split
 
 **v0.0.1 ships:**
-- Diagnostic decision tree (§51.2) with all 12 patterns
-- Auto-actions: `auto_refocus`, `pause_until_recovery`, `skip_to_next_target`, `re_slew_and_plate_solve`, `notify_only`
-- Real-time Health Indicator + Diagnostic Panel UI (§51.4)
-- User policy / aggression dial (§51.5)
+- Diagnostic decision tree (§51.2) with all 12 patterns — runs on every frame regardless of mode
+- Auto-actions defined: `auto_refocus`, `pause_until_recovery`, `skip_to_next_target`, `re_slew_and_plate_solve`, `notify_only`, `safety_abort`
+- Real-time Health Indicator + Diagnostic Panel UI (§51.4) — always visible during a session
+- User policy / aggression dial (§51.5) with 4 modes
+- **Default mode: `notify_only`** — diagnostics run + surface in UI + enrich FITS metadata, but ARA takes no autonomous action without explicit user opt-in
 - Per-frame FITS metadata enrichment (§51.8)
 - API endpoints + WebSocket events (§51.7)
 
 **v0.1.0:**
-- Per-user threshold calibration (§51.9 first bullet)
+- Per-user threshold calibration (§51.9 first bullet) — once thresholds calibrate per user, `balanced` can become a safe default
+- Promotion path: `balanced` becomes the default mode in v0.0.2 / v0.1.0 once telemetry confirms calibrated thresholds rarely false-positive
 - ML pattern detection (§51.9 second bullet)
 - Predictive alerts (§51.9 third bullet)
 - More sophisticated patterns (we'll learn what works from real user feedback)
+
+### 51.12 §61 search registry entries
+
+- `diagnostics.mode` — keywords: `diagnostics mode, smart corrections, auto refocus, auto pause, auto skip, aggression dial, notify only, balanced, aggressive, conservative`
+- `diagnostics.auto_refocus_threshold` — keywords: `hfr threshold, refocus trigger, focus drift sensitivity`
+- `diagnostics.pause_on_cloud_detection` — keywords: `cloud detection, auto pause clouds, star count drop`
+- `diagnostics.pause_threshold_star_count_drop_pct` — keywords: `star count drop, cloud sensitivity, pause threshold`
+- `diagnostics.max_consecutive_solve_failures` — keywords: `plate solve failures, re-slew threshold, off-target detection`
 
 ---
 
@@ -5907,7 +6586,7 @@ These were explicitly marked as v0.1.0 commitments during planning (not "maybe")
 | **Astrometry.net solver support** | §18.I | If user demand emerges, with Survey-Manager-style UI for 4100/4200/5000-series index downloads. |
 | **OpenAPI-generated SDKs** | §49.7 | Auto-generated client packages for Python/JS/Go from the OpenAPI spec. Useful for community integrations. |
 | **Generated docs for multiple versions** | §49.7 | Swagger UI multi-spec selector showing v0.0.1, v0.1.0, etc. |
-| **Sequence templates expansion** | GAPS-ARA Tier 3 | Beyond the 4 v0.0.1 templates (LRGB, SHO, lunar, planetary). Community-contributed templates registry. |
+| **Sequence templates expansion** | GAPS-ARA Tier 3 | Beyond the 3 v0.0.1 templates (LRGB, SHO, comet). Community-contributed templates registry for DSO + comet workflows. |
 
 ### 55.2 v0.2.0 — Larger projects
 
@@ -5916,7 +6595,6 @@ Genuinely ambitious work for the v0.2.0 milestone:
 | Feature | Notes |
 |---|---|
 | **Pre-built RPi OS image** | Alternative to .deb install — flashable image with everything pre-configured. Requires CI image-build pipeline. ASIAir-level zero-friction install. |
-| **Planetary / lunar imaging workflow specifics** | High-frame-rate ROI capture, SER file format for stacking pipelines, surface-feature tracking, lucky-imaging support. Distinct from DSO mental model; needs dedicated design pass. |
 | **WCAG 2.1 AA formal certification** | Move from "AA-leaning baseline" (§53) to formal compliance with third-party audit. Only if observatory/outreach use justifies the cost. |
 | **Light-mode theme variant** | Most users want dark; this is for daytime planning + outreach demo contexts. |
 | **Web UI option** | A web frontend (Vue/React/Svelte) for users who don't want a desktop app. Same OpenAPI client + API surface. |
@@ -5933,6 +6611,7 @@ Items deliberately not on any roadmap (avoid scope-creep pull):
 - **Solar imaging specifics** (solar filter detection, prominence tracking) — niche; not on roadmap. Solar imagers can use ARA but ARA won't specialize for them.
 - **Mount homing mechanical-knob automation** — physical altitude/azimuth knob automation requires hardware. ARA guides the human; doesn't drive knobs.
 - **Astrometric measurement tools** (asteroid astrometry submission to MPC, supernovae search workflows) — research-grade workflows; out of scope for the imaging tool.
+- **Planetary / lunar lucky-imaging** — high-frame-rate (5–30 fps) capture, ROI streaming, SER file output, surface-feature tracking. Architecturally blocked: Alpaca has no video API (per §52 Alpaca-only commitment), so the workflow primitive isn't available. NINA has the same limitation. Users wanting planetary use FireCapture / SharpCap / AstroDMx with vendor-native drivers — different tool category. Per §18.J this is permanent, not deferred.
 
 ### 55.4 What's NOT on this list (and why)
 
@@ -6128,7 +6807,7 @@ Single endpoint that returns everything WILMA needs to redraw the app shell. Cal
 }
 ```
 
-**`ws_resume_token`** — the cleanest answer to "did WILMA miss any events while disconnected." The server keeps a 1-hour ring buffer of WebSocket events. On reconnect, the client passes the token via WS query string (`?token=...&resume=ws_token_jkl`); server replays events the client missed, then resumes live streaming. Beyond 1 hour (or if the token is unrecognized), the client trusts the `/state` snapshot and starts fresh.
+**`ws_resume_token`** — the cleanest answer to "did WILMA miss any events while disconnected." Despite the name, this is a *replay cursor*, not an auth token (ARA has no API auth per §67). The server keeps a 1-hour ring buffer of WebSocket events. On reconnect, the client passes the cursor via WS query string (`?resume=ws_token_jkl`); server replays events the client missed, then resumes live streaming. Beyond 1 hour (or if the cursor is unrecognized), the client trusts the `/state` snapshot and starts fresh.
 
 Any nullable section means "not currently active / not configured" — clients render accordingly rather than treating it as an error.
 
@@ -6156,16 +6835,15 @@ WILMA generates a fresh UUID per user-initiated mutation; HTTP-level retries aft
 
 ### 60.6 Rate limiting
 
-v0.0.1 keeps it minimal — LAN-only, single user, no real abuse vector:
+v0.0.1 keeps it minimal — LAN-only, single user, no auth (per §67), no real abuse vector:
 
 | Surface | Limit |
 |---|---|
-| Failed token auth | 3 attempts / 60 s / IP → 429 for 5 min (already in §9) |
-| WebSocket connections | 1 per token (enforced by §27 single-client policy) |
+| WebSocket connections | 1 active per Pi (enforced by §27 single-client policy) |
 | General API requests | None |
-| Backup-stream pull (§44) | Client-side token bucket; no server-side cap |
+| Backup-stream pull (§44) | Client-side token-bucket bandwidth limit; no server-side cap |
 
-v0.1.0 may add per-endpoint limits once TLS / remote-internet access (§55.1) lands — at that point the threat model changes.
+v0.1.0 may add per-endpoint limits once §67.4 remote-access mode lands — at that point auth, TLS, and rate limiting all enter together for the internet-facing surface.
 
 ### 60.7 Cross-section updates
 
@@ -7243,7 +7921,7 @@ ARA is Alpaca-only forever (§52). Standard Alpaca `ICamera` has no streaming mo
 
 So ARA implements Live View as a server-side loop of short normal captures with previews routed straight to WebSocket and no FITS save. This works with every Alpaca camera — AlpacaBridge-driven (ZWO, QHY, SVBONY, ToupTek, PlayerOne), third-party ASCOM-Alpaca drivers, simulators for CI/dev. Cadence is bounded but adequate for the framing/focus-check use case.
 
-v0.1.0 may add a custom AlpacaBridge video extension (non-standard but acceptable given ARA controls both sides of the wire) when planetary / high-frame-rate workflows arrive. v0.0.1 is loop-only.
+Per §18.J, ARA's scope is DSO + comets only — high-frame-rate workflows (planetary / lucky-imaging) are permanently out of scope, not deferred. The loop-of-captures approach is therefore not a temporary workaround; it's the right primitive for the workloads ARA targets.
 
 ### 64.3 Scope — framing + focus-check, not stacking
 
@@ -7257,10 +7935,12 @@ v0.1.0 may add a custom AlpacaBridge video extension (non-standard but acceptabl
 
 **Out of scope for v0.0.1 (deferred to v0.1.0):**
 - Running-average / live stacking (covered by v0.1.0 live stacking commitment in §55)
-- Native SDK video mode (high frame rates — covered by v0.1.0 planetary pass + custom AlpacaBridge IVideo-replacement extension)
-- ROI (region-of-interest) live capture for planetary
-- SER file format support (planetary stack input format)
 - Multi-frame averaging for visible noise reduction during display
+
+**Permanently out of scope (per §18.J):**
+- Native SDK video mode / high-frame-rate capture — Alpaca has no video API; not coming
+- ROI (region-of-interest) live capture for lucky-imaging — same architectural reason
+- SER file format support (planetary stack input format) — no workflow needs it
 
 ### 64.4 The loop — how it actually works
 
@@ -7441,7 +8121,7 @@ Per §60 conventions: RFC 7807 errors, idempotency-key on mutating endpoints, JS
 | `GET` | `/api/v1/imaging/live/state` | UI rehydrate. Returns `{ state: "idle"|"starting"|"looping"|"stopping", settings, frames_delivered, started_at, last_frame: { seq, hfr, stars, mean, timestamp } | null }`. Surfaced via `/api/v1/server/state` snapshot per §60 too. |
 | `GET` | `/api/v1/imaging/live/current.jpg` | Latest preview JPEG. `Cache-Control: no-store`. 404 if state != `looping`. Optional `?seq=N` query honored for cache-busting (server ignores the value). |
 
-All endpoints require token auth per §9. Rate-limiting deferred per §60 (token-retry only in v0.0.1).
+All endpoints are open per §67 (no auth in v0.0.1). Rate-limiting deferred per §60.
 
 Errors (per §60 RFC 7807):
 | Code | Status | When |
@@ -7502,10 +8182,393 @@ All searchable from the §61 omnibar.
 
 ### 64.17 v0.1.0 expansion paths
 
-- **Native SDK video mode via AlpacaBridge custom extension** — for ZWO ASI / QHY / SVBONY / ToupTek / PlayerOne. Custom REST endpoints on the AlpacaBridge camera device (`/api/v1/video/start`, `/api/v1/video/frame`, `/api/v1/video/stop`) outside the Alpaca spec. ARA gates on a capability flag and uses video mode when present. Unlocks 5-30 fps cadence. Required for planetary / lucky imaging in v0.1.0.
-- **ROI (region-of-interest) capture** — for planetary, drop the full sensor and stream a 640×480 patch around the target. Bundled with native video mode.
-- **SER file format output** — when Save Current is tapped repeatedly during a high-cadence run, write a SER file (planetary stack format) instead of N individual FITS. Bundled with the planetary pass.
 - **Live stacking integration (§55 commitment)** — Live View becomes the realtime preview surface for the v0.1.0 live-stacking pipeline. User taps "Stack" instead of (or in addition to) Live View; same loop, but each frame is registered + integrated into a running stack; preview shows the integrated result, not the latest frame.
 - **Mobile full control** — if demand emerges, promote mobile companion from read-only to full Live View control.
 - **Multi-frame averaging for display** — server-side running average of last N frames for noise-reduced preview (display-only, doesn't change Save Current behavior). Trades latency for visible SNR.
 - **Bahtinov mask focus indicator** — automatic detection of Bahtinov mask diffraction pattern with a numeric "focus quality" score on each live frame. Power-user feature; small audience but high value for that audience.
+
+**Permanently out of scope** (per §18.J): native SDK video mode, ROI capture, SER file format output — all are lucky-imaging features that require a video API Alpaca doesn't provide.
+
+---
+
+## 65. Image stretching pipeline + preview API
+
+§40.2 generates two JPEG previews per captured FITS using the user's default stretch. This section specs the stretch palette, defaults policy, server-side compute + cache strategy, and the API knobs the client uses to request alternative renderings. All pixel processing happens server-side via OpenCvSharp4 (per §26); the WILMA client receives JPEGs over HTTP and never touches FITS pixels in v0.0.1 (real-time client-side slider deferred to v0.1.0, see §65.10).
+
+### 65.1 Stretch palette (v0.0.1)
+
+Seven stretch IDs ship in v0.0.1:
+
+| Stretch ID | Algorithm | Use case |
+|---|---|---|
+| `auto_stf` | PixInsight-style STF — auto blackpoint/midpoint/whitepoint from histogram median + MAD (Median Absolute Deviation). Adopted defaults: shadows clipping = −2.8 σ_MAD below median, target background = 0.25, highlights clipping = 99.998%. | **Default for Light frames.** General-purpose "make it look good." Matches NINA + PI expectations. |
+| `linear` | Raw values clipped at supplied black/white percentiles (defaults: 0.5% / 99.5%) and rescaled to 0–255. | Technical inspection — clipping check, ADU verification, calibration-frame review. **Auto-default for Dark/Bias/Flat** per §65.2. |
+| `log` | `log(x − bp + 1)` scaling, then rescale to 0–255. | High-dynamic-range objects (M42 core, globular clusters). |
+| `asinh` | Lupton arcsinh: `asinh(beta · (x − bp)) / asinh(beta)`. Default β = 3.0, tunable via `beta` param. | Galaxies + faint nebulae. Well-behaved near zero, less likely to crush shadows than log. Modern preference among PI/Siril users. |
+| `sqrt` | Gamma 0.5 after black/white-point clip. | Old-school but still useful for some targets. Cheap to compute. |
+| `equalized` | Full histogram equalization. | "What's there?" quick-look pass; ignores absolute brightness. |
+| `manual` | User-supplied `blackpoint`, `midpoint`, `whitepoint` (0–1 range). | Power-user override; backs the manual sliders in the frame viewer. |
+
+No per-filter stretch palette in v0.0.1 — stretches are universal across filters. (Per-filter defaults are a different question, addressed in §65.2.)
+
+### 65.2 Defaults policy
+
+Defaults compose as: **(frame-type auto-override) overrides (per-profile default) overrides (request-time `?stretch=` param)**.
+
+- **Per-profile default for Light frames** — single setting in profile, default `auto_stf`. Applies to all filters; no per-filter override in v0.0.1.
+- **Frame-type auto-override (automatic)** — Dark / Bias / Flat frames always render at `linear` regardless of profile default. Histogram games on calibration frames mislead users about clipping, signal-vs-noise, and bias level. No way to disable this auto-override in v0.0.1 (power users can still request `?stretch=` per-request).
+- **Per-filter defaults** — explicitly out of scope for v0.0.1. Profile carries one default for Lights; if the user wants different stretches per filter, they pick per-frame in the viewer. Adds complexity now without proven UX win; reconsider in v0.1.0 if users ask.
+
+Profile schema additions:
+
+```json
+{
+  "stretch_defaults": {
+    "light_default": "auto_stf",
+    "manual_default_params": { "blackpoint": 0.02, "midpoint": 0.5, "whitepoint": 0.98 },
+    "asinh_default_beta": 3.0,
+    "linear_clip_percentiles": [0.005, 0.995]
+  }
+}
+```
+
+### 65.3 Where compute happens
+
+Server-side, on top of OpenCvSharp4 (per §26):
+
+- **Capture-time preview** (`<frame>.preview.jpg`): generated server-side at capture time, using the profile's `light_default` (or frame-type auto-override). Cached on disk alongside the FITS. Always exists for completed frames.
+- **Alternative stretches**: server compute on first request, cached at `<frame>.preview.<stretch-id>.jpg` (or `<frame>.preview.manual.<hash-of-params>.jpg` for manual stretch). Subsequent requests serve from cache.
+- **Manual stretch sliders (frame viewer)**: each slider drag fires `GET /api/v1/frames/{id}/preview?stretch=manual&blackpoint=...&midpoint=...&whitepoint=...` debounced 200 ms. Server computes + caches; cache key includes the rounded param values (3 decimal places) to bound the cache entry count.
+- **Client-side real-time slider (no server round-trip)**: deferred to v0.1.0 (see §65.10). v0.0.1's 200 ms debounce + LAN-only deployment makes server round-trip adequate for the slider UX.
+
+### 65.4 Cache strategy
+
+Per-frame variant cache:
+
+- **Default cap: 6 variants per frame**, plus the default-stretch preview that always exists.
+- **LRU eviction** within a frame when cap is exceeded.
+- **Cache cap configurable** via Settings → Image Processing → Preview Cache (range 1–20).
+- **Manual-stretch entries** count against the cap but are coalesced by rounded params; rapid slider dragging doesn't blow the cache because near-identical param tuples hash to the same cache key.
+- **Thumbnails** (`<frame>.thumb.jpg`) are **default stretch only** — re-stretch on thumbnails is not supported in v0.0.1 (would multiply cache cost for negligible UX gain; frame viewer uses the full preview).
+- **Disk overhead estimate**: 6 variants × 3–8 MB ≈ 18–48 MB extra per frame in the worst case (every variant requested). Most frames will have 0–2 alternate variants in practice. USB storage from §29 has plenty of headroom.
+- **Eviction policy on storage pressure**: when free space on the configured save path drops below the §29 critical threshold, preview variants (NOT defaults, NOT FITS, NOT thumbnails) evict first as recoverable cache. WS event `frame.preview.variant.evicted` notifies the client so its UI knows to fall back to default if it had been showing an alt.
+
+### 65.5 Batch re-stretch
+
+For "re-stretch entire session in asinh":
+
+- `POST /api/v1/sessions/{id}/restretch` enqueues a background job. Returns 202 + `job_id`.
+- Job runs server-side, generating + caching alt-stretch variants for each frame matching the filter (frame_type / filter band).
+- WS events report progress: `session.restretch.progress` + `session.restretch.complete` / `session.restretch.failed`.
+- Cancellable: `DELETE /api/v1/jobs/{job_id}`.
+- Rate-limited to one batch job per profile at a time; second `POST` while a job runs returns 409 with the running job's id.
+
+### 65.6 API extensions to §40.3
+
+Extends the existing `GET /api/v1/frames/{id}/preview` endpoint and adds three new endpoints:
+
+```
+GET /api/v1/frames/{id}/preview
+  Query params:
+    stretch       auto_stf | linear | log | asinh | sqrt | equalized | manual
+                  (default: profile's light_default, or frame-type auto-override)
+    blackpoint    0.0–1.0    (manual only)
+    midpoint      0.0–1.0    (manual only)
+    whitepoint    0.0–1.0    (manual only; must satisfy bp < mp < wp)
+    beta          > 0        (asinh only; default = profile's asinh_default_beta or 3.0)
+    bp_pct, wp_pct 0.0–1.0   (linear only; default = profile's linear_clip_percentiles)
+
+  Responses:
+    200 image/jpeg            — cached variant served
+    202 Retry-After: 1        — compute queued (batch-job scenario); client retries
+    400                       — invalid params (e.g., manual without all three points, bp ≥ wp)
+    404                       — frame not found
+```
+
+```
+GET  /api/v1/profiles/{id}/stretch-defaults    → returns the stretch_defaults block
+PATCH /api/v1/profiles/{id}/stretch-defaults   → updates one or more fields
+```
+
+```
+POST   /api/v1/sessions/{id}/restretch         → enqueue batch job
+DELETE /api/v1/jobs/{job_id}                   → cancel batch job
+GET    /api/v1/jobs/{job_id}                   → job status
+```
+
+```
+DELETE /api/v1/frames/{id}/preview/variants    → flush all alt-stretch variants for a frame
+                                                  (keeps default + thumb; useful for cache reset)
+```
+
+### 65.7 WebSocket events
+
+```json
+{ "type": "frame.preview.ready", "payload": { "frame_id": "...", "stretch_id": "auto_stf", "is_default": true } }
+{ "type": "frame.preview.variant.ready", "payload": { "frame_id": "...", "stretch_id": "asinh", "params_hash": "..." } }
+{ "type": "frame.preview.variant.evicted", "payload": { "frame_id": "...", "stretch_id": "asinh", "reason": "storage_pressure" | "lru_eviction" } }
+{ "type": "session.restretch.progress", "payload": { "job_id": "...", "done": 42, "total": 144, "current_frame_id": "..." } }
+{ "type": "session.restretch.complete", "payload": { "job_id": "...", "frames_processed": 144, "duration_seconds": 38 } }
+{ "type": "session.restretch.failed", "payload": { "job_id": "...", "error": "...", "frames_processed": 42 } }
+```
+
+### 65.8 Mobile companion behavior (§41)
+
+§41 caps mobile to view-only / monitoring — no sequence editing, no equipment control. Stretching is a **viewing** capability (the underlying FITS is unchanged), so mobile gets the full stretch palette + manual sliders via the same `?stretch=` API. Mobile UX uses tap-to-cycle through the preset stretches and a bottom-sheet panel for manual sliders.
+
+### 65.9 Frame viewer UI integration (§40.5)
+
+The §40.5 frame viewer mockup gets a stretch picker:
+
+```
+┌──────────────────────────────────────────────────┐
+│  M42_L_2026-05-18T22:14:32_120s.fits      ⭐⭐⭐⭐  │
+│  ──────────────────────────────────────────────  │
+│                                                  │
+│       [full preview image, pinch/scroll to zoom] │
+│                                                  │
+│  [Stretch: auto_stf ▼]  [⚙ Manual sliders]      │
+│  ──────────────────────────────────────────────  │
+│  ...metadata...                                  │
+│  [Rate]  [Tag]  [Open in App]  [Show in Folder]  │
+│  [Download FITS]  [Delete]                       │
+└──────────────────────────────────────────────────┘
+```
+
+The picker is a popover with the 7 stretch IDs + the current default highlighted. **[⚙ Manual sliders]** expands an inline panel with blackpoint / midpoint / whitepoint sliders + asinh-β input (when `asinh` selected). Slider drags fire the debounced `?stretch=manual` request. "Reset to profile default" button.
+
+### 65.10 v0.1.0 paths
+
+- **Real-time client-side slider on desktop**: WILMA desktop downloads the full FITS on user-initiated "Power Stretch" mode, parses it with a Dart FITS library, and re-stretches locally on every slider event with no server round-trip. Sub-frame-rate response. Out of scope for v0.0.1 because of FITS-parser dependency + desktop-only execution model.
+- **Per-filter stretch defaults**: if users request it, add `per_filter` map to `stretch_defaults` profile block.
+- **Color-channel stretching**: for OSC cameras + LRGB composites, independent R/G/B blackpoint/midpoint/whitepoint (PixInsight's screen-color-balance equivalent). v0.0.1 stretches the channels uniformly.
+- **STF refinement**: NINA/PI users have tuned shadows/highlights clipping params over time; v0.1.0 could expose those as advanced knobs (currently fixed at the PI defaults).
+- **GraXpert / starless preview**: starnet-style background extraction as a preview-only filter. Big win for inspecting nebulosity without star clutter, but ships ML model weights (~50 MB) — defer.
+- **Per-target preferred stretch**: profile remembers "M31 always looks best at log; M42 at asinh β=4" via the §40.6 Resume Target flow.
+
+### 65.11 §61 search registry entries
+
+Per §0.5 pillar 3 + COMMIT-PR-RULES settings-registry gate. Every stretch knob is registered:
+
+- `image_processing.stretch_default_light` — keywords: `default stretch, light stretch, auto stretch, stf, preview default, image rendering`
+- `image_processing.stretch_default_calibration` — keywords: `dark stretch, bias stretch, flat stretch, calibration stretch, linear`
+- `image_processing.manual_blackpoint_default` — keywords: `blackpoint, black point, shadows, clipping shadows`
+- `image_processing.manual_midpoint_default` — keywords: `midpoint, mid point, gamma, midtone`
+- `image_processing.manual_whitepoint_default` — keywords: `whitepoint, white point, highlights, clipping highlights`
+- `image_processing.asinh_beta_default` — keywords: `asinh, arcsinh, beta, lupton, faint nebula`
+- `image_processing.linear_clip_percentiles` — keywords: `linear clip, percentile clip, blackpoint percentile, whitepoint percentile`
+- `image_processing.preview_cache_cap` — keywords: `preview cache, cache size, variants per frame, alt stretches`
+- `image_processing.slider_debounce_ms` — keywords: `slider lag, slider responsiveness, debounce, stretch slider speed`
+- `image_processing.open_frame_viewer` — keywords: `frame viewer, image viewer, stretch picker, preview options`
+
+### 65.12 Implementation notes
+
+- All stretch algorithms operate on the FITS as float-normalized (0.0–1.0) in OpenCvSharp4. STF auto-params computed from the histogram of a single channel (mono) or luminance (color).
+- Manual-stretch param cache key: `sha1(blackpoint_3dp || midpoint_3dp || whitepoint_3dp || asinh_beta_3dp)` truncated to 8 chars.
+- Color frames (OSC): preview generation applies STF/log/asinh/etc. to luminance, then re-applies channel ratios. Doesn't re-balance channels (that's v0.1.0).
+- Saturation handling: in linear mode, saturated pixels (>= whitepoint) render as pure white. In other modes, they render at the algorithm's max output (255 after rescale).
+- JPEG quality for alt variants matches §40.2 preview (quality 90).
+- Compute budget per alt variant: ~50–200 ms on a Pi 4 for a 16 MP frame; faster on Pi 5. Capture pipeline (§28.5) is not blocked by alt-stretch compute (separate worker pool, lower priority).
+
+---
+
+## 66. Server concurrency model
+
+Per §18.J, ARA's supported workloads are DSO + comet long-exposure capture (30–900 s exposures, occasionally short bursts to 1 s for bright targets or comet cadence). Image processing (FITS atomic-write per §28.7 + default-stretch preview per §65) takes ~1–3 s per frame on a Pi 4. The exposure-vs-processing ratio is therefore 10×–300× in capture's favor — the image processor is never the bottleneck for the supported workflows. This section specs the executor layout that exploits that headroom without over-engineering.
+
+### 66.1 Executor pools
+
+| Pool | Threads | Priority | Notes |
+|---|---|---|---|
+| **Capture** (per camera) | 1 | High | Latency-sensitive Alpaca state machine + readout. Always-available core. |
+| **Image processor** | **1** | Normal | FITS atomic-write + default-stretch preview + thumbnail. Single worker is plenty for 30 s+ exposures; queue handles short-exposure bursts (calibration / comet cadence) without dropping. |
+| **Alt-stretch** (§65) | 1 | Low | Handles `?stretch=X` API requests + batch re-stretch jobs. Doesn't compete with capture. |
+| **WS broadcast** | 1 async | Normal | Pushes events to the single connected WILMA client (per §27). Per-client bounded send queue prevents memory leaks during disconnect scenarios. |
+| **REST handler** | ASP.NET Core pool | Normal | Standard thread pool; sized to leave room for capture. |
+| **Backup stream** (§44) | 1 | Lowest | Capture-aware backoff per existing §44.4 (pauses during active integration). |
+| **Diagnostics** (§51) | 1 | Low | Best-effort frame analyzer; drops oldest on queue full. |
+| **SQLite writer** | 1 | Normal | All writes serialized through a single writer task; reads concurrent via WAL (§28.6). |
+| **Notification dispatch** (§46) | 1 async | Normal | Fan-out to WS + sound + persistence. |
+| **Stats aggregator** (§50) | 1 | Idle | Runs nightly during astronomical dusk preparation or on-demand. |
+| **PHD2 client** (§63) | 1 async | Normal | Persistent TCP socket + JSON-RPC reader. Events flow to WS broadcast. |
+
+mDNS responder runs in `avahi-daemon` (system service, not ARA's concern).
+
+### 66.2 Bounded queues
+
+Bounding exists to prevent memory leaks during edge cases (WILMA disconnects, power user spams alt-stretch requests, USB drive briefly hangs), not to manage steady-state contention.
+
+| Queue | Depth | Drop policy | Rationale |
+|---|---|---|---|
+| Image processor in-queue | 10 jobs | Block capture (rare) | Plenty for any flats/comet/calibration batch; never fills under DSO workload |
+| Alt-stretch in-queue | 8 jobs | Reject API request with 503 + `Retry-After: 5` | Power-user flood protection |
+| WS broadcast (per client) | 256 events | Disconnect client + flag for `ws_resume_token` replay (§60) | WILMA disconnect/stall protection |
+| Backup stream buffer | 1 frame in flight | Block (pause stream) | Per §44.4 |
+| Diagnostics in-queue | 3 frames | Drop oldest + log warning | Diagnostics is best-effort by design (§51) |
+| SQLite writer | unbounded | Never drop | Critical path; SQLite is fast with WAL |
+| Notification dispatch | 64 notifications | Drop `info` severity first; keep `warning`/`critical`/`urgent` | Storm protection |
+
+### 66.3 Thread priorities
+
+Standard .NET `ThreadPriority` settings on dedicated workers:
+
+- `AboveNormal`: Capture
+- `Normal`: Image processor, WS broadcast, REST handler, SQLite writer, notification dispatch, PHD2 client
+- `BelowNormal`: Alt-stretch, diagnostics
+- `Lowest`: Backup stream
+- `Idle`: Stats aggregator
+
+ASP.NET Core's thread pool keeps its own policy; the explicit-priority pools above are dedicated workers outside the pool.
+
+### 66.4 Backpressure events
+
+The only steady-state backpressure path is **image processor → capture**, and it should virtually never fire under normal v0.0.1 workloads (DSO 30 s+). When it does fire (storage slow, USB stick instead of SSD, sustained short-exposure burst longer than the queue can hold), the server emits:
+
+```json
+{ "type": "capture.backpressure", "payload": { "queue_depth": 10, "queue_max": 10, "exposure_paused_ms": 1850 } }
+```
+
+**Silent + WS event only** per the bake decision — no user notification. Visible in the WILMA Stats dashboard if/when the §50 Pi performance panel ships (v0.1.0; see §66.7).
+
+Other backpressure-adjacent events:
+
+```json
+{ "type": "storage.slow", "payload": { "fsync_ms": 1450, "threshold_ms": 1000 } }       // sustained fsync > 1s — warning notification, suggests USB SSD upgrade
+{ "type": "diagnostics.frame_dropped", "payload": { "frame_id": "...", "reason": "queue_full" } }  // log-only
+{ "type": "ws.client_disconnected", "payload": { "reason": "send_queue_full", "resume_token_offered": true } }
+```
+
+### 66.5 Memory budget on Pi 4 (4 GB)
+
+| Component | RAM | Notes |
+|---|---|---|
+| .NET runtime baseline | ~200 MB | Server + AlpacaBridge proxying |
+| Image processor working set | ~100 MB | 1 worker × FITS + intermediate Mats |
+| Image processor queue | ~50 MB | Worst case: 10 jobs × ~5 MB Alpaca readout buffer (FITS itself written via atomic-rename, not held in memory) |
+| Alt-stretch working buffers | ~100 MB | OpenCvSharp4 temp Mats |
+| SQLite mmap | ~256 MB | Per §28.6 `mmap_size` |
+| WS queues | ~10 MB | Bounded per §66.2 |
+| PHD2 client | ~10 MB | Lightweight |
+| Backup stream | ~50 MB | 1 frame buffered |
+| Diagnostics worker | ~50 MB | 1 frame |
+| Notification dispatch + REST handlers + logs | ~150 MB | |
+| **Estimated peak RSS** | **~1.0 GB** | Comfortable on 4 GB Pi; ~3 GB OS headroom |
+
+8 GB Pi 4 / Pi 5 has additional comfort; 2 GB SBC variants (some Orange Pi / RockChip) are borderline — DEPLOY.md notes 4 GB minimum recommended.
+
+### 66.6 Storage I/O cascade
+
+USB SSD per §29 keeps `fsync` latency to 5–50 ms typical. If USB stick is used despite §29's warning, latencies can climb to 200 ms – 2 s, which propagates:
+
+1. `fsync` latency rises above 1 s → image processor takes longer per job → queue depth rises
+2. If queue depth stays > 5 for > 30 s → emit `storage.slow` warning notification ("Storage write speed is slow. Consider upgrading to USB 3.0 SSD.")
+3. If queue ever hits 10 → capture backpressure fires (`capture.backpressure` WS event), exposures briefly pause until queue drains
+
+This cascade is self-healing once the user upgrades storage; no permanent damage and no data loss thanks to §28.7's atomic-write pattern.
+
+### 66.7 Telemetry surface
+
+v0.0.1 ships **log-only** telemetry:
+- Per-executor queue depth, throughput EWMA, backpressure event count written to the server log every 60 s during active session
+- `capture.backpressure`, `storage.slow`, `diagnostics.frame_dropped`, `ws.client_disconnected` WS events for real-time visibility
+
+v0.0.1 does **not** ship:
+- `GET /api/v1/server/internal-state` endpoint exposing live executor metrics
+- WILMA Stats "Pi performance" panel
+
+Both are v0.1.0 paths. Rationale: under DSO workloads the backpressure events fire essentially never, so the operational value of live metrics is low; if a user does hit storage problems, the WS event + log entry is sufficient diagnosis. Adding the endpoint + panel is ~2 days of work that's better spent elsewhere in v0.0.1.
+
+### 66.8 What's out of scope for v0.0.1
+
+- Live performance dashboard in WILMA (deferred to v0.1.0 — `GET /api/v1/server/internal-state` + Stats "Pi performance" panel)
+- Per-pool runtime tuning via API (`PATCH /api/v1/server/concurrency` to change worker counts on the fly) — fixed at startup in v0.0.1
+- Dynamic priority adjustment under load (e.g., promoting capture to realtime priority on Pi 4 specifically) — fixed priorities
+- Hot-reload of executor config without server restart
+- High-frame-rate / planetary concurrency model — permanently out of scope per §18.J (no video API in Alpaca)
+
+### 66.9 §61 search registry entries
+
+Pool sizes + queue depths are not exposed as user-facing settings in v0.0.1 (fixed at the values above). No registry entries needed; if v0.1.0 adds runtime tuning per §66.8, those settings register at that time.
+
+The only related entry needed in v0.0.1:
+
+- `diagnostics.troubleshoot_storage_slow` — keywords: `storage slow, usb performance, fsync slow, capture pausing, backpressure, slow drive, upgrade ssd`
+
+---
+
+## 67. Security model
+
+ARA's security model matches **ASCOM Alpaca and ZWO ASIAir**: trusted-LAN deployment, **no authentication on the API**, no transport encryption in v0.0.1. This is a deliberate choice that reflects how astrophotography software is actually used.
+
+### 67.1 Threat model
+
+ARA users image from:
+- Their own backyard (private LAN, often a single device)
+- Remote observatories they own (private LAN, possibly behind a VPN)
+- Dark sky party fields (shared LAN with other astrophotographers)
+
+In every case the people on the network are imaging peers, not adversaries. Star parties have happened for decades with ASIAir, KStars/EKOS, NINA-with-Alpaca-over-LAN, SharpCap remote, and SkyPortal — **none of which authenticate the API**. No one is hacking imaging rigs in the wild. The imaging community is small, trusts each other, and the on-network blast radius (mess with someone's exposure) is too low to motivate attacks.
+
+ARA inherits this posture:
+
+| Threat | v0.0.1 protection | Notes |
+|---|---|---|
+| Casual API access on shared LAN | None | Same as Alpaca + ASIAir. Single-client policy (§27) provides session ownership UX but isn't auth. |
+| Network sniffing on shared Wi-Fi | None | Same as Alpaca + ASIAir. No TLS in v0.0.1 (§2.3). |
+| MITM attacks | None | Same as Alpaca + ASIAir. |
+| Accidental reformat / wipe by another user | Label-echo confirmation (§29.1.3) | Destructive ops require typing the drive's exact label — protects against accidents, not malice |
+| Malicious binary push to overwrite the server | SHA-256 verification (§33.4) | Binary integrity check is independent of auth; an attacker would need to upload a correctly-hashed binary, which requires already having the binary |
+
+### 67.2 What protections still exist (defense without auth)
+
+Several mechanisms reduce risk regardless of authentication:
+
+- **mDNS discovery is client-initiated** — WILMA discovers servers; the user explicitly picks one. An attacker cannot push unsolicited commands to a WILMA client
+- **Single-client policy (§27)** — only one WILMA controls the rig at a time. A second connection prompts the existing user to grant takeover; an opportunistic attacker can't silently snipe the session
+- **Confirmation UX on destructive operations** — drive reformat (§29.1.3), polar align changes, emergency stops, sequence aborts all require explicit user actions; an attacker can't trigger them without UI interaction
+- **SHA-256 verification on binary updates (§33.4)** — a malicious binary push must produce the correct SHA-256, which requires either possessing the legitimate binary or breaking SHA-256
+- **No remote access by default** — ARA binds to LAN interfaces only. Reaching ARA from outside the LAN requires the user to set up port forwarding or VPN themselves
+- **Local-logs-only telemetry (§18.C)** — no network calls leave the Pi unprompted; nothing for an attacker to spy on en route
+
+### 67.3 User responsibility (deployment recommendations)
+
+DEPLOY.md (per §34.6) documents:
+
+- **Home network**: trust your own LAN. Standard deployment.
+- **Star party / shared LAN**: same posture as ASIAir. Standard deployment is fine. If you want isolation, run the Pi in AP mode (§32.6) so only your devices connect, or use the Pi's Ethernet interface with a dedicated cable.
+- **Public Wi-Fi (coffee shop, airport, hotel)**: don't. Image on private networks.
+- **Remote observatory access (over internet)**: out of scope for v0.0.1 — use a VPN. v0.1.0 may add an opt-in remote-access mode with TLS + token auth.
+
+### 67.4 v0.1.0 remote-access mode (deferred)
+
+When users want to image from a remote observatory over the internet, the open-LAN model breaks down — the internet has actual adversaries. v0.1.0 adds an opt-in **remote-access mode**:
+
+- TLS termination (Let's Encrypt or self-signed)
+- Token authentication (re-introduces the auth that v0.0.1 dropped)
+- Rate limiting + optional IP allowlist
+- Binds on a separate interface so internal LAN access stays unauthenticated
+
+Remote-access mode is **opt-in** — users explicitly enable it in Settings. Default deployment stays unauthenticated.
+
+### 67.5 What ARA does NOT do (anti-features in v0.0.1)
+
+- **No authentication** — explicitly removed per §67. This is the whole point.
+- **No transport encryption** — no TLS in v0.0.1 (§2.3); v0.1.0 with remote-access mode
+- **No audit logging** — events go to log files but aren't designed for security forensics
+- **No anti-virus or behavior detection** — out of scope
+- **No security scanning of equipment drivers** — ASCOM Alpaca trusts drivers; ARA inherits that
+- **No code signing in v0.0.1** (per §18.F) — ships unsigned for cost reasons
+
+### 67.6 If a security issue is found
+
+Responsible disclosure: private email rather than public GitHub issue. Channel TBD on the OpenAstro wiki (`security@open-astro.dev` placeholder). v0.0.1 has no formal bug bounty.
+
+The §54 bug report flow's redaction list still scrubs hostnames, paths, internal IPs, and any tokens that may exist (in case v0.1.0 or future deployments do use auth and a user submits a v0.1.0 bug report from a remote-access-mode deployment) — defense in depth.
+
+### 67.7 §61 search registry
+
+- `security.deployment_recommendations` — keywords: `security, network safety, star party, public wifi, vpn, remote access, threat model, alpaca security, asiair security`
+- `security.no_authentication` — keywords: `auth, authentication, token, password, login, why no password, secure server`
+- `security.remote_access_v010` — keywords: `internet access, remote imaging, tls, auth, token, https, over internet, vpn alternative`
+
+---
