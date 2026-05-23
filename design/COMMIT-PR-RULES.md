@@ -1,6 +1,6 @@
-# COMMIT-PR-RULES.md — DRAFT (to discuss)
+# COMMIT-PR-RULES.md
 
-Parking-lot doc capturing the commit + PR + CodeRabbit discussion. **Not yet baked into PORT_PLAYBOOK.md.** Picks back up next session.
+Authoritative reference for the per-phase + sub-PR rhythm, branch naming, CodeRabbit poll-and-fix loop, and pre-PR gate used by the AI during the port. Read together with `design/PORT_PLAYBOOK.md` — which links here from §0 rule 9 (phase-boundary PR rhythm), §3 (phase plan + sub-PR mapping), §19.1 (git safety + branch allowlist), and §22 (final pass `port/ara → master`). Design phase is complete (see "Status" below); Phase 0.5 execution follows the rhythm specified here.
 
 ## The constraint that drove this
 
@@ -344,18 +344,9 @@ When we finalize, these playbook sections need edits:
 - **§19.1 git safety** — allow `port/ara/phase-*` sub-branches; main `port/ara` becomes integration-only
 - **§22 final pass** — final PR becomes `port/ara → master` (already specced as such; just confirm)
 
-## Open question for tomorrow
-
-Is per-phase PR-rhythm acceptable given the merge ceremony it adds (16-20 PRs total across the port)? Or would you rather:
-- Use a paid CodeRabbit tier to handle bigger PRs
-- Skip CodeRabbit for mechanical changes and accept single mega-PRs for review
-- Some hybrid
-
-Sleep on it. Continue tomorrow.
-
 ---
 
-## Status: mostly settled (2026-05-23)
+## Status: design phase complete (2026-05-23)
 
 **Decisions made 2026-05-23:**
 - Phase 12 split shape confirmed (8 sub-PRs, 12a–12h, augmented mapping with all session decisions integrated; see table above)
