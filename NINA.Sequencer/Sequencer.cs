@@ -22,7 +22,7 @@ using NINA.Sequencer.SequenceItem.Imaging;
 using NINA.Sequencer.SequenceItem.Telescope;
 using NINA.Sequencer.Trigger.MeridianFlip;
 using NINA.Sequencer.SequenceItem.Utility;
-using NINA.Astrometry;
+using OpenAstroAra.Astrometry;
 using System;
 using System.Collections.Generic;
 using System.Linq;

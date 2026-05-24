@@ -36,7 +36,7 @@ using NINA.Core.Locale;
 using NINA.Equipment.Interfaces;
 using NINA.Core.Model;
 using NINA.Equipment.Equipment.MyGuider.PHD2.PhdEvents;
-using NINA.Astrometry;
+using OpenAstroAra.Astrometry;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using System.Net;

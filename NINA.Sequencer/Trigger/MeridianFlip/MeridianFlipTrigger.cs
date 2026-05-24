@@ -20,7 +20,7 @@ using NINA.Sequencer.Container;
 using NINA.Sequencer.SequenceItem;
 using NINA.Sequencer.Utility;
 using NINA.Sequencer.Validations;
-using NINA.Astrometry;
+using OpenAstroAra.Astrometry;
 using NINA.Equipment.Interfaces.Mediator;
 using NINA.ViewModel;
 using NINA.WPF.Base.Interfaces.ViewModel;
@@ -241,7 +241,7 @@ namespace NINA.Sequencer.Trigger.MeridianFlip {
                     if (noRemainingTime) {
                         // There is no more time remaining. Project the side of pier to that at the time after the flip and check if this flip is required
                         var projectedSiderealTime = Angle.ByHours(AstroUtil.EuclidianModulus(telescopeInfo.SiderealTime + originalMaximumTimeRemaining.TotalHours, 24));
-                        var targetSideOfPier = NINA.Astrometry.MeridianFlip.ExpectedPierSide(
+                        var targetSideOfPier = OpenAstroAra.Astrometry.MeridianFlip.ExpectedPierSide(
                             coordinates: telescopeInfo.Coordinates,
                             localSiderealTime: projectedSiderealTime);
                         if (telescopeInfo.SideOfPier == targetSideOfPier) {
@@ -258,7 +258,7 @@ namespace NINA.Sequencer.Trigger.MeridianFlip {
                         }
                     } else {
                         // There is still time remaining. A flip is likely not required. Double check by checking the current expected side of pier with the actual side of pier
-                        var targetSideOfPier = NINA.Astrometry.MeridianFlip.ExpectedPierSide(
+                        var targetSideOfPier = OpenAstroAra.Astrometry.MeridianFlip.ExpectedPierSide(
                             coordinates: telescopeInfo.Coordinates,
                             localSiderealTime: Angle.ByHours(telescopeInfo.SiderealTime));
                         if (telescopeInfo.SideOfPier == targetSideOfPier) {

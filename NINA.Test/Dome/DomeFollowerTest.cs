@@ -14,7 +14,7 @@ using NINA.Equipment.Equipment.MyDome;
 using NINA.Equipment.Equipment.MyTelescope;
 using NINA.Profile.Interfaces;
 using NINA.Core.Utility;
-using NINA.Astrometry;
+using OpenAstroAra.Astrometry;
 using NUnit.Framework;
 using System.Threading;
 using System.Threading.Tasks;

@@ -12,8 +12,8 @@
 
 #endregion "copyright"
 
-using NINA.Astrometry;
-using NINA.Astrometry.RiseAndSet;
+using OpenAstroAra.Astrometry;
+using OpenAstroAra.Astrometry.RiseAndSet;
 using NUnit.Framework;
 using NUnit.Framework.Legacy;
 using OxyPlot.Axes;
@@ -23,7 +23,7 @@ using System.Collections.Immutable;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using static NINA.Astrometry.AstroUtil;
+using static OpenAstroAra.Astrometry.AstroUtil;
 
 namespace NINA.Test {
 

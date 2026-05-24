@@ -14,7 +14,7 @@
 
 using FluentAssertions;
 using Moq;
-using NINA.Astrometry;
+using OpenAstroAra.Astrometry;
 using NINA.Core.Utility;
 using NINA.Sequencer;
 using NINA.Sequencer.SequenceItem.Utility;

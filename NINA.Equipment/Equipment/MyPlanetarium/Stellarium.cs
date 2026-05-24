@@ -14,7 +14,7 @@
 
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using NINA.Astrometry;
+using OpenAstroAra.Astrometry;
 using NINA.Core.Utility;
 using NINA.Core.Utility.Http;
 using NINA.Equipment.Exceptions;

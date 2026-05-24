@@ -15,7 +15,7 @@
 using FluentAssertions;
 using Moq;
 using NINA.PlateSolving;
-using NINA.Astrometry;
+using OpenAstroAra.Astrometry;
 using NINA.Equipment.Interfaces.Mediator;
 using NINA.Equipment.Model;
 using NINA.Core.Model;

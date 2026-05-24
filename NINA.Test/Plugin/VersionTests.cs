@@ -14,7 +14,7 @@
 
 using FluentAssertions;
 using Moq;
-using NINA.Astrometry.Interfaces;
+using OpenAstroAra.Astrometry.Interfaces;
 using NINA.Core.Interfaces;
 using NINA.Core.Utility;
 using NINA.Core.Utility.WindowService;

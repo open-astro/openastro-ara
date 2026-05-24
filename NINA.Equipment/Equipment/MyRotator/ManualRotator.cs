@@ -18,7 +18,7 @@ using NINA.Core.Utility.WindowService;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using NINA.Astrometry;
+using OpenAstroAra.Astrometry;
 using NINA.Core.Locale;
 using NINA.Equipment.Interfaces;
 using System.Collections.Generic;
