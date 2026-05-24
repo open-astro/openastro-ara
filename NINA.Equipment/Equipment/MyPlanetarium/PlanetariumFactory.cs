@@ -14,7 +14,7 @@
 
 using NINA.Core.Enum;
 using NINA.Equipment.Interfaces;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 
 namespace NINA.Equipment.Equipment.MyPlanetarium {
 

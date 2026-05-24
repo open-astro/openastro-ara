@@ -15,7 +15,7 @@
 using NINA.Core.Utility;
 using NINA.Astrometry;
 using NINA.Core.Utility.TcpRaw;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using System;
 using System.Threading.Tasks;
 using NINA.Equipment.Exceptions;

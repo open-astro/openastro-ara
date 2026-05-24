@@ -3,7 +3,7 @@ using Moq;
 using NINA.Astrometry;
 using NINA.Astrometry.Interfaces;
 using NINA.Core.Utility;
-using NINA.Profile;
+using OpenAstroAra.Profile;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;

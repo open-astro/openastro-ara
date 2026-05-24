@@ -10,7 +10,7 @@ using System.Net.NetworkInformation;
 using System.Linq;
 using NINA.Core.Utility;
 using NINA.Equipment.Interfaces;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using NINA.Equipment.Equipment.MyGuider.SkyGuard.SkyGuardMessages;
 using NINA.Core.Interfaces;
 using NINA.Equipment.Equipment.MyTelescope;

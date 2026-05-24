@@ -17,7 +17,7 @@ using NINA.Core.Utility;
 using NINA.Astrometry;
 using NINA.Core.Utility.Http;
 using NINA.Core.Utility.Notification;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using System;
 using System.Threading;
 using System.Threading.Tasks;

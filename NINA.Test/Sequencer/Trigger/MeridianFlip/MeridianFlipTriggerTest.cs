@@ -15,7 +15,7 @@
 using FluentAssertions;
 using Moq;
 using NINA.Equipment.Equipment.MyTelescope;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using NINA.Sequencer.SequenceItem;
 using NINA.Sequencer.Trigger.MeridianFlip;
 using NINA.Astrometry;

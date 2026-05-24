@@ -21,7 +21,7 @@ using NINA.Core.Utility.Notification;
 using NINA.Core.Utility.WindowService;
 using NINA.Equipment.Equipment.MyGuider.MetaGuide;
 using NINA.Equipment.Interfaces;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using Nito.AsyncEx;
 using System;
 using System.Collections.Generic;

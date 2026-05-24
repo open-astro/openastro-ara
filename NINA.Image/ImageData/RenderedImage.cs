@@ -23,7 +23,7 @@ using System.Windows.Threading;
 using NINA.Core.Model;
 using NINA.Image.ImageAnalysis;
 using NINA.Image.Interfaces;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using NINA.Core.Utility;
 
 namespace NINA.Image.ImageData {
