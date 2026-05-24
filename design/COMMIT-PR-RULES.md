@@ -28,8 +28,8 @@ Rhythm:
 4. Tags `phase-N-complete` on sub-branch
 5. Opens PR `phase-N → port/ara`
 6. CodeRabbit reviews; AI poll-and-fix loop runs (60 s polling; auto-fix trivial + correctness findings via new commits; reasoned replies for disagreements; out-of-scope items → `design/PORT_TODO.md`). **If CodeRabbit returns rate-limit / no-credits, AI does NOT merge** — posts `Held for CodeRabbit @<user> — rate-limited, refill in <X>`, then either waits for the auto-refill window and retriggers via `@coderabbitai review`, or waits for user direction (e.g., billing fix).
-7. **AI merges** once the §19.1 merge-gate clears (green CI + **actual CodeRabbit review** posted, not a rate-limit skip + no unresolved actionable findings + clean self-review against scope). Use `gh pr merge --squash --delete-branch` to remove the sub-branch from origin in the same step. If any gate condition is ambiguous, AI posts `Held for human review @<user> — <reason>` and waits instead.
-8. AI pulls updated `port/ara`. **If the just-merged sub-PR was the last in a phase** (e.g., `phase-0.5a-6` closes out Phase 0.5a), AI also tags `phase-N-complete` on `port/ara` HEAD and opens a `port/ara → master` promotion PR per PORT_PLAYBOOK.md §22.0 cadence. Then starts the next phase from updated `port/ara` once the promotion PR merges.
+7. **AI merges** once the §19.1 merge-gate clears (green CI + **actual CodeRabbit review** posted — defined as either (a) a CodeRabbit walkthrough/summary comment outlining the review scope, or (b) an explicit *"No actionable comments were generated"* (or equivalent) summary post-review; rate-limit / "Review limit reached" / "Review skipped" tokens **do not satisfy** this — + no unresolved actionable findings + clean self-review against scope). Use `gh pr merge --squash --delete-branch` to remove the sub-branch from origin in the same step. If any gate condition is ambiguous, AI posts `Held for human review @<user> — <reason>` and waits instead.
+8. AI pulls updated `port/ara`. **If the just-merged sub-PR was the last in a phase** — determined by consulting the phase sub-PR list in PORT_PLAYBOOK.md §3 plus the per-phase sub-split table in this document (e.g., `phase-0.5a-6` is the last entry under Phase 0.5a's row; `phase-12h` is the last under Phase 12's row) — AI also tags `phase-N-complete` on `port/ara` HEAD and opens a `port/ara → master` promotion PR per PORT_PLAYBOOK.md §22.0 cadence. Then starts the next phase from updated `port/ara` once the promotion PR merges.
 
 Final integration: per §22.0 (revised 2026-05-23), `port/ara → master` is **periodic**, not one-shot — promoted after each phase boundary. The Phase 15 final pass catches whatever tail-end work hasn't been promoted yet. Same §19.1 merge-gate; merge commit (not squash) preserves per-phase history on `master`.
 
@@ -175,11 +175,19 @@ After the AI opens any PR (Phase 0.5 sub-PRs, Phase 12 sub-PRs, or any other pha
    | Disagreement (CodeRabbit suggests something wrong, contradicts the playbook spec, or is beyond PR scope) | Post reply with reasoning + link to the relevant playbook section; do not change code |
    | Out-of-scope suggestion (broader refactor, future feature) | Append entry to `design/PORT_TODO.md` with PR reference; reply: *"Acknowledged — tracked in design/PORT_TODO.md for follow-up"* |
 4. **CodeRabbit re-reviews after each fix push.** AI handles round-2 findings the same way. If the same issue ping-pongs more than twice, AI defers: posts *"Deferring this to human review — see comments above"* and stops auto-fixing that thread
-5. **Quiescence detection:** when 3 consecutive polls (= 3 minutes idle) return no new comments, AI posts *"Ready for human review @<user>"* on the PR and stops polling
-6. **User reviews + merges** at their convenience. AI does not merge anything, ever (this rule is permanent — see §19.1 git safety in the playbook)
-7. **After user merge**, AI pulls the updated integration branch (`port/ara`) and starts the next sub-PR from there
+5. **Quiescence detection:** when 3 consecutive polls (= 3 minutes idle) return no new comments AND the gate conditions in §19.1 are satisfied, AI merges per step 6 below. If gate conditions are NOT satisfied (rate-limit, unresolved findings, ambiguous scope), AI posts *"Held for human review @<user> — <reason>"* and stops polling
+6. **AI merges** under the §19.1 merge-gate (policy revised 2026-05-23 — see Status section + §19.1 git safety in the playbook). Earlier version of this doc said "User reviews + merges; AI does not merge anything, ever" — that rule was reversed by the user in `prep-ci` PR #2; this step's text is the current authoritative behavior
+7. **After AI merge**, AI pulls the updated integration branch (`port/ara`) and starts the next sub-PR from there
 
 **Parallel work:** while waiting for CodeRabbit on an open PR, the AI may start drafting the next sub-PR's work in the same session. Polling for the open PR continues in the background via the harness's natural notification flow — no busy-waiting needed.
+
+**Polling implementation (lessons learned 2026-05-23, PR #9 thread):**
+
+- **Trust `gh pr checks <N>` for the CI gate** — it returns reliable `pass`/`fail`/`pending` for each check.
+- **Do NOT trust the CodeRabbit *check status* alone.** It reports `pass` even when the underlying review was rate-limited or skipped. The authoritative signal is the **comment body** — a real walkthrough or "No actionable comments" summary. Match on `walkthrough_start` HTML comment, `📝 Walkthrough`, or `No actionable comments were generated`. Do NOT match on `findings` / `actionable` / `complete` alone — those words appear in rate-limit messages too.
+- **Wait command:** prefer `Bash run_in_background` with an `until` loop checking concrete state (e.g., `until gh api .../comments --jq '...' | grep -q '<specific-marker>'; do sleep 30; done`), not a `Monitor` event stream. One notification on completion, no babysitting.
+- **Quiescence:** "3 min idle" means "no new commit AND no new bot/user comment since the last review". Use `created_at` timestamps from `gh api .../comments`, not wall-clock since opening the PR.
+- **When in doubt, snapshot the current state with one `gh pr view <N> --json` call and decide.** Don't loop indefinitely without a stop condition.
 
 **Failure modes:**
 - **CodeRabbit doesn't respond within 30 minutes** → AI posts *"CodeRabbit hasn't responded in 30 min; flagging for manual review"* and stops polling; user investigates (rate-limit, queue, etc.)

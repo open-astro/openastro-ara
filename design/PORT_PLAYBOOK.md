@@ -1684,7 +1684,7 @@ ARA targets deep-sky objects and comets — the long-exposure (30 s – 900 s) c
 
   **Rate-limit handling:** if CodeRabbit returns rate-limit / no-credits / "Review limit reached", AI does NOT merge. AI posts `Held for CodeRabbit @<user> — rate-limited, refill in <X>` and either (a) waits for the auto-refill window then retriggers via `@coderabbitai review`, or (b) waits for user direction (e.g., billing fix). No "strict-letter" merge-on-skip — that defeats the checks-and-balances purpose of the gate.
 
-  Merge method: **squash** for prep + multi-commit sub-PRs that should land as one logical change on `port/ara`; **merge commit** for phase PRs that benefit from preserving per-commit granularity. AI picks based on the PR's commit history. **Always use `--delete-branch`** to keep the sub-branch list trimmed (per user direction 2026-05-23). Push immediately. Pull `port/ara` and continue.
+  Merge method: **squash** for prep + multi-commit sub-PRs that should land as one logical change on `port/ara`; **merge commit** for phase PRs that benefit from preserving per-commit granularity. AI picks based on the PR's commit history. **Always use `--delete-branch` for sub-PR merges** to keep the sub-branch list trimmed (per user direction 2026-05-23); N/A for `port/ara → master` promotions per §22.1 (the long-lived `port/ara` integration branch is never deleted mid-port). Push immediately. Pull `port/ara` and continue.
 
   If any of the gate conditions are ambiguous or the AI is uncertain whether to merge, it posts "Held for human review @<user> — <reason>" instead of merging. The user can override either way.
 - No `git push --force` or `--force-with-lease`. Plain `git push` only.
