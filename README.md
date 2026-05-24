@@ -1,42 +1,30 @@
-# N.I.N.A. - Nighttime Imaging 'N' Astronomy #
-[![Website](https://img.shields.io/badge/website-nighttime--imaging.eu-blue)](https://nighttime-imaging.eu/)
-[![Latest Release](https://img.shields.io/badge/download-latest-blue)](https://nighttime-imaging.eu/download/)
-[![Discord](https://img.shields.io/discord/436650817295089664)](https://discord.gg/nighttime-imaging)
+# OpenAstro Ara
+
 [![License: MPL 2.0](https://img.shields.io/badge/License-MPL%202.0-brightgreen.svg)](https://www.mozilla.org/en-US/MPL/2.0/)
-[![Become a Patron](https://img.shields.io/badge/Patreon-support-orange?logo=patreon)](https://www.patreon.com/stefanberg?fan_landing=true)
 
-This repository contains the source code of the **N.I.N.A. - Nighttime Imaging 'N' Astronomy** imaging software.
+A headless ASP.NET Core daemon (`OpenAstroAra.Server`) + cross-platform Flutter client (`OpenAstroAra.Client`) for deep-sky astrophotography. The server runs on a Raspberry Pi 4/5 or any ARM64 / x64 Linux host; the client runs on macOS, iOS, Android, Windows, and Linux desktops from one Flutter codebase.
 
----
+The product model is ASIAir-like: server runs the night, client is for planning and monitoring. Close the laptop, imaging keeps going.
 
-## 🧭 About
+## Status
 
-**N.I.N.A.** (Nighttime Imaging 'N' Astronomy) is a modular astrophotography suite designed to simplify and streamline image acquisition.  
-Originally created with DSO imaging in mind, the platform now supports a wide range of astrophotography and astronomy workflows via a powerful plugin system.
+**Pre-release** — actively being ported from NINA (the WPF-based [Nighttime Imaging 'N' Astronomy](https://nighttime-imaging.eu/) software by Stefan Berg and contributors). See `design/PORT_PLAYBOOK.md` for the full port plan and `design/PORT_PROGRESS.md` for current status. First release target: `v0.0.1-ara.1`.
 
-Whether you're new to astrophotography or a seasoned imager, N.I.N.A. aims to make your sessions easier, faster, and more comfortable.
+## Lineage
 
----
+OpenAstro Ara is a hard fork of NINA `master` (3.2 line). All inherited code retains the original `Stefan Berg and the N.I.N.A. Contributors` copyright headers per the MPL-2.0 license. See `LICENSE.txt`, `COPYING`, `AUTHORS`, and `NOTICE.md` (added Phase 15) for the full attribution.
 
-## 🌐 Resources
+## Repository
 
-- 🏠 Project website: [nighttime-imaging.eu](https://nighttime-imaging.eu/)
-- 📦 Latest release: [nighttime-imaging.eu/download](https://nighttime-imaging.eu/download/)
-- 📖 Documentation: [nina.docs](https://github.com/isbeorn/nina.docs)
-- 💬 Community support: [Discord](https://discord.gg/nighttime-imaging)
+```
+openastro-ara/                       (this repo)
+├── OpenAstroAra.Server/             ← .NET 10 headless daemon (Phase 4+)
+├── OpenAstroAra.Core / Astrometry / Profile / Image / Equipment / Sequencer / PlateSolving / Test
+│                                    ← inherited from NINA, ported during Phase 0.5
+├── client/openastroara_client/      ← Flutter desktop+mobile client (Phase 11+)
+└── design/                          ← port playbook + tracking docs (not shipped)
+```
 
----
+## License
 
-## 🤝 Contributing
-
-Interested in contributing code, reporting bugs, or improving documentation?  
-Please check out our [Contributing Guidelines](https://github.com/isbeorn/nina.docs/blob/develop/CONTRIBUTING.md).
-
-We welcome all kinds of contributions — from small fixes to large feature proposals.
-
----
-
-## ⚖ License
-
-This project is licensed under the **Mozilla Public License 2.0**.  
-See the [`LICENSE`](./LICENSE.txt) file for details.
+[Mozilla Public License 2.0](LICENSE.txt) — same as upstream NINA.

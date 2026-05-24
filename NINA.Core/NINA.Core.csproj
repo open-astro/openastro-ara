@@ -91,22 +91,17 @@
     <Title>N.I.N.A. Core Library</Title>
     <Version>3.2.0.9001</Version>
     <Authors>Stefan Berg and the N.I.N.A. Contributors</Authors>
-    <Product>N.I.N.A. - Nighttime Imaging 'N' Astronomy</Product>
+    <Product>OpenAstro Ara</Product>
     <Description>This assembly contains the core components of N.I.N.A.</Description>
     <Copyright>Copyright ©  2016 - 2025 Stefan Berg and the N.I.N.A. contributors</Copyright>
-    <PackageProjectUrl>https://nighttime-imaging.eu/</PackageProjectUrl>
-    <PackageIcon>ninasplash.png</PackageIcon>
-    <RepositoryUrl>https://github.com/isbeorn/nina.git</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/open-astro/openastro-ara</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/open-astro/openastro-ara.git</RepositoryUrl>
     <PackageOutputPath>$(SolutionDir)publish</PackageOutputPath>
     <IncludeSymbols>False</IncludeSymbols>
     <PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
   </PropertyGroup>
   <ItemGroup>
     <None Include="..\LICENSE.txt">
-      <Pack>True</Pack>
-      <PackagePath>\</PackagePath>
-    </None>
-    <None Include="..\NINA\Resources\ninasplash.png">
       <Pack>True</Pack>
       <PackagePath>\</PackagePath>
     </None>
@@ -120,7 +115,4 @@
   <ItemGroup>
     <Folder Include="Interfaces\Utility\" />
   </ItemGroup>
-  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
-    <Exec IgnoreExitCode="true" Command="if $(Configuration) == SignedRelease signtool sign /t http://timestamp.sectigo.com /i Sectigo /v /a /fd SHA256 $(TargetPath)" />
-  </Target>
 </Project>
