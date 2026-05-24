@@ -1,6 +1,6 @@
 ﻿using Moq;
 using NINA.Equipment.Interfaces.Mediator;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using NINA.ViewModel.ImageHistory;
 using NINA.WPF.Base.Interfaces.Mediator;
 using NINA.WPF.Base.Interfaces;
@@ -19,7 +19,7 @@ using NINA.Sequencer.Interfaces;
 using NINA.WPF.Base.Model;
 using NINA.WPF.Base.Utility.AutoFocus;
 using NINA.Equipment.Equipment.MyFilterWheel;
-using NINA.Image.ImageData;
+using OpenAstroAra.Image.ImageData;
 using NINA.WPF.Base.Interfaces.ViewModel;
 using NINA.Core.Model;
 using NINA.Sequencer.SequenceItem.Autofocus;

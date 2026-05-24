@@ -14,7 +14,7 @@
 
 using Newtonsoft.Json;
 using NINA.Core.Model;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using NINA.Sequencer.Container;
 using NINA.Sequencer.SequenceItem;
 using NINA.Sequencer.Validations;
@@ -29,7 +29,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using NINA.Core.Locale;
 using NINA.WPF.Base.ViewModel;
-using NINA.Astrometry;
+using OpenAstroAra.Astrometry;
 using NINA.Sequencer.SequenceItem.Platesolving;
 using NINA.Core.Utility;
 using System.IO;
@@ -39,7 +39,7 @@ using NINA.WPF.Base.Interfaces.Mediator;
 using NINA.Core.Enum;
 using NINA.PlateSolving;
 using NINA.Core.Utility.WindowService;
-using NINA.Image.Interfaces;
+using OpenAstroAra.Image.Interfaces;
 using NINA.Equipment.Interfaces;
 using NINA.Sequencer.Interfaces;
 

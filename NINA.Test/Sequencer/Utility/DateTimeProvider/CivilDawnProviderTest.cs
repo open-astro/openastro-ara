@@ -1,8 +1,8 @@
 ﻿using FluentAssertions;
 using Moq;
-using NINA.Astrometry.Interfaces;
-using NINA.Astrometry.RiseAndSet;
-using NINA.Astrometry;
+using OpenAstroAra.Astrometry.Interfaces;
+using OpenAstroAra.Astrometry.RiseAndSet;
+using OpenAstroAra.Astrometry;
 using NINA.Core.Utility;
 using NINA.Sequencer.Utility.DateTimeProvider;
 using System;

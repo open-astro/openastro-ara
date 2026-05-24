@@ -6,9 +6,9 @@ using System.Threading.Tasks;
 
 namespace NINA.Sequencer.SequenceItem.Utility {
     using Newtonsoft.Json;
-    using NINA.Astrometry;
+    using OpenAstroAra.Astrometry;
     using NINA.Core.Enum;
-    using NINA.Profile.Interfaces;
+    using OpenAstroAra.Profile.Interfaces;
     using System.Collections.Generic;
 
     public abstract class WaitForAltitudeBase : SequenceItem {

@@ -13,13 +13,13 @@
 #endregion "copyright"
 
 using Newtonsoft.Json;
-using NINA.Profile.Interfaces;
-using NINA.Astrometry;
+using OpenAstroAra.Profile.Interfaces;
+using OpenAstroAra.Astrometry;
 using System;
 using System.ComponentModel.Composition;
 using NINA.Sequencer.SequenceItem.Utility;
 using NINA.Core.Enum;
-using NINA.Astrometry.RiseAndSet;
+using OpenAstroAra.Astrometry.RiseAndSet;
 using NINA.Core.Locale;
 using Nito.AsyncEx;
 

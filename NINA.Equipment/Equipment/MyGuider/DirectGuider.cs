@@ -14,11 +14,11 @@
 
 using NINA.Core.Utility;
 using NINA.Core.Utility.Notification;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using NINA.Astrometry;
+using OpenAstroAra.Astrometry;
 using Accord.Statistics.Distributions.Univariate;
 using NINA.Core.Enum;
 using NINA.Equipment.Interfaces.Mediator;

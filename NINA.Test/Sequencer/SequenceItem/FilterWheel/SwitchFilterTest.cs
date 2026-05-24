@@ -15,7 +15,7 @@
 using FluentAssertions;
 using Moq;
 using NINA.Equipment.Equipment.MyFilterWheel;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using NINA.Sequencer;
 using NINA.Core.Model;
 using NINA.Sequencer.SequenceItem.FilterWheel;

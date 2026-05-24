@@ -12,16 +12,16 @@
 
 #endregion "copyright"
 
-using NINA.Astrometry;
+using OpenAstroAra.Astrometry;
 using NINA.Core.Locale;
 using NINA.Core.Model;
 using NINA.Core.Utility;
 using NINA.Core.Utility.Notification;
 using NINA.Equipment.Interfaces.Mediator;
-using NINA.Image.ImageData;
-using NINA.Image.Interfaces;
+using OpenAstroAra.Image.ImageData;
+using OpenAstroAra.Image.Interfaces;
 using NINA.PlateSolving;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using NINA.WPF.Base.Interfaces.Mediator;
 using NINA.WPF.Base.Interfaces.ViewModel;
 using NINA.WPF.Base.Model;

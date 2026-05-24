@@ -15,11 +15,11 @@
 using FluentAssertions;
 using Moq;
 using NINA.Equipment.Equipment.MyTelescope;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using NINA.Sequencer.Container;
 using NINA.Core.Model;
 using NINA.Sequencer.SequenceItem.Telescope;
-using NINA.Astrometry;
+using OpenAstroAra.Astrometry;
 using NINA.Equipment.Interfaces.Mediator;
 
 namespace NINA.Test.Sequencer.SequenceItem.Telescope {

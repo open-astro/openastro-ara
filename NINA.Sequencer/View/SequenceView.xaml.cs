@@ -12,7 +12,7 @@
 
 #endregion "copyright"
 
-using NINA.Astrometry;
+using OpenAstroAra.Astrometry;
 using NINA.Sequencer.Container;
 using System;
 using System.Collections.Generic;

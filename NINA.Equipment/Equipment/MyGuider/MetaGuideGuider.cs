@@ -12,7 +12,7 @@
 
 #endregion "copyright"
 
-using NINA.Astrometry;
+using OpenAstroAra.Astrometry;
 using NINA.Core.Interfaces;
 using NINA.Core.Locale;
 using NINA.Core.Model;
@@ -21,7 +21,7 @@ using NINA.Core.Utility.Notification;
 using NINA.Core.Utility.WindowService;
 using NINA.Equipment.Equipment.MyGuider.MetaGuide;
 using NINA.Equipment.Interfaces;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using Nito.AsyncEx;
 using System;
 using System.Collections.Generic;
