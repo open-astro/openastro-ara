@@ -1674,7 +1674,7 @@ ARA targets deep-sky objects and comets — the long-exposure (30 s – 900 s) c
 
 ### 19.1 Git safety
 
-- **Branch allowlist:** AI may commit/push to `port/ara` (integration branch, where all phase PRs land) and to per-sub-PR feature branches matching the pattern `port/ara/phase-N[/<letter>]` (e.g., `port/ara/phase-0.5/a`, `port/ara/phase-12/h`). All other branches are off-limits without explicit user instruction. The main `port/ara` branch is integration-only — direct commits to it happen only after the user merges a sub-PR (AI pulls the merge commit; never authors directly).
+- **Branch allowlist:** AI may commit/push to `port/ara` (integration branch, where all phase PRs land) and to per-sub-PR feature branches with **flat names** matching `phase-N[<letter>]` (e.g., `phase-0.5a`, `phase-12h`, `phase-1`) plus a small set of named prep branches (e.g., `prep-ci`). All other branches are off-limits without explicit user instruction. The main `port/ara` branch is integration-only — direct commits to it happen only after the user merges a sub-PR (AI pulls the merge commit; never authors directly). **Why flat names:** Git refs are tree-structured — a branch named `port/ara` makes `port/ara/anything` an invalid ref name (`fatal: cannot lock ref ...: 'refs/heads/port/ara' exists`). See `design/COMMIT-PR-RULES.md` per-phase rhythm section for the branch tree diagram.
 - **AI never merges, ever.** PR merges are a user action, no exceptions. AI opens PRs, drives the CodeRabbit poll-and-fix loop per COMMIT-PR-RULES.md, posts "Ready for human review @<user>" at quiescence, and waits.
 - No `git push --force` or `--force-with-lease`. Plain `git push` only.
 - No `--no-verify` on commits.
@@ -1705,7 +1705,8 @@ ARA targets deep-sky objects and comets — the long-exposure (30 s – 900 s) c
 ### 19.5 Scope safety
 
 - Do not edit `design/PORT_PLAYBOOK.md`, `design/PORT_DECISIONS.md`, `design/PORT_TODO.md`, `design/PORT_PROGRESS.md`, `design/API_CONTRACT.md` except to append entries per documented rules.
-- Do not edit `.git/`, `.github/workflows/` (until Phase 14), `.claude/`.
+- Do not edit `.git/`, `.claude/`.
+- `.github/workflows/` is owned by the playbook: the full CI matrix per §14.3 lands at Phase 14. Pre-Phase-14 edits are permitted only to (a) replace the stale upstream NINA CI that would otherwise red-flag every PR (the progressive placeholder in `prep-ci`) and (b) grow that placeholder at the documented phase boundaries (Phase 0.5p, Phase 4, Phase 11) on the way to §14.3. Any other workflow change before Phase 14 requires explicit user instruction.
 
 ---
 

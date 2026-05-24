@@ -11,20 +11,22 @@ CodeRabbit (free tier) limits AI review to **~200 files per PR**. The current §
 ### Per-phase PR rhythm
 
 ```
-master                          ← final integration target
-  └─ port/ara                   ← integration branch (where phase PRs land)
-       ├─ port/ara/phase-0.5/a  ← sub-PR for Phase 0.5 part a
-       ├─ port/ara/phase-0.5/b  ← sub-PR for Phase 0.5 part b
-       ├─ port/ara/phase-1      ← Phase 1 (single PR fits)
+master                  ← final integration target
+  └─ port/ara           ← integration branch (where phase PRs land)
+       ├─ phase-0.5a    ← sub-PR for Phase 0.5 part a
+       ├─ phase-0.5b    ← sub-PR for Phase 0.5 part b
+       ├─ phase-1       ← Phase 1 (single PR fits)
        └─ ...
 ```
 
+**Git ref naming constraint:** sub-branches use **flat names** (`phase-0.5a`, `phase-1`, `prep-ci`), not nested under `port/ara/...`. Git refs are tree-structured — `port/ara` existing as a branch makes `port/ara/anything` an invalid ref name (`fatal: cannot lock ref ...: 'refs/heads/port/ara' exists; cannot create 'refs/heads/port/ara/...'`). The integration branch keeps the `port/ara` name (per PORT_PLAYBOOK.md §1); sub-branches sit alongside it at the top level.
+
 Rhythm:
-1. AI checks out `port/ara`, creates `port/ara/phase-N` (or sub-branch)
+1. AI checks out `port/ara`, creates `phase-N` (or sub-branch like `phase-0.5a`, `prep-ci`)
 2. Does the phase's work on the sub-branch (commits + pushes per commit)
 3. Completes phase, runs §15 gate
 4. Tags `phase-N-complete` on sub-branch
-5. Opens PR `port/ara/phase-N → port/ara`
+5. Opens PR `phase-N → port/ara`
 6. CodeRabbit reviews
 7. User reviews + merges
 8. AI starts next phase from updated `port/ara`
@@ -327,7 +329,7 @@ There is intentionally no opt-out mechanism. The gate exists because reviewer vi
 ## Things still to decide
 
 - [x] ~~Confirm per-phase PR rhythm OR alternative~~ → **Decided 2026-05-23**: per-phase + sub-PR splitting, free CodeRabbit tier, no paid escalation
-- [x] ~~Confirm sub-PR letter scheme (a/b/c/...) and branch naming~~ → **Decided 2026-05-23**: letter scheme `a-h`; branch naming `port/ara/phase-N/<letter>` (e.g., `port/ara/phase-12/e`)
+- [x] ~~Confirm sub-PR letter scheme (a/b/c/...) and branch naming~~ → **Decided 2026-05-23**: letter scheme `a-h`. Branch naming originally specified as `port/ara/phase-N/<letter>`; revised in prep-ci PR to flat names (`phase-Na`, e.g., `phase-12e`) after discovering Git refs forbid `port/ara/...` while `port/ara` itself is a branch.
 - [x] ~~Confirm skip-review marker syntax~~ → **Decided 2026-05-23**: **no skip-review markers; every PR gets reviewed**. Belt-and-suspenders catches subtle issues that mechanical PRs can hide. See "CodeRabbit review policy" section above.
 - [x] ~~Decide on `.coderabbit.yaml` config~~ → **Decided 2026-05-23**: minimal exclusions only. Exclude truly-generated code (`client/openastroara_client/lib/api/generated/**`, `**/*.g.dart`) + temp/backup files (`*.bak`, `*.tmp`). Enable detailed-review focus on settings files (`lib/settings/registry.dart`, `lib/screens/settings/**`, profile-schema files) per Layer 4 of the Settings-registry gate above. Nothing else excluded — every other path goes through full review per the policy above.
 - [x] ~~Decide on `develop` branch~~ → **Decided 2026-05-23**: **no**. The integration branch `port/ara` already plays that role; adding `develop` adds a merge step without benefit for a single-developer port. Final phase-15 PR goes `port/ara → master` directly.
@@ -341,7 +343,7 @@ When we finalize, these playbook sections need edits:
 
 - **§0 rule 9** — tag every phase boundary + open PR (replace "never stop" with "wait for merge")
 - **§3 phase plan** — add sub-PR rows for Phase 0.5 (and Phase 12 if confirmed)
-- **§19.1 git safety** — allow `port/ara/phase-*` sub-branches; main `port/ara` becomes integration-only
+- **§19.1 git safety** — allow flat-named `phase-*` sub-branches (e.g., `phase-0.5a`); main `port/ara` becomes integration-only
 - **§22 final pass** — final PR becomes `port/ara → master` (already specced as such; just confirm)
 
 ---
@@ -350,7 +352,7 @@ When we finalize, these playbook sections need edits:
 
 **Decisions made 2026-05-23:**
 - Phase 12 split shape confirmed (8 sub-PRs, 12a–12h, augmented mapping with all session decisions integrated; see table above)
-- Sub-PR letter scheme + branch naming confirmed (`port/ara/phase-N/<letter>`)
+- Sub-PR letter scheme + branch naming confirmed (originally `port/ara/phase-N/<letter>`; revised in `prep-ci` PR to flat `phase-N<letter>` due to a Git ref constraint — see per-phase rhythm section)
 - AI auto-continues to next sub-PR after user merge (no nudge between sub-PRs)
 - CodeRabbit poll-and-fix workflow specced (60 s polling, AI handles trivial + correctness findings, user handles merge)
 - Push cadence: after every commit
@@ -363,7 +365,7 @@ When we finalize, these playbook sections need edits:
 **Baked into `PORT_PLAYBOOK.md` (2026-05-23):**
 - ✅ §0 rule 9 — "Tag every phase boundary; open the PR; wait for merge before the next phase." References this doc for the full rhythm + CodeRabbit loop. AI never merges; auto-continues to next sub-PR after user merge.
 - ✅ §3 phase plan — Phase 0.5 sub-PR rhythm references the 16-sub-PR mapping (0.5a–0.5p); Phase 12 references the 8-sub-PR mapping (12a–12h); cross-cutting sub-PR rhythm paragraph added after the phase list.
-- ✅ §19.1 git safety — branch allowlist now permits `port/ara` (integration) + `port/ara/phase-N[/<letter>]` (sub-PR feature branches). "AI never merges, ever" baked as permanent rule. Tag scheme extended to `phase-N-<letter>-complete` for sub-PRs.
+- ✅ §19.1 git safety — branch allowlist now permits `port/ara` (integration) + flat-named `phase-N[<letter>]` sub-PR feature branches (e.g., `phase-0.5a`, `phase-12h`) plus a small set of named prep branches (e.g., `prep-ci`). "AI never merges, ever" baked as permanent rule. Tag scheme extended to `phase-N-<letter>-complete` for sub-PRs.
 - ✅ §22 final pass — final PR confirmed `port/ara → master` (no `develop` branch); release notes step updated to use `CHANGELOG.md` per §33.7 + Keep-a-Changelog format + fresh `[Unreleased]` placeholder; mobile-deferred-to-v0.1.0 noted in CHANGELOG sections.
 
 The design phase is now fully complete. Phase 0.5 execution can begin per the rhythm above.
@@ -377,7 +379,7 @@ Beyond the AI-driven port, this document needs a v2 pass covering **post-v0.0.1 
 Open items for that v2 pass:
 
 - [ ] **Community contributor PR template** — `.github/PULL_REQUEST_TEMPLATE.md` enforcing: linked issue, scope statement, CodeRabbit-fittable size, settings-registry-updated checkbox (per §61.4), tests-added checkbox, screenshot/video for UI changes
-- [ ] **Branch naming convention for community PRs** — `feature/<short-name>`, `fix/<short-name>`, `chore/<short-name>`. Mirrors port's `port/ara/phase-N/X` pattern but namespaced differently to keep histories clean.
+- [ ] **Branch naming convention for community PRs** — `feature/<short-name>`, `fix/<short-name>`, `chore/<short-name>`. Distinct from the port's flat `phase-N<letter>` pattern to keep histories clean.
 - [ ] **Auto-split heuristics** — if a community PR exceeds CodeRabbit's 200-file limit, what guidance do we give? "Split before submitting" via labelled `needs-split` workflow, or accept and use paid tier?
 - [ ] **Claude Code skill recommendations** for community contributors — the available Claude Code skills (`code-review`, `security-review`, `fewer-permission-prompts`, `verify`, `update-config`, `init`, etc.) should be documented in `CONTRIBUTING.md` as recommended workflow:
   - Before opening a PR, run `/security-review` on the diff
