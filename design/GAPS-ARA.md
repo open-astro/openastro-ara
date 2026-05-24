@@ -158,7 +158,7 @@
 - **Documentation** (post-Phase 15, AI-executed): README rewrite, NOTICE.md full text, DEPLOY.md, User guide, CONTRIBUTING.md, ISSUE_TEMPLATE / PULL_REQUEST_TEMPLATE, API_CONTRACT.md initial content. No design decisions needed — write-the-thing tasks per existing playbook references (§17.2 for NOTICE.md, §34.6 for DEPLOY.md, §56 for migration guide, etc.). Folded into Phase 15.
 - **PHD2-GAP.md upstream PR** (post-Phase 12): file the upstream openastro-phd2 PR with the 3 real gaps + 7 doc clarifications once Phase 12 sub-PRs 12b + 12c are merged. ARA v0.0.1 ships with workarounds; v0.1.0 switches to the new events.
 
-**Ready to start Phase 0.5 execution** whenever the user gives the go-signal. The first sub-PR is 0.5a (delete WPF UI) per the 16-sub-PR plan in `COMMIT-PR-RULES.md`. AI runs `scripts/pre-pr-check.sh` before opening each PR; CodeRabbit reviews every PR; AI auto-fixes findings; user reviews + merges.
+**Ready to start Phase 0.5 execution** whenever the user gives the go-signal. The first sub-PR is 0.5a (delete WPF UI) per the 16-sub-PR plan in `COMMIT-PR-RULES.md`. AI runs `scripts/pre-pr-check.sh` before opening each PR; CodeRabbit reviews every PR; AI auto-fixes findings; **AI merges under the §19.1 merge-gate** (policy revised 2026-05-23 in `prep-ci` PR #2 — originally specced as "user merges").
 
 ### Parked work in other docs to revisit
 
