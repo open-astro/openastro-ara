@@ -55,7 +55,6 @@
   <ItemGroup>
     <PackageReference Include="ASCOM.Alpaca.Components" Version="2.1.0" />
     <PackageReference Include="ASCOM.Alpaca.Device" Version="2.1.0" />
-    <PackageReference Include="ASCOM.Com.Components" Version="2.1.0" />
     <PackageReference Include="Castle.Core" Version="5.2.1" />
     <PackageReference Include="Castle.Core.AsyncInterceptor" Version="2.1.0" />
     <PackageReference Include="Google.Protobuf.Tools" Version="3.31.1" />
@@ -76,7 +75,6 @@
     <PackageReference Include="System.Text.RegularExpressions" Version="4.3.1" />
   </ItemGroup>
   <ItemGroup>
-    <Folder Include="SDK\CameraSDKs\ToupTekAlike\SVBonySDK\" />
   </ItemGroup>
   <PropertyGroup>
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
