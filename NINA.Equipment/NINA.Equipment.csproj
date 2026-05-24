@@ -34,11 +34,9 @@
     </Compile>
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\nikoncswrapper\nikoncswrapper.csproj" />
     <ProjectReference Include="..\NINA.Astrometry\NINA.Astrometry.csproj" />
     <ProjectReference Include="..\NINA.Core\NINA.Core.csproj" />
     <ProjectReference Include="..\NINA.Image\NINA.Image.csproj" />
-    <ProjectReference Include="..\NINA.MGEN\NINA.MGEN.csproj" />
     <ProjectReference Include="..\NINA.Profile\NINA.Profile.csproj" />
   </ItemGroup>
   <ItemGroup>
