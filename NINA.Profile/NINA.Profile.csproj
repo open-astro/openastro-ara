@@ -25,7 +25,7 @@
     </Compile>
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\NINA.Core\NINA.Core.csproj" />
+    <ProjectReference Include="..\OpenAstroAra.Core\OpenAstroAra.Core.csproj" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\LICENSE.txt">

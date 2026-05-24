@@ -19,7 +19,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 		RELEASE_NOTES.md = RELEASE_NOTES.md
 	EndProjectSection
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NINA.Core", "NINA.Core\NINA.Core.csproj", "{F906E54B-9CE8-4A66-856B-E876DD305F2B}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenAstroAra.Core", "OpenAstroAra.Core\OpenAstroAra.Core.csproj", "{F906E54B-9CE8-4A66-856B-E876DD305F2B}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NINA.Equipment", "NINA.Equipment\NINA.Equipment.csproj", "{20B7C98E-F7F8-497E-B5E5-02FA99D4B98B}"
 EndProject
