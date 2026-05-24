@@ -86,6 +86,13 @@ reviews:
   profile: chill           # default review depth — adjust if too noisy
   request_changes_workflow: false   # don't auto-block merges; user decides
 
+  auto_review:
+    enabled: true
+    base_branches:
+      - master
+      - port/ara           # without this, sub-PRs to port/ara are skipped
+                           # (CodeRabbit defaults to default-branch only)
+
   path_filters:
     # Exclude generated code (don't review machine output)
     - "!client/openastroara_client/lib/api/generated/**"
