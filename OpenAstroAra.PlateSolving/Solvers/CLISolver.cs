@@ -12,20 +12,20 @@
 
 #endregion "copyright"
 
-using NINA.Core.Enum;
+using OpenAstroAra.Core.Enum;
 using OpenAstroAra.Image.Interfaces;
-using NINA.Core.Utility;
-using NINA.Core.Utility.Extensions;
+using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Core.Utility.Extensions;
 using System;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using OpenAstroAra.Image.FileFormat;
-using NINA.Core.Model;
-using NINA.Core.Locale;
+using OpenAstroAra.Core.Model;
+using OpenAstroAra.Core.Locale;
 using System.Collections.Generic;
 
-namespace NINA.PlateSolving.Solvers {
+namespace OpenAstroAra.PlateSolving.Solvers {
 
     internal abstract class CLISolver : BaseSolver {
         protected string executableLocation;

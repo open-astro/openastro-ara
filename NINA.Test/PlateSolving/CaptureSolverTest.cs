@@ -16,7 +16,7 @@ using FluentAssertions;
 using Moq;
 using OpenAstroAra.Image.ImageData;
 using NINA.Equipment.Equipment.MyFilterWheel;
-using NINA.PlateSolving;
+using OpenAstroAra.PlateSolving;
 using NINA.Equipment.Interfaces.Mediator;
 using NUnit.Framework;
 using System;
@@ -30,7 +30,7 @@ using OpenAstroAra.Image.Interfaces;
 using NINA.Equipment.Model;
 using NINA.Core.Model;
 using NINA.Core.Model.Equipment;
-using NINA.PlateSolving.Interfaces;
+using OpenAstroAra.PlateSolving.Interfaces;
 
 namespace NINA.Test.PlateSolving {
 

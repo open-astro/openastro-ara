@@ -13,13 +13,13 @@
 #endregion "copyright"
 
 using OpenAstroAra.Profile.Interfaces;
-using NINA.PlateSolving.Solvers;
-using NINA.Core.Enum;
-using NINA.PlateSolving.Interfaces;
-using NINA.Equipment.Interfaces.Mediator;
-using NINA.Equipment.Interfaces;
+using OpenAstroAra.PlateSolving.Solvers;
+using OpenAstroAra.Core.Enum;
+using OpenAstroAra.PlateSolving.Interfaces;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Equipment.Interfaces;
 
-namespace NINA.PlateSolving {
+namespace OpenAstroAra.PlateSolving {
 
     public class PlateSolverFactoryProxy : IPlateSolverFactory {
 

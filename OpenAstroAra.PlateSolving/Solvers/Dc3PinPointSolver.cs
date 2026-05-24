@@ -13,11 +13,11 @@
 #endregion "copyright"
 
 using OpenAstroAra.Astrometry;
-using NINA.Core.Enum;
-using NINA.Core.Locale;
-using NINA.Core.Model;
-using NINA.Core.Utility;
-using NINA.Core.Utility.Notification;
+using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Locale;
+using OpenAstroAra.Core.Model;
+using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Core.Utility.Notification;
 using OpenAstroAra.Image.FileFormat;
 using OpenAstroAra.Image.Interfaces;
 using OpenAstroAra.Profile.Interfaces;
@@ -27,7 +27,7 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace NINA.PlateSolving.Solvers {
+namespace OpenAstroAra.PlateSolving.Solvers {
 
     internal class Dc3PinPointSolver : BaseSolver {
         private readonly Dc3PoinPointCatalogEnum catalogType;

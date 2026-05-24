@@ -14,10 +14,10 @@
 
 using CommunityToolkit.Mvvm.ComponentModel;
 using OpenAstroAra.Astrometry;
-using NINA.Core.Utility;
+using OpenAstroAra.Core.Utility;
 using System;
 
-namespace NINA.PlateSolving {
+namespace OpenAstroAra.PlateSolving {
 
     public partial class PlateSolveResult : BaseINPC {
 

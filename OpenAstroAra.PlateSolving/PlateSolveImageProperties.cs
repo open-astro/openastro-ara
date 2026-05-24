@@ -15,7 +15,7 @@
 using OpenAstroAra.Image.Interfaces;
 using OpenAstroAra.Astrometry;
 
-namespace NINA.PlateSolving {
+namespace OpenAstroAra.PlateSolving {
 
     internal class PlateSolveImageProperties {
         public double FocalLength { get; private set; }

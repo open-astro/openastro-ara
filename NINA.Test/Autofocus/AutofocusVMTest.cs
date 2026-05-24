@@ -24,7 +24,7 @@ using OpenAstroAra.Image.ImageAnalysis;
 using OpenAstroAra.Image.ImageData;
 using OpenAstroAra.Image.Interfaces;
 using OpenAstroAra.Image.RawConverter;
-using NINA.PlateSolving.Interfaces;
+using OpenAstroAra.PlateSolving.Interfaces;
 using OpenAstroAra.Profile.Interfaces;
 using NINA.WPF.Base.Interfaces.Mediator;
 using NINA.WPF.Base.ViewModel.AutoFocus;

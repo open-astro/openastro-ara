@@ -19,8 +19,8 @@ using System.Runtime.InteropServices;
 // General Information about an assembly is controlled through the following
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
-[assembly: AssemblyTitle("NINA.Platesolving")]
-[assembly: AssemblyDescription("This assembly contains the Platesolving components of N.I.N.A. to invoke different platesolvers.")]
+[assembly: AssemblyTitle("OpenAstroAra.PlateSolving")]
+[assembly: AssemblyDescription("Plate-solving components of OpenAstro Ara (forked from N.I.N.A.) — multiple solver backends.")]
 [assembly: AssemblyConfiguration("")]
 
 // Setting ComVisible to false makes the types in this assembly not visible

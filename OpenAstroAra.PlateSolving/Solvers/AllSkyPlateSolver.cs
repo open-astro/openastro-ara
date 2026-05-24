@@ -13,14 +13,14 @@
 #endregion "copyright"
 
 using OpenAstroAra.Astrometry;
-using NINA.Core.Locale;
+using OpenAstroAra.Core.Locale;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Text;
 
-namespace NINA.PlateSolving.Solvers {
+namespace OpenAstroAra.PlateSolving.Solvers {
 
     internal class AllSkyPlateSolver : CLISolver {
 

@@ -35,7 +35,7 @@
     <ProjectReference Include="..\OpenAstroAra.Core\OpenAstroAra.Core.csproj" />
     <ProjectReference Include="..\NINA.Equipment\NINA.Equipment.csproj" />
     <ProjectReference Include="..\OpenAstroAra.Image\OpenAstroAra.Image.csproj" />
-    <ProjectReference Include="..\NINA.Platesolving\NINA.PlateSolving.csproj" />
+    <ProjectReference Include="..\NINA.Platesolving\OpenAstroAra.PlateSolving.csproj" />
     <ProjectReference Include="..\OpenAstroAra.Profile\OpenAstroAra.Profile.csproj" />
     <ProjectReference Include="..\NINA.Sequencer\NINA.Sequencer.csproj" />
   </ItemGroup>

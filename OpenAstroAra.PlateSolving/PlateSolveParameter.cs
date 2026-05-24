@@ -15,7 +15,7 @@
 using OpenAstroAra.Astrometry;
 using System;
 
-namespace NINA.PlateSolving {
+namespace OpenAstroAra.PlateSolving {
 
     public class PlateSolveParameter {
         private double pixelSize;

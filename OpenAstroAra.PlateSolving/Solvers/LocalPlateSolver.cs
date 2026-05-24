@@ -13,13 +13,13 @@
 #endregion "copyright"
 
 using OpenAstroAra.Astrometry;
-using NINA.Core.Locale;
+using OpenAstroAra.Core.Locale;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 
-namespace NINA.PlateSolving.Solvers {
+namespace OpenAstroAra.PlateSolving.Solvers {
 
     internal class LocalPlateSolver : CLISolver {
         private string bashLocation;

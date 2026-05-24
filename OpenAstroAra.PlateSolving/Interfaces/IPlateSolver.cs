@@ -12,16 +12,16 @@
 
 #endregion "copyright"
 
-using NINA.Core.Model;
+using OpenAstroAra.Core.Model;
 using OpenAstroAra.Image.Interfaces;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace NINA.PlateSolving.Interfaces {
+namespace OpenAstroAra.PlateSolving.Interfaces {
 
-    public interface IImageSolver {
+    public interface IPlateSolver {
 
-        Task<PlateSolveResult> Solve(IImageData source, PlateSolveParameter parameter, IProgress<ApplicationStatus> progress, CancellationToken ct);
+        Task<PlateSolveResult> SolveAsync(IImageData source, PlateSolveParameter parameter, IProgress<ApplicationStatus> progress, CancellationToken canceltoken);
     }
 }

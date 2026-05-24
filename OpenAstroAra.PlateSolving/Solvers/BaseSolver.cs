@@ -16,12 +16,12 @@ using System;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
-using NINA.Core.Model;
-using NINA.Core.Utility;
+using OpenAstroAra.Core.Model;
+using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Image.Interfaces;
-using NINA.PlateSolving.Interfaces;
+using OpenAstroAra.PlateSolving.Interfaces;
 
-namespace NINA.PlateSolving.Solvers {
+namespace OpenAstroAra.PlateSolving.Solvers {
 
     internal abstract class BaseSolver : IPlateSolver {
         protected static string WORKING_DIRECTORY;

@@ -12,10 +12,12 @@
 
 #endregion "copyright"
 
-namespace NINA.PlateSolving {
+using System;
 
-    public class CenterSolveParameter : CaptureSolverParameter {
-        public double Threshold { get; set; }
-        public bool NoSync { get; set; }
+namespace OpenAstroAra.PlateSolving {
+
+    public class CaptureSolverParameter : PlateSolveParameter {
+        public int Attempts { get; set; }
+        public TimeSpan ReattemptDelay { get; set; }
     }
 }

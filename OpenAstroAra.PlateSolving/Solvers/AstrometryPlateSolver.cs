@@ -13,11 +13,11 @@
 #endregion "copyright"
 
 using Newtonsoft.Json.Linq;
-using NINA.Core.Enum;
+using OpenAstroAra.Core.Enum;
 using OpenAstroAra.Image.Interfaces;
-using NINA.Core.Utility;
-using NINA.Core.Utility.Http;
-using NINA.Core.Utility.Notification;
+using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Core.Utility.Http;
+using OpenAstroAra.Core.Utility.Notification;
 using System;
 using System.Collections.Specialized;
 using System.IO;
@@ -25,11 +25,11 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Media.Imaging;
-using NINA.Core.Model;
+using OpenAstroAra.Core.Model;
 using OpenAstroAra.Image.FileFormat;
-using NINA.Core.Locale;
+using OpenAstroAra.Core.Locale;
 
-namespace NINA.PlateSolving.Solvers {
+namespace OpenAstroAra.PlateSolving.Solvers {
 
     internal class AstrometryPlateSolver : BaseSolver {
         private const string AUTHURL = "/api/login/";
