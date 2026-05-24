@@ -15,9 +15,9 @@
 using FluentAssertions;
 using Moq;
 using NINA.Core.Model;
-using NINA.Equipment.Equipment.MySafetyMonitor;
-using NINA.Equipment.Interfaces;
-using NINA.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Equipment.Equipment.MySafetyMonitor;
+using OpenAstroAra.Equipment.Interfaces;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using NINA.Sequencer.SequenceItem.SafetyMonitor;
 using NUnit.Framework;
 using System;

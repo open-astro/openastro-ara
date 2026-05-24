@@ -13,15 +13,15 @@ using NUnit.Framework;
 using System;
 using NINA.Core.Utility;
 using System.Windows.Media.Media3D;
-using NINA.Astrometry;
-using NINA.Equipment.Equipment.MyTelescope;
+using OpenAstroAra.Astrometry;
+using OpenAstroAra.Equipment.Equipment.MyTelescope;
 using NINA.Core.Database;
 using System.IO;
 using Moq;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using NINA.Core.Enum;
-using NINA.Equipment.Equipment.MyDome;
-using NINA.Equipment.Interfaces;
+using OpenAstroAra.Equipment.Equipment.MyDome;
+using OpenAstroAra.Equipment.Interfaces;
 using NUnit.Framework.Legacy;
 
 namespace NINA.Test.Dome {

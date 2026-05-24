@@ -13,8 +13,8 @@
 #endregion "copyright"
 
 using NINA.Core.Utility;
-using NINA.Profile;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile;
+using OpenAstroAra.Profile.Interfaces;
 using NINA.Sequencer.Conditions;
 using NINA.Sequencer.Container;
 using NINA.Sequencer.SequenceItem;

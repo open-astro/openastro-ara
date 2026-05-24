@@ -14,8 +14,8 @@
 
 using FluentAssertions;
 using Moq;
-using NINA.Equipment.Equipment.MyPlanetarium;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Equipment.Equipment.MyPlanetarium;
+using OpenAstroAra.Profile.Interfaces;
 using NINA.Sequencer;
 using NINA.Sequencer.Conditions;
 using NINA.Sequencer.Container;
@@ -23,8 +23,8 @@ using NINA.Sequencer.SequenceItem;
 using NINA.Sequencer.Serialization;
 using NINA.Sequencer.Trigger;
 using NINA.Core.Utility;
-using NINA.Astrometry;
-using NINA.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Astrometry;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using NINA.ViewModel;
 using NINA.ViewModel.FramingAssistant;
 using NINA.ViewModel.ImageHistory;

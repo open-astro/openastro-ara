@@ -1,16 +1,16 @@
 ﻿using FluentAssertions;
 using Moq;
-using NINA.Astrometry;
-using NINA.Astrometry.Interfaces;
+using OpenAstroAra.Astrometry;
+using OpenAstroAra.Astrometry.Interfaces;
 using NINA.Core.Utility;
-using NINA.Profile;
+using OpenAstroAra.Profile;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using static NINA.Equipment.Equipment.MyGPS.PegasusAstro.UnityApi.DriverUranusReport;
+using static OpenAstroAra.Equipment.Equipment.MyGPS.PegasusAstro.UnityApi.DriverUranusReport;
 using static NINA.Sequencer.SequenceItem.FlatDevice.SkyFlat;
 
 namespace NINA.Test.Sequencer.SequenceItem.FlatDevice {

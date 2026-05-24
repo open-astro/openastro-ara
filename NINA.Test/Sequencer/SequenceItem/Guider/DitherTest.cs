@@ -14,11 +14,11 @@
 
 using FluentAssertions;
 using Moq;
-using NINA.Equipment.Equipment.MyGuider;
+using OpenAstroAra.Equipment.Equipment.MyGuider;
 using NINA.Sequencer;
 using NINA.Core.Model;
 using NINA.Sequencer.SequenceItem.Guider;
-using NINA.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using NUnit.Framework;
 using System;
 using System.Collections.Generic;
@@ -26,7 +26,7 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 
 namespace NINA.Test.Sequencer.SequenceItem.Guider {
 

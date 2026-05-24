@@ -6,12 +6,12 @@ using System.Threading.Tasks;
 
 namespace NINA.Sequencer.SequenceItem.Utility {
     using Newtonsoft.Json;
-    using NINA.Astrometry;
+    using OpenAstroAra.Astrometry;
     using NINA.Core.Enum;
     using NINA.Core.Locale;
     using NINA.Core.Model;
     using NINA.Core.Utility;
-    using NINA.Profile.Interfaces;
+    using OpenAstroAra.Profile.Interfaces;
     using NINA.Sequencer.Conditions;
     using NINA.Sequencer.Utility;
     using NINA.Sequencer.Validations;

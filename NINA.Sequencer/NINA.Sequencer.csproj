@@ -37,12 +37,12 @@
     </None>
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\NINA.Astrometry\NINA.Astrometry.csproj" />
+    <ProjectReference Include="..\OpenAstroAra.Astrometry\OpenAstroAra.Astrometry.csproj" />
     <ProjectReference Include="..\OpenAstroAra.Core\OpenAstroAra.Core.csproj" />
-    <ProjectReference Include="..\OpenAstroAra.Equipment\OpenAstroAra.Equipment.csproj" />
-    <ProjectReference Include="..\NINA.Image\NINA.Image.csproj" />
+    <ProjectReference Include="..\NINA.Equipment\OpenAstroAra.Equipment.csproj" />
+    <ProjectReference Include="..\OpenAstroAra.Image\OpenAstroAra.Image.csproj" />
     <ProjectReference Include="..\NINA.Platesolving\NINA.PlateSolving.csproj" />
-    <ProjectReference Include="..\NINA.Profile\NINA.Profile.csproj" />
+    <ProjectReference Include="..\OpenAstroAra.Profile\OpenAstroAra.Profile.csproj" />
     <ProjectReference Include="..\NINA.CustomControlLibrary\NINA.CustomControlLibrary.csproj" />
     <ProjectReference Include="..\NINA.WPF.Base\NINA.WPF.Base.csproj" />
   </ItemGroup>

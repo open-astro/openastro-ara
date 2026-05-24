@@ -14,12 +14,12 @@
 
 using Newtonsoft.Json;
 using NINA.Core.Model;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using NINA.Sequencer.Container;
 using NINA.Sequencer.SequenceItem;
 using NINA.Sequencer.SequenceItem.Autofocus;
 using NINA.Sequencer.Validations;
-using NINA.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using NINA.Core.Utility.WindowService;
 using NINA.ViewModel;
 using NINA.WPF.Base.Interfaces.ViewModel;
@@ -37,7 +37,7 @@ using NINA.Core.Locale;
 using NINA.Sequencer.Utility;
 using NINA.Core.Utility;
 using NINA.Sequencer.Interfaces;
-using NINA.Image.ImageAnalysis;
+using OpenAstroAra.Image.ImageAnalysis;
 using NINA.WPF.Base.Interfaces;
 
 namespace NINA.Sequencer.Trigger.Autofocus {

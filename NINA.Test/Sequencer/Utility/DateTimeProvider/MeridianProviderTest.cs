@@ -14,12 +14,12 @@
 
 using FluentAssertions;
 using Moq;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using NINA.Sequencer;
 using NINA.Sequencer.Container;
 using NINA.Sequencer.Utility.DateTimeProvider;
 using NINA.Core.Utility;
-using NINA.Astrometry;
+using OpenAstroAra.Astrometry;
 using NUnit.Framework;
 using System;
 using System.Collections.Generic;

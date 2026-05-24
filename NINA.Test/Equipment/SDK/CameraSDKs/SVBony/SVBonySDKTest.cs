@@ -12,7 +12,7 @@
 using FluentAssertions;
 using Moq;
 using NINA.Core.Enum;
-using NINA.Equipment.SDK.CameraSDKs.SVBonySDK;
+using OpenAstroAra.Equipment.SDK.CameraSDKs.SVBonySDK;
 using NUnit.Framework;
 using System;
 using System.Collections.Generic;

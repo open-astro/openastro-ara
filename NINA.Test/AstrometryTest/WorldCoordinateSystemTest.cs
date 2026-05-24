@@ -1,5 +1,5 @@
 ﻿using FluentAssertions;
-using NINA.Astrometry;
+using OpenAstroAra.Astrometry;
 using System;
 using System.Collections.Generic;
 using System.Linq;

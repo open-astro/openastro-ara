@@ -14,13 +14,13 @@
 
 using FluentAssertions;
 using Moq;
-using NINA.Image.ImageData;
-using NINA.Equipment.Equipment.MyCamera;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Image.ImageData;
+using OpenAstroAra.Equipment.Equipment.MyCamera;
+using OpenAstroAra.Profile.Interfaces;
 using NINA.Sequencer;
 using NINA.Core.Model;
 using NINA.Sequencer.SequenceItem.Imaging;
-using NINA.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using NINA.ViewModel.ImageHistory;
 using Nito.AsyncEx;
 using NUnit.Framework;
@@ -30,8 +30,8 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using NINA.Image.Interfaces;
-using NINA.Equipment.Model;
+using OpenAstroAra.Image.Interfaces;
+using OpenAstroAra.Equipment.Model;
 using NINA.Core.Utility;
 using NINA.WPF.Base.Interfaces.Mediator;
 using NINA.Core.Model.Equipment;

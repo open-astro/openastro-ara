@@ -15,16 +15,16 @@
 using Newtonsoft.Json;
 using NINA.Core.Enum;
 using NINA.Core.Model;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using NINA.Core.Utility;
-using NINA.Astrometry;
+using OpenAstroAra.Astrometry;
 using System;
 using System.ComponentModel.Composition;
 using System.Threading;
 using System.Threading.Tasks;
 using NINA.Core.Locale;
 using NINA.Sequencer.Validations;
-using NINA.Astrometry.RiseAndSet;
+using OpenAstroAra.Astrometry.RiseAndSet;
 using Nito.AsyncEx;
 
 namespace NINA.Sequencer.SequenceItem.Utility {

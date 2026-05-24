@@ -14,10 +14,10 @@
 
 using Newtonsoft.Json;
 using NINA.Core.Model;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using NINA.Sequencer.Validations;
-using NINA.Astrometry;
-using NINA.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Astrometry;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;

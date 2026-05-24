@@ -16,7 +16,7 @@ using Newtonsoft.Json;
 using NINA.Core.Model;
 using NINA.Sequencer.Validations;
 using NINA.Core.Utility;
-using NINA.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -26,8 +26,8 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using NINA.Core.Locale;
-using NINA.Equipment.Interfaces;
-using NINA.Equipment.Equipment.MySwitch;
+using OpenAstroAra.Equipment.Interfaces;
+using OpenAstroAra.Equipment.Equipment.MySwitch;
 
 namespace NINA.Sequencer.SequenceItem.Switch {
 

@@ -17,7 +17,7 @@ using NINA.Core.Utility;
 using System.Collections.Generic;
 using System.Windows.Input;
 using System.Threading.Tasks;
-using NINA.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using System;
 using System.IO;
 using System.Threading;

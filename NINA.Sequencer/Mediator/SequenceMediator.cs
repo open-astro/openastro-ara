@@ -14,13 +14,13 @@
 
 using NINA.Core.Model;
 using NINA.Sequencer.Container;
-using NINA.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using NINA.ViewModel.Sequencer;
 using System;
 using System.Collections.Generic;
 using NINA.Sequencer.Interfaces.Mediator;
-using NINA.Astrometry;
-using NINA.Astrometry.Interfaces;
+using OpenAstroAra.Astrometry;
+using OpenAstroAra.Astrometry.Interfaces;
 using System.Threading.Tasks;
 using System.Threading;
 using NINA.Sequencer.SequenceItem;

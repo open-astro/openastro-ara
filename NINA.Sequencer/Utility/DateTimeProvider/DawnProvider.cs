@@ -14,14 +14,14 @@
 
 using Newtonsoft.Json;
 using NINA.Core.Utility;
-using NINA.Astrometry;
+using OpenAstroAra.Astrometry;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using NINA.Core.Locale;
-using NINA.Astrometry.Interfaces;
+using OpenAstroAra.Astrometry.Interfaces;
 
 namespace NINA.Sequencer.Utility.DateTimeProvider {
 

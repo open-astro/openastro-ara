@@ -14,12 +14,12 @@
 
 using FluentAssertions;
 using Moq;
-using NINA.Equipment.Equipment.MyCamera;
-using NINA.Equipment.Equipment.MyFilterWheel;
-using NINA.Equipment.Equipment.MyFocuser;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Equipment.Equipment.MyCamera;
+using OpenAstroAra.Equipment.Equipment.MyFilterWheel;
+using OpenAstroAra.Equipment.Equipment.MyFocuser;
+using OpenAstroAra.Profile.Interfaces;
 using NINA.Sequencer.Trigger.Autofocus;
-using NINA.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using NINA.Core.Utility.WindowService;
 using NUnit.Framework;
 using System;
@@ -32,7 +32,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
 using NINA.WPF.Base.Interfaces.Mediator;
-using NINA.Image.ImageData;
+using OpenAstroAra.Image.ImageData;
 using NINA.Core.Utility;
 using NINA.Core.Model.Equipment;
 using NINA.WPF.Base.Interfaces.ViewModel;
@@ -40,7 +40,7 @@ using NINA.WPF.Base.Model;
 using NINA.WPF.Base.Utility.AutoFocus;
 using NINA.Sequencer.SequenceItem;
 using NINA.Sequencer.Interfaces;
-using NINA.Image.ImageAnalysis;
+using OpenAstroAra.Image.ImageAnalysis;
 using NINA.WPF.Base.Interfaces;
 using NINA.ViewModel.ImageHistory;
 

@@ -1,8 +1,8 @@
 ﻿using Newtonsoft.Json;
 using NINA.Core.Locale;
 using NINA.Core.Model;
-using NINA.Equipment.Interfaces;
-using NINA.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Equipment.Interfaces;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using NINA.Sequencer.Validations;
 using System;
 using System.Collections.Generic;

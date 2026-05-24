@@ -11,10 +11,10 @@
 #endregion "copyright"
 using FluentAssertions;
 using Moq;
-using NINA.Image.ImageAnalysis;
-using NINA.Image.ImageData;
-using NINA.Image.Interfaces;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Image.ImageAnalysis;
+using OpenAstroAra.Image.ImageData;
+using OpenAstroAra.Image.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using NUnit.Framework;
 using NUnit.Framework.Legacy;
 

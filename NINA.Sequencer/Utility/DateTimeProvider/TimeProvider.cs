@@ -13,8 +13,8 @@
 #endregion "copyright"
 
 using Newtonsoft.Json;
-using NINA.Astrometry;
-using NINA.Astrometry.Interfaces;
+using OpenAstroAra.Astrometry;
+using OpenAstroAra.Astrometry.Interfaces;
 using NINA.Core.Locale;
 using NINA.Core.Utility;
 using System;
