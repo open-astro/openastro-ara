@@ -12,19 +12,19 @@
 
 #endregion "copyright"
 
-using NINA.Core.Utility;
-using NINA.Core.Utility.Notification;
+using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Core.Utility.Notification;
 using OpenAstroAra.Profile.Interfaces;
 using System;
 using System.IO;
 using System.Threading.Tasks;
 using System.Windows.Media.Imaging;
 using OpenAstroAra.Image.ImageData;
-using NINA.Core.Enum;
+using OpenAstroAra.Core.Enum;
 using OpenAstroAra.Image.Interfaces;
-using NINA.Core.Locale;
+using OpenAstroAra.Core.Locale;
 
-namespace NINA.Image {
+namespace OpenAstroAra.Image {
 
     public class Thumbnail : BaseINPC {
         protected readonly IImageDataFactory imageDataFactory;

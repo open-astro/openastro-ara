@@ -13,10 +13,10 @@
 #endregion "copyright"
 
 using OpenAstroAra.Astrometry;
-using NINA.Core.Enum;
-using NINA.Core.Interfaces;
-using NINA.Core.Model;
-using NINA.Core.Utility;
+using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Interfaces;
+using OpenAstroAra.Core.Model;
+using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Image.FileFormat;
 using OpenAstroAra.Image.FileFormat.FITS;
 using OpenAstroAra.Image.FileFormat.XISF;

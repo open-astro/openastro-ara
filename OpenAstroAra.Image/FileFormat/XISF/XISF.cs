@@ -14,10 +14,10 @@
 
 using Ionic.Zlib;
 using K4os.Compression.LZ4;
-using NINA.Core.Enum;
-using NINA.Core.Locale;
-using NINA.Core.Utility;
-using NINA.Core.Utility.Notification;
+using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Locale;
+using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Core.Utility.Notification;
 using OpenAstroAra.Image.FileFormat.XISF.DataConverter;
 using OpenAstroAra.Image.ImageAnalysis;
 using OpenAstroAra.Image.ImageData;

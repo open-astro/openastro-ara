@@ -12,7 +12,7 @@
 
 #endregion "copyright"
 
-using NINA.Core.Enum;
+using OpenAstroAra.Core.Enum;
 using OpenAstroAra.Profile.Interfaces;
 
 namespace OpenAstroAra.Image.FileFormat {
