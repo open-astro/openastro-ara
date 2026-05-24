@@ -15,7 +15,7 @@ using System.Threading.Tasks;
 using Moq;
 using NINA.Core.Locale;
 using NINA.Equipment.Equipment.MyFlatDevice;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using NINA.Core.Utility.SerialCommunication;
 using NUnit.Framework;
 using NINA.Equipment.SDK.FlatDeviceSDKs.PegasusAstroSDK;

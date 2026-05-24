@@ -15,7 +15,7 @@
 using Newtonsoft.Json;
 using NINA.Core.Enum;
 using NINA.Core.Model;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using NINA.Core.Utility;
 using OpenAstroAra.Astrometry;
 using System;

@@ -18,7 +18,7 @@ using NINA.Equipment.Equipment.MyTelescope;
 using NINA.Core.Database;
 using System.IO;
 using Moq;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using NINA.Core.Enum;
 using NINA.Equipment.Equipment.MyDome;
 using NINA.Equipment.Interfaces;

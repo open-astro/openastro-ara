@@ -15,7 +15,7 @@
 using NINA.Core.Enum;
 using NINA.Equipment.Equipment.MyGPS.PegasusAstro;
 using NINA.Equipment.Interfaces;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 
 namespace NINA.Equipment.Equipment.MyGPS {
     public class GnssFactory : IGnssFactory {

@@ -20,7 +20,7 @@ using NINA.Core.Utility;
 using NINA.Core.Utility.Notification;
 using NINA.Image.FileFormat;
 using NINA.Image.Interfaces;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using System;
 using System.IO;
 using System.Runtime.InteropServices;

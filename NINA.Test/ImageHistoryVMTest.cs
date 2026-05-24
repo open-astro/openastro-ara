@@ -12,7 +12,7 @@
 using FluentAssertions;
 using Moq;
 using NINA.Image.ImageData;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using NINA.Equipment.Interfaces.Mediator;
 using NINA.ViewModel;
 using NINA.ViewModel.ImageHistory;

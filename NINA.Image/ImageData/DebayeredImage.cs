@@ -15,7 +15,7 @@
 using NINA.Core.Enum;
 using NINA.Image.ImageAnalysis;
 using NINA.Image.Interfaces;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using System.Threading.Tasks;
 using System.Windows.Media.Imaging;
 

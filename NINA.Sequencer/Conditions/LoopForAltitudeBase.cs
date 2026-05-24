@@ -9,7 +9,7 @@ namespace NINA.Sequencer.SequenceItem.Utility {
     using OpenAstroAra.Astrometry;
     using NINA.Core.Enum;
     using NINA.Core.Utility;
-    using NINA.Profile.Interfaces;
+    using OpenAstroAra.Profile.Interfaces;
     using NINA.Sequencer.Conditions;
     using NINA.Sequencer.Utility;
     using System;

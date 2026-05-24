@@ -23,7 +23,7 @@ using System.Windows.Media.Imaging;
 using NINA.Core.Enum;
 using NINA.Image.RawConverter;
 using NINA.Image.ImageAnalysis;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using NINA.Core.Interfaces;
 
 namespace NINA.Image.ImageData {

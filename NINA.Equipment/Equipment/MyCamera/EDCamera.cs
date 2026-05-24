@@ -15,7 +15,7 @@
 using EDSDKLib;
 using NINA.Core.Enum;
 using NINA.Image.ImageData;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using NINA.Core.Utility;
 using NINA.Core.Utility.Notification;
 using System;

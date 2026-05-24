@@ -13,7 +13,7 @@
 #endregion "copyright"
 
 using NINA.Core.Utility;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using NINA.Core.Utility.WindowService;
 using System;
 using System.Threading;

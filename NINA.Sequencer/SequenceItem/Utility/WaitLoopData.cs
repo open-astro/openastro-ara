@@ -10,7 +10,7 @@ namespace NINA.Sequencer.SequenceItem.Utility {
     using NINA.Core.Enum;
     using NINA.Core.Model;
     using NINA.Core.Utility;
-    using NINA.Profile.Interfaces;
+    using OpenAstroAra.Profile.Interfaces;
 
     [JsonObject(MemberSerialization.OptIn)]
     public class WaitLoopData : BaseINPC {

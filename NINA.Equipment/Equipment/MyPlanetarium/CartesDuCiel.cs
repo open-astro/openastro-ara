@@ -14,7 +14,7 @@
 
 using OpenAstroAra.Astrometry;
 using NINA.Core.Utility.TcpRaw;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using System;
 using System.Threading.Tasks;
 using System.Text.RegularExpressions;

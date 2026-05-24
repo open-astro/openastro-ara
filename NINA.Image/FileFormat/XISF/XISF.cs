@@ -22,7 +22,7 @@ using NINA.Image.FileFormat.XISF.DataConverter;
 using NINA.Image.ImageAnalysis;
 using NINA.Image.ImageData;
 using NINA.Image.Interfaces;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using System;
 using System.IO;
 using System.Linq;

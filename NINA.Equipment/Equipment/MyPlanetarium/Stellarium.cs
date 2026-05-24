@@ -19,7 +19,7 @@ using NINA.Core.Utility;
 using NINA.Core.Utility.Http;
 using NINA.Equipment.Exceptions;
 using NINA.Equipment.Interfaces;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using System;
 using System.Globalization;
 using System.Net;

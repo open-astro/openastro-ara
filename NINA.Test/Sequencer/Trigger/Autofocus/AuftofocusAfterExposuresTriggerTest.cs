@@ -1,6 +1,6 @@
 ﻿using Moq;
 using NINA.Equipment.Interfaces.Mediator;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using NINA.ViewModel.ImageHistory;
 using NINA.WPF.Base.Interfaces.Mediator;
 using NINA.WPF.Base.Interfaces;

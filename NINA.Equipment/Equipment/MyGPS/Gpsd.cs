@@ -18,7 +18,7 @@ using NINA.Core.Locale;
 using NINA.Core.Utility;
 using NINA.Equipment.Exceptions;
 using NINA.Equipment.Interfaces;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using System;
 using System.IO;
 using System.Linq;

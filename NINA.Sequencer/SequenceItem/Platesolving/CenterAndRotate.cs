@@ -15,7 +15,7 @@
 using Newtonsoft.Json;
 using NINA.Core.Model;
 using NINA.PlateSolving;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using NINA.Sequencer.Container;
 using NINA.Sequencer.Utility;
 using NINA.Sequencer.Validations;
