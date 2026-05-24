@@ -12,7 +12,7 @@ using NINA.Equipment.Equipment.MySwitch.Ascom;
 using NINA.Equipment.Equipment.MyTelescope;
 using NINA.Equipment.Equipment.MyWeatherData;
 using NINA.Equipment.Interfaces;
-using NINA.Image.Interfaces;
+using OpenAstroAra.Image.Interfaces;
 using NINA.Profile.Interfaces;
 using System;
 using System.Collections.Generic;

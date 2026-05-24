@@ -10,7 +10,7 @@
 */
 #endregion "copyright"
 using FluentAssertions;
-using NINA.Image.ImageData;
+using OpenAstroAra.Image.ImageData;
 using NINA.Equipment.Equipment.MyCamera;
 using NINA.Core.Utility;
 using NINA.Astrometry;
@@ -19,8 +19,8 @@ using System;
 using System.Globalization;
 using System.IO;
 using System.Threading.Tasks;
-using NINA.Image.Interfaces;
-using NINA.Image.FileFormat;
+using OpenAstroAra.Image.Interfaces;
+using OpenAstroAra.Image.FileFormat;
 using NINA.Core.Model;
 using Moq;
 using NUnit.Framework.Legacy;

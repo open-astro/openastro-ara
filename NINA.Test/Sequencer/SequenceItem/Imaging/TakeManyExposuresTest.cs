@@ -14,7 +14,7 @@
 
 using FluentAssertions;
 using Moq;
-using NINA.Image.ImageData;
+using OpenAstroAra.Image.ImageData;
 using NINA.Equipment.Equipment.MyCamera;
 using NINA.Profile.Interfaces;
 using NINA.Sequencer;

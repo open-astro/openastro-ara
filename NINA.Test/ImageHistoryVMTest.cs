@@ -11,7 +11,7 @@
 #endregion "copyright"
 using FluentAssertions;
 using Moq;
-using NINA.Image.ImageData;
+using OpenAstroAra.Image.ImageData;
 using NINA.Profile.Interfaces;
 using NINA.Equipment.Interfaces.Mediator;
 using NINA.ViewModel;

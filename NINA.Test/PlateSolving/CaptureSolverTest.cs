@@ -14,7 +14,7 @@
 
 using FluentAssertions;
 using Moq;
-using NINA.Image.ImageData;
+using OpenAstroAra.Image.ImageData;
 using NINA.Equipment.Equipment.MyFilterWheel;
 using NINA.PlateSolving;
 using NINA.Equipment.Interfaces.Mediator;
@@ -26,7 +26,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using NINA.Core.Utility;
-using NINA.Image.Interfaces;
+using OpenAstroAra.Image.Interfaces;
 using NINA.Equipment.Model;
 using NINA.Core.Model;
 using NINA.Core.Model.Equipment;

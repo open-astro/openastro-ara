@@ -16,7 +16,7 @@ using FluentAssertions;
 using Moq;
 using NINA.Equipment.Interfaces;
 using NINA.Equipment.Interfaces.Mediator;
-using NINA.Image.Interfaces;
+using OpenAstroAra.Image.Interfaces;
 using NINA.Profile.Interfaces;
 using NINA.Sequencer.Trigger.Platesolving;
 using NINA.WPF.Base.Interfaces.Mediator;

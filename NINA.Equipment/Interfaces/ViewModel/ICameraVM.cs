@@ -16,7 +16,7 @@ using NINA.Core.Model;
 using NINA.Core.Utility;
 using NINA.Equipment.Equipment.MyCamera;
 using NINA.Equipment.Model;
-using NINA.Image.Interfaces;
+using OpenAstroAra.Image.Interfaces;
 using System;
 using System.Collections.Generic;
 using System.Threading;

@@ -10,7 +10,7 @@
 */
 #endregion "copyright"
 using FluentAssertions;
-using NINA.Image.ImageData;
+using OpenAstroAra.Image.ImageData;
 using NINA.Core.Utility;
 using NINA.Astrometry;
 using NUnit.Framework;
@@ -19,7 +19,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using NINA.Image.FileFormat.FITS;
+using OpenAstroAra.Image.FileFormat.FITS;
 
 namespace NINA.Test {
 

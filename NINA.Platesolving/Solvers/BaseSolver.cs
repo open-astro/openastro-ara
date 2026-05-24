@@ -18,7 +18,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using NINA.Core.Model;
 using NINA.Core.Utility;
-using NINA.Image.Interfaces;
+using OpenAstroAra.Image.Interfaces;
 using NINA.PlateSolving.Interfaces;
 
 namespace NINA.PlateSolving.Solvers {

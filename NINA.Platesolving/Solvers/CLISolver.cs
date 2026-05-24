@@ -13,14 +13,14 @@
 #endregion "copyright"
 
 using NINA.Core.Enum;
-using NINA.Image.Interfaces;
+using OpenAstroAra.Image.Interfaces;
 using NINA.Core.Utility;
 using NINA.Core.Utility.Extensions;
 using System;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
-using NINA.Image.FileFormat;
+using OpenAstroAra.Image.FileFormat;
 using NINA.Core.Model;
 using NINA.Core.Locale;
 using System.Collections.Generic;

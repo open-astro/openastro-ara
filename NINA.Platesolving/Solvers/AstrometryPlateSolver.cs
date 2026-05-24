@@ -14,7 +14,7 @@
 
 using Newtonsoft.Json.Linq;
 using NINA.Core.Enum;
-using NINA.Image.Interfaces;
+using OpenAstroAra.Image.Interfaces;
 using NINA.Core.Utility;
 using NINA.Core.Utility.Http;
 using NINA.Core.Utility.Notification;
@@ -26,7 +26,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Media.Imaging;
 using NINA.Core.Model;
-using NINA.Image.FileFormat;
+using OpenAstroAra.Image.FileFormat;
 using NINA.Core.Locale;
 
 namespace NINA.PlateSolving.Solvers {
