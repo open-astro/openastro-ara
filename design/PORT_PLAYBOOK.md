@@ -1675,14 +1675,16 @@ ARA targets deep-sky objects and comets — the long-exposure (30 s – 900 s) c
 ### 19.1 Git safety
 
 - **Branch allowlist:** AI may commit/push to `port/ara` (integration branch, where all phase PRs land) and to per-sub-PR feature branches with **flat names** matching `phase-N[<letter>]` (e.g., `phase-0.5a`, `phase-12h`, `phase-1`) plus a small set of named prep branches (e.g., `prep-ci`). All other branches are off-limits without explicit user instruction. The main `port/ara` branch is integration-only — direct commits to it happen only after the user merges a sub-PR (AI pulls the merge commit; never authors directly). **Why flat names:** Git refs are tree-structured — a branch named `port/ara` makes `port/ara/anything` an invalid ref name (`fatal: cannot lock ref ...: 'refs/heads/port/ara' exists`). See `design/COMMIT-PR-RULES.md` per-phase rhythm section for the branch tree diagram.
-- **AI merges PRs under a strict merge-gate** (policy revised 2026-05-23 from "AI never merges" after the user granted full merge authority in PR #2). The AI merges a PR when **all** of the following hold:
+- **AI merges PRs under a strict merge-gate** (policy revised 2026-05-23 from "AI never merges" after the user granted full merge authority in PR #2; tightened later same day after user direction "wait for rabbit … we need checks and balances" in PR #9 thread). The AI merges a PR when **all** of the following hold:
   - All required CI checks are `pass` (no `pending`, no `failure`)
-  - CodeRabbit review has been posted AND the PR has been quiescent (no new comments, no new commits) for ≥3 minutes
+  - **CodeRabbit has actually reviewed the PR** — a real walkthrough or "no actionable comments" summary in the comment thread, not a "Review skipped" / "Review limit reached" / rate-limit message. A "pass" status check from CodeRabbit alongside a rate-limit comment **does not satisfy** this gate (CodeRabbit reports pass on the check even when the underlying review was throttled). The PR must also be quiescent (no new comments, no new commits) for ≥3 minutes after the review lands.
   - All actionable CodeRabbit findings have been addressed via additional commits on the same sub-branch (per the CodeRabbit poll-and-fix loop in COMMIT-PR-RULES.md); disagreements have reasoned replies; out-of-scope items are tracked in `design/PORT_TODO.md`
   - AI self-review against the playbook scope is clean (no out-of-scope changes, no unexplained deletions, no half-finished states per §0.3)
-  - For the final `port/ara → master` PR at §22: additionally verify all `phase-N-complete` (and applicable `phase-N-<letter>-complete`) tags exist on the merged commits
+  - For `port/ara → master` PRs (per §22 cadence): additionally verify all expected `phase-N-complete` (and applicable `phase-N-<letter>-complete`) tags exist on the merged commits
 
-  Merge method: **squash** for prep + multi-commit sub-PRs that should land as one logical change on `port/ara`; **merge commit** for phase PRs that benefit from preserving per-commit granularity. AI picks based on the PR's commit history. Push immediately. Pull `port/ara` and continue.
+  **Rate-limit handling:** if CodeRabbit returns rate-limit / no-credits / "Review limit reached", AI does NOT merge. AI posts `Held for CodeRabbit @<user> — rate-limited, refill in <X>` and either (a) waits for the auto-refill window then retriggers via `@coderabbitai review`, or (b) waits for user direction (e.g., billing fix). No "strict-letter" merge-on-skip — that defeats the checks-and-balances purpose of the gate.
+
+  Merge method: **squash** for prep + multi-commit sub-PRs that should land as one logical change on `port/ara`; **merge commit** for phase PRs that benefit from preserving per-commit granularity. AI picks based on the PR's commit history. **Always use `--delete-branch` for sub-PR merges** to keep the sub-branch list trimmed (per user direction 2026-05-23); N/A for `port/ara → master` promotions per §22.1 (the long-lived `port/ara` integration branch is never deleted mid-port). Push immediately. Pull `port/ara` and continue.
 
   If any of the gate conditions are ambiguous or the AI is uncertain whether to merge, it posts "Held for human review @<user> — <reason>" instead of merging. The user can override either way.
 - No `git push --force` or `--force-with-lease`. Plain `git push` only.
@@ -1763,7 +1765,33 @@ When porting NINA logic into ASP.NET Core endpoints, replace `Loc.Instance[...]`
 
 ---
 
-## 22. Final pass (Phase 15)
+## 22. Periodic `port/ara → master` promotion + Phase 15 final pass
+
+### 22.0 Promotion cadence (revised 2026-05-23 from one-shot to periodic)
+
+The original plan was "single PR `port/ara → master` at Phase 15." Revised per user direction (PR #9 thread): promote `port/ara → master` **after each completed phase** (or sub-phase tag, when a sub-phase represents a coherent milestone — e.g., `phase-0.5a-complete` is a meaningful checkpoint; `phase-0.5b-complete` is too; `phase-12c-complete` may not be, judgment call). Reasons:
+
+- Visibility: stakeholders + GitHub default-branch viewers see actual progress on `master` instead of a long-running side branch
+- Risk: smaller, sequential `port/ara → master` merges are easier to revert than one mega-merge at Phase 15
+- Release ergonomics: `master` always reflects the most-recently-validated phase milestone; nightly snapshot tooling (future §34) can publish from `master` continuously
+
+### 22.1 Promotion procedure (per phase)
+
+After AI merges the last sub-PR of a phase into `port/ara`:
+
+1. Tag the boundary on `port/ara` HEAD: `git tag phase-N-complete && git push --tags`
+2. Open PR `port/ara → master` titled `port(promote): merge phase-N-complete to master`
+3. The §19.1 merge-gate applies: CI green + CodeRabbit reviewed + no unresolved actionable findings + clean self-review. Additionally:
+   - Verify the expected `phase-N-complete` tag (and applicable sub-tags) exist on the commits being merged
+   - Verify `port/ara` is ahead of `master` only by reviewed sub-PR commits (no surprises)
+4. **Merge method: merge commit** (not squash) — preserves per-phase + per-sub-PR commit history on `master`
+5. **Use `--delete-branch`** is N/A here (`port/ara` is a long-lived integration branch — never deleted until the port is fully complete)
+
+### 22.2 Sub-branch cleanup (continuous)
+
+Every sub-PR merge uses `gh pr merge --squash --delete-branch` so merged sub-branches are removed from origin immediately. Locally, `git fetch --prune` removes the stale tracking refs. If a stale sub-branch is found on origin (e.g., from an aborted PR), it can be deleted with `git push origin --delete <branch>` — but only sub-branches AI itself created (`phase-*`, `prep-*`, `rules-*`); never delete long-lived integration branches (`port/ara`, `master`) or branches the user created.
+
+### 22.3 Phase 15 (final release pass)
 
 1. Sweep `design/PORT_TODO.md`: every `// TODO(port)` and `// PORT_BLOCKED` resolved or explicitly accepted in `design/PORT_DECISIONS.md`.
 2. Run the gate one more time including `-c Release` and `flutter build` for every desktop platform (macOS / Windows / Linux per §18.G).
@@ -1784,7 +1812,9 @@ When porting NINA logic into ASP.NET Core endpoints, replace `Loc.Instance[...]`
    - Known issues, install instructions
    - Create fresh `## [Unreleased]` placeholder for v0.0.2 work
 5. Bump `CommonAssemblyInfo.cs` to `0.0.1.0`; informational `0.0.1-ara.1`. Bump `pubspec.yaml` to `0.0.1+1`.
-6. **Open final PR from `port/ara` to `master`** with `design/PORT_DECISIONS.md` contents as description. Per COMMIT-PR-RULES.md decision (2026-05-23): no `develop` branch; final PR goes directly `port/ara → master`. This PR is a fast-forward over the already-reviewed per-phase sub-PRs that landed on `port/ara` throughout the port — CodeRabbit's review burden is minimal because each constituent commit was already reviewed at its sub-PR. **AI merges** once the §19.1 merge-gate clears (all CI checks green; CodeRabbit quiescent ≥3 min with no unresolved actionable findings; all phase tags verified to exist; merge method: merge commit to preserve per-phase granularity on `master`'s history). The user can override either direction by commenting on the PR before quiescence.
+6. **Final `port/ara → master` PR.** Per §22.0 cadence, most phase promotions have already landed on `master` incrementally; this last PR catches the Phase 15 tail-end work (TODO sweep, version bumps, CHANGELOG entry, smoke-test fixes). Title: `port(release): merge phase-15-complete to master — v0.0.1-ara.1`. Body: `design/PORT_DECISIONS.md` contents. The §19.1 merge-gate applies; merge commit (not squash) to preserve history.
+
+   If for any reason periodic promotion was paused mid-port, this is the catch-all merge: all unmerged `port/ara` commits land on `master` here.
 
 ---
 
