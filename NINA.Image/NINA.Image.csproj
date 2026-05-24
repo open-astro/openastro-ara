@@ -41,7 +41,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Accord.Imaging\Accord.Imaging (NETStandard).csproj" />
     <ProjectReference Include="..\NINA.Astrometry\NINA.Astrometry.csproj" />
-    <ProjectReference Include="..\NINA.Core\NINA.Core.csproj" />
+    <ProjectReference Include="..\OpenAstroAra.Core\OpenAstroAra.Core.csproj" />
     <ProjectReference Include="..\NINA.Profile\NINA.Profile.csproj" />
   </ItemGroup>
   <ItemGroup>
