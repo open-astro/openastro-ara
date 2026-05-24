@@ -15,9 +15,9 @@
 using FluentAssertions;
 using Moq;
 using NINA.Equipment.Equipment.MyCamera;
-using NINA.Sequencer;
+using OpenAstroAra.Sequencer;
 using NINA.Core.Model;
-using NINA.Sequencer.SequenceItem.Camera;
+using OpenAstroAra.Sequencer.SequenceItem.Camera;
 using NINA.Equipment.Interfaces.Mediator;
 using NUnit.Framework;
 using System;

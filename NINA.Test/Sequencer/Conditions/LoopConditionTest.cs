@@ -13,7 +13,7 @@
 #endregion "copyright"
 
 using FluentAssertions;
-using NINA.Sequencer.Conditions;
+using OpenAstroAra.Sequencer.Conditions;
 using NUnit.Framework;
 using System;
 using System.Collections.Generic;

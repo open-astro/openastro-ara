@@ -16,9 +16,9 @@ using FluentAssertions;
 using Moq;
 using NINA.Equipment.Equipment.MyTelescope;
 using NINA.Profile.Interfaces;
-using NINA.Sequencer.Container;
+using OpenAstroAra.Sequencer.Container;
 using NINA.Core.Model;
-using NINA.Sequencer.SequenceItem.Telescope;
+using OpenAstroAra.Sequencer.SequenceItem.Telescope;
 using NINA.Astrometry;
 using NINA.Equipment.Interfaces.Mediator;
 

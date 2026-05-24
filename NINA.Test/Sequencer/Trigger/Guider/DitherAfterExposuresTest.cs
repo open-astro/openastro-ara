@@ -15,7 +15,7 @@
 using FluentAssertions;
 using Moq;
 using NINA.Image.ImageData;
-using NINA.Sequencer.Trigger.Guider;
+using OpenAstroAra.Sequencer.Trigger.Guider;
 using NINA.Equipment.Interfaces.Mediator;
 using NINA.ViewModel.ImageHistory;
 using NINA.ViewModel.Interfaces;
@@ -29,9 +29,9 @@ using System.Threading.Tasks;
 using NINA.Equipment.Equipment.MyGuider;
 using NINA.WPF.Base.Interfaces.ViewModel;
 using NINA.WPF.Base.Model;
-using NINA.Sequencer.SequenceItem;
+using OpenAstroAra.Sequencer.SequenceItem;
 using NINA.Profile.Interfaces;
-using NINA.Sequencer.Interfaces;
+using OpenAstroAra.Sequencer.Interfaces;
 
 namespace NINA.Test.Sequencer.Trigger.Guider {
 

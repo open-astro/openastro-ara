@@ -17,7 +17,7 @@ using Moq;
 using NINA.Equipment.Equipment.MyDome;
 using NINA.Equipment.Equipment.MyTelescope;
 using NINA.Core.Model;
-using NINA.Sequencer.SequenceItem.Dome;
+using OpenAstroAra.Sequencer.SequenceItem.Dome;
 using NINA.Equipment.Interfaces.Mediator;
 using NUnit.Framework;
 using System;

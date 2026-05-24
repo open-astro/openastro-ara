@@ -15,11 +15,11 @@
 using FluentAssertions;
 using Moq;
 using NINA.Core.Model;
-using NINA.Sequencer;
-using NINA.Sequencer.Conditions;
-using NINA.Sequencer.Container;
-using NINA.Sequencer.SequenceItem;
-using NINA.Sequencer.Trigger;
+using OpenAstroAra.Sequencer;
+using OpenAstroAra.Sequencer.Conditions;
+using OpenAstroAra.Sequencer.Container;
+using OpenAstroAra.Sequencer.SequenceItem;
+using OpenAstroAra.Sequencer.Trigger;
 using NUnit.Framework;
 using System;
 using System.Collections.Generic;
@@ -36,7 +36,7 @@ namespace NINA.Test.Sequencer {
         [Test]
         public void ctor_MainContainerSet() {
             var rootMock = new Mock<ISequenceRootContainer>();
-            var sut = new NINA.Sequencer.Sequencer(rootMock.Object);
+            var sut = new OpenAstroAra.Sequencer.Sequencer(rootMock.Object);
 
             sut.MainContainer.Should().Be(rootMock.Object);
         }
@@ -46,7 +46,7 @@ namespace NINA.Test.Sequencer {
             var rootMock = new Mock<ISequenceRootContainer>();
             rootMock.Setup(x => x.GetItemsSnapshot()).Returns(new List<ISequenceItem>());
             rootMock.Setup(x => x.GetTriggersSnapshot()).Returns(new List<ISequenceTrigger>());
-            var sut = new NINA.Sequencer.Sequencer(rootMock.Object);
+            var sut = new OpenAstroAra.Sequencer.Sequencer(rootMock.Object);
 
             var progress = new Progress<ApplicationStatus>();
             var ct = new CancellationToken();
@@ -69,7 +69,7 @@ namespace NINA.Test.Sequencer {
 
             rootMock.Setup(x => x.GetItemsSnapshot()).Returns(items);
             rootMock.Setup(x => x.GetTriggersSnapshot()).Returns(new List<ISequenceTrigger>());
-            var sut = new NINA.Sequencer.Sequencer(rootMock.Object);
+            var sut = new OpenAstroAra.Sequencer.Sequencer(rootMock.Object);
 
             var progress = new Progress<ApplicationStatus>();
             var ct = new CancellationToken();
@@ -94,7 +94,7 @@ namespace NINA.Test.Sequencer {
 
             rootMock.Setup(x => x.GetItemsSnapshot()).Returns(items);
             rootMock.Setup(x => x.GetTriggersSnapshot()).Returns(new List<ISequenceTrigger>());
-            var sut = new NINA.Sequencer.Sequencer(rootMock.Object);
+            var sut = new OpenAstroAra.Sequencer.Sequencer(rootMock.Object);
 
             var progress = new Progress<ApplicationStatus>();
             var ct = new CancellationToken();
@@ -119,7 +119,7 @@ namespace NINA.Test.Sequencer {
 
             rootMock.Setup(x => x.GetItemsSnapshot()).Returns(items);
             rootMock.Setup(x => x.GetTriggersSnapshot()).Returns(new List<ISequenceTrigger>());
-            var sut = new NINA.Sequencer.Sequencer(rootMock.Object);
+            var sut = new OpenAstroAra.Sequencer.Sequencer(rootMock.Object);
 
             var progress = new Progress<ApplicationStatus>();
             var ct = new CancellationToken();
@@ -144,7 +144,7 @@ namespace NINA.Test.Sequencer {
 
             rootMock.Setup(x => x.GetItemsSnapshot()).Returns(items);
             rootMock.Setup(x => x.GetTriggersSnapshot()).Returns(new List<ISequenceTrigger>());
-            var sut = new NINA.Sequencer.Sequencer(rootMock.Object);
+            var sut = new OpenAstroAra.Sequencer.Sequencer(rootMock.Object);
 
             var progress = new Progress<ApplicationStatus>();
             var ct = new CancellationToken();
@@ -169,7 +169,7 @@ namespace NINA.Test.Sequencer {
 
             rootMock.Setup(x => x.GetItemsSnapshot()).Returns(items);
             rootMock.Setup(x => x.GetTriggersSnapshot()).Returns(new List<ISequenceTrigger>());
-            var sut = new NINA.Sequencer.Sequencer(rootMock.Object);
+            var sut = new OpenAstroAra.Sequencer.Sequencer(rootMock.Object);
 
             var progress = new Progress<ApplicationStatus>();
             var ct = new CancellationToken();
@@ -192,7 +192,7 @@ namespace NINA.Test.Sequencer {
 
             rootMock.Setup(x => x.GetItemsSnapshot()).Returns(items);
             rootMock.Setup(x => x.GetTriggersSnapshot()).Returns(new List<ISequenceTrigger>());
-            var sut = new NINA.Sequencer.Sequencer(rootMock.Object);
+            var sut = new OpenAstroAra.Sequencer.Sequencer(rootMock.Object);
 
             var progress = new Progress<ApplicationStatus>();
             var ct = new CancellationToken();

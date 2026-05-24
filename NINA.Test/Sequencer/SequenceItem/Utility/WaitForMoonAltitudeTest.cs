@@ -15,7 +15,7 @@
 using FluentAssertions;
 using Moq;
 using NINA.Profile.Interfaces;
-using NINA.Sequencer.SequenceItem.Utility;
+using OpenAstroAra.Sequencer.SequenceItem.Utility;
 using NUnit.Framework;
 
 namespace NINA.Test.Sequencer.SequenceItem.Utility {

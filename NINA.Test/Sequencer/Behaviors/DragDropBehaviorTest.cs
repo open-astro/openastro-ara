@@ -14,7 +14,7 @@
 
 using FluentAssertions;
 using Moq;
-using NINA.Sequencer.Behaviors;
+using OpenAstroAra.Sequencer.Behaviors;
 using NUnit.Framework;
 using System;
 using System.Collections.Generic;

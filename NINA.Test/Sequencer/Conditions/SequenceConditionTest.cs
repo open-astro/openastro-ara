@@ -15,9 +15,9 @@
 using FluentAssertions;
 using Moq;
 using NINA.Core.Enum;
-using NINA.Sequencer.Conditions;
-using NINA.Sequencer.Container;
-using NINA.Sequencer.SequenceItem;
+using OpenAstroAra.Sequencer.Conditions;
+using OpenAstroAra.Sequencer.Container;
+using OpenAstroAra.Sequencer.SequenceItem;
 using NUnit.Framework;
 using OxyPlot;
 using System;

@@ -15,8 +15,8 @@
 using FluentAssertions;
 using Moq;
 using NINA.Equipment.Equipment.MySwitch;
-using NINA.Sequencer;
-using NINA.Sequencer.SequenceItem.Switch;
+using OpenAstroAra.Sequencer;
+using OpenAstroAra.Sequencer.SequenceItem.Switch;
 using NINA.Equipment.Interfaces.Mediator;
 using NUnit.Framework;
 using System;

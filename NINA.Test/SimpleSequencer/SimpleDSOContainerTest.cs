@@ -2,9 +2,9 @@
 using NINA.Profile.Interfaces;
 using NINA.Equipment.Interfaces;
 using NINA.Equipment.Interfaces.Mediator;
-using NINA.Sequencer;
-using NINA.Sequencer.Conditions;
-using NINA.Sequencer.Container;
+using OpenAstroAra.Sequencer;
+using OpenAstroAra.Sequencer.Conditions;
+using OpenAstroAra.Sequencer.Container;
 using NINA.WPF.Base.Interfaces.Mediator;
 using NINA.WPF.Base.Interfaces.ViewModel;
 using System;
@@ -13,12 +13,12 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using NINA.Astrometry.Interfaces;
-using NINA.Sequencer.SequenceItem.FilterWheel;
-using NINA.Sequencer.SequenceItem.Imaging;
+using OpenAstroAra.Sequencer.SequenceItem.FilterWheel;
+using OpenAstroAra.Sequencer.SequenceItem.Imaging;
 using NINA.Equipment.Equipment.MyCamera;
 using NINA.Equipment.Equipment.MyGuider;
 using FluentAssertions;
-using NINA.Sequencer.Trigger.Guider;
+using OpenAstroAra.Sequencer.Trigger.Guider;
 
 namespace NINA.Test.SimpleSequencer {
     [TestFixture]

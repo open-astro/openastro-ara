@@ -16,7 +16,7 @@ using FluentAssertions;
 using Moq;
 using NINA.Equipment.Equipment.MyRotator;
 using NINA.Core.Model;
-using NINA.Sequencer.SequenceItem.Rotator;
+using OpenAstroAra.Sequencer.SequenceItem.Rotator;
 using NINA.Equipment.Interfaces.Mediator;
 using NUnit.Framework;
 using System;

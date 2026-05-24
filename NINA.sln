@@ -29,7 +29,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NINA.Astrometry", "NINA.Ast
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NINA.PlateSolving", "NINA.Platesolving\NINA.PlateSolving.csproj", "{A721D420-3C8E-4E96-9558-37B50801FF6B}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NINA.Sequencer", "NINA.Sequencer\NINA.Sequencer.csproj", "{537A7A82-8C12-45E9-ABAD-B6B3729D6CB1}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenAstroAra.Sequencer", "OpenAstroAra.Sequencer\OpenAstroAra.Sequencer.csproj", "{537A7A82-8C12-45E9-ABAD-B6B3729D6CB1}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NINA.Image", "NINA.Image\NINA.Image.csproj", "{2E7B7C6F-FB8E-49F2-9579-6D16CD263E64}"
 EndProject

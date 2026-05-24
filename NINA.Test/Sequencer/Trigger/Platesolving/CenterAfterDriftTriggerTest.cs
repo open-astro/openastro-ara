@@ -18,7 +18,7 @@ using NINA.Equipment.Interfaces;
 using NINA.Equipment.Interfaces.Mediator;
 using NINA.Image.Interfaces;
 using NINA.Profile.Interfaces;
-using NINA.Sequencer.Trigger.Platesolving;
+using OpenAstroAra.Sequencer.Trigger.Platesolving;
 using NINA.WPF.Base.Interfaces.Mediator;
 using NINA.WPF.Base.Interfaces.ViewModel;
 using NUnit.Framework;

@@ -15,9 +15,9 @@
 using FluentAssertions;
 using Moq;
 using NINA.Profile.Interfaces;
-using NINA.Sequencer;
-using NINA.Sequencer.Container;
-using NINA.Sequencer.SequenceItem.Utility;
+using OpenAstroAra.Sequencer;
+using OpenAstroAra.Sequencer.Container;
+using OpenAstroAra.Sequencer.SequenceItem.Utility;
 using NINA.Core.Utility;
 using NINA.Astrometry;
 using NINA.Core.Enum;

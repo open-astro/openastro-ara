@@ -4,7 +4,7 @@ using NINA.Astrometry.Interfaces;
 using NINA.Astrometry.RiseAndSet;
 using NINA.Astrometry;
 using NINA.Core.Utility;
-using NINA.Sequencer.Utility.DateTimeProvider;
+using OpenAstroAra.Sequencer.Utility.DateTimeProvider;
 using System;
 using System.Collections.Generic;
 using System.Linq;

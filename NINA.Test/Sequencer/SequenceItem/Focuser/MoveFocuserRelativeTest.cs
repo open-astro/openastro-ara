@@ -16,7 +16,7 @@ using FluentAssertions;
 using Moq;
 using NINA.Equipment.Equipment.MyFocuser;
 using NINA.Core.Model;
-using NINA.Sequencer.SequenceItem.Focuser;
+using OpenAstroAra.Sequencer.SequenceItem.Focuser;
 using NINA.Equipment.Interfaces.Mediator;
 using NUnit.Framework;
 using System;

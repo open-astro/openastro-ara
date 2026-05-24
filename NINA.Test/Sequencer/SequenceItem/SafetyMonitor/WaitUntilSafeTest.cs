@@ -18,7 +18,7 @@ using NINA.Core.Model;
 using NINA.Equipment.Equipment.MySafetyMonitor;
 using NINA.Equipment.Interfaces;
 using NINA.Equipment.Interfaces.Mediator;
-using NINA.Sequencer.SequenceItem.SafetyMonitor;
+using OpenAstroAra.Sequencer.SequenceItem.SafetyMonitor;
 using NUnit.Framework;
 using System;
 using System.Collections.Generic;
