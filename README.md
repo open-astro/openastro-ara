@@ -12,11 +12,11 @@ The product model is ASIAir-like: server runs the night, client is for planning 
 
 ## Lineage
 
-OpenAstro Ara is a hard fork of NINA `master` (3.2 line). All inherited code retains the original `Stefan Berg and the N.I.N.A. Contributors` copyright headers per the MPL-2.0 license. See `LICENSE.txt`, `COPYING`, `AUTHORS`, and `NOTICE.md` (added Phase 15) for the full attribution.
+OpenAstro Ara is a hard fork of NINA `master` (3.2 line). All inherited code retains the original `Stefan Berg and the N.I.N.A. Contributors` copyright headers per the MPL-2.0 license. See `LICENSE.txt`, `COPYING`, and `AUTHORS` for the inherited attribution; `NOTICE.md` with full lineage attribution will be added in Phase 15 per playbook §17.2.
 
 ## Repository
 
-```
+```text
 openastro-ara/                       (this repo)
 ├── OpenAstroAra.Server/             ← .NET 10 headless daemon (Phase 4+)
 ├── OpenAstroAra.Core / Astrometry / Profile / Image / Equipment / Sequencer / PlateSolving / Test
