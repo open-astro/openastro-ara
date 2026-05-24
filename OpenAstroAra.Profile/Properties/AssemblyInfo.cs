@@ -20,7 +20,7 @@ using System.Runtime.InteropServices;
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
 [assembly: AssemblyTitle("OpenAstroAra.Profile")]
-[assembly: AssemblyDescription("This assembly contains the profile related components of N.I.N.A.")]
+[assembly: AssemblyDescription("Profile components of OpenAstro Ara (forked from N.I.N.A.).")]
 [assembly: AssemblyConfiguration("")]
 
 // Setting ComVisible to false makes the types in this assembly not visible
