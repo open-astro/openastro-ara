@@ -16,15 +16,15 @@ using FluentAssertions;
 using Moq;
 using OpenAstroAra.Sequencer.Utility.DateTimeProvider;
 using NINA.Core.Utility;
-using NINA.Astrometry;
+using OpenAstroAra.Astrometry;
 using NUnit.Framework;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using NINA.Astrometry.RiseAndSet;
-using NINA.Astrometry.Interfaces;
+using OpenAstroAra.Astrometry.RiseAndSet;
+using OpenAstroAra.Astrometry.Interfaces;
 
 namespace NINA.Test.Sequencer.Utility.DateTimeProvider {
 

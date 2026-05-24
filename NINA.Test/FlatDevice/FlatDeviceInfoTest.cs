@@ -15,8 +15,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using Moq;
 using NINA.Core.Locale;
-using NINA.Equipment.Equipment.MyFlatDevice;
-using NINA.Equipment.Interfaces;
+using OpenAstroAra.Equipment.Equipment.MyFlatDevice;
+using OpenAstroAra.Equipment.Interfaces;
 using NUnit.Framework;
 
 namespace NINA.Test.FlatDevice {

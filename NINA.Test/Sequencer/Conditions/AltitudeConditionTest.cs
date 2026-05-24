@@ -14,9 +14,9 @@
 
 using FluentAssertions;
 using Moq;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Sequencer.Conditions;
-using NINA.Astrometry;
+using OpenAstroAra.Astrometry;
 using NUnit.Framework;
 using OpenAstroAra.Sequencer.Interfaces;
 using OpenAstroAra.Sequencer.Container;

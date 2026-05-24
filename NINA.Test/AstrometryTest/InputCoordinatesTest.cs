@@ -11,8 +11,8 @@
 #endregion "copyright"
 using FluentAssertions;
 using Newtonsoft.Json;
-using NINA.Astrometry;
-using NINA.Equipment.Model;
+using OpenAstroAra.Astrometry;
+using OpenAstroAra.Equipment.Model;
 using NUnit.Framework;
 using System;
 using System.Collections.Generic;

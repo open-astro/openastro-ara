@@ -14,8 +14,8 @@
 
 using FluentAssertions;
 using Moq;
-using NINA.Profile;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile;
+using OpenAstroAra.Profile.Interfaces;
 using NUnit.Framework;
 using System;
 

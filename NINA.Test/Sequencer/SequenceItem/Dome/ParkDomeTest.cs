@@ -14,10 +14,10 @@
 
 using FluentAssertions;
 using Moq;
-using NINA.Equipment.Equipment.MyDome;
+using OpenAstroAra.Equipment.Equipment.MyDome;
 using NINA.Core.Model;
 using OpenAstroAra.Sequencer.SequenceItem.Dome;
-using NINA.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using NUnit.Framework;
 using System;
 using System.Collections.Generic;

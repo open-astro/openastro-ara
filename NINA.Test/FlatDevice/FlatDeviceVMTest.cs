@@ -12,12 +12,12 @@
 using FluentAssertions;
 using Moq;
 using NINA.Core.Locale;
-using NINA.Equipment.Equipment.MyCamera;
-using NINA.Equipment.Equipment.MyFilterWheel;
-using NINA.Equipment.Equipment.MyFlatDevice;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Equipment.Equipment.MyCamera;
+using OpenAstroAra.Equipment.Equipment.MyFilterWheel;
+using OpenAstroAra.Equipment.Equipment.MyFlatDevice;
+using OpenAstroAra.Profile.Interfaces;
 using NINA.Core.Utility;
-using NINA.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using NINA.ViewModel;
 using NUnit.Framework;
 using System;
@@ -28,9 +28,9 @@ using System.Threading.Tasks;
 using NINA.WPF.Base.Interfaces.Mediator;
 using NINA.Core.Model;
 using NINA.Core.Model.Equipment;
-using NINA.Profile;
-using NINA.Equipment.Interfaces;
-using NINA.Equipment.Interfaces.ViewModel;
+using OpenAstroAra.Profile;
+using OpenAstroAra.Equipment.Interfaces;
+using OpenAstroAra.Equipment.Interfaces.ViewModel;
 using NINA.WPF.Base.ViewModel.Equipment.FlatDevice;
 
 namespace NINA.Test.FlatDevice {

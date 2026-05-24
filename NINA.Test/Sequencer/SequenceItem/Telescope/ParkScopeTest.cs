@@ -14,11 +14,11 @@
 
 using FluentAssertions;
 using Moq;
-using NINA.Equipment.Equipment.MyTelescope;
+using OpenAstroAra.Equipment.Equipment.MyTelescope;
 using OpenAstroAra.Sequencer;
 using NINA.Core.Model;
 using OpenAstroAra.Sequencer.SequenceItem.Telescope;
-using NINA.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using NUnit.Framework;
 using System;
 using System.Collections.Generic;

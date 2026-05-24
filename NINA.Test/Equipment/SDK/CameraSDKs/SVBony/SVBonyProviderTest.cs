@@ -11,8 +11,8 @@
 #endregion "copyright"
 using FluentAssertions;
 using Moq;
-using NINA.Equipment.SDK.CameraSDKs.SVBonySDK;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Equipment.SDK.CameraSDKs.SVBonySDK;
+using OpenAstroAra.Profile.Interfaces;
 using NUnit.Framework;
 using System;
 using System.Collections.Generic;

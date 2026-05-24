@@ -14,7 +14,7 @@
 
 using Newtonsoft.Json;
 using OpenAstroAra.Core.Model;
-using NINA.PlateSolving;
+using OpenAstroAra.PlateSolving;
 using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.Utility;
@@ -36,7 +36,7 @@ using OpenAstroAra.Core.Locale;
 using OpenAstroAra.Equipment.Model;
 using OpenAstroAra.Core.Model.Equipment;
 using OpenAstroAra.Core.Utility.Notification;
-using NINA.PlateSolving.Interfaces;
+using OpenAstroAra.PlateSolving.Interfaces;
 using OpenAstroAra.Equipment.Interfaces;
 
 namespace OpenAstroAra.Sequencer.SequenceItem.Platesolving {

@@ -15,18 +15,18 @@
 using FluentAssertions;
 using Moq;
 using OpenAstroAra.Sequencer.Trigger.Guider;
-using NINA.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using NUnit.Framework;
 using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using NINA.Equipment.Equipment.MyGuider;
+using OpenAstroAra.Equipment.Equipment.MyGuider;
 using NINA.WPF.Base.Interfaces.ViewModel;
 using NINA.WPF.Base.Model;
 using NINA.Core.Model;
 using OpenAstroAra.Sequencer.SequenceItem.Imaging;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using NINA.WPF.Base.Interfaces.Mediator;
 
 namespace NINA.Test.Sequencer.Trigger.Guider {

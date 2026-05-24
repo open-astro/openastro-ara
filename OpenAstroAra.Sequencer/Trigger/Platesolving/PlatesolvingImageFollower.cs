@@ -20,7 +20,7 @@ using OpenAstroAra.Core.Utility.Notification;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Image.ImageData;
 using OpenAstroAra.Image.Interfaces;
-using NINA.PlateSolving;
+using OpenAstroAra.PlateSolving;
 using OpenAstroAra.Profile.Interfaces;
 using NINA.WPF.Base.Interfaces.Mediator;
 using NINA.WPF.Base.Interfaces.ViewModel;

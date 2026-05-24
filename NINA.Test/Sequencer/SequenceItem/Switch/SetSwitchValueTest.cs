@@ -14,10 +14,10 @@
 
 using FluentAssertions;
 using Moq;
-using NINA.Equipment.Equipment.MySwitch;
+using OpenAstroAra.Equipment.Equipment.MySwitch;
 using OpenAstroAra.Sequencer;
 using OpenAstroAra.Sequencer.SequenceItem.Switch;
-using NINA.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using NUnit.Framework;
 using System;
 using System.Collections.Generic;
@@ -26,7 +26,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using NINA.Core.Model;
-using NINA.Equipment.Interfaces;
+using OpenAstroAra.Equipment.Interfaces;
 
 namespace NINA.Test.Sequencer.SequenceItem.Switch {
 

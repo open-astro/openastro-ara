@@ -9,8 +9,8 @@
     file, You can obtain one at http://mozilla.org/MPL/2.0/.
 */
 #endregion "copyright"
-using NINA.Equipment.Equipment.MyGuider;
-using NINA.Equipment.Equipment.MyGuider.PHD2;
+using OpenAstroAra.Equipment.Equipment.MyGuider;
+using OpenAstroAra.Equipment.Equipment.MyGuider.PHD2;
 using NINA.Core.Enum;
 using NUnit.Framework;
 using System;
@@ -19,8 +19,8 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using NINA.Core.Interfaces;
-using NINA.Equipment.Equipment;
-using NINA.Equipment.Equipment.MyGuider.PHD2.PhdEvents;
+using OpenAstroAra.Equipment.Equipment;
+using OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.PhdEvents;
 using FluentAssertions;
 using NUnit.Framework.Legacy;
 

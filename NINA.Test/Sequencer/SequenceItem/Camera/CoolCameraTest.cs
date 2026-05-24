@@ -14,11 +14,11 @@
 
 using FluentAssertions;
 using Moq;
-using NINA.Equipment.Equipment.MyCamera;
+using OpenAstroAra.Equipment.Equipment.MyCamera;
 using OpenAstroAra.Sequencer;
 using NINA.Core.Model;
 using OpenAstroAra.Sequencer.SequenceItem.Camera;
-using NINA.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using NUnit.Framework;
 using System;
 using System.Collections.Generic;

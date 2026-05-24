@@ -37,7 +37,7 @@ using OpenAstroAra.Core.Utility.Notification;
 using OpenAstroAra.Sequencer.Utility;
 using NINA.WPF.Base.Interfaces.Mediator;
 using OpenAstroAra.Core.Enum;
-using NINA.PlateSolving;
+using OpenAstroAra.PlateSolving;
 using OpenAstroAra.Core.Utility.WindowService;
 using OpenAstroAra.Image.Interfaces;
 using OpenAstroAra.Equipment.Interfaces;

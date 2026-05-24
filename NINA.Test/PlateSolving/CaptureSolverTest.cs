@@ -14,10 +14,10 @@
 
 using FluentAssertions;
 using Moq;
-using NINA.Image.ImageData;
-using NINA.Equipment.Equipment.MyFilterWheel;
-using NINA.PlateSolving;
-using NINA.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Image.ImageData;
+using OpenAstroAra.Equipment.Equipment.MyFilterWheel;
+using OpenAstroAra.PlateSolving;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using NUnit.Framework;
 using System;
 using System.Collections.Generic;
@@ -26,11 +26,11 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using NINA.Core.Utility;
-using NINA.Image.Interfaces;
-using NINA.Equipment.Model;
+using OpenAstroAra.Image.Interfaces;
+using OpenAstroAra.Equipment.Model;
 using NINA.Core.Model;
 using NINA.Core.Model.Equipment;
-using NINA.PlateSolving.Interfaces;
+using OpenAstroAra.PlateSolving.Interfaces;
 
 namespace NINA.Test.PlateSolving {
 

@@ -10,17 +10,17 @@
 */
 #endregion "copyright"
 using Moq;
-using NINA.Equipment.Equipment.MyFlatDevice;
-using NINA.Profile.Interfaces;
-using NINA.Equipment.SDK.FlatDeviceSDKs.AlnitakSDK;
+using OpenAstroAra.Equipment.Equipment.MyFlatDevice;
+using OpenAstroAra.Profile.Interfaces;
+using OpenAstroAra.Equipment.SDK.FlatDeviceSDKs.AlnitakSDK;
 using NINA.Core.Utility.SerialCommunication;
 using NUnit.Framework;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using NINA.Equipment.Interfaces;
+using OpenAstroAra.Equipment.Interfaces;
 using FluentAssertions;
-using NINA.Equipment.Exceptions;
+using OpenAstroAra.Equipment.Exceptions;
 
 namespace NINA.Test.FlatDevice {
 

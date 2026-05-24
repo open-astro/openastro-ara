@@ -14,11 +14,11 @@
 
 using FluentAssertions;
 using Moq;
-using NINA.Equipment.Equipment.MyFlatDevice;
+using OpenAstroAra.Equipment.Equipment.MyFlatDevice;
 using OpenAstroAra.Sequencer;
 using NINA.Core.Model;
 using OpenAstroAra.Sequencer.SequenceItem.FlatDevice;
-using NINA.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using NUnit.Framework;
 using System;
 using System.Collections.Generic;
@@ -81,7 +81,7 @@ namespace NINA.Test.Sequencer.SequenceItem.FlatDevice {
 
         [Test]
         public async Task Execute_NoIssues_LogicCalled() {
-            fdMediatorMock.Setup(x => x.GetInfo()).Returns(new FlatDeviceInfo() { Connected = true, SupportsOpenClose = true, CoverState = NINA.Equipment.Interfaces.CoverState.Closed });
+            fdMediatorMock.Setup(x => x.GetInfo()).Returns(new FlatDeviceInfo() { Connected = true, SupportsOpenClose = true, CoverState = OpenAstroAra.Equipment.Interfaces.CoverState.Closed });
 
             var sut = new CloseCover(fdMediatorMock.Object);
             await sut.Execute(default, default);

@@ -14,17 +14,17 @@
 
 using FluentAssertions;
 using Moq;
-using NINA.Astrometry;
+using OpenAstroAra.Astrometry;
 using NINA.Core.Locale;
 using NINA.Core.Model;
 using NINA.Core.Utility.WindowService;
-using NINA.Equipment.Equipment.MyTelescope;
-using NINA.Equipment.Interfaces;
-using NINA.Equipment.Interfaces.Mediator;
-using NINA.Equipment.Model;
-using NINA.PlateSolving;
-using NINA.PlateSolving.Interfaces;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Equipment.Equipment.MyTelescope;
+using OpenAstroAra.Equipment.Interfaces;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Equipment.Model;
+using OpenAstroAra.PlateSolving;
+using OpenAstroAra.PlateSolving.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.SequenceItem.Platesolving;
 using NINA.WPF.Base.ViewModel;
@@ -63,7 +63,7 @@ namespace NINA.Test.Sequencer.SequenceItem.Platesolving {
             plateSolverFactoryMock = new Mock<IPlateSolverFactory>();
             windowServiceFactoryMock = new Mock<IWindowServiceFactory>();
             domeMediatorMock = new Mock<IDomeMediator>();
-            domeMediatorMock.Setup(m => m.GetInfo()).Returns(new NINA.Equipment.Equipment.MyDome.DomeInfo() { Connected = false });
+            domeMediatorMock.Setup(m => m.GetInfo()).Returns(new OpenAstroAra.Equipment.Equipment.MyDome.DomeInfo() { Connected = false });
             domeFollowerMock = new Mock<IDomeFollower>();
         }
 

@@ -14,12 +14,12 @@
 
 using FluentAssertions;
 using Moq;
-using NINA.Equipment.Equipment.MyFilterWheel;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Equipment.Equipment.MyFilterWheel;
+using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Sequencer;
 using NINA.Core.Model;
 using OpenAstroAra.Sequencer.SequenceItem.FilterWheel;
-using NINA.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using NUnit.Framework;
 using System;
 using System.Collections.Generic;
