@@ -29,7 +29,9 @@ client/openastroara_client/android/local.properties
 client/openastroara_client/linux/flutter/ephemeral/
 client/openastroara_client/macos/Flutter/ephemeral/
 client/openastroara_client/windows/flutter/ephemeral/
-client/openastroara_client/web/
+# client/openastroara_client/web/  # web target deferred to v0.0.1+ per §18.G;
+# do NOT blanket-ignore — when web is enabled, source/config under web/ must be tracked.
+# Generated artifacts go under client/openastroara_client/build/ which is already ignored.
 
 # === ARA-specific runtime + dev paths ===
 /publish/
