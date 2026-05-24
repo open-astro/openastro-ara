@@ -109,3 +109,32 @@ lfs/
 /NINA.Setup/.wix/
 # the bundled .net runtime - it will be automatically downloaded from the ms page. no need to include this in source control
 /NINA.SetupBundle/dotnet-windowsdesktop-runtime-win-x64.exe
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# Claude Code / agent worktrees
+.claude/
