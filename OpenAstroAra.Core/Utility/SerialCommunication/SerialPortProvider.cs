@@ -17,7 +17,6 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO.Ports;
 using System.Linq;
-using System.Management;
 using System.Text.RegularExpressions;
 
 namespace OpenAstroAra.Core.Utility.SerialCommunication {
