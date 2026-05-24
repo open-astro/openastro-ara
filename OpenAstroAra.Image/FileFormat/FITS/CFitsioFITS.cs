@@ -7,9 +7,9 @@ using System.Threading.Tasks;
 using static OpenAstroAra.Image.FileFormat.FITS.CfitsioNative;
 using OpenAstroAra.Image.ImageData;
 using System.Globalization;
-using OpenAstroAra.Core.Enum;
+using NINA.Core.Enum;
 using OpenAstroAra.Astrometry;
-using OpenAstroAra.Core.Utility;
+using NINA.Core.Utility;
 
 namespace OpenAstroAra.Image.FileFormat.FITS {
     public class CFitsioFITS {

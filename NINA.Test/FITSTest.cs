@@ -12,7 +12,7 @@
 using FluentAssertions;
 using OpenAstroAra.Image.ImageData;
 using NINA.Core.Utility;
-using NINA.Astrometry;
+using OpenAstroAra.Astrometry;
 using NUnit.Framework;
 using System;
 using System.Collections.Generic;

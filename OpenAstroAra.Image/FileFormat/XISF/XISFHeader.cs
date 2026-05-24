@@ -12,7 +12,7 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Core.Enum;
+using NINA.Core.Enum;
 using OpenAstroAra.Image.ImageData;
 using OpenAstroAra.Astrometry;
 using System;
@@ -22,7 +22,7 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
-using OpenAstroAra.Core.Utility;
+using NINA.Core.Utility;
 using System.Collections.Generic;
 
 namespace OpenAstroAra.Image.FileFormat.XISF {

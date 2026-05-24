@@ -12,14 +12,14 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Core.Enum;
+using NINA.Core.Enum;
 using OpenAstroAra.Astrometry;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Text;
-using OpenAstroAra.Core.Utility;
+using NINA.Core.Utility;
 using OpenAstroAra.Image.ImageData;
 
 namespace OpenAstroAra.Image.FileFormat.FITS {

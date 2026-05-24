@@ -1,4 +1,4 @@
-﻿using NINA.Astrometry;
+﻿using OpenAstroAra.Astrometry;
 
 namespace NINA.Sequencer.Container {
     public class ContextCoordinates {

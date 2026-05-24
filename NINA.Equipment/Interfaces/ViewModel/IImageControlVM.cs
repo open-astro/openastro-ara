@@ -21,7 +21,7 @@ using System.Threading.Tasks;
 using System.Windows.Input;
 using System.Windows.Media.Imaging;
 using OpenAstroAra.Image.ImageAnalysis;
-using NINA.Astrometry;
+using OpenAstroAra.Astrometry;
 using NINA.Core.Model;
 using OpenAstroAra.Image.Interfaces;
 using NINA.Equipment.Interfaces.Mediator;

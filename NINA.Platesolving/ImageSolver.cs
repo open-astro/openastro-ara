@@ -13,7 +13,7 @@
 #endregion "copyright"
 
 using OpenAstroAra.Image.Interfaces;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using NINA.Core.Utility;
 using System;
 using System.Collections.Generic;

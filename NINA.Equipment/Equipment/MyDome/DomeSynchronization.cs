@@ -12,8 +12,8 @@
 
 #endregion "copyright"
 
-using NINA.Profile.Interfaces;
-using NINA.Astrometry;
+using OpenAstroAra.Profile.Interfaces;
+using OpenAstroAra.Astrometry;
 using System;
 using Accord.Math;
 using NINA.Core.Enum;

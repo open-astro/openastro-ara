@@ -17,7 +17,7 @@ using Moq;
 using NINA.Equipment.Equipment.MyCamera;
 using NINA.Equipment.Equipment.MyFilterWheel;
 using NINA.Equipment.Equipment.MyFocuser;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using NINA.Sequencer.Trigger.Autofocus;
 using NINA.Equipment.Interfaces.Mediator;
 using NINA.Core.Utility.WindowService;

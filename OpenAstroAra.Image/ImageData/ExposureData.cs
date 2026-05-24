@@ -12,19 +12,19 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Core.Utility;
+using NINA.Core.Utility;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using OpenAstroAra.Core.Model;
-using OpenAstroAra.Core.Locale;
+using NINA.Core.Model;
+using NINA.Core.Locale;
 using OpenAstroAra.Image.Interfaces;
 using System.Windows.Media.Imaging;
-using OpenAstroAra.Core.Enum;
+using NINA.Core.Enum;
 using OpenAstroAra.Image.RawConverter;
 using OpenAstroAra.Image.ImageAnalysis;
 using OpenAstroAra.Profile.Interfaces;
-using OpenAstroAra.Core.Interfaces;
+using NINA.Core.Interfaces;
 
 namespace OpenAstroAra.Image.ImageData {
 

@@ -12,8 +12,8 @@
 
 #endregion "copyright"
 
-using NINA.Astrometry;
-using NINA.Astrometry.Interfaces;
+using OpenAstroAra.Astrometry;
+using OpenAstroAra.Astrometry.Interfaces;
 using NINA.Core.Model;
 using NINA.Equipment.Interfaces.ViewModel;
 using NINA.Sequencer.Container;

@@ -13,7 +13,7 @@ using FluentAssertions;
 using Moq;
 using NINA.Core.Enum;
 using NINA.Equipment.Interfaces;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using NINA.WPF.Base.ViewModel.Equipment.Focuser;
 using NUnit.Framework;
 using System.Threading;

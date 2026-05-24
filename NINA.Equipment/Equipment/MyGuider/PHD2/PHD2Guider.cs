@@ -15,7 +15,7 @@
 using CommunityToolkit.Mvvm.Input;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using NINA.Core.Utility;
 using NINA.Core.Utility.Notification;
 using NINA.Core.Utility.WindowService;
@@ -36,7 +36,7 @@ using NINA.Core.Locale;
 using NINA.Equipment.Interfaces;
 using NINA.Core.Model;
 using NINA.Equipment.Equipment.MyGuider.PHD2.PhdEvents;
-using NINA.Astrometry;
+using OpenAstroAra.Astrometry;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using System.Net;

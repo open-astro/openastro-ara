@@ -14,9 +14,9 @@
 
 using NINA.MGEN;
 using NINA.Exceptions;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using NINA.Core.Utility;
-using NINA.Astrometry;
+using OpenAstroAra.Astrometry;
 using NINA.Core.Utility.Notification;
 using NINA.Core.Locale;
 using System;

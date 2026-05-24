@@ -12,7 +12,7 @@
 using FluentAssertions;
 using Moq;
 using NINA.Equipment.Equipment.MyFocuser;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using NINA.Core.Enum;
 using NINA.Equipment.Interfaces.Mediator;
 using NINA.ViewModel;

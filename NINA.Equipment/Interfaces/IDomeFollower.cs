@@ -13,7 +13,7 @@
 #endregion "copyright"
 
 using NINA.Equipment.Equipment.MyTelescope;
-using NINA.Astrometry;
+using OpenAstroAra.Astrometry;
 using System.ComponentModel;
 using System.Threading;
 using System.Threading.Tasks;

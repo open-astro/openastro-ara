@@ -13,14 +13,14 @@
 #endregion "copyright"
 
 using Newtonsoft.Json;
-using NINA.Astrometry;
+using OpenAstroAra.Astrometry;
 using NINA.Core.Locale;
 using NINA.Core.Utility;
 using NINA.Core.Utility.Http;
 using NINA.Equipment.Equipment.MyGPS.PegasusAstro.UnityApi;
 using NINA.Equipment.Exceptions;
 using NINA.Equipment.Interfaces;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using System;
 using System.Threading;
 using System.Threading.Tasks;

@@ -12,7 +12,7 @@
 
 #endregion "copyright"
 
-using NINA.Astrometry;
+using OpenAstroAra.Astrometry;
 using NINA.Core.Enum;
 using NINA.Core.Locale;
 using NINA.Core.Model;
@@ -20,7 +20,7 @@ using NINA.Core.Utility;
 using NINA.Core.Utility.Notification;
 using OpenAstroAra.Image.FileFormat;
 using OpenAstroAra.Image.Interfaces;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using System;
 using System.IO;
 using System.Runtime.InteropServices;

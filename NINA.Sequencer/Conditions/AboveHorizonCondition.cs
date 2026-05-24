@@ -13,9 +13,9 @@
 #endregion "copyright"
 
 using Newtonsoft.Json;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using NINA.Sequencer.SequenceItem;
-using NINA.Astrometry;
+using OpenAstroAra.Astrometry;
 using System;
 using System.ComponentModel.Composition;
 using NINA.Sequencer.SequenceItem.Utility;
