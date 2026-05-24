@@ -16,7 +16,7 @@ using NINA.Core.Enum;
 using NINA.Core.Model.Equipment;
 using NINA.Core.Utility;
 using NINA.Equipment.Model;
-using NINA.Image.Interfaces;
+using OpenAstroAra.Image.Interfaces;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;

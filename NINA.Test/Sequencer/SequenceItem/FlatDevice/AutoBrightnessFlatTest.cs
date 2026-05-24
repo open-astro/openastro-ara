@@ -5,7 +5,7 @@ using NINA.Equipment.Equipment.MyCamera;
 using NINA.Equipment.Equipment.MyFlatDevice;
 using NINA.Equipment.Interfaces.Mediator;
 using NINA.Equipment.Model;
-using NINA.Image.Interfaces;
+using OpenAstroAra.Image.Interfaces;
 using OpenAstroAra.Profile.Interfaces;
 using NINA.Sequencer.SequenceItem.FlatDevice;
 using NINA.WPF.Base.Interfaces.Mediator;

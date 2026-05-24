@@ -31,7 +31,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NINA.PlateSolving", "NINA.P
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NINA.Sequencer", "NINA.Sequencer\NINA.Sequencer.csproj", "{537A7A82-8C12-45E9-ABAD-B6B3729D6CB1}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NINA.Image", "NINA.Image\NINA.Image.csproj", "{2E7B7C6F-FB8E-49F2-9579-6D16CD263E64}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenAstroAra.Image", "OpenAstroAra.Image\OpenAstroAra.Image.csproj", "{2E7B7C6F-FB8E-49F2-9579-6D16CD263E64}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Accord.Imaging (NETStandard)", "Accord.Imaging\Accord.Imaging (NETStandard).csproj", "{F1882ED8-D352-4B11-A0B5-02BF44625966}"
 EndProject

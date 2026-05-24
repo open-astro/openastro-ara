@@ -36,7 +36,7 @@ using NINA.Core.Locale;
 using NINA.WPF.Base.ViewModel;
 using NINA.Sequencer.Interfaces;
 using NINA.Equipment.Interfaces;
-using NINA.Image.ImageAnalysis;
+using OpenAstroAra.Image.ImageAnalysis;
 using NINA.WPF.Base.Interfaces;
 
 namespace NINA.Sequencer.Trigger.MeridianFlip {

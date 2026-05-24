@@ -31,7 +31,7 @@ using NINA.Core.Enum;
 using NINA.WPF.Base.Interfaces.Mediator;
 using NINA.WPF.Base.Interfaces.ViewModel;
 using NINA.Equipment.Interfaces;
-using NINA.Image.ImageAnalysis;
+using OpenAstroAra.Image.ImageAnalysis;
 using NINA.WPF.Base.Interfaces;
 
 namespace NINA.Test.Sequencer.Trigger.MeridianFlip {

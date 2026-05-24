@@ -1,5 +1,5 @@
 ﻿using FluentAssertions;
-using NINA.Image.ImageAnalysis;
+using OpenAstroAra.Image.ImageAnalysis;
 using System;
 using System.Collections.Generic;
 using System.Linq;

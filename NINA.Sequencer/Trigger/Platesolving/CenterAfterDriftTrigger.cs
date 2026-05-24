@@ -39,7 +39,7 @@ using NINA.WPF.Base.Interfaces.Mediator;
 using NINA.Core.Enum;
 using NINA.PlateSolving;
 using NINA.Core.Utility.WindowService;
-using NINA.Image.Interfaces;
+using OpenAstroAra.Image.Interfaces;
 using NINA.Equipment.Interfaces;
 using NINA.Sequencer.Interfaces;
 

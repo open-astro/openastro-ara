@@ -33,7 +33,7 @@ using NINA.WPF.Base.Interfaces.Mediator;
 using NINA.Core.Locale;
 using NINA.Core.Utility;
 using NINA.Sequencer.Utility;
-using NINA.Image.ImageAnalysis;
+using OpenAstroAra.Image.ImageAnalysis;
 using NINA.Sequencer.Interfaces;
 using NINA.WPF.Base.Interfaces;
 

@@ -14,7 +14,7 @@
 
 using FluentAssertions;
 using Moq;
-using NINA.Image.ImageData;
+using OpenAstroAra.Image.ImageData;
 using NINA.Sequencer.Trigger.Guider;
 using NINA.Equipment.Interfaces.Mediator;
 using NINA.ViewModel.ImageHistory;

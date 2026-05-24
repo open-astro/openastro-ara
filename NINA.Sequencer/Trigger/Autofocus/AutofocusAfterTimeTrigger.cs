@@ -34,7 +34,7 @@ using NINA.Core.Locale;
 using NINA.Sequencer.Utility;
 using NINA.Core.Utility;
 using NINA.Sequencer.Interfaces;
-using NINA.Image.ImageAnalysis;
+using OpenAstroAra.Image.ImageAnalysis;
 using NINA.WPF.Base.Interfaces;
 
 namespace NINA.Sequencer.Trigger.Autofocus {

@@ -17,7 +17,7 @@ using NINA.Core.Model;
 using NINA.Core.Utility;
 using NINA.Equipment.Interfaces.ViewModel;
 using NINA.Equipment.Model;
-using NINA.Image.Interfaces;
+using OpenAstroAra.Image.Interfaces;
 using System;
 using System.Threading;
 using System.Threading.Tasks;

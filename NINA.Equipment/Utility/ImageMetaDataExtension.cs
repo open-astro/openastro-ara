@@ -18,7 +18,7 @@ using System.Linq;
 using NINA.Core.Enum;
 using System.Text;
 using System.Threading.Tasks;
-using NINA.Image.ImageData;
+using OpenAstroAra.Image.ImageData;
 using NINA.Equipment.Equipment.MyCamera;
 using NINA.Equipment.Equipment.MyTelescope;
 using NINA.Equipment.Equipment.MyFilterWheel;

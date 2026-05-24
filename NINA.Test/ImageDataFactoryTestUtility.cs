@@ -11,10 +11,10 @@
 #endregion "copyright"
 using Moq;
 using NINA.Core.Interfaces;
-using NINA.Image.ImageAnalysis;
-using NINA.Image.ImageData;
-using NINA.Image.Interfaces;
-using NINA.Image.RawConverter;
+using OpenAstroAra.Image.ImageAnalysis;
+using OpenAstroAra.Image.ImageData;
+using OpenAstroAra.Image.Interfaces;
+using OpenAstroAra.Image.RawConverter;
 using OpenAstroAra.Profile.Interfaces;
 using System;
 using System.Collections.Generic;

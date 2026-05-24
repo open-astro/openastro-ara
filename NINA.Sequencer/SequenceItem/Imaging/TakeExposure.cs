@@ -38,7 +38,7 @@ using OpenAstroAra.Astrometry;
 using NINA.Equipment.Equipment.MyCamera;
 using NINA.WPF.Base.Interfaces.ViewModel;
 using NINA.Sequencer.Interfaces;
-using NINA.Image.Interfaces;
+using OpenAstroAra.Image.Interfaces;
 using NINA.Sequencer.Utility;
 
 namespace NINA.Sequencer.SequenceItem.Imaging {

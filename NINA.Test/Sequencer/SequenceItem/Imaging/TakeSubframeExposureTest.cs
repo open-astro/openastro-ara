@@ -14,7 +14,7 @@
 
 using FluentAssertions;
 using Moq;
-using NINA.Image.ImageData;
+using OpenAstroAra.Image.ImageData;
 using NINA.Equipment.Equipment.MyCamera;
 using OpenAstroAra.Profile.Interfaces;
 using NINA.Sequencer;
@@ -30,7 +30,7 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using NINA.Image.Interfaces;
+using OpenAstroAra.Image.Interfaces;
 using NINA.Equipment.Model;
 using NINA.Core.Utility;
 using NINA.WPF.Base.Interfaces.Mediator;
