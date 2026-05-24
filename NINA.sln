@@ -35,7 +35,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NINA.Image", "NINA.Image\NI
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Accord.Imaging (NETStandard)", "Accord.Imaging\Accord.Imaging (NETStandard).csproj", "{F1882ED8-D352-4B11-A0B5-02BF44625966}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NINA.Test", "NINA.Test\NINA.Test.csproj", "{F51E3DA4-B63C-4D96-97B2-DBD222E956BF}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenAstroAra.Test", "OpenAstroAra.Test\OpenAstroAra.Test.csproj", "{F51E3DA4-B63C-4D96-97B2-DBD222E956BF}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "3rd Party", "3rd Party", "{D63B3F98-1CD5-454F-9717-307594C75669}"
 EndProject
