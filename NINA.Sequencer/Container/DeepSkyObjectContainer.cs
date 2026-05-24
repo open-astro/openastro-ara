@@ -14,13 +14,13 @@
 
 using Newtonsoft.Json;
 using NINA.Core.Enum;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using NINA.Sequencer.Conditions;
 using NINA.Sequencer.Container.ExecutionStrategy;
 using NINA.Sequencer.SequenceItem;
 using NINA.Sequencer.Trigger;
 using NINA.Core.Utility;
-using NINA.Astrometry;
+using OpenAstroAra.Astrometry;
 using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel.Composition;
@@ -31,7 +31,7 @@ using NINA.WPF.Base.Interfaces.Mediator;
 using OpenAstroAra.Equipment.Exceptions;
 using NINA.Core.Utility.Notification;
 using NINA.Core.Locale;
-using NINA.Astrometry.Interfaces;
+using OpenAstroAra.Astrometry.Interfaces;
 using OpenAstroAra.Equipment.Interfaces;
 using NINA.WPF.Base.Interfaces.ViewModel;
 using System.Windows;

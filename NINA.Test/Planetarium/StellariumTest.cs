@@ -17,7 +17,7 @@ using Moq;
 using Newtonsoft.Json.Linq;
 using OpenAstroAra.Equipment.Equipment.MyPlanetarium;
 using OpenAstroAra.Equipment.Interfaces;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using NUnit.Framework;
 
 namespace NINA.Test.Planetarium {

@@ -14,7 +14,7 @@
 
 using Newtonsoft.Json;
 using NINA.Core.Model;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using NINA.Sequencer.Container;
 using NINA.Sequencer.Validations;
 using NINA.Core.Utility;
@@ -34,11 +34,11 @@ using NINA.WPF.Base.Interfaces.Mediator;
 using NINA.Core.Model.Equipment;
 using NINA.Core.Locale;
 using OpenAstroAra.Equipment.Model;
-using NINA.Astrometry;
+using OpenAstroAra.Astrometry;
 using OpenAstroAra.Equipment.Equipment.MyCamera;
 using NINA.WPF.Base.Interfaces.ViewModel;
 using NINA.Sequencer.Interfaces;
-using NINA.Image.Interfaces;
+using OpenAstroAra.Image.Interfaces;
 using NINA.Sequencer.Utility;
 
 namespace NINA.Sequencer.SequenceItem.Imaging {

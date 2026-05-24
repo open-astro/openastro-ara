@@ -26,7 +26,7 @@ using NINA.WPF.Base.Interfaces.ViewModel;
 using NINA.WPF.Base.Model;
 using NINA.Core.Model;
 using NINA.Sequencer.SequenceItem.Imaging;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using NINA.WPF.Base.Interfaces.Mediator;
 
 namespace NINA.Test.Sequencer.Trigger.Guider {

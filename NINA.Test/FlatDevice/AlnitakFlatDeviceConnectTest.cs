@@ -12,7 +12,7 @@
 using Moq;
 using NINA.Core.Locale;
 using OpenAstroAra.Equipment.Equipment.MyFlatDevice;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Equipment.SDK.FlatDeviceSDKs.AlnitakSDK;
 using NINA.Core.Utility.SerialCommunication;
 using NUnit.Framework;

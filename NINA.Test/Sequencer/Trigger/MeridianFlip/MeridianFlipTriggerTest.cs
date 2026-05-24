@@ -15,10 +15,10 @@
 using FluentAssertions;
 using Moq;
 using OpenAstroAra.Equipment.Equipment.MyTelescope;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using NINA.Sequencer.SequenceItem;
 using NINA.Sequencer.Trigger.MeridianFlip;
-using NINA.Astrometry;
+using OpenAstroAra.Astrometry;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using NINA.ViewModel.ImageHistory;
 using NUnit.Framework;
@@ -31,7 +31,7 @@ using NINA.Core.Enum;
 using NINA.WPF.Base.Interfaces.Mediator;
 using NINA.WPF.Base.Interfaces.ViewModel;
 using OpenAstroAra.Equipment.Interfaces;
-using NINA.Image.ImageAnalysis;
+using OpenAstroAra.Image.ImageAnalysis;
 using NINA.WPF.Base.Interfaces;
 
 namespace NINA.Test.Sequencer.Trigger.MeridianFlip {
@@ -428,15 +428,15 @@ namespace NINA.Test.Sequencer.Trigger.MeridianFlip {
             var lst = 14.0;
             var rightAscension = (TimeSpan.FromHours(lst) - TimeSpan.FromMinutes(62)).TotalHours;
             var coordinates = new Coordinates(Angle.ByHours(rightAscension), Angle.ByDegree(20.0), Epoch.JNOW);
-            var expectedSideOfPier = NINA.Astrometry.MeridianFlip.ExpectedPierSide(coordinates, Angle.ByHours(lst));
-            var timeToMeridian = NINA.Astrometry.MeridianFlip.TimeToMeridian(coordinates, Angle.ByHours(lst));
+            var expectedSideOfPier = OpenAstroAra.Astrometry.MeridianFlip.ExpectedPierSide(coordinates, Angle.ByHours(lst));
+            var timeToMeridian = OpenAstroAra.Astrometry.MeridianFlip.TimeToMeridian(coordinates, Angle.ByHours(lst));
 
             var settings = new Mock<IMeridianFlipSettings>();
             settings.SetupGet(m => m.MinutesAfterMeridian).Returns(55);
             settings.SetupGet(m => m.MaxMinutesAfterMeridian).Returns(65);
             settings.SetupGet(m => m.PauseTimeBeforeMeridian).Returns(0);
             settings.SetupGet(m => m.UseSideOfPier).Returns(true);
-            var timeToFlip = NINA.Astrometry.MeridianFlip.TimeToMeridianFlip(settings.Object, coordinates, Angle.ByHours(lst), PierSide.pierEast);
+            var timeToFlip = OpenAstroAra.Astrometry.MeridianFlip.TimeToMeridianFlip(settings.Object, coordinates, Angle.ByHours(lst), PierSide.pierEast);
 
             Assert.That(timeToFlip > TimeSpan.FromHours(12));
         }

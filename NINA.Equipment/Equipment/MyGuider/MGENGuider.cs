@@ -14,9 +14,9 @@
 
 using NINA.MGEN;
 using NINA.Exceptions;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using NINA.Core.Utility;
-using NINA.Astrometry;
+using OpenAstroAra.Astrometry;
 using NINA.Core.Utility.Notification;
 using NINA.Core.Locale;
 using System;
@@ -26,7 +26,7 @@ using System.Threading.Tasks;
 using System.Windows.Input;
 using System.Windows.Media.Imaging;
 using NINA.Core.Interfaces;
-using NINA.Image.ImageAnalysis;
+using OpenAstroAra.Image.ImageAnalysis;
 using NINA.Equipment.Interfaces;
 using NINA.Core.Model;
 using NINA.Equipment.Interfaces.Mediator;

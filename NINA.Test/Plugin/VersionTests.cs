@@ -14,20 +14,20 @@
 
 using FluentAssertions;
 using Moq;
-using NINA.Astrometry.Interfaces;
+using OpenAstroAra.Astrometry.Interfaces;
 using NINA.Core.Interfaces;
 using NINA.Core.Utility;
 using NINA.Core.Utility.WindowService;
 using OpenAstroAra.Equipment.Interfaces;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Equipment.Interfaces.ViewModel;
-using NINA.Image.ImageAnalysis;
-using NINA.Image.Interfaces;
-using NINA.PlateSolving.Interfaces;
+using OpenAstroAra.Image.ImageAnalysis;
+using OpenAstroAra.Image.Interfaces;
+using OpenAstroAra.PlateSolving.Interfaces;
 using NINA.Plugin;
 using NINA.Plugin.Interfaces;
 using NINA.Plugin.ManifestDefinition;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using NINA.WPF.Base.Interfaces;
 using NINA.WPF.Base.Interfaces.Mediator;
 using NINA.WPF.Base.Interfaces.ViewModel;

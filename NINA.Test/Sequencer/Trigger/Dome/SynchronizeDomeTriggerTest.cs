@@ -14,12 +14,12 @@
 
 using FluentAssertions;
 using Moq;
-using NINA.Astrometry;
+using OpenAstroAra.Astrometry;
 using OpenAstroAra.Equipment.Equipment.MyDome;
 using OpenAstroAra.Equipment.Equipment.MyTelescope;
 using OpenAstroAra.Equipment.Interfaces;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using NINA.Sequencer.SequenceItem;
 using NINA.Sequencer.Trigger.Dome;
 using NINA.Sequencer.Trigger.Platesolving;

@@ -13,7 +13,7 @@
 #endregion "copyright"
 
 using NINA.Core.Enum;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using NINA.Core.Utility;
 using NINA.Core.Utility.WindowService;
 using System;
@@ -28,9 +28,9 @@ using System.Windows.Input;
 using NINA.Equipment.Interfaces.Mediator;
 using NINA.Core.Model.Equipment;
 using NINA.Core.Locale;
-using NINA.Image.Interfaces;
+using OpenAstroAra.Image.Interfaces;
 using NINA.Equipment.Model;
-using NINA.Image.ImageData;
+using OpenAstroAra.Image.ImageData;
 using NINA.Equipment.Interfaces;
 using Microsoft.Win32;
 

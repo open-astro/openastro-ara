@@ -17,7 +17,7 @@ using NINA.Core.Model.Equipment;
 using NINA.Core.MyMessageBox;
 using NINA.Core.Utility;
 using NINA.Equipment.Interfaces;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using System;
 using System.Collections.Generic;
 using System.Linq;

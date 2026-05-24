@@ -10,7 +10,7 @@
 */
 #endregion "copyright"
 using FluentAssertions;
-using NINA.Astrometry;
+using OpenAstroAra.Astrometry;
 using NUnit.Framework;
 using NUnit.Framework.Legacy;
 using System;

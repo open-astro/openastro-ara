@@ -20,7 +20,7 @@ using NINA.Core.Utility.WindowService;
 using NINA.Equipment.Exceptions;
 using NINA.Equipment.Interfaces;
 using NINA.Equipment.SDK.FlatDeviceSDKs.AlnitakSDK;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;

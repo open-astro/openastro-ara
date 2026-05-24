@@ -14,9 +14,9 @@
 
 using FluentAssertions;
 using Moq;
-using NINA.Image.ImageData;
+using OpenAstroAra.Image.ImageData;
 using OpenAstroAra.Equipment.Equipment.MyFilterWheel;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using NINA.Sequencer.Trigger.Autofocus;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using NINA.Core.Utility.WindowService;
@@ -41,9 +41,9 @@ using NINA.WPF.Base.Utility.AutoFocus;
 using NINA.WPF.Base.Model;
 using NINA.Sequencer.SequenceItem;
 using NINA.Sequencer.Interfaces;
-using NINA.Image.ImageAnalysis;
+using OpenAstroAra.Image.ImageAnalysis;
 using NINA.WPF.Base.Interfaces;
-using NINA.Astrometry.Body;
+using OpenAstroAra.Astrometry.Body;
 
 namespace NINA.Test.Sequencer.Trigger.Autofocus {
 

@@ -12,7 +12,7 @@
 using FluentAssertions;
 using Moq;
 using OpenAstroAra.Equipment.SDK.CameraSDKs.SVBonySDK;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using NUnit.Framework;
 using System;
 using System.Collections.Generic;

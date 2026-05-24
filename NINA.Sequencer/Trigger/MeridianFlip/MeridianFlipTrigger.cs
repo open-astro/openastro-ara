@@ -15,12 +15,12 @@
 using Newtonsoft.Json;
 using NINA.Core.Model;
 using NINA.Core.Utility;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using NINA.Sequencer.Container;
 using NINA.Sequencer.SequenceItem;
 using NINA.Sequencer.Utility;
 using NINA.Sequencer.Validations;
-using NINA.Astrometry;
+using OpenAstroAra.Astrometry;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using NINA.ViewModel;
 using NINA.WPF.Base.Interfaces.ViewModel;
@@ -36,7 +36,7 @@ using NINA.Core.Locale;
 using NINA.WPF.Base.ViewModel;
 using NINA.Sequencer.Interfaces;
 using OpenAstroAra.Equipment.Interfaces;
-using NINA.Image.ImageAnalysis;
+using OpenAstroAra.Image.ImageAnalysis;
 using NINA.WPF.Base.Interfaces;
 
 namespace NINA.Sequencer.Trigger.MeridianFlip {
@@ -241,7 +241,7 @@ namespace NINA.Sequencer.Trigger.MeridianFlip {
                     if (noRemainingTime) {
                         // There is no more time remaining. Project the side of pier to that at the time after the flip and check if this flip is required
                         var projectedSiderealTime = Angle.ByHours(AstroUtil.EuclidianModulus(telescopeInfo.SiderealTime + originalMaximumTimeRemaining.TotalHours, 24));
-                        var targetSideOfPier = NINA.Astrometry.MeridianFlip.ExpectedPierSide(
+                        var targetSideOfPier = OpenAstroAra.Astrometry.MeridianFlip.ExpectedPierSide(
                             coordinates: telescopeInfo.Coordinates,
                             localSiderealTime: projectedSiderealTime);
                         if (telescopeInfo.SideOfPier == targetSideOfPier) {
@@ -258,7 +258,7 @@ namespace NINA.Sequencer.Trigger.MeridianFlip {
                         }
                     } else {
                         // There is still time remaining. A flip is likely not required. Double check by checking the current expected side of pier with the actual side of pier
-                        var targetSideOfPier = NINA.Astrometry.MeridianFlip.ExpectedPierSide(
+                        var targetSideOfPier = OpenAstroAra.Astrometry.MeridianFlip.ExpectedPierSide(
                             coordinates: telescopeInfo.Coordinates,
                             localSiderealTime: Angle.ByHours(telescopeInfo.SiderealTime));
                         if (telescopeInfo.SideOfPier == targetSideOfPier) {

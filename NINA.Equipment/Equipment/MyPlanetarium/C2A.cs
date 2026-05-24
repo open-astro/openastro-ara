@@ -13,9 +13,9 @@
 #endregion "copyright"
 
 using NINA.Core.Utility;
-using NINA.Astrometry;
+using OpenAstroAra.Astrometry;
 using NINA.Core.Utility.TcpRaw;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using System.Threading.Tasks;
 using System;
 using NINA.Equipment.Exceptions;

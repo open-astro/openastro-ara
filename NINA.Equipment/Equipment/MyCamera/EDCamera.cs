@@ -14,8 +14,8 @@
 
 using EDSDKLib;
 using NINA.Core.Enum;
-using NINA.Image.ImageData;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Image.ImageData;
+using OpenAstroAra.Profile.Interfaces;
 using NINA.Core.Utility;
 using NINA.Core.Utility.Notification;
 using System;
@@ -29,10 +29,10 @@ using System.Windows.Media.Imaging;
 using NINA.Core.Locale;
 using NINA.Core.Model.Equipment;
 using NINA.Core.MyMessageBox;
-using NINA.Image.RawConverter;
+using OpenAstroAra.Image.RawConverter;
 using NINA.Equipment.Exceptions;
 using NINA.Equipment.Model;
-using NINA.Image.Interfaces;
+using OpenAstroAra.Image.Interfaces;
 using NINA.Equipment.Interfaces;
 using NINA.Equipment.Utility;
 

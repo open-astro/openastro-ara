@@ -13,8 +13,8 @@ using System.Linq;
 using FluentAssertions;
 using NINA.Core.Model.Equipment;
 using OpenAstroAra.Equipment.Equipment.MyCamera;
-using NINA.Profile;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile;
+using OpenAstroAra.Profile.Interfaces;
 using NUnit.Framework;
 
 namespace NINA.Test.FlatDevice {

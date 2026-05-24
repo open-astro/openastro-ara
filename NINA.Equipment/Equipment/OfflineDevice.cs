@@ -1,10 +1,10 @@
-﻿using NINA.Astrometry;
+﻿using OpenAstroAra.Astrometry;
 using NINA.Core.Enum;
 using NINA.Core.Model.Equipment;
 using NINA.Core.Utility;
 using NINA.Equipment.Interfaces;
 using NINA.Equipment.Model;
-using NINA.Image.Interfaces;
+using OpenAstroAra.Image.Interfaces;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;

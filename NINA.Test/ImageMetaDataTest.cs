@@ -9,21 +9,21 @@
     file, You can obtain one at http://mozilla.org/MPL/2.0/.
 */
 #endregion "copyright"
-using NINA.Image.ImageData;
+using OpenAstroAra.Image.ImageData;
 using OpenAstroAra.Equipment.Equipment.MyCamera;
 using OpenAstroAra.Equipment.Equipment.MyFilterWheel;
 using OpenAstroAra.Equipment.Equipment.MyFocuser;
 using OpenAstroAra.Equipment.Equipment.MyRotator;
 using OpenAstroAra.Equipment.Equipment.MyTelescope;
 using OpenAstroAra.Equipment.Equipment.MyWeatherData;
-using NINA.Profile.Interfaces;
-using NINA.Astrometry;
+using OpenAstroAra.Profile.Interfaces;
+using OpenAstroAra.Astrometry;
 using NUnit.Framework;
 using System;
 using System.Collections.Generic;
 using OpenAstroAra.Equipment.Utility;
 using NINA.Core.Model.Equipment;
-using NINA.Profile;
+using OpenAstroAra.Profile;
 using NINA.Core.Enum;
 using Moq;
 using OpenAstroAra.Equipment.Interfaces;
@@ -98,7 +98,7 @@ namespace NINA.Test {
 
         [Test]
         public void FromProfileTest() {
-            var profile = new NINA.Profile.Profile() {
+            var profile = new OpenAstroAra.Profile.Profile() {
                 CameraSettings = {
                     PixelSize = 3.8
                 },

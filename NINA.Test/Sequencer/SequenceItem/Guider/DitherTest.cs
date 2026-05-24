@@ -26,7 +26,7 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 
 namespace NINA.Test.Sequencer.SequenceItem.Guider {
 

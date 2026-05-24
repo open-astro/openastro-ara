@@ -14,7 +14,7 @@
 
 using Newtonsoft.Json;
 using NINA.Core.Model;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using NINA.Sequencer.Conditions;
 using NINA.Sequencer.Container;
 using NINA.Sequencer.Container.ExecutionStrategy;
@@ -34,7 +34,7 @@ using System.Threading.Tasks;
 using NINA.WPF.Base.Interfaces.Mediator;
 using NINA.Core.Locale;
 using OpenAstroAra.Equipment.Model;
-using NINA.Profile;
+using OpenAstroAra.Profile;
 using NINA.WPF.Base.Interfaces.ViewModel;
 using NINA.Sequencer.Utility;
 using NINA.Core.Utility;

@@ -15,7 +15,7 @@
 using FluentAssertions;
 using Moq;
 using OpenAstroAra.Equipment.Equipment.MyFilterWheel;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using NINA.Sequencer.Trigger.Autofocus;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using NINA.Core.Utility.WindowService;

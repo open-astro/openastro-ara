@@ -4,7 +4,7 @@ using NINA.Core.Model;
 using NINA.Core.Utility;
 using OpenAstroAra.Equipment.Equipment;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using NINA.Sequencer.Validations;
 using System;
 using System.Collections.Generic;

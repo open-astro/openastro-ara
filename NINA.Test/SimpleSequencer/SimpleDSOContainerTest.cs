@@ -1,5 +1,5 @@
 ﻿using Moq;
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Equipment.Interfaces;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using NINA.Sequencer;
@@ -12,7 +12,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using NINA.Astrometry.Interfaces;
+using OpenAstroAra.Astrometry.Interfaces;
 using NINA.Sequencer.SequenceItem.FilterWheel;
 using NINA.Sequencer.SequenceItem.Imaging;
 using OpenAstroAra.Equipment.Equipment.MyCamera;
