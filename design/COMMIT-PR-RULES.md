@@ -27,11 +27,11 @@ Rhythm:
 3. Completes phase, runs §15 gate
 4. Tags `phase-N-complete` on sub-branch
 5. Opens PR `phase-N → port/ara`
-6. CodeRabbit reviews; AI poll-and-fix loop runs (60 s polling; auto-fix trivial + correctness findings via new commits; reasoned replies for disagreements; out-of-scope items → `design/PORT_TODO.md`)
-7. **AI merges** once the §19.1 merge-gate clears (green CI + CodeRabbit quiescent ≥3 min + no unresolved actionable findings + clean self-review against scope). If any gate condition is ambiguous, AI posts `Held for human review @<user> — <reason>` and waits instead of merging.
-8. AI pulls updated `port/ara` and starts next phase
+6. CodeRabbit reviews; AI poll-and-fix loop runs (60 s polling; auto-fix trivial + correctness findings via new commits; reasoned replies for disagreements; out-of-scope items → `design/PORT_TODO.md`). **If CodeRabbit returns rate-limit / no-credits, AI does NOT merge** — posts `Held for CodeRabbit @<user> — rate-limited, refill in <X>`, then either waits for the auto-refill window and retriggers via `@coderabbitai review`, or waits for user direction (e.g., billing fix).
+7. **AI merges** once the §19.1 merge-gate clears (green CI + **actual CodeRabbit review** posted, not a rate-limit skip + no unresolved actionable findings + clean self-review against scope). Use `gh pr merge --squash --delete-branch` to remove the sub-branch from origin in the same step. If any gate condition is ambiguous, AI posts `Held for human review @<user> — <reason>` and waits instead.
+8. AI pulls updated `port/ara`. **If the just-merged sub-PR was the last in a phase** (e.g., `phase-0.5a-6` closes out Phase 0.5a), AI also tags `phase-N-complete` on `port/ara` HEAD and opens a `port/ara → master` promotion PR per PORT_PLAYBOOK.md §22.0 cadence. Then starts the next phase from updated `port/ara` once the promotion PR merges.
 
-Final integration: `port/ara → master` PR at Phase 15 = a fast-forward over already-reviewed phase PRs. Same §19.1 merge-gate applies; AI merges with a merge commit (preserves per-phase history on `master`) once the gate clears.
+Final integration: per §22.0 (revised 2026-05-23), `port/ara → master` is **periodic**, not one-shot — promoted after each phase boundary. The Phase 15 final pass catches whatever tail-end work hasn't been promoted yet. Same §19.1 merge-gate; merge commit (not squash) preserves per-phase history on `master`.
 
 ### Phase size audit
 
