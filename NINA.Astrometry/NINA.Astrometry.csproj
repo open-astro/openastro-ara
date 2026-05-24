@@ -35,10 +35,6 @@
       <Pack>True</Pack>
       <PackagePath>\</PackagePath>
     </None>
-    <None Include="..\NINA\Resources\ninasplash.png">
-      <Pack>True</Pack>
-      <PackagePath>\</PackagePath>
-    </None>
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\NINA.Core\NINA.Core.csproj" />
@@ -56,17 +52,13 @@
     <Title>$(AssemblyName)</Title>
     <Version>3.2.0.9001</Version>
     <Company>$(Authors)</Company>
-    <Product>N.I.N.A. - Nighttime Imaging 'N' Astronomy</Product>
+    <Product>OpenAstro Ara</Product>
     <Description>This assembly contains the astronomy components of N.I.N.A.</Description>
     <Copyright>Copyright ©  2016 - 2025 Stefan Berg and the N.I.N.A. contributors</Copyright>
-    <PackageProjectUrl>https://nighttime-imaging.eu/</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/isbeorn/nina.git</RepositoryUrl>
-    <PackageIcon>ninasplash.png</PackageIcon>
+    <PackageProjectUrl>https://github.com/open-astro/openastro-ara</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/open-astro/openastro-ara.git</RepositoryUrl>
     <PackageOutputPath>$(SolutionDir)publish</PackageOutputPath>
     <Authors>Stefan Berg and the N.I.N.A. Contributors</Authors>
     <PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
   </PropertyGroup>
-  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
-    <Exec IgnoreExitCode="true" Command="if $(Configuration) == SignedRelease signtool sign /t http://timestamp.sectigo.com /i Sectigo /v /a /fd SHA256 $(TargetPath)" />
-  </Target>
 </Project>
