@@ -51,9 +51,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout (no LFS)
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.x — pinned per zizmor + CodeRabbit security finding on PR #12
         with:
           lfs: false
+          persist-credentials: false  # checkout step needs no push access; reduces blast radius
 
       - name: Verify required design docs exist
         run: |
