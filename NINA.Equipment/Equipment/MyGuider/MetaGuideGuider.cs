@@ -12,7 +12,7 @@
 
 #endregion "copyright"
 
-using NINA.Astrometry;
+using OpenAstroAra.Astrometry;
 using NINA.Core.Interfaces;
 using NINA.Core.Locale;
 using NINA.Core.Model;

@@ -8,7 +8,7 @@ using static NINA.Image.FileFormat.FITS.CfitsioNative;
 using NINA.Image.ImageData;
 using System.Globalization;
 using NINA.Core.Enum;
-using NINA.Astrometry;
+using OpenAstroAra.Astrometry;
 using NINA.Core.Utility;
 
 namespace NINA.Image.FileFormat.FITS {

@@ -1,5 +1,5 @@
 ﻿using Newtonsoft.Json;
-using NINA.Astrometry.Interfaces;
+using OpenAstroAra.Astrometry.Interfaces;
 using NINA.Core.Locale;
 using NINA.Core.Utility;
 using System;

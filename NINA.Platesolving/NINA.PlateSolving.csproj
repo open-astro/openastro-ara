@@ -37,7 +37,7 @@
     </None>
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\NINA.Astrometry\NINA.Astrometry.csproj" />
+    <ProjectReference Include="..\OpenAstroAra.Astrometry\OpenAstroAra.Astrometry.csproj" />
     <ProjectReference Include="..\OpenAstroAra.Core\OpenAstroAra.Core.csproj" />
     <ProjectReference Include="..\NINA.Equipment\NINA.Equipment.csproj" />
     <ProjectReference Include="..\NINA.Image\NINA.Image.csproj" />
