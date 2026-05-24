@@ -14,12 +14,12 @@
 
 using FluentAssertions;
 using Moq;
-using NINA.PlateSolving;
+using OpenAstroAra.PlateSolving;
 using NINA.Astrometry;
 using NINA.Equipment.Interfaces.Mediator;
 using NINA.Equipment.Model;
 using NINA.Core.Model;
-using NINA.PlateSolving.Interfaces;
+using OpenAstroAra.PlateSolving.Interfaces;
 using NINA.Equipment.Interfaces;
 
 namespace NINA.Test.PlateSolving {

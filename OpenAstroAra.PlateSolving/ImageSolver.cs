@@ -12,20 +12,20 @@
 
 #endregion "copyright"
 
-using NINA.Image.Interfaces;
-using NINA.Profile.Interfaces;
-using NINA.Core.Utility;
+using OpenAstroAra.Image.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
+using OpenAstroAra.Core.Utility;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using NINA.Core.Model;
-using NINA.Core.Locale;
-using NINA.PlateSolving.Interfaces;
+using OpenAstroAra.Core.Model;
+using OpenAstroAra.Core.Locale;
+using OpenAstroAra.PlateSolving.Interfaces;
 
-namespace NINA.PlateSolving {
+namespace OpenAstroAra.PlateSolving {
 
     public class ImageSolver : IImageSolver {
 

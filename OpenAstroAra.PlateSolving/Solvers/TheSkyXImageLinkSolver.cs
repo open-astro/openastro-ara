@@ -13,13 +13,13 @@
 #endregion "copyright"
 
 using ASCOM;
-using NINA.Astrometry;
-using NINA.Core.Enum;
-using NINA.Core.Model;
-using NINA.Core.Utility;
-using NINA.Core.Utility.Notification;
-using NINA.Image.FileFormat;
-using NINA.Image.Interfaces;
+using OpenAstroAra.Astrometry;
+using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Model;
+using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Core.Utility.Notification;
+using OpenAstroAra.Image.FileFormat;
+using OpenAstroAra.Image.Interfaces;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -36,7 +36,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace NINA.PlateSolving.Solvers {
+namespace OpenAstroAra.PlateSolving.Solvers {
     internal class TheSkyXImageLinkSolver : BaseSolver {
 
         private string _tsxHost;

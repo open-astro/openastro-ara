@@ -12,13 +12,10 @@
 
 #endregion "copyright"
 
-using System.Windows.Media.Imaging;
+namespace OpenAstroAra.PlateSolving {
 
-namespace NINA.PlateSolving {
-
-    public class PlateSolveProgress {
-        public BitmapSource Thumbnail { get; set; }
-
-        public PlateSolveResult PlateSolveResult { get; set; }
+    public class CenterSolveParameter : CaptureSolverParameter {
+        public double Threshold { get; set; }
+        public bool NoSync { get; set; }
     }
 }

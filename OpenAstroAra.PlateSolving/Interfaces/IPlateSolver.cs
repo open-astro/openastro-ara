@@ -12,13 +12,13 @@
 
 #endregion "copyright"
 
-using NINA.Core.Model;
-using NINA.Image.Interfaces;
+using OpenAstroAra.Core.Model;
+using OpenAstroAra.Image.Interfaces;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace NINA.PlateSolving.Interfaces {
+namespace OpenAstroAra.PlateSolving.Interfaces {
 
     public interface IPlateSolver {
 

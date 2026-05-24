@@ -13,11 +13,11 @@
 #endregion "copyright"
 
 using CommunityToolkit.Mvvm.ComponentModel;
-using NINA.Astrometry;
-using NINA.Core.Utility;
+using OpenAstroAra.Astrometry;
+using OpenAstroAra.Core.Utility;
 using System;
 
-namespace NINA.PlateSolving {
+namespace OpenAstroAra.PlateSolving {
 
     public partial class PlateSolveResult : BaseINPC {
 

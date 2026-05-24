@@ -15,7 +15,7 @@
 using FluentAssertions;
 using Moq;
 using NINA.Image.ImageData;
-using NINA.PlateSolving;
+using OpenAstroAra.PlateSolving;
 using NINA.Astrometry;
 using NUnit.Framework;
 using System;
@@ -27,7 +27,7 @@ using System.Threading.Tasks;
 using NINA.Core.Locale;
 using NINA.Image.Interfaces;
 using NINA.Core.Model;
-using NINA.PlateSolving.Interfaces;
+using OpenAstroAra.PlateSolving.Interfaces;
 
 namespace NINA.Test.PlateSolving {
 

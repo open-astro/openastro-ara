@@ -12,10 +12,10 @@
 
 #endregion "copyright"
 
-using NINA.Astrometry;
-using NINA.Core.Locale;
-using NINA.Core.Utility;
-using NINA.Core.Utility.Notification;
+using OpenAstroAra.Astrometry;
+using OpenAstroAra.Core.Locale;
+using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Core.Utility.Notification;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -23,7 +23,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 
-namespace NINA.PlateSolving.Solvers {
+namespace OpenAstroAra.PlateSolving.Solvers {
 
     internal class ASTAPSolver : CLISolver {
 

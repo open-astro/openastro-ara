@@ -12,7 +12,7 @@
 
 #endregion "copyright"
 
-using NINA.Profile.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -20,14 +20,14 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Media;
-using NINA.Equipment.Interfaces.Mediator;
-using NINA.Core.Model;
-using NINA.Core.Utility;
-using NINA.Equipment.Model;
-using NINA.PlateSolving.Interfaces;
-using NINA.Core.Locale;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Core.Model;
+using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Equipment.Model;
+using OpenAstroAra.PlateSolving.Interfaces;
+using OpenAstroAra.Core.Locale;
 
-namespace NINA.PlateSolving {
+namespace OpenAstroAra.PlateSolving {
 
     public class CaptureSolver : ICaptureSolver {
         private IImagingMediator imagingMediator;

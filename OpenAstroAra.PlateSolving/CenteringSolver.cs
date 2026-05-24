@@ -12,22 +12,22 @@
 
 #endregion "copyright"
 
-using NINA.Core.Utility;
-using NINA.Astrometry;
+using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Astrometry;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using NINA.Core.Model;
-using NINA.Equipment.Interfaces.Mediator;
-using NINA.Core.Locale;
-using NINA.Equipment.Model;
-using NINA.PlateSolving.Interfaces;
-using NINA.Equipment.Interfaces;
-using NINA.Core.Utility.Notification;
-using NINA.Core.Model.Equipment;
+using OpenAstroAra.Core.Model;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Core.Locale;
+using OpenAstroAra.Equipment.Model;
+using OpenAstroAra.PlateSolving.Interfaces;
+using OpenAstroAra.Equipment.Interfaces;
+using OpenAstroAra.Core.Utility.Notification;
+using OpenAstroAra.Core.Model.Equipment;
 using System.Collections.Generic;
 
-namespace NINA.PlateSolving {
+namespace OpenAstroAra.PlateSolving {
 
     public class CenteringSolver : ICenteringSolver {
         private readonly ITelescopeMediator telescopeMediator;

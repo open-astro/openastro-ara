@@ -23,7 +23,7 @@ using NINA.Equipment.Interfaces.Mediator;
 using NINA.Equipment.Interfaces.ViewModel;
 using NINA.Image.ImageAnalysis;
 using NINA.Image.Interfaces;
-using NINA.PlateSolving.Interfaces;
+using OpenAstroAra.PlateSolving.Interfaces;
 using NINA.Plugin;
 using NINA.Plugin.Interfaces;
 using NINA.Plugin.ManifestDefinition;
