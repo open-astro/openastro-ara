@@ -22,7 +22,6 @@ using Serilog.Sinks.File;
 using System.Text;
 using Serilog.Events;
 using System.Globalization;
-using System.Management;
 using System.Runtime.InteropServices;
 
 namespace OpenAstroAra.Core.Utility {
