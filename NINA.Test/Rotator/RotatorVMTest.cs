@@ -16,7 +16,7 @@ using Moq;
 using NINA.Equipment.Equipment.MyDome;
 using NINA.Equipment.Equipment.MyTelescope;
 using OpenAstroAra.Profile.Interfaces;
-using NINA.Astrometry;
+using OpenAstroAra.Astrometry;
 using NINA.Equipment.Interfaces.Mediator;
 using NUnit.Framework;
 using System;

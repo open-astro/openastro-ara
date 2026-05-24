@@ -13,7 +13,7 @@
 #endregion "copyright"
 
 using NINA.Image.Interfaces;
-using NINA.Astrometry;
+using OpenAstroAra.Astrometry;
 
 namespace NINA.PlateSolving {
 

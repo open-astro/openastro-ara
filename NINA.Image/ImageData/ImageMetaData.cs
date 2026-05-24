@@ -14,7 +14,7 @@
 
 using NINA.Core.Enum;
 using OpenAstroAra.Profile.Interfaces;
-using NINA.Astrometry;
+using OpenAstroAra.Astrometry;
 using System;
 using System.Linq;
 using NINA.Core.Model;

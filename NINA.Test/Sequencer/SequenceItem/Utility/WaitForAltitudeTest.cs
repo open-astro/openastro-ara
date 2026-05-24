@@ -19,7 +19,7 @@ using NINA.Sequencer;
 using NINA.Sequencer.Container;
 using NINA.Sequencer.SequenceItem.Utility;
 using NINA.Core.Utility;
-using NINA.Astrometry;
+using OpenAstroAra.Astrometry;
 using NINA.Core.Enum;
 using NINA.Equipment.Interfaces.Mediator;
 using NUnit.Framework;

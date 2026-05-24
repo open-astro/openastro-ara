@@ -1,8 +1,8 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using NINA.Astrometry;
-using NINA.Astrometry.Interfaces;
+using OpenAstroAra.Astrometry;
+using OpenAstroAra.Astrometry.Interfaces;
 using NINA.Core.Locale;
 using NINA.Core.Model;
 using NINA.Core.Model.Equipment;

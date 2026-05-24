@@ -43,7 +43,7 @@ using NINA.Sequencer.SequenceItem;
 using NINA.Sequencer.Interfaces;
 using NINA.Image.ImageAnalysis;
 using NINA.WPF.Base.Interfaces;
-using NINA.Astrometry.Body;
+using OpenAstroAra.Astrometry.Body;
 
 namespace NINA.Test.Sequencer.Trigger.Autofocus {
 

@@ -20,7 +20,7 @@ using NINA.Core.Utility.WindowService;
 using NINA.Core.Locale;
 using System.Windows.Threading;
 using NINA.Core.Utility.Http;
-using NINA.Astrometry;
+using OpenAstroAra.Astrometry;
 using System.Collections.Generic;
 using NINA.Equipment.Equipment.MyGuider.PHD2;
 using System.Globalization;

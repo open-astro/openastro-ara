@@ -16,7 +16,7 @@ using FluentAssertions;
 using Moq;
 using NINA.Image.ImageData;
 using NINA.PlateSolving;
-using NINA.Astrometry;
+using OpenAstroAra.Astrometry;
 using NUnit.Framework;
 using System;
 using System.Collections.Generic;

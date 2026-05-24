@@ -25,7 +25,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NINA.Equipment", "NINA.Equi
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenAstroAra.Profile", "OpenAstroAra.Profile\OpenAstroAra.Profile.csproj", "{8540150E-7FF0-4F7B-A714-0F6ABDB1AC60}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NINA.Astrometry", "NINA.Astrometry\NINA.Astrometry.csproj", "{57B7CC6E-A410-4866-9BF9-278B94118E3D}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenAstroAra.Astrometry", "OpenAstroAra.Astrometry\OpenAstroAra.Astrometry.csproj", "{57B7CC6E-A410-4866-9BF9-278B94118E3D}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NINA.PlateSolving", "NINA.Platesolving\NINA.PlateSolving.csproj", "{A721D420-3C8E-4E96-9558-37B50801FF6B}"
 EndProject

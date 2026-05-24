@@ -14,7 +14,7 @@
 
 using NINA.Core.Enum;
 using NINA.Image.ImageData;
-using NINA.Astrometry;
+using OpenAstroAra.Astrometry;
 using System;
 using System.Globalization;
 using System.IO;

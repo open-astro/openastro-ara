@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace NINA.Sequencer.SequenceItem.Utility {
     using Newtonsoft.Json;
-    using NINA.Astrometry;
+    using OpenAstroAra.Astrometry;
     using NINA.Core.Enum;
     using OpenAstroAra.Profile.Interfaces;
     using System.Collections.Generic;

@@ -23,7 +23,7 @@ using NINA.Sequencer.SequenceItem;
 using NINA.Sequencer.Serialization;
 using NINA.Sequencer.Trigger;
 using NINA.Core.Utility;
-using NINA.Astrometry;
+using OpenAstroAra.Astrometry;
 using NINA.Equipment.Interfaces.Mediator;
 using NINA.ViewModel;
 using NINA.ViewModel.FramingAssistant;

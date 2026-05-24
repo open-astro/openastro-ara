@@ -29,7 +29,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using NINA.Core.Locale;
 using NINA.WPF.Base.ViewModel;
-using NINA.Astrometry;
+using OpenAstroAra.Astrometry;
 using NINA.Sequencer.SequenceItem.Platesolving;
 using NINA.Core.Utility;
 using System.IO;

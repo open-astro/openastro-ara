@@ -17,7 +17,7 @@ using NINA.Core.Enum;
 using OpenAstroAra.Profile.Interfaces;
 using NINA.Sequencer.SequenceItem;
 using NINA.Core.Utility;
-using NINA.Astrometry;
+using OpenAstroAra.Astrometry;
 using System;
 using System.ComponentModel.Composition;
 using System.Linq;

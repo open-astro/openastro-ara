@@ -14,7 +14,7 @@
 
 using FluentAssertions;
 using Moq;
-using NINA.Astrometry;
+using OpenAstroAra.Astrometry;
 using NINA.Core.Locale;
 using NINA.Core.Model;
 using NINA.Core.Utility.WindowService;

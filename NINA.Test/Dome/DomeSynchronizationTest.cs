@@ -13,7 +13,7 @@ using NUnit.Framework;
 using System;
 using NINA.Core.Utility;
 using System.Windows.Media.Media3D;
-using NINA.Astrometry;
+using OpenAstroAra.Astrometry;
 using NINA.Equipment.Equipment.MyTelescope;
 using NINA.Core.Database;
 using System.IO;

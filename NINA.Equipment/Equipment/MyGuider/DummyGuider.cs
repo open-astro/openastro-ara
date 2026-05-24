@@ -21,7 +21,7 @@ using NINA.Core.Interfaces;
 using NINA.Core.Locale;
 using NINA.Equipment.Interfaces;
 using NINA.Core.Model;
-using NINA.Astrometry;
+using OpenAstroAra.Astrometry;
 using System.Collections.Generic;
 using NINA.Equipment.Equipment.MyGuider.PHD2;
 
