@@ -1,0 +1,78 @@
+name: CI
+
+# Progressive CI for the NINA → OpenAstro Ara port.
+#
+# This file replaces the upstream NINA Windows build (build-and-test.yml) and
+# the NINA Backblaze release pipeline (build-and-release.yml), both of which
+# were incompatible with the port direction (.NET 10 daemon on linux-arm64,
+# Debian 13 / RPi target — see design/PORT_PLAYBOOK.md §2.1, §13).
+#
+# Growth schedule, matching the playbook phases:
+#
+#   NOW (pre-Phase 0.5)
+#     → sanity-checks only: design docs exist + workflow files parse.
+#       Codebase is still NINA / .NET 8 / WPF; no meaningful build possible
+#       on Linux until Phase 0.5p (.NET 10 bump).
+#
+#   Phase 0.5p (.NET 10 bump)
+#     → add `server-build` job: `dotnet restore && dotnet build` on
+#       ubuntu-latest with .NET 10 SDK.
+#
+#   Phase 4 (OpenAstroAra.Server scaffold)
+#     → extend `server-build`: `dotnet publish OpenAstroAra.Server
+#       -c Release -r linux-arm64 --self-contained` to produce the
+#       Debian 13 (Trixie) / RPi 4-5 daemon artifact (per §13.1).
+#
+#   Phase 11 (Flutter scaffold)
+#     → add `client-test` job: `flutter analyze && flutter test` on Linux.
+#
+#   Phase 14 (full CI matrix per §14.3)
+#     → full matrix: server-build (linux), server-e2e (Docker arm64),
+#       client-macos / -windows / -linux / -test, settings-registry gate,
+#       Alpaca-simulator pinning auto-download (§14.5.1).
+#
+# Until then, every job in this file MUST stay green on a vanilla `port/ara`
+# checkout — sub-PRs that delete or rename projects should not break CI.
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+      - port/ara
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sanity:
+    name: Sanity (design docs)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (no LFS)
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.x — pinned per zizmor + CodeRabbit security finding on PR #12
+        with:
+          lfs: false
+          persist-credentials: false  # checkout step needs no push access; reduces blast radius
+
+      - name: Verify required design docs exist
+        run: |
+          set -e
+          for f in \
+            design/PORT_PLAYBOOK.md \
+            design/COMMIT-PR-RULES.md \
+            design/GAPS-ARA.md \
+          ; do
+            if [ ! -s "$f" ]; then
+              echo "::error file=$f::Required design doc missing or empty"
+              exit 1
+            fi
+            echo "ok: $f ($(wc -l < "$f") lines)"
+          done
+
+      # NOTE: We intentionally don't yaml-lint workflow files here.
+      # GitHub Actions' own parser is the ultimate validator — a malformed
+      # workflow won't run at all. A lint step is duplicate work.
+      # When `actionlint` style checks are wanted (e.g., shellcheck inside
+      # `run:` blocks), re-add via `rhysd/actionlint` at Phase 14.
