@@ -192,7 +192,7 @@ openastro-ara/                              (repo root, branch: port/ara)
 6. **Commit cadence.** One commit per logical unit (one project converted, one endpoint implemented, one view ported). Commit messages: `port(<area>): <what>`. Never amend; always new commits. Never `--no-verify`.
 7. **No upstream plugin compatibility.** ARA is a hard fork. The plugin SDK is **deferred to v0.1.0** — Phase 0.5 deletes the plugin loader and plugin browser UI entirely. Do not preserve any compatibility with NINA plugins.
 8. **Full-auto operation.** You are running with auto-approve on. Hard git safety rails (§19) apply unconditionally — no force pushes, no `--no-verify`, no destructive ops outside the explicit deletion lists.
-9. **Tag every phase boundary; open the PR; wait for merge before the next phase.** Per `design/COMMIT-PR-RULES.md`, the port ships as a sequence of phase PRs (plus sub-PRs within Phase 0.5 and Phase 12) targeting the `port/ara` integration branch. At the end of each phase or sub-phase, after the §15 gate is green: tag with `git tag phase-N[-letter]-complete && git push --tags`, update `design/PORT_PROGRESS.md`, push the sub-branch, open the PR, run the CodeRabbit poll-and-fix loop (see COMMIT-PR-RULES.md), then **wait for the user to merge** before pulling the updated `port/ara` and starting the next phase or sub-phase. AI never merges (permanent rule, see §19.1). Auto-continuation across sub-PRs within a phase happens automatically after merge; between phases the same auto-continuation applies unless the user has paused.
+9. **Tag every phase boundary; open the PR; merge it; continue.** Per `design/COMMIT-PR-RULES.md`, the port ships as a sequence of phase PRs (plus sub-PRs within Phase 0.5 and Phase 12) targeting the `port/ara` integration branch. At the end of each phase or sub-phase, after the §15 gate is green: tag with `git tag phase-N[-letter]-complete && git push --tags`, update `design/PORT_PROGRESS.md`, push the sub-branch, open the PR, run the CodeRabbit poll-and-fix loop (see COMMIT-PR-RULES.md), then **AI merges the PR** once the §19.1 merge-gate clears (all required CI checks green; CodeRabbit quiescent ≥3 min with no unresolved actionable findings; self-review against the phase scope clean). After merge, pull the updated `port/ara` and continue to the next phase or sub-phase. Auto-continuation across sub-PRs within a phase happens automatically; between phases the same auto-continuation applies unless the user has explicitly paused.
 10. **Quota interruption is normal.** When the model session hits its weekly limit and resumes, the first action is to read `design/PORT_PROGRESS.md` to find out where to continue. See §20.
 
 ---
@@ -1349,7 +1349,7 @@ The script `scripts/bump-alpaca-simulators.sh`:
 3. Runs the §14.1 server integration tests against the new simulators
 4. Generates a regression report (which existing test names pass/fail; new event shapes detected)
 5. Opens a PR with body: "Bump Alpaca simulators v0.4.0 → vX.Y.Z. Regression test results: N passed, N failed. Upstream changelog: <link>"
-6. PR follows the standard CodeRabbit poll-and-fix loop (COMMIT-PR-RULES.md); user reviews + merges if green
+6. PR follows the standard CodeRabbit poll-and-fix loop (COMMIT-PR-RULES.md); AI merges per the §19.1 merge-gate if green
 
 If the upstream API has breaking changes, the PR's failing tests document exactly what changed — informs whether ARA needs adaptation code or whether the change is benign.
 
@@ -1675,7 +1675,16 @@ ARA targets deep-sky objects and comets — the long-exposure (30 s – 900 s) c
 ### 19.1 Git safety
 
 - **Branch allowlist:** AI may commit/push to `port/ara` (integration branch, where all phase PRs land) and to per-sub-PR feature branches with **flat names** matching `phase-N[<letter>]` (e.g., `phase-0.5a`, `phase-12h`, `phase-1`) plus a small set of named prep branches (e.g., `prep-ci`). All other branches are off-limits without explicit user instruction. The main `port/ara` branch is integration-only — direct commits to it happen only after the user merges a sub-PR (AI pulls the merge commit; never authors directly). **Why flat names:** Git refs are tree-structured — a branch named `port/ara` makes `port/ara/anything` an invalid ref name (`fatal: cannot lock ref ...: 'refs/heads/port/ara' exists`). See `design/COMMIT-PR-RULES.md` per-phase rhythm section for the branch tree diagram.
-- **AI never merges, ever.** PR merges are a user action, no exceptions. AI opens PRs, drives the CodeRabbit poll-and-fix loop per COMMIT-PR-RULES.md, posts "Ready for human review @<user>" at quiescence, and waits.
+- **AI merges PRs under a strict merge-gate** (policy revised 2026-05-23 from "AI never merges" after the user granted full merge authority in PR #2). The AI merges a PR when **all** of the following hold:
+  - All required CI checks are `pass` (no `pending`, no `failure`)
+  - CodeRabbit review has been posted AND the PR has been quiescent (no new comments, no new commits) for ≥3 minutes
+  - All actionable CodeRabbit findings have been addressed via additional commits on the same sub-branch (per the CodeRabbit poll-and-fix loop in COMMIT-PR-RULES.md); disagreements have reasoned replies; out-of-scope items are tracked in `design/PORT_TODO.md`
+  - AI self-review against the playbook scope is clean (no out-of-scope changes, no unexplained deletions, no half-finished states per §0.3)
+  - For the final `port/ara → master` PR at §22: additionally verify all `phase-N-complete` (and applicable `phase-N-<letter>-complete`) tags exist on the merged commits
+
+  Merge method: **squash** for prep + multi-commit sub-PRs that should land as one logical change on `port/ara`; **merge commit** for phase PRs that benefit from preserving per-commit granularity. AI picks based on the PR's commit history. Push immediately. Pull `port/ara` and continue.
+
+  If any of the gate conditions are ambiguous or the AI is uncertain whether to merge, it posts "Held for human review @<user> — <reason>" instead of merging. The user can override either way.
 - No `git push --force` or `--force-with-lease`. Plain `git push` only.
 - No `--no-verify` on commits.
 - No `git reset --hard` without first creating `backup-<timestamp>` tag.
@@ -1775,7 +1784,7 @@ When porting NINA logic into ASP.NET Core endpoints, replace `Loc.Instance[...]`
    - Known issues, install instructions
    - Create fresh `## [Unreleased]` placeholder for v0.0.2 work
 5. Bump `CommonAssemblyInfo.cs` to `0.0.1.0`; informational `0.0.1-ara.1`. Bump `pubspec.yaml` to `0.0.1+1`.
-6. **Open final PR from `port/ara` to `master`** with `design/PORT_DECISIONS.md` contents as description. Per COMMIT-PR-RULES.md decision (2026-05-23): no `develop` branch; final PR goes directly `port/ara → master`. This PR is a fast-forward over the already-reviewed per-phase sub-PRs that landed on `port/ara` throughout the port — CodeRabbit's review burden is minimal because each constituent commit was already reviewed at its sub-PR. **Do not merge** — user reviews + merges.
+6. **Open final PR from `port/ara` to `master`** with `design/PORT_DECISIONS.md` contents as description. Per COMMIT-PR-RULES.md decision (2026-05-23): no `develop` branch; final PR goes directly `port/ara → master`. This PR is a fast-forward over the already-reviewed per-phase sub-PRs that landed on `port/ara` throughout the port — CodeRabbit's review burden is minimal because each constituent commit was already reviewed at its sub-PR. **AI merges** once the §19.1 merge-gate clears (all CI checks green; CodeRabbit quiescent ≥3 min with no unresolved actionable findings; all phase tags verified to exist; merge method: merge commit to preserve per-phase granularity on `master`'s history). The user can override either direction by commenting on the PR before quiescence.
 
 ---
 

@@ -27,11 +27,11 @@ Rhythm:
 3. Completes phase, runs §15 gate
 4. Tags `phase-N-complete` on sub-branch
 5. Opens PR `phase-N → port/ara`
-6. CodeRabbit reviews
-7. User reviews + merges
-8. AI starts next phase from updated `port/ara`
+6. CodeRabbit reviews; AI poll-and-fix loop runs (60 s polling; auto-fix trivial + correctness findings via new commits; reasoned replies for disagreements; out-of-scope items → `design/PORT_TODO.md`)
+7. **AI merges** once the §19.1 merge-gate clears (green CI + CodeRabbit quiescent ≥3 min + no unresolved actionable findings + clean self-review against scope). If any gate condition is ambiguous, AI posts `Held for human review @<user> — <reason>` and waits instead of merging.
+8. AI pulls updated `port/ara` and starts next phase
 
-Final integration: `port/ara → master` PR at Phase 15 = a fast-forward over already-reviewed phase PRs.
+Final integration: `port/ara → master` PR at Phase 15 = a fast-forward over already-reviewed phase PRs. Same §19.1 merge-gate applies; AI merges with a merge commit (preserves per-phase history on `master`) once the gate clears.
 
 ### Phase size audit
 
@@ -370,9 +370,9 @@ When we finalize, these playbook sections need edits:
 - **No `develop` branch** — sub-PRs land on `port/ara` directly; Phase 15 final PR `port/ara → master`
 
 **Baked into `PORT_PLAYBOOK.md` (2026-05-23):**
-- ✅ §0 rule 9 — "Tag every phase boundary; open the PR; wait for merge before the next phase." References this doc for the full rhythm + CodeRabbit loop. AI never merges; auto-continues to next sub-PR after user merge.
+- ✅ §0 rule 9 — "Tag every phase boundary; open the PR; merge it; continue." References this doc for the full rhythm + CodeRabbit loop. **Policy revised 2026-05-23** (later same day, in `prep-ci` PR #2): AI merges sub-PR + final PRs under the §19.1 merge-gate; auto-continues to next sub-PR after merge. Original 2026-05-23 decision was "AI never merges, ever"; reversed when the user granted full merge authority.
 - ✅ §3 phase plan — Phase 0.5 sub-PR rhythm references the 16-sub-PR mapping (0.5a–0.5p); Phase 12 references the 8-sub-PR mapping (12a–12h); cross-cutting sub-PR rhythm paragraph added after the phase list.
-- ✅ §19.1 git safety — branch allowlist now permits `port/ara` (integration) + flat-named `phase-N[<letter>]` sub-PR feature branches (e.g., `phase-0.5a`, `phase-12h`) plus a small set of named prep branches (e.g., `prep-ci`). "AI never merges, ever" baked as permanent rule. Tag scheme extended to `phase-N-<letter>-complete` for sub-PRs.
+- ✅ §19.1 git safety — branch allowlist now permits `port/ara` (integration) + flat-named `phase-N[<letter>]` sub-PR feature branches (e.g., `phase-0.5a`, `phase-12h`) plus a small set of named prep branches (e.g., `prep-ci`). **Merge policy revised 2026-05-23** in `prep-ci` PR #2: original "AI never merges, ever" rule replaced with "AI merges under a strict merge-gate" (green CI + CodeRabbit quiescent ≥3 min + no unresolved findings + clean self-review). User retains override. Tag scheme extended to `phase-N-<letter>-complete` for sub-PRs.
 - ✅ §22 final pass — final PR confirmed `port/ara → master` (no `develop` branch); release notes step updated to use `CHANGELOG.md` per §33.7 + Keep-a-Changelog format + fresh `[Unreleased]` placeholder; mobile-deferred-to-v0.1.0 noted in CHANGELOG sections.
 
 The design phase is now fully complete. Phase 0.5 execution can begin per the rhythm above.
