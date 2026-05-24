@@ -2,8 +2,8 @@
 using NINA.Core.Enum;
 using NINA.Core.Model;
 using NINA.Core.Utility;
-using NINA.Equipment.Exceptions;
-using NINA.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Equipment.Exceptions;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using NINA.Profile.Interfaces;
 using NINA.Sequencer.Container;
 using NINA.Sequencer.Interfaces.Mediator;

@@ -13,7 +13,7 @@
 #endregion "copyright"
 
 using Newtonsoft.Json;
-using NINA.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using NINA.Core.Model;
 using NINA.Sequencer.Container;
 using NINA.Sequencer.SequenceItem;

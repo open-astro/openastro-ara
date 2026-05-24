@@ -1,6 +1,6 @@
 ﻿using FluentAssertions;
 using Moq;
-using NINA.Equipment.SDK.CameraSDKs.ASTPANSDK;
+using OpenAstroAra.Equipment.SDK.CameraSDKs.ASTPANSDK;
 using NINA.Profile.Interfaces;
 using NUnit.Framework;
 using System;

@@ -1,7 +1,7 @@
 ﻿using Moq;
 using NINA.Profile.Interfaces;
-using NINA.Equipment.Interfaces;
-using NINA.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Equipment.Interfaces;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using NINA.Sequencer;
 using NINA.Sequencer.Conditions;
 using NINA.Sequencer.Container;
@@ -15,8 +15,8 @@ using System.Threading.Tasks;
 using NINA.Astrometry.Interfaces;
 using NINA.Sequencer.SequenceItem.FilterWheel;
 using NINA.Sequencer.SequenceItem.Imaging;
-using NINA.Equipment.Equipment.MyCamera;
-using NINA.Equipment.Equipment.MyGuider;
+using OpenAstroAra.Equipment.Equipment.MyCamera;
+using OpenAstroAra.Equipment.Equipment.MyGuider;
 using FluentAssertions;
 using NINA.Sequencer.Trigger.Guider;
 

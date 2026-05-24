@@ -11,7 +11,7 @@
 #endregion "copyright"
 using FluentAssertions;
 using NINA.Image.ImageData;
-using NINA.Equipment.Equipment.MyCamera;
+using OpenAstroAra.Equipment.Equipment.MyCamera;
 using NINA.Core.Utility;
 using NINA.Astrometry;
 using NUnit.Framework;

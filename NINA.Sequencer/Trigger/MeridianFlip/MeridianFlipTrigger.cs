@@ -21,7 +21,7 @@ using NINA.Sequencer.SequenceItem;
 using NINA.Sequencer.Utility;
 using NINA.Sequencer.Validations;
 using NINA.Astrometry;
-using NINA.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using NINA.ViewModel;
 using NINA.WPF.Base.Interfaces.ViewModel;
 using System;
@@ -35,7 +35,7 @@ using NINA.WPF.Base.Interfaces.Mediator;
 using NINA.Core.Locale;
 using NINA.WPF.Base.ViewModel;
 using NINA.Sequencer.Interfaces;
-using NINA.Equipment.Interfaces;
+using OpenAstroAra.Equipment.Interfaces;
 using NINA.Image.ImageAnalysis;
 using NINA.WPF.Base.Interfaces;
 

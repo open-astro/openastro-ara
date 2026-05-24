@@ -18,7 +18,7 @@ using NINA.Profile.Interfaces;
 using NINA.Sequencer.Container;
 using NINA.Sequencer.SequenceItem;
 using NINA.Sequencer.Validations;
-using NINA.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using NINA.WPF.Base.Interfaces.ViewModel;
 using System;
 using System.Collections.Generic;
@@ -40,7 +40,7 @@ using NINA.Core.Enum;
 using NINA.PlateSolving;
 using NINA.Core.Utility.WindowService;
 using NINA.Image.Interfaces;
-using NINA.Equipment.Interfaces;
+using OpenAstroAra.Equipment.Interfaces;
 using NINA.Sequencer.Interfaces;
 
 namespace NINA.Sequencer.Trigger.Platesolving {

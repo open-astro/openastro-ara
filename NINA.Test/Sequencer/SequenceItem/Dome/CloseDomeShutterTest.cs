@@ -14,10 +14,10 @@
 
 using FluentAssertions;
 using Moq;
-using NINA.Equipment.Equipment.MyDome;
+using OpenAstroAra.Equipment.Equipment.MyDome;
 using NINA.Core.Model;
 using NINA.Sequencer.SequenceItem.Dome;
-using NINA.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using NUnit.Framework;
 using System;
 using System.Collections.Generic;
@@ -77,7 +77,7 @@ namespace NINA.Test.Sequencer.SequenceItem.Dome {
 
         [Test]
         public async Task Execute_NoIssues_LogicCalled() {
-            domeMediatorMock.Setup(x => x.GetInfo()).Returns(new DomeInfo() { Connected = true, ShutterStatus = NINA.Equipment.Interfaces.ShutterState.ShutterClosed });
+            domeMediatorMock.Setup(x => x.GetInfo()).Returns(new DomeInfo() { Connected = true, ShutterStatus = OpenAstroAra.Equipment.Interfaces.ShutterState.ShutterClosed });
             domeMediatorMock.Setup(x => x.CloseShutter(It.IsAny<CancellationToken>())).Returns(Task.FromResult(true));
 
             var sut = new CloseDomeShutter(domeMediatorMock.Object);

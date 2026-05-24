@@ -15,7 +15,7 @@
 using Newtonsoft.Json;
 using NINA.Core.Model;
 using NINA.Sequencer.Validations;
-using NINA.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;

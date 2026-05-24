@@ -22,7 +22,7 @@ using NINA.Sequencer.SequenceItem;
 using NINA.Sequencer.SequenceItem.Autofocus;
 using NINA.Sequencer.Validations;
 using NINA.Core.Utility;
-using NINA.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using NINA.Core.Utility.WindowService;
 using NINA.WPF.Base.Interfaces.ViewModel;
 using NINA.ViewModel.Interfaces;

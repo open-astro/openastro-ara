@@ -17,7 +17,7 @@ using NINA.Core.Locale;
 using NINA.Core.Model;
 using NINA.Core.Utility;
 using NINA.Core.Utility.Notification;
-using NINA.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using NINA.Image.ImageData;
 using NINA.Image.Interfaces;
 using NINA.PlateSolving;

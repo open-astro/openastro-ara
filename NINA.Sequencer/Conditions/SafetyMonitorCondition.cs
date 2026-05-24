@@ -15,7 +15,7 @@
 using NINA.Sequencer.SequenceItem;
 using NINA.Sequencer.Validations;
 using NINA.Core.Utility;
-using NINA.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.Composition;

@@ -12,7 +12,7 @@
 using System.Linq;
 using FluentAssertions;
 using NINA.Core.Model.Equipment;
-using NINA.Equipment.Equipment.MyCamera;
+using OpenAstroAra.Equipment.Equipment.MyCamera;
 using NINA.Profile;
 using NINA.Profile.Interfaces;
 using NUnit.Framework;

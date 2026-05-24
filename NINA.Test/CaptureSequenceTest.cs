@@ -12,9 +12,9 @@
 using NINA.Astrometry;
 using NINA.Core.Enum;
 using NINA.Core.Model.Equipment;
-using NINA.Equipment.Model;
-using NINA.Equipment.Equipment.MyCamera;
-using NINA.Equipment.Equipment.MyFilterWheel;
+using OpenAstroAra.Equipment.Model;
+using OpenAstroAra.Equipment.Equipment.MyCamera;
+using OpenAstroAra.Equipment.Equipment.MyFilterWheel;
 using NUnit.Framework;
 using System;
 using System.Linq;

@@ -15,11 +15,11 @@
 using FluentAssertions;
 using Moq;
 using NINA.Core.Enum;
-using NINA.Equipment.Equipment.MyFlatDevice;
+using OpenAstroAra.Equipment.Equipment.MyFlatDevice;
 using NINA.Sequencer;
 using NINA.Core.Model;
 using NINA.Sequencer.SequenceItem.FlatDevice;
-using NINA.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using NUnit.Framework;
 using System;
 using System.Collections.Generic;

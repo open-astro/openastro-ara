@@ -9,13 +9,13 @@
     file, You can obtain one at http://mozilla.org/MPL/2.0/.
 */
 #endregion "copyright"
-using NINA.Equipment.Equipment.MyFlatDevice;
-using NINA.Equipment.SDK.FlatDeviceSDKs.AlnitakSDK;
+using OpenAstroAra.Equipment.Equipment.MyFlatDevice;
+using OpenAstroAra.Equipment.SDK.FlatDeviceSDKs.AlnitakSDK;
 using NINA.Core.Utility.SerialCommunication;
 using NUnit.Framework;
 using System;
 using FluentAssertions;
-using NINA.Equipment.Interfaces;
+using OpenAstroAra.Equipment.Interfaces;
 
 namespace NINA.Test.FlatDevice {
 
@@ -30,7 +30,7 @@ namespace NINA.Test.FlatDevice {
         [TestCase("LightOff", "*D99OOO")]
         public void TestIsValidResponse(string responseName, string response) {
             var sut = (AlnitakResponse)Activator.CreateInstance("NINA.Equipment",
-                $"NINA.Equipment.SDK.FlatDeviceSDKs.AlnitakSDK.{responseName}Response").Unwrap();
+                $"OpenAstroAra.Equipment.SDK.FlatDeviceSDKs.AlnitakSDK.{responseName}Response").Unwrap();
             Action act = () => sut.DeviceResponse = response;
             act.Should().NotThrow();
         }
@@ -56,7 +56,7 @@ namespace NINA.Test.FlatDevice {
         [TestCase("LightOff", "")]
         public void TestIsInvalidResponse(string responseName, string response) {
             var sut = (AlnitakResponse)Activator.CreateInstance("NINA.Equipment",
-                $"NINA.Equipment.SDK.FlatDeviceSDKs.AlnitakSDK.{responseName}Response").Unwrap();
+                $"OpenAstroAra.Equipment.SDK.FlatDeviceSDKs.AlnitakSDK.{responseName}Response").Unwrap();
             Action act = () => sut.DeviceResponse = response;
             act.Should().Throw<InvalidDeviceResponseException>();
         }

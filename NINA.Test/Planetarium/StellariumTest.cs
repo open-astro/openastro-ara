@@ -15,8 +15,8 @@
 using FluentAssertions;
 using Moq;
 using Newtonsoft.Json.Linq;
-using NINA.Equipment.Equipment.MyPlanetarium;
-using NINA.Equipment.Interfaces;
+using OpenAstroAra.Equipment.Equipment.MyPlanetarium;
+using OpenAstroAra.Equipment.Interfaces;
 using NINA.Profile.Interfaces;
 using NUnit.Framework;
 

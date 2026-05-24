@@ -20,10 +20,10 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Media;
-using NINA.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using NINA.Core.Model;
 using NINA.Core.Utility;
-using NINA.Equipment.Model;
+using OpenAstroAra.Equipment.Model;
 using NINA.PlateSolving.Interfaces;
 using NINA.Core.Locale;
 

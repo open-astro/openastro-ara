@@ -13,7 +13,7 @@
 #endregion "copyright"
 
 using NINA.Core.Model;
-using NINA.Equipment.Model;
+using OpenAstroAra.Equipment.Model;
 using System;
 using System.Threading;
 using System.Threading.Tasks;

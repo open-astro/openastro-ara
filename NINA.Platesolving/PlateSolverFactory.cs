@@ -16,8 +16,8 @@ using NINA.Profile.Interfaces;
 using NINA.PlateSolving.Solvers;
 using NINA.Core.Enum;
 using NINA.PlateSolving.Interfaces;
-using NINA.Equipment.Interfaces.Mediator;
-using NINA.Equipment.Interfaces;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Equipment.Interfaces;
 
 namespace NINA.PlateSolving {
 

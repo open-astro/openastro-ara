@@ -15,10 +15,10 @@
 using FluentAssertions;
 using Moq;
 using NINA.Astrometry;
-using NINA.Equipment.Equipment.MyDome;
-using NINA.Equipment.Equipment.MyTelescope;
-using NINA.Equipment.Interfaces;
-using NINA.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Equipment.Equipment.MyDome;
+using OpenAstroAra.Equipment.Equipment.MyTelescope;
+using OpenAstroAra.Equipment.Interfaces;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using NINA.Profile.Interfaces;
 using NINA.Sequencer.SequenceItem;
 using NINA.Sequencer.Trigger.Dome;

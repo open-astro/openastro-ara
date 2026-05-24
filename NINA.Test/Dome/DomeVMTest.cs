@@ -10,11 +10,11 @@
 */
 #endregion "copyright"
 using Moq;
-using NINA.Equipment.Equipment.MyDome;
-using NINA.Equipment.Equipment.MyTelescope;
+using OpenAstroAra.Equipment.Equipment.MyDome;
+using OpenAstroAra.Equipment.Equipment.MyTelescope;
 using NINA.Profile.Interfaces;
 using NINA.Astrometry;
-using NINA.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using NUnit.Framework;
 using System;
 using System.Collections.Generic;
@@ -24,8 +24,8 @@ using System.Threading.Tasks;
 using NINA.WPF.Base.Interfaces.Mediator;
 using NINA.Core.Utility;
 using NINA.Core.Model;
-using NINA.Equipment.Interfaces;
-using NINA.Equipment.Interfaces.ViewModel;
+using OpenAstroAra.Equipment.Interfaces;
+using OpenAstroAra.Equipment.Interfaces.ViewModel;
 using NINA.WPF.Base.ViewModel.Equipment.Dome;
 using NUnit.Framework.Legacy;
 

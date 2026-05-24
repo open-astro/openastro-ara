@@ -1,7 +1,7 @@
 ﻿using Newtonsoft.Json;
 using NINA.Core.Model;
 using NINA.Core.Utility;
-using NINA.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using NINA.Profile.Interfaces;
 using NINA.Sequencer.Container;
 using NINA.Sequencer.SequenceItem;
