@@ -15,10 +15,10 @@
 using FluentAssertions;
 using Moq;
 using OpenAstroAra.Equipment.Equipment.MyTelescope;
-using NINA.Sequencer;
-using NINA.Sequencer.Container;
+using OpenAstroAra.Sequencer;
+using OpenAstroAra.Sequencer.Container;
 using NINA.Core.Model;
-using NINA.Sequencer.SequenceItem.Telescope;
+using OpenAstroAra.Sequencer.SequenceItem.Telescope;
 using OpenAstroAra.Astrometry;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using NUnit.Framework;

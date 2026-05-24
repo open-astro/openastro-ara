@@ -37,7 +37,7 @@
     <ProjectReference Include="..\OpenAstroAra.Image\OpenAstroAra.Image.csproj" />
     <ProjectReference Include="..\NINA.Platesolving\OpenAstroAra.PlateSolving.csproj" />
     <ProjectReference Include="..\OpenAstroAra.Profile\OpenAstroAra.Profile.csproj" />
-    <ProjectReference Include="..\NINA.Sequencer\NINA.Sequencer.csproj" />
+    <ProjectReference Include="..\NINA.Sequencer\OpenAstroAra.Sequencer.csproj" />
   </ItemGroup>
 
   <ItemGroup>

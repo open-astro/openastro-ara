@@ -14,8 +14,8 @@
 
 using FluentAssertions;
 using Moq;
-using NINA.Sequencer.Container;
-using NINA.Sequencer.Container.ExecutionStrategy;
+using OpenAstroAra.Sequencer.Container;
+using OpenAstroAra.Sequencer.Container.ExecutionStrategy;
 using NINA.View.Sequencer.Converter;
 using NUnit.Framework;
 using System;

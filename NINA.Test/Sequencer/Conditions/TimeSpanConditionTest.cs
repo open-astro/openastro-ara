@@ -15,11 +15,11 @@
 using FluentAssertions;
 using Moq;
 using NINA.Core.Utility;
-using NINA.Sequencer;
-using NINA.Sequencer.Conditions;
-using NINA.Sequencer.Interfaces;
-using NINA.Sequencer.SequenceItem;
-using NINA.Sequencer.Utility.DateTimeProvider;
+using OpenAstroAra.Sequencer;
+using OpenAstroAra.Sequencer.Conditions;
+using OpenAstroAra.Sequencer.Interfaces;
+using OpenAstroAra.Sequencer.SequenceItem;
+using OpenAstroAra.Sequencer.Utility.DateTimeProvider;
 using NUnit.Framework;
 using System;
 using System.Collections.Generic;

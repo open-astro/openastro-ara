@@ -11,7 +11,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using static OpenAstroAra.Equipment.Equipment.MyGPS.PegasusAstro.UnityApi.DriverUranusReport;
-using static NINA.Sequencer.SequenceItem.FlatDevice.SkyFlat;
+using static OpenAstroAra.Sequencer.SequenceItem.FlatDevice.SkyFlat;
 
 namespace NINA.Test.Sequencer.SequenceItem.FlatDevice {
     [TestFixture]

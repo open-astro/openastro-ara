@@ -14,7 +14,7 @@
 
 using FluentAssertions;
 using Moq;
-using NINA.Sequencer.Utility.DateTimeProvider;
+using OpenAstroAra.Sequencer.Utility.DateTimeProvider;
 using NINA.Core.Utility;
 using NUnit.Framework;
 using System;
@@ -36,7 +36,7 @@ namespace NINA.Test.Sequencer.Utility.DateTimeProvider {
             var customDateTimeMock = new Mock<ICustomDateTime>();
             customDateTimeMock.SetupGet(x => x.Now).Returns(referenceDate);
 
-            var sut = new NINA.Sequencer.Utility.DateTimeProvider.TimeProvider(new Mock<INighttimeCalculator>().Object);
+            var sut = new OpenAstroAra.Sequencer.Utility.DateTimeProvider.TimeProvider(new Mock<INighttimeCalculator>().Object);
             sut.DateTime = customDateTimeMock.Object;
             sut.GetDateTime(null).Should().Be(referenceDate);
         }

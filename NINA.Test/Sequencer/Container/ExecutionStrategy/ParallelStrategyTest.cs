@@ -14,9 +14,9 @@
 
 using Moq;
 using NINA.Core.Model;
-using NINA.Sequencer.Container;
-using NINA.Sequencer.Container.ExecutionStrategy;
-using NINA.Sequencer.SequenceItem;
+using OpenAstroAra.Sequencer.Container;
+using OpenAstroAra.Sequencer.Container.ExecutionStrategy;
+using OpenAstroAra.Sequencer.SequenceItem;
 using NUnit.Framework;
 using System;
 using System.Collections.Generic;

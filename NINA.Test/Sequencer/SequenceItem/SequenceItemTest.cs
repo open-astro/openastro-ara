@@ -15,10 +15,10 @@
 using FluentAssertions;
 using Moq;
 using NINA.Core.Enum;
-using NINA.Sequencer;
-using NINA.Sequencer.Container;
+using OpenAstroAra.Sequencer;
+using OpenAstroAra.Sequencer.Container;
 using NINA.Core.Model;
-using NINA.Sequencer.SequenceItem;
+using OpenAstroAra.Sequencer.SequenceItem;
 using NUnit.Framework;
 using System;
 using System.Collections.Generic;
@@ -35,7 +35,7 @@ namespace NINA.Test.Sequencer.SequenceItem {
         [Test]
         public void AttachNewParent_PreviousWasNull_NewParentAttached() {
             //Arrange
-            var mock = new Mock<NINA.Sequencer.SequenceItem.SequenceItem>();
+            var mock = new Mock<OpenAstroAra.Sequencer.SequenceItem.SequenceItem>();
             mock.CallBase = true;
             var testContainerMock = new Mock<ISequenceContainer>();
 
@@ -53,7 +53,7 @@ namespace NINA.Test.Sequencer.SequenceItem {
         [Test]
         public async Task Run_Successfully_StatusToComplete() {
             //Arrange
-            var mock = new Mock<NINA.Sequencer.SequenceItem.SequenceItem>();
+            var mock = new Mock<OpenAstroAra.Sequencer.SequenceItem.SequenceItem>();
             mock.CallBase = true;
 
             //Act
@@ -67,7 +67,7 @@ namespace NINA.Test.Sequencer.SequenceItem {
         [Test]
         public async Task Run_Successfully_MultiAttempts_RunOnlyOnce_StatusToComplete() {
             //Arrange
-            var mock = new Mock<NINA.Sequencer.SequenceItem.SequenceItem>();
+            var mock = new Mock<OpenAstroAra.Sequencer.SequenceItem.SequenceItem>();
             mock.CallBase = true;
 
             //Act
@@ -83,7 +83,7 @@ namespace NINA.Test.Sequencer.SequenceItem {
         [Test]
         public async Task Run_Successfully_MultiAttempts_FailTwiceFinishOnThird_StatusToComplete() {
             //Arrange
-            var mock = new Mock<NINA.Sequencer.SequenceItem.SequenceItem>();
+            var mock = new Mock<OpenAstroAra.Sequencer.SequenceItem.SequenceItem>();
             mock.CallBase = true;
 
             mock.SetupSequence(x => x.Execute(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
@@ -104,7 +104,7 @@ namespace NINA.Test.Sequencer.SequenceItem {
         [Test]
         public async Task Run_Unsuccessfully_StatusToFailed() {
             //Arrange
-            var mock = new Mock<NINA.Sequencer.SequenceItem.SequenceItem>();
+            var mock = new Mock<OpenAstroAra.Sequencer.SequenceItem.SequenceItem>();
             mock.CallBase = true;
 
             //Act
@@ -120,7 +120,7 @@ namespace NINA.Test.Sequencer.SequenceItem {
         [Test]
         public async Task Run_Cancelled_StatusToCreated() {
             //Arrange
-            var mock = new Mock<NINA.Sequencer.SequenceItem.SequenceItem>();
+            var mock = new Mock<OpenAstroAra.Sequencer.SequenceItem.SequenceItem>();
             mock.CallBase = true;
 
             //Act
@@ -145,7 +145,7 @@ namespace NINA.Test.Sequencer.SequenceItem {
         [Test]
         public async Task Run_Failed_ValidationFailure() {
             //Arrange
-            var mock = new Mock<NINA.Sequencer.SequenceItem.SequenceItem>();
+            var mock = new Mock<OpenAstroAra.Sequencer.SequenceItem.SequenceItem>();
             mock.CallBase = true;
 
             //Act
@@ -163,7 +163,7 @@ namespace NINA.Test.Sequencer.SequenceItem {
         [Test]
         public async Task Run_Skipped_StatusToCreated() {
             //Arrange
-            var mock = new Mock<NINA.Sequencer.SequenceItem.SequenceItem>();
+            var mock = new Mock<OpenAstroAra.Sequencer.SequenceItem.SequenceItem>();
             mock.CallBase = true;
 
             //Act
@@ -181,7 +181,7 @@ namespace NINA.Test.Sequencer.SequenceItem {
         [Test]
         public async Task ResetProgress() {
             //Arrange
-            var mock = new Mock<NINA.Sequencer.SequenceItem.SequenceItem>();
+            var mock = new Mock<OpenAstroAra.Sequencer.SequenceItem.SequenceItem>();
             mock.CallBase = true;
 
             //Act
@@ -196,7 +196,7 @@ namespace NINA.Test.Sequencer.SequenceItem {
         [Test]
         public void Skip() {
             //Arrange
-            var mock = new Mock<NINA.Sequencer.SequenceItem.SequenceItem>();
+            var mock = new Mock<OpenAstroAra.Sequencer.SequenceItem.SequenceItem>();
             mock.CallBase = true;
             mock.SetupGet(x => x.Attempts).Returns(1);
 
@@ -211,7 +211,7 @@ namespace NINA.Test.Sequencer.SequenceItem {
         [Test]
         public void GetEstimatedDuration() {
             //Arrange
-            var mock = new Mock<NINA.Sequencer.SequenceItem.SequenceItem>();
+            var mock = new Mock<OpenAstroAra.Sequencer.SequenceItem.SequenceItem>();
             mock.CallBase = true;
 
             //Act
@@ -223,7 +223,7 @@ namespace NINA.Test.Sequencer.SequenceItem {
         public void MoveUp() {
             var parent = new Mock<ISequenceContainer>();
             //Arrange
-            var mock = new Mock<NINA.Sequencer.SequenceItem.SequenceItem>();
+            var mock = new Mock<OpenAstroAra.Sequencer.SequenceItem.SequenceItem>();
             mock.CallBase = true;
 
             //Act
@@ -238,7 +238,7 @@ namespace NINA.Test.Sequencer.SequenceItem {
         public void MoveDown() {
             var parent = new Mock<ISequenceContainer>();
             //Arrange
-            var mock = new Mock<NINA.Sequencer.SequenceItem.SequenceItem>();
+            var mock = new Mock<OpenAstroAra.Sequencer.SequenceItem.SequenceItem>();
             mock.CallBase = true;
 
             //Act
@@ -253,7 +253,7 @@ namespace NINA.Test.Sequencer.SequenceItem {
         public void Detach() {
             var parent = new Mock<ISequenceContainer>();
             //Arrange
-            var mock = new Mock<NINA.Sequencer.SequenceItem.SequenceItem>();
+            var mock = new Mock<OpenAstroAra.Sequencer.SequenceItem.SequenceItem>();
             mock.CallBase = true;
 
             //Act
@@ -267,7 +267,7 @@ namespace NINA.Test.Sequencer.SequenceItem {
         [Test]
         public async Task Run_Unsuccessfully_After3Retries_StatusToFailed() {
             //Arrange
-            var mock = new Mock<NINA.Sequencer.SequenceItem.SequenceItem>();
+            var mock = new Mock<OpenAstroAra.Sequencer.SequenceItem.SequenceItem>();
             mock.CallBase = true;
 
             mock
@@ -290,7 +290,7 @@ namespace NINA.Test.Sequencer.SequenceItem {
         [Test]
         public async Task Run_Successfully_After3Retries_StatusToFinished() {
             //Arrange
-            var mock = new Mock<NINA.Sequencer.SequenceItem.SequenceItem>();
+            var mock = new Mock<OpenAstroAra.Sequencer.SequenceItem.SequenceItem>();
             mock.CallBase = true;
 
             mock
@@ -315,14 +315,14 @@ namespace NINA.Test.Sequencer.SequenceItem {
             var parent = new Mock<ISequenceContainer>();
 
             //Arrange
-            var mock = new Mock<NINA.Sequencer.SequenceItem.SequenceItem>();
+            var mock = new Mock<OpenAstroAra.Sequencer.SequenceItem.SequenceItem>();
             mock.CallBase = true;
             mock.Setup(x => x.Execute(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>())).Throws(new Exception("Failed to run"));
 
             //Act
             var sut = mock.Object;
             sut.AttachNewParent(parent.Object);
-            sut.ErrorBehavior = NINA.Sequencer.Utility.InstructionErrorBehavior.SkipInstructionSetOnError;
+            sut.ErrorBehavior = OpenAstroAra.Sequencer.Utility.InstructionErrorBehavior.SkipInstructionSetOnError;
 
             await sut.Run(default, default);
 
@@ -338,14 +338,14 @@ namespace NINA.Test.Sequencer.SequenceItem {
             parent.Setup(x => x.Parent).Returns(root.Object);
 
             //Arrange
-            var mock = new Mock<NINA.Sequencer.SequenceItem.SequenceItem>();
+            var mock = new Mock<OpenAstroAra.Sequencer.SequenceItem.SequenceItem>();
             mock.CallBase = true;
             mock.Setup(x => x.Execute(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>())).Throws(new Exception("Failed to run"));
 
             //Act
             var sut = mock.Object;
             sut.AttachNewParent(parent.Object);
-            sut.ErrorBehavior = NINA.Sequencer.Utility.InstructionErrorBehavior.AbortOnError;
+            sut.ErrorBehavior = OpenAstroAra.Sequencer.Utility.InstructionErrorBehavior.AbortOnError;
 
             await sut.Run(default, default);
 
@@ -374,14 +374,14 @@ namespace NINA.Test.Sequencer.SequenceItem {
             root.Setup(x => x.Items).Returns(new List<ISequenceItem>() { start.Object, target.Object, end.Object });
 
             //Arrange
-            var mock = new Mock<NINA.Sequencer.SequenceItem.SequenceItem>();
+            var mock = new Mock<OpenAstroAra.Sequencer.SequenceItem.SequenceItem>();
             mock.CallBase = true;
             mock.Setup(x => x.Execute(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>())).Throws(new Exception("Failed to run"));
 
             //Act
             var sut = mock.Object;
             sut.AttachNewParent(parent.Object);
-            sut.ErrorBehavior = NINA.Sequencer.Utility.InstructionErrorBehavior.SkipToSequenceEndInstructions;
+            sut.ErrorBehavior = OpenAstroAra.Sequencer.Utility.InstructionErrorBehavior.SkipToSequenceEndInstructions;
 
             await sut.Run(default, default);
             await Task.Delay(100);

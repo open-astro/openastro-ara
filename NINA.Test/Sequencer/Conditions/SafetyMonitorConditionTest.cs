@@ -14,7 +14,7 @@
 
 using FluentAssertions;
 using Moq;
-using NINA.Sequencer.Conditions;
+using OpenAstroAra.Sequencer.Conditions;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using NUnit.Framework;
 using System;
@@ -23,8 +23,8 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using OpenAstroAra.Equipment.Equipment.MySafetyMonitor;
-using NINA.Sequencer.Interfaces;
-using NINA.Sequencer.Container;
+using OpenAstroAra.Sequencer.Interfaces;
+using OpenAstroAra.Sequencer.Container;
 
 namespace NINA.Test.Sequencer.Conditions {
 

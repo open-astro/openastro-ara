@@ -15,9 +15,9 @@
 using FluentAssertions;
 using Moq;
 using OpenAstroAra.Equipment.Equipment.MyFlatDevice;
-using NINA.Sequencer;
+using OpenAstroAra.Sequencer;
 using NINA.Core.Model;
-using NINA.Sequencer.SequenceItem.FlatDevice;
+using OpenAstroAra.Sequencer.SequenceItem.FlatDevice;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using NUnit.Framework;
 using System;

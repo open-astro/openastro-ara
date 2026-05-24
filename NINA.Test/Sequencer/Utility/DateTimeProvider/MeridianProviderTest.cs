@@ -15,9 +15,9 @@
 using FluentAssertions;
 using Moq;
 using OpenAstroAra.Profile.Interfaces;
-using NINA.Sequencer;
-using NINA.Sequencer.Container;
-using NINA.Sequencer.Utility.DateTimeProvider;
+using OpenAstroAra.Sequencer;
+using OpenAstroAra.Sequencer.Container;
+using OpenAstroAra.Sequencer.Utility.DateTimeProvider;
 using NINA.Core.Utility;
 using OpenAstroAra.Astrometry;
 using NUnit.Framework;

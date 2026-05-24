@@ -13,13 +13,13 @@
 #endregion "copyright"
 
 using FluentAssertions;
-using NINA.Sequencer.Conditions;
+using OpenAstroAra.Sequencer.Conditions;
 using NINA.Core.Enum;
 using NUnit.Framework;
 using System.Collections.Generic;
 using Moq;
-using NINA.Sequencer.Interfaces;
-using NINA.Sequencer.Container;
+using OpenAstroAra.Sequencer.Interfaces;
+using OpenAstroAra.Sequencer.Container;
 
 namespace NINA.Test.Sequencer.Conditions {
 

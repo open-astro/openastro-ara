@@ -14,10 +14,10 @@
 
 using FluentAssertions;
 using Moq;
-using NINA.Sequencer;
-using NINA.Sequencer.Conditions;
-using NINA.Sequencer.SequenceItem;
-using NINA.Sequencer.Utility.DateTimeProvider;
+using OpenAstroAra.Sequencer;
+using OpenAstroAra.Sequencer.Conditions;
+using OpenAstroAra.Sequencer.SequenceItem;
+using OpenAstroAra.Sequencer.Utility.DateTimeProvider;
 using OpenAstroAra.Astrometry;
 using NUnit.Framework;
 using System;
@@ -26,8 +26,8 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using NINA.Core.Utility;
-using NINA.Sequencer.Container;
-using NINA.Sequencer.Interfaces;
+using OpenAstroAra.Sequencer.Container;
+using OpenAstroAra.Sequencer.Interfaces;
 
 namespace NINA.Test.Sequencer.Conditions {
 

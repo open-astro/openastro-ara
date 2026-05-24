@@ -15,9 +15,9 @@
 using FluentAssertions;
 using Moq;
 using OpenAstroAra.Equipment.Equipment.MyGuider;
-using NINA.Sequencer;
+using OpenAstroAra.Sequencer;
 using NINA.Core.Model;
-using NINA.Sequencer.SequenceItem.Guider;
+using OpenAstroAra.Sequencer.SequenceItem.Guider;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using NUnit.Framework;
 using System;

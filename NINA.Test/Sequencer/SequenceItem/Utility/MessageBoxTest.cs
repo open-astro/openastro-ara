@@ -14,8 +14,8 @@
 
 using FluentAssertions;
 using NINA.Core.Utility.WindowService;
-using NINA.Sequencer;
-using NINA.Sequencer.SequenceItem.Utility;
+using OpenAstroAra.Sequencer;
+using OpenAstroAra.Sequencer.SequenceItem.Utility;
 using NUnit.Framework;
 using System;
 using System.Collections.Generic;

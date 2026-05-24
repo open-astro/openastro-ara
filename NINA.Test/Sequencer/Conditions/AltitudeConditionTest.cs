@@ -15,11 +15,11 @@
 using FluentAssertions;
 using Moq;
 using OpenAstroAra.Profile.Interfaces;
-using NINA.Sequencer.Conditions;
+using OpenAstroAra.Sequencer.Conditions;
 using OpenAstroAra.Astrometry;
 using NUnit.Framework;
-using NINA.Sequencer.Interfaces;
-using NINA.Sequencer.Container;
+using OpenAstroAra.Sequencer.Interfaces;
+using OpenAstroAra.Sequencer.Container;
 using NUnit.Framework.Legacy;
 
 namespace NINA.Test.Sequencer.Conditions {
