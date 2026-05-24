@@ -11,10 +11,10 @@
 #endregion "copyright"
 using FluentAssertions;
 using Moq;
-using NINA.Equipment.Equipment.MyFocuser;
+using OpenAstroAra.Equipment.Equipment.MyFocuser;
 using OpenAstroAra.Profile.Interfaces;
 using NINA.Core.Enum;
-using NINA.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using NINA.ViewModel;
 using NUnit.Framework;
 using System;
@@ -22,8 +22,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using NINA.WPF.Base.Interfaces.Mediator;
 using NINA.Core.Model;
-using NINA.Equipment.Interfaces.ViewModel;
-using NINA.Equipment.Interfaces;
+using OpenAstroAra.Equipment.Interfaces.ViewModel;
+using OpenAstroAra.Equipment.Interfaces;
 using NINA.WPF.Base.ViewModel.Equipment.Focuser;
 
 namespace NINA.Test.Focuser {

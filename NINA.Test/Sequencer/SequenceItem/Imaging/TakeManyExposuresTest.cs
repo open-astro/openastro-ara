@@ -15,13 +15,13 @@
 using FluentAssertions;
 using Moq;
 using OpenAstroAra.Image.ImageData;
-using NINA.Equipment.Equipment.MyCamera;
+using OpenAstroAra.Equipment.Equipment.MyCamera;
 using OpenAstroAra.Profile.Interfaces;
 using NINA.Sequencer;
 using NINA.Core.Model;
 using NINA.Sequencer.SequenceItem.Imaging;
 using NINA.Sequencer.Serialization;
-using NINA.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using NINA.ViewModel.ImageHistory;
 using Nito.AsyncEx;
 using NUnit.Framework;

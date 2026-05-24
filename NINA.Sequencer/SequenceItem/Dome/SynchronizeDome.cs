@@ -15,7 +15,7 @@
 using Newtonsoft.Json;
 using NINA.Core.Model;
 using NINA.Sequencer.Validations;
-using NINA.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
@@ -23,7 +23,7 @@ using System.ComponentModel.Composition;
 using System.Threading;
 using System.Threading.Tasks;
 using NINA.Core.Locale;
-using NINA.Equipment.Interfaces;
+using OpenAstroAra.Equipment.Interfaces;
 
 namespace NINA.Sequencer.SequenceItem.Dome {
 

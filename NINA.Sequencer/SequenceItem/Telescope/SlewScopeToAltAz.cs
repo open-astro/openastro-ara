@@ -17,7 +17,7 @@ using NINA.Core.Model;
 using OpenAstroAra.Profile.Interfaces;
 using NINA.Sequencer.Validations;
 using OpenAstroAra.Astrometry;
-using NINA.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;

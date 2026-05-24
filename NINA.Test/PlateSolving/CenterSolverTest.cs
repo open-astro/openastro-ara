@@ -16,11 +16,11 @@ using FluentAssertions;
 using Moq;
 using OpenAstroAra.PlateSolving;
 using OpenAstroAra.Astrometry;
-using NINA.Equipment.Interfaces.Mediator;
-using NINA.Equipment.Model;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Equipment.Model;
 using NINA.Core.Model;
 using OpenAstroAra.PlateSolving.Interfaces;
-using NINA.Equipment.Interfaces;
+using OpenAstroAra.Equipment.Interfaces;
 
 namespace NINA.Test.PlateSolving {
 
@@ -42,7 +42,7 @@ namespace NINA.Test.PlateSolving {
             telescopeMediatorMock = new Mock<ITelescopeMediator>();
             filterMediatorMock = new Mock<IFilterWheelMediator>();
             domeMediatorMock = new Mock<IDomeMediator>();
-            domeMediatorMock.Setup(m => m.GetInfo()).Returns(new NINA.Equipment.Equipment.MyDome.DomeInfo() { Connected = false });
+            domeMediatorMock.Setup(m => m.GetInfo()).Returns(new OpenAstroAra.Equipment.Equipment.MyDome.DomeInfo() { Connected = false });
             domeFollowerMock = new Mock<IDomeFollower>();
         }
 

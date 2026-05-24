@@ -14,12 +14,12 @@
 
 using FluentAssertions;
 using Moq;
-using NINA.Equipment.Equipment.MyTelescope;
+using OpenAstroAra.Equipment.Equipment.MyTelescope;
 using OpenAstroAra.Profile.Interfaces;
 using NINA.Sequencer.SequenceItem;
 using NINA.Sequencer.Trigger.MeridianFlip;
 using OpenAstroAra.Astrometry;
-using NINA.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using NINA.ViewModel.ImageHistory;
 using NUnit.Framework;
 using System;
@@ -30,7 +30,7 @@ using System.Threading.Tasks;
 using NINA.Core.Enum;
 using NINA.WPF.Base.Interfaces.Mediator;
 using NINA.WPF.Base.Interfaces.ViewModel;
-using NINA.Equipment.Interfaces;
+using OpenAstroAra.Equipment.Interfaces;
 using OpenAstroAra.Image.ImageAnalysis;
 using NINA.WPF.Base.Interfaces;
 

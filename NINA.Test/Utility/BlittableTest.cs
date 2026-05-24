@@ -20,7 +20,7 @@ using System.Text;
 using System.Threading.Tasks;
 using NINA.Core.Utility;
 using System.Drawing;
-using NINA.Equipment.SDK.CameraSDKs.SBIGSDK.SbigSharp;
+using OpenAstroAra.Equipment.SDK.CameraSDKs.SBIGSDK.SbigSharp;
 using NUnit.Framework.Legacy;
 
 namespace NINA.Test.Utility {

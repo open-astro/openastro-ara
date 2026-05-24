@@ -14,10 +14,10 @@
 
 using FluentAssertions;
 using Moq;
-using NINA.Equipment.Equipment.MyFilterWheel;
+using OpenAstroAra.Equipment.Equipment.MyFilterWheel;
 using OpenAstroAra.Profile.Interfaces;
 using NINA.Sequencer.Trigger.Autofocus;
-using NINA.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using NINA.Core.Utility.WindowService;
 using NINA.ViewModel;
 using NINA.ViewModel.ImageHistory;
@@ -28,8 +28,8 @@ using System.Threading.Tasks;
 using System.Windows;
 using NINA.Core.Model.Equipment;
 using NINA.WPF.Base.Interfaces.Mediator;
-using NINA.Equipment.Equipment.MyFocuser;
-using NINA.Equipment.Equipment.MyCamera;
+using OpenAstroAra.Equipment.Equipment.MyFocuser;
+using OpenAstroAra.Equipment.Equipment.MyCamera;
 using NINA.WPF.Base.Interfaces.ViewModel;
 using NINA.WPF.Base.Utility.AutoFocus;
 using NINA.Sequencer.SequenceItem;
@@ -38,7 +38,7 @@ using NINA.WPF.Base.Interfaces;
 using NINA.Core.Utility;
 using NINA.WPF.Base.Model;
 using NINA.Core.Model;
-using static NINA.Equipment.Equipment.MyGPS.PegasusAstro.UnityApi.DriverUranusReport;
+using static OpenAstroAra.Equipment.Equipment.MyGPS.PegasusAstro.UnityApi.DriverUranusReport;
 
 namespace NINA.Test.Sequencer.Trigger.Autofocus {
 

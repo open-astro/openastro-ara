@@ -25,7 +25,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using NINA.Sequencer.Utility;
 using System.Runtime.Serialization;
-using NINA.Equipment.Equipment.MyGuider.SkyGuard.SkyGuardMessages;
+using OpenAstroAra.Equipment.Equipment.MyGuider.SkyGuard.SkyGuardMessages;
 using NINA.Sequencer.SequenceItem.Utility;
 
 namespace NINA.Sequencer.Conditions {

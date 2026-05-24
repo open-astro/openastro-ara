@@ -20,7 +20,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using NINA.Core.Enum;
-using NINA.Equipment.Equipment.MyCamera;
+using OpenAstroAra.Equipment.Equipment.MyCamera;
 
 namespace NINA.Sequencer.Container {
 

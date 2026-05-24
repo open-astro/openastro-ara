@@ -12,7 +12,7 @@
 using System.Threading;
 using System.Threading.Tasks;
 using Moq;
-using NINA.Equipment.Equipment.MyFlatDevice;
+using OpenAstroAra.Equipment.Equipment.MyFlatDevice;
 using OpenAstroAra.Profile.Interfaces;
 using NUnit.Framework;
 

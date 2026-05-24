@@ -10,7 +10,7 @@
 */
 #endregion "copyright"
 using Moq;
-using NINA.Equipment.SDK.FlatDeviceSDKs.AlnitakSDK;
+using OpenAstroAra.Equipment.SDK.FlatDeviceSDKs.AlnitakSDK;
 using NINA.Core.Utility.SerialCommunication;
 using NUnit.Framework;
 using System.Collections.Generic;

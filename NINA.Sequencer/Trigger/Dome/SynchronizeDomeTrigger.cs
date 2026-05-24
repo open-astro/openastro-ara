@@ -18,7 +18,7 @@ using OpenAstroAra.Profile.Interfaces;
 using NINA.Sequencer.Container;
 using NINA.Sequencer.SequenceItem;
 using NINA.Sequencer.Validations;
-using NINA.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
@@ -29,7 +29,7 @@ using NINA.Core.Locale;
 using OpenAstroAra.Astrometry;
 using NINA.Core.Utility;
 using NINA.WPF.Base.Interfaces.Mediator;
-using NINA.Equipment.Interfaces;
+using OpenAstroAra.Equipment.Interfaces;
 
 namespace NINA.Sequencer.Trigger.Dome {
 

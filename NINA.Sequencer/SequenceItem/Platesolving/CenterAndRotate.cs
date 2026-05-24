@@ -21,7 +21,7 @@ using NINA.Sequencer.Utility;
 using NINA.Sequencer.Validations;
 using NINA.Core.Utility;
 using OpenAstroAra.Astrometry;
-using NINA.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using NINA.Core.Utility.WindowService;
 using NINA.ViewModel;
 using System;
@@ -33,11 +33,11 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using NINA.Core.Locale;
-using NINA.Equipment.Model;
+using OpenAstroAra.Equipment.Model;
 using NINA.Core.Model.Equipment;
 using NINA.Core.Utility.Notification;
 using NINA.PlateSolving.Interfaces;
-using NINA.Equipment.Interfaces;
+using OpenAstroAra.Equipment.Interfaces;
 
 namespace NINA.Sequencer.SequenceItem.Platesolving {
 

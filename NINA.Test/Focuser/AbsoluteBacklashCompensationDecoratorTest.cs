@@ -11,8 +11,8 @@
 #endregion "copyright"
 using FluentAssertions;
 using Moq;
-using NINA.Equipment.Equipment.MyFocuser;
-using NINA.Equipment.Interfaces;
+using OpenAstroAra.Equipment.Equipment.MyFocuser;
+using OpenAstroAra.Equipment.Interfaces;
 using OpenAstroAra.Profile.Interfaces;
 using NINA.WPF.Base.ViewModel.Equipment.Focuser;
 using NUnit.Framework;

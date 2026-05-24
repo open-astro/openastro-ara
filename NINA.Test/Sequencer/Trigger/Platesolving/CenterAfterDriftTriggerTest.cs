@@ -14,8 +14,8 @@
 
 using FluentAssertions;
 using Moq;
-using NINA.Equipment.Interfaces;
-using NINA.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Equipment.Interfaces;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Image.Interfaces;
 using OpenAstroAra.Profile.Interfaces;
 using NINA.Sequencer.Trigger.Platesolving;

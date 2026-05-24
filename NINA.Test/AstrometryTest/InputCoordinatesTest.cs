@@ -12,7 +12,7 @@
 using FluentAssertions;
 using Newtonsoft.Json;
 using OpenAstroAra.Astrometry;
-using NINA.Equipment.Model;
+using OpenAstroAra.Equipment.Model;
 using NUnit.Framework;
 using System;
 using System.Collections.Generic;

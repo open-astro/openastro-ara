@@ -1,10 +1,10 @@
 ﻿using FluentAssertions;
 using Moq;
 using NINA.Core.Model;
-using NINA.Equipment.Equipment.MyCamera;
-using NINA.Equipment.Equipment.MyFlatDevice;
-using NINA.Equipment.Interfaces.Mediator;
-using NINA.Equipment.Model;
+using OpenAstroAra.Equipment.Equipment.MyCamera;
+using OpenAstroAra.Equipment.Equipment.MyFlatDevice;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Equipment.Model;
 using OpenAstroAra.Image.ImageData;
 using OpenAstroAra.Image.Interfaces;
 using OpenAstroAra.Profile.Interfaces;

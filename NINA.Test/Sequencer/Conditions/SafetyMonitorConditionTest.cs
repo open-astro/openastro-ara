@@ -15,14 +15,14 @@
 using FluentAssertions;
 using Moq;
 using NINA.Sequencer.Conditions;
-using NINA.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using NUnit.Framework;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using NINA.Equipment.Equipment.MySafetyMonitor;
+using OpenAstroAra.Equipment.Equipment.MySafetyMonitor;
 using NINA.Sequencer.Interfaces;
 using NINA.Sequencer.Container;
 
