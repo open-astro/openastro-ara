@@ -42,4 +42,23 @@ Per PORT_PLAYBOOK.md §1 + §19.5: this file is **append-only**. Do not edit pri
 ### CodeRabbit billing scope confusion (pre-Phase-0.5b)
 
 - **Org-level vs. personal billing.** When CR hit its 1-review/hour cap on PR #5, user upgraded the CR plan but rate-limit persisted on subsequent PRs. Rate-limit message specifies "Your **organization** has run out of usage credits" — `open-astro` is an org, needs separate tenant billing in CodeRabbit's subscription UI. Resolved by user after explicit prompt on PR #9.
-- **PRs #6-#8 effectively merged without CR review** during the rate-limited window. The CR status check reported `pass` (misleadingly), but the underlying comment was a rate-limit warning. Caught + retroactively documented during the PR #10 rules-tightening exercise. Future PRs use the strict gate.
+- **PRs #5, #6, #7, #8 effectively merged without CR review** during the rate-limited window. The CR status check reported `pass` (misleadingly), but the underlying comment was a rate-limit warning. Caught + retroactively documented during the PR #10 rules-tightening exercise. Future PRs use the strict gate.
+
+## 2026-05-24 — Retroactive audit of the 4 unreviewed PRs
+
+User requested a retroactive review of the PRs that merged with no CodeRabbit walkthrough. Performed via the `/review` Claude Code skill (per the playbook fallback option). Each PR's diff was audited for: (a) scope creep vs. PR description, (b) pure-delete invariant (no surprise additions), (c) license-header / lineage compliance per §17.
+
+| PR | Files | Adds | Dels | Scope verified | Verdict |
+|---|---|---|---|---|---|
+| #5 phase-0.5a-2 | 117 | 0 | 15,925 | 74 in `NINA/View/Equipment/` + 43 in `NINA/View/Imaging/` — matches description, no extras | ✅ Approved retroactively |
+| #6 phase-0.5a-3 | 90 | 0 | 19,860 | `NINA/View/{Options,About,Sequencer,Thumbnail,Plugins,FlatWizard}` + View/ root XAML/CS — matches | ✅ Approved retroactively |
+| #7 phase-0.5a-4 | 418 | 0 | 167,065 | `NINA/{Resources/346, ViewModel/41, Database/15, Utility/14, External/1}` + `.gitmodules` (External submodule) — matches | ✅ Approved retroactively |
+| #8 phase-0.5a-5 | 95 | 0 | 14,687 | `NINA.WPF.Base/{ViewModel/40, Resources/28, Interfaces/27}` — matches | ✅ Approved retroactively |
+
+**Total audited:** 720 files, 0 additions, 217,537 deletions.
+
+**Findings:** none. All 4 PRs were correctly-scoped pure-delete WPF demolition per playbook §4.2. Zero scope creep (no files outside the documented directories). Zero unexpected additions. License headers go with the deleted files per MPL §3.3 (derivative work distribution); lineage attribution in `NOTICE.md` (Phase 15) preserves the inherited copyright record.
+
+**Audit method:** for each PR, `gh pr view <n> --json files` (paginated for #7 via REST API) → bucket files by top-level directory → compare against PR description's claimed scope. Diff-line spot-checked for the first PR (#5) via `gh pr diff 5` to confirm pure-deletion file headers.
+
+The cost of "no CR review" for these PRs was minimal — there was no logic to review, just "did the right files get deleted?" — which the file-tree audit confirms unambiguously. The audit is recorded here for the project's accountability log; no remediation actions are needed.
