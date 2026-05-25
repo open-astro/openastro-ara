@@ -80,7 +80,7 @@ namespace OpenAstroAra.Equipment.Providers {
         public Task<T> ConnectAsync<T>(DiscoveredDevice device, CancellationToken ct) where T : class {
             // TODO(phase-4): full proxy instantiation via ASCOM.Alpaca.Components +
             // wiring into the server's equipment session state per playbook §8.
-            // Stub returns null for now; daemon scaffold (Phase 4) replaces this
+            // Stub throws for now; daemon scaffold (Phase 4) replaces this
             // with the real typed-proxy factory.
             throw new NotImplementedException(
                 "AlpacaEquipmentProvider.ConnectAsync<T> is wired up in Phase 4 (server scaffold). " +
