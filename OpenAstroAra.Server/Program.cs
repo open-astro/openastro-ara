@@ -19,7 +19,10 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Scalar.AspNetCore;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using OpenAstroAra.Server.Endpoints;
+using OpenAstroAra.Server.Services;
 
 namespace OpenAstroAra.Server;
 
@@ -49,13 +52,25 @@ public class Program {
 
         builder.Services.AddOpenApi();
 
-        // §8.1 DI registrations (placeholder).
-        // Each phase lands its own block here:
-        //   Phase 6 — equipment services (ICameraService, ITelescopeService, ...)
-        //   Phase 7 — sequence services (ISequenceService, ICaptureOrchestratorService)
-        //   Phase 8 — image services (IImageDataFactory, IFrameRepository)
-        //   Phase 9 — IWsBroadcaster + IWsEventChannel + dispatch worker
-        // For now the scaffold deliberately registers nothing beyond framework defaults.
+        // §60.6 — enums on the wire serialize as all-lowercase strings (no
+        // separators) so the OpenAPI DeviceType token set (`filterwheel`,
+        // `covercalibrator`) matches both the URL path parameter and the JSON
+        // payload field, and other enums (FrameType etc.) follow the same
+        // convention. Properties use snake_case (standard JSON convention).
+        builder.Services.ConfigureHttpJsonOptions(opts => {
+            opts.SerializerOptions.Converters.Add(
+                new JsonStringEnumConverter(LowerCaseNamingPolicy.Instance));
+            opts.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower;
+        });
+
+        // §8.1 DI registrations.
+        // Phase 6 (this block): equipment services — IEquipmentDiscoveryService
+        // implemented; per-device services (ICameraService etc.) declared but
+        // not yet registered (endpoints return 501 until impls land).
+        // Phase 7 — sequence services (ISequenceService, ICaptureOrchestratorService)
+        // Phase 8 — image services (IImageDataFactory, IFrameRepository)
+        // Phase 9 — IWsBroadcaster + IWsEventChannel + dispatch worker
+        builder.Services.AddSingleton<IEquipmentDiscoveryService, AlpacaEquipmentDiscoveryService>();
 
         var app = builder.Build();
 
@@ -72,6 +87,9 @@ public class Program {
             http.Response.Headers.CacheControl = "no-store";
             return Results.Text("ok", contentType: "text/plain");
         });
+
+        // Phase 6 equipment endpoints (501 stubs except discovery).
+        app.MapEquipmentEndpoints();
 
         // Phase 7 endpoint groups (501 stubs until service implementations land).
         app.MapSequenceEndpoints();
@@ -116,6 +134,16 @@ public class Program {
     /// Range-validates the result; invalid values fall back to the default so a
     /// misconfigured env var can't crash startup before Serilog is wired.
     /// </summary>
+    /// <summary>
+    /// All-lowercase JSON naming policy used for enum-to-string serialization
+    /// (e.g. <c>DeviceType.FilterWheel</c> → <c>"filterwheel"</c>). No
+    /// underscores/dashes so the JSON token matches the URL path segment.
+    /// </summary>
+    private sealed class LowerCaseNamingPolicy : JsonNamingPolicy {
+        public static readonly LowerCaseNamingPolicy Instance = new();
+        public override string ConvertName(string name) => name.ToLowerInvariant();
+    }
+
     private static int ResolvePort(Microsoft.Extensions.Configuration.IConfiguration config) {
         const int defaultPort = 5555;
         const int minPort = 1;
