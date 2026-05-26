@@ -1,0 +1,13 @@
+/var/log/openastroara/*.log {
+    daily
+    rotate 14
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0640 openastroara openastroara
+    sharedscripts
+    postrotate
+        systemctl reload openastroara-server.service > /dev/null 2>&1 || true
+    endscript
+}
