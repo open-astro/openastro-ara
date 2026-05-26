@@ -71,3 +71,11 @@ The cost of "no CR review" for these PRs was minimal — there was no logic to r
 - **Reason:** Per §13 the actual deployment target is Debian 13 / RPi 4-5 (arm64). Building an x64 self-contained artifact every CI run buys nothing — there's no x64 deployment surface, no x64 Docker image, and no developer who would run `./publish/x64/OpenAstroAra.Server` against the daemon (local dev uses `dotnet run` from the source tree). User confirmed 2026-05-26 in the closed-PR-#45 thread.
 - **PORT_PLAYBOOK.md §11.1 reconciliation:** §11.1 still lists both RIDs as authoritative; a separate doc PR should strike the `linux-x64` line. Until then, this decision-log entry is the controlling reference.
 - **Reversibility:** trivial — adding `linux-x64` back is a 4-line CI-yaml addition.
+
+### Base image: `10.0-noble-chiseled-arm64v8` (not `10.0-bookworm-slim-arm64v8`)
+
+- **Decision:** `Dockerfile` uses `mcr.microsoft.com/dotnet/runtime-deps:10.0-noble-chiseled-arm64v8` as the base, **not** the playbook §11.2 example `mcr.microsoft.com/dotnet/runtime-deps:10.0-bookworm-slim-arm64v8`.
+- **Reason:** Microsoft no longer publishes Debian-based (`bookworm`, `trixie`) images for the .NET 10 line — only `noble` (Ubuntu 24.04 LTS) and `azurelinux3.0`. The playbook's `bookworm-slim-arm64v8` tag returns 404 from MCR (confirmed in CI run 26477736713 on closed PR #45 successor PR #46). `noble-chiseled` is Microsoft's current minimal/distroless variant for self-contained .NET apps — ~12MB, no shell, no package manager, just the .NET runtime deps the bundled app needs.
+- **§13 RPi compatibility:** the §13 RPi target is Debian 13 (Trixie), but Docker image base OS is independent of host OS. A chiseled Ubuntu container runs fine on a Debian host. The RPi's `apt`, `systemd`, etc. are unaffected by what's inside the daemon's container.
+- **`USER 1000` still works** even though chiseled has no `/etc/passwd`: the kernel uses the numeric UID directly. Matches typical RPi `pi` user UID 1000.
+- **PORT_PLAYBOOK.md §11.2 reconciliation:** §11.2 still lists the `bookworm-slim-arm64v8` tag as authoritative; the same separate doc PR that strikes `linux-x64` from §11.1 should also update the Dockerfile example here.
