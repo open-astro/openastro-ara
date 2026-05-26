@@ -1,0 +1,37 @@
+#!/bin/sh
+# postrm — runs after files are removed.
+
+set -e
+
+case "$1" in
+    remove)
+        if [ -d /run/systemd/system ]; then
+            systemctl daemon-reload || true
+        fi
+        ;;
+    purge)
+        # On purge: remove the service user, group, and any stale runtime dir.
+        # Data + log dirs are intentionally preserved so a reinstall keeps
+        # frames + DB + logs.
+        if [ -d /run/systemd/system ]; then
+            deb-systemd-helper purge openastroara-server.service > /dev/null || true
+            systemctl daemon-reload || true
+        fi
+        if getent passwd openastroara > /dev/null; then
+            deluser --quiet --system openastroara > /dev/null || true
+        fi
+        if getent group openastroara > /dev/null; then
+            delgroup --quiet --system openastroara > /dev/null || true
+        fi
+        rm -rf /var/run/openastroara
+        rm -f /etc/sudoers.d/openastroara
+        ;;
+    upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
+        ;;
+    *)
+        echo "postrm called with unknown argument: $1" >&2
+        exit 1
+        ;;
+esac
+
+exit 0

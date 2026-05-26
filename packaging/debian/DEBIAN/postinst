@@ -1,0 +1,72 @@
+#!/bin/sh
+# postinst — runs after files are installed.
+# Per playbook §34.3.
+
+set -e
+
+case "$1" in
+    configure)
+        # 1. Create the openastroara system user + group (idempotent).
+        if ! getent passwd openastroara > /dev/null; then
+            adduser --system --group --no-create-home \
+                --home /var/lib/openastroara \
+                --shell /usr/sbin/nologin \
+                --gecos "OpenAstro Ara server" \
+                openastroara
+        fi
+
+        # 2. Add openastroara to standard device groups so it can talk to
+        #    USB-serial (GPS, dew heaters, switches), V4L2 cameras, and
+        #    hotplug devices. Vendor-specific groups are NOT added here —
+        #    those ship with AlpacaBridge or vendor SDKs per §34.3 split.
+        for grp in dialout video plugdev; do
+            if getent group "$grp" > /dev/null; then
+                usermod -aG "$grp" openastroara
+            fi
+        done
+
+        # 3. Create data + log + config dirs with the right ownership.
+        mkdir -p /var/log/openastroara /var/lib/openastroara /etc/openastroara
+        chown openastroara:openastroara /var/log/openastroara /var/lib/openastroara
+        chown root:openastroara /etc/openastroara
+        chmod 750 /etc/openastroara
+
+        # 4. Set CAP_SYS_TIME on the binary (clock adjustment for §31 GPS time sync).
+        #    Guard on `command -v setcap` so postinst doesn't abort on a minimal
+        #    install without libcap2-bin — the daemon still runs without
+        #    CAP_SYS_TIME, just can't bump the clock from GPS time signals.
+        if [ -x /opt/openastroara/OpenAstroAra.Server ] && command -v setcap > /dev/null 2>&1; then
+            setcap cap_sys_time+ep /opt/openastroara/OpenAstroAra.Server
+        fi
+
+        # 5. Refresh systemd-tmpfiles so /var/run/openastroara appears now
+        #    (and on every boot).
+        systemd-tmpfiles --create /usr/lib/tmpfiles.d/openastroara.conf || true
+
+        # 6. Validate sudoers drop-in. The visudo check is best-effort — if
+        #    visudo isn't installed (minimal Debian without `sudo` package),
+        #    skip the validation rather than aborting postinst. The drop-in
+        #    is only effective once sudo is installed anyway.
+        if [ -f /etc/sudoers.d/openastroara ]; then
+            chmod 0440 /etc/sudoers.d/openastroara
+            if command -v visudo > /dev/null 2>&1; then
+                visudo -cf /etc/sudoers.d/openastroara > /dev/null
+            fi
+        fi
+
+        # 7. Enable + start the service.
+        if [ -d /run/systemd/system ]; then
+            systemctl daemon-reload
+            deb-systemd-helper enable openastroara-server.service > /dev/null || true
+            deb-systemd-invoke start openastroara-server.service > /dev/null || true
+        fi
+        ;;
+    abort-upgrade|abort-remove|abort-deconfigure)
+        ;;
+    *)
+        echo "postinst called with unknown argument: $1" >&2
+        exit 1
+        ;;
+esac
+
+exit 0

@@ -1,0 +1,22 @@
+Package: openastroara-server
+Version: @VERSION@
+Section: net
+Priority: optional
+Architecture: arm64
+Maintainer: OpenAstro <noreply@openastro.net>
+Depends: libc6, libgcc-s1, libstdc++6
+Recommends: alpaca-bridge, openastro-phd2
+Suggests: gpsd
+Homepage: https://github.com/open-astro/openastro-ara
+Description: OpenAstro Ara server daemon for astrophotography
+ OpenAstro Ara is the daemon half of the OpenAstro stack — it runs on a
+ Raspberry Pi (or other arm64 SBC) next to your astrophotography mount,
+ exposes a REST + WebSocket API on the LAN, and is driven by the WILMA
+ client app (mobile + desktop).
+ .
+ This package installs the self-contained .NET 10 server binary to
+ /opt/openastroara, configures a hardened systemd service unit, creates
+ the openastroara service user, and sets up log rotation + tmpfiles
+ cleanup. Recommended companion packages (alpaca-bridge for equipment
+ access, openastro-phd2 for autoguiding) are pulled in automatically;
+ opt out with --no-install-recommends if you maintain your own stack.
