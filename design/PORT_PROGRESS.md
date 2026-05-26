@@ -4,9 +4,9 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** Phase 10 (Linux smoke test) — next up
-- **Last merged:** Phase 6 (equipment endpoint scaffold + Alpaca discovery) — PR #38, 2026-05-26
-- **Currently working on:** Nothing in flight. The daemon HTTP+WS endpoint surface (Phases 5-9) is complete as scaffolds; service implementations land per-area incrementally. Phase 10 = `dotnet publish -r linux-arm64` + Docker validation; the cross-compile gate already passes locally on macOS (non-AOT path).
+- **Phase:** Phase 10 (Linux smoke test) — in flight
+- **Last merged:** `infra-port-driver-skill` — PR #44, 2026-05-26 (adds `.claude/skills/port-driver/SKILL.md`, the project-scoped Claude Code skill that drives the port autonomously under `/loop /port-driver`).
+- **Currently working on:** `phase-10` branch — adds `Dockerfile` (per §11.2, with `runtime-deps` base instead of the playbook's `aspnet` since `--self-contained` already bundles the runtime) + extends `.github/workflows/ci.yml` with a `server-build` job that does `dotnet build`, `dotnet publish -r linux-arm64`, arm64-ELF verification, and a `docker buildx` arm64 image build via QEMU. arm64-only (no `linux-x64` publish) per the 2026-05-26 decision logged in `design/PORT_DECISIONS.md`.
 
 ## Completed
 
@@ -88,17 +88,22 @@ Folded into Phase 0.5p (global.json + csproj target framework bumps).
 - ✅ `Endpoints/SystemEndpoints.cs` (15 endpoints across bug-report + data-manager + backup + profile-share)
 - ✅ `Endpoints/WebSocketEndpoints.cs` — `GET /api/v1/ws/catalog` is **functional** (dumps WsEventCatalog.All); WS upgrade returns 426 with proper `Upgrade: websocket` + `Connection: Upgrade` headers per RFC 7231 §6.5.15
 
+### Phase 0.5p-followup buildfix — Core + Astrometry + Equipment cleanup (PR #43)
+- ✅ `OpenAstroAra.Core` — `Notification.cs` scrubbed (CustomDisplayPart references removed; warning/error variants now route to `Logger` with `[CallerXxx]` attribute propagation so the original call site is preserved); `MyMessageBox.cs` `Show(...)` maps affirmative defaults (Yes→No, OK→Cancel) to safe non-affirmative results to prevent `SequenceHasChanged.AskHasChanged` silently auto-detaching; `System.Management 10.0.0` added for WMI usage in `Logger.cs` + `SerialPortProvider.cs`.
+- ✅ `OpenAstroAra.Astrometry` — `DatabaseInteraction.cs` reduced to a minimal stub (`GetUT1_UTC` returns 0 with cancellation honored via `Task.FromCanceled<double>(token)`; `GetDisplayAlias` Levenshtein logic preserved); `AstroUtil.cs` + `TopocentricCoordinates.cs` cleaned of stale `using OpenAstroAra.Core.Database;`.
+- ✅ `OpenAstroAra.Equipment` — 7 vendor-specific files deleted (EDCamera, MGENGuider, ASCOMInteraction, AllProSpikeAFlat, AlnitakFlatDevice, ArteskyFlatBox, PegasusAstroFlatMaster) per Phase 2 Alpaca-only collapse; Phase 6 `AlpacaEquipmentProvider.cs` SDK signature bug fixed (`deviceType:` → `deviceTypes:`, missing `logger:` arg added). 3 orphaned `OpenAstroAra.Test/FlatDevice/*` files also deleted.
+- ⚠️ `OpenAstroAra.Sequencer` — 96 errors from `NINA.WPF.Base` references remain. Tracked in `design/PORT_TODO.md` as a dedicated `phase-0.5p-followup-sequencer` pass (substantive sub-PR-equivalent scope).
+
 ## Endpoint surface (as of Phase 9 merge)
 
 **141 endpoint registrations across 11 endpoint files.** Functional today: `/healthz`, `/api/v1/server/info`, `/api/v1/equipment/discover/{type}`, `/api/v1/ws/catalog`. Remaining endpoints return 501 with RFC 7807 Problem bodies until per-area service implementations land — the surface itself is stable for WILMA client codegen (Phase 11+).
 
 ## In flight
 
-Nothing currently. master and port/ara are in parity.
+- `phase-10` — Phase 10 Linux smoke test. Adds repo-root `Dockerfile` + extends `.github/workflows/ci.yml` `server-build` job (cross-publish + Docker buildx). AOT publish deferred to a small Phase 14 follow-up since cross-compiling AOT from ubuntu-latest x64 to linux-arm64 needs additional toolchain setup beyond the §14.3 scope of this PR.
 
 ## Next
 
-- **Phase 10** — Linux smoke test. Cross-platform publish gate already verified locally on macOS (non-AOT, both `linux-arm64` + `linux-x64` ELF produced). Next steps: write the `Dockerfile` per §11.2, add the publish step to CI, optionally run on a real Pi if available. AOT cross-compile from macOS blocked on missing `objcopy`/clang-aarch64 toolchain; CI Linux runners will handle AOT.
 - **Phase 11** — Flutter WILMA client scaffold + first-run flow + server discovery + handshake. Generates Dart client from `OpenAstroAra.Server/openapi.yaml` via `openapi_generator` per §12.1.
 - **Phase 12-13** — Flutter views (app shell, all main tabs) + image preview pipeline end-to-end.
 - **Phase 14** — Tests + GitHub Actions CI matrix.

@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright � 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright � 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -98,69 +98,20 @@ namespace OpenAstroAra.Core.MyMessageBox {
             return Show(messageBoxText, caption, MessageBoxButton.OK, MessageBoxResult.OK);
         }
 
+        // TODO(port): Phase 15 sweep — replace these static calls at all 4 call sites
+        // (Sequencer/Sequencer.cs, SequenceHasChanged.cs, Container/SequenceRootContainer.cs,
+        // MyMessageBoxVM.cs) with DI'd dialog/confirmation flow that proxies through WS to
+        // WILMA (per §35 / §60.9 modal events). For now this is an API-preserving no-op
+        // that maps affirmative defaults (Yes/OK) to their safe non-affirmative counterparts
+        // (No/Cancel) so callers like SequenceHasChanged.AskHasChanged — which proceed on any
+        // non-No result — don't silently auto-affirm. Non-affirmative defaults pass through
+        // unchanged. Once the WS dialog flow lands, the real user choice replaces this.
         public static MessageBoxResult Show(string messageBoxText, string caption, MessageBoxButton button, MessageBoxResult defaultresult) {
-            var dialogresult = defaultresult;
-            dialogresult = Application.Current.Dispatcher.Invoke(() => {
-                var MyMessageBox = new MyMessageBox {
-                    Title = caption,
-                    Text = messageBoxText,
-                };
-
-                if (button == MessageBoxButton.OKCancel) {
-                    MyMessageBox.CancelVisibility = Visibility.Visible;
-                    MyMessageBox.OKVisibility = Visibility.Visible;
-                    MyMessageBox.YesVisibility = Visibility.Hidden;
-                    MyMessageBox.NoVisibility = Visibility.Hidden;
-                } else if (button == MessageBoxButton.YesNo) {
-                    MyMessageBox.CancelVisibility = Visibility.Hidden;
-                    MyMessageBox.OKVisibility = Visibility.Hidden;
-                    MyMessageBox.YesVisibility = Visibility.Visible;
-                    MyMessageBox.NoVisibility = Visibility.Visible;
-                } else if (button == MessageBoxButton.OK) {
-                    MyMessageBox.CancelVisibility = Visibility.Hidden;
-                    MyMessageBox.OKVisibility = Visibility.Visible;
-                    MyMessageBox.YesVisibility = Visibility.Hidden;
-                    MyMessageBox.NoVisibility = Visibility.Hidden;
-                } else {
-                    MyMessageBox.CancelVisibility = Visibility.Hidden;
-                    MyMessageBox.OKVisibility = Visibility.Visible;
-                    MyMessageBox.YesVisibility = Visibility.Hidden;
-                    MyMessageBox.NoVisibility = Visibility.Hidden;
-                }
-
-                var mainwindow = Application.Current.MainWindow;
-                Window win = new MyMessageBoxView {
-                    DataContext = MyMessageBox,
-                    Owner = mainwindow,
-                    WindowStartupLocation = WindowStartupLocation.CenterOwner,
-                };
-                win.Closed += (object sender, EventArgs e) => {
-                    Application.Current.MainWindow.Focus();
-                };
-
-                mainwindow.Opacity = 0.8;
-                win.ShowDialog();
-                mainwindow.Opacity = 1;
-
-                if (win.DialogResult == null) {
-                    return defaultresult;
-                } else if (win.DialogResult == true) {
-                    if (MyMessageBox.YesVisibility == Visibility.Visible) {
-                        return MessageBoxResult.Yes;
-                    } else {
-                        return MessageBoxResult.OK;
-                    }
-                } else if (win.DialogResult == false) {
-                    if (MyMessageBox.NoVisibility == Visibility.Visible) {
-                        return MessageBoxResult.No;
-                    } else {
-                        return MessageBoxResult.Cancel;
-                    }
-                } else {
-                    return defaultresult;
-                }
-            });
-            return dialogresult;
+            return defaultresult switch {
+                MessageBoxResult.Yes => MessageBoxResult.No,
+                MessageBoxResult.OK => MessageBoxResult.Cancel,
+                _ => defaultresult,
+            };
         }
     }
 }
