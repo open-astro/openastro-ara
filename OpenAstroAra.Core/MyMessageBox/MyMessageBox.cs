@@ -102,10 +102,16 @@ namespace OpenAstroAra.Core.MyMessageBox {
         // (Sequencer/Sequencer.cs, SequenceHasChanged.cs, Container/SequenceRootContainer.cs,
         // MyMessageBoxVM.cs) with DI'd dialog/confirmation flow that proxies through WS to
         // WILMA (per §35 / §60.9 modal events). For now this is an API-preserving no-op
-        // that returns the caller-supplied default so daemon code compiles without the
-        // deleted WPF MyMessageBoxView (removed in Phase 0.5p).
+        // that maps affirmative defaults (Yes/OK) to their safe non-affirmative counterparts
+        // (No/Cancel) so callers like SequenceHasChanged.AskHasChanged — which proceed on any
+        // non-No result — don't silently auto-affirm. Non-affirmative defaults pass through
+        // unchanged. Once the WS dialog flow lands, the real user choice replaces this.
         public static MessageBoxResult Show(string messageBoxText, string caption, MessageBoxButton button, MessageBoxResult defaultresult) {
-            return defaultresult;
+            return defaultresult switch {
+                MessageBoxResult.Yes => MessageBoxResult.No,
+                MessageBoxResult.OK => MessageBoxResult.Cancel,
+                _ => defaultresult,
+            };
         }
     }
 }

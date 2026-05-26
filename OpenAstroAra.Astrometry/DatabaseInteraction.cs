@@ -42,6 +42,9 @@ namespace OpenAstroAra.Astrometry {
         }
 
         public Task<double> GetUT1_UTC(DateTime date, CancellationToken token) {
+            if (token.IsCancellationRequested) {
+                return Task.FromCanceled<double>(token);
+            }
             return Task.FromResult(0d);
         }
 
