@@ -4,9 +4,9 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** Phase 10.5 (Debian packaging) — in flight (promoted from Phase 14 §34 per user request 2026-05-26)
-- **Last merged:** `phase-10` — PR #46, 2026-05-26 (Dockerfile + CI `server-build` job + `linux-arm64` self-contained publish + arm64-ELF verify + Docker buildx via QEMU; arm64-only per the 2026-05-26 decision in `design/PORT_DECISIONS.md`). Promoted to master via PR #47.
-- **Currently working on:** `phase-10.5-deb-packaging` branch — adds `packaging/debian/` tree (DEBIAN/control + postinst + prerm + postrm, hardened systemd unit per §13, sudoers drop-in, logrotate, tmpfiles, server.env example) + `packaging/build-deb.sh` assembler + CI `Build .deb` step that uploads an arm64 `.deb` artifact on every push. Apt repo (apt.openastro.net + reprepro + GPG signing) stays at Phase 14.
+- **Phase:** Phase 10.5 done; CHANGELOG.md init in flight before Phase 11
+- **Last merged:** `phase-10.5-deb-packaging` — PR #49, 2026-05-26 (arm64 `.deb` packaging — overlay tree + assembler + CI Build .deb + artifact upload). Promoted to master via PR #50; tag `phase-10.5-complete`. Tail fix `fix-deb-version-tag-filter` (PR #51, tag matcher tightening + systemd unit trailing-comment fix).
+- **Currently working on:** `infra-changelog-init` branch — adds `CHANGELOG.md` at repo root (Keep-a-Changelog format) with the full backfilled history (every phase from 0.5a through 10.5) and the going-forward `[Unreleased]` convention. SKILL.md step 2 of "Open the PR" now reminds the driver to add a `[Unreleased]` bullet for user-visible changes.
 
 ## Completed
 
@@ -100,7 +100,7 @@ Folded into Phase 0.5p (global.json + csproj target framework bumps).
 
 ## In flight
 
-- `phase-10.5-deb-packaging` — Phase 10.5 Debian packaging (promoted from Phase 14 §34 per user direction). First .deb-as-CI-artifact (apt repo + reprepro + GPG signing still deferred to Phase 14). systemd unit uses `Type=simple` for now; `Type=notify` + `WatchdogSec=60` switches in when the Phase 4 / §66 watchdog `IHostedService` lands.
+- `infra-changelog-init` — `CHANGELOG.md` backfill (Keep-a-Changelog) + going-forward `[Unreleased]` convention wired into SKILL.md.
 
 ## Next
 

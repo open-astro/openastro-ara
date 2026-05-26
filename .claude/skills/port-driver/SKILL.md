@@ -148,9 +148,11 @@ When in doubt, prefer folding into the sub-PR — direct pushes to `port/ara` by
 
    Non-zero exit = fix + retry once. Twice failing in a row = stop and notify user.
 
-2. Push the branch: `git push -u origin <branch-name>`
+2. **CHANGELOG entry (convention-only enforcement).** If this sub-PR introduces a user-visible change (new feature, behavior change, removal, bug fix, security fix), add a bullet to the `[Unreleased]` section of `CHANGELOG.md` in this same diff under the matching subsection (Added / Changed / Deprecated / Removed / Fixed / Security). Mechanical PRs (pure renames, pure deletes during demolition, doc-only edits to internal `design/` files) are exempt — when in doubt, add one. See `CHANGELOG.md` "How to update this file" for the full rule.
 
-3. Open the PR:
+3. Push the branch: `git push -u origin <branch-name>`
+
+4. Open the PR:
    ```shell
    gh pr create --base port/ara --head <branch-name> --title "<conventional-prefix>: <one-line>" --body "$(cat <<'EOF'
    ## Summary
@@ -168,7 +170,7 @@ When in doubt, prefer folding into the sub-PR — direct pushes to `port/ara` by
    )"
    ```
 
-4. Schedule next wake-up at 270s — give CR time to start its review pass.
+5. Schedule next wake-up at 270s — give CR time to start its review pass.
 
 ### Step 5 — Start the next sub-PR (scenario C)
 
