@@ -1,36 +1,117 @@
 # OpenAstro Ara — Port Progress
 
-Single-page status. Updated on every commit. Per PORT_PLAYBOOK.md §20.1, "Currently working on" must point at a specific file, endpoint, or sub-PR — never "various refactoring."
+Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1, "Currently working on" must point at a specific file, endpoint, or sub-PR — never "various refactoring."
 
 ## Current
 
-- **Phase:** 0.5c — Delete vendor SDKs (next up)
-- **Started:** 2026-05-23
-- **Currently working on:** `ci-harden` follow-up PR addressing PR #12's CodeRabbit security finding (pin `actions/checkout@v4` to SHA + `persist-credentials: false`). Then will open the master promotion PR for phase-0.5b-complete (supersedes PR #12 which was scoped only to 0.5a).
+- **Phase:** Phase 10 (Linux smoke test) — next up
+- **Last merged:** Phase 6 (equipment endpoint scaffold + Alpaca discovery) — PR #38, 2026-05-26
+- **Currently working on:** Nothing in flight. The daemon HTTP+WS endpoint surface (Phases 5-9) is complete as scaffolds; service implementations land per-area incrementally. Phase 10 = `dotnet publish -r linux-arm64` + Docker validation; the cross-compile gate already passes locally on macOS (non-AOT path).
 
 ## Completed
 
-- ✅ Pre-Phase-0.5 prep
-  - `prep-ci` (PR #2): CI baseline + branch naming + merge authority
-  - `rules-tighten` (PR #10): tightened §19.1 (no merge-on-rate-limit) + added §22 periodic master promotion
-  - `tracking-files` (PR #11): added the four §1 tracking files (retroactive)
-- ✅ Phase 0.5a — Fork hygiene / WPF demolition (tag: `phase-0.5a-complete`)
-  - `phase-0.5a-1` (PR #4): .sln deregister + NINA shell files + NINA.CustomControlLibrary/
-  - `phase-0.5a-2` (PR #5): NINA/View/Equipment + Imaging
-  - `phase-0.5a-3` (PR #6): rest of NINA/View/
-  - `phase-0.5a-4` (PR #7): remaining NINA/ subdirs + .gitmodules
-  - `phase-0.5a-5` (PR #8): NINA.WPF.Base part 1 (ViewModel + Resources + Interfaces)
-  - `phase-0.5a-6` (PR #9): NINA.WPF.Base part 2 (final)
-- ✅ Phase 0.5b — Delete MGEN + nikoncswrapper + WiX + Plugin (tag: `phase-0.5b-complete`)
-  - `phase-0.5b` (PR #13): 131 deletions + cascade scrubs in NINA.Equipment.csproj + NINA.Test.csproj
+### Pre-Phase-0.5 prep
+- `prep-ci` (PR #2) — CI baseline + branch naming + merge authority
+- `rules-tighten` (PR #10) — tightened §19.1 (no merge-on-rate-limit) + added §22 periodic master promotion
+- `tracking-files` (PR #11) — added the four §1 tracking files (retroactive)
+
+### Phase 0.5 — Fork hygiene + project demolition (tag `phase-0.5p-complete` on master)
+- ✅ **0.5a** (tag `phase-0.5a-complete`) — Fork hygiene / WPF demolition, 6 sub-PRs (#4-#9)
+- ✅ **0.5b** (tag `phase-0.5b-complete`) — Delete MGEN + nikoncswrapper + WiX + Plugin (#13)
+- ✅ **0.5c** (tag `phase-0.5c-complete`) — Delete vendor SDKs + vendor concrete impls
+- ✅ **0.5d** (tag `phase-0.5d-complete`) — Delete ASCOM COM glue
+- ✅ **0.5e + 0.5f** (tag `phase-0.5f-complete`) — Strip Stefan branding + non-English locales
+- ✅ **0.5g** — `NINA.Core` → `OpenAstroAra.Core` (tag `phase-0.5g-complete`)
+- ✅ **0.5h** — `NINA.Astrometry` → `OpenAstroAra.Astrometry`
+- ✅ **0.5i** — `NINA.Profile` → `OpenAstroAra.Profile`
+- ✅ **0.5j** — `NINA.Image` → `OpenAstroAra.Image`
+- ✅ **0.5k** — `NINA.Equipment` → `OpenAstroAra.Equipment` (rename + cascade scrub)
+- ✅ **0.5l** — `NINA.Sequencer` → `OpenAstroAra.Sequencer`
+- ✅ **0.5m** — `NINA.Platesolving` → `OpenAstroAra.PlateSolving`
+- ✅ **0.5n** — `NINA.Test` → `OpenAstroAra.Test` (tag `phase-0.5n-complete`)
+- ✅ **0.5o** — `NINA.sln` → `OpenAstroAra.sln` + `.gitignore` rewrite
+- ✅ **0.5p** — .NET 10 bump + first build cleanup pass (tag `phase-0.5p-complete`)
+
+### Phase 1 — .NET 10 SDK pin
+Folded into Phase 0.5p (global.json + csproj target framework bumps).
+
+### Phase 2 — Equipment layer to Alpaca-only
+- ✅ Commit `013da7697` — collapsed `MyCamera/*` (vendor concrete impls) into Alpaca-only providers per §52. Added `IEquipmentProvider` per §6.2 with `DiscoverAsync` + `ConnectAsync<T>`.
+
+### Phase 3 — Repoint PHD2 client at openastro-phd2
+- ✅ Commit `82481559e` — `PHD2Guider.cs` now logs `openastro-phd2` vs upstream PHD2 detection via PHDSubver/PHDVersion substring match. Mojibake fixed (`(c)` for the copyright glyph).
+
+### Phase 4 — Server scaffold (tag `phase-4-complete`)
+- ✅ Commit `8c103c324` — `OpenAstroAra.Server` project (Microsoft.NET.Sdk.Web, .NET 10, AOT in Release). Kestrel port resolution env → appsettings → 5555. `/healthz` + `/api/v1/server/info` operational. Scalar UI mounted at `/scalar/v1`.
+
+### Phase 5 — Define API contract + OpenAPI spec (PR #37)
+- ✅ `OpenAstroAra.Server/openapi.yaml` — full v0.0.1 contract:
+  - 6 endpoint groups (Server, Equipment, Sequence, Image, Log, Stream)
+  - Cursor-based pagination per §60.2 (`limit`/`cursor` + `items`/`next_cursor`/`has_more`)
+  - `Idempotency-Key` HTTP header per §60.5
+  - RFC 7807 `Problem` schema with JSON-pointer keyed `errors` map
+  - `ServerStateSnapshot` includes `ws_resume_token` for §60.9 resume
+  - WS protocol fully documented (`/api/v1/ws`, X-Ara-WS-Version: 1, 30s ping/60s pong heartbeat, resume, close codes 1000/1001/1009/1011/1012/4001-4004)
+  - OpenAPI 3.1 null unions throughout (no `nullable: true`)
+
+### Phase 6 — Equipment endpoints + Alpaca discovery (PR #38)
+- ✅ `Contracts/EquipmentDtos.cs` — 12 DTO records covering all device types + `DeviceType` enum (now includes `FlatDevice` per the §10.6 row, mapped to Alpaca `CoverCalibrator` under the hood)
+- ✅ `Services/IEquipmentServices.cs` — 12 service interfaces (discovery + per-device)
+- ✅ `Services/EquipmentDiscoveryService.cs` — **functional** Alpaca UDP discovery on port 32227 via `ASCOM.Alpaca.Discovery.GetAscomDevicesAsync`
+- ✅ `Endpoints/EquipmentEndpoints.cs` — `GET /api/v1/equipment/discover/{type}` (functional) + per-device 501 stubs
+- ✅ Route collision fix: discovery moved to `/discover/{type}` so it doesn't shadow per-device literal routes (`/camera`, `/telescope`, …)
+- ✅ `DeviceType` token alignment: all-lowercase concatenated form (`filterwheel`, `safetymonitor`) matches both URL path segments and the C# enum (`Enum.TryParse` with `ignoreCase: true`)
+- ✅ Global `JsonStringEnumConverter` with custom `LowerCaseNamingPolicy` for consistent enum-to-string serialization
+
+### Phase 7 — Sequence + Calibration + Mosaic endpoints (PR #39)
+- ✅ `Contracts/SequenceDtos.cs` (~16 records), `Contracts/CalibrationDtos.cs`, `Contracts/MosaicDtos.cs`, `Contracts/SharedDtos.cs` (cursor page + operation accepted)
+- ✅ `Services/ISequenceServices.cs` — 8 service interfaces
+- ✅ `Endpoints/SequenceEndpoints.cs` — 16 endpoints incl. `PATCH /api/v1/sequences/{id}` (was PUT; switched to PATCH because partial-update semantics)
+- ✅ `Endpoints/CalibrationEndpoints.cs` — 6 endpoints (sessions + matching-flats + dark-library build/status/list)
+- ✅ `Endpoints/MosaicEndpoints.cs` — 6 endpoints (CRUD + panels + progress; panel DTO includes §47.3 `crosses_ra_wrap` flag)
+- ✅ Full OpenAPI metadata on every route: `.Accepts<TReq>() / .Produces<TResp>() / .ProducesProblem() / .WithName()` so generated OpenAPI surface has typed schemas for WILMA codegen
+
+### Phase 8 — Image + Session + Backup stream + Diagnostics (PR #40)
+- ✅ `Contracts/ImageDtos.cs` — ~15 DTOs incl. `FrameType` enum mirroring FITS IMAGETYP, `QualityScoreBreakdownDto` (composite score per §50.10), HFR analysis time series, `BackupClaimRequestDto`
+- ✅ `Contracts/DiagnosticsDtos.cs` — health state + issue + event DTOs + 2 enums (`DiagnosticHealth`, `DiagnosticsMode`)
+- ✅ `Services/IImageServices.cs` — 4 service interfaces (`IFrameRepository`, `ISessionService`, `IBackupStreamService`, `IDiagnosticsService`)
+- ✅ `Endpoints/ImageEndpoints.cs` — 16 endpoints (`/api/v1/{frames,sessions,backup/stream}`) with full pagination params on list routes
+- ✅ `Endpoints/DiagnosticsEndpoints.cs` — 3 endpoints (`/state`, `/mode`, `/history` with cursor pagination)
+
+### Phase 9 — Log/state + WS + notifications + Stats + System (PR #41)
+- ✅ `Contracts/SharedDtos.cs` (re-confirmed), `Contracts/ServerStateDtos.cs`, `Contracts/NotificationDtos.cs`, `Contracts/StatsDtos.cs`, `Contracts/DataManagerDtos.cs`
+- ✅ `Contracts/WsEvents/WsEventCatalog.cs` — 75+ event tokens across Phases 6-9, `WsEventEnvelopeDto` matching §60.9.3 wire shape
+- ✅ `Services/IServerStateServices.cs` — 9 service interfaces (state, logs, notifications, stats, bug-report, data-manager, backup, profile-share, `IWsBroadcaster` + `IWsEventChannel`)
+- ✅ `Endpoints/ServerStateEndpoints.cs` (9 endpoints + `/readyz`)
+- ✅ `Endpoints/NotificationEndpoints.cs` (5 endpoints)
+- ✅ `Endpoints/StatsEndpoints.cs` (8 endpoints with typed query params)
+- ✅ `Endpoints/SystemEndpoints.cs` (15 endpoints across bug-report + data-manager + backup + profile-share)
+- ✅ `Endpoints/WebSocketEndpoints.cs` — `GET /api/v1/ws/catalog` is **functional** (dumps WsEventCatalog.All); WS upgrade returns 426 with proper `Upgrade: websocket` + `Connection: Upgrade` headers per RFC 7231 §6.5.15
+
+## Endpoint surface (as of Phase 9 merge)
+
+**141 endpoint registrations across 11 endpoint files.** Functional today: `/healthz`, `/api/v1/server/info`, `/api/v1/equipment/discover/{type}`, `/api/v1/ws/catalog`. Remaining endpoints return 501 with RFC 7807 Problem bodies until per-area service implementations land — the surface itself is stable for WILMA client codegen (Phase 11+).
 
 ## In flight
 
-- ⏳ `ci-harden` — security hardening on `.github/workflows/ci.yml` per PR #12 CR finding
-- ⏳ PR #12 `port/ara → master` promotion (phase-0.5a) — open; will be closed and superseded by a phase-0.5b promotion that includes ci-harden + 0.5b
+Nothing currently. master and port/ara are in parity.
 
 ## Next
 
-- After ci-harden merges to port/ara: open new master promotion PR (`port(promote): merge phase-0.5b-complete to master`), close PR #12
-- After master promotion: Phase 0.5c — delete vendor SDKs (`NINA.Equipment/SDK/CameraSDKs/*` + vendor concrete impls in `MyCamera/MyFilterWheel/MyFocuser`). Estimated 60-120 files; single PR.
-- Long-horizon: 0.5d (COM glue) → 0.5e (WebView2) → 0.5f (Stefan branding) → 0.5g-n (project renames) → 0.5o (sln rename + .gitignore) → 0.5p (.NET 10 bump). Each completes with `phase-0.5X-complete` tag + master promotion.
+- **Phase 10** — Linux smoke test. Cross-platform publish gate already verified locally on macOS (non-AOT, both `linux-arm64` + `linux-x64` ELF produced). Next steps: write the `Dockerfile` per §11.2, add the publish step to CI, optionally run on a real Pi if available. AOT cross-compile from macOS blocked on missing `objcopy`/clang-aarch64 toolchain; CI Linux runners will handle AOT.
+- **Phase 11** — Flutter WILMA client scaffold + first-run flow + server discovery + handshake. Generates Dart client from `OpenAstroAra.Server/openapi.yaml` via `openapi_generator` per §12.1.
+- **Phase 12-13** — Flutter views (app shell, all main tabs) + image preview pipeline end-to-end.
+- **Phase 14** — Tests + GitHub Actions CI matrix.
+- **Phase 15** — TODO sweep + RPi smoke test + release v0.0.1-ara.1.
+
+## Tag inventory
+
+```
+phase-0.5a-complete   phase-0.5b-complete   phase-0.5c-complete
+phase-0.5d-complete   phase-0.5f-complete   phase-0.5g-complete
+phase-0.5n-complete   phase-0.5p-complete   phase-4-complete
+phase-5-complete      phase-6-complete      phase-7-complete
+phase-8-complete      phase-9-complete
+```
+
+(Phase 5-9 tags added retroactively in `port-progress-refresh` after the playbook tracking gap was caught.)
