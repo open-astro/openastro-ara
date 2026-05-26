@@ -1,0 +1,630 @@
+# OpenAstro Ara — REST + WebSocket API contract
+#
+# Source of truth for the server-client wire protocol. Per PORT_PLAYBOOK.md §9 (Phase 5):
+#   - URL-versioned (/api/v1/...)
+#   - No auth in v0.0.1 (trusted-LAN posture per §67)
+#   - JSON for ops, JPEG bytes for previews, FITS bytes for full downloads
+#   - WebSocket at /api/v1/stream for live updates
+#
+# Endpoint groups land incrementally:
+#   - Phase 4 (DONE): /healthz, /api/v1/server/info
+#   - Phase 6: /api/v1/equipment/{type} — list/connect/control
+#   - Phase 7: /api/v1/sequence — load, start/pause/resume/abort, status
+#   - Phase 8: /api/v1/image — list, FITS download, preview JPEG
+#   - Phase 9: /api/v1/log, /api/v1/stream (WebSocket), notifications
+#
+# Phase 5 = the spec itself. Server code references this file as the contract;
+# `Microsoft.AspNetCore.OpenApi` generates the live `/openapi/v1.json` from
+# minimal-API endpoints; Scalar UI mounts it at `/scalar/v1` per §49.
+#
+# Design log: see design/API_CONTRACT.md for one entry per non-obvious wire-shape decision.
+
+openapi: 3.1.0
+
+info:
+  title: OpenAstro Ara Server API
+  version: 0.0.1-ara.1
+  description: |
+    REST + WebSocket API for the OpenAstro Ara headless daemon. Speaks to the
+    Flutter WILMA client (`client/openastroara_client`). Designed for trusted-LAN
+    deployments; v0.1.0 will add opt-in remote-access mode with TLS + token auth.
+
+    **Lineage:** forked from N.I.N.A. (Nighttime Imaging 'N' Astronomy). See repo
+    root LICENSE.txt, COPYING, AUTHORS for the inherited attribution. NOTICE.md
+    (added at Phase 15) carries the full lineage record.
+  license:
+    name: MPL-2.0
+    url: https://www.mozilla.org/en-US/MPL/2.0/
+
+servers:
+  - url: http://{host}:{port}/api/v1
+    description: Direct LAN connection (default)
+    variables:
+      host:
+        default: openastroara.local
+        description: Pi hostname or IP; discoverable via mDNS service _openastroara._tcp.local
+      port:
+        default: "5555"
+
+# ─── Endpoint group: Server ────────────────────────────────────────────────────
+
+paths:
+  /server/info:
+    get:
+      summary: Server identification + capabilities
+      description: |
+        Lightweight identity payload per §60.4. WILMA clients call this after mDNS
+        discovery to verify the daemon they're connecting to and to fetch the
+        server's stable UUID for profile pinning.
+      tags: [Server]
+      responses:
+        '200':
+          description: Identity payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerInfo'
+
+  /server/state:
+    get:
+      summary: Current server-state snapshot (§60.4 hydration)
+      description: |
+        Single-shot snapshot of all session-level state — equipment connection
+        status, in-flight sequence (if any), recent log tail. Used by clients
+        that just reconnected to rebuild their view without replaying the WS
+        event log.
+      tags: [Server]
+      responses:
+        '200':
+          description: State snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerStateSnapshot'
+
+# ─── Endpoint group: Equipment (Phase 6) ──────────────────────────────────────
+
+  /equipment/{type}:
+    get:
+      summary: List discovered devices of a given type
+      description: |
+        Triggers Alpaca discovery (UDP broadcast on port 32227) and returns
+        the result. Cached for §32.4 cache_ttl; pass `?force_refresh=true`
+        to bypass.
+      tags: [Equipment]
+      parameters:
+        - name: type
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/DeviceType'
+        - name: force_refresh
+          in: query
+          schema: { type: boolean, default: false }
+      responses:
+        '200':
+          description: Discovered devices
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/DiscoveredDevice' }
+
+  /equipment/{type}/connect:
+    post:
+      summary: Connect to a device
+      tags: [Equipment]
+      parameters:
+        - name: type
+          in: path
+          required: true
+          schema: { $ref: '#/components/schemas/DeviceType' }
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnectRequest'
+      responses:
+        '202':
+          description: Connect started (state transition reported via WS)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OperationAccepted' }
+
+  /equipment/{type}/disconnect:
+    post:
+      summary: Disconnect the currently-connected device of this type
+      tags: [Equipment]
+      parameters:
+        - name: type
+          in: path
+          required: true
+          schema: { $ref: '#/components/schemas/DeviceType' }
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202':
+          description: Disconnect started
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OperationAccepted' }
+
+# ─── Endpoint group: Sequence (Phase 7) ───────────────────────────────────────
+
+  /sequence:
+    get:
+      summary: Get the current sequence (if any) + execution state
+      tags: [Sequence]
+      responses:
+        '200':
+          description: Current sequence + state
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SequenceState' }
+    put:
+      summary: Replace the current sequence with the supplied JSON
+      description: |
+        Schema per §38. Validation runs server-side; failed validation returns
+        422 with a list of issues (per §73 error shape).
+      tags: [Sequence]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Sequence' }
+      responses:
+        '200':
+          description: Loaded
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SequenceState' }
+        '422':
+          description: Validation failure
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /sequence/start:
+    post:
+      summary: Start (or resume) execution of the loaded sequence
+      description: |
+        **Idempotency-Key required** per §60.5 — start is one of the operations
+        where double-execution would burn equipment time + create duplicate frames.
+      tags: [Sequence]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyRequired'
+      responses:
+        '202':
+          description: Started
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OperationAccepted' }
+
+  /sequence/pause:
+    post:
+      summary: Pause execution after the current instruction completes
+      tags: [Sequence]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202':
+          description: Pause requested
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OperationAccepted' }
+
+  /sequence/abort:
+    post:
+      summary: Abort execution immediately (per §35.3 emergency stop semantics)
+      tags: [Sequence]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202':
+          description: Abort initiated; mount parks per §57 + alarm fires per §35.5
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OperationAccepted' }
+
+# ─── Endpoint group: Image (Phase 8) ──────────────────────────────────────────
+
+  /image:
+    get:
+      summary: List captured frames in the library
+      description: |
+        Paginated; default 50 per page. Filter by `target=...`, `date_from=...`,
+        `date_to=...`. Items return metadata only; use `/image/{id}` to download.
+      tags: [Image]
+      parameters:
+        - name: target
+          in: query
+          schema: { type: string }
+        - name: date_from
+          in: query
+          schema: { type: string, format: date-time }
+        - name: date_to
+          in: query
+          schema: { type: string, format: date-time }
+        - name: page
+          in: query
+          schema: { type: integer, default: 1, minimum: 1 }
+        - name: per_page
+          in: query
+          schema: { type: integer, default: 50, minimum: 1, maximum: 200 }
+      responses:
+        '200':
+          description: Page of frames
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FramePage' }
+
+  /image/{id}:
+    get:
+      summary: Get frame metadata
+      tags: [Image]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Frame metadata
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Frame' }
+
+  /image/{id}/fits:
+    get:
+      summary: Download the FITS file
+      tags: [Image]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: FITS bytes
+          content:
+            application/fits:
+              schema: { type: string, format: binary }
+
+  /image/{id}/preview:
+    get:
+      summary: Get the server-rendered JPEG preview
+      description: |
+        Stretched JPEG per §65. Stretch parameters configurable via query string.
+      tags: [Image]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: stretch
+          in: query
+          schema: { type: string, enum: [auto, linear, asinh, log] }
+        - name: max_dim
+          in: query
+          schema: { type: integer, default: 1920, minimum: 256, maximum: 4096 }
+      responses:
+        '200':
+          description: JPEG bytes
+          content:
+            image/jpeg:
+              schema: { type: string, format: binary }
+
+# ─── Endpoint group: Log (Phase 9) ────────────────────────────────────────────
+
+  /log:
+    get:
+      summary: Recent log lines
+      tags: [Log]
+      parameters:
+        - name: tail
+          in: query
+          schema: { type: integer, default: 200, minimum: 1, maximum: 10000 }
+        - name: level
+          in: query
+          schema: { type: string, enum: [Debug, Information, Warning, Error] }
+      responses:
+        '200':
+          description: Log lines
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/LogLine' }
+
+# ─── Endpoint group: Stream (Phase 9 — WebSocket) ─────────────────────────────
+# WebSocket endpoints aren't expressible in OpenAPI 3.1 paths; the full
+# wire-level invariants are documented here. See §60.9 for the canonical
+# spec + §60.10 for the event catalog. Independent client implementations
+# can rely on this section being the source of truth.
+#
+# Endpoint: ws://{host}:{port}/api/v1/ws  (NOT /api/v1/stream — common mistake)
+#
+# Upgrade headers:
+#   X-Ara-WS-Version: 1                  (required; mismatched → 426 Upgrade Required)
+#   Sec-WebSocket-Extensions: permessage-deflate  (default; omit to disable compression)
+#
+# Frame size:    1 MB max (REST cap is 64 KB per §60.3; WS is larger to accommodate
+#                batched notifications + resume replay bursts).
+# Compression:   permessage-deflate enabled by default; ~70% savings on JSON traffic.
+# Heartbeat:     server sends a WS ping every 30 s; client must pong within 60 s.
+#                2 consecutive missed pongs → server closes with code 1011
+#                (reason: server_initiated_disconnect_unresponsive_client).
+#                Client should likewise close + trigger §32 reconnect modal if no
+#                server activity (ping OR event) seen for 90 s.
+#
+# Resume protocol: after the WebSocket upgrade completes, the client may send
+# its FIRST message as a JSON resume request:
+#   { "resume_token": "<opaque-string-from-prior-server-state-snapshot>" }
+# Server responds with one of:
+#   { "resumed": true,  "missed_events": <n>, "last_event_id": "<id>" }
+#     → server then immediately replays missed events as normal events
+#   { "resumed": false, "code": "resume_token_expired", "reason": "..." }
+#     → fresh subscription, no replay
+#   { "resumed": false, "code": "resume_token_invalid" }
+#     → client should clear local cursor + reconnect fresh
+# If the client's first message is anything OTHER than a resume request,
+# server treats the connection as fresh (no replay).
+# Resume tokens are issued by REST `GET /api/v1/server/state` and have
+# a 1-hour validity window. After that, fall back to fresh /state rehydrate.
+#
+# Event envelope (every server-sent message):
+#   { "type": "frame.complete",
+#     "ts":   "2026-05-23T19:14:33.123Z",
+#     "id":   "evt-7f3a9b",                # monotonic per server boot
+#     "payload": { ...event-specific... } }
+#
+# Close codes:
+#   1000 — Normal closure (both directions)
+#   1001 — Going away (network change, app backgrounded)
+#   1009 — Frame too large (>1 MB)
+#   1011 — Server-side error / unresponsive client / client_too_slow backpressure
+#   1012 — Service restart imminent (pairs with server.restart_imminent event per §34.7)
+#   4001 — (v0.1.0 only) Auth required / token invalid (remote-access mode per §67.4)
+#   4002 — Resume token expired (client clears local + reconnects with REST snapshot)
+#   4003 — WS protocol version mismatch (X-Ara-WS-Version negotiation failed)
+#   4004 — Single-client policy: another WILMA took over (§27)
+#
+# Backpressure: per-client send buffer limited to 256 messages (§66.2). If exceeded,
+# server closes with code 1011 + reason `client_too_slow`. Client reconnects with
+# resume protocol to catch up.
+#
+# Event catalog (see §60.10 for full schemas):
+#   equipment.state         — connection + per-device runtime state changes
+#   sequence.progress       — frame-completion, target-switch, instruction-step events
+#   frame.complete          — new frame written to library; payload includes preview URL
+#   log.line                — server log emission (filterable per channel subscribe)
+#   notification            — §46 in-app feed entry (info / warning / critical / urgent)
+#   diagnostic.alert        — §51 real-time acquisition diagnostic flag
+#   server.restart_imminent — pairs with 1012 close per §34.7 update flow
+#   operation.{started|progress|complete|failed} — long-running op state from REST 202s
+
+# ─── Reusable parameters + schemas ────────────────────────────────────────────
+
+components:
+
+  parameters:
+    # Cursor pagination per §60.2. Use these on every list endpoint that
+    # paginates. Default limit 50, max 500. cursor is opaque (base64-encoded
+    # JSON internally) — clients echo it back without interpretation.
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, default: 50, minimum: 1, maximum: 500 }
+    Cursor:
+      name: cursor
+      in: query
+      schema: { type: string }
+      description: Opaque pagination cursor returned by a prior response's `next_cursor`. Omit on the first request.
+
+    # Idempotency-Key per §60.5. 24h dedup window.
+    # IdempotencyKey: optional — server processes without dedup if omitted.
+    # IdempotencyKeyRequired: same header but request fails with 400 if missing.
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      schema: { type: string, format: uuid }
+      description: Client-generated UUID. Same key + same body within 24h returns the cached response; same key + different body returns 409 Conflict. Omit to opt out of dedup.
+    IdempotencyKeyRequired:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, format: uuid }
+      description: Required for this endpoint per §60.5. Same semantics as the optional `IdempotencyKey` parameter.
+
+  schemas:
+
+    ServerInfo:
+      type: object
+      required: [server_uuid, nickname, version, api, mdns_service]
+      properties:
+        server_uuid:
+          type: string
+          format: uuid
+          description: Stable identifier for this install (persisted on disk).
+        nickname:
+          type: string
+          description: User-friendly server name (defaults to hostname).
+        version:
+          type: string
+          description: Daemon version (e.g., "0.0.1-ara.1").
+        api:
+          type: string
+          enum: [v1]
+        mdns_service:
+          type: string
+          description: mDNS service type advertised by this daemon.
+          example: _openastroara._tcp.local
+        tier:
+          type: string
+          enum: [scaffold, ready]
+          description: |
+            "scaffold" during Phase 4 (this scaffold only has /healthz +
+            /server/info). Becomes "ready" once Phase 6-9 endpoints land.
+
+    ServerStateSnapshot:
+      type: object
+      description: |
+        Full UI-rehydrate snapshot per §60.4. Called on first connect and after
+        every reconnect. Includes `ws_resume_token` — the cursor clients pass
+        as the first WS message to replay events missed while disconnected
+        (see Stream section above).
+      required: [server_uuid, equipment, sequence, log_tail, ws_resume_token]
+      properties:
+        server_uuid: { type: string, format: uuid }
+        equipment:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/EquipmentState'
+        sequence: { $ref: '#/components/schemas/SequenceState', nullable: true }
+        log_tail:
+          type: array
+          items: { $ref: '#/components/schemas/LogLine' }
+        ws_resume_token:
+          type: string
+          description: Opaque replay cursor for the WebSocket stream. Valid for 1 hour. Despite the name, this is NOT an auth token (ARA has no API auth per §67).
+
+    DeviceType:
+      type: string
+      enum: [camera, telescope, focuser, filter_wheel, rotator, dome, safety_monitor, switch, observing_conditions, cover_calibrator]
+
+    DiscoveredDevice:
+      type: object
+      required: [unique_id, name, type, host_name, ip_address, ip_port, alpaca_device_number]
+      properties:
+        unique_id: { type: string }
+        name: { type: string }
+        type: { $ref: '#/components/schemas/DeviceType' }
+        host_name: { type: string }
+        ip_address: { type: string }
+        ip_port: { type: integer }
+        alpaca_device_number: { type: integer }
+        use_https: { type: boolean, default: false }
+
+    ConnectRequest:
+      type: object
+      description: |
+        Idempotency is handled via the `Idempotency-Key` HEADER (see the shared
+        parameter), not via a body field. Header convention matches the rest
+        of the API surface per §60.5.
+      required: [device]
+      properties:
+        device: { $ref: '#/components/schemas/DiscoveredDevice' }
+
+    EquipmentState:
+      type: object
+      properties:
+        state: { type: string, enum: [disconnected, connecting, connected, error] }
+        device: { $ref: '#/components/schemas/DiscoveredDevice', nullable: true }
+        last_event_at: { type: string, format: date-time, nullable: true }
+
+    SequenceState:
+      type: object
+      properties:
+        loaded: { type: boolean }
+        running: { type: boolean }
+        paused: { type: boolean }
+        current_target: { type: string, nullable: true }
+        current_instruction: { type: string, nullable: true }
+        frames_completed: { type: integer, minimum: 0 }
+        frames_total: { type: integer, minimum: 0 }
+
+    Sequence:
+      type: object
+      description: |
+        Full sequence document. Schema per §38. Phase 7 lands the detailed
+        properties; this stub allows the contract to be referenced today.
+      additionalProperties: true
+
+    Frame:
+      type: object
+      required: [id, target, captured_at, exposure_sec, filter, file_size]
+      properties:
+        id: { type: string }
+        target: { type: string }
+        captured_at: { type: string, format: date-time }
+        exposure_sec: { type: number }
+        filter: { type: string }
+        file_size: { type: integer, minimum: 0 }
+        hfr: { type: number, nullable: true }
+        stars: { type: integer, nullable: true }
+        quality_score: { type: number, nullable: true, description: "§50.10 composite score" }
+
+    FramePage:
+      type: object
+      description: |
+        Cursor-paginated frame list per §60.2. `next_cursor: null` + `has_more: false`
+        means end of results. `total` only present on the first page (request without
+        `cursor` param); computing total over a moving window is expensive and
+        rarely needed once scrolling.
+      required: [items, has_more]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Frame' }
+        next_cursor:
+          type: string
+          nullable: true
+        has_more:
+          type: boolean
+        total:
+          type: integer
+          description: Only included on the first page; subsequent pages omit it.
+
+    LogLine:
+      type: object
+      required: [ts, level, message]
+      properties:
+        ts: { type: string, format: date-time }
+        level: { type: string, enum: [Debug, Information, Warning, Error] }
+        message: { type: string }
+        source: { type: string, nullable: true }
+
+    OperationAccepted:
+      type: object
+      required: [operation_id]
+      properties:
+        operation_id:
+          type: string
+          format: uuid
+          description: Track operation state via WS `operation.*` events.
+
+    Problem:
+      type: object
+      description: |
+        RFC 7807 `application/problem+json` payload per §60.1.
+
+        ARA-specific context lives as TOP-LEVEL extension fields (per RFC 7807 §3.2),
+        not nested under `extensions`. E.g., an `equipment-not-found` problem can
+        include `deviceType` and `knownDevices` at the top level.
+
+        For 422 validation errors, `errors` is a MAP keyed by JSON-pointer path
+        (matching ASP.NET Core's default + the §60.1 contract), not an array of
+        triplets.
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+          format: uri
+          description: |
+            Problem-type URI. e.g., `https://openastro.net/errors/equipment-not-found`.
+            URIs do not need to resolve to a live page in v0.0.1 — they're identifiers.
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string, nullable: true }
+        instance: { type: string, nullable: true }
+        errors:
+          type: object
+          description: |
+            Validation error map: JSON-pointer string → array of error messages.
+            Only present on 422 responses. Example:
+              "/schemaVersion": ["unrecognized version 'foo'"]
+              "/instructions/3/camera_id": ["camera 'cam-abc' not in active profile"]
+          additionalProperties:
+            type: array
+            items: { type: string }
