@@ -14,7 +14,9 @@
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
+using OpenAstroAra.Server.Contracts;
 
 namespace OpenAstroAra.Server.Endpoints;
 
@@ -33,34 +35,108 @@ public static class SystemEndpoints {
     public static IEndpointRouteBuilder MapSystemEndpoints(this IEndpointRouteBuilder app) {
         // ─── Bug report (§54) ───
         var bug = app.MapGroup("/api/v1/bugreport").WithTags("BugReport");
-        bug.MapPost("/prepare", () => NotImplementedStub("POST /api/v1/bugreport/prepare", "§54"));
-        bug.MapGet("/download", () => NotImplementedStub("GET /api/v1/bugreport/download", "§54"));
+
+        bug.MapPost("/prepare", () => NotImplementedStub("POST /api/v1/bugreport/prepare", "§54"))
+           .Produces<BugReportPreparationDto>(StatusCodes.Status202Accepted)
+           .ProducesProblem(StatusCodes.Status501NotImplemented)
+           .WithName("PrepareBugReport");
+
+        bug.MapGet("/download", () => NotImplementedStub("GET /api/v1/bugreport/download", "§54"))
+           .Produces<byte[]>(StatusCodes.Status200OK, "application/zip")
+           .ProducesProblem(StatusCodes.Status404NotFound)
+           .ProducesProblem(StatusCodes.Status501NotImplemented)
+           .WithName("DownloadBugReport");
 
         // ─── Data Manager (§36.2) ───
         var data = app.MapGroup("/api/v1/data-manager").WithTags("DataManager");
-        data.MapGet("/packages", () => NotImplementedStub("GET /api/v1/data-manager/packages", "§36.2"));
-        data.MapPost("/download", () => NotImplementedStub("POST /api/v1/data-manager/download", "§36.2"));
+
+        data.MapGet("/packages", () => NotImplementedStub("GET /api/v1/data-manager/packages", "§36.2"))
+            .Produces<IReadOnlyList<DataPackageDto>>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status501NotImplemented)
+            .WithName("ListDataPackages");
+
+        data.MapPost("/download", ([FromBody] DownloadRequestDto request) =>
+                NotImplementedStub("POST /api/v1/data-manager/download", "§36.2"))
+            .Accepts<DownloadRequestDto>("application/json")
+            .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status501NotImplemented)
+            .WithName("StartDataPackageDownload");
+
         data.MapPost("/cancel/{downloadId:guid}", (Guid downloadId) =>
-            NotImplementedStub("POST /api/v1/data-manager/cancel/{downloadId}", "§36.2"));
+                NotImplementedStub("POST /api/v1/data-manager/cancel/{downloadId}", "§36.2"))
+            .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status501NotImplemented)
+            .WithName("CancelDataPackageDownload");
+
         data.MapDelete("/{packageId}", (string packageId) =>
-            NotImplementedStub("DELETE /api/v1/data-manager/{packageId}", "§36.2"));
-        data.MapGet("/state", () => NotImplementedStub("GET /api/v1/data-manager/state", "§36.2"));
+                NotImplementedStub("DELETE /api/v1/data-manager/{packageId}", "§36.2"))
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status501NotImplemented)
+            .WithName("DeleteDataPackage");
+
+        data.MapGet("/state", () => NotImplementedStub("GET /api/v1/data-manager/state", "§36.2"))
+            .Produces<DataManagerStateDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status501NotImplemented)
+            .WithName("GetDataManagerState");
 
         // ─── Backup (§43) ───
         var backup = app.MapGroup("/api/v1/backup").WithTags("Backup");
-        backup.MapPost("/create-zip", () => NotImplementedStub("POST /api/v1/backup/create-zip", "§43"));
-        backup.MapPost("/restore-zip", () => NotImplementedStub("POST /api/v1/backup/restore-zip", "§43"));
-        backup.MapGet("/snapshots", () => NotImplementedStub("GET /api/v1/backup/snapshots", "§43"));
-        backup.MapGet("/clone-status", () => NotImplementedStub("GET /api/v1/backup/clone-status", "§43"));
+
+        backup.MapPost("/create-zip", () => NotImplementedStub("POST /api/v1/backup/create-zip", "§43"))
+              .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
+              .ProducesProblem(StatusCodes.Status501NotImplemented)
+              .WithName("CreateBackupZip");
+
+        backup.MapPost("/restore-zip", ([FromBody] RestoreRequestDto request) =>
+                NotImplementedStub("POST /api/v1/backup/restore-zip", "§43"))
+            .Accepts<RestoreRequestDto>("application/json")
+            .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
+            .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+            .ProducesProblem(StatusCodes.Status501NotImplemented)
+            .WithName("RestoreBackupZip");
+
+        backup.MapGet("/snapshots", () => NotImplementedStub("GET /api/v1/backup/snapshots", "§43"))
+              .Produces<IReadOnlyList<BackupZipDto>>(StatusCodes.Status200OK)
+              .ProducesProblem(StatusCodes.Status501NotImplemented)
+              .WithName("ListBackupSnapshots");
+
+        backup.MapGet("/clone-status", () => NotImplementedStub("GET /api/v1/backup/clone-status", "§43"))
+              .Produces<System.Text.Json.JsonElement>(StatusCodes.Status200OK)
+              .ProducesProblem(StatusCodes.Status501NotImplemented)
+              .WithName("GetBackupCloneStatus");
 
         // ─── Profile sharing (§70) ───
         var profiles = app.MapGroup("/api/v1/profiles").WithTags("ProfileShare");
+
         profiles.MapPost("/{id:guid}/share-export", (Guid id) =>
-            NotImplementedStub("POST /api/v1/profiles/{id}/share-export", "§70"));
-        profiles.MapPost("/share-import", () => NotImplementedStub("POST /api/v1/profiles/share-import", "§70"));
-        profiles.MapPost("/share-import/commit", () => NotImplementedStub("POST /api/v1/profiles/share-import/commit", "§70"));
+                NotImplementedStub("POST /api/v1/profiles/{id}/share-export", "§70"))
+            .Produces<ProfileShareDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status501NotImplemented)
+            .WithName("ExportProfileShare");
+
+        profiles.MapPost("/share-import", () => NotImplementedStub("POST /api/v1/profiles/share-import", "§70"))
+            .Produces<ProfileShareImportPreviewDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+            .ProducesProblem(StatusCodes.Status501NotImplemented)
+            .WithName("PreviewProfileShareImport");
+
+        profiles.MapPost("/share-import/commit", () =>
+                NotImplementedStub("POST /api/v1/profiles/share-import/commit", "§70"))
+            .Produces<Guid>(StatusCodes.Status201Created)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status501NotImplemented)
+            .WithName("CommitProfileShareImport");
+
         profiles.MapGet("/{id:guid}/sky-data-recommendations", (Guid id) =>
-            NotImplementedStub("GET /api/v1/profiles/{id}/sky-data-recommendations", "§36.2"));
+                NotImplementedStub("GET /api/v1/profiles/{id}/sky-data-recommendations", "§36.2"))
+            .Produces<IReadOnlyList<DataPackageDto>>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status501NotImplemented)
+            .WithName("GetProfileSkyDataRecommendations");
 
         return app;
     }

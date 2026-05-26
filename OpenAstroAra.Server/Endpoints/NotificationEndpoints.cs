@@ -14,7 +14,9 @@
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
+using OpenAstroAra.Server.Contracts;
 
 namespace OpenAstroAra.Server.Endpoints;
 
@@ -33,12 +35,40 @@ public static class NotificationEndpoints {
     public static IEndpointRouteBuilder MapNotificationEndpoints(this IEndpointRouteBuilder app) {
         var notifications = app.MapGroup("/api/v1/notifications").WithTags("Notifications");
 
-        notifications.MapGet("", () => NotImplementedStub("GET /api/v1/notifications", "§46"));
-        notifications.MapPost("/{id:guid}/dismiss", (Guid id) => NotImplementedStub("POST /api/v1/notifications/{id}/dismiss", "§46"));
-        notifications.MapPost("/{id:guid}/mark-read", (Guid id) => NotImplementedStub("POST /api/v1/notifications/{id}/mark-read", "§46"));
+        notifications.MapGet("", () => NotImplementedStub("GET /api/v1/notifications", "§46"))
+                     .Produces<CursorPage<NotificationDto>>(StatusCodes.Status200OK)
+                     .ProducesProblem(StatusCodes.Status501NotImplemented)
+                     .WithName("ListNotifications");
 
-        notifications.MapGet("/preferences", () => NotImplementedStub("GET /api/v1/notifications/preferences", "§46.4"));
-        notifications.MapPut("/preferences", () => NotImplementedStub("PUT /api/v1/notifications/preferences", "§46.4"));
+        notifications.MapPost("/{id:guid}/dismiss",
+                (Guid id, [FromBody] NotificationActionRequestDto request) =>
+                    NotImplementedStub("POST /api/v1/notifications/{id}/dismiss", "§46"))
+            .Accepts<NotificationActionRequestDto>("application/json")
+            .Produces<NotificationDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status501NotImplemented)
+            .WithName("DismissNotification");
+
+        notifications.MapPost("/{id:guid}/mark-read", (Guid id) =>
+                NotImplementedStub("POST /api/v1/notifications/{id}/mark-read", "§46"))
+            .Produces<NotificationDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status501NotImplemented)
+            .WithName("MarkNotificationRead");
+
+        notifications.MapGet("/preferences", () =>
+                NotImplementedStub("GET /api/v1/notifications/preferences", "§46.4"))
+            .Produces<NotificationPreferenceDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status501NotImplemented)
+            .WithName("GetNotificationPreferences");
+
+        notifications.MapPut("/preferences", ([FromBody] NotificationPreferenceDto preferences) =>
+                NotImplementedStub("PUT /api/v1/notifications/preferences", "§46.4"))
+            .Accepts<NotificationPreferenceDto>("application/json")
+            .Produces<NotificationPreferenceDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+            .ProducesProblem(StatusCodes.Status501NotImplemented)
+            .WithName("SetNotificationPreferences");
 
         return app;
     }

@@ -30,13 +30,18 @@ namespace OpenAstroAra.Server.Endpoints;
 /// </summary>
 public static class WebSocketEndpoints {
 
+    /// <summary>Catalog payload returned by GET /api/v1/ws/catalog.</summary>
+    public sealed record WsCatalogResponse(IReadOnlyList<string> Events);
+
     public static IEndpointRouteBuilder MapWebSocketEndpoints(this IEndpointRouteBuilder app) {
         var ws = app.MapGroup("/api/v1/ws").WithTags("WebSocket");
 
         // §60.9.4 — exposes the catalog without requiring a WS upgrade.
         // Lets the WILMA client validate "the daemon advertises this event type"
         // before subscribing.
-        ws.MapGet("/catalog", () => Results.Ok(new { events = WsEventCatalog.All }));
+        ws.MapGet("/catalog", () => Results.Ok(new WsCatalogResponse(WsEventCatalog.All)))
+          .Produces<WsCatalogResponse>(StatusCodes.Status200OK)
+          .WithName("GetWebSocketCatalog");
 
         // Actual WS handler at /api/v1/ws — stubbed at the HTTP layer until
         // app.UseWebSockets() + the IWsBroadcaster impl land. Returns 501
@@ -55,7 +60,10 @@ public static class WebSocketEndpoints {
                 title: "WebSocket upgrade required",
                 statusCode: StatusCodes.Status426UpgradeRequired,
                 detail: "This endpoint serves WebSocket connections only. See §60.9 for the connection protocol (X-Ara-WS-Version: 1, 30s ping / 60s pong, resume protocol with last-seen seq).");
-        });
+        })
+        .ProducesProblem(StatusCodes.Status426UpgradeRequired)
+        .ProducesProblem(StatusCodes.Status501NotImplemented)
+        .WithName("UpgradeToWebSocket");
 
         return app;
     }

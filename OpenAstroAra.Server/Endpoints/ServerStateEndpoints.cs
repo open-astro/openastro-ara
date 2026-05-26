@@ -14,12 +14,15 @@
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
+using OpenAstroAra.Server.Contracts;
 
 namespace OpenAstroAra.Server.Endpoints;
 
 /// <summary>
 /// Phase 9 server-state / lifecycle / log endpoints per PORT_PLAYBOOK.md §10.9.
+/// Every route declares its intended request + response DTOs for WILMA codegen.
 /// </summary>
 public static class ServerStateEndpoints {
 
@@ -33,22 +36,59 @@ public static class ServerStateEndpoints {
     public static IEndpointRouteBuilder MapServerStateEndpoints(this IEndpointRouteBuilder app) {
         var server = app.MapGroup("/api/v1/server").WithTags("Server");
 
-        server.MapGet("/state", () => NotImplementedStub("GET /api/v1/server/state", "§60.4"));
-        server.MapGet("/versions", () => NotImplementedStub("GET /api/v1/server/versions", "§33.2.1"));
-        server.MapGet("/release-notes", () => NotImplementedStub("GET /api/v1/server/release-notes", "§54"));
-        server.MapPost("/restart", () => NotImplementedStub("POST /api/v1/server/restart", "§34.7"));
-        server.MapPost("/restart-on-idle", () => NotImplementedStub("POST /api/v1/server/restart-on-idle", "§34.7"));
+        server.MapGet("/state", () => NotImplementedStub("GET /api/v1/server/state", "§60.4"))
+              .Produces<ServerStateDto>(StatusCodes.Status200OK)
+              .ProducesProblem(StatusCodes.Status501NotImplemented)
+              .WithName("GetServerState");
 
-        // /api/v1/server/info already lives directly in Program.cs (Phase 4 scaffold).
+        server.MapGet("/versions", () => NotImplementedStub("GET /api/v1/server/versions", "§33.2.1"))
+              .Produces<ApiVersionsDto>(StatusCodes.Status200OK)
+              .ProducesProblem(StatusCodes.Status501NotImplemented)
+              .WithName("GetServerVersions");
+
+        server.MapGet("/release-notes", () => NotImplementedStub("GET /api/v1/server/release-notes", "§54"))
+              .Produces<ReleaseNotesDto>(StatusCodes.Status200OK)
+              .ProducesProblem(StatusCodes.Status404NotFound)
+              .ProducesProblem(StatusCodes.Status501NotImplemented)
+              .WithName("GetReleaseNotes");
+
+        server.MapPost("/restart", () => NotImplementedStub("POST /api/v1/server/restart", "§34.7"))
+              .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
+              .ProducesProblem(StatusCodes.Status501NotImplemented)
+              .WithName("RestartServer");
+
+        server.MapPost("/restart-on-idle", () => NotImplementedStub("POST /api/v1/server/restart-on-idle", "§34.7"))
+              .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
+              .ProducesProblem(StatusCodes.Status501NotImplemented)
+              .WithName("RestartServerOnIdle");
 
         // ─── Logs (§29.9) ───
         var logs = server.MapGroup("/logs");
-        logs.MapPost("/rotate", () => NotImplementedStub("POST /api/v1/server/logs/rotate", "§29.9"));
-        logs.MapGet("/download", () => NotImplementedStub("GET /api/v1/server/logs/download", "§29.9"));
-        logs.MapPost("/tail", () => NotImplementedStub("POST /api/v1/server/logs/tail", "§29.9"));
+
+        logs.MapPost("/rotate", () => NotImplementedStub("POST /api/v1/server/logs/rotate", "§29.9"))
+            .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
+            .ProducesProblem(StatusCodes.Status501NotImplemented)
+            .WithName("RotateLogs");
+
+        logs.MapGet("/download", () => NotImplementedStub("GET /api/v1/server/logs/download", "§29.9"))
+            .Produces<byte[]>(StatusCodes.Status200OK, "application/octet-stream")
+            .ProducesProblem(StatusCodes.Status501NotImplemented)
+            .WithName("DownloadLogs");
+
+        logs.MapPost("/tail", ([FromBody] LogTailRequestDto request) =>
+                NotImplementedStub("POST /api/v1/server/logs/tail", "§29.9"))
+            .Accepts<LogTailRequestDto>("application/json")
+            .Produces<IReadOnlyList<LogEntryDto>>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status501NotImplemented)
+            .WithName("TailLogs");
 
         // /readyz (§60.8) — distinct from /healthz which Phase 4 owns.
-        app.MapGet("/readyz", () => NotImplementedStub("GET /readyz", "§60.8"));
+        app.MapGet("/readyz", () => NotImplementedStub("GET /readyz", "§60.8"))
+           .Produces(StatusCodes.Status200OK)
+           .ProducesProblem(StatusCodes.Status503ServiceUnavailable)
+           .ProducesProblem(StatusCodes.Status501NotImplemented)
+           .WithName("ReadinessCheck")
+           .WithTags("Health");
 
         return app;
     }

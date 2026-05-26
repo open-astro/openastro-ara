@@ -15,6 +15,7 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using OpenAstroAra.Server.Contracts;
 
 namespace OpenAstroAra.Server.Endpoints;
 
@@ -33,14 +34,51 @@ public static class StatsEndpoints {
     public static IEndpointRouteBuilder MapStatsEndpoints(this IEndpointRouteBuilder app) {
         var stats = app.MapGroup("/api/v1/stats").WithTags("Stats");
 
-        stats.MapGet("/overview", () => NotImplementedStub("GET /api/v1/stats/overview", "§50"));
-        stats.MapGet("/targets", () => NotImplementedStub("GET /api/v1/stats/targets", "§50"));
-        stats.MapGet("/focus-temp", () => NotImplementedStub("GET /api/v1/stats/focus-temp", "§50"));
-        stats.MapGet("/guiding", () => NotImplementedStub("GET /api/v1/stats/guiding", "§50"));
-        stats.MapGet("/frame-quality", () => NotImplementedStub("GET /api/v1/stats/frame-quality", "§50"));
-        stats.MapGet("/best-frames", () => NotImplementedStub("GET /api/v1/stats/best-frames", "§50"));
-        stats.MapGet("/calendar", () => NotImplementedStub("GET /api/v1/stats/calendar", "§50"));
-        stats.MapGet("/export/csv", () => NotImplementedStub("GET /api/v1/stats/export/csv", "§50.16"));
+        stats.MapGet("/overview", () => NotImplementedStub("GET /api/v1/stats/overview", "§50"))
+             .Produces<StatsOverviewDto>(StatusCodes.Status200OK)
+             .ProducesProblem(StatusCodes.Status501NotImplemented)
+             .WithName("GetStatsOverview");
+
+        stats.MapGet("/targets", () => NotImplementedStub("GET /api/v1/stats/targets", "§50"))
+             .Produces<StatsTargetsDto>(StatusCodes.Status200OK)
+             .ProducesProblem(StatusCodes.Status501NotImplemented)
+             .WithName("GetStatsTargets");
+
+        stats.MapGet("/focus-temp", (DateTimeOffset? since) =>
+                NotImplementedStub("GET /api/v1/stats/focus-temp", "§50"))
+            .Produces<StatsFocusTempDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status501NotImplemented)
+            .WithName("GetStatsFocusTemp");
+
+        stats.MapGet("/guiding", (DateTimeOffset? since) =>
+                NotImplementedStub("GET /api/v1/stats/guiding", "§50"))
+            .Produces<StatsGuidingDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status501NotImplemented)
+            .WithName("GetStatsGuiding");
+
+        stats.MapGet("/frame-quality", (string? filter) =>
+                NotImplementedStub("GET /api/v1/stats/frame-quality", "§50"))
+            .Produces<StatsFrameQualityDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status501NotImplemented)
+            .WithName("GetStatsFrameQuality");
+
+        stats.MapGet("/best-frames", (int? limit) =>
+                NotImplementedStub("GET /api/v1/stats/best-frames", "§50"))
+            .Produces<StatsBestFramesDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status501NotImplemented)
+            .WithName("GetStatsBestFrames");
+
+        stats.MapGet("/calendar", (DateOnly? fromDate, DateOnly? toDate) =>
+                NotImplementedStub("GET /api/v1/stats/calendar", "§50"))
+            .Produces<StatsCalendarDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status501NotImplemented)
+            .WithName("GetStatsCalendar");
+
+        stats.MapGet("/export/csv", (string? scope) =>
+                NotImplementedStub("GET /api/v1/stats/export/csv", "§50.16"))
+            .Produces<byte[]>(StatusCodes.Status200OK, "text/csv")
+            .ProducesProblem(StatusCodes.Status501NotImplemented)
+            .WithName("ExportStatsCsv");
 
         return app;
     }
