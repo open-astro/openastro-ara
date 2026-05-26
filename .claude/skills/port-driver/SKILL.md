@@ -111,7 +111,7 @@ When CR has been rate-limited for >15 min and no real review is forthcoming:
 2. Invoke the built-in `/review` skill via the `Skill` tool with the PR number as arg. This runs a structured self-review against the diff.
 3. Process the findings the same way as CR findings (§3 step 4 table). Fix → commit → push.
 4. After /review is clean (no remaining actionable findings), post a comment on the PR:
-   ```
+   ```text
    CodeRabbit was rate-limited for >15 min. Ran `/review` self-review as the gate per the 2026-05-26 policy update — clean. Proceeding to merge under the §19.1 gate.
    ```
 5. Treat the clean /review as satisfying the "real review" condition of §19.1. Continue to merge.
@@ -151,7 +151,7 @@ When in doubt, prefer folding into the sub-PR — direct pushes to `port/ara` by
 2. Push the branch: `git push -u origin <branch-name>`
 
 3. Open the PR:
-   ```
+   ```shell
    gh pr create --base port/ara --head <branch-name> --title "<conventional-prefix>: <one-line>" --body "$(cat <<'EOF'
    ## Summary
    <1-3 bullets — what + why>
@@ -175,7 +175,7 @@ When in doubt, prefer folding into the sub-PR — direct pushes to `port/ara` by
 1. Re-read PORT_PROGRESS.md "Next" section + the COMMIT-PR-RULES.md table to identify which sub-PR comes next.
 
 2. From `port/ara`:
-   ```
+   ```shell
    git checkout port/ara && git pull --ff-only
    git checkout -b <branch-name>     # flat name, e.g. phase-10, phase-12a
    # NEVER use hierarchical names like port/ara/phase-10 — Git refs are tree-structured,
@@ -198,7 +198,7 @@ When in doubt, prefer folding into the sub-PR — direct pushes to `port/ara` by
 
 1. From `port/ara`: `git tag phase-<N>-complete && git push origin phase-<N>-complete`
 2. Open the promotion PR:
-   ```
+   ```shell
    gh pr create --base master --head port/ara --title "Merge port/ara: Phase <N> (<short-description>)" --body "<summary of what landed>"
    ```
 3. This PR also goes through the CR loop (§3) — same gate, but use `--merge` not `--squash` when merging it (per COMMIT-PR-RULES.md).
@@ -225,12 +225,12 @@ At the **end of every iteration** call `ScheduleWakeup` with the same prompt the
 
 One short paragraph for the user / log:
 
-```
+```text
 [port-driver iter] <UTC timestamp> | phase=<N> branch=<X> pr=<N|none> | did: <verb-phrase> | next: <verb-phrase> | sleep <seconds>s
 ```
 
 Example:
-```
+```text
 [port-driver iter] 2026-05-26T18:42Z | phase=10 branch=phase-10 pr=#43 | did: pushed fix for CR nit on Dockerfile USER directive | next: poll CR for round-2 review | sleep 270s
 ```
 
