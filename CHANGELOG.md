@@ -37,6 +37,7 @@ at the top. This happens in the same commit that pushes the release tag.
 
 ### Added
 - `CHANGELOG.md` at repo root (Keep-a-Changelog format) with backfilled history through `phase-10.5-complete` + the going-forward `[Unreleased]` convention. Convention is reminded by `.claude/skills/port-driver/SKILL.md` step "Open the PR".
+- **Phase 11 scaffold** — Flutter WILMA client at `client/openastroara_client/` (`org.openastro.openastroara`, platforms = macos/windows/linux per §18.G mobile-deferred-to-v0.1.0). Pinned Flutter 3.44.0 via `.flutter-version` + pubspec `environment.flutter`. Runtime deps: dio, web_socket_channel, multicast_dns, riverpod, flutter_riverpod, flutter_secure_storage, file_picker. First-run skeleton: `lib/models/server.dart` (AraServer), `lib/services/server_discovery_service.dart` (mDNS scan `_openastroara._tcp.local`), `lib/services/server_api.dart` (dio /api/v1/server/info handshake), `lib/state/server_state.dart` (Riverpod 3.x Notifier-based providers), `lib/screens/first_run_screen.dart` (discovery list + manual entry + handshake panel), `lib/main.dart` (Material 3 dark theme entry). `flutter analyze` clean.
 
 ---
 
