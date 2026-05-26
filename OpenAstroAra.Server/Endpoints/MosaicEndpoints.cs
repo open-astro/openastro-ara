@@ -14,12 +14,16 @@
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
+using OpenAstroAra.Server.Contracts;
 
 namespace OpenAstroAra.Server.Endpoints;
 
 /// <summary>
 /// Phase 7 mosaic endpoints per PORT_PLAYBOOK.md §10.7 + §47.
+/// Each route declares its intended request + response DTOs so the
+/// generated OpenAPI surface lists the real schemas for WILMA codegen.
 /// </summary>
 public static class MosaicEndpoints {
 
@@ -33,15 +37,43 @@ public static class MosaicEndpoints {
     public static IEndpointRouteBuilder MapMosaicEndpoints(this IEndpointRouteBuilder app) {
         var mosaic = app.MapGroup("/api/v1/mosaics").WithTags("Mosaics");
 
-        mosaic.MapGet("", () => NotImplementedStub("GET /api/v1/mosaics", "§47"));
-        mosaic.MapGet("/{id:guid}", (Guid id) => NotImplementedStub("GET /api/v1/mosaics/{id}", "§47"));
-        mosaic.MapPost("", () => NotImplementedStub("POST /api/v1/mosaics", "§47"));
-        mosaic.MapDelete("/{id:guid}", (Guid id) => NotImplementedStub("DELETE /api/v1/mosaics/{id}", "§47"));
+        mosaic.MapGet("", () => NotImplementedStub("GET /api/v1/mosaics", "§47"))
+              .Produces<CursorPage<MosaicDto>>(StatusCodes.Status200OK)
+              .ProducesProblem(StatusCodes.Status501NotImplemented)
+              .WithName("ListMosaics");
+
+        mosaic.MapGet("/{id:guid}", (Guid id) => NotImplementedStub("GET /api/v1/mosaics/{id}", "§47"))
+              .Produces<MosaicDto>(StatusCodes.Status200OK)
+              .ProducesProblem(StatusCodes.Status404NotFound)
+              .ProducesProblem(StatusCodes.Status501NotImplemented)
+              .WithName("GetMosaic");
+
+        mosaic.MapPost("", ([FromBody] MosaicCreateRequestDto request) => NotImplementedStub("POST /api/v1/mosaics", "§47"))
+              .Accepts<MosaicCreateRequestDto>("application/json")
+              .Produces<MosaicDto>(StatusCodes.Status201Created)
+              .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+              .ProducesProblem(StatusCodes.Status501NotImplemented)
+              .WithName("CreateMosaic");
+
+        mosaic.MapDelete("/{id:guid}", (Guid id) => NotImplementedStub("DELETE /api/v1/mosaics/{id}", "§47"))
+              .Produces(StatusCodes.Status204NoContent)
+              .ProducesProblem(StatusCodes.Status404NotFound)
+              .ProducesProblem(StatusCodes.Status501NotImplemented)
+              .WithName("DeleteMosaic");
 
         mosaic.MapGet("/{id:guid}/panels", (Guid id) =>
-            NotImplementedStub("GET /api/v1/mosaics/{id}/panels", "§47"));
+                NotImplementedStub("GET /api/v1/mosaics/{id}/panels", "§47"))
+            .Produces<IReadOnlyList<MosaicPanelDto>>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status501NotImplemented)
+            .WithName("GetMosaicPanels");
+
         mosaic.MapGet("/{id:guid}/progress", (Guid id) =>
-            NotImplementedStub("GET /api/v1/mosaics/{id}/progress", "§47"));
+                NotImplementedStub("GET /api/v1/mosaics/{id}/progress", "§47"))
+            .Produces<MosaicProgressDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status501NotImplemented)
+            .WithName("GetMosaicProgress");
 
         return app;
     }

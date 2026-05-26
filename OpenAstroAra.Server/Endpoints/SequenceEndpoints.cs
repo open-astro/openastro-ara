@@ -14,6 +14,7 @@
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using OpenAstroAra.Server.Contracts;
 
@@ -22,10 +23,12 @@ namespace OpenAstroAra.Server.Endpoints;
 /// <summary>
 /// Phase 7 sequence-endpoint registration per PORT_PLAYBOOK.md §10.7.
 ///
-/// All endpoints return 501 NotImplemented stubs with an RFC 7807 Problem
-/// body until the corresponding service implementations land. The endpoint
-/// surface is registered so OpenAPI/codegen can target it today; impls
-/// follow incrementally as the §38 sequencer engine is brought across.
+/// All handlers return 501 NotImplemented stubs with an RFC 7807 Problem
+/// body until the corresponding service implementations land. Each route
+/// declares its intended request + response DTOs via the .Accepts<T>() /
+/// .Produces<T>() / .ProducesProblem() helpers so the generated OpenAPI
+/// surface lists the real schemas — WILMA client codegen can target the
+/// full Phase 7 contract today even though every handler is a stub.
 /// </summary>
 public static class SequenceEndpoints {
 
@@ -40,35 +43,120 @@ public static class SequenceEndpoints {
         var seq = app.MapGroup("/api/v1/sequences").WithTags("Sequences");
 
         // CRUD
-        seq.MapGet("", () => NotImplementedStub("GET /api/v1/sequences", "§38"));
-        seq.MapGet("/{id:guid}", (Guid id) => NotImplementedStub("GET /api/v1/sequences/{id}", "§38"));
-        seq.MapPost("", () => NotImplementedStub("POST /api/v1/sequences", "§38"));
-        seq.MapPut("/{id:guid}", (Guid id) => NotImplementedStub("PUT /api/v1/sequences/{id}", "§38"));
-        seq.MapDelete("/{id:guid}", (Guid id) => NotImplementedStub("DELETE /api/v1/sequences/{id}", "§38"));
+        seq.MapGet("", () => NotImplementedStub("GET /api/v1/sequences", "§38"))
+           .Produces<CursorPage<SequenceListItemDto>>(StatusCodes.Status200OK)
+           .ProducesProblem(StatusCodes.Status501NotImplemented)
+           .WithName("ListSequences");
+
+        seq.MapGet("/{id:guid}", (Guid id) => NotImplementedStub("GET /api/v1/sequences/{id}", "§38"))
+           .Produces<SequenceDto>(StatusCodes.Status200OK)
+           .ProducesProblem(StatusCodes.Status404NotFound)
+           .ProducesProblem(StatusCodes.Status501NotImplemented)
+           .WithName("GetSequence");
+
+        seq.MapPost("", ([FromBody] SequenceCreateRequestDto request) => NotImplementedStub("POST /api/v1/sequences", "§38"))
+           .Accepts<SequenceCreateRequestDto>("application/json")
+           .Produces<SequenceDto>(StatusCodes.Status201Created)
+           .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+           .ProducesProblem(StatusCodes.Status501NotImplemented)
+           .WithName("CreateSequence");
+
+        // PATCH (not PUT) because the partial-update semantics — only supplied
+        // fields are touched — don't match REST's full-replacement PUT contract.
+        // See SequenceUpdateRequestDto XML doc.
+        seq.MapPatch("/{id:guid}", (Guid id, [FromBody] SequenceUpdateRequestDto request) =>
+                NotImplementedStub("PATCH /api/v1/sequences/{id}", "§38"))
+           .Accepts<SequenceUpdateRequestDto>("application/json")
+           .Produces<SequenceDto>(StatusCodes.Status200OK)
+           .ProducesProblem(StatusCodes.Status404NotFound)
+           .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+           .ProducesProblem(StatusCodes.Status501NotImplemented)
+           .WithName("UpdateSequence");
+
+        seq.MapDelete("/{id:guid}", (Guid id) => NotImplementedStub("DELETE /api/v1/sequences/{id}", "§38"))
+           .Produces(StatusCodes.Status204NoContent)
+           .ProducesProblem(StatusCodes.Status404NotFound)
+           .ProducesProblem(StatusCodes.Status501NotImplemented)
+           .WithName("DeleteSequence");
 
         // Lifecycle
-        seq.MapGet("/{id:guid}/state", (Guid id) => NotImplementedStub("GET /api/v1/sequences/{id}/state", "§28.12"));
-        seq.MapPost("/{id:guid}/start", (Guid id) => NotImplementedStub("POST /api/v1/sequences/{id}/start", "§28"));
-        seq.MapPost("/{id:guid}/pause", (Guid id) => NotImplementedStub("POST /api/v1/sequences/{id}/pause", "§28.12"));
-        seq.MapPost("/{id:guid}/resume", (Guid id) => NotImplementedStub("POST /api/v1/sequences/{id}/resume", "§28.12"));
-        seq.MapPost("/{id:guid}/abort", (Guid id) => NotImplementedStub("POST /api/v1/sequences/{id}/abort", "§28"));
-        seq.MapPost("/{id:guid}/stop", (Guid id) => NotImplementedStub("POST /api/v1/sequences/{id}/stop", "§28"));
+        seq.MapGet("/{id:guid}/state", (Guid id) => NotImplementedStub("GET /api/v1/sequences/{id}/state", "§28.12"))
+           .Produces<SequenceRunStateDto>(StatusCodes.Status200OK)
+           .ProducesProblem(StatusCodes.Status404NotFound)
+           .ProducesProblem(StatusCodes.Status501NotImplemented)
+           .WithName("GetSequenceState");
+
+        seq.MapPost("/{id:guid}/start", (Guid id, [FromBody] SequenceStartRequestDto request) =>
+                NotImplementedStub("POST /api/v1/sequences/{id}/start", "§28"))
+           .Accepts<SequenceStartRequestDto>("application/json")
+           .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
+           .ProducesProblem(StatusCodes.Status409Conflict)
+           .ProducesProblem(StatusCodes.Status501NotImplemented)
+           .WithName("StartSequence");
+
+        seq.MapPost("/{id:guid}/pause", (Guid id) => NotImplementedStub("POST /api/v1/sequences/{id}/pause", "§28.12"))
+           .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
+           .ProducesProblem(StatusCodes.Status409Conflict)
+           .ProducesProblem(StatusCodes.Status501NotImplemented)
+           .WithName("PauseSequence");
+
+        seq.MapPost("/{id:guid}/resume", (Guid id) => NotImplementedStub("POST /api/v1/sequences/{id}/resume", "§28.12"))
+           .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
+           .ProducesProblem(StatusCodes.Status409Conflict)
+           .ProducesProblem(StatusCodes.Status501NotImplemented)
+           .WithName("ResumeSequence");
+
+        seq.MapPost("/{id:guid}/abort", (Guid id) => NotImplementedStub("POST /api/v1/sequences/{id}/abort", "§28"))
+           .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
+           .ProducesProblem(StatusCodes.Status501NotImplemented)
+           .WithName("AbortSequence");
+
+        seq.MapPost("/{id:guid}/stop", (Guid id) => NotImplementedStub("POST /api/v1/sequences/{id}/stop", "§28"))
+           .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
+           .ProducesProblem(StatusCodes.Status501NotImplemented)
+           .WithName("StopSequence");
 
         // Templates (§38.6, §38.7)
-        seq.MapGet("/templates", () => NotImplementedStub("GET /api/v1/sequences/templates", "§38.6"));
-        seq.MapPost("/templates/{name}/instantiate", (string name) =>
-            NotImplementedStub("POST /api/v1/sequences/templates/{name}/instantiate", "§38.6"));
+        seq.MapGet("/templates", () => NotImplementedStub("GET /api/v1/sequences/templates", "§38.6"))
+           .Produces<IReadOnlyList<SequenceTemplateDto>>(StatusCodes.Status200OK)
+           .ProducesProblem(StatusCodes.Status501NotImplemented)
+           .WithName("ListSequenceTemplates");
+
+        seq.MapPost("/templates/{name}/instantiate",
+                (string name, [FromBody] TemplateInstantiateRequestDto request) =>
+                    NotImplementedStub("POST /api/v1/sequences/templates/{name}/instantiate", "§38.6"))
+           .Accepts<TemplateInstantiateRequestDto>("application/json")
+           .Produces<SequenceDto>(StatusCodes.Status201Created)
+           .ProducesProblem(StatusCodes.Status404NotFound)
+           .ProducesProblem(StatusCodes.Status501NotImplemented)
+           .WithName("InstantiateSequenceTemplate");
 
         // NINA import (§38.4)
-        seq.MapPost("/import", () => NotImplementedStub("POST /api/v1/sequences/import", "§38.4"));
+        seq.MapPost("/import", ([FromBody] SequenceImportRequestDto request) =>
+                NotImplementedStub("POST /api/v1/sequences/import", "§38.4"))
+           .Accepts<SequenceImportRequestDto>("application/json")
+           .Produces<SequenceImportResultDto>(StatusCodes.Status201Created)
+           .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+           .ProducesProblem(StatusCodes.Status501NotImplemented)
+           .WithName("ImportNinaSequence");
 
         // Sharing (§70)
         seq.MapPost("/{id:guid}/share-export", (Guid id) =>
-            NotImplementedStub("POST /api/v1/sequences/{id}/share-export", "§70"));
+                NotImplementedStub("POST /api/v1/sequences/{id}/share-export", "§70"))
+           .Produces<SequenceShareDto>(StatusCodes.Status200OK)
+           .ProducesProblem(StatusCodes.Status404NotFound)
+           .ProducesProblem(StatusCodes.Status501NotImplemented)
+           .WithName("ShareExportSequence");
 
         // Auto-flats decision (§48)
-        seq.MapPost("/{id:guid}/auto-flats-decision", (Guid id) =>
-            NotImplementedStub("POST /api/v1/sequences/{id}/auto-flats-decision", "§48"));
+        seq.MapPost("/{id:guid}/auto-flats-decision",
+                (Guid id, [FromBody] AutoFlatsDecisionRequestDto request) =>
+                    NotImplementedStub("POST /api/v1/sequences/{id}/auto-flats-decision", "§48"))
+           .Accepts<AutoFlatsDecisionRequestDto>("application/json")
+           .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
+           .ProducesProblem(StatusCodes.Status404NotFound)
+           .ProducesProblem(StatusCodes.Status501NotImplemented)
+           .WithName("DecideAutoFlats");
 
         return app;
     }

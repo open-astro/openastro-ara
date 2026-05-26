@@ -14,12 +14,16 @@
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
+using OpenAstroAra.Server.Contracts;
 
 namespace OpenAstroAra.Server.Endpoints;
 
 /// <summary>
 /// Phase 7 calibration endpoints per PORT_PLAYBOOK.md §10.7 + §39.
+/// Each route declares its intended request + response DTOs so the
+/// generated OpenAPI surface lists the real schemas for WILMA codegen.
 /// </summary>
 public static class CalibrationEndpoints {
 
@@ -34,19 +38,46 @@ public static class CalibrationEndpoints {
         var calibration = app.MapGroup("/api/v1/calibration").WithTags("Calibration");
 
         // Session lookup (§39)
-        calibration.MapGet("/sessions", () => NotImplementedStub("GET /api/v1/calibration/sessions", "§39"));
+        calibration.MapGet("/sessions", () => NotImplementedStub("GET /api/v1/calibration/sessions", "§39"))
+                   .Produces<CursorPage<CalibrationSessionDto>>(StatusCodes.Status200OK)
+                   .ProducesProblem(StatusCodes.Status501NotImplemented)
+                   .WithName("ListCalibrationSessions");
+
         calibration.MapGet("/sessions/{id:guid}", (Guid id) =>
-            NotImplementedStub("GET /api/v1/calibration/sessions/{id}", "§39"));
-        calibration.MapPost("/sessions/{id:guid}/matching-flats", (Guid id) =>
-            NotImplementedStub("POST /api/v1/calibration/sessions/{id}/matching-flats", "§39"));
+                NotImplementedStub("GET /api/v1/calibration/sessions/{id}", "§39"))
+            .Produces<CalibrationSessionDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status501NotImplemented)
+            .WithName("GetCalibrationSession");
+
+        calibration.MapPost("/sessions/{id:guid}/matching-flats",
+                (Guid id, [FromBody] MatchingFlatsRequestDto request) =>
+                    NotImplementedStub("POST /api/v1/calibration/sessions/{id}/matching-flats", "§39"))
+            .Accepts<MatchingFlatsRequestDto>("application/json")
+            .Produces<GeneratedFlatSequenceDto>(StatusCodes.Status201Created)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status501NotImplemented)
+            .WithName("GenerateMatchingFlats");
 
         // Dark library (§39, §63)
-        calibration.MapPost("/dark-library/build", () =>
-            NotImplementedStub("POST /api/v1/calibration/dark-library/build", "§39"));
+        calibration.MapPost("/dark-library/build", ([FromBody] DarkLibraryBuildRequestDto request) =>
+                NotImplementedStub("POST /api/v1/calibration/dark-library/build", "§39"))
+            .Accepts<DarkLibraryBuildRequestDto>("application/json")
+            .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
+            .ProducesProblem(StatusCodes.Status501NotImplemented)
+            .WithName("BuildDarkLibrary");
+
         calibration.MapGet("/dark-library/status", () =>
-            NotImplementedStub("GET /api/v1/calibration/dark-library/status", "§39"));
+                NotImplementedStub("GET /api/v1/calibration/dark-library/status", "§39"))
+            .Produces<DarkLibraryStateDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status501NotImplemented)
+            .WithName("GetDarkLibraryStatus");
+
         calibration.MapGet("/dark-library/list", () =>
-            NotImplementedStub("GET /api/v1/calibration/dark-library/list", "§39"));
+                NotImplementedStub("GET /api/v1/calibration/dark-library/list", "§39"))
+            .Produces<IReadOnlyList<DarkLibraryEntryDto>>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status501NotImplemented)
+            .WithName("ListDarkLibraryEntries");
 
         return app;
     }

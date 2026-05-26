@@ -67,7 +67,13 @@ public sealed record SequenceCreateRequestDto(
     System.Text.Json.JsonElement Body,
     string? TemplateOrigin);
 
-/// <summary>PUT /api/v1/sequences/{id} body. Name + Description nullable so partial updates patch.</summary>
+/// <summary>
+/// PATCH /api/v1/sequences/{id} body. All fields nullable — only supplied
+/// fields are updated. Route uses PATCH (not PUT) because the partial-update
+/// semantics don't match REST PUT's "full replacement" contract. A PUT here
+/// would require sending the full <see cref="SequenceDto.Body"/> (potentially
+/// MB-sized JSON DOM) just to rename a sequence.
+/// </summary>
 public sealed record SequenceUpdateRequestDto(
     string? Name,
     string? Description,
