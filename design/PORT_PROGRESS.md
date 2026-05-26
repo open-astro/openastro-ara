@@ -104,7 +104,6 @@ Folded into Phase 0.5p (global.json + csproj target framework bumps).
 
 ## Next
 
-- **Phase 10** — Linux smoke test. Cross-platform publish gate already verified locally on macOS (non-AOT, both `linux-arm64` + `linux-x64` ELF produced). Next steps: write the `Dockerfile` per §11.2, add the publish step to CI, optionally run on a real Pi if available. AOT cross-compile from macOS blocked on missing `objcopy`/clang-aarch64 toolchain; CI Linux runners will handle AOT.
 - **Phase 11** — Flutter WILMA client scaffold + first-run flow + server discovery + handshake. Generates Dart client from `OpenAstroAra.Server/openapi.yaml` via `openapi_generator` per §12.1.
 - **Phase 12-13** — Flutter views (app shell, all main tabs) + image preview pipeline end-to-end.
 - **Phase 14** — Tests + GitHub Actions CI matrix.
