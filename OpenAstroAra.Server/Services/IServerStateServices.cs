@@ -1,0 +1,109 @@
+#region "copyright"
+
+/*
+    Copyright (c) 2026 Open Astro and the OpenAstro Ara contributors
+
+    This file is part of OpenAstro Ara (forked from N.I.N.A.).
+
+    This Source Code Form is subject to the terms of the Mozilla Public
+    License, v. 2.0. If a copy of the MPL was not distributed with this
+    file, You can obtain one at http://mozilla.org/MPL/2.0/.
+*/
+
+#endregion "copyright"
+
+using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Contracts.WsEvents;
+
+namespace OpenAstroAra.Server.Services;
+
+// ────────────────────────────────────────────────────────────────────────────
+// Phase 9 service interfaces per PORT_PLAYBOOK.md §8.1.
+// ────────────────────────────────────────────────────────────────────────────
+
+/// <summary>State snapshot + lifecycle (§60.4, §34.7).</summary>
+public interface IServerStateService {
+    Task<ServerStateDto> GetSnapshotAsync(CancellationToken ct);
+    Task<ApiVersionsDto> GetVersionsAsync(CancellationToken ct);
+    Task<ReleaseNotesDto?> GetReleaseNotesAsync(string? version, CancellationToken ct);
+    Task<OperationAcceptedDto> RestartAsync(string reason, string? idempotencyKey, CancellationToken ct);
+    Task<OperationAcceptedDto> RestartOnIdleAsync(string reason, string? idempotencyKey, CancellationToken ct);
+}
+
+/// <summary>Log endpoints (§29.9).</summary>
+public interface ILogService {
+    Task<OperationAcceptedDto> RotateAsync(string? idempotencyKey, CancellationToken ct);
+    Task<(Stream Stream, string FileName)?> OpenDownloadAsync(string? logFileName, CancellationToken ct);
+    Task<IReadOnlyList<LogEntryDto>> TailAsync(LogTailRequestDto request, CancellationToken ct);
+}
+
+/// <summary>Notifications (§46, §35.5).</summary>
+public interface INotificationService {
+    Task<CursorPage<NotificationDto>> ListAsync(int limit, string? cursor, bool? unreadOnly, CancellationToken ct);
+    Task<NotificationDto?> DismissAsync(Guid id, NotificationActionRequestDto request, CancellationToken ct);
+    Task<NotificationDto?> MarkReadAsync(Guid id, CancellationToken ct);
+    Task<NotificationPreferenceDto> GetPreferencesAsync(CancellationToken ct);
+    Task<NotificationPreferenceDto> SetPreferencesAsync(NotificationPreferenceDto preferences, CancellationToken ct);
+}
+
+/// <summary>Stats (§50). Per-view methods so an AOT-friendly switch picks the right serializer.</summary>
+public interface IStatsService {
+    Task<StatsOverviewDto> GetOverviewAsync(CancellationToken ct);
+    Task<StatsTargetsDto> GetTargetsAsync(CancellationToken ct);
+    Task<StatsFocusTempDto> GetFocusTempAsync(DateTimeOffset? since, CancellationToken ct);
+    Task<StatsGuidingDto> GetGuidingAsync(DateTimeOffset? since, CancellationToken ct);
+    Task<StatsFrameQualityDto> GetFrameQualityAsync(string? filter, CancellationToken ct);
+    Task<StatsBestFramesDto> GetBestFramesAsync(int limit, CancellationToken ct);
+    Task<StatsCalendarDto> GetCalendarAsync(DateOnly fromDate, DateOnly toDate, CancellationToken ct);
+    Task<(Stream Stream, string FileName)?> OpenCsvExportAsync(string scope, CancellationToken ct);
+}
+
+/// <summary>Bug-report bundle preparation (§54).</summary>
+public interface IBugReportService {
+    Task<BugReportPreparationDto> PrepareAsync(string? idempotencyKey, CancellationToken ct);
+    Task<(Stream Stream, string FileName)?> OpenDownloadAsync(Guid preparationId, CancellationToken ct);
+}
+
+/// <summary>Data Manager (§36.2).</summary>
+public interface IDataManagerService {
+    Task<IReadOnlyList<DataPackageDto>> ListPackagesAsync(CancellationToken ct);
+    Task<OperationAcceptedDto> DownloadAsync(DownloadRequestDto request, string? idempotencyKey, CancellationToken ct);
+    Task<OperationAcceptedDto> CancelAsync(Guid downloadId, CancellationToken ct);
+    Task<bool> DeleteAsync(string packageId, CancellationToken ct);
+    Task<DataManagerStateDto> GetStateAsync(CancellationToken ct);
+}
+
+/// <summary>Backup (§43).</summary>
+public interface IBackupService {
+    Task<OperationAcceptedDto> CreateZipAsync(string? idempotencyKey, CancellationToken ct);
+    Task<OperationAcceptedDto> RestoreZipAsync(RestoreRequestDto request, string? idempotencyKey, CancellationToken ct);
+    Task<IReadOnlyList<BackupZipDto>> ListSnapshotsAsync(CancellationToken ct);
+    Task<System.Text.Json.JsonElement> GetCloneStatusAsync(CancellationToken ct);
+}
+
+/// <summary>Profile sharing (§70).</summary>
+public interface IProfileShareService {
+    Task<ProfileShareDto> ExportAsync(Guid profileId, CancellationToken ct);
+    Task<ProfileShareImportPreviewDto> ImportPreviewAsync(System.Text.Json.JsonElement manifest, CancellationToken ct);
+    Task<Guid> ImportCommitAsync(Guid importToken, CancellationToken ct);
+}
+
+/// <summary>
+/// WebSocket broadcaster (§60.9). Singleton; called by every service that
+/// publishes an event. Sequence numbers are server-assigned + monotonic.
+/// </summary>
+public interface IWsBroadcaster {
+    Task PublishAsync(string eventType, System.Text.Json.JsonElement payload, CancellationToken ct);
+    long CurrentSequence { get; }
+}
+
+/// <summary>
+/// Buffered event channel feeding <see cref="IWsBroadcaster"/>. Bounded so
+/// fast emitters don't drown the consumer; backpressure surfaces as a
+/// <c>backup.stream.backpressure</c> event when buffers approach capacity.
+/// </summary>
+public interface IWsEventChannel {
+    Task EnqueueAsync(WsEventEnvelopeDto envelope, CancellationToken ct);
+    IAsyncEnumerable<WsEventEnvelopeDto> ReadAllAsync(CancellationToken ct);
+    Task<IReadOnlyList<WsEventEnvelopeDto>> ResumeFromAsync(long lastSeenSeq, CancellationToken ct);
+}
