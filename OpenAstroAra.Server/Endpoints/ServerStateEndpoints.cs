@@ -46,11 +46,12 @@ public static class ServerStateEndpoints {
               .ProducesProblem(StatusCodes.Status501NotImplemented)
               .WithName("GetServerVersions");
 
-        server.MapGet("/release-notes", () => NotImplementedStub("GET /api/v1/server/release-notes", "§54"))
-              .Produces<ReleaseNotesDto>(StatusCodes.Status200OK)
-              .ProducesProblem(StatusCodes.Status404NotFound)
-              .ProducesProblem(StatusCodes.Status501NotImplemented)
-              .WithName("GetReleaseNotes");
+        server.MapGet("/release-notes",
+                (string? version) => NotImplementedStub("GET /api/v1/server/release-notes", "§54"))
+            .Produces<ReleaseNotesDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status501NotImplemented)
+            .WithName("GetReleaseNotes");
 
         server.MapPost("/restart", () => NotImplementedStub("POST /api/v1/server/restart", "§34.7"))
               .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
@@ -70,8 +71,10 @@ public static class ServerStateEndpoints {
             .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("RotateLogs");
 
-        logs.MapGet("/download", () => NotImplementedStub("GET /api/v1/server/logs/download", "§29.9"))
+        logs.MapGet("/download",
+                (string? logFileName) => NotImplementedStub("GET /api/v1/server/logs/download", "§29.9"))
             .Produces<byte[]>(StatusCodes.Status200OK, "application/octet-stream")
+            .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("DownloadLogs");
 

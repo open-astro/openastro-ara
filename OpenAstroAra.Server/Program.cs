@@ -73,8 +73,13 @@ public class Program {
             return Results.Text("ok", contentType: "text/plain");
         });
 
-        // Phase 9 endpoint groups (501 stubs except /api/v1/ws/catalog and
-        // /api/v1/server/info which are functional today).
+        // Phase 7 endpoint groups (501 stubs until service implementations land).
+        app.MapSequenceEndpoints();
+        app.MapCalibrationEndpoints();
+        app.MapMosaicEndpoints();
+
+        // Phase 9 endpoint groups (501 stubs except /api/v1/ws/catalog which is
+        // functional today). /api/v1/server/info already lives directly in this file.
         app.MapServerStateEndpoints();
         app.MapNotificationEndpoints();
         app.MapStatsEndpoints();

@@ -35,10 +35,12 @@ public static class NotificationEndpoints {
     public static IEndpointRouteBuilder MapNotificationEndpoints(this IEndpointRouteBuilder app) {
         var notifications = app.MapGroup("/api/v1/notifications").WithTags("Notifications");
 
-        notifications.MapGet("", () => NotImplementedStub("GET /api/v1/notifications", "§46"))
-                     .Produces<CursorPage<NotificationDto>>(StatusCodes.Status200OK)
-                     .ProducesProblem(StatusCodes.Status501NotImplemented)
-                     .WithName("ListNotifications");
+        notifications.MapGet("",
+                (int? limit, string? cursor, bool? unreadOnly) =>
+                    NotImplementedStub("GET /api/v1/notifications", "§46"))
+            .Produces<CursorPage<NotificationDto>>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status501NotImplemented)
+            .WithName("ListNotifications");
 
         notifications.MapPost("/{id:guid}/dismiss",
                 (Guid id, [FromBody] NotificationActionRequestDto request) =>

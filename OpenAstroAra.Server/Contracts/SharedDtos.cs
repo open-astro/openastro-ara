@@ -15,7 +15,8 @@
 namespace OpenAstroAra.Server.Contracts;
 
 // ────────────────────────────────────────────────────────────────────────────
-// Cross-cutting DTOs reused across phases. First introduced in Phase 7.
+// Cross-cutting DTOs used by multiple endpoint groups. Created in Phase 7
+// (sequence + calibration + mosaic scaffold) and reused from Phase 8 onward.
 // ────────────────────────────────────────────────────────────────────────────
 
 /// <summary>
@@ -27,7 +28,9 @@ public sealed record CursorPage<T>(
     bool HasMore);
 
 /// <summary>
-/// Long-running operation acceptance envelope per §60.5.
+/// Long-running operation acceptance envelope per §60.5. Server returns 202 + this
+/// payload; client subscribes to <c>operation.{op_id}</c> events on the WebSocket
+/// channel for progress + terminal status.
 /// </summary>
 public sealed record OperationAcceptedDto(
     Guid OperationId,

@@ -55,6 +55,10 @@ public static class WebSocketEndpoints {
                     statusCode: StatusCodes.Status501NotImplemented,
                     detail: "The /api/v1/ws upgrade is registered but the broadcaster + event channel are not yet running. WS goes live with Phase 9 service implementations.");
             }
+            // Per RFC 7231 §6.5.15, 426 responses must include hop-by-hop Upgrade
+            // + Connection headers so the client knows which protocol to switch to.
+            http.Response.Headers.Upgrade = "websocket";
+            http.Response.Headers.Connection = "Upgrade";
             return Results.Problem(
                 type: "https://openastro.net/errors/upgrade-required",
                 title: "WebSocket upgrade required",

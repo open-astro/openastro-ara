@@ -41,11 +41,12 @@ public static class SystemEndpoints {
            .ProducesProblem(StatusCodes.Status501NotImplemented)
            .WithName("PrepareBugReport");
 
-        bug.MapGet("/download", () => NotImplementedStub("GET /api/v1/bugreport/download", "§54"))
-           .Produces<byte[]>(StatusCodes.Status200OK, "application/zip")
-           .ProducesProblem(StatusCodes.Status404NotFound)
-           .ProducesProblem(StatusCodes.Status501NotImplemented)
-           .WithName("DownloadBugReport");
+        bug.MapGet("/download",
+                (Guid preparationId) => NotImplementedStub("GET /api/v1/bugreport/download", "§54"))
+            .Produces<byte[]>(StatusCodes.Status200OK, "application/zip")
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status501NotImplemented)
+            .WithName("DownloadBugReport");
 
         // ─── Data Manager (§36.2) ───
         var data = app.MapGroup("/api/v1/data-manager").WithTags("DataManager");
@@ -118,14 +119,18 @@ public static class SystemEndpoints {
             .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("ExportProfileShare");
 
-        profiles.MapPost("/share-import", () => NotImplementedStub("POST /api/v1/profiles/share-import", "§70"))
+        profiles.MapPost("/share-import",
+                ([FromBody] System.Text.Json.JsonElement manifest) =>
+                    NotImplementedStub("POST /api/v1/profiles/share-import", "§70"))
+            .Accepts<System.Text.Json.JsonElement>("application/json")
             .Produces<ProfileShareImportPreviewDto>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
             .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("PreviewProfileShareImport");
 
-        profiles.MapPost("/share-import/commit", () =>
-                NotImplementedStub("POST /api/v1/profiles/share-import/commit", "§70"))
+        profiles.MapPost("/share-import/commit",
+                (Guid importToken) =>
+                    NotImplementedStub("POST /api/v1/profiles/share-import/commit", "§70"))
             .Produces<Guid>(StatusCodes.Status201Created)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status501NotImplemented)
