@@ -80,6 +80,9 @@ public sealed class AlpacaEquipmentDiscoveryService : IEquipmentDiscoveryService
         Contracts.DeviceType.Switch => DeviceTypes.Switch,
         Contracts.DeviceType.ObservingConditions => DeviceTypes.ObservingConditions,
         Contracts.DeviceType.CoverCalibrator => DeviceTypes.CoverCalibrator,
+        // FlatDevice is a NINA UX-facing concept that maps to Alpaca's CoverCalibrator.
+        // See DeviceType XML doc; both tokens are kept for client clarity.
+        Contracts.DeviceType.FlatDevice => DeviceTypes.CoverCalibrator,
         Contracts.DeviceType.Guider => throw new ArgumentException(
             "Guider (PHD2) is not an Alpaca device; use IGuiderService.ConnectAsync instead.", nameof(t)),
         _ => throw new ArgumentOutOfRangeException(nameof(t), t, "Unknown device type")

@@ -19,6 +19,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Scalar.AspNetCore;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using OpenAstroAra.Server.Endpoints;
 using OpenAstroAra.Server.Services;
 
@@ -50,6 +52,17 @@ public class Program {
 
         builder.Services.AddOpenApi();
 
+        // §60.6 — enums on the wire serialize as all-lowercase strings (no
+        // separators) so the OpenAPI DeviceType token set (`filterwheel`,
+        // `covercalibrator`) matches both the URL path parameter and the JSON
+        // payload field, and other enums (FrameType etc.) follow the same
+        // convention. Properties use snake_case (standard JSON convention).
+        builder.Services.ConfigureHttpJsonOptions(opts => {
+            opts.SerializerOptions.Converters.Add(
+                new JsonStringEnumConverter(LowerCaseNamingPolicy.Instance));
+            opts.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower;
+        });
+
         // §8.1 DI registrations.
         // Phase 6 (this block): equipment services — IEquipmentDiscoveryService
         // implemented; per-device services (ICameraService etc.) declared but
@@ -78,6 +91,15 @@ public class Program {
         // Phase 6 equipment endpoints (501 stubs except discovery).
         app.MapEquipmentEndpoints();
 
+        // Phase 7 endpoint groups (501 stubs until service implementations land).
+        app.MapSequenceEndpoints();
+        app.MapCalibrationEndpoints();
+        app.MapMosaicEndpoints();
+
+        // Phase 8 endpoint groups (501 stubs until service implementations land).
+        app.MapImageEndpoints();
+        app.MapDiagnosticsEndpoints();
+
         // §60 meta endpoint — server identification + capabilities.
         // Lightweight identity payload per the playbook contract: server_uuid (stable per
         // install), nickname (user-set in profile, defaults to hostname), version, api,
@@ -104,6 +126,16 @@ public class Program {
     /// Range-validates the result; invalid values fall back to the default so a
     /// misconfigured env var can't crash startup before Serilog is wired.
     /// </summary>
+    /// <summary>
+    /// All-lowercase JSON naming policy used for enum-to-string serialization
+    /// (e.g. <c>DeviceType.FilterWheel</c> → <c>"filterwheel"</c>). No
+    /// underscores/dashes so the JSON token matches the URL path segment.
+    /// </summary>
+    private sealed class LowerCaseNamingPolicy : JsonNamingPolicy {
+        public static readonly LowerCaseNamingPolicy Instance = new();
+        public override string ConvertName(string name) => name.ToLowerInvariant();
+    }
+
     private static int ResolvePort(Microsoft.Extensions.Configuration.IConfiguration config) {
         const int defaultPort = 5555;
         const int minPort = 1;

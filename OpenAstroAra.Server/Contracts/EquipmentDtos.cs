@@ -26,10 +26,20 @@ namespace OpenAstroAra.Server.Contracts;
 /// will wire the source-generated context for AOT compat).
 /// </summary>
 
-/// <summary>Device type per §6.2 / OpenAPI DeviceType enum.</summary>
+/// <summary>
+/// Device type per §6.2 / OpenAPI DeviceType enum. Token serialization is
+/// all-lowercase concatenated (e.g., <c>filterwheel</c>, <c>covercalibrator</c>);
+/// the route handler uses <c>Enum.TryParse&lt;DeviceType&gt;(ignoreCase: true)</c>
+/// so the JSON token matches the URL segment and the per-device literal route.
+///
+/// <c>FlatDevice</c> is the NINA UX-facing concept; under the hood it discovers
+/// as Alpaca <c>CoverCalibrator</c> (the only Alpaca device type that combines
+/// cover + light source). Both tokens are retained so the WILMA UI can keep
+/// NINA's separation while the underlying Alpaca query maps to CoverCalibrator.
+/// </summary>
 public enum DeviceType {
     Camera, Telescope, Focuser, FilterWheel, Rotator, Dome,
-    SafetyMonitor, Switch, ObservingConditions, CoverCalibrator, Guider
+    SafetyMonitor, Switch, ObservingConditions, CoverCalibrator, FlatDevice, Guider
 }
 
 /// <summary>Connection state machine state. Drives <c>equipment.{type}.state</c> WS events.</summary>
@@ -49,8 +59,9 @@ public sealed record DiscoveredDeviceDto(
 /// <summary>Connect-request body. Idempotency-Key header per §60.5.</summary>
 public sealed record ConnectRequestDto(DiscoveredDeviceDto Device);
 
-/// <summary>Generic operation-accepted body per OpenAPI spec.</summary>
-public sealed record OperationAcceptedDto(string OperationId);
+// OperationAcceptedDto lives in SharedDtos.cs (added in Phase 7 — same record
+// shape reused for every long-running operation across Phases 6-9). Phase 6's
+// original stub OperationAcceptedDto(string) was superseded.
 
 // ─── Camera (§10.6 row 1) ─────────────────────────────────────────────────────
 
