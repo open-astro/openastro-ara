@@ -20,7 +20,7 @@ Plus the user's auto-memory under `~/.claude/projects/-Users-dev-Documents-GitHu
 Stop the loop (omit `ScheduleWakeup`) when any of these are true. Post a final status note to the user and exit:
 
 1. The user has explicitly paused work (a comment on an open PR saying "pause", "stop", "hold", or similar — check the most recent PR comments by `@joeytroy`).
-2. You hit a `Held for human review @joeytroy — <reason>` situation twice in a row on the same PR.
+2. You hit a `Held for human review @joeytroy — <reason>` situation in two consecutive iterations on the same PR with no intervening successful work (the counter resets the moment any iteration produces a fix push, a CI pass, a CR reply, or any other non-Held outcome).
 3. PORT_PROGRESS.md shows the port is complete (Phase 15 merged and `v0.0.1-ara.1` tagged).
 4. A `dotnet build` or pre-PR gate fails twice in a row on the same fix attempt (don't ping-pong).
 5. Git state is unexpectedly dirty or on an unknown branch (investigate, don't auto-recover).
@@ -42,7 +42,7 @@ If `MEMORY.md` is loaded and `[[feedback-merge-authority]]` / `[[project-coderab
 
 ### Step 2 — Decide the branch state
 
-Pick exactly one of these scenarios. Don't multi-task.
+Pick exactly one of these scenarios, checking in the order **D → A → B → C → E** (highest priority first). Don't multi-task. Precedence matters because (C) and (D) can both be true when the last merge was the final sub-PR of a phase — (D) wins so the promotion tag + `port/ara → master` PR happen before scenario-C picks up the next phase's sub-PR.
 
 **(A) Open PR exists and you authored it (or it's the active sub-PR on `phase-N…`).**
 → Go to §3 (CR poll/fix loop).
@@ -68,8 +68,8 @@ This implements COMMIT-PR-RULES.md "CodeRabbit review loop".
    - Fix the underlying issue (do not skip hooks; do not retry blindly twice in a row)
    - Commit + push with a message like `fix(ci): <one-line>` and re-poll next iteration
 
-2. Pull CR's comments:
-   ```
+2. Pull CR's comments — `{owner}` and `{repo}` are placeholders you must substitute with the actual GitHub coordinates (`open-astro` and `openastro-ara` for this repo):
+   ```shell
    gh api repos/{owner}/{repo}/issues/<N>/comments --jq '.[] | {user: .user.login, created_at, body: (.body | .[0:400])}'
    gh api repos/{owner}/{repo}/pulls/<N>/comments    --jq '.[] | {user: .user.login, path, line, body: (.body | .[0:400])}'
    ```
@@ -97,7 +97,7 @@ This implements COMMIT-PR-RULES.md "CodeRabbit review loop".
    - Green CI on `gh pr checks <N>` (all required checks `pass`)
    - Real CR review posted (walkthrough/summary) **OR** /review fallback completed cleanly (§3a)
    - No unresolved actionable findings
-   - ≥3 minutes since the last commit AND the last bot/user comment (use `created_at` from `gh api`)
+   - ≥3 minutes since the most recent of (last commit, last bot/user comment) — use `created_at` from `gh api`
    - Clean self-review against scope
 
    If all clear → **merge** (§3b).
@@ -126,26 +126,25 @@ After merge:
 - If the merged sub-PR was the last in a phase (consult COMMIT-PR-RULES.md sub-split tables and PORT_PROGRESS.md), go to scenario D next iteration.
 - Otherwise go to scenario C next iteration.
 
-Update `design/PORT_PROGRESS.md` "Completed" section in the same commit pattern the prior phase entries use. Commit + push to `port/ara` directly only if PORT_PROGRESS.md is the *only* file you're touching (it's tracking metadata) — otherwise fold it into the next sub-PR's commits.
+Update `design/PORT_PROGRESS.md` "Completed" section in the same commit pattern the prior phase entries use. Timing rule:
+
+- **Standalone direct commit to `port/ara`**: use this *only* when you're on `port/ara` immediately after a merge and PORT_PROGRESS.md is the single file changing (pure tracking-metadata update, no code).
+- **Folded into the next sub-PR**: use this when you've already moved onto a `phase-N` branch and have other changes queued — include the PORT_PROGRESS.md edit in the sub-PR's commits so it reviews through CR alongside the code work.
+
+When in doubt, prefer folding into the sub-PR — direct pushes to `port/ara` bypass CR review, so keep that path narrow.
 
 ### Step 4 — Open the PR (scenario B)
 
 1. Run pre-PR gate. If `scripts/pre-pr-check.sh` exists, run it. Otherwise the minimum gate is:
-   ```
+
+   ```shell
    dotnet build OpenAstroAra.Server/OpenAstroAra.Server.csproj -c Release
    # When the touched files include a domain project (Core / Astrometry /
    # Equipment / Image / Profile / PlateSolving / Test), additionally:
    dotnet build OpenAstroAra.<TouchedProject>/OpenAstroAra.<TouchedProject>.csproj -c Release
    ```
-   Why Server, not the whole solution: per `OpenAstroAra.Server.csproj` comments,
-   Server is the cross-platform daemon artifact (`net10.0`, AOT-published in Release)
-   and is the only project CI grows into gating (Phase 4 expansion in
-   `.github/workflows/ci.yml`). Inherited domain projects stay `net10.0-windows`
-   with WPF until each is made cross-platform-clean per §26 / Phase 4+. The
-   whole-solution build is currently blocked on `OpenAstroAra.Sequencer` (96 errors
-   from `NINA.WPF.Base` references, tracked in `design/PORT_TODO.md` as a separate
-   `phase-0.5p-followup-sequencer` pass). Once that lands, this minimum gate can
-   widen back to `dotnet build OpenAstroAra.sln -c Release`.
+
+   **Why Server, not the whole solution:** per `OpenAstroAra.Server.csproj` comments, Server is the cross-platform daemon artifact (`net10.0`, AOT-published in Release) and is the only project CI grows into gating (Phase 4 expansion in `.github/workflows/ci.yml`). Inherited domain projects stay `net10.0-windows` with WPF until each is made cross-platform-clean per §26 / Phase 4+. The whole-solution build is currently blocked on `OpenAstroAra.Sequencer` (96 errors from `NINA.WPF.Base` references, tracked in `design/PORT_TODO.md` as a separate `phase-0.5p-followup-sequencer` pass). Once that lands, this minimum gate can widen back to `dotnet build OpenAstroAra.sln -c Release`.
 
    Non-zero exit = fix + retry once. Twice failing in a row = stop and notify user.
 
@@ -178,7 +177,10 @@ Update `design/PORT_PROGRESS.md` "Completed" section in the same commit pattern 
 2. From `port/ara`:
    ```
    git checkout port/ara && git pull --ff-only
-   git checkout -b <branch-name>     # flat name, e.g. phase-10, phase-12a — NEVER port/ara/...
+   git checkout -b <branch-name>     # flat name, e.g. phase-10, phase-12a
+   # NEVER use hierarchical names like port/ara/phase-10 — Git refs are tree-structured,
+   # so `port/ara/anything` is invalid while `port/ara` itself exists as a branch
+   # (per COMMIT-PR-RULES.md "Git ref naming constraint").
    ```
 
 3. Do the actual work for the sub-PR's scope. Keep commits small + focused. Push after every commit (per the 2026-05-23 cadence decision).
