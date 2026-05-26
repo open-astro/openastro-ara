@@ -78,6 +78,10 @@ public class Program {
         app.MapCalibrationEndpoints();
         app.MapMosaicEndpoints();
 
+        // Phase 8 endpoint groups (501 stubs until service implementations land).
+        app.MapImageEndpoints();
+        app.MapDiagnosticsEndpoints();
+
         // Phase 9 endpoint groups (501 stubs except /api/v1/ws/catalog which is
         // functional today). /api/v1/server/info already lives directly in this file.
         app.MapServerStateEndpoints();
