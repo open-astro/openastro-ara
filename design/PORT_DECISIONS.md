@@ -62,3 +62,12 @@ User requested a retroactive review of the PRs that merged with no CodeRabbit wa
 **Audit method:** for each PR, `gh pr view <n> --json files` (paginated for #7 via REST API) → bucket files by top-level directory → compare against PR description's claimed scope. Diff-line spot-checked for the first PR (#5) via `gh pr diff 5` to confirm pure-deletion file headers.
 
 The cost of "no CR review" for these PRs was minimal — there was no logic to review, just "did the right files get deleted?" — which the file-tree audit confirms unambiguously. The audit is recorded here for the project's accountability log; no remediation actions are needed.
+
+## 2026-05-26 — Phase 10 (Linux smoke test)
+
+### `linux-x64` publish dropped from CI
+
+- **Decision:** The `server-build` CI job + Dockerfile target **`linux-arm64` only**. The `dotnet publish -r linux-x64 --self-contained` line from playbook §11.1 is intentionally **not** carried over.
+- **Reason:** Per §13 the actual deployment target is Debian 13 / RPi 4-5 (arm64). Building an x64 self-contained artifact every CI run buys nothing — there's no x64 deployment surface, no x64 Docker image, and no developer who would run `./publish/x64/OpenAstroAra.Server` against the daemon (local dev uses `dotnet run` from the source tree). User confirmed 2026-05-26 in the closed-PR-#45 thread.
+- **PORT_PLAYBOOK.md §11.1 reconciliation:** §11.1 still lists both RIDs as authoritative; a separate doc PR should strike the `linux-x64` line. Until then, this decision-log entry is the controlling reference.
+- **Reversibility:** trivial — adding `linux-x64` back is a 4-line CI-yaml addition.

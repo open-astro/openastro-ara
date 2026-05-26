@@ -4,9 +4,9 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** Phase 10 (Linux smoke test) — next up
-- **Last merged:** `phase-0.5p-followup-buildfix` — PR #43, 2026-05-26 (Core + Astrometry + Equipment WPF/vendor scrub + Phase 6 ASCOM Alpaca signature fix; whole-solution build now clean except `OpenAstroAra.Sequencer` which has 96 `NINA.WPF.Base`-reference errors deferred to a dedicated `phase-0.5p-followup-sequencer` pass).
-- **Currently working on:** Resuming the `infra-port-driver-skill` PR — adds `.claude/skills/port-driver/SKILL.md`, the project-scoped Claude Code skill that drives the port autonomously under `/loop /port-driver`. Once that lands, Phase 10 = `dotnet publish -r linux-arm64` + Docker validation; the cross-compile gate already passes locally on macOS (non-AOT path).
+- **Phase:** Phase 10 (Linux smoke test) — in flight
+- **Last merged:** `infra-port-driver-skill` — PR #44, 2026-05-26 (adds `.claude/skills/port-driver/SKILL.md`, the project-scoped Claude Code skill that drives the port autonomously under `/loop /port-driver`).
+- **Currently working on:** `phase-10` branch — adds `Dockerfile` (per §11.2, with `runtime-deps` base instead of the playbook's `aspnet` since `--self-contained` already bundles the runtime) + extends `.github/workflows/ci.yml` with a `server-build` job that does `dotnet build`, `dotnet publish -r linux-arm64`, arm64-ELF verification, and a `docker buildx` arm64 image build via QEMU. arm64-only (no `linux-x64` publish) per the 2026-05-26 decision logged in `design/PORT_DECISIONS.md`.
 
 ## Completed
 
@@ -100,7 +100,7 @@ Folded into Phase 0.5p (global.json + csproj target framework bumps).
 
 ## In flight
 
-- `infra-port-driver-skill` — adds `.claude/skills/port-driver/SKILL.md` so `/loop /port-driver` becomes a project-scoped, version-controlled autonomous driver for the rest of the port. Gate target refined to `OpenAstroAra.Server` per the project's actual cross-platform-clean architecture (Sequencer cleanup is its own follow-up).
+- `phase-10` — Phase 10 Linux smoke test. Adds repo-root `Dockerfile` + extends `.github/workflows/ci.yml` `server-build` job (cross-publish + Docker buildx). AOT publish deferred to a small Phase 14 follow-up since cross-compiling AOT from ubuntu-latest x64 to linux-arm64 needs additional toolchain setup beyond the §14.3 scope of this PR.
 
 ## Next
 
