@@ -65,17 +65,24 @@ public class Program {
         app.MapScalarApiReference();
 
         // Health endpoint for the §13 systemd readiness check + §15 build gate.
-        app.MapGet("/healthz", () => Results.Ok(new {
-            status = "ok",
-            version = typeof(Program).Assembly.GetName().Version?.ToString() ?? "0.0.0",
-            api = "v1"
-        }));
+        // Per playbook §60.4, /healthz returns plain text "ok" with Cache-Control: no-store
+        // so the systemd watchdog + load balancers don't cache stale liveness signals.
+        app.MapGet("/healthz", (HttpContext http) => {
+            http.Response.Headers.CacheControl = "no-store";
+            return Results.Text("ok", contentType: "text/plain");
+        });
 
         // §60 meta endpoint — server identification + capabilities.
+        // Lightweight identity payload per the playbook contract: server_uuid (stable per
+        // install), nickname (user-set in profile, defaults to hostname), version, api,
+        // mDNS service-type so the WILMA client can verify discovery matches the daemon
+        // it's connected to.
         app.MapGet("/api/v1/server/info", () => Results.Ok(new {
-            name = "OpenAstroAra.Server",
-            version = typeof(Program).Assembly.GetName().Version?.ToString() ?? "0.0.0",
+            server_uuid = ServerIdentity.Uuid,
+            nickname = ServerIdentity.Nickname,
+            version = ServerIdentity.Version,
             api = "v1",
+            mdns_service = "_openastroara._tcp.local",
             tier = "scaffold"  // upgraded to "ready" once Phase 6-9 endpoints land
         }));
 
@@ -83,12 +90,27 @@ public class Program {
         app.Run();
     }
 
+    /// <summary>
+    /// Resolve listen port. Order of precedence (per playbook §2.1):
+    ///   1. <c>OPENASTROARA_PORT</c> env var
+    ///   2. <c>OpenAstroAra:Port</c> in appsettings.json
+    ///   3. Default 5555
+    /// Range-validates the result; invalid values fall back to the default so a
+    /// misconfigured env var can't crash startup before Serilog is wired.
+    /// </summary>
     private static int ResolvePort(Microsoft.Extensions.Configuration.IConfiguration config) {
+        const int defaultPort = 5555;
+        const int minPort = 1;
+        const int maxPort = 65535;
+
         var envPort = System.Environment.GetEnvironmentVariable("OPENASTROARA_PORT");
-        if (!string.IsNullOrWhiteSpace(envPort) && int.TryParse(envPort, out var p)) {
+        if (!string.IsNullOrWhiteSpace(envPort) && int.TryParse(envPort, out var p) && p >= minPort && p <= maxPort) {
             return p;
         }
         var configured = config.GetValue<int?>("OpenAstroAra:Port");
-        return configured ?? 5555;
+        if (configured is int c && c >= minPort && c <= maxPort) {
+            return c;
+        }
+        return defaultPort;
     }
 }
