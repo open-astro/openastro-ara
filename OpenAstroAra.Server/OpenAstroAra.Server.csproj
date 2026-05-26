@@ -38,6 +38,10 @@
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.0" />
     <PackageReference Include="Serilog.AspNetCore" Version="9.0.0" />
     <PackageReference Include="Zeroconf" Version="3.6.11" />
+    <!-- Phase 6: ASCOM Alpaca for cross-platform equipment discovery + typed proxies per §6.2 / §52 -->
+    <PackageReference Include="ASCOM.Alpaca.Components" Version="2.1.0" />
+    <PackageReference Include="ASCOM.Alpaca.Device" Version="2.1.0" />
+    <PackageReference Include="ASCOM.Tools" Version="2.1.0" />
   </ItemGroup>
 
 </Project>

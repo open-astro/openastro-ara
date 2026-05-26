@@ -19,6 +19,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Scalar.AspNetCore;
+using OpenAstroAra.Server.Endpoints;
+using OpenAstroAra.Server.Services;
 
 namespace OpenAstroAra.Server;
 
@@ -48,13 +50,14 @@ public class Program {
 
         builder.Services.AddOpenApi();
 
-        // §8.1 DI registrations (placeholder).
-        // Each phase lands its own block here:
-        //   Phase 6 — equipment services (ICameraService, ITelescopeService, ...)
-        //   Phase 7 — sequence services (ISequenceService, ICaptureOrchestratorService)
-        //   Phase 8 — image services (IImageDataFactory, IFrameRepository)
-        //   Phase 9 — IWsBroadcaster + IWsEventChannel + dispatch worker
-        // For now the scaffold deliberately registers nothing beyond framework defaults.
+        // §8.1 DI registrations.
+        // Phase 6 (this block): equipment services — IEquipmentDiscoveryService
+        // implemented; per-device services (ICameraService etc.) declared but
+        // not yet registered (endpoints return 501 until impls land).
+        // Phase 7 — sequence services (ISequenceService, ICaptureOrchestratorService)
+        // Phase 8 — image services (IImageDataFactory, IFrameRepository)
+        // Phase 9 — IWsBroadcaster + IWsEventChannel + dispatch worker
+        builder.Services.AddSingleton<IEquipmentDiscoveryService, AlpacaEquipmentDiscoveryService>();
 
         var app = builder.Build();
 
@@ -71,6 +74,9 @@ public class Program {
             http.Response.Headers.CacheControl = "no-store";
             return Results.Text("ok", contentType: "text/plain");
         });
+
+        // Phase 6 equipment endpoints (501 stubs except discovery).
+        app.MapEquipmentEndpoints();
 
         // §60 meta endpoint — server identification + capabilities.
         // Lightweight identity payload per the playbook contract: server_uuid (stable per
