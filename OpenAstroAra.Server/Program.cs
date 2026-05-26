@@ -19,6 +19,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Scalar.AspNetCore;
+using OpenAstroAra.Server.Endpoints;
 
 namespace OpenAstroAra.Server;
 
@@ -71,6 +72,14 @@ public class Program {
             http.Response.Headers.CacheControl = "no-store";
             return Results.Text("ok", contentType: "text/plain");
         });
+
+        // Phase 9 endpoint groups (501 stubs except /api/v1/ws/catalog and
+        // /api/v1/server/info which are functional today).
+        app.MapServerStateEndpoints();
+        app.MapNotificationEndpoints();
+        app.MapStatsEndpoints();
+        app.MapSystemEndpoints();
+        app.MapWebSocketEndpoints();
 
         // §60 meta endpoint — server identification + capabilities.
         // Lightweight identity payload per the playbook contract: server_uuid (stable per
