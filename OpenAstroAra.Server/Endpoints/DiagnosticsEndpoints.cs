@@ -14,7 +14,9 @@
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
+using OpenAstroAra.Server.Contracts;
 
 namespace OpenAstroAra.Server.Endpoints;
 
@@ -33,9 +35,22 @@ public static class DiagnosticsEndpoints {
     public static IEndpointRouteBuilder MapDiagnosticsEndpoints(this IEndpointRouteBuilder app) {
         var diagnostics = app.MapGroup("/api/v1/diagnostics").WithTags("Diagnostics");
 
-        diagnostics.MapGet("/state", () => NotImplementedStub("GET /api/v1/diagnostics/state", "§51"));
-        diagnostics.MapPost("/mode", () => NotImplementedStub("POST /api/v1/diagnostics/mode", "§51.5"));
-        diagnostics.MapGet("/history", () => NotImplementedStub("GET /api/v1/diagnostics/history", "§51"));
+        diagnostics.MapGet("/state", () => NotImplementedStub("GET /api/v1/diagnostics/state", "§51"))
+                   .Produces<DiagnosticsStateDto>(StatusCodes.Status200OK)
+                   .ProducesProblem(StatusCodes.Status501NotImplemented)
+                   .WithName("GetDiagnosticsState");
+
+        diagnostics.MapPost("/mode", ([FromBody] DiagnosticsModeRequestDto request) =>
+                NotImplementedStub("POST /api/v1/diagnostics/mode", "§51.5"))
+            .Accepts<DiagnosticsModeRequestDto>("application/json")
+            .Produces<DiagnosticsStateDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status501NotImplemented)
+            .WithName("SetDiagnosticsMode");
+
+        diagnostics.MapGet("/history", () => NotImplementedStub("GET /api/v1/diagnostics/history", "§51"))
+                   .Produces<CursorPage<DiagnosticEventDto>>(StatusCodes.Status200OK)
+                   .ProducesProblem(StatusCodes.Status501NotImplemented)
+                   .WithName("GetDiagnosticsHistory");
 
         return app;
     }
