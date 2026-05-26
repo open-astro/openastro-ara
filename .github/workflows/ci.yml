@@ -87,6 +87,7 @@ jobs:
         with:
           lfs: false
           persist-credentials: false
+          fetch-depth: 0  # need full history + tags so `git describe --tags --exact-match HEAD` can find the release tag for the .deb version step
 
       - name: Setup .NET 10 SDK
         uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9  # v4.x pinned per zizmor pattern
@@ -143,3 +144,39 @@ jobs:
           push: false
           tags: openastroara-server:arm64
           load: false  # smoke test only — don't load arm64 manifest into x64 docker daemon
+
+      # === Phase 10.5: .deb packaging ===
+      # Assemble an arm64 .deb on every push so the user can scp it to a
+      # Pi for testing. Apt repo (apt.openastro.net) + reprepro + GPG
+      # signing arrives at Phase 14 per playbook §34.5. For now this is
+      # an artifact-only build — download the .deb from the Actions run.
+      - name: Compute .deb version
+        id: deb-version
+        run: |
+          # Release versions are tagged `v*` (e.g. `v0.0.1-ara.1`); the leading
+          # `v` is stripped to get the dpkg-valid Version field. Non-release
+          # tags like `phase-10.5-complete` are EXCLUDED via `--match 'v*'` so
+          # they don't get mistakenly used as Debian versions (dpkg-deb
+          # requires the Version field to start with a digit, which would
+          # reject `phase-10.5-complete` outright).
+          # Untagged commits get 0.0.0-dev-<short-sha> so they're trivially
+          # distinguishable from real releases and never collide.
+          if git describe --tags --exact-match --match 'v*' HEAD 2>/dev/null; then
+            VERSION="$(git describe --tags --exact-match --match 'v*' HEAD | sed 's/^v//')"
+          else
+            VERSION="0.0.0-dev-$(git rev-parse --short HEAD)"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Computed .deb version: $VERSION"
+
+      - name: Build .deb (arm64)
+        run: |
+          packaging/build-deb.sh ./publish/arm64 "${{ steps.deb-version.outputs.version }}" ./dist
+
+      - name: Upload .deb artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4 pinned per zizmor immutable-ref policy
+        with:
+          name: openastroara-server-${{ steps.deb-version.outputs.version }}-arm64-deb
+          path: ./dist/openastroara-server_*_arm64.deb
+          if-no-files-found: error
+          retention-days: 30

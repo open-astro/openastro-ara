@@ -1,0 +1,9 @@
+# openastroara user gets passwordless sudo for two specific scripts only.
+# Validated by `visudo -cf` during package build per §34.3.
+#
+# update.sh   — invoked by the WILMA-push update flow (§33)
+# configure-storage.sh — invoked by the storage-config flow (§29.1.4)
+#
+# Mode 0440, owned by root:root, as Debian sudoers requires.
+openastroara ALL=(root) NOPASSWD: /opt/openastroara/update.sh
+openastroara ALL=(root) NOPASSWD: /opt/openastroara/scripts/configure-storage.sh

@@ -1,0 +1,60 @@
+[Unit]
+Description=OpenAstro Ara Server
+Documentation=https://github.com/open-astro/openastro-ara
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+# Type=simple for v0.0.1-ara.1 — Type=notify + WatchdogSec=60 from the
+# §13 spec require the sd_notify watchdog implementation tracked as
+# Phase 4 / §66 work. Will switch to Type=notify + WatchdogSec once
+# the IHostedService heartbeat lands in OpenAstroAra.Server.
+Type=simple
+User=openastroara
+Group=openastroara
+ExecStart=/opt/openastroara/OpenAstroAra.Server
+EnvironmentFile=-/etc/openastroara/server.env
+WorkingDirectory=/var/lib/openastroara
+
+Restart=on-failure
+RestartSec=3
+
+# === Hardening per §13 / §67 (defense in depth on trusted LAN) ===
+
+# Process restrictions
+NoNewPrivileges=true
+LockPersonality=true
+
+# Filesystem isolation
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+# PrivateDevices=false explicitly because cameras + USB serial need
+# /dev access via udev rules. (Inline trailing comments are not valid
+# in systemd .service syntax — systemd-analyze warns "Failed to parse
+# boolean value" on them — so move the rationale to a dedicated line.)
+PrivateDevices=false
+ReadWritePaths=/var/log/openastroara
+ReadWritePaths=/var/lib/openastroara
+ReadWritePaths=/media/openastroara
+ReadWritePaths=/var/run/openastroara
+ReadWritePaths=/etc/openastroara
+
+# Network restrictions
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+# Capability restrictions (CAP_SYS_TIME for §31 time sync; nothing else)
+CapabilityBoundingSet=CAP_SYS_TIME
+AmbientCapabilities=CAP_SYS_TIME
+
+# Syscall filter (allow standard service syscalls only)
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+
+# Standard output to journald (Serilog also writes to /var/log/openastroara per §29.9)
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=openastroara
+
+[Install]
+WantedBy=multi-user.target
