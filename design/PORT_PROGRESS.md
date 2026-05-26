@@ -106,12 +106,13 @@ Nothing currently. master and port/ara are in parity.
 
 ## Tag inventory
 
-```
+```text
 phase-0.5a-complete   phase-0.5b-complete   phase-0.5c-complete
 phase-0.5d-complete   phase-0.5f-complete   phase-0.5g-complete
-phase-0.5n-complete   phase-0.5p-complete   phase-4-complete
-phase-5-complete      phase-6-complete      phase-7-complete
-phase-8-complete      phase-9-complete
+phase-0.5n-complete   phase-0.5p-complete   phase-2-complete
+phase-3-complete      phase-4-complete      phase-5-complete
+phase-6-complete      phase-7-complete      phase-8-complete
+phase-9-complete
 ```
 
 (Phase 5-9 tags added retroactively in `port-progress-refresh` after the playbook tracking gap was caught.)
