@@ -3,11 +3,13 @@
     rotate 14
     compress
     delaycompress
+    copytruncate
     missingok
     notifempty
-    create 0640 openastroara openastroara
-    sharedscripts
-    postrotate
-        systemctl reload openastroara-server.service > /dev/null 2>&1 || true
-    endscript
+    # `copytruncate` rotates by copy-then-truncate-in-place instead of
+    # rename + signal — needed here because the systemd unit has no
+    # ExecReload= and the daemon doesn't yet handle SIGHUP to reopen
+    # its log handle. Phase 4 / §66 follow-up can add SIGHUP support
+    # and switch this stanza to a rename + `systemctl reload` flow
+    # (drop copytruncate, restore the postrotate hook).
 }

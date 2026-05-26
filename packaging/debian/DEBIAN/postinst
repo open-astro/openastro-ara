@@ -32,7 +32,10 @@ case "$1" in
         chmod 750 /etc/openastroara
 
         # 4. Set CAP_SYS_TIME on the binary (clock adjustment for §31 GPS time sync).
-        if [ -x /opt/openastroara/OpenAstroAra.Server ]; then
+        #    Guard on `command -v setcap` so postinst doesn't abort on a minimal
+        #    install without libcap2-bin — the daemon still runs without
+        #    CAP_SYS_TIME, just can't bump the clock from GPS time signals.
+        if [ -x /opt/openastroara/OpenAstroAra.Server ] && command -v setcap > /dev/null 2>&1; then
             setcap cap_sys_time+ep /opt/openastroara/OpenAstroAra.Server
         fi
 
@@ -40,10 +43,15 @@ case "$1" in
         #    (and on every boot).
         systemd-tmpfiles --create /usr/lib/tmpfiles.d/openastroara.conf || true
 
-        # 6. Validate sudoers drop-in before systemd picks it up.
+        # 6. Validate sudoers drop-in. The visudo check is best-effort — if
+        #    visudo isn't installed (minimal Debian without `sudo` package),
+        #    skip the validation rather than aborting postinst. The drop-in
+        #    is only effective once sudo is installed anyway.
         if [ -f /etc/sudoers.d/openastroara ]; then
             chmod 0440 /etc/sudoers.d/openastroara
-            visudo -cf /etc/sudoers.d/openastroara > /dev/null
+            if command -v visudo > /dev/null 2>&1; then
+                visudo -cf /etc/sudoers.d/openastroara > /dev/null
+            fi
         fi
 
         # 7. Enable + start the service.
