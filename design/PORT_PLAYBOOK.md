@@ -761,7 +761,7 @@ Hand-write `OpenAstroAra.Server/openapi.yaml`. Endpoint groups:
 | Group | Path prefix | Purpose |
 |---|---|---|
 | Server | `/api/v1/server` | Version, capabilities, handshake, current state summary |
-| Equipment | `/api/v1/equipment/{type}` | List/connect/control cameras, mounts, focusers, filter wheels, rotators, etc. |
+| Equipment | `/api/v1/equipment/discover/{type}` + `/api/v1/equipment/{type}/{connect,disconnect,...}` | Discovery uses the explicit `/discover/` segment so it does not collide at depth 2 with the per-device literal-name groups (`camera`, `telescope`, etc.) used for connect/disconnect + per-device operations |
 | Sequence | `/api/v1/sequence` | Load JSON, validate, start/pause/resume/abort, status |
 | Image | `/api/v1/image` | List frames, download FITS, request preview JPEG |
 | Log | `/api/v1/log` | Recent log lines |
