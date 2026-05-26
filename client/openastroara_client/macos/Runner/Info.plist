@@ -28,5 +28,16 @@
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_openastroara._tcp</string>
+	</array>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>WILMA scans your local network to find OpenAstro Ara servers running on a Raspberry Pi or similar.</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 </dict>
 </plist>
