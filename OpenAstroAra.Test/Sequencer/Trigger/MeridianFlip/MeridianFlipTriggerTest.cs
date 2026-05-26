@@ -20,7 +20,6 @@ using OpenAstroAra.Sequencer.SequenceItem;
 using OpenAstroAra.Sequencer.Trigger.MeridianFlip;
 using OpenAstroAra.Astrometry;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
-using NINA.ViewModel.ImageHistory;
 using NUnit.Framework;
 using System;
 using System.Collections.Generic;
@@ -28,11 +27,8 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using OpenAstroAra.Core.Enum;
-using NINA.WPF.Base.Interfaces.Mediator;
-using NINA.WPF.Base.Interfaces.ViewModel;
 using OpenAstroAra.Equipment.Interfaces;
 using OpenAstroAra.Image.ImageAnalysis;
-using NINA.WPF.Base.Interfaces;
 
 namespace OpenAstroAra.Test.Sequencer.Trigger.MeridianFlip {
 

@@ -15,16 +15,13 @@ using OpenAstroAra.Equipment.Equipment.MyFocuser;
 using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Core.Enum;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
-using NINA.ViewModel;
 using NUnit.Framework;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using NINA.WPF.Base.Interfaces.Mediator;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Equipment.Interfaces.ViewModel;
 using OpenAstroAra.Equipment.Interfaces;
-using NINA.WPF.Base.ViewModel.Equipment.Focuser;
 
 namespace OpenAstroAra.Test.Focuser {
 

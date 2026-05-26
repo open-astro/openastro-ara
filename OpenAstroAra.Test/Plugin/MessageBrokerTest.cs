@@ -1,6 +1,4 @@
 ﻿using FluentAssertions;
-using NINA.Plugin.Interfaces;
-using NINA.Plugin.Messaging;
 using System;
 using System.Collections.Generic;
 using System.Linq;

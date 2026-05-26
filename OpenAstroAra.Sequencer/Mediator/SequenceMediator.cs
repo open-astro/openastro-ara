@@ -15,7 +15,6 @@
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
-using NINA.ViewModel.Sequencer;
 using System;
 using System.Collections.Generic;
 using OpenAstroAra.Sequencer.Interfaces.Mediator;

@@ -27,7 +27,6 @@ using OpenAstroAra.PlateSolving.Interfaces;
 using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.SequenceItem.Platesolving;
-using NINA.WPF.Base.ViewModel;
 using NUnit.Framework;
 using System;
 using System.Collections.Generic;

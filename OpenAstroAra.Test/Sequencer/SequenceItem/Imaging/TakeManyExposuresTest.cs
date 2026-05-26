@@ -22,7 +22,6 @@ using OpenAstroAra.Core.Model;
 using OpenAstroAra.Sequencer.SequenceItem.Imaging;
 using OpenAstroAra.Sequencer.Serialization;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
-using NINA.ViewModel.ImageHistory;
 using Nito.AsyncEx;
 using NUnit.Framework;
 using System;
@@ -30,8 +29,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using NINA.WPF.Base.Interfaces.Mediator;
-using NINA.WPF.Base.Interfaces.ViewModel;
 
 namespace OpenAstroAra.Test.Sequencer.SequenceItem.Imaging {
 

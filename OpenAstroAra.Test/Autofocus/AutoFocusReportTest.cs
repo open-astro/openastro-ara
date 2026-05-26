@@ -13,7 +13,6 @@ using FluentAssertions;
 using Moq;
 using OpenAstroAra.Core.Enum;
 using OpenAstroAra.Profile.Interfaces;
-using NINA.WPF.Base.Utility.AutoFocus;
 using NUnit.Framework;
 using OxyPlot.Series;
 using System;

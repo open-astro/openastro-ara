@@ -18,20 +18,17 @@ using OpenAstroAra.Equipment.Equipment.MyFlatDevice;
 using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
-using NINA.ViewModel;
 using NUnit.Framework;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Threading;
 using System.Threading.Tasks;
-using NINA.WPF.Base.Interfaces.Mediator;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Core.Model.Equipment;
 using OpenAstroAra.Profile;
 using OpenAstroAra.Equipment.Interfaces;
 using OpenAstroAra.Equipment.Interfaces.ViewModel;
-using NINA.WPF.Base.ViewModel.Equipment.FlatDevice;
 
 namespace OpenAstroAra.Test.FlatDevice {
 

@@ -24,7 +24,6 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using OpenAstroAra.Core.Locale;
-using NINA.WPF.Base.Mediator;
 
 namespace OpenAstroAra.Sequencer.SequenceItem.Dome {
 

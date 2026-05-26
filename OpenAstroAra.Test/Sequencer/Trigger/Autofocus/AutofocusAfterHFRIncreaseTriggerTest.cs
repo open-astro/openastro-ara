@@ -31,18 +31,12 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
-using NINA.WPF.Base.Interfaces.Mediator;
 using OpenAstroAra.Image.ImageData;
 using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Core.Model.Equipment;
-using NINA.WPF.Base.Interfaces.ViewModel;
-using NINA.WPF.Base.Model;
-using NINA.WPF.Base.Utility.AutoFocus;
 using OpenAstroAra.Sequencer.SequenceItem;
 using OpenAstroAra.Sequencer.Interfaces;
 using OpenAstroAra.Image.ImageAnalysis;
-using NINA.WPF.Base.Interfaces;
-using NINA.ViewModel.ImageHistory;
 
 namespace OpenAstroAra.Test.Sequencer.Trigger.Autofocus {
 

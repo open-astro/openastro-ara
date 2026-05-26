@@ -29,8 +29,6 @@ using System.Linq;
 using System.Runtime.Serialization;
 using System.Text;
 using System.Threading.Tasks;
-using NINA.WPF.Base.Interfaces.Mediator;
-using NINA.WPF.Base.Interfaces.ViewModel;
 using OpenAstroAra.Sequencer.Utility;
 using System.Windows;
 using System.ComponentModel;

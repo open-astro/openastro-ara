@@ -21,7 +21,6 @@ using System.Threading.Tasks;
 using OpenAstroAra.Core.Enum;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Equipment.Interfaces;
-using NINA.WPF.Base.ViewModel.Equipment.Dome;
 using NUnit.Framework.Legacy;
 
 namespace OpenAstroAra.Test.Dome {

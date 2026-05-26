@@ -22,12 +22,9 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using OpenAstroAra.Equipment.Equipment.MyGuider;
-using NINA.WPF.Base.Interfaces.ViewModel;
-using NINA.WPF.Base.Model;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Sequencer.SequenceItem.Imaging;
 using OpenAstroAra.Profile.Interfaces;
-using NINA.WPF.Base.Interfaces.Mediator;
 
 namespace OpenAstroAra.Test.Sequencer.Trigger.Guider {
 

@@ -14,7 +14,6 @@
 
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Astrometry;
-using NINA.ViewModel.Sequencer.SimpleSequence;
 using System;
 using System.Threading;
 using System.Threading.Tasks;

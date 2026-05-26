@@ -19,8 +19,6 @@ using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.SequenceItem;
 using OpenAstroAra.Sequencer.SequenceItem.Guider;
 using OpenAstroAra.Sequencer.Validations;
-using NINA.WPF.Base.Interfaces.ViewModel;
-using NINA.ViewModel.Interfaces;
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;

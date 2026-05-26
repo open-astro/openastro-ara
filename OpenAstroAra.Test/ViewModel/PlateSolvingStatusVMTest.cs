@@ -1,6 +1,5 @@
 ﻿using FluentAssertions;
 using OpenAstroAra.PlateSolving;
-using NINA.WPF.Base.ViewModel;
 using System;
 using System.Collections.Generic;
 using System.Linq;

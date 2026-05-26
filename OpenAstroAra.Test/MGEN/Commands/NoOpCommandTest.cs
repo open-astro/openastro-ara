@@ -12,7 +12,6 @@
 using FluentAssertions;
 using FTD2XX_NET;
 using Moq;
-using NINA.MGEN2.Commands.AppMode;
 
 
 

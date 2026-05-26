@@ -32,10 +32,8 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using OpenAstroAra.Equipment.Model;
-using NINA.WPF.Base.Interfaces.Mediator;
 using OpenAstroAra.Core.Locale;
 using OpenAstroAra.Profile;
-using NINA.WPF.Base.Interfaces.ViewModel;
 using OpenAstroAra.Sequencer.Utility;
 using OpenAstroAra.Core.Utility;
 

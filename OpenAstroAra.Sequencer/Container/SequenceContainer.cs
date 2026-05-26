@@ -23,7 +23,6 @@ using OpenAstroAra.Sequencer.SequenceItem;
 using OpenAstroAra.Sequencer.Trigger;
 using OpenAstroAra.Sequencer.Validations;
 using OpenAstroAra.Core.Utility;
-using NINA.ViewModel.Sequencer;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;

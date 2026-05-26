@@ -16,7 +16,6 @@ using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Sequencer.Conditions;
 using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.Trigger;
-using NINA.WPF.Base.Utility;
 using System;
 using System.Collections.Generic;
 using System.Linq;

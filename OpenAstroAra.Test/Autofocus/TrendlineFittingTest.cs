@@ -18,7 +18,6 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using OpenAstroAra.Core.Enum;
-using NINA.WPF.Base.Utility.AutoFocus;
 
 namespace OpenAstroAra.Test.Autofocus {
 
