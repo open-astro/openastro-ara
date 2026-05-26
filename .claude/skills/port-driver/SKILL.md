@@ -132,9 +132,21 @@ Update `design/PORT_PROGRESS.md` "Completed" section in the same commit pattern 
 
 1. Run pre-PR gate. If `scripts/pre-pr-check.sh` exists, run it. Otherwise the minimum gate is:
    ```
-   dotnet build OpenAstroAra.sln -c Release
-   dotnet test OpenAstroAra.sln --no-build -c Release   # only if test projects exist for the touched area
+   dotnet build OpenAstroAra.Server/OpenAstroAra.Server.csproj -c Release
+   # When the touched files include a domain project (Core / Astrometry /
+   # Equipment / Image / Profile / PlateSolving / Test), additionally:
+   dotnet build OpenAstroAra.<TouchedProject>/OpenAstroAra.<TouchedProject>.csproj -c Release
    ```
+   Why Server, not the whole solution: per `OpenAstroAra.Server.csproj` comments,
+   Server is the cross-platform daemon artifact (`net10.0`, AOT-published in Release)
+   and is the only project CI grows into gating (Phase 4 expansion in
+   `.github/workflows/ci.yml`). Inherited domain projects stay `net10.0-windows`
+   with WPF until each is made cross-platform-clean per §26 / Phase 4+. The
+   whole-solution build is currently blocked on `OpenAstroAra.Sequencer` (96 errors
+   from `NINA.WPF.Base` references, tracked in `design/PORT_TODO.md` as a separate
+   `phase-0.5p-followup-sequencer` pass). Once that lands, this minimum gate can
+   widen back to `dotnet build OpenAstroAra.sln -c Release`.
+
    Non-zero exit = fix + retry once. Twice failing in a row = stop and notify user.
 
 2. Push the branch: `git push -u origin <branch-name>`

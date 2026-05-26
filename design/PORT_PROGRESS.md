@@ -5,8 +5,8 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 ## Current
 
 - **Phase:** Phase 10 (Linux smoke test) — next up
-- **Last merged:** Phase 6 (equipment endpoint scaffold + Alpaca discovery) — PR #38, 2026-05-26
-- **Currently working on:** Nothing in flight. The daemon HTTP+WS endpoint surface (Phases 5-9) is complete as scaffolds; service implementations land per-area incrementally. Phase 10 = `dotnet publish -r linux-arm64` + Docker validation; the cross-compile gate already passes locally on macOS (non-AOT path).
+- **Last merged:** `phase-0.5p-followup-buildfix` — PR #43, 2026-05-26 (Core + Astrometry + Equipment WPF/vendor scrub + Phase 6 ASCOM Alpaca signature fix; whole-solution build now clean except `OpenAstroAra.Sequencer` which has 96 `NINA.WPF.Base`-reference errors deferred to a dedicated `phase-0.5p-followup-sequencer` pass).
+- **Currently working on:** Resuming the `infra-port-driver-skill` PR — adds `.claude/skills/port-driver/SKILL.md`, the project-scoped Claude Code skill that drives the port autonomously under `/loop /port-driver`. Once that lands, Phase 10 = `dotnet publish -r linux-arm64` + Docker validation; the cross-compile gate already passes locally on macOS (non-AOT path).
 
 ## Completed
 
@@ -88,13 +88,19 @@ Folded into Phase 0.5p (global.json + csproj target framework bumps).
 - ✅ `Endpoints/SystemEndpoints.cs` (15 endpoints across bug-report + data-manager + backup + profile-share)
 - ✅ `Endpoints/WebSocketEndpoints.cs` — `GET /api/v1/ws/catalog` is **functional** (dumps WsEventCatalog.All); WS upgrade returns 426 with proper `Upgrade: websocket` + `Connection: Upgrade` headers per RFC 7231 §6.5.15
 
+### Phase 0.5p-followup buildfix — Core + Astrometry + Equipment cleanup (PR #43)
+- ✅ `OpenAstroAra.Core` — `Notification.cs` scrubbed (CustomDisplayPart references removed; warning/error variants now route to `Logger` with `[CallerXxx]` attribute propagation so the original call site is preserved); `MyMessageBox.cs` `Show(...)` maps affirmative defaults (Yes→No, OK→Cancel) to safe non-affirmative results to prevent `SequenceHasChanged.AskHasChanged` silently auto-detaching; `System.Management 10.0.0` added for WMI usage in `Logger.cs` + `SerialPortProvider.cs`.
+- ✅ `OpenAstroAra.Astrometry` — `DatabaseInteraction.cs` reduced to a minimal stub (`GetUT1_UTC` returns 0 with cancellation honored via `Task.FromCanceled<double>(token)`; `GetDisplayAlias` Levenshtein logic preserved); `AstroUtil.cs` + `TopocentricCoordinates.cs` cleaned of stale `using OpenAstroAra.Core.Database;`.
+- ✅ `OpenAstroAra.Equipment` — 7 vendor-specific files deleted (EDCamera, MGENGuider, ASCOMInteraction, AllProSpikeAFlat, AlnitakFlatDevice, ArteskyFlatBox, PegasusAstroFlatMaster) per Phase 2 Alpaca-only collapse; Phase 6 `AlpacaEquipmentProvider.cs` SDK signature bug fixed (`deviceType:` → `deviceTypes:`, missing `logger:` arg added). 3 orphaned `OpenAstroAra.Test/FlatDevice/*` files also deleted.
+- ⚠️ `OpenAstroAra.Sequencer` — 96 errors from `NINA.WPF.Base` references remain. Tracked in `design/PORT_TODO.md` as a dedicated `phase-0.5p-followup-sequencer` pass (substantive sub-PR-equivalent scope).
+
 ## Endpoint surface (as of Phase 9 merge)
 
 **141 endpoint registrations across 11 endpoint files.** Functional today: `/healthz`, `/api/v1/server/info`, `/api/v1/equipment/discover/{type}`, `/api/v1/ws/catalog`. Remaining endpoints return 501 with RFC 7807 Problem bodies until per-area service implementations land — the surface itself is stable for WILMA client codegen (Phase 11+).
 
 ## In flight
 
-Nothing currently. master and port/ara are in parity.
+- `infra-port-driver-skill` — adds `.claude/skills/port-driver/SKILL.md` so `/loop /port-driver` becomes a project-scoped, version-controlled autonomous driver for the rest of the port. Gate target refined to `OpenAstroAra.Server` per the project's actual cross-platform-clean architecture (Sequencer cleanup is its own follow-up).
 
 ## Next
 
