@@ -78,6 +78,10 @@ public class Program {
         app.MapCalibrationEndpoints();
         app.MapMosaicEndpoints();
 
+        // Phase 8 endpoint groups (501 stubs until service implementations land).
+        app.MapImageEndpoints();
+        app.MapDiagnosticsEndpoints();
+
         // §60 meta endpoint — server identification + capabilities.
         // Lightweight identity payload per the playbook contract: server_uuid (stable per
         // install), nickname (user-set in profile, defaults to hostname), version, api,

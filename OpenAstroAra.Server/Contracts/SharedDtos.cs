@@ -15,9 +15,8 @@
 namespace OpenAstroAra.Server.Contracts;
 
 // ────────────────────────────────────────────────────────────────────────────
-// Cross-cutting DTOs used by multiple endpoint groups (Phase 6 introduced
-// OperationAcceptedDto in Equipment scaffold; this file holds the
-// post-Phase-6 shared types for Phase 7+ that aren't device-specific).
+// Cross-cutting DTOs used by multiple endpoint groups. Created in Phase 7
+// (sequence + calibration + mosaic scaffold) and reused from Phase 8 onward.
 // ────────────────────────────────────────────────────────────────────────────
 
 /// <summary>
