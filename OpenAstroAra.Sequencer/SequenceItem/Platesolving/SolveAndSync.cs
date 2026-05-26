@@ -19,7 +19,6 @@ using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Sequencer.Validations;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Core.Utility.WindowService;
-using NINA.ViewModel;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.Composition;
@@ -30,7 +29,6 @@ using System.Threading.Tasks;
 using OpenAstroAra.Core.Locale;
 using OpenAstroAra.Equipment.Model;
 using OpenAstroAra.Core.Model.Equipment;
-using NINA.WPF.Base.ViewModel;
 using OpenAstroAra.PlateSolving.Interfaces;
 
 namespace OpenAstroAra.Sequencer.SequenceItem.Platesolving {

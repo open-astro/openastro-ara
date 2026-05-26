@@ -15,7 +15,7 @@
 using OpenAstroAra.Astrometry.RiseAndSet;
 using OpenAstroAra.Core.Database;
 using OpenAstroAra.Core.Utility;
-using NINA.Profile;
+using OpenAstroAra.Profile;
 using Nito.AsyncEx;
 using System;
 using System.Collections.Concurrent;

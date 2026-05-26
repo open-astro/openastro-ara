@@ -1,5 +1,4 @@
 ﻿using FluentAssertions;
-using NINA.Utility;
 
 namespace OpenAstroAra.Test.Utility {
 

@@ -20,9 +20,6 @@ using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Sequencer.Trigger.Autofocus;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Core.Utility.WindowService;
-using NINA.ViewModel;
-using NINA.ViewModel.ImageHistory;
-using NINA.ViewModel.Interfaces;
 using NUnit.Framework;
 using System;
 using System.Collections.Generic;
@@ -31,18 +28,13 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
-using NINA.WPF.Base.Interfaces.Mediator;
 using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Core.Model.Equipment;
 using OpenAstroAra.Equipment.Equipment.MyFocuser;
 using OpenAstroAra.Equipment.Equipment.MyCamera;
-using NINA.WPF.Base.Interfaces.ViewModel;
-using NINA.WPF.Base.Utility.AutoFocus;
-using NINA.WPF.Base.Model;
 using OpenAstroAra.Sequencer.SequenceItem;
 using OpenAstroAra.Sequencer.Interfaces;
 using OpenAstroAra.Image.ImageAnalysis;
-using NINA.WPF.Base.Interfaces;
 using OpenAstroAra.Astrometry.Body;
 
 namespace OpenAstroAra.Test.Sequencer.Trigger.Autofocus {

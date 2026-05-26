@@ -17,7 +17,6 @@ using Moq;
 using OpenAstroAra.Sequencer.Conditions;
 using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.Trigger;
-using NINA.View.Sequencer;
 using NUnit.Framework;
 using System;
 using System.Collections.Generic;

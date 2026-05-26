@@ -14,8 +14,6 @@ using Moq;
 using OpenAstroAra.Image.ImageData;
 using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
-using NINA.ViewModel;
-using NINA.ViewModel.ImageHistory;
 using NUnit.Framework;
 using System;
 using System.Collections.Generic;
@@ -23,8 +21,6 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using NINA.WPF.Base.Interfaces.Mediator;
-using NINA.WPF.Base.Utility.AutoFocus;
 using OpenAstroAra.Core.Enum;
 
 namespace OpenAstroAra.Test {

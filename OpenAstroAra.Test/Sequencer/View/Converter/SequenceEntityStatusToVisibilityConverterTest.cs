@@ -14,7 +14,6 @@
 
 using FluentAssertions;
 using OpenAstroAra.Core.Enum;
-using NINA.View.Sequencer.Converter;
 using NUnit.Framework;
 using System;
 using System.Collections.Generic;

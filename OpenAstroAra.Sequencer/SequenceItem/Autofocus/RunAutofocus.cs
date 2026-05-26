@@ -26,8 +26,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using OpenAstroAra.Core.Model.Equipment;
 using OpenAstroAra.Core.Locale;
-using NINA.WPF.Base.Interfaces.ViewModel;
-using NINA.WPF.Base.Interfaces;
 
 namespace OpenAstroAra.Sequencer.SequenceItem.Autofocus {
 

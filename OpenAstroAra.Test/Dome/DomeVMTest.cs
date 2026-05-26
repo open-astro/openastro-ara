@@ -21,12 +21,10 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Threading;
 using System.Threading.Tasks;
-using NINA.WPF.Base.Interfaces.Mediator;
 using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Equipment.Interfaces;
 using OpenAstroAra.Equipment.Interfaces.ViewModel;
-using NINA.WPF.Base.ViewModel.Equipment.Dome;
 using NUnit.Framework.Legacy;
 
 namespace OpenAstroAra.Test.Dome {

@@ -12,8 +12,6 @@
 
 #endregion "copyright"
 
-using NINA.MGEN;
-using NINA.Exceptions;
 using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Astrometry;

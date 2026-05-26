@@ -17,7 +17,6 @@ using OpenAstroAra.Astrometry.Interfaces;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Equipment.Interfaces.ViewModel;
 using OpenAstroAra.Sequencer.Container;
-using NINA.ViewModel.Interfaces;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;

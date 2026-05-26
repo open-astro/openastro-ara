@@ -14,7 +14,6 @@ using Moq;
 using OpenAstroAra.Core.Enum;
 using OpenAstroAra.Equipment.Interfaces;
 using OpenAstroAra.Profile.Interfaces;
-using NINA.WPF.Base.ViewModel.Equipment.Focuser;
 using NUnit.Framework;
 using System.Threading;
 using System.Threading.Tasks;

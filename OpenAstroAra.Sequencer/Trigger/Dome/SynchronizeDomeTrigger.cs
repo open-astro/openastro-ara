@@ -28,7 +28,6 @@ using System.Threading.Tasks;
 using OpenAstroAra.Core.Locale;
 using OpenAstroAra.Astrometry;
 using OpenAstroAra.Core.Utility;
-using NINA.WPF.Base.Interfaces.Mediator;
 using OpenAstroAra.Equipment.Interfaces;
 
 namespace OpenAstroAra.Sequencer.Trigger.Dome {

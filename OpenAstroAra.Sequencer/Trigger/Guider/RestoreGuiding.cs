@@ -26,7 +26,6 @@ using System.ComponentModel.Composition;
 using System.Threading;
 using System.Threading.Tasks;
 using OpenAstroAra.Core.Locale;
-using NINA.WPF.Base.Interfaces.ViewModel;
 using OpenAstroAra.Core.Utility.Notification;
 using OpenAstroAra.Sequencer.SequenceItem.Imaging;
 using OpenAstroAra.Sequencer.Interfaces;

@@ -23,7 +23,6 @@ using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Astrometry;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Core.Utility.WindowService;
-using NINA.ViewModel;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
