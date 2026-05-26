@@ -1,0 +1,65 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <OutputType>Library</OutputType>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <Configurations>Debug;Release;SignedRelease</Configurations>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <IncludeSource>true</IncludeSource>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'SignedRelease|AnyCPU'">
+    <OutputPath>bin\SignedRelease\</OutputPath>
+    <Optimize>true</Optimize>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Remove="Converters\**" />
+    <EmbeddedResource Remove="Converters\**" />
+    <None Remove="Converters\**" />
+    <Page Remove="Converters\**" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\CommonAssemblyInfo.cs">
+      <Link>Properties\CommonAssemblyInfo.cs</Link>
+    </Compile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\LICENSE.txt">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\OpenAstroAra.Astrometry\OpenAstroAra.Astrometry.csproj" />
+    <ProjectReference Include="..\OpenAstroAra.Core\OpenAstroAra.Core.csproj" />
+    <ProjectReference Include="..\OpenAstroAra.Equipment\OpenAstroAra.Equipment.csproj" />
+    <ProjectReference Include="..\OpenAstroAra.Image\OpenAstroAra.Image.csproj" />
+    <ProjectReference Include="..\OpenAstroAra.PlateSolving\OpenAstroAra.PlateSolving.csproj" />
+    <ProjectReference Include="..\OpenAstroAra.Profile\OpenAstroAra.Profile.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
+    <PackageReference Include="System.Data.SqlClient" Version="4.9.0" />
+    <PackageReference Include="System.Net.Http" Version="4.3.4" />
+    <PackageReference Include="System.Text.RegularExpressions" Version="4.3.1" />
+  </ItemGroup>
+  <PropertyGroup>
+    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+    <Title>$(AssemblyName)</Title>
+    <Version>3.2.0.9001</Version>
+    <Authors>Stefan Berg and the N.I.N.A. Contributors</Authors>
+    <Product>OpenAstro Ara</Product>
+    <Description>Advanced Sequencer components of OpenAstro Ara (forked from N.I.N.A.).</Description>
+    <Copyright>Copyright ©  2016 - 2025 Stefan Berg and the N.I.N.A. contributors</Copyright>
+    <PackageProjectUrl>https://github.com/open-astro/openastro-ara</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/open-astro/openastro-ara.git</RepositoryUrl>
+    <PackageOutputPath>$(SolutionDir)publish</PackageOutputPath>
+    <PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
+  </PropertyGroup>
+</Project>

@@ -1,140 +1,83 @@
-#Exclude external DLL files
-NINA/External/*/Altair
-NINA/External/*/Canon
-NINA/External/*/Nikon
-NINA/External/**/*.lib
-NINA/External/**/*.exe
+# === Build outputs ===
+**/bin/
+**/obj/
+**/publish/
+**/AppPackages/
+**/*.dll.config
+**/*.pdb
+**/*.user
+**/*.suo
+**/.vs/
+**/*.cache
 
-# Exclude nuget.exe
-/publish/nuget.exe
+# === .NET tool / SDK caches ===
+.dotnet/
+.nuget/
+**/global.json.lock
+**/project.lock.json
 
-# User-specific files
-*.rsuser
-*.user
-*.suo
-*.user
-*.userosscache
-*.sln.docstates
+# === Flutter / Dart ===
+client/openastroara_client/.dart_tool/
+client/openastroara_client/build/
+client/openastroara_client/.flutter-plugins
+client/openastroara_client/.flutter-plugins-dependencies
+client/openastroara_client/.packages
+# client/openastroara_client/pubspec.lock  # NOT ignored — keep for reproducibility per playbook §4.6
+client/openastroara_client/ios/Pods/
+client/openastroara_client/android/.gradle/
+client/openastroara_client/android/local.properties
+client/openastroara_client/linux/flutter/ephemeral/
+client/openastroara_client/macos/Flutter/ephemeral/
+client/openastroara_client/windows/flutter/ephemeral/
+# client/openastroara_client/web/  # web target deferred to v0.0.1+ per §18.G;
+# do NOT blanket-ignore — when web is enabled, source/config under web/ must be tracked.
+# Generated artifacts go under client/openastroara_client/build/ which is already ignored.
 
-# Build results
-[Dd]ebug/
-[Dd]ebugPublic/
-[Rr]elease/
-[Rr]eleases/
-bld/
-[Bb]in/
-[Oo]bj/
-[Ll]og/
+# === ARA-specific runtime + dev paths ===
+/publish/
+/artifacts/
+/coverage/
+OpenAstroAra.Server/openapi.yaml.bak
+OpenAstroAra.Test/fixtures/alpaca-simulators/
+OpenAstroAra.Test/TestResults/
 
-# Visual Studio 2015/2017 cache/options directory
-.vs/
-
-# Jetbrains Rider
+# === Editor / IDE ===
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
 .idea/
-
-# Visual Studio 2017 auto generated files
-Generated\ Files/
-
-# MSTest test Results
-[Tt]est[Rr]esult*/
-[Bb]uild[Ll]og.*
-
-# NUNIT
-*.VisualState.xml
-TestResult.xml
-
-# Files built by Visual Studio
-*_i.c
-*_p.c
-*_h.h
-*.ilk
-*.meta
-*.obj
-*.iobj
-*.pch
-*.pdb
-*.ipdb
-*.pgc
-*.pgd
-*.rsp
-*.sbr
-*.tlb
-*.tli
-*.tlh
-*.tmp
-*.tmp_proj
-*_wpftmp.csproj
-*.log
-*.vspscc
-*.vssscc
-.builds
-*.pidb
-*.svclog
-*.scc
-
-# Visual Studio profiler
-*.psess
-*.vsp
-*.vspx
-*.sap
-
-# AxoCover is a Code Coverage Tool
-.axoCover/*
-!.axoCover/settings.json
-
-# NuGet Packages
-*.nupkg
-*.snupkg
-# The packages folder can be ignored because of Package Restore
-**/[Pp]ackages/*
-# except build/, which is used as an MSBuild target.
-!**/[Pp]ackages/build/
-
-# Others
-RELEASE_NOTES.html
-ClientBin/
-~$*
+*.iml
+*.swp
+*.swo
 *~
-*.dbmdl
-*.dbproj.schemaview
-*.jfm
-*.pfx
-*.publishsettings
-orleans.codegen.cs
-/NINA/Resources/SVG/ArrowRight.ai
-/NINA/Resources/StaticResources/ArrowRight.xaml
-/NINA/Resources/StaticResources/ArrowLeft.xaml
-hooks/
-lfs/
-/NINA.Setup/.wix/
-# the bundled .net runtime - it will be automatically downloaded from the ms page. no need to include this in source control
-/NINA.SetupBundle/dotnet-windowsdesktop-runtime-win-x64.exe
 
-# macOS
+# === macOS / Linux / Windows OS files ===
 .DS_Store
-.AppleDouble
-.LSOverride
-Icon
-._*
-.DocumentRevisions-V100
-.fseventsd
-.Spotlight-V100
-.TemporaryItems
-.Trashes
-.VolumeIcon.icns
-.com.apple.timemachine.donotpresent
-.AppleDB
-.AppleDesktop
-Network Trash Folder
-Temporary Items
-.apdisk
+Thumbs.db
+desktop.ini
 
-# Linux
-*~
-.fuse_hidden*
-.directory
-.Trash-*
-.nfs*
+# === Secrets (per §19.4) ===
+*.pfx
+*.key
+*.pem
+*.env
+appsettings.Secrets.json
+secrets.dart
 
-# Claude Code / agent worktrees
-.claude/
+# === Logs / runtime state (per §29.9) ===
+*.log
+*.log.*.gz
+*.tmp
+*.bak
+
+# === Local dev databases ===
+*.db-journal
+*.db-wal
+*.db-shm
+
+# === Removed-during-port artifacts (Phase 0.5 cleanup) ===
+WiX/
+**/MGEN/
+**/nikoncswrapper/
+**/Setup/

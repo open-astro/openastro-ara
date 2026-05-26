@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>OpenAstroAra.Server</RootNamespace>
+    <AssemblyName>OpenAstroAra.Server</AssemblyName>
+  </PropertyGroup>
+
+  <!--
+    AOT-mode publishing per PORT_PLAYBOOK.md §71. Disabled in Debug
+    builds (avoid analyzer noise during inner loop) but enforced
+    for Release publishes.
+  -->
+  <PropertyGroup Condition="'$(Configuration)'=='Release'">
+    <PublishAot>true</PublishAot>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      Inherited domain projects are net10.0-windows (kept WPF deps until
+      OpenCvSharp4 migration in §26 / Phase 4+). Server itself stays
+      net10.0 (cross-platform) but cannot ProjectReference them on
+      non-Windows without EnableWindowsTargeting on consumers, which
+      defeats the purpose. Wiring up happens incrementally as each
+      domain project is itself cross-platform-clean (Phase 4+ refactors).
+      For now the scaffold has no ProjectReferences; endpoints come
+      online as their dependencies become available.
+    -->
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.0" />
+    <PackageReference Include="Scalar.AspNetCore" Version="2.9.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.0" />
+    <PackageReference Include="Serilog.AspNetCore" Version="9.0.0" />
+    <PackageReference Include="Zeroconf" Version="3.6.11" />
+  </ItemGroup>
+
+</Project>
