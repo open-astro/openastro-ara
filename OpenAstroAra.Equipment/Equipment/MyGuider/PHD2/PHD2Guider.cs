@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright � 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright (c) 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -220,9 +220,11 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             try {
                 if (connected) {
                     // Phase 3 (PORT_PLAYBOOK.md §7): log PHD2 version + identify openastro-phd2.
-                    // The Version event handler (case "Version" in ProcessEvent) already
-                    // populates the Version property during the PHD2 handshake; by the time
-                    // _tcs.Task completes, Version is non-null.
+                    // RunListener resolves _tcs as soon as the TCP socket is up; the "Version"
+                    // event from PHD2 may not have arrived yet, so we briefly wait for it
+                    // (bounded by token + a 2-second cap) before logging identification.
+                    await WaitForVersionAsync(maxWaitMs: 2000, token).ConfigureAwait(false);
+
                     if (Version != null) {
                         var phdVersionString = Version.PHDVersion ?? "(unknown)";
                         var phdSubver = Version.PHDSubver ?? string.Empty;
@@ -235,9 +237,11 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                         if (isOpenAstroPhd2) {
                             Logger.Info($"Connected to openastro-phd2 v{phdVersionString} (subver {phdSubver}).");
                         } else {
-                            Logger.Info($"Connected to upstream PHD2 v{phdVersionString} (subver {phdSubver}). " +
+                            Logger.Warning($"Connected to upstream PHD2 v{phdVersionString} (subver {phdSubver}). " +
                                 $"OpenAstro Ara is designed against openastro-phd2; some §63 / §63.2 features may not be available.");
                         }
+                    } else {
+                        Logger.Warning("PHD2 version event did not arrive within 2s after connect; cannot identify openastro-phd2 vs upstream. Some §63 features may behave unexpectedly.");
                     }
 
                     await GetProfiles();
@@ -476,6 +480,26 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 return new LockPosition(lockPositionResponse.result[0], lockPositionResponse.result[1]);
             }
             return null;
+        }
+
+        /// <summary>
+        /// Phase 3 (§7) helper: PHD2's listener emits the "Version" event right after the
+        /// TCP socket opens, but it's not necessarily available the instant <c>_tcs.Task</c>
+        /// completes. This polls <see cref="Version"/> with a short cap so the connect path
+        /// has a useful value to log without blocking the user indefinitely if the event
+        /// never arrives (network issues, broken upstream impl, etc.).
+        /// </summary>
+        private async Task WaitForVersionAsync(int maxWaitMs, CancellationToken token) {
+            const int pollIntervalMs = 50;
+            var elapsed = 0;
+            while (Version == null && elapsed < maxWaitMs && !token.IsCancellationRequested) {
+                try {
+                    await Task.Delay(pollIntervalMs, token).ConfigureAwait(false);
+                } catch (TaskCanceledException) {
+                    return;
+                }
+                elapsed += pollIntervalMs;
+            }
         }
 
         private async Task<string> GetAppState(
