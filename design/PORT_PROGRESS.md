@@ -4,9 +4,9 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** Phase 10.5 (Debian packaging) — in flight (promoted from Phase 14 §34 per user request 2026-05-26)
-- **Last merged:** `phase-10` — PR #46, 2026-05-26 (Dockerfile + CI `server-build` job + `linux-arm64` self-contained publish + arm64-ELF verify + Docker buildx via QEMU; arm64-only per the 2026-05-26 decision in `design/PORT_DECISIONS.md`). Promoted to master via PR #47.
-- **Currently working on:** `phase-10.5-deb-packaging` branch — adds `packaging/debian/` tree (DEBIAN/control + postinst + prerm + postrm, hardened systemd unit per §13, sudoers drop-in, logrotate, tmpfiles, server.env example) + `packaging/build-deb.sh` assembler + CI `Build .deb` step that uploads an arm64 `.deb` artifact on every push. Apt repo (apt.openastro.net + reprepro + GPG signing) stays at Phase 14.
+- **Phase:** Phase 11 (Flutter scaffold) — in flight
+- **Last merged:** `infra-changelog-init` — PR #52, 2026-05-26 (`CHANGELOG.md` Keep-a-Changelog init with full backfilled phase history + SKILL.md step reminding the driver to add `[Unreleased]` entries for user-visible changes).
+- **Currently working on:** `phase-11-flutter-scaffold` branch — adds `client/openastroara_client/` Flutter project (macos/windows/linux platforms, Flutter 3.44.0 pinned), runtime deps (dio + web_socket_channel + multicast_dns + riverpod + flutter_secure_storage + file_picker), first-run skeleton (mDNS discovery + manual server entry + /api/v1/server/info handshake via Riverpod 3.x Notifier providers). `flutter analyze` clean. OpenAPI Dart codegen deferred to a Phase 11 follow-up since the `openapi_generator` pub package has a Dart-SDK constraint conflict — the typed client can be generated externally via the Java `openapi-generator-cli` tool instead.
 
 ## Completed
 
@@ -100,7 +100,7 @@ Folded into Phase 0.5p (global.json + csproj target framework bumps).
 
 ## In flight
 
-- `phase-10.5-deb-packaging` — Phase 10.5 Debian packaging (promoted from Phase 14 §34 per user direction). First .deb-as-CI-artifact (apt repo + reprepro + GPG signing still deferred to Phase 14). systemd unit uses `Type=simple` for now; `Type=notify` + `WatchdogSec=60` switches in when the Phase 4 / §66 watchdog `IHostedService` lands.
+- `phase-11-flutter-scaffold` — Flutter WILMA client scaffold + first-run flow (mDNS discovery + manual entry + handshake). Real UI polish lands at Phase 12a (app shell). OpenAPI Dart codegen lands as a Phase 11 follow-up (the `openapi_generator` pub package has a SDK-constraint conflict; switching to `openapi-generator-cli` external invocation).
 
 ## Next
 
