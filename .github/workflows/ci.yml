@@ -76,3 +76,74 @@ jobs:
       # workflow won't run at all. A lint step is duplicate work.
       # When `actionlint` style checks are wanted (e.g., shellcheck inside
       # `run:` blocks), re-add via `rhysd/actionlint` at Phase 14.
+
+  server-build:
+    name: Server (build + cross-publish + Docker)
+    runs-on: ubuntu-latest
+    needs: sanity
+    steps:
+      - name: Checkout (no LFS)
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.x — pinned per zizmor + CodeRabbit security finding on PR #12
+        with:
+          lfs: false
+          persist-credentials: false
+
+      - name: Setup .NET 10 SDK
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9  # v4.x pinned per zizmor pattern
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: dotnet restore (Server)
+        run: dotnet restore OpenAstroAra.Server/OpenAstroAra.Server.csproj
+
+      - name: dotnet build (Server, Release)
+        run: dotnet build OpenAstroAra.Server/OpenAstroAra.Server.csproj -c Release --no-restore
+
+      # Cross-publish self-contained for both Linux RIDs. AOT is disabled
+      # for this Phase 10 first cut — cross-compiling AOT from ubuntu-latest
+      # x64 host to linux-arm64 needs clang + sysroot setup that we'll add
+      # in a Phase 14 follow-up alongside the rest of the §14.3 matrix.
+      # Non-AOT --self-contained still produces a deployable single-folder
+      # ELF artifact, which is what the Docker image consumes.
+      - name: dotnet publish (linux-arm64, self-contained, non-AOT)
+        run: |
+          dotnet publish OpenAstroAra.Server/OpenAstroAra.Server.csproj \
+            -c Release -r linux-arm64 --self-contained \
+            -p:PublishAot=false \
+            -o ./publish/arm64
+
+      - name: dotnet publish (linux-x64, self-contained, non-AOT)
+        run: |
+          dotnet publish OpenAstroAra.Server/OpenAstroAra.Server.csproj \
+            -c Release -r linux-x64 --self-contained \
+            -p:PublishAot=false \
+            -o ./publish/x64
+
+      # Verify both arch outputs are real ELF binaries (catches "publish
+      # succeeded but produced no executable" surprises that the dotnet
+      # CLI sometimes silently misses).
+      - name: Verify cross-compile output
+        run: |
+          set -e
+          file ./publish/arm64/OpenAstroAra.Server | tee /dev/stderr | grep -q 'aarch64'
+          file ./publish/x64/OpenAstroAra.Server   | tee /dev/stderr | grep -q 'x86-64'
+
+      # Build the arm64 Docker image via buildx. Buildx + qemu lets the
+      # x64 runner cross-build arm64 images without a real Pi.
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130  # v3 pinned per zizmor immutable-ref policy
+        with:
+          platforms: arm64
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f  # v3 pinned per zizmor immutable-ref policy
+
+      - name: Build Docker image (arm64)
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8  # v6 pinned per zizmor immutable-ref policy
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/arm64
+          push: false
+          tags: openastroara-server:arm64
+          load: false  # smoke test only — don't load arm64 manifest into x64 docker daemon
