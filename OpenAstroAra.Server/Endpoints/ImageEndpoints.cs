@@ -38,10 +38,12 @@ public static class ImageEndpoints {
         // ─── Frames (§40, §65) ───
         var frames = app.MapGroup("/api/v1/frames").WithTags("Frames");
 
-        frames.MapGet("", () => NotImplementedStub("GET /api/v1/frames", "§40"))
-              .Produces<CursorPage<FrameListItemDto>>(StatusCodes.Status200OK)
-              .ProducesProblem(StatusCodes.Status501NotImplemented)
-              .WithName("ListFrames");
+        frames.MapGet("",
+                (int? limit, string? cursor, Guid? sessionId, string? targetName) =>
+                    NotImplementedStub("GET /api/v1/frames", "§40"))
+            .Produces<CursorPage<FrameListItemDto>>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status501NotImplemented)
+            .WithName("ListFrames");
 
         frames.MapGet("/{id:guid}", (Guid id) => NotImplementedStub("GET /api/v1/frames/{id}", "§40"))
               .Produces<FrameDto>(StatusCodes.Status200OK)
@@ -98,10 +100,11 @@ public static class ImageEndpoints {
         // ─── Sessions (§40, §65) ───
         var sessions = app.MapGroup("/api/v1/sessions").WithTags("Sessions");
 
-        sessions.MapGet("", () => NotImplementedStub("GET /api/v1/sessions", "§40"))
-                .Produces<CursorPage<SessionDto>>(StatusCodes.Status200OK)
-                .ProducesProblem(StatusCodes.Status501NotImplemented)
-                .WithName("ListSessions");
+        sessions.MapGet("",
+                (int? limit, string? cursor) => NotImplementedStub("GET /api/v1/sessions", "§40"))
+            .Produces<CursorPage<SessionDto>>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status501NotImplemented)
+            .WithName("ListSessions");
 
         sessions.MapGet("/{id:guid}", (Guid id) => NotImplementedStub("GET /api/v1/sessions/{id}", "§40"))
                 .Produces<SessionDto>(StatusCodes.Status200OK)
@@ -109,8 +112,9 @@ public static class ImageEndpoints {
                 .ProducesProblem(StatusCodes.Status501NotImplemented)
                 .WithName("GetSession");
 
-        sessions.MapGet("/{id:guid}/frames", (Guid id) =>
-                NotImplementedStub("GET /api/v1/sessions/{id}/frames", "§40"))
+        sessions.MapGet("/{id:guid}/frames",
+                (Guid id, int? limit, string? cursor) =>
+                    NotImplementedStub("GET /api/v1/sessions/{id}/frames", "§40"))
             .Produces<CursorPage<FrameListItemDto>>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status501NotImplemented)
@@ -149,11 +153,13 @@ public static class ImageEndpoints {
               .ProducesProblem(StatusCodes.Status501NotImplemented)
               .WithName("SubscribeBackupStream");
 
-        backup.MapPost("/claim", () => NotImplementedStub("POST /api/v1/backup/stream/claim", "§44"))
-              .Produces<BackupFrameDto>(StatusCodes.Status200OK)
-              .ProducesProblem(StatusCodes.Status404NotFound)
-              .ProducesProblem(StatusCodes.Status501NotImplemented)
-              .WithName("ClaimBackupFrame");
+        backup.MapPost("/claim", ([FromBody] BackupClaimRequestDto request) =>
+                NotImplementedStub("POST /api/v1/backup/stream/claim", "§44"))
+            .Accepts<BackupClaimRequestDto>("application/json")
+            .Produces<BackupFrameDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status501NotImplemented)
+            .WithName("ClaimBackupFrame");
 
         return app;
     }

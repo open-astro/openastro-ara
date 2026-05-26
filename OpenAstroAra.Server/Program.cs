@@ -73,6 +73,11 @@ public class Program {
             return Results.Text("ok", contentType: "text/plain");
         });
 
+        // Phase 7 endpoint groups (501 stubs until service implementations land).
+        app.MapSequenceEndpoints();
+        app.MapCalibrationEndpoints();
+        app.MapMosaicEndpoints();
+
         // Phase 8 endpoint groups (501 stubs until service implementations land).
         app.MapImageEndpoints();
         app.MapDiagnosticsEndpoints();

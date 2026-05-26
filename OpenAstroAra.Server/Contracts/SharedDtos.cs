@@ -15,8 +15,8 @@
 namespace OpenAstroAra.Server.Contracts;
 
 // ────────────────────────────────────────────────────────────────────────────
-// Cross-cutting DTOs used by multiple endpoint groups. First introduced in
-// Phase 7 (sequence + calibration + mosaic) and reused from Phase 8 onward.
+// Cross-cutting DTOs used by multiple endpoint groups. Created in Phase 7
+// (sequence + calibration + mosaic scaffold) and reused from Phase 8 onward.
 // ────────────────────────────────────────────────────────────────────────────
 
 /// <summary>

@@ -160,3 +160,8 @@ public sealed record BackupFrameDto(
     string FilePath,
     long FileSizeBytes,
     string Sha256);
+
+/// <summary>POST /api/v1/backup/stream/claim body (§44). Claims a frame for an active subscription.</summary>
+public sealed record BackupClaimRequestDto(
+    Guid SubscriptionId,
+    Guid FrameId);

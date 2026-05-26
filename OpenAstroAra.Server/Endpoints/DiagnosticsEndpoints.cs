@@ -47,10 +47,12 @@ public static class DiagnosticsEndpoints {
             .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("SetDiagnosticsMode");
 
-        diagnostics.MapGet("/history", () => NotImplementedStub("GET /api/v1/diagnostics/history", "§51"))
-                   .Produces<CursorPage<DiagnosticEventDto>>(StatusCodes.Status200OK)
-                   .ProducesProblem(StatusCodes.Status501NotImplemented)
-                   .WithName("GetDiagnosticsHistory");
+        diagnostics.MapGet("/history",
+                (int? limit, string? cursor) =>
+                    NotImplementedStub("GET /api/v1/diagnostics/history", "§51"))
+            .Produces<CursorPage<DiagnosticEventDto>>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status501NotImplemented)
+            .WithName("GetDiagnosticsHistory");
 
         return app;
     }

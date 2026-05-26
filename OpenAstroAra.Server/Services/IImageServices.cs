@@ -26,8 +26,11 @@ namespace OpenAstroAra.Server.Services;
 
 /// <summary>
 /// Frame catalog + per-frame previews/thumbnails/downloads (§40 + §65).
-/// Returns previews as PNG/JPEG byte streams; the daemon never returns raw
-/// FITS for the preview endpoints — those are §72 FrameFileService.
+///
+/// Previews are returned as PNG/JPEG byte streams from <see cref="GetPreviewAsync"/>
+/// and <see cref="GetThumbnailAsync"/>. Raw FITS is served by the distinct
+/// <see cref="OpenDownloadAsync"/> method (per §72) which streams the original
+/// frame file — used by the WILMA library "Download original" action.
 /// </summary>
 public interface IFrameRepository {
     Task<CursorPage<FrameListItemDto>> ListAsync(int limit, string? cursor, Guid? sessionId, string? targetName, CancellationToken ct);
@@ -53,7 +56,7 @@ public interface ISessionService {
 /// <summary>Backup stream per §44. Out-of-band frame fan-out to long-running backup processes.</summary>
 public interface IBackupStreamService {
     Task<BackupSubscriptionDto> SubscribeAsync(CancellationToken ct);
-    Task<bool> ClaimAsync(Guid subscriptionId, Guid frameId, CancellationToken ct);
+    Task<BackupFrameDto?> ClaimAsync(BackupClaimRequestDto request, CancellationToken ct);
 }
 
 /// <summary>Diagnostics monitor (§51). Worker emits §60.9 WS events on state changes.</summary>
