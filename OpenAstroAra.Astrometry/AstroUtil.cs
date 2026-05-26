@@ -13,7 +13,6 @@
 #endregion "copyright"
 
 using OpenAstroAra.Astrometry.RiseAndSet;
-using OpenAstroAra.Core.Database;
 using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Profile;
 using Nito.AsyncEx;

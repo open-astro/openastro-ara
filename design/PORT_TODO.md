@@ -14,8 +14,9 @@ Per §0 rule 6 + §15 step 7 + COMMIT-PR-RULES.md CodeRabbit rule "out-of-scope 
 
 - ✅ `NINA.Equipment.csproj` ProjectReferences to nikoncswrapper + NINA.MGEN — scrubbed in Phase 0.5b
 - ✅ `NINA.Test.csproj` ProjectReferences to NINA.MGEN + NINA.Plugin + NINA.CustomControlLibrary + NINA.WPF.Base + NINA — scrubbed in Phase 0.5b
-- ⏳ `NINA.Sequencer.csproj` still has `<ProjectReference Include="..\NINA.WPF.Base\NINA.WPF.Base.csproj" />` (dangling). Plus NINA.Sequencer's .cs files use WPF.Base types directly. Removal happens at Phase 0.5p (.NET 10 bump) or earlier if a dedicated "Sequencer WPF-removal" pass is needed.
-- ⏳ `NINA.Test.csproj` and `NINA.Equipment.csproj` still have .cs files using types from MGEN/Plugin/WPF.Base/NINA — compile errors persist; resolved during Phase 0.5p or a dedicated WPF-removal pass on these projects.
+- ✅ **Phase 0.5p-followup buildfix** (`phase-0.5p-followup-buildfix`, 2026-05-26) — Core scrubs (Notification.cs CustomDisplayPart removal, MyMessageBox.cs MyMessageBoxView removal, +System.Management package for WMI usage in Logger.cs/SerialPortProvider.cs), Astrometry DB-greenfield reconciliation (DatabaseInteraction.cs stubbed to GetUT1_UTC + GetDisplayAlias only; consumers AstroUtil.cs/TopocentricCoordinates.cs cleaned), Equipment vendor file deletions (EDCamera + MGENGuider + ASCOMInteraction + 4 flat device drivers + 3 orphaned test files), Phase 6 Alpaca discovery bug fix (`deviceType:` → `deviceTypes:` + missing `logger:` param). After this PR, `dotnet build OpenAstroAra.sln -c Release` is green except for the Sequencer item below.
+- ⏳ **Sequencer WPF-removal pass** — `OpenAstroAra.Sequencer.csproj` references and `.cs` source files still use NINA.WPF.Base types (IImageHistoryVM, IImageSaveMediator, etc.). 96 compile errors as of the phase-0.5p-followup-buildfix PR. This is a substantial pass equivalent in scope to a Phase sub-PR — needs its own branch (`phase-0.5p-followup-sequencer` or similar) and explicit user authorization before starting.
+- ⏳ `NINA.Test.csproj` post-Sequencer-removal: tests that depend on Sequencer types will also need scrubbing once Sequencer's WPF dependencies are resolved.
 
 ### Source-file `TODO(port)` markers
 

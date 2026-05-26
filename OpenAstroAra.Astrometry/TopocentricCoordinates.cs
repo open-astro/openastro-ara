@@ -12,7 +12,6 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Core.Database;
 using OpenAstroAra.Core.Enum;
 using OpenAstroAra.Core.Utility;
 using System;

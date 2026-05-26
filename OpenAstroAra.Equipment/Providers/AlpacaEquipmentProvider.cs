@@ -51,7 +51,7 @@ namespace OpenAstroAra.Equipment.Providers {
         public async Task<IReadOnlyList<DiscoveredDevice>> DiscoverAsync(DeviceType type, CancellationToken ct) {
             var ascomType = MapDeviceType(type);
             var discovered = await AlpacaDiscovery.GetAscomDevicesAsync(
-                deviceType: ascomType,
+                deviceTypes: ascomType,
                 numberOfPolls: DefaultNumberOfPolls,
                 pollInterval: DefaultPollInterval,
                 discoveryPort: DefaultDiscoveryPort,
@@ -60,6 +60,7 @@ namespace OpenAstroAra.Equipment.Providers {
                 useIpV4: true,
                 useIpV6: false,
                 serviceType: ASCOM.Common.Alpaca.ServiceType.Http,
+                logger: null,
                 cancellationToken: ct).ConfigureAwait(false);
 
             var results = new List<DiscoveredDevice>(discovered.Count);
