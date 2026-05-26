@@ -153,11 +153,16 @@ jobs:
       - name: Compute .deb version
         id: deb-version
         run: |
-          # Tag-built versions look like 0.0.1-ara.1 (from `git tag v0.0.1-ara.1`).
-          # Branch/PR builds get 0.0.0-dev-<short-sha> so they're trivially
+          # Release versions are tagged `v*` (e.g. `v0.0.1-ara.1`); the leading
+          # `v` is stripped to get the dpkg-valid Version field. Non-release
+          # tags like `phase-10.5-complete` are EXCLUDED via `--match 'v*'` so
+          # they don't get mistakenly used as Debian versions (dpkg-deb
+          # requires the Version field to start with a digit, which would
+          # reject `phase-10.5-complete` outright).
+          # Untagged commits get 0.0.0-dev-<short-sha> so they're trivially
           # distinguishable from real releases and never collide.
-          if git describe --tags --exact-match HEAD 2>/dev/null; then
-            VERSION="$(git describe --tags --exact-match HEAD | sed 's/^v//')"
+          if git describe --tags --exact-match --match 'v*' HEAD 2>/dev/null; then
+            VERSION="$(git describe --tags --exact-match --match 'v*' HEAD | sed 's/^v//')"
           else
             VERSION="0.0.0-dev-$(git rev-parse --short HEAD)"
           fi
