@@ -82,6 +82,14 @@ public class Program {
         app.MapImageEndpoints();
         app.MapDiagnosticsEndpoints();
 
+        // Phase 9 endpoint groups (501 stubs except /api/v1/ws/catalog which is
+        // functional today). /api/v1/server/info already lives directly in this file.
+        app.MapServerStateEndpoints();
+        app.MapNotificationEndpoints();
+        app.MapStatsEndpoints();
+        app.MapSystemEndpoints();
+        app.MapWebSocketEndpoints();
+
         // §60 meta endpoint — server identification + capabilities.
         // Lightweight identity payload per the playbook contract: server_uuid (stable per
         // install), nickname (user-set in profile, defaults to hostname), version, api,
