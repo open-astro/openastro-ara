@@ -13,6 +13,7 @@
 #endregion "copyright"
 
 using System;
+using System.Runtime.CompilerServices;
 
 namespace OpenAstroAra.Core.Utility.Notification {
 
@@ -21,7 +22,9 @@ namespace OpenAstroAra.Core.Utility.Notification {
     // per Phase 9 / §60.9), which broadcasts notification.posted WS events to WILMA.
     // For now: informational variants are no-ops; warning/error variants forward to
     // Logger so operational issues stay visible in the daemon log instead of being
-    // silently dropped (the WPF toast UI was removed in Phase 0.5p).
+    // silently dropped (the WPF toast UI was removed in Phase 0.5p). [CallerXxx]
+    // attributes are propagated so Logger captures the *original* call site (e.g.
+    // ProfileService.cs:256) rather than this stub.
     public static class Notification {
 
         public static void ShowInformation(string message) { }
@@ -30,24 +33,41 @@ namespace OpenAstroAra.Core.Utility.Notification {
 
         public static void ShowSuccess(string message) { }
 
-        public static void ShowWarning(string message) {
-            Logger.Warning(message);
+        public static void ShowWarning(string message,
+                [CallerMemberName] string memberName = "",
+                [CallerFilePath] string sourceFilePath = "",
+                [CallerLineNumber] int lineNumber = 0) {
+            Logger.Warning(message, memberName, sourceFilePath, lineNumber);
         }
 
-        public static void ShowWarning(string message, TimeSpan lifetime) {
-            Logger.Warning(message);
+        public static void ShowWarning(string message, TimeSpan lifetime,
+                [CallerMemberName] string memberName = "",
+                [CallerFilePath] string sourceFilePath = "",
+                [CallerLineNumber] int lineNumber = 0) {
+            Logger.Warning(message, memberName, sourceFilePath, lineNumber);
         }
 
-        public static void ShowError(string message) {
-            Logger.Error(message);
+        public static void ShowError(string message,
+                [CallerMemberName] string memberName = "",
+                [CallerFilePath] string sourceFilePath = "",
+                [CallerLineNumber] int lineNumber = 0) {
+            Logger.Error(message, memberName, sourceFilePath, lineNumber);
         }
 
-        public static void ShowExternalError(string message, string header) {
-            Logger.Error(string.IsNullOrWhiteSpace(header) ? message : $"{header}: {message}");
+        public static void ShowExternalError(string message, string header,
+                [CallerMemberName] string memberName = "",
+                [CallerFilePath] string sourceFilePath = "",
+                [CallerLineNumber] int lineNumber = 0) {
+            Logger.Error(string.IsNullOrWhiteSpace(header) ? message : $"{header}: {message}",
+                memberName, sourceFilePath, lineNumber);
         }
 
-        public static void ShowExternalWarning(string message, string header) {
-            Logger.Warning(string.IsNullOrWhiteSpace(header) ? message : $"{header}: {message}");
+        public static void ShowExternalWarning(string message, string header,
+                [CallerMemberName] string memberName = "",
+                [CallerFilePath] string sourceFilePath = "",
+                [CallerLineNumber] int lineNumber = 0) {
+            Logger.Warning(string.IsNullOrWhiteSpace(header) ? message : $"{header}: {message}",
+                memberName, sourceFilePath, lineNumber);
         }
 
         public static void CloseAll() { }
