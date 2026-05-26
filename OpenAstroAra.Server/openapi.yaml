@@ -1,0 +1,499 @@
+# OpenAstro Ara — REST + WebSocket API contract
+#
+# Source of truth for the server-client wire protocol. Per PORT_PLAYBOOK.md §9 (Phase 5):
+#   - URL-versioned (/api/v1/...)
+#   - No auth in v0.0.1 (trusted-LAN posture per §67)
+#   - JSON for ops, JPEG bytes for previews, FITS bytes for full downloads
+#   - WebSocket at /api/v1/stream for live updates
+#
+# Endpoint groups land incrementally:
+#   - Phase 4 (DONE): /healthz, /api/v1/server/info
+#   - Phase 6: /api/v1/equipment/{type} — list/connect/control
+#   - Phase 7: /api/v1/sequence — load, start/pause/resume/abort, status
+#   - Phase 8: /api/v1/image — list, FITS download, preview JPEG
+#   - Phase 9: /api/v1/log, /api/v1/stream (WebSocket), notifications
+#
+# Phase 5 = the spec itself. Server code references this file as the contract;
+# `Microsoft.AspNetCore.OpenApi` generates the live `/openapi/v1.json` from
+# minimal-API endpoints; Scalar UI mounts it at `/scalar/v1` per §49.
+#
+# Design log: see design/API_CONTRACT.md for one entry per non-obvious wire-shape decision.
+
+openapi: 3.1.0
+
+info:
+  title: OpenAstro Ara Server API
+  version: 0.0.1-ara.1
+  description: |
+    REST + WebSocket API for the OpenAstro Ara headless daemon. Speaks to the
+    Flutter WILMA client (`client/openastroara_client`). Designed for trusted-LAN
+    deployments; v0.1.0 will add opt-in remote-access mode with TLS + token auth.
+
+    **Lineage:** forked from N.I.N.A. (Nighttime Imaging 'N' Astronomy). See repo
+    root LICENSE.txt, COPYING, AUTHORS for the inherited attribution. NOTICE.md
+    (added at Phase 15) carries the full lineage record.
+  license:
+    name: MPL-2.0
+    url: https://www.mozilla.org/en-US/MPL/2.0/
+
+servers:
+  - url: http://{host}:{port}/api/v1
+    description: Direct LAN connection (default)
+    variables:
+      host:
+        default: openastroara.local
+        description: Pi hostname or IP; discoverable via mDNS service _openastroara._tcp.local
+      port:
+        default: "5555"
+
+# ─── Endpoint group: Server ────────────────────────────────────────────────────
+
+paths:
+  /server/info:
+    get:
+      summary: Server identification + capabilities
+      description: |
+        Lightweight identity payload per §60.4. WILMA clients call this after mDNS
+        discovery to verify the daemon they're connecting to and to fetch the
+        server's stable UUID for profile pinning.
+      tags: [Server]
+      responses:
+        '200':
+          description: Identity payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerInfo'
+
+  /server/state:
+    get:
+      summary: Current server-state snapshot (§60.4 hydration)
+      description: |
+        Single-shot snapshot of all session-level state — equipment connection
+        status, in-flight sequence (if any), recent log tail. Used by clients
+        that just reconnected to rebuild their view without replaying the WS
+        event log.
+      tags: [Server]
+      responses:
+        '200':
+          description: State snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerStateSnapshot'
+
+# ─── Endpoint group: Equipment (Phase 6) ──────────────────────────────────────
+
+  /equipment/{type}:
+    get:
+      summary: List discovered devices of a given type
+      description: |
+        Triggers Alpaca discovery (UDP broadcast on port 32227) and returns
+        the result. Cached for §32.4 cache_ttl; pass `?force_refresh=true`
+        to bypass.
+      tags: [Equipment]
+      parameters:
+        - name: type
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/DeviceType'
+        - name: force_refresh
+          in: query
+          schema: { type: boolean, default: false }
+      responses:
+        '200':
+          description: Discovered devices
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/DiscoveredDevice' }
+
+  /equipment/{type}/connect:
+    post:
+      summary: Connect to a device
+      tags: [Equipment]
+      parameters:
+        - name: type
+          in: path
+          required: true
+          schema: { $ref: '#/components/schemas/DeviceType' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnectRequest'
+      responses:
+        '202':
+          description: Connect started (state transition reported via WS)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OperationAccepted' }
+
+  /equipment/{type}/disconnect:
+    post:
+      summary: Disconnect the currently-connected device of this type
+      tags: [Equipment]
+      parameters:
+        - name: type
+          in: path
+          required: true
+          schema: { $ref: '#/components/schemas/DeviceType' }
+      responses:
+        '202':
+          description: Disconnect started
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OperationAccepted' }
+
+# ─── Endpoint group: Sequence (Phase 7) ───────────────────────────────────────
+
+  /sequence:
+    get:
+      summary: Get the current sequence (if any) + execution state
+      tags: [Sequence]
+      responses:
+        '200':
+          description: Current sequence + state
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SequenceState' }
+    put:
+      summary: Replace the current sequence with the supplied JSON
+      description: |
+        Schema per §38. Validation runs server-side; failed validation returns
+        422 with a list of issues (per §73 error shape).
+      tags: [Sequence]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Sequence' }
+      responses:
+        '200':
+          description: Loaded
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SequenceState' }
+        '422':
+          description: Validation failure
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /sequence/start:
+    post:
+      summary: Start (or resume) execution of the loaded sequence
+      tags: [Sequence]
+      responses:
+        '202':
+          description: Started
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OperationAccepted' }
+
+  /sequence/pause:
+    post:
+      summary: Pause execution after the current instruction completes
+      tags: [Sequence]
+      responses:
+        '202':
+          description: Pause requested
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OperationAccepted' }
+
+  /sequence/abort:
+    post:
+      summary: Abort execution immediately (per §35.3 emergency stop semantics)
+      tags: [Sequence]
+      responses:
+        '202':
+          description: Abort initiated; mount parks per §57 + alarm fires per §35.5
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OperationAccepted' }
+
+# ─── Endpoint group: Image (Phase 8) ──────────────────────────────────────────
+
+  /image:
+    get:
+      summary: List captured frames in the library
+      description: |
+        Paginated; default 50 per page. Filter by `target=...`, `date_from=...`,
+        `date_to=...`. Items return metadata only; use `/image/{id}` to download.
+      tags: [Image]
+      parameters:
+        - name: target
+          in: query
+          schema: { type: string }
+        - name: date_from
+          in: query
+          schema: { type: string, format: date-time }
+        - name: date_to
+          in: query
+          schema: { type: string, format: date-time }
+        - name: page
+          in: query
+          schema: { type: integer, default: 1, minimum: 1 }
+        - name: per_page
+          in: query
+          schema: { type: integer, default: 50, minimum: 1, maximum: 200 }
+      responses:
+        '200':
+          description: Page of frames
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FramePage' }
+
+  /image/{id}:
+    get:
+      summary: Get frame metadata
+      tags: [Image]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Frame metadata
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Frame' }
+
+  /image/{id}/fits:
+    get:
+      summary: Download the FITS file
+      tags: [Image]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: FITS bytes
+          content:
+            application/fits:
+              schema: { type: string, format: binary }
+
+  /image/{id}/preview:
+    get:
+      summary: Get the server-rendered JPEG preview
+      description: |
+        Stretched JPEG per §65. Stretch parameters configurable via query string.
+      tags: [Image]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: stretch
+          in: query
+          schema: { type: string, enum: [auto, linear, asinh, log] }
+        - name: max_dim
+          in: query
+          schema: { type: integer, default: 1920, minimum: 256, maximum: 4096 }
+      responses:
+        '200':
+          description: JPEG bytes
+          content:
+            image/jpeg:
+              schema: { type: string, format: binary }
+
+# ─── Endpoint group: Log (Phase 9) ────────────────────────────────────────────
+
+  /log:
+    get:
+      summary: Recent log lines
+      tags: [Log]
+      parameters:
+        - name: tail
+          in: query
+          schema: { type: integer, default: 200, minimum: 1, maximum: 10000 }
+        - name: level
+          in: query
+          schema: { type: string, enum: [Debug, Information, Warning, Error] }
+      responses:
+        '200':
+          description: Log lines
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/LogLine' }
+
+# ─── Endpoint group: Stream (Phase 9 — WebSocket) ─────────────────────────────
+# Note: WebSocket endpoints aren't expressible in OpenAPI 3.1 paths; documented
+# here in description form only. See §60.9 for the full event taxonomy.
+#
+# WS URL: ws://{host}:{port}/api/v1/stream
+# Frames: JSON of shape { type, ts, payload }
+# Subscribe: client sends { type: "subscribe", channels: ["log","frames",...] }
+# Catalog: §60.10 — equipment.state, sequence.progress, frame.complete,
+#          log.line, notification, diagnostic.alert, etc.
+
+# ─── Schemas ──────────────────────────────────────────────────────────────────
+
+components:
+  schemas:
+
+    ServerInfo:
+      type: object
+      required: [server_uuid, nickname, version, api, mdns_service]
+      properties:
+        server_uuid:
+          type: string
+          format: uuid
+          description: Stable identifier for this install (persisted on disk).
+        nickname:
+          type: string
+          description: User-friendly server name (defaults to hostname).
+        version:
+          type: string
+          description: Daemon version (e.g., "0.0.1-ara.1").
+        api:
+          type: string
+          enum: [v1]
+        mdns_service:
+          type: string
+          description: mDNS service type advertised by this daemon.
+          example: _openastroara._tcp.local
+        tier:
+          type: string
+          enum: [scaffold, ready]
+          description: |
+            "scaffold" during Phase 4 (this scaffold only has /healthz +
+            /server/info). Becomes "ready" once Phase 6-9 endpoints land.
+
+    ServerStateSnapshot:
+      type: object
+      required: [server_uuid, equipment, sequence, log_tail]
+      properties:
+        server_uuid: { type: string, format: uuid }
+        equipment:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/EquipmentState'
+        sequence: { $ref: '#/components/schemas/SequenceState', nullable: true }
+        log_tail:
+          type: array
+          items: { $ref: '#/components/schemas/LogLine' }
+
+    DeviceType:
+      type: string
+      enum: [camera, telescope, focuser, filter_wheel, rotator, dome, safety_monitor, switch, observing_conditions, cover_calibrator]
+
+    DiscoveredDevice:
+      type: object
+      required: [unique_id, name, type, host_name, ip_address, ip_port, alpaca_device_number]
+      properties:
+        unique_id: { type: string }
+        name: { type: string }
+        type: { $ref: '#/components/schemas/DeviceType' }
+        host_name: { type: string }
+        ip_address: { type: string }
+        ip_port: { type: integer }
+        alpaca_device_number: { type: integer }
+        use_https: { type: boolean, default: false }
+
+    ConnectRequest:
+      type: object
+      required: [device]
+      properties:
+        device: { $ref: '#/components/schemas/DiscoveredDevice' }
+        idempotency_key:
+          type: string
+          description: Per §60.9; prevents double-connect on retry.
+
+    EquipmentState:
+      type: object
+      properties:
+        state: { type: string, enum: [disconnected, connecting, connected, error] }
+        device: { $ref: '#/components/schemas/DiscoveredDevice', nullable: true }
+        last_event_at: { type: string, format: date-time, nullable: true }
+
+    SequenceState:
+      type: object
+      properties:
+        loaded: { type: boolean }
+        running: { type: boolean }
+        paused: { type: boolean }
+        current_target: { type: string, nullable: true }
+        current_instruction: { type: string, nullable: true }
+        frames_completed: { type: integer, minimum: 0 }
+        frames_total: { type: integer, minimum: 0 }
+
+    Sequence:
+      type: object
+      description: |
+        Full sequence document. Schema per §38. Phase 7 lands the detailed
+        properties; this stub allows the contract to be referenced today.
+      additionalProperties: true
+
+    Frame:
+      type: object
+      required: [id, target, captured_at, exposure_sec, filter, file_size]
+      properties:
+        id: { type: string }
+        target: { type: string }
+        captured_at: { type: string, format: date-time }
+        exposure_sec: { type: number }
+        filter: { type: string }
+        file_size: { type: integer, minimum: 0 }
+        hfr: { type: number, nullable: true }
+        stars: { type: integer, nullable: true }
+        quality_score: { type: number, nullable: true, description: "§50.10 composite score" }
+
+    FramePage:
+      type: object
+      required: [items, page, per_page, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Frame' }
+        page: { type: integer }
+        per_page: { type: integer }
+        total: { type: integer }
+
+    LogLine:
+      type: object
+      required: [ts, level, message]
+      properties:
+        ts: { type: string, format: date-time }
+        level: { type: string, enum: [Debug, Information, Warning, Error] }
+        message: { type: string }
+        source: { type: string, nullable: true }
+
+    OperationAccepted:
+      type: object
+      required: [operation_id]
+      properties:
+        operation_id:
+          type: string
+          format: uuid
+          description: Track operation state via WS `operation.*` events.
+
+    Problem:
+      type: object
+      description: |
+        RFC 7807 problem-details payload. Per playbook §73 error contract.
+      required: [type, title, status]
+      properties:
+        type: { type: string, format: uri, description: "Problem-type URI; see §73 catalog" }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string, nullable: true }
+        instance: { type: string, nullable: true }
+        errors:
+          type: array
+          items:
+            type: object
+            required: [field, code]
+            properties:
+              field: { type: string }
+              code: { type: string }
+              message: { type: string, nullable: true }
