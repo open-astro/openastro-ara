@@ -33,6 +33,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenAstroAra.Image", "OpenA
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Accord.Imaging (NETStandard)", "Accord.Imaging\Accord.Imaging (NETStandard).csproj", "{F1882ED8-D352-4B11-A0B5-02BF44625966}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenAstroAra.Server", "OpenAstroAra.Server\OpenAstroAra.Server.csproj", "{B1A2C3D4-5E6F-7890-ABCD-EF0123456789}"
+EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenAstroAra.Test", "OpenAstroAra.Test\OpenAstroAra.Test.csproj", "{F51E3DA4-B63C-4D96-97B2-DBD222E956BF}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "3rd Party", "3rd Party", "{D63B3F98-1CD5-454F-9717-307594C75669}"
@@ -131,6 +133,18 @@ Global
 		{2E7B7C6F-FB8E-49F2-9579-6D16CD263E64}.SignedRelease|Any CPU.Build.0 = SignedRelease|Any CPU
 		{2E7B7C6F-FB8E-49F2-9579-6D16CD263E64}.SignedRelease|x64.ActiveCfg = SignedRelease|Any CPU
 		{2E7B7C6F-FB8E-49F2-9579-6D16CD263E64}.SignedRelease|x64.Build.0 = SignedRelease|Any CPU
+		{B1A2C3D4-5E6F-7890-ABCD-EF0123456789}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B1A2C3D4-5E6F-7890-ABCD-EF0123456789}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B1A2C3D4-5E6F-7890-ABCD-EF0123456789}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{B1A2C3D4-5E6F-7890-ABCD-EF0123456789}.Debug|x64.Build.0 = Debug|Any CPU
+		{B1A2C3D4-5E6F-7890-ABCD-EF0123456789}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B1A2C3D4-5E6F-7890-ABCD-EF0123456789}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B1A2C3D4-5E6F-7890-ABCD-EF0123456789}.Release|x64.ActiveCfg = Release|Any CPU
+		{B1A2C3D4-5E6F-7890-ABCD-EF0123456789}.Release|x64.Build.0 = Release|Any CPU
+		{B1A2C3D4-5E6F-7890-ABCD-EF0123456789}.SignedRelease|Any CPU.ActiveCfg = SignedRelease|Any CPU
+		{B1A2C3D4-5E6F-7890-ABCD-EF0123456789}.SignedRelease|Any CPU.Build.0 = SignedRelease|Any CPU
+		{B1A2C3D4-5E6F-7890-ABCD-EF0123456789}.SignedRelease|x64.ActiveCfg = SignedRelease|Any CPU
+		{B1A2C3D4-5E6F-7890-ABCD-EF0123456789}.SignedRelease|x64.Build.0 = SignedRelease|Any CPU
 		{F1882ED8-D352-4B11-A0B5-02BF44625966}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{F1882ED8-D352-4B11-A0B5-02BF44625966}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{F1882ED8-D352-4B11-A0B5-02BF44625966}.Debug|x64.ActiveCfg = Debug|Any CPU
