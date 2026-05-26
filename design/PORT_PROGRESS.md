@@ -4,9 +4,9 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** Phase 10.5 done; CHANGELOG.md init in flight before Phase 11
-- **Last merged:** `phase-10.5-deb-packaging` — PR #49, 2026-05-26 (arm64 `.deb` packaging — overlay tree + assembler + CI Build .deb + artifact upload). Promoted to master via PR #50; tag `phase-10.5-complete`. Tail fix `fix-deb-version-tag-filter` (PR #51, tag matcher tightening + systemd unit trailing-comment fix).
-- **Currently working on:** `infra-changelog-init` branch — adds `CHANGELOG.md` at repo root (Keep-a-Changelog format) with the full backfilled history (every phase from 0.5a through 10.5) and the going-forward `[Unreleased]` convention. SKILL.md step 2 of "Open the PR" now reminds the driver to add a `[Unreleased]` bullet for user-visible changes.
+- **Phase:** Phase 11 (Flutter scaffold) — in flight
+- **Last merged:** `infra-changelog-init` — PR #52, 2026-05-26 (`CHANGELOG.md` Keep-a-Changelog init with full backfilled phase history + SKILL.md step reminding the driver to add `[Unreleased]` entries for user-visible changes).
+- **Currently working on:** `phase-11-flutter-scaffold` branch — adds `client/openastroara_client/` Flutter project (macos/windows/linux platforms, Flutter 3.44.0 pinned), runtime deps (dio + web_socket_channel + multicast_dns + riverpod + flutter_secure_storage + file_picker), first-run skeleton (mDNS discovery + manual server entry + /api/v1/server/info handshake via Riverpod 3.x Notifier providers). `flutter analyze` clean. OpenAPI Dart codegen deferred to a Phase 11 follow-up since the `openapi_generator` pub package has a Dart-SDK constraint conflict — the typed client can be generated externally via the Java `openapi-generator-cli` tool instead.
 
 ## Completed
 
@@ -100,7 +100,7 @@ Folded into Phase 0.5p (global.json + csproj target framework bumps).
 
 ## In flight
 
-- `infra-changelog-init` — `CHANGELOG.md` backfill (Keep-a-Changelog) + going-forward `[Unreleased]` convention wired into SKILL.md.
+- `phase-11-flutter-scaffold` — Flutter WILMA client scaffold + first-run flow (mDNS discovery + manual entry + handshake). Real UI polish lands at Phase 12a (app shell). OpenAPI Dart codegen lands as a Phase 11 follow-up (the `openapi_generator` pub package has a SDK-constraint conflict; switching to `openapi-generator-cli` external invocation).
 
 ## Next
 
