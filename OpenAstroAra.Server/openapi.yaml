@@ -8,7 +8,7 @@
 #
 # Endpoint groups land incrementally:
 #   - Phase 4 (DONE): /healthz, /api/v1/server/info
-#   - Phase 6: /api/v1/equipment/{type} — list/connect/control
+#   - Phase 6: /api/v1/equipment/discover/{type} (discovery) + /equipment/{type}/{connect,disconnect}
 #   - Phase 7: /api/v1/sequence — load, start/pause/resume/abort, status
 #   - Phase 8: /api/v1/image — list, FITS download, preview JPEG
 #   - Phase 9: /api/v1/log, /api/v1/stream (WebSocket), notifications
@@ -84,13 +84,18 @@ paths:
 
 # ─── Endpoint group: Equipment (Phase 6) ──────────────────────────────────────
 
-  /equipment/{type}:
+  /equipment/discover/{type}:
     get:
       summary: List discovered devices of a given type
       description: |
         Triggers Alpaca discovery (UDP broadcast on port 32227) and returns
         the result. Cached for §32.4 cache_ttl; pass `?force_refresh=true`
         to bypass.
+
+        The discovery path uses an explicit `/discover/` segment so the
+        per-device current-state GETs at `/equipment/{type}` (where `{type}`
+        is a literal segment like `camera`/`telescope`) do not collide with
+        discovery. See PORT_PLAYBOOK.md §10.6.
       tags: [Equipment]
       parameters:
         - name: type

@@ -44,8 +44,16 @@ public static class EquipmentEndpoints {
     public static IEndpointRouteBuilder MapEquipmentEndpoints(this IEndpointRouteBuilder app) {
         var equipment = app.MapGroup("/api/v1/equipment").WithTags("Equipment");
 
-        // Discovery (shared across device types)
-        equipment.MapGet("/{type}", async (string type, bool? forceRefresh, IEquipmentDiscoveryService svc, CancellationToken ct) => {
+        // Discovery (shared across device types).
+        //
+        // Route is /discover/{type} — NOT /{type} — to avoid colliding with the
+        // per-device literal-route groups below (e.g. GET /api/v1/equipment/camera
+        // maps to the per-device current-state stub, not discovery). The §10.6
+        // table reads "GET /api/v1/equipment/{type}" in shorthand; the actual
+        // wire path is disambiguated via /discover/ so all DeviceType values
+        // (incl. camera/telescope/etc. that have dedicated groups) are reachable.
+        // openapi.yaml + design/PORT_PLAYBOOK.md §10.6 row 1 both updated to match.
+        equipment.MapGet("/discover/{type}", async (string type, bool? forceRefresh, IEquipmentDiscoveryService svc, CancellationToken ct) => {
             if (!Enum.TryParse<DeviceType>(type, ignoreCase: true, out var deviceType)) {
                 return Results.Problem(
                     type: "https://openastro.net/errors/unknown-device-type",
