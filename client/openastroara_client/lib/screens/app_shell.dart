@@ -6,6 +6,7 @@ import '../state/app_shell_state.dart';
 import '../theme/ara_colors.dart';
 import '../widgets/command_palette.dart';
 import '../widgets/equipment_chip.dart';
+import '../widgets/help_dialog.dart';
 import '../widgets/status_indicator.dart';
 import 'library/image_library_screen.dart';
 import 'stats/stats_dashboard_screen.dart';
@@ -214,8 +215,7 @@ class _BottomStatusBar extends StatelessWidget {
           IconButton(
             icon: const Icon(Icons.help_outline, size: 18),
             tooltip: 'Help / Report a bug (§54)',
-            // Disabled until the §54 help/bug-report dialog lands.
-            onPressed: null,
+            onPressed: () => showHelpDialog(context),
           ),
           const SizedBox(width: 4),
         ],
