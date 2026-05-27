@@ -4,9 +4,9 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** Phase 12d.4 (Sequencer node reorder + delete) — in flight
-- **Last merged:** `phase-12d3-cond-loops` — PR #67, 2026-05-27 (conditional/loop UI banners + demo content; 0 CR findings).
-- **Currently working on:** `phase-12d4-reorder` branch — InstructionEditor gains Move Up / Move Down / Delete icon-buttons backed by new SequenceController methods that walk the immutable tree, find the selected node's parent, and rebuild via copyWith. Drag-and-drop lands in 12d.5.
+- **Phase:** Phase 12d.5 (Sequencer Add Child / Add Sibling) — in flight
+- **Last merged:** `phase-12d4-reorder` — PR #68, 2026-05-27 (reorder + delete actions; 0 CR findings).
+- **Currently working on:** `phase-12d5-addnode` branch — two new menu-buttons in the InstructionEditor (Add Child, Add Sibling) with 13 ready-made node specs covering containers + common NINA instruction types. New nodes auto-select for immediate editing. Editable params + DnD reorder land in 12d.6.
 
 ## Completed
 
