@@ -4,9 +4,9 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** Phase 11 (Flutter scaffold) — in flight
-- **Last merged:** `infra-changelog-init` — PR #52, 2026-05-26 (`CHANGELOG.md` Keep-a-Changelog init with full backfilled phase history + SKILL.md step reminding the driver to add `[Unreleased]` entries for user-visible changes).
-- **Currently working on:** `phase-11-flutter-scaffold` branch — adds `client/openastroara_client/` Flutter project (macos/windows/linux platforms, Flutter 3.44.0 pinned), runtime deps (dio + web_socket_channel + multicast_dns + riverpod + flutter_secure_storage + file_picker), first-run skeleton (mDNS discovery + manual server entry + /api/v1/server/info handshake via Riverpod 3.x Notifier providers). `flutter analyze` clean. OpenAPI Dart codegen deferred to a Phase 11 follow-up since the `openapi_generator` pub package has a Dart-SDK constraint conflict — the typed client can be generated externally via the Java `openapi-generator-cli` tool instead.
+- **Phase:** Phase 12a (app shell + global infrastructure) — in flight
+- **Last merged:** `phase-11-flutter-scaffold` — PR #53, 2026-05-26 (Flutter WILMA scaffold + first-run flow + mDNS discovery + /api/v1/server/info handshake + macOS entitlements/Bonjour/ATS fixes from /review fallback). Promoted to master via PR #54 (tag `phase-11-complete`).
+- **Currently working on:** `phase-12a-app-shell` branch — Material 3 dark theme (§25.2 color tokens), AppShell with NavigationRail + 5 tabs (Imaging/Framing/Sequencer/Sky Atlas/Options, all placeholders pointing at later 12c-12h PRs), top equipment bar with §25.3 device-type chips, bottom status bar with StatusIndicator + help-icon, saved-server persistence via flutter_secure_storage so the app starts at AppShell once a server is confirmed. `flutter analyze` clean.
 
 ## Completed
 
@@ -100,7 +100,7 @@ Folded into Phase 0.5p (global.json + csproj target framework bumps).
 
 ## In flight
 
-- `phase-11-flutter-scaffold` — Flutter WILMA client scaffold + first-run flow (mDNS discovery + manual entry + handshake). Real UI polish lands at Phase 12a (app shell). OpenAPI Dart codegen lands as a Phase 11 follow-up (the `openapi_generator` pub package has a SDK-constraint conflict; switching to `openapi-generator-cli` external invocation).
+- `phase-12a-app-shell` — Phase 12a app shell (§25 visual design + nav rail + top equipment bar + status bar + saved-server routing). Tab content + equipment chooser flow + disconnect/emergency-stop modals land in Phase 12c-12h sub-PRs.
 
 ## Next
 

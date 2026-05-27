@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/server.dart';
 import '../services/server_api.dart';
+import '../state/saved_server_state.dart';
 import '../state/server_state.dart';
 
 /// Phase 11 first-run screen — server discovery + selection + handshake.
@@ -89,7 +90,19 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
               ),
             ]),
             const SizedBox(height: 16),
-            if (selected != null) _HandshakePanel(handshake: handshake, server: selected),
+            if (selected != null)
+              _HandshakePanel(
+                handshake: handshake,
+                server: selected,
+                onConfirm: () async {
+                  await ref
+                      .read(savedServersProvider.notifier)
+                      .add(selected);
+                  // The _RootRouter watching savedServersProvider rebuilds
+                  // and swaps in AppShell automatically once the list is
+                  // non-empty.
+                },
+              ),
           ],
         ),
       ),
@@ -109,7 +122,12 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
 class _HandshakePanel extends StatelessWidget {
   final AsyncValue<ServerInfo?> handshake;
   final AraServer server;
-  const _HandshakePanel({required this.handshake, required this.server});
+  final VoidCallback onConfirm;
+  const _HandshakePanel({
+    required this.handshake,
+    required this.server,
+    required this.onConfirm,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -125,6 +143,12 @@ class _HandshakePanel extends StatelessWidget {
                   Text('Server version: ${info.version}'),
                   Text('API version: ${info.apiVersion}'),
                   Text('Endpoint: ${server.baseUrl}'),
+                  const SizedBox(height: 12),
+                  FilledButton.icon(
+                    onPressed: onConfirm,
+                    icon: const Icon(Icons.arrow_forward),
+                    label: const Text('Save & continue'),
+                  ),
                 ]),
           loading: () => Row(children: [
             const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)),
