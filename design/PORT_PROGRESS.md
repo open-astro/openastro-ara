@@ -4,9 +4,9 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** Phase 12e.1 (Sky Atlas tab + Data Manager scaffold) — in flight
-- **Last merged:** `phase-12d-sequencer` — PR #59, 2026-05-27 (Sequencer skeleton — data model + tree + toolbar + editor; CR found 4 valid issues: unmodifiable map/list wrap + copyWith sentinel + load resets selection + toolbar right-align, all fixed before merge).
-- **Currently working on:** `phase-12e-sky-atlas` branch — Sky Atlas tab body (mode toggle + universal search + Aladin placeholder) + 4-tab DataManagerModal (Sky Imagery / Star Catalogs / Thumbnails / Solar System) + §36.13 sky-data-missing banner. webview_flutter Aladin embed + real downloads land in 12e.2.
+- **Phase:** Phase 12f.1 (Image Library skeleton) — in flight
+- **Last merged:** `phase-12e-sky-atlas` — PR #60, 2026-05-27 (Sky Atlas tab + Data Manager 4-tab modal + §36.13 sky-data-missing banner; CR found 1 Minor missing dismiss action, fixed before merge).
+- **Currently working on:** `phase-12f-image-library` branch — full-screen `ImageLibraryScreen` (sessions list, filter pills, thumbnail strips) + `FrameViewerScreen` (metadata panel + action buttons) + demo M42 / NGC 6188 sessions + AppShell launch entry. Real `/api/v1/sessions` + `/api/v1/frames`, stretch picker (§65), auto-rating + HFR drift (§40.7), bulk ops + backup UI land in 12f.2/.3.
 
 ## Completed
 

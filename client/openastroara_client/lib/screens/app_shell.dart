@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../theme/ara_colors.dart';
 import '../widgets/equipment_chip.dart';
 import '../widgets/status_indicator.dart';
+import 'library/image_library_screen.dart';
 import 'tabs/framing_tab.dart';
 import 'tabs/imaging_tab.dart';
 import 'tabs/options_tab.dart';
@@ -140,6 +141,22 @@ class _BottomStatusBar extends StatelessWidget {
             label: 'Disconnected',
           ),
           const Spacer(),
+          // Image Library entry (§40). Full-screen route — captured frames
+          // grouped by session per 12f.1's in-memory demo; real backend in
+          // 12f.2.
+          TextButton.icon(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const ImageLibraryScreen(),
+              ),
+            ),
+            icon: const Icon(Icons.photo_library_outlined, size: 16),
+            label: const Text('Image Library'),
+            style: TextButton.styleFrom(
+              foregroundColor: AraColors.textSecondary,
+              textStyle: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
           // Profile wizard entry (§37). Launches the 18-screen wizard as a
           // full-screen route; per-screen content is being filled in across
           // Phase 12b follow-up PRs.
