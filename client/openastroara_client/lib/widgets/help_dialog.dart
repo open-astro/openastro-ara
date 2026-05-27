@@ -117,10 +117,19 @@ class _HelpDialog extends ConsumerWidget {
     );
     // Re-fetch package info inline so the diagnostics text always has the
     // freshest version even if the dialog opened before the async resolved.
-    final info = await PackageInfo.fromPlatform();
-    final version = info.buildNumber.isEmpty
-        ? info.version
-        : '${info.version}+${info.buildNumber}';
+    // PackageInfo.fromPlatform can throw on some platforms (e.g. missing
+    // channel registration); fall back to "(unknown)" rather than letting
+    // the whole button do nothing.
+    String version = '(unknown)';
+    try {
+      final info = await PackageInfo.fromPlatform();
+      version = info.buildNumber.isEmpty
+          ? info.version
+          : '${info.version}+${info.buildNumber}';
+    } catch (e, st) {
+      developer.log('Failed to read PackageInfo',
+          name: 'openastroara.help_dialog', error: e, stackTrace: st);
+    }
     final payload = '''
 OpenAstroAra diagnostics:
   app version: $version
