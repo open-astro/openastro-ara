@@ -4,9 +4,9 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** Phase 12-tests-3 (SequenceController coverage) — in flight
-- **Last merged:** `phase-12-tests-2-state` — PR #78, 2026-05-27 (18 more tests for wizard / exposure / tab-index; CR clean, 0 findings).
-- **Currently working on:** `phase-12-tests-3-seq` branch — 14 SequenceController tests covering tree mutation (addChild + addSiblingAfter), reorder (moveSelectedUp/Down), delete, root + non-container guards, findNode/load semantics. Brings total coverage to 55.
+- **Phase:** Phase 12 CR cleanup round 5 — 4 findings on promotion #80
+- **Last merged:** `phase-12-tests-3-seq` — PR #79, 2026-05-27 (14 SequenceController tests; CR caught 1 Minor — assertion-style consistency — fixed before merge).
+- **Currently working on:** `phase-12-cr-cleanup-5` branch — fixes promotion-PR #80 findings: Set.unmodifiable on librarySelection toggle (+ test locking it in), SafeArea wrap on LibraryBulkActionBar for system-inset safety, CHANGELOG casing nit, this PORT_PROGRESS update. Total tests after this: 56.
 
 ## Completed
 

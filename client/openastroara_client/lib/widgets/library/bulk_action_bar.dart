@@ -15,15 +15,20 @@ class LibraryBulkActionBar extends ConsumerWidget {
     final selected = ref.watch(librarySelectionProvider);
     if (selected.isEmpty) return const SizedBox.shrink();
 
-    return Material(
-      elevation: 8,
-      color: AraColors.bgPanel,
-      child: Container(
-        decoration: const BoxDecoration(
-          border: Border(top: BorderSide(color: AraColors.selectionBg, width: 2)),
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        child: Row(
+    return SafeArea(
+      // `top: false` because this bar lives at the bottom; only the bottom
+      // inset matters (system gesture/navigation area on mobile, Dock on
+      // macOS, etc).
+      top: false,
+      child: Material(
+        elevation: 8,
+        color: AraColors.bgPanel,
+        child: Container(
+          decoration: const BoxDecoration(
+            border: Border(top: BorderSide(color: AraColors.selectionBg, width: 2)),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(
           children: [
             IconButton(
               onPressed: () =>
@@ -54,6 +59,7 @@ class LibraryBulkActionBar extends ConsumerWidget {
               ),
             ),
           ],
+          ),
         ),
       ),
     );
