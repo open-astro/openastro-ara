@@ -9,6 +9,7 @@ import 'tabs/imaging_tab.dart';
 import 'tabs/options_tab.dart';
 import 'tabs/sequencer_tab.dart';
 import 'tabs/sky_atlas_tab.dart';
+import 'wizard/wizard_shell.dart';
 
 /// Main app shell — replaces the first-run screen once a server is saved
 /// (playbook §25 layout: nav rail on left, top equipment bar, center
@@ -126,7 +127,7 @@ class _BottomStatusBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 28,
+      height: 32,
       decoration: const BoxDecoration(
         color: AraColors.bgPanel,
         border: Border(top: BorderSide(color: AraColors.border)),
@@ -139,6 +140,23 @@ class _BottomStatusBar extends StatelessWidget {
             label: 'Disconnected',
           ),
           const Spacer(),
+          // Profile wizard entry (§37). Launches the 18-screen wizard as a
+          // full-screen route; per-screen content is being filled in across
+          // Phase 12b follow-up PRs.
+          TextButton.icon(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const WizardShell(),
+                fullscreenDialog: true,
+              ),
+            ),
+            icon: const Icon(Icons.tune, size: 16),
+            label: const Text('Run profile wizard'),
+            style: TextButton.styleFrom(
+              foregroundColor: AraColors.textSecondary,
+              textStyle: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
           // Bug-report entry (§54) — wired in a Phase 12a follow-up.
           IconButton(
             icon: const Icon(Icons.help_outline, size: 18),
