@@ -26,7 +26,7 @@ class WizardShell extends ConsumerWidget {
         title: Text('Set up profile · Step ${state.step} of ${ProfileWizard.totalSteps}'),
         actions: [
           TextButton.icon(
-            onPressed: () => _saveAndExit(controller),
+            onPressed: () => _saveAndExit(context, controller),
             icon: const Icon(Icons.logout, size: 18),
             label: const Text('Save & Exit'),
           ),
@@ -48,7 +48,7 @@ class WizardShell extends ConsumerWidget {
             onSkip: controller.skipCurrent,
             onNext: state.step < ProfileWizard.totalSteps
                 ? controller.next
-                : () => _saveAndExit(controller),
+                : () => _saveAndExit(context, controller),
             isLast: state.step == ProfileWizard.totalSteps,
           ),
         ],
@@ -56,9 +56,18 @@ class WizardShell extends ConsumerWidget {
     );
   }
 
-  void _saveAndExit(WizardController controller) {
+  void _saveAndExit(BuildContext context, WizardController controller) {
     final draft = controller.snapshot();
-    onComplete?.call(ProfileDraftSnapshot(draft));
+    final cb = onComplete;
+    if (cb != null) {
+      cb(ProfileDraftSnapshot(draft));
+    } else {
+      // No persistence callback wired yet (current AppShell launcher path) —
+      // still dismiss the wizard route so Save & Exit + Save Profile don't
+      // look broken. Profile persistence to ~/.config/openastroara/profiles/
+      // lands with the first per-screen form follow-up PR (§30.4).
+      Navigator.of(context).pop();
+    }
   }
 }
 

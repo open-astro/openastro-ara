@@ -23,7 +23,14 @@ class WizardController extends Notifier<WizardState> {
 
   void skipCurrent() {
     state.draft.skippedScreens.add(state.step);
-    next();
+    if (state.step < ProfileWizard.totalSteps) {
+      next();
+    } else {
+      // On the last step, `next()` is a no-op, so explicitly emit a new
+      // state to notify listeners that `skippedScreens` mutated and the
+      // skipped-banner needs to render.
+      state = state.copyWith();
+    }
   }
 
   void jumpTo(int step) {
