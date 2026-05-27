@@ -3,6 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../state/stats/stats_state.dart';
 import '../../theme/ara_colors.dart';
+import '../../widgets/stats/charts/calendar_heatmap.dart';
+import '../../widgets/stats/charts/focus_temp_scatter.dart';
+import '../../widgets/stats/charts/frame_quality_chart.dart';
+import '../../widgets/stats/charts/guiding_rms_chart.dart';
 import '../../widgets/stats/stat_tile.dart';
 
 /// Stats dashboard per playbook §50. Phase 12g.1 wires the Overview tiles +
@@ -105,30 +109,10 @@ class StatsDashboardScreen extends ConsumerWidget {
               ),
           const SizedBox(height: 24),
           _SectionTitle(title: 'Visualizations', context: context),
-          _ChartPlaceholder(
-            icon: Icons.scatter_plot,
-            title: 'Focus & Temperature',
-            subtitle:
-                'Focus position vs sensor temperature scatter + linear regression — Phase 12g.2',
-          ),
-          _ChartPlaceholder(
-            icon: Icons.show_chart,
-            title: 'Guiding RMS Trends',
-            subtitle:
-                'Per-session RA + Dec RMS arcseconds over time — Phase 12g.2',
-          ),
-          _ChartPlaceholder(
-            icon: Icons.bar_chart,
-            title: 'Frame Quality Composite',
-            subtitle:
-                '§50.10 composite score (HFR + star count + ADU background) — Phase 12g.2',
-          ),
-          _ChartPlaceholder(
-            icon: Icons.grid_on,
-            title: 'Calendar Heatmap',
-            subtitle:
-                'GitHub-style calendar of integration minutes per night — Phase 12g.2',
-          ),
+          const FocusTempScatterChart(),
+          const GuidingRmsChart(),
+          const FrameQualityChart(),
+          const CalendarHeatmap(),
         ],
       ),
     );
@@ -183,50 +167,3 @@ class _TargetRollupTile extends StatelessWidget {
   }
 }
 
-class _ChartPlaceholder extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-
-  const _ChartPlaceholder({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 140,
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AraColors.bgPanel,
-        border: Border.all(color: AraColors.border),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, size: 48, color: AraColors.textDisabled),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(title, style: Theme.of(context).textTheme.titleSmall),
-                const SizedBox(height: 4),
-                Text(
-                  subtitle,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AraColors.textSecondary,
-                      ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
