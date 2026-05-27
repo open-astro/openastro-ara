@@ -4,9 +4,9 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** Phase 12f.3a (Library multi-select skeleton) — in flight
-- **Last merged:** PR #71 promotion (port/ara → master) — 2026-05-27, master at `85ee24726`. 13 sub-PRs (#63-#75 less #71) landed in port/ara during the session including 4 cleanup rounds for promotion-PR findings.
-- **Currently working on:** `phase-12f3a-multiselect` branch — adds §40.8 selection-mode state + `LibraryBulkActionBar` slide-up card with 5 disabled-for-now actions (Rate / Tag / Move / Export / Delete). FrameThumbnail gains selected/selectionMode/onLongPress props. Real bulk actions wire to /api/v1/frames/bulk in 12f.3b.
+- **Phase:** Phase 12-tests (initial unit tests + CI integration) — in flight
+- **Last merged:** `phase-12f3a-multiselect` — PR #76, 2026-05-27 (library multi-select skeleton; CR caught 1 Major — long-press add-only — fixed before merge).
+- **Currently working on:** `phase-12-tests-initial` branch — seeds `test/` directory with 23 Dart unit tests across `library_selection_test`, `settings_search_test`, `sequence_node_test` + adds the long-promised `client-test` CI job (`flutter analyze && flutter test` on Linux, pinned to .flutter-version).
 
 ## Completed
 
@@ -104,7 +104,7 @@ Folded into Phase 0.5p (global.json + csproj target framework bumps).
 
 - **Phase 11** — Flutter WILMA client scaffold + first-run flow + server discovery + handshake. Generates Dart client from `OpenAstroAra.Server/openapi.yaml` via `openapi_generator` per §12.1.
 - **Phase 12-13** — Flutter views (app shell, all main tabs) + image preview pipeline end-to-end.
-- **Phase 14** — Tests + GitHub Actions CI matrix.
+- **Phase 14** — CI matrix expansion (cross-platform client-test macOS/Windows/Linux + server-e2e Docker arm64 + settings-registry gate + Alpaca-simulator pinning per §14.3 / §14.5). Initial `client-test` job + Dart unit tests landed early in Phase 12-tests.
 - **Phase 15** — TODO sweep + RPi smoke test + release v0.0.1-ara.1.
 
 ## Tag inventory
