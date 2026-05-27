@@ -243,6 +243,7 @@ List<SettingsSearchEntry> searchSettings(
 }) {
   final q = query.trim().toLowerCase();
   if (q.isEmpty) return const [];
+  if (limit <= 0) return const [];
   final scored = <(int, SettingsSearchEntry)>[];
   for (final entry in index) {
     final s = _scoreEntry(entry, q);

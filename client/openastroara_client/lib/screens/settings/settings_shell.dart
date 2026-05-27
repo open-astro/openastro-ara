@@ -159,15 +159,22 @@ class _PanelHeader extends StatelessWidget {
           Text(info?.label ?? 'Settings',
               style: Theme.of(context).textTheme.titleMedium),
           const Spacer(),
-          // §61 smart search ⌘K — opens the global command palette
-          // (also reachable via the ⌘K / Ctrl+K shortcut from anywhere
-          // in AppShell).
+          // §61 smart search — opens the global command palette (also
+          // reachable via ⌘K / Ctrl+K from anywhere in AppShell). Hint
+          // adapts to host platform so the displayed shortcut matches
+          // what the user can actually press.
           Builder(
-            builder: (context) => TextButton.icon(
-              onPressed: () => showCommandPalette(context),
-              icon: const Icon(Icons.search, size: 16),
-              label: const Text('Search settings (⌘K)'),
-            ),
+            builder: (context) {
+              final shortcutLabel =
+                  Theme.of(context).platform == TargetPlatform.macOS
+                      ? '⌘K'
+                      : 'Ctrl+K';
+              return TextButton.icon(
+                onPressed: () => showCommandPalette(context),
+                icon: const Icon(Icons.search, size: 16),
+                label: Text('Search settings ($shortcutLabel)'),
+              );
+            },
           ),
         ],
       ),
