@@ -4,9 +4,9 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** Phase 12h.2 (Remaining settings panels — read-only stubs) — in flight
-- **Last merged:** `phase-12h-settings` — PR #63, 2026-05-27 (Settings shell + tree nav + 3 basic panels; CR caught 1 Major — TextEditingController in build() — fixed before merge).
-- **Currently working on:** `phase-12h2-panels` branch — 18 new read-only panel stubs bring the §25.5.5 settings tree to 22 rendered panels. Equipment cluster (10) + Imaging extras (Autofocus, Plate Solving) + Session (Filenames, Notifications) + Safety (Policies, Site) + Sky Atlas Data + Profile (Active, Re-run wizard). Editable forms + persistence land in 12h.2b/c; §61 ⌘K smart search in 12h.3.
+- **Phase:** Phase 12h.3 (§61 ⌘K smart search palette) — in flight
+- **Last merged:** `phase-12h2-panels` — PR #64, 2026-05-27 (18 new settings panels + shared SettingsRow widget; 0 CR findings, merged with "No actionable comments 🎉").
+- **Currently working on:** `phase-12h3-searchpalette` branch — global ⌘K / Ctrl+K command palette indexes the 22-panel `settingsTree` registry + a per-panel keyword corpus. Results are ranked, navigable via ↑↓/Enter/Esc; activating one jumps to that settings panel by switching to the Options tab + setting the panel-id provider. Closes out the Phase 12h trio (shell → panels → search).
 
 ## Completed
 

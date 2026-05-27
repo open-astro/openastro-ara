@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../state/app_shell_state.dart';
 import '../theme/ara_colors.dart';
+import '../widgets/command_palette.dart';
 import '../widgets/equipment_chip.dart';
 import '../widgets/status_indicator.dart';
 import 'library/image_library_screen.dart';
@@ -26,8 +29,6 @@ class AppShell extends ConsumerStatefulWidget {
 }
 
 class _AppShellState extends ConsumerState<AppShell> {
-  int _selectedTab = 0;
-
   static const _tabs = <_TabSpec>[
     _TabSpec(icon: Icons.camera_alt, label: 'Imaging', body: ImagingTab()),
     _TabSpec(icon: Icons.crop_free, label: 'Framing', body: FramingTab()),
@@ -38,33 +39,49 @@ class _AppShellState extends ConsumerState<AppShell> {
 
   @override
   Widget build(BuildContext context) {
+    final selectedTab = ref.watch(selectedTabIndexProvider);
     return Scaffold(
       body: SafeArea(
-        child: Column(
-          children: [
-            const _TopEquipmentBar(),
-            Expanded(
-              child: Row(
-                children: [
-                  NavigationRail(
-                    selectedIndex: _selectedTab,
-                    onDestinationSelected: (i) => setState(() => _selectedTab = i),
-                    labelType: NavigationRailLabelType.all,
-                    destinations: [
-                      for (final t in _tabs)
-                        NavigationRailDestination(
-                          icon: Icon(t.icon),
-                          label: Text(t.label),
-                        ),
+        child: CallbackShortcuts(
+          // §61 ⌘K on macOS, Ctrl+K elsewhere — both bound so the palette
+          // is reachable regardless of host platform.
+          bindings: <ShortcutActivator, VoidCallback>{
+            const SingleActivator(LogicalKeyboardKey.keyK, meta: true): () =>
+                showCommandPalette(context),
+            const SingleActivator(LogicalKeyboardKey.keyK, control: true): () =>
+                showCommandPalette(context),
+          },
+          child: Focus(
+            autofocus: true,
+            child: Column(
+              children: [
+                const _TopEquipmentBar(),
+                Expanded(
+                  child: Row(
+                    children: [
+                      NavigationRail(
+                        selectedIndex: selectedTab,
+                        onDestinationSelected: (i) => ref
+                            .read(selectedTabIndexProvider.notifier)
+                            .select(i),
+                        labelType: NavigationRailLabelType.all,
+                        destinations: [
+                          for (final t in _tabs)
+                            NavigationRailDestination(
+                              icon: Icon(t.icon),
+                              label: Text(t.label),
+                            ),
+                        ],
+                      ),
+                      const VerticalDivider(width: 1, thickness: 1),
+                      Expanded(child: _tabs[selectedTab].body),
                     ],
                   ),
-                  const VerticalDivider(width: 1, thickness: 1),
-                  Expanded(child: _tabs[_selectedTab].body),
-                ],
-              ),
+                ),
+                const _BottomStatusBar(),
+              ],
             ),
-            const _BottomStatusBar(),
-          ],
+          ),
         ),
       ),
     );

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../state/settings/settings_nav.dart';
 import '../../theme/ara_colors.dart';
+import '../../widgets/command_palette.dart';
 import 'panels/diagnostics_mode_panel.dart';
 import 'panels/equipment_camera_panel.dart';
 import 'panels/equipment_dome_panel.dart';
@@ -158,11 +159,22 @@ class _PanelHeader extends StatelessWidget {
           Text(info?.label ?? 'Settings',
               style: Theme.of(context).textTheme.titleMedium),
           const Spacer(),
-          // §61 smart search ⌘K stub — wires up in Phase 12h.3.
-          TextButton.icon(
-            onPressed: null,
-            icon: const Icon(Icons.search, size: 16),
-            label: const Text('Search settings (⌘K)'),
+          // §61 smart search — opens the global command palette (also
+          // reachable via ⌘K / Ctrl+K from anywhere in AppShell). Hint
+          // adapts to host platform so the displayed shortcut matches
+          // what the user can actually press.
+          Builder(
+            builder: (context) {
+              final shortcutLabel =
+                  Theme.of(context).platform == TargetPlatform.macOS
+                      ? '⌘K'
+                      : 'Ctrl+K';
+              return TextButton.icon(
+                onPressed: () => showCommandPalette(context),
+                icon: const Icon(Icons.search, size: 16),
+                label: Text('Search settings ($shortcutLabel)'),
+              );
+            },
           ),
         ],
       ),
