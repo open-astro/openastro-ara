@@ -42,13 +42,19 @@ class SequenceController extends Notifier<SequenceNode> {
   }
 
   /// Append a new node as a child of the parent with id [parentId]. Selects
-  /// the new node so its params can be edited immediately.
+  /// the new node so its params can be edited immediately. No-op if the
+  /// parent doesn't exist or isn't a container — instructions can't have
+  /// children; the API enforces the invariant even if the UI gate is
+  /// bypassed.
   void addChild(
     String parentId, {
     required SequenceNodeKind kind,
     String? instructionType,
     String? displayName,
   }) {
+    final parent = findNode(state, parentId);
+    if (parent == null || !parent.isContainer) return;
+
     final id = _nextId();
     final newNode = SequenceNode(
       id: id,
