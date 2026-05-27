@@ -180,3 +180,43 @@ jobs:
           path: ./dist/openastroara-server_*_arm64.deb
           if-no-files-found: error
           retention-days: 30
+
+  client-test:
+    name: Client (analyze + test)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (no LFS)
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.x pinned per zizmor + CodeRabbit security policy
+        with:
+          lfs: false
+          persist-credentials: false
+
+      - name: Read pinned Flutter version
+        id: flutter-version
+        run: |
+          set -euo pipefail
+          VERSION="$(cat client/openastroara_client/.flutter-version | tr -d '[:space:]')"
+          if [[ -z "$VERSION" ]]; then
+            echo "::error::client/openastroara_client/.flutter-version is empty"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@e938fdf56512cc96ef2f93601a5a40bde3801046  # v2.x pinned per zizmor immutable-ref policy
+        with:
+          flutter-version: ${{ steps.flutter-version.outputs.version }}
+          channel: stable
+          cache: true
+
+      - name: pub get
+        working-directory: client/openastroara_client
+        run: flutter pub get
+
+      - name: flutter analyze
+        working-directory: client/openastroara_client
+        run: flutter analyze
+
+      - name: flutter test
+        working-directory: client/openastroara_client
+        run: flutter test

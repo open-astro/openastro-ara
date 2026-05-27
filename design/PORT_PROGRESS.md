@@ -4,9 +4,9 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** Phase 12f.3a (Library multi-select skeleton) — in flight
-- **Last merged:** PR #71 promotion (port/ara → master) — 2026-05-27, master at `85ee24726`. 13 sub-PRs (#63-#75 less #71) landed in port/ara during the session including 4 cleanup rounds for promotion-PR findings.
-- **Currently working on:** `phase-12f3a-multiselect` branch — adds §40.8 selection-mode state + `LibraryBulkActionBar` slide-up card with 5 disabled-for-now actions (Rate / Tag / Move / Export / Delete). FrameThumbnail gains selected/selectionMode/onLongPress props. Real bulk actions wire to /api/v1/frames/bulk in 12f.3b.
+- **Phase:** Phase 12-tests (initial unit tests + CI integration) — in flight
+- **Last merged:** `phase-12f3a-multiselect` — PR #76, 2026-05-27 (library multi-select skeleton; CR caught 1 Major — long-press add-only — fixed before merge).
+- **Currently working on:** `phase-12-tests-initial` branch — seeds `test/` directory with 23 Dart unit tests across `library_selection_test`, `settings_search_test`, `sequence_node_test` + adds the long-promised `client-test` CI job (`flutter analyze && flutter test` on Linux, pinned to .flutter-version).
 
 ## Completed
 
