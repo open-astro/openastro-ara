@@ -4,9 +4,9 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** Phase 12d.5 (Sequencer Add Child / Add Sibling) — in flight
-- **Last merged:** `phase-12d4-reorder` — PR #68, 2026-05-27 (reorder + delete actions; 0 CR findings).
-- **Currently working on:** `phase-12d5-addnode` branch — two new menu-buttons in the InstructionEditor (Add Child, Add Sibling) with 13 ready-made node specs covering containers + common NINA instruction types. New nodes auto-select for immediate editing. Editable params + DnD reorder land in 12d.6.
+- **Phase:** Phase 12g.3 (Stats CSV export) — in flight
+- **Last merged:** `phase-12d5-addnode` — PR #69, 2026-05-27 (Add Child/Sibling actions; CR caught 1 Major — non-container parent guard — fixed before merge).
+- **Currently working on:** `phase-12g3-csv` branch — Export CSV button on Stats dashboard now offers Sessions Summary + Per-Frame Details flavors via PopupMenu; selected CSV is copied to the clipboard with row-count confirmation snackbar. File-save dialog lands in 12g.4.
 
 ## Completed
 
