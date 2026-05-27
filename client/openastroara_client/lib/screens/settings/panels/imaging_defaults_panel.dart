@@ -48,12 +48,13 @@ class _SettingsField extends StatelessWidget {
                       color: AraColors.textSecondary,
                     )),
           ),
+          // Phase 12h.1 ships read-only stubs — using Text instead of a
+          // disabled TextField avoids allocating a TextEditingController
+          // every rebuild. 12h.2 swaps these for real editable form fields
+          // (each one in its own StatefulWidget with properly-disposed
+          // controllers).
           Expanded(
-            child: TextField(
-              controller: TextEditingController(text: value),
-              enabled: false,
-              decoration: const InputDecoration(isDense: true),
-            ),
+            child: Text(value, style: Theme.of(context).textTheme.bodyMedium),
           ),
         ],
       ),
