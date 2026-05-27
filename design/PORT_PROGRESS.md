@@ -104,7 +104,7 @@ Folded into Phase 0.5p (global.json + csproj target framework bumps).
 
 - **Phase 11** — Flutter WILMA client scaffold + first-run flow + server discovery + handshake. Generates Dart client from `OpenAstroAra.Server/openapi.yaml` via `openapi_generator` per §12.1.
 - **Phase 12-13** — Flutter views (app shell, all main tabs) + image preview pipeline end-to-end.
-- **Phase 14** — Tests + GitHub Actions CI matrix.
+- **Phase 14** — CI matrix expansion (cross-platform client-test macOS/Windows/Linux + server-e2e Docker arm64 + settings-registry gate + Alpaca-simulator pinning per §14.3 / §14.5). Initial `client-test` job + Dart unit tests landed early in Phase 12-tests.
 - **Phase 15** — TODO sweep + RPi smoke test + release v0.0.1-ara.1.
 
 ## Tag inventory
