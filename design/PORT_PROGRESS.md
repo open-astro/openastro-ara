@@ -4,9 +4,9 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** Phase 12d.3 (Sequencer conditional/loop UI) — in flight
-- **Last merged:** `phase-12g2-charts` — PR #66, 2026-05-27 (4 fl_chart visualizations; CR caught 2 Majors — both hard-coded chart maxY — fixed before merge).
-- **Currently working on:** `phase-12d3-cond-loops` branch — demos a `ForEachFilter` loop (L/R/G/B sub-loop) under M42 + an `IfCondition` skip-if-unsafe under NGC 7000, with new condition/loop banners in the InstructionEditor explaining the gate logic and iteration values.
+- **Phase:** Phase 12d.4 (Sequencer node reorder + delete) — in flight
+- **Last merged:** `phase-12d3-cond-loops` — PR #67, 2026-05-27 (conditional/loop UI banners + demo content; 0 CR findings).
+- **Currently working on:** `phase-12d4-reorder` branch — InstructionEditor gains Move Up / Move Down / Delete icon-buttons backed by new SequenceController methods that walk the immutable tree, find the selected node's parent, and rebuild via copyWith. Drag-and-drop lands in 12d.5.
 
 ## Completed
 

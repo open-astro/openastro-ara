@@ -19,6 +19,67 @@ class SequenceController extends Notifier<SequenceNode> {
     ref.read(selectedNodeIdProvider.notifier).select(null);
   }
 
+  /// Move the selected node up among its siblings. No-op if nothing is
+  /// selected, the node is the root, or it's already first.
+  void moveSelectedUp() => _moveSelected(-1);
+
+  /// Move the selected node down among its siblings. No-op if nothing is
+  /// selected, the node is the root, or it's already last.
+  void moveSelectedDown() => _moveSelected(1);
+
+  void _moveSelected(int delta) {
+    final id = ref.read(selectedNodeIdProvider);
+    if (id == null || id == state.id) return;
+    final next = _withParentModified(state, id, (parent, idx) {
+      final newIdx = idx + delta;
+      if (newIdx < 0 || newIdx >= parent.children.length) return parent;
+      final reordered = [...parent.children];
+      final moved = reordered.removeAt(idx);
+      reordered.insert(newIdx, moved);
+      return parent.copyWith(children: reordered);
+    });
+    if (next != null) state = next;
+  }
+
+  /// Delete the selected node. Also clears the selection since the id is now
+  /// dangling. No-op if nothing is selected or the node is the root.
+  void deleteSelected() {
+    final id = ref.read(selectedNodeIdProvider);
+    if (id == null || id == state.id) return;
+    final next = _withParentModified(state, id, (parent, idx) {
+      final reordered = [...parent.children]..removeAt(idx);
+      return parent.copyWith(children: reordered);
+    });
+    if (next != null) {
+      state = next;
+      ref.read(selectedNodeIdProvider.notifier).select(null);
+    }
+  }
+
+  /// Recursively find the parent of [id] and apply [op]. Returns the new
+  /// root (or `null` if the id wasn't found anywhere). Each ancestor on the
+  /// path gets a fresh copyWith so the immutable tree's identity invariants
+  /// hold all the way back up to root.
+  static SequenceNode? _withParentModified(
+    SequenceNode current,
+    String id,
+    SequenceNode Function(SequenceNode parent, int idx) op,
+  ) {
+    for (var i = 0; i < current.children.length; i++) {
+      final child = current.children[i];
+      if (child.id == id) {
+        return op(current, i);
+      }
+      final replaced = _withParentModified(child, id, op);
+      if (replaced != null) {
+        final children = [...current.children];
+        children[i] = replaced;
+        return current.copyWith(children: children);
+      }
+    }
+    return null;
+  }
+
   /// Returns a placeholder root that contains one Area + two Targets so the
   /// tree view shows something on first launch. Phase 12d.3 expanded the
   /// demo with a conditional container (skip-if-unsafe) and a loop container

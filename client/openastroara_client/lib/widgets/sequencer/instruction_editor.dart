@@ -34,13 +34,51 @@ class InstructionEditor extends ConsumerWidget {
       );
     }
 
+    final isRoot = node.id == root.id;
     return Container(
       color: AraColors.bgPanel,
       padding: const EdgeInsets.all(16),
       child: ListView(
         children: [
-          Text(node.displayName,
-              style: Theme.of(context).textTheme.titleMedium),
+          Row(children: [
+            Expanded(
+              child: Text(node.displayName,
+                  style: Theme.of(context).textTheme.titleMedium),
+            ),
+            // Phase 12d.4 — reorder + delete. Disabled for the root since
+            // moving it sideways is undefined. Drag-and-drop lands in 12d.5.
+            IconButton(
+              onPressed: isRoot
+                  ? null
+                  : () => ref
+                      .read(sequenceControllerProvider.notifier)
+                      .moveSelectedUp(),
+              icon: const Icon(Icons.arrow_upward),
+              tooltip: 'Move up among siblings',
+              iconSize: 18,
+            ),
+            IconButton(
+              onPressed: isRoot
+                  ? null
+                  : () => ref
+                      .read(sequenceControllerProvider.notifier)
+                      .moveSelectedDown(),
+              icon: const Icon(Icons.arrow_downward),
+              tooltip: 'Move down among siblings',
+              iconSize: 18,
+            ),
+            IconButton(
+              onPressed: isRoot
+                  ? null
+                  : () => ref
+                      .read(sequenceControllerProvider.notifier)
+                      .deleteSelected(),
+              icon: const Icon(Icons.delete_outline),
+              tooltip: 'Delete this node',
+              iconSize: 18,
+              color: isRoot ? null : AraColors.accentBusy,
+            ),
+          ]),
           const SizedBox(height: 4),
           Text(
             'Kind: ${node.kind.name}'
