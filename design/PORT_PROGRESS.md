@@ -4,9 +4,9 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** Phase 12i (Help/Report-a-bug dialog §54) — in flight
-- **Last merged:** PR #80 promotion (port/ara → master) — 2026-05-27, master at `141ddb448`. Brought 4 sub-PRs to master (multi-select + 55 tests).
-- **Currently working on:** `phase-12i-help-dialog` branch — wires the AppShell Help button to a §54 dialog showing app version + active server + GitHub links + Copy-diagnostics button.
+- **Phase:** Phase 12-tests-4 (stats + sky atlas state coverage) — in flight
+- **Last merged:** `phase-12i-help-dialog` — PR #82, 2026-05-27 (§54 Help dialog with diagnostics copy + tappable GitHub links; CR caught 2 Majors — list.last + url_launcher — fixed before merge).
+- **Currently working on:** `phase-12-tests-4-stats-sky` branch — 14 more tests bringing total to 70: stats overview/rollups/best-frames + sky atlas mode/search/availability.
 
 ## Completed
 
