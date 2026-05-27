@@ -4,9 +4,9 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** Phase 12h.3 (§61 ⌘K smart search palette) — in flight
-- **Last merged:** `phase-12h2-panels` — PR #64, 2026-05-27 (18 new settings panels + shared SettingsRow widget; 0 CR findings, merged with "No actionable comments 🎉").
-- **Currently working on:** `phase-12h3-searchpalette` branch — global ⌘K / Ctrl+K command palette indexes the 22-panel `settingsTree` registry + a per-panel keyword corpus. Results are ranked, navigable via ↑↓/Enter/Esc; activating one jumps to that settings panel by switching to the Options tab + setting the panel-id provider. Closes out the Phase 12h trio (shell → panels → search).
+- **Phase:** Phase 12g.2 (Real fl_chart visualizations) — in flight
+- **Last merged:** `phase-12h3-searchpalette` — PR #65, 2026-05-27 (§61 ⌘K command palette; CR caught 2 Minors — platform-aware shortcut + limit guard — fixed before merge). Closed out the Phase 12h trio (#63 + #64 + #65).
+- **Currently working on:** `phase-12g2-charts` branch — replaces the 4 placeholder cards in the §50 Stats dashboard with real fl_chart visualizations (Focus/Temp scatter, Guiding RMS line, Frame Quality bar, Calendar heatmap). Demo library expanded from 2 → 7 sessions so the charts have meaningful data; `CaptureSession` gained nullable `guidingRmsRa` / `guidingRmsDec` fields.
 
 ## Completed
 

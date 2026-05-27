@@ -52,6 +52,11 @@ class CaptureSession {
   final String targetName;
   final String siteName;
   final List<CapturedFrame> frames;
+  // §50.7 per-session guiding RMS in arcseconds. Nullable — pre-Phase-3
+  // sessions don't have guider data attached. Real values are populated
+  // from /api/v1/sessions/{id}/guider-stats in Phase 12g.3.
+  final double? guidingRmsRa;
+  final double? guidingRmsDec;
 
   CaptureSession({
     required this.id,
@@ -59,6 +64,8 @@ class CaptureSession {
     required this.targetName,
     required this.siteName,
     required List<CapturedFrame> frames,
+    this.guidingRmsRa,
+    this.guidingRmsDec,
   }) : frames = List<CapturedFrame>.unmodifiable(frames);
 
   /// Total integration time across all light frames in the session.
