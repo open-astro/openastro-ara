@@ -4,9 +4,9 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** Phase 12h.1 (Settings shell + tree nav) — in flight
-- **Last merged:** `phase-12g-stats` — PR #62, 2026-05-27 (StatsDashboardScreen with Overview tiles + Targets rollup + Best Frames + visualization placeholders, 0 CR findings).
-- **Currently working on:** `phase-12h-settings` branch — `SettingsShell` replaces the Options tab placeholder (6-group tree on the left, selected panel on the right). 3 panels fully rendered (Imaging Defaults, Storage, Diagnostics Mode); remaining panels show a placeholder that confirms routing works. Editable forms + persistence + §61 ⌘K smart search land in 12h.2/.3.
+- **Phase:** Phase 12h.2 (Remaining settings panels — read-only stubs) — in flight
+- **Last merged:** `phase-12h-settings` — PR #63, 2026-05-27 (Settings shell + tree nav + 3 basic panels; CR caught 1 Major — TextEditingController in build() — fixed before merge).
+- **Currently working on:** `phase-12h2-panels` branch — 18 new read-only panel stubs bring the §25.5.5 settings tree to 22 rendered panels. Equipment cluster (10) + Imaging extras (Autofocus, Plate Solving) + Session (Filenames, Notifications) + Safety (Policies, Site) + Sky Atlas Data + Profile (Active, Re-run wizard). Editable forms + persistence land in 12h.2b/c; §61 ⌘K smart search in 12h.3.
 
 ## Completed
 
