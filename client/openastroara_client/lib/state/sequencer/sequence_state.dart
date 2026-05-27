@@ -20,9 +20,9 @@ class SequenceController extends Notifier<SequenceNode> {
   }
 
   /// Returns a placeholder root that contains one Area + two Targets so the
-  /// tree view shows something on first launch. (Not const because the
-  /// SequenceNode constructor wraps params/children in unmodifiable views,
-  /// which can't be evaluated at const time.)
+  /// tree view shows something on first launch. Phase 12d.3 expanded the
+  /// demo with a conditional container (skip-if-unsafe) and a loop container
+  /// (per-filter sub-cycle) so the new node kinds render in the tree.
   static SequenceNode _demoSequence() => SequenceNode(
         id: 'root',
         kind: SequenceNodeKind.root,
@@ -50,16 +50,35 @@ class SequenceController extends Notifier<SequenceNode> {
                     instructionType: 'AutoFocus',
                     displayName: 'Run autofocus',
                   ),
+                  // §38.5 loop container — runs its children once per filter
+                  // in `filters`. Same pattern NINA uses for filter sub-loops.
                   SequenceNode(
-                    id: 'instr-1-3',
-                    kind: SequenceNodeKind.instruction,
-                    instructionType: 'TakeManyExposures',
-                    displayName: 'Capture L × 30 (60s)',
+                    id: 'loop-1',
+                    kind: SequenceNodeKind.loopContainer,
+                    displayName: 'For each filter',
+                    instructionType: 'ForEachFilter',
                     params: const <String, Object?>{
-                      'count': 30,
-                      'exposureSeconds': 60,
-                      'filter': 'L',
+                      'filters': <String>['L', 'R', 'G', 'B'],
+                      'iterationLabel': r'filter $$ITER$$',
                     },
+                    children: [
+                      SequenceNode(
+                        id: 'instr-loop-1',
+                        kind: SequenceNodeKind.instruction,
+                        instructionType: 'SwitchFilter',
+                        displayName: r'Switch to $$ITER$$',
+                      ),
+                      SequenceNode(
+                        id: 'instr-loop-2',
+                        kind: SequenceNodeKind.instruction,
+                        instructionType: 'TakeManyExposures',
+                        displayName: 'Capture × 20 (60s)',
+                        params: const <String, Object?>{
+                          'count': 20,
+                          'exposureSeconds': 60,
+                        },
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -74,6 +93,42 @@ class SequenceController extends Notifier<SequenceNode> {
                     instructionType: 'WaitForAltitude',
                     displayName: 'Wait until altitude > 30°',
                     params: const <String, Object?>{'altitudeDeg': 30},
+                  ),
+                  // §38.6 conditional container — children only execute when
+                  // the condition is true. Skip-if-unsafe is the canonical
+                  // safety pattern from playbook §35.
+                  SequenceNode(
+                    id: 'cond-1',
+                    kind: SequenceNodeKind.conditionalContainer,
+                    displayName: 'If weather is safe',
+                    instructionType: 'IfCondition',
+                    params: const <String, Object?>{
+                      'condition': 'safetyMonitor.isSafe',
+                      'elseBranch': 'skipTarget',
+                    },
+                    children: [
+                      SequenceNode(
+                        id: 'instr-cond-1',
+                        kind: SequenceNodeKind.instruction,
+                        instructionType: 'TakeManyExposures',
+                        displayName: 'Capture Hα × 30 (300s)',
+                        params: const <String, Object?>{
+                          'count': 30,
+                          'exposureSeconds': 300,
+                          'filter': 'Hα',
+                        },
+                      ),
+                      SequenceNode(
+                        id: 'instr-cond-2',
+                        kind: SequenceNodeKind.instruction,
+                        instructionType: 'DitherBetweenFrames',
+                        displayName: 'Dither every 1 frame (5px)',
+                        params: const <String, Object?>{
+                          'everyN': 1,
+                          'pixels': 5.0,
+                        },
+                      ),
+                    ],
                   ),
                 ],
               ),
