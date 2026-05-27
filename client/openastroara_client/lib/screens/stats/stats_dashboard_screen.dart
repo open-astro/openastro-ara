@@ -1,0 +1,232 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../state/stats/stats_state.dart';
+import '../../theme/ara_colors.dart';
+import '../../widgets/stats/stat_tile.dart';
+
+/// Stats dashboard per playbook §50. Phase 12g.1 wires the Overview tiles +
+/// Targets rollup + Best Frames list over `librarySessionsProvider` demo
+/// data. 12g.2 adds chart visualizations (Focus & Temperature scatter,
+/// Guiding RMS trends, Frame Quality composite, Calendar heatmap) via
+/// fl_chart. 12g.3 wires `/api/v1/stats/*` + per-target detail drill-down.
+class StatsDashboardScreen extends ConsumerWidget {
+  const StatsDashboardScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final overview = ref.watch(statsOverviewProvider);
+    final rollups = ref.watch(targetRollupsProvider);
+    final bestFrames = ref.watch(bestFramesProvider);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Stats'),
+        actions: [
+          TextButton.icon(
+            onPressed: null,
+            icon: const Icon(Icons.file_download, size: 16),
+            label: const Text('Export CSV'),
+          ),
+          const SizedBox(width: 8),
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          _SectionTitle(title: 'Overview', context: context),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              StatTile(
+                icon: Icons.calendar_month,
+                value: '${overview.totalNights}',
+                label: 'Nights',
+              ),
+              StatTile(
+                icon: Icons.gps_fixed,
+                value: '${overview.totalTargets}',
+                label: 'Targets',
+              ),
+              StatTile(
+                icon: Icons.list_alt,
+                value: '${overview.totalSessions}',
+                label: 'Sessions',
+              ),
+              StatTile(
+                icon: Icons.image_outlined,
+                value: '${overview.totalFrames}',
+                label: 'Frames',
+              ),
+              StatTile(
+                icon: Icons.timelapse,
+                value: _formatHours(overview.totalIntegration),
+                label: 'Total integration',
+              ),
+              StatTile(
+                icon: Icons.star_border,
+                value: overview.averageHfr.toStringAsFixed(2),
+                label: 'Avg HFR',
+                subtitle: 'lights only',
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          _SectionTitle(title: 'Targets', context: context),
+          ...rollups.map((r) => _TargetRollupTile(rollup: r)),
+          const SizedBox(height: 24),
+          _SectionTitle(title: 'Best Frames (by HFR)', context: context),
+          ...bestFrames.asMap().entries.map(
+                (entry) => ListTile(
+                  dense: true,
+                  leading: CircleAvatar(
+                    radius: 12,
+                    backgroundColor: AraColors.selectionBg,
+                    child: Text('${entry.key + 1}',
+                        style: Theme.of(context).textTheme.labelSmall),
+                  ),
+                  title: Text(entry.value.filename,
+                      style: Theme.of(context).textTheme.bodySmall),
+                  subtitle: Text(
+                    'HFR ${entry.value.hfr.toStringAsFixed(2)} · '
+                    '${entry.value.starCount} stars · '
+                    '${entry.value.filter}',
+                  ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      for (var i = 0; i < entry.value.rating; i++)
+                        const Icon(Icons.star,
+                            size: 12, color: AraColors.accentBusy),
+                    ],
+                  ),
+                ),
+              ),
+          const SizedBox(height: 24),
+          _SectionTitle(title: 'Visualizations', context: context),
+          _ChartPlaceholder(
+            icon: Icons.scatter_plot,
+            title: 'Focus & Temperature',
+            subtitle:
+                'Focus position vs sensor temperature scatter + linear regression — Phase 12g.2',
+          ),
+          _ChartPlaceholder(
+            icon: Icons.show_chart,
+            title: 'Guiding RMS Trends',
+            subtitle:
+                'Per-session RA + Dec RMS arcseconds over time — Phase 12g.2',
+          ),
+          _ChartPlaceholder(
+            icon: Icons.bar_chart,
+            title: 'Frame Quality Composite',
+            subtitle:
+                '§50.10 composite score (HFR + star count + ADU background) — Phase 12g.2',
+          ),
+          _ChartPlaceholder(
+            icon: Icons.grid_on,
+            title: 'Calendar Heatmap',
+            subtitle:
+                'GitHub-style calendar of integration minutes per night — Phase 12g.2',
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatHours(Duration d) {
+    final mins = d.inMinutes;
+    return '${mins ~/ 60}h ${(mins % 60).toString().padLeft(2, '0')}m';
+  }
+}
+
+class _SectionTitle extends StatelessWidget {
+  final String title;
+  final BuildContext context;
+  const _SectionTitle({required this.title, required this.context});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Text(title, style: Theme.of(context).textTheme.titleMedium),
+    );
+  }
+}
+
+class _TargetRollupTile extends StatelessWidget {
+  final TargetRollup rollup;
+  const _TargetRollupTile({required this.rollup});
+
+  String _formatHours(Duration d) {
+    final mins = d.inMinutes;
+    return '${mins ~/ 60}h ${(mins % 60).toString().padLeft(2, '0')}m';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        leading: const Icon(Icons.gps_fixed, color: AraColors.textSecondary),
+        title: Text(rollup.targetName),
+        subtitle: Text(
+          '${rollup.sessionCount} session${rollup.sessionCount == 1 ? '' : 's'} · '
+          '${rollup.frameCount} frames · '
+          '${_formatHours(rollup.integration)} integration · '
+          'Avg HFR ${rollup.averageHfr.toStringAsFixed(2)}',
+        ),
+        trailing: const Icon(Icons.chevron_right, color: AraColors.textDisabled),
+        onTap: null, // per-target detail drill-down lands in 12g.3
+      ),
+    );
+  }
+}
+
+class _ChartPlaceholder extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  const _ChartPlaceholder({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 140,
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AraColors.bgPanel,
+        border: Border.all(color: AraColors.border),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 48, color: AraColors.textDisabled),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(title, style: Theme.of(context).textTheme.titleSmall),
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AraColors.textSecondary,
+                      ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

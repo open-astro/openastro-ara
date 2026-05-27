@@ -5,6 +5,7 @@ import '../theme/ara_colors.dart';
 import '../widgets/equipment_chip.dart';
 import '../widgets/status_indicator.dart';
 import 'library/image_library_screen.dart';
+import 'stats/stats_dashboard_screen.dart';
 import 'tabs/framing_tab.dart';
 import 'tabs/imaging_tab.dart';
 import 'tabs/options_tab.dart';
@@ -152,6 +153,22 @@ class _BottomStatusBar extends StatelessWidget {
             ),
             icon: const Icon(Icons.photo_library_outlined, size: 16),
             label: const Text('Image Library'),
+            style: TextButton.styleFrom(
+              foregroundColor: AraColors.textSecondary,
+              textStyle: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
+          // Stats dashboard entry (§50). Full-screen route — overview tiles
+          // + Targets rollup + Best Frames over the library demo data.
+          // Real charts (fl_chart) + per-target detail land in 12g.2/.3.
+          TextButton.icon(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const StatsDashboardScreen(),
+              ),
+            ),
+            icon: const Icon(Icons.insights, size: 16),
+            label: const Text('Stats'),
             style: TextButton.styleFrom(
               foregroundColor: AraColors.textSecondary,
               textStyle: Theme.of(context).textTheme.bodySmall,
