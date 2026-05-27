@@ -56,5 +56,15 @@ void main() {
       expect(notifier.contains('only-this'), isTrue);
       expect(notifier.contains('other'), isFalse);
     });
+
+    test('published state is unmodifiable', () {
+      // Round-2 cleanup contract: external consumers can't bypass the
+      // notifier by mutating the published Set in place.
+      final notifier = container.read(librarySelectionProvider.notifier);
+      notifier.toggle('a');
+      final set = container.read(librarySelectionProvider);
+      expect(() => set.add('b'), throwsUnsupportedError);
+      expect(() => set.remove('a'), throwsUnsupportedError);
+    });
   });
 }

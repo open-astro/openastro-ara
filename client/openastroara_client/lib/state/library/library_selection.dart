@@ -10,15 +10,21 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 /// `/api/v1/frames/bulk` is defined.
 class LibrarySelectionNotifier extends Notifier<Set<String>> {
   @override
+  // const empty set is already unmodifiable, so consumers can't mutate
+  // the initial state to bypass the notifier.
   Set<String> build() => const <String>{};
 
   void toggle(String frameId) {
     final next = Set<String>.from(state);
     if (!next.add(frameId)) next.remove(frameId);
-    state = next;
+    // Wrap in Set.unmodifiable so external consumers can't bypass the
+    // notifier by mutating the published set directly (would cause UI
+    // drift since the notifier wouldn't see the change).
+    state = Set<String>.unmodifiable(next);
   }
 
   void clear() {
+    // const empty set is already unmodifiable; no need to wrap.
     if (state.isNotEmpty) state = const <String>{};
   }
 
