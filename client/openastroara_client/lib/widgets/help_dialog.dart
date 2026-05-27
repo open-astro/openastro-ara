@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../state/saved_server_state.dart';
@@ -20,8 +21,19 @@ Future<void> showHelpDialog(BuildContext context) async {
   );
 }
 
-const String _kAppVersion = '0.0.1-ara.0';
 const String _kRepoUrl = 'https://github.com/open-astro/openastro-ara';
+
+/// App version read at runtime from `package_info_plus` so pubspec.yaml is
+/// the single source of truth. FutureProvider so the async fetch is cached
+/// across rebuilds of the help dialog.
+final _appVersionProvider = FutureProvider<String>((ref) async {
+  final info = await PackageInfo.fromPlatform();
+  // Format: `<version>+<build>` (e.g. `0.0.1+1`). Empty build number is
+  // skipped so the trailing `+` doesn't dangle.
+  return info.buildNumber.isEmpty
+      ? info.version
+      : '${info.version}+${info.buildNumber}';
+});
 
 class _HelpDialog extends ConsumerWidget {
   const _HelpDialog();
@@ -29,6 +41,7 @@ class _HelpDialog extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final servers = ref.watch(savedServersProvider);
+    final appVersion = ref.watch(_appVersionProvider);
     final activeServer = servers.maybeWhen(
       // Most-recently-saved entry is the de-facto "active" server; the
       // saved-server list is append-ordered (oldest first), so .last picks
@@ -51,7 +64,13 @@ class _HelpDialog extends ConsumerWidget {
               'clipboard — paste it into the issue body so we have context.',
             ),
             const SizedBox(height: 16),
-            _DiagnosticRow(label: 'App version', value: _kAppVersion),
+            _DiagnosticRow(
+              label: 'App version',
+              value: appVersion.maybeWhen(
+                data: (v) => v,
+                orElse: () => '(loading...)',
+              ),
+            ),
             _DiagnosticRow(label: 'Active server', value: activeServer),
             _DiagnosticRow(
               label: 'Saved servers',
@@ -96,9 +115,24 @@ class _HelpDialog extends ConsumerWidget {
       data: (list) => list.isEmpty ? '(none)' : list.last.toString(),
       orElse: () => '(unknown)',
     );
+    // Re-fetch package info inline so the diagnostics text always has the
+    // freshest version even if the dialog opened before the async resolved.
+    // PackageInfo.fromPlatform can throw on some platforms (e.g. missing
+    // channel registration); fall back to "(unknown)" rather than letting
+    // the whole button do nothing.
+    String version = '(unknown)';
+    try {
+      final info = await PackageInfo.fromPlatform();
+      version = info.buildNumber.isEmpty
+          ? info.version
+          : '${info.version}+${info.buildNumber}';
+    } catch (e, st) {
+      developer.log('Failed to read PackageInfo',
+          name: 'openastroara.help_dialog', error: e, stackTrace: st);
+    }
     final payload = '''
 OpenAstroAra diagnostics:
-  app version: $_kAppVersion
+  app version: $version
   active server: $activeServer
   saved servers: ${servers.value?.length ?? 0}
 
