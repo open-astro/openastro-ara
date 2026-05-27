@@ -48,10 +48,31 @@ class SequenceNode {
     this.instructionType,
     Map<String, Object?> params = const <String, Object?>{},
     List<SequenceNode> children = const <SequenceNode>[],
-  })  : params = Map<String, Object?>.unmodifiable(params),
+  })  : params = _freezeParams(params),
         children = List<SequenceNode>.unmodifiable(children);
 
   bool get isContainer => kind != SequenceNodeKind.instruction;
+
+  // Deep-freeze `params` so callers can't mutate nested List/Map values
+  // after construction. Without this the round-2 deep-equality switch
+  // would let two structurally-identical nodes silently diverge in
+  // hashCode/== after one's nested list got mutated.
+  static Map<String, Object?> _freezeParams(Map<String, Object?> source) =>
+      Map<String, Object?>.unmodifiable(
+        source.map((k, v) => MapEntry(k, _freezeDeep(v))),
+      );
+
+  static Object? _freezeDeep(Object? value) {
+    if (value is Map) {
+      return Map<Object?, Object?>.unmodifiable(
+        value.map((k, v) => MapEntry(k, _freezeDeep(v))),
+      );
+    }
+    if (value is List) {
+      return List<Object?>.unmodifiable(value.map(_freezeDeep));
+    }
+    return value;
+  }
 
   SequenceNode copyWith({
     String? displayName,
