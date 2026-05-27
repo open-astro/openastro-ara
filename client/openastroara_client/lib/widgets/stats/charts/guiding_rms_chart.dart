@@ -21,10 +21,18 @@ class GuidingRmsChart extends ConsumerWidget {
 
     final raSpots = <FlSpot>[];
     final decSpots = <FlSpot>[];
+    var observedMax = 0.0;
     for (var i = 0; i < withRms.length; i++) {
-      raSpots.add(FlSpot(i.toDouble(), withRms[i].guidingRmsRa!));
-      decSpots.add(FlSpot(i.toDouble(), withRms[i].guidingRmsDec!));
+      final ra = withRms[i].guidingRmsRa!;
+      final dec = withRms[i].guidingRmsDec!;
+      raSpots.add(FlSpot(i.toDouble(), ra));
+      decSpots.add(FlSpot(i.toDouble(), dec));
+      if (ra > observedMax) observedMax = ra;
+      if (dec > observedMax) observedMax = dec;
     }
+    // Floor at 1.5″ (a healthy mount stays well under) and ceil at 5.0″ so a
+    // single bad-seeing outlier doesn't squash the rest of the trend.
+    final yMax = (observedMax + 0.2).clamp(1.5, 5.0).toDouble();
 
     return ChartCard(
       title: 'Guiding RMS Trends',
@@ -45,7 +53,7 @@ class GuidingRmsChart extends ConsumerWidget {
                   minX: 0,
                   maxX: (withRms.length - 1).toDouble(),
                   minY: 0,
-                  maxY: 1.5,
+                  maxY: yMax,
                   borderData: FlBorderData(
                     show: true,
                     border: Border.all(color: AraColors.border),

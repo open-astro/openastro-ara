@@ -20,6 +20,7 @@ class FrameQualityChart extends ConsumerWidget {
       ..sort((a, b) => a.date.compareTo(b.date));
 
     final bars = <BarChartGroupData>[];
+    var observedMax = 0.0;
     for (var i = 0; i < sessions.length; i++) {
       final lights = sessions[i].frames
           .where((f) => f.frameType.toLowerCase() == 'light')
@@ -27,6 +28,7 @@ class FrameQualityChart extends ConsumerWidget {
       if (lights.isEmpty) continue;
       final avgHfr =
           lights.map((f) => f.hfr).reduce((a, b) => a + b) / lights.length;
+      if (avgHfr > observedMax) observedMax = avgHfr;
       bars.add(BarChartGroupData(x: i, barRods: [
         BarChartRodData(
           toY: avgHfr,
@@ -40,6 +42,10 @@ class FrameQualityChart extends ConsumerWidget {
         ),
       ]));
     }
+    // Pad 0.2 over the observed max but keep a sensible floor of 2.5 so the
+    // color bands stay legible on calm sessions; ceiling at 6.0 prevents a
+    // single bad seeing night from squashing everything else.
+    final yMax = (observedMax + 0.2).clamp(2.5, 6.0);
 
     return ChartCard(
       title: 'Frame Quality (avg HFR per session)',
@@ -59,7 +65,7 @@ class FrameQualityChart extends ConsumerWidget {
               child: BarChart(
                 BarChartData(
                   alignment: BarChartAlignment.spaceAround,
-                  maxY: 2.5,
+                  maxY: yMax,
                   borderData: FlBorderData(
                     show: true,
                     border: Border.all(color: AraColors.border),
