@@ -4,9 +4,9 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** Phase 12a (app shell + global infrastructure) — in flight
-- **Last merged:** `phase-11-flutter-scaffold` — PR #53, 2026-05-26 (Flutter WILMA scaffold + first-run flow + mDNS discovery + /api/v1/server/info handshake + macOS entitlements/Bonjour/ATS fixes from /review fallback). Promoted to master via PR #54 (tag `phase-11-complete`).
-- **Currently working on:** `phase-12a-app-shell` branch — Material 3 dark theme (§25.2 color tokens), AppShell with NavigationRail + 5 tabs (Imaging/Framing/Sequencer/Sky Atlas/Options, all placeholders pointing at later 12c-12h PRs), top equipment bar with §25.3 device-type chips, bottom status bar with StatusIndicator + help-icon, saved-server persistence via flutter_secure_storage so the app starts at AppShell once a server is confirmed. `flutter analyze` clean.
+- **Phase:** Phase 12b (Profile wizard shell) — in flight
+- **Last merged:** `phase-12a-app-shell` — PR #55, 2026-05-27 (§25 Material 3 dark theme + AppShell + NavigationRail + top equipment bar + bottom status bar + saved-server persistence; `/review` fallback found 2 Minor keyring-failure-handling bugs, fixed before merge).
+- **Currently working on:** `phase-12b-wizard-shell` branch — §37 18-screen / 7-stage wizard scaffold. `ProfileDraft` model + `WizardController` Riverpod auto-dispose Notifier + `ProfileWizard.steps` catalog + `WizardShell` (progress bar + screen body + Back/Skip/Next/Save Profile + Save & Exit) + 18 placeholder screens (one-paragraph description each, real forms in 12b follow-ups). AppShell bottom status bar gets a "Run profile wizard" entry point.
 
 ## Completed
 
@@ -100,7 +100,7 @@ Folded into Phase 0.5p (global.json + csproj target framework bumps).
 
 ## In flight
 
-- `phase-12a-app-shell` — Phase 12a app shell (§25 visual design + nav rail + top equipment bar + status bar + saved-server routing). Tab content + equipment chooser flow + disconnect/emergency-stop modals land in Phase 12c-12h sub-PRs.
+- `phase-12b-wizard-shell` — Phase 12b wizard SHELL (navigation flow + ProfileDraft state + 18 placeholder screens, real forms in 12b follow-ups).
 
 ## Next
 
