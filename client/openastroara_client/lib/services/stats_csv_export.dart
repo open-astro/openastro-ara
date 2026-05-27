@@ -34,7 +34,7 @@ String exportSessionsCsv(List<CaptureSession> sessions) {
       s.guidingRmsDec?.toStringAsFixed(2) ?? '',
     ].join(','));
   }
-  return rows.join('\n');
+  return rows.join('\r\n');
 }
 
 String exportFramesCsv(List<CaptureSession> sessions) {
@@ -66,16 +66,20 @@ String exportFramesCsv(List<CaptureSession> sessions) {
       ].join(','));
     }
   }
-  return rows.join('\n');
+  return rows.join('\r\n');
 }
 
 String _isoDate(DateTime d) =>
     '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
-/// RFC-4180 quoting: wrap in quotes if the field contains comma, quote, or
-/// newline; escape inner quotes by doubling.
+/// RFC-4180 quoting: wrap in quotes if the field contains comma, quote, LF,
+/// or CR; escape inner quotes by doubling. Row separator is CRLF per RFC-4180
+/// (strict consumers — Excel-on-Mac, ETL pipelines — require this).
 String _csv(String s) {
-  if (s.contains(',') || s.contains('"') || s.contains('\n')) {
+  if (s.contains(',') ||
+      s.contains('"') ||
+      s.contains('\n') ||
+      s.contains('\r')) {
     return '"${s.replaceAll('"', '""')}"';
   }
   return s;

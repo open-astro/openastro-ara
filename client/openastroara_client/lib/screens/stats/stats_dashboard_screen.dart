@@ -147,22 +147,44 @@ class StatsDashboardScreen extends ConsumerWidget {
     return '${mins ~/ 60}h ${(mins % 60).toString().padLeft(2, '0')}m';
   }
 
-  void _exportCsv(BuildContext context, WidgetRef ref, String key) {
+  Future<void> _exportCsv(
+    BuildContext context,
+    WidgetRef ref,
+    String key,
+  ) async {
     final sessions = ref.read(librarySessionsProvider);
+    // Count rows from the source data, not by splitting the CSV — quoted
+    // fields with embedded newlines (rare but legal per RFC-4180) would
+    // otherwise inflate the count.
+    final rowCount = switch (key) {
+      'sessions' => sessions.length,
+      'frames' => sessions.fold<int>(0, (sum, s) => sum + s.frames.length),
+      _ => 0,
+    };
     final csv = switch (key) {
       'sessions' => exportSessionsCsv(sessions),
       'frames' => exportFramesCsv(sessions),
       _ => '',
     };
     if (csv.isEmpty) return;
-    Clipboard.setData(ClipboardData(text: csv));
+
+    try {
+      await Clipboard.setData(ClipboardData(text: csv));
+    } on PlatformException {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to copy CSV to clipboard.')),
+      );
+      return;
+    }
+    if (!context.mounted) return;
     final label =
         key == 'sessions' ? 'Sessions summary' : 'Per-frame details';
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
           '$label CSV copied to clipboard '
-          '(${csv.split('\n').length - 1} rows). Real file save lands in 12g.4.',
+          '($rowCount rows). Real file save lands in 12g.4.',
         ),
       ),
     );
