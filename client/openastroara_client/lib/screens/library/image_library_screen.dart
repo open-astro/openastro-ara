@@ -23,7 +23,8 @@ class ImageLibraryScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Image Library'),
         bottom: const PreferredSize(
-          preferredSize: Size.fromHeight(48),
+          // 64 = dropdown's 48px intrinsic + 16px vertical padding.
+          preferredSize: Size.fromHeight(64),
           child: _LibraryHeaderBar(),
         ),
       ),
@@ -191,18 +192,28 @@ class _SessionCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Long target/site names would otherwise blow out the Row's
+            // intrinsic width; clip with ellipsis instead.
             Row(
               children: [
-                Text(
-                  '${_dateLabel()} — ${session.targetName}',
-                  style: Theme.of(context).textTheme.titleMedium,
+                Expanded(
+                  child: Text(
+                    '${_dateLabel()} — ${session.targetName}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                 ),
                 const SizedBox(width: 8),
-                Text(
-                  '(${session.siteName})',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AraColors.textSecondary,
-                      ),
+                Flexible(
+                  child: Text(
+                    '(${session.siteName})',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AraColors.textSecondary,
+                        ),
+                  ),
                 ),
               ],
             ),

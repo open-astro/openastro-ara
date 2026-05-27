@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -37,14 +39,20 @@ class _RootRouter extends ConsumerWidget {
       loading: () => const Scaffold(
         body: Center(child: CircularProgressIndicator()),
       ),
-      error: (e, _) => Scaffold(
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Text('Failed to load saved servers: $e'),
+      error: (e, st) {
+        // Log internal details for debug; UI shows a generic message so
+        // exception text can't leak into the user-facing surface.
+        developer.log('Failed to load saved servers',
+            name: 'openastroara.saved_servers', error: e, stackTrace: st);
+        return const Scaffold(
+          body: Center(
+            child: Padding(
+              padding: EdgeInsets.all(24),
+              child: Text('Failed to load saved servers. Please try again.'),
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }

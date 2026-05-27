@@ -146,7 +146,9 @@ class _BottomStatusBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 32,
+      // 40px gives `TextButton.icon` enough breathing room at default
+      // and 110% text-scale; 32 was clipping the launchers.
+      height: 40,
       decoration: const BoxDecoration(
         color: AraColors.bgPanel,
         border: Border(top: BorderSide(color: AraColors.border)),

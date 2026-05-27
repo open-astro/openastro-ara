@@ -4,9 +4,9 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** Phase 12 CR cleanup round 3 (in flight) — 1 follow-up finding on PR #71
-- **Last merged:** `phase-12-cr-cleanup-2` — PR #73, 2026-05-27 (8 round-2 findings + CHANGELOG count nit). Round-3 CR pass surfaced 1 follow-up Major.
-- **Currently working on:** `phase-12-cr-cleanup-3` branch — adds matching deep-freeze for SequenceNode.params (round-2 made comparison deep but constructor shallow-froze; nested List/Map values would be mutable after construction and could change hashCode/== silently).
+- **Phase:** Phase 12 CR cleanup round 4 (in flight) — 5 real findings on PR #71 + reply 2 hallucinated Criticals
+- **Last merged:** `phase-12-cr-cleanup-3` — PR #74, 2026-05-27 (deep-freeze SequenceNode.params; 0 CR findings). Round-4 CR pass surfaced 7 findings — 5 actionable, 2 hallucinated.
+- **Currently working on:** `phase-12-cr-cleanup-4` branch — fixes status bar height (32→40), library AppBar height (48→64), diagnostics radio Semantics for a11y, main.dart generic error message + developer.log, library session header ellipsis. Replies on the 2 Criticals about a non-existent registry file.
 
 ## Completed
 

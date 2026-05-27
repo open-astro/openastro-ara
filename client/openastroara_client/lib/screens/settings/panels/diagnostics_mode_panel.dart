@@ -58,7 +58,14 @@ class _ModeOption extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return Semantics(
+      // Expose selected state + label to assistive tech so screen readers
+      // announce which mode is active (the Icon-based visual indicator
+      // alone isn't audible).
+      label: label,
+      selected: selected,
+      button: true,
+      child: Container(
       margin: const EdgeInsets.symmetric(vertical: 8),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -99,6 +106,7 @@ class _ModeOption extends StatelessWidget {
           ),
         ],
       ),
+    ),
     );
   }
 }
