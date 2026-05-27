@@ -41,6 +41,97 @@ class SequenceController extends Notifier<SequenceNode> {
     if (next != null) state = next;
   }
 
+  /// Append a new node as a child of the parent with id [parentId]. Selects
+  /// the new node so its params can be edited immediately.
+  void addChild(
+    String parentId, {
+    required SequenceNodeKind kind,
+    String? instructionType,
+    String? displayName,
+  }) {
+    final id = _nextId();
+    final newNode = SequenceNode(
+      id: id,
+      kind: kind,
+      displayName: displayName ?? _defaultName(kind, instructionType),
+      instructionType: instructionType,
+    );
+    final next = _withNodeReplaced(state, parentId, (parent) {
+      return parent.copyWith(children: [...parent.children, newNode]);
+    });
+    if (next != null) {
+      state = next;
+      ref.read(selectedNodeIdProvider.notifier).select(id);
+    }
+  }
+
+  /// Insert a new node immediately after the sibling with id [refId]. Selects
+  /// the new node so its params can be edited immediately.
+  void addSiblingAfter(
+    String refId, {
+    required SequenceNodeKind kind,
+    String? instructionType,
+    String? displayName,
+  }) {
+    final id = _nextId();
+    final newNode = SequenceNode(
+      id: id,
+      kind: kind,
+      displayName: displayName ?? _defaultName(kind, instructionType),
+      instructionType: instructionType,
+    );
+    final next = _withParentModified(state, refId, (parent, idx) {
+      final reordered = [...parent.children];
+      reordered.insert(idx + 1, newNode);
+      return parent.copyWith(children: reordered);
+    });
+    if (next != null) {
+      state = next;
+      ref.read(selectedNodeIdProvider.notifier).select(id);
+    }
+  }
+
+  /// Replace the node with id [nodeId] using [op]. Walks the tree and rebuilds
+  /// the path with copyWith so the immutable-tree invariants hold. Returns
+  /// the new root or null if [nodeId] wasn't found.
+  static SequenceNode? _withNodeReplaced(
+    SequenceNode current,
+    String nodeId,
+    SequenceNode Function(SequenceNode node) op,
+  ) {
+    if (current.id == nodeId) return op(current);
+    for (var i = 0; i < current.children.length; i++) {
+      final replaced =
+          _withNodeReplaced(current.children[i], nodeId, op);
+      if (replaced != null) {
+        final children = [...current.children];
+        children[i] = replaced;
+        return current.copyWith(children: children);
+      }
+    }
+    return null;
+  }
+
+  static int _idCounter = 0;
+  static String _nextId() {
+    _idCounter++;
+    return 'node-${DateTime.now().millisecondsSinceEpoch}-$_idCounter';
+  }
+
+  static String _defaultName(SequenceNodeKind kind, String? instructionType) {
+    if (instructionType != null) return instructionType;
+    return switch (kind) {
+      SequenceNodeKind.root => 'Untitled sequence',
+      SequenceNodeKind.area => 'New area',
+      SequenceNodeKind.target => 'New target',
+      SequenceNodeKind.sequentialContainer => 'Sequential block',
+      SequenceNodeKind.parallelContainer => 'Parallel block',
+      SequenceNodeKind.conditionalContainer => 'If condition',
+      SequenceNodeKind.loopContainer => 'Loop',
+      SequenceNodeKind.instruction => 'New instruction',
+    };
+  }
+
   /// Delete the selected node. Also clears the selection since the id is now
   /// dangling. No-op if nothing is selected or the node is the root.
   void deleteSelected() {

@@ -35,6 +35,7 @@ class InstructionEditor extends ConsumerWidget {
     }
 
     final isRoot = node.id == root.id;
+    final controller = ref.read(sequenceControllerProvider.notifier);
     return Container(
       color: AraColors.bgPanel,
       padding: const EdgeInsets.all(16),
@@ -45,34 +46,44 @@ class InstructionEditor extends ConsumerWidget {
               child: Text(node.displayName,
                   style: Theme.of(context).textTheme.titleMedium),
             ),
+            // Phase 12d.5 — add child / sibling. Add-sibling is disabled
+            // when the root is selected (the root has no parent).
+            _AddNodeMenu(
+              icon: Icons.add,
+              tooltip: 'Add child node',
+              enabled: node.isContainer,
+              onSelected: (spec) => controller.addChild(
+                node.id,
+                kind: spec.kind,
+                instructionType: spec.instructionType,
+              ),
+            ),
+            _AddNodeMenu(
+              icon: Icons.subdirectory_arrow_right,
+              tooltip: 'Add sibling node after this one',
+              enabled: !isRoot,
+              onSelected: (spec) => controller.addSiblingAfter(
+                node.id,
+                kind: spec.kind,
+                instructionType: spec.instructionType,
+              ),
+            ),
             // Phase 12d.4 — reorder + delete. Disabled for the root since
-            // moving it sideways is undefined. Drag-and-drop lands in 12d.5.
+            // moving it sideways is undefined. Drag-and-drop lands in 12d.6.
             IconButton(
-              onPressed: isRoot
-                  ? null
-                  : () => ref
-                      .read(sequenceControllerProvider.notifier)
-                      .moveSelectedUp(),
+              onPressed: isRoot ? null : controller.moveSelectedUp,
               icon: const Icon(Icons.arrow_upward),
               tooltip: 'Move up among siblings',
               iconSize: 18,
             ),
             IconButton(
-              onPressed: isRoot
-                  ? null
-                  : () => ref
-                      .read(sequenceControllerProvider.notifier)
-                      .moveSelectedDown(),
+              onPressed: isRoot ? null : controller.moveSelectedDown,
               icon: const Icon(Icons.arrow_downward),
               tooltip: 'Move down among siblings',
               iconSize: 18,
             ),
             IconButton(
-              onPressed: isRoot
-                  ? null
-                  : () => ref
-                      .read(sequenceControllerProvider.notifier)
-                      .deleteSelected(),
+              onPressed: isRoot ? null : controller.deleteSelected,
               icon: const Icon(Icons.delete_outline),
               tooltip: 'Delete this node',
               iconSize: 18,
@@ -168,6 +179,67 @@ class InstructionEditor extends ConsumerWidget {
           ],
         ],
       ),
+    );
+  }
+}
+
+/// Spec for one entry in the Add-node menu — (kind, instructionType?) pair.
+class _NewNodeSpec {
+  final SequenceNodeKind kind;
+  final String? instructionType;
+  final String label;
+  const _NewNodeSpec(this.label, this.kind, [this.instructionType]);
+}
+
+const _kNewNodeMenu = <_NewNodeSpec>[
+  _NewNodeSpec('Sequential container', SequenceNodeKind.sequentialContainer),
+  _NewNodeSpec('Parallel container', SequenceNodeKind.parallelContainer),
+  _NewNodeSpec('Conditional (IfCondition)',
+      SequenceNodeKind.conditionalContainer, 'IfCondition'),
+  _NewNodeSpec(
+      'Loop (ForEachFilter)', SequenceNodeKind.loopContainer, 'ForEachFilter'),
+  _NewNodeSpec('Target', SequenceNodeKind.target),
+  // Common instructions per §38.1 — fast-path entries so users don't have
+  // to type the type name each time.
+  _NewNodeSpec(
+      'Instruction · SlewToTarget', SequenceNodeKind.instruction, 'SlewToTarget'),
+  _NewNodeSpec('Instruction · AutoFocus', SequenceNodeKind.instruction, 'AutoFocus'),
+  _NewNodeSpec('Instruction · TakeManyExposures', SequenceNodeKind.instruction,
+      'TakeManyExposures'),
+  _NewNodeSpec('Instruction · SwitchFilter', SequenceNodeKind.instruction,
+      'SwitchFilter'),
+  _NewNodeSpec('Instruction · WaitForAltitude', SequenceNodeKind.instruction,
+      'WaitForAltitude'),
+  _NewNodeSpec('Instruction · WaitForTime', SequenceNodeKind.instruction,
+      'WaitForTime'),
+  _NewNodeSpec(
+      'Instruction · DitherBetweenFrames', SequenceNodeKind.instruction, 'DitherBetweenFrames'),
+  _NewNodeSpec('Instruction · ParkMount', SequenceNodeKind.instruction, 'ParkMount'),
+];
+
+class _AddNodeMenu extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final bool enabled;
+  final void Function(_NewNodeSpec) onSelected;
+  const _AddNodeMenu({
+    required this.icon,
+    required this.tooltip,
+    required this.enabled,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<_NewNodeSpec>(
+      enabled: enabled,
+      tooltip: tooltip,
+      icon: Icon(icon, size: 18),
+      onSelected: onSelected,
+      itemBuilder: (_) => [
+        for (final spec in _kNewNodeMenu)
+          PopupMenuItem<_NewNodeSpec>(value: spec, child: Text(spec.label)),
+      ],
     );
   }
 }
