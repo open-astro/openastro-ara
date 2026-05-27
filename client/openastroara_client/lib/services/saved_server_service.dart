@@ -17,9 +17,16 @@ class SavedServerService {
       : _storage = storage ?? const FlutterSecureStorage();
 
   Future<List<AraServer>> loadAll() async {
-    final raw = await _storage.read(key: _storageKey);
-    if (raw == null || raw.isEmpty) return const <AraServer>[];
+    // The outer try/catch covers both classes of failure:
+    //   1. The underlying keychain/keyring is unavailable (Linux without
+    //      libsecret, macOS keychain locked, etc) — flutter_secure_storage
+    //      throws from `read`.
+    //   2. The stored JSON is corrupted (mismatched schema, partial write).
+    // Both degrade gracefully to "no saved servers" so the app lands in
+    // FirstRunScreen instead of stranding the user on the error route.
     try {
+      final raw = await _storage.read(key: _storageKey);
+      if (raw == null || raw.isEmpty) return const <AraServer>[];
       final List<dynamic> parsed = jsonDecode(raw) as List<dynamic>;
       return parsed
           .whereType<Map<String, dynamic>>()
@@ -27,8 +34,6 @@ class SavedServerService {
           .whereType<AraServer>()
           .toList(growable: false);
     } catch (_) {
-      // Corrupted store — start fresh rather than crash the app on launch.
-      // The user re-adds the server via the first-run flow.
       return const <AraServer>[];
     }
   }

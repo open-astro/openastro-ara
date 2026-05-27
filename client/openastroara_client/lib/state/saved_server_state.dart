@@ -19,7 +19,10 @@ class SavedServersNotifier extends AsyncNotifier<List<AraServer>> {
   Future<void> add(AraServer server) async {
     final svc = ref.read(savedServerServiceProvider);
     await svc.add(server);
-    state = AsyncData(await svc.loadAll());
+    // AsyncValue.guard captures any throw from loadAll() into AsyncError
+    // so the _RootRouter can render the error branch instead of letting
+    // the exception unhandled-future through the FirstRunScreen handler.
+    state = await AsyncValue.guard(() => svc.loadAll());
   }
 }
 
