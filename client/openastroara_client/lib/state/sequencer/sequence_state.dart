@@ -52,6 +52,7 @@ class SequenceController extends Notifier<SequenceNode> {
     String? instructionType,
     String? displayName,
   }) {
+    if (kind == SequenceNodeKind.root) return;
     final parent = findNode(state, parentId);
     if (parent == null || !parent.isContainer) return;
 
@@ -72,13 +73,15 @@ class SequenceController extends Notifier<SequenceNode> {
   }
 
   /// Insert a new node immediately after the sibling with id [refId]. Selects
-  /// the new node so its params can be edited immediately.
+  /// the new node so its params can be edited immediately. Refuses to insert
+  /// a root-kind node (the tree can only have one root, set at construction).
   void addSiblingAfter(
     String refId, {
     required SequenceNodeKind kind,
     String? instructionType,
     String? displayName,
   }) {
+    if (kind == SequenceNodeKind.root) return;
     final id = _nextId();
     final newNode = SequenceNode(
       id: id,

@@ -27,7 +27,8 @@ class EquipmentChip extends StatelessWidget {
   Widget build(BuildContext context) {
     return Semantics(
       label: '$label (${status.name})',
-      button: onTap != null,
+      // Either tap or long-press makes this chip interactive.
+      button: onTap != null || onLongPress != null,
       child: InkWell(
         onTap: onTap,
         onLongPress: onLongPress,

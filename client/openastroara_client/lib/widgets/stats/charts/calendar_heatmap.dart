@@ -15,8 +15,11 @@ class CalendarHeatmap extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final sessions = ref.watch(librarySessionsProvider);
-    final today = DateTime(2026, 5, 27); // matches demo "now"; replaced
-    // by real wall-clock in Phase 12g.3.
+    // Real wall-clock — the rolling window advances as real time moves.
+    // Demo sessions land on 2026-04/05 dates which the wall-clock-anchored
+    // window captures naturally.
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
     const daysShown = 49;
     final start = today.subtract(const Duration(days: daysShown - 1));
 

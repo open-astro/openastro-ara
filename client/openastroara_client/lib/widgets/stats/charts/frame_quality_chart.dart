@@ -45,7 +45,8 @@ class FrameQualityChart extends ConsumerWidget {
     // Pad 0.2 over the observed max but keep a sensible floor of 2.5 so the
     // color bands stay legible on calm sessions; ceiling at 6.0 prevents a
     // single bad seeing night from squashing everything else.
-    final yMax = (observedMax + 0.2).clamp(2.5, 6.0);
+    // `clamp` returns `num`; BarChartData.maxY expects `double`.
+    final yMax = (observedMax + 0.2).clamp(2.5, 6.0).toDouble();
 
     return ChartCard(
       title: 'Frame Quality (avg HFR per session)',

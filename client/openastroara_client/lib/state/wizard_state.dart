@@ -34,7 +34,9 @@ class WizardController extends Notifier<WizardState> {
   }
 
   void jumpTo(int step) {
-    final clamped = step.clamp(1, ProfileWizard.totalSteps);
+    // `clamp` returns `num`; copyWith expects `int`. Explicit toInt() so
+    // static analysis is happy.
+    final clamped = step.clamp(1, ProfileWizard.totalSteps).toInt();
     state = state.copyWith(step: clamped);
   }
 

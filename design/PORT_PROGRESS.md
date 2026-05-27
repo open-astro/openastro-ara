@@ -4,9 +4,9 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** Phase 12g.3 (Stats CSV export) — in flight
-- **Last merged:** `phase-12d5-addnode` — PR #69, 2026-05-27 (Add Child/Sibling actions; CR caught 1 Major — non-container parent guard — fixed before merge).
-- **Currently working on:** `phase-12g3-csv` branch — Export CSV button on Stats dashboard now offers Sessions Summary + Per-Frame Details flavors via PopupMenu; selected CSV is copied to the clipboard with row-count confirmation snackbar. File-save dialog lands in 12g.4.
+- **Phase:** Phase 12 CR cleanup (in flight) — addresses 13 promotion-PR #71 findings
+- **Last merged:** `phase-12g3-csv` — PR #70, 2026-05-27 (Stats CSV export; CR caught 3 — 1 Major async Clipboard + 2 Minor row-count/CRLF — fixed before merge).
+- **Currently working on:** `phase-12-cr-cleanup` branch — batch-fixes the 13 actionable CR findings raised on the promotion PR #71 (3 Critical clamp().toX() casts, 4 Major behavior fixes, 6 Minor housekeeping). The 14th finding — missing filter-slot UI control — is deferred to PORT_TODO.md as it's a feature add. Once merged, PR #71 auto-updates and we can re-promote.
 
 ## Completed
 

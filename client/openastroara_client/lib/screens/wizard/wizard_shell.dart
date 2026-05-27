@@ -61,13 +61,14 @@ class WizardShell extends ConsumerWidget {
     final cb = onComplete;
     if (cb != null) {
       cb(ProfileDraftSnapshot(draft));
-    } else {
-      // No persistence callback wired yet (current AppShell launcher path) —
-      // still dismiss the wizard route so Save & Exit + Save Profile don't
-      // look broken. Profile persistence to ~/.config/openastroara/profiles/
-      // lands with the first per-screen form follow-up PR (§30.4).
-      Navigator.of(context).pop();
     }
+    // Always dismiss the wizard route — "Save & Exit" should exit
+    // regardless of whether a persistence callback was wired. The
+    // callback handles persistence; this handles route dismissal so
+    // the button label matches its behavior. Profile persistence to
+    // ~/.config/openastroara/profiles/ lands with the first per-screen
+    // form follow-up PR (§30.4).
+    Navigator.of(context).pop();
   }
 }
 
