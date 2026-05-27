@@ -32,11 +32,15 @@ class SequencerToolbar extends StatelessWidget {
           _ToolButton(icon: Icons.pause, label: 'Pause', onPressed: null),
           _ToolButton(icon: Icons.stop, label: 'Abort', onPressed: null),
           const Spacer(),
-          Text(
-            'Idle — connect to a server to load saved sequences',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AraColors.textDisabled,
-                ),
+          Flexible(
+            child: Text(
+              'Idle — connect to a server to load saved sequences',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AraColors.textDisabled,
+                  ),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+            ),
           ),
         ],
       ),

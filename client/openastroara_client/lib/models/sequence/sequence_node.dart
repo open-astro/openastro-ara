@@ -20,9 +20,19 @@ enum SequenceNodeKind {
   instruction,
 }
 
+// Sentinel for `copyWith` so callers can pass `instructionType: null` to
+// explicitly clear it (e.g. converting an instruction node into a container).
+// Plain `instructionType: null` is indistinguishable from "not provided"
+// without this.
+const Object _unset = Object();
+
 /// A single node in the sequence tree. Generic enough to cover all NINA
 /// container + instruction types; per-instruction parameters live in
 /// [params] (Dart Map → JSON object on the wire).
+///
+/// `params` and `children` are wrapped in unmodifiable views at construction
+/// so external mutation of the passed Map/List can't silently invalidate
+/// equality/hash assumptions.
 class SequenceNode {
   final String id;
   final SequenceNodeKind kind;
@@ -31,20 +41,21 @@ class SequenceNode {
   final Map<String, Object?> params;
   final List<SequenceNode> children;
 
-  const SequenceNode({
+  SequenceNode({
     required this.id,
     required this.kind,
     required this.displayName,
     this.instructionType,
-    this.params = const <String, Object?>{},
-    this.children = const <SequenceNode>[],
-  });
+    Map<String, Object?> params = const <String, Object?>{},
+    List<SequenceNode> children = const <SequenceNode>[],
+  })  : params = Map<String, Object?>.unmodifiable(params),
+        children = List<SequenceNode>.unmodifiable(children);
 
   bool get isContainer => kind != SequenceNodeKind.instruction;
 
   SequenceNode copyWith({
     String? displayName,
-    String? instructionType,
+    Object? instructionType = _unset,
     Map<String, Object?>? params,
     List<SequenceNode>? children,
   }) =>
@@ -52,7 +63,9 @@ class SequenceNode {
         id: id,
         kind: kind,
         displayName: displayName ?? this.displayName,
-        instructionType: instructionType ?? this.instructionType,
+        instructionType: identical(instructionType, _unset)
+            ? this.instructionType
+            : instructionType as String?,
         params: params ?? this.params,
         children: children ?? this.children,
       );
