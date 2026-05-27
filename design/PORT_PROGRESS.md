@@ -4,9 +4,9 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** Phase 12 CR cleanup round 5 — 4 findings on promotion #80
-- **Last merged:** `phase-12-tests-3-seq` — PR #79, 2026-05-27 (14 SequenceController tests; CR caught 1 Minor — assertion-style consistency — fixed before merge).
-- **Currently working on:** `phase-12-cr-cleanup-5` branch — fixes promotion-PR #80 findings: Set.unmodifiable on librarySelection toggle (+ test locking it in), SafeArea wrap on LibraryBulkActionBar for system-inset safety, CHANGELOG casing nit, this PORT_PROGRESS update. Total tests after this: 56.
+- **Phase:** Phase 12i (Help/Report-a-bug dialog §54) — in flight
+- **Last merged:** PR #80 promotion (port/ara → master) — 2026-05-27, master at `141ddb448`. Brought 4 sub-PRs to master (multi-select + 55 tests).
+- **Currently working on:** `phase-12i-help-dialog` branch — wires the AppShell Help button to a §54 dialog showing app version + active server + GitHub links + Copy-diagnostics button.
 
 ## Completed
 
