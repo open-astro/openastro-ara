@@ -4,9 +4,9 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** Phase 12d.1 (Sequencer skeleton) — in flight
-- **Last merged:** `phase-12c.2-livev-diagnostics` — PR #58, 2026-05-27 (Live View Notifier + Diagnostic Panel; CR back online after user added $100 in credits; single Minor punctuation fix in 98f2454b9). Phase 12c.3 (Take One + WS event stream + real frame fetch) deferred — needs daemon endpoints functional first.
-- **Currently working on:** `phase-12d-sequencer` branch — Sequencer tab skeleton (data model + Riverpod controller + tree view + selected-node editor + toolbar). Demo sequence seeded in-memory so the tree renders. NINA import + server sync + Run wiring + conditional/loop UI land in Phase 12d.2/12d.3.
+- **Phase:** Phase 12e.1 (Sky Atlas tab + Data Manager scaffold) — in flight
+- **Last merged:** `phase-12d-sequencer` — PR #59, 2026-05-27 (Sequencer skeleton — data model + tree + toolbar + editor; CR found 4 valid issues: unmodifiable map/list wrap + copyWith sentinel + load resets selection + toolbar right-align, all fixed before merge).
+- **Currently working on:** `phase-12e-sky-atlas` branch — Sky Atlas tab body (mode toggle + universal search + Aladin placeholder) + 4-tab DataManagerModal (Sky Imagery / Star Catalogs / Thumbnails / Solar System) + §36.13 sky-data-missing banner. webview_flutter Aladin embed + real downloads land in 12e.2.
 
 ## Completed
 
@@ -98,9 +98,7 @@ Folded into Phase 0.5p (global.json + csproj target framework bumps).
 
 **141 endpoint registrations across 11 endpoint files.** Functional today: `/healthz`, `/api/v1/server/info`, `/api/v1/equipment/discover/{type}`, `/api/v1/ws/catalog`. Remaining endpoints return 501 with RFC 7807 Problem bodies until per-area service implementations land — the surface itself is stable for WILMA client codegen (Phase 11+).
 
-## In flight
-
-- `phase-12d-sequencer` — Phase 12d.1 Sequencer skeleton (data model + tree view + toolbar + selected-node editor). 12d.2 wires endpoints + run/save/load; 12d.3 adds NINA import + conditional/loop UI + template instantiation.
+- `phase-12e-sky-atlas` — Phase 12e.1 Sky Atlas tab body + Data Manager 4-tab modal stub + §36.13 sky-data-missing banner. webview_flutter Aladin embed + real /api/v1/data-manager/* downloads land in 12e.2.
 
 ## Next
 
