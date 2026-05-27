@@ -4,9 +4,9 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** Phase 12g.2 (Real fl_chart visualizations) — in flight
-- **Last merged:** `phase-12h3-searchpalette` — PR #65, 2026-05-27 (§61 ⌘K command palette; CR caught 2 Minors — platform-aware shortcut + limit guard — fixed before merge). Closed out the Phase 12h trio (#63 + #64 + #65).
-- **Currently working on:** `phase-12g2-charts` branch — replaces the 4 placeholder cards in the §50 Stats dashboard with real fl_chart visualizations (Focus/Temp scatter, Guiding RMS line, Frame Quality bar, Calendar heatmap). Demo library expanded from 2 → 7 sessions so the charts have meaningful data; `CaptureSession` gained nullable `guidingRmsRa` / `guidingRmsDec` fields.
+- **Phase:** Phase 12d.3 (Sequencer conditional/loop UI) — in flight
+- **Last merged:** `phase-12g2-charts` — PR #66, 2026-05-27 (4 fl_chart visualizations; CR caught 2 Majors — both hard-coded chart maxY — fixed before merge).
+- **Currently working on:** `phase-12d3-cond-loops` branch — demos a `ForEachFilter` loop (L/R/G/B sub-loop) under M42 + an `IfCondition` skip-if-unsafe under NGC 7000, with new condition/loop banners in the InstructionEditor explaining the gate logic and iteration values.
 
 ## Completed
 
