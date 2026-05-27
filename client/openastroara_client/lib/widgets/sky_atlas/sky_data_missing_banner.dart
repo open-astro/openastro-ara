@@ -6,15 +6,26 @@ import '../../theme/ara_colors.dart';
 
 /// §36.13 silent banner — shown across the app when the active profile has
 /// no HiPS sky imagery downloaded yet. Dismissible per the §30.7 shared
-/// banner pattern; "Open Data Manager" CTA jumps to §36.2 inline.
-class SkyDataMissingBanner extends ConsumerWidget {
+/// banner pattern; "Open Data Manager" CTA jumps to §36.2 inline. The
+/// dismiss state is session-local; the banner re-appears on next launch
+/// until the user actually downloads something (matches §30.7 silent-
+/// banner contract).
+class SkyDataMissingBanner extends ConsumerStatefulWidget {
   final VoidCallback onOpenDataManager;
   const SkyDataMissingBanner({super.key, required this.onOpenDataManager});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SkyDataMissingBanner> createState() =>
+      _SkyDataMissingBannerState();
+}
+
+class _SkyDataMissingBannerState extends ConsumerState<SkyDataMissingBanner> {
+  bool _dismissed = false;
+
+  @override
+  Widget build(BuildContext context) {
     final hasImagery = ref.watch(skyImageryAvailableProvider);
-    if (hasImagery) return const SizedBox.shrink();
+    if (hasImagery || _dismissed) return const SizedBox.shrink();
 
     return Container(
       decoration: BoxDecoration(
@@ -35,8 +46,13 @@ class SkyDataMissingBanner extends ConsumerWidget {
             ),
           ),
           TextButton(
-            onPressed: onOpenDataManager,
+            onPressed: widget.onOpenDataManager,
             child: const Text('Open Data Manager'),
+          ),
+          IconButton(
+            onPressed: () => setState(() => _dismissed = true),
+            icon: const Icon(Icons.close, size: 18),
+            tooltip: 'Dismiss',
           ),
         ],
       ),
