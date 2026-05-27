@@ -277,9 +277,16 @@ class _SessionCard extends StatelessWidget {
                                 );
                               }
                             },
-                            onLongPress: () => ref
-                                .read(librarySelectionProvider.notifier)
-                                .toggle(f.id),
+                            onLongPress: () {
+                              // Long-press is add-only — never deselects.
+                              // Use tap (in selection mode) or the bulk-bar
+                              // Close to clear selection.
+                              if (!selection.contains(f.id)) {
+                                ref
+                                    .read(librarySelectionProvider.notifier)
+                                    .toggle(f.id);
+                              }
+                            },
                           ))
                       .toList(),
                 ),
