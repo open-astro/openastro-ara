@@ -24,7 +24,7 @@ class CapturedFrame {
   final List<String> tags;
   final String notes;
 
-  const CapturedFrame({
+  CapturedFrame({
     required this.id,
     required this.filename,
     required this.exposure,
@@ -41,9 +41,9 @@ class CapturedFrame {
     required this.focusSteps,
     required this.capturedAt,
     this.rating = 0,
-    this.tags = const <String>[],
+    List<String> tags = const <String>[],
     this.notes = '',
-  });
+  }) : tags = List<String>.unmodifiable(tags);
 }
 
 class CaptureSession {
@@ -53,13 +53,13 @@ class CaptureSession {
   final String siteName;
   final List<CapturedFrame> frames;
 
-  const CaptureSession({
+  CaptureSession({
     required this.id,
     required this.date,
     required this.targetName,
     required this.siteName,
-    required this.frames,
-  });
+    required List<CapturedFrame> frames,
+  }) : frames = List<CapturedFrame>.unmodifiable(frames);
 
   /// Total integration time across all light frames in the session.
   Duration get totalIntegration {
@@ -70,12 +70,24 @@ class CaptureSession {
     return sum;
   }
 
+  // Canonical filter order — used by [framesByFilter] so the result honors
+  // the documented L/R/G/B/Hα/OIII/SII contract regardless of capture order.
+  static const _filterOrder = <String>['L', 'R', 'G', 'B', 'Hα', 'OIII', 'SII'];
+
   /// Frame counts grouped by filter, in canonical L/R/G/B/Hα/OIII/SII order.
+  /// Unknown filters land at the end in the order they were first seen.
   Map<String, int> get framesByFilter {
-    final out = <String, int>{};
+    final counts = <String, int>{};
     for (final f in frames) {
-      out[f.filter] = (out[f.filter] ?? 0) + 1;
+      counts[f.filter] = (counts[f.filter] ?? 0) + 1;
     }
-    return out;
+    final ordered = <String, int>{};
+    for (final f in _filterOrder) {
+      if (counts.containsKey(f)) ordered[f] = counts[f]!;
+    }
+    for (final entry in counts.entries) {
+      ordered.putIfAbsent(entry.key, () => entry.value);
+    }
+    return ordered;
   }
 }

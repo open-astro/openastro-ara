@@ -16,6 +16,8 @@ class ImageLibraryScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final sessions = ref.watch(librarySessionsProvider);
+    final grouping = ref.watch(libraryGroupingProvider);
+    final groups = _groupSessions(sessions, grouping);
 
     return Scaffold(
       appBar: AppBar(
@@ -26,10 +28,61 @@ class ImageLibraryScreen extends ConsumerWidget {
         ),
       ),
       body: ListView(
-        children: sessions.map((s) => _SessionCard(session: s)).toList(),
+        children: [
+          for (final g in groups) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+              child: Text(
+                g.label,
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      color: AraColors.textSecondary,
+                    ),
+              ),
+            ),
+            ...g.sessions.map((s) => _SessionCard(session: s)),
+          ],
+        ],
       ),
     );
   }
+
+  /// Apply the active grouping to the flat session list. Each group also
+  /// gets its sessions sorted newest-first (matches NINA's UX). Phase 12f.2
+  /// adds a secondary-sort dropdown.
+  List<_SessionGroup> _groupSessions(
+    List<CaptureSession> sessions,
+    LibraryGrouping grouping,
+  ) {
+    final sorted = [...sessions]..sort((a, b) => b.date.compareTo(a.date));
+    switch (grouping) {
+      case LibraryGrouping.bySession:
+        return [_SessionGroup(label: 'All sessions', sessions: sorted)];
+      case LibraryGrouping.byTarget:
+        final byTarget = <String, List<CaptureSession>>{};
+        for (final s in sorted) {
+          byTarget.putIfAbsent(s.targetName, () => []).add(s);
+        }
+        return byTarget.entries
+            .map((e) => _SessionGroup(label: e.key, sessions: e.value))
+            .toList();
+      case LibraryGrouping.byDate:
+        final byMonth = <String, List<CaptureSession>>{};
+        for (final s in sorted) {
+          final key =
+              '${s.date.year}-${s.date.month.toString().padLeft(2, '0')}';
+          byMonth.putIfAbsent(key, () => []).add(s);
+        }
+        return byMonth.entries
+            .map((e) => _SessionGroup(label: e.key, sessions: e.value))
+            .toList();
+    }
+  }
+}
+
+class _SessionGroup {
+  final String label;
+  final List<CaptureSession> sessions;
+  const _SessionGroup({required this.label, required this.sessions});
 }
 
 class _LibraryHeaderBar extends ConsumerWidget {
