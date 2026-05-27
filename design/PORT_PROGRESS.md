@@ -4,9 +4,9 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** Phase 12c.2 (Live View Notifier + Diagnostic Panel) — in flight
-- **Last merged:** `phase-12c.1-imaging-core` — PR #57, 2026-05-27 (Imaging + Framing tab cores; `/review` fallback found only 3 Low-value items — Live View widget-state, TextField commit-on-Enter, Stepper width-shift).
-- **Currently working on:** `phase-12c.2-livev-diagnostics` branch — Live View toggle lifted from widget state into `liveViewControllerProvider` Notifier (addresses CR Low-value finding from #57). Diagnostic Panel widget rendered below the histogram (collapsible, lists recent events). `diagnosticsStateProvider` stub today; real WS event stream (§60.9 `diagnostics.*`) lands in Phase 12c.3 alongside Take One + frame fetch.
+- **Phase:** Phase 12d.1 (Sequencer skeleton) — in flight
+- **Last merged:** `phase-12c.2-livev-diagnostics` — PR #58, 2026-05-27 (Live View Notifier + Diagnostic Panel; CR back online after user added $100 in credits; single Minor punctuation fix in 98f2454b9). Phase 12c.3 (Take One + WS event stream + real frame fetch) deferred — needs daemon endpoints functional first.
+- **Currently working on:** `phase-12d-sequencer` branch — Sequencer tab skeleton (data model + Riverpod controller + tree view + selected-node editor + toolbar). Demo sequence seeded in-memory so the tree renders. NINA import + server sync + Run wiring + conditional/loop UI land in Phase 12d.2/12d.3.
 
 ## Completed
 
@@ -100,7 +100,7 @@ Folded into Phase 0.5p (global.json + csproj target framework bumps).
 
 ## In flight
 
-- `phase-12c.2-livev-diagnostics` — Live View Notifier + Diagnostic Panel + diagnostics-sourced StatusIndicator. WS event stream + Take One + frame fetch land in 12c.3.
+- `phase-12d-sequencer` — Phase 12d.1 Sequencer skeleton (data model + tree view + toolbar + selected-node editor). 12d.2 wires endpoints + run/save/load; 12d.3 adds NINA import + conditional/loop UI + template instantiation.
 
 ## Next
 
