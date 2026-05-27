@@ -4,8 +4,27 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../state/settings/settings_nav.dart';
 import '../../theme/ara_colors.dart';
 import 'panels/diagnostics_mode_panel.dart';
+import 'panels/equipment_camera_panel.dart';
+import 'panels/equipment_dome_panel.dart';
+import 'panels/equipment_filter_wheel_panel.dart';
+import 'panels/equipment_flat_panel.dart';
+import 'panels/equipment_focuser_panel.dart';
+import 'panels/equipment_guider_panel.dart';
+import 'panels/equipment_mount_panel.dart';
+import 'panels/equipment_rotator_panel.dart';
+import 'panels/equipment_safety_monitor_panel.dart';
+import 'panels/equipment_weather_panel.dart';
 import 'panels/generic_placeholder_panel.dart';
+import 'panels/imaging_autofocus_panel.dart';
 import 'panels/imaging_defaults_panel.dart';
+import 'panels/imaging_plate_solve_panel.dart';
+import 'panels/profile_active_panel.dart';
+import 'panels/profile_wizard_panel.dart';
+import 'panels/safety_policies_panel.dart';
+import 'panels/safety_site_panel.dart';
+import 'panels/session_filenames_panel.dart';
+import 'panels/session_notifications_panel.dart';
+import 'panels/sky_data_panel.dart';
 import 'panels/storage_panel.dart';
 
 /// Settings shell per §25.5.5 — tree on the left, selected panel on the
@@ -158,16 +177,35 @@ class _PanelBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return switch (panelId) {
+      'eq.camera' => const EquipmentCameraPanel(),
+      'eq.mount' => const EquipmentMountPanel(),
+      'eq.focuser' => const EquipmentFocuserPanel(),
+      'eq.filterwheel' => const EquipmentFilterWheelPanel(),
+      'eq.rotator' => const EquipmentRotatorPanel(),
+      'eq.guider' => const EquipmentGuiderPanel(),
+      'eq.flat' => const EquipmentFlatPanel(),
+      'eq.dome' => const EquipmentDomePanel(),
+      'eq.weather' => const EquipmentWeatherPanel(),
+      'eq.safety' => const EquipmentSafetyMonitorPanel(),
       'img.defaults' => const ImagingDefaultsPanel(),
+      'img.autofocus' => const ImagingAutofocusPanel(),
+      'img.platesolve' => const ImagingPlateSolvePanel(),
       'session.storage' => const StoragePanel(),
+      'session.filenames' => const SessionFilenamesPanel(),
+      'session.notifications' => const SessionNotificationsPanel(),
+      'safety.policies' => const SafetyPoliciesPanel(),
       'safety.diagnostics' => const DiagnosticsModePanel(),
+      'safety.site' => const SafetySitePanel(),
+      'sky.data' => const SkyDataPanel(),
+      'profile.active' => const ProfileActivePanel(),
+      'profile.wizard' => const ProfileWizardPanel(),
       _ => GenericPlaceholderPanel(
           panelId: panelId,
           label: findPanelInfo(panelId)?.label ?? panelId,
           note:
-              'This panel\'s form lands in Phase 12h.2. The settings tree '
-              'navigation + Riverpod state are real today; selecting a panel '
-              'here is enough to verify the routing.',
+              'This panel\'s form lands in a later Phase 12h sub-PR. The '
+              'settings tree navigation + Riverpod state are real today; '
+              'selecting a panel here is enough to verify the routing.',
         ),
     };
   }
