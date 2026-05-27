@@ -4,9 +4,9 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** Phase 12b (Profile wizard shell) — in flight
-- **Last merged:** `phase-12a-app-shell` — PR #55, 2026-05-27 (§25 Material 3 dark theme + AppShell + NavigationRail + top equipment bar + bottom status bar + saved-server persistence; `/review` fallback found 2 Minor keyring-failure-handling bugs, fixed before merge).
-- **Currently working on:** `phase-12b-wizard-shell` branch — §37 18-screen / 7-stage wizard scaffold. `ProfileDraft` model + `WizardController` Riverpod auto-dispose Notifier + `ProfileWizard.steps` catalog + `WizardShell` (progress bar + screen body + Back/Skip/Next/Save Profile + Save & Exit) + 18 placeholder screens (one-paragraph description each, real forms in 12b follow-ups). AppShell bottom status bar gets a "Run profile wizard" entry point.
+- **Phase:** Phase 12c.1 (Imaging + Framing tab cores) — in flight
+- **Last merged:** `phase-12b-wizard-shell` — PR #56, 2026-05-27 (§37 wizard SHELL with 18 placeholder screens + ProfileDraft model + WizardController; CR caught Save & Exit no-op + skipCurrent terminal-step rebuild, both fixed before merge).
+- **Currently working on:** `phase-12c.1-imaging-core` branch — Imaging tab (§25.5.1) gets FrameViewer + HistogramStrip + ExposureControlsPanel + always-visible §51 StatusIndicator. Framing tab (§25.5.2) gets target search bar + SkyChartPreview placeholder + FramingParamsPanel (rotation/mosaic/overlap). Riverpod 3.x Notifier providers for ExposureParams + FramingParams + target query string. Sub-split from the original Phase 12c row — 12c.2/12c.3 land Live View + Diagnostic Panel + polar alignment + mosaic Aladin overlay + real frame fetch.
 
 ## Completed
 
@@ -100,7 +100,7 @@ Folded into Phase 0.5p (global.json + csproj target framework bumps).
 
 ## In flight
 
-- `phase-12b-wizard-shell` — Phase 12b wizard SHELL (navigation flow + ProfileDraft state + 18 placeholder screens, real forms in 12b follow-ups).
+- `phase-12c.1-imaging-core` — Phase 12c.1 Imaging + Framing tab cores. Live View + Diagnostic Panel + polar alignment + mosaic overlay land in 12c.2 / 12c.3.
 
 ## Next
 
