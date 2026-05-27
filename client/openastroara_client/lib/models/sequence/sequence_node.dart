@@ -7,7 +7,7 @@
 // 12d.2 wires JSON (de)serialization against the OpenAPI schema and the
 // `/api/v1/sequences` endpoints. Phase 12d.3 adds NINA import handling.
 
-import 'package:flutter/foundation.dart';
+import 'package:collection/collection.dart';
 
 enum SequenceNodeKind {
   root,
@@ -70,6 +70,12 @@ class SequenceNode {
         children: children ?? this.children,
       );
 
+  // DeepCollectionEquality handles nested List/Map values inside `params`
+  // (e.g. the loop container's `filters: ['L', 'R', 'G', 'B']` list).
+  // mapEquals / listEquals are shallow so two structurally-identical nodes
+  // would otherwise compare unequal when params contain collections.
+  static const _deepEq = DeepCollectionEquality();
+
   @override
   bool operator ==(Object other) =>
       other is SequenceNode &&
@@ -77,16 +83,16 @@ class SequenceNode {
       other.kind == kind &&
       other.displayName == displayName &&
       other.instructionType == instructionType &&
-      mapEquals(other.params, params) &&
-      listEquals(other.children, children);
+      _deepEq.equals(other.params, params) &&
+      _deepEq.equals(other.children, children);
 
   @override
-  int get hashCode => Object.hashAll([
+  int get hashCode => Object.hash(
         id,
         kind,
         displayName,
         instructionType,
-        Object.hashAllUnordered(params.entries),
-        Object.hashAll(children),
-      ]);
+        _deepEq.hash(params),
+        _deepEq.hash(children),
+      );
 }

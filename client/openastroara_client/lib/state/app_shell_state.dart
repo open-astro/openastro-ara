@@ -5,9 +5,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 /// so the §61 ⌘K palette can jump straight to a settings panel by selecting
 /// the Options tab and updating `selectedSettingsPanelProvider`.
 class SelectedTabIndexNotifier extends Notifier<int> {
+  static const _tabCount = 5; // Imaging / Framing / Sequencer / Sky Atlas / Options
   @override
   int build() => 0;
-  void select(int index) => state = index;
+  void select(int index) {
+    if (index < 0 || index >= _tabCount) return;
+    state = index;
+  }
 }
 
 final selectedTabIndexProvider =
