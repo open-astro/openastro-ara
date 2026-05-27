@@ -79,10 +79,9 @@ class _ImagingHeader extends ConsumerWidget {
             return StatusIndicator(
               level: diag.level,
               label: diag.label,
-              onTap: () {
-                // Phase 12c.3: open the full diagnostic history modal
-                // per §51 Diagnostic Panel "expanded view".
-              },
+              // Tap wires up in Phase 12c.3 (opens §51 expanded view).
+              // null here so the affordance isn't misleading until then.
+              onTap: null,
             );
           }),
         ],

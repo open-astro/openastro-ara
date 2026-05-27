@@ -23,14 +23,33 @@ class SequencerToolbar extends StatelessWidget {
       ),
       child: Row(
         children: [
-          _ToolButton(icon: Icons.note_add_outlined, label: 'New', onPressed: null),
-          _ToolButton(icon: Icons.folder_open_outlined, label: 'Load', onPressed: null),
-          _ToolButton(icon: Icons.save_outlined, label: 'Save', onPressed: null),
-          _ToolButton(icon: Icons.fact_check_outlined, label: 'Validate', onPressed: null),
-          const VerticalDivider(width: 16, indent: 8, endIndent: 8),
-          _ToolButton(icon: Icons.play_arrow, label: 'Run', onPressed: null),
-          _ToolButton(icon: Icons.pause, label: 'Pause', onPressed: null),
-          _ToolButton(icon: Icons.stop, label: 'Abort', onPressed: null),
+          // Buttons in a horizontally-scrollable row so the toolbar stays
+          // usable on narrow window widths (≤ ~700px). The status line
+          // gets the remaining flexible space on the right.
+          Flexible(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(children: const [
+                _ToolButton(
+                    icon: Icons.note_add_outlined, label: 'New', onPressed: null),
+                _ToolButton(
+                    icon: Icons.folder_open_outlined,
+                    label: 'Load',
+                    onPressed: null),
+                _ToolButton(
+                    icon: Icons.save_outlined, label: 'Save', onPressed: null),
+                _ToolButton(
+                    icon: Icons.fact_check_outlined,
+                    label: 'Validate',
+                    onPressed: null),
+                VerticalDivider(width: 16, indent: 8, endIndent: 8),
+                _ToolButton(
+                    icon: Icons.play_arrow, label: 'Run', onPressed: null),
+                _ToolButton(icon: Icons.pause, label: 'Pause', onPressed: null),
+                _ToolButton(icon: Icons.stop, label: 'Abort', onPressed: null),
+              ]),
+            ),
+          ),
           Expanded(
             child: Text(
               'Idle — connect to a server to load saved sequences',

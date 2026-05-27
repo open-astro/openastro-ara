@@ -75,7 +75,7 @@ class GuidingRmsChart extends ConsumerWidget {
                       sideTitles: SideTitles(showTitles: true, reservedSize: 36),
                     ),
                     bottomTitles: AxisTitles(
-                      axisNameWidget: const Text('session #'),
+                      axisNameWidget: const Text('Session date'),
                       sideTitles: SideTitles(
                         showTitles: true,
                         reservedSize: 28,

@@ -222,11 +222,11 @@ class _FramingParamsPanel extends StatelessWidget {
             onChanged: onOverlapChanged,
           ),
           const SizedBox(height: 16),
+          // Disabled until Phase 12c.2 wires the "append to Sequencer
+          // tree" path — an enabled-but-no-op button would falsely suggest
+          // it works.
           FilledButton.icon(
-            onPressed: () {
-              // Phase 12c.2: append the current target + framing params to
-              // the Sequencer tree as a new Target node.
-            },
+            onPressed: null,
             icon: const Icon(Icons.add),
             label: const Text('Set as Target'),
           ),

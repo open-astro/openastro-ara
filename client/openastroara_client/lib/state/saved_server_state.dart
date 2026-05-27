@@ -18,7 +18,16 @@ class SavedServersNotifier extends AsyncNotifier<List<AraServer>> {
 
   Future<void> add(AraServer server) async {
     final svc = ref.read(savedServerServiceProvider);
-    await svc.add(server);
+    // Persist first, but on failure still update in-memory state so the
+    // user isn't blocked on first-run by a transient keyring/storage
+    // error. The next loadAll() will reconcile if/when persistence works.
+    try {
+      await svc.add(server);
+    } catch (_) {
+      final current = state.value ?? const <AraServer>[];
+      state = AsyncValue.data([...current, server]);
+      return;
+    }
     // AsyncValue.guard captures any throw from loadAll() into AsyncError
     // so the _RootRouter can render the error branch instead of letting
     // the exception unhandled-future through the FirstRunScreen handler.
