@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../services/stats_csv_export.dart';
+import '../../state/library/library_state.dart';
 import '../../state/stats/stats_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../widgets/stats/charts/calendar_heatmap.dart';
@@ -27,10 +30,31 @@ class StatsDashboardScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Stats'),
         actions: [
-          TextButton.icon(
-            onPressed: null,
-            icon: const Icon(Icons.file_download, size: 16),
-            label: const Text('Export CSV'),
+          Builder(
+            builder: (context) => PopupMenuButton<String>(
+              tooltip: 'Export CSV',
+              onSelected: (key) => _exportCsv(context, ref, key),
+              itemBuilder: (_) => const [
+                PopupMenuItem(
+                  value: 'sessions',
+                  child: Text('Sessions summary'),
+                ),
+                PopupMenuItem(
+                  value: 'frames',
+                  child: Text('Per-frame details'),
+                ),
+              ],
+              child: const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 12),
+                child: Row(children: [
+                  Icon(Icons.file_download, size: 16),
+                  SizedBox(width: 6),
+                  Text('Export CSV'),
+                  SizedBox(width: 4),
+                  Icon(Icons.arrow_drop_down, size: 16),
+                ]),
+              ),
+            ),
           ),
           const SizedBox(width: 8),
         ],
@@ -121,6 +145,27 @@ class StatsDashboardScreen extends ConsumerWidget {
   String _formatHours(Duration d) {
     final mins = d.inMinutes;
     return '${mins ~/ 60}h ${(mins % 60).toString().padLeft(2, '0')}m';
+  }
+
+  void _exportCsv(BuildContext context, WidgetRef ref, String key) {
+    final sessions = ref.read(librarySessionsProvider);
+    final csv = switch (key) {
+      'sessions' => exportSessionsCsv(sessions),
+      'frames' => exportFramesCsv(sessions),
+      _ => '',
+    };
+    if (csv.isEmpty) return;
+    Clipboard.setData(ClipboardData(text: csv));
+    final label =
+        key == 'sessions' ? 'Sessions summary' : 'Per-frame details';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          '$label CSV copied to clipboard '
+          '(${csv.split('\n').length - 1} rows). Real file save lands in 12g.4.',
+        ),
+      ),
+    );
   }
 }
 
