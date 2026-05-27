@@ -4,9 +4,9 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** Phase 12 CR cleanup round 4 (in flight) — 5 real findings on PR #71 + reply 2 hallucinated Criticals
-- **Last merged:** `phase-12-cr-cleanup-3` — PR #74, 2026-05-27 (deep-freeze SequenceNode.params; 0 CR findings). Round-4 CR pass surfaced 7 findings — 5 actionable, 2 hallucinated.
-- **Currently working on:** `phase-12-cr-cleanup-4` branch — fixes status bar height (32→40), library AppBar height (48→64), diagnostics radio Semantics for a11y, main.dart generic error message + developer.log, library session header ellipsis. Replies on the 2 Criticals about a non-existent registry file.
+- **Phase:** Phase 12 CR cleanup round 5 — 4 findings on promotion #80
+- **Last merged:** `phase-12-tests-3-seq` — PR #79, 2026-05-27 (14 SequenceController tests; CR caught 1 Minor — assertion-style consistency — fixed before merge).
+- **Currently working on:** `phase-12-cr-cleanup-5` branch — fixes promotion-PR #80 findings: Set.unmodifiable on librarySelection toggle (+ test locking it in), SafeArea wrap on LibraryBulkActionBar for system-inset safety, CHANGELOG casing nit, this PORT_PROGRESS update. Total tests after this: 56.
 
 ## Completed
 
@@ -104,7 +104,7 @@ Folded into Phase 0.5p (global.json + csproj target framework bumps).
 
 - **Phase 11** — Flutter WILMA client scaffold + first-run flow + server discovery + handshake. Generates Dart client from `OpenAstroAra.Server/openapi.yaml` via `openapi_generator` per §12.1.
 - **Phase 12-13** — Flutter views (app shell, all main tabs) + image preview pipeline end-to-end.
-- **Phase 14** — Tests + GitHub Actions CI matrix.
+- **Phase 14** — CI matrix expansion (cross-platform client-test macOS/Windows/Linux + server-e2e Docker arm64 + settings-registry gate + Alpaca-simulator pinning per §14.3 / §14.5). Initial `client-test` job + Dart unit tests landed early in Phase 12-tests.
 - **Phase 15** — TODO sweep + RPi smoke test + release v0.0.1-ara.1.
 
 ## Tag inventory
