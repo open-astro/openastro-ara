@@ -4,9 +4,9 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** Phase 12c.1 (Imaging + Framing tab cores) — in flight
-- **Last merged:** `phase-12b-wizard-shell` — PR #56, 2026-05-27 (§37 wizard SHELL with 18 placeholder screens + ProfileDraft model + WizardController; CR caught Save & Exit no-op + skipCurrent terminal-step rebuild, both fixed before merge).
-- **Currently working on:** `phase-12c.1-imaging-core` branch — Imaging tab (§25.5.1) gets FrameViewer + HistogramStrip + ExposureControlsPanel + always-visible §51 StatusIndicator. Framing tab (§25.5.2) gets target search bar + SkyChartPreview placeholder + FramingParamsPanel (rotation/mosaic/overlap). Riverpod 3.x Notifier providers for ExposureParams + FramingParams + target query string. Sub-split from the original Phase 12c row — 12c.2/12c.3 land Live View + Diagnostic Panel + polar alignment + mosaic Aladin overlay + real frame fetch.
+- **Phase:** Phase 12c.2 (Live View Notifier + Diagnostic Panel) — in flight
+- **Last merged:** `phase-12c.1-imaging-core` — PR #57, 2026-05-27 (Imaging + Framing tab cores; `/review` fallback found only 3 Low-value items — Live View widget-state, TextField commit-on-Enter, Stepper width-shift).
+- **Currently working on:** `phase-12c.2-livev-diagnostics` branch — Live View toggle lifted from widget state into `liveViewControllerProvider` Notifier (addresses CR Low-value finding from #57). Diagnostic Panel widget rendered below the histogram (collapsible, lists recent events). `diagnosticsStateProvider` stub today; real WS event stream (§60.9 `diagnostics.*`) lands in Phase 12c.3 alongside Take One + frame fetch.
 
 ## Completed
 
@@ -100,7 +100,7 @@ Folded into Phase 0.5p (global.json + csproj target framework bumps).
 
 ## In flight
 
-- `phase-12c.1-imaging-core` — Phase 12c.1 Imaging + Framing tab cores. Live View + Diagnostic Panel + polar alignment + mosaic overlay land in 12c.2 / 12c.3.
+- `phase-12c.2-livev-diagnostics` — Live View Notifier + Diagnostic Panel + diagnostics-sourced StatusIndicator. WS event stream + Take One + frame fetch land in 12c.3.
 
 ## Next
 

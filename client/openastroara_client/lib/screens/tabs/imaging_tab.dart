@@ -1,28 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../state/imaging/live_view_state.dart';
+import '../../widgets/imaging/diagnostic_panel.dart';
 import '../../widgets/imaging/exposure_controls_panel.dart';
 import '../../widgets/imaging/frame_viewer.dart';
 import '../../widgets/imaging/histogram_strip.dart';
 import '../../widgets/status_indicator.dart';
 import '../../theme/ara_colors.dart';
 
-/// Imaging tab per playbook §25.5.1. Phase 12c.1 wires the layout (frame
-/// viewer + histogram + exposure controls panel + always-visible §51 health
-/// indicator) and the local Riverpod state. Phase 12c.2 connects Take One +
-/// Live View toggle to the daemon and renders real frame previews.
-class ImagingTab extends ConsumerStatefulWidget {
+/// Imaging tab per playbook §25.5.1. Phase 12c.2: Live View state lifted
+/// into `liveViewControllerProvider` (observable cross-component), §51
+/// Health Indicator + Diagnostic Panel sourced from the diagnostics
+/// provider (currently a stub; real WS event wiring lands in 12c.3).
+class ImagingTab extends ConsumerWidget {
   const ImagingTab({super.key});
 
   @override
-  ConsumerState<ImagingTab> createState() => _ImagingTabState();
-}
-
-class _ImagingTabState extends ConsumerState<ImagingTab> {
-  bool _liveViewOn = false;
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final liveViewOn = ref.watch(liveViewControllerProvider);
     return Column(
       children: [
         const _ImagingHeader(),
@@ -31,19 +27,22 @@ class _ImagingTabState extends ConsumerState<ImagingTab> {
             children: [
               Expanded(
                 child: Column(
-                  children: [
-                    const Expanded(child: FrameViewer()),
-                    const HistogramStrip(),
+                  children: const [
+                    Expanded(child: FrameViewer()),
+                    HistogramStrip(),
+                    DiagnosticPanel(),
                   ],
                 ),
               ),
               ExposureControlsPanel(
-                liveViewOn: _liveViewOn,
+                liveViewOn: liveViewOn,
                 onTakeOne: () {
-                  // Phase 12c.2: invoke /api/v1/sequence/exposure with the
+                  // Phase 12c.3: invoke /api/v1/sequence/exposure with the
                   // current ExposureParams + the connected camera.
                 },
-                onLiveViewToggle: (v) => setState(() => _liveViewOn = v),
+                onLiveViewToggle: ref
+                    .read(liveViewControllerProvider.notifier)
+                    .set,
               ),
             ],
           ),
@@ -53,11 +52,11 @@ class _ImagingTabState extends ConsumerState<ImagingTab> {
   }
 }
 
-class _ImagingHeader extends StatelessWidget {
+class _ImagingHeader extends ConsumerWidget {
   const _ImagingHeader();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Container(
       height: 40,
       padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -72,12 +71,20 @@ class _ImagingHeader extends StatelessWidget {
           Text('Imaging', style: Theme.of(context).textTheme.titleMedium),
           const Spacer(),
           // §51 Health Indicator — always visible per the playbook's
-          // "always-visible" requirement. Wired to actual diagnostics
-          // state in Phase 12c.2 alongside the Diagnostic Panel.
-          const StatusIndicator(
-            level: StatusLevel.disconnected,
-            label: 'Diagnostics: not connected',
-          ),
+          // "always-visible" requirement. Sourced from
+          // diagnosticsStateProvider (stub today; real WS event stream
+          // in 12c.3).
+          Consumer(builder: (context, ref, _) {
+            final diag = ref.watch(diagnosticsStateProvider);
+            return StatusIndicator(
+              level: diag.level,
+              label: diag.label,
+              onTap: () {
+                // Phase 12c.3: open the full diagnostic history modal
+                // per §51 Diagnostic Panel "expanded view".
+              },
+            );
+          }),
         ],
       ),
     );
