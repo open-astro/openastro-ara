@@ -66,9 +66,10 @@ class _HelpDialog extends ConsumerWidget {
             const SizedBox(height: 16),
             _DiagnosticRow(
               label: 'App version',
-              value: appVersion.maybeWhen(
+              value: appVersion.when(
                 data: (v) => v,
-                orElse: () => '(loading...)',
+                loading: () => '(loading...)',
+                error: (_, _) => '(unknown)',
               ),
             ),
             _DiagnosticRow(label: 'Active server', value: activeServer),
