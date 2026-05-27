@@ -87,8 +87,7 @@ void main() {
     test('addSiblingAfter refuses root kind', () {
       final before = container.read(sequenceControllerProvider);
       ctrl.addSiblingAfter('target-1', kind: SequenceNodeKind.root);
-      expect(identical(container.read(sequenceControllerProvider), before),
-          isTrue);
+      expect(container.read(sequenceControllerProvider), equals(before));
     });
 
     test('moveSelectedUp swaps with the previous sibling', () {
