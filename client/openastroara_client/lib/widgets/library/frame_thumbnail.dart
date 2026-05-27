@@ -44,6 +44,9 @@ class FrameThumbnail extends StatelessWidget {
                   ),
                 ),
               ),
+              // Defensive clamp — malformed payload could push rating
+              // outside 0..5 and overflow the thumbnail. Real validation
+              // lands at the API/model boundary in Phase 12f.2.
               if (frame.rating > 0)
                 Positioned(
                   right: 4,
@@ -51,7 +54,7 @@ class FrameThumbnail extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      for (var i = 0; i < frame.rating; i++)
+                      for (var i = 0; i < frame.rating.clamp(0, 5); i++)
                         const Icon(Icons.star, size: 8, color: AraColors.accentBusy),
                     ],
                   ),

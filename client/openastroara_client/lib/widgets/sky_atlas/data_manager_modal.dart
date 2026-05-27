@@ -200,7 +200,7 @@ class _SolarSystemTab extends StatelessWidget {
         SizedBox(height: 12),
         _AssetRow(
           name: 'MPC asteroid catalog (bulk)',
-          size: 'placeholder',
+          size: 'TBD',
           recommendedNote: 'Deferred to v0.1.0 per §36.8.',
         ),
       ],

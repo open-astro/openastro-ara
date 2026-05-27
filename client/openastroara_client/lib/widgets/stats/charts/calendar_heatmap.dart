@@ -23,11 +23,15 @@ class CalendarHeatmap extends ConsumerWidget {
     const daysShown = 49;
     final start = today.subtract(const Duration(days: daysShown - 1));
 
-    // Sum integration minutes per date.
+    // Sum integration minutes per date, but only for dates that actually
+    // fall in the rendered 49-day window — sessions outside the window
+    // would otherwise inflate `maxMins` and wash out visible contrast.
     final perDay = <String, int>{};
     for (final s in sessions) {
+      final day = DateTime(s.date.year, s.date.month, s.date.day);
+      if (day.isBefore(start) || day.isAfter(today)) continue;
       final mins = s.totalIntegration.inMinutes;
-      final key = _dayKey(s.date);
+      final key = _dayKey(day);
       perDay[key] = (perDay[key] ?? 0) + mins;
     }
     final maxMins = perDay.values.isEmpty

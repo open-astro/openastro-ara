@@ -114,12 +114,21 @@ class _LibraryHeaderBar extends ConsumerWidget {
             ],
           ),
           const SizedBox(width: 16),
-          // Filter + rating + search pills wire up in 12f.2.
-          const _ChipPlaceholder(icon: Icons.filter_list, label: 'All filters'),
-          const SizedBox(width: 8),
-          const _ChipPlaceholder(icon: Icons.star_border, label: 'Any rating'),
-          const SizedBox(width: 8),
-          const _ChipPlaceholder(icon: Icons.search, label: 'Search'),
+          // Filter + rating + search pills wire up in 12f.2. Wrapped in a
+          // SingleChildScrollView so the header stays usable on narrow
+          // window widths.
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(children: const [
+                _ChipPlaceholder(icon: Icons.filter_list, label: 'All filters'),
+                SizedBox(width: 8),
+                _ChipPlaceholder(icon: Icons.star_border, label: 'Any rating'),
+                SizedBox(width: 8),
+                _ChipPlaceholder(icon: Icons.search, label: 'Search'),
+              ]),
+            ),
+          ),
         ],
       ),
     );

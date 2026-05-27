@@ -4,9 +4,9 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** Phase 12 CR cleanup (in flight) — addresses 13 promotion-PR #71 findings
-- **Last merged:** `phase-12g3-csv` — PR #70, 2026-05-27 (Stats CSV export; CR caught 3 — 1 Major async Clipboard + 2 Minor row-count/CRLF — fixed before merge).
-- **Currently working on:** `phase-12-cr-cleanup` branch — batch-fixes the 13 actionable CR findings raised on the promotion PR #71 (3 Critical clamp().toX() casts, 4 Major behavior fixes, 6 Minor housekeeping). The 14th finding — missing filter-slot UI control — is deferred to PORT_TODO.md as it's a feature add. Once merged, PR #71 auto-updates and we can re-promote.
+- **Phase:** Phase 12 CR cleanup round 2 (in flight) — addresses 8 round-2 findings on promotion PR #71
+- **Last merged:** `phase-12-cr-cleanup` — PR #72, 2026-05-27 (13 round-1 findings; clean CR review). Promotion PR #71 auto-re-reviewed after merge and surfaced 8 new findings.
+- **Currently working on:** `phase-12-cr-cleanup-2` branch — fixes 8 round-2 findings: DeepCollectionEquality for SequenceNode (adds `collection ^1.19.1` dep), tab-index range guard, exposure setter validation, calendar-heatmap windowed aggregation, library header responsive scrollview, Help button onPressed=null, frame thumbnail rating clamp, MPC catalog 'placeholder' → 'TBD'.
 
 ## Completed
 

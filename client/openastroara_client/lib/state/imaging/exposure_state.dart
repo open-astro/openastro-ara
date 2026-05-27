@@ -47,11 +47,33 @@ class ExposureController extends Notifier<ExposureParams> {
   @override
   ExposureParams build() => const ExposureParams();
 
-  void setExposure(Duration d) => state = state.copyWith(exposure: d);
-  void setGain(int v) => state = state.copyWith(gain: v);
-  void setOffset(int v) => state = state.copyWith(offset: v);
-  void setBin(int v) => state = state.copyWith(bin: v);
-  void setFilterSlot(String s) => state = state.copyWith(filterSlot: s);
+  // Setters validate at the boundary so downstream consumers (Take One
+  // payload, sequence import) can't propagate physically-impossible values.
+  void setExposure(Duration d) {
+    if (d <= Duration.zero) return;
+    state = state.copyWith(exposure: d);
+  }
+
+  void setGain(int v) {
+    if (v < 0) return;
+    state = state.copyWith(gain: v);
+  }
+
+  void setOffset(int v) {
+    if (v < 0) return;
+    state = state.copyWith(offset: v);
+  }
+
+  void setBin(int v) {
+    if (v < 1) return;
+    state = state.copyWith(bin: v);
+  }
+
+  void setFilterSlot(String s) {
+    if (s.isEmpty) return;
+    state = state.copyWith(filterSlot: s);
+  }
+
   void setFrameKind(FrameKind k) => state = state.copyWith(frameKind: k);
 }
 

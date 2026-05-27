@@ -212,7 +212,8 @@ class _BottomStatusBar extends StatelessWidget {
           IconButton(
             icon: const Icon(Icons.help_outline, size: 18),
             tooltip: 'Help / Report a bug (§54)',
-            onPressed: () {},
+            // Disabled until the §54 help/bug-report dialog lands.
+            onPressed: null,
           ),
           const SizedBox(width: 4),
         ],
