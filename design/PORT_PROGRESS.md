@@ -4,9 +4,9 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** Phase 11 (Flutter scaffold) — in flight
-- **Last merged:** `infra-changelog-init` — PR #52, 2026-05-26 (`CHANGELOG.md` Keep-a-Changelog init with full backfilled phase history + SKILL.md step reminding the driver to add `[Unreleased]` entries for user-visible changes).
-- **Currently working on:** `phase-11-flutter-scaffold` branch — adds `client/openastroara_client/` Flutter project (macos/windows/linux platforms, Flutter 3.44.0 pinned), runtime deps (dio + web_socket_channel + multicast_dns + riverpod + flutter_secure_storage + file_picker), first-run skeleton (mDNS discovery + manual server entry + /api/v1/server/info handshake via Riverpod 3.x Notifier providers). `flutter analyze` clean. OpenAPI Dart codegen deferred to a Phase 11 follow-up since the `openapi_generator` pub package has a Dart-SDK constraint conflict — the typed client can be generated externally via the Java `openapi-generator-cli` tool instead.
+- **Phase:** Phase 12 CR cleanup round 4 (in flight) — 5 real findings on PR #71 + reply 2 hallucinated Criticals
+- **Last merged:** `phase-12-cr-cleanup-3` — PR #74, 2026-05-27 (deep-freeze SequenceNode.params; 0 CR findings). Round-4 CR pass surfaced 7 findings — 5 actionable, 2 hallucinated.
+- **Currently working on:** `phase-12-cr-cleanup-4` branch — fixes status bar height (32→40), library AppBar height (48→64), diagnostics radio Semantics for a11y, main.dart generic error message + developer.log, library session header ellipsis. Replies on the 2 Criticals about a non-existent registry file.
 
 ## Completed
 
@@ -98,9 +98,7 @@ Folded into Phase 0.5p (global.json + csproj target framework bumps).
 
 **141 endpoint registrations across 11 endpoint files.** Functional today: `/healthz`, `/api/v1/server/info`, `/api/v1/equipment/discover/{type}`, `/api/v1/ws/catalog`. Remaining endpoints return 501 with RFC 7807 Problem bodies until per-area service implementations land — the surface itself is stable for WILMA client codegen (Phase 11+).
 
-## In flight
-
-- `phase-11-flutter-scaffold` — Flutter WILMA client scaffold + first-run flow (mDNS discovery + manual entry + handshake). Real UI polish lands at Phase 12a (app shell). OpenAPI Dart codegen lands as a Phase 11 follow-up (the `openapi_generator` pub package has a SDK-constraint conflict; switching to `openapi-generator-cli` external invocation).
+- `phase-12e-sky-atlas` — Phase 12e.1 Sky Atlas tab body + Data Manager 4-tab modal stub + §36.13 sky-data-missing banner. webview_flutter Aladin embed + real /api/v1/data-manager/* downloads land in 12e.2.
 
 ## Next
 

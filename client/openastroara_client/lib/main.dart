@@ -1,7 +1,12 @@
+import 'dart:developer' as developer;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'screens/app_shell.dart';
 import 'screens/first_run_screen.dart';
+import 'state/saved_server_state.dart';
+import 'theme/ara_theme.dart';
 
 void main() {
   runApp(const ProviderScope(child: OpenAstroAraApp()));
@@ -14,8 +19,40 @@ class OpenAstroAraApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'OpenAstro Ara WILMA',
-      theme: ThemeData.dark(useMaterial3: true),
-      home: const FirstRunScreen(),
+      theme: buildAraTheme(),
+      home: const _RootRouter(),
+    );
+  }
+}
+
+/// Decides between FirstRunScreen (no saved servers yet) and AppShell
+/// (at least one server saved). Per playbook §30.
+class _RootRouter extends ConsumerWidget {
+  const _RootRouter();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final saved = ref.watch(savedServersProvider);
+    return saved.when(
+      data: (servers) =>
+          servers.isEmpty ? const FirstRunScreen() : const AppShell(),
+      loading: () => const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      ),
+      error: (e, st) {
+        // Log internal details for debug; UI shows a generic message so
+        // exception text can't leak into the user-facing surface.
+        developer.log('Failed to load saved servers',
+            name: 'openastroara.saved_servers', error: e, stackTrace: st);
+        return const Scaffold(
+          body: Center(
+            child: Padding(
+              padding: EdgeInsets.all(24),
+              child: Text('Failed to load saved servers. Please try again.'),
+            ),
+          ),
+        );
+      },
     );
   }
 }

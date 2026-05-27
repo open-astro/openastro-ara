@@ -1,0 +1,225 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../state/app_shell_state.dart';
+import '../theme/ara_colors.dart';
+import '../widgets/command_palette.dart';
+import '../widgets/equipment_chip.dart';
+import '../widgets/status_indicator.dart';
+import 'library/image_library_screen.dart';
+import 'stats/stats_dashboard_screen.dart';
+import 'tabs/framing_tab.dart';
+import 'tabs/imaging_tab.dart';
+import 'tabs/options_tab.dart';
+import 'tabs/sequencer_tab.dart';
+import 'tabs/sky_atlas_tab.dart';
+import 'wizard/wizard_shell.dart';
+
+/// Main app shell — replaces the first-run screen once a server is saved
+/// (playbook §25 layout: nav rail on left, top equipment bar, center
+/// workspace, bottom status). Per-area content lives in the 5 tab widgets.
+/// Equipment chips along the top are placeholder until Phase 12c wires the
+/// chooser bottom-sheet + Alpaca discovery flow per §25.3.
+class AppShell extends ConsumerStatefulWidget {
+  const AppShell({super.key});
+
+  @override
+  ConsumerState<AppShell> createState() => _AppShellState();
+}
+
+class _AppShellState extends ConsumerState<AppShell> {
+  static const _tabs = <_TabSpec>[
+    _TabSpec(icon: Icons.camera_alt, label: 'Imaging', body: ImagingTab()),
+    _TabSpec(icon: Icons.crop_free, label: 'Framing', body: FramingTab()),
+    _TabSpec(icon: Icons.list_alt, label: 'Sequencer', body: SequencerTab()),
+    _TabSpec(icon: Icons.public, label: 'Sky Atlas', body: SkyAtlasTab()),
+    _TabSpec(icon: Icons.settings, label: 'Options', body: OptionsTab()),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final selectedTab = ref.watch(selectedTabIndexProvider);
+    return Scaffold(
+      body: SafeArea(
+        child: CallbackShortcuts(
+          // §61 ⌘K on macOS, Ctrl+K elsewhere — both bound so the palette
+          // is reachable regardless of host platform.
+          bindings: <ShortcutActivator, VoidCallback>{
+            const SingleActivator(LogicalKeyboardKey.keyK, meta: true): () =>
+                showCommandPalette(context),
+            const SingleActivator(LogicalKeyboardKey.keyK, control: true): () =>
+                showCommandPalette(context),
+          },
+          child: Focus(
+            autofocus: true,
+            child: Column(
+              children: [
+                const _TopEquipmentBar(),
+                Expanded(
+                  child: Row(
+                    children: [
+                      NavigationRail(
+                        selectedIndex: selectedTab,
+                        onDestinationSelected: (i) => ref
+                            .read(selectedTabIndexProvider.notifier)
+                            .select(i),
+                        labelType: NavigationRailLabelType.all,
+                        destinations: [
+                          for (final t in _tabs)
+                            NavigationRailDestination(
+                              icon: Icon(t.icon),
+                              label: Text(t.label),
+                            ),
+                        ],
+                      ),
+                      const VerticalDivider(width: 1, thickness: 1),
+                      Expanded(child: _tabs[selectedTab].body),
+                    ],
+                  ),
+                ),
+                const _BottomStatusBar(),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TabSpec {
+  final IconData icon;
+  final String label;
+  final Widget body;
+  const _TabSpec({required this.icon, required this.label, required this.body});
+}
+
+class _TopEquipmentBar extends StatelessWidget {
+  const _TopEquipmentBar();
+
+  // Per §25.3 device-type order. Each chip is disconnected until Phase 12c
+  // wires the Alpaca chooser + connect flow.
+  static const _chips = <(IconData, String)>[
+    (Icons.camera_alt, 'CAM'),
+    (Icons.filter_alt, 'FW'),
+    (Icons.adjust, 'FOC'),
+    (Icons.public, 'MOUNT'),
+    (Icons.rotate_right, 'ROT'),
+    (Icons.gps_fixed, 'GUIDE'),
+    (Icons.wb_sunny, 'FLAT'),
+    (Icons.power, 'SW'),
+    (Icons.cloud_outlined, 'WX'),
+    (Icons.shield_outlined, 'SAFE'),
+    (Icons.home_outlined, 'DOME'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 64,
+      decoration: const BoxDecoration(
+        color: AraColors.bgPanel,
+        border: Border(bottom: BorderSide(color: AraColors.border)),
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: Row(
+          children: [
+            for (final (icon, label) in _chips)
+              EquipmentChip(
+                icon: icon,
+                label: label,
+                status: StatusLevel.disconnected,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BottomStatusBar extends StatelessWidget {
+  const _BottomStatusBar();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      // 40px gives `TextButton.icon` enough breathing room at default
+      // and 110% text-scale; 32 was clipping the launchers.
+      height: 40,
+      decoration: const BoxDecoration(
+        color: AraColors.bgPanel,
+        border: Border(top: BorderSide(color: AraColors.border)),
+      ),
+      child: Row(
+        children: [
+          const SizedBox(width: 8),
+          const StatusIndicator(
+            level: StatusLevel.disconnected,
+            label: 'Disconnected',
+          ),
+          const Spacer(),
+          // Image Library entry (§40). Full-screen route — captured frames
+          // grouped by session per 12f.1's in-memory demo; real backend in
+          // 12f.2.
+          TextButton.icon(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const ImageLibraryScreen(),
+              ),
+            ),
+            icon: const Icon(Icons.photo_library_outlined, size: 16),
+            label: const Text('Image Library'),
+            style: TextButton.styleFrom(
+              foregroundColor: AraColors.textSecondary,
+              textStyle: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
+          // Stats dashboard entry (§50). Full-screen route — overview tiles
+          // + Targets rollup + Best Frames over the library demo data.
+          // Real charts (fl_chart) + per-target detail land in 12g.2/.3.
+          TextButton.icon(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const StatsDashboardScreen(),
+              ),
+            ),
+            icon: const Icon(Icons.insights, size: 16),
+            label: const Text('Stats'),
+            style: TextButton.styleFrom(
+              foregroundColor: AraColors.textSecondary,
+              textStyle: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
+          // Profile wizard entry (§37). Launches the 18-screen wizard as a
+          // full-screen route; per-screen content is being filled in across
+          // Phase 12b follow-up PRs.
+          TextButton.icon(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const WizardShell(),
+                fullscreenDialog: true,
+              ),
+            ),
+            icon: const Icon(Icons.tune, size: 16),
+            label: const Text('Run profile wizard'),
+            style: TextButton.styleFrom(
+              foregroundColor: AraColors.textSecondary,
+              textStyle: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
+          // Bug-report entry (§54) — wired in a Phase 12a follow-up.
+          IconButton(
+            icon: const Icon(Icons.help_outline, size: 18),
+            tooltip: 'Help / Report a bug (§54)',
+            // Disabled until the §54 help/bug-report dialog lands.
+            onPressed: null,
+          ),
+          const SizedBox(width: 4),
+        ],
+      ),
+    );
+  }
+}
