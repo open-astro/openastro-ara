@@ -4,9 +4,9 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** Phase 12-tests (initial unit tests + CI integration) — in flight
-- **Last merged:** `phase-12f3a-multiselect` — PR #76, 2026-05-27 (library multi-select skeleton; CR caught 1 Major — long-press add-only — fixed before merge).
-- **Currently working on:** `phase-12-tests-initial` branch — seeds `test/` directory with 23 Dart unit tests across `library_selection_test`, `settings_search_test`, `sequence_node_test` + adds the long-promised `client-test` CI job (`flutter analyze && flutter test` on Linux, pinned to .flutter-version).
+- **Phase:** Phase 12-tests-2 (wizard + exposure + tab-index coverage) — in flight
+- **Last merged:** `phase-12-tests-initial` — PR #77, 2026-05-27 (23 unit tests + new `client-test` CI job; CR caught 1 Minor — Phase 14 text contradiction — fixed before merge).
+- **Currently working on:** `phase-12-tests-2-state` branch — adds 18 more tests (wizard step clamping/skip-emit, exposure setter validation, tab-index range guard) bringing total coverage to 41.
 
 ## Completed
 
