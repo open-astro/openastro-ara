@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/library/frame.dart';
+import '../../state/library/library_selection.dart';
 import '../../state/library/library_state.dart';
 import '../../theme/ara_colors.dart';
+import '../../widgets/library/bulk_action_bar.dart';
 import '../../widgets/library/frame_thumbnail.dart';
 import 'frame_viewer_screen.dart';
 
@@ -28,20 +30,28 @@ class ImageLibraryScreen extends ConsumerWidget {
           child: _LibraryHeaderBar(),
         ),
       ),
-      body: ListView(
+      body: Column(
         children: [
-          for (final g in groups) ...[
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-              child: Text(
-                g.label,
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      color: AraColors.textSecondary,
+          Expanded(
+            child: ListView(
+              children: [
+                for (final g in groups) ...[
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                    child: Text(
+                      g.label,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            color: AraColors.textSecondary,
+                          ),
                     ),
-              ),
+                  ),
+                  ...g.sessions.map((s) => _SessionCard(session: s)),
+                ],
+              ],
             ),
-            ...g.sessions.map((s) => _SessionCard(session: s)),
-          ],
+          ),
+          // Slides into view when selection is non-empty (§40.8).
+          const LibraryBulkActionBar(),
         ],
       ),
     );
@@ -240,21 +250,48 @@ class _SessionCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 8),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: session.frames
-                    .map((f) => FrameThumbnail(
-                          frame: f,
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (_) => FrameViewerScreen(frame: f),
-                            ),
-                          ),
-                        ))
-                    .toList(),
-              ),
-            ),
+            // Frame strip — in selection mode, tap toggles selection; out
+            // of selection mode, tap opens the §40.5 Frame Viewer. Long-
+            // press always enters selection mode (or adds to it).
+            Consumer(builder: (context, ref, _) {
+              final selection = ref.watch(librarySelectionProvider);
+              final inSelectionMode = selection.isNotEmpty;
+              return SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: session.frames
+                      .map((f) => FrameThumbnail(
+                            frame: f,
+                            selected: selection.contains(f.id),
+                            selectionMode: inSelectionMode,
+                            onTap: () {
+                              if (inSelectionMode) {
+                                ref
+                                    .read(librarySelectionProvider.notifier)
+                                    .toggle(f.id);
+                              } else {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute<void>(
+                                    builder: (_) => FrameViewerScreen(frame: f),
+                                  ),
+                                );
+                              }
+                            },
+                            onLongPress: () {
+                              // Long-press is add-only — never deselects.
+                              // Use tap (in selection mode) or the bulk-bar
+                              // Close to clear selection.
+                              if (!selection.contains(f.id)) {
+                                ref
+                                    .read(librarySelectionProvider.notifier)
+                                    .toggle(f.id);
+                              }
+                            },
+                          ))
+                      .toList(),
+                ),
+              );
+            }),
           ],
         ),
       ),

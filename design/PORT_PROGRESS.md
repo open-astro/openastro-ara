@@ -4,9 +4,9 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** Phase 12 CR cleanup round 4 (in flight) — 5 real findings on PR #71 + reply 2 hallucinated Criticals
-- **Last merged:** `phase-12-cr-cleanup-3` — PR #74, 2026-05-27 (deep-freeze SequenceNode.params; 0 CR findings). Round-4 CR pass surfaced 7 findings — 5 actionable, 2 hallucinated.
-- **Currently working on:** `phase-12-cr-cleanup-4` branch — fixes status bar height (32→40), library AppBar height (48→64), diagnostics radio Semantics for a11y, main.dart generic error message + developer.log, library session header ellipsis. Replies on the 2 Criticals about a non-existent registry file.
+- **Phase:** Phase 12f.3a (Library multi-select skeleton) — in flight
+- **Last merged:** PR #71 promotion (port/ara → master) — 2026-05-27, master at `85ee24726`. 13 sub-PRs (#63-#75 less #71) landed in port/ara during the session including 4 cleanup rounds for promotion-PR findings.
+- **Currently working on:** `phase-12f3a-multiselect` branch — adds §40.8 selection-mode state + `LibraryBulkActionBar` slide-up card with 5 disabled-for-now actions (Rate / Tag / Move / Export / Delete). FrameThumbnail gains selected/selectionMode/onLongPress props. Real bulk actions wire to /api/v1/frames/bulk in 12f.3b.
 
 ## Completed
 
