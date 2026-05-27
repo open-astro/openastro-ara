@@ -4,9 +4,9 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** Phase 12g.1 (Stats dashboard skeleton) — in flight
-- **Last merged:** `phase-12f-image-library` — PR #61, 2026-05-27 (Image Library + Frame Viewer + demo M42/NGC 6188 sessions; CR caught 3 valid issues: mutable lists / canonical-order claim / grouping selector no-op, all fixed before merge).
-- **Currently working on:** `phase-12g-stats` branch — full-screen `StatsDashboardScreen` (Overview tiles, Targets rollup, Best Frames, Visualization placeholders) reachable from AppShell. Chart renders (fl_chart) + per-target detail + CSV export land in 12g.2/.3.
+- **Phase:** Phase 12h.1 (Settings shell + tree nav) — in flight
+- **Last merged:** `phase-12g-stats` — PR #62, 2026-05-27 (StatsDashboardScreen with Overview tiles + Targets rollup + Best Frames + visualization placeholders, 0 CR findings).
+- **Currently working on:** `phase-12h-settings` branch — `SettingsShell` replaces the Options tab placeholder (6-group tree on the left, selected panel on the right). 3 panels fully rendered (Imaging Defaults, Storage, Diagnostics Mode); remaining panels show a placeholder that confirms routing works. Editable forms + persistence + §61 ⌘K smart search land in 12h.2/.3.
 
 ## Completed
 
