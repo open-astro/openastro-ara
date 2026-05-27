@@ -4,9 +4,9 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** Phase 12f.1 (Image Library skeleton) — in flight
-- **Last merged:** `phase-12e-sky-atlas` — PR #60, 2026-05-27 (Sky Atlas tab + Data Manager 4-tab modal + §36.13 sky-data-missing banner; CR found 1 Minor missing dismiss action, fixed before merge).
-- **Currently working on:** `phase-12f-image-library` branch — full-screen `ImageLibraryScreen` (sessions list, filter pills, thumbnail strips) + `FrameViewerScreen` (metadata panel + action buttons) + demo M42 / NGC 6188 sessions + AppShell launch entry. Real `/api/v1/sessions` + `/api/v1/frames`, stretch picker (§65), auto-rating + HFR drift (§40.7), bulk ops + backup UI land in 12f.2/.3.
+- **Phase:** Phase 12g.1 (Stats dashboard skeleton) — in flight
+- **Last merged:** `phase-12f-image-library` — PR #61, 2026-05-27 (Image Library + Frame Viewer + demo M42/NGC 6188 sessions; CR caught 3 valid issues: mutable lists / canonical-order claim / grouping selector no-op, all fixed before merge).
+- **Currently working on:** `phase-12g-stats` branch — full-screen `StatsDashboardScreen` (Overview tiles, Targets rollup, Best Frames, Visualization placeholders) reachable from AppShell. Chart renders (fl_chart) + per-target detail + CSV export land in 12g.2/.3.
 
 ## Completed
 
