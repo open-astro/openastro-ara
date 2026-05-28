@@ -4,12 +4,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../state/imaging/exposure_state.dart' show FrameKind;
 import '../../../state/settings/imaging_defaults_state.dart';
 import '../../../theme/ara_colors.dart';
+import '../../../widgets/settings/editable_field.dart';
 
-/// §37.11 Imaging Defaults panel. Phase 12h.2-imaging-b makes the form
-/// editable — values flow through `imagingDefaultsProvider`. Phase 12h.2b
-/// (next sub-PR) wires `/api/v1/profile/imaging-defaults` for daemon
-/// round-trip persistence; today's "Save" is in-memory only and shows a
-/// snackbar to confirm the change stuck.
+/// §37.11 Imaging Defaults panel. Phase 12h.2-imaging-b made the form
+/// editable; 12h.2-display-sync swaps the panel's local _NumberField for
+/// the shared `EditableNumberRow` so rejected input snaps back to the
+/// canonical state (round-1 CR finding on PR #94).
 class ImagingDefaultsPanel extends ConsumerWidget {
   const ImagingDefaultsPanel({super.key});
 
@@ -20,34 +20,42 @@ class ImagingDefaultsPanel extends ConsumerWidget {
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
-        _NumberField(
+        EditableNumberRow(
           label: 'Default exposure (s)',
-          initialValue: d.defaultExposure.inSeconds.toString(),
+          currentValue: d.defaultExposure.inSeconds.toString(),
+          getCanonical: () =>
+              ref.read(imagingDefaultsProvider).defaultExposure.inSeconds.toString(),
           parse: (s) {
             final i = int.tryParse(s);
             if (i == null) return;
             n.setExposure(Duration(seconds: i));
           },
         ),
-        _NumberField(
+        EditableNumberRow(
           label: 'Default gain',
-          initialValue: d.defaultGain.toString(),
+          currentValue: d.defaultGain.toString(),
+          getCanonical: () =>
+              ref.read(imagingDefaultsProvider).defaultGain.toString(),
           parse: (s) {
             final i = int.tryParse(s);
             if (i != null) n.setGain(i);
           },
         ),
-        _NumberField(
+        EditableNumberRow(
           label: 'Default offset',
-          initialValue: d.defaultOffset.toString(),
+          currentValue: d.defaultOffset.toString(),
+          getCanonical: () =>
+              ref.read(imagingDefaultsProvider).defaultOffset.toString(),
           parse: (s) {
             final i = int.tryParse(s);
             if (i != null) n.setOffset(i);
           },
         ),
-        _NumberField(
+        EditableNumberRow(
           label: 'Default bin',
-          initialValue: d.defaultBin.toString(),
+          currentValue: d.defaultBin.toString(),
+          getCanonical: () =>
+              ref.read(imagingDefaultsProvider).defaultBin.toString(),
           parse: (s) {
             final i = int.tryParse(s);
             if (i != null) n.setBin(i);
@@ -82,17 +90,21 @@ class ImagingDefaultsPanel extends ConsumerWidget {
             ],
           ),
         ),
-        _NumberField(
+        EditableNumberRow(
           label: 'Cooling target temperature (°C)',
-          initialValue: d.coolerTargetC.toString(),
+          currentValue: d.coolerTargetC.toString(),
+          getCanonical: () =>
+              ref.read(imagingDefaultsProvider).coolerTargetC.toString(),
           parse: (s) {
             final v = double.tryParse(s);
             if (v != null) n.setCoolerTargetC(v);
           },
         ),
-        _NumberField(
+        EditableNumberRow(
           label: 'Cooler ramp rate (°C/min)',
-          initialValue: d.coolerRampRatePerMin.toString(),
+          currentValue: d.coolerRampRatePerMin.toString(),
+          getCanonical: () =>
+              ref.read(imagingDefaultsProvider).coolerRampRatePerMin.toString(),
           parse: (s) {
             final v = double.tryParse(s);
             if (v != null) n.setCoolerRampRate(v);
@@ -136,76 +148,6 @@ class ImagingDefaultsPanel extends ConsumerWidget {
           ],
         ),
       ],
-    );
-  }
-}
-
-/// Single-line text field for an imaging-defaults numeric row. Owns its own
-/// TextEditingController in a StatefulWidget so the controller is disposed
-/// properly (the 12h.1 CR finding on PR #63 — never allocate a
-/// TextEditingController inside build()).
-class _NumberField extends StatefulWidget {
-  final String label;
-  final String initialValue;
-  final void Function(String) parse;
-  const _NumberField({
-    required this.label,
-    required this.initialValue,
-    required this.parse,
-  });
-
-  @override
-  State<_NumberField> createState() => _NumberFieldState();
-}
-
-class _NumberFieldState extends State<_NumberField> {
-  late final TextEditingController _controller;
-  late final FocusNode _focusNode;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = TextEditingController(text: widget.initialValue);
-    _focusNode = FocusNode();
-    // Commit the parsed value on focus-out so a user can tab/click away
-    // without explicitly hitting enter.
-    _focusNode.addListener(() {
-      if (!_focusNode.hasFocus) {
-        widget.parse(_controller.text);
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    _focusNode.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 280,
-            child: Text(widget.label,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AraColors.textSecondary,
-                    )),
-          ),
-          Expanded(
-            child: TextField(
-              controller: _controller,
-              focusNode: _focusNode,
-              decoration: const InputDecoration(isDense: true),
-              onSubmitted: widget.parse,
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

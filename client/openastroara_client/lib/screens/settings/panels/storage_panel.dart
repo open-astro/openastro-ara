@@ -3,12 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../state/settings/storage_settings_state.dart';
 import '../../../theme/ara_colors.dart';
+import '../../../widgets/settings/editable_field.dart';
 
 /// Storage panel per §29 — save directory + format + compression + filename
-/// template. Phase 12h.2-storage makes the form editable, wired to
-/// `storageSettingsProvider`. The §29.1.3 SD-card wear warning stays at the
-/// top. Free-space probing + §63 directory picker land in 12h.2b alongside
-/// daemon round-trip.
+/// template. Phase 12h.2-storage made the form editable; 12h.2-display-sync
+/// swaps the panel's local _TextField for the shared `EditableTextRow` so
+/// rejected input (empty save dir, empty filename template) snaps back to
+/// the canonical state.
 class StoragePanel extends ConsumerWidget {
   const StoragePanel({super.key});
 
@@ -39,9 +40,10 @@ class StoragePanel extends ConsumerWidget {
           ]),
         ),
         const SizedBox(height: 16),
-        _TextField(
+        EditableTextRow(
           label: 'Save directory',
-          initialValue: s.saveDirectory,
+          currentValue: s.saveDirectory,
+          getCanonical: () => ref.read(storageSettingsProvider).saveDirectory,
           parse: n.setSaveDirectory,
         ),
         Padding(
@@ -49,7 +51,7 @@ class StoragePanel extends ConsumerWidget {
           child: Row(
             children: [
               SizedBox(
-                width: 200,
+                width: 280,
                 child: Text('Free space',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: AraColors.textSecondary,
@@ -66,7 +68,7 @@ class StoragePanel extends ConsumerWidget {
           child: Row(
             children: [
               SizedBox(
-                width: 200,
+                width: 280,
                 child: Text('File format',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: AraColors.textSecondary,
@@ -95,7 +97,7 @@ class StoragePanel extends ConsumerWidget {
           child: Row(
             children: [
               SizedBox(
-                width: 200,
+                width: 280,
                 child: Text('Compression',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: AraColors.textSecondary,
@@ -118,9 +120,11 @@ class StoragePanel extends ConsumerWidget {
             ],
           ),
         ),
-        _TextField(
+        EditableTextRow(
           label: 'Filename template',
-          initialValue: s.filenameTemplate,
+          currentValue: s.filenameTemplate,
+          getCanonical: () =>
+              ref.read(storageSettingsProvider).filenameTemplate,
           parse: n.setFilenameTemplate,
           maxLines: 2,
         ),
@@ -144,80 +148,6 @@ class StoragePanel extends ConsumerWidget {
           ],
         ),
       ],
-    );
-  }
-}
-
-/// Owns its own TextEditingController + FocusNode per the PR #63 contract
-/// — never allocate a controller inline in build(). Commits on focus-out
-/// + onSubmitted.
-class _TextField extends StatefulWidget {
-  final String label;
-  final String initialValue;
-  final void Function(String) parse;
-  final int maxLines;
-  const _TextField({
-    required this.label,
-    required this.initialValue,
-    required this.parse,
-    this.maxLines = 1,
-  });
-
-  @override
-  State<_TextField> createState() => _TextFieldState();
-}
-
-class _TextFieldState extends State<_TextField> {
-  late final TextEditingController _controller;
-  late final FocusNode _focusNode;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = TextEditingController(text: widget.initialValue);
-    _focusNode = FocusNode();
-    _focusNode.addListener(() {
-      if (!_focusNode.hasFocus) {
-        widget.parse(_controller.text);
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    _focusNode.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 200,
-            child: Padding(
-              padding: const EdgeInsets.only(top: 12),
-              child: Text(widget.label,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AraColors.textSecondary,
-                      )),
-            ),
-          ),
-          Expanded(
-            child: TextField(
-              controller: _controller,
-              focusNode: _focusNode,
-              maxLines: widget.maxLines,
-              decoration: const InputDecoration(isDense: true),
-              onSubmitted: widget.parse,
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

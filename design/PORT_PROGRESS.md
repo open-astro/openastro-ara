@@ -4,9 +4,9 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** Phase 12h.2-safety (editable Safety Policies panel) — in flight
-- **Last merged:** `phase-12h2-notifications` — PR #93, 2026-05-28 (editable Notifications panel; CR clean).
-- **Currently working on:** `phase-12h2-safety` branch — SafetyPolicies notifier (§35) with 3 enums + 12-field model, plus editable panel with 4 dropdowns + 3 number rows + 5 switches. Total tests: 108.
+- **Phase:** Phase 12h.2-display-sync (retrofit imaging + storage panels with shared editable widgets) — in flight
+- **Last merged:** `phase-12h2-safety` — PR #94, 2026-05-28 (editable Safety Policies panel; CR caught 1 Major — display sync on rejected input — fixed before merge).
+- **Currently working on:** `phase-12h2-display-sync` branch — extracts EditableTextRow / EditableNumberRow from the safety panel into `lib/widgets/settings/editable_field.dart` + retrofits imaging + storage panels to use them. Carries the round-1 CR contract from PR #94 (rejected input snaps back to canonical state). Tests stay at 108 (UI refactor, no notifier change).
 
 ## Completed
 
