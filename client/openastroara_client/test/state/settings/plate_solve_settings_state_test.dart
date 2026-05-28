@@ -48,7 +48,7 @@ void main() {
           'http://nova.astrometry.net');
     });
 
-    test('searchRadiusDeg clamps to (0, 180]', () {
+    test('searchRadiusDeg rejects outside (0, 180]', () {
       final n = container.read(plateSolveSettingsProvider.notifier);
       n.setSearchRadiusDeg(0);
       n.setSearchRadiusDeg(-5);
@@ -61,7 +61,7 @@ void main() {
           180);
     });
 
-    test('downsampleFactor clamps to [1, 8]', () {
+    test('downsampleFactor rejects outside [1, 8]', () {
       final n = container.read(plateSolveSettingsProvider.notifier);
       n.setDownsampleFactor(0);
       n.setDownsampleFactor(9);

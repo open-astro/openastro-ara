@@ -80,14 +80,15 @@ class PlateSolveSettingsNotifier extends Notifier<PlateSolveSettings> {
 
   void setSearchRadiusDeg(double v) {
     // 0° wouldn't search anything; 180° is the full sphere from any
-    // pointing — clamp to that physical range.
+    // pointing. Reject out-of-range (per the convention used by every
+    // other settings notifier — display-sync snaps the field back).
     if (v <= 0 || v > 180) return;
     state = state.copyWith(searchRadiusDeg: v);
   }
 
   void setDownsampleFactor(int v) {
     // 1 = no downsampling; 8 is the practical upper limit before the
-    // image is too coarse for star detection.
+    // image is too coarse for star detection. Reject out-of-range.
     if (v < 1 || v > 8) return;
     state = state.copyWith(downsampleFactor: v);
   }
