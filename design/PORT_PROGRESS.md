@@ -4,9 +4,9 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** Phase 12h.2-diagnostics (editable Diagnostics Mode picker) — in flight
-- **Last merged:** `phase-12h2-platesolve` — PR #100, 2026-05-28 (editable Plate Solve panel; CR caught doc/test "clamp" wording mismatch, fixed to "rejects" matching cross-panel convention).
-- **Currently working on:** `phase-12h2-diagnostics` branch — DiagnosticsMode notifier + radio picker wired through Riverpod. Total tests: 138.
+- **Phase:** Phase 12h.2-switch (consolidate _SwitchRow into shared widget) — in flight
+- **Last merged:** 6th master promotion `phase-12h-promotion-6` — PR #102, 2026-05-28 (includes #97 site, #98 filenames, #99 autofocus, #100 plate-solve, #101 diagnostics, #103 string-trim followup).
+- **Currently working on:** `phase-12h2-switch` branch — lift `_SwitchRow` from 6 panels into shared `SettingsSwitchRow` in `lib/widgets/settings/editable_field.dart`. Total tests: 138.
 
 ## Completed
 

@@ -36,4 +36,4 @@ Per §0 rule 6 + §15 step 7 + COMMIT-PR-RULES.md CodeRabbit rule "out-of-scope 
 
 ## Phase 15 sweep candidates
 
-- **Consolidate `_SwitchRow` into shared editable-field widget set.** Currently duplicated across `safety_policies_panel.dart`, `session_filenames_panel.dart`, `site_settings_panel.dart`, and `imaging_autofocus_panel.dart` with identical implementation. Lift into `lib/widgets/settings/editable_field.dart` alongside `EditableTextRow`/`EditableNumberRow`. Batched here to avoid CR churn on each editable-panel sub-PR. (Flagged 2026-05-27 in PR #99 self-review.)
+- ✅ **Consolidate `_SwitchRow` into shared editable-field widget set.** Resolved in PR #104 (Phase 12h.2-switch) — lifted into `lib/widgets/settings/editable_field.dart` as `SettingsSwitchRow` with optional `hint` slot. All 6 panel copies removed.

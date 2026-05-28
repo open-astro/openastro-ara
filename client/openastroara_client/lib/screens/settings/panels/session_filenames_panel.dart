@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../state/settings/filenames_settings_state.dart';
 import '../../../state/settings/storage_settings_state.dart';
 import '../../../theme/ara_colors.dart';
+import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
 
 /// §29.2 File saving + naming. Phase 12h.2-filenames makes the
@@ -34,7 +35,7 @@ class SessionFilenamesPanel extends ConsumerWidget {
           value: _compressionLabel(ss.compression),
           hint: 'Edit in Settings → Session → Storage',
         ),
-        _SwitchRow(
+        SettingsSwitchRow(
           label: 'Compress bias/dark frames',
           value: fs.compressDarksAndBias,
           onChanged: fn.setCompressDarksAndBias,
@@ -131,44 +132,4 @@ class SessionFilenamesPanel extends ConsumerWidget {
         StorageCompression.rice => 'RICE',
         StorageCompression.gzip => 'gzip',
       };
-}
-
-class _SwitchRow extends StatelessWidget {
-  final String label;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-  final String? hint;
-  const _SwitchRow({
-    required this.label,
-    required this.value,
-    required this.onChanged,
-    this.hint,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(children: [
-        SizedBox(
-          width: 280,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AraColors.textSecondary,
-                      )),
-              if (hint != null)
-                Text(hint!,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: AraColors.textDisabled,
-                        )),
-            ],
-          ),
-        ),
-        Switch(value: value, onChanged: onChanged),
-      ]),
-    );
-  }
 }

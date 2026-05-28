@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../state/settings/notifications_settings_state.dart';
 import '../../../theme/ara_colors.dart';
+import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
 
 /// §54 Notifications panel — editable form wired to
@@ -20,17 +21,17 @@ class SessionNotificationsPanel extends ConsumerWidget {
       padding: const EdgeInsets.all(24),
       children: [
         const SettingsSectionHeader('Channels'),
-        _SwitchRow(
+        SettingsSwitchRow(
           label: 'In-app banner',
           value: s.inAppBanner,
           onChanged: n.setInAppBanner,
         ),
-        _SwitchRow(
+        SettingsSwitchRow(
           label: 'OS desktop notification',
           value: s.osDesktop,
           onChanged: n.setOsDesktop,
         ),
-        _SwitchRow(
+        SettingsSwitchRow(
           label: 'Sound alert (§35 alarm)',
           value: s.soundAlert,
           onChanged: n.setSoundAlert,
@@ -48,37 +49,37 @@ class SessionNotificationsPanel extends ConsumerWidget {
           hint: 'Empty = disabled',
         ),
         const SettingsSectionHeader('Trigger on'),
-        _SwitchRow(
+        SettingsSwitchRow(
           label: 'Sequence complete',
           value: s.onSequenceComplete,
           onChanged: n.setOnSequenceComplete,
         ),
-        _SwitchRow(
+        SettingsSwitchRow(
           label: 'Sequence paused',
           value: s.onSequencePaused,
           onChanged: n.setOnSequencePaused,
         ),
-        _SwitchRow(
+        SettingsSwitchRow(
           label: 'Critical diagnostic',
           value: s.onCriticalDiagnostic,
           onChanged: n.setOnCriticalDiagnostic,
         ),
-        _SwitchRow(
+        SettingsSwitchRow(
           label: 'Safety event',
           value: s.onSafetyEvent,
           onChanged: n.setOnSafetyEvent,
         ),
-        _SwitchRow(
+        SettingsSwitchRow(
           label: 'Autofocus failed',
           value: s.onAutofocusFailed,
           onChanged: n.setOnAutofocusFailed,
         ),
-        _SwitchRow(
+        SettingsSwitchRow(
           label: 'Plate solve failed (×N)',
           value: s.onPlateSolveFailed,
           onChanged: n.setOnPlateSolveFailed,
         ),
-        _SwitchRow(
+        SettingsSwitchRow(
           label: 'Disk space low (<10 GB)',
           value: s.onDiskSpaceLow,
           onChanged: n.setOnDiskSpaceLow,
@@ -100,34 +101,6 @@ class SessionNotificationsPanel extends ConsumerWidget {
           ),
         ]),
       ],
-    );
-  }
-}
-
-class _SwitchRow extends StatelessWidget {
-  final String label;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-  const _SwitchRow({
-    required this.label,
-    required this.value,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(children: [
-        SizedBox(
-          width: 280,
-          child: Text(label,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AraColors.textSecondary,
-                  )),
-        ),
-        Switch(value: value, onChanged: onChanged),
-      ]),
     );
   }
 }

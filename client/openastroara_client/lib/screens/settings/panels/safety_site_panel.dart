@@ -63,7 +63,7 @@ class SafetySitePanel extends ConsumerWidget {
           hint: 'IANA name (e.g. America/Los_Angeles)',
         ),
         const SettingsSectionHeader('Horizon'),
-        _SwitchRow(
+        SettingsSwitchRow(
           label: 'Use custom horizon polygon (§36.8)',
           value: s.useCustomHorizon,
           onChanged: n.setUseCustomHorizon,
@@ -156,34 +156,6 @@ class SafetySitePanel extends ConsumerWidget {
           ),
         ]),
       ],
-    );
-  }
-}
-
-class _SwitchRow extends StatelessWidget {
-  final String label;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-  const _SwitchRow({
-    required this.label,
-    required this.value,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(children: [
-        SizedBox(
-          width: 280,
-          child: Text(label,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AraColors.textSecondary,
-                  )),
-        ),
-        Switch(value: value, onChanged: onChanged),
-      ]),
     );
   }
 }
