@@ -4,9 +4,9 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** Phase 12-tests-4 (stats + sky atlas state coverage) — in flight
-- **Last merged:** `phase-12i-help-dialog` — PR #82, 2026-05-27 (§54 Help dialog with diagnostics copy + tappable GitHub links; CR caught 2 Majors — list.last + url_launcher — fixed before merge).
-- **Currently working on:** `phase-12-tests-4-stats-sky` branch — 14 more tests bringing total to 70: stats overview/rollups/best-frames + sky atlas mode/search/availability.
+- **Phase:** Phase 12-tests-6 (saved_server_state coverage) — in flight
+- **Last merged:** `phase-12-tests-5-framing` — PR #87, 2026-05-28 (12 more tests; CR clean, 0 findings).
+- **Currently working on:** `phase-12-tests-6-saved-servers` branch — 3 tests locking in the cleanup-1 contract that first-run isn't blocked by keyring errors. Brings total to 85.
 
 ## Completed
 
