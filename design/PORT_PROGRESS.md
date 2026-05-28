@@ -4,9 +4,9 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** Phase 12h.2-display-sync (retrofit imaging + storage panels with shared editable widgets) — in flight
-- **Last merged:** `phase-12h2-safety` — PR #94, 2026-05-28 (editable Safety Policies panel; CR caught 1 Major — display sync on rejected input — fixed before merge).
-- **Currently working on:** `phase-12h2-display-sync` branch — extracts EditableTextRow / EditableNumberRow from the safety panel into `lib/widgets/settings/editable_field.dart` + retrofits imaging + storage panels to use them. Carries the round-1 CR contract from PR #94 (rejected input snaps back to canonical state). Tests stay at 108 (UI refactor, no notifier change).
+- **Phase:** Phase 12h.2-site (editable Site preferences) — in flight
+- **Last merged:** PR #96 promotion (port/ara → master) — 2026-05-28, master at `7f6198352`. Brought 4 editable settings panels + display-sync refactor to master.
+- **Currently working on:** `phase-12h2-site` branch — SiteSettings notifier with 10 validated setters + editable safety_site_panel using the shared editable widgets. Total tests: 117.
 
 ## Completed
 
