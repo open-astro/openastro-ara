@@ -4,9 +4,9 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** Phase 12-tests-5 (framing + live-view + library-grouping coverage) — in flight
-- **Last merged:** PR #84 promotion (port/ara → master) — 2026-05-28, master at `00166bb36`. Brought help dialog (#82) + tests-4 (#83) + 2 cleanup rounds (#85 package_info_plus, #86 .when() error state) to master.
-- **Currently working on:** `phase-12-tests-5-framing` branch — 12 more tests (framing + live-view + library-grouping notifiers) bringing total to 82.
+- **Phase:** Phase 12-tests-6 (saved_server_state coverage) — in flight
+- **Last merged:** `phase-12-tests-5-framing` — PR #87, 2026-05-28 (12 more tests; CR clean, 0 findings).
+- **Currently working on:** `phase-12-tests-6-saved-servers` branch — 3 tests locking in the cleanup-1 contract that first-run isn't blocked by keyring errors. Brings total to 85.
 
 ## Completed
 
