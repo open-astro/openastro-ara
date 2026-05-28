@@ -41,8 +41,9 @@ class StorageSettingsNotifier extends Notifier<StorageSettings> {
 
   void setSaveDirectory(String s) {
     // Empty save directory would write to current dir at runtime — reject.
-    if (s.isEmpty) return;
-    state = state.copyWith(saveDirectory: s);
+    final v = s.trim();
+    if (v.isEmpty) return;
+    state = state.copyWith(saveDirectory: v);
   }
 
   void setFileFormat(StorageFileFormat f) =>
@@ -52,8 +53,9 @@ class StorageSettingsNotifier extends Notifier<StorageSettings> {
       state = state.copyWith(compression: c);
 
   void setFilenameTemplate(String t) {
-    if (t.isEmpty) return;
-    state = state.copyWith(filenameTemplate: t);
+    final v = t.trim();
+    if (v.isEmpty) return;
+    state = state.copyWith(filenameTemplate: v);
   }
 }
 

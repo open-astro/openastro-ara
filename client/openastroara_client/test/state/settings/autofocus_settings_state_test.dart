@@ -54,11 +54,13 @@ void main() {
       expect(container.read(autofocusSettingsProvider).binning, 2);
     });
 
-    test('setAfFilter rejects empty', () {
+    test('setAfFilter trims + rejects empty or whitespace-only', () {
       final n = container.read(autofocusSettingsProvider.notifier);
       n.setAfFilter('');
+      n.setAfFilter('   ');
+      n.setAfFilter('\t\n');
       expect(container.read(autofocusSettingsProvider).afFilter, 'L');
-      n.setAfFilter('Hα');
+      n.setAfFilter('  Hα  ');
       expect(container.read(autofocusSettingsProvider).afFilter, 'Hα');
     });
 

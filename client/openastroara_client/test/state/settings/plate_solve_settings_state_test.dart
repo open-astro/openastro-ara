@@ -36,14 +36,16 @@ void main() {
           PlateSolveEngine.astap);
     });
 
-    test('string setters reject empty', () {
+    test('string setters trim + reject empty or whitespace-only', () {
       final n = container.read(plateSolveSettingsProvider.notifier);
       n.setPathOrEndpoint('');
+      n.setPathOrEndpoint('   ');
       n.setIndexDownloadPath('');
+      n.setIndexDownloadPath('\t\n');
       final s = container.read(plateSolveSettingsProvider);
       expect(s.pathOrEndpoint, '/usr/bin/astap');
       expect(s.indexDownloadPath, '/var/lib/astap');
-      n.setPathOrEndpoint('http://nova.astrometry.net');
+      n.setPathOrEndpoint('  http://nova.astrometry.net  ');
       expect(container.read(plateSolveSettingsProvider).pathOrEndpoint,
           'http://nova.astrometry.net');
     });

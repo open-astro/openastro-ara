@@ -70,14 +70,17 @@ void main() {
       expect(container.read(siteSettingsProvider).typicalSeeingArcsec, 1.8);
     });
 
-    test('setSiteName + setTimeZone reject empty', () {
+    test('setSiteName + setTimeZone trim + reject empty or whitespace-only',
+        () {
       final n = container.read(siteSettingsProvider.notifier);
       n.setSiteName('');
+      n.setSiteName('   ');
       n.setTimeZone('');
+      n.setTimeZone('\t');
       expect(container.read(siteSettingsProvider).siteName, 'Backyard');
       expect(container.read(siteSettingsProvider).timeZone, 'UTC');
-      n.setSiteName('Observatory');
-      n.setTimeZone('America/Los_Angeles');
+      n.setSiteName('  Observatory  ');
+      n.setTimeZone('  America/Los_Angeles  ');
       expect(container.read(siteSettingsProvider).siteName, 'Observatory');
       expect(container.read(siteSettingsProvider).timeZone,
           'America/Los_Angeles');
