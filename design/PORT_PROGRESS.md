@@ -4,9 +4,9 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** Phase 12h.2-autofocus (editable Autofocus panel) — in flight
-- **Last merged:** `phase-12h2-filenames` — PR #98, 2026-05-28 (editable File Naming panel + storage-owned refs; CR clean).
-- **Currently working on:** `phase-12h2-autofocus` branch — AutofocusSettings notifier (12 fields: method/steps/stepSize/exposure/binning/filter + 4 triggers + 2 safety toggles) with validated setters. Total tests: 128.
+- **Phase:** Phase 12h.2-platesolve (editable Plate Solve panel) — in flight
+- **Last merged:** `phase-12h2-autofocus` — PR #99, 2026-05-28 (editable Autofocus panel; /review fallback after CR rate-limit).
+- **Currently working on:** `phase-12h2-platesolve` branch — PlateSolveSettings notifier (11 fields: engine enum + path/index + 4 solving parameters + 3 slew/sync toggles + max-iter + convergence tol) with validated setters. Total tests: 136.
 
 ## Completed
 
