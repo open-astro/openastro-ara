@@ -4,9 +4,9 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** Phase 12h.2-filenames (editable File Naming panel) — in flight
-- **Last merged:** `phase-12h2-site` — PR #97, 2026-05-28 (editable Site preferences; CR clean).
-- **Currently working on:** `phase-12h2-filenames` branch — FilenamesSettings notifier (date separator + dark/bias compression) avoiding state duplication with storage-owned template/format/compression. Total tests: 120.
+- **Phase:** Phase 12h.2-autofocus (editable Autofocus panel) — in flight
+- **Last merged:** `phase-12h2-filenames` — PR #98, 2026-05-28 (editable File Naming panel + storage-owned refs; CR clean).
+- **Currently working on:** `phase-12h2-autofocus` branch — AutofocusSettings notifier (12 fields: method/steps/stepSize/exposure/binning/filter + 4 triggers + 2 safety toggles) with validated setters. Total tests: 128.
 
 ## Completed
 
