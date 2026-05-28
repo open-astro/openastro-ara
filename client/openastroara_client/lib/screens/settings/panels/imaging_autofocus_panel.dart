@@ -103,7 +103,7 @@ class ImagingAutofocusPanel extends ConsumerWidget {
           parse: n.setAfFilter,
         ),
         const SettingsSectionHeader('Triggers'),
-        _SwitchRow(
+        SettingsSwitchRow(
           label: 'After filter change',
           value: s.runAfterFilterChange,
           onChanged: n.setRunAfterFilterChange,
@@ -143,13 +143,13 @@ class ImagingAutofocusPanel extends ConsumerWidget {
           },
         ),
         const SettingsSectionHeader('Safety'),
-        _SwitchRow(
+        SettingsSwitchRow(
           label: 'Abort sequence if AF fails',
           value: s.abortSequenceOnAfFailure,
           onChanged: n.setAbortSequenceOnAfFailure,
           hint: '§35 — overrideable by diagnostics-mode policy',
         ),
-        _SwitchRow(
+        SettingsSwitchRow(
           label: 'Restore position on failure',
           value: s.restorePositionOnFailure,
           onChanged: n.setRestorePositionOnFailure,
@@ -171,46 +171,6 @@ class ImagingAutofocusPanel extends ConsumerWidget {
           ),
         ]),
       ],
-    );
-  }
-}
-
-class _SwitchRow extends StatelessWidget {
-  final String label;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-  final String? hint;
-  const _SwitchRow({
-    required this.label,
-    required this.value,
-    required this.onChanged,
-    this.hint,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(children: [
-        SizedBox(
-          width: 280,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AraColors.textSecondary,
-                      )),
-              if (hint != null)
-                Text(hint!,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: AraColors.textDisabled,
-                        )),
-            ],
-          ),
-        ),
-        Switch(value: value, onChanged: onChanged),
-      ]),
     );
   }
 }

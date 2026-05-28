@@ -135,3 +135,50 @@ class EditableNumberRow extends StatelessWidget {
     );
   }
 }
+
+/// Shared switch row for settings panels. Replaces the per-panel `_SwitchRow`
+/// copies that drifted into safety_policies / safety_site / session_filenames
+/// / session_notifications / imaging_autofocus / imaging_plate_solve.
+///
+/// The `hint` slot supports an optional second-line explanation (used by §35
+/// safety policies + autofocus to surface playbook-section refs).
+class SettingsSwitchRow extends StatelessWidget {
+  final String label;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  final String? hint;
+  const SettingsSwitchRow({
+    super.key,
+    required this.label,
+    required this.value,
+    required this.onChanged,
+    this.hint,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(children: [
+        SizedBox(
+          width: 280,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: AraColors.textSecondary,
+                      )),
+              if (hint != null)
+                Text(hint!,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: AraColors.textDisabled,
+                        )),
+            ],
+          ),
+        ),
+        Switch(value: value, onChanged: onChanged),
+      ]),
+    );
+  }
+}

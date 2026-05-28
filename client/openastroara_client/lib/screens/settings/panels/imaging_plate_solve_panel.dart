@@ -101,19 +101,19 @@ class ImagingPlateSolvePanel extends ConsumerWidget {
             if (v != null) n.setTimeoutSeconds(v);
           },
         ),
-        _SwitchRow(
+        SettingsSwitchRow(
           label: 'Use blind solve as fallback',
           value: s.useBlindFallback,
           onChanged: n.setUseBlindFallback,
           hint: 'if hint-based solve times out',
         ),
         const SettingsSectionHeader('Slew + sync'),
-        _SwitchRow(
+        SettingsSwitchRow(
           label: 'Center after slew',
           value: s.centerAfterSlew,
           onChanged: n.setCenterAfterSlew,
         ),
-        _SwitchRow(
+        SettingsSwitchRow(
           label: 'Sync to coordinates',
           value: s.syncToCoordinates,
           onChanged: n.setSyncToCoordinates,
@@ -157,46 +157,6 @@ class ImagingPlateSolvePanel extends ConsumerWidget {
           ),
         ]),
       ],
-    );
-  }
-}
-
-class _SwitchRow extends StatelessWidget {
-  final String label;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-  final String? hint;
-  const _SwitchRow({
-    required this.label,
-    required this.value,
-    required this.onChanged,
-    this.hint,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(children: [
-        SizedBox(
-          width: 280,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AraColors.textSecondary,
-                      )),
-              if (hint != null)
-                Text(hint!,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: AraColors.textDisabled,
-                        )),
-            ],
-          ),
-        ),
-        Switch(value: value, onChanged: onChanged),
-      ]),
     );
   }
 }

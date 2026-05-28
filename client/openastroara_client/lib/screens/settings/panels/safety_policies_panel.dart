@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../state/settings/safety_policies_state.dart';
 import '../../../theme/ara_colors.dart';
+import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
 
 /// §35 Safety Policies panel — editable. Daemon round-trip via
@@ -32,7 +33,7 @@ class SafetyPoliciesPanel extends ConsumerWidget {
             if (v != null) n.setOnUnsafe(v);
           },
         ),
-        _SwitchRow(
+        SettingsSwitchRow(
           label: 'Auto-resume when safe',
           value: s.autoResumeWhenSafe,
           onChanged: n.setAutoResumeWhenSafe,
@@ -48,7 +49,7 @@ class SafetyPoliciesPanel extends ConsumerWidget {
           },
         ),
         const SettingsSectionHeader('On meridian flip'),
-        _SwitchRow(
+        SettingsSwitchRow(
           label: 'Auto flip',
           value: s.meridianFlipAuto,
           onChanged: n.setMeridianFlipAuto,
@@ -63,12 +64,12 @@ class SafetyPoliciesPanel extends ConsumerWidget {
             if (v != null) n.setMeridianPauseMin(v);
           },
         ),
-        _SwitchRow(
+        SettingsSwitchRow(
           label: 'Re-center after flip',
           value: s.meridianRecenter,
           onChanged: n.setMeridianRecenter,
         ),
-        _SwitchRow(
+        SettingsSwitchRow(
           label: 'Re-calibrate guider after flip',
           value: s.meridianRecalGuider,
           onChanged: n.setMeridianRecalGuider,
@@ -86,7 +87,7 @@ class SafetyPoliciesPanel extends ConsumerWidget {
             if (v != null) n.setOnAltitudeLimit(v);
           },
         ),
-        _SwitchRow(
+        SettingsSwitchRow(
           label: 'Park if no more targets',
           value: s.parkIfNoMoreTargets,
           onChanged: n.setParkIfNoMoreTargets,
@@ -114,7 +115,7 @@ class SafetyPoliciesPanel extends ConsumerWidget {
             if (v != null) n.setGuiderRetryTimeoutSec(v);
           },
         ),
-        _SwitchRow(
+        SettingsSwitchRow(
           label: 'Skip target if recovery fails',
           value: s.skipTargetIfRecoveryFails,
           onChanged: n.setSkipTargetIfRecoveryFails,
@@ -136,34 +137,6 @@ class SafetyPoliciesPanel extends ConsumerWidget {
           ),
         ]),
       ],
-    );
-  }
-}
-
-class _SwitchRow extends StatelessWidget {
-  final String label;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-  const _SwitchRow({
-    required this.label,
-    required this.value,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(children: [
-        SizedBox(
-          width: 280,
-          child: Text(label,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AraColors.textSecondary,
-                  )),
-        ),
-        Switch(value: value, onChanged: onChanged),
-      ]),
     );
   }
 }
