@@ -4,9 +4,9 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** Phase 12h.2-switch (consolidate _SwitchRow into shared widget) — in flight
-- **Last merged:** 6th master promotion `phase-12h-promotion-6` — PR #102, 2026-05-28 (includes #97 site, #98 filenames, #99 autofocus, #100 plate-solve, #101 diagnostics, #103 string-trim followup).
-- **Currently working on:** `phase-12h2-switch` branch — lift `_SwitchRow` from 6 panels into shared `SettingsSwitchRow` in `lib/widgets/settings/editable_field.dart`. Total tests: 138.
+- **Phase:** Phase 12h.2-dropdown (consolidate _DropdownRow + _NumberRow) — in flight
+- **Last merged:** `phase-12h2-switch` — PR #104, 2026-05-28 (`_SwitchRow` consolidation, −153 LoC across 6 panels).
+- **Currently working on:** `phase-12h2-dropdown` branch — lift safety_policies's local `_DropdownRow<T>` and `_NumberRow` into shared widgets (`SettingsDropdownRow<T>` + reuse of `EditableNumberRow`). Total tests: 138.
 
 ## Completed
 
