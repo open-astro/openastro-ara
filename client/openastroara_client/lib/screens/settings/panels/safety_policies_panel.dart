@@ -39,7 +39,9 @@ class SafetyPoliciesPanel extends ConsumerWidget {
         ),
         _NumberRow(
           label: 'Resume delay (min)',
-          initialValue: s.resumeDelayMin.toString(),
+          currentValue: s.resumeDelayMin.toString(),
+          getCanonical: () =>
+              ref.read(safetyPoliciesProvider).resumeDelayMin.toString(),
           parse: (str) {
             final v = int.tryParse(str);
             if (v != null) n.setResumeDelayMin(v);
@@ -53,7 +55,9 @@ class SafetyPoliciesPanel extends ConsumerWidget {
         ),
         _NumberRow(
           label: 'Pause after flip (min)',
-          initialValue: s.meridianPauseMin.toString(),
+          currentValue: s.meridianPauseMin.toString(),
+          getCanonical: () =>
+              ref.read(safetyPoliciesProvider).meridianPauseMin.toString(),
           parse: (str) {
             final v = int.tryParse(str);
             if (v != null) n.setMeridianPauseMin(v);
@@ -102,7 +106,9 @@ class SafetyPoliciesPanel extends ConsumerWidget {
         ),
         _NumberRow(
           label: 'Retry timeout (s)',
-          initialValue: s.guiderRetryTimeoutSec.toString(),
+          currentValue: s.guiderRetryTimeoutSec.toString(),
+          getCanonical: () =>
+              ref.read(safetyPoliciesProvider).guiderRetryTimeoutSec.toString(),
           parse: (str) {
             final v = int.tryParse(str);
             if (v != null) n.setGuiderRetryTimeoutSec(v);
@@ -204,11 +210,19 @@ class _DropdownRow<T> extends StatelessWidget {
 
 class _NumberRow extends StatefulWidget {
   final String label;
-  final String initialValue;
+  // Current state value (passed in on each rebuild so the row updates on
+  // external state changes).
+  final String currentValue;
+  // After parse runs, re-read the notifier's value and resync the
+  // controller. This handles the rejected-value case (setter no-ops on
+  // invalid input → state didn't change → without resync the field would
+  // keep displaying the user's rejected input).
+  final String Function() getCanonical;
   final void Function(String) parse;
   const _NumberRow({
     required this.label,
-    required this.initialValue,
+    required this.currentValue,
+    required this.getCanonical,
     required this.parse,
   });
 
@@ -223,11 +237,30 @@ class _NumberRowState extends State<_NumberRow> {
   @override
   void initState() {
     super.initState();
-    _controller = TextEditingController(text: widget.initialValue);
+    _controller = TextEditingController(text: widget.currentValue);
     _focusNode = FocusNode();
     _focusNode.addListener(() {
-      if (!_focusNode.hasFocus) widget.parse(_controller.text);
+      if (!_focusNode.hasFocus) _commit();
     });
+  }
+
+  void _commit() {
+    widget.parse(_controller.text);
+    final canonical = widget.getCanonical();
+    if (canonical != _controller.text) {
+      _controller.text = canonical;
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _NumberRow old) {
+    super.didUpdateWidget(old);
+    // External state changes (e.g. another panel resetting the value)
+    // should refresh the displayed text. Only update when focus is
+    // elsewhere — don't yank text out from under the user mid-edit.
+    if (!_focusNode.hasFocus && widget.currentValue != _controller.text) {
+      _controller.text = widget.currentValue;
+    }
   }
 
   @override
@@ -254,7 +287,7 @@ class _NumberRowState extends State<_NumberRow> {
             controller: _controller,
             focusNode: _focusNode,
             decoration: const InputDecoration(isDense: true),
-            onSubmitted: widget.parse,
+            onSubmitted: (_) => _commit(),
           ),
         ),
       ]),
