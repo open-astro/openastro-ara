@@ -4,9 +4,9 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** Phase 12h.2-notifications (editable Notifications panel) — in flight
-- **Last merged:** `phase-12h2-storage` — PR #92, 2026-05-28 (editable Storage panel; CR clean).
-- **Currently working on:** `phase-12h2-notifications` branch — NotificationsSettings notifier with 5 channels (3 toggles + 2 tokens) + 7 trigger toggles + editable panel. Total tests: 103.
+- **Phase:** Phase 12h.2-safety (editable Safety Policies panel) — in flight
+- **Last merged:** `phase-12h2-notifications` — PR #93, 2026-05-28 (editable Notifications panel; CR clean).
+- **Currently working on:** `phase-12h2-safety` branch — SafetyPolicies notifier (§35) with 3 enums + 12-field model, plus editable panel with 4 dropdowns + 3 number rows + 5 switches. Total tests: 108.
 
 ## Completed
 
