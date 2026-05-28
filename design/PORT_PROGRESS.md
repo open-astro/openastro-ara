@@ -4,9 +4,9 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** Phase 12 CR cleanup round 5 — 4 findings on promotion #80
-- **Last merged:** `phase-12-tests-3-seq` — PR #79, 2026-05-27 (14 SequenceController tests; CR caught 1 Minor — assertion-style consistency — fixed before merge).
-- **Currently working on:** `phase-12-cr-cleanup-5` branch — fixes promotion-PR #80 findings: Set.unmodifiable on librarySelection toggle (+ test locking it in), SafeArea wrap on LibraryBulkActionBar for system-inset safety, CHANGELOG casing nit, this PORT_PROGRESS update. Total tests after this: 56.
+- **Phase:** Phase 12-tests-4 (stats + sky atlas state coverage) — in flight
+- **Last merged:** `phase-12i-help-dialog` — PR #82, 2026-05-27 (§54 Help dialog with diagnostics copy + tappable GitHub links; CR caught 2 Majors — list.last + url_launcher — fixed before merge).
+- **Currently working on:** `phase-12-tests-4-stats-sky` branch — 14 more tests bringing total to 70: stats overview/rollups/best-frames + sky atlas mode/search/availability.
 
 ## Completed
 
