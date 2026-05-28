@@ -4,9 +4,9 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** Phase 12-tests-6 (saved_server_state coverage) — in flight
-- **Last merged:** `phase-12-tests-5-framing` — PR #87, 2026-05-28 (12 more tests; CR clean, 0 findings).
-- **Currently working on:** `phase-12-tests-6-saved-servers` branch — 3 tests locking in the cleanup-1 contract that first-run isn't blocked by keyring errors. Brings total to 85.
+- **Phase:** Phase 12h.2-display-sync (retrofit imaging + storage panels with shared editable widgets) — in flight
+- **Last merged:** `phase-12h2-safety` — PR #94, 2026-05-28 (editable Safety Policies panel; CR caught 1 Major — display sync on rejected input — fixed before merge).
+- **Currently working on:** `phase-12h2-display-sync` branch — extracts EditableTextRow / EditableNumberRow from the safety panel into `lib/widgets/settings/editable_field.dart` + retrofits imaging + storage panels to use them. Carries the round-1 CR contract from PR #94 (rejected input snaps back to canonical state). Tests stay at 108 (UI refactor, no notifier change).
 
 ## Completed
 

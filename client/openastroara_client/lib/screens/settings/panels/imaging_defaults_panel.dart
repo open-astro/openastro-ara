@@ -1,63 +1,153 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../state/imaging/exposure_state.dart' show FrameKind;
+import '../../../state/settings/imaging_defaults_state.dart';
 import '../../../theme/ara_colors.dart';
+import '../../../widgets/settings/editable_field.dart';
 
-/// Imaging defaults panel — values seeded from the wizard's `ImagingDefaults`
-/// for the active profile, editable here per §61.4 (every setting must be
-/// findable via the registry). Phase 12h.1 ships read-only stubs; 12h.2
-/// wires the editable form + persistence to the profile JSON.
-class ImagingDefaultsPanel extends StatelessWidget {
+/// §37.11 Imaging Defaults panel. Phase 12h.2-imaging-b made the form
+/// editable; 12h.2-display-sync swaps the panel's local _NumberField for
+/// the shared `EditableNumberRow` so rejected input snaps back to the
+/// canonical state (round-1 CR finding on PR #94).
+class ImagingDefaultsPanel extends ConsumerWidget {
   const ImagingDefaultsPanel({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final d = ref.watch(imagingDefaultsProvider);
+    final n = ref.read(imagingDefaultsProvider.notifier);
     return ListView(
       padding: const EdgeInsets.all(24),
-      children: const [
-        _SettingsField(label: 'Default exposure (s)', value: '5'),
-        _SettingsField(label: 'Default gain', value: '100'),
-        _SettingsField(label: 'Default offset', value: '50'),
-        _SettingsField(label: 'Default bin', value: '1×1'),
-        _SettingsField(label: 'Default frame type', value: 'Light'),
-        _SettingsField(
-          label: 'Cooling target temperature (°C)',
-          value: '−10',
+      children: [
+        EditableNumberRow(
+          label: 'Default exposure (s)',
+          currentValue: d.defaultExposure.inSeconds.toString(),
+          getCanonical: () =>
+              ref.read(imagingDefaultsProvider).defaultExposure.inSeconds.toString(),
+          parse: (s) {
+            final i = int.tryParse(s);
+            if (i == null) return;
+            n.setExposure(Duration(seconds: i));
+          },
         ),
-        _SettingsField(label: 'Cooler ramp rate (°C/min)', value: '1.0'),
-        _SettingsField(label: 'Cooler warmup at session end', value: 'Off'),
+        EditableNumberRow(
+          label: 'Default gain',
+          currentValue: d.defaultGain.toString(),
+          getCanonical: () =>
+              ref.read(imagingDefaultsProvider).defaultGain.toString(),
+          parse: (s) {
+            final i = int.tryParse(s);
+            if (i != null) n.setGain(i);
+          },
+        ),
+        EditableNumberRow(
+          label: 'Default offset',
+          currentValue: d.defaultOffset.toString(),
+          getCanonical: () =>
+              ref.read(imagingDefaultsProvider).defaultOffset.toString(),
+          parse: (s) {
+            final i = int.tryParse(s);
+            if (i != null) n.setOffset(i);
+          },
+        ),
+        EditableNumberRow(
+          label: 'Default bin',
+          currentValue: d.defaultBin.toString(),
+          getCanonical: () =>
+              ref.read(imagingDefaultsProvider).defaultBin.toString(),
+          parse: (s) {
+            final i = int.tryParse(s);
+            if (i != null) n.setBin(i);
+          },
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 280,
+                child: Text('Default frame type',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: AraColors.textSecondary,
+                        )),
+              ),
+              Expanded(
+                child: DropdownButtonFormField<FrameKind>(
+                  initialValue: d.defaultFrameKind,
+                  isDense: true,
+                  items: const [
+                    DropdownMenuItem(value: FrameKind.light, child: Text('Light')),
+                    DropdownMenuItem(value: FrameKind.dark, child: Text('Dark')),
+                    DropdownMenuItem(value: FrameKind.bias, child: Text('Bias')),
+                    DropdownMenuItem(value: FrameKind.flat, child: Text('Flat')),
+                  ],
+                  onChanged: (v) {
+                    if (v != null) n.setFrameKind(v);
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+        EditableNumberRow(
+          label: 'Cooling target temperature (°C)',
+          currentValue: d.coolerTargetC.toString(),
+          getCanonical: () =>
+              ref.read(imagingDefaultsProvider).coolerTargetC.toString(),
+          parse: (s) {
+            final v = double.tryParse(s);
+            if (v != null) n.setCoolerTargetC(v);
+          },
+        ),
+        EditableNumberRow(
+          label: 'Cooler ramp rate (°C/min)',
+          currentValue: d.coolerRampRatePerMin.toString(),
+          getCanonical: () =>
+              ref.read(imagingDefaultsProvider).coolerRampRatePerMin.toString(),
+          parse: (s) {
+            final v = double.tryParse(s);
+            if (v != null) n.setCoolerRampRate(v);
+          },
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 280,
+                child: Text('Warm-up cooler at session end',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: AraColors.textSecondary,
+                        )),
+              ),
+              Switch(
+                value: d.warmupAtSessionEnd,
+                onChanged: n.setWarmupAtSessionEnd,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 24),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            FilledButton.icon(
+              onPressed: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'Imaging defaults saved (in memory). Daemon round-trip lands in 12h.2b.',
+                    ),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.save, size: 16),
+              label: const Text('Save'),
+            ),
+          ],
+        ),
       ],
-    );
-  }
-}
-
-class _SettingsField extends StatelessWidget {
-  final String label;
-  final String value;
-  const _SettingsField({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 280,
-            child: Text(label,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AraColors.textSecondary,
-                    )),
-          ),
-          // Phase 12h.1 ships read-only stubs — using Text instead of a
-          // disabled TextField avoids allocating a TextEditingController
-          // every rebuild. 12h.2 swaps these for real editable form fields
-          // (each one in its own StatefulWidget with properly-disposed
-          // controllers).
-          Expanded(
-            child: Text(value, style: Theme.of(context).textTheme.bodyMedium),
-          ),
-        ],
-      ),
     );
   }
 }
