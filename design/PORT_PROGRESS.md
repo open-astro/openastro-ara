@@ -4,9 +4,9 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** Phase 12h.2-storage (editable Storage panel) — in flight
-- **Last merged:** `phase-12h2-imaging-panel` — PR #91, 2026-05-28 (editable Imaging Defaults panel UI; CR clean).
-- **Currently working on:** `phase-12h2-storage` branch — StorageSettings notifier + editable storage_panel with save-directory / filename-template TextField rows + format/compression dropdowns. Total tests: 97.
+- **Phase:** Phase 12h.2-notifications (editable Notifications panel) — in flight
+- **Last merged:** `phase-12h2-storage` — PR #92, 2026-05-28 (editable Storage panel; CR clean).
+- **Currently working on:** `phase-12h2-notifications` branch — NotificationsSettings notifier with 5 channels (3 toggles + 2 tokens) + 7 trigger toggles + editable panel. Total tests: 103.
 
 ## Completed
 
