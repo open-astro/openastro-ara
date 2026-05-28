@@ -4,9 +4,9 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** Phase 12h.2-imaging (Imaging Defaults state) — in flight
-- **Last merged:** PR #89 promotion (port/ara → master) — 2026-05-28, master at `11f85b4cd`. Brought tests-5 (#87) + tests-6 (#88) to master, total 85 tests.
-- **Currently working on:** `phase-12h2-imaging-defaults` branch — new ImagingDefaults model + ImagingDefaultsNotifier with 8 validated setters + 8 tests. The editable panel UI lands in 12h.2-imaging-b. Brings total to 93.
+- **Phase:** Phase 12h.2-imaging-b (editable Imaging Defaults panel UI) — in flight
+- **Last merged:** `phase-12h2-imaging-defaults` — PR #90, 2026-05-28 (ImagingDefaults model + notifier + 8 tests; CR clean).
+- **Currently working on:** `phase-12h2-imaging-panel` branch — refactors imaging_defaults_panel.dart to be editable, wiring 6 TextField rows + 1 dropdown + 1 switch to the notifier. `_NumberField` is a StatefulWidget with properly-disposed TextEditingController per the PR #63 round-1 CR contract.
 
 ## Completed
 
