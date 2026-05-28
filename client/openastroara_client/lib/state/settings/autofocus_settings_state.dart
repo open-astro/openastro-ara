@@ -96,8 +96,9 @@ class AutofocusSettingsNotifier extends Notifier<AutofocusSettings> {
   }
 
   void setAfFilter(String s) {
-    if (s.isEmpty) return;
-    state = state.copyWith(afFilter: s);
+    final v = s.trim();
+    if (v.isEmpty) return;
+    state = state.copyWith(afFilter: v);
   }
 
   void setRunAfterFilterChange(bool v) =>

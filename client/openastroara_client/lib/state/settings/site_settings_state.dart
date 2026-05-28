@@ -71,8 +71,9 @@ class SiteSettingsNotifier extends Notifier<SiteSettings> {
   SiteSettings build() => const SiteSettings();
 
   void setSiteName(String s) {
-    if (s.isEmpty) return;
-    state = state.copyWith(siteName: s);
+    final v = s.trim();
+    if (v.isEmpty) return;
+    state = state.copyWith(siteName: v);
   }
 
   void setLatitudeDeg(double v) {
@@ -93,8 +94,9 @@ class SiteSettingsNotifier extends Notifier<SiteSettings> {
   }
 
   void setTimeZone(String s) {
-    if (s.isEmpty) return;
-    state = state.copyWith(timeZone: s);
+    final v = s.trim();
+    if (v.isEmpty) return;
+    state = state.copyWith(timeZone: v);
   }
 
   void setUseCustomHorizon(bool v) =>

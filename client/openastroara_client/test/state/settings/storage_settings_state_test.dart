@@ -16,12 +16,13 @@ void main() {
       expect(s.filenameTemplate.isNotEmpty, isTrue);
     });
 
-    test('setSaveDirectory rejects empty', () {
+    test('setSaveDirectory trims + rejects empty or whitespace-only', () {
       final n = container.read(storageSettingsProvider.notifier);
       n.setSaveDirectory('');
+      n.setSaveDirectory('   ');
       expect(container.read(storageSettingsProvider).saveDirectory,
           '/media/openastroara');
-      n.setSaveDirectory('/mnt/usb');
+      n.setSaveDirectory('  /mnt/usb  ');
       expect(container.read(storageSettingsProvider).saveDirectory, '/mnt/usb');
     });
 
@@ -35,13 +36,14 @@ void main() {
           StorageCompression.off);
     });
 
-    test('setFilenameTemplate rejects empty', () {
+    test('setFilenameTemplate trims + rejects empty or whitespace-only', () {
       final n = container.read(storageSettingsProvider.notifier);
       final original = container.read(storageSettingsProvider).filenameTemplate;
       n.setFilenameTemplate('');
+      n.setFilenameTemplate('   ');
       expect(container.read(storageSettingsProvider).filenameTemplate,
           original);
-      n.setFilenameTemplate(r'$$TARGET$$/$$FILTER$$');
+      n.setFilenameTemplate(r'  $$TARGET$$/$$FILTER$$  ');
       expect(container.read(storageSettingsProvider).filenameTemplate,
           r'$$TARGET$$/$$FILTER$$');
     });

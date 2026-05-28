@@ -69,13 +69,15 @@ class PlateSolveSettingsNotifier extends Notifier<PlateSolveSettings> {
   void setEngine(PlateSolveEngine e) => state = state.copyWith(engine: e);
 
   void setPathOrEndpoint(String s) {
-    if (s.isEmpty) return;
-    state = state.copyWith(pathOrEndpoint: s);
+    final v = s.trim();
+    if (v.isEmpty) return;
+    state = state.copyWith(pathOrEndpoint: v);
   }
 
   void setIndexDownloadPath(String s) {
-    if (s.isEmpty) return;
-    state = state.copyWith(indexDownloadPath: s);
+    final v = s.trim();
+    if (v.isEmpty) return;
+    state = state.copyWith(indexDownloadPath: v);
   }
 
   void setSearchRadiusDeg(double v) {
