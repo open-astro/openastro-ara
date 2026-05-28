@@ -4,9 +4,9 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** Phase 12h.2-site (editable Site preferences) — in flight
-- **Last merged:** PR #96 promotion (port/ara → master) — 2026-05-28, master at `7f6198352`. Brought 4 editable settings panels + display-sync refactor to master.
-- **Currently working on:** `phase-12h2-site` branch — SiteSettings notifier with 10 validated setters + editable safety_site_panel using the shared editable widgets. Total tests: 117.
+- **Phase:** Phase 12h.2-filenames (editable File Naming panel) — in flight
+- **Last merged:** `phase-12h2-site` — PR #97, 2026-05-28 (editable Site preferences; CR clean).
+- **Currently working on:** `phase-12h2-filenames` branch — FilenamesSettings notifier (date separator + dark/bias compression) avoiding state duplication with storage-owned template/format/compression. Total tests: 120.
 
 ## Completed
 
