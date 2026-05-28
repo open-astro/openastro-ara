@@ -4,9 +4,9 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** Phase 12-tests-6 (saved_server_state coverage) — in flight
-- **Last merged:** `phase-12-tests-5-framing` — PR #87, 2026-05-28 (12 more tests; CR clean, 0 findings).
-- **Currently working on:** `phase-12-tests-6-saved-servers` branch — 3 tests locking in the cleanup-1 contract that first-run isn't blocked by keyring errors. Brings total to 85.
+- **Phase:** Phase 12h.2-imaging (Imaging Defaults state) — in flight
+- **Last merged:** PR #89 promotion (port/ara → master) — 2026-05-28, master at `11f85b4cd`. Brought tests-5 (#87) + tests-6 (#88) to master, total 85 tests.
+- **Currently working on:** `phase-12h2-imaging-defaults` branch — new ImagingDefaults model + ImagingDefaultsNotifier with 8 validated setters + 8 tests. The editable panel UI lands in 12h.2-imaging-b. Brings total to 93.
 
 ## Completed
 
