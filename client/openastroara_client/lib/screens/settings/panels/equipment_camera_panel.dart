@@ -1,35 +1,44 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../state/settings/equipment_connection_state.dart';
+import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
 
-/// §37.4 + §52 Camera panel. Phase 12h.2 ships read-only stubs reflecting
-/// the camera-equipment fields from `ProfileDraft.camera`. Phase 12h.2b
-/// wires editable forms + persistence via `/api/v1/profile/camera`.
-class EquipmentCameraPanel extends StatelessWidget {
+/// §37.4 + §52 Camera panel. Auto-connect-on-boot is editable in 12h.2;
+/// sensor + cooling fields stay read-only because they're daemon-reported.
+/// Phase 12h.2b wires daemon round-trip + makes the cooling defaults
+/// editable (overlapping with imaging-defaults).
+class EquipmentCameraPanel extends ConsumerWidget {
   const EquipmentCameraPanel({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final connection = ref.watch(equipmentConnectionProvider);
+    final n = ref.read(equipmentConnectionProvider.notifier);
+
     return ListView(
       padding: const EdgeInsets.all(24),
-      children: const [
-        SettingsSectionHeader('Connection'),
-        SettingsRow(label: 'Alpaca device', value: 'Not selected'),
-        SettingsRow(
+      children: [
+        const SettingsSectionHeader('Connection'),
+        const SettingsRow(label: 'Alpaca device', value: 'Not selected'),
+        SettingsSwitchRow(
           label: 'Auto-connect on boot',
-          value: 'On',
-          hint: 'See §52.1 connection lifecycle',
+          helpKey: 'eq.auto_connect_on_boot',
+          value: connection.autoConnect(EquipmentDeviceType.camera),
+          onChanged: (v) => n.setAutoConnect(EquipmentDeviceType.camera, v),
+          hint: '§52.1 connection lifecycle',
         ),
-        SettingsSectionHeader('Sensor'),
-        SettingsRow(label: 'Pixel size (μm)', value: '—'),
-        SettingsRow(label: 'Sensor type', value: '— (Mono / OSC)'),
-        SettingsRow(label: 'Bit depth', value: '16'),
-        SettingsRow(label: 'Bayer pattern', value: 'N/A'),
-        SettingsSectionHeader('Cooling'),
-        SettingsRow(label: 'Has cooler', value: 'Auto-detect'),
-        SettingsRow(label: 'Default target temp (°C)', value: '−10'),
-        SettingsRow(label: 'Ramp rate (°C/min)', value: '1.0'),
-        SettingsRow(label: 'Warm-up at session end', value: 'Off'),
+        const SettingsSectionHeader('Sensor'),
+        const SettingsRow(label: 'Pixel size (μm)', value: '—'),
+        const SettingsRow(label: 'Sensor type', value: '— (Mono / OSC)'),
+        const SettingsRow(label: 'Bit depth', value: '16'),
+        const SettingsRow(label: 'Bayer pattern', value: 'N/A'),
+        const SettingsSectionHeader('Cooling'),
+        const SettingsRow(label: 'Has cooler', value: 'Auto-detect'),
+        const SettingsRow(label: 'Default target temp (°C)', value: '−10'),
+        const SettingsRow(label: 'Ramp rate (°C/min)', value: '1.0'),
+        const SettingsRow(label: 'Warm-up at session end', value: 'Off'),
       ],
     );
   }

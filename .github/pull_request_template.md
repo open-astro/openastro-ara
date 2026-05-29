@@ -1,33 +1,37 @@
 <!--
-🎯 Thank you for contributing to N.I.N.A.! Please fill out the template below to help us review your PR effectively.
+Thank you for contributing to OpenAstro Ara. Please fill this out — keeps reviews fast and lets the registry gates do their job.
 -->
 
-## 🚀 Purpose
+## Summary
 
-<!-- Briefly describe the goal of this pull request. What feature, fix, or improvement does it bring? -->
+<!-- 1–3 bullets. What changed and why. -->
 
-## 🧪 How Was It Tested?
+## Scope (COMMIT-PR-RULES.md row)
 
-<!-- Describe how you tested your changes. Include manual tests, automated tests, and testing across themes or configurations. -->
+<!-- Which phase / sub-PR row from design/COMMIT-PR-RULES.md does this belong to? -->
 
-## ✅ PR Checklist
+## Test plan
 
-- [ ] All unit tests pass
-- [ ] UI changes tested across Light, Dark, and Night themes (if applicable)
-- [ ] Plugin API compatibility reviewed  
-  - [ ] No breaking changes to interfaces  
-  - [ ] No changes to method/class signatures (especially optional parameters)
-- [ ] `Changelog.md` updated (if applicable)
-- [ ] [Documentation](https://github.com/isbeorn/nina.docs) updated (if applicable)
+- [ ] CI green (`flutter analyze` + `flutter test` + server build)
+- [ ] Manual verification — describe what you actually clicked / ran
 
-## 🔗 Related Issues
+## §61.4 settings-registry checklist (only if this PR adds or modifies a user-facing setting)
 
-<!-- List related GitHub issues this PR closes or is connected to. Use GitHub keywords (e.g., "Closes #123"). -->
+- [ ] N/A — no settings touched
+- [ ] Every new setting has a corresponding entry in `client/openastroara_client/lib/settings/registry.dart`
+- [ ] Each new entry has a non-empty `description` and ≥3 search keywords
+- [ ] Search verified — typing common keywords in WILMA's ⌘K palette finds the setting
 
-## 📸 Screenshots
+## §69.4 help-registry checklist (only if this PR adds a new ⓘ help icon)
 
-<!-- If your PR includes UI changes, include before/after screenshots or videos -->
+- [ ] N/A — no help icons added
+- [ ] Every new `HelpIcon(helpKey: '...')` has a corresponding `Help(...)` entry in `client/openastroara_client/lib/help/registry.dart`
+- [ ] Each entry has a non-empty `title` and `body`
 
-## 📝 Additional Notes
+## Screenshots (UI changes only)
 
-<!-- Add any extra context, caveats, or considerations for reviewers here -->
+<!-- Before/after, or just after if the change is additive. Drag images in. -->
+
+## Notes
+
+<!-- Anything else reviewers should know. -->

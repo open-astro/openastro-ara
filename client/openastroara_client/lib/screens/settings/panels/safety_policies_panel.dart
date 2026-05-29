@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../state/settings/safety_policies_state.dart';
-import '../../../theme/ara_colors.dart';
+import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
 
 /// §35 Safety Policies panel — editable. Daemon round-trip via
@@ -19,8 +19,9 @@ class SafetyPoliciesPanel extends ConsumerWidget {
       padding: const EdgeInsets.all(24),
       children: [
         const SettingsSectionHeader('On unsafe weather'),
-        _DropdownRow<UnsafeAction>(
+        SettingsDropdownRow<UnsafeAction>(
           label: 'Action',
+          helpKey: 'safety.policies.on_unsafe',
           value: s.onUnsafe,
           items: const {
             UnsafeAction.pauseAndPark: 'Pause + park + close dome',
@@ -32,13 +33,15 @@ class SafetyPoliciesPanel extends ConsumerWidget {
             if (v != null) n.setOnUnsafe(v);
           },
         ),
-        _SwitchRow(
+        SettingsSwitchRow(
           label: 'Auto-resume when safe',
+          helpKey: 'safety.policies.auto_resume',
           value: s.autoResumeWhenSafe,
           onChanged: n.setAutoResumeWhenSafe,
         ),
-        _NumberRow(
+        EditableNumberRow(
           label: 'Resume delay (min)',
+          helpKey: 'safety.policies.resume_delay',
           currentValue: s.resumeDelayMin.toString(),
           getCanonical: () =>
               ref.read(safetyPoliciesProvider).resumeDelayMin.toString(),
@@ -48,13 +51,15 @@ class SafetyPoliciesPanel extends ConsumerWidget {
           },
         ),
         const SettingsSectionHeader('On meridian flip'),
-        _SwitchRow(
+        SettingsSwitchRow(
           label: 'Auto flip',
+          helpKey: 'safety.policies.meridian_flip_auto',
           value: s.meridianFlipAuto,
           onChanged: n.setMeridianFlipAuto,
         ),
-        _NumberRow(
+        EditableNumberRow(
           label: 'Pause after flip (min)',
+          helpKey: 'safety.policies.meridian_pause_min',
           currentValue: s.meridianPauseMin.toString(),
           getCanonical: () =>
               ref.read(safetyPoliciesProvider).meridianPauseMin.toString(),
@@ -63,19 +68,20 @@ class SafetyPoliciesPanel extends ConsumerWidget {
             if (v != null) n.setMeridianPauseMin(v);
           },
         ),
-        _SwitchRow(
+        SettingsSwitchRow(
           label: 'Re-center after flip',
           value: s.meridianRecenter,
           onChanged: n.setMeridianRecenter,
         ),
-        _SwitchRow(
+        SettingsSwitchRow(
           label: 'Re-calibrate guider after flip',
           value: s.meridianRecalGuider,
           onChanged: n.setMeridianRecalGuider,
         ),
         const SettingsSectionHeader('On altitude limit'),
-        _DropdownRow<AltitudeLimitAction>(
+        SettingsDropdownRow<AltitudeLimitAction>(
           label: 'Action',
+          helpKey: 'safety.policies.on_altitude_limit',
           value: s.onAltitudeLimit,
           items: const {
             AltitudeLimitAction.skipTarget: 'Skip + advance to next target',
@@ -86,17 +92,18 @@ class SafetyPoliciesPanel extends ConsumerWidget {
             if (v != null) n.setOnAltitudeLimit(v);
           },
         ),
-        _SwitchRow(
+        SettingsSwitchRow(
           label: 'Park if no more targets',
           value: s.parkIfNoMoreTargets,
           onChanged: n.setParkIfNoMoreTargets,
         ),
         const SettingsSectionHeader('On guider lost'),
-        _DropdownRow<GuiderLostAction>(
+        SettingsDropdownRow<GuiderLostAction>(
           label: 'Action',
+          helpKey: 'safety.policies.on_guider_lost',
           value: s.onGuiderLost,
           items: const {
-            GuiderLostAction.pauseAndRetry: 'Pause + retry once',
+            GuiderLostAction.pauseAndRetry: 'Pause + retry until timeout',
             GuiderLostAction.skipTarget: 'Skip target',
             GuiderLostAction.abortSequence: 'Abort sequence',
           },
@@ -104,8 +111,9 @@ class SafetyPoliciesPanel extends ConsumerWidget {
             if (v != null) n.setOnGuiderLost(v);
           },
         ),
-        _NumberRow(
+        EditableNumberRow(
           label: 'Retry timeout (s)',
+          helpKey: 'safety.policies.guider_retry_timeout',
           currentValue: s.guiderRetryTimeoutSec.toString(),
           getCanonical: () =>
               ref.read(safetyPoliciesProvider).guiderRetryTimeoutSec.toString(),
@@ -114,7 +122,7 @@ class SafetyPoliciesPanel extends ConsumerWidget {
             if (v != null) n.setGuiderRetryTimeoutSec(v);
           },
         ),
-        _SwitchRow(
+        SettingsSwitchRow(
           label: 'Skip target if recovery fails',
           value: s.skipTargetIfRecoveryFails,
           onChanged: n.setSkipTargetIfRecoveryFails,
@@ -136,161 +144,6 @@ class SafetyPoliciesPanel extends ConsumerWidget {
           ),
         ]),
       ],
-    );
-  }
-}
-
-class _SwitchRow extends StatelessWidget {
-  final String label;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-  const _SwitchRow({
-    required this.label,
-    required this.value,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(children: [
-        SizedBox(
-          width: 280,
-          child: Text(label,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AraColors.textSecondary,
-                  )),
-        ),
-        Switch(value: value, onChanged: onChanged),
-      ]),
-    );
-  }
-}
-
-class _DropdownRow<T> extends StatelessWidget {
-  final String label;
-  final T value;
-  final Map<T, String> items;
-  final ValueChanged<T?> onChanged;
-  const _DropdownRow({
-    required this.label,
-    required this.value,
-    required this.items,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(children: [
-        SizedBox(
-          width: 280,
-          child: Text(label,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AraColors.textSecondary,
-                  )),
-        ),
-        Expanded(
-          child: DropdownButtonFormField<T>(
-            initialValue: value,
-            isDense: true,
-            items: [
-              for (final e in items.entries)
-                DropdownMenuItem<T>(value: e.key, child: Text(e.value)),
-            ],
-            onChanged: onChanged,
-          ),
-        ),
-      ]),
-    );
-  }
-}
-
-class _NumberRow extends StatefulWidget {
-  final String label;
-  // Current state value (passed in on each rebuild so the row updates on
-  // external state changes).
-  final String currentValue;
-  // After parse runs, re-read the notifier's value and resync the
-  // controller. This handles the rejected-value case (setter no-ops on
-  // invalid input → state didn't change → without resync the field would
-  // keep displaying the user's rejected input).
-  final String Function() getCanonical;
-  final void Function(String) parse;
-  const _NumberRow({
-    required this.label,
-    required this.currentValue,
-    required this.getCanonical,
-    required this.parse,
-  });
-
-  @override
-  State<_NumberRow> createState() => _NumberRowState();
-}
-
-class _NumberRowState extends State<_NumberRow> {
-  late final TextEditingController _controller;
-  late final FocusNode _focusNode;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = TextEditingController(text: widget.currentValue);
-    _focusNode = FocusNode();
-    _focusNode.addListener(() {
-      if (!_focusNode.hasFocus) _commit();
-    });
-  }
-
-  void _commit() {
-    widget.parse(_controller.text);
-    final canonical = widget.getCanonical();
-    if (canonical != _controller.text) {
-      _controller.text = canonical;
-    }
-  }
-
-  @override
-  void didUpdateWidget(covariant _NumberRow old) {
-    super.didUpdateWidget(old);
-    // External state changes (e.g. another panel resetting the value)
-    // should refresh the displayed text. Only update when focus is
-    // elsewhere — don't yank text out from under the user mid-edit.
-    if (!_focusNode.hasFocus && widget.currentValue != _controller.text) {
-      _controller.text = widget.currentValue;
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    _focusNode.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(children: [
-        SizedBox(
-          width: 280,
-          child: Text(widget.label,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AraColors.textSecondary,
-                  )),
-        ),
-        Expanded(
-          child: TextField(
-            controller: _controller,
-            focusNode: _focusNode,
-            decoration: const InputDecoration(isDense: true),
-            onSubmitted: (_) => _commit(),
-          ),
-        ),
-      ]),
     );
   }
 }

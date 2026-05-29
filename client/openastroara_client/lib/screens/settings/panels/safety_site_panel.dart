@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../state/settings/site_settings_state.dart';
-import '../../../theme/ara_colors.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
 
@@ -63,14 +62,16 @@ class SafetySitePanel extends ConsumerWidget {
           hint: 'IANA name (e.g. America/Los_Angeles)',
         ),
         const SettingsSectionHeader('Horizon'),
-        _SwitchRow(
+        SettingsSwitchRow(
           label: 'Use custom horizon polygon (§36.8)',
+          helpKey: 'safety.site.use_custom_horizon',
           value: s.useCustomHorizon,
           onChanged: n.setUseCustomHorizon,
         ),
         if (!s.useCustomHorizon)
           EditableNumberRow(
             label: 'Default horizon altitude (°)',
+            helpKey: 'safety.site.default_horizon_altitude_deg',
             currentValue: s.defaultHorizonAltitudeDeg.toString(),
             getCanonical: () => ref
                 .read(siteSettingsProvider)
@@ -84,6 +85,7 @@ class SafetySitePanel extends ConsumerWidget {
         const SettingsSectionHeader('Conditions defaults'),
         EditableNumberRow(
           label: 'Bortle class (1..9)',
+          helpKey: 'safety.site.bortle_class',
           currentValue: s.bortleClass.toString(),
           getCanonical: () =>
               ref.read(siteSettingsProvider).bortleClass.toString(),
@@ -94,6 +96,7 @@ class SafetySitePanel extends ConsumerWidget {
         ),
         EditableNumberRow(
           label: 'Typical seeing (″)',
+          helpKey: 'safety.site.typical_seeing_arcsec',
           currentValue: s.typicalSeeingArcsec.toString(),
           getCanonical: () =>
               ref.read(siteSettingsProvider).typicalSeeingArcsec.toString(),
@@ -102,42 +105,18 @@ class SafetySitePanel extends ConsumerWidget {
             if (v != null) n.setTypicalSeeingArcsec(v);
           },
         ),
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Row(
-            children: [
-              SizedBox(
-                width: 280,
-                child: Text('Twilight definition',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AraColors.textSecondary,
-                        )),
-              ),
-              Expanded(
-                child: DropdownButtonFormField<TwilightDefinition>(
-                  initialValue: s.twilightDefinition,
-                  isDense: true,
-                  items: const [
-                    DropdownMenuItem(
-                      value: TwilightDefinition.civil,
-                      child: Text('Civil (−6°)'),
-                    ),
-                    DropdownMenuItem(
-                      value: TwilightDefinition.nautical,
-                      child: Text('Nautical (−12°)'),
-                    ),
-                    DropdownMenuItem(
-                      value: TwilightDefinition.astronomical,
-                      child: Text('Astronomical (−18°)'),
-                    ),
-                  ],
-                  onChanged: (v) {
-                    if (v != null) n.setTwilightDefinition(v);
-                  },
-                ),
-              ),
-            ],
-          ),
+        SettingsDropdownRow<TwilightDefinition>(
+          label: 'Twilight definition',
+          helpKey: 'safety.site.twilight_definition',
+          value: s.twilightDefinition,
+          items: const {
+            TwilightDefinition.civil: 'Civil (−6°)',
+            TwilightDefinition.nautical: 'Nautical (−12°)',
+            TwilightDefinition.astronomical: 'Astronomical (−18°)',
+          },
+          onChanged: (v) {
+            if (v != null) n.setTwilightDefinition(v);
+          },
         ),
         const SizedBox(height: 24),
         Row(mainAxisAlignment: MainAxisAlignment.end, children: [
@@ -156,34 +135,6 @@ class SafetySitePanel extends ConsumerWidget {
           ),
         ]),
       ],
-    );
-  }
-}
-
-class _SwitchRow extends StatelessWidget {
-  final String label;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-  const _SwitchRow({
-    required this.label,
-    required this.value,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(children: [
-        SizedBox(
-          width: 280,
-          child: Text(label,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AraColors.textSecondary,
-                  )),
-        ),
-        Switch(value: value, onChanged: onChanged),
-      ]),
     );
   }
 }

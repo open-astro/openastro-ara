@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../state/settings/filenames_settings_state.dart';
 import '../../../state/settings/storage_settings_state.dart';
-import '../../../theme/ara_colors.dart';
+import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
 
 /// §29.2 File saving + naming. Phase 12h.2-filenames makes the
@@ -34,8 +34,9 @@ class SessionFilenamesPanel extends ConsumerWidget {
           value: _compressionLabel(ss.compression),
           hint: 'Edit in Settings → Session → Storage',
         ),
-        _SwitchRow(
+        SettingsSwitchRow(
           label: 'Compress bias/dark frames',
+          helpKey: 'session.filenames.compress_darks_and_bias',
           value: fs.compressDarksAndBias,
           onChanged: fn.setCompressDarksAndBias,
           hint: 'RICE losslessly compresses dark frames very well',
@@ -46,40 +47,18 @@ class SessionFilenamesPanel extends ConsumerWidget {
           value: ss.filenameTemplate,
           hint: 'Edit in Settings → Session → Storage',
         ),
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Row(children: [
-            SizedBox(
-              width: 280,
-              child: Text('Date separator',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AraColors.textSecondary,
-                      )),
-            ),
-            Expanded(
-              child: DropdownButtonFormField<DateSeparator>(
-                initialValue: fs.dateSeparator,
-                isDense: true,
-                items: const [
-                  DropdownMenuItem(
-                    value: DateSeparator.forwardSlash,
-                    child: Text('/  (forward slash — real directories)'),
-                  ),
-                  DropdownMenuItem(
-                    value: DateSeparator.underscore,
-                    child: Text('_  (underscore — flat filenames)'),
-                  ),
-                  DropdownMenuItem(
-                    value: DateSeparator.dash,
-                    child: Text('-  (dash — flat filenames, Windows-safe)'),
-                  ),
-                ],
-                onChanged: (v) {
-                  if (v != null) fn.setDateSeparator(v);
-                },
-              ),
-            ),
-          ]),
+        SettingsDropdownRow<DateSeparator>(
+          label: 'Date separator',
+          helpKey: 'session.filenames.date_separator',
+          value: fs.dateSeparator,
+          items: const {
+            DateSeparator.forwardSlash: '/  (forward slash — real directories)',
+            DateSeparator.underscore: '_  (underscore — flat filenames)',
+            DateSeparator.dash: '-  (dash — flat filenames, Windows-safe)',
+          },
+          onChanged: (v) {
+            if (v != null) fn.setDateSeparator(v);
+          },
         ),
         const SettingsSectionHeader('Available tokens'),
         const SettingsRow(
@@ -131,44 +110,4 @@ class SessionFilenamesPanel extends ConsumerWidget {
         StorageCompression.rice => 'RICE',
         StorageCompression.gzip => 'gzip',
       };
-}
-
-class _SwitchRow extends StatelessWidget {
-  final String label;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-  final String? hint;
-  const _SwitchRow({
-    required this.label,
-    required this.value,
-    required this.onChanged,
-    this.hint,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(children: [
-        SizedBox(
-          width: 280,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AraColors.textSecondary,
-                      )),
-              if (hint != null)
-                Text(hint!,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: AraColors.textDisabled,
-                        )),
-            ],
-          ),
-        ),
-        Switch(value: value, onChanged: onChanged),
-      ]),
-    );
-  }
 }

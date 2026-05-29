@@ -2,12 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../state/settings/notifications_settings_state.dart';
-import '../../../theme/ara_colors.dart';
+import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
 
 /// §54 Notifications panel — editable form wired to
-/// `notificationsSettingsProvider`. Daemon round-trip via
-/// `/api/v1/profile/notifications` lands in 12h.2b.
+/// `notificationsSettingsProvider`. Phase 12h.3d registered all 12 fields in
+/// `settings/registry.dart` and wired `helpKey`s on the non-obvious controls
+/// (pushover/telegram tokens, critical-diagnostic semantics, plate-solve
+/// retry budget, disk-space threshold). Local `_TokenField` widget retired
+/// in favor of the shared `EditableTextRow` from 12h.3a.
 class SessionNotificationsPanel extends ConsumerWidget {
   const SessionNotificationsPanel({super.key});
 
@@ -20,66 +23,76 @@ class SessionNotificationsPanel extends ConsumerWidget {
       padding: const EdgeInsets.all(24),
       children: [
         const SettingsSectionHeader('Channels'),
-        _SwitchRow(
+        SettingsSwitchRow(
           label: 'In-app banner',
           value: s.inAppBanner,
           onChanged: n.setInAppBanner,
         ),
-        _SwitchRow(
+        SettingsSwitchRow(
           label: 'OS desktop notification',
           value: s.osDesktop,
           onChanged: n.setOsDesktop,
         ),
-        _SwitchRow(
+        SettingsSwitchRow(
           label: 'Sound alert (§35 alarm)',
           value: s.soundAlert,
           onChanged: n.setSoundAlert,
         ),
-        _TokenField(
+        EditableTextRow(
           label: 'Pushover token',
-          initialValue: s.pushoverToken,
+          helpKey: 'session.notifications.pushover_token',
+          hint: 'Empty = disabled',
+          currentValue: s.pushoverToken,
+          getCanonical: () =>
+              ref.read(notificationsSettingsProvider).pushoverToken,
           parse: n.setPushoverToken,
-          hint: 'Empty = disabled',
         ),
-        _TokenField(
+        EditableTextRow(
           label: 'Telegram bot token',
-          initialValue: s.telegramBotToken,
-          parse: n.setTelegramBotToken,
+          helpKey: 'session.notifications.telegram_bot_token',
           hint: 'Empty = disabled',
+          currentValue: s.telegramBotToken,
+          getCanonical: () =>
+              ref.read(notificationsSettingsProvider).telegramBotToken,
+          parse: n.setTelegramBotToken,
         ),
         const SettingsSectionHeader('Trigger on'),
-        _SwitchRow(
+        SettingsSwitchRow(
           label: 'Sequence complete',
           value: s.onSequenceComplete,
           onChanged: n.setOnSequenceComplete,
         ),
-        _SwitchRow(
+        SettingsSwitchRow(
           label: 'Sequence paused',
           value: s.onSequencePaused,
           onChanged: n.setOnSequencePaused,
         ),
-        _SwitchRow(
+        SettingsSwitchRow(
           label: 'Critical diagnostic',
+          helpKey: 'session.notifications.on_critical_diagnostic',
           value: s.onCriticalDiagnostic,
           onChanged: n.setOnCriticalDiagnostic,
         ),
-        _SwitchRow(
+        SettingsSwitchRow(
           label: 'Safety event',
+          helpKey: 'session.notifications.on_safety_event',
           value: s.onSafetyEvent,
           onChanged: n.setOnSafetyEvent,
         ),
-        _SwitchRow(
+        SettingsSwitchRow(
           label: 'Autofocus failed',
           value: s.onAutofocusFailed,
           onChanged: n.setOnAutofocusFailed,
         ),
-        _SwitchRow(
+        SettingsSwitchRow(
           label: 'Plate solve failed (×N)',
+          helpKey: 'session.notifications.on_plate_solve_failed',
           value: s.onPlateSolveFailed,
           onChanged: n.setOnPlateSolveFailed,
         ),
-        _SwitchRow(
+        SettingsSwitchRow(
           label: 'Disk space low (<10 GB)',
+          helpKey: 'session.notifications.on_disk_space_low',
           value: s.onDiskSpaceLow,
           onChanged: n.setOnDiskSpaceLow,
         ),
@@ -100,101 +113,6 @@ class SessionNotificationsPanel extends ConsumerWidget {
           ),
         ]),
       ],
-    );
-  }
-}
-
-class _SwitchRow extends StatelessWidget {
-  final String label;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-  const _SwitchRow({
-    required this.label,
-    required this.value,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(children: [
-        SizedBox(
-          width: 280,
-          child: Text(label,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AraColors.textSecondary,
-                  )),
-        ),
-        Switch(value: value, onChanged: onChanged),
-      ]),
-    );
-  }
-}
-
-/// Token field — StatefulWidget owning its own TextEditingController +
-/// FocusNode per the PR #63 contract.
-class _TokenField extends StatefulWidget {
-  final String label;
-  final String initialValue;
-  final void Function(String) parse;
-  final String? hint;
-  const _TokenField({
-    required this.label,
-    required this.initialValue,
-    required this.parse,
-    this.hint,
-  });
-
-  @override
-  State<_TokenField> createState() => _TokenFieldState();
-}
-
-class _TokenFieldState extends State<_TokenField> {
-  late final TextEditingController _controller;
-  late final FocusNode _focusNode;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = TextEditingController(text: widget.initialValue);
-    _focusNode = FocusNode();
-    _focusNode.addListener(() {
-      if (!_focusNode.hasFocus) widget.parse(_controller.text);
-    });
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    _focusNode.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(children: [
-        SizedBox(
-          width: 280,
-          child: Text(widget.label,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AraColors.textSecondary,
-                  )),
-        ),
-        Expanded(
-          child: TextField(
-            controller: _controller,
-            focusNode: _focusNode,
-            decoration: InputDecoration(
-              isDense: true,
-              hintText: widget.hint,
-            ),
-            onSubmitted: widget.parse,
-          ),
-        ),
-      ]),
     );
   }
 }
