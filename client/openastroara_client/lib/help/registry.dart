@@ -274,4 +274,21 @@ const Map<String, Help> helpRegistry = {
         'Recommended on — calibration frames are bulky (one library can take 5+ GB) and benefit far more from compression than light frames.',
     relatedSettings: ['session.storage.compression'],
   ),
+
+  // §37.4 Filter Wheel slot labels.
+  'eq.filterwheel.slot_labels': Help(
+    key: 'eq.filterwheel.slot_labels',
+    title: 'Filter wheel slot labels',
+    body: 'Names you give each physical filter slot. They flow through to several places:\n\n'
+        '* **`\$\$FILTER\$\$` filename token** — e.g. `M31_L_60s.fits` uses the active slot\'s label.\n'
+        '* **FITS-header `FILTER` keyword** — read by downstream stacking tools (DSS, Siril, PixInsight) to group frames per filter.\n'
+        '* **Sequence per-filter exposure blocks** — sequences reference filters by label, so labels here must match the labels used in your sequence templates.\n'
+        '* **§29.2 calibration-set indexing** — matching darks/flats are looked up per filter label.\n\n'
+        '**Conventions** (not enforced — use whatever you like):\n'
+        '* Mono LRGB: `L`, `R`, `G`, `B`\n'
+        '* Narrowband: `Hα` (or `Ha`), `OIII`, `SII`\n'
+        '* Photometric: `U`, `B`, `V`, `R`, `I` (Johnson) or `u`, `g`, `r`, `i`, `z` (SDSS)\n\n'
+        'Leave a slot blank if it\'s unused or unloaded.',
+    relatedSettings: ['session.storage.filename_template'],
+  ),
 };

@@ -504,4 +504,22 @@ const List<Setting> settingsRegistry = [
     defaultValue: true,
     profilePath: 'filenames.compress_darks_and_bias',
   ),
+
+  // §37.4 + §46.2 Filter Wheel — per-slot label list. State lives in
+  // `filterWheelLabelsProvider`. Single registry entry representing the
+  // whole list (vs registering 8 individual slot settings) because the
+  // slots are uniform + the slot count is hardware-reported at connect
+  // time. Search hits surface the whole panel; ⓘ on the section header
+  // opens the help body explaining how labels feed `$$FILTER$$` tokens +
+  // FITS-header values.
+  Setting(
+    id: 'eq.filterwheel.slot_labels',
+    label: 'Filter wheel slot labels',
+    description: 'Per-slot filter names. Surface in `\$\$FILTER\$\$` filename tokens, FITS-header FILTER values, sequence per-filter exposure blocks, and §29.2 calibration-set indexing.',
+    keywords: ['filter', 'slot', 'label', 'wheel', 'efw', 'name', 'l', 'r', 'g', 'b', 'ha', 'oiii', 'sii'],
+    path: ['Settings', 'Equipment', 'Filter Wheel'],
+    type: SettingType.complex(),
+    defaultValue: ['L', 'R', 'G', 'B', 'Hα', 'OIII', 'SII', ''],
+    profilePath: 'filterwheel.slot_labels',
+  ),
 ];
