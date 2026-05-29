@@ -53,7 +53,48 @@ const Map<String, Help> helpRegistry = {
     body: 'The number of minutes to wait after a "Safe" signal before '
         'actually resuming. Useful to ensure that a passing cloud bank '
         'has fully cleared before starting the next exposure.',
-    relatedSettings: ['safety.policies.resume_delay'],
+    relatedSettings: ['safety.policies.auto_resume'],
+  ),
+  'safety.policies.meridian_flip_auto': Help(
+    key: 'safety.policies.meridian_flip_auto',
+    title: 'Auto meridian flip',
+    body: 'A meridian flip is when a German Equatorial Mount (GEM) swaps sides of the pier to keep tracking a target that crossed the meridian (south line at culmination).\n\n'
+        '* **On** (recommended): the mount flips automatically when the target reaches the configured meridian-limit (set per-mount by the §57 mount-safety policy). Exposure pauses, mount flips, plate-solve re-centers, guider re-calibrates, exposure resumes.\n'
+        '* **Off**: the sequence pauses at the meridian-limit and waits for you to manually flip + resume.\n\n'
+        'Fork-mounted scopes (CGEM-DX, alt-az without wedge) don\'t need a meridian flip — turn this off and the meridian-limit policy is ignored.',
+    relatedSettings: ['safety.policies.meridian_pause_min', 'safety.policies.meridian_recenter', 'safety.policies.meridian_recal_guider'],
+  ),
+  'safety.policies.meridian_pause_min': Help(
+    key: 'safety.policies.meridian_pause_min',
+    title: 'Pause after meridian flip',
+    body: 'Time the mount needs to settle mechanically after the pier-side swap before exposures resume. Faster mounts (Paramount, 10Micron) settle in <1 min; slower or heavy-payload setups need 3-5 min. '
+        'Set this conservatively — a too-short pause produces motion-blurred first frames after the flip.',
+    relatedSettings: ['safety.policies.meridian_flip_auto'],
+  ),
+  'safety.policies.on_altitude_limit': Help(
+    key: 'safety.policies.on_altitude_limit',
+    title: 'On altitude limit',
+    body: 'What happens when a target drops below the minimum-altitude floor (set in §37.12 Site Preferences, default 20°).\n\n'
+        '* **Skip target**: move to the next target in the sequence and continue. Recommended for multi-target sessions.\n'
+        '* **Pause sequence**: pause and wait for the target to rise again (only useful for circumpolar targets).\n'
+        '* **Abort sequence**: stop the whole session. Strict but predictable.',
+    relatedSettings: ['safety.site.default_horizon_altitude_deg', 'safety.policies.park_if_no_more_targets'],
+  ),
+  'safety.policies.on_guider_lost': Help(
+    key: 'safety.policies.on_guider_lost',
+    title: 'On guider lost',
+    body: 'Action when PHD2 reports lost lock — typically caused by clouds rolling in, a star drifting off the guide chip, or a calibration glitch.\n\n'
+        '* **Pause + retry**: pause exposure, restart guider, retry until `Guider retry timeout` expires. Recommended for clear-but-occasional-cloud nights.\n'
+        '* **Skip target**: skip this target immediately and move on.\n'
+        '* **Abort sequence**: stop the whole session.',
+    relatedSettings: ['safety.policies.guider_retry_timeout', 'safety.policies.skip_target_if_recovery_fails'],
+  ),
+  'safety.policies.guider_retry_timeout': Help(
+    key: 'safety.policies.guider_retry_timeout',
+    title: 'Guider retry timeout',
+    body: 'How long to keep retrying guider re-acquisition before giving up. When the timeout expires, the §54 plate-solve-failed notification fires and the §35 `Skip target if recovery fails` policy decides next.\n\n'
+        '60s is a good default — long enough to ride out a passing cloud but short enough to skip a target if guiding is genuinely broken.',
+    relatedSettings: ['safety.policies.on_guider_lost', 'session.notifications.on_plate_solve_failed'],
   ),
   'diagnostics.mode': Help(
     key: 'diagnostics.mode',
