@@ -19,33 +19,45 @@ class SafetyPoliciesPanel extends ConsumerWidget {
       padding: const EdgeInsets.all(24),
       children: [
         const SettingsSectionHeader('On unsafe weather'),
-        SettingsDropdownRow<UnsafeAction>(
-          label: 'Action',
-          value: s.onUnsafe,
-          items: const {
-            UnsafeAction.pauseAndPark: 'Pause + park + close dome',
-            UnsafeAction.parkOnly: 'Park only',
-            UnsafeAction.abortAndPark: 'Abort sequence + park',
-            UnsafeAction.ignore: 'Ignore (not recommended)',
-          },
-          onChanged: (v) {
-            if (v != null) n.setOnUnsafe(v);
-          },
+        SearchHighlight(
+          settingId: 'safety.policies.on_unsafe',
+          child: SettingsDropdownRow<UnsafeAction>(
+            label: 'Action',
+            helpKey: 'safety.policies.on_unsafe',
+            value: s.onUnsafe,
+            items: const {
+              UnsafeAction.pauseAndPark: 'Pause + park + close dome',
+              UnsafeAction.parkOnly: 'Park only',
+              UnsafeAction.abortAndPark: 'Abort sequence + park',
+              UnsafeAction.ignore: 'Ignore (not recommended)',
+            },
+            onChanged: (v) {
+              if (v != null) n.setOnUnsafe(v);
+            },
+          ),
         ),
-        SettingsSwitchRow(
-          label: 'Auto-resume when safe',
-          value: s.autoResumeWhenSafe,
-          onChanged: n.setAutoResumeWhenSafe,
+        SearchHighlight(
+          settingId: 'safety.policies.auto_resume',
+          child: SettingsSwitchRow(
+            label: 'Auto-resume when safe',
+            helpKey: 'safety.policies.auto_resume',
+            value: s.autoResumeWhenSafe,
+            onChanged: n.setAutoResumeWhenSafe,
+          ),
         ),
-        EditableNumberRow(
-          label: 'Resume delay (min)',
-          currentValue: s.resumeDelayMin.toString(),
-          getCanonical: () =>
-              ref.read(safetyPoliciesProvider).resumeDelayMin.toString(),
-          parse: (str) {
-            final v = int.tryParse(str);
-            if (v != null) n.setResumeDelayMin(v);
-          },
+        SearchHighlight(
+          settingId: 'safety.policies.resume_delay',
+          child: EditableNumberRow(
+            label: 'Resume delay (min)',
+            helpKey: 'safety.policies.resume_delay',
+            currentValue: s.resumeDelayMin.toString(),
+            getCanonical: () =>
+                ref.read(safetyPoliciesProvider).resumeDelayMin.toString(),
+            parse: (str) {
+              final v = int.tryParse(str);
+              if (v != null) n.setResumeDelayMin(v);
+            },
+          ),
         ),
         const SettingsSectionHeader('On meridian flip'),
         SettingsSwitchRow(

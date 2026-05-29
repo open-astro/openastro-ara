@@ -255,7 +255,7 @@ class _ConditionBanner extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
         decoration: BoxDecoration(
-          color: AraColors.selectionBg.withValues(alpha: 0.15),
+          color: AraColors.selectionBg.withOpacity(0.15),
           border: Border.all(color: AraColors.selectionBg),
           borderRadius: BorderRadius.circular(4),
         ),
@@ -290,7 +290,7 @@ class _LoopBanner extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
         decoration: BoxDecoration(
-          color: AraColors.accentBusy.withValues(alpha: 0.12),
+          color: AraColors.accentBusy.withOpacity(0.12),
           border: Border.all(color: AraColors.accentBusy),
           borderRadius: BorderRadius.circular(4),
         ),

@@ -1,26 +1,31 @@
+import '../../settings/registry.dart';
 import 'settings_nav.dart';
 
 /// §61 smart-search registry. Indexes every settable panel from
-/// `settingsTree` plus a small per-panel keyword corpus so users can find
-/// settings by intent ("dither", "park", "cooler") not just by exact label.
-///
-/// Phase 12h.3 ships the index + a simple substring-with-keyword-boost
-/// scorer. Future phases (12h.4+?) may upgrade to fuzzy matching or
-/// per-row indexing (so "exposure" finds Imaging Defaults's
-/// "Default exposure (s)" row directly).
+/// `settingsTree` plus individual settings from `settingsRegistry`.
+/// Users can find settings by intent ("dither", "park", "cooler") not just by
+/// exact label.
 
 class SettingsSearchEntry {
-  final String panelId;
+  final String? panelId;
+  final String? settingId;
   final String label;
   final String groupLabel;
   final List<String> keywords;
+  final String? description;
+  final List<String> relatedSettings;
 
   const SettingsSearchEntry({
-    required this.panelId,
+    this.panelId,
+    this.settingId,
     required this.label,
     required this.groupLabel,
     required this.keywords,
+    this.description,
+    this.relatedSettings = const [],
   });
+
+  String get id => settingId ?? panelId ?? '';
 }
 
 /// Per-panel keyword corpus. Each entry lists user-intent words the panel
@@ -38,6 +43,13 @@ const Map<String, List<String>> _panelKeywords = {
     'bayer',
     'alpaca',
     'connect',
+    'image processing',
+    'opencv',
+    'opencvsharp',
+    'bitmap',
+    'warmup',
+    'thermal shock',
+    'condensation',
   ],
   'eq.mount': [
     'slew',
@@ -48,9 +60,20 @@ const Map<String, List<String>> _panelKeywords = {
     'altitude',
     'limit',
     'sidereal',
+    'stop mount',
+    'safety',
+    'slew safety',
   ],
-  'eq.focuser': ['steps', 'backlash', 'autofocus', 'temp', 'compensation'],
-  'eq.filterwheel': ['filter', 'slot', 'L', 'R', 'G', 'B', 'Ha', 'OIII', 'SII'],
+  'eq.focuser': [
+    'steps',
+    'backlash',
+    'autofocus',
+    'temp',
+    'compensation',
+    'smart focus',
+    'hocus focus',
+  ],
+  'eq.filterwheel': ['filter', 'slot', 'L', 'R', 'G', 'B', 'Ha', 'OIII', 'SII', 'efw'],
   'eq.rotator': ['angle', 'rotate', 'reverse'],
   'eq.guider': [
     'phd2',
@@ -59,6 +82,8 @@ const Map<String, List<String>> _panelKeywords = {
     'settle',
     'calibration',
     'rms',
+    'openastro-phd2',
+    'aggressiveness',
   ],
   'eq.flat': ['cover', 'calibrator', 'panel', 'brightness', 'adu'],
   'eq.dome': ['shutter', 'slave', 'azimuth', 'home'],
@@ -70,6 +95,8 @@ const Map<String, List<String>> _panelKeywords = {
     'dew',
     'observe',
     'poll',
+    'wifi drops',
+    'network unstable',
   ],
   'eq.safety': ['unsafe', 'safe', 'resume', 'monitor'],
   'img.defaults': [
@@ -82,6 +109,9 @@ const Map<String, List<String>> _panelKeywords = {
     'cooler',
     'warmup',
     'target',
+    'image rendering',
+    'stf',
+    'auto stretch',
   ],
   'img.autofocus': [
     'af',
@@ -91,6 +121,7 @@ const Map<String, List<String>> _panelKeywords = {
     'steps',
     'drift',
     'trigger',
+    'recalibrate',
   ],
   'img.platesolve': [
     'astap',
@@ -100,6 +131,7 @@ const Map<String, List<String>> _panelKeywords = {
     'center',
     'blind',
     'iterations',
+    'convergence',
   ],
   'session.storage': [
     'disk',
@@ -111,6 +143,10 @@ const Map<String, List<String>> _panelKeywords = {
     'rice',
     'fits',
     'directory',
+    'quarantine',
+    'damaged file',
+    'reformat',
+    'eject',
   ],
   'session.filenames': [
     'naming',
@@ -121,6 +157,8 @@ const Map<String, List<String>> _panelKeywords = {
     'target',
     'fits',
     'xisf',
+    'underscore',
+    'snake case',
   ],
   'session.notifications': [
     'push',
@@ -150,6 +188,9 @@ const Map<String, List<String>> _panelKeywords = {
     'abort',
     'critical',
     'mode',
+    'smart corrections',
+    'auto refocus',
+    'aggression dial',
   ],
   'safety.site': [
     'latitude',
@@ -173,6 +214,8 @@ const Map<String, List<String>> _panelKeywords = {
     'ephemerides',
     'de440',
     'mpc',
+    'data manager',
+    'downloads',
   ],
   'profile.active': [
     'profile',
@@ -182,12 +225,34 @@ const Map<String, List<String>> _panelKeywords = {
     'json',
     'duplicate',
     'delete',
+    'nina profile',
   ],
   'profile.wizard': ['wizard', 'rerun', 'setup', 'walkthrough'],
+  'app.changelog': [
+    'changelog',
+    'release notes',
+    'what\'s new',
+    'version history',
+    'updates',
+    'what changed',
+  ],
+  'app.monitoring': [
+    'health check',
+    'healthz',
+    'readyz',
+    'uptime',
+    'prometheus',
+    'performance',
+    'latency',
+    'slow',
+    'websocket catalog',
+    'ws protocol',
+  ],
 };
 
 List<SettingsSearchEntry> buildSearchIndex() {
   final entries = <SettingsSearchEntry>[];
+  // 1. Index panels.
   for (final group in settingsTree) {
     for (final panel in group.panels) {
       entries.add(SettingsSearchEntry(
@@ -198,7 +263,33 @@ List<SettingsSearchEntry> buildSearchIndex() {
       ));
     }
   }
+  // 2. Index individual settings.
+  for (final s in settingsRegistry) {
+    entries.add(SettingsSearchEntry(
+      settingId: s.id,
+      label: s.label,
+      groupLabel: s.path.join(' › '),
+      keywords: s.keywords,
+      description: s.description,
+      relatedSettings: s.relatedSettings,
+      // Map setting to its parent panel if possible for jumping.
+      panelId: _mapSettingToPanel(s),
+    ));
+  }
   return entries;
+}
+
+String? _mapSettingToPanel(Setting s) {
+  // Simple mapping based on setting ID prefix.
+  if (s.id.startsWith('eq.')) return s.id.split('.').take(2).join('.');
+  if (s.id.startsWith('img.')) return s.id.split('.').take(2).join('.');
+  if (s.id.startsWith('session.')) return s.id.split('.').take(2).join('.');
+  if (s.id.startsWith('safety.')) return s.id.split('.').take(2).join('.');
+  if (s.id.startsWith('guider.')) return 'eq.guider';
+  if (s.id.startsWith('camera.')) return 'eq.camera';
+  if (s.id.startsWith('storage.')) return 'session.storage';
+  if (s.id.startsWith('filenames.')) return 'session.filenames';
+  return null;
 }
 
 /// Score an entry against a normalized lower-cased query. Higher = better.
@@ -207,6 +298,7 @@ int _scoreEntry(SettingsSearchEntry entry, String query) {
   if (query.isEmpty) return 0;
   final label = entry.label.toLowerCase();
   final group = entry.groupLabel.toLowerCase();
+  final desc = entry.description?.toLowerCase() ?? '';
 
   // Exact label match wins.
   if (label == query) return 1000;
@@ -231,7 +323,18 @@ int _scoreEntry(SettingsSearchEntry entry, String query) {
       keywordScore = keywordScore < 80 ? 80 : keywordScore;
     }
   }
-  return keywordScore;
+  if (keywordScore > 0) return keywordScore;
+
+  // Description match.
+  if (desc.contains(query)) return 50;
+
+  return 0;
+}
+
+class _ScoredEntry {
+  final int score;
+  final SettingsSearchEntry entry;
+  _ScoredEntry(this.score, this.entry);
 }
 
 /// Top N matches for `query`, ranked by score descending. Capped at 20
@@ -244,11 +347,11 @@ List<SettingsSearchEntry> searchSettings(
   final q = query.trim().toLowerCase();
   if (q.isEmpty) return const [];
   if (limit <= 0) return const [];
-  final scored = <(int, SettingsSearchEntry)>[];
+  final List<_ScoredEntry> scored = [];
   for (final entry in index) {
     final s = _scoreEntry(entry, q);
-    if (s > 0) scored.add((s, entry));
+    if (s > 0) scored.add(_ScoredEntry(s, entry));
   }
-  scored.sort((a, b) => b.$1.compareTo(a.$1));
-  return scored.take(limit).map((p) => p.$2).toList();
+  scored.sort((a, b) => b.score.compareTo(a.score));
+  return scored.take(limit).map((p) => p.entry).toList();
 }

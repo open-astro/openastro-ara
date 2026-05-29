@@ -22,7 +22,7 @@ class FocusTempScatterChart extends ConsumerWidget {
           frame.sensorTempC,
           frame.focusSteps.toDouble(),
           dotPainter: FlDotCirclePainter(
-            color: AraColors.selectionBg.withValues(alpha: 0.7),
+            color: AraColors.selectionBg.withOpacity(0.7),
             radius: 4,
           ),
         ));

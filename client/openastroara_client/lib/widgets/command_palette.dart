@@ -71,7 +71,12 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
   void _activate() {
     if (_results.isEmpty) return;
     final entry = _results[_selectedIndex];
-    ref.read(selectedSettingsPanelProvider.notifier).select(entry.panelId);
+    if (entry.panelId != null) {
+      ref.read(selectedSettingsPanelProvider.notifier).select(entry.panelId!);
+    }
+    if (entry.settingId != null) {
+      ref.read(highlightedSettingProvider.notifier).highlight(entry.settingId!);
+    }
     // Switch to the Options tab so the panel is visible.
     ref.read(selectedTabIndexProvider.notifier).select(4);
     Navigator.of(context).pop();
@@ -196,9 +201,9 @@ class _EmptyHint extends StatelessWidget {
           hasQuery
               ? 'No matches. Try a different word — keywords cover sensor / '
                   'cooling / dither / park / autofocus / plate-solve / file '
-                  'naming / safety / sky data, etc.'
+                  'naming / safety / sky data / profiles / search registry, etc.'
               : 'Start typing to search settings. ↑↓ to navigate, Enter to '
-                  'open, Esc to close.',
+                  'open, Esc to close. ⌘K from anywhere.',
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: AraColors.textSecondary,
@@ -225,7 +230,7 @@ class _ResultRow extends StatelessWidget {
       onTap: onTap,
       child: Container(
         color:
-            selected ? AraColors.selectionBg.withValues(alpha: 0.25) : null,
+            selected ? AraColors.selectionBg.withOpacity(0.25) : null,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         child: Row(
           children: [
@@ -238,11 +243,42 @@ class _ResultRow extends StatelessWidget {
                   Text(entry.label,
                       style: Theme.of(context).textTheme.bodyMedium),
                   Text(
-                    '${entry.groupLabel} · ${entry.panelId}',
+                    '${entry.groupLabel}${entry.settingId != null ? ' · ${entry.settingId}' : ' · ${entry.panelId}'}',
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
                           color: AraColors.textDisabled,
                         ),
                   ),
+                  if (selected && entry.description != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        entry.description!,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: AraColors.textSecondary,
+                              fontStyle: FontStyle.italic,
+                            ),
+                      ),
+                    ),
+                  if (selected && entry.relatedSettings.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Wrap(
+                        spacing: 8,
+                        children: [
+                          Text('Related:',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .labelSmall
+                                  ?.copyWith(color: AraColors.textDisabled)),
+                          for (final rel in entry.relatedSettings)
+                            Text(rel,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .labelSmall
+                                    ?.copyWith(color: AraColors.selectionBg)),
+                        ],
+                      ),
+                    ),
                 ],
               ),
             ),

@@ -5,7 +5,7 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 ## Current
 
 - **Phase:** Phase 12h.3-search (Smart Settings Search) — starting
-- **Last merged:** `phase-12h2-dropdown` — PR #105, 2026-05-29 (consolidate `_DropdownRow` + `_NumberRow` into shared widgets, −126 LoC).
+- **Last merged:** `phase-12h2-equipment-connect` — PR #106, 2026-05-29 (auto-connect per device type).
 - **Currently working on:** `phase-12h3-search` branch — §61 smart settings search (⌘K) cross-cutting all settings panels.
 
 ## Completed
@@ -108,6 +108,7 @@ Folded into Phase 0.5p (global.json + csproj target framework bumps).
   - 12h.2-trim: Whitespace-tolerant string setters (PR #103)
   - 12h.2-switch: Shared `SettingsSwitchRow` (PR #104)
   - 12h.2-dropdown: Shared `SettingsDropdownRow` (PR #105, merged 2026-05-29)
+- **12h.3-search** — §61 smart settings search (⌘K) + Help Registry infrastructure.
 
 ### Phase 0.5p-followup buildfix — Core + Astrometry + Equipment cleanup (PR #43)
 - ✅ `OpenAstroAra.Core` — `Notification.cs` scrubbed (CustomDisplayPart references removed; warning/error variants now route to `Logger` with `[CallerXxx]` attribute propagation so the original call site is preserved); `MyMessageBox.cs` `Show(...)` maps affirmative defaults (Yes→No, OK→Cancel) to safe non-affirmative results to prevent `SequenceHasChanged.AskHasChanged` silently auto-detaching; `System.Management 10.0.0` added for WMI usage in `Logger.cs` + `SerialPortProvider.cs`.

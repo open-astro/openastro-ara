@@ -62,7 +62,7 @@ class _PlaceholderScreen extends ConsumerWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
-                    color: AraColors.accentBusy.withValues(alpha: 0.15),
+                    color: AraColors.accentBusy.withOpacity(0.15),
                     borderRadius: BorderRadius.circular(4),
                     border: Border.all(color: AraColors.accentBusy),
                   ),
