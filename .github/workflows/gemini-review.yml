@@ -7,18 +7,25 @@ on:
 jobs:
   review:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
-      pull-requests: write
       contents: read
+      pull-requests: write
+      issues: write
 
     steps:
-      - name: Checkout Code
+      - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Run Gemini PR Review
-        uses: google-gemini/gemini-cli@main
         with:
-          command: /review
+          persist-credentials: false
+
+      - name: Run Gemini pull request review
+        uses: google-github-actions/run-gemini-cli@v0.1.22
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GEMINI_CLI_TRUST_WORKSPACE: 'true'
+        with:
+          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          github_pr_number: ${{ github.event.pull_request.number }}
+          prompt: '/review'
