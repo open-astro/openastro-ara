@@ -282,10 +282,11 @@ const Map<String, Help> helpRegistry = {
     title: 'Auto-connect on boot',
     body: 'Whether to automatically open the Alpaca connection to this device when the daemon starts.\n\n'
         '**Defaults split by side-effect risk:**\n\n'
-        '*Connect-by-default* (no movement / no actuation):\n'
+        '*Connect-by-default* (minor or no actuation):\n'
         '* Camera — USB link power-up only\n'
         '* Mount — sidereal tracking comes on per §57\n'
-        '* Focuser, filter wheel, rotator — position read on connect, no movement\n'
+        '* Focuser, rotator — position read on connect, no movement\n'
+        '* Filter wheel — most drivers reposition to last-known slot on connect (driver-dependent). If it matters which filter is in beam at startup, leave this off and connect manually.\n'
         '* Flat panel (CoverCalibrator) — does not change cover position\n'
         '* Safety monitor — recommended on for unattended observatories\n\n'
         '*Manual-connect by default* (driver may actuate hardware on connect):\n'
