@@ -103,7 +103,7 @@ class HelpIcon extends ConsumerWidget {
                               orElse: () => const SettingsSearchEntry(
                                   label: '',
                                   groupLabel: '',
-                                  keywords: const <String>[]));
+                                  keywords: <String>[]));
 
                           if (sEntry.panelId != null) {
                             final modalContext = context;

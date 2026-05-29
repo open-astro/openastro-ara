@@ -31,7 +31,7 @@ class ImagingPlateSolvePanel extends ConsumerWidget {
             ),
             Expanded(
               child: DropdownButtonFormField<PlateSolveEngine>(
-                value: s.engine,
+                initialValue: s.engine,
                 isDense: true,
                 items: const [
                   DropdownMenuItem(

@@ -183,7 +183,7 @@ class SettingsDropdownRow<T> extends StatelessWidget {
         ),
         Expanded(
           child: DropdownButtonFormField<T>(
-            value: value,
+            initialValue: value,
             isDense: true,
             items: [
               for (final e in items.entries)

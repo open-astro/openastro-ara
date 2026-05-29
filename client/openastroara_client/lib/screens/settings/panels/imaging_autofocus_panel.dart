@@ -31,7 +31,7 @@ class ImagingAutofocusPanel extends ConsumerWidget {
             ),
             Expanded(
               child: DropdownButtonFormField<AutofocusMethod>(
-                value: s.method,
+                initialValue: s.method,
                 isDense: true,
                 items: const [
                   DropdownMenuItem(

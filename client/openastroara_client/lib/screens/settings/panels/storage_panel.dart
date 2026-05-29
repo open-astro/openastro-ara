@@ -76,7 +76,7 @@ class StoragePanel extends ConsumerWidget {
               ),
               Expanded(
                 child: DropdownButtonFormField<StorageFileFormat>(
-                  value: s.fileFormat,
+                  initialValue: s.fileFormat,
                   isDense: true,
                   items: const [
                     DropdownMenuItem(value: StorageFileFormat.fits, child: Text('FITS')),
@@ -105,7 +105,7 @@ class StoragePanel extends ConsumerWidget {
               ),
               Expanded(
                 child: DropdownButtonFormField<StorageCompression>(
-                  value: s.compression,
+                  initialValue: s.compression,
                   isDense: true,
                   items: const [
                     DropdownMenuItem(value: StorageCompression.off, child: Text('Off')),

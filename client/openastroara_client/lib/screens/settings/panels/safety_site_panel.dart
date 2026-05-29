@@ -115,7 +115,7 @@ class SafetySitePanel extends ConsumerWidget {
               ),
               Expanded(
                 child: DropdownButtonFormField<TwilightDefinition>(
-                  value: s.twilightDefinition,
+                  initialValue: s.twilightDefinition,
                   isDense: true,
                   items: const [
                     DropdownMenuItem(

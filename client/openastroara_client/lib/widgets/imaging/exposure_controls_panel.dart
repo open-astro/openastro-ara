@@ -68,7 +68,7 @@ class ExposureControlsPanel extends ConsumerWidget {
           ),
           const SizedBox(height: 8),
           DropdownButtonFormField<FrameKind>(
-            value: params.frameKind,
+            initialValue: params.frameKind,
             decoration: const InputDecoration(labelText: 'Frame type'),
             items: const [
               DropdownMenuItem(value: FrameKind.light, child: Text('Light')),
