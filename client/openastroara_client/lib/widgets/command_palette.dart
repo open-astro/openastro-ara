@@ -225,7 +225,7 @@ class _ResultRow extends StatelessWidget {
       onTap: onTap,
       child: Container(
         color:
-            selected ? AraColors.selectionBg.withValues(alpha: 0.25) : null,
+            selected ? AraColors.selectionBg.withOpacity(0.25) : null,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         child: Row(
           children: [

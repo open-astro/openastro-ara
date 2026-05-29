@@ -54,7 +54,7 @@ class FrameThumbnail extends StatelessWidget {
                 top: 4,
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                  color: AraColors.bgPanel.withValues(alpha: 0.85),
+                  color: AraColors.bgPanel.withOpacity(0.85),
                   child: Text(
                     frame.filter,
                     style: Theme.of(context).textTheme.labelSmall,
@@ -75,7 +75,7 @@ class FrameThumbnail extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: selected
                           ? AraColors.selectionBg
-                          : AraColors.bgPanel.withValues(alpha: 0.85),
+                          : AraColors.bgPanel.withOpacity(0.85),
                       border:
                           Border.all(color: AraColors.selectionBg, width: 1.5),
                       borderRadius: BorderRadius.circular(3),
