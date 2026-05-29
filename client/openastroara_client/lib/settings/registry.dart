@@ -62,7 +62,7 @@ class Setting {
 /// The canonical settings registry.
 const List<Setting> settingsRegistry = [
   // §35 Safety Policies
-  Setting(
+  const Setting(
     id: 'safety.policies.on_unsafe',
     label: 'On unsafe weather',
     description: 'What action to take when the safety monitor reports unsafe weather.',
@@ -72,7 +72,7 @@ const List<Setting> settingsRegistry = [
     defaultValue: 'Pause + park',
     profilePath: 'safety.on_unsafe',
   ),
-  Setting(
+  const Setting(
     id: 'safety.policies.auto_resume',
     label: 'Auto-resume when safe',
     description: 'Whether to automatically resume the sequence when weather becomes safe again.',
@@ -82,7 +82,7 @@ const List<Setting> settingsRegistry = [
     defaultValue: true,
     profilePath: 'safety.auto_resume',
   ),
-  Setting(
+  const Setting(
     id: 'safety.policies.resume_delay',
     label: 'Resume delay (min)',
     description: 'How long to wait after weather becomes safe before resuming.',
@@ -94,7 +94,7 @@ const List<Setting> settingsRegistry = [
   ),
 
   // §63 PHD2 / Guider
-  Setting(
+  const Setting(
     id: 'guider.dither_pixels',
     label: 'Dither pixels',
     description: 'How many pixels PHD2 dithers between exposures. Larger values '
@@ -112,7 +112,7 @@ const List<Setting> settingsRegistry = [
   ),
 
   // §51 Diagnostics
-  Setting(
+  const Setting(
     id: 'diagnostics.mode',
     label: 'Diagnostics mode',
     description: 'Smart correction policy: notify only, balanced, or aggressive auto-recovery.',
@@ -124,7 +124,7 @@ const List<Setting> settingsRegistry = [
   ),
 
   // §37.4 Imaging Defaults
-  Setting(
+  const Setting(
     id: 'imaging.defaults.exposure',
     label: 'Default exposure (s)',
     description: 'Standard exposure time used when no target-specific override exists.',
@@ -136,7 +136,7 @@ const List<Setting> settingsRegistry = [
   ),
 
   // §37.3 Camera
-  Setting(
+  const Setting(
     id: 'camera.cooler_warmup_on_session_end',
     label: 'Cooler warmup on end',
     description: 'How to handle the sensor cooler when the imaging session finishes.',

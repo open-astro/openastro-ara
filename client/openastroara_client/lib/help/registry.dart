@@ -20,7 +20,7 @@ class Help {
 }
 
 const Map<String, Help> helpRegistry = {
-  'guider.dither_pixels': Help(
+  'guider.dither_pixels': const Help(
     key: 'guider.dither_pixels',
     title: 'Dithering',
     body: 'Dithering is the process of slightly shifting the telescope position '
@@ -30,7 +30,7 @@ const Map<String, Help> helpRegistry = {
     learnMoreUrl: 'https://openastro.net/wiki/guiding/dithering',
     relatedSettings: const ['guider.dither_pixels'],
   ),
-  'safety.policies.on_unsafe': Help(
+  'safety.policies.on_unsafe': const Help(
     key: 'safety.policies.on_unsafe',
     title: 'Unsafe Weather Actions',
     body: 'Determines what the system does when the safety monitor reports '
@@ -38,7 +38,7 @@ const Map<String, Help> helpRegistry = {
         'safest default for unattended imaging.',
     relatedSettings: const ['safety.policies.on_unsafe'],
   ),
-  'safety.policies.auto_resume': Help(
+  'safety.policies.auto_resume': const Help(
     key: 'safety.policies.auto_resume',
     title: 'Auto-resume',
     body: 'If enabled, the sequence will automatically resume as soon as the '
@@ -46,7 +46,7 @@ const Map<String, Help> helpRegistry = {
         'stays paused until you manually resume it.',
     relatedSettings: const ['safety.policies.auto_resume'],
   ),
-  'safety.policies.resume_delay': Help(
+  'safety.policies.resume_delay': const Help(
     key: 'safety.policies.resume_delay',
     title: 'Resume Delay',
     body: 'The number of minutes to wait after a "Safe" signal before '
@@ -54,7 +54,7 @@ const Map<String, Help> helpRegistry = {
         'has fully cleared before starting the next exposure.',
     relatedSettings: const ['safety.policies.resume_delay'],
   ),
-  'diagnostics.mode': Help(
+  'diagnostics.mode': const Help(
     key: 'diagnostics.mode',
     title: 'Diagnostics Mode',
     body: 'Controls how Ara responds to acquisition issues like star loss or focus drift.\n\n'
@@ -63,7 +63,7 @@ const Map<String, Help> helpRegistry = {
         '* **Aggressive**: Takes corrective action for almost all issues (e.g. abort/restart on star loss).',
     relatedSettings: const ['diagnostics.mode'],
   ),
-  'camera.cooler_warmup_on_session_end': Help(
+  'camera.cooler_warmup_on_session_end': const Help(
     key: 'camera.cooler_warmup_on_session_end',
     title: 'Cooler Warmup',
     body: 'Determines how the camera cooler is handled after the session.\n\n'

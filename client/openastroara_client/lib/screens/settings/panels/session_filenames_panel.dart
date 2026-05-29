@@ -59,7 +59,7 @@ class SessionFilenamesPanel extends ConsumerWidget {
             ),
             Expanded(
               child: DropdownButtonFormField<DateSeparator>(
-                initialValue: fs.dateSeparator,
+                value: fs.dateSeparator,
                 isDense: true,
                 items: const [
                   DropdownMenuItem(

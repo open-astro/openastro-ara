@@ -74,7 +74,7 @@ class ImagingDefaultsPanel extends ConsumerWidget {
               ),
               Expanded(
                 child: DropdownButtonFormField<FrameKind>(
-                  initialValue: d.defaultFrameKind,
+                  value: d.defaultFrameKind,
                   isDense: true,
                   items: const [
                     DropdownMenuItem(value: FrameKind.light, child: Text('Light')),

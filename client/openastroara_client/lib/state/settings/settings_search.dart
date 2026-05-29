@@ -259,7 +259,7 @@ List<SettingsSearchEntry> buildSearchIndex() {
         panelId: panel.id,
         label: panel.label,
         groupLabel: group.label,
-        keywords: _panelKeywords[panel.id] ?? const [],
+        keywords: _panelKeywords[panel.id] ?? const <String>[],
       ));
     }
   }
