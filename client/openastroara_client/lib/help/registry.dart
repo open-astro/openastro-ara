@@ -146,4 +146,48 @@ const Map<String, Help> helpRegistry = {
         'Use `\\` (or `/`) as the path separator. Subdirectories are created automatically.',
     relatedSettings: ['session.storage.filename_template'],
   ),
+
+  // §54 Notifications — help on the genuinely non-obvious controls (token
+  // setup + the events with hidden semantics like retry budgets / thresholds).
+  // The plain "trigger on X" channel + event toggles are self-explanatory.
+  'session.notifications.pushover_token': Help(
+    key: 'session.notifications.pushover_token',
+    title: 'Pushover token',
+    body: 'Pushover is a paid (one-time \$5) push-notification service that delivers messages to your phone or desktop. '
+        'To use: sign up at pushover.net, then copy the User Key from your dashboard into this field.\n\n'
+        'Leave empty to disable Pushover delivery entirely. Other channels (in-app banner, OS notification, sound) work independently.',
+    learnMoreUrl: 'https://pushover.net/',
+    relatedSettings: ['session.notifications.pushover_token'],
+  ),
+  'session.notifications.telegram_bot_token': Help(
+    key: 'session.notifications.telegram_bot_token',
+    title: 'Telegram bot token',
+    body: 'Telegram bots are free and deliver messages to a Telegram chat you control. '
+        'To use: message @BotFather in Telegram, send `/newbot`, follow the prompts, then paste the bot token here.\n\n'
+        'You\'ll also need to send `/start` to your new bot once so it can DM you. Leave empty to disable Telegram delivery.',
+    learnMoreUrl: 'https://core.telegram.org/bots#how-do-i-create-a-bot',
+    relatedSettings: ['session.notifications.telegram_bot_token'],
+  ),
+  'session.notifications.on_critical_diagnostic': Help(
+    key: 'session.notifications.on_critical_diagnostic',
+    title: 'Critical diagnostic events',
+    body: '"Critical" is §51\'s top severity level — events that indicate something is actively wrong and may require intervention. '
+        'Examples: sensor cooler runaway, mount tracking deviation > 30″, guider RMS suddenly tripled, autofocus position drifted past the backlash budget. '
+        'Lower-severity diagnostic events (warnings, infos) fire regardless of this toggle but only the critical ones generate notifications.',
+    relatedSettings: ['session.notifications.on_critical_diagnostic'],
+  ),
+  'session.notifications.on_plate_solve_failed': Help(
+    key: 'session.notifications.on_plate_solve_failed',
+    title: 'Plate solve failed (×N)',
+    body: 'Fires after N consecutive plate-solve failures — single-try failures are common (clouds, blooming, framing issue) and not worth alerting on. '
+        'The retry count N is set by the guider-retry-timeout in §35 Safety Policies; the default is 3 tries before giving up.',
+    relatedSettings: ['session.notifications.on_plate_solve_failed', 'safety.policies.guider_retry_timeout'],
+  ),
+  'session.notifications.on_disk_space_low': Help(
+    key: 'session.notifications.on_disk_space_low',
+    title: 'Disk space low',
+    body: 'Fires when free space on the §29 save directory drops below ~10 GB — about one hour of LRGB capture at 4096x4096 16-bit FITS. '
+        'Threshold is fixed in v0.0.1; making it configurable is a v0.1.0 enhancement.',
+    relatedSettings: ['session.notifications.on_disk_space_low', 'session.storage.save_directory'],
+  ),
 };
