@@ -102,4 +102,39 @@ const Map<String, Help> helpRegistry = {
         'When enabled, the cooler ramps the sensor back to within ~5°C of ambient before disconnecting at session end.',
     relatedSettings: ['imaging.defaults.warmup_at_session_end'],
   ),
+
+  // §29 Storage — help on the non-obvious controls (format, compression,
+  // filename template). `save_directory` is self-explanatory.
+  'session.storage.file_format': Help(
+    key: 'session.storage.file_format',
+    title: 'File format',
+    body: 'FITS is the historical standard for astronomy and the safest choice for downstream tools (DSS, Siril, PixInsight, AstroPixelProcessor — all read FITS). '
+        'XISF is PixInsight\'s native format with richer metadata (per-frame statistics, processing history) but smaller tool support. '
+        'RICE-compressed FITS halves file size on light frames with minimal CPU cost and is widely supported. '
+        'Gzipped FITS is universal but slower to write and read.',
+    relatedSettings: ['session.storage.file_format'],
+  ),
+  'session.storage.compression': Help(
+    key: 'session.storage.compression',
+    title: 'Compression',
+    body: 'Optional lossless compression applied as each frame is written to disk.\n\n'
+        '* **Off**: No compression — fastest, biggest files.\n'
+        '* **RICE**: Astronomy-tuned algorithm. ~2x compression on lights, ~10x on darks/bias. Fast both ways. Recommended.\n'
+        '* **gzip**: General-purpose. Smaller files than RICE but ~5x slower to write. Use only if a downstream tool requires it.',
+    relatedSettings: ['session.storage.compression'],
+  ),
+  'session.storage.filename_template': Help(
+    key: 'session.storage.filename_template',
+    title: 'Filename template',
+    body: 'Output paths are built by substituting \$\$TOKEN\$\$ placeholders in this template. Tokens are uppercased and surrounded by double-dollars.\n\n'
+        '**Common tokens:**\n'
+        '* `\$\$DATEMINUS12\$\$` — session date (rolls over at noon UTC-12, so all-night exposures share one date)\n'
+        '* `\$\$DATETIME\$\$` — exposure-start timestamp\n'
+        '* `\$\$IMAGETYPE\$\$` — Light / Dark / Bias / Flat\n'
+        '* `\$\$FILTER\$\$` — current filter slot label\n'
+        '* `\$\$EXPOSURETIME\$\$` — exposure seconds\n'
+        '* `\$\$TARGETNAME\$\$` — target from the active sequence\n\n'
+        'Use `\\` (or `/`) as the path separator. Subdirectories are created automatically.',
+    relatedSettings: ['session.storage.filename_template'],
+  ),
 };
