@@ -98,12 +98,13 @@ const Map<String, Help> helpRegistry = {
   ),
   'diagnostics.mode': Help(
     key: 'diagnostics.mode',
-    title: 'Diagnostics Mode',
-    body: 'Controls how Ara responds to acquisition issues like star loss or focus drift.\n\n'
-        '* **Notify only**: Logs the issue and notifies you, but takes no action.\n'
-        '* **Balanced**: Performs low-risk recoveries (like auto-refocus on drift).\n'
-        '* **Aggressive**: Takes corrective action for almost all issues (e.g. abort/restart on star loss).',
-    relatedSettings: ['diagnostics.mode'],
+    title: 'Diagnostics mode',
+    body: 'Controls how Ara responds to §51 critical-severity diagnostic events (sensor temp out of range, mount drift > 30″, guider RMS triple, autofocus position lost, etc).\n\n'
+        '* **Notify only** (default): events surface in the Diagnostic Panel + as §54 WS notifications, but sequence execution is never auto-paused by diagnostics alone.\n'
+        '* **Pause on critical**: critical-severity events auto-pause the running sequence and ring the §35 alarm. You decide whether to resume.\n'
+        '* **Abort on critical**: critical-severity events trigger §35 Abort + Park instead of pause. Use only for unattended observatory automation where you trust the safety policies to recover safely.\n\n'
+        'Lower-severity diagnostic events (warnings, infos) never trigger automated action regardless of this setting.',
+    relatedSettings: ['session.notifications.on_critical_diagnostic'],
   ),
   // §37.9 Imaging Defaults — help only on the non-obvious controls (per
   // §69.1 default-is-no-tooltip). Exposure / target temp / frame type are
@@ -381,6 +382,54 @@ const Map<String, Help> helpRegistry = {
     body: 'Force an AF run every N hours regardless of temperature or HFR. Catches slow drift that doesn\'t cross either of the other triggers (e.g. a gradual mechanical settling on first-night-out setups).\n\n'
         '2 hours is a safe interval for most sessions. Set to 0 to disable the time-based trigger and rely purely on temperature + HFR triggers.',
     relatedSettings: ['img.autofocus.trigger_temp_delta_c', 'img.autofocus.trigger_hfr_drift_pct'],
+  ),
+
+  // §37.10 Plate Solving — help on the non-obvious controls.
+  'img.platesolve.engine': Help(
+    key: 'img.platesolve.engine',
+    title: 'Plate-solving engine',
+    body: '* **ASTAP** (recommended): fast, accurate, local. Comes bundled with the §13 Debian package (`/usr/bin/astap`) plus a star index. Best default for unattended observatories.\n'
+        '* **astrometry.net**: gold-standard accuracy. Can run online (nova.astrometry.net) or locally with downloaded index files. Slower than ASTAP but handles trickier fields.\n'
+        '* **PlateSolve 2**: legacy Windows binary. Included for compatibility with NINA-imported sequences; not recommended for new setups.',
+    relatedSettings: ['img.platesolve.path_or_endpoint', 'img.platesolve.search_radius_deg'],
+  ),
+  'img.platesolve.search_radius_deg': Help(
+    key: 'img.platesolve.search_radius_deg',
+    title: 'Search radius',
+    body: 'How far from the hinted RA/Dec position the solver searches for a match.\n\n'
+        '* **Small radius (5-15°)**: fast, but solve fails if your mount pointing is off or polar alignment is wrong.\n'
+        '* **30° (default)**: tolerant of typical mount-pointing error.\n'
+        '* **>90°**: effectively blind — slow but always finds a solution.\n\n'
+        'Combine with `Use blind solve as fallback` for a fast-then-slow strategy.',
+    relatedSettings: ['img.platesolve.use_blind_fallback'],
+  ),
+  'img.platesolve.downsample_factor': Help(
+    key: 'img.platesolve.downsample_factor',
+    title: 'Downsample factor',
+    body: 'Plate solvers don\'t need full resolution to find a match — they only need enough pixels to detect stars. Downsampling 2x quarters the input area and is roughly 4x faster, with negligible accuracy hit on most setups.\n\n'
+        'Bump to 3-4 for very large sensors (>30 MP). Drop to 1 if you have a small sensor (<5 MP) and solves are unreliable.',
+    relatedSettings: ['img.platesolve.timeout_seconds'],
+  ),
+  'img.platesolve.use_blind_fallback': Help(
+    key: 'img.platesolve.use_blind_fallback',
+    title: 'Blind-solve fallback',
+    body: 'If a hint-based solve times out (mount pointing way off, polar alignment wrong, hint coordinates stale), retry the same frame with no hint — let the solver search the entire sky.\n\n'
+        'Blind solves are slower (often 30-60s) but rescue most bad-pointing situations. Recommended on except for very large sensors where blind solves can run out of timeout.',
+    relatedSettings: ['img.platesolve.search_radius_deg'],
+  ),
+  'img.platesolve.max_iterations': Help(
+    key: 'img.platesolve.max_iterations',
+    title: 'Max centering iterations',
+    body: 'Center-after-slew loops solve→slew→solve→slew until the target is within tolerance OR this many iterations have run.\n\n'
+        '5 is enough for most mounts (each iteration typically halves the pointing error). Bump to 8-10 for cone-error setups where pointing improves slowly; drop to 2-3 for fast precision mounts that converge in one pass.',
+    relatedSettings: ['img.platesolve.convergence_tolerance_arcsec'],
+  ),
+  'img.platesolve.convergence_tolerance_arcsec': Help(
+    key: 'img.platesolve.convergence_tolerance_arcsec',
+    title: 'Convergence tolerance',
+    body: 'How close to dead-center the target must be before centering stops. 60″ (1 arc-minute) is a good default for typical setups — tighter than the §53 sub-frame guiding can correct, looser than the human eye can notice.\n\n'
+        'Tighten to 30″ for narrowband mosaics where panel alignment matters; loosen to 120″ for wide-field RGB where 2′ is well within frame.',
+    relatedSettings: ['img.platesolve.max_iterations'],
   ),
 
   // §37.4 Filter Wheel slot labels.

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../state/settings/plate_solve_settings_state.dart';
-import '../../../theme/ara_colors.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
 
@@ -19,40 +18,18 @@ class ImagingPlateSolvePanel extends ConsumerWidget {
       padding: const EdgeInsets.all(24),
       children: [
         const SettingsSectionHeader('Solver'),
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Row(children: [
-            SizedBox(
-              width: 280,
-              child: Text('Engine',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AraColors.textSecondary,
-                      )),
-            ),
-            Expanded(
-              child: DropdownButtonFormField<PlateSolveEngine>(
-                initialValue: s.engine,
-                isDense: true,
-                items: const [
-                  DropdownMenuItem(
-                    value: PlateSolveEngine.astap,
-                    child: Text('ASTAP'),
-                  ),
-                  DropdownMenuItem(
-                    value: PlateSolveEngine.astrometryNet,
-                    child: Text('astrometry.net'),
-                  ),
-                  DropdownMenuItem(
-                    value: PlateSolveEngine.platesolve2,
-                    child: Text('PlateSolve 2'),
-                  ),
-                ],
-                onChanged: (v) {
-                  if (v != null) n.setEngine(v);
-                },
-              ),
-            ),
-          ]),
+        SettingsDropdownRow<PlateSolveEngine>(
+          label: 'Engine',
+          helpKey: 'img.platesolve.engine',
+          value: s.engine,
+          items: const {
+            PlateSolveEngine.astap: 'ASTAP',
+            PlateSolveEngine.astrometryNet: 'astrometry.net',
+            PlateSolveEngine.platesolve2: 'PlateSolve 2',
+          },
+          onChanged: (v) {
+            if (v != null) n.setEngine(v);
+          },
         ),
         EditableTextRow(
           label: 'Path / endpoint',
@@ -71,6 +48,7 @@ class ImagingPlateSolvePanel extends ConsumerWidget {
         const SettingsSectionHeader('Solving parameters'),
         EditableNumberRow(
           label: 'Search radius (°)',
+          helpKey: 'img.platesolve.search_radius_deg',
           currentValue: s.searchRadiusDeg.toString(),
           getCanonical: () =>
               ref.read(plateSolveSettingsProvider).searchRadiusDeg.toString(),
@@ -81,6 +59,7 @@ class ImagingPlateSolvePanel extends ConsumerWidget {
         ),
         EditableNumberRow(
           label: 'Downsample factor (1..8)',
+          helpKey: 'img.platesolve.downsample_factor',
           currentValue: s.downsampleFactor.toString(),
           getCanonical: () => ref
               .read(plateSolveSettingsProvider)
@@ -103,6 +82,7 @@ class ImagingPlateSolvePanel extends ConsumerWidget {
         ),
         SettingsSwitchRow(
           label: 'Use blind solve as fallback',
+          helpKey: 'img.platesolve.use_blind_fallback',
           value: s.useBlindFallback,
           onChanged: n.setUseBlindFallback,
           hint: 'if hint-based solve times out',
@@ -120,6 +100,7 @@ class ImagingPlateSolvePanel extends ConsumerWidget {
         ),
         EditableNumberRow(
           label: 'Max iterations',
+          helpKey: 'img.platesolve.max_iterations',
           currentValue: s.maxIterations.toString(),
           getCanonical: () =>
               ref.read(plateSolveSettingsProvider).maxIterations.toString(),
@@ -130,6 +111,7 @@ class ImagingPlateSolvePanel extends ConsumerWidget {
         ),
         EditableNumberRow(
           label: 'Convergence tolerance (″)',
+          helpKey: 'img.platesolve.convergence_tolerance_arcsec',
           currentValue: s.convergenceToleranceArcsec.toString(),
           getCanonical: () => ref
               .read(plateSolveSettingsProvider)
