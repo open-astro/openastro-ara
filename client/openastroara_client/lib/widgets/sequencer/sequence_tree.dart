@@ -28,7 +28,7 @@ class SequenceTree extends ConsumerWidget {
               .read(selectedNodeIdProvider.notifier)
               .select(row.node.id),
           child: Container(
-            color: selected ? AraColors.selectionBg.withOpacity(0.25) : null,
+            color: selected ? AraColors.selectionBg.withValues(alpha: 0.25) : null,
             padding: EdgeInsets.only(
               left: 8 + row.depth * 20.0,
               right: 8,

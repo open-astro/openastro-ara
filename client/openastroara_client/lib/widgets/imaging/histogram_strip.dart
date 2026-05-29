@@ -27,7 +27,7 @@ class HistogramStrip extends StatelessWidget {
             child: Container(
               margin: const EdgeInsets.symmetric(horizontal: 0.5),
               height: 8,
-              color: AraColors.textDisabled.withOpacity(alpha),
+              color: AraColors.textDisabled.withValues(alpha: alpha),
             ),
           );
         }),

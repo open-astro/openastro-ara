@@ -35,7 +35,7 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
   late final TextEditingController _controller;
   late final FocusNode _searchFocus;
   late final List<SettingsSearchEntry> _index;
-  List<SettingsSearchEntry> _results = const [];
+  List<SettingsSearchEntry> _results = const <SettingsSearchEntry>[];
   int _selectedIndex = 0;
 
   @override
@@ -230,7 +230,7 @@ class _ResultRow extends StatelessWidget {
       onTap: onTap,
       child: Container(
         color:
-            selected ? AraColors.selectionBg.withOpacity(0.25) : null,
+            selected ? AraColors.selectionBg.withValues(alpha: 0.25) : null,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         child: Row(
           children: [

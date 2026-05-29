@@ -29,7 +29,7 @@ class _SkyDataMissingBannerState extends ConsumerState<SkyDataMissingBanner> {
 
     return Container(
       decoration: BoxDecoration(
-        color: AraColors.accentBusy.withOpacity(0.12),
+        color: AraColors.accentBusy.withValues(alpha: 0.12),
         border: const Border(bottom: BorderSide(color: AraColors.border)),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),

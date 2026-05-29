@@ -122,7 +122,7 @@ class _PanelRow extends StatelessWidget {
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.fromLTRB(28, 8, 16, 8),
-        color: selected ? AraColors.selectionBg.withOpacity(0.25) : null,
+        color: selected ? AraColors.selectionBg.withValues(alpha: 0.25) : null,
         child: Row(
           children: [
             Expanded(

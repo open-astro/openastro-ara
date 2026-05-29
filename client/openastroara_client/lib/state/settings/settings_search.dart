@@ -22,7 +22,7 @@ class SettingsSearchEntry {
     required this.groupLabel,
     required this.keywords,
     this.description,
-    this.relatedSettings = const [],
+    this.relatedSettings = const <String>[],
   });
 
   String get id => settingId ?? panelId ?? '';
@@ -345,8 +345,8 @@ List<SettingsSearchEntry> searchSettings(
   int limit = 20,
 }) {
   final q = query.trim().toLowerCase();
-  if (q.isEmpty) return const [];
-  if (limit <= 0) return const [];
+  if (q.isEmpty) return const <SettingsSearchEntry>[];
+  if (limit <= 0) return const <SettingsSearchEntry>[];
   final List<_ScoredEntry> scored = [];
   for (final entry in index) {
     final s = _scoreEntry(entry, q);

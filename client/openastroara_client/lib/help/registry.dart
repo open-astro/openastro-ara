@@ -14,8 +14,8 @@ class Help {
     required this.title,
     required this.body,
     this.learnMoreUrl,
-    this.relatedHelpKeys = const [],
-    this.relatedSettings = const [],
+    this.relatedHelpKeys = const <String>[],
+    this.relatedSettings = const <String>[],
   });
 }
 

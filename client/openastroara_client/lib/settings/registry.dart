@@ -55,7 +55,7 @@ class Setting {
     required this.type,
     required this.defaultValue,
     this.profilePath,
-    this.relatedSettings = const [],
+    this.relatedSettings = const <String>[],
   });
 }
 

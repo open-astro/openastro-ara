@@ -106,7 +106,7 @@ class SearchHighlight extends ConsumerWidget {
       decoration: BoxDecoration(
         border: Border.all(
           color: isHighlighted
-              ? Colors.yellow.withOpacity(0.8)
+              ? Colors.yellow.withValues(alpha: 0.8)
               : Colors.transparent,
           width: 2,
         ),

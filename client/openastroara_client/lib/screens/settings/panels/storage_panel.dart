@@ -23,7 +23,7 @@ class StoragePanel extends ConsumerWidget {
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: AraColors.accentBusy.withOpacity(0.12),
+            color: AraColors.accentBusy.withValues(alpha: 0.12),
             border: Border.all(color: AraColors.accentBusy),
             borderRadius: BorderRadius.circular(4),
           ),
