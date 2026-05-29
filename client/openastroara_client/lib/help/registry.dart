@@ -64,13 +64,42 @@ const Map<String, Help> helpRegistry = {
         '* **Aggressive**: Takes corrective action for almost all issues (e.g. abort/restart on star loss).',
     relatedSettings: ['diagnostics.mode'],
   ),
-  'camera.cooler_warmup_on_session_end': Help(
-    key: 'camera.cooler_warmup_on_session_end',
-    title: 'Cooler Warmup',
-    body: 'Determines how the camera cooler is handled after the session.\n\n'
-        '* **Off**: Disconnect immediately. Best for CMOS.\n'
-        '* **Ramp**: Slowly return to ambient temperature. Best for CCDs to avoid thermal shock.\n'
-        '* **Immediate**: Stop cooling directly before disconnect.',
-    relatedSettings: ['camera.cooler_warmup_on_session_end'],
+  // §37.9 Imaging Defaults — help only on the non-obvious controls (per
+  // §69.1 default-is-no-tooltip). Exposure / target temp / frame type are
+  // self-explanatory by their labels.
+  'imaging.defaults.gain': Help(
+    key: 'imaging.defaults.gain',
+    title: 'Default gain',
+    body: 'CMOS sensor gain (amplification before the ADC). Higher gain = more sensitivity per photon, but also more read noise floor. '
+        'For deep-sky targets most CMOS cameras have a "unity gain" sweet spot listed in their datasheet — start there.',
+    relatedSettings: ['imaging.defaults.gain'],
+  ),
+  'imaging.defaults.offset': Help(
+    key: 'imaging.defaults.offset',
+    title: 'Default offset',
+    body: 'A small DC pedestal added to every pixel before readout. Prevents the black level from clipping at zero, which would '
+        'break dark-frame and bias subtraction. Camera-specific — your camera\'s manual usually recommends a value.',
+    relatedSettings: ['imaging.defaults.offset'],
+  ),
+  'imaging.defaults.bin': Help(
+    key: 'imaging.defaults.bin',
+    title: 'Default binning',
+    body: 'Pixel binning combines a NxN grid of pixels into one larger virtual pixel. 2x2 quadruples sensitivity per pixel but halves resolution. '
+        'On CMOS cameras binning is typically done in software (post-readout) and equivalent to downsampling — the gain in SNR is smaller than on CCD.',
+    relatedSettings: ['imaging.defaults.bin'],
+  ),
+  'imaging.defaults.cooler_ramp_c_per_min': Help(
+    key: 'imaging.defaults.cooler_ramp_c_per_min',
+    title: 'Cooler ramp rate',
+    body: 'How fast the sensor cools toward the target temperature. Faster ramps stress the TEC and risk condensation on the sensor cover '
+        'as the temperature crosses the dew point. 1°C/min is a safe default; some sensors handle 2-3°C/min fine.',
+    relatedSettings: ['imaging.defaults.cooler_ramp_c_per_min'],
+  ),
+  'imaging.defaults.warmup_at_session_end': Help(
+    key: 'imaging.defaults.warmup_at_session_end',
+    title: 'Warm up at session end',
+    body: 'CCD sensors can crack under repeated thermal shock if disconnected cold. CMOS sensors are tolerant — most users leave this off. '
+        'When enabled, the cooler ramps the sensor back to within ~5°C of ambient before disconnecting at session end.',
+    relatedSettings: ['imaging.defaults.warmup_at_session_end'],
   ),
 };
