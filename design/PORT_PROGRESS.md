@@ -4,9 +4,9 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** Phase 12h.2-dropdown (consolidate _DropdownRow + _NumberRow) — in flight
-- **Last merged:** `phase-12h2-switch` — PR #104, 2026-05-28 (`_SwitchRow` consolidation, −153 LoC across 6 panels).
-- **Currently working on:** `phase-12h2-dropdown` branch — lift safety_policies's local `_DropdownRow<T>` and `_NumberRow` into shared widgets (`SettingsDropdownRow<T>` + reuse of `EditableNumberRow`). Total tests: 138.
+- **Phase:** Phase 12h.3-search (Smart Settings Search) — starting
+- **Last merged:** `phase-12h2-dropdown` — PR #105, 2026-05-29 (consolidate `_DropdownRow` + `_NumberRow` into shared widgets, −126 LoC).
+- **Currently working on:** `phase-12h3-search` branch — §61 smart settings search (⌘K) cross-cutting all settings panels.
 
 ## Completed
 
@@ -87,6 +87,27 @@ Folded into Phase 0.5p (global.json + csproj target framework bumps).
 - ✅ `Endpoints/StatsEndpoints.cs` (8 endpoints with typed query params)
 - ✅ `Endpoints/SystemEndpoints.cs` (15 endpoints across bug-report + data-manager + backup + profile-share)
 - ✅ `Endpoints/WebSocketEndpoints.cs` — `GET /api/v1/ws/catalog` is **functional** (dumps WsEventCatalog.All); WS upgrade returns 426 with proper `Upgrade: websocket` + `Connection: Upgrade` headers per RFC 7231 §6.5.15
+
+### Phase 10 — Server smoke test (tag `phase-10-complete`)
+- ✅ Server build + publish ARM64/x64 CI. `/healthz` + `/api/v1/server/info` verified.
+
+### Phase 11 — Flutter client scaffold + first-run (tag `phase-11-complete`)
+- ✅ Handshake flow + server discovery (mDNS). `client/openastroara_client` project structure + runtime deps.
+
+### Phase 12 — Flutter views (App shell, tabs, settings)
+- ✅ **12a** (tag `phase-12a-complete`) — App shell + navigation + top equipment bar + §25.3 Chips.
+- ✅ **12b** — Wizard (§37) 18-screen scaffold + `ProfileDraft` model.
+- ✅ **12c** — Imaging + Framing tab cores. `ExposureControlsPanel` + `FramingParamsPanel`.
+- ✅ **12h.2-refactor** (tag `phase-12h2-complete`) — Settings polish:
+  - 12h.2-safety: Editable Safety Policies (PR #94)
+  - 12h.2-site: Editable Site preferences (PR #97)
+  - 12h.2-filenames: Editable File Naming (PR #98)
+  - 12h.2-autofocus: Editable Autofocus (PR #99)
+  - 12h.2-platesolve: Editable Plate Solve (PR #100)
+  - 12h.2-diagnostics: Editable Diagnostics Mode (PR #101)
+  - 12h.2-trim: Whitespace-tolerant string setters (PR #103)
+  - 12h.2-switch: Shared `SettingsSwitchRow` (PR #104)
+  - 12h.2-dropdown: Shared `SettingsDropdownRow` (PR #105, merged 2026-05-29)
 
 ### Phase 0.5p-followup buildfix — Core + Astrometry + Equipment cleanup (PR #43)
 - ✅ `OpenAstroAra.Core` — `Notification.cs` scrubbed (CustomDisplayPart references removed; warning/error variants now route to `Logger` with `[CallerXxx]` attribute propagation so the original call site is preserved); `MyMessageBox.cs` `Show(...)` maps affirmative defaults (Yes→No, OK→Cancel) to safe non-affirmative results to prevent `SequenceHasChanged.AskHasChanged` silently auto-detaching; `System.Management 10.0.0` added for WMI usage in `Logger.cs` + `SerialPortProvider.cs`.

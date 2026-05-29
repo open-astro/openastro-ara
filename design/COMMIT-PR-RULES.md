@@ -1,10 +1,10 @@
 # COMMIT-PR-RULES.md
 
-Authoritative reference for the per-phase + sub-PR rhythm, branch naming, CodeRabbit poll-and-fix loop, and pre-PR gate used by the AI during the port. Read together with `design/PORT_PLAYBOOK.md` — which links here from §0 rule 9 (phase-boundary PR rhythm), §3 (phase plan + sub-PR mapping), §19.1 (git safety + branch allowlist), and §22 (final pass `port/ara → master`). Design phase is complete (see "Status" below); Phase 0.5 execution follows the rhythm specified here.
+Authoritative reference for the per-phase + sub-PR rhythm, branch naming, Augment poll-and-fix loop, and pre-PR gate used by the AI during the port. Read together with `design/PORT_PLAYBOOK.md` — which links here from §0 rule 9 (phase-boundary PR rhythm), §3 (phase plan + sub-PR mapping), §19.1 (git safety + branch allowlist), and §22 (final pass `port/ara → master`). Design phase is complete (see "Status" below); Phase 0.5 execution follows the rhythm specified here.
 
 ## The constraint that drove this
 
-CodeRabbit (free tier) limits AI review to **~200 files per PR**. The current §22 plan is "one mega-PR at Phase 15" which is multi-thousand files — won't get CodeRabbit review.
+Review capacity is limited by PR size. The current §22 plan is "one mega-PR at Phase 15" which is multi-thousand files — won't get effective review.
 
 ## Proposed solution: per-phase PRs with sub-PR splitting
 
@@ -27,8 +27,8 @@ Rhythm:
 3. Completes phase, runs §15 gate
 4. Tags `phase-N-complete` on sub-branch
 5. Opens PR `phase-N → port/ara`
-6. CodeRabbit reviews; AI poll-and-fix loop runs (60 s polling; auto-fix trivial + correctness findings via new commits; reasoned replies for disagreements; out-of-scope items → `design/PORT_TODO.md`). **If CodeRabbit returns rate-limit / no-credits, AI does NOT merge** — posts `Held for CodeRabbit @<user> — rate-limited, refill in <X>`, then either waits for the auto-refill window and retriggers via `@coderabbitai review`, or waits for user direction (e.g., billing fix).
-7. **AI merges** once the §19.1 merge-gate clears (green CI + **actual CodeRabbit review** posted — defined as either (a) a CodeRabbit walkthrough/summary comment outlining the review scope, or (b) an explicit *"No actionable comments were generated"* (or equivalent) summary post-review; rate-limit / "Review limit reached" / "Review skipped" tokens **do not satisfy** this — + no unresolved actionable findings + clean self-review against scope). Use `gh pr merge --squash --delete-branch` to remove the sub-branch from origin in the same step. If any gate condition is ambiguous, AI posts `Held for human review @<user> — <reason>` and waits instead.
+6. Augment reviews; AI poll-and-fix loop runs (AI is subscribed to PR events; auto-fix trivial + correctness findings via new commits; reasoned replies for disagreements; out-of-scope items → `design/PORT_TODO.md`).
+7. **AI merges** once the §19.1 merge-gate clears (green CI + **actual Augment review** posted — defined as either (a) a walkthrough/summary comment outlining the review scope, or (b) an explicit *"No actionable comments were generated"* (or equivalent) summary post-review; + no unresolved actionable findings + clean self-review against scope). Use `gh pr merge --squash --delete-branch` to remove the sub-branch from origin in the same step. If any gate condition is ambiguous, AI posts `Held for human review @<user> — <reason>` and waits instead.
 8. AI pulls updated `port/ara`. **If the just-merged sub-PR was the last in a phase** — determined by consulting the phase sub-PR list in PORT_PLAYBOOK.md §3 plus the per-phase sub-split table in this document (e.g., `phase-0.5a-6` is the last entry under Phase 0.5a's row; `phase-12h` is the last under Phase 12's row) — AI also tags `phase-N-complete` on `port/ara` HEAD and opens a `port/ara → master` promotion PR per PORT_PLAYBOOK.md §22.0 cadence. Then starts the next phase from updated `port/ara` once the promotion PR merges.
 
 Final integration: per §22.0 (revised 2026-05-23), `port/ara → master` is **periodic**, not one-shot — promoted after each phase boundary. The Phase 15 final pass catches whatever tail-end work hasn't been promoted yet. Same §19.1 merge-gate; merge commit (not squash) preserves per-phase history on `master`.
@@ -71,78 +71,9 @@ Final integration: per §22.0 (revised 2026-05-23), `port/ara → master` is **p
 | 0.5o — Rename solution + global identifiers | sln, sln.licenseheader, etc. | ~5-15 |
 | 0.5p — .NET 10 bump + global.json (might absorb Phase 1) | csproj TFM changes | ~10-15 |
 
-### `.coderabbit.yaml` minimal config (DECIDED 2026-05-23)
-
-Committed at repo root. Excludes only truly-generated code + temp files; focuses detailed review on settings files (per Layer 4 of the Settings-registry gate below).
-
-```yaml
-# .coderabbit.yaml
-# Lives at repo root.
-# Policy: review every PR fully (no skip markers).
-# This config narrows what gets reviewed (excludes generated code) and
-# focuses extra attention on settings files.
-
-reviews:
-  profile: chill           # default review depth — adjust if too noisy
-  request_changes_workflow: false   # don't auto-block merges; user decides
-
-  auto_review:
-    enabled: true
-    base_branches:
-      - master
-      - port/ara           # without this, sub-PRs to port/ara are skipped
-                           # (CodeRabbit defaults to default-branch only)
-
-  path_filters:
-    # Exclude generated code (don't review machine output)
-    - "!client/openastroara_client/lib/api/generated/**"
-    - "!**/*.g.dart"
-    - "!**/*.freezed.dart"
-    - "!**/*.mocks.dart"
-    # Exclude temp + backup files (shouldn't be committed anyway)
-    - "!**/*.bak"
-    - "!**/*.tmp"
-    - "!/tmp/**"
-    # Exclude built artifacts
-    - "!**/bin/**"
-    - "!**/obj/**"
-    - "!**/build/**"
-    # Everything else: full review
-
-  path_instructions:
-    # Focused review on settings files per Layer 4 of the registry gate
-    - path: "client/openastroara_client/lib/settings/registry.dart"
-      instructions: |
-        Verify every Setting entry has a meaningful description and at least 3 keywords.
-        Flag any entry where keywords look auto-generated or trivially derived from the id.
-        Flag any entry whose path[] doesn't match an actual Settings panel hierarchy.
-    - path: "client/openastroara_client/lib/screens/settings/**"
-      instructions: |
-        For every new setting widget (toggle, slider, dropdown, text input, color picker),
-        verify a corresponding entry exists in lib/settings/registry.dart with non-empty
-        description + keywords. Flag any widget that adds user-facing state without a
-        registry entry — this should also be caught by check-settings-registry.mjs but
-        catch any miss here.
-    - path: "client/openastroara_client/lib/wizard/**"
-      instructions: |
-        Wizard screens often introduce settings — verify any persisted value is registered.
-```
-
-### CodeRabbit review policy (DECIDED 2026-05-23): every PR gets reviewed
-
-**No skip-review markers.** Every Phase 0.5 sub-PR — mechanical or substantive, deletes or renames or branding — goes through full CodeRabbit review before merge. Rationale: mechanical PRs can hide real issues (wrong files renamed, missed exclusions, broken references after a rename) that only a careful pass catches. Belt-and-suspenders is worth the review-burden cost for a port of this size.
-
-This means:
-- The AI does NOT add `@coderabbitai ignore` to any PR description
-- The AI does NOT add `coderabbit-skip` labels (we don't use that workflow)
-- All 16+ Phase 0.5 sub-PRs + all 8 Phase 12 sub-PRs + every other phase PR get CodeRabbit reviews
-- AI follows the standard CodeRabbit poll-and-fix loop (see "CodeRabbit review loop" section below) on every PR — no fast-path for any PR type
-
-If review burden becomes truly unmanageable on certain PR types in practice, the policy can be revisited mid-port — but the default is **review everything**.
-
 ### Phase 12 (Flutter views) — DECIDED 8-PR split (2026-05-23)
 
-**Status: settled.** 8 sub-PRs (12a–12h). Each stays under CodeRabbit's 200-file free-tier limit. Order: 12a → 12b → 12c–12g (independent feature tabs, any order) → 12h last (consolidates §61 search registry across all settings panels).
+**Status: settled.** 8 sub-PRs (12a–12h). Each stays under review limits. Order: 12a → 12b → 12c–12g (independent feature tabs, any order) → 12h last (consolidates §61 search registry across all settings panels).
 
 | Sub-PR | Scope | Approx file count |
 |---|---|---|
@@ -159,42 +90,33 @@ If review burden becomes truly unmanageable on certain PR types in practice, the
 
 **Sub-PRs that exceed 200 files mid-port:** any sub-PR that turns out larger than estimated gets ad-hoc sub-split before opening (e.g., 12d → 12d.1 editor + 12d.2 template instantiation if it bloats). Decision made at PR-prep time, not pre-planned.
 
-### CodeRabbit review loop (AI-driven, 60-second polling)
+### Augment review policy (DECIDED 2026-05-29): every PR gets reviewed
+
+**No skip-review markers.** Every Phase 0.5 sub-PR — mechanical or substantive, deletes or renames or branding — goes through full Augment review before merge. Rationale: mechanical PRs can hide real issues (wrong files renamed, missed exclusions, broken references after a rename) that only a careful pass catches. Belt-and-suspenders is worth the review-burden cost for a port of this size.
+
+This means:
+- All 16+ Phase 0.5 sub-PRs + all 8 Phase 12 sub-PRs + every other phase PR get Augment reviews
+- AI follows the standard Augment poll-and-fix loop (see "Augment review loop" section below) on every PR — no fast-path for any PR type
+
+### Augment review loop (AI-driven)
 
 **Pre-PR gate (always runs before opening the PR):** AI invokes `scripts/pre-pr-check.sh` per playbook §14.4. Exits non-zero on any failure (build error, test failure, format issue, settings-registry miss, etc.). AI fixes failures + re-runs the script + opens the PR only when green. For PRs touching user-visible Flutter UI, AI also captures screenshots per §14.6 and attaches them to the PR description.
 
 After the AI opens any PR (Phase 0.5 sub-PRs, Phase 12 sub-PRs, or any other phase):
 
-1. **AI opens the PR** (with green pre-PR gate + screenshots if applicable), waits for CodeRabbit's initial review pass (~2–10 minutes depending on PR size + queue depth)
-2. **AI polls every 60 seconds** for new CodeRabbit comments via `gh api repos/<owner>/<repo>/pulls/<pr>/comments` (and the issue-comments endpoint for top-level review summaries)
-3. **AI processes each finding:**
+1. **AI opens the PR** (with green pre-PR gate + screenshots if applicable).
+2. **AI processes each finding:**
    | Finding type | AI action |
    |---|---|
    | Trivial / nit (formatting, naming, minor clarity) | Fix immediately, push commit, post reply: *"Fixed in `<sha>`"* |
    | Real bug or correctness issue | Fix immediately, push commit, post reply: *"Addressed in `<sha>`"* |
-   | Disagreement (CodeRabbit suggests something wrong, contradicts the playbook spec, or is beyond PR scope) | Post reply with reasoning + link to the relevant playbook section; do not change code |
+   | Disagreement (Augment suggests something wrong, contradicts the playbook spec, or is beyond PR scope) | Post reply with reasoning + link to the relevant playbook section; do not change code |
    | Out-of-scope suggestion (broader refactor, future feature) | Append entry to `design/PORT_TODO.md` with PR reference; reply: *"Acknowledged — tracked in design/PORT_TODO.md for follow-up"* |
-4. **CodeRabbit re-reviews after each fix push.** AI handles round-2 findings the same way. If the same issue ping-pongs more than twice, AI defers: posts *"Deferring this to human review — see comments above"* and stops auto-fixing that thread
-5. **Quiescence detection:** when 3 consecutive polls (= 3 minutes idle) return no new comments AND the gate conditions in §19.1 are satisfied, AI merges per step 6 below. If gate conditions are NOT satisfied (rate-limit, unresolved findings, ambiguous scope), AI posts *"Held for human review @<user> — <reason>"* and stops polling
-6. **AI merges** under the §19.1 merge-gate (policy revised 2026-05-23 — see Status section + §19.1 git safety in the playbook). Earlier version of this doc said "User reviews + merges; AI does not merge anything, ever" — that rule was reversed by the user in `prep-ci` PR #2; this step's text is the current authoritative behavior
-7. **After AI merge**, AI pulls the updated integration branch (`port/ara`) and starts the next sub-PR from there
+3. **Augment re-reviews after each fix push.** AI handles round-2 findings the same way.
+4. **AI merges** under the §19.1 merge-gate (policy revised 2026-05-23).
+5. **After AI merge**, AI pulls the updated integration branch (`port/ara`) and starts the next sub-PR from there
 
-**Parallel work:** while waiting for CodeRabbit on an open PR, the AI may start drafting the next sub-PR's work in the same session. Polling for the open PR continues in the background via the harness's natural notification flow — no busy-waiting needed.
-
-**Polling implementation (lessons learned 2026-05-23, PR #9 thread):**
-
-- **Trust `gh pr checks <N>` for the CI gate** — it returns reliable `pass`/`fail`/`pending` for each check.
-- **Do NOT trust the CodeRabbit *check status* alone.** It reports `pass` even when the underlying review was rate-limited or skipped. The authoritative signal is the **comment body** — a real walkthrough or "No actionable comments" summary. Match on `walkthrough_start` HTML comment, `📝 Walkthrough`, or `No actionable comments were generated`. Do NOT match on `findings` / `actionable` / `complete` alone — those words appear in rate-limit messages too.
-- **Wait command:** prefer `Bash run_in_background` with an `until` loop checking concrete state (e.g., `until gh api .../comments --jq '...' | grep -q '<specific-marker>'; do sleep 30; done`), not a `Monitor` event stream. One notification on completion, no babysitting.
-- **Quiescence:** "3 min idle" means "no new commit AND no new bot/user comment since the last review". Use `created_at` timestamps from `gh api .../comments`, not wall-clock since opening the PR.
-- **When in doubt, snapshot the current state with one `gh pr view <N> --json` call and decide.** Don't loop indefinitely without a stop condition.
-
-**Failure modes:**
-- **CodeRabbit doesn't respond within 30 minutes** → AI posts *"CodeRabbit hasn't responded in 30 min; flagging for manual review"* and stops polling; user investigates (rate-limit, queue, etc.)
-- **Push hooks fail during a fix commit** → AI does NOT use `--no-verify`; reports the failure to the user via PR comment + waits for guidance
-- **Repeated CI failure on a fix** → after 2 failed fix attempts on the same finding, AI defers to user
-
-This loop applies to all PRs the AI opens, not just Phase 12 sub-PRs. Phase 0.5 sub-PRs, individual phase PRs, and any follow-up PRs all use the same workflow.
+**Triggering a re-review:** mention `@augment-code review` (or the specific bot handle) in a PR comment.
 
 ## Settings-registry gate (BAKED — applies to port AND community)
 
@@ -255,9 +177,9 @@ Same `check-settings-registry.mjs` runs in CI against the PR diff. A failing che
 
 Manual checkbox is the third layer — CI catches what humans miss; PR template catches what CI misses (e.g., a setting registered with empty keywords would pass CI but fail user discoverability).
 
-**Layer 4 — CodeRabbit review focus**:
+**Layer 4 — Augment review focus**:
 
-`.coderabbit.yaml` includes a path-based instruction: any PR that touches `lib/screens/settings/**` OR `lib/wizard/**` OR profile-schema files MUST have CodeRabbit review the registry diff. CodeRabbit instructed to flag settings without meaningful descriptions / keywords (not just structurally-present entries).
+Augment is instructed to flag settings without meaningful descriptions / keywords (not just structurally-present entries).
 
 ### Detection script behavior (`check-settings-registry.mjs`)
 
@@ -324,7 +246,7 @@ Phase 12 sub-PR 12h (Settings) is the natural home for the registry's initial bu
 
 **Status: settled rule. Applies immediately starting Phase 12 alongside the settings-registry gate.**
 
-The help registry (`client/openastroara_client/lib/help/registry.dart`, specced in `PORT_PLAYBOOK.md` §69) follows the **same enforcement model** as the settings registry: pre-commit hook + CI check + PR template checkbox + CodeRabbit path instructions. Mechanism is fully described in §69.4; this section just affirms it applies to community contributions identically to maintainer commits, with no opt-out.
+The help registry (`client/openastroara_client/lib/help/registry.dart`, specced in `PORT_PLAYBOOK.md` §69) follows the **same enforcement model** as the settings registry: pre-commit hook + CI check + PR template checkbox + Augment instructions. Mechanism is fully described in §69.4; this section just affirms it applies to community contributions identically to maintainer commits, with no opt-out.
 
 Detection script: `scripts/check-help-registry.mjs --staged` (parallel to `check-settings-registry.mjs`). Same activation timing (Phase 12 onward), same blocking behavior on fail, same per-PR template checkboxes.
 
@@ -343,14 +265,13 @@ There is intentionally no opt-out mechanism. The gate exists because reviewer vi
 
 ## Things still to decide
 
-- [x] ~~Confirm per-phase PR rhythm OR alternative~~ → **Decided 2026-05-23**: per-phase + sub-PR splitting, free CodeRabbit tier, no paid escalation
+- [x] ~~Confirm per-phase PR rhythm OR alternative~~ → **Decided 2026-05-23**: per-phase + sub-PR splitting
 - [x] ~~Confirm sub-PR letter scheme (a/b/c/...) and branch naming~~ → **Decided 2026-05-23**: letter scheme `a-h`. Branch naming originally specified as `port/ara/phase-N/<letter>`; revised in prep-ci PR to flat names (`phase-Na`, e.g., `phase-12e`) after discovering Git refs forbid `port/ara/...` while `port/ara` itself is a branch.
-- [x] ~~Confirm skip-review marker syntax~~ → **Decided 2026-05-23**: **no skip-review markers; every PR gets reviewed**. Belt-and-suspenders catches subtle issues that mechanical PRs can hide. See "CodeRabbit review policy" section above.
-- [x] ~~Decide on `.coderabbit.yaml` config~~ → **Decided 2026-05-23**: minimal exclusions only. Exclude truly-generated code (`client/openastroara_client/lib/api/generated/**`, `**/*.g.dart`) + temp/backup files (`*.bak`, `*.tmp`). Enable detailed-review focus on settings files (`lib/settings/registry.dart`, `lib/screens/settings/**`, profile-schema files) per Layer 4 of the Settings-registry gate above. Nothing else excluded — every other path goes through full review per the policy above.
+- [x] ~~Confirm skip-review marker syntax~~ → **Decided 2026-05-23**: **no skip-review markers; every PR gets reviewed**. Belt-and-suspenders catches subtle issues that mechanical PRs can hide. See "Augment review policy" section above.
 - [x] ~~Decide on `develop` branch~~ → **Decided 2026-05-23**: **no**. The integration branch `port/ara` already plays that role; adding `develop` adds a merge step without benefit for a single-developer port. Final phase-15 PR goes `port/ara → master` directly.
 - [x] ~~Should AI auto-continue to next phase after PR merge~~ → **Decided 2026-05-23**: AI pulls updated `port/ara` after user merges, then auto-starts the next sub-PR (no human nudge needed between sub-PRs within the same phase). Between phases (e.g., after Phase 12 fully merges and Phase 13 begins), AI auto-starts unless user has paused
-- [x] ~~What happens if CodeRabbit flags a real issue mid-port~~ → **Decided 2026-05-23**: AI fixes via additional commits on the same sub-branch (not a follow-up PR; not an amend that destroys history). See "CodeRabbit review loop" section above for the full pattern
-- [x] ~~Push cadence — push after every commit vs batched~~ → **Decided 2026-05-23**: push after every commit (visibility for user + enables CodeRabbit incremental review)
+- [x] ~~What happens if Augment flags a real issue mid-port~~ → **Decided 2026-05-23**: AI fixes via additional commits on the same sub-branch (not a follow-up PR; not an amend that destroys history). See "Augment review loop" section above for the full pattern
+- [x] ~~Push cadence — push after every commit vs batched~~ → **Decided 2026-05-23**: push after every commit (visibility for user + enables Augment incremental review)
 
 ## Once decided, baking targets
 
@@ -369,18 +290,17 @@ When we finalize, these playbook sections need edits:
 - Phase 12 split shape confirmed (8 sub-PRs, 12a–12h, augmented mapping with all session decisions integrated; see table above)
 - Sub-PR letter scheme + branch naming confirmed (originally `port/ara/phase-N/<letter>`; revised in `prep-ci` PR to flat `phase-N<letter>` due to a Git ref constraint — see per-phase rhythm section)
 - AI auto-continues to next sub-PR after user merge (no nudge between sub-PRs)
-- CodeRabbit poll-and-fix workflow specced (60 s polling, AI handles trivial + correctness findings, user handles merge)
+- Augment poll-and-fix workflow specced (AI handles trivial + correctness findings, user handles merge)
 - Push cadence: after every commit
 
 **Decisions made 2026-05-23 (continued):**
-- **No skip-review markers** — every PR gets full CodeRabbit review, including mechanical Phase 0.5 deletes/renames (belt-and-suspenders for subtle issues)
-- `.coderabbit.yaml` minimal config (excludes generated code + temp files only; detailed-review focus on settings files)
+- **No skip-review markers** — every PR gets full Augment review, including mechanical Phase 0.5 deletes/renames (belt-and-suspenders for subtle issues)
 - **No `develop` branch** — sub-PRs land on `port/ara` directly; Phase 15 final PR `port/ara → master`
 
 **Baked into `PORT_PLAYBOOK.md` (2026-05-23):**
-- ✅ §0 rule 9 — "Tag every phase boundary; open the PR; merge it; continue." References this doc for the full rhythm + CodeRabbit loop. **Policy revised 2026-05-23** (later same day, in `prep-ci` PR #2): AI merges sub-PR + final PRs under the §19.1 merge-gate; auto-continues to next sub-PR after merge. Original 2026-05-23 decision was "AI never merges, ever"; reversed when the user granted full merge authority.
+- ✅ §0 rule 9 — "Tag every phase boundary; open the PR; merge it; continue." References this doc for the full rhythm + Augment loop. **Policy revised 2026-05-23** (later same day, in `prep-ci` PR #2): AI merges sub-PR + final PRs under the §19.1 merge-gate; auto-continues to next sub-PR after merge. Original 2026-05-23 decision was "AI never merges, ever"; reversed when the user granted full merge authority.
 - ✅ §3 phase plan — Phase 0.5 sub-PR rhythm references the 16-sub-PR mapping (0.5a–0.5p); Phase 12 references the 8-sub-PR mapping (12a–12h); cross-cutting sub-PR rhythm paragraph added after the phase list.
-- ✅ §19.1 git safety — branch allowlist now permits `port/ara` (integration) + flat-named `phase-N[<letter>]` sub-PR feature branches (e.g., `phase-0.5a`, `phase-12h`) plus a small set of named prep branches (e.g., `prep-ci`). **Merge policy revised 2026-05-23** in `prep-ci` PR #2: original "AI never merges, ever" rule replaced with "AI merges under a strict merge-gate" (green CI + CodeRabbit quiescent ≥3 min + no unresolved findings + clean self-review). User retains override. Tag scheme extended to `phase-N-<letter>-complete` for sub-PRs.
+- ✅ §19.1 git safety — branch allowlist now permits `port/ara` (integration) + flat-named `phase-N[<letter>]` sub-PR feature branches (e.g., `phase-0.5a`, `phase-12h`) plus a small set of named prep branches (e.g., `prep-ci`). **Merge policy revised 2026-05-23** in `prep-ci` PR #2: original "AI never merges, ever" rule replaced with "AI merges under a strict merge-gate" (green CI + Augment quiescent ≥3 min + no unresolved findings + clean self-review). User retains override. Tag scheme extended to `phase-N-<letter>-complete` for sub-PRs.
 - ✅ §22 final pass — final PR confirmed `port/ara → master` (no `develop` branch); release notes step updated to use `CHANGELOG.md` per §33.7 + Keep-a-Changelog format + fresh `[Unreleased]` placeholder; mobile-deferred-to-v0.1.0 noted in CHANGELOG sections.
 
 The design phase is now fully complete. Phase 0.5 execution can begin per the rhythm above.
@@ -389,13 +309,13 @@ The design phase is now fully complete. Phase 0.5 execution can begin per the rh
 
 ## Future scope — extend to community contributor workflow + Claude Code skills
 
-Beyond the AI-driven port, this document needs a v2 pass covering **post-v0.0.1 community contributions** — when external users start adding features, fixing bugs, and shipping improvements. The same CodeRabbit-aware PR-splitting discipline should apply.
+Beyond the AI-driven port, this document needs a v2 pass covering **post-v0.0.1 community contributions** — when external users start adding features, fixing bugs, and shipping improvements. The same review-aware PR-splitting discipline should apply.
 
 Open items for that v2 pass:
 
-- [ ] **Community contributor PR template** — `.github/PULL_REQUEST_TEMPLATE.md` enforcing: linked issue, scope statement, CodeRabbit-fittable size, settings-registry-updated checkbox (per §61.4), tests-added checkbox, screenshot/video for UI changes
+- [ ] **Community contributor PR template** — `.github/PULL_REQUEST_TEMPLATE.md` enforcing: linked issue, scope statement, size, settings-registry-updated checkbox (per §61.4), tests-added checkbox, screenshot/video for UI changes
 - [ ] **Branch naming convention for community PRs** — `feature/<short-name>`, `fix/<short-name>`, `chore/<short-name>`. Distinct from the port's flat `phase-N<letter>` pattern to keep histories clean.
-- [ ] **Auto-split heuristics** — if a community PR exceeds CodeRabbit's 200-file limit, what guidance do we give? "Split before submitting" via labelled `needs-split` workflow, or accept and use paid tier?
+- [ ] **Auto-split heuristics** — if a community PR exceeds capacity, what guidance do we give? "Split before submitting" via labelled `needs-split` workflow?
 - [ ] **Claude Code skill recommendations** for community contributors — the available Claude Code skills (`code-review`, `security-review`, `fewer-permission-prompts`, `verify`, `update-config`, `init`, etc.) should be documented in `CONTRIBUTING.md` as recommended workflow:
   - Before opening a PR, run `/security-review` on the diff
   - For PRs touching UI, use `/verify` to confirm the change works in the actual app
