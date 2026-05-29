@@ -357,7 +357,7 @@ const Map<String, Help> helpRegistry = {
     key: 'img.autofocus.step_size',
     title: 'AF step size',
     body: 'Distance between sample positions, in focuser native steps. Should span **3-5x the critical focus zone (CFZ)** total range — too small and the V-curve doesn\'t have enough vertical range to fit; too large and you sample outside the regime where the curve is parabolic.\n\n'
-        'CFZ ≈ 4.88 × λ × N² where λ is wavelength (~550nm green) and N is the f-ratio. f/4 → CFZ ~17µm; f/8 → CFZ ~69µm. Convert µm to focuser steps via your focuser\'s steps-per-µm.\n\n'
+        'CFZ ≈ 2 × λ × N² where λ is wavelength (~0.55µm for green) and N is the f-ratio. f/4 → CFZ ~17µm; f/8 → CFZ ~70µm. Convert µm to focuser steps via your focuser\'s steps-per-µm.\n\n'
         'When in doubt: start with the default (50), run a focus, look at the V-curve. Flat curve → increase step size; sharp narrow V → decrease.',
     relatedSettings: ['img.autofocus.steps'],
   ),
