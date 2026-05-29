@@ -7,6 +7,7 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 - **Phase:** Phase 12h.3-search (Smart Settings Search) — starting
 - **Last merged:** `phase-12h2-dropdown` — PR #105, 2026-05-29 (consolidate `_DropdownRow` + `_NumberRow` into shared widgets, −126 LoC).
 - **Currently working on:** `phase-12h3-search` branch — §61 smart settings search (⌘K) cross-cutting all settings panels.
+- **In flight (12h.2 followup):** `phase-12h2-equipment-connect` (PR #106) — `EquipmentConnectionSettings` notifier wiring auto-connect-on-boot across all 10 equipment panels. 3 new tests, total 141.
 
 ## Completed
 
