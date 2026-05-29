@@ -13,7 +13,8 @@ class EquipmentGuiderPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final connection = ref.watch(equipmentConnectionProvider);
+    final autoConnect = ref.watch(equipmentConnectionProvider
+        .select((s) => s.autoConnect(EquipmentDeviceType.guider)));
     final n = ref.read(equipmentConnectionProvider.notifier);
 
     return ListView(
@@ -29,7 +30,7 @@ class EquipmentGuiderPanel extends ConsumerWidget {
         ),
         SettingsSwitchRow(
           label: 'Auto-connect on boot',
-          value: connection.autoConnect(EquipmentDeviceType.guider),
+          value: autoConnect,
           onChanged: (v) => n.setAutoConnect(EquipmentDeviceType.guider, v),
           hint: 'Off by default — guider connect starts PHD2 client',
         ),

@@ -12,7 +12,8 @@ class EquipmentFilterWheelPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final connection = ref.watch(equipmentConnectionProvider);
+    final autoConnect = ref.watch(equipmentConnectionProvider
+        .select((s) => s.autoConnect(EquipmentDeviceType.filterWheel)));
     final n = ref.read(equipmentConnectionProvider.notifier);
 
     return ListView(
@@ -22,7 +23,7 @@ class EquipmentFilterWheelPanel extends ConsumerWidget {
         const SettingsRow(label: 'Alpaca device', value: 'Not selected'),
         SettingsSwitchRow(
           label: 'Auto-connect on boot',
-          value: connection.autoConnect(EquipmentDeviceType.filterWheel),
+          value: autoConnect,
           onChanged: (v) =>
               n.setAutoConnect(EquipmentDeviceType.filterWheel, v),
         ),

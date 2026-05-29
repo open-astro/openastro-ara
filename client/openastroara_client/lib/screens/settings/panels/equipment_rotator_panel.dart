@@ -11,7 +11,8 @@ class EquipmentRotatorPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final connection = ref.watch(equipmentConnectionProvider);
+    final autoConnect = ref.watch(equipmentConnectionProvider
+        .select((s) => s.autoConnect(EquipmentDeviceType.rotator)));
     final n = ref.read(equipmentConnectionProvider.notifier);
 
     return ListView(
@@ -22,7 +23,7 @@ class EquipmentRotatorPanel extends ConsumerWidget {
             label: 'Alpaca device', value: 'Not selected (optional)'),
         SettingsSwitchRow(
           label: 'Auto-connect on boot',
-          value: connection.autoConnect(EquipmentDeviceType.rotator),
+          value: autoConnect,
           onChanged: (v) => n.setAutoConnect(EquipmentDeviceType.rotator, v),
         ),
         const SettingsSectionHeader('Orientation'),

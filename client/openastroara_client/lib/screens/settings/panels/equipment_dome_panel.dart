@@ -12,7 +12,8 @@ class EquipmentDomePanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final connection = ref.watch(equipmentConnectionProvider);
+    final autoConnect = ref.watch(equipmentConnectionProvider
+        .select((s) => s.autoConnect(EquipmentDeviceType.dome)));
     final n = ref.read(equipmentConnectionProvider.notifier);
 
     return ListView(
@@ -23,7 +24,7 @@ class EquipmentDomePanel extends ConsumerWidget {
             label: 'Alpaca device', value: 'Not selected (optional)'),
         SettingsSwitchRow(
           label: 'Auto-connect on boot',
-          value: connection.autoConnect(EquipmentDeviceType.dome),
+          value: autoConnect,
           onChanged: (v) => n.setAutoConnect(EquipmentDeviceType.dome, v),
           hint: 'Off by default — dome connect actuates shutter',
         ),

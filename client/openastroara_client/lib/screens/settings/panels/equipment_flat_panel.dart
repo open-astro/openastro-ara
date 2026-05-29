@@ -12,7 +12,8 @@ class EquipmentFlatPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final connection = ref.watch(equipmentConnectionProvider);
+    final autoConnect = ref.watch(equipmentConnectionProvider
+        .select((s) => s.autoConnect(EquipmentDeviceType.flatPanel)));
     final n = ref.read(equipmentConnectionProvider.notifier);
 
     return ListView(
@@ -26,7 +27,7 @@ class EquipmentFlatPanel extends ConsumerWidget {
         ),
         SettingsSwitchRow(
           label: 'Auto-connect on boot',
-          value: connection.autoConnect(EquipmentDeviceType.flatPanel),
+          value: autoConnect,
           onChanged: (v) =>
               n.setAutoConnect(EquipmentDeviceType.flatPanel, v),
         ),

@@ -13,7 +13,8 @@ class EquipmentFocuserPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final connection = ref.watch(equipmentConnectionProvider);
+    final autoConnect = ref.watch(equipmentConnectionProvider
+        .select((s) => s.autoConnect(EquipmentDeviceType.focuser)));
     final n = ref.read(equipmentConnectionProvider.notifier);
 
     return ListView(
@@ -23,7 +24,7 @@ class EquipmentFocuserPanel extends ConsumerWidget {
         const SettingsRow(label: 'Alpaca device', value: 'Not selected'),
         SettingsSwitchRow(
           label: 'Auto-connect on boot',
-          value: connection.autoConnect(EquipmentDeviceType.focuser),
+          value: autoConnect,
           onChanged: (v) => n.setAutoConnect(EquipmentDeviceType.focuser, v),
         ),
         const SettingsSectionHeader('Movement'),

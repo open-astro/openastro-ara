@@ -45,7 +45,7 @@ class EquipmentConnectionSettings {
   EquipmentConnectionSettings copyWithAutoConnect(
       EquipmentDeviceType t, bool v) {
     return EquipmentConnectionSettings(
-      autoConnectOnBoot: {...autoConnectOnBoot, t: v},
+      autoConnectOnBoot: Map.unmodifiable({...autoConnectOnBoot, t: v}),
     );
   }
 }

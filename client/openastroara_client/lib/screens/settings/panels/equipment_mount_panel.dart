@@ -12,7 +12,8 @@ class EquipmentMountPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final connection = ref.watch(equipmentConnectionProvider);
+    final autoConnect = ref.watch(equipmentConnectionProvider
+        .select((s) => s.autoConnect(EquipmentDeviceType.mount)));
     final n = ref.read(equipmentConnectionProvider.notifier);
 
     return ListView(
@@ -22,7 +23,7 @@ class EquipmentMountPanel extends ConsumerWidget {
         const SettingsRow(label: 'Alpaca device', value: 'Not selected'),
         SettingsSwitchRow(
           label: 'Auto-connect on boot',
-          value: connection.autoConnect(EquipmentDeviceType.mount),
+          value: autoConnect,
           onChanged: (v) => n.setAutoConnect(EquipmentDeviceType.mount, v),
         ),
         const SettingsSectionHeader('Slew + tracking'),
