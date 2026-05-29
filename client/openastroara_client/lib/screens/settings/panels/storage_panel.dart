@@ -42,6 +42,7 @@ class StoragePanel extends ConsumerWidget {
         const SizedBox(height: 16),
         EditableTextRow(
           label: 'Save directory',
+          helpKey: 'session.storage.save_directory',
           currentValue: s.saveDirectory,
           getCanonical: () => ref.read(storageSettingsProvider).saveDirectory,
           parse: n.setSaveDirectory,

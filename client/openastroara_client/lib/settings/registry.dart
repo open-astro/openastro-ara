@@ -246,7 +246,11 @@ const List<Setting> settingsRegistry = [
     keywords: ['filename', 'template', 'naming', 'tokens', 'pattern', 'date', 'filter'],
     path: ['Settings', 'Session', 'Storage'],
     type: SettingType.string(),
-    defaultValue: r'\$\$DATEMINUS12\$\$\\\$\$IMAGETYPE\$\$\\\$\$DATETIME\$\$_\$\$FILTER\$\$_\$\$EXPOSURETIME\$\$s',
+    // Raw string matches `StorageSettings.filenameTemplate` default verbatim.
+    // The doubled-backslash + doubled-dollar syntax is the template engine's
+    // own convention (`\\` as path separator, `$$TOKEN$$` for substitution);
+    // the `r''` prefix means Dart doesn't process either as escapes.
+    defaultValue: r'$$DATEMINUS12$$\\$$IMAGETYPE$$\\$$DATETIME$$_$$FILTER$$_$$EXPOSURETIME$$s',
     profilePath: 'storage.filename_template',
   ),
 ];

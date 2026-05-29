@@ -104,7 +104,16 @@ const Map<String, Help> helpRegistry = {
   ),
 
   // §29 Storage — help on the non-obvious controls (format, compression,
-  // filename template). `save_directory` is self-explanatory.
+  // filename template, plus a brief save-directory note because the default
+  // `/media/openastroara` mount point isn't obvious to novices).
+  'session.storage.save_directory': Help(
+    key: 'session.storage.save_directory',
+    title: 'Save directory',
+    body: 'Base path where captured frames are written. Must be a mounted writable directory. '
+        'Default `/media/openastroara` assumes the §29.1.3 ext4 wizard set up a USB drive there. '
+        'Capturing to the SD card is fine for testing but will wear the card out over a single all-night session — use external storage for real sessions.',
+    relatedSettings: ['session.storage.save_directory'],
+  ),
   'session.storage.file_format': Help(
     key: 'session.storage.file_format',
     title: 'File format',
