@@ -108,6 +108,7 @@ Folded into Phase 0.5p (global.json + csproj target framework bumps).
   - 12h.2-trim: Whitespace-tolerant string setters (PR #103)
   - 12h.2-switch: Shared `SettingsSwitchRow` (PR #104)
   - 12h.2-dropdown: Shared `SettingsDropdownRow` (PR #105, merged 2026-05-29)
+  - 12h.2-equipment-connect: Per-device-type auto-connect on boot (PR #106, merged 2026-05-29)
 - **12h.3-search** — §61 smart settings search (⌘K) + Help Registry infrastructure.
 
 ### Phase 0.5p-followup buildfix — Core + Astrometry + Equipment cleanup (PR #43)
