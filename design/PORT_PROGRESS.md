@@ -4,9 +4,9 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** Phase 12h.3-search (Smart Settings Search) — starting
+- **Phase:** Phase 12h.3-search (Smart Settings Search) — fixing CI
 - **Last merged:** `phase-12h2-equipment-connect` — PR #106, 2026-05-29 (auto-connect per device type).
-- **Currently working on:** `phase-12h3-search` branch — §61 smart settings search (⌘K) cross-cutting all settings panels.
+- **Currently working on:** `phase-12h3-search` branch — §61 smart settings search (⌘K) cross-cutting all settings panels. Resolving Flutter 3.44.0 analyzer errors.
 
 ## Completed
 
