@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../state/settings/autofocus_settings_state.dart';
-import '../../../theme/ara_colors.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
 
@@ -19,43 +18,22 @@ class ImagingAutofocusPanel extends ConsumerWidget {
       padding: const EdgeInsets.all(24),
       children: [
         const SettingsSectionHeader('Algorithm'),
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Row(children: [
-            SizedBox(
-              width: 280,
-              child: Text('Method',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AraColors.textSecondary,
-                      )),
-            ),
-            Expanded(
-              child: DropdownButtonFormField<AutofocusMethod>(
-                initialValue: s.method,
-                isDense: true,
-                items: const [
-                  DropdownMenuItem(
-                    value: AutofocusMethod.hfrVCurve,
-                    child: Text('HFR (V-curve)'),
-                  ),
-                  DropdownMenuItem(
-                    value: AutofocusMethod.brightestStarHfr,
-                    child: Text('Brightest-star HFR'),
-                  ),
-                  DropdownMenuItem(
-                    value: AutofocusMethod.fwhm,
-                    child: Text('FWHM (Gaussian fit)'),
-                  ),
-                ],
-                onChanged: (v) {
-                  if (v != null) n.setMethod(v);
-                },
-              ),
-            ),
-          ]),
+        SettingsDropdownRow<AutofocusMethod>(
+          label: 'Method',
+          helpKey: 'img.autofocus.method',
+          value: s.method,
+          items: const {
+            AutofocusMethod.hfrVCurve: 'HFR (V-curve)',
+            AutofocusMethod.brightestStarHfr: 'Brightest-star HFR',
+            AutofocusMethod.fwhm: 'FWHM (Gaussian fit)',
+          },
+          onChanged: (v) {
+            if (v != null) n.setMethod(v);
+          },
         ),
         EditableNumberRow(
           label: 'Number of steps (3..31)',
+          helpKey: 'img.autofocus.steps',
           currentValue: s.steps.toString(),
           getCanonical: () =>
               ref.read(autofocusSettingsProvider).steps.toString(),
@@ -66,6 +44,7 @@ class ImagingAutofocusPanel extends ConsumerWidget {
         ),
         EditableNumberRow(
           label: 'Step size (focuser steps)',
+          helpKey: 'img.autofocus.step_size',
           currentValue: s.stepSize.toString(),
           getCanonical: () =>
               ref.read(autofocusSettingsProvider).stepSize.toString(),
@@ -110,6 +89,7 @@ class ImagingAutofocusPanel extends ConsumerWidget {
         ),
         EditableNumberRow(
           label: 'After temp delta (°C)',
+          helpKey: 'img.autofocus.trigger_temp_delta_c',
           currentValue: s.triggerTempDeltaC.toString(),
           getCanonical: () => ref
               .read(autofocusSettingsProvider)
@@ -122,6 +102,7 @@ class ImagingAutofocusPanel extends ConsumerWidget {
         ),
         EditableNumberRow(
           label: 'On HFR drift threshold (%)',
+          helpKey: 'img.autofocus.trigger_hfr_drift_pct',
           currentValue: s.triggerHfrDriftPct.toString(),
           getCanonical: () => ref
               .read(autofocusSettingsProvider)
@@ -134,6 +115,7 @@ class ImagingAutofocusPanel extends ConsumerWidget {
         ),
         EditableNumberRow(
           label: 'Every N hours (0 = off)',
+          helpKey: 'img.autofocus.every_n_hours',
           currentValue: s.everyNHours.toString(),
           getCanonical: () =>
               ref.read(autofocusSettingsProvider).everyNHours.toString(),
