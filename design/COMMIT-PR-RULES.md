@@ -1,6 +1,6 @@
 # COMMIT-PR-RULES.md
 
-Authoritative reference for the per-phase + sub-PR rhythm, branch naming, Augment poll-and-fix loop, and pre-PR gate used by the AI during the port. Read together with `design/PORT_PLAYBOOK.md` — which links here from §0 rule 9 (phase-boundary PR rhythm), §3 (phase plan + sub-PR mapping), §19.1 (git safety + branch allowlist), and §22 (final pass `port/ara → master`). Design phase is complete (see "Status" below); Phase 0.5 execution follows the rhythm specified here.
+Authoritative reference for the per-phase + sub-PR rhythm, branch naming, code-review loop, and pre-PR gate used by the AI during the port. Read together with `design/PORT_PLAYBOOK.md` — which links here from §0 rule 9 (phase-boundary PR rhythm), §3 (phase plan + sub-PR mapping), §19.1 (git safety + branch allowlist), and §22 (final pass `port/ara → master`). Design phase is complete (see "Status" below); Phase 0.5 execution follows the rhythm specified here.
 
 ## The constraint that drove this
 
@@ -27,8 +27,8 @@ Rhythm:
 3. Completes phase, runs §15 gate
 4. Tags `phase-N-complete` on sub-branch
 5. Opens PR `phase-N → port/ara`
-6. Augment reviews; AI poll-and-fix loop runs (AI is subscribed to PR events; auto-fix trivial + correctness findings via new commits; reasoned replies for disagreements; out-of-scope items → `design/PORT_TODO.md`).
-7. **AI merges** once the §19.1 merge-gate clears (green CI + **actual Augment review** posted — defined as either (a) a walkthrough/summary comment outlining the review scope, or (b) an explicit *"No actionable comments were generated"* (or equivalent) summary post-review; + no unresolved actionable findings + clean self-review against scope). Use `gh pr merge --squash --delete-branch` to remove the sub-branch from origin in the same step. If any gate condition is ambiguous, AI posts `Held for human review @<user> — <reason>` and waits instead.
+6. Sonnet (running on the user's behalf) reviews; AI poll-and-fix loop runs (AI watches for the review comment; auto-fix trivial + correctness findings via new commits; reasoned replies for disagreements; out-of-scope items → `design/PORT_TODO.md`). If Sonnet hasn't reviewed within ~15 min, AI falls back to the built-in `/review` self-review as the gate signal (carried over from the CR-era fallback policy).
+7. **AI merges** once the §19.1 merge-gate clears (green CI + **review pass posted** — either a structured Sonnet review with no unaddressed findings, or a clean `/review` fallback; + ≥3 min quiescence + clean self-review against scope). Use `gh pr merge --squash --delete-branch` to remove the sub-branch from origin in the same step. If any gate condition is ambiguous, AI posts `Held for human review @<user> — <reason>` and waits instead.
 8. AI pulls updated `port/ara`. **If the just-merged sub-PR was the last in a phase** — determined by consulting the phase sub-PR list in PORT_PLAYBOOK.md §3 plus the per-phase sub-split table in this document (e.g., `phase-0.5a-6` is the last entry under Phase 0.5a's row; `phase-12h` is the last under Phase 12's row) — AI also tags `phase-N-complete` on `port/ara` HEAD and opens a `port/ara → master` promotion PR per PORT_PLAYBOOK.md §22.0 cadence. Then starts the next phase from updated `port/ara` once the promotion PR merges.
 
 Final integration: per §22.0 (revised 2026-05-23), `port/ara → master` is **periodic**, not one-shot — promoted after each phase boundary. The Phase 15 final pass catches whatever tail-end work hasn't been promoted yet. Same §19.1 merge-gate; merge commit (not squash) preserves per-phase history on `master`.
@@ -90,15 +90,24 @@ Final integration: per §22.0 (revised 2026-05-23), `port/ara → master` is **p
 
 **Sub-PRs that exceed 200 files mid-port:** any sub-PR that turns out larger than estimated gets ad-hoc sub-split before opening (e.g., 12d → 12d.1 editor + 12d.2 template instantiation if it bloats). Decision made at PR-prep time, not pre-planned.
 
-### Augment review policy (DECIDED 2026-05-29): every PR gets reviewed
+### Code review policy (DECIDED 2026-05-29, reviewer revised same day): every PR gets reviewed
 
-**No skip-review markers.** Every Phase 0.5 sub-PR — mechanical or substantive, deletes or renames or branding — goes through full Augment review before merge. Rationale: mechanical PRs can hide real issues (wrong files renamed, missed exclusions, broken references after a rename) that only a careful pass catches. Belt-and-suspenders is worth the review-burden cost for a port of this size.
+**No skip-review markers.** Every Phase 0.5 sub-PR — mechanical or substantive, deletes or renames or branding — goes through full code review before merge. Rationale: mechanical PRs can hide real issues (wrong files renamed, missed exclusions, broken references after a rename) that only a careful pass catches. Belt-and-suspenders is worth the review-burden cost for a port of this size.
+
+**Reviewer history** (intentionally short, intentionally documented because this is the kind of thing that's confusing to onlookers reading old PRs):
+
+| Period | Reviewer | Outcome |
+|---|---|---|
+| 2026-05-23 → 2026-05-28 | CodeRabbit (`coderabbitai[bot]`) | Free-tier rate-limit (1 review/hr/org) incompatible with cadence; dropped. |
+| 2026-05-29 (briefly) | Augment Code (`augmentcode[bot]` / `app/augmentcode`) | Worked for 2 PRs (#105, #106) then exhausted its internal Gemini quota mid-session. Also authored one autonomous PR (#107) that overclaimed scope. Dropped. |
+| 2026-05-29 (briefly) | Gemini via `google-github-actions/run-gemini-cli` | Hit `gemini-3-flash` free-tier daily cap (20 req/day) on the very PR introducing it. Workflow file removed before merging. |
+| 2026-05-29 → present | **Sonnet (Anthropic Claude, running on user's account)** | Posts structured reviews as `joeytroy` user comments. No separate quota meter. Caught real bugs on PR #108 that self-review missed. **Current.** |
 
 This means:
-- All 16+ Phase 0.5 sub-PRs + all 8 Phase 12 sub-PRs + every other phase PR get Augment reviews
-- AI follows the standard Augment poll-and-fix loop (see "Augment review loop" section below) on every PR — no fast-path for any PR type
+- All 16+ Phase 0.5 sub-PRs + all 8 Phase 12 sub-PRs + every other phase PR get full review
+- AI follows the standard poll-and-fix loop (see "Review loop" section below) on every PR — no fast-path for any PR type
 
-### Augment review loop (AI-driven)
+### Review loop (AI-driven)
 
 **Pre-PR gate (always runs before opening the PR):** AI invokes `scripts/pre-pr-check.sh` per playbook §14.4. Exits non-zero on any failure (build error, test failure, format issue, settings-registry miss, etc.). AI fixes failures + re-runs the script + opens the PR only when green. For PRs touching user-visible Flutter UI, AI also captures screenshots per §14.6 and attaches them to the PR description.
 
@@ -110,13 +119,13 @@ After the AI opens any PR (Phase 0.5 sub-PRs, Phase 12 sub-PRs, or any other pha
    |---|---|
    | Trivial / nit (formatting, naming, minor clarity) | Fix immediately, push commit, post reply: *"Fixed in `<sha>`"* |
    | Real bug or correctness issue | Fix immediately, push commit, post reply: *"Addressed in `<sha>`"* |
-   | Disagreement (Augment suggests something wrong, contradicts the playbook spec, or is beyond PR scope) | Post reply with reasoning + link to the relevant playbook section; do not change code |
+   | Disagreement (reviewer suggests something wrong, contradicts the playbook spec, or is beyond PR scope) | Post reply with reasoning + link to the relevant playbook section; do not change code |
    | Out-of-scope suggestion (broader refactor, future feature) | Append entry to `design/PORT_TODO.md` with PR reference; reply: *"Acknowledged — tracked in design/PORT_TODO.md for follow-up"* |
-3. **Augment re-reviews after each fix push.** AI handles round-2 findings the same way.
+3. **Sonnet re-reviews after each fix push** if the user invokes it again; otherwise AI handles round-2 findings via the same poll-and-fix loop.
 4. **AI merges** under the §19.1 merge-gate (policy revised 2026-05-23).
 5. **After AI merge**, AI pulls the updated integration branch (`port/ara`) and starts the next sub-PR from there
 
-**Triggering a re-review:** mention `@augment-code review` (or the specific bot handle) in a PR comment.
+**Triggering a re-review:** Sonnet runs on the user's invocation (out-of-band of GitHub comments). AI does not @-mention any bot — if Sonnet's review is needed and hasn't appeared, AI either waits or falls back to `/review` per the 2026-05-26 fallback policy.
 
 ## Settings-registry gate (BAKED — applies to port AND community)
 
@@ -177,9 +186,9 @@ Same `check-settings-registry.mjs` runs in CI against the PR diff. A failing che
 
 Manual checkbox is the third layer — CI catches what humans miss; PR template catches what CI misses (e.g., a setting registered with empty keywords would pass CI but fail user discoverability).
 
-**Layer 4 — Augment review focus**:
+**Layer 4 — Reviewer focus**:
 
-Augment is instructed to flag settings without meaningful descriptions / keywords (not just structurally-present entries).
+Sonnet is instructed (via the user's prompt) to flag settings without meaningful descriptions / keywords (not just structurally-present entries), in addition to the standard correctness/style review.
 
 ### Detection script behavior (`check-settings-registry.mjs`)
 
@@ -246,7 +255,7 @@ Phase 12 sub-PR 12h (Settings) is the natural home for the registry's initial bu
 
 **Status: settled rule. Applies immediately starting Phase 12 alongside the settings-registry gate.**
 
-The help registry (`client/openastroara_client/lib/help/registry.dart`, specced in `PORT_PLAYBOOK.md` §69) follows the **same enforcement model** as the settings registry: pre-commit hook + CI check + PR template checkbox + Augment instructions. Mechanism is fully described in §69.4; this section just affirms it applies to community contributions identically to maintainer commits, with no opt-out.
+The help registry (`client/openastroara_client/lib/help/registry.dart`, specced in `PORT_PLAYBOOK.md` §69) follows the **same enforcement model** as the settings registry: pre-commit hook + CI check + PR template checkbox + reviewer instructions. Mechanism is fully described in §69.4; this section just affirms it applies to community contributions identically to maintainer commits, with no opt-out.
 
 Detection script: `scripts/check-help-registry.mjs --staged` (parallel to `check-settings-registry.mjs`). Same activation timing (Phase 12 onward), same blocking behavior on fail, same per-PR template checkboxes.
 
@@ -267,11 +276,11 @@ There is intentionally no opt-out mechanism. The gate exists because reviewer vi
 
 - [x] ~~Confirm per-phase PR rhythm OR alternative~~ → **Decided 2026-05-23**: per-phase + sub-PR splitting
 - [x] ~~Confirm sub-PR letter scheme (a/b/c/...) and branch naming~~ → **Decided 2026-05-23**: letter scheme `a-h`. Branch naming originally specified as `port/ara/phase-N/<letter>`; revised in prep-ci PR to flat names (`phase-Na`, e.g., `phase-12e`) after discovering Git refs forbid `port/ara/...` while `port/ara` itself is a branch.
-- [x] ~~Confirm skip-review marker syntax~~ → **Decided 2026-05-23**: **no skip-review markers; every PR gets reviewed**. Belt-and-suspenders catches subtle issues that mechanical PRs can hide. See "Augment review policy" section above.
+- [x] ~~Confirm skip-review marker syntax~~ → **Decided 2026-05-23**: **no skip-review markers; every PR gets reviewed**. Belt-and-suspenders catches subtle issues that mechanical PRs can hide. See "Code review policy" section above.
 - [x] ~~Decide on `develop` branch~~ → **Decided 2026-05-23**: **no**. The integration branch `port/ara` already plays that role; adding `develop` adds a merge step without benefit for a single-developer port. Final phase-15 PR goes `port/ara → master` directly.
 - [x] ~~Should AI auto-continue to next phase after PR merge~~ → **Decided 2026-05-23**: AI pulls updated `port/ara` after user merges, then auto-starts the next sub-PR (no human nudge needed between sub-PRs within the same phase). Between phases (e.g., after Phase 12 fully merges and Phase 13 begins), AI auto-starts unless user has paused
-- [x] ~~What happens if Augment flags a real issue mid-port~~ → **Decided 2026-05-23**: AI fixes via additional commits on the same sub-branch (not a follow-up PR; not an amend that destroys history). See "Augment review loop" section above for the full pattern
-- [x] ~~Push cadence — push after every commit vs batched~~ → **Decided 2026-05-23**: push after every commit (visibility for user + enables Augment incremental review)
+- [x] ~~What happens if the reviewer flags a real issue mid-port~~ → **Decided 2026-05-23**: AI fixes via additional commits on the same sub-branch (not a follow-up PR; not an amend that destroys history). See "Review loop" section above for the full pattern
+- [x] ~~Push cadence — push after every commit vs batched~~ → **Decided 2026-05-23**: push after every commit (visibility for user + enables incremental review)
 
 ## Once decided, baking targets
 
@@ -290,17 +299,17 @@ When we finalize, these playbook sections need edits:
 - Phase 12 split shape confirmed (8 sub-PRs, 12a–12h, augmented mapping with all session decisions integrated; see table above)
 - Sub-PR letter scheme + branch naming confirmed (originally `port/ara/phase-N/<letter>`; revised in `prep-ci` PR to flat `phase-N<letter>` due to a Git ref constraint — see per-phase rhythm section)
 - AI auto-continues to next sub-PR after user merge (no nudge between sub-PRs)
-- Augment poll-and-fix workflow specced (AI handles trivial + correctness findings, user handles merge)
+- Poll-and-fix workflow specced (AI handles trivial + correctness findings, user handles merge)
 - Push cadence: after every commit
 
 **Decisions made 2026-05-23 (continued):**
-- **No skip-review markers** — every PR gets full Augment review, including mechanical Phase 0.5 deletes/renames (belt-and-suspenders for subtle issues)
+- **No skip-review markers** — every PR gets full review, including mechanical Phase 0.5 deletes/renames (belt-and-suspenders for subtle issues)
 - **No `develop` branch** — sub-PRs land on `port/ara` directly; Phase 15 final PR `port/ara → master`
 
 **Baked into `PORT_PLAYBOOK.md` (2026-05-23):**
-- ✅ §0 rule 9 — "Tag every phase boundary; open the PR; merge it; continue." References this doc for the full rhythm + Augment loop. **Policy revised 2026-05-23** (later same day, in `prep-ci` PR #2): AI merges sub-PR + final PRs under the §19.1 merge-gate; auto-continues to next sub-PR after merge. Original 2026-05-23 decision was "AI never merges, ever"; reversed when the user granted full merge authority.
+- ✅ §0 rule 9 — "Tag every phase boundary; open the PR; merge it; continue." References this doc for the full rhythm + review loop. **Policy revised 2026-05-23** (later same day, in `prep-ci` PR #2): AI merges sub-PR + final PRs under the §19.1 merge-gate; auto-continues to next sub-PR after merge. Original 2026-05-23 decision was "AI never merges, ever"; reversed when the user granted full merge authority.
 - ✅ §3 phase plan — Phase 0.5 sub-PR rhythm references the 16-sub-PR mapping (0.5a–0.5p); Phase 12 references the 8-sub-PR mapping (12a–12h); cross-cutting sub-PR rhythm paragraph added after the phase list.
-- ✅ §19.1 git safety — branch allowlist now permits `port/ara` (integration) + flat-named `phase-N[<letter>]` sub-PR feature branches (e.g., `phase-0.5a`, `phase-12h`) plus a small set of named prep branches (e.g., `prep-ci`). **Merge policy revised 2026-05-23** in `prep-ci` PR #2: original "AI never merges, ever" rule replaced with "AI merges under a strict merge-gate" (green CI + Augment quiescent ≥3 min + no unresolved findings + clean self-review). User retains override. Tag scheme extended to `phase-N-<letter>-complete` for sub-PRs.
+- ✅ §19.1 git safety — branch allowlist now permits `port/ara` (integration) + flat-named `phase-N[<letter>]` sub-PR feature branches (e.g., `phase-0.5a`, `phase-12h`) plus a small set of named prep branches (e.g., `prep-ci`). **Merge policy revised 2026-05-23** in `prep-ci` PR #2: original "AI never merges, ever" rule replaced with "AI merges under a strict merge-gate" (green CI + reviewer quiescent ≥3 min + no unresolved findings + clean self-review). User retains override. Tag scheme extended to `phase-N-<letter>-complete` for sub-PRs.
 - ✅ §22 final pass — final PR confirmed `port/ara → master` (no `develop` branch); release notes step updated to use `CHANGELOG.md` per §33.7 + Keep-a-Changelog format + fresh `[Unreleased]` placeholder; mobile-deferred-to-v0.1.0 noted in CHANGELOG sections.
 
 The design phase is now fully complete. Phase 0.5 execution can begin per the rhythm above.
@@ -322,7 +331,7 @@ Open items for that v2 pass:
   - For PRs touching the settings registry, run `/code-review` with focus on §61.4 compliance
   - For PRs adding new sections to design docs, follow the existing playbook section style
 - [ ] **Pre-commit hooks for contributors** — beyond the already-baked settings-registry gate (see "Settings-registry gate" section above — settled, applies to community too): additional lint rules enforcing no `--no-verify`, no force pushes to main/master, license-header presence on new C# files
-- [ ] **`.coderabbit.yaml`** — path-based skip-review config that mechanical changes can opt into via PR labels or file-path patterns. Carry from port phase into community phase.
+- [ ] ~~**`.coderabbit.yaml`**~~ — obsolete: CodeRabbit removed from the org 2026-05-29. The current reviewer (Sonnet) doesn't read a per-repo config; reviewer behavior is set per-invocation by the user.
 - [ ] **Issue templates** (`.github/ISSUE_TEMPLATE/`) — bug-report (auto-filled with §54 bug-report-submission zip), feature-request (mapped to §55 roadmap tiers), driver-quirk-report (auto-routed upstream per §52.5)
 - [ ] **Release cadence post-v0.0.1** — semver discipline, RELEASE_NOTES.md entry per release, GitHub Releases pipeline (already in §14.3 CI), how community PRs feed into next-release vs current-release branches
 - [ ] **Maintainer workflow** — who reviews, merge criteria, how long PRs sit before stale-bot pings, etc. Light-touch at first (small project); formalize as community grows.
