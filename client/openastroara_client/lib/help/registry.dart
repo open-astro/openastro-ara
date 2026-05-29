@@ -253,6 +253,5 @@ const Map<String, Help> helpRegistry = {
         '* **Civil (−6°)**: Sun 6° below horizon — sky is still bright; brightest planets visible. Used by sequence-start with skip-twilight off.\n'
         '* **Nautical (−12°)**: Sun 12° below — horizon visible to the eye, bright stars + globulars OK for testing or wide-field.\n'
         '* **Astronomical (−18°)**: Sun 18° below — sky is fully dark, deep-sky imaging window. Recommended default.',
-    relatedSettings: ['safety.site.twilight_definition'],
   ),
 };
