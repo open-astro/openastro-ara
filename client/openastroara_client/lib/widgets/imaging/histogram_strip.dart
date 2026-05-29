@@ -21,7 +21,7 @@ class HistogramStrip extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.end,
         children: List<Widget>.generate(64, (i) {
           // Placeholder gradient — empty bins from left to right.
-          // `clamp` returns `num`; withValues alpha expects `double`.
+          // `clamp` returns `num`; withOpacity expects `double`.
           final alpha = (0.05 + 0.25 * (i / 63)).clamp(0.0, 1.0).toDouble();
           return Expanded(
             child: Container(
