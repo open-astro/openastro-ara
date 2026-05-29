@@ -480,4 +480,28 @@ const List<Setting> settingsRegistry = [
     defaultValue: 'Astronomical (−18°)',
     profilePath: 'site.twilight_definition',
   ),
+
+  // §29.2 File naming options that don't overlap with the storage panel.
+  // State lives in `filenamesSettingsProvider`. File format / compression /
+  // filename template themselves live in StorageSettings (see registry above).
+  Setting(
+    id: 'session.filenames.date_separator',
+    label: 'Date separator',
+    description: 'How `\$\$DATE*\$\$` tokens render: `/` produces real subdirectories per date; `_` and `-` keep dates inline in flat filenames.',
+    keywords: ['date', 'separator', 'directory', 'slash', 'underscore', 'dash', 'flat', 'windows'],
+    path: ['Settings', 'Session', 'Filenames'],
+    type: SettingType.enumValue(['/  (forward slash)', '_  (underscore)', '-  (dash)']),
+    defaultValue: '/  (forward slash)',
+    profilePath: 'filenames.date_separator',
+  ),
+  Setting(
+    id: 'session.filenames.compress_darks_and_bias',
+    label: 'Compress bias/dark frames',
+    description: 'Apply RICE compression to bias + dark calibration frames regardless of the main compression setting. They compress losslessly very well.',
+    keywords: ['compress', 'dark', 'bias', 'calibration', 'rice', 'size'],
+    path: ['Settings', 'Session', 'Filenames'],
+    type: SettingType.bool(),
+    defaultValue: true,
+    profilePath: 'filenames.compress_darks_and_bias',
+  ),
 ];
