@@ -21,6 +21,7 @@ class SafetyPoliciesPanel extends ConsumerWidget {
         const SettingsSectionHeader('On unsafe weather'),
         SettingsDropdownRow<UnsafeAction>(
           label: 'Action',
+          helpKey: 'safety.policies.on_unsafe',
           value: s.onUnsafe,
           items: const {
             UnsafeAction.pauseAndPark: 'Pause + park + close dome',
@@ -34,11 +35,13 @@ class SafetyPoliciesPanel extends ConsumerWidget {
         ),
         SettingsSwitchRow(
           label: 'Auto-resume when safe',
+          helpKey: 'safety.policies.auto_resume',
           value: s.autoResumeWhenSafe,
           onChanged: n.setAutoResumeWhenSafe,
         ),
         EditableNumberRow(
           label: 'Resume delay (min)',
+          helpKey: 'safety.policies.resume_delay',
           currentValue: s.resumeDelayMin.toString(),
           getCanonical: () =>
               ref.read(safetyPoliciesProvider).resumeDelayMin.toString(),
@@ -50,11 +53,13 @@ class SafetyPoliciesPanel extends ConsumerWidget {
         const SettingsSectionHeader('On meridian flip'),
         SettingsSwitchRow(
           label: 'Auto flip',
+          helpKey: 'safety.policies.meridian_flip_auto',
           value: s.meridianFlipAuto,
           onChanged: n.setMeridianFlipAuto,
         ),
         EditableNumberRow(
           label: 'Pause after flip (min)',
+          helpKey: 'safety.policies.meridian_pause_min',
           currentValue: s.meridianPauseMin.toString(),
           getCanonical: () =>
               ref.read(safetyPoliciesProvider).meridianPauseMin.toString(),
@@ -76,6 +81,7 @@ class SafetyPoliciesPanel extends ConsumerWidget {
         const SettingsSectionHeader('On altitude limit'),
         SettingsDropdownRow<AltitudeLimitAction>(
           label: 'Action',
+          helpKey: 'safety.policies.on_altitude_limit',
           value: s.onAltitudeLimit,
           items: const {
             AltitudeLimitAction.skipTarget: 'Skip + advance to next target',
@@ -94,9 +100,10 @@ class SafetyPoliciesPanel extends ConsumerWidget {
         const SettingsSectionHeader('On guider lost'),
         SettingsDropdownRow<GuiderLostAction>(
           label: 'Action',
+          helpKey: 'safety.policies.on_guider_lost',
           value: s.onGuiderLost,
           items: const {
-            GuiderLostAction.pauseAndRetry: 'Pause + retry once',
+            GuiderLostAction.pauseAndRetry: 'Pause + retry until timeout',
             GuiderLostAction.skipTarget: 'Skip target',
             GuiderLostAction.abortSequence: 'Abort sequence',
           },
@@ -106,6 +113,7 @@ class SafetyPoliciesPanel extends ConsumerWidget {
         ),
         EditableNumberRow(
           label: 'Retry timeout (s)',
+          helpKey: 'safety.policies.guider_retry_timeout',
           currentValue: s.guiderRetryTimeoutSec.toString(),
           getCanonical: () =>
               ref.read(safetyPoliciesProvider).guiderRetryTimeoutSec.toString(),
