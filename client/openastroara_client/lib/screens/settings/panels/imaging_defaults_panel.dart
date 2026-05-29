@@ -99,6 +99,7 @@ class ImagingDefaultsPanel extends ConsumerWidget {
         ),
         SettingsSwitchRow(
           label: 'Warm-up cooler at session end',
+          helpKey: 'imaging.defaults.warmup_at_session_end',
           value: d.warmupAtSessionEnd,
           onChanged: n.setWarmupAtSessionEnd,
         ),
