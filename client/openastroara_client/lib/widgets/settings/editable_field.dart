@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-
+import '../help_icon.dart';
 import '../../theme/ara_colors.dart';
 
 /// Shared editable form-row widgets for §25.5.5 settings panels.
@@ -20,6 +20,7 @@ class EditableTextRow extends StatefulWidget {
   final void Function(String) parse;
   final int maxLines;
   final String? hint;
+  final String? helpKey;
 
   const EditableTextRow({
     super.key,
@@ -29,6 +30,7 @@ class EditableTextRow extends StatefulWidget {
     required this.parse,
     this.maxLines = 1,
     this.hint,
+    this.helpKey,
   });
 
   @override
@@ -85,11 +87,16 @@ class _EditableTextRowState extends State<EditableTextRow> {
             width: 280,
             child: Padding(
               padding: EdgeInsets.only(top: widget.maxLines > 1 ? 12 : 0),
-              child: Text(
-                widget.label,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AraColors.textSecondary,
-                    ),
+              child: Row(
+                children: [
+                  Text(
+                    widget.label,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: AraColors.textSecondary,
+                        ),
+                  ),
+                  if (widget.helpKey != null) HelpIcon(helpKey: widget.helpKey!),
+                ],
               ),
             ),
           ),
@@ -117,12 +124,14 @@ class EditableNumberRow extends StatelessWidget {
   final String currentValue;
   final String Function() getCanonical;
   final void Function(String) parse;
+  final String? helpKey;
   const EditableNumberRow({
     super.key,
     required this.label,
     required this.currentValue,
     required this.getCanonical,
     required this.parse,
+    this.helpKey,
   });
 
   @override
@@ -132,6 +141,7 @@ class EditableNumberRow extends StatelessWidget {
       currentValue: currentValue,
       getCanonical: getCanonical,
       parse: parse,
+      helpKey: helpKey,
     );
   }
 }
@@ -144,12 +154,14 @@ class SettingsDropdownRow<T> extends StatelessWidget {
   final T value;
   final Map<T, String> items;
   final ValueChanged<T?> onChanged;
+  final String? helpKey;
   const SettingsDropdownRow({
     super.key,
     required this.label,
     required this.value,
     required this.items,
     required this.onChanged,
+    this.helpKey,
   });
 
   @override
@@ -159,10 +171,15 @@ class SettingsDropdownRow<T> extends StatelessWidget {
       child: Row(children: [
         SizedBox(
           width: 280,
-          child: Text(label,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AraColors.textSecondary,
-                  )),
+          child: Row(
+            children: [
+              Text(label,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: AraColors.textSecondary,
+                      )),
+              if (helpKey != null) HelpIcon(helpKey: helpKey!),
+            ],
+          ),
         ),
         Expanded(
           child: DropdownButtonFormField<T>(
@@ -191,12 +208,14 @@ class SettingsSwitchRow extends StatelessWidget {
   final bool value;
   final ValueChanged<bool> onChanged;
   final String? hint;
+  final String? helpKey;
   const SettingsSwitchRow({
     super.key,
     required this.label,
     required this.value,
     required this.onChanged,
     this.hint,
+    this.helpKey,
   });
 
   @override
@@ -209,10 +228,15 @@ class SettingsSwitchRow extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AraColors.textSecondary,
-                      )),
+              Row(
+                children: [
+                  Text(label,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: AraColors.textSecondary,
+                          )),
+                  if (helpKey != null) HelpIcon(helpKey: helpKey!),
+                ],
+              ),
               if (hint != null)
                 Text(hint!,
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(

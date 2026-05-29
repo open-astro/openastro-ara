@@ -88,6 +88,14 @@ const List<SettingsGroup> settingsTree = <SettingsGroup>[
       SettingsPanelInfo(id: 'profile.wizard', label: 'Run wizard again', groupId: 'profile'),
     ],
   ),
+  SettingsGroup(
+    id: 'system',
+    label: 'System',
+    panels: <SettingsPanelInfo>[
+      SettingsPanelInfo(id: 'app.monitoring', label: 'Monitoring', groupId: 'system'),
+      SettingsPanelInfo(id: 'app.changelog', label: 'About', groupId: 'system'),
+    ],
+  ),
 ];
 
 class SelectedSettingsPanelNotifier extends Notifier<String> {
@@ -99,6 +107,24 @@ class SelectedSettingsPanelNotifier extends Notifier<String> {
 final selectedSettingsPanelProvider =
     NotifierProvider<SelectedSettingsPanelNotifier, String>(
         SelectedSettingsPanelNotifier.new);
+
+class HighlightedSettingNotifier extends Notifier<String?> {
+  @override
+  String? build() => null;
+
+  void highlight(String settingId) {
+    state = settingId;
+    // Auto-clear after 2 seconds per §61.2.
+    Future.delayed(const Duration(seconds: 2), () {
+      if (state == settingId) state = null;
+    });
+  }
+}
+
+final highlightedSettingProvider =
+    NotifierProvider<HighlightedSettingNotifier, String?>(
+        HighlightedSettingNotifier.new);
+
 
 SettingsPanelInfo? findPanelInfo(String id) {
   for (final g in settingsTree) {
