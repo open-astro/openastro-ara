@@ -181,6 +181,28 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  registry-gate:
+    # §61.4 settings-registry gate + §69.4 help-registry gate (Layer 2 — CI).
+    # The hooks live in scripts/check-settings-registry.mjs +
+    # scripts/check-help-registry.mjs and run on Node (pre-installed on
+    # ubuntu-latest, no setup-node step needed). Activates at Phase 12 of
+    # the port, per the activation table in COMMIT-PR-RULES.md.
+    name: Settings + Help registry gate
+    runs-on: ubuntu-latest
+    needs: sanity
+    steps:
+      - name: Checkout (no LFS)
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.x pinned per zizmor immutable-ref policy
+        with:
+          lfs: false
+          persist-credentials: false
+
+      - name: Run settings-registry check
+        run: node scripts/check-settings-registry.mjs
+
+      - name: Run help-registry check
+        run: node scripts/check-help-registry.mjs
+
   client-test:
     name: Client (analyze + test)
     runs-on: ubuntu-latest
