@@ -427,7 +427,7 @@ const Map<String, Help> helpRegistry = {
   'img.platesolve.convergence_tolerance_arcsec': Help(
     key: 'img.platesolve.convergence_tolerance_arcsec',
     title: 'Convergence tolerance',
-    body: 'How close to dead-center the target must be before centering stops. 60″ (1 arc-minute) is a good default for typical setups — tighter than the §53 sub-frame guiding can correct, looser than the human eye can notice.\n\n'
+    body: 'How close to dead-center the target must be before centering stops. 60″ (1 arc-minute) is a good default for typical setups — tighter than the §63 PHD2 sub-frame guiding can correct, looser than the human eye can notice.\n\n'
         'Tighten to 30″ for narrowband mosaics where panel alignment matters; loosen to 120″ for wide-field RGB where 2′ is well within frame.',
     relatedSettings: ['img.platesolve.max_iterations'],
   ),
