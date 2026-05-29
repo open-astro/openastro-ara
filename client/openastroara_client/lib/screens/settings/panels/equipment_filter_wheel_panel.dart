@@ -30,9 +30,14 @@ class EquipmentFilterWheelPanel extends ConsumerWidget {
               connN.setAutoConnect(EquipmentDeviceType.filterWheel, v),
         ),
         const SettingsSectionHeader('Filters'),
+        // ⓘ icon only on slot 1 — the labels are a single conceptual setting
+        // (see `eq.filterwheel.slot_labels` in `settings/registry.dart`), so
+        // one help affordance per section is enough. Repeating ⓘ on every
+        // slot would be visual noise per §69.1.
         for (var slot = 1; slot <= labels.slotCount; slot++)
           EditableTextRow(
             label: 'Slot $slot',
+            helpKey: slot == 1 ? 'eq.filterwheel.slot_labels' : null,
             currentValue: labels.labelAt(slot),
             getCanonical: () =>
                 ref.read(filterWheelLabelsProvider).labelAt(slot),
