@@ -23,6 +23,7 @@ class EquipmentFocuserPanel extends ConsumerWidget {
         const SettingsRow(label: 'Alpaca device', value: 'Not selected'),
         SettingsSwitchRow(
           label: 'Auto-connect on boot',
+          helpKey: 'eq.auto_connect_on_boot',
           value: connection.autoConnect(EquipmentDeviceType.focuser),
           onChanged: (v) => n.setAutoConnect(EquipmentDeviceType.focuser, v),
         ),

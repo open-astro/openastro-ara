@@ -29,6 +29,7 @@ class EquipmentGuiderPanel extends ConsumerWidget {
         ),
         SettingsSwitchRow(
           label: 'Auto-connect on boot',
+          helpKey: 'eq.auto_connect_on_boot',
           value: connection.autoConnect(EquipmentDeviceType.guider),
           onChanged: (v) => n.setAutoConnect(EquipmentDeviceType.guider, v),
           hint: 'Off by default — guider connect starts PHD2 client',

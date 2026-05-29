@@ -22,6 +22,7 @@ class EquipmentRotatorPanel extends ConsumerWidget {
             label: 'Alpaca device', value: 'Not selected (optional)'),
         SettingsSwitchRow(
           label: 'Auto-connect on boot',
+          helpKey: 'eq.auto_connect_on_boot',
           value: connection.autoConnect(EquipmentDeviceType.rotator),
           onChanged: (v) => n.setAutoConnect(EquipmentDeviceType.rotator, v),
         ),

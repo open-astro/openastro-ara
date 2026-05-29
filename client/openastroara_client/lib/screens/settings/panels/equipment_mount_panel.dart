@@ -22,6 +22,7 @@ class EquipmentMountPanel extends ConsumerWidget {
         const SettingsRow(label: 'Alpaca device', value: 'Not selected'),
         SettingsSwitchRow(
           label: 'Auto-connect on boot',
+          helpKey: 'eq.auto_connect_on_boot',
           value: connection.autoConnect(EquipmentDeviceType.mount),
           onChanged: (v) => n.setAutoConnect(EquipmentDeviceType.mount, v),
         ),
