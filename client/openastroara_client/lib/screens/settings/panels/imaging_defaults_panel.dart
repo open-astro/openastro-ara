@@ -3,13 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../state/imaging/exposure_state.dart' show FrameKind;
 import '../../../state/settings/imaging_defaults_state.dart';
-import '../../../theme/ara_colors.dart';
 import '../../../widgets/settings/editable_field.dart';
 
-/// §37.11 Imaging Defaults panel. Phase 12h.2-imaging-b made the form
-/// editable; 12h.2-display-sync swaps the panel's local _NumberField for
-/// the shared `EditableNumberRow` so rejected input snaps back to the
-/// canonical state (round-1 CR finding on PR #94).
+/// §37.9 Imaging Defaults panel. Phase 12h.3b registered all 8 fields in
+/// `settings/registry.dart` and wired `helpKey`s on the non-obvious controls
+/// (gain, offset, bin, ramp rate, warmup) — the ⌘K command palette now
+/// finds them and the ⓘ icons explain them in-place.
 class ImagingDefaultsPanel extends ConsumerWidget {
   const ImagingDefaultsPanel({super.key});
 
@@ -33,6 +32,7 @@ class ImagingDefaultsPanel extends ConsumerWidget {
         ),
         EditableNumberRow(
           label: 'Default gain',
+          helpKey: 'imaging.defaults.gain',
           currentValue: d.defaultGain.toString(),
           getCanonical: () =>
               ref.read(imagingDefaultsProvider).defaultGain.toString(),
@@ -43,6 +43,7 @@ class ImagingDefaultsPanel extends ConsumerWidget {
         ),
         EditableNumberRow(
           label: 'Default offset',
+          helpKey: 'imaging.defaults.offset',
           currentValue: d.defaultOffset.toString(),
           getCanonical: () =>
               ref.read(imagingDefaultsProvider).defaultOffset.toString(),
@@ -53,6 +54,7 @@ class ImagingDefaultsPanel extends ConsumerWidget {
         ),
         EditableNumberRow(
           label: 'Default bin',
+          helpKey: 'imaging.defaults.bin',
           currentValue: d.defaultBin.toString(),
           getCanonical: () =>
               ref.read(imagingDefaultsProvider).defaultBin.toString(),
@@ -61,34 +63,18 @@ class ImagingDefaultsPanel extends ConsumerWidget {
             if (i != null) n.setBin(i);
           },
         ),
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Row(
-            children: [
-              SizedBox(
-                width: 280,
-                child: Text('Default frame type',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AraColors.textSecondary,
-                        )),
-              ),
-              Expanded(
-                child: DropdownButtonFormField<FrameKind>(
-                  initialValue: d.defaultFrameKind,
-                  isDense: true,
-                  items: const [
-                    DropdownMenuItem(value: FrameKind.light, child: Text('Light')),
-                    DropdownMenuItem(value: FrameKind.dark, child: Text('Dark')),
-                    DropdownMenuItem(value: FrameKind.bias, child: Text('Bias')),
-                    DropdownMenuItem(value: FrameKind.flat, child: Text('Flat')),
-                  ],
-                  onChanged: (v) {
-                    if (v != null) n.setFrameKind(v);
-                  },
-                ),
-              ),
-            ],
-          ),
+        SettingsDropdownRow<FrameKind>(
+          label: 'Default frame type',
+          value: d.defaultFrameKind,
+          items: const {
+            FrameKind.light: 'Light',
+            FrameKind.dark: 'Dark',
+            FrameKind.bias: 'Bias',
+            FrameKind.flat: 'Flat',
+          },
+          onChanged: (v) {
+            if (v != null) n.setFrameKind(v);
+          },
         ),
         EditableNumberRow(
           label: 'Cooling target temperature (°C)',
@@ -102,6 +88,7 @@ class ImagingDefaultsPanel extends ConsumerWidget {
         ),
         EditableNumberRow(
           label: 'Cooler ramp rate (°C/min)',
+          helpKey: 'imaging.defaults.cooler_ramp_c_per_min',
           currentValue: d.coolerRampRatePerMin.toString(),
           getCanonical: () =>
               ref.read(imagingDefaultsProvider).coolerRampRatePerMin.toString(),
@@ -110,23 +97,11 @@ class ImagingDefaultsPanel extends ConsumerWidget {
             if (v != null) n.setCoolerRampRate(v);
           },
         ),
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Row(
-            children: [
-              SizedBox(
-                width: 280,
-                child: Text('Warm-up cooler at session end',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AraColors.textSecondary,
-                        )),
-              ),
-              Switch(
-                value: d.warmupAtSessionEnd,
-                onChanged: n.setWarmupAtSessionEnd,
-              ),
-            ],
-          ),
+        SettingsSwitchRow(
+          label: 'Warm-up cooler at session end',
+          helpKey: 'imaging.defaults.warmup_at_session_end',
+          value: d.warmupAtSessionEnd,
+          onChanged: n.setWarmupAtSessionEnd,
         ),
         const SizedBox(height: 24),
         Row(

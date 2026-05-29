@@ -36,6 +36,7 @@ at the top. This happens in the same commit that pushes the release tag.
 ## [Unreleased]
 
 ### Added
+- **Phase 12h.3b — Imaging Defaults bulk-registered + help icons wired.** First panel migration after 12h.3a foundation. All 8 imaging-defaults fields (exposure, gain, offset, bin, frame type, cooler target, cooler ramp, warmup) registered in `settings/registry.dart` with description + ≥4 keywords + path metadata, so ⌘K finds them by intent. 5 new `Help` entries on the non-obvious controls (gain, offset, bin, ramp rate, warmup) — covers the CMOS/CCD differences, the thermal-shock rationale, and the offset/black-level explanation. Panel widgets switched to shared `SettingsDropdownRow` + `SettingsSwitchRow`. Registry-gate CI passes.
 - **Phase 12h.3a — Smart Settings Search + Help Registry foundation.** Rebuilds the §61 (smart settings search) + §69 (help tooltip registry) infrastructure after Augment's #107 was closed for scope overreach. Lands the foundation only — bulk-registration of all ~200 settings + per-panel migration is split into 12h.3b through 12h.3N follow-up PRs. This sub-PR includes:
   - **Data shapes.** `lib/settings/registry.dart` (`Setting` + `SettingType` + `settingsRegistry` list, 7 starter entries). `lib/help/registry.dart` (`Help` + `helpRegistry` map, 6 starter entries).
   - **Search engine.** `lib/state/settings/settings_search.dart` — per-panel keyword corpus + scored entries + fuzzy intent matching. Plus `lib/state/settings/settings_nav.dart` mapping the settings panel tree.
