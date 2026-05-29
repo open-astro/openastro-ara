@@ -288,7 +288,7 @@ const Map<String, Help> helpRegistry = {
         '* Mono LRGB: `L`, `R`, `G`, `B`\n'
         '* Narrowband: `Hα` (or `Ha`), `OIII`, `SII`\n'
         '* Photometric: `U`, `B`, `V`, `R`, `I` (Johnson) or `u`, `g`, `r`, `i`, `z` (SDSS)\n\n'
-        'Leave a slot blank if it\'s unused or unloaded. Empty labels suppress that slot from filter pickers.',
+        'Leave a slot blank if it\'s unused or unloaded.',
     relatedSettings: ['session.storage.filename_template'],
   ),
 };
