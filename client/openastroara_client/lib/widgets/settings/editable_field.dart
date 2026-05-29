@@ -136,6 +136,50 @@ class EditableNumberRow extends StatelessWidget {
   }
 }
 
+/// Shared enum-dropdown row for settings panels. Lifted from
+/// safety_policies_panel's local `_DropdownRow<T>` so panels with enum
+/// pickers share the layout.
+class SettingsDropdownRow<T> extends StatelessWidget {
+  final String label;
+  final T value;
+  final Map<T, String> items;
+  final ValueChanged<T?> onChanged;
+  const SettingsDropdownRow({
+    super.key,
+    required this.label,
+    required this.value,
+    required this.items,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(children: [
+        SizedBox(
+          width: 280,
+          child: Text(label,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: AraColors.textSecondary,
+                  )),
+        ),
+        Expanded(
+          child: DropdownButtonFormField<T>(
+            initialValue: value,
+            isDense: true,
+            items: [
+              for (final e in items.entries)
+                DropdownMenuItem<T>(value: e.key, child: Text(e.value)),
+            ],
+            onChanged: onChanged,
+          ),
+        ),
+      ]),
+    );
+  }
+}
+
 /// Shared switch row for settings panels. Replaces the per-panel `_SwitchRow`
 /// copies that drifted into safety_policies / safety_site / session_filenames
 /// / session_notifications / imaging_autofocus / imaging_plate_solve.
