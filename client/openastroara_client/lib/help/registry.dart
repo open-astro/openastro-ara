@@ -201,4 +201,58 @@ const Map<String, Help> helpRegistry = {
         'Threshold is fixed in v0.0.1; making it configurable is a v0.1.0 enhancement.',
     relatedSettings: ['session.storage.save_directory'],
   ),
+
+  // §37.12 Site — help on the genuinely non-obvious controls. Site name,
+  // lat/lon, elevation, time zone are self-explanatory by label.
+  'safety.site.use_custom_horizon': Help(
+    key: 'safety.site.use_custom_horizon',
+    title: 'Custom horizon polygon',
+    body: 'A measured azimuth/altitude polygon describing actual obstructions at your site (trees, roof line, neighbor\'s house). '
+        'When on, target visibility checks use this polygon instead of the flat default-altitude floor — much more accurate for low-altitude targets.\n\n'
+        'The polygon import + measurement workflow lives in §36.8 Sky Atlas → "Capture horizon mask". '
+        'Until you\'ve imported one, leave this off and the flat horizon will be used.',
+    relatedSettings: ['safety.site.use_custom_horizon', 'safety.site.default_horizon_altitude_deg'],
+  ),
+  'safety.site.default_horizon_altitude_deg': Help(
+    key: 'safety.site.default_horizon_altitude_deg',
+    title: 'Default horizon altitude',
+    body: 'Flat altitude floor used for visibility checks when no custom horizon polygon is loaded. '
+        'Targets transiting below this altitude are flagged as below-horizon by the §38 framing assistant and skipped by the §35 altitude-limit safety policy.\n\n'
+        '20° is a sensible default for backyard sites (covers most trees + suburban roof lines); 0° turns the floor off; 30° is conservative for low-precision tracking.',
+    relatedSettings: ['safety.site.use_custom_horizon'],
+  ),
+  'safety.site.bortle_class': Help(
+    key: 'safety.site.bortle_class',
+    title: 'Bortle dark-sky class',
+    body: 'A 1-9 scale rating your site\'s sky darkness, where 1 is an excellent dark site (SQM ≥21.99 mag/arcsec²) and 9 is inner-city light pollution (Milky Way invisible).\n\n'
+        '* **1-2**: Excellent / true dark site\n'
+        '* **3-4**: Rural / rural-suburban transition\n'
+        '* **5-6**: Suburban / bright suburban (most backyard astrophotographers)\n'
+        '* **7-8**: Suburban-urban transition / urban\n'
+        '* **9**: Inner city — narrowband filters required\n\n'
+        'Used by §50 quality-score estimation + suggested exposure ranges in §38. Don\'t know your class? lightpollutionmap.info or darkskies.org.',
+    learnMoreUrl: 'https://en.wikipedia.org/wiki/Bortle_scale',
+    relatedSettings: ['safety.site.typical_seeing_arcsec'],
+  ),
+  'safety.site.typical_seeing_arcsec': Help(
+    key: 'safety.site.typical_seeing_arcsec',
+    title: 'Typical seeing',
+    body: 'The median FWHM of star images at your site, in arcseconds — a measure of atmospheric turbulence.\n\n'
+        '* **<1.0″**: Excellent (high-altitude observatory class)\n'
+        '* **1.0-2.0″**: Very good\n'
+        '* **2.0-3.0″**: Typical backyard\n'
+        '* **3.0-4.0″**: Poor / windy / heat-cell turbulence\n'
+        '* **>4.0″**: Severe — usually rules out planetary or short-FL imaging\n\n'
+        'Used as the baseline for §50 quality scoring (frames worse than 2x typical seeing get auto-rated down) and for autofocus convergence thresholds.',
+    relatedSettings: ['safety.site.bortle_class'],
+  ),
+  'safety.site.twilight_definition': Help(
+    key: 'safety.site.twilight_definition',
+    title: 'Twilight definition',
+    body: 'Determines when "night" begins/ends for sequence scheduling.\n\n'
+        '* **Civil (−6°)**: Sun 6° below horizon — sky is still bright; brightest planets visible. Used by sequence-start with skip-twilight off.\n'
+        '* **Nautical (−12°)**: Sun 12° below — horizon visible to the eye, bright stars + globulars OK for testing or wide-field.\n'
+        '* **Astronomical (−18°)**: Sun 18° below — sky is fully dark, deep-sky imaging window. Recommended default.',
+    relatedSettings: ['safety.site.twilight_definition'],
+  ),
 };
