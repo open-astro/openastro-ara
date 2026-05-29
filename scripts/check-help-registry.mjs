@@ -40,13 +40,54 @@ if (!existsSync(REGISTRY)) {
 
 const src = readFileSync(REGISTRY, 'utf8');
 
-// Match `Help(...)` blocks within the `const Map<String, Help> helpRegistry`.
-const entryRe = /Help\s*\(\s*([\s\S]*?)\s*\)\s*,?/g;
-const entries = [];
-let m;
-while ((m = entryRe.exec(src)) !== null) {
-  entries.push({ body: m[1], index: m.index });
+// Find `Help(...)` blocks. Same balanced-paren walk as the settings
+// script — string literals (single, double, triple-single) and nested
+// calls in entry bodies break a naive non-greedy regex.
+function extractEntries(src, keyword) {
+  const entries = [];
+  const startRe = new RegExp(`(?:^|[\\s,\\[{:])${keyword}\\s*\\(`, 'g');
+  let m;
+  while ((m = startRe.exec(src)) !== null) {
+    const openParenIdx = src.indexOf('(', m.index);
+    if (openParenIdx === -1) continue;
+    let depth = 1;
+    let i = openParenIdx + 1;
+    let inSingle = false;
+    let inDouble = false;
+    let inTriple = false;
+    while (i < src.length && depth > 0) {
+      // Triple-single-quote opens/closes match before single-quote so we
+      // don't misread `'''...'''` body literals as three separate quotes.
+      if (!inSingle && !inDouble && src.startsWith("'''", i)) {
+        inTriple = !inTriple;
+        i += 3;
+        continue;
+      }
+      if (inTriple) {
+        i++;
+        continue;
+      }
+      const c = src[i];
+      if (!inSingle && !inDouble) {
+        if (c === '(') depth++;
+        else if (c === ')') depth--;
+        else if (c === "'") inSingle = true;
+        else if (c === '"') inDouble = true;
+      } else if (inSingle && c === "'") {
+        inSingle = false;
+      } else if (inDouble && c === '"') {
+        inDouble = false;
+      }
+      i++;
+    }
+    if (depth === 0) {
+      entries.push({ body: src.slice(openParenIdx + 1, i - 1), index: m.index });
+    }
+  }
+  return entries;
 }
+
+const entries = extractEntries(src, 'Help');
 
 if (entries.length === 0) {
   console.log('✓ help-registry: 0 entries (empty registry is allowed).');

@@ -47,15 +47,49 @@ if (!existsSync(REGISTRY)) {
 
 const src = readFileSync(REGISTRY, 'utf8');
 
-// Match `Setting(...)` blocks. The registry uses a single top-level
-// `const List<Setting> settingsRegistry = [ Setting(...), Setting(...), ];`
-// pattern, so a non-greedy block match across the entries is sufficient.
-const entryRe = /Setting\s*\(\s*([\s\S]*?)\s*\)\s*,?/g;
-const entries = [];
-let m;
-while ((m = entryRe.exec(src)) !== null) {
-  entries.push({ body: m[1], index: m.index });
+// Find `Setting(...)` blocks. A non-greedy regex on parens doesn't work
+// because Setting entries contain nested constructs like:
+//   label: 'Resume delay (min)',           — parens inside string literals
+//   type: SettingType.intRange(min: 0, ),  — nested function calls
+// We walk the file character by character starting at each `Setting(`
+// occurrence, tracking paren depth while respecting Dart string literals
+// (single + double quoted, no escape handling needed since the registry
+// doesn't use embedded quotes).
+function extractEntries(src, keyword) {
+  const entries = [];
+  // Match `Setting` (or `Help`) as an identifier — preceded by whitespace,
+  // `[`, `,`, or `{` (so we don't accidentally match `OtherSetting`).
+  const startRe = new RegExp(`(?:^|[\\s,\\[{])${keyword}\\s*\\(`, 'g');
+  let m;
+  while ((m = startRe.exec(src)) !== null) {
+    const openParenIdx = src.indexOf('(', m.index);
+    if (openParenIdx === -1) continue;
+    let depth = 1;
+    let i = openParenIdx + 1;
+    let inSingle = false;
+    let inDouble = false;
+    while (i < src.length && depth > 0) {
+      const c = src[i];
+      if (!inSingle && !inDouble) {
+        if (c === '(') depth++;
+        else if (c === ')') depth--;
+        else if (c === "'") inSingle = true;
+        else if (c === '"') inDouble = true;
+      } else if (inSingle && c === "'") {
+        inSingle = false;
+      } else if (inDouble && c === '"') {
+        inDouble = false;
+      }
+      i++;
+    }
+    if (depth === 0) {
+      entries.push({ body: src.slice(openParenIdx + 1, i - 1), index: m.index });
+    }
+  }
+  return entries;
 }
+
+const entries = extractEntries(src, 'Setting');
 
 if (entries.length === 0) {
   // An empty registry is fine — the foundation PR ships an empty registry
