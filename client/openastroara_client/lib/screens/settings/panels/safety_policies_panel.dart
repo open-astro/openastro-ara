@@ -103,7 +103,7 @@ class SafetyPoliciesPanel extends ConsumerWidget {
           helpKey: 'safety.policies.on_guider_lost',
           value: s.onGuiderLost,
           items: const {
-            GuiderLostAction.pauseAndRetry: 'Pause + retry once',
+            GuiderLostAction.pauseAndRetry: 'Pause + retry until timeout',
             GuiderLostAction.skipTarget: 'Skip target',
             GuiderLostAction.abortSequence: 'Abort sequence',
           },
