@@ -280,11 +280,23 @@ List<SettingsSearchEntry> buildSearchIndex() {
 }
 
 String? _mapSettingToPanel(Setting s) {
-  // Simple mapping based on setting ID prefix.
+  // Map a setting's dotted ID to a panel ID in settingsTree.
+  //
+  // Two flavors:
+  //   (a) IDs whose first segment already matches the panel-ID first segment
+  //       (eq./img./session./safety.) — take the first two segments verbatim.
+  //   (b) IDs whose first segment is a topic name that lives inside a panel
+  //       (imaging.* lives in img., diagnostics.* in safety.diagnostics, etc.)
+  //       — hand-map by topic.
   if (s.id.startsWith('eq.')) return s.id.split('.').take(2).join('.');
   if (s.id.startsWith('img.')) return s.id.split('.').take(2).join('.');
   if (s.id.startsWith('session.')) return s.id.split('.').take(2).join('.');
   if (s.id.startsWith('safety.')) return s.id.split('.').take(2).join('.');
+  // Topic-name → panel mappings. Keep in sync with registry IDs + settingsTree.
+  if (s.id.startsWith('imaging.defaults.')) return 'img.defaults';
+  if (s.id.startsWith('imaging.autofocus.')) return 'img.autofocus';
+  if (s.id.startsWith('imaging.platesolve.')) return 'img.platesolve';
+  if (s.id.startsWith('diagnostics.')) return 'safety.diagnostics';
   if (s.id.startsWith('guider.')) return 'eq.guider';
   if (s.id.startsWith('camera.')) return 'eq.camera';
   if (s.id.startsWith('storage.')) return 'session.storage';

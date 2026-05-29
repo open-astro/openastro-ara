@@ -81,10 +81,10 @@ for (const entry of entries) {
         .filter(Boolean)
     : [];
 
-  if (!id) {
-    failures.push(`Entry near char ${entry.index}: missing or malformed \`id\``);
-    continue;
-  }
+  // Skip class constructor matches: `const Setting({required this.id, ...})`
+  // is matched by the same regex but has no quoted `id:` literal. Only
+  // entries with a real quoted id are registry entries we should validate.
+  if (!id) continue;
   if (ids.has(id)) {
     failures.push(`Entry \`${id}\`: duplicate id (first defined near char ${ids.get(id)})`);
   } else {

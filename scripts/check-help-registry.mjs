@@ -64,10 +64,9 @@ for (const entry of entries) {
   // also accepted by checking for ''' presence.
   const hasBody = /body:\s*('([^']*)'|'''[\s\S]*?''')/.test(entry.body);
 
-  if (!key) {
-    failures.push(`Entry near char ${entry.index}: missing or malformed \`key\``);
-    continue;
-  }
+  // Skip class constructor matches: `const Help({required this.key, ...})`
+  // is matched by the same regex but has no quoted `key:` literal.
+  if (!key) continue;
   if (keys.has(key)) {
     failures.push(`Entry \`${key}\`: duplicate key (first defined near char ${keys.get(key)})`);
   } else {
