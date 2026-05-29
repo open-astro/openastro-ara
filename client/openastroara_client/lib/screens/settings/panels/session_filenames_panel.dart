@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../state/settings/filenames_settings_state.dart';
 import '../../../state/settings/storage_settings_state.dart';
-import '../../../theme/ara_colors.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
 
@@ -37,6 +36,7 @@ class SessionFilenamesPanel extends ConsumerWidget {
         ),
         SettingsSwitchRow(
           label: 'Compress bias/dark frames',
+          helpKey: 'session.filenames.compress_darks_and_bias',
           value: fs.compressDarksAndBias,
           onChanged: fn.setCompressDarksAndBias,
           hint: 'RICE losslessly compresses dark frames very well',
@@ -47,40 +47,18 @@ class SessionFilenamesPanel extends ConsumerWidget {
           value: ss.filenameTemplate,
           hint: 'Edit in Settings → Session → Storage',
         ),
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Row(children: [
-            SizedBox(
-              width: 280,
-              child: Text('Date separator',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AraColors.textSecondary,
-                      )),
-            ),
-            Expanded(
-              child: DropdownButtonFormField<DateSeparator>(
-                initialValue: fs.dateSeparator,
-                isDense: true,
-                items: const [
-                  DropdownMenuItem(
-                    value: DateSeparator.forwardSlash,
-                    child: Text('/  (forward slash — real directories)'),
-                  ),
-                  DropdownMenuItem(
-                    value: DateSeparator.underscore,
-                    child: Text('_  (underscore — flat filenames)'),
-                  ),
-                  DropdownMenuItem(
-                    value: DateSeparator.dash,
-                    child: Text('-  (dash — flat filenames, Windows-safe)'),
-                  ),
-                ],
-                onChanged: (v) {
-                  if (v != null) fn.setDateSeparator(v);
-                },
-              ),
-            ),
-          ]),
+        SettingsDropdownRow<DateSeparator>(
+          label: 'Date separator',
+          helpKey: 'session.filenames.date_separator',
+          value: fs.dateSeparator,
+          items: const {
+            DateSeparator.forwardSlash: '/  (forward slash — real directories)',
+            DateSeparator.underscore: '_  (underscore — flat filenames)',
+            DateSeparator.dash: '-  (dash — flat filenames, Windows-safe)',
+          },
+          onChanged: (v) {
+            if (v != null) fn.setDateSeparator(v);
+          },
         ),
         const SettingsSectionHeader('Available tokens'),
         const SettingsRow(

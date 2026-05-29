@@ -254,4 +254,24 @@ const Map<String, Help> helpRegistry = {
         '* **Nautical (−12°)**: Sun 12° below — horizon visible to the eye, bright stars + globulars OK for testing or wide-field.\n'
         '* **Astronomical (−18°)**: Sun 18° below — sky is fully dark, deep-sky imaging window. Recommended default.',
   ),
+
+  // §29.2 Filenames — both fields are non-obvious so both get help.
+  'session.filenames.date_separator': Help(
+    key: 'session.filenames.date_separator',
+    title: 'Date separator',
+    body: 'Determines how `\$\$DATETIME\$\$` and `\$\$DATEMINUS12\$\$` tokens render in output paths.\n\n'
+        '* **`/` forward slash**: dates like `2026-05-29` become actual subdirectories. Cleanest organization, plays well with file managers.\n'
+        '* **`_` underscore**: dates stay inline (`2026-05-29_M31_L_60s.fits`). Flat output; good if you sort + organize externally later.\n'
+        '* **`-` dash**: same as underscore, but uses `-` between date components. Maximally Windows-safe (no characters reserved by NTFS).',
+    relatedSettings: ['session.storage.filename_template'],
+  ),
+  'session.filenames.compress_darks_and_bias': Help(
+    key: 'session.filenames.compress_darks_and_bias',
+    title: 'Compress bias + dark frames',
+    body: 'Bias and dark frames are dominated by sensor noise (mostly zero in bias, slowly-varying in darks) and compress losslessly very well — typically 8-15x with RICE. '
+        'When on, calibration frames get RICE compression regardless of the global compression setting in §29 Storage. '
+        'When off, calibration frames respect the global compression setting.\n\n'
+        'Recommended on — calibration frames are bulky (one library can take 5+ GB) and benefit far more from compression than light frames.',
+    relatedSettings: ['session.storage.compression'],
+  ),
 };
