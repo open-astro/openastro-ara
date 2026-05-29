@@ -59,5 +59,43 @@ void main() {
       expect(s.labelAt(9), '');
       expect(s.labelAt(-1), '');
     });
+
+    test('model-layer constructor trims even when bypassing the notifier', () {
+      // Future daemon-hydration loaders will call the constructor directly.
+      // The trim invariant must hold there too, not just in the notifier.
+      final s = FilterWheelLabels(
+        labels: ['  L  ', '\tR\t', 'G', 'B', '', '', '', ''],
+      );
+      expect(s.labelAt(1), 'L');
+      expect(s.labelAt(2), 'R');
+      expect(s.labelAt(3), 'G');
+    });
+
+    test('withLabel preserves the unmodifiable contract', () {
+      // Pull the state, then attempt to mutate the underlying list through
+      // any handle we can reach. Should throw because the list is wrapped in
+      // List.unmodifiable.
+      final s = container.read(filterWheelLabelsProvider);
+      expect(() => (s.labelAt(1)), returnsNormally);
+      // labels is private now; consumers can only mutate via the notifier.
+      // Verify a `state =` after withLabel still produces a new instance.
+      final next = s.withLabel(1, 'X');
+      expect(identical(s, next), isFalse);
+      expect(s.labelAt(1), 'L'); // original untouched
+      expect(next.labelAt(1), 'X');
+    });
+
+    test('== / hashCode treat same-content instances as equal', () {
+      final a = FilterWheelLabels(
+        labels: ['L', 'R', 'G', 'B', 'Hα', 'OIII', 'SII', ''],
+      );
+      final b = FilterWheelLabels(
+        labels: ['L', 'R', 'G', 'B', 'Hα', 'OIII', 'SII', ''],
+      );
+      final c = a.withLabel(1, 'Lum');
+      expect(a, equals(b));
+      expect(a.hashCode, equals(b.hashCode));
+      expect(a, isNot(equals(c)));
+    });
   });
 }

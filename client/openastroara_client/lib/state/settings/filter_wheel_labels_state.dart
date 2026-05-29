@@ -7,41 +7,54 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 /// notifier resizes via `setSlotCount` in 12h.2b.
 
 class FilterWheelLabels {
-  // Index = slot number minus 1 (slot 1 is index 0). Trimmed strings; empty
-  // string means slot is unused/blank.
-  final List<String> labels;
+  // Stored unmodifiable so consumers can't mutate the slot list in place.
+  // Values are trimmed at this layer so the invariant holds regardless of
+  // whether they came in via the notifier setter or a future daemon-hydration
+  // call site that constructs the model directly.
+  final List<String> _labels;
 
-  const FilterWheelLabels({
-    this.labels = const ['L', 'R', 'G', 'B', 'Hα', 'OIII', 'SII', ''],
-  });
+  FilterWheelLabels({
+    List<String> labels = const ['L', 'R', 'G', 'B', 'Hα', 'OIII', 'SII', ''],
+  }) : _labels = List.unmodifiable(labels.map((s) => s.trim()));
 
-  int get slotCount => labels.length;
+  int get slotCount => _labels.length;
 
+  /// 1-indexed (slot 1 is the first slot). Out-of-range returns empty.
   String labelAt(int slot) {
-    // 1-indexed for the user-facing API; internal storage is 0-indexed.
     final i = slot - 1;
-    if (i < 0 || i >= labels.length) return '';
-    return labels[i];
+    if (i < 0 || i >= _labels.length) return '';
+    return _labels[i];
   }
 
   FilterWheelLabels withLabel(int slot, String label) {
     final i = slot - 1;
-    if (i < 0 || i >= labels.length) return this;
-    final next = [...labels];
-    next[i] = label;
+    if (i < 0 || i >= _labels.length) return this;
+    final next = [..._labels];
+    next[i] = label.trim();
     return FilterWheelLabels(labels: next);
   }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    if (other is! FilterWheelLabels) return false;
+    if (other._labels.length != _labels.length) return false;
+    for (var i = 0; i < _labels.length; i++) {
+      if (other._labels[i] != _labels[i]) return false;
+    }
+    return true;
+  }
+
+  @override
+  int get hashCode => Object.hashAll(_labels);
 }
 
 class FilterWheelLabelsNotifier extends Notifier<FilterWheelLabels> {
   @override
-  FilterWheelLabels build() => const FilterWheelLabels();
+  FilterWheelLabels build() => FilterWheelLabels();
 
   void setLabel(int slot, String label) {
-    // Trim so trailing whitespace doesn't accidentally persist (consistent
-    // with the trim-then-reject pattern used elsewhere, but here we allow
-    // empty so the user can blank out an unused slot).
-    state = state.withLabel(slot, label.trim());
+    state = state.withLabel(slot, label);
   }
 }
 
