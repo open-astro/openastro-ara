@@ -6,10 +6,10 @@ import '../../../theme/ara_colors.dart';
 import '../../../widgets/settings/editable_field.dart';
 
 /// Storage panel per §29 — save directory + format + compression + filename
-/// template. Phase 12h.2-storage made the form editable; 12h.2-display-sync
-/// swaps the panel's local _TextField for the shared `EditableTextRow` so
-/// rejected input (empty save dir, empty filename template) snaps back to
-/// the canonical state.
+/// template. Phase 12h.3c registered all 4 fields in `settings/registry.dart`
+/// and wired `helpKey`s on the non-obvious controls (format, compression,
+/// filename template). The ⌘K command palette now finds them; ⓘ icons
+/// explain them in-place.
 class StoragePanel extends ConsumerWidget {
   const StoragePanel({super.key});
 
@@ -42,6 +42,7 @@ class StoragePanel extends ConsumerWidget {
         const SizedBox(height: 16),
         EditableTextRow(
           label: 'Save directory',
+          helpKey: 'session.storage.save_directory',
           currentValue: s.saveDirectory,
           getCanonical: () => ref.read(storageSettingsProvider).saveDirectory,
           parse: n.setSaveDirectory,
@@ -63,65 +64,36 @@ class StoragePanel extends ConsumerWidget {
             ],
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Row(
-            children: [
-              SizedBox(
-                width: 280,
-                child: Text('File format',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AraColors.textSecondary,
-                        )),
-              ),
-              Expanded(
-                child: DropdownButtonFormField<StorageFileFormat>(
-                  initialValue: s.fileFormat,
-                  isDense: true,
-                  items: const [
-                    DropdownMenuItem(value: StorageFileFormat.fits, child: Text('FITS')),
-                    DropdownMenuItem(value: StorageFileFormat.xisf, child: Text('XISF')),
-                    DropdownMenuItem(value: StorageFileFormat.fitsRice, child: Text('FITS + RICE compression')),
-                    DropdownMenuItem(value: StorageFileFormat.fitsGzip, child: Text('FITS + gzip')),
-                  ],
-                  onChanged: (v) {
-                    if (v != null) n.setFileFormat(v);
-                  },
-                ),
-              ),
-            ],
-          ),
+        SettingsDropdownRow<StorageFileFormat>(
+          label: 'File format',
+          helpKey: 'session.storage.file_format',
+          value: s.fileFormat,
+          items: const {
+            StorageFileFormat.fits: 'FITS',
+            StorageFileFormat.xisf: 'XISF',
+            StorageFileFormat.fitsRice: 'FITS + RICE compression',
+            StorageFileFormat.fitsGzip: 'FITS + gzip',
+          },
+          onChanged: (v) {
+            if (v != null) n.setFileFormat(v);
+          },
         ),
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Row(
-            children: [
-              SizedBox(
-                width: 280,
-                child: Text('Compression',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AraColors.textSecondary,
-                        )),
-              ),
-              Expanded(
-                child: DropdownButtonFormField<StorageCompression>(
-                  initialValue: s.compression,
-                  isDense: true,
-                  items: const [
-                    DropdownMenuItem(value: StorageCompression.off, child: Text('Off')),
-                    DropdownMenuItem(value: StorageCompression.rice, child: Text('RICE')),
-                    DropdownMenuItem(value: StorageCompression.gzip, child: Text('gzip')),
-                  ],
-                  onChanged: (v) {
-                    if (v != null) n.setCompression(v);
-                  },
-                ),
-              ),
-            ],
-          ),
+        SettingsDropdownRow<StorageCompression>(
+          label: 'Compression',
+          helpKey: 'session.storage.compression',
+          value: s.compression,
+          items: const {
+            StorageCompression.off: 'Off',
+            StorageCompression.rice: 'RICE',
+            StorageCompression.gzip: 'gzip',
+          },
+          onChanged: (v) {
+            if (v != null) n.setCompression(v);
+          },
         ),
         EditableTextRow(
           label: 'Filename template',
+          helpKey: 'session.storage.filename_template',
           currentValue: s.filenameTemplate,
           getCanonical: () =>
               ref.read(storageSettingsProvider).filenameTemplate,

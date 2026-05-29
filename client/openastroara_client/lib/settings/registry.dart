@@ -207,4 +207,50 @@ const List<Setting> settingsRegistry = [
     defaultValue: false,
     profilePath: 'imaging.warmup_at_session_end',
   ),
+
+  // §29 Storage — 4 fields. State lives in `storageSettingsProvider`.
+  Setting(
+    id: 'session.storage.save_directory',
+    label: 'Save directory',
+    description: 'Base directory where captured frames are written. The §29.1.3 ext4 wizard helps migrate from the SD card to a USB drive.',
+    keywords: ['save', 'directory', 'folder', 'path', 'storage', 'disk', 'usb', 'sd card'],
+    path: ['Settings', 'Session', 'Storage'],
+    type: SettingType.path(),
+    defaultValue: '/media/openastroara',
+    profilePath: 'storage.save_directory',
+  ),
+  Setting(
+    id: 'session.storage.file_format',
+    label: 'File format',
+    description: 'On-disk frame format. FITS is the de-facto astronomy standard; XISF is PixInsight\'s native format with richer metadata.',
+    keywords: ['format', 'fits', 'xisf', 'rice', 'gzip', 'file type', 'extension'],
+    path: ['Settings', 'Session', 'Storage'],
+    type: SettingType.enumValue(['FITS', 'XISF', 'FITS + RICE compression', 'FITS + gzip']),
+    defaultValue: 'FITS',
+    profilePath: 'storage.file_format',
+  ),
+  Setting(
+    id: 'session.storage.compression',
+    label: 'Compression',
+    description: 'Optional lossless compression of frame files at write time. RICE is fast + astronomy-tuned; gzip is universal but slower.',
+    keywords: ['compression', 'rice', 'gzip', 'lossless', 'disk space', 'size'],
+    path: ['Settings', 'Session', 'Storage'],
+    type: SettingType.enumValue(['Off', 'RICE', 'gzip']),
+    defaultValue: 'RICE',
+    profilePath: 'storage.compression',
+  ),
+  Setting(
+    id: 'session.storage.filename_template',
+    label: 'Filename template',
+    description: 'Pattern for output filenames using \$\$TOKEN\$\$ placeholders. Tokens: DATEMINUS12, DATETIME, IMAGETYPE, FILTER, EXPOSURETIME, TARGETNAME, etc.',
+    keywords: ['filename', 'template', 'naming', 'tokens', 'pattern', 'date', 'filter'],
+    path: ['Settings', 'Session', 'Storage'],
+    type: SettingType.string(),
+    // Raw string matches `StorageSettings.filenameTemplate` default verbatim.
+    // The doubled-backslash + doubled-dollar syntax is the template engine's
+    // own convention (`\\` as path separator, `$$TOKEN$$` for substitution);
+    // the `r''` prefix means Dart doesn't process either as escapes.
+    defaultValue: r'$$DATEMINUS12$$\\$$IMAGETYPE$$\\$$DATETIME$$_$$FILTER$$_$$EXPOSURETIME$$s',
+    profilePath: 'storage.filename_template',
+  ),
 ];
