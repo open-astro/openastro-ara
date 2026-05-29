@@ -259,8 +259,8 @@ const Map<String, Help> helpRegistry = {
   'session.filenames.date_separator': Help(
     key: 'session.filenames.date_separator',
     title: 'Date separator',
-    body: 'Determines how `\$\$DATE\$\$`, `\$\$DATETIME\$\$`, and `\$\$DATEMINUS12\$\$` tokens render in output paths.\n\n'
-        '* **`/` forward slash**: tokens like `2026-05-29` become actual subdirectories. Cleanest organization, plays well with file managers.\n'
+    body: 'Determines how `\$\$DATETIME\$\$` and `\$\$DATEMINUS12\$\$` tokens render in output paths.\n\n'
+        '* **`/` forward slash**: dates like `2026-05-29` become actual subdirectories. Cleanest organization, plays well with file managers.\n'
         '* **`_` underscore**: dates stay inline (`2026-05-29_M31_L_60s.fits`). Flat output; good if you sort + organize externally later.\n'
         '* **`-` dash**: same as underscore, but uses `-` between date components. Maximally Windows-safe (no characters reserved by NTFS).',
     relatedSettings: ['session.storage.filename_template'],
