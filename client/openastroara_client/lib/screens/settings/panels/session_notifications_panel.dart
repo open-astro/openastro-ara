@@ -75,6 +75,7 @@ class SessionNotificationsPanel extends ConsumerWidget {
         ),
         SettingsSwitchRow(
           label: 'Safety event',
+          helpKey: 'session.notifications.on_safety_event',
           value: s.onSafetyEvent,
           onChanged: n.setOnSafetyEvent,
         ),
