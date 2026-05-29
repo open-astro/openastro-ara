@@ -337,6 +337,52 @@ const Map<String, Help> helpRegistry = {
         'Override per device based on your hardware\'s behaviour.',
   ),
 
+  // §37.11 Autofocus — help on the genuinely non-obvious controls.
+  'img.autofocus.method': Help(
+    key: 'img.autofocus.method',
+    title: 'Autofocus method',
+    body: '* **HFR V-curve** (recommended): samples N positions across the focuser range, computes Half-Flux Radius at each, fits a V-shaped parabola, and picks the position at the V\'s minimum. Robust for CMOS + small refractors.\n'
+        '* **Brightest-star HFR**: same algorithm but uses only the single brightest star in the frame (vs the median across all detected stars). Faster on sparse fields but noise-sensitive.\n'
+        '* **FWHM (Gaussian fit)**: fits a 2D Gaussian to star profiles. More accurate at the focus point but slower; benefits from longer exposures.',
+    relatedSettings: ['img.autofocus.steps', 'img.autofocus.step_size'],
+  ),
+  'img.autofocus.steps': Help(
+    key: 'img.autofocus.steps',
+    title: 'Number of AF steps',
+    body: 'How many focuser positions to sample around the current position. The V-curve fit needs at least 3 points to be meaningful; 7-9 is the sweet spot for most setups (good fit + reasonable run time, ~5-10 min total).\n\n'
+        'More steps catch a flatter HFR-vs-position curve more accurately but multiply the AF run time. Use 11-15 only if your CFZ is very small (long focal length + fast f-ratio) or you\'re tuning the routine.',
+    relatedSettings: ['img.autofocus.step_size', 'img.autofocus.exposure_seconds'],
+  ),
+  'img.autofocus.step_size': Help(
+    key: 'img.autofocus.step_size',
+    title: 'AF step size',
+    body: 'Distance between sample positions, in focuser native steps. Should span **3-5x the critical focus zone (CFZ)** total range — too small and the V-curve doesn\'t have enough vertical range to fit; too large and you sample outside the regime where the curve is parabolic.\n\n'
+        'CFZ ≈ 2 × λ × N² where λ is wavelength (~0.55µm for green) and N is the f-ratio. f/4 → CFZ ~17µm; f/8 → CFZ ~70µm. Convert µm to focuser steps via your focuser\'s steps-per-µm.\n\n'
+        'When in doubt: start with the default (50), run a focus, look at the V-curve. Flat curve → increase step size; sharp narrow V → decrease.',
+    relatedSettings: ['img.autofocus.steps'],
+  ),
+  'img.autofocus.trigger_temp_delta_c': Help(
+    key: 'img.autofocus.trigger_temp_delta_c',
+    title: 'Temperature-trigger threshold',
+    body: 'Most focuser tubes expand/contract with temperature — a 5°C overnight drop can move best-focus by 50-100 focuser steps. This setting triggers an AF run when the focuser-reported temperature has changed by this many °C since the last run.\n\n'
+        '2.0°C is a sensible default for most aluminum/carbon-fiber tubes; tune lower (1.0-1.5°C) for very thermally sensitive setups (fast newts, big aperture refractors). 0 disables the temperature trigger.',
+    relatedSettings: ['img.autofocus.trigger_hfr_drift_pct', 'img.autofocus.every_n_hours'],
+  ),
+  'img.autofocus.trigger_hfr_drift_pct': Help(
+    key: 'img.autofocus.trigger_hfr_drift_pct',
+    title: 'HFR-drift trigger',
+    body: 'Triggers an AF run when the median HFR of recent light frames has worsened by this percentage compared to the post-AF baseline. Catches focus drift between scheduled AF runs — temperature changes are the usual cause but seeing degradation or mechanical shifts also bump HFR.\n\n'
+        '15% is a balanced default — clear enough to detect real drift, loose enough to ignore single bad frames. Lower the threshold (5-10%) for narrowband / long exposures where bad frames are expensive.',
+    relatedSettings: ['img.autofocus.trigger_temp_delta_c', 'img.autofocus.every_n_hours'],
+  ),
+  'img.autofocus.every_n_hours': Help(
+    key: 'img.autofocus.every_n_hours',
+    title: 'Periodic AF trigger',
+    body: 'Force an AF run every N hours regardless of temperature or HFR. Catches slow drift that doesn\'t cross either of the other triggers (e.g. a gradual mechanical settling on first-night-out setups).\n\n'
+        '2 hours is a safe interval for most sessions. Set to 0 to disable the time-based trigger and rely purely on temperature + HFR triggers.',
+    relatedSettings: ['img.autofocus.trigger_temp_delta_c', 'img.autofocus.trigger_hfr_drift_pct'],
+  ),
+
   // §37.4 Filter Wheel slot labels.
   'eq.filterwheel.slot_labels': Help(
     key: 'eq.filterwheel.slot_labels',
