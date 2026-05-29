@@ -25,6 +25,7 @@ class EquipmentFilterWheelPanel extends ConsumerWidget {
         const SettingsRow(label: 'Alpaca device', value: 'Not selected'),
         SettingsSwitchRow(
           label: 'Auto-connect on boot',
+          helpKey: 'eq.auto_connect_on_boot',
           value: connection.autoConnect(EquipmentDeviceType.filterWheel),
           onChanged: (v) =>
               connN.setAutoConnect(EquipmentDeviceType.filterWheel, v),

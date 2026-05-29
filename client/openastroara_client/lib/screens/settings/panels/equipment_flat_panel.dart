@@ -26,6 +26,7 @@ class EquipmentFlatPanel extends ConsumerWidget {
         ),
         SettingsSwitchRow(
           label: 'Auto-connect on boot',
+          helpKey: 'eq.auto_connect_on_boot',
           value: connection.autoConnect(EquipmentDeviceType.flatPanel),
           onChanged: (v) =>
               n.setAutoConnect(EquipmentDeviceType.flatPanel, v),

@@ -275,6 +275,27 @@ const Map<String, Help> helpRegistry = {
     relatedSettings: ['session.storage.compression'],
   ),
 
+  // §52.1 connection lifecycle — one shared help entry covers all 10 device-
+  // type auto-connect toggles. Per-device side effects are listed in the body.
+  'eq.auto_connect_on_boot': Help(
+    key: 'eq.auto_connect_on_boot',
+    title: 'Auto-connect on boot',
+    body: 'Whether to automatically open the Alpaca connection to this device when the daemon starts.\n\n'
+        '**Defaults split by side-effect risk:**\n\n'
+        '*Connect-by-default* (minor or no actuation):\n'
+        '* Camera — USB link power-up only\n'
+        '* Mount — sidereal tracking comes on per §57\n'
+        '* Focuser, rotator — position read on connect, no movement\n'
+        '* Filter wheel — most drivers reposition to last-known slot on connect (driver-dependent). If it matters which filter is in beam at startup, leave this off and connect manually.\n'
+        '* Flat panel (CoverCalibrator) — does not change cover position\n'
+        '* Safety monitor — recommended on for unattended observatories\n\n'
+        '*Manual-connect by default* (driver may actuate hardware on connect):\n'
+        '* Guider — starts the PHD2 / openastro-phd2 client process\n'
+        '* Dome — some drivers move shutter or rotate to home on connect\n'
+        '* Weather station — keeps the polling loop quiet until you opt in\n\n'
+        'Override per device based on your hardware\'s behaviour.',
+  ),
+
   // §37.4 Filter Wheel slot labels.
   'eq.filterwheel.slot_labels': Help(
     key: 'eq.filterwheel.slot_labels',

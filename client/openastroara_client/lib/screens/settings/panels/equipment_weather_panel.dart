@@ -22,6 +22,7 @@ class EquipmentWeatherPanel extends ConsumerWidget {
             label: 'Alpaca device', value: 'Not selected (optional)'),
         SettingsSwitchRow(
           label: 'Auto-connect on boot',
+          helpKey: 'eq.auto_connect_on_boot',
           value: connection.autoConnect(EquipmentDeviceType.weather),
           onChanged: (v) => n.setAutoConnect(EquipmentDeviceType.weather, v),
         ),
