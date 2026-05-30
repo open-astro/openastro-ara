@@ -126,6 +126,21 @@ public static class ProfileEndpoints {
             .WithName("PutSafetyPolicies")
             .WithSummary("Replace the active profile's safety policies.");
 
+        profile.MapGet("/autofocus", (IProfileStore store) =>
+                Results.Ok(store.GetAutofocusSettings()))
+            .Produces<AutofocusSettingsDto>(StatusCodes.Status200OK)
+            .WithName("GetAutofocusSettings")
+            .WithSummary("Get the active profile's autofocus settings.");
+
+        profile.MapPut("/autofocus", (AutofocusSettingsDto body, IProfileStore store) => {
+                store.PutAutofocusSettings(body);
+                return Results.Ok(body);
+            })
+            .Accepts<AutofocusSettingsDto>("application/json")
+            .Produces<AutofocusSettingsDto>(StatusCodes.Status200OK)
+            .WithName("PutAutofocusSettings")
+            .WithSummary("Replace the active profile's autofocus settings.");
+
         return app;
     }
 }

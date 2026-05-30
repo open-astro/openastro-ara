@@ -1,7 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-/// §37.11 Autofocus settings. Phase 12h.2-autofocus holds state in memory;
-/// 12h.2b wires `/api/v1/profile/autofocus` for daemon round-trip.
+import '../../services/profile_api.dart';
+
+/// §37.11 Autofocus settings. Phase 12h.6h wires the daemon round-trip
+/// via [ProfileApi] (`/api/v1/profile/autofocus`). Local state is the
+/// source of truth between syncs.
 
 enum AutofocusMethod { hfrVCurve, brightestStarHfr, fwhm }
 
@@ -123,6 +126,16 @@ class AutofocusSettingsNotifier extends Notifier<AutofocusSettings> {
       state = state.copyWith(abortSequenceOnAfFailure: v);
   void setRestorePositionOnFailure(bool v) =>
       state = state.copyWith(restorePositionOnFailure: v);
+
+  Future<void> hydrateFromServer(ProfileApi api) async {
+    state = await api.getAutofocusSettings();
+  }
+
+  Future<AutofocusSettings> persistToServer(ProfileApi api) async {
+    final echoed = await api.putAutofocusSettings(state);
+    state = echoed;
+    return echoed;
+  }
 }
 
 final autofocusSettingsProvider =

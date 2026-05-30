@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 
 import '../models/server.dart';
 import '../state/imaging/exposure_state.dart' show FrameKind;
+import '../state/settings/autofocus_settings_state.dart';
 import '../state/settings/filenames_settings_state.dart';
 import '../state/settings/imaging_defaults_state.dart';
 import '../state/settings/notifications_settings_state.dart';
@@ -130,6 +131,23 @@ class ProfileApi {
     return _safetyPoliciesFromJson(res.data ?? const {});
   }
 
+  /// GET the active profile's autofocus settings.
+  Future<AutofocusSettings> getAutofocusSettings() async {
+    final res = await _dio.get<Map<String, dynamic>>(
+      '/api/v1/profile/autofocus',
+    );
+    return _autofocusSettingsFromJson(res.data ?? const {});
+  }
+
+  /// PUT the active profile's autofocus settings.
+  Future<AutofocusSettings> putAutofocusSettings(AutofocusSettings value) async {
+    final res = await _dio.put<Map<String, dynamic>>(
+      '/api/v1/profile/autofocus',
+      data: _autofocusSettingsToJson(value),
+    );
+    return _autofocusSettingsFromJson(res.data ?? const {});
+  }
+
   // ── JSON mapping ────────────────────────────────────────────────────────
   // The server's `ConfigureHttpJsonOptions` uses snake_case, so the wire
   // shape is `exposure_seconds` etc. (not `defaultExposure`).
@@ -228,6 +246,66 @@ class ProfileApi {
       case 'rice':
       default:
         return StorageCompression.rice;
+    }
+  }
+
+  // ── Autofocus settings JSON mapping ────────────────────────────────────
+
+  static AutofocusSettings _autofocusSettingsFromJson(Map<String, dynamic> j) =>
+      AutofocusSettings(
+        method: _autofocusMethodFromString(j['method'] as String?),
+        steps: (j['steps'] as num?)?.toInt() ?? 7,
+        stepSize: (j['step_size'] as num?)?.toInt() ?? 50,
+        exposureSeconds: (j['exposure_seconds'] as num?)?.toInt() ?? 5,
+        binning: (j['binning'] as num?)?.toInt() ?? 1,
+        afFilter: (j['af_filter'] as String?) ?? 'L',
+        runAfterFilterChange: (j['run_after_filter_change'] as bool?) ?? true,
+        triggerTempDeltaC:
+            (j['trigger_temp_delta_c'] as num?)?.toDouble() ?? 2.0,
+        triggerHfrDriftPct:
+            (j['trigger_hfr_drift_pct'] as num?)?.toDouble() ?? 15.0,
+        everyNHours: (j['every_n_hours'] as num?)?.toInt() ?? 2,
+        abortSequenceOnAfFailure:
+            (j['abort_sequence_on_af_failure'] as bool?) ?? true,
+        restorePositionOnFailure:
+            (j['restore_position_on_failure'] as bool?) ?? true,
+      );
+
+  static Map<String, dynamic> _autofocusSettingsToJson(AutofocusSettings v) => {
+        'method': _autofocusMethodToString(v.method),
+        'steps': v.steps,
+        'step_size': v.stepSize,
+        'exposure_seconds': v.exposureSeconds,
+        'binning': v.binning,
+        'af_filter': v.afFilter,
+        'run_after_filter_change': v.runAfterFilterChange,
+        'trigger_temp_delta_c': v.triggerTempDeltaC,
+        'trigger_hfr_drift_pct': v.triggerHfrDriftPct,
+        'every_n_hours': v.everyNHours,
+        'abort_sequence_on_af_failure': v.abortSequenceOnAfFailure,
+        'restore_position_on_failure': v.restorePositionOnFailure,
+      };
+
+  static AutofocusMethod _autofocusMethodFromString(String? s) {
+    switch (s) {
+      case 'brightest_star_hfr':
+        return AutofocusMethod.brightestStarHfr;
+      case 'fwhm':
+        return AutofocusMethod.fwhm;
+      case 'hfr_v_curve':
+      default:
+        return AutofocusMethod.hfrVCurve;
+    }
+  }
+
+  static String _autofocusMethodToString(AutofocusMethod m) {
+    switch (m) {
+      case AutofocusMethod.hfrVCurve:
+        return 'hfr_v_curve';
+      case AutofocusMethod.brightestStarHfr:
+        return 'brightest_star_hfr';
+      case AutofocusMethod.fwhm:
+        return 'fwhm';
     }
   }
 
