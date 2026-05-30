@@ -2,7 +2,7 @@
 
 [![License: MPL 2.0](https://img.shields.io/badge/License-MPL%202.0-brightgreen.svg)](https://www.mozilla.org/en-US/MPL/2.0/)
 
-A headless ASP.NET Core daemon (`OpenAstroAra.Server`) + cross-platform Flutter client (`OpenAstroAra.Client`) for deep-sky astrophotography. The server runs on a Raspberry Pi 4/5 or any ARM64 / x64 Linux host; the client runs on macOS, iOS, Android, Windows, and Linux desktops from one Flutter codebase.
+A headless ASP.NET Core daemon (`OpenAstroAra.Server`) + cross-platform Flutter client (`OpenAstroAra.Client`) for deep-sky astrophotography. The server runs on **ARM64 Linux only** — Raspberry Pi 4/5 is the reference platform; other ARM64 SBCs (Orange Pi 5, Rock Pi, etc.) running Debian Trixie arm64 are best-effort per playbook §13.1. The client runs on macOS, iOS, Android, Windows, and Linux desktops from one Flutter codebase.
 
 The product model is ASIAir-like: server runs the night, client is for planning and monitoring. Close the laptop, imaging keeps going.
 

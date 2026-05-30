@@ -93,6 +93,28 @@ public class Program {
         // Phase 13.3 — placeholder ISessionService composing on the frame repo
         // so the §40 Library + session-drilldown UI has consistent fixture data.
         builder.Services.AddSingleton<ISessionService, PlaceholderSessionService>();
+        // Phase 13.4 — placeholder INotificationService so WILMA's §46 inbox +
+        // §46.4 preferences view has wire shapes to render. Three sample
+        // notifications (Info/Warning/Critical across Sequence/Storage/Safety
+        // categories); preferences default to "everything enabled" matching §46.4.
+        builder.Services.AddSingleton<INotificationService, PlaceholderNotificationService>();
+        // Phase 13.5 — placeholder IDiagnosticsService. Static fixtures
+        // (Yellow health + 1 open issue + 3-event history); SetMode stores
+        // in-memory. The §51 *operating* mode reported here (Off/Observe/
+        // Suggest/AutoCorrect) is conceptually distinct from the §51.5
+        // *settings* reaction mode (notify_only/pause_on_critical/
+        // abort_on_critical) which round-trips via the profile store —
+        // Phase 13.x reconciles.
+        builder.Services.AddSingleton<IDiagnosticsService, PlaceholderDiagnosticsService>();
+        // Phase 13.6 — placeholder IStatsService covering all 8 §50 chart
+        // views with synthetic fixture data. Numbers are intentionally small
+        // so the Stats tab renders something sensible without claiming the
+        // system has acquired 50 nights of data.
+        builder.Services.AddSingleton<IStatsService, PlaceholderStatsService>();
+        // Phase 13.7 — placeholder IServerStateService for the §60.4 state
+        // snapshot + §33.2.1 versions + §54 release notes. Restart endpoints
+        // throw (§13 systemd-watchdog work needed).
+        builder.Services.AddSingleton<IServerStateService, PlaceholderServerStateService>();
 
         // §37 profile store. Phase 12h.6a introduced the in-memory impl;
         // Phase 12h.7 upgraded to FileProfileStore (settings survive daemon

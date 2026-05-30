@@ -17,6 +17,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Services;
 
 namespace OpenAstroAra.Server.Endpoints;
 
@@ -36,21 +37,26 @@ public static class ServerStateEndpoints {
     public static IEndpointRouteBuilder MapServerStateEndpoints(this IEndpointRouteBuilder app) {
         var server = app.MapGroup("/api/v1/server").WithTags("Server");
 
-        server.MapGet("/state", () => NotImplementedStub("GET /api/v1/server/state", "§60.4"))
+        // Phase 13.7 — wired to IServerStateService (placeholder today).
+        server.MapGet("/state",
+                async (IServerStateService svc, CancellationToken ct) =>
+                    Results.Ok(await svc.GetSnapshotAsync(ct)))
               .Produces<ServerStateDto>(StatusCodes.Status200OK)
-              .ProducesProblem(StatusCodes.Status501NotImplemented)
               .WithName("GetServerState");
 
-        server.MapGet("/versions", () => NotImplementedStub("GET /api/v1/server/versions", "§33.2.1"))
+        server.MapGet("/versions",
+                async (IServerStateService svc, CancellationToken ct) =>
+                    Results.Ok(await svc.GetVersionsAsync(ct)))
               .Produces<ApiVersionsDto>(StatusCodes.Status200OK)
-              .ProducesProblem(StatusCodes.Status501NotImplemented)
               .WithName("GetServerVersions");
 
         server.MapGet("/release-notes",
-                (string? version) => NotImplementedStub("GET /api/v1/server/release-notes", "§54"))
+                async (string? version, IServerStateService svc, CancellationToken ct) => {
+                    var notes = await svc.GetReleaseNotesAsync(version, ct);
+                    return notes is null ? Results.NotFound() : Results.Ok(notes);
+                })
             .Produces<ReleaseNotesDto>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status404NotFound)
-            .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("GetReleaseNotes");
 
         server.MapPost("/restart", () => NotImplementedStub("POST /api/v1/server/restart", "§34.7"))
