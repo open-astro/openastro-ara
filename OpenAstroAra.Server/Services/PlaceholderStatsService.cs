@@ -138,15 +138,18 @@ public sealed class PlaceholderStatsService : IStatsService {
     }
 
     public Task<StatsCalendarDto> GetCalendarAsync(DateOnly fromDate, DateOnly toDate, CancellationToken ct) {
-        // Only emit days with non-zero activity — the §50 calendar
-        // heatmap renders zero-cells from the date range itself, so we
-        // don't have to send 30 empty rows.
+        // Dates are relative to "today" rather than hardcoded — fixture
+        // stays useful indefinitely as the calendar default window slides
+        // forward. Same 5-night cadence as the overview sparkline so the
+        // two views agree. Only non-zero days emitted; the §50 calendar
+        // heatmap renders zero-cells from the range itself.
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var days = new[] {
-            new StatsCalendarDayDto(new DateOnly(2026, 5, 30), 3, 0.15, new[] { "M31" }),
-            new StatsCalendarDayDto(new DateOnly(2026, 5, 27), 50, 2.5,  new[] { "M81" }),
-            new StatsCalendarDayDto(new DateOnly(2026, 5, 23), 84, 4.2,  new[] { "M81", "M31" }),
-            new StatsCalendarDayDto(new DateOnly(2026, 5, 16), 36, 1.8,  new[] { "NGC 7000" }),
-            new StatsCalendarDayDto(new DateOnly(2026, 5,  9), 72, 3.6,  new[] { "M42", "NGC 7000" }),
+            new StatsCalendarDayDto(today,             3,  0.15, new[] { "M31" }),
+            new StatsCalendarDayDto(today.AddDays(-3),  50, 2.5,  new[] { "M81" }),
+            new StatsCalendarDayDto(today.AddDays(-7),  84, 4.2,  new[] { "M81", "M31" }),
+            new StatsCalendarDayDto(today.AddDays(-14), 36, 1.8,  new[] { "NGC 7000" }),
+            new StatsCalendarDayDto(today.AddDays(-21), 72, 3.6,  new[] { "M42", "NGC 7000" }),
         };
         return Task.FromResult(new StatsCalendarDto(
             days.Where(d => d.Date >= fromDate && d.Date <= toDate).ToList()));
