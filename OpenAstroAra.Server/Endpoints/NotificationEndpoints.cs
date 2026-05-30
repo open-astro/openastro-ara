@@ -68,6 +68,11 @@ public static class NotificationEndpoints {
                     Results.Ok(await svc.SetPreferencesAsync(preferences, ct)))
             .Accepts<NotificationPreferenceDto>("application/json")
             .Produces<NotificationPreferenceDto>(StatusCodes.Status200OK)
+            // The placeholder accepts any prefs body, but the §46.5 real
+            // implementation will validate (e.g. reject empty category
+            // lists, malformed quiet-hours times). Keep the annotation so
+            // the contract is visible for that future validation.
+            .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
             .WithName("SetNotificationPreferences");
 
         return app;
