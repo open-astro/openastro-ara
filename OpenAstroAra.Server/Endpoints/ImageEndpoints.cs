@@ -39,17 +39,22 @@ public static class ImageEndpoints {
         // ─── Frames (§40, §65) ───
         var frames = app.MapGroup("/api/v1/frames").WithTags("Frames");
 
+        // Phase 13.2 — wired to IFrameRepository. PlaceholderFrameRepository
+        // returns three sample frames (two Lights + one Dark, all M31 in the
+        // same fake session) so the WILMA Library + frame-detail UI has real
+        // wire shapes to render. Phase 13.3+ swaps in the §28 DB-backed impl.
         frames.MapGet("",
-                (int? limit, string? cursor, Guid? sessionId, string? targetName) =>
-                    NotImplementedStub("GET /api/v1/frames", "§40"))
+                async (int? limit, string? cursor, Guid? sessionId, string? targetName, IFrameRepository repo, CancellationToken ct) =>
+                    Results.Ok(await repo.ListAsync(limit ?? 50, cursor, sessionId, targetName, ct)))
             .Produces<CursorPage<FrameListItemDto>>(StatusCodes.Status200OK)
-            .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("ListFrames");
 
-        frames.MapGet("/{id:guid}", (Guid id) => NotImplementedStub("GET /api/v1/frames/{id}", "§40"))
+        frames.MapGet("/{id:guid}", async (Guid id, IFrameRepository repo, CancellationToken ct) => {
+                var frame = await repo.GetAsync(id, ct);
+                return frame is null ? Results.NotFound() : Results.Ok(frame);
+            })
               .Produces<FrameDto>(StatusCodes.Status200OK)
               .ProducesProblem(StatusCodes.Status404NotFound)
-              .ProducesProblem(StatusCodes.Status501NotImplemented)
               .WithName("GetFrame");
 
         // Phase 13.1 — wired to IFrameRepository (PlaceholderFrameRepository
