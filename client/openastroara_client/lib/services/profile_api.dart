@@ -7,6 +7,7 @@ import '../state/settings/diagnostics_mode_state.dart';
 import '../state/settings/filenames_settings_state.dart';
 import '../state/settings/imaging_defaults_state.dart';
 import '../state/settings/notifications_settings_state.dart';
+import '../state/settings/phd2_settings_state.dart';
 import '../state/settings/plate_solve_settings_state.dart';
 import '../state/settings/safety_policies_state.dart';
 import '../state/settings/site_settings_state.dart';
@@ -185,6 +186,23 @@ class ProfileApi {
     return _diagnosticsModeFromString((res.data ?? const {})['mode'] as String?);
   }
 
+  /// GET the active profile's PHD2 settings.
+  Future<Phd2Settings> getPhd2Settings() async {
+    final res = await _dio.get<Map<String, dynamic>>(
+      '/api/v1/profile/phd2',
+    );
+    return _phd2SettingsFromJson(res.data ?? const {});
+  }
+
+  /// PUT the active profile's PHD2 settings.
+  Future<Phd2Settings> putPhd2Settings(Phd2Settings value) async {
+    final res = await _dio.put<Map<String, dynamic>>(
+      '/api/v1/profile/phd2',
+      data: _phd2SettingsToJson(value),
+    );
+    return _phd2SettingsFromJson(res.data ?? const {});
+  }
+
   // ── JSON mapping ────────────────────────────────────────────────────────
   // The server's `ConfigureHttpJsonOptions` uses snake_case, so the wire
   // shape is `exposure_seconds` etc. (not `defaultExposure`).
@@ -285,6 +303,37 @@ class ProfileApi {
         return StorageCompression.rice;
     }
   }
+
+  // ── PHD2 settings JSON mapping ─────────────────────────────────────────
+
+  static Phd2Settings _phd2SettingsFromJson(Map<String, dynamic> j) =>
+      Phd2Settings(
+        host: (j['host'] as String?) ?? 'localhost',
+        port: (j['port'] as num?)?.toInt() ?? 4400,
+        phd2Profile: (j['phd2_profile'] as String?) ?? 'Default',
+        ditherEnabled: (j['dither_enabled'] as bool?) ?? true,
+        ditherEveryNFrames:
+            (j['dither_every_n_frames'] as num?)?.toInt() ?? 1,
+        ditherPixels: (j['dither_pixels'] as num?)?.toDouble() ?? 5.0,
+        settlePixels: (j['settle_pixels'] as num?)?.toDouble() ?? 1.5,
+        settleTimeSec: (j['settle_time_sec'] as num?)?.toInt() ?? 10,
+        settleTimeoutSec: (j['settle_timeout_sec'] as num?)?.toInt() ?? 60,
+        forceCalibrationEachSession:
+            (j['force_calibration_each_session'] as bool?) ?? false,
+      );
+
+  static Map<String, dynamic> _phd2SettingsToJson(Phd2Settings v) => {
+        'host': v.host,
+        'port': v.port,
+        'phd2_profile': v.phd2Profile,
+        'dither_enabled': v.ditherEnabled,
+        'dither_every_n_frames': v.ditherEveryNFrames,
+        'dither_pixels': v.ditherPixels,
+        'settle_pixels': v.settlePixels,
+        'settle_time_sec': v.settleTimeSec,
+        'settle_timeout_sec': v.settleTimeoutSec,
+        'force_calibration_each_session': v.forceCalibrationEachSession,
+      };
 
   // ── Diagnostics mode JSON mapping ──────────────────────────────────────
 

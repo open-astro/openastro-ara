@@ -206,4 +206,25 @@ public sealed class InMemoryProfileStore : IProfileStore {
     public void PutDiagnosticsMode(DiagnosticsModeDto value) {
         lock (_lock) { _diagnosticsMode = value; }
     }
+
+    // Defaults match Phd2Settings() constructor.
+    private Phd2SettingsDto _phd2 = new(
+        Host: "localhost",
+        Port: 4400,
+        Phd2Profile: "Default",
+        DitherEnabled: true,
+        DitherEveryNFrames: 1,
+        DitherPixels: 5.0,
+        SettlePixels: 1.5,
+        SettleTimeSec: 10,
+        SettleTimeoutSec: 60,
+        ForceCalibrationEachSession: false);
+
+    public Phd2SettingsDto GetPhd2Settings() {
+        lock (_lock) { return _phd2; }
+    }
+
+    public void PutPhd2Settings(Phd2SettingsDto value) {
+        lock (_lock) { _phd2 = value; }
+    }
 }
