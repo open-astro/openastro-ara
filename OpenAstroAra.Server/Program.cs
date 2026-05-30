@@ -85,6 +85,15 @@ public class Program {
         // Phase 9 — IWsBroadcaster + IWsEventChannel + dispatch worker
         builder.Services.AddSingleton<IEquipmentDiscoveryService, AlpacaEquipmentDiscoveryService>();
 
+        // Phase 13.1 — placeholder IFrameRepository so the §65 preview/thumbnail
+        // endpoints return a real (tiny gray) JPEG instead of 501-stubbing. Real
+        // OpenCvSharp4-backed implementation lands in Phase 13.2+ alongside the
+        // §28 frame catalog DB.
+        builder.Services.AddSingleton<IFrameRepository, PlaceholderFrameRepository>();
+        // Phase 13.3 — placeholder ISessionService composing on the frame repo
+        // so the §40 Library + session-drilldown UI has consistent fixture data.
+        builder.Services.AddSingleton<ISessionService, PlaceholderSessionService>();
+
         // §37 profile store. Phase 12h.6a introduced the in-memory impl;
         // Phase 12h.7 upgraded to FileProfileStore (settings survive daemon
         // restart). Profile path resolution:

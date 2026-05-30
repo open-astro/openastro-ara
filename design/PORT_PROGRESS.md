@@ -5,8 +5,8 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 ## Current
 
 - **Phase:** Phase 12h.6 — daemon round-trip for in-memory settings.
-- **Last merged:** `phase-14a-aot-json-context-foundation` — PR #143, 2026-05-30. Closes the AOT-readiness gap; `dotnet run` smoke passes end-to-end (daemon serves /healthz + profile GET/PUT round-trip + persists to disk).
-- **Currently working on:** `phase-14b-ci-server-smoke` — adds a runtime smoke step to the server-build CI job so future PRs catch JsonTypeInfo/serializer-context regressions at PR time instead of post-merge.
+- **Last merged:** `phase-13-2-frame-dto-placeholder` — PR #148, 2026-05-30. Three sample fixture frames (M31 Lights + Dark) wired through `/frames` and `/frames/{id}`. The browseable Library round-trip is now live end-to-end on the server side.
+- **Currently working on:** `phase-13-3-session-placeholder` — `PlaceholderSessionService` returning one fake session matching the §13.2 sample frames. Wires `/sessions`, `/sessions/{id}`, and `/sessions/{id}/frames` to the new service. §28 DB-backed catalog lands in 13.4+.
 - **Note:** Phase 12h.3 (Smart Settings Search) + 12h.4 (PHD2) + 12h.5 (Alpaca chooser) all merged via PRs #110-#128 between 2026-05-29 and 2026-05-30; a dedicated `port-progress-refresh` sub-PR will backfill the Completed section once Phase 12h closes out.
 
 ## Completed
@@ -109,6 +109,26 @@ Folded into Phase 0.5p (global.json + csproj target framework bumps).
   - 12h.2-trim: Whitespace-tolerant string setters (PR #103)
   - 12h.2-switch: Shared `SettingsSwitchRow` (PR #104)
   - 12h.2-dropdown: Shared `SettingsDropdownRow` (PR #105, merged 2026-05-29)
+- ✅ **12h.3** — Smart Settings Search (⌘K) + Help Registry. Cross-cutting all settings panels. Foundation + per-section rollout across PRs #110–#123 (2026-05-29 → 2026-05-30):
+  - 12h.3a (PR #111): Foundation — `settings/registry.dart`, `help/registry.dart`, command palette widget, two CI registry-enforcement scripts.
+  - 12h.3b-k (PRs #112–#121): Bulk-register each panel's entries + wire help icons (imaging defaults, storage, notifications, site, filenames, filter wheel, equipment auto-connect, safety policies, autofocus, plate solve + diagnostics mode).
+  - 12h.3l (PR #123): Visible magnifying-glass affordance in AppShell top bar.
+- ✅ **12h.4** (PR #124) — §63 PHD2 settings state (`phd2_settings_state.dart`, 7 tests, 10 fields) + full guider panel migration.
+- ✅ **12h.5** — §52.2 Alpaca device chooser. Three sub-PRs (#125, #126, #127):
+  - 12h.5a: `DiscoveredDevice` model + `EquipmentDiscoveryApi` dio wrapper + `AlpacaSelectionNotifier` + modal chooser dialog + camera-panel wiring.
+  - 12h.5b: Lifted `AlpacaDeviceRow` to a shared widget + wired mount panel.
+  - 12h.5c: Wired the row across the remaining 7 equipment panels.
+- ✅ **12h.6** — §37 daemon round-trip for every settings panel (PRs #129–#140, tag `phase-12h7-complete`). 11 sub-PRs cloning the same `IProfileStore` foundation across all sections:
+  - 12h.6a (PR #129): Server-side imaging-defaults endpoint — `IProfileStore` + `InMemoryProfileStore` foundation.
+  - 12h.6b (PR #130): Client `ProfileApi` + imaging-defaults panel hydrate-on-mount + Save → PUT.
+  - 12h.6c (PR #131): Storage settings (server + client bundled).
+  - 12h.6d-L (PRs #132–#140): Notifications, site, filenames, safety policies, autofocus, plate solve, diagnostics mode, PHD2, equipment-connection (10 auto-connect bools auto-saved via notifier).
+  - PR #140 also caught a systemic camelCase-vs-snake_case drift in 11 profile-section OpenAPI schemas and swept all to snake_case.
+- ✅ **12h.7** (PR #141) — `FileProfileStore` + `ProfileSnapshotDto`. Settings now survive daemon restart via atomic JSON writes to `{profileDir}/profile.json`. Path resolves env > `/var/lib/openastroara` > `~/.local/share/openastroara`.
+
+### Phase 14 — Tests + AOT hardening + CI matrix
+- ✅ **14a** (PR #143) — `AraJsonSerializerContext` source-gen for all 133 DTO records + 7 `CursorPage<T>` instantiations + 8 `IReadOnlyList<T>` collection wrappers + `ProblemDetails`. Closes the long-running AOT-readiness gap that was blocking `dotnet run` smoke testing. Daemon now starts cleanly in Development mode; profile GET/PUT round-trip works end-to-end.
+- ✅ **14b** (PR #144, tag `phase-14b-complete`) — server runtime smoke step in CI. After `dotnet build`, the workflow backgrounds the daemon, polls `/healthz`, probes a real DTO endpoint + a 501-stub Problem endpoint, and asserts `profile.json` is written with snake_case keys. Would have caught the 12h.6a JsonTypeInfo bug at PR time.
 
 ### Phase 0.5p-followup buildfix — Core + Astrometry + Equipment cleanup (PR #43)
 - ✅ `OpenAstroAra.Core` — `Notification.cs` scrubbed (CustomDisplayPart references removed; warning/error variants now route to `Logger` with `[CallerXxx]` attribute propagation so the original call site is preserved); `MyMessageBox.cs` `Show(...)` maps affirmative defaults (Yes→No, OK→Cancel) to safe non-affirmative results to prevent `SequenceHasChanged.AskHasChanged` silently auto-detaching; `System.Management 10.0.0` added for WMI usage in `Logger.cs` + `SerialPortProvider.cs`.
