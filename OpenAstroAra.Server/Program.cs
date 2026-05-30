@@ -111,6 +111,10 @@ public class Program {
         // so the Stats tab renders something sensible without claiming the
         // system has acquired 50 nights of data.
         builder.Services.AddSingleton<IStatsService, PlaceholderStatsService>();
+        // Phase 13.7 — placeholder IServerStateService for the §60.4 state
+        // snapshot + §33.2.1 versions + §54 release notes. Restart endpoints
+        // throw (§13 systemd-watchdog work needed).
+        builder.Services.AddSingleton<IServerStateService, PlaceholderServerStateService>();
 
         // §37 profile store. Phase 12h.6a introduced the in-memory impl;
         // Phase 12h.7 upgraded to FileProfileStore (settings survive daemon
