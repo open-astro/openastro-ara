@@ -150,6 +150,10 @@ public class Program {
         // Phase 13.13 — §38 sequence CRUD + runtime control.
         builder.Services.AddSingleton<ISequenceService, PlaceholderSequenceService>();
         builder.Services.AddSingleton<ISequencerService, PlaceholderSequencerService>();
+        // Phase 13.14 — calibration + dark library + mosaic placeholders.
+        builder.Services.AddSingleton<ICalibrationService, PlaceholderCalibrationService>();
+        builder.Services.AddSingleton<IDarkLibraryService, PlaceholderDarkLibraryService>();
+        builder.Services.AddSingleton<IMosaicService, PlaceholderMosaicService>();
 
         // §37 profile store. Phase 12h.6a introduced the in-memory impl;
         // Phase 12h.7 upgraded to FileProfileStore (settings survive daemon

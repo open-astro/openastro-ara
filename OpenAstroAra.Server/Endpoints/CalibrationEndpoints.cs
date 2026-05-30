@@ -17,66 +17,64 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Services;
 
 namespace OpenAstroAra.Server.Endpoints;
 
 /// <summary>
 /// Phase 7 calibration endpoints per PORT_PLAYBOOK.md §10.7 + §39.
-/// Each route declares its intended request + response DTOs so the
-/// generated OpenAPI surface lists the real schemas for WILMA codegen.
+/// Phase 13.14 wires every route to <see cref="ICalibrationService"/>
+/// + <see cref="IDarkLibraryService"/> (placeholders today).
 /// </summary>
 public static class CalibrationEndpoints {
-
-    private static IResult NotImplementedStub(string endpoint, string section) =>
-        Results.Problem(
-            type: "https://openastro.net/errors/not-implemented",
-            title: "Endpoint not yet implemented",
-            statusCode: StatusCodes.Status501NotImplemented,
-            detail: $"{endpoint} is part of Phase 7's incremental implementation ({section}). Stub registered so the OpenAPI surface is stable; service wiring lands per area.");
 
     public static IEndpointRouteBuilder MapCalibrationEndpoints(this IEndpointRouteBuilder app) {
         var calibration = app.MapGroup("/api/v1/calibration").WithTags("Calibration");
 
         // Session lookup (§39)
-        calibration.MapGet("/sessions", () => NotImplementedStub("GET /api/v1/calibration/sessions", "§39"))
+        calibration.MapGet("/sessions",
+                async (int? limit, string? cursor, ICalibrationService svc, CancellationToken ct) =>
+                    Results.Ok(await svc.ListSessionsAsync(limit ?? 50, cursor, ct)))
                    .Produces<CursorPage<CalibrationSessionDto>>(StatusCodes.Status200OK)
-                   .ProducesProblem(StatusCodes.Status501NotImplemented)
                    .WithName("ListCalibrationSessions");
 
-        calibration.MapGet("/sessions/{id:guid}", (Guid id) =>
-                NotImplementedStub("GET /api/v1/calibration/sessions/{id}", "§39"))
+        calibration.MapGet("/sessions/{id:guid}",
+                async (Guid id, ICalibrationService svc, CancellationToken ct) => {
+                    var dto = await svc.GetSessionAsync(id, ct);
+                    return dto is null ? Results.NotFound() : Results.Ok(dto);
+                })
             .Produces<CalibrationSessionDto>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status404NotFound)
-            .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("GetCalibrationSession");
 
         calibration.MapPost("/sessions/{id:guid}/matching-flats",
-                (Guid id, [FromBody] MatchingFlatsRequestDto request) =>
-                    NotImplementedStub("POST /api/v1/calibration/sessions/{id}/matching-flats", "§39"))
+                async (Guid id, [FromBody] MatchingFlatsRequestDto request, ICalibrationService svc, CancellationToken ct) => {
+                    var generated = await svc.GenerateMatchingFlatsAsync(id, request, ct);
+                    return Results.Created($"/api/v1/sequences/{generated.GeneratedSequenceId}", generated);
+                })
             .Accepts<MatchingFlatsRequestDto>("application/json")
             .Produces<GeneratedFlatSequenceDto>(StatusCodes.Status201Created)
             .ProducesProblem(StatusCodes.Status404NotFound)
-            .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("GenerateMatchingFlats");
 
         // Dark library (§39, §63)
-        calibration.MapPost("/dark-library/build", ([FromBody] DarkLibraryBuildRequestDto request) =>
-                NotImplementedStub("POST /api/v1/calibration/dark-library/build", "§39"))
+        calibration.MapPost("/dark-library/build",
+                async ([FromBody] DarkLibraryBuildRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, IDarkLibraryService svc, CancellationToken ct) =>
+                    Results.Accepted(value: await svc.StartBuildAsync(request, key, ct)))
             .Accepts<DarkLibraryBuildRequestDto>("application/json")
             .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
-            .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("BuildDarkLibrary");
 
-        calibration.MapGet("/dark-library/status", () =>
-                NotImplementedStub("GET /api/v1/calibration/dark-library/status", "§39"))
+        calibration.MapGet("/dark-library/status",
+                async (IDarkLibraryService svc, CancellationToken ct) =>
+                    Results.Ok(await svc.GetStatusAsync(ct)))
             .Produces<DarkLibraryStateDto>(StatusCodes.Status200OK)
-            .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("GetDarkLibraryStatus");
 
-        calibration.MapGet("/dark-library/list", () =>
-                NotImplementedStub("GET /api/v1/calibration/dark-library/list", "§39"))
+        calibration.MapGet("/dark-library/list",
+                async (IDarkLibraryService svc, CancellationToken ct) =>
+                    Results.Ok(await svc.ListEntriesAsync(ct)))
             .Produces<IReadOnlyList<DarkLibraryEntryDto>>(StatusCodes.Status200OK)
-            .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("ListDarkLibraryEntries");
 
         return app;

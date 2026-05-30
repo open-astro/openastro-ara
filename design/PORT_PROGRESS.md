@@ -5,8 +5,8 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 ## Current
 
 - **Phase:** Phase 12h.6 — daemon round-trip for in-memory settings.
-- **Last merged:** `phase-13-12-equipment-services-placeholder` — PR #162, 2026-05-30. All 12 §52 equipment services wired (~50 routes 501→functional).
-- **Currently working on:** `phase-13-13-sequence-services-placeholder` — `PlaceholderSequenceService` + `PlaceholderSequencerService`. In-memory CRUD round-trip for §38 sequences (create/get/list/update/delete actually persist for the daemon lifetime). Lifecycle actions (start/pause/resume/abort/stop) return 202 OperationAccepted. Calibration + Mosaic + DarkLibrary placeholders follow in 13.14+.
+- **Last merged:** `phase-13-13-sequence-services-placeholder` — PR #163, 2026-05-30. §38 sequence CRUD + lifecycle wired.
+- **Currently working on:** `phase-13-14-calibration-mosaic-darks-placeholder` — `PlaceholderCalibrationService` + `PlaceholderDarkLibraryService` + `PlaceholderMosaicService`. §39 calibration + dark library + §47 mosaic surfaces — CRUD round-trip on mosaic (in-memory), fixture data on calibration/darks, status endpoints functional. ~12 routes 501→functional. Smoke gate's 501-probe target moved to `/sequences/templates` (still stubbed).
 - **Note:** Phase 12h.3 (Smart Settings Search) + 12h.4 (PHD2) + 12h.5 (Alpaca chooser) all merged via PRs #110-#128 between 2026-05-29 and 2026-05-30; a dedicated `port-progress-refresh` sub-PR will backfill the Completed section once Phase 12h closes out.
 
 ## Completed
