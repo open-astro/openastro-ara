@@ -85,3 +85,14 @@ public sealed record SiteSettingsDto(
     int BortleClass,
     double TypicalSeeingArcsec,
     string TwilightDefinition);
+
+/// <summary>
+/// §29.2 filenames settings — date-token separator + dark/bias
+/// compression toggle. (The main filename template + format live in
+/// <see cref="StorageSettingsDto"/>; this section covers what the storage
+/// panel doesn't.) `DateSeparator` is `forward_slash`/`underscore`/`dash`
+/// on the wire (snake_case for compound names per §60.6).
+/// </summary>
+public sealed record FilenamesSettingsDto(
+    string DateSeparator,
+    bool CompressDarksAndBias);

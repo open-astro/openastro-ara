@@ -34,4 +34,7 @@ public interface IProfileStore {
 
     SiteSettingsDto GetSiteSettings();
     void PutSiteSettings(SiteSettingsDto value);
+
+    FilenamesSettingsDto GetFilenamesSettings();
+    void PutFilenamesSettings(FilenamesSettingsDto value);
 }

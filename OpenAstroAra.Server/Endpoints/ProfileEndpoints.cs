@@ -96,6 +96,21 @@ public static class ProfileEndpoints {
             .WithName("PutSiteSettings")
             .WithSummary("Replace the active profile's site preferences.");
 
+        profile.MapGet("/filenames", (IProfileStore store) =>
+                Results.Ok(store.GetFilenamesSettings()))
+            .Produces<FilenamesSettingsDto>(StatusCodes.Status200OK)
+            .WithName("GetFilenamesSettings")
+            .WithSummary("Get the active profile's filenames settings.");
+
+        profile.MapPut("/filenames", (FilenamesSettingsDto body, IProfileStore store) => {
+                store.PutFilenamesSettings(body);
+                return Results.Ok(body);
+            })
+            .Accepts<FilenamesSettingsDto>("application/json")
+            .Produces<FilenamesSettingsDto>(StatusCodes.Status200OK)
+            .WithName("PutFilenamesSettings")
+            .WithSummary("Replace the active profile's filenames settings.");
+
         return app;
     }
 }

@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 
 import '../models/server.dart';
 import '../state/imaging/exposure_state.dart' show FrameKind;
+import '../state/settings/filenames_settings_state.dart';
 import '../state/settings/imaging_defaults_state.dart';
 import '../state/settings/notifications_settings_state.dart';
 import '../state/settings/site_settings_state.dart';
@@ -92,6 +93,23 @@ class ProfileApi {
       data: _siteSettingsToJson(value),
     );
     return _siteSettingsFromJson(res.data ?? const {});
+  }
+
+  /// GET the active profile's filenames-settings section.
+  Future<FilenamesSettings> getFilenamesSettings() async {
+    final res = await _dio.get<Map<String, dynamic>>(
+      '/api/v1/profile/filenames',
+    );
+    return _filenamesSettingsFromJson(res.data ?? const {});
+  }
+
+  /// PUT the active profile's filenames-settings section.
+  Future<FilenamesSettings> putFilenamesSettings(FilenamesSettings value) async {
+    final res = await _dio.put<Map<String, dynamic>>(
+      '/api/v1/profile/filenames',
+      data: _filenamesSettingsToJson(value),
+    );
+    return _filenamesSettingsFromJson(res.data ?? const {});
   }
 
   // ── JSON mapping ────────────────────────────────────────────────────────
@@ -192,6 +210,42 @@ class ProfileApi {
       case 'rice':
       default:
         return StorageCompression.rice;
+    }
+  }
+
+  // ── Filenames settings JSON mapping ────────────────────────────────────
+
+  static FilenamesSettings _filenamesSettingsFromJson(Map<String, dynamic> j) =>
+      FilenamesSettings(
+        dateSeparator: _dateSeparatorFromString(j['date_separator'] as String?),
+        compressDarksAndBias: (j['compress_darks_and_bias'] as bool?) ?? true,
+      );
+
+  static Map<String, dynamic> _filenamesSettingsToJson(FilenamesSettings v) => {
+        'date_separator': _dateSeparatorToString(v.dateSeparator),
+        'compress_darks_and_bias': v.compressDarksAndBias,
+      };
+
+  static DateSeparator _dateSeparatorFromString(String? s) {
+    switch (s) {
+      case 'underscore':
+        return DateSeparator.underscore;
+      case 'dash':
+        return DateSeparator.dash;
+      case 'forward_slash':
+      default:
+        return DateSeparator.forwardSlash;
+    }
+  }
+
+  static String _dateSeparatorToString(DateSeparator d) {
+    switch (d) {
+      case DateSeparator.forwardSlash:
+        return 'forward_slash';
+      case DateSeparator.underscore:
+        return 'underscore';
+      case DateSeparator.dash:
+        return 'dash';
     }
   }
 

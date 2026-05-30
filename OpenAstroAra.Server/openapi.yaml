@@ -379,6 +379,34 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ImagingDefaults' }
 
+  /profile/filenames:
+    get:
+      summary: Get active profile's filenames settings
+      description: |
+        Phase 12h.6f — §29.2 filenames section. Covers what the storage
+        panel doesn't (date-token separator + dark/bias compression).
+      tags: [Profile]
+      responses:
+        '200':
+          description: Current filenames-settings state
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FilenamesSettings' }
+    put:
+      summary: Replace active profile's filenames settings
+      tags: [Profile]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/FilenamesSettings' }
+      responses:
+        '200':
+          description: New state (echo of input)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FilenamesSettings' }
+
   /profile/site:
     get:
       summary: Get active profile's site preferences
@@ -756,6 +784,16 @@ components:
         fileFormat:       { type: string, enum: [fits, xisf, fits_rice, fits_gzip] }
         compression:      { type: string, enum: [off, rice, gzip] }
         filenameTemplate: { type: string, minLength: 1 }
+
+    FilenamesSettings:
+      type: object
+      description: |
+        §29.2 filenames profile section. Mirrors WILMA's `FilenamesSettings`.
+        `dateSeparator` is one of `forward_slash`/`underscore`/`dash`.
+      required: [dateSeparator, compressDarksAndBias]
+      properties:
+        dateSeparator:        { type: string, enum: [forward_slash, underscore, dash] }
+        compressDarksAndBias: { type: boolean }
 
     SiteSettings:
       type: object
