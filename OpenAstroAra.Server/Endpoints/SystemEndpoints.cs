@@ -68,12 +68,17 @@ public static class SystemEndpoints {
                     Results.Accepted(value: await svc.DownloadAsync(request, idempotencyKey, ct)))
             .Accepts<DownloadRequestDto>("application/json")
             .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
+            // Real impl will 404 if PackageId is unknown — keep the
+            // annotation visible for WILMA codegen.
+            .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("StartDataPackageDownload");
 
         data.MapPost("/cancel/{downloadId:guid}",
                 async (Guid downloadId, IDataManagerService svc, CancellationToken ct) =>
                     Results.Accepted(value: await svc.CancelAsync(downloadId, ct)))
             .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
+            // Real impl 404s if the download id isn't an active job.
+            .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("CancelDataPackageDownload");
 
         data.MapDelete("/{packageId}",
@@ -136,8 +141,13 @@ public static class SystemEndpoints {
             .WithName("PreviewProfileShareImport");
 
         profiles.MapPost("/share-import/commit",
-                async (Guid importToken, IProfileShareService svc, CancellationToken ct) =>
-                    Results.Created($"/api/v1/profiles/{await svc.ImportCommitAsync(importToken, ct)}", value: importToken))
+                async (Guid importToken, IProfileShareService svc, CancellationToken ct) => {
+                    // Body must be the new profile's GUID so WILMA can
+                    // navigate to it; the import token has already done
+                    // its job at this point.
+                    var newProfileId = await svc.ImportCommitAsync(importToken, ct);
+                    return Results.Created($"/api/v1/profiles/{newProfileId}", value: newProfileId);
+                })
             .Produces<Guid>(StatusCodes.Status201Created)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("CommitProfileShareImport");

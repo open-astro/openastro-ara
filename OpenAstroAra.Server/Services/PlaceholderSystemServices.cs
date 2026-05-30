@@ -104,7 +104,7 @@ public sealed class PlaceholderProfileShareService : IProfileShareService {
             ProfileName: "Sample profile",
             Manifest: _emptyManifest.RootElement.Clone(),
             PayloadBytes: 4_096,
-            DownloadUrl: $"/api/v1/profile/share/{profileId}/payload"));
+            DownloadUrl: $"/api/v1/profiles/share/{profileId}/payload"));
 
     public Task<ProfileShareImportPreviewDto> ImportPreviewAsync(JsonElement manifest, CancellationToken ct) =>
         Task.FromResult(new ProfileShareImportPreviewDto(
