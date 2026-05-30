@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../state/settings/equipment_connection_state.dart';
+import '../../../widgets/equipment/alpaca_device_row.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
 
@@ -18,8 +19,11 @@ class EquipmentWeatherPanel extends ConsumerWidget {
       padding: const EdgeInsets.all(24),
       children: [
         const SettingsSectionHeader('Connection'),
-        const SettingsRow(
-            label: 'Alpaca device', value: 'Not selected (optional)'),
+        const AlpacaDeviceRow(
+          deviceType: EquipmentDeviceType.weather,
+          deviceTypeLabel: 'weather',
+          hint: 'Optional — feeds §35 safety policies',
+        ),
         SettingsSwitchRow(
           label: 'Auto-connect on boot',
           helpKey: 'eq.auto_connect_on_boot',
