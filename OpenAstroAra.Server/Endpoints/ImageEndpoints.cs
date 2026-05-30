@@ -115,24 +115,36 @@ public static class ImageEndpoints {
         // ─── Sessions (§40, §65) ───
         var sessions = app.MapGroup("/api/v1/sessions").WithTags("Sessions");
 
+        // Phase 13.3 — wired to ISessionService. Placeholder returns one
+        // fake session matching the §13.2 sample frames so list/get/frames
+        // all join up. §28 DB-backed impl lands in Phase 13.4+.
         sessions.MapGet("",
-                (int? limit, string? cursor) => NotImplementedStub("GET /api/v1/sessions", "§40"))
+                async (int? limit, string? cursor, ISessionService svc, CancellationToken ct) =>
+                    Results.Ok(await svc.ListAsync(limit ?? 50, cursor, ct)))
             .Produces<CursorPage<SessionDto>>(StatusCodes.Status200OK)
-            .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("ListSessions");
 
-        sessions.MapGet("/{id:guid}", (Guid id) => NotImplementedStub("GET /api/v1/sessions/{id}", "§40"))
+        sessions.MapGet("/{id:guid}", async (Guid id, ISessionService svc, CancellationToken ct) => {
+                var session = await svc.GetAsync(id, ct);
+                return session is null ? Results.NotFound() : Results.Ok(session);
+            })
                 .Produces<SessionDto>(StatusCodes.Status200OK)
                 .ProducesProblem(StatusCodes.Status404NotFound)
-                .ProducesProblem(StatusCodes.Status501NotImplemented)
                 .WithName("GetSession");
 
         sessions.MapGet("/{id:guid}/frames",
-                (Guid id, int? limit, string? cursor) =>
-                    NotImplementedStub("GET /api/v1/sessions/{id}/frames", "§40"))
+                async (Guid id, int? limit, string? cursor, ISessionService svc, CancellationToken ct) => {
+                    // Existence check first — without it, unknown session IDs
+                    // would return 200 + empty list (the frame repo silently
+                    // filters to no matches), which is semantically wrong:
+                    // "no frames in a non-existent session" ≠ "this session
+                    // had no frames yet". §40 expects 404 here.
+                    var session = await svc.GetAsync(id, ct);
+                    if (session is null) return Results.NotFound();
+                    return Results.Ok(await svc.GetFramesAsync(id, limit ?? 50, cursor, ct));
+                })
             .Produces<CursorPage<FrameListItemDto>>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status404NotFound)
-            .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("GetSessionFrames");
 
         sessions.MapPost("/{id:guid}/resume-target",
