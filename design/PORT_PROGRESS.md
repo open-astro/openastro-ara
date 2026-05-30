@@ -4,10 +4,10 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** Phase 12h.3-search (Smart Settings Search) — starting
-- **Last merged:** `phase-12h2-dropdown` — PR #105, 2026-05-29 (consolidate `_DropdownRow` + `_NumberRow` into shared widgets, −126 LoC).
-- **Currently working on:** `phase-12h3-search` branch — §61 smart settings search (⌘K) cross-cutting all settings panels.
-- **In flight (12h.2 followup):** `phase-12h2-equipment-connect` (PR #106) — `EquipmentConnectionSettings` notifier wiring auto-connect-on-boot across all 10 equipment panels. 3 new tests, total 141.
+- **Phase:** Phase 12h.6 — daemon round-trip for in-memory settings.
+- **Last merged:** `phase-12h6a-profile-imaging-defaults` — PR #129, 2026-05-30 (server-side imaging-defaults `GET`/`PUT` real endpoints; replaces the 501-stub with an `IProfileStore` + in-memory impl).
+- **Currently working on:** `phase-12h6b-profile-api-client` — client `ProfileApi` service + hydrate `imagingDefaultsProvider` on panel mount + wire the imaging-defaults Save button to PUT.
+- **Note:** Phase 12h.3 (Smart Settings Search) + 12h.4 (PHD2) + 12h.5 (Alpaca chooser) all merged via PRs #110-#128 between 2026-05-29 and 2026-05-30; a dedicated `port-progress-refresh` sub-PR will backfill the Completed section once Phase 12h closes out.
 
 ## Completed
 

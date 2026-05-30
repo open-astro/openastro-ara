@@ -1,12 +1,14 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../services/profile_api.dart';
 import '../imaging/exposure_state.dart' show FrameKind;
 
 /// Profile-level imaging defaults (§37.11 + §29). These seed the
 /// `ExposureController` on first build of the Imaging tab; changes from the
-/// Settings panel persist back here. Phase 12h.2-imaging holds the values
-/// in memory; 12h.2b will wire `/api/v1/profile/imaging-defaults` for
-/// daemon round-trip persistence.
+/// Settings panel persist back here. Phase 12h.6b wires the daemon round-
+/// trip via [ProfileApi]: [ImagingDefaultsNotifier.hydrateFromServer] runs
+/// on panel mount, [ImagingDefaultsNotifier.persistToServer] runs from the
+/// Save button. Local state is still the source of truth between syncs.
 
 class ImagingDefaults {
   final Duration defaultExposure;
@@ -95,6 +97,22 @@ class ImagingDefaultsNotifier extends Notifier<ImagingDefaults> {
 
   void setWarmupAtSessionEnd(bool v) =>
       state = state.copyWith(warmupAtSessionEnd: v);
+
+  /// Replace local state with what the daemon currently holds. Called on
+  /// Settings panel mount so the user sees the persisted values, not the
+  /// in-process defaults. Errors bubble up to the caller for snackbar UI.
+  Future<void> hydrateFromServer(ProfileApi api) async {
+    state = await api.getImagingDefaults();
+  }
+
+  /// Send the current local state to the daemon. Returns the daemon's echo
+  /// so the panel can confirm what was persisted (and update state if the
+  /// daemon normalized any field).
+  Future<ImagingDefaults> persistToServer(ProfileApi api) async {
+    final echoed = await api.putImagingDefaults(state);
+    state = echoed;
+    return echoed;
+  }
 }
 
 final imagingDefaultsProvider =
