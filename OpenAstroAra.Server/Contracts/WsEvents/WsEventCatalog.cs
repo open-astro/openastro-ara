@@ -191,3 +191,27 @@ public sealed record WsEventEnvelopeDto(
     DateTimeOffset Ts,
     long Seq,
     System.Text.Json.JsonElement Payload);
+
+/// <summary>
+/// Optional first message a client may send after the §60.9 WS upgrade
+/// completes. <c>ResumeToken</c> is the opaque string returned by REST
+/// <c>GET /api/v1/server/state.ws_resume_token</c> in a prior session;
+/// for v0.0.1 it's the base-10 stringified last-seen sequence number.
+/// </summary>
+public sealed record WsResumeRequestDto(string? ResumeToken);
+
+/// <summary>
+/// Server response to a <see cref="WsResumeRequestDto"/>. Three shapes
+/// per openapi.yaml §60.9 docs:
+/// <list type="bullet">
+///   <item><c>{ resumed: true,  missed_events: N, last_event_id: "..." }</c> → replay follows immediately</item>
+///   <item><c>{ resumed: false, code: "resume_token_expired" }</c> → fresh subscription, no replay</item>
+///   <item><c>{ resumed: false, code: "resume_token_invalid" }</c> → client should clear local cursor</item>
+/// </list>
+/// </summary>
+public sealed record WsResumeResponseDto(
+    bool Resumed,
+    int? MissedEvents,
+    string? LastEventId,
+    string? Code,
+    string? Reason);

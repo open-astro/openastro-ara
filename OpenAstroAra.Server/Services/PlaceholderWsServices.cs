@@ -84,8 +84,13 @@ public sealed class InMemoryWsServices : IWsBroadcaster, IWsEventChannel {
         return Task.CompletedTask;
     }
 
-    public async IAsyncEnumerable<WsEventEnvelopeDto> ReadAllAsync(
-            [EnumeratorCancellation] CancellationToken ct) {
+    public IAsyncEnumerable<WsEventEnvelopeDto> ReadAllAsync(CancellationToken ct) {
+        // Eager registration — the subscriber dict entry has to exist before
+        // the caller runs any resume-phase logic, otherwise events published
+        // between snapshot and iteration are silently dropped (the race
+        // Sonnet caught on PR #174). Splitting the registration out of the
+        // iterator method moves it to the synchronous call site so it
+        // happens immediately, not on the first MoveNextAsync.
         var subscriberId = Guid.NewGuid();
         var sub = Channel.CreateBounded<WsEventEnvelopeDto>(
             new BoundedChannelOptions(PerSubscriberCapacity) {
@@ -94,6 +99,13 @@ public sealed class InMemoryWsServices : IWsBroadcaster, IWsEventChannel {
                 FullMode = BoundedChannelFullMode.DropOldest,
             });
         _subscribers[subscriberId] = sub;
+        return ReadFromSubscriptionAsync(subscriberId, sub, ct);
+    }
+
+    private async IAsyncEnumerable<WsEventEnvelopeDto> ReadFromSubscriptionAsync(
+            Guid subscriberId,
+            Channel<WsEventEnvelopeDto> sub,
+            [EnumeratorCancellation] CancellationToken ct) {
         try {
             await foreach (var envelope in sub.Reader.ReadAllAsync(ct)) {
                 yield return envelope;
