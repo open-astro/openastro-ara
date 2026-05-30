@@ -102,10 +102,10 @@ public static class WebSocketEndpoints {
     }
 
     /// <summary>
-     /// Window the server waits for an optional resume request as the
-     /// client's first frame. After this, the connection is treated as a
-     /// fresh subscription (no replay).
-     /// </summary>
+    /// Window the server waits for an optional resume request as the
+    /// client's first frame. After this, the connection is treated as a
+    /// fresh subscription (no replay).
+    /// </summary>
     private static readonly TimeSpan ResumeWindow = TimeSpan.FromSeconds(5);
 
     private static async Task HandleWebSocketAsync(
@@ -120,10 +120,21 @@ public static class WebSocketEndpoints {
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(http.RequestAborted);
         var ct = cts.Token;
 
+        // Register the per-client subscription BEFORE the resume phase
+        // runs. The race Sonnet caught on PR #174: any event published
+        // between the replay snapshot and the iterator's first MoveNext
+        // landed nowhere — too late for replay, too early for the
+        // subscription. Registering up front means new publishes buffer in
+        // the per-sub channel during the resume window + replay send; the
+        // drain loop later dedups against the highWaterMark so events that
+        // appear in both the snapshot and the channel are sent exactly
+        // once.
+        var liveStream = channel.ReadAllAsync(ct);
+
         // §60.9 resume protocol — give the client a short window to send a
         // JSON resume request as its first frame. Anything else (timeout,
         // non-JSON, missing resume_token) → treat as fresh subscription.
-        await HandleResumePhaseAsync(socket, channel, broadcaster, logger, ct);
+        var highWaterMark = await HandleResumePhaseAsync(socket, channel, broadcaster, logger, ct);
 
         // Passive receive loop — after the resume window the receive side
         // just watches for Close frames. Heartbeat (pong handling) and
@@ -150,8 +161,15 @@ public static class WebSocketEndpoints {
         }, ct);
 
         try {
-            await foreach (var envelope in channel.ReadAllAsync(ct)) {
+            await foreach (var envelope in liveStream) {
                 if (socket.State != WebSocketState.Open) break;
+                // Dedup against the replay snapshot's high-water mark.
+                // Envelopes with seq <= highWaterMark were either already
+                // replayed (during the resume phase) or already seen by
+                // the client (per their resume_token). Anything new (seq
+                // > highWaterMark) goes through normally. Fresh-subscription
+                // case has highWaterMark = 0, so this is a no-op there.
+                if (envelope.Seq <= highWaterMark) continue;
                 var json = JsonSerializer.SerializeToUtf8Bytes(
                     envelope, AraJsonSerializerContext.Default.WsEventEnvelopeDto);
                 await socket.SendAsync(
@@ -180,7 +198,14 @@ public static class WebSocketEndpoints {
         try { await receiveTask; } catch { /* swallowed; loop already logs */ }
     }
 
-    private static async Task HandleResumePhaseAsync(
+    /// <summary>
+    /// Runs the §60.9 resume protocol if the client sends a JSON resume
+    /// request as its first frame. Returns the high-water-mark seq for
+    /// drain-loop dedup — anything with seq &lt;= this was either already
+    /// replayed or already seen by the client. Returns 0 for fresh
+    /// subscriptions (no replay, no dedup needed).
+    /// </summary>
+    private static async Task<long> HandleResumePhaseAsync(
             WebSocket socket,
             IWsEventChannel channel,
             IWsBroadcaster broadcaster,
@@ -198,25 +223,25 @@ public static class WebSocketEndpoints {
             do {
                 result = await socket.ReceiveAsync(buffer, resumeCts.Token);
                 if (result.MessageType == WebSocketMessageType.Close) {
-                    return;
+                    return 0;
                 }
                 ms.Write(buffer, 0, result.Count);
                 if (ms.Length > 16 * 1024) {
                     // Resume request is small; anything larger isn't one.
-                    return;
+                    return 0;
                 }
             } while (!result.EndOfMessage);
         } catch (OperationCanceledException) when (resumeCts.IsCancellationRequested && !ct.IsCancellationRequested) {
             // Resume window elapsed — fresh subscription, no replay.
-            return;
+            return 0;
         } catch (WebSocketException ex) {
             logger.LogDebug(ex, "WS resume receive failed");
-            return;
+            return 0;
         }
 
         if (result.MessageType != WebSocketMessageType.Text) {
             // Binary first frame can't be a resume request — discard.
-            return;
+            return 0;
         }
 
         WsResumeRequestDto? request;
@@ -225,12 +250,12 @@ public static class WebSocketEndpoints {
                 ms.ToArray(), AraJsonSerializerContext.Default.WsResumeRequestDto);
         } catch (JsonException) {
             // Malformed JSON → fresh subscription.
-            return;
+            return 0;
         }
 
         if (request is null || string.IsNullOrWhiteSpace(request.ResumeToken)) {
             // First frame wasn't a resume request → fresh subscription.
-            return;
+            return 0;
         }
 
         // v0.0.1: resume_token is the base-10 stringified last-seen sequence
@@ -243,7 +268,7 @@ public static class WebSocketEndpoints {
                 LastEventId: null,
                 Code: "resume_token_invalid",
                 Reason: "Token must be a non-negative base-10 integer."), ct);
-            return;
+            return 0;
         }
 
         var currentSeq = broadcaster.CurrentSequence;
@@ -257,20 +282,27 @@ public static class WebSocketEndpoints {
                 LastEventId: null,
                 Code: "resume_token_expired",
                 Reason: $"Last seen seq {lastSeenSeq} is beyond the {replayWindow}-event replay window (current seq: {currentSeq})."), ct);
-            return;
+            return 0;
         }
 
         var missed = await channel.ResumeFromAsync(lastSeenSeq, ct);
+        // High-water mark for drain-loop dedup. Max seq in the snapshot is
+        // the seq of the last envelope (ConcurrentQueue.ToArray returns
+        // FIFO order, so [^1] is the newest). If the snapshot is empty,
+        // there's nothing to replay and nothing to dedup — fall back to
+        // lastSeenSeq so dedup-skip is a no-op.
+        var highWaterMark = missed.Count > 0 ? missed[^1].Seq : lastSeenSeq;
         await SendResumeResponseAsync(socket, new WsResumeResponseDto(
             Resumed: true,
             MissedEvents: missed.Count,
-            LastEventId: missed.Count > 0 ? missed[^1].Seq.ToString() : lastSeenSeq.ToString(),
+            LastEventId: highWaterMark.ToString(),
             Code: null,
             Reason: null), ct);
 
         // Replay every missed envelope in order before the normal drain
-        // takes over. New events that have arrived since the snapshot will
-        // be picked up by the post-resume ReadAllAsync subscription.
+        // takes over. Events published during this loop also land in the
+        // already-registered subscription channel — the drain loop dedups
+        // them via the highWaterMark filter.
         foreach (var envelope in missed) {
             if (socket.State != WebSocketState.Open) break;
             var json = JsonSerializer.SerializeToUtf8Bytes(
@@ -278,6 +310,8 @@ public static class WebSocketEndpoints {
             await socket.SendAsync(
                 json, WebSocketMessageType.Text, endOfMessage: true, ct);
         }
+
+        return highWaterMark;
     }
 
     private static async Task SendResumeResponseAsync(
