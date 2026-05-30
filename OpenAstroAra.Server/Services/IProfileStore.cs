@@ -25,4 +25,7 @@ namespace OpenAstroAra.Server.Services;
 public interface IProfileStore {
     ImagingDefaultsDto GetImagingDefaults();
     void PutImagingDefaults(ImagingDefaultsDto value);
+
+    StorageSettingsDto GetStorageSettings();
+    void PutStorageSettings(StorageSettingsDto value);
 }

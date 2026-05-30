@@ -379,6 +379,37 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ImagingDefaults' }
 
+  /profile/storage:
+    get:
+      summary: Get active profile's storage settings
+      description: |
+        Phase 12h.6c — §29 storage section. WILMA hydrates `storageSettingsProvider`
+        from this on panel mount.
+      tags: [Profile]
+      responses:
+        '200':
+          description: Current storage-settings state
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StorageSettings' }
+    put:
+      summary: Replace active profile's storage settings
+      description: |
+        Full-replace semantics — WILMA's "Save" button holds the complete
+        section state client-side so PATCH partial-update is unnecessary.
+      tags: [Profile]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StorageSettings' }
+      responses:
+        '200':
+          description: New state (echo of input)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StorageSettings' }
+
 # ─── Endpoint group: Stream (Phase 9 — WebSocket) ─────────────────────────────
 # WebSocket endpoints aren't expressible in OpenAPI 3.1 paths; the full
 # wire-level invariants are documented here. See §60.9 for the canonical
@@ -653,6 +684,19 @@ components:
         coolerTargetC:      { type: number, format: double, minimum: -60, maximum: 30 }
         coolerRampCPerMin:  { type: number, format: double, minimum: 0, maximum: 10 }
         warmupAtSessionEnd: { type: boolean }
+
+    StorageSettings:
+      type: object
+      description: |
+        §29 storage profile section. Mirrors WILMA's `StorageSettings` client model.
+        `fileFormat` is one of `fits`/`xisf`/`fits_rice`/`fits_gzip`; `compression`
+        is one of `off`/`rice`/`gzip`.
+      required: [saveDirectory, fileFormat, compression, filenameTemplate]
+      properties:
+        saveDirectory:    { type: string, minLength: 1 }
+        fileFormat:       { type: string, enum: [fits, xisf, fits_rice, fits_gzip] }
+        compression:      { type: string, enum: [off, rice, gzip] }
+        filenameTemplate: { type: string, minLength: 1 }
 
     OperationAccepted:
       type: object

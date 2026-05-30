@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import '../models/server.dart';
 import '../state/imaging/exposure_state.dart' show FrameKind;
 import '../state/settings/imaging_defaults_state.dart';
+import '../state/settings/storage_settings_state.dart';
 
 /// Client-side wrapper around §37 profile endpoints. Phase 12h.6a landed the
 /// daemon side (`GET`/`PUT /api/v1/profile/imaging-defaults` backed by an
@@ -37,6 +38,23 @@ class ProfileApi {
       data: _imagingDefaultsToJson(value),
     );
     return _imagingDefaultsFromJson(res.data ?? const {});
+  }
+
+  /// GET the active profile's storage-settings section.
+  Future<StorageSettings> getStorageSettings() async {
+    final res = await _dio.get<Map<String, dynamic>>(
+      '/api/v1/profile/storage',
+    );
+    return _storageSettingsFromJson(res.data ?? const {});
+  }
+
+  /// PUT the active profile's storage-settings section.
+  Future<StorageSettings> putStorageSettings(StorageSettings value) async {
+    final res = await _dio.put<Map<String, dynamic>>(
+      '/api/v1/profile/storage',
+      data: _storageSettingsToJson(value),
+    );
+    return _storageSettingsFromJson(res.data ?? const {});
   }
 
   // ── JSON mapping ────────────────────────────────────────────────────────
@@ -78,6 +96,65 @@ class ProfileApi {
       case 'light':
       default:
         return FrameKind.light;
+    }
+  }
+
+  // ── Storage settings JSON mapping ──────────────────────────────────────
+
+  static StorageSettings _storageSettingsFromJson(Map<String, dynamic> j) =>
+      StorageSettings(
+        saveDirectory: (j['save_directory'] as String?) ?? '/media/openastroara',
+        fileFormat: _fileFormatFromString(j['file_format'] as String?),
+        compression: _compressionFromString(j['compression'] as String?),
+        // Fallback matches the StorageSettings() constructor default
+        // (raw-string literal with `\\` double-backslash separators).
+        filenameTemplate: (j['filename_template'] as String?) ??
+            r'$$DATEMINUS12$$\\$$IMAGETYPE$$\\$$DATETIME$$_$$FILTER$$_$$EXPOSURETIME$$s',
+      );
+
+  static Map<String, dynamic> _storageSettingsToJson(StorageSettings v) => {
+        'save_directory': v.saveDirectory,
+        'file_format': _fileFormatToString(v.fileFormat),
+        'compression': v.compression.name,
+        'filename_template': v.filenameTemplate,
+      };
+
+  static StorageFileFormat _fileFormatFromString(String? s) {
+    switch (s) {
+      case 'xisf':
+        return StorageFileFormat.xisf;
+      case 'fits_rice':
+        return StorageFileFormat.fitsRice;
+      case 'fits_gzip':
+        return StorageFileFormat.fitsGzip;
+      case 'fits':
+      default:
+        return StorageFileFormat.fits;
+    }
+  }
+
+  static String _fileFormatToString(StorageFileFormat f) {
+    switch (f) {
+      case StorageFileFormat.fits:
+        return 'fits';
+      case StorageFileFormat.xisf:
+        return 'xisf';
+      case StorageFileFormat.fitsRice:
+        return 'fits_rice';
+      case StorageFileFormat.fitsGzip:
+        return 'fits_gzip';
+    }
+  }
+
+  static StorageCompression _compressionFromString(String? s) {
+    switch (s) {
+      case 'off':
+        return StorageCompression.off;
+      case 'gzip':
+        return StorageCompression.gzip;
+      case 'rice':
+      default:
+        return StorageCompression.rice;
     }
   }
 }
