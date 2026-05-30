@@ -5,8 +5,8 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 ## Current
 
 - **Phase:** Phase 12h.6 — daemon round-trip for in-memory settings.
-- **Last merged:** `phase-13-10-system-services-placeholder` — PR #159, 2026-05-30. DataManager + ProfileShare + BackupStream — 11 more routes 501→functional.
-- **Currently working on:** `phase-13-11-backup-service-placeholder` — `PlaceholderBackupService` for the §43 ZIP-snapshot surface (distinct from §44 BackupStream). 4 routes: create-zip + restore-zip return 202s, snapshots returns 1 fixture record, clone-status returns idle JSON blob.
+- **Last merged:** `phase-13-11-backup-service-placeholder` — PR #160, 2026-05-30. Promoted to master via PR #161 alongside #157/#158/#159 (Phase 13.8-13.11).
+- **Currently working on:** `phase-13-12-equipment-services-placeholder` — all 12 §52 equipment services (camera, telescope, focuser, filter wheel, rotator, dome, switch, observing-conditions, safety-monitor, flat-device, guider, polar-align). ~50 routes go 501-stub → functional. All Gets return 404 (no hardware); Connects/Disconnects/Actions return 202 OperationAccepted. Real ASCOM Alpaca drivers land per-device in Phase 13.x / 14.
 - **Note:** Phase 12h.3 (Smart Settings Search) + 12h.4 (PHD2) + 12h.5 (Alpaca chooser) all merged via PRs #110-#128 between 2026-05-29 and 2026-05-30; a dedicated `port-progress-refresh` sub-PR will backfill the Completed section once Phase 12h closes out.
 
 ## Completed
