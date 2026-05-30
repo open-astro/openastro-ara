@@ -141,14 +141,17 @@ public class Program {
         // install), nickname (user-set in profile, defaults to hostname), version, api,
         // mDNS service-type so the WILMA client can verify discovery matches the daemon
         // it's connected to.
-        app.MapGet("/api/v1/server/info", () => Results.Ok(new {
-            server_uuid = ServerIdentity.Uuid,
-            nickname = ServerIdentity.Nickname,
-            version = ServerIdentity.Version,
-            api = "v1",
-            mdns_service = "_openastroara._tcp.local",
-            tier = "scaffold"  // upgraded to "ready" once Phase 6-9 endpoints land
-        }));
+        // Use the typed ServerInfoDto so source-gen handles the wire shape
+        // (Phase 14a). An anonymous type here would force a reflection
+        // fallback that can't run under AOT and breaks Development mode.
+        app.MapGet("/api/v1/server/info", () => Results.Ok(new OpenAstroAra.Server.Contracts.ServerInfoDto(
+            ServerUuid: ServerIdentity.Uuid,
+            Nickname: ServerIdentity.Nickname,
+            Version: ServerIdentity.Version,
+            Api: "v1",
+            MdnsService: "_openastroara._tcp.local",
+            Tier: "scaffold"  // upgraded to "ready" once Phase 6-9 endpoints land
+        )));
 
         app.Logger.LogInformation("OpenAstroAra.Server listening on :{Port}", port);
         app.Run();

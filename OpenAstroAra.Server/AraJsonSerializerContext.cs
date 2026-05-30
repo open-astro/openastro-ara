@@ -14,6 +14,7 @@
 
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
+using Microsoft.AspNetCore.Mvc;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Contracts.WsEvents;
 
@@ -41,9 +42,17 @@ namespace OpenAstroAra.Server;
 /// source-gen path or by an OpenAPI-introspection path that uses its own
 /// resolver chain.
 /// </summary>
+// Note: deliberately NOT setting UseStringEnumConverter = true here.
+// That option would make source-gen apply SnakeCaseLower to enum member
+// names too (`DarkFlat` → `dark_flat`, `SafetyMonitor` → `safety_monitor`),
+// which contradicts the §60.6 convention of all-lowercase enums with no
+// separator (`darkflat`, `safetymonitor`) used in both URL path segments
+// and JSON payloads. Without this flag, source-gen defers enum
+// serialization to the converters registered on JsonSerializerOptions
+// — Program.cs registers a JsonStringEnumConverter(LowerCaseNamingPolicy)
+// which produces the §60.6 shape.
 [JsonSourceGenerationOptions(
-    PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower,
-    UseStringEnumConverter = true)]
+    PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)]
 [JsonSerializable(typeof(ApiSurfaceVersionDto))]
 [JsonSerializable(typeof(ApiVersionsDto))]
 [JsonSerializable(typeof(AutoFlatsDecisionRequestDto))]
@@ -185,6 +194,10 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(CursorPage<NotificationDto>))]
 [JsonSerializable(typeof(CursorPage<SequenceListItemDto>))]
 [JsonSerializable(typeof(CursorPage<SessionDto>))]
+// Framework types — RFC 7807 problem responses from Results.Problem(...)
+// helpers used by every 4xx/5xx code path (NotImplementedStub etc.).
+[JsonSerializable(typeof(ProblemDetails))]
+[JsonSerializable(typeof(HttpValidationProblemDetails))]
 // Collection wrappers — endpoints that return raw lists.
 [JsonSerializable(typeof(IReadOnlyList<BackupZipDto>))]
 [JsonSerializable(typeof(IReadOnlyList<DarkLibraryEntryDto>))]
