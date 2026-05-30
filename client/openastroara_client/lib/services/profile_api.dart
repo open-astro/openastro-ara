@@ -5,6 +5,7 @@ import '../state/imaging/exposure_state.dart' show FrameKind;
 import '../state/settings/filenames_settings_state.dart';
 import '../state/settings/imaging_defaults_state.dart';
 import '../state/settings/notifications_settings_state.dart';
+import '../state/settings/safety_policies_state.dart';
 import '../state/settings/site_settings_state.dart';
 import '../state/settings/storage_settings_state.dart';
 
@@ -112,6 +113,23 @@ class ProfileApi {
     return _filenamesSettingsFromJson(res.data ?? const {});
   }
 
+  /// GET the active profile's safety policies.
+  Future<SafetyPolicies> getSafetyPolicies() async {
+    final res = await _dio.get<Map<String, dynamic>>(
+      '/api/v1/profile/safety',
+    );
+    return _safetyPoliciesFromJson(res.data ?? const {});
+  }
+
+  /// PUT the active profile's safety policies.
+  Future<SafetyPolicies> putSafetyPolicies(SafetyPolicies value) async {
+    final res = await _dio.put<Map<String, dynamic>>(
+      '/api/v1/profile/safety',
+      data: _safetyPoliciesToJson(value),
+    );
+    return _safetyPoliciesFromJson(res.data ?? const {});
+  }
+
   // ── JSON mapping ────────────────────────────────────────────────────────
   // The server's `ConfigureHttpJsonOptions` uses snake_case, so the wire
   // shape is `exposure_seconds` etc. (not `defaultExposure`).
@@ -210,6 +228,115 @@ class ProfileApi {
       case 'rice':
       default:
         return StorageCompression.rice;
+    }
+  }
+
+  // ── Safety policies JSON mapping ───────────────────────────────────────
+
+  static SafetyPolicies _safetyPoliciesFromJson(Map<String, dynamic> j) =>
+      SafetyPolicies(
+        onUnsafe: _unsafeActionFromString(j['on_unsafe'] as String?),
+        autoResumeWhenSafe: (j['auto_resume_when_safe'] as bool?) ?? true,
+        resumeDelayMin: (j['resume_delay_min'] as num?)?.toInt() ?? 10,
+        meridianFlipAuto: (j['meridian_flip_auto'] as bool?) ?? true,
+        meridianPauseMin: (j['meridian_pause_min'] as num?)?.toInt() ?? 5,
+        meridianRecenter: (j['meridian_recenter'] as bool?) ?? true,
+        meridianRecalGuider: (j['meridian_recal_guider'] as bool?) ?? true,
+        onAltitudeLimit:
+            _altitudeLimitActionFromString(j['on_altitude_limit'] as String?),
+        parkIfNoMoreTargets: (j['park_if_no_more_targets'] as bool?) ?? true,
+        onGuiderLost: _guiderLostActionFromString(j['on_guider_lost'] as String?),
+        guiderRetryTimeoutSec:
+            (j['guider_retry_timeout_sec'] as num?)?.toInt() ?? 60,
+        skipTargetIfRecoveryFails:
+            (j['skip_target_if_recovery_fails'] as bool?) ?? true,
+      );
+
+  static Map<String, dynamic> _safetyPoliciesToJson(SafetyPolicies v) => {
+        'on_unsafe': _unsafeActionToString(v.onUnsafe),
+        'auto_resume_when_safe': v.autoResumeWhenSafe,
+        'resume_delay_min': v.resumeDelayMin,
+        'meridian_flip_auto': v.meridianFlipAuto,
+        'meridian_pause_min': v.meridianPauseMin,
+        'meridian_recenter': v.meridianRecenter,
+        'meridian_recal_guider': v.meridianRecalGuider,
+        'on_altitude_limit': _altitudeLimitActionToString(v.onAltitudeLimit),
+        'park_if_no_more_targets': v.parkIfNoMoreTargets,
+        'on_guider_lost': _guiderLostActionToString(v.onGuiderLost),
+        'guider_retry_timeout_sec': v.guiderRetryTimeoutSec,
+        'skip_target_if_recovery_fails': v.skipTargetIfRecoveryFails,
+      };
+
+  static UnsafeAction _unsafeActionFromString(String? s) {
+    switch (s) {
+      case 'park_only':
+        return UnsafeAction.parkOnly;
+      case 'abort_and_park':
+        return UnsafeAction.abortAndPark;
+      case 'ignore':
+        return UnsafeAction.ignore;
+      case 'pause_and_park':
+      default:
+        return UnsafeAction.pauseAndPark;
+    }
+  }
+
+  static String _unsafeActionToString(UnsafeAction a) {
+    switch (a) {
+      case UnsafeAction.pauseAndPark:
+        return 'pause_and_park';
+      case UnsafeAction.parkOnly:
+        return 'park_only';
+      case UnsafeAction.abortAndPark:
+        return 'abort_and_park';
+      case UnsafeAction.ignore:
+        return 'ignore';
+    }
+  }
+
+  static AltitudeLimitAction _altitudeLimitActionFromString(String? s) {
+    switch (s) {
+      case 'pause_sequence':
+        return AltitudeLimitAction.pauseSequence;
+      case 'abort_sequence':
+        return AltitudeLimitAction.abortSequence;
+      case 'skip_target':
+      default:
+        return AltitudeLimitAction.skipTarget;
+    }
+  }
+
+  static String _altitudeLimitActionToString(AltitudeLimitAction a) {
+    switch (a) {
+      case AltitudeLimitAction.skipTarget:
+        return 'skip_target';
+      case AltitudeLimitAction.pauseSequence:
+        return 'pause_sequence';
+      case AltitudeLimitAction.abortSequence:
+        return 'abort_sequence';
+    }
+  }
+
+  static GuiderLostAction _guiderLostActionFromString(String? s) {
+    switch (s) {
+      case 'skip_target':
+        return GuiderLostAction.skipTarget;
+      case 'abort_sequence':
+        return GuiderLostAction.abortSequence;
+      case 'pause_and_retry':
+      default:
+        return GuiderLostAction.pauseAndRetry;
+    }
+  }
+
+  static String _guiderLostActionToString(GuiderLostAction a) {
+    switch (a) {
+      case GuiderLostAction.pauseAndRetry:
+        return 'pause_and_retry';
+      case GuiderLostAction.skipTarget:
+        return 'skip_target';
+      case GuiderLostAction.abortSequence:
+        return 'abort_sequence';
     }
   }
 

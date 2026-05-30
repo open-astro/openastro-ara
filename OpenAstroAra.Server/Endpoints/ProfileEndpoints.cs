@@ -111,6 +111,21 @@ public static class ProfileEndpoints {
             .WithName("PutFilenamesSettings")
             .WithSummary("Replace the active profile's filenames settings.");
 
+        profile.MapGet("/safety", (IProfileStore store) =>
+                Results.Ok(store.GetSafetyPolicies()))
+            .Produces<SafetyPoliciesDto>(StatusCodes.Status200OK)
+            .WithName("GetSafetyPolicies")
+            .WithSummary("Get the active profile's safety policies.");
+
+        profile.MapPut("/safety", (SafetyPoliciesDto body, IProfileStore store) => {
+                store.PutSafetyPolicies(body);
+                return Results.Ok(body);
+            })
+            .Accepts<SafetyPoliciesDto>("application/json")
+            .Produces<SafetyPoliciesDto>(StatusCodes.Status200OK)
+            .WithName("PutSafetyPolicies")
+            .WithSummary("Replace the active profile's safety policies.");
+
         return app;
     }
 }

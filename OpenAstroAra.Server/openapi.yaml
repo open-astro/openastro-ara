@@ -379,6 +379,33 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ImagingDefaults' }
 
+  /profile/safety:
+    get:
+      summary: Get active profile's safety policies
+      description: |
+        Phase 12h.6g — §35 safety policies section.
+      tags: [Profile]
+      responses:
+        '200':
+          description: Current safety-policies state
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SafetyPolicies' }
+    put:
+      summary: Replace active profile's safety policies
+      tags: [Profile]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SafetyPolicies' }
+      responses:
+        '200':
+          description: New state (echo of input)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SafetyPolicies' }
+
   /profile/filenames:
     get:
       summary: Get active profile's filenames settings
@@ -784,6 +811,30 @@ components:
         fileFormat:       { type: string, enum: [fits, xisf, fits_rice, fits_gzip] }
         compression:      { type: string, enum: [off, rice, gzip] }
         filenameTemplate: { type: string, minLength: 1 }
+
+    SafetyPolicies:
+      type: object
+      description: |
+        §35 safety policies profile section. Mirrors WILMA's `SafetyPolicies`.
+        Enums use snake_case strings on the wire.
+      required:
+        [onUnsafe, autoResumeWhenSafe, resumeDelayMin, meridianFlipAuto,
+         meridianPauseMin, meridianRecenter, meridianRecalGuider,
+         onAltitudeLimit, parkIfNoMoreTargets, onGuiderLost,
+         guiderRetryTimeoutSec, skipTargetIfRecoveryFails]
+      properties:
+        onUnsafe:                  { type: string, enum: [pause_and_park, park_only, abort_and_park, ignore] }
+        autoResumeWhenSafe:        { type: boolean }
+        resumeDelayMin:            { type: integer, minimum: 0 }
+        meridianFlipAuto:          { type: boolean }
+        meridianPauseMin:          { type: integer, minimum: 0 }
+        meridianRecenter:          { type: boolean }
+        meridianRecalGuider:       { type: boolean }
+        onAltitudeLimit:           { type: string, enum: [skip_target, pause_sequence, abort_sequence] }
+        parkIfNoMoreTargets:       { type: boolean }
+        onGuiderLost:              { type: string, enum: [pause_and_retry, skip_target, abort_sequence] }
+        guiderRetryTimeoutSec:     { type: integer, minimum: 0 }
+        skipTargetIfRecoveryFails: { type: boolean }
 
     FilenamesSettings:
       type: object

@@ -96,3 +96,22 @@ public sealed record SiteSettingsDto(
 public sealed record FilenamesSettingsDto(
     string DateSeparator,
     bool CompressDarksAndBias);
+
+/// <summary>
+/// §35 safety policies — unsafe-weather + meridian-flip + altitude-limit
+/// + guider-lost reaction config. All enum values are snake_case strings
+/// on the wire (e.g. <c>pause_and_park</c>, <c>skip_target</c>).
+/// </summary>
+public sealed record SafetyPoliciesDto(
+    string OnUnsafe,
+    bool AutoResumeWhenSafe,
+    int ResumeDelayMin,
+    bool MeridianFlipAuto,
+    int MeridianPauseMin,
+    bool MeridianRecenter,
+    bool MeridianRecalGuider,
+    string OnAltitudeLimit,
+    bool ParkIfNoMoreTargets,
+    string OnGuiderLost,
+    int GuiderRetryTimeoutSec,
+    bool SkipTargetIfRecoveryFails);

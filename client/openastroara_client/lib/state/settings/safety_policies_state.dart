@@ -1,7 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-/// §35 Safety policies. Phase 12h.2-safety holds the values in memory; the
-/// daemon /api/v1/profile/safety wires in 12h.2b.
+import '../../services/profile_api.dart';
+
+/// §35 Safety policies. Phase 12h.6g wires the daemon round-trip via
+/// [ProfileApi] (`/api/v1/profile/safety`). Local state is still source
+/// of truth between syncs.
 
 enum UnsafeAction { pauseAndPark, parkOnly, abortAndPark, ignore }
 enum AltitudeLimitAction { skipTarget, pauseSequence, abortSequence }
@@ -115,6 +118,16 @@ class SafetyPoliciesNotifier extends Notifier<SafetyPolicies> {
 
   void setSkipTargetIfRecoveryFails(bool v) =>
       state = state.copyWith(skipTargetIfRecoveryFails: v);
+
+  Future<void> hydrateFromServer(ProfileApi api) async {
+    state = await api.getSafetyPolicies();
+  }
+
+  Future<SafetyPolicies> persistToServer(ProfileApi api) async {
+    final echoed = await api.putSafetyPolicies(state);
+    state = echoed;
+    return echoed;
+  }
 }
 
 final safetyPoliciesProvider =

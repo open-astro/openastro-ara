@@ -5,8 +5,8 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 ## Current
 
 - **Phase:** Phase 12h.6 — daemon round-trip for in-memory settings.
-- **Last merged:** `phase-12h6e-profile-site` — PR #133, 2026-05-30 (§37.12 site preferences: 10 fields incl. TwilightDefinition enum).
-- **Currently working on:** `phase-12h6f-profile-filenames` — §29.2 file-naming round-trip (2 fields: DateSeparator enum + compressDarksAndBias bool).
+- **Last merged:** `phase-12h6f-profile-filenames` — PR #134, 2026-05-30 (§29.2 file-naming round-trip).
+- **Currently working on:** `phase-12h6g-profile-safety-policies` — §35 safety policies (12 fields incl. 3 enums: UnsafeAction, AltitudeLimitAction, GuiderLostAction).
 - **Note:** Phase 12h.3 (Smart Settings Search) + 12h.4 (PHD2) + 12h.5 (Alpaca chooser) all merged via PRs #110-#128 between 2026-05-29 and 2026-05-30; a dedicated `port-progress-refresh` sub-PR will backfill the Completed section once Phase 12h closes out.
 
 ## Completed
