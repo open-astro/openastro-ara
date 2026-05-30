@@ -141,6 +141,21 @@ public static class ProfileEndpoints {
             .WithName("PutAutofocusSettings")
             .WithSummary("Replace the active profile's autofocus settings.");
 
+        profile.MapGet("/plate-solve", (IProfileStore store) =>
+                Results.Ok(store.GetPlateSolveSettings()))
+            .Produces<PlateSolveSettingsDto>(StatusCodes.Status200OK)
+            .WithName("GetPlateSolveSettings")
+            .WithSummary("Get the active profile's plate-solve settings.");
+
+        profile.MapPut("/plate-solve", (PlateSolveSettingsDto body, IProfileStore store) => {
+                store.PutPlateSolveSettings(body);
+                return Results.Ok(body);
+            })
+            .Accepts<PlateSolveSettingsDto>("application/json")
+            .Produces<PlateSolveSettingsDto>(StatusCodes.Status200OK)
+            .WithName("PutPlateSolveSettings")
+            .WithSummary("Replace the active profile's plate-solve settings.");
+
         return app;
     }
 }

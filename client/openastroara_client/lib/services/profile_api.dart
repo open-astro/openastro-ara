@@ -6,6 +6,7 @@ import '../state/settings/autofocus_settings_state.dart';
 import '../state/settings/filenames_settings_state.dart';
 import '../state/settings/imaging_defaults_state.dart';
 import '../state/settings/notifications_settings_state.dart';
+import '../state/settings/plate_solve_settings_state.dart';
 import '../state/settings/safety_policies_state.dart';
 import '../state/settings/site_settings_state.dart';
 import '../state/settings/storage_settings_state.dart';
@@ -148,6 +149,24 @@ class ProfileApi {
     return _autofocusSettingsFromJson(res.data ?? const {});
   }
 
+  /// GET the active profile's plate-solve settings.
+  Future<PlateSolveSettings> getPlateSolveSettings() async {
+    final res = await _dio.get<Map<String, dynamic>>(
+      '/api/v1/profile/plate-solve',
+    );
+    return _plateSolveSettingsFromJson(res.data ?? const {});
+  }
+
+  /// PUT the active profile's plate-solve settings.
+  Future<PlateSolveSettings> putPlateSolveSettings(
+      PlateSolveSettings value) async {
+    final res = await _dio.put<Map<String, dynamic>>(
+      '/api/v1/profile/plate-solve',
+      data: _plateSolveSettingsToJson(value),
+    );
+    return _plateSolveSettingsFromJson(res.data ?? const {});
+  }
+
   // ── JSON mapping ────────────────────────────────────────────────────────
   // The server's `ConfigureHttpJsonOptions` uses snake_case, so the wire
   // shape is `exposure_seconds` etc. (not `defaultExposure`).
@@ -246,6 +265,63 @@ class ProfileApi {
       case 'rice':
       default:
         return StorageCompression.rice;
+    }
+  }
+
+  // ── Plate-solve settings JSON mapping ──────────────────────────────────
+
+  static PlateSolveSettings _plateSolveSettingsFromJson(Map<String, dynamic> j) =>
+      PlateSolveSettings(
+        engine: _plateSolveEngineFromString(j['engine'] as String?),
+        pathOrEndpoint: (j['path_or_endpoint'] as String?) ?? '/usr/bin/astap',
+        indexDownloadPath:
+            (j['index_download_path'] as String?) ?? '/var/lib/astap',
+        searchRadiusDeg: (j['search_radius_deg'] as num?)?.toDouble() ?? 30,
+        downsampleFactor: (j['downsample_factor'] as num?)?.toInt() ?? 2,
+        timeoutSeconds: (j['timeout_seconds'] as num?)?.toInt() ?? 60,
+        useBlindFallback: (j['use_blind_fallback'] as bool?) ?? true,
+        centerAfterSlew: (j['center_after_slew'] as bool?) ?? true,
+        syncToCoordinates: (j['sync_to_coordinates'] as bool?) ?? true,
+        maxIterations: (j['max_iterations'] as num?)?.toInt() ?? 5,
+        convergenceToleranceArcsec:
+            (j['convergence_tolerance_arcsec'] as num?)?.toDouble() ?? 60.0,
+      );
+
+  static Map<String, dynamic> _plateSolveSettingsToJson(PlateSolveSettings v) =>
+      {
+        'engine': _plateSolveEngineToString(v.engine),
+        'path_or_endpoint': v.pathOrEndpoint,
+        'index_download_path': v.indexDownloadPath,
+        'search_radius_deg': v.searchRadiusDeg,
+        'downsample_factor': v.downsampleFactor,
+        'timeout_seconds': v.timeoutSeconds,
+        'use_blind_fallback': v.useBlindFallback,
+        'center_after_slew': v.centerAfterSlew,
+        'sync_to_coordinates': v.syncToCoordinates,
+        'max_iterations': v.maxIterations,
+        'convergence_tolerance_arcsec': v.convergenceToleranceArcsec,
+      };
+
+  static PlateSolveEngine _plateSolveEngineFromString(String? s) {
+    switch (s) {
+      case 'astrometry_net':
+        return PlateSolveEngine.astrometryNet;
+      case 'platesolve2':
+        return PlateSolveEngine.platesolve2;
+      case 'astap':
+      default:
+        return PlateSolveEngine.astap;
+    }
+  }
+
+  static String _plateSolveEngineToString(PlateSolveEngine e) {
+    switch (e) {
+      case PlateSolveEngine.astap:
+        return 'astap';
+      case PlateSolveEngine.astrometryNet:
+        return 'astrometry_net';
+      case PlateSolveEngine.platesolve2:
+        return 'platesolve2';
     }
   }
 

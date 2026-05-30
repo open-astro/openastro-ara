@@ -1,8 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-/// §37.10 Plate Solving settings. Phase 12h.2-platesolve holds state in
-/// memory; 12h.2b wires `/api/v1/profile/plate-solve` for daemon
-/// round-trip.
+import '../../services/profile_api.dart';
+
+/// §37.10 Plate Solving settings. Phase 12h.6i wires the daemon round-
+/// trip via [ProfileApi] (`/api/v1/profile/plate-solve`). Local state is
+/// the source of truth between syncs.
 
 enum PlateSolveEngine { astap, astrometryNet, platesolve2 }
 
@@ -115,6 +117,16 @@ class PlateSolveSettingsNotifier extends Notifier<PlateSolveSettings> {
   void setConvergenceToleranceArcsec(double v) {
     if (v <= 0) return;
     state = state.copyWith(convergenceToleranceArcsec: v);
+  }
+
+  Future<void> hydrateFromServer(ProfileApi api) async {
+    state = await api.getPlateSolveSettings();
+  }
+
+  Future<PlateSolveSettings> persistToServer(ProfileApi api) async {
+    final echoed = await api.putPlateSolveSettings(state);
+    state = echoed;
+    return echoed;
   }
 }
 

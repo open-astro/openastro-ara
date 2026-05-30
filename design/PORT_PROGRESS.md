@@ -5,8 +5,8 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 ## Current
 
 - **Phase:** Phase 12h.6 — daemon round-trip for in-memory settings.
-- **Last merged:** `phase-12h6g-profile-safety-policies` — PR #135, 2026-05-30 (§35 safety policies, 12 fields incl. 3 enums).
-- **Currently working on:** `phase-12h6h-profile-autofocus` — §37.11 autofocus settings (12 fields incl. AutofocusMethod enum).
+- **Last merged:** `phase-12h6h-profile-autofocus` — PR #136, 2026-05-30 (§37.11 autofocus, 12 fields incl. AutofocusMethod enum).
+- **Currently working on:** `phase-12h6i-profile-plate-solve` — §37.10 plate solving (11 fields incl. PlateSolveEngine enum).
 - **Note:** Phase 12h.3 (Smart Settings Search) + 12h.4 (PHD2) + 12h.5 (Alpaca chooser) all merged via PRs #110-#128 between 2026-05-29 and 2026-05-30; a dedicated `port-progress-refresh` sub-PR will backfill the Completed section once Phase 12h closes out.
 
 ## Completed
