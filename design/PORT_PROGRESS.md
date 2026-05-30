@@ -5,8 +5,8 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 ## Current
 
 - **Phase:** Phase 12h.6 — daemon round-trip for in-memory settings.
-- **Last merged:** `phase-12h6b-profile-api-client` — PR #130, 2026-05-30 (client `ProfileApi` + imaging-defaults panel hydrate-on-mount + Save-to-PUT). 12h.6a (#129) landed the server-side endpoint earlier the same morning.
-- **Currently working on:** `phase-12h6c-profile-storage` — §29 storage settings daemon round-trip (server + client bundled in one PR now that the pattern is mechanical).
+- **Last merged:** `phase-12h6c-profile-storage` — PR #131, 2026-05-30 (§29 storage settings, server + client bundled). 12h.6a/b (#129/#130) landed earlier; imaging-defaults split server/client, storage onward bundles since the pattern is mechanical.
+- **Currently working on:** `phase-12h6d-profile-notifications` — §54 notifications settings round-trip (12 fields: 3 channel bools + 2 tokens + 7 trigger bools).
 - **Note:** Phase 12h.3 (Smart Settings Search) + 12h.4 (PHD2) + 12h.5 (Alpaca chooser) all merged via PRs #110-#128 between 2026-05-29 and 2026-05-30; a dedicated `port-progress-refresh` sub-PR will backfill the Completed section once Phase 12h closes out.
 
 ## Completed

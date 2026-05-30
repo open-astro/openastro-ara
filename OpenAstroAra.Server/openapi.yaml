@@ -379,6 +379,37 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ImagingDefaults' }
 
+  /profile/notifications:
+    get:
+      summary: Get active profile's notifications settings
+      description: |
+        Phase 12h.6d — §54 notifications section. WILMA hydrates
+        `notificationsSettingsProvider` from this on panel mount.
+      tags: [Profile]
+      responses:
+        '200':
+          description: Current notifications-settings state
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NotificationsSettings' }
+    put:
+      summary: Replace active profile's notifications settings
+      description: |
+        Full-replace semantics. Per-channel tokens are stored as plain
+        strings in v0.0.1; secret handling lands in Phase 14 per §40.
+      tags: [Profile]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/NotificationsSettings' }
+      responses:
+        '200':
+          description: New state (echo of input)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NotificationsSettings' }
+
   /profile/storage:
     get:
       summary: Get active profile's storage settings
@@ -697,6 +728,30 @@ components:
         fileFormat:       { type: string, enum: [fits, xisf, fits_rice, fits_gzip] }
         compression:      { type: string, enum: [off, rice, gzip] }
         filenameTemplate: { type: string, minLength: 1 }
+
+    NotificationsSettings:
+      type: object
+      description: |
+        §54 notifications profile section. Mirrors WILMA's `NotificationsSettings`
+        field-for-field. Token fields are stored as plain strings in v0.0.1;
+        Phase 14 §40 hardening migrates to secret refs.
+      required:
+        [inAppBanner, osDesktop, soundAlert, pushoverToken, telegramBotToken,
+         onSequenceComplete, onSequencePaused, onCriticalDiagnostic,
+         onSafetyEvent, onAutofocusFailed, onPlateSolveFailed, onDiskSpaceLow]
+      properties:
+        inAppBanner:          { type: boolean }
+        osDesktop:            { type: boolean }
+        soundAlert:           { type: boolean }
+        pushoverToken:        { type: string }
+        telegramBotToken:     { type: string }
+        onSequenceComplete:   { type: boolean }
+        onSequencePaused:     { type: boolean }
+        onCriticalDiagnostic: { type: boolean }
+        onSafetyEvent:        { type: boolean }
+        onAutofocusFailed:    { type: boolean }
+        onPlateSolveFailed:   { type: boolean }
+        onDiskSpaceLow:       { type: boolean }
 
     OperationAccepted:
       type: object

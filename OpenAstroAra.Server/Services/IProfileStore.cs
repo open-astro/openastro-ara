@@ -28,4 +28,7 @@ public interface IProfileStore {
 
     StorageSettingsDto GetStorageSettings();
     void PutStorageSettings(StorageSettingsDto value);
+
+    NotificationsSettingsDto GetNotificationsSettings();
+    void PutNotificationsSettings(NotificationsSettingsDto value);
 }
