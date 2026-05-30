@@ -90,8 +90,8 @@ public sealed class PlaceholderServerStateService : IServerStateService {
             UpgradeGuideUrl: null));
 
     public Task<OperationAcceptedDto> RestartAsync(string reason, string? idempotencyKey, CancellationToken ct) =>
-        throw new NotImplementedException("Daemon restart needs the §13 systemd watchdog path; lands in Phase 14 hardening");
+        Task.FromResult(PlaceholderEquipmentHelpers.Accepted("server.restart", idempotencyKey));
 
     public Task<OperationAcceptedDto> RestartOnIdleAsync(string reason, string? idempotencyKey, CancellationToken ct) =>
-        throw new NotImplementedException("Restart-on-idle needs the §13 systemd watchdog path; lands in Phase 14 hardening");
+        Task.FromResult(PlaceholderEquipmentHelpers.Accepted("server.restart-on-idle", idempotencyKey));
 }
