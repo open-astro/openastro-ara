@@ -165,11 +165,15 @@ public static class ImageEndpoints {
             .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("RestretchSession");
 
-        sessions.MapGet("/{id:guid}/hfr-analysis", (Guid id) =>
-                NotImplementedStub("GET /api/v1/sessions/{id}/hfr-analysis", "§40.7"))
+        sessions.MapGet("/{id:guid}/hfr-analysis",
+                async (ISessionService svc, Guid id, CancellationToken ct) => {
+                    var analysis = await svc.GetHfrAnalysisAsync(id, ct);
+                    return analysis is null
+                        ? Results.NotFound()
+                        : Results.Ok(analysis);
+                })
             .Produces<HfrAnalysisDto>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status404NotFound)
-            .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("GetSessionHfrAnalysis");
 
         // ─── Backup stream (§44) — Phase 13.10 wired to IBackupStreamService ───
