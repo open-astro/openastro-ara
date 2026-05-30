@@ -5,8 +5,8 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 ## Current
 
 - **Phase:** Phase 12h.6 — daemon round-trip for in-memory settings.
-- **Last merged:** `phase-13-2-frame-dto-placeholder` — PR #148, 2026-05-30. Three sample fixture frames (M31 Lights + Dark) wired through `/frames` and `/frames/{id}`. The browseable Library round-trip is now live end-to-end on the server side.
-- **Currently working on:** `phase-13-3-session-placeholder` — `PlaceholderSessionService` returning one fake session matching the §13.2 sample frames. Wires `/sessions`, `/sessions/{id}`, and `/sessions/{id}/frames` to the new service. §28 DB-backed catalog lands in 13.4+.
+- **Last merged:** `phase-13-3-session-placeholder` — PR #149, 2026-05-30. Browseable Library round-trip live server-side. Promoted to master via PR #150 alongside #146/#147/#148.
+- **Currently working on:** `phase-13-4-notifications-placeholder` — `PlaceholderNotificationService` with 3 sample notifications (Info/Warning/Critical across Sequence/Storage/Safety) + preferences with toggle support. Wires all 5 §46 notification endpoints to the service.
 - **Note:** Phase 12h.3 (Smart Settings Search) + 12h.4 (PHD2) + 12h.5 (Alpaca chooser) all merged via PRs #110-#128 between 2026-05-29 and 2026-05-30; a dedicated `port-progress-refresh` sub-PR will backfill the Completed section once Phase 12h closes out.
 
 ## Completed
