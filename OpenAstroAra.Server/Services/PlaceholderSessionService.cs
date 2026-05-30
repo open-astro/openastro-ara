@@ -72,10 +72,10 @@ public sealed class PlaceholderSessionService : ISessionService {
         _frames.ListAsync(limit, cursor, sessionId, targetName: null, ct);
 
     public Task<OperationAcceptedDto> ResumeTargetAsync(Guid sessionId, ResumeTargetRequestDto request, string? idempotencyKey, CancellationToken ct) =>
-        throw new NotImplementedException("ResumeTarget lands with the §38 sequence orchestrator in Phase 13.x");
+        Task.FromResult(PlaceholderEquipmentHelpers.Accepted("sessions.resume-target", idempotencyKey));
 
     public Task<OperationAcceptedDto> RestretchAsync(Guid sessionId, SessionRestretchRequestDto request, string? idempotencyKey, CancellationToken ct) =>
-        throw new NotImplementedException("Restretch lands with the OpenCvSharp4 preview generator in Phase 13.x");
+        Task.FromResult(PlaceholderEquipmentHelpers.Accepted("sessions.restretch", idempotencyKey));
 
     public async Task<HfrAnalysisDto?> GetHfrAnalysisAsync(Guid sessionId, CancellationToken ct) {
         if (sessionId != SampleSessionId) return null;

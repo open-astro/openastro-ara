@@ -154,21 +154,35 @@ public static class ImageEndpoints {
             .WithName("GetSessionFrames");
 
         sessions.MapPost("/{id:guid}/resume-target",
-                (Guid id, [FromBody] ResumeTargetRequestDto request) =>
-                    NotImplementedStub("POST /api/v1/sessions/{id}/resume-target", "§40"))
+                async (ISessionService svc, Guid id, [FromBody] ResumeTargetRequestDto request,
+                       [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey,
+                       CancellationToken ct) => {
+                    // Verify the session exists before accepting the operation —
+                    // matches §40 wire contract where resume-target on an unknown
+                    // session is 404, not a 202 the operator will silently watch
+                    // never make progress.
+                    var session = await svc.GetAsync(id, ct);
+                    return session is null
+                        ? Results.NotFound()
+                        : Results.Accepted(value: await svc.ResumeTargetAsync(id, request, idempotencyKey, ct));
+                })
             .Accepts<ResumeTargetRequestDto>("application/json")
             .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
             .ProducesProblem(StatusCodes.Status404NotFound)
-            .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("ResumeSessionTarget");
 
         sessions.MapPost("/{id:guid}/restretch",
-                (Guid id, [FromBody] SessionRestretchRequestDto request) =>
-                    NotImplementedStub("POST /api/v1/sessions/{id}/restretch", "§65"))
+                async (ISessionService svc, Guid id, [FromBody] SessionRestretchRequestDto request,
+                       [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey,
+                       CancellationToken ct) => {
+                    var session = await svc.GetAsync(id, ct);
+                    return session is null
+                        ? Results.NotFound()
+                        : Results.Accepted(value: await svc.RestretchAsync(id, request, idempotencyKey, ct));
+                })
             .Accepts<SessionRestretchRequestDto>("application/json")
             .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
             .ProducesProblem(StatusCodes.Status404NotFound)
-            .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("RestretchSession");
 
         sessions.MapGet("/{id:guid}/hfr-analysis",
