@@ -379,6 +379,35 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ImagingDefaults' }
 
+  /profile/diagnostics-mode:
+    get:
+      summary: Get active profile's diagnostics mode
+      description: |
+        Phase 12h.6j — §51 diagnostics-mode section. Single-enum section
+        wrapped in a DTO to leave room for future per-severity threshold
+        knobs without a wire-shape break.
+      tags: [Profile]
+      responses:
+        '200':
+          description: Current diagnostics-mode state
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DiagnosticsMode' }
+    put:
+      summary: Replace active profile's diagnostics mode
+      tags: [Profile]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DiagnosticsMode' }
+      responses:
+        '200':
+          description: New state (echo of input)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DiagnosticsMode' }
+
   /profile/plate-solve:
     get:
       summary: Get active profile's plate-solve settings
@@ -865,6 +894,14 @@ components:
         fileFormat:       { type: string, enum: [fits, xisf, fits_rice, fits_gzip] }
         compression:      { type: string, enum: [off, rice, gzip] }
         filenameTemplate: { type: string, minLength: 1 }
+
+    DiagnosticsMode:
+      type: object
+      description: |
+        §51 diagnostics-mode profile section. Single-enum picker.
+      required: [mode]
+      properties:
+        mode: { type: string, enum: [notify_only, pause_on_critical, abort_on_critical] }
 
     PlateSolveSettings:
       type: object

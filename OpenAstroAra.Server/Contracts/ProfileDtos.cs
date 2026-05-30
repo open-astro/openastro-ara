@@ -152,3 +152,11 @@ public sealed record PlateSolveSettingsDto(
     bool SyncToCoordinates,
     int MaxIterations,
     double ConvergenceToleranceArcsec);
+
+/// <summary>
+/// §51 diagnostics-mode picker. Single-enum section; wrapped in a DTO
+/// for symmetry with other profile sections + to leave room for future
+/// per-severity threshold knobs without breaking the wire shape.
+/// `Mode` is `notify_only`/`pause_on_critical`/`abort_on_critical`.
+/// </summary>
+public sealed record DiagnosticsModeDto(string Mode);
