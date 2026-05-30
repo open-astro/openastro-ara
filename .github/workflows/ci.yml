@@ -152,12 +152,12 @@ jobs:
           # body (catches ProblemDetails-not-registered regressions). NOT
           # using -f here because curl with -f exits non-zero on 4xx/5xx
           # before writing %{http_code}, which is exactly the response we
-          # want to observe. /api/v1/sequences is still 501 until the
-          # ISequenceService placeholder lands.
-          echo "Probing /api/v1/sequences (expect 501 Problem JSON) …"
+          # want to observe. /api/v1/calibration/sessions is still 501
+          # until the ICalibrationService placeholder lands.
+          echo "Probing /api/v1/calibration/sessions (expect 501 Problem JSON) …"
           PROBLEM_STATUS=$(curl -sS -o "$RUNNER_TEMP/problem.json" \
             -w '%{http_code}' \
-            "http://localhost:$OPENASTROARA_PORT/api/v1/sequences")
+            "http://localhost:$OPENASTROARA_PORT/api/v1/calibration/sessions")
           if [ "$PROBLEM_STATUS" != "501" ]; then
             echo "✗ expected 501, got $PROBLEM_STATUS"
             cat "$RUNNER_TEMP/problem.json"
