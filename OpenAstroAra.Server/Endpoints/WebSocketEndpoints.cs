@@ -12,21 +12,30 @@
 
 #endregion "copyright"
 
+using System.Net.WebSockets;
+using System.Text.Json;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.Logging;
 using OpenAstroAra.Server.Contracts.WsEvents;
+using OpenAstroAra.Server.Services;
 
 namespace OpenAstroAra.Server.Endpoints;
 
 /// <summary>
-/// Phase 9 WebSocket endpoint per PORT_PLAYBOOK.md §10.9 + §60.9.
+/// §60.9 WebSocket endpoint. <c>GET /api/v1/ws</c> accepts the protocol
+/// upgrade and drains <see cref="IWsEventChannel"/> to the client as
+/// JSON text frames using the §60.9.3 envelope shape.
 ///
-/// Endpoint: <c>GET /api/v1/ws</c>. Stub returns 501 NotImplemented (the
-/// actual WS handler comes online with <c>IWsBroadcaster</c> +
-/// <c>IWsEventChannel</c> implementations). Also exposes the read-only
-/// <c>/api/v1/ws/catalog</c> endpoint required by §60.9.4 — that one is
-/// functional immediately since it just dumps <see cref="WsEventCatalog.All"/>.
+/// First sub-PR (accept + drain): no version validation, no heartbeat,
+/// no resume — those layer on in subsequent sub-PRs. The handler is
+/// already wired to the §13.17 broadcaster, so every placeholder
+/// service that calls <c>broadcaster.PublishAsync(...)</c> reaches the
+/// connected clients today.
+///
+/// <c>/api/v1/ws/catalog</c> stays the read-only event-catalog endpoint
+/// per §60.9.4 — independent of the upgrade path.
 /// </summary>
 public static class WebSocketEndpoints {
 
@@ -43,32 +52,96 @@ public static class WebSocketEndpoints {
           .Produces<WsCatalogResponse>(StatusCodes.Status200OK)
           .WithName("GetWebSocketCatalog");
 
-        // Actual WS handler at /api/v1/ws — stubbed at the HTTP layer until
-        // app.UseWebSockets() + the IWsBroadcaster impl land. Returns 501
-        // for plain HTTP GETs and 426 with an Upgrade-Required header for
-        // attempted WS handshakes.
-        ws.MapGet("", (HttpContext http) => {
-            if (http.WebSockets.IsWebSocketRequest) {
+        // §60.9 WebSocket upgrade.
+        //   - WS request: accept the upgrade and run the send/receive loop.
+        //   - Plain HTTP GET: 426 Upgrade Required with Upgrade/Connection
+        //     headers per RFC 7231 §6.5.15.
+        ws.MapGet("",
+            async (HttpContext http, IWsEventChannel channel, ILoggerFactory loggerFactory) => {
+                if (http.WebSockets.IsWebSocketRequest) {
+                    var logger = loggerFactory.CreateLogger("OpenAstroAra.Server.Endpoints.WebSocket");
+                    await HandleWebSocketAsync(http, channel, logger);
+                    return Results.Empty;
+                }
+                // Per RFC 7231 §6.5.15, 426 responses must include hop-by-hop Upgrade
+                // + Connection headers so the client knows which protocol to switch to.
+                http.Response.Headers.Upgrade = "websocket";
+                http.Response.Headers.Connection = "Upgrade";
                 return Results.Problem(
-                    type: "https://openastro.net/errors/ws-not-implemented",
-                    title: "WebSocket endpoint not yet implemented",
-                    statusCode: StatusCodes.Status501NotImplemented,
-                    detail: "The /api/v1/ws upgrade is registered but the broadcaster + event channel are not yet running. WS goes live with Phase 9 service implementations.");
-            }
-            // Per RFC 7231 §6.5.15, 426 responses must include hop-by-hop Upgrade
-            // + Connection headers so the client knows which protocol to switch to.
-            http.Response.Headers.Upgrade = "websocket";
-            http.Response.Headers.Connection = "Upgrade";
-            return Results.Problem(
-                type: "https://openastro.net/errors/upgrade-required",
-                title: "WebSocket upgrade required",
-                statusCode: StatusCodes.Status426UpgradeRequired,
-                detail: "This endpoint serves WebSocket connections only. See §60.9 for the connection protocol (X-Ara-WS-Version: 1, 30s ping / 60s pong, resume protocol with last-seen seq).");
-        })
-        .ProducesProblem(StatusCodes.Status426UpgradeRequired)
-        .ProducesProblem(StatusCodes.Status501NotImplemented)
-        .WithName("UpgradeToWebSocket");
+                    type: "https://openastro.net/errors/upgrade-required",
+                    title: "WebSocket upgrade required",
+                    statusCode: StatusCodes.Status426UpgradeRequired,
+                    detail: "This endpoint serves WebSocket connections only. See §60.9 for the connection protocol (X-Ara-WS-Version: 1, 30s ping / 60s pong, resume protocol with last-seen seq).");
+            })
+            .ProducesProblem(StatusCodes.Status426UpgradeRequired)
+            .WithName("UpgradeToWebSocket");
 
         return app;
+    }
+
+    private static async Task HandleWebSocketAsync(
+            HttpContext http,
+            IWsEventChannel channel,
+            ILogger logger) {
+        using var socket = await http.WebSockets.AcceptWebSocketAsync();
+        // Linked CTS lets the passive receive loop cancel the send loop
+        // when the client sends a Close frame, while the server-side
+        // RequestAborted token still drives shutdown.
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(http.RequestAborted);
+        var ct = cts.Token;
+
+        // Passive receive loop — sub-PR A discards all inbound frames except
+        // Close. Sub-PR B handles pong responses; sub-PR C handles client
+        // resume requests.
+        var receiveTask = Task.Run(async () => {
+            var buffer = new byte[1024];
+            try {
+                while (!ct.IsCancellationRequested && socket.State == WebSocketState.Open) {
+                    var result = await socket.ReceiveAsync(buffer, ct);
+                    if (result.MessageType == WebSocketMessageType.Close) {
+                        break;
+                    }
+                }
+            } catch (OperationCanceledException) {
+                // Expected on shutdown.
+            } catch (WebSocketException) {
+                // Expected on abrupt client disconnect.
+            } catch (Exception ex) {
+                logger.LogDebug(ex, "WS receive loop closed unexpectedly");
+            }
+            // Whatever caused the receive loop to exit (close frame, disconnect,
+            // shutdown), tear down the send loop too.
+            try { cts.Cancel(); } catch { /* CTS already disposed */ }
+        }, ct);
+
+        try {
+            await foreach (var envelope in channel.ReadAllAsync(ct)) {
+                if (socket.State != WebSocketState.Open) break;
+                var json = JsonSerializer.SerializeToUtf8Bytes(
+                    envelope, AraJsonSerializerContext.Default.WsEventEnvelopeDto);
+                await socket.SendAsync(
+                    json, WebSocketMessageType.Text, endOfMessage: true, ct);
+            }
+        } catch (OperationCanceledException) {
+            // Expected on shutdown or client close.
+        } catch (WebSocketException ex) {
+            logger.LogDebug(ex, "WS send loop ended on socket error");
+        } catch (Exception ex) {
+            logger.LogError(ex, "WS send loop failed");
+        }
+
+        // Best-effort close — if the socket is already gone the framework
+        // throws, but there's nothing useful to do at that point.
+        if (socket.State == WebSocketState.Open) {
+            try {
+                await socket.CloseAsync(
+                    WebSocketCloseStatus.NormalClosure, "server closing", CancellationToken.None);
+            } catch (Exception ex) {
+                logger.LogDebug(ex, "WS close failed");
+            }
+        }
+
+        try { cts.Cancel(); } catch { /* CTS already disposed */ }
+        try { await receiveTask; } catch { /* swallowed; loop already logs */ }
     }
 }

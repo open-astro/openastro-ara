@@ -181,6 +181,14 @@ public class Program {
 
         app.UseCors();
 
+        // §60.9 WebSocket support — must be registered before MapWebSocketEndpoints
+        // so the framework can negotiate the protocol upgrade. KeepAliveInterval
+        // is the framework-level ping cadence; the §60.9 application-level
+        // heartbeat (30s ping / 60s pong) layers on top of this in the handler.
+        app.UseWebSockets(new WebSocketOptions {
+            KeepAliveInterval = TimeSpan.FromSeconds(30),
+        });
+
         // §49 API docs: Scalar UI (AOT-friendly Swagger replacement per §71.3).
         app.MapOpenApi();
         app.MapScalarApiReference();
