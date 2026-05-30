@@ -133,28 +133,40 @@ public static class SequenceEndpoints {
            .WithName("StopSequence");
 
 
-        // Templates (§38.6, §38.7)
-        seq.MapGet("/templates", () => NotImplementedStub("GET /api/v1/sequences/templates", "§38.6"))
+        // Phase 13.15 — Templates (§38.6, §38.7) wired to ISequenceTemplateService.
+        seq.MapGet("/templates",
+                async (ISequenceTemplateService svc, CancellationToken ct) =>
+                    Results.Ok(await svc.ListAsync(ct)))
            .Produces<IReadOnlyList<SequenceTemplateDto>>(StatusCodes.Status200OK)
-           .ProducesProblem(StatusCodes.Status501NotImplemented)
            .WithName("ListSequenceTemplates");
 
         seq.MapPost("/templates/{name}/instantiate",
-                (string name, [FromBody] TemplateInstantiateRequestDto request) =>
-                    NotImplementedStub("POST /api/v1/sequences/templates/{name}/instantiate", "§38.6"))
+                async (string name, [FromBody] TemplateInstantiateRequestDto request, ISequenceTemplateService svc, CancellationToken ct) => {
+                    // Convert unknown-template signals to 404 at the
+                    // endpoint layer rather than coupling to a concrete
+                    // service type — keeps the contract clean when the
+                    // real ISequenceTemplateService impl lands.
+                    try {
+                        var dto = await svc.InstantiateAsync(name, request, ct);
+                        return Results.Created($"/api/v1/sequences/{dto.Id}", dto);
+                    } catch (KeyNotFoundException) {
+                        return Results.NotFound();
+                    }
+                })
            .Accepts<TemplateInstantiateRequestDto>("application/json")
            .Produces<SequenceDto>(StatusCodes.Status201Created)
            .ProducesProblem(StatusCodes.Status404NotFound)
-           .ProducesProblem(StatusCodes.Status501NotImplemented)
            .WithName("InstantiateSequenceTemplate");
 
-        // NINA import (§38.4)
-        seq.MapPost("/import", ([FromBody] SequenceImportRequestDto request) =>
-                NotImplementedStub("POST /api/v1/sequences/import", "§38.4"))
+        // Phase 13.15 — NINA import (§38.4) wired to ISequenceImportService.
+        seq.MapPost("/import",
+                async ([FromBody] SequenceImportRequestDto request, ISequenceImportService svc, CancellationToken ct) => {
+                    var result = await svc.ImportAsync(request, ct);
+                    return Results.Created($"/api/v1/sequences/{result.CreatedSequenceId}", result);
+                })
            .Accepts<SequenceImportRequestDto>("application/json")
            .Produces<SequenceImportResultDto>(StatusCodes.Status201Created)
            .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
-           .ProducesProblem(StatusCodes.Status501NotImplemented)
            .WithName("ImportNinaSequence");
 
         // Sharing (§70) — Phase 13.13 wired to ISequenceService.
@@ -165,14 +177,18 @@ public static class SequenceEndpoints {
            .ProducesProblem(StatusCodes.Status404NotFound)
            .WithName("ShareExportSequence");
 
-        // Auto-flats decision (§48)
+        // Phase 13.15 — Auto-flats decision (§48) wired to IAutoFlatsService.
+        // Existence-check via ISequenceService first per the §48 contract —
+        // matches the matching-flats/mosaic-panels pattern.
         seq.MapPost("/{id:guid}/auto-flats-decision",
-                (Guid id, [FromBody] AutoFlatsDecisionRequestDto request) =>
-                    NotImplementedStub("POST /api/v1/sequences/{id}/auto-flats-decision", "§48"))
+                async (Guid id, [FromBody] AutoFlatsDecisionRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, IAutoFlatsService svc, ISequenceService sequences, CancellationToken ct) => {
+                    var sequence = await sequences.GetAsync(id, ct);
+                    if (sequence is null) return Results.NotFound();
+                    return Results.Accepted(value: await svc.ProvideDecisionAsync(id, request, key, ct));
+                })
            .Accepts<AutoFlatsDecisionRequestDto>("application/json")
            .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
            .ProducesProblem(StatusCodes.Status404NotFound)
-           .ProducesProblem(StatusCodes.Status501NotImplemented)
            .WithName("DecideAutoFlats");
 
         return app;
