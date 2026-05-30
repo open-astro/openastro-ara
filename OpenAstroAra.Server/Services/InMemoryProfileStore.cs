@@ -149,4 +149,27 @@ public sealed class InMemoryProfileStore : IProfileStore {
     public void PutSafetyPolicies(SafetyPoliciesDto value) {
         lock (_lock) { _safety = value; }
     }
+
+    // Defaults match AutofocusSettings() constructor.
+    private AutofocusSettingsDto _autofocus = new(
+        Method: "hfr_v_curve",
+        Steps: 7,
+        StepSize: 50,
+        ExposureSeconds: 5,
+        Binning: 1,
+        AfFilter: "L",
+        RunAfterFilterChange: true,
+        TriggerTempDeltaC: 2.0,
+        TriggerHfrDriftPct: 15.0,
+        EveryNHours: 2,
+        AbortSequenceOnAfFailure: true,
+        RestorePositionOnFailure: true);
+
+    public AutofocusSettingsDto GetAutofocusSettings() {
+        lock (_lock) { return _autofocus; }
+    }
+
+    public void PutAutofocusSettings(AutofocusSettingsDto value) {
+        lock (_lock) { _autofocus = value; }
+    }
 }

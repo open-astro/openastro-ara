@@ -379,6 +379,33 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ImagingDefaults' }
 
+  /profile/autofocus:
+    get:
+      summary: Get active profile's autofocus settings
+      description: |
+        Phase 12h.6h — §37.11 autofocus section.
+      tags: [Profile]
+      responses:
+        '200':
+          description: Current autofocus-settings state
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AutofocusSettings' }
+    put:
+      summary: Replace active profile's autofocus settings
+      tags: [Profile]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AutofocusSettings' }
+      responses:
+        '200':
+          description: New state (echo of input)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AutofocusSettings' }
+
   /profile/safety:
     get:
       summary: Get active profile's safety policies
@@ -811,6 +838,29 @@ components:
         fileFormat:       { type: string, enum: [fits, xisf, fits_rice, fits_gzip] }
         compression:      { type: string, enum: [off, rice, gzip] }
         filenameTemplate: { type: string, minLength: 1 }
+
+    AutofocusSettings:
+      type: object
+      description: |
+        §37.11 autofocus profile section. Mirrors WILMA's `AutofocusSettings`.
+        `method` is one of `hfr_v_curve`/`brightest_star_hfr`/`fwhm`.
+      required:
+        [method, steps, stepSize, exposureSeconds, binning, afFilter,
+         runAfterFilterChange, triggerTempDeltaC, triggerHfrDriftPct,
+         everyNHours, abortSequenceOnAfFailure, restorePositionOnFailure]
+      properties:
+        method:                    { type: string, enum: [hfr_v_curve, brightest_star_hfr, fwhm] }
+        steps:                     { type: integer, minimum: 3, maximum: 31 }
+        stepSize:                  { type: integer, minimum: 1 }
+        exposureSeconds:           { type: integer, minimum: 1 }
+        binning:                   { type: integer, minimum: 1, maximum: 4 }
+        afFilter:                  { type: string, minLength: 1 }
+        runAfterFilterChange:      { type: boolean }
+        triggerTempDeltaC:         { type: number, format: double, minimum: 0 }
+        triggerHfrDriftPct:        { type: number, format: double, minimum: 0, maximum: 100 }
+        everyNHours:               { type: integer, minimum: 0 }
+        abortSequenceOnAfFailure:  { type: boolean }
+        restorePositionOnFailure:  { type: boolean }
 
     SafetyPolicies:
       type: object

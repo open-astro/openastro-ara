@@ -115,3 +115,22 @@ public sealed record SafetyPoliciesDto(
     string OnGuiderLost,
     int GuiderRetryTimeoutSec,
     bool SkipTargetIfRecoveryFails);
+
+/// <summary>
+/// §37.11 autofocus settings — method + sweep params + filter/runtime
+/// policies + abort behavior. `Method` is `hfr_v_curve`/
+/// `brightest_star_hfr`/`fwhm` on the wire.
+/// </summary>
+public sealed record AutofocusSettingsDto(
+    string Method,
+    int Steps,
+    int StepSize,
+    int ExposureSeconds,
+    int Binning,
+    string AfFilter,
+    bool RunAfterFilterChange,
+    double TriggerTempDeltaC,
+    double TriggerHfrDriftPct,
+    int EveryNHours,
+    bool AbortSequenceOnAfFailure,
+    bool RestorePositionOnFailure);

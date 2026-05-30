@@ -40,4 +40,7 @@ public interface IProfileStore {
 
     SafetyPoliciesDto GetSafetyPolicies();
     void PutSafetyPolicies(SafetyPoliciesDto value);
+
+    AutofocusSettingsDto GetAutofocusSettings();
+    void PutAutofocusSettings(AutofocusSettingsDto value);
 }
