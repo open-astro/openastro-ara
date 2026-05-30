@@ -31,4 +31,7 @@ public interface IProfileStore {
 
     NotificationsSettingsDto GetNotificationsSettings();
     void PutNotificationsSettings(NotificationsSettingsDto value);
+
+    SiteSettingsDto GetSiteSettings();
+    void PutSiteSettings(SiteSettingsDto value);
 }

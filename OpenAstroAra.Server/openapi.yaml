@@ -379,6 +379,34 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ImagingDefaults' }
 
+  /profile/site:
+    get:
+      summary: Get active profile's site preferences
+      description: |
+        Phase 12h.6e — §37.12 site section. WILMA hydrates
+        `siteSettingsProvider` from this on panel mount.
+      tags: [Profile]
+      responses:
+        '200':
+          description: Current site-settings state
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SiteSettings' }
+    put:
+      summary: Replace active profile's site preferences
+      tags: [Profile]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SiteSettings' }
+      responses:
+        '200':
+          description: New state (echo of input)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SiteSettings' }
+
   /profile/notifications:
     get:
       summary: Get active profile's notifications settings
@@ -728,6 +756,27 @@ components:
         fileFormat:       { type: string, enum: [fits, xisf, fits_rice, fits_gzip] }
         compression:      { type: string, enum: [off, rice, gzip] }
         filenameTemplate: { type: string, minLength: 1 }
+
+    SiteSettings:
+      type: object
+      description: |
+        §37.12 site profile section. Mirrors WILMA's `SiteSettings` field-for-field.
+        `twilightDefinition` is one of `civil`/`nautical`/`astronomical`.
+      required:
+        [siteName, latitudeDeg, longitudeDeg, elevationM, timeZone,
+         useCustomHorizon, defaultHorizonAltitudeDeg, bortleClass,
+         typicalSeeingArcsec, twilightDefinition]
+      properties:
+        siteName:                  { type: string, minLength: 1 }
+        latitudeDeg:               { type: number, format: double, minimum: -90,  maximum: 90 }
+        longitudeDeg:              { type: number, format: double, minimum: -180, maximum: 180 }
+        elevationM:                { type: number, format: double, minimum: -500, maximum: 9000 }
+        timeZone:                  { type: string, minLength: 1 }
+        useCustomHorizon:          { type: boolean }
+        defaultHorizonAltitudeDeg: { type: number, format: double, minimum: 0, maximum: 90 }
+        bortleClass:               { type: integer, minimum: 1, maximum: 9 }
+        typicalSeeingArcsec:       { type: number, format: double, minimum: 0, maximum: 20 }
+        twilightDefinition:        { type: string, enum: [civil, nautical, astronomical] }
 
     NotificationsSettings:
       type: object

@@ -81,6 +81,21 @@ public static class ProfileEndpoints {
             .WithName("PutNotificationsSettings")
             .WithSummary("Replace the active profile's notifications settings.");
 
+        profile.MapGet("/site", (IProfileStore store) =>
+                Results.Ok(store.GetSiteSettings()))
+            .Produces<SiteSettingsDto>(StatusCodes.Status200OK)
+            .WithName("GetSiteSettings")
+            .WithSummary("Get the active profile's site preferences.");
+
+        profile.MapPut("/site", (SiteSettingsDto body, IProfileStore store) => {
+                store.PutSiteSettings(body);
+                return Results.Ok(body);
+            })
+            .Accepts<SiteSettingsDto>("application/json")
+            .Produces<SiteSettingsDto>(StatusCodes.Status200OK)
+            .WithName("PutSiteSettings")
+            .WithSummary("Replace the active profile's site preferences.");
+
         return app;
     }
 }

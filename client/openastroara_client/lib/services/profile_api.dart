@@ -4,6 +4,7 @@ import '../models/server.dart';
 import '../state/imaging/exposure_state.dart' show FrameKind;
 import '../state/settings/imaging_defaults_state.dart';
 import '../state/settings/notifications_settings_state.dart';
+import '../state/settings/site_settings_state.dart';
 import '../state/settings/storage_settings_state.dart';
 
 /// Client-side wrapper around §37 profile endpoints. Phase 12h.6a landed the
@@ -74,6 +75,23 @@ class ProfileApi {
       data: _notificationsSettingsToJson(value),
     );
     return _notificationsSettingsFromJson(res.data ?? const {});
+  }
+
+  /// GET the active profile's site-settings section.
+  Future<SiteSettings> getSiteSettings() async {
+    final res = await _dio.get<Map<String, dynamic>>(
+      '/api/v1/profile/site',
+    );
+    return _siteSettingsFromJson(res.data ?? const {});
+  }
+
+  /// PUT the active profile's site-settings section.
+  Future<SiteSettings> putSiteSettings(SiteSettings value) async {
+    final res = await _dio.put<Map<String, dynamic>>(
+      '/api/v1/profile/site',
+      data: _siteSettingsToJson(value),
+    );
+    return _siteSettingsFromJson(res.data ?? const {});
   }
 
   // ── JSON mapping ────────────────────────────────────────────────────────
@@ -174,6 +192,50 @@ class ProfileApi {
       case 'rice':
       default:
         return StorageCompression.rice;
+    }
+  }
+
+  // ── Site settings JSON mapping ─────────────────────────────────────────
+
+  static SiteSettings _siteSettingsFromJson(Map<String, dynamic> j) =>
+      SiteSettings(
+        siteName: (j['site_name'] as String?) ?? 'Backyard',
+        latitudeDeg: (j['latitude_deg'] as num?)?.toDouble() ?? 0,
+        longitudeDeg: (j['longitude_deg'] as num?)?.toDouble() ?? 0,
+        elevationM: (j['elevation_m'] as num?)?.toDouble() ?? 0,
+        timeZone: (j['time_zone'] as String?) ?? 'UTC',
+        useCustomHorizon: (j['use_custom_horizon'] as bool?) ?? false,
+        defaultHorizonAltitudeDeg:
+            (j['default_horizon_altitude_deg'] as num?)?.toDouble() ?? 20,
+        bortleClass: (j['bortle_class'] as num?)?.toInt() ?? 6,
+        typicalSeeingArcsec:
+            (j['typical_seeing_arcsec'] as num?)?.toDouble() ?? 2.5,
+        twilightDefinition:
+            _twilightFromString(j['twilight_definition'] as String?),
+      );
+
+  static Map<String, dynamic> _siteSettingsToJson(SiteSettings v) => {
+        'site_name': v.siteName,
+        'latitude_deg': v.latitudeDeg,
+        'longitude_deg': v.longitudeDeg,
+        'elevation_m': v.elevationM,
+        'time_zone': v.timeZone,
+        'use_custom_horizon': v.useCustomHorizon,
+        'default_horizon_altitude_deg': v.defaultHorizonAltitudeDeg,
+        'bortle_class': v.bortleClass,
+        'typical_seeing_arcsec': v.typicalSeeingArcsec,
+        'twilight_definition': v.twilightDefinition.name,
+      };
+
+  static TwilightDefinition _twilightFromString(String? s) {
+    switch (s) {
+      case 'civil':
+        return TwilightDefinition.civil;
+      case 'nautical':
+        return TwilightDefinition.nautical;
+      case 'astronomical':
+      default:
+        return TwilightDefinition.astronomical;
     }
   }
 

@@ -89,4 +89,27 @@ public sealed class InMemoryProfileStore : IProfileStore {
     public void PutNotificationsSettings(NotificationsSettingsDto value) {
         lock (_lock) { _notifications = value; }
     }
+
+    // Defaults match SiteSettings() constructor. Lat/lon default to 0,0
+    // (Gulf of Guinea) — astrometry math works there, the user just sees
+    // the wizard prompt to set their real location.
+    private SiteSettingsDto _site = new(
+        SiteName: "Backyard",
+        LatitudeDeg: 0.0,
+        LongitudeDeg: 0.0,
+        ElevationM: 0.0,
+        TimeZone: "UTC",
+        UseCustomHorizon: false,
+        DefaultHorizonAltitudeDeg: 20.0,
+        BortleClass: 6,
+        TypicalSeeingArcsec: 2.5,
+        TwilightDefinition: "astronomical");
+
+    public SiteSettingsDto GetSiteSettings() {
+        lock (_lock) { return _site; }
+    }
+
+    public void PutSiteSettings(SiteSettingsDto value) {
+        lock (_lock) { _site = value; }
+    }
 }
