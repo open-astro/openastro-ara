@@ -72,6 +72,10 @@ public class Program {
         // Phase 9 — IWsBroadcaster + IWsEventChannel + dispatch worker
         builder.Services.AddSingleton<IEquipmentDiscoveryService, AlpacaEquipmentDiscoveryService>();
 
+        // Phase 12h.6a: §37 profile store. In-memory for v0.0.1; file-based
+        // persistence lands in Phase 13 (settings survive daemon restart).
+        builder.Services.AddSingleton<IProfileStore, InMemoryProfileStore>();
+
         var app = builder.Build();
 
         app.UseCors();
@@ -107,6 +111,11 @@ public class Program {
         app.MapStatsEndpoints();
         app.MapSystemEndpoints();
         app.MapWebSocketEndpoints();
+
+        // Phase 12h.6a: §37 profile endpoints. imaging-defaults is real
+        // (in-memory store); other sections follow as 12h.6b-N adds DTOs +
+        // section-specific endpoint pairs on top of the same IProfileStore.
+        app.MapProfileEndpoints();
 
         // §60 meta endpoint — server identification + capabilities.
         // Lightweight identity payload per the playbook contract: server_uuid (stable per

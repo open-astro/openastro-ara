@@ -342,6 +342,43 @@ paths:
                 type: array
                 items: { $ref: '#/components/schemas/LogLine' }
 
+# ─── Endpoint group: Profile (§37 — Phase 12h.6) ──────────────────────────────
+# WILMA's editable settings panels persist via these endpoints. Each section
+# is one DTO + GET + PUT pair. v0.0.1 stores the active profile in-memory
+# (resets on daemon restart); Phase 13 adds file-based persistence.
+# Multi-profile + §42 import/export lands in v0.1.0.
+
+  /profile/imaging-defaults:
+    get:
+      summary: Get active profile's imaging defaults
+      description: |
+        Phase 12h.6a — first profile section to land end-to-end. WILMA hydrates
+        its `imagingDefaultsProvider` from this on app start.
+      tags: [Profile]
+      responses:
+        '200':
+          description: Current imaging-defaults state
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ImagingDefaults' }
+    put:
+      summary: Replace active profile's imaging defaults
+      description: |
+        Full-replace semantics — WILMA's "Save" buttons hold complete section
+        state client-side so PATCH partial-update is unnecessary for v0.0.1.
+      tags: [Profile]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ImagingDefaults' }
+      responses:
+        '200':
+          description: New state (echo of input)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ImagingDefaults' }
+
 # ─── Endpoint group: Stream (Phase 9 — WebSocket) ─────────────────────────────
 # WebSocket endpoints aren't expressible in OpenAPI 3.1 paths; the full
 # wire-level invariants are documented here. See §60.9 for the canonical
@@ -599,6 +636,23 @@ components:
         level: { type: string, enum: [Debug, Information, Warning, Error] }
         message: { type: string }
         source: { type: string, nullable: true }
+
+    ImagingDefaults:
+      type: object
+      description: |
+        §37 imaging-defaults profile section. Mirrors WILMA's `ImagingDefaults`
+        client model field-for-field. `frameKind` is one of `light`/`dark`/`bias`/`flat`.
+      required:
+        [exposureSeconds, gain, offset, bin, frameKind, coolerTargetC, coolerRampCPerMin, warmupAtSessionEnd]
+      properties:
+        exposureSeconds:    { type: integer, minimum: 1, maximum: 3600 }
+        gain:               { type: integer, minimum: 0, maximum: 1000 }
+        offset:             { type: integer, minimum: 0, maximum: 500 }
+        bin:                { type: integer, minimum: 1, maximum: 4 }
+        frameKind:          { type: string, enum: [light, dark, bias, flat] }
+        coolerTargetC:      { type: number, format: double, minimum: -60, maximum: 30 }
+        coolerRampCPerMin:  { type: number, format: double, minimum: 0, maximum: 10 }
+        warmupAtSessionEnd: { type: boolean }
 
     OperationAccepted:
       type: object
