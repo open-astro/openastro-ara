@@ -25,7 +25,7 @@ namespace OpenAstroAra.Server.Endpoints;
 /// Phase 8 diagnostics endpoints per PORT_PLAYBOOK.md §10.8 + §51.
 /// Phase 13.5 wires every route to <see cref="IDiagnosticsService"/>
 /// (placeholder today; real monitor worker + WS event emission lands
-/// in Phase 13.x).
+/// in the real-infra phase that follows §60.9).
 /// </summary>
 public static class DiagnosticsEndpoints {
 

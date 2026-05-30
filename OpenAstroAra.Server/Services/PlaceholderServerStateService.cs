@@ -85,7 +85,7 @@ public sealed class PlaceholderServerStateService : IServerStateService {
                 "§40 Library browseable (placeholder data), §51 diagnostics + " +
                 "§50 stats render fixture views, §46 notifications functional " +
                 "with sample data. Full FITS-to-JPEG pipeline + real frame " +
-                "catalog DB land in Phase 13.x.",
+                "catalog DB land in the real-infra phase that follows §60.9.",
             BreakingChanges: Array.Empty<string>(),
             UpgradeGuideUrl: null));
 

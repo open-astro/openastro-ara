@@ -28,7 +28,7 @@ namespace OpenAstroAra.Server.Services;
 /// distinct from the §51 *settings* mode (notify_only / pause_on_critical
 /// / abort_on_critical) which lives in <c>profile.json</c> via
 /// <see cref="IProfileStore"/>. Real implementation reconciles the two
-/// in Phase 13.x.
+/// in the real-infra phase (post-§60.9, when the §51 monitor process lands).
 ///
 /// History: three fixture events (Green/Yellow/Red severities) so the
 /// §51.3 history scroll has data to render.

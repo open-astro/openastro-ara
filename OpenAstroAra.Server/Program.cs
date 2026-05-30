@@ -104,7 +104,7 @@ public class Program {
         // Suggest/AutoCorrect) is conceptually distinct from the §51.5
         // *settings* reaction mode (notify_only/pause_on_critical/
         // abort_on_critical) which round-trips via the profile store —
-        // Phase 13.x reconciles.
+        // the real-infra phase reconciles the two when §51 monitor lands.
         builder.Services.AddSingleton<IDiagnosticsService, PlaceholderDiagnosticsService>();
         // Phase 13.6 — placeholder IStatsService covering all 8 §50 chart
         // views with synthetic fixture data. Numbers are intentionally small
@@ -134,7 +134,7 @@ public class Program {
         // Phase 13.12 — placeholder equipment services for all 12 device
         // types (§52). All Gets return null → 404; Connects/Disconnects/
         // Actions return 202 OperationAccepted. Real ASCOM Alpaca drivers
-        // land per-device in Phase 13.x / 14.
+        // land per-device in the real-infra phase + Phase 14.
         builder.Services.AddSingleton<ICameraService, PlaceholderCameraService>();
         builder.Services.AddSingleton<ITelescopeService, PlaceholderTelescopeService>();
         builder.Services.AddSingleton<IFocuserService, PlaceholderFocuserService>();
