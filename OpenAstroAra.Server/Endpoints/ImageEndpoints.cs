@@ -133,9 +133,18 @@ public static class ImageEndpoints {
                 .WithName("GetSession");
 
         sessions.MapGet("/{id:guid}/frames",
-                async (Guid id, int? limit, string? cursor, ISessionService svc, CancellationToken ct) =>
-                    Results.Ok(await svc.GetFramesAsync(id, limit ?? 50, cursor, ct)))
+                async (Guid id, int? limit, string? cursor, ISessionService svc, CancellationToken ct) => {
+                    // Existence check first — without it, unknown session IDs
+                    // would return 200 + empty list (the frame repo silently
+                    // filters to no matches), which is semantically wrong:
+                    // "no frames in a non-existent session" ≠ "this session
+                    // had no frames yet". §40 expects 404 here.
+                    var session = await svc.GetAsync(id, ct);
+                    if (session is null) return Results.NotFound();
+                    return Results.Ok(await svc.GetFramesAsync(id, limit ?? 50, cursor, ct));
+                })
             .Produces<CursorPage<FrameListItemDto>>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("GetSessionFrames");
 
         sessions.MapPost("/{id:guid}/resume-target",
