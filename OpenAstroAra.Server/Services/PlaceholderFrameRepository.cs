@@ -158,11 +158,11 @@ public sealed class PlaceholderFrameRepository : IFrameRepository {
         Task.FromResult<(Stream FitsStream, string FileName)?>(null);
 
     public Task<OperationAcceptedDto> BulkRateAsync(BulkRateRequestDto request, string? idempotencyKey, CancellationToken ct) =>
-        throw new NotImplementedException("BulkRate lands with the §28 frame catalog DB in Phase 13.x");
+        Task.FromResult(PlaceholderEquipmentHelpers.Accepted("frames.bulk-rate", idempotencyKey));
 
     public Task<OperationAcceptedDto> BulkTagAsync(BulkTagRequestDto request, string? idempotencyKey, CancellationToken ct) =>
-        throw new NotImplementedException("BulkTag lands with the §28 frame catalog DB in Phase 13.x");
+        Task.FromResult(PlaceholderEquipmentHelpers.Accepted("frames.bulk-tag", idempotencyKey));
 
     public Task<OperationAcceptedDto> BulkDeleteAsync(BulkDeleteRequestDto request, string? idempotencyKey, CancellationToken ct) =>
-        throw new NotImplementedException("BulkDelete lands with the §28 frame catalog DB in Phase 13.x");
+        Task.FromResult(PlaceholderEquipmentHelpers.Accepted("frames.bulk-delete", idempotencyKey));
 }
