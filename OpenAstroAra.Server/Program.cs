@@ -115,6 +115,10 @@ public class Program {
         // snapshot + §33.2.1 versions + §54 release notes. Restart endpoints
         // throw (§13 systemd-watchdog work needed).
         builder.Services.AddSingleton<IServerStateService, PlaceholderServerStateService>();
+        // Phase 13.8 — placeholder ILogService. Tail returns 8 fixture
+        // entries; rotate accepts; download is 404 (no Serilog file sinks
+        // wired yet — Phase 14 §29.9.2).
+        builder.Services.AddSingleton<ILogService, PlaceholderLogService>();
 
         // §37 profile store. Phase 12h.6a introduced the in-memory impl;
         // Phase 12h.7 upgraded to FileProfileStore (settings survive daemon
