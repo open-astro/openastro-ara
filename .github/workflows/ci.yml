@@ -155,6 +155,20 @@ jobs:
           curl -fsS "http://localhost:$OPENASTROARA_PORT/api/v1/ws/catalog" \
             | tee /dev/stderr \
             | grep -q '"events":\['
+          # Probe the /api/v1/ws upgrade itself — confirms the WS handler
+          # negotiates the protocol switch (101 Switching Protocols). curl
+          # has no native WS support but emits the Upgrade handshake when
+          # given the right headers; --max-time bounds the dwell since the
+          # channel is idle and the server has nothing to send.
+          echo "Probing /api/v1/ws upgrade …"
+          curl -sS -i -N --max-time 2 \
+            -H 'Connection: Upgrade' \
+            -H 'Upgrade: websocket' \
+            -H 'Sec-WebSocket-Version: 13' \
+            -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' \
+            "http://localhost:$OPENASTROARA_PORT/api/v1/ws" 2>&1 \
+            | tee /dev/stderr \
+            | grep -q '^HTTP/1.1 101 Switching Protocols'
           # Verify a still-stubbed endpoint serializes its RFC 7807 Problem
           # body (catches ProblemDetails-not-registered regressions). NOT
           # using -f here because curl with -f exits non-zero on 4xx/5xx
