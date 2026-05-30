@@ -98,6 +98,10 @@ public class Program {
         // notifications (Info/Warning/Critical across Sequence/Storage/Safety
         // categories); preferences default to "everything enabled" matching §46.4.
         builder.Services.AddSingleton<INotificationService, PlaceholderNotificationService>();
+        // Phase 13.5 — placeholder IDiagnosticsService composes on the profile
+        // store so the §51 Diagnostic Panel's reported mode matches what the
+        // user picked in settings (no fakery drift with the 12h.6j round-trip).
+        builder.Services.AddSingleton<IDiagnosticsService, PlaceholderDiagnosticsService>();
 
         // §37 profile store. Phase 12h.6a introduced the in-memory impl;
         // Phase 12h.7 upgraded to FileProfileStore (settings survive daemon
