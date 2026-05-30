@@ -24,19 +24,18 @@ class DiscoveredDevice {
   });
 
   factory DiscoveredDevice.fromJson(Map<String, dynamic> json) {
+    // The daemon serializes records via System.Text.Json with the default
+    // camelCase naming policy (see `OpenAstroAra.Server/Program.cs`), so
+    // every key is camelCase. No PascalCase fallback needed.
     return DiscoveredDevice(
-      uniqueId: json['uniqueId'] as String? ?? json['UniqueId'] as String? ?? '',
-      name: json['name'] as String? ?? json['Name'] as String? ?? '',
-      deviceType: _parseType(json['type'] ?? json['Type']),
-      hostName:
-          json['hostName'] as String? ?? json['HostName'] as String? ?? '',
-      ipAddress:
-          json['ipAddress'] as String? ?? json['IpAddress'] as String? ?? '',
-      ipPort: (json['ipPort'] ?? json['IpPort'] ?? 0) as int,
-      alpacaDeviceNumber: (json['alpacaDeviceNumber'] ??
-          json['AlpacaDeviceNumber'] ??
-          0) as int,
-      useHttps: (json['useHttps'] ?? json['UseHttps'] ?? false) as bool,
+      uniqueId: json['uniqueId'] as String? ?? '',
+      name: json['name'] as String? ?? '',
+      deviceType: _parseType(json['type']),
+      hostName: json['hostName'] as String? ?? '',
+      ipAddress: json['ipAddress'] as String? ?? '',
+      ipPort: (json['ipPort'] as int?) ?? 0,
+      alpacaDeviceNumber: (json['alpacaDeviceNumber'] as int?) ?? 0,
+      useHttps: (json['useHttps'] as bool?) ?? false,
     );
   }
 
@@ -73,8 +72,10 @@ class DiscoveredDevice {
       case 'safety':
         return EquipmentDeviceType.safetyMonitor;
       default:
-        // Fallback so a stray daemon value doesn't crash the chooser; the
-        // device just won't match any client device-type filter.
+        // Fallback so a stray daemon value doesn't crash the chooser, but
+        // assert in debug builds so future daemon-added types surface
+        // immediately rather than silently misclassifying as camera.
+        assert(false, 'Unknown device type from daemon: $s');
         return EquipmentDeviceType.camera;
     }
   }
