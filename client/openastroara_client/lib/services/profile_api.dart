@@ -106,8 +106,10 @@ class ProfileApi {
         saveDirectory: (j['save_directory'] as String?) ?? '/media/openastroara',
         fileFormat: _fileFormatFromString(j['file_format'] as String?),
         compression: _compressionFromString(j['compression'] as String?),
+        // Fallback matches the StorageSettings() constructor default
+        // (raw-string literal with `\\` double-backslash separators).
         filenameTemplate: (j['filename_template'] as String?) ??
-            r'$$DATEMINUS12$$\$$IMAGETYPE$$\$$DATETIME$$_$$FILTER$$_$$EXPOSURETIME$$s',
+            r'$$DATEMINUS12$$\\$$IMAGETYPE$$\\$$DATETIME$$_$$FILTER$$_$$EXPOSURETIME$$s',
       );
 
   static Map<String, dynamic> _storageSettingsToJson(StorageSettings v) => {

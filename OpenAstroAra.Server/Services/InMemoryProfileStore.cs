@@ -37,13 +37,17 @@ public sealed class InMemoryProfileStore : IProfileStore {
         CoolerRampCPerMin: 1.0,
         WarmupAtSessionEnd: false);
 
-    // Defaults match the WILMA client's StorageSettings() constructor.
+    // Defaults match the WILMA client's StorageSettings() constructor
+    // (lib/state/settings/storage_settings_state.dart) field-for-field,
+    // including the `\\` double-backslash separators in the filename
+    // template — the raw-string literal on the client uses literal
+    // double-backslashes, so the verbatim string here matches with `\\`.
     // The save directory matches the §13 systemd unit's WorkingDirectory.
     private StorageSettingsDto _storage = new(
         SaveDirectory: "/media/openastroara",
         FileFormat: "fits",
         Compression: "rice",
-        FilenameTemplate: @"$$DATEMINUS12$$\$$IMAGETYPE$$\$$DATETIME$$_$$FILTER$$_$$EXPOSURETIME$$s");
+        FilenameTemplate: @"$$DATEMINUS12$$\\$$IMAGETYPE$$\\$$DATETIME$$_$$FILTER$$_$$EXPOSURETIME$$s");
 
     public ImagingDefaultsDto GetImagingDefaults() {
         lock (_lock) { return _imagingDefaults; }
