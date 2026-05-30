@@ -187,6 +187,8 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(TelescopeStateDto))]
 [JsonSerializable(typeof(TemplateInstantiateRequestDto))]
 [JsonSerializable(typeof(WsEventEnvelopeDto))]
+[JsonSerializable(typeof(WsResumeRequestDto))]
+[JsonSerializable(typeof(WsResumeResponseDto))]
 // /api/v1/ws/catalog response shape (defined inline in WebSocketEndpoints).
 [JsonSerializable(typeof(WebSocketEndpoints.WsCatalogResponse))]
 // Concrete CursorPage<T> instantiations — one per paginated endpoint.
