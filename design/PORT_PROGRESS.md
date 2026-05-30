@@ -4,10 +4,10 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** §60.9 real WS upgrade handler — sub-PRs A/B/C promoted to master via PR #175 (2026-05-30); sub-PR D on `port/ara` pending next promotion.
-- **Last merged:** `ws-handler-d-heartbeat` — PR #176, 2026-05-30. `KeepAliveTimeout = 60s` enables .NET 10 framework-level pong-timeout enforcement (close 1011 on unresponsive client).
-- **Currently working on:** Tracking refresh — document the four WS-handler sub-PRs in "Completed" and update the Next pointer past §60.9.
-- **Next substantive work:** Real-infra ops on top of the now-live WS infrastructure — server restart via systemd, FITS file download, frame catalog DB-backed bulk ops, session resume-target/restretch, `/sessions/{id}/hfr-analysis` time-series aggregation (last 501-probe target). Plus Phase 14 CI matrix expansion (cross-platform client-test + Alpaca simulator pinning per §14.5).
+- **Phase:** Post-§60.9 placeholder cleanup — all but one 501 stub closed out via #179–#182. Promoted to master via PR #183 (2026-05-30).
+- **Last merged on `port/ara`:** This tracking refresh.
+- **Currently working on:** PORT_PROGRESS.md refresh for the four post-§60.9 placeholder-wiring sub-PRs.
+- **Next substantive work:** The remaining 501 stub is `/api/v1/frames/{id}/download` (§72) — the CI smoke gate's deliberate 501 anchor; depends on real FITS file storage. Real-infra options for what comes after: Phase 14 CI matrix expansion (cross-platform client-test, Alpaca simulator pinning per §14.5, server-e2e Docker arm64), §28 frame catalog DB-backed bulk ops, §13 systemd-driven daemon restart, §65 stretch pipeline. None of these are placeholder-shaped — they need real infrastructure decisions.
 
 ## Completed
 
@@ -164,6 +164,17 @@ Builds the real WebSocket lifecycle on top of the Phase 13.17 `InMemoryWsService
 - ✅ **Sub-PR D** (PR #176) — `KeepAliveTimeout = 60s`. .NET 10 closes the socket with code 1011 if no pong/data arrives within the window — matches openapi.yaml line 680's "2 consecutive missed pongs → server closes" and line 711's mapping of 1011 to "unresponsive client". No manual pong-tracking code required.
 
 Close-code coverage from this work: 1000 (sub-PR A clean close), 1001 (handled by `RequestAborted` propagation), 1011 (sub-PR D timeout), 4003 (sub-PR B version mismatch). Out of scope until real infrastructure: 1009 (frame too large — depends on actual large-frame use cases), 1012 (service restart pairs with §34.7 imminent-restart event), 4001 (auth, v0.1.0 only), 4002 (real opaque resume tokens with 1-hour validity tied to REST `/server/state` issuance), 4004 (single-client policy via §27 takeover state machine).
+
+### Post-§60.9 placeholder cleanup (PRs #179–#183)
+
+After the §60.9 WS lifecycle landed, four sub-PRs flipped the last batch of endpoints from 501-stubs (with `NotImplementedException`-throwing service methods) to standard placeholder-Accepted responses, so WILMA can develop against real wire shapes without the daemon throwing 500s.
+
+- ✅ **#179** — §40.7 `/sessions/{id}/hfr-analysis`: real aggregation (mean / stddev / least-squares slope / `improving`/`degrading`/`stable`/`insufficient-data` trend label) from the per-frame Hfr column on `PlaceholderFrameRepository.SampleFrames`. CI smoke gate's 501-probe anchor migrated to `/frames/{id}/download`.
+- ✅ **#180** — §40.8 `/frames/bulk/{rate,tag,delete}`: standard `Accepted` helper with `Idempotency-Key` threaded through. operation_type names follow the route-segment-prefix convention (`frames.bulk-rate` etc.).
+- ✅ **#181** — `/sessions/{id}/{resume-target,restretch}`: same shape + 404 existence check before 202 so unknown session ids don't get silent no-op operations.
+- ✅ **#182** — `/server/{restart,restart-on-idle}`: optional `?reason=` query string (defaults to `operator_requested`). Real systemd-driven restart still in Phase 14 hardening.
+
+After this sweep, **the only remaining 501 stub is `/api/v1/frames/{id}/download` (§72)** — kept as the CI smoke gate's 501 anchor since it depends on real FITS file storage.
 
 ### Phase 0.5p-followup buildfix — Core + Astrometry + Equipment cleanup (PR #43)
 - ✅ `OpenAstroAra.Core` — `Notification.cs` scrubbed (CustomDisplayPart references removed; warning/error variants now route to `Logger` with `[CallerXxx]` attribute propagation so the original call site is preserved); `MyMessageBox.cs` `Show(...)` maps affirmative defaults (Yes→No, OK→Cancel) to safe non-affirmative results to prevent `SequenceHasChanged.AskHasChanged` silently auto-detaching; `System.Management 10.0.0` added for WMI usage in `Logger.cs` + `SerialPortProvider.cs`.

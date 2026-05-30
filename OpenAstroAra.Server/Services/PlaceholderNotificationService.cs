@@ -29,7 +29,7 @@ namespace OpenAstroAra.Server.Services;
 ///
 /// Mutating endpoints (dismiss + mark-read) update an in-memory cache
 /// but don't persist; the §46.5 SQLite-backed notifications log lands
-/// in Phase 13.x alongside the §28 frame catalog DB.
+/// alongside the §28 frame catalog DB (real-infra phase, post-§60.9).
 ///
 /// Preferences are loaded from a single in-memory <see cref="NotificationPreferenceDto"/>
 /// (defaults: alarm sound on, no quiet hours, every category enabled) —

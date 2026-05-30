@@ -22,7 +22,7 @@ namespace OpenAstroAra.Server.Services;
 /// §38 sequence CRUD surface. Backed by an in-memory dictionary so
 /// create/update/delete actually round-trip during a single daemon
 /// lifetime (resets on restart). Real §28-DB-backed impl + the §38
-/// sequence orchestrator land in Phase 13.x.
+/// sequence orchestrator land in the real-infra phase (post-§60.9).
 /// </summary>
 public sealed class PlaceholderSequenceService : ISequenceService {
     private readonly object _lock = new();
