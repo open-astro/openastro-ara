@@ -5,8 +5,8 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 ## Current
 
 - **Phase:** Phase 12h.6 — daemon round-trip for in-memory settings.
-- **Last merged:** `port-progress-refresh-12h-phase14` — PR #146, 2026-05-30 (tracking-doc refresh through 14b).
-- **Currently working on:** `phase-13-1-frame-preview-placeholder` — first Phase 13 (§12.5 image preview pipeline) sub-PR. Wires `IFrameRepository` to a `PlaceholderFrameRepository` that serves a small precomputed gray JPEG from the §65 preview + thumbnail endpoints. Real OpenCvSharp4 + FITS reading + §28 frame catalog land in 13.2+.
+- **Last merged:** `phase-13-1-frame-preview-placeholder` — PR #147, 2026-05-30. Phase 13 (§12.5 image preview pipeline) underway: §65 preview + thumbnail endpoints now serve a precomputed 64×64 JPEG from `PlaceholderFrameRepository`.
+- **Currently working on:** `phase-13-2-frame-dto-placeholder` — extends the placeholder repo with three fake fixture frames (two M31 Lights + a Dark) so `GET /frames/{id}` and `GET /frames?...` return real wire shapes for the WILMA Library + Frame Detail UI. Real OpenCvSharp4 + FITS reading + §28 DB-backed catalog land in 13.3+.
 - **Note:** Phase 12h.3 (Smart Settings Search) + 12h.4 (PHD2) + 12h.5 (Alpaca chooser) all merged via PRs #110-#128 between 2026-05-29 and 2026-05-30; a dedicated `port-progress-refresh` sub-PR will backfill the Completed section once Phase 12h closes out.
 
 ## Completed
