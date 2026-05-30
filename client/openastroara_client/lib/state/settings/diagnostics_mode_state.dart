@@ -5,7 +5,8 @@ import '../../services/profile_api.dart';
 /// §51 diagnostics mode. Phase 12h.6j wires the daemon round-trip via
 /// [ProfileApi] (`/api/v1/profile/diagnostics-mode`). The picker
 /// auto-saves on each radio tap (no Save button — single-choice UX),
-/// so [persistToServer] runs from `setMode`.
+/// so [persistToServer] runs from the panel's `_selectAndSave` after
+/// it calls [setMode] to update local state optimistically.
 
 enum DiagnosticsMode { notifyOnly, pauseOnCritical, abortOnCritical }
 
