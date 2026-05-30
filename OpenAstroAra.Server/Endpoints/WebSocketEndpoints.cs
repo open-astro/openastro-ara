@@ -286,12 +286,13 @@ public static class WebSocketEndpoints {
         }
 
         var missed = await channel.ResumeFromAsync(lastSeenSeq, ct);
-        // High-water mark for drain-loop dedup. Max seq in the snapshot is
-        // the seq of the last envelope (ConcurrentQueue.ToArray returns
-        // FIFO order, so [^1] is the newest). If the snapshot is empty,
-        // there's nothing to replay and nothing to dedup — fall back to
-        // lastSeenSeq so dedup-skip is a no-op.
-        var highWaterMark = missed.Count > 0 ? missed[^1].Seq : lastSeenSeq;
+        // High-water mark for drain-loop dedup. Use Max(Seq) rather than
+        // missed[^1].Seq — under multi-publisher concurrency, _replay.Enqueue
+        // can complete out of seq order if one thread pauses between
+        // Interlocked.Increment and Enqueue, so the queue's last element
+        // isn't guaranteed to be the max. O(N) on N ≤ 1000 envelopes.
+        // Empty snapshot → fall back to lastSeenSeq so dedup-skip is a no-op.
+        var highWaterMark = missed.Count > 0 ? missed.Max(e => e.Seq) : lastSeenSeq;
         await SendResumeResponseAsync(socket, new WsResumeResponseDto(
             Resumed: true,
             MissedEvents: missed.Count,
