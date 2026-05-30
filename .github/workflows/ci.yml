@@ -189,17 +189,31 @@ jobs:
             -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' \
             "http://localhost:$OPENASTROARA_PORT/api/v1/ws")
           test "$STATUS" = "426"
+          # Verify hfr-analysis is now functional + returns the §40.7 shape.
+          # Previously this endpoint was 501; the new PlaceholderSessionService
+          # aggregates from the sample frames' Hfr column. Sample session id
+          # matches PlaceholderFrameRepository.SampleSessionId.
+          SAMPLE_SESSION="11111111-1111-1111-1111-111111111111"
+          echo "Probing /api/v1/sessions/\$SAMPLE_SESSION/hfr-analysis (expect 200 with mean_hfr) …"
+          curl -fsS "http://localhost:$OPENASTROARA_PORT/api/v1/sessions/$SAMPLE_SESSION/hfr-analysis" \
+            | tee /dev/stderr \
+            | grep -q '"mean_hfr":'
+          # 404 path: unknown session id.
+          ZERO_GUID="00000000-0000-0000-0000-000000000000"
+          echo "Probing /api/v1/sessions/\$ZERO_GUID/hfr-analysis (expect 404) …"
+          NOT_FOUND_STATUS=$(curl -sS -o /dev/null -w '%{http_code}' \
+            "http://localhost:$OPENASTROARA_PORT/api/v1/sessions/$ZERO_GUID/hfr-analysis")
+          test "$NOT_FOUND_STATUS" = "404" \
+            || (echo "✗ expected 404, got $NOT_FOUND_STATUS"; exit 1)
           # Verify a still-stubbed endpoint serializes its RFC 7807 Problem
           # body (catches ProblemDetails-not-registered regressions). NOT
           # using -f here because curl with -f exits non-zero on 4xx/5xx
-          # before writing %{http_code}. /sessions/{guid}/hfr-analysis
-          # is still 501 until the §40.7 time-series aggregation lands —
-          # serves as the gate's anchor through the remainder of Phase 13.
-          ZERO_GUID="00000000-0000-0000-0000-000000000000"
-          echo "Probing /api/v1/sessions/\$ZERO_GUID/hfr-analysis (expect 501 Problem JSON) …"
+          # before writing %{http_code}. /frames/{id}/download is the new
+          # 501-probe anchor — depends on real FITS file storage (§72).
+          echo "Probing /api/v1/frames/\$ZERO_GUID/download (expect 501 Problem JSON) …"
           PROBLEM_STATUS=$(curl -sS -o "$RUNNER_TEMP/problem.json" \
             -w '%{http_code}' \
-            "http://localhost:$OPENASTROARA_PORT/api/v1/sessions/$ZERO_GUID/hfr-analysis")
+            "http://localhost:$OPENASTROARA_PORT/api/v1/frames/$ZERO_GUID/download")
           if [ "$PROBLEM_STATUS" != "501" ]; then
             echo "✗ expected 501, got $PROBLEM_STATUS"
             cat "$RUNNER_TEMP/problem.json"

@@ -72,14 +72,77 @@ public sealed class PlaceholderSessionService : ISessionService {
         _frames.ListAsync(limit, cursor, sessionId, targetName: null, ct);
 
     public Task<OperationAcceptedDto> ResumeTargetAsync(Guid sessionId, ResumeTargetRequestDto request, string? idempotencyKey, CancellationToken ct) =>
-        throw new NotImplementedException("ResumeTarget lands with the §38 sequence orchestrator in Phase 13.x");
+        Task.FromResult(PlaceholderEquipmentHelpers.Accepted("sessions.resume-target", idempotencyKey));
 
     public Task<OperationAcceptedDto> RestretchAsync(Guid sessionId, SessionRestretchRequestDto request, string? idempotencyKey, CancellationToken ct) =>
-        throw new NotImplementedException("Restretch lands with the OpenCvSharp4 preview generator in Phase 13.x");
+        Task.FromResult(PlaceholderEquipmentHelpers.Accepted("sessions.restretch", idempotencyKey));
 
-    public Task<HfrAnalysisDto?> GetHfrAnalysisAsync(Guid sessionId, CancellationToken ct) =>
-        // No HFR time-series yet (per-frame HFR is on the FrameDto but
-        // not aggregated into a session-level analysis); 13.4 generates
-        // it from the §28 catalog.
-        Task.FromResult<HfrAnalysisDto?>(null);
+    public async Task<HfrAnalysisDto?> GetHfrAnalysisAsync(Guid sessionId, CancellationToken ct) {
+        if (sessionId != SampleSessionId) return null;
+
+        // Pull the frames for this session and aggregate HFR for the
+        // lights with a non-null measurement. Dark/flat frames don't carry
+        // HFR and stay out of the time series.
+        // Page size 200 covers any plausible session (sample has 3 frames;
+        // real sessions cap well below this until §28 DB-backed pagination
+        // lands).
+        var page = await _frames.ListAsync(limit: 200, cursor: null, sessionId, targetName: null, ct);
+        var points = page.Items
+            .Where(f => f.Hfr.HasValue)
+            .OrderBy(f => f.CapturedUtc)
+            .Select(f => new HfrTimeSeriesPointDto(
+                Timestamp: f.CapturedUtc,
+                Hfr: f.Hfr!.Value,
+                StarCount: f.StarCount,
+                FrameId: f.Id))
+            .ToList();
+
+        if (points.Count == 0) {
+            // Session has no HFR-bearing frames yet — match the §40.7
+            // "no data" shape rather than a 404 (the session itself
+            // exists; the analysis just hasn't accumulated).
+            return new HfrAnalysisDto(
+                SessionId: sessionId,
+                FrameCount: 0,
+                MeanHfr: 0,
+                StandardDeviation: 0,
+                TrendSlopePerHour: 0,
+                Trend: "insufficient-data",
+                TimeSeries: Array.Empty<HfrTimeSeriesPointDto>());
+        }
+
+        var mean = points.Average(p => p.Hfr);
+        var variance = points.Average(p => (p.Hfr - mean) * (p.Hfr - mean));
+        var stdDev = Math.Sqrt(variance);
+
+        // Simple least-squares slope: x = hours-since-first-frame, y = HFR.
+        var t0 = points[0].Timestamp;
+        var xs = points.Select(p => (p.Timestamp - t0).TotalHours).ToList();
+        var ys = points.Select(p => p.Hfr).ToList();
+        var xMean = xs.Average();
+        var yMean = ys.Average();
+        var numerator = 0.0;
+        var denominator = 0.0;
+        for (int i = 0; i < points.Count; i++) {
+            var dx = xs[i] - xMean;
+            numerator += dx * (ys[i] - yMean);
+            denominator += dx * dx;
+        }
+        var slopePerHour = denominator > 0 ? numerator / denominator : 0;
+
+        // Trend label per §40.7: "improving" if HFR is decreasing,
+        // "degrading" if increasing, "stable" within ±0.05 px/hr.
+        var trend = slopePerHour > 0.05 ? "degrading"
+                  : slopePerHour < -0.05 ? "improving"
+                  : "stable";
+
+        return new HfrAnalysisDto(
+            SessionId: sessionId,
+            FrameCount: points.Count,
+            MeanHfr: mean,
+            StandardDeviation: stdDev,
+            TrendSlopePerHour: slopePerHour,
+            Trend: trend,
+            TimeSeries: points);
+    }
 }

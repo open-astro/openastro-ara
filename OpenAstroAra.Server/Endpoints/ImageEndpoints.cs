@@ -88,28 +88,34 @@ public static class ImageEndpoints {
             .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("DownloadFrame");
 
-        frames.MapPost("/bulk/rate", ([FromBody] BulkRateRequestDto request) =>
-                NotImplementedStub("POST /api/v1/frames/bulk/rate", "§40.8"))
+        frames.MapPost("/bulk/rate",
+                async (IFrameRepository repo, [FromBody] BulkRateRequestDto request,
+                       [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey,
+                       CancellationToken ct) =>
+                    Results.Accepted(value: await repo.BulkRateAsync(request, idempotencyKey, ct)))
             .Accepts<BulkRateRequestDto>("application/json")
             .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
             .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
-            .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("BulkRateFrames");
 
-        frames.MapPost("/bulk/tag", ([FromBody] BulkTagRequestDto request) =>
-                NotImplementedStub("POST /api/v1/frames/bulk/tag", "§40.8"))
+        frames.MapPost("/bulk/tag",
+                async (IFrameRepository repo, [FromBody] BulkTagRequestDto request,
+                       [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey,
+                       CancellationToken ct) =>
+                    Results.Accepted(value: await repo.BulkTagAsync(request, idempotencyKey, ct)))
             .Accepts<BulkTagRequestDto>("application/json")
             .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
             .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
-            .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("BulkTagFrames");
 
-        frames.MapPost("/bulk/delete", ([FromBody] BulkDeleteRequestDto request) =>
-                NotImplementedStub("POST /api/v1/frames/bulk/delete", "§40.8"))
+        frames.MapPost("/bulk/delete",
+                async (IFrameRepository repo, [FromBody] BulkDeleteRequestDto request,
+                       [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey,
+                       CancellationToken ct) =>
+                    Results.Accepted(value: await repo.BulkDeleteAsync(request, idempotencyKey, ct)))
             .Accepts<BulkDeleteRequestDto>("application/json")
             .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
             .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
-            .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("BulkDeleteFrames");
 
         // ─── Sessions (§40, §65) ───
@@ -148,28 +154,46 @@ public static class ImageEndpoints {
             .WithName("GetSessionFrames");
 
         sessions.MapPost("/{id:guid}/resume-target",
-                (Guid id, [FromBody] ResumeTargetRequestDto request) =>
-                    NotImplementedStub("POST /api/v1/sessions/{id}/resume-target", "§40"))
+                async (ISessionService svc, Guid id, [FromBody] ResumeTargetRequestDto request,
+                       [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey,
+                       CancellationToken ct) => {
+                    // Verify the session exists before accepting the operation —
+                    // matches §40 wire contract where resume-target on an unknown
+                    // session is 404, not a 202 the operator will silently watch
+                    // never make progress.
+                    var session = await svc.GetAsync(id, ct);
+                    return session is null
+                        ? Results.NotFound()
+                        : Results.Accepted(value: await svc.ResumeTargetAsync(id, request, idempotencyKey, ct));
+                })
             .Accepts<ResumeTargetRequestDto>("application/json")
             .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
             .ProducesProblem(StatusCodes.Status404NotFound)
-            .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("ResumeSessionTarget");
 
         sessions.MapPost("/{id:guid}/restretch",
-                (Guid id, [FromBody] SessionRestretchRequestDto request) =>
-                    NotImplementedStub("POST /api/v1/sessions/{id}/restretch", "§65"))
+                async (ISessionService svc, Guid id, [FromBody] SessionRestretchRequestDto request,
+                       [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey,
+                       CancellationToken ct) => {
+                    var session = await svc.GetAsync(id, ct);
+                    return session is null
+                        ? Results.NotFound()
+                        : Results.Accepted(value: await svc.RestretchAsync(id, request, idempotencyKey, ct));
+                })
             .Accepts<SessionRestretchRequestDto>("application/json")
             .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
             .ProducesProblem(StatusCodes.Status404NotFound)
-            .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("RestretchSession");
 
-        sessions.MapGet("/{id:guid}/hfr-analysis", (Guid id) =>
-                NotImplementedStub("GET /api/v1/sessions/{id}/hfr-analysis", "§40.7"))
+        sessions.MapGet("/{id:guid}/hfr-analysis",
+                async (ISessionService svc, Guid id, CancellationToken ct) => {
+                    var analysis = await svc.GetHfrAnalysisAsync(id, ct);
+                    return analysis is null
+                        ? Results.NotFound()
+                        : Results.Ok(analysis);
+                })
             .Produces<HfrAnalysisDto>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status404NotFound)
-            .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("GetSessionHfrAnalysis");
 
         // ─── Backup stream (§44) — Phase 13.10 wired to IBackupStreamService ───
