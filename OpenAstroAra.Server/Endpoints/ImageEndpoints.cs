@@ -88,28 +88,34 @@ public static class ImageEndpoints {
             .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("DownloadFrame");
 
-        frames.MapPost("/bulk/rate", ([FromBody] BulkRateRequestDto request) =>
-                NotImplementedStub("POST /api/v1/frames/bulk/rate", "§40.8"))
+        frames.MapPost("/bulk/rate",
+                async (IFrameRepository repo, [FromBody] BulkRateRequestDto request,
+                       [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey,
+                       CancellationToken ct) =>
+                    Results.Accepted(value: await repo.BulkRateAsync(request, idempotencyKey, ct)))
             .Accepts<BulkRateRequestDto>("application/json")
             .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
             .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
-            .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("BulkRateFrames");
 
-        frames.MapPost("/bulk/tag", ([FromBody] BulkTagRequestDto request) =>
-                NotImplementedStub("POST /api/v1/frames/bulk/tag", "§40.8"))
+        frames.MapPost("/bulk/tag",
+                async (IFrameRepository repo, [FromBody] BulkTagRequestDto request,
+                       [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey,
+                       CancellationToken ct) =>
+                    Results.Accepted(value: await repo.BulkTagAsync(request, idempotencyKey, ct)))
             .Accepts<BulkTagRequestDto>("application/json")
             .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
             .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
-            .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("BulkTagFrames");
 
-        frames.MapPost("/bulk/delete", ([FromBody] BulkDeleteRequestDto request) =>
-                NotImplementedStub("POST /api/v1/frames/bulk/delete", "§40.8"))
+        frames.MapPost("/bulk/delete",
+                async (IFrameRepository repo, [FromBody] BulkDeleteRequestDto request,
+                       [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey,
+                       CancellationToken ct) =>
+                    Results.Accepted(value: await repo.BulkDeleteAsync(request, idempotencyKey, ct)))
             .Accepts<BulkDeleteRequestDto>("application/json")
             .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
             .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
-            .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("BulkDeleteFrames");
 
         // ─── Sessions (§40, §65) ───
