@@ -5,8 +5,8 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 ## Current
 
 - **Phase:** Phase 12h.6 — daemon round-trip for in-memory settings.
-- **Last merged:** `phase-13-10-system-services-placeholder` — PR #159, 2026-05-30. DataManager + ProfileShare + BackupStream — 11 more routes 501→functional.
-- **Currently working on:** `phase-13-11-backup-service-placeholder` — `PlaceholderBackupService` for the §43 ZIP-snapshot surface (distinct from §44 BackupStream). 4 routes: create-zip + restore-zip return 202s, snapshots returns 1 fixture record, clone-status returns idle JSON blob.
+- **Last merged:** `phase-13-13-sequence-services-placeholder` — PR #163, 2026-05-30. §38 sequence CRUD + lifecycle wired.
+- **Currently working on:** `phase-13-14-calibration-mosaic-darks-placeholder` — `PlaceholderCalibrationService` + `PlaceholderDarkLibraryService` + `PlaceholderMosaicService`. §39 calibration + dark library + §47 mosaic surfaces — CRUD round-trip on mosaic (in-memory), fixture data on calibration/darks, status endpoints functional. ~12 routes 501→functional. Smoke gate's 501-probe target moved to `/sequences/templates` (still stubbed).
 - **Note:** Phase 12h.3 (Smart Settings Search) + 12h.4 (PHD2) + 12h.5 (Alpaca chooser) all merged via PRs #110-#128 between 2026-05-29 and 2026-05-30; a dedicated `port-progress-refresh` sub-PR will backfill the Completed section once Phase 12h closes out.
 
 ## Completed
