@@ -59,14 +59,22 @@ public static class ServerStateEndpoints {
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("GetReleaseNotes");
 
-        server.MapPost("/restart", () => NotImplementedStub("POST /api/v1/server/restart", "§34.7"))
+        server.MapPost("/restart",
+                async (IServerStateService svc,
+                       [FromQuery] string? reason,
+                       [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey,
+                       CancellationToken ct) =>
+                    Results.Accepted(value: await svc.RestartAsync(reason ?? "operator_requested", idempotencyKey, ct)))
               .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
-              .ProducesProblem(StatusCodes.Status501NotImplemented)
               .WithName("RestartServer");
 
-        server.MapPost("/restart-on-idle", () => NotImplementedStub("POST /api/v1/server/restart-on-idle", "§34.7"))
+        server.MapPost("/restart-on-idle",
+                async (IServerStateService svc,
+                       [FromQuery] string? reason,
+                       [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey,
+                       CancellationToken ct) =>
+                    Results.Accepted(value: await svc.RestartOnIdleAsync(reason ?? "operator_requested", idempotencyKey, ct)))
               .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
-              .ProducesProblem(StatusCodes.Status501NotImplemented)
               .WithName("RestartServerOnIdle");
 
         // ─── Logs (§29.9) — Phase 13.8 wired to ILogService ───
