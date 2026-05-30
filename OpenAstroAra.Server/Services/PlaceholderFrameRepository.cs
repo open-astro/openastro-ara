@@ -77,7 +77,18 @@ public sealed class PlaceholderFrameRepository : IFrameRepository {
             Width: 4144, Height: 2822, BitDepth: 16,
             Hfr: 1.85, StarCount: 412, Eccentricity: 0.32,
             GuidingRmsArcsec: 0.74, SnrEstimate: 45.2,
-            QualityScore: null,
+            // Populated quality score so the §65 Frame Detail UI can
+            // develop against the non-null path. Component breakdown
+            // matches the per-light metrics above; composite is the §50.10
+            // weighted average shape WILMA renders as a 0-1 bar.
+            QualityScore: new QualityScoreBreakdownDto(
+                Composite: 0.87,
+                HfrComponent: 0.92,
+                StarCountComponent: 0.84,
+                EccentricityComponent: 0.78,
+                GuidingRmsComponent: 0.88,
+                SnrComponent: 0.91,
+                Explanation: "Good seeing + low RMS; HFR comfortably under target."),
             Rating: 4,
             Tags: new[] { "good-seeing" }),
         new FrameDto(
