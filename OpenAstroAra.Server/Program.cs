@@ -90,6 +90,9 @@ public class Program {
         // OpenCvSharp4-backed implementation lands in Phase 13.2+ alongside the
         // §28 frame catalog DB.
         builder.Services.AddSingleton<IFrameRepository, PlaceholderFrameRepository>();
+        // Phase 13.3 — placeholder ISessionService composing on the frame repo
+        // so the §40 Library + session-drilldown UI has consistent fixture data.
+        builder.Services.AddSingleton<ISessionService, PlaceholderSessionService>();
 
         // §37 profile store. Phase 12h.6a introduced the in-memory impl;
         // Phase 12h.7 upgraded to FileProfileStore (settings survive daemon
