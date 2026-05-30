@@ -5,9 +5,8 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 ## Current
 
 - **Phase:** Phase 12h.6 — daemon round-trip for in-memory settings.
-- **Last merged:** `phase-14b-ci-server-smoke` — PR #144, 2026-05-30. CI now runs the daemon end-to-end on every server PR. Promoted to `master` via PR #145 alongside 14a.
-- **Currently working on:** `port-progress-refresh-12h-phase14` — tracking-doc backfill (this PR). Refreshes the Completed section to cover Phase 12h.3-12h.7 + Phase 14a-b (40+ sub-PRs since the last Completed entry).
-- **Next chunk:** Phase 13 (image preview pipeline per §12.5) — server-side `IImagePreviewGenerator` + FITS reader integration + WS `frame.complete` event + Flutter image-view wiring. Substantial multi-PR effort; first sub-PR will likely scaffold the interface + service stub.
+- **Last merged:** `port-progress-refresh-12h-phase14` — PR #146, 2026-05-30 (tracking-doc refresh through 14b).
+- **Currently working on:** `phase-13-1-frame-preview-placeholder` — first Phase 13 (§12.5 image preview pipeline) sub-PR. Wires `IFrameRepository` to a `PlaceholderFrameRepository` that serves a small precomputed gray JPEG from the §65 preview + thumbnail endpoints. Real OpenCvSharp4 + FITS reading + §28 frame catalog land in 13.2+.
 - **Note:** Phase 12h.3 (Smart Settings Search) + 12h.4 (PHD2) + 12h.5 (Alpaca chooser) all merged via PRs #110-#128 between 2026-05-29 and 2026-05-30; a dedicated `port-progress-refresh` sub-PR will backfill the Completed section once Phase 12h closes out.
 
 ## Completed

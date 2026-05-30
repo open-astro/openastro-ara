@@ -17,6 +17,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Services;
 
 namespace OpenAstroAra.Server.Endpoints;
 
@@ -51,19 +52,28 @@ public static class ImageEndpoints {
               .ProducesProblem(StatusCodes.Status501NotImplemented)
               .WithName("GetFrame");
 
-        frames.MapPost("/{id:guid}/preview", (Guid id, [FromBody] FramePreviewRequestDto request) =>
-                NotImplementedStub("POST /api/v1/frames/{id}/preview", "§65"))
+        // Phase 13.1 — wired to IFrameRepository (PlaceholderFrameRepository
+        // returns a small precomputed JPEG so the wire is testable end-to-end).
+        // Real OpenCvSharp4 + §28 frame catalog DB lands in Phase 13.2+.
+        frames.MapPost("/{id:guid}/preview", async (Guid id, [FromBody] FramePreviewRequestDto request, IFrameRepository repo, CancellationToken ct) => {
+                var result = await repo.GetPreviewAsync(id, request, ct);
+                return result is null
+                    ? Results.NotFound()
+                    : Results.Bytes(result.Value.Bytes, result.Value.ContentType);
+            })
             .Accepts<FramePreviewRequestDto>("application/json")
             .Produces<byte[]>(StatusCodes.Status200OK, "image/jpeg")
             .ProducesProblem(StatusCodes.Status404NotFound)
-            .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("GetFramePreview");
 
-        frames.MapGet("/{id:guid}/thumbnail", (Guid id) =>
-                NotImplementedStub("GET /api/v1/frames/{id}/thumbnail", "§65"))
+        frames.MapGet("/{id:guid}/thumbnail", async (Guid id, IFrameRepository repo, CancellationToken ct) => {
+                var result = await repo.GetThumbnailAsync(id, ct);
+                return result is null
+                    ? Results.NotFound()
+                    : Results.Bytes(result.Value.Bytes, result.Value.ContentType);
+            })
             .Produces<byte[]>(StatusCodes.Status200OK, "image/jpeg")
             .ProducesProblem(StatusCodes.Status404NotFound)
-            .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("GetFrameThumbnail");
 
         frames.MapGet("/{id:guid}/download", (Guid id) =>
