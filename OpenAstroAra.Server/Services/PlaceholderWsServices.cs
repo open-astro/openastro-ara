@@ -39,26 +39,19 @@ namespace OpenAstroAra.Server.Services;
 /// </summary>
 public sealed class InMemoryWsServices : IWsBroadcaster, IWsEventChannel {
     private const int ReplayBufferCapacity = 1000;
+    private const int PerSubscriberCapacity = 1000;
 
     private long _seq;
-    private readonly Channel<WsEventEnvelopeDto> _channel;
+    // Per-subscriber channels. Each ReadAllAsync call registers its own
+    // channel; PublishAsync fans out to all of them. Without this, a
+    // single shared Channel<T> would split events between multiple
+    // connected clients (each event delivered to exactly one reader)
+    // instead of broadcasting — wrong shape for §60.9 events.
+    private readonly ConcurrentDictionary<Guid, Channel<WsEventEnvelopeDto>> _subscribers = new();
     // ConcurrentQueue + manual trim — keeping the last N envelopes for
     // resume; ConcurrentQueue's TryDequeue is the safe trim primitive.
     private readonly ConcurrentQueue<WsEventEnvelopeDto> _replay = new();
     private readonly object _replayTrimLock = new();
-
-    public InMemoryWsServices() {
-        // Bounded channel with DropOldest behavior — under sustained
-        // backpressure we keep newer events and drop older ones. Future
-        // WS handler can emit backup.stream.backpressure events when
-        // dropping happens.
-        _channel = Channel.CreateBounded<WsEventEnvelopeDto>(
-            new BoundedChannelOptions(ReplayBufferCapacity) {
-                SingleReader = false,
-                SingleWriter = false,
-                FullMode = BoundedChannelFullMode.DropOldest,
-            });
-    }
 
     public long CurrentSequence => Interlocked.Read(ref _seq);
 
@@ -78,16 +71,48 @@ public sealed class InMemoryWsServices : IWsBroadcaster, IWsEventChannel {
     async Task IWsEventChannel.EnqueueAsync(WsEventEnvelopeDto envelope, CancellationToken ct)
         => await EnqueueInternalAsync(envelope, ct);
 
-    private async Task EnqueueInternalAsync(WsEventEnvelopeDto envelope, CancellationToken ct) {
+    private Task EnqueueInternalAsync(WsEventEnvelopeDto envelope, CancellationToken ct) {
         _replay.Enqueue(envelope);
         TrimReplay();
-        await _channel.Writer.WriteAsync(envelope, ct);
+        // Fan-out: every subscriber gets the envelope. TryWrite is
+        // non-blocking — if a per-sub channel is full, the DropOldest
+        // policy on that channel evicts the stalest envelope so a
+        // slow client can't backpressure the publisher.
+        foreach (var sub in _subscribers.Values) {
+            sub.Writer.TryWrite(envelope);
+        }
+        return Task.CompletedTask;
     }
 
-    public async IAsyncEnumerable<WsEventEnvelopeDto> ReadAllAsync(
+    public IAsyncEnumerable<WsEventEnvelopeDto> ReadAllAsync(CancellationToken ct) {
+        // Eager registration — the subscriber dict entry has to exist before
+        // the caller runs any resume-phase logic, otherwise events published
+        // between snapshot and iteration are silently dropped (the race
+        // Sonnet caught on PR #174). Splitting the registration out of the
+        // iterator method moves it to the synchronous call site so it
+        // happens immediately, not on the first MoveNextAsync.
+        var subscriberId = Guid.NewGuid();
+        var sub = Channel.CreateBounded<WsEventEnvelopeDto>(
+            new BoundedChannelOptions(PerSubscriberCapacity) {
+                SingleReader = true,
+                SingleWriter = false,
+                FullMode = BoundedChannelFullMode.DropOldest,
+            });
+        _subscribers[subscriberId] = sub;
+        return ReadFromSubscriptionAsync(subscriberId, sub, ct);
+    }
+
+    private async IAsyncEnumerable<WsEventEnvelopeDto> ReadFromSubscriptionAsync(
+            Guid subscriberId,
+            Channel<WsEventEnvelopeDto> sub,
             [EnumeratorCancellation] CancellationToken ct) {
-        await foreach (var envelope in _channel.Reader.ReadAllAsync(ct)) {
-            yield return envelope;
+        try {
+            await foreach (var envelope in sub.Reader.ReadAllAsync(ct)) {
+                yield return envelope;
+            }
+        } finally {
+            _subscribers.TryRemove(subscriberId, out _);
+            sub.Writer.TryComplete();
         }
     }
 
