@@ -1,17 +1,86 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../services/profile_api.dart';
+import '../../../state/saved_server_state.dart';
 import '../../../state/settings/safety_policies_state.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
 
-/// §35 Safety Policies panel — editable. Daemon round-trip via
-/// `/api/v1/profile/safety` lands in 12h.2b.
-class SafetyPoliciesPanel extends ConsumerWidget {
+/// §35 Safety Policies panel — editable. Phase 12h.6g added the daemon
+/// round-trip — values hydrate from the active server on mount and
+/// persist back on Save.
+class SafetyPoliciesPanel extends ConsumerStatefulWidget {
   const SafetyPoliciesPanel({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SafetyPoliciesPanel> createState() =>
+      _SafetyPoliciesPanelState();
+}
+
+class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel> {
+  bool _saving = false;
+  String? _lastError;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _hydrate());
+  }
+
+  Future<void> _hydrate() async {
+    final api = _api();
+    if (api == null) return;
+    try {
+      await ref.read(safetyPoliciesProvider.notifier).hydrateFromServer(api);
+    } catch (e) {
+      if (mounted) setState(() => _lastError = 'Could not load saved values: $e');
+    }
+  }
+
+  Future<void> _save() async {
+    setState(() {
+      _saving = true;
+      _lastError = null;
+    });
+    final api = _api();
+    final messenger = ScaffoldMessenger.of(context);
+    if (api == null) {
+      setState(() {
+        _saving = false;
+        _lastError = 'No active server — connect to a daemon first.';
+      });
+      messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
+      return;
+    }
+    try {
+      await ref.read(safetyPoliciesProvider.notifier).persistToServer(api);
+      if (!mounted) return;
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Safety policies saved to daemon.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _lastError = 'Save failed: $e');
+      messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  ProfileApi? _api() {
+    final servers = ref.read(savedServersProvider).maybeWhen(
+          data: (list) => list,
+          orElse: () => const [],
+        );
+    if (servers.isEmpty) return null;
+    // Most-recently-saved server is the de-facto active one — same
+    // convention as §52.2 Alpaca chooser + §54 help dialog.
+    return ProfileApi(servers.last);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final s = ref.watch(safetyPoliciesProvider);
     final n = ref.read(safetyPoliciesProvider.notifier);
 
@@ -128,19 +197,24 @@ class SafetyPoliciesPanel extends ConsumerWidget {
           onChanged: n.setSkipTargetIfRecoveryFails,
         ),
         const SizedBox(height: 24),
+        if (_lastError != null) ...[
+          Text(
+            _lastError!,
+            style: TextStyle(color: Theme.of(context).colorScheme.error),
+          ),
+          const SizedBox(height: 12),
+        ],
         Row(mainAxisAlignment: MainAxisAlignment.end, children: [
           FilledButton.icon(
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text(
-                    'Safety policies saved (in memory). Daemon round-trip lands in 12h.2b.',
-                  ),
-                ),
-              );
-            },
-            icon: const Icon(Icons.save, size: 16),
-            label: const Text('Save'),
+            onPressed: _saving ? null : _save,
+            icon: _saving
+                ? const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.save, size: 16),
+            label: Text(_saving ? 'Saving…' : 'Save'),
           ),
         ]),
       ],

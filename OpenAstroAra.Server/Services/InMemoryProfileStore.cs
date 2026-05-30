@@ -126,4 +126,27 @@ public sealed class InMemoryProfileStore : IProfileStore {
     public void PutFilenamesSettings(FilenamesSettingsDto value) {
         lock (_lock) { _filenames = value; }
     }
+
+    // Defaults match SafetyPolicies() constructor.
+    private SafetyPoliciesDto _safety = new(
+        OnUnsafe: "pause_and_park",
+        AutoResumeWhenSafe: true,
+        ResumeDelayMin: 10,
+        MeridianFlipAuto: true,
+        MeridianPauseMin: 5,
+        MeridianRecenter: true,
+        MeridianRecalGuider: true,
+        OnAltitudeLimit: "skip_target",
+        ParkIfNoMoreTargets: true,
+        OnGuiderLost: "pause_and_retry",
+        GuiderRetryTimeoutSec: 60,
+        SkipTargetIfRecoveryFails: true);
+
+    public SafetyPoliciesDto GetSafetyPolicies() {
+        lock (_lock) { return _safety; }
+    }
+
+    public void PutSafetyPolicies(SafetyPoliciesDto value) {
+        lock (_lock) { _safety = value; }
+    }
 }

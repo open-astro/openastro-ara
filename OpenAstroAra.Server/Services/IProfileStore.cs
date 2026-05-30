@@ -37,4 +37,7 @@ public interface IProfileStore {
 
     FilenamesSettingsDto GetFilenamesSettings();
     void PutFilenamesSettings(FilenamesSettingsDto value);
+
+    SafetyPoliciesDto GetSafetyPolicies();
+    void PutSafetyPolicies(SafetyPoliciesDto value);
 }
