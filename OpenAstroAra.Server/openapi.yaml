@@ -379,6 +379,34 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ImagingDefaults' }
 
+  /profile/equipment-connection:
+    get:
+      summary: Get active profile's equipment auto-connect bools
+      description: |
+        Phase 12h.6L — §52.1 connection-lifecycle defaults. One bool per
+        device type for auto-connect-on-daemon-boot.
+      tags: [Profile]
+      responses:
+        '200':
+          description: Current equipment-connection state
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EquipmentConnection' }
+    put:
+      summary: Replace active profile's equipment auto-connect bools
+      tags: [Profile]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EquipmentConnection' }
+      responses:
+        '200':
+          description: New state (echo of input)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EquipmentConnection' }
+
   /profile/phd2:
     get:
       summary: Get active profile's PHD2 / guider settings
@@ -921,6 +949,23 @@ components:
         fileFormat:       { type: string, enum: [fits, xisf, fits_rice, fits_gzip] }
         compression:      { type: string, enum: [off, rice, gzip] }
         filenameTemplate: { type: string, minLength: 1 }
+
+    EquipmentConnection:
+      type: object
+      description: |
+        §52.1 auto-connect-on-boot bools. One field per device type.
+      required: [camera, mount, focuser, filterWheel, rotator, guider, flatPanel, dome, weather, safetyMonitor]
+      properties:
+        camera:        { type: boolean }
+        mount:         { type: boolean }
+        focuser:       { type: boolean }
+        filterWheel:   { type: boolean }
+        rotator:       { type: boolean }
+        guider:        { type: boolean }
+        flatPanel:     { type: boolean }
+        dome:          { type: boolean }
+        weather:       { type: boolean }
+        safetyMonitor: { type: boolean }
 
     Phd2Settings:
       type: object

@@ -227,4 +227,28 @@ public sealed class InMemoryProfileStore : IProfileStore {
     public void PutPhd2Settings(Phd2SettingsDto value) {
         lock (_lock) { _phd2 = value; }
     }
+
+    // Defaults match EquipmentConnectionSettings() constructor: camera +
+    // mount + focuser + filter wheel + rotator + flat + safety on by
+    // default; dome + weather + guider off (manual connect — dome
+    // involves shutter actuation, guider starts PHD2 client).
+    private EquipmentConnectionDto _equipmentConnection = new(
+        Camera: true,
+        Mount: true,
+        Focuser: true,
+        FilterWheel: true,
+        Rotator: true,
+        Guider: false,
+        FlatPanel: true,
+        Dome: false,
+        Weather: false,
+        SafetyMonitor: true);
+
+    public EquipmentConnectionDto GetEquipmentConnection() {
+        lock (_lock) { return _equipmentConnection; }
+    }
+
+    public void PutEquipmentConnection(EquipmentConnectionDto value) {
+        lock (_lock) { _equipmentConnection = value; }
+    }
 }

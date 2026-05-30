@@ -4,6 +4,7 @@ import '../models/server.dart';
 import '../state/imaging/exposure_state.dart' show FrameKind;
 import '../state/settings/autofocus_settings_state.dart';
 import '../state/settings/diagnostics_mode_state.dart';
+import '../state/settings/equipment_connection_state.dart';
 import '../state/settings/filenames_settings_state.dart';
 import '../state/settings/imaging_defaults_state.dart';
 import '../state/settings/notifications_settings_state.dart';
@@ -203,6 +204,24 @@ class ProfileApi {
     return _phd2SettingsFromJson(res.data ?? const {});
   }
 
+  /// GET the active profile's equipment auto-connect bools.
+  Future<EquipmentConnectionSettings> getEquipmentConnection() async {
+    final res = await _dio.get<Map<String, dynamic>>(
+      '/api/v1/profile/equipment-connection',
+    );
+    return _equipmentConnectionFromJson(res.data ?? const {});
+  }
+
+  /// PUT the active profile's equipment auto-connect bools.
+  Future<EquipmentConnectionSettings> putEquipmentConnection(
+      EquipmentConnectionSettings value) async {
+    final res = await _dio.put<Map<String, dynamic>>(
+      '/api/v1/profile/equipment-connection',
+      data: _equipmentConnectionToJson(value),
+    );
+    return _equipmentConnectionFromJson(res.data ?? const {});
+  }
+
   // ── JSON mapping ────────────────────────────────────────────────────────
   // The server's `ConfigureHttpJsonOptions` uses snake_case, so the wire
   // shape is `exposure_seconds` etc. (not `defaultExposure`).
@@ -303,6 +322,40 @@ class ProfileApi {
         return StorageCompression.rice;
     }
   }
+
+  // ── Equipment-connection JSON mapping ──────────────────────────────────
+
+  static EquipmentConnectionSettings _equipmentConnectionFromJson(
+      Map<String, dynamic> j) {
+    bool read(String key, bool dflt) => (j[key] as bool?) ?? dflt;
+    return EquipmentConnectionSettings(autoConnectOnBoot: {
+      EquipmentDeviceType.camera: read('camera', true),
+      EquipmentDeviceType.mount: read('mount', true),
+      EquipmentDeviceType.focuser: read('focuser', true),
+      EquipmentDeviceType.filterWheel: read('filter_wheel', true),
+      EquipmentDeviceType.rotator: read('rotator', true),
+      EquipmentDeviceType.guider: read('guider', false),
+      EquipmentDeviceType.flatPanel: read('flat_panel', true),
+      EquipmentDeviceType.dome: read('dome', false),
+      EquipmentDeviceType.weather: read('weather', false),
+      EquipmentDeviceType.safetyMonitor: read('safety_monitor', true),
+    });
+  }
+
+  static Map<String, dynamic> _equipmentConnectionToJson(
+          EquipmentConnectionSettings v) =>
+      {
+        'camera': v.autoConnect(EquipmentDeviceType.camera),
+        'mount': v.autoConnect(EquipmentDeviceType.mount),
+        'focuser': v.autoConnect(EquipmentDeviceType.focuser),
+        'filter_wheel': v.autoConnect(EquipmentDeviceType.filterWheel),
+        'rotator': v.autoConnect(EquipmentDeviceType.rotator),
+        'guider': v.autoConnect(EquipmentDeviceType.guider),
+        'flat_panel': v.autoConnect(EquipmentDeviceType.flatPanel),
+        'dome': v.autoConnect(EquipmentDeviceType.dome),
+        'weather': v.autoConnect(EquipmentDeviceType.weather),
+        'safety_monitor': v.autoConnect(EquipmentDeviceType.safetyMonitor),
+      };
 
   // ── PHD2 settings JSON mapping ─────────────────────────────────────────
 

@@ -5,8 +5,8 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 ## Current
 
 - **Phase:** Phase 12h.6 — daemon round-trip for in-memory settings.
-- **Last merged:** `phase-12h6j-profile-diagnostics-mode` — PR #138, 2026-05-30 (§51 diagnostics-mode picker; auto-save on radio-tap UX).
-- **Currently working on:** `phase-12h6k-profile-phd2` — §63 PHD2 / guider settings (10 fields, no enums). Last non-equipment settings section; the 10 equipment panels round-trip via the §52.2 equipment-connection notifier in a future sub-PR.
+- **Last merged:** `phase-12h6k-profile-phd2` — PR #139, 2026-05-30 (§63 PHD2 / guider settings, 10 fields no enums).
+- **Currently working on:** `phase-12h6L-profile-equipment-connection` — §52.1 auto-connect bools (10 device types). Notifier auto-persists on toggle + auto-hydrates on first read; zero panel changes needed. This closes the settings round-trip surface — all 12 §37 profile sections now persist to the daemon.
 - **Note:** Phase 12h.3 (Smart Settings Search) + 12h.4 (PHD2) + 12h.5 (Alpaca chooser) all merged via PRs #110-#128 between 2026-05-29 and 2026-05-30; a dedicated `port-progress-refresh` sub-PR will backfill the Completed section once Phase 12h closes out.
 
 ## Completed

@@ -186,6 +186,21 @@ public static class ProfileEndpoints {
             .WithName("PutPhd2Settings")
             .WithSummary("Replace the active profile's PHD2 settings.");
 
+        profile.MapGet("/equipment-connection", (IProfileStore store) =>
+                Results.Ok(store.GetEquipmentConnection()))
+            .Produces<EquipmentConnectionDto>(StatusCodes.Status200OK)
+            .WithName("GetEquipmentConnection")
+            .WithSummary("Get the active profile's equipment auto-connect bools.");
+
+        profile.MapPut("/equipment-connection", (EquipmentConnectionDto body, IProfileStore store) => {
+                store.PutEquipmentConnection(body);
+                return Results.Ok(body);
+            })
+            .Accepts<EquipmentConnectionDto>("application/json")
+            .Produces<EquipmentConnectionDto>(StatusCodes.Status200OK)
+            .WithName("PutEquipmentConnection")
+            .WithSummary("Replace the active profile's equipment auto-connect bools.");
+
         return app;
     }
 }
