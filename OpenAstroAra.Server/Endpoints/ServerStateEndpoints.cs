@@ -69,26 +69,30 @@ public static class ServerStateEndpoints {
               .ProducesProblem(StatusCodes.Status501NotImplemented)
               .WithName("RestartServerOnIdle");
 
-        // ─── Logs (§29.9) ───
+        // ─── Logs (§29.9) — Phase 13.8 wired to ILogService ───
         var logs = server.MapGroup("/logs");
 
-        logs.MapPost("/rotate", () => NotImplementedStub("POST /api/v1/server/logs/rotate", "§29.9"))
+        logs.MapPost("/rotate",
+                async ([FromHeader(Name = "Idempotency-Key")] string? idempotencyKey, ILogService svc, CancellationToken ct) =>
+                    Results.Accepted(value: await svc.RotateAsync(idempotencyKey, ct)))
             .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
-            .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("RotateLogs");
 
         logs.MapGet("/download",
-                (string? logFileName) => NotImplementedStub("GET /api/v1/server/logs/download", "§29.9"))
+                async (string? logFileName, ILogService svc, CancellationToken ct) => {
+                    var result = await svc.OpenDownloadAsync(logFileName, ct);
+                    if (result is null) return Results.NotFound();
+                    return Results.Stream(result.Value.Stream, "application/octet-stream", result.Value.FileName);
+                })
             .Produces<byte[]>(StatusCodes.Status200OK, "application/octet-stream")
             .ProducesProblem(StatusCodes.Status404NotFound)
-            .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("DownloadLogs");
 
-        logs.MapPost("/tail", ([FromBody] LogTailRequestDto request) =>
-                NotImplementedStub("POST /api/v1/server/logs/tail", "§29.9"))
+        logs.MapPost("/tail",
+                async ([FromBody] LogTailRequestDto request, ILogService svc, CancellationToken ct) =>
+                    Results.Ok(await svc.TailAsync(request, ct)))
             .Accepts<LogTailRequestDto>("application/json")
             .Produces<IReadOnlyList<LogEntryDto>>(StatusCodes.Status200OK)
-            .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("TailLogs");
 
         // /readyz (§60.8) — distinct from /healthz which Phase 4 owns.

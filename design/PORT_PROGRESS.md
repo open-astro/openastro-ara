@@ -5,8 +5,8 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 ## Current
 
 - **Phase:** Phase 12h.6 — daemon round-trip for in-memory settings.
-- **Last merged:** `phase-13-6-stats-placeholder` — PR #154, 2026-05-30. 8 §50 chart routes functional with relative-dated fixture data.
-- **Currently working on:** `phase-13-7-server-state-placeholder` — `PlaceholderServerStateService` for §60.4 state snapshot + §33.2.1 versions + §54 release notes. 3 server-meta routes go 501-stub → functional.
+- **Last merged:** `phase-13-7-server-state-placeholder` — PR #155, 2026-05-30. Promoted to master via PR #156 alongside #151/#152/#153/#154 (Phase 13.4-13.7 + README arm64-only).
+- **Currently working on:** `phase-13-8-log-service-placeholder` — `PlaceholderLogService` for §29.9 log surface. 3 routes: tail (8 fixture entries with MinLevel + substring filtering), rotate (returns 202 OperationAccepted), download (404 — Serilog file sinks land in Phase 14).
 - **Note:** Phase 12h.3 (Smart Settings Search) + 12h.4 (PHD2) + 12h.5 (Alpaca chooser) all merged via PRs #110-#128 between 2026-05-29 and 2026-05-30; a dedicated `port-progress-refresh` sub-PR will backfill the Completed section once Phase 12h closes out.
 
 ## Completed
