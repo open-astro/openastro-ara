@@ -17,6 +17,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Services;
 
 namespace OpenAstroAra.Server.Endpoints;
 
@@ -36,104 +37,122 @@ public static class SystemEndpoints {
         // ─── Bug report (§54) ───
         var bug = app.MapGroup("/api/v1/bugreport").WithTags("BugReport");
 
-        bug.MapPost("/prepare", () => NotImplementedStub("POST /api/v1/bugreport/prepare", "§54"))
+        // Phase 13.9 — wired to IBugReportService (placeholder).
+        bug.MapPost("/prepare",
+                async ([FromHeader(Name = "Idempotency-Key")] string? idempotencyKey, IBugReportService svc, CancellationToken ct) =>
+                    Results.Accepted(value: await svc.PrepareAsync(idempotencyKey, ct)))
            .Produces<BugReportPreparationDto>(StatusCodes.Status202Accepted)
-           .ProducesProblem(StatusCodes.Status501NotImplemented)
            .WithName("PrepareBugReport");
 
         bug.MapGet("/download",
-                (Guid preparationId) => NotImplementedStub("GET /api/v1/bugreport/download", "§54"))
+                async (Guid preparationId, IBugReportService svc, CancellationToken ct) => {
+                    var result = await svc.OpenDownloadAsync(preparationId, ct);
+                    if (result is null) return Results.NotFound();
+                    return Results.Stream(result.Value.Stream, "application/zip", result.Value.FileName);
+                })
             .Produces<byte[]>(StatusCodes.Status200OK, "application/zip")
             .ProducesProblem(StatusCodes.Status404NotFound)
-            .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("DownloadBugReport");
 
-        // ─── Data Manager (§36.2) ───
+        // ─── Data Manager (§36.2) — Phase 13.10 wired to IDataManagerService ───
         var data = app.MapGroup("/api/v1/data-manager").WithTags("DataManager");
 
-        data.MapGet("/packages", () => NotImplementedStub("GET /api/v1/data-manager/packages", "§36.2"))
+        data.MapGet("/packages",
+                async (IDataManagerService svc, CancellationToken ct) =>
+                    Results.Ok(await svc.ListPackagesAsync(ct)))
             .Produces<IReadOnlyList<DataPackageDto>>(StatusCodes.Status200OK)
-            .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("ListDataPackages");
 
-        data.MapPost("/download", ([FromBody] DownloadRequestDto request) =>
-                NotImplementedStub("POST /api/v1/data-manager/download", "§36.2"))
+        data.MapPost("/download",
+                async ([FromBody] DownloadRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey, IDataManagerService svc, CancellationToken ct) =>
+                    Results.Accepted(value: await svc.DownloadAsync(request, idempotencyKey, ct)))
             .Accepts<DownloadRequestDto>("application/json")
             .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
+            // Real impl will 404 if PackageId is unknown — keep the
+            // annotation visible for WILMA codegen.
             .ProducesProblem(StatusCodes.Status404NotFound)
-            .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("StartDataPackageDownload");
 
-        data.MapPost("/cancel/{downloadId:guid}", (Guid downloadId) =>
-                NotImplementedStub("POST /api/v1/data-manager/cancel/{downloadId}", "§36.2"))
+        data.MapPost("/cancel/{downloadId:guid}",
+                async (Guid downloadId, IDataManagerService svc, CancellationToken ct) =>
+                    Results.Accepted(value: await svc.CancelAsync(downloadId, ct)))
             .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
+            // Real impl 404s if the download id isn't an active job.
             .ProducesProblem(StatusCodes.Status404NotFound)
-            .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("CancelDataPackageDownload");
 
-        data.MapDelete("/{packageId}", (string packageId) =>
-                NotImplementedStub("DELETE /api/v1/data-manager/{packageId}", "§36.2"))
+        data.MapDelete("/{packageId}",
+                async (string packageId, IDataManagerService svc, CancellationToken ct) => {
+                    var ok = await svc.DeleteAsync(packageId, ct);
+                    return ok ? Results.NoContent() : Results.NotFound();
+                })
             .Produces(StatusCodes.Status204NoContent)
             .ProducesProblem(StatusCodes.Status404NotFound)
-            .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("DeleteDataPackage");
 
-        data.MapGet("/state", () => NotImplementedStub("GET /api/v1/data-manager/state", "§36.2"))
+        data.MapGet("/state",
+                async (IDataManagerService svc, CancellationToken ct) =>
+                    Results.Ok(await svc.GetStateAsync(ct)))
             .Produces<DataManagerStateDto>(StatusCodes.Status200OK)
-            .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("GetDataManagerState");
 
-        // ─── Backup (§43) ───
+        // ─── Backup (§43) — Phase 13.11 wired to IBackupService ───
         var backup = app.MapGroup("/api/v1/backup").WithTags("Backup");
 
-        backup.MapPost("/create-zip", () => NotImplementedStub("POST /api/v1/backup/create-zip", "§43"))
+        backup.MapPost("/create-zip",
+                async ([FromHeader(Name = "Idempotency-Key")] string? idempotencyKey, IBackupService svc, CancellationToken ct) =>
+                    Results.Accepted(value: await svc.CreateZipAsync(idempotencyKey, ct)))
               .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
-              .ProducesProblem(StatusCodes.Status501NotImplemented)
               .WithName("CreateBackupZip");
 
-        backup.MapPost("/restore-zip", ([FromBody] RestoreRequestDto request) =>
-                NotImplementedStub("POST /api/v1/backup/restore-zip", "§43"))
+        backup.MapPost("/restore-zip",
+                async ([FromBody] RestoreRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey, IBackupService svc, CancellationToken ct) =>
+                    Results.Accepted(value: await svc.RestoreZipAsync(request, idempotencyKey, ct)))
             .Accepts<RestoreRequestDto>("application/json")
             .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
             .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
-            .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("RestoreBackupZip");
 
-        backup.MapGet("/snapshots", () => NotImplementedStub("GET /api/v1/backup/snapshots", "§43"))
+        backup.MapGet("/snapshots",
+                async (IBackupService svc, CancellationToken ct) =>
+                    Results.Ok(await svc.ListSnapshotsAsync(ct)))
               .Produces<IReadOnlyList<BackupZipDto>>(StatusCodes.Status200OK)
-              .ProducesProblem(StatusCodes.Status501NotImplemented)
               .WithName("ListBackupSnapshots");
 
-        backup.MapGet("/clone-status", () => NotImplementedStub("GET /api/v1/backup/clone-status", "§43"))
+        backup.MapGet("/clone-status",
+                async (IBackupService svc, CancellationToken ct) =>
+                    Results.Ok(await svc.GetCloneStatusAsync(ct)))
               .Produces<System.Text.Json.JsonElement>(StatusCodes.Status200OK)
-              .ProducesProblem(StatusCodes.Status501NotImplemented)
               .WithName("GetBackupCloneStatus");
 
-        // ─── Profile sharing (§70) ───
+        // ─── Profile sharing (§70) — Phase 13.10 wired to IProfileShareService ───
         var profiles = app.MapGroup("/api/v1/profiles").WithTags("ProfileShare");
 
-        profiles.MapPost("/{id:guid}/share-export", (Guid id) =>
-                NotImplementedStub("POST /api/v1/profiles/{id}/share-export", "§70"))
+        profiles.MapPost("/{id:guid}/share-export",
+                async (Guid id, IProfileShareService svc, CancellationToken ct) =>
+                    Results.Ok(await svc.ExportAsync(id, ct)))
             .Produces<ProfileShareDto>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status404NotFound)
-            .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("ExportProfileShare");
 
         profiles.MapPost("/share-import",
-                ([FromBody] System.Text.Json.JsonElement manifest) =>
-                    NotImplementedStub("POST /api/v1/profiles/share-import", "§70"))
+                async ([FromBody] System.Text.Json.JsonElement manifest, IProfileShareService svc, CancellationToken ct) =>
+                    Results.Ok(await svc.ImportPreviewAsync(manifest, ct)))
             .Accepts<System.Text.Json.JsonElement>("application/json")
             .Produces<ProfileShareImportPreviewDto>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
-            .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("PreviewProfileShareImport");
 
         profiles.MapPost("/share-import/commit",
-                (Guid importToken) =>
-                    NotImplementedStub("POST /api/v1/profiles/share-import/commit", "§70"))
+                async (Guid importToken, IProfileShareService svc, CancellationToken ct) => {
+                    // Body must be the new profile's GUID so WILMA can
+                    // navigate to it; the import token has already done
+                    // its job at this point.
+                    var newProfileId = await svc.ImportCommitAsync(importToken, ct);
+                    return Results.Created($"/api/v1/profiles/{newProfileId}", value: newProfileId);
+                })
             .Produces<Guid>(StatusCodes.Status201Created)
             .ProducesProblem(StatusCodes.Status404NotFound)
-            .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("CommitProfileShareImport");
 
         profiles.MapGet("/{id:guid}/sky-data-recommendations", (Guid id) =>
