@@ -142,13 +142,16 @@ public static class SequenceEndpoints {
 
         seq.MapPost("/templates/{name}/instantiate",
                 async (string name, [FromBody] TemplateInstantiateRequestDto request, ISequenceTemplateService svc, CancellationToken ct) => {
-                    // The placeholder service throws KeyNotFoundException
-                    // for unknown templates; endpoint converts via a
-                    // short-lived existence check on the listing.
-                    if (svc is PlaceholderSequenceTemplateService pst && !pst.TemplateExists(name))
+                    // Convert unknown-template signals to 404 at the
+                    // endpoint layer rather than coupling to a concrete
+                    // service type — keeps the contract clean when the
+                    // real ISequenceTemplateService impl lands.
+                    try {
+                        var dto = await svc.InstantiateAsync(name, request, ct);
+                        return Results.Created($"/api/v1/sequences/{dto.Id}", dto);
+                    } catch (KeyNotFoundException) {
                         return Results.NotFound();
-                    var dto = await svc.InstantiateAsync(name, request, ct);
-                    return Results.Created($"/api/v1/sequences/{dto.Id}", dto);
+                    }
                 })
            .Accepts<TemplateInstantiateRequestDto>("application/json")
            .Produces<SequenceDto>(StatusCodes.Status201Created)
@@ -175,9 +178,14 @@ public static class SequenceEndpoints {
            .WithName("ShareExportSequence");
 
         // Phase 13.15 — Auto-flats decision (§48) wired to IAutoFlatsService.
+        // Existence-check via ISequenceService first per the §48 contract —
+        // matches the matching-flats/mosaic-panels pattern.
         seq.MapPost("/{id:guid}/auto-flats-decision",
-                async (Guid id, [FromBody] AutoFlatsDecisionRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, IAutoFlatsService svc, CancellationToken ct) =>
-                    Results.Accepted(value: await svc.ProvideDecisionAsync(id, request, key, ct)))
+                async (Guid id, [FromBody] AutoFlatsDecisionRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, IAutoFlatsService svc, ISequenceService sequences, CancellationToken ct) => {
+                    var sequence = await sequences.GetAsync(id, ct);
+                    if (sequence is null) return Results.NotFound();
+                    return Results.Accepted(value: await svc.ProvideDecisionAsync(id, request, key, ct));
+                })
            .Accepts<AutoFlatsDecisionRequestDto>("application/json")
            .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
            .ProducesProblem(StatusCodes.Status404NotFound)
