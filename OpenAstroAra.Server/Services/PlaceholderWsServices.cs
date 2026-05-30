@@ -68,10 +68,17 @@ public sealed class InMemoryWsServices : IWsBroadcaster, IWsEventChannel {
             Ts: DateTimeOffset.UtcNow,
             Seq: Interlocked.Increment(ref _seq),
             Payload: payload);
-        return EnqueueAsync(envelope, ct);
+        return EnqueueInternalAsync(envelope, ct);
     }
 
-    public async Task EnqueueAsync(WsEventEnvelopeDto envelope, CancellationToken ct) {
+    // Explicit interface impl — keeps the interface contract for the future WS
+    // upgrade handler but prevents callers from resolving InMemoryWsServices
+    // directly and enqueueing pre-built envelopes that would bypass the
+    // sequencing in PublishAsync.
+    async Task IWsEventChannel.EnqueueAsync(WsEventEnvelopeDto envelope, CancellationToken ct)
+        => await EnqueueInternalAsync(envelope, ct);
+
+    private async Task EnqueueInternalAsync(WsEventEnvelopeDto envelope, CancellationToken ct) {
         _replay.Enqueue(envelope);
         TrimReplay();
         await _channel.Writer.WriteAsync(envelope, ct);
