@@ -14,6 +14,7 @@
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
@@ -22,37 +23,21 @@ namespace OpenAstroAra.Server.Endpoints;
 
 /// <summary>
 /// Phase 6 equipment-endpoint registration per PORT_PLAYBOOK.md §10.6.
+/// Phase 13.12 wires every device group through its corresponding
+/// placeholder service. Each Get returns 404 (no hardware connected);
+/// Connects/Disconnects/Actions return 202 <see cref="OperationAcceptedDto"/>.
+/// Real ASCOM Alpaca drivers land per-device in Phase 13.x / 14.
 ///
-/// Each device type follows the same shape (Get + Connect + Disconnect + device-specific operations).
-/// Endpoint bodies are stubs that return 501 NotImplemented until the corresponding
-/// service implementations land. The endpoint surface itself is defined so the
-/// OpenAPI document + WILMA client codegen can target it today; service impls
-/// fill in incrementally.
-///
-/// Idempotency-Key header is read where §60.5 requires it. Long-running ops
-/// return 202 with <see cref="OperationAcceptedDto"/>; progress arrives via WS.
+/// Idempotency-Key header is read where §60.5 requires it. Long-running
+/// ops return 202 with operation accepted; progress arrives via WS.
 /// </summary>
 public static class EquipmentEndpoints {
-
-    private static IResult NotImplementedStub(string endpoint) =>
-        Results.Problem(
-            type: "https://openastro.net/errors/not-implemented",
-            title: "Endpoint not yet implemented",
-            statusCode: StatusCodes.Status501NotImplemented,
-            detail: $"{endpoint} is part of Phase 6's incremental implementation. Stub registered so the OpenAPI surface is stable; service wiring lands per device type.");
 
     public static IEndpointRouteBuilder MapEquipmentEndpoints(this IEndpointRouteBuilder app) {
         var equipment = app.MapGroup("/api/v1/equipment").WithTags("Equipment");
 
-        // Discovery (shared across device types).
-        //
-        // Route is /discover/{type} — NOT /{type} — to avoid colliding with the
-        // per-device literal-route groups below (e.g. GET /api/v1/equipment/camera
-        // maps to the per-device current-state stub, not discovery). The §10.6
-        // table reads "GET /api/v1/equipment/{type}" in shorthand; the actual
-        // wire path is disambiguated via /discover/ so all DeviceType values
-        // (incl. camera/telescope/etc. that have dedicated groups) are reachable.
-        // openapi.yaml + design/PORT_PLAYBOOK.md §10.6 row 1 both updated to match.
+        // Discovery (shared across device types) — already functional via
+        // AlpacaEquipmentDiscoveryService since Phase 6.
         equipment.MapGet("/discover/{type}", async (string type, bool? forceRefresh, IEquipmentDiscoveryService svc, CancellationToken ct) => {
             if (!Enum.TryParse<DeviceType>(type, ignoreCase: true, out var deviceType)) {
                 return Results.Problem(
@@ -67,93 +52,161 @@ public static class EquipmentEndpoints {
 
         // ─── Camera ───
         var camera = equipment.MapGroup("/camera");
-        camera.MapGet("", () => NotImplementedStub("GET /api/v1/equipment/camera"));
-        camera.MapPost("/connect", () => NotImplementedStub("POST /api/v1/equipment/camera/connect"));
-        camera.MapPost("/disconnect", () => NotImplementedStub("POST /api/v1/equipment/camera/disconnect"));
-        camera.MapPost("/exposure", () => NotImplementedStub("POST /api/v1/equipment/camera/exposure"));
-        camera.MapPost("/exposure/abort", () => NotImplementedStub("POST /api/v1/equipment/camera/exposure/abort"));
+        camera.MapGet("", async (ICameraService svc, CancellationToken ct) => {
+            var dto = await svc.GetAsync(ct); return dto is null ? Results.NotFound() : Results.Ok(dto);
+        });
+        camera.MapPost("/connect", async ([FromBody] ConnectRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ICameraService svc, CancellationToken ct) =>
+            Results.Accepted(value: await svc.ConnectAsync(request, key, ct)));
+        camera.MapPost("/disconnect", async ([FromHeader(Name = "Idempotency-Key")] string? key, ICameraService svc, CancellationToken ct) =>
+            Results.Accepted(value: await svc.DisconnectAsync(key, ct)));
+        camera.MapPost("/exposure", async ([FromBody] ExposureRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ICameraService svc, CancellationToken ct) =>
+            Results.Accepted(value: await svc.StartExposureAsync(request, key, ct)));
+        camera.MapPost("/exposure/abort", async (ICameraService svc, CancellationToken ct) => {
+            await svc.AbortExposureAsync(ct); return Results.Accepted();
+        });
 
         // ─── Telescope ───
         var telescope = equipment.MapGroup("/telescope");
-        telescope.MapGet("", () => NotImplementedStub("GET /api/v1/equipment/telescope"));
-        telescope.MapPost("/connect", () => NotImplementedStub("POST /api/v1/equipment/telescope/connect"));
-        telescope.MapPost("/disconnect", () => NotImplementedStub("POST /api/v1/equipment/telescope/disconnect"));
-        telescope.MapPost("/slew", () => NotImplementedStub("POST /api/v1/equipment/telescope/slew"));
-        telescope.MapPost("/park", () => NotImplementedStub("POST /api/v1/equipment/telescope/park"));
-        telescope.MapPost("/unpark", () => NotImplementedStub("POST /api/v1/equipment/telescope/unpark"));
-        telescope.MapPost("/abort", () => NotImplementedStub("POST /api/v1/equipment/telescope/abort"));
+        telescope.MapGet("", async (ITelescopeService svc, CancellationToken ct) => {
+            var dto = await svc.GetAsync(ct); return dto is null ? Results.NotFound() : Results.Ok(dto);
+        });
+        telescope.MapPost("/connect", async ([FromBody] ConnectRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, CancellationToken ct) =>
+            Results.Accepted(value: await svc.ConnectAsync(request, key, ct)));
+        telescope.MapPost("/disconnect", async ([FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, CancellationToken ct) =>
+            Results.Accepted(value: await svc.DisconnectAsync(key, ct)));
+        telescope.MapPost("/slew", async ([FromBody] SlewRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, CancellationToken ct) =>
+            Results.Accepted(value: await svc.SlewAsync(request, key, ct)));
+        telescope.MapPost("/park", async ([FromBody] ParkRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, CancellationToken ct) =>
+            Results.Accepted(value: await svc.ParkAsync(request, key, ct)));
+        telescope.MapPost("/unpark", async ([FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, CancellationToken ct) =>
+            Results.Accepted(value: await svc.UnparkAsync(key, ct)));
+        telescope.MapPost("/abort", async (ITelescopeService svc, CancellationToken ct) => {
+            await svc.AbortSlewAsync(ct); return Results.Accepted();
+        });
 
         // ─── Focuser ───
         var focuser = equipment.MapGroup("/focuser");
-        focuser.MapGet("", () => NotImplementedStub("GET /api/v1/equipment/focuser"));
-        focuser.MapPost("/connect", () => NotImplementedStub("POST /api/v1/equipment/focuser/connect"));
-        focuser.MapPost("/disconnect", () => NotImplementedStub("POST /api/v1/equipment/focuser/disconnect"));
-        focuser.MapPost("/move", () => NotImplementedStub("POST /api/v1/equipment/focuser/move"));
+        focuser.MapGet("", async (IFocuserService svc, CancellationToken ct) => {
+            var dto = await svc.GetAsync(ct); return dto is null ? Results.NotFound() : Results.Ok(dto);
+        });
+        focuser.MapPost("/connect", async ([FromBody] ConnectRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, IFocuserService svc, CancellationToken ct) =>
+            Results.Accepted(value: await svc.ConnectAsync(request, key, ct)));
+        focuser.MapPost("/disconnect", async ([FromHeader(Name = "Idempotency-Key")] string? key, IFocuserService svc, CancellationToken ct) =>
+            Results.Accepted(value: await svc.DisconnectAsync(key, ct)));
+        focuser.MapPost("/move", async ([FromBody] FocuserMoveRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, IFocuserService svc, CancellationToken ct) =>
+            Results.Accepted(value: await svc.MoveAsync(request, key, ct)));
 
         // ─── FilterWheel ───
         var filterwheel = equipment.MapGroup("/filterwheel");
-        filterwheel.MapGet("", () => NotImplementedStub("GET /api/v1/equipment/filterwheel"));
-        filterwheel.MapPost("/connect", () => NotImplementedStub("POST /api/v1/equipment/filterwheel/connect"));
-        filterwheel.MapPost("/disconnect", () => NotImplementedStub("POST /api/v1/equipment/filterwheel/disconnect"));
-        filterwheel.MapPost("/change", () => NotImplementedStub("POST /api/v1/equipment/filterwheel/change"));
+        filterwheel.MapGet("", async (IFilterWheelService svc, CancellationToken ct) => {
+            var dto = await svc.GetAsync(ct); return dto is null ? Results.NotFound() : Results.Ok(dto);
+        });
+        filterwheel.MapPost("/connect", async ([FromBody] ConnectRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, IFilterWheelService svc, CancellationToken ct) =>
+            Results.Accepted(value: await svc.ConnectAsync(request, key, ct)));
+        filterwheel.MapPost("/disconnect", async ([FromHeader(Name = "Idempotency-Key")] string? key, IFilterWheelService svc, CancellationToken ct) =>
+            Results.Accepted(value: await svc.DisconnectAsync(key, ct)));
+        filterwheel.MapPost("/change", async ([FromBody] FilterChangeRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, IFilterWheelService svc, CancellationToken ct) =>
+            Results.Accepted(value: await svc.ChangeFilterAsync(request, key, ct)));
 
         // ─── Rotator ───
         var rotator = equipment.MapGroup("/rotator");
-        rotator.MapGet("", () => NotImplementedStub("GET /api/v1/equipment/rotator"));
-        rotator.MapPost("/connect", () => NotImplementedStub("POST /api/v1/equipment/rotator/connect"));
-        rotator.MapPost("/disconnect", () => NotImplementedStub("POST /api/v1/equipment/rotator/disconnect"));
-        rotator.MapPost("/move", () => NotImplementedStub("POST /api/v1/equipment/rotator/move"));
+        rotator.MapGet("", async (IRotatorService svc, CancellationToken ct) => {
+            var dto = await svc.GetAsync(ct); return dto is null ? Results.NotFound() : Results.Ok(dto);
+        });
+        rotator.MapPost("/connect", async ([FromBody] ConnectRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, IRotatorService svc, CancellationToken ct) =>
+            Results.Accepted(value: await svc.ConnectAsync(request, key, ct)));
+        rotator.MapPost("/disconnect", async ([FromHeader(Name = "Idempotency-Key")] string? key, IRotatorService svc, CancellationToken ct) =>
+            Results.Accepted(value: await svc.DisconnectAsync(key, ct)));
+        rotator.MapPost("/move", async ([FromBody] RotatorMoveRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, IRotatorService svc, CancellationToken ct) =>
+            Results.Accepted(value: await svc.MoveAsync(request, key, ct)));
 
         // ─── Dome ───
         var dome = equipment.MapGroup("/dome");
-        dome.MapGet("", () => NotImplementedStub("GET /api/v1/equipment/dome"));
-        dome.MapPost("/connect", () => NotImplementedStub("POST /api/v1/equipment/dome/connect"));
-        dome.MapPost("/disconnect", () => NotImplementedStub("POST /api/v1/equipment/dome/disconnect"));
-        dome.MapPost("/slew", () => NotImplementedStub("POST /api/v1/equipment/dome/slew"));
-        dome.MapPost("/park", () => NotImplementedStub("POST /api/v1/equipment/dome/park"));
-        dome.MapPost("/shutter/open", () => NotImplementedStub("POST /api/v1/equipment/dome/shutter/open"));
-        dome.MapPost("/shutter/close", () => NotImplementedStub("POST /api/v1/equipment/dome/shutter/close"));
+        dome.MapGet("", async (IDomeService svc, CancellationToken ct) => {
+            var dto = await svc.GetAsync(ct); return dto is null ? Results.NotFound() : Results.Ok(dto);
+        });
+        dome.MapPost("/connect", async ([FromBody] ConnectRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, IDomeService svc, CancellationToken ct) =>
+            Results.Accepted(value: await svc.ConnectAsync(request, key, ct)));
+        dome.MapPost("/disconnect", async ([FromHeader(Name = "Idempotency-Key")] string? key, IDomeService svc, CancellationToken ct) =>
+            Results.Accepted(value: await svc.DisconnectAsync(key, ct)));
+        dome.MapPost("/slew", async ([FromBody] DomeSlewRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, IDomeService svc, CancellationToken ct) =>
+            Results.Accepted(value: await svc.SlewAsync(request, key, ct)));
+        dome.MapPost("/park", async ([FromHeader(Name = "Idempotency-Key")] string? key, IDomeService svc, CancellationToken ct) =>
+            Results.Accepted(value: await svc.ParkAsync(key, ct)));
+        dome.MapPost("/shutter/open", async ([FromHeader(Name = "Idempotency-Key")] string? key, IDomeService svc, CancellationToken ct) =>
+            Results.Accepted(value: await svc.OpenShutterAsync(key, ct)));
+        dome.MapPost("/shutter/close", async ([FromHeader(Name = "Idempotency-Key")] string? key, IDomeService svc, CancellationToken ct) =>
+            Results.Accepted(value: await svc.CloseShutterAsync(key, ct)));
 
         // ─── Switch ───
         var sw = equipment.MapGroup("/switch");
-        sw.MapGet("", () => NotImplementedStub("GET /api/v1/equipment/switch"));
-        sw.MapPost("/connect", () => NotImplementedStub("POST /api/v1/equipment/switch/connect"));
-        sw.MapPost("/disconnect", () => NotImplementedStub("POST /api/v1/equipment/switch/disconnect"));
-        sw.MapPost("/value", () => NotImplementedStub("POST /api/v1/equipment/switch/value"));
+        sw.MapGet("", async (ISwitchService svc, CancellationToken ct) => {
+            var dto = await svc.GetAsync(ct); return dto is null ? Results.NotFound() : Results.Ok(dto);
+        });
+        sw.MapPost("/connect", async ([FromBody] ConnectRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ISwitchService svc, CancellationToken ct) =>
+            Results.Accepted(value: await svc.ConnectAsync(request, key, ct)));
+        sw.MapPost("/disconnect", async ([FromHeader(Name = "Idempotency-Key")] string? key, ISwitchService svc, CancellationToken ct) =>
+            Results.Accepted(value: await svc.DisconnectAsync(key, ct)));
+        sw.MapPost("/value", async ([FromBody] SwitchValueRequestDto request, ISwitchService svc, CancellationToken ct) => {
+            await svc.SetValueAsync(request, ct); return Results.Accepted();
+        });
 
         // ─── ObservingConditions ───
         var oc = equipment.MapGroup("/observingconditions");
-        oc.MapGet("", () => NotImplementedStub("GET /api/v1/equipment/observingconditions"));
-        oc.MapPost("/connect", () => NotImplementedStub("POST /api/v1/equipment/observingconditions/connect"));
-        oc.MapPost("/disconnect", () => NotImplementedStub("POST /api/v1/equipment/observingconditions/disconnect"));
+        oc.MapGet("", async (IObservingConditionsService svc, CancellationToken ct) => {
+            var dto = await svc.GetAsync(ct); return dto is null ? Results.NotFound() : Results.Ok(dto);
+        });
+        oc.MapPost("/connect", async ([FromBody] ConnectRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, IObservingConditionsService svc, CancellationToken ct) =>
+            Results.Accepted(value: await svc.ConnectAsync(request, key, ct)));
+        oc.MapPost("/disconnect", async ([FromHeader(Name = "Idempotency-Key")] string? key, IObservingConditionsService svc, CancellationToken ct) =>
+            Results.Accepted(value: await svc.DisconnectAsync(key, ct)));
 
         // ─── SafetyMonitor ───
         var safety = equipment.MapGroup("/safetymonitor");
-        safety.MapGet("", () => NotImplementedStub("GET /api/v1/equipment/safetymonitor"));
-        safety.MapPost("/connect", () => NotImplementedStub("POST /api/v1/equipment/safetymonitor/connect"));
-        safety.MapPost("/disconnect", () => NotImplementedStub("POST /api/v1/equipment/safetymonitor/disconnect"));
+        safety.MapGet("", async (ISafetyMonitorService svc, CancellationToken ct) => {
+            var dto = await svc.GetAsync(ct); return dto is null ? Results.NotFound() : Results.Ok(dto);
+        });
+        safety.MapPost("/connect", async ([FromBody] ConnectRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ISafetyMonitorService svc, CancellationToken ct) =>
+            Results.Accepted(value: await svc.ConnectAsync(request, key, ct)));
+        safety.MapPost("/disconnect", async ([FromHeader(Name = "Idempotency-Key")] string? key, ISafetyMonitorService svc, CancellationToken ct) =>
+            Results.Accepted(value: await svc.DisconnectAsync(key, ct)));
 
         // ─── FlatDevice ───
         var flat = equipment.MapGroup("/flatdevice");
-        flat.MapGet("", () => NotImplementedStub("GET /api/v1/equipment/flatdevice"));
-        flat.MapPost("/connect", () => NotImplementedStub("POST /api/v1/equipment/flatdevice/connect"));
-        flat.MapPost("/disconnect", () => NotImplementedStub("POST /api/v1/equipment/flatdevice/disconnect"));
-        flat.MapPost("/apply", () => NotImplementedStub("POST /api/v1/equipment/flatdevice/apply"));
+        flat.MapGet("", async (IFlatDeviceService svc, CancellationToken ct) => {
+            var dto = await svc.GetAsync(ct); return dto is null ? Results.NotFound() : Results.Ok(dto);
+        });
+        flat.MapPost("/connect", async ([FromBody] ConnectRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, IFlatDeviceService svc, CancellationToken ct) =>
+            Results.Accepted(value: await svc.ConnectAsync(request, key, ct)));
+        flat.MapPost("/disconnect", async ([FromHeader(Name = "Idempotency-Key")] string? key, IFlatDeviceService svc, CancellationToken ct) =>
+            Results.Accepted(value: await svc.DisconnectAsync(key, ct)));
+        flat.MapPost("/apply", async ([FromBody] FlatPanelRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, IFlatDeviceService svc, CancellationToken ct) =>
+            Results.Accepted(value: await svc.ApplyFlatPanelAsync(request, key, ct)));
 
         // ─── Guider (PHD2) ───
         var guider = equipment.MapGroup("/guider");
-        guider.MapGet("", () => NotImplementedStub("GET /api/v1/equipment/guider"));
-        guider.MapPost("/connect", () => NotImplementedStub("POST /api/v1/equipment/guider/connect"));
-        guider.MapPost("/disconnect", () => NotImplementedStub("POST /api/v1/equipment/guider/disconnect"));
-        guider.MapPost("/start", () => NotImplementedStub("POST /api/v1/equipment/guider/start"));
-        guider.MapPost("/stop", () => NotImplementedStub("POST /api/v1/equipment/guider/stop"));
-        guider.MapPost("/dither", () => NotImplementedStub("POST /api/v1/equipment/guider/dither"));
+        guider.MapGet("", async (IGuiderService svc, CancellationToken ct) => {
+            var dto = await svc.GetAsync(ct); return dto is null ? Results.NotFound() : Results.Ok(dto);
+        });
+        guider.MapPost("/connect", async ([FromBody] GuiderConnectRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, IGuiderService svc, CancellationToken ct) =>
+            Results.Accepted(value: await svc.ConnectAsync(request, key, ct)));
+        guider.MapPost("/disconnect", async ([FromHeader(Name = "Idempotency-Key")] string? key, IGuiderService svc, CancellationToken ct) =>
+            Results.Accepted(value: await svc.DisconnectAsync(key, ct)));
+        guider.MapPost("/start", async ([FromHeader(Name = "Idempotency-Key")] string? key, IGuiderService svc, CancellationToken ct) =>
+            Results.Accepted(value: await svc.StartGuidingAsync(key, ct)));
+        guider.MapPost("/stop", async ([FromHeader(Name = "Idempotency-Key")] string? key, IGuiderService svc, CancellationToken ct) =>
+            Results.Accepted(value: await svc.StopGuidingAsync(key, ct)));
+        guider.MapPost("/dither", async (double pixels, [FromHeader(Name = "Idempotency-Key")] string? key, IGuiderService svc, CancellationToken ct) =>
+            Results.Accepted(value: await svc.DitherAsync(pixels, key, ct)));
 
         // ─── Polar Alignment ───
         var polar = equipment.MapGroup("/polaralign");
-        polar.MapGet("/status", () => NotImplementedStub("GET /api/v1/equipment/polaralign/status"));
-        polar.MapPost("/start", () => NotImplementedStub("POST /api/v1/equipment/polaralign/start"));
-        polar.MapPost("/stop", () => NotImplementedStub("POST /api/v1/equipment/polaralign/stop"));
+        polar.MapGet("/status", async (IPolarAlignService svc, CancellationToken ct) =>
+            Results.Ok(await svc.GetStatusAsync(ct)));
+        polar.MapPost("/start", async ([FromHeader(Name = "Idempotency-Key")] string? key, IPolarAlignService svc, CancellationToken ct) =>
+            Results.Accepted(value: await svc.StartAsync(key, ct)));
+        polar.MapPost("/stop", async ([FromHeader(Name = "Idempotency-Key")] string? key, IPolarAlignService svc, CancellationToken ct) =>
+            Results.Accepted(value: await svc.StopAsync(key, ct)));
 
         return app;
     }

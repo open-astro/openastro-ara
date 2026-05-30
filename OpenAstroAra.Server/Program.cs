@@ -131,6 +131,22 @@ public class Program {
         builder.Services.AddSingleton<IBackupStreamService, PlaceholderBackupStreamService>();
         // Phase 13.11 — placeholder IBackupService for §43 ZIP snapshots.
         builder.Services.AddSingleton<IBackupService, PlaceholderBackupService>();
+        // Phase 13.12 — placeholder equipment services for all 12 device
+        // types (§52). All Gets return null → 404; Connects/Disconnects/
+        // Actions return 202 OperationAccepted. Real ASCOM Alpaca drivers
+        // land per-device in Phase 13.x / 14.
+        builder.Services.AddSingleton<ICameraService, PlaceholderCameraService>();
+        builder.Services.AddSingleton<ITelescopeService, PlaceholderTelescopeService>();
+        builder.Services.AddSingleton<IFocuserService, PlaceholderFocuserService>();
+        builder.Services.AddSingleton<IFilterWheelService, PlaceholderFilterWheelService>();
+        builder.Services.AddSingleton<IRotatorService, PlaceholderRotatorService>();
+        builder.Services.AddSingleton<IDomeService, PlaceholderDomeService>();
+        builder.Services.AddSingleton<ISwitchService, PlaceholderSwitchService>();
+        builder.Services.AddSingleton<IObservingConditionsService, PlaceholderObservingConditionsService>();
+        builder.Services.AddSingleton<ISafetyMonitorService, PlaceholderSafetyMonitorService>();
+        builder.Services.AddSingleton<IFlatDeviceService, PlaceholderFlatDeviceService>();
+        builder.Services.AddSingleton<IGuiderService, PlaceholderGuiderService>();
+        builder.Services.AddSingleton<IPolarAlignService, PlaceholderPolarAlignService>();
 
         // §37 profile store. Phase 12h.6a introduced the in-memory impl;
         // Phase 12h.7 upgraded to FileProfileStore (settings survive daemon
