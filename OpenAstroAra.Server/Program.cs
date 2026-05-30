@@ -182,11 +182,19 @@ public class Program {
         app.UseCors();
 
         // §60.9 WebSocket support — must be registered before MapWebSocketEndpoints
-        // so the framework can negotiate the protocol upgrade. KeepAliveInterval
-        // is the framework-level ping cadence; the §60.9 application-level
-        // heartbeat (30s ping / 60s pong) layers on top of this in the handler.
+        // so the framework can negotiate the protocol upgrade.
+        //   KeepAliveInterval = 30s — server-initiated RFC 6455 ping cadence
+        //   KeepAliveTimeout  = 60s — close the socket if no pong/data arrives
+        //                              within this window (matches openapi.yaml
+        //                              line 680: "client must pong within 60s",
+        //                              2 consecutive missed pongs → server closes).
+        // .NET 10's KeepAliveTimeout enforces the unresponsive-client teardown
+        // automatically; the close code emitted by the framework is 1011
+        // ("internal error") which matches the spec's §60.9 line 711 mapping
+        // of 1011 to "unresponsive client".
         app.UseWebSockets(new WebSocketOptions {
             KeepAliveInterval = TimeSpan.FromSeconds(30),
+            KeepAliveTimeout = TimeSpan.FromSeconds(60),
         });
 
         // §49 API docs: Scalar UI (AOT-friendly Swagger replacement per §71.3).
