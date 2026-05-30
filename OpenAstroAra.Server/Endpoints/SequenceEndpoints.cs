@@ -17,6 +17,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Services;
 
 namespace OpenAstroAra.Server.Endpoints;
 
@@ -42,79 +43,95 @@ public static class SequenceEndpoints {
     public static IEndpointRouteBuilder MapSequenceEndpoints(this IEndpointRouteBuilder app) {
         var seq = app.MapGroup("/api/v1/sequences").WithTags("Sequences");
 
-        // CRUD
-        seq.MapGet("", () => NotImplementedStub("GET /api/v1/sequences", "§38"))
+        // Phase 13.13 — CRUD wired to ISequenceService (in-memory placeholder).
+        seq.MapGet("",
+                async (int? limit, string? cursor, ISequenceService svc, CancellationToken ct) =>
+                    Results.Ok(await svc.ListAsync(limit ?? 50, cursor, ct)))
            .Produces<CursorPage<SequenceListItemDto>>(StatusCodes.Status200OK)
-           .ProducesProblem(StatusCodes.Status501NotImplemented)
            .WithName("ListSequences");
 
-        seq.MapGet("/{id:guid}", (Guid id) => NotImplementedStub("GET /api/v1/sequences/{id}", "§38"))
+        seq.MapGet("/{id:guid}", async (Guid id, ISequenceService svc, CancellationToken ct) => {
+                var dto = await svc.GetAsync(id, ct);
+                return dto is null ? Results.NotFound() : Results.Ok(dto);
+            })
            .Produces<SequenceDto>(StatusCodes.Status200OK)
            .ProducesProblem(StatusCodes.Status404NotFound)
-           .ProducesProblem(StatusCodes.Status501NotImplemented)
            .WithName("GetSequence");
 
-        seq.MapPost("", ([FromBody] SequenceCreateRequestDto request) => NotImplementedStub("POST /api/v1/sequences", "§38"))
+        seq.MapPost("",
+                async ([FromBody] SequenceCreateRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ISequenceService svc, CancellationToken ct) => {
+                    var dto = await svc.CreateAsync(request, key, ct);
+                    return Results.Created($"/api/v1/sequences/{dto.Id}", dto);
+                })
            .Accepts<SequenceCreateRequestDto>("application/json")
            .Produces<SequenceDto>(StatusCodes.Status201Created)
            .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
-           .ProducesProblem(StatusCodes.Status501NotImplemented)
            .WithName("CreateSequence");
 
-        // PATCH (not PUT) because the partial-update semantics — only supplied
-        // fields are touched — don't match REST's full-replacement PUT contract.
-        // See SequenceUpdateRequestDto XML doc.
-        seq.MapPatch("/{id:guid}", (Guid id, [FromBody] SequenceUpdateRequestDto request) =>
-                NotImplementedStub("PATCH /api/v1/sequences/{id}", "§38"))
+        seq.MapPatch("/{id:guid}",
+                async (Guid id, [FromBody] SequenceUpdateRequestDto request, ISequenceService svc, CancellationToken ct) => {
+                    var dto = await svc.UpdateAsync(id, request, ct);
+                    return dto is null ? Results.NotFound() : Results.Ok(dto);
+                })
            .Accepts<SequenceUpdateRequestDto>("application/json")
            .Produces<SequenceDto>(StatusCodes.Status200OK)
            .ProducesProblem(StatusCodes.Status404NotFound)
            .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
-           .ProducesProblem(StatusCodes.Status501NotImplemented)
            .WithName("UpdateSequence");
 
-        seq.MapDelete("/{id:guid}", (Guid id) => NotImplementedStub("DELETE /api/v1/sequences/{id}", "§38"))
+        seq.MapDelete("/{id:guid}",
+                async (Guid id, ISequenceService svc, CancellationToken ct) => {
+                    var ok = await svc.DeleteAsync(id, ct);
+                    return ok ? Results.NoContent() : Results.NotFound();
+                })
            .Produces(StatusCodes.Status204NoContent)
            .ProducesProblem(StatusCodes.Status404NotFound)
-           .ProducesProblem(StatusCodes.Status501NotImplemented)
            .WithName("DeleteSequence");
 
-        // Lifecycle
-        seq.MapGet("/{id:guid}/state", (Guid id) => NotImplementedStub("GET /api/v1/sequences/{id}/state", "§28.12"))
+        // Phase 13.13 — Lifecycle wired to ISequencerService.
+        seq.MapGet("/{id:guid}/state",
+                async (Guid id, ISequencerService svc, CancellationToken ct) => {
+                    var state = await svc.GetRunStateAsync(id, ct);
+                    return state is null ? Results.NotFound() : Results.Ok(state);
+                })
            .Produces<SequenceRunStateDto>(StatusCodes.Status200OK)
            .ProducesProblem(StatusCodes.Status404NotFound)
-           .ProducesProblem(StatusCodes.Status501NotImplemented)
            .WithName("GetSequenceState");
 
-        seq.MapPost("/{id:guid}/start", (Guid id, [FromBody] SequenceStartRequestDto request) =>
-                NotImplementedStub("POST /api/v1/sequences/{id}/start", "§28"))
+        seq.MapPost("/{id:guid}/start",
+                async (Guid id, [FromBody] SequenceStartRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ISequencerService svc, CancellationToken ct) =>
+                    Results.Accepted(value: await svc.StartAsync(id, request, key, ct)))
            .Accepts<SequenceStartRequestDto>("application/json")
            .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
            .ProducesProblem(StatusCodes.Status409Conflict)
-           .ProducesProblem(StatusCodes.Status501NotImplemented)
            .WithName("StartSequence");
 
-        seq.MapPost("/{id:guid}/pause", (Guid id) => NotImplementedStub("POST /api/v1/sequences/{id}/pause", "§28.12"))
+        seq.MapPost("/{id:guid}/pause",
+                async (Guid id, [FromHeader(Name = "Idempotency-Key")] string? key, ISequencerService svc, CancellationToken ct) =>
+                    Results.Accepted(value: await svc.PauseAsync(id, key, ct)))
            .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
            .ProducesProblem(StatusCodes.Status409Conflict)
-           .ProducesProblem(StatusCodes.Status501NotImplemented)
            .WithName("PauseSequence");
 
-        seq.MapPost("/{id:guid}/resume", (Guid id) => NotImplementedStub("POST /api/v1/sequences/{id}/resume", "§28.12"))
+        seq.MapPost("/{id:guid}/resume",
+                async (Guid id, [FromHeader(Name = "Idempotency-Key")] string? key, ISequencerService svc, CancellationToken ct) =>
+                    Results.Accepted(value: await svc.ResumeAsync(id, key, ct)))
            .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
            .ProducesProblem(StatusCodes.Status409Conflict)
-           .ProducesProblem(StatusCodes.Status501NotImplemented)
            .WithName("ResumeSequence");
 
-        seq.MapPost("/{id:guid}/abort", (Guid id) => NotImplementedStub("POST /api/v1/sequences/{id}/abort", "§28"))
+        seq.MapPost("/{id:guid}/abort",
+                async (Guid id, [FromHeader(Name = "Idempotency-Key")] string? key, ISequencerService svc, CancellationToken ct) =>
+                    Results.Accepted(value: await svc.AbortAsync(id, key, ct)))
            .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
-           .ProducesProblem(StatusCodes.Status501NotImplemented)
            .WithName("AbortSequence");
 
-        seq.MapPost("/{id:guid}/stop", (Guid id) => NotImplementedStub("POST /api/v1/sequences/{id}/stop", "§28"))
+        seq.MapPost("/{id:guid}/stop",
+                async (Guid id, [FromHeader(Name = "Idempotency-Key")] string? key, ISequencerService svc, CancellationToken ct) =>
+                    Results.Accepted(value: await svc.StopAsync(id, key, ct)))
            .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
-           .ProducesProblem(StatusCodes.Status501NotImplemented)
            .WithName("StopSequence");
+
 
         // Templates (§38.6, §38.7)
         seq.MapGet("/templates", () => NotImplementedStub("GET /api/v1/sequences/templates", "§38.6"))
@@ -140,12 +157,12 @@ public static class SequenceEndpoints {
            .ProducesProblem(StatusCodes.Status501NotImplemented)
            .WithName("ImportNinaSequence");
 
-        // Sharing (§70)
-        seq.MapPost("/{id:guid}/share-export", (Guid id) =>
-                NotImplementedStub("POST /api/v1/sequences/{id}/share-export", "§70"))
+        // Sharing (§70) — Phase 13.13 wired to ISequenceService.
+        seq.MapPost("/{id:guid}/share-export",
+                async (Guid id, ISequenceService svc, CancellationToken ct) =>
+                    Results.Ok(await svc.ShareExportAsync(id, ct)))
            .Produces<SequenceShareDto>(StatusCodes.Status200OK)
            .ProducesProblem(StatusCodes.Status404NotFound)
-           .ProducesProblem(StatusCodes.Status501NotImplemented)
            .WithName("ShareExportSequence");
 
         // Auto-flats decision (§48)

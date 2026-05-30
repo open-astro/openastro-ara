@@ -147,6 +147,9 @@ public class Program {
         builder.Services.AddSingleton<IFlatDeviceService, PlaceholderFlatDeviceService>();
         builder.Services.AddSingleton<IGuiderService, PlaceholderGuiderService>();
         builder.Services.AddSingleton<IPolarAlignService, PlaceholderPolarAlignService>();
+        // Phase 13.13 — §38 sequence CRUD + runtime control.
+        builder.Services.AddSingleton<ISequenceService, PlaceholderSequenceService>();
+        builder.Services.AddSingleton<ISequencerService, PlaceholderSequencerService>();
 
         // §37 profile store. Phase 12h.6a introduced the in-memory impl;
         // Phase 12h.7 upgraded to FileProfileStore (settings survive daemon
