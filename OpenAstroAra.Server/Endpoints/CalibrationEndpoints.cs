@@ -49,6 +49,12 @@ public static class CalibrationEndpoints {
 
         calibration.MapPost("/sessions/{id:guid}/matching-flats",
                 async (Guid id, [FromBody] MatchingFlatsRequestDto request, ICalibrationService svc, CancellationToken ct) => {
+                    // Existence-check first — §39 requires 404 on unknown
+                    // sessions, but GenerateMatchingFlatsAsync is a pure
+                    // factory that never validates the id. Mirror the
+                    // /mosaics/{id}/panels pattern.
+                    var session = await svc.GetSessionAsync(id, ct);
+                    if (session is null) return Results.NotFound();
                     var generated = await svc.GenerateMatchingFlatsAsync(id, request, ct);
                     return Results.Created($"/api/v1/sequences/{generated.GeneratedSequenceId}", generated);
                 })
