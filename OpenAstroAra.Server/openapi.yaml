@@ -379,6 +379,34 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ImagingDefaults' }
 
+  /profile/equipment-connection:
+    get:
+      summary: Get active profile's equipment auto-connect bools
+      description: |
+        Phase 12h.6L — §52.1 connection-lifecycle defaults. One bool per
+        device type for auto-connect-on-daemon-boot.
+      tags: [Profile]
+      responses:
+        '200':
+          description: Current equipment-connection state
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EquipmentConnection' }
+    put:
+      summary: Replace active profile's equipment auto-connect bools
+      tags: [Profile]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EquipmentConnection' }
+      responses:
+        '200':
+          description: New state (echo of input)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EquipmentConnection' }
+
   /profile/phd2:
     get:
       summary: Get active profile's PHD2 / guider settings
@@ -896,51 +924,68 @@ components:
       type: object
       description: |
         §37 imaging-defaults profile section. Mirrors WILMA's `ImagingDefaults`
-        client model field-for-field. `frameKind` is one of `light`/`dark`/`bias`/`flat`.
+        client model field-for-field. `frame_kind` is one of `light`/`dark`/`bias`/`flat`.
       required:
-        [exposureSeconds, gain, offset, bin, frameKind, coolerTargetC, coolerRampCPerMin, warmupAtSessionEnd]
+        [exposure_seconds, gain, offset, bin, frame_kind, cooler_target_c, cooler_ramp_c_per_min, warmup_at_session_end]
       properties:
-        exposureSeconds:    { type: integer, minimum: 1, maximum: 3600 }
-        gain:               { type: integer, minimum: 0, maximum: 1000 }
-        offset:             { type: integer, minimum: 0, maximum: 500 }
-        bin:                { type: integer, minimum: 1, maximum: 4 }
-        frameKind:          { type: string, enum: [light, dark, bias, flat] }
-        coolerTargetC:      { type: number, format: double, minimum: -60, maximum: 30 }
-        coolerRampCPerMin:  { type: number, format: double, minimum: 0, maximum: 10 }
-        warmupAtSessionEnd: { type: boolean }
+        exposure_seconds:       { type: integer, minimum: 1, maximum: 3600 }
+        gain:                   { type: integer, minimum: 0, maximum: 1000 }
+        offset:                 { type: integer, minimum: 0, maximum: 500 }
+        bin:                    { type: integer, minimum: 1, maximum: 4 }
+        frame_kind:             { type: string, enum: [light, dark, bias, flat] }
+        cooler_target_c:        { type: number, format: double, minimum: -60, maximum: 30 }
+        cooler_ramp_c_per_min:  { type: number, format: double, minimum: 0, maximum: 10 }
+        warmup_at_session_end:  { type: boolean }
 
     StorageSettings:
       type: object
       description: |
         §29 storage profile section. Mirrors WILMA's `StorageSettings` client model.
-        `fileFormat` is one of `fits`/`xisf`/`fits_rice`/`fits_gzip`; `compression`
+        `file_format` is one of `fits`/`xisf`/`fits_rice`/`fits_gzip`; `compression`
         is one of `off`/`rice`/`gzip`.
-      required: [saveDirectory, fileFormat, compression, filenameTemplate]
+      required: [save_directory, file_format, compression, filename_template]
       properties:
-        saveDirectory:    { type: string, minLength: 1 }
-        fileFormat:       { type: string, enum: [fits, xisf, fits_rice, fits_gzip] }
-        compression:      { type: string, enum: [off, rice, gzip] }
-        filenameTemplate: { type: string, minLength: 1 }
+        save_directory:    { type: string, minLength: 1 }
+        file_format:       { type: string, enum: [fits, xisf, fits_rice, fits_gzip] }
+        compression:       { type: string, enum: [off, rice, gzip] }
+        filename_template: { type: string, minLength: 1 }
+
+    EquipmentConnection:
+      type: object
+      description: |
+        §52.1 auto-connect-on-boot bools. One field per device type.
+      required: [camera, mount, focuser, filter_wheel, rotator, guider, flat_panel, dome, weather, safety_monitor]
+      properties:
+        camera:         { type: boolean }
+        mount:          { type: boolean }
+        focuser:        { type: boolean }
+        filter_wheel:   { type: boolean }
+        rotator:        { type: boolean }
+        guider:         { type: boolean }
+        flat_panel:     { type: boolean }
+        dome:           { type: boolean }
+        weather:        { type: boolean }
+        safety_monitor: { type: boolean }
 
     Phd2Settings:
       type: object
       description: |
         §63 PHD2 / guider profile section. Mirrors WILMA's `Phd2Settings`.
       required:
-        [host, port, phd2Profile, ditherEnabled, ditherEveryNFrames,
-         ditherPixels, settlePixels, settleTimeSec, settleTimeoutSec,
-         forceCalibrationEachSession]
+        [host, port, phd2_profile, dither_enabled, dither_every_n_frames,
+         dither_pixels, settle_pixels, settle_time_sec, settle_timeout_sec,
+         force_calibration_each_session]
       properties:
-        host:                        { type: string, minLength: 1 }
-        port:                        { type: integer, minimum: 1024, maximum: 65535 }
-        phd2Profile:                 { type: string, minLength: 1 }
-        ditherEnabled:               { type: boolean }
-        ditherEveryNFrames:          { type: integer, minimum: 1 }
-        ditherPixels:                { type: number, format: double, minimum: 0 }
-        settlePixels:                { type: number, format: double, minimum: 0 }
-        settleTimeSec:               { type: integer, minimum: 0 }
-        settleTimeoutSec:            { type: integer, minimum: 1 }
-        forceCalibrationEachSession: { type: boolean }
+        host:                           { type: string, minLength: 1 }
+        port:                           { type: integer, minimum: 1024, maximum: 65535 }
+        phd2_profile:                   { type: string, minLength: 1 }
+        dither_enabled:                 { type: boolean }
+        dither_every_n_frames:          { type: integer, minimum: 1 }
+        dither_pixels:                  { type: number, format: double, minimum: 0 }
+        settle_pixels:                  { type: number, format: double, minimum: 0 }
+        settle_time_sec:                { type: integer, minimum: 0 }
+        settle_timeout_sec:             { type: integer, minimum: 1 }
+        force_calibration_each_session: { type: boolean }
 
     DiagnosticsMode:
       type: object
@@ -956,22 +1001,22 @@ components:
         §37.10 plate-solve profile section. Mirrors WILMA's `PlateSolveSettings`.
         `engine` is one of `astap`/`astrometry_net`/`platesolve2`.
       required:
-        [engine, pathOrEndpoint, indexDownloadPath, searchRadiusDeg,
-         downsampleFactor, timeoutSeconds, useBlindFallback,
-         centerAfterSlew, syncToCoordinates, maxIterations,
-         convergenceToleranceArcsec]
+        [engine, path_or_endpoint, index_download_path, search_radius_deg,
+         downsample_factor, timeout_seconds, use_blind_fallback,
+         center_after_slew, sync_to_coordinates, max_iterations,
+         convergence_tolerance_arcsec]
       properties:
-        engine:                     { type: string, enum: [astap, astrometry_net, platesolve2] }
-        pathOrEndpoint:             { type: string, minLength: 1 }
-        indexDownloadPath:          { type: string, minLength: 1 }
-        searchRadiusDeg:            { type: number, format: double, minimum: 0, maximum: 180 }
-        downsampleFactor:           { type: integer, minimum: 1, maximum: 8 }
-        timeoutSeconds:             { type: integer, minimum: 1 }
-        useBlindFallback:           { type: boolean }
-        centerAfterSlew:            { type: boolean }
-        syncToCoordinates:          { type: boolean }
-        maxIterations:              { type: integer, minimum: 1 }
-        convergenceToleranceArcsec: { type: number, format: double, minimum: 0 }
+        engine:                       { type: string, enum: [astap, astrometry_net, platesolve2] }
+        path_or_endpoint:             { type: string, minLength: 1 }
+        index_download_path:          { type: string, minLength: 1 }
+        search_radius_deg:            { type: number, format: double, minimum: 0, maximum: 180 }
+        downsample_factor:            { type: integer, minimum: 1, maximum: 8 }
+        timeout_seconds:              { type: integer, minimum: 1 }
+        use_blind_fallback:           { type: boolean }
+        center_after_slew:            { type: boolean }
+        sync_to_coordinates:          { type: boolean }
+        max_iterations:               { type: integer, minimum: 1 }
+        convergence_tolerance_arcsec: { type: number, format: double, minimum: 0 }
 
     AutofocusSettings:
       type: object
@@ -979,22 +1024,22 @@ components:
         §37.11 autofocus profile section. Mirrors WILMA's `AutofocusSettings`.
         `method` is one of `hfr_v_curve`/`brightest_star_hfr`/`fwhm`.
       required:
-        [method, steps, stepSize, exposureSeconds, binning, afFilter,
-         runAfterFilterChange, triggerTempDeltaC, triggerHfrDriftPct,
-         everyNHours, abortSequenceOnAfFailure, restorePositionOnFailure]
+        [method, steps, step_size, exposure_seconds, binning, af_filter,
+         run_after_filter_change, trigger_temp_delta_c, trigger_hfr_drift_pct,
+         every_n_hours, abort_sequence_on_af_failure, restore_position_on_failure]
       properties:
-        method:                    { type: string, enum: [hfr_v_curve, brightest_star_hfr, fwhm] }
-        steps:                     { type: integer, minimum: 3, maximum: 31 }
-        stepSize:                  { type: integer, minimum: 1 }
-        exposureSeconds:           { type: integer, minimum: 1 }
-        binning:                   { type: integer, minimum: 1, maximum: 4 }
-        afFilter:                  { type: string, minLength: 1 }
-        runAfterFilterChange:      { type: boolean }
-        triggerTempDeltaC:         { type: number, format: double, minimum: 0 }
-        triggerHfrDriftPct:        { type: number, format: double, minimum: 0, maximum: 100 }
-        everyNHours:               { type: integer, minimum: 0 }
-        abortSequenceOnAfFailure:  { type: boolean }
-        restorePositionOnFailure:  { type: boolean }
+        method:                       { type: string, enum: [hfr_v_curve, brightest_star_hfr, fwhm] }
+        steps:                        { type: integer, minimum: 3, maximum: 31 }
+        step_size:                    { type: integer, minimum: 1 }
+        exposure_seconds:             { type: integer, minimum: 1 }
+        binning:                      { type: integer, minimum: 1, maximum: 4 }
+        af_filter:                    { type: string, minLength: 1 }
+        run_after_filter_change:      { type: boolean }
+        trigger_temp_delta_c:         { type: number, format: double, minimum: 0 }
+        trigger_hfr_drift_pct:        { type: number, format: double, minimum: 0, maximum: 100 }
+        every_n_hours:                { type: integer, minimum: 0 }
+        abort_sequence_on_af_failure: { type: boolean }
+        restore_position_on_failure:  { type: boolean }
 
     SafetyPolicies:
       type: object
@@ -1002,54 +1047,54 @@ components:
         §35 safety policies profile section. Mirrors WILMA's `SafetyPolicies`.
         Enums use snake_case strings on the wire.
       required:
-        [onUnsafe, autoResumeWhenSafe, resumeDelayMin, meridianFlipAuto,
-         meridianPauseMin, meridianRecenter, meridianRecalGuider,
-         onAltitudeLimit, parkIfNoMoreTargets, onGuiderLost,
-         guiderRetryTimeoutSec, skipTargetIfRecoveryFails]
+        [on_unsafe, auto_resume_when_safe, resume_delay_min, meridian_flip_auto,
+         meridian_pause_min, meridian_recenter, meridian_recal_guider,
+         on_altitude_limit, park_if_no_more_targets, on_guider_lost,
+         guider_retry_timeout_sec, skip_target_if_recovery_fails]
       properties:
-        onUnsafe:                  { type: string, enum: [pause_and_park, park_only, abort_and_park, ignore] }
-        autoResumeWhenSafe:        { type: boolean }
-        resumeDelayMin:            { type: integer, minimum: 0 }
-        meridianFlipAuto:          { type: boolean }
-        meridianPauseMin:          { type: integer, minimum: 0 }
-        meridianRecenter:          { type: boolean }
-        meridianRecalGuider:       { type: boolean }
-        onAltitudeLimit:           { type: string, enum: [skip_target, pause_sequence, abort_sequence] }
-        parkIfNoMoreTargets:       { type: boolean }
-        onGuiderLost:              { type: string, enum: [pause_and_retry, skip_target, abort_sequence] }
-        guiderRetryTimeoutSec:     { type: integer, minimum: 0 }
-        skipTargetIfRecoveryFails: { type: boolean }
+        on_unsafe:                     { type: string, enum: [pause_and_park, park_only, abort_and_park, ignore] }
+        auto_resume_when_safe:         { type: boolean }
+        resume_delay_min:              { type: integer, minimum: 0 }
+        meridian_flip_auto:            { type: boolean }
+        meridian_pause_min:            { type: integer, minimum: 0 }
+        meridian_recenter:             { type: boolean }
+        meridian_recal_guider:         { type: boolean }
+        on_altitude_limit:             { type: string, enum: [skip_target, pause_sequence, abort_sequence] }
+        park_if_no_more_targets:       { type: boolean }
+        on_guider_lost:                { type: string, enum: [pause_and_retry, skip_target, abort_sequence] }
+        guider_retry_timeout_sec:      { type: integer, minimum: 0 }
+        skip_target_if_recovery_fails: { type: boolean }
 
     FilenamesSettings:
       type: object
       description: |
         §29.2 filenames profile section. Mirrors WILMA's `FilenamesSettings`.
-        `dateSeparator` is one of `forward_slash`/`underscore`/`dash`.
-      required: [dateSeparator, compressDarksAndBias]
+        `date_separator` is one of `forward_slash`/`underscore`/`dash`.
+      required: [date_separator, compress_darks_and_bias]
       properties:
-        dateSeparator:        { type: string, enum: [forward_slash, underscore, dash] }
-        compressDarksAndBias: { type: boolean }
+        date_separator:          { type: string, enum: [forward_slash, underscore, dash] }
+        compress_darks_and_bias: { type: boolean }
 
     SiteSettings:
       type: object
       description: |
         §37.12 site profile section. Mirrors WILMA's `SiteSettings` field-for-field.
-        `twilightDefinition` is one of `civil`/`nautical`/`astronomical`.
+        `twilight_definition` is one of `civil`/`nautical`/`astronomical`.
       required:
-        [siteName, latitudeDeg, longitudeDeg, elevationM, timeZone,
-         useCustomHorizon, defaultHorizonAltitudeDeg, bortleClass,
-         typicalSeeingArcsec, twilightDefinition]
+        [site_name, latitude_deg, longitude_deg, elevation_m, time_zone,
+         use_custom_horizon, default_horizon_altitude_deg, bortle_class,
+         typical_seeing_arcsec, twilight_definition]
       properties:
-        siteName:                  { type: string, minLength: 1 }
-        latitudeDeg:               { type: number, format: double, minimum: -90,  maximum: 90 }
-        longitudeDeg:              { type: number, format: double, minimum: -180, maximum: 180 }
-        elevationM:                { type: number, format: double, minimum: -500, maximum: 9000 }
-        timeZone:                  { type: string, minLength: 1 }
-        useCustomHorizon:          { type: boolean }
-        defaultHorizonAltitudeDeg: { type: number, format: double, minimum: 0, maximum: 90 }
-        bortleClass:               { type: integer, minimum: 1, maximum: 9 }
-        typicalSeeingArcsec:       { type: number, format: double, minimum: 0, maximum: 20 }
-        twilightDefinition:        { type: string, enum: [civil, nautical, astronomical] }
+        site_name:                    { type: string, minLength: 1 }
+        latitude_deg:                 { type: number, format: double, minimum: -90,  maximum: 90 }
+        longitude_deg:                { type: number, format: double, minimum: -180, maximum: 180 }
+        elevation_m:                  { type: number, format: double, minimum: -500, maximum: 9000 }
+        time_zone:                    { type: string, minLength: 1 }
+        use_custom_horizon:           { type: boolean }
+        default_horizon_altitude_deg: { type: number, format: double, minimum: 0, maximum: 90 }
+        bortle_class:                 { type: integer, minimum: 1, maximum: 9 }
+        typical_seeing_arcsec:        { type: number, format: double, minimum: 0, maximum: 20 }
+        twilight_definition:          { type: string, enum: [civil, nautical, astronomical] }
 
     NotificationsSettings:
       type: object
@@ -1058,22 +1103,22 @@ components:
         field-for-field. Token fields are stored as plain strings in v0.0.1;
         Phase 14 §40 hardening migrates to secret refs.
       required:
-        [inAppBanner, osDesktop, soundAlert, pushoverToken, telegramBotToken,
-         onSequenceComplete, onSequencePaused, onCriticalDiagnostic,
-         onSafetyEvent, onAutofocusFailed, onPlateSolveFailed, onDiskSpaceLow]
+        [in_app_banner, os_desktop, sound_alert, pushover_token, telegram_bot_token,
+         on_sequence_complete, on_sequence_paused, on_critical_diagnostic,
+         on_safety_event, on_autofocus_failed, on_plate_solve_failed, on_disk_space_low]
       properties:
-        inAppBanner:          { type: boolean }
-        osDesktop:            { type: boolean }
-        soundAlert:           { type: boolean }
-        pushoverToken:        { type: string }
-        telegramBotToken:     { type: string }
-        onSequenceComplete:   { type: boolean }
-        onSequencePaused:     { type: boolean }
-        onCriticalDiagnostic: { type: boolean }
-        onSafetyEvent:        { type: boolean }
-        onAutofocusFailed:    { type: boolean }
-        onPlateSolveFailed:   { type: boolean }
-        onDiskSpaceLow:       { type: boolean }
+        in_app_banner:          { type: boolean }
+        os_desktop:             { type: boolean }
+        sound_alert:            { type: boolean }
+        pushover_token:         { type: string }
+        telegram_bot_token:     { type: string }
+        on_sequence_complete:   { type: boolean }
+        on_sequence_paused:     { type: boolean }
+        on_critical_diagnostic: { type: boolean }
+        on_safety_event:        { type: boolean }
+        on_autofocus_failed:    { type: boolean }
+        on_plate_solve_failed:  { type: boolean }
+        on_disk_space_low:      { type: boolean }
 
     OperationAccepted:
       type: object

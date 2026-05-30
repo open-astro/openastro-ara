@@ -52,4 +52,7 @@ public interface IProfileStore {
 
     Phd2SettingsDto GetPhd2Settings();
     void PutPhd2Settings(Phd2SettingsDto value);
+
+    EquipmentConnectionDto GetEquipmentConnection();
+    void PutEquipmentConnection(EquipmentConnectionDto value);
 }

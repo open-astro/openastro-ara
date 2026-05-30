@@ -179,3 +179,21 @@ public sealed record Phd2SettingsDto(
     int SettleTimeSec,
     int SettleTimeoutSec,
     bool ForceCalibrationEachSession);
+
+/// <summary>
+/// §52.1 connection-lifecycle defaults — which equipment device types
+/// auto-connect when the daemon boots. One bool per device type. Wire
+/// shape uses snake_case for compound names: `filter_wheel`,
+/// `flat_panel`, `safety_monitor`.
+/// </summary>
+public sealed record EquipmentConnectionDto(
+    bool Camera,
+    bool Mount,
+    bool Focuser,
+    bool FilterWheel,
+    bool Rotator,
+    bool Guider,
+    bool FlatPanel,
+    bool Dome,
+    bool Weather,
+    bool SafetyMonitor);
