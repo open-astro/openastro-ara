@@ -33,3 +33,17 @@ public sealed record ImagingDefaultsDto(
     double CoolerTargetC,
     double CoolerRampCPerMin,
     bool WarmupAtSessionEnd);
+
+/// <summary>
+/// §29 storage settings (save directory + file format + compression +
+/// filename template). `FileFormat` is one of `fits`/`xisf`/`fits_rice`/
+/// `fits_gzip`; `Compression` is `off`/`rice`/`gzip`. Both are strings on
+/// the wire (matches the §60.6 enum-as-string convention used everywhere
+/// else); the client maps them back to its `StorageFileFormat` +
+/// `StorageCompression` enums.
+/// </summary>
+public sealed record StorageSettingsDto(
+    string SaveDirectory,
+    string FileFormat,
+    string Compression,
+    string FilenameTemplate);

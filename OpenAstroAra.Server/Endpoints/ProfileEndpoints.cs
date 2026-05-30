@@ -51,6 +51,21 @@ public static class ProfileEndpoints {
             .WithName("PutImagingDefaults")
             .WithSummary("Replace the active profile's imaging defaults.");
 
+        profile.MapGet("/storage", (IProfileStore store) =>
+                Results.Ok(store.GetStorageSettings()))
+            .Produces<StorageSettingsDto>(StatusCodes.Status200OK)
+            .WithName("GetStorageSettings")
+            .WithSummary("Get the active profile's storage settings.");
+
+        profile.MapPut("/storage", (StorageSettingsDto body, IProfileStore store) => {
+                store.PutStorageSettings(body);
+                return Results.Ok(body);
+            })
+            .Accepts<StorageSettingsDto>("application/json")
+            .Produces<StorageSettingsDto>(StatusCodes.Status200OK)
+            .WithName("PutStorageSettings")
+            .WithSummary("Replace the active profile's storage settings.");
+
         return app;
     }
 }
