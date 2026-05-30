@@ -21,16 +21,8 @@ class Help {
 }
 
 const Map<String, Help> helpRegistry = {
-  'guider.dither_pixels': Help(
-    key: 'guider.dither_pixels',
-    title: 'Dithering',
-    body: 'Dithering is the process of slightly shifting the telescope position '
-        'between exposures. This causes fixed-pattern noise (like hot pixels) '
-        'to fall on different physical pixels in each frame, allowing them to '
-        'be removed during stacking.',
-    learnMoreUrl: 'https://openastro.net/wiki/guiding/dithering',
-    relatedSettings: ['guider.dither_pixels'],
-  ),
+  // (Old `guider.dither_pixels` starter entry retired in 12h.4 — superseded
+  // by the proper `eq.guider.*` namespace below.)
   'safety.policies.on_unsafe': Help(
     key: 'safety.policies.on_unsafe',
     title: 'Unsafe Weather Actions',
@@ -430,6 +422,41 @@ const Map<String, Help> helpRegistry = {
     body: 'How close to dead-center the target must be before centering stops. 60″ (1 arc-minute) is a good default for typical setups — tighter than the §63 PHD2 sub-frame guiding can correct, looser than the human eye can notice.\n\n'
         'Tighten to 30″ for narrowband mosaics where panel alignment matters; loosen to 120″ for wide-field RGB where 2′ is well within frame.',
     relatedSettings: ['img.platesolve.max_iterations'],
+  ),
+
+  // §63 PHD2 — help on the genuinely non-obvious controls. Host/port/profile
+  // are self-explanatory; settle-time + force-calibration get help because
+  // their behaviour interacts with §35 + §38 in non-obvious ways.
+  'eq.guider.dither_pixels': Help(
+    key: 'eq.guider.dither_pixels',
+    title: 'Dither amplitude',
+    body: 'How many guide-camera pixels to shift the mount between exposures. Larger amplitudes randomize fixed-pattern noise more aggressively but mean longer settle times.\n\n'
+        '* **3-5 px**: conservative. Settles fast on most mounts.\n'
+        '* **5-10 px**: aggressive. Better noise reduction in stacks; needs a stable mount + good RMS.\n'
+        '* **>10 px**: usually overkill; can push the guide star off the chip on small guide scopes.',
+    relatedSettings: ['eq.guider.dither_every_n_frames', 'eq.guider.settle_pixels'],
+  ),
+  'eq.guider.settle_pixels': Help(
+    key: 'eq.guider.settle_pixels',
+    title: 'Settle threshold',
+    body: 'Once a dither completes, PHD2 considers the guider re-settled when guide-RMS error stays below this many pixels for `settle_time` seconds.\n\n'
+        'Tight thresholds (0.5-1.0 px) catch the last bit of motion but waste time on mounts that hover at 1 px RMS — they\'ll never converge.\n'
+        '1.5 px (default) is a sensible middle ground. Loosen to 2-3 px for slower mounts; tighten only if your guide RMS routinely sits below 1 px.',
+    relatedSettings: ['eq.guider.settle_time_sec', 'eq.guider.settle_timeout_sec'],
+  ),
+  'eq.guider.settle_timeout_sec': Help(
+    key: 'eq.guider.settle_timeout_sec',
+    title: 'Settle timeout',
+    body: 'Hard maximum on settle wait. If the threshold isn\'t met by this point, exposure resumes anyway. The §54 plate-solve-failed notification (and §35 guider-lost retry budget) take over from here if guide quality stays bad.\n\n'
+        '60s is the default. Bump to 120-180s on slow mounts; drop to 30s if you\'d rather skip frames than burn time on a stuck guider.',
+    relatedSettings: ['eq.guider.settle_pixels', 'safety.policies.guider_retry_timeout'],
+  ),
+  'eq.guider.force_calibration_each_session': Help(
+    key: 'eq.guider.force_calibration_each_session',
+    title: 'Force calibration each session',
+    body: 'PHD2 caches calibration data (guide-pulse direction, ratio, backlash) and reuses it across sessions by default. Forcing a fresh calibration each session is safer if your guide-scope orientation can shift overnight (loose dovetail, scope swap, etc) but adds 2-5 min to every startup.\n\n'
+        'Recommended **off** for permanent setups (observatory rig); **on** for portable setups (grab-and-go scope, traveling kit).',
+    relatedSettings: ['safety.policies.meridian_recal_guider'],
   ),
 
   // §37.4 Filter Wheel slot labels.

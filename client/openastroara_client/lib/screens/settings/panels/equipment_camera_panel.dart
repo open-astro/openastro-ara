@@ -2,13 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../state/settings/equipment_connection_state.dart';
+import '../../../widgets/equipment/alpaca_device_row.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
 
-/// §37.4 + §52 Camera panel. Auto-connect-on-boot is editable in 12h.2;
+/// §37.4 + §52 Camera panel. Alpaca device + auto-connect are editable;
 /// sensor + cooling fields stay read-only because they're daemon-reported.
-/// Phase 12h.2b wires daemon round-trip + makes the cooling defaults
-/// editable (overlapping with imaging-defaults).
 class EquipmentCameraPanel extends ConsumerWidget {
   const EquipmentCameraPanel({super.key});
 
@@ -21,7 +20,10 @@ class EquipmentCameraPanel extends ConsumerWidget {
       padding: const EdgeInsets.all(24),
       children: [
         const SettingsSectionHeader('Connection'),
-        const SettingsRow(label: 'Alpaca device', value: 'Not selected'),
+        const AlpacaDeviceRow(
+          deviceType: EquipmentDeviceType.camera,
+          deviceTypeLabel: 'camera',
+        ),
         SettingsSwitchRow(
           label: 'Auto-connect on boot',
           helpKey: 'eq.auto_connect_on_boot',

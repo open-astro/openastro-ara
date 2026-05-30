@@ -117,25 +117,46 @@ class _TopEquipmentBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final shortcutLabel = Theme.of(context).platform == TargetPlatform.macOS
+        ? '⌘K'
+        : 'Ctrl+K';
     return Container(
       height: 64,
       decoration: const BoxDecoration(
         color: AraColors.bgPanel,
         border: Border(bottom: BorderSide(color: AraColors.border)),
       ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        child: Row(
-          children: [
-            for (final (icon, label) in _chips)
-              EquipmentChip(
-                icon: icon,
-                label: label,
-                status: StatusLevel.disconnected,
+      child: Row(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Row(
+                children: [
+                  for (final (icon, label) in _chips)
+                    EquipmentChip(
+                      icon: icon,
+                      label: label,
+                      status: StatusLevel.disconnected,
+                    ),
+                ],
               ),
-          ],
-        ),
+            ),
+          ),
+          // §61.1 — visible magnifying-glass icon on the right side of the
+          // top bar. Opens the same `showCommandPalette` dialog that ⌘K
+          // launches; tooltip surfaces the platform-correct shortcut so
+          // keyboard-first users learn it.
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: IconButton(
+              icon: const Icon(Icons.search, size: 22),
+              tooltip: 'Search settings ($shortcutLabel)',
+              onPressed: () => showCommandPalette(context),
+            ),
+          ),
+        ],
       ),
     );
   }

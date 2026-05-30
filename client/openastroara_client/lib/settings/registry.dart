@@ -187,24 +187,6 @@ const List<Setting> settingsRegistry = [
     profilePath: 'safety.skip_target_if_recovery_fails',
   ),
 
-  // §63 PHD2 / Guider
-  Setting(
-    id: 'guider.dither_pixels',
-    label: 'Dither pixels',
-    description: 'How many pixels PHD2 dithers between exposures. Larger values '
-        'randomize hot-pixel positions more aggressively; smaller values '
-        'settle faster.',
-    keywords: ['dither', 'guide', 'guider', 'phd2', 'randomize', 'hot pixel'],
-    path: ['Settings', 'Guider', 'PHD2'],
-    type: SettingType.intRange(min: 0, max: 50),
-    defaultValue: 5,
-    profilePath: 'guider.dither_pixels',
-    relatedSettings: [
-      'guider.dither_settle_threshold',
-      'guider.dither_timeout_action',
-    ],
-  ),
-
   // §51 Diagnostics — single-enum picker; actual state lives in
   // `diagnosticsModeProvider`.
   Setting(
@@ -957,5 +939,110 @@ const List<Setting> settingsRegistry = [
     type: SettingType.doubleRange(min: 1, max: 600, step: 1),
     defaultValue: 60.0,
     profilePath: 'platesolve.convergence_tolerance_arcsec',
+  ),
+
+  // §63 PHD2 / guider — 10 fields covering connection + dithering + calibration.
+  // State lives in `phd2SettingsProvider`. The §35 meridian-flip re-cal guider
+  // policy lives in `safetyPoliciesProvider` (already registered) since it's
+  // a meridian-flip behaviour, not a PHD2-internal one.
+  Setting(
+    id: 'eq.guider.host',
+    label: 'PHD2 host',
+    description: 'Hostname or IP where PHD2 (or openastro-phd2) is running. Default `localhost` for same-machine setups; use the daemon\'s LAN IP for remote PHD2.',
+    keywords: ['phd2', 'host', 'hostname', 'ip', 'guider', 'remote'],
+    path: ['Settings', 'Equipment', 'Guider'],
+    type: SettingType.string(),
+    defaultValue: 'localhost',
+    profilePath: 'phd2.host',
+  ),
+  Setting(
+    id: 'eq.guider.port',
+    label: 'PHD2 port',
+    description: 'TCP port for the PHD2 server-mode socket. 4400 is the standard default; rebind only if PHD2 is configured non-standard.',
+    keywords: ['phd2', 'port', 'tcp', 'guider', 'network'],
+    path: ['Settings', 'Equipment', 'Guider'],
+    type: SettingType.intRange(min: 1024, max: 65535),
+    defaultValue: 4400,
+    profilePath: 'phd2.port',
+  ),
+  Setting(
+    id: 'eq.guider.profile',
+    label: 'PHD2 profile',
+    description: 'Which PHD2 equipment profile to use. PHD2 stores per-mount/camera profiles separate from ARA\'s profiles.',
+    keywords: ['phd2', 'profile', 'equipment', 'guider'],
+    path: ['Settings', 'Equipment', 'Guider'],
+    type: SettingType.string(),
+    defaultValue: 'Default',
+    profilePath: 'phd2.profile',
+  ),
+  Setting(
+    id: 'eq.guider.dither_enabled',
+    label: 'Enable dithering',
+    description: 'Shift the mount by a few pixels between exposures so fixed-pattern noise (hot pixels, walking noise) randomizes across the stack.',
+    keywords: ['dither', 'enable', 'guider', 'phd2', 'hot pixel', 'walking noise'],
+    path: ['Settings', 'Equipment', 'Guider'],
+    type: SettingType.bool(),
+    defaultValue: true,
+    profilePath: 'phd2.dither_enabled',
+  ),
+  Setting(
+    id: 'eq.guider.dither_every_n_frames',
+    label: 'Dither every N frames',
+    description: 'How often to dither. 1 = every frame; 3-5 = every few frames (saves settle time on short exposures).',
+    keywords: ['dither', 'interval', 'frames', 'every', 'phd2'],
+    path: ['Settings', 'Equipment', 'Guider'],
+    type: SettingType.intRange(min: 1, max: 100),
+    defaultValue: 1,
+    profilePath: 'phd2.dither_every_n_frames',
+  ),
+  Setting(
+    id: 'eq.guider.dither_pixels',
+    label: 'Dither pixels',
+    description: 'How many guide-camera pixels to dither. Larger = more aggressive randomization; smaller = faster settle.',
+    keywords: ['dither', 'pixels', 'amplitude', 'phd2'],
+    path: ['Settings', 'Equipment', 'Guider'],
+    type: SettingType.doubleRange(min: 0, max: 100, step: 0.5),
+    defaultValue: 5.0,
+    profilePath: 'phd2.dither_pixels',
+  ),
+  Setting(
+    id: 'eq.guider.settle_pixels',
+    label: 'Settle threshold (pixels)',
+    description: 'PHD2 considers the guider settled once RMS error stays under this many pixels for `settle_time` seconds.',
+    keywords: ['settle', 'threshold', 'pixels', 'rms', 'phd2', 'tolerance'],
+    path: ['Settings', 'Equipment', 'Guider'],
+    type: SettingType.doubleRange(min: 0, max: 10, step: 0.1),
+    defaultValue: 1.5,
+    profilePath: 'phd2.settle_pixels',
+  ),
+  Setting(
+    id: 'eq.guider.settle_time_sec',
+    label: 'Settle time (s)',
+    description: 'How long RMS must stay under the settle threshold to count as settled.',
+    keywords: ['settle', 'time', 'seconds', 'phd2', 'wait'],
+    path: ['Settings', 'Equipment', 'Guider'],
+    type: SettingType.intRange(min: 0, max: 120),
+    defaultValue: 10,
+    profilePath: 'phd2.settle_time_sec',
+  ),
+  Setting(
+    id: 'eq.guider.settle_timeout_sec',
+    label: 'Settle timeout (s)',
+    description: 'Give up waiting for settle after this many seconds. Resumes the exposure even if RMS is still high.',
+    keywords: ['settle', 'timeout', 'seconds', 'phd2', 'limit'],
+    path: ['Settings', 'Equipment', 'Guider'],
+    type: SettingType.intRange(min: 1, max: 600),
+    defaultValue: 60,
+    profilePath: 'phd2.settle_timeout_sec',
+  ),
+  Setting(
+    id: 'eq.guider.force_calibration_each_session',
+    label: 'Force calibration each session',
+    description: 'Re-run PHD2 calibration at every session start instead of reusing the previous calibration. Slower but safer for setups where guide-scope orientation may have shifted.',
+    keywords: ['calibration', 'force', 'session', 'phd2', 'recalibrate'],
+    path: ['Settings', 'Equipment', 'Guider'],
+    type: SettingType.bool(),
+    defaultValue: false,
+    profilePath: 'phd2.force_calibration_each_session',
   ),
 ];
