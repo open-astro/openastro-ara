@@ -1,10 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-/// §63 PHD2 / guider settings. Phase 12h.4 holds state in memory; 12h.2b
-/// will wire `/api/v1/profile/phd2` for daemon round-trip. The §35
-/// meridian-flip re-cal-guider policy lives in `safetyPoliciesProvider`
-/// (it crosses the §35/§63 boundary and belongs with the rest of meridian
-/// behavior) — only PHD2-internal settings live here.
+import '../../services/profile_api.dart';
+
+/// §63 PHD2 / guider settings. Phase 12h.6k wires the daemon round-trip
+/// via [ProfileApi] (`/api/v1/profile/phd2`). The §35 meridian-flip
+/// re-cal-guider policy lives in `safetyPoliciesProvider` (crosses the
+/// §35/§63 boundary, belongs with the rest of meridian behavior).
 
 class Phd2Settings {
   // Connection.
@@ -116,6 +117,16 @@ class Phd2SettingsNotifier extends Notifier<Phd2Settings> {
 
   void setForceCalibrationEachSession(bool v) =>
       state = state.copyWith(forceCalibrationEachSession: v);
+
+  Future<void> hydrateFromServer(ProfileApi api) async {
+    state = await api.getPhd2Settings();
+  }
+
+  Future<Phd2Settings> persistToServer(ProfileApi api) async {
+    final echoed = await api.putPhd2Settings(state);
+    state = echoed;
+    return echoed;
+  }
 }
 
 final phd2SettingsProvider =

@@ -379,6 +379,33 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ImagingDefaults' }
 
+  /profile/phd2:
+    get:
+      summary: Get active profile's PHD2 / guider settings
+      description: |
+        Phase 12h.6k — §63 PHD2 section.
+      tags: [Profile]
+      responses:
+        '200':
+          description: Current PHD2-settings state
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Phd2Settings' }
+    put:
+      summary: Replace active profile's PHD2 / guider settings
+      tags: [Profile]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Phd2Settings' }
+      responses:
+        '200':
+          description: New state (echo of input)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Phd2Settings' }
+
   /profile/diagnostics-mode:
     get:
       summary: Get active profile's diagnostics mode
@@ -894,6 +921,26 @@ components:
         fileFormat:       { type: string, enum: [fits, xisf, fits_rice, fits_gzip] }
         compression:      { type: string, enum: [off, rice, gzip] }
         filenameTemplate: { type: string, minLength: 1 }
+
+    Phd2Settings:
+      type: object
+      description: |
+        §63 PHD2 / guider profile section. Mirrors WILMA's `Phd2Settings`.
+      required:
+        [host, port, phd2Profile, ditherEnabled, ditherEveryNFrames,
+         ditherPixels, settlePixels, settleTimeSec, settleTimeoutSec,
+         forceCalibrationEachSession]
+      properties:
+        host:                        { type: string, minLength: 1 }
+        port:                        { type: integer, minimum: 1024, maximum: 65535 }
+        phd2Profile:                 { type: string, minLength: 1 }
+        ditherEnabled:               { type: boolean }
+        ditherEveryNFrames:          { type: integer, minimum: 1 }
+        ditherPixels:                { type: number, format: double, minimum: 0 }
+        settlePixels:                { type: number, format: double, minimum: 0 }
+        settleTimeSec:               { type: integer, minimum: 0 }
+        settleTimeoutSec:            { type: integer, minimum: 1 }
+        forceCalibrationEachSession: { type: boolean }
 
     DiagnosticsMode:
       type: object

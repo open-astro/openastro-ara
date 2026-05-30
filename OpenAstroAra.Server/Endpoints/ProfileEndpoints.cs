@@ -171,6 +171,21 @@ public static class ProfileEndpoints {
             .WithName("PutDiagnosticsMode")
             .WithSummary("Replace the active profile's diagnostics mode.");
 
+        profile.MapGet("/phd2", (IProfileStore store) =>
+                Results.Ok(store.GetPhd2Settings()))
+            .Produces<Phd2SettingsDto>(StatusCodes.Status200OK)
+            .WithName("GetPhd2Settings")
+            .WithSummary("Get the active profile's PHD2 settings.");
+
+        profile.MapPut("/phd2", (Phd2SettingsDto body, IProfileStore store) => {
+                store.PutPhd2Settings(body);
+                return Results.Ok(body);
+            })
+            .Accepts<Phd2SettingsDto>("application/json")
+            .Produces<Phd2SettingsDto>(StatusCodes.Status200OK)
+            .WithName("PutPhd2Settings")
+            .WithSummary("Replace the active profile's PHD2 settings.");
+
         return app;
     }
 }

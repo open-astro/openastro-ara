@@ -49,4 +49,7 @@ public interface IProfileStore {
 
     DiagnosticsModeDto GetDiagnosticsMode();
     void PutDiagnosticsMode(DiagnosticsModeDto value);
+
+    Phd2SettingsDto GetPhd2Settings();
+    void PutPhd2Settings(Phd2SettingsDto value);
 }

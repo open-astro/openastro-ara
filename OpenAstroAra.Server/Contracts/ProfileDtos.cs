@@ -160,3 +160,22 @@ public sealed record PlateSolveSettingsDto(
 /// `Mode` is `notify_only`/`pause_on_critical`/`abort_on_critical`.
 /// </summary>
 public sealed record DiagnosticsModeDto(string Mode);
+
+/// <summary>
+/// §63 PHD2 / guider settings — connection (host/port/profile) +
+/// dithering knobs + per-session calibration policy. The §35 meridian-
+/// flip re-cal-guider toggle lives in <see cref="SafetyPoliciesDto"/>
+/// (crosses §35/§63 boundary, belongs with the rest of meridian
+/// behavior).
+/// </summary>
+public sealed record Phd2SettingsDto(
+    string Host,
+    int Port,
+    string Phd2Profile,
+    bool DitherEnabled,
+    int DitherEveryNFrames,
+    double DitherPixels,
+    double SettlePixels,
+    int SettleTimeSec,
+    int SettleTimeoutSec,
+    bool ForceCalibrationEachSession);
