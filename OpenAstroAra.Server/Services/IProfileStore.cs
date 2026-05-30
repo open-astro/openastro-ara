@@ -43,4 +43,7 @@ public interface IProfileStore {
 
     AutofocusSettingsDto GetAutofocusSettings();
     void PutAutofocusSettings(AutofocusSettingsDto value);
+
+    PlateSolveSettingsDto GetPlateSolveSettings();
+    void PutPlateSolveSettings(PlateSolveSettingsDto value);
 }

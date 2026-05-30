@@ -379,6 +379,33 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ImagingDefaults' }
 
+  /profile/plate-solve:
+    get:
+      summary: Get active profile's plate-solve settings
+      description: |
+        Phase 12h.6i — §37.10 plate-solve section.
+      tags: [Profile]
+      responses:
+        '200':
+          description: Current plate-solve-settings state
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PlateSolveSettings' }
+    put:
+      summary: Replace active profile's plate-solve settings
+      tags: [Profile]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PlateSolveSettings' }
+      responses:
+        '200':
+          description: New state (echo of input)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PlateSolveSettings' }
+
   /profile/autofocus:
     get:
       summary: Get active profile's autofocus settings
@@ -838,6 +865,29 @@ components:
         fileFormat:       { type: string, enum: [fits, xisf, fits_rice, fits_gzip] }
         compression:      { type: string, enum: [off, rice, gzip] }
         filenameTemplate: { type: string, minLength: 1 }
+
+    PlateSolveSettings:
+      type: object
+      description: |
+        §37.10 plate-solve profile section. Mirrors WILMA's `PlateSolveSettings`.
+        `engine` is one of `astap`/`astrometry_net`/`platesolve2`.
+      required:
+        [engine, pathOrEndpoint, indexDownloadPath, searchRadiusDeg,
+         downsampleFactor, timeoutSeconds, useBlindFallback,
+         centerAfterSlew, syncToCoordinates, maxIterations,
+         convergenceToleranceArcsec]
+      properties:
+        engine:                     { type: string, enum: [astap, astrometry_net, platesolve2] }
+        pathOrEndpoint:             { type: string, minLength: 1 }
+        indexDownloadPath:          { type: string, minLength: 1 }
+        searchRadiusDeg:            { type: number, format: double, minimum: 0, maximum: 180 }
+        downsampleFactor:           { type: integer, minimum: 1, maximum: 8 }
+        timeoutSeconds:             { type: integer, minimum: 1 }
+        useBlindFallback:           { type: boolean }
+        centerAfterSlew:            { type: boolean }
+        syncToCoordinates:          { type: boolean }
+        maxIterations:              { type: integer, minimum: 1 }
+        convergenceToleranceArcsec: { type: number, format: double, minimum: 0 }
 
     AutofocusSettings:
       type: object

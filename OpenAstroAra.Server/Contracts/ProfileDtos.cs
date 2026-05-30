@@ -134,3 +134,21 @@ public sealed record AutofocusSettingsDto(
     int EveryNHours,
     bool AbortSequenceOnAfFailure,
     bool RestorePositionOnFailure);
+
+/// <summary>
+/// §37.10 plate solving settings — engine + search/timeout knobs +
+/// centering policy + convergence loop bounds. `Engine` is `astap`/
+/// `astrometry_net`/`platesolve2` on the wire.
+/// </summary>
+public sealed record PlateSolveSettingsDto(
+    string Engine,
+    string PathOrEndpoint,
+    string IndexDownloadPath,
+    double SearchRadiusDeg,
+    int DownsampleFactor,
+    int TimeoutSeconds,
+    bool UseBlindFallback,
+    bool CenterAfterSlew,
+    bool SyncToCoordinates,
+    int MaxIterations,
+    double ConvergenceToleranceArcsec);

@@ -172,4 +172,26 @@ public sealed class InMemoryProfileStore : IProfileStore {
     public void PutAutofocusSettings(AutofocusSettingsDto value) {
         lock (_lock) { _autofocus = value; }
     }
+
+    // Defaults match PlateSolveSettings() constructor.
+    private PlateSolveSettingsDto _plateSolve = new(
+        Engine: "astap",
+        PathOrEndpoint: "/usr/bin/astap",
+        IndexDownloadPath: "/var/lib/astap",
+        SearchRadiusDeg: 30.0,
+        DownsampleFactor: 2,
+        TimeoutSeconds: 60,
+        UseBlindFallback: true,
+        CenterAfterSlew: true,
+        SyncToCoordinates: true,
+        MaxIterations: 5,
+        ConvergenceToleranceArcsec: 60.0);
+
+    public PlateSolveSettingsDto GetPlateSolveSettings() {
+        lock (_lock) { return _plateSolve; }
+    }
+
+    public void PutPlateSolveSettings(PlateSolveSettingsDto value) {
+        lock (_lock) { _plateSolve = value; }
+    }
 }
