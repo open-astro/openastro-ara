@@ -123,6 +123,12 @@ public class Program {
         // bug report" UI. Prepare returns a synthetic ready record; download
         // is 404 (real ZIP bundling lands in Phase 14 §54.3).
         builder.Services.AddSingleton<IBugReportService, PlaceholderBugReportService>();
+        // Phase 13.10 — three more system-service placeholders so the §36.2
+        // Data Manager + §70 Profile Share + §44 Backup Stream surfaces are
+        // testable end-to-end without the §28 catalog wired.
+        builder.Services.AddSingleton<IDataManagerService, PlaceholderDataManagerService>();
+        builder.Services.AddSingleton<IProfileShareService, PlaceholderProfileShareService>();
+        builder.Services.AddSingleton<IBackupStreamService, PlaceholderBackupStreamService>();
 
         // §37 profile store. Phase 12h.6a introduced the in-memory impl;
         // Phase 12h.7 upgraded to FileProfileStore (settings survive daemon
