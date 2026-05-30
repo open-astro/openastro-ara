@@ -50,15 +50,18 @@ public sealed class PlaceholderCameraService : ICameraService {
         Task.FromResult(PlaceholderEquipmentHelpers.Accepted("camera.connect", idempotencyKey));
     public Task<OperationAcceptedDto> DisconnectAsync(string? idempotencyKey, CancellationToken ct) =>
         Task.FromResult(PlaceholderEquipmentHelpers.Accepted("camera.disconnect", idempotencyKey));
-    public Task<ExposureResponseDto> StartExposureAsync(ExposureRequestDto request, string? idempotencyKey, CancellationToken ct) =>
-        // Synthetic frame id + preview URL. Real impl returns these once
-        // the capture worker has queued the exposure + emits the WS
-        // frame.complete event when capture finishes.
-        Task.FromResult(new ExposureResponseDto(
-            FrameId: Guid.NewGuid().ToString(),
-            PreviewUrl: $"/api/v1/frames/{Guid.NewGuid()}/preview",
+    public Task<ExposureResponseDto> StartExposureAsync(ExposureRequestDto request, string? idempotencyKey, CancellationToken ct) {
+        // Synthetic frame id + matching preview URL so WILMA can construct
+        // the §65 preview-fetch URL from the FrameId alone (the URL just
+        // happens to point at the §13.1 placeholder JPEG since no real
+        // frame with this GUID lives in the §28 catalog).
+        var frameId = Guid.NewGuid();
+        return Task.FromResult(new ExposureResponseDto(
+            FrameId: frameId.ToString(),
+            PreviewUrl: $"/api/v1/frames/{frameId}/preview",
             ExposureSec: 1.0,
             CapturedAt: DateTimeOffset.UtcNow.ToString("O")));
+    }
     public Task AbortExposureAsync(CancellationToken ct) => Task.CompletedTask;
     public Task SetCoolerAsync(bool on, double? targetTemperatureC, CancellationToken ct) => Task.CompletedTask;
 }
@@ -135,11 +138,13 @@ public sealed class PlaceholderSwitchService : ISwitchService {
 }
 
 public sealed class PlaceholderObservingConditionsService : IObservingConditionsService {
+    // operation_type prefix matches the route segment ("observing-conditions.*")
+    // for consistency with the rest of the 12-service block.
     public Task<ObservingConditionsDto?> GetAsync(CancellationToken ct) => Task.FromResult<ObservingConditionsDto?>(null);
     public Task<OperationAcceptedDto> ConnectAsync(ConnectRequestDto request, string? idempotencyKey, CancellationToken ct) =>
-        Task.FromResult(PlaceholderEquipmentHelpers.Accepted("weather.connect", idempotencyKey));
+        Task.FromResult(PlaceholderEquipmentHelpers.Accepted("observing-conditions.connect", idempotencyKey));
     public Task<OperationAcceptedDto> DisconnectAsync(string? idempotencyKey, CancellationToken ct) =>
-        Task.FromResult(PlaceholderEquipmentHelpers.Accepted("weather.disconnect", idempotencyKey));
+        Task.FromResult(PlaceholderEquipmentHelpers.Accepted("observing-conditions.disconnect", idempotencyKey));
 }
 
 public sealed class PlaceholderSafetyMonitorService : ISafetyMonitorService {
