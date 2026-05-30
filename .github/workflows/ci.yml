@@ -100,6 +100,62 @@ jobs:
       - name: dotnet build (Server, Release)
         run: dotnet build OpenAstroAra.Server/OpenAstroAra.Server.csproj -c Release --no-restore
 
+      # Phase 14b smoke gate — actually run the daemon and hit a real
+      # endpoint to catch the class of regressions where `dotnet build`
+      # succeeds but the runtime trips an AOT JsonTypeInfo or
+      # serializer-context mismatch (the Phase 12h.6a-era trap). Runs the
+      # built binary on the ubuntu-latest x64 host (not the cross-compiled
+      # arm64 artifact — that requires qemu which is slower); same code
+      # path either way for JSON serialization. Background the process,
+      # poll until /healthz returns 200, smoke a profile endpoint, then
+      # SIGTERM. A failure here means a runtime regression no `dotnet build`
+      # warning would have caught.
+      - name: Server runtime smoke (/healthz + /api/v1/profile/imaging-defaults)
+        run: |
+          set -euo pipefail
+          export OPENASTROARA_PROFILE_DIR="$RUNNER_TEMP/oara-smoke"
+          export OPENASTROARA_PORT=5599
+          # Background the daemon. Redirect output so the workflow log
+          # keeps the smoke responses + the server tail together if it
+          # blows up.
+          dotnet run --project OpenAstroAra.Server -c Release --no-build \
+            > "$RUNNER_TEMP/server.log" 2>&1 &
+          SERVER_PID=$!
+          # Poll /healthz up to ~30s. Print server tail on failure.
+          for i in $(seq 1 30); do
+            if curl -fsS "http://localhost:$OPENASTROARA_PORT/healthz" > /dev/null 2>&1; then
+              echo "✓ /healthz responded after ${i}s"
+              break
+            fi
+            sleep 1
+            if [ "$i" = "30" ]; then
+              echo "✗ /healthz never responded; server tail:"
+              tail -50 "$RUNNER_TEMP/server.log"
+              kill $SERVER_PID 2>/dev/null || true
+              exit 1
+            fi
+          done
+          # Verify a real DTO endpoint serializes (catches the JsonTypeInfo
+          # class of bug).
+          echo "Probing /api/v1/profile/imaging-defaults …"
+          curl -fsS "http://localhost:$OPENASTROARA_PORT/api/v1/profile/imaging-defaults" \
+            | tee /dev/stderr \
+            | grep -q '"exposure_seconds":5'
+          # Verify a 501-stub endpoint serializes its RFC 7807 Problem body
+          # (catches ProblemDetails-not-registered regressions).
+          echo "Probing /api/v1/diagnostics/state (expect 501 Problem JSON) …"
+          curl -fsS -o /dev/null -w '%{http_code}\n' \
+            "http://localhost:$OPENASTROARA_PORT/api/v1/diagnostics/state" \
+            | grep -q '^501$' || (echo "✗ expected 501"; tail -50 "$RUNNER_TEMP/server.log"; exit 1)
+          # Verify the FileProfileStore wrote profile.json with snake_case keys.
+          test -f "$OPENASTROARA_PROFILE_DIR/profile.json" \
+            || (echo "✗ profile.json not written"; tail -50 "$RUNNER_TEMP/server.log"; exit 1)
+          grep -q '"exposure_seconds"' "$OPENASTROARA_PROFILE_DIR/profile.json" \
+            || (echo "✗ profile.json missing snake_case keys"; exit 1)
+          echo "✓ smoke clean"
+          kill $SERVER_PID 2>/dev/null || true
+          wait $SERVER_PID 2>/dev/null || true
+
       # Publish self-contained for linux-arm64 only. The §13 deployment
       # target is Debian 13 / RPi 4-5 (arm64); per the 2026-05-26 decision
       # logged in design/PORT_DECISIONS.md, we don't build for linux-x64
