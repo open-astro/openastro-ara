@@ -4,10 +4,10 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** Phase 13 — server placeholder library (effectively complete via 13.1–13.17).
-- **Last merged:** `phase-13-17-ws-broadcaster-placeholder` — PR #169, 2026-05-30. Sits on `port/ara`; one sub-PR pending promotion to master.
-- **Currently working on:** Tracking refresh — backfill Phase 13 sub-PR entries into "Completed" (13.1–13.17) so the file matches what's actually on master + port/ara.
-- **Next substantive work:** Real `/api/v1/ws` upgrade handler (§60.9 lifecycle — handshake, ping/pong heartbeat, resume protocol via `InMemoryWsServices.ResumeFromAsync`, close codes 1000/1001/1009/1011/1012/4001-4004). The placeholder broadcaster + event channel from 13.17 sit ready behind `IWsBroadcaster` + `IWsEventChannel`.
+- **Phase:** §60.9 real WS upgrade handler — sub-PRs A/B/C promoted to master via PR #175 (2026-05-30); sub-PR D on `port/ara` pending next promotion.
+- **Last merged:** `ws-handler-d-heartbeat` — PR #176, 2026-05-30. `KeepAliveTimeout = 60s` enables .NET 10 framework-level pong-timeout enforcement (close 1011 on unresponsive client).
+- **Currently working on:** Tracking refresh — document the four WS-handler sub-PRs in "Completed" and update the Next pointer past §60.9.
+- **Next substantive work:** Real-infra ops on top of the now-live WS infrastructure — server restart via systemd, FITS file download, frame catalog DB-backed bulk ops, session resume-target/restretch, `/sessions/{id}/hfr-analysis` time-series aggregation (last 501-probe target). Plus Phase 14 CI matrix expansion (cross-platform client-test + Alpaca simulator pinning per §14.5).
 
 ## Completed
 
@@ -153,6 +153,17 @@ The §60.x endpoint surface was already laid down in Phases 5–9 (141 routes re
 - ✅ **13.17** (PR #169) — `InMemoryWsServices` implementing both `IWsBroadcaster` (publish) and `IWsEventChannel` (consume) via a shared singleton. 1000-event replay buffer for §60.9.6 resume; bounded channel (`DropOldest`) for backpressure. `/api/v1/ws` upgrade itself stays 501 — real lifecycle is post-Phase-13 work. Also fixed a latent AOT registration gap on `WsCatalogResponse` that had been silently 500-ing `/ws/catalog` since Phase 14a (smoke gate now probes it).
 
 After Phase 13 the daemon serves realistic shapes for ~all WILMA-facing routes. Functional ground (not placeholders): `/healthz`, `/api/v1/server/info`, `/api/v1/equipment/discover/{type}`, `/api/v1/ws/catalog`, all `/api/v1/profiles/*` settings round-trip + persistence (Phase 12h.6 + 12h.7), `/frames/{id}/preview` + `/thumbnail` (Phase 13.1).
+
+### §60.9 real WS upgrade handler (PRs #172–#176)
+
+Builds the real WebSocket lifecycle on top of the Phase 13.17 `InMemoryWsServices` broadcaster/channel placeholders. Promoted to master via PR #175 (sub-PRs A/B/C); sub-PR D awaiting next promotion on `port/ara`.
+
+- ✅ **Sub-PR A** (PR #172) — accept the upgrade + drain `IWsEventChannel` to JSON text frames. `app.UseWebSockets()` registered with `KeepAliveInterval = 30s`. Passive receive loop with linked CTS detects client Close frames. Best-effort `1000 Normal Closure` on shutdown. Bonus fix: pub-sub fan-out replacement for the single-shared-channel design (multi-client correctness) + a CI smoke-gate WS-upgrade-handshake probe.
+- ✅ **Sub-PR B** (PR #173) — `X-Ara-WS-Version: 1` validation. Missing/wrong header → 426 Upgrade Required pre-upgrade with a version-mismatch Problem body (per openapi.yaml line 674). `ProtocolVersion` constant as single source of truth. CI smoke gate added positive (101) + negative (426) probes.
+- ✅ **Sub-PR C** (PR #174) — §60.9 resume protocol. First-frame JSON `{ "resume_token": "..." }` parsing with 5s window. Three response shapes (resumed:true / token_expired / token_invalid). Inline replay of every envelope with `seq > last_seen_seq`. Eager per-subscriber registration + high-water-mark dedup (via `Max(Seq)`) closes the snapshot-gap race between replay end and live-stream start. v0.0.1 token format = base-10 stringified last-seen seq.
+- ✅ **Sub-PR D** (PR #176) — `KeepAliveTimeout = 60s`. .NET 10 closes the socket with code 1011 if no pong/data arrives within the window — matches openapi.yaml line 680's "2 consecutive missed pongs → server closes" and line 711's mapping of 1011 to "unresponsive client". No manual pong-tracking code required.
+
+Close-code coverage from this work: 1000 (sub-PR A clean close), 1001 (handled by `RequestAborted` propagation), 1011 (sub-PR D timeout), 4003 (sub-PR B version mismatch). Out of scope until real infrastructure: 1009 (frame too large — depends on actual large-frame use cases), 1012 (service restart pairs with §34.7 imminent-restart event), 4001 (auth, v0.1.0 only), 4002 (real opaque resume tokens with 1-hour validity tied to REST `/server/state` issuance), 4004 (single-client policy via §27 takeover state machine).
 
 ### Phase 0.5p-followup buildfix — Core + Astrometry + Equipment cleanup (PR #43)
 - ✅ `OpenAstroAra.Core` — `Notification.cs` scrubbed (CustomDisplayPart references removed; warning/error variants now route to `Logger` with `[CallerXxx]` attribute propagation so the original call site is preserved); `MyMessageBox.cs` `Show(...)` maps affirmative defaults (Yes→No, OK→Cancel) to safe non-affirmative results to prevent `SequenceHasChanged.AskHasChanged` silently auto-detaching; `System.Management 10.0.0` added for WMI usage in `Logger.cs` + `SerialPortProvider.cs`.
