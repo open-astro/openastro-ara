@@ -26,7 +26,7 @@ namespace OpenAstroAra.Server.Endpoints;
 /// Phase 13.12 wires every device group through its corresponding
 /// placeholder service. Each Get returns 404 (no hardware connected);
 /// Connects/Disconnects/Actions return 202 <see cref="OperationAcceptedDto"/>.
-/// Real ASCOM Alpaca drivers land per-device in Phase 13.x / 14.
+/// Real ASCOM Alpaca drivers land per-device in the real-infra phase + Phase 14.
 ///
 /// Idempotency-Key header is read where §60.5 requires it. Long-running
 /// ops return 202 with operation accepted; progress arrives via WS.
