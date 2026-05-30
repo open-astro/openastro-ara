@@ -98,6 +98,14 @@ public class Program {
         // notifications (Info/Warning/Critical across Sequence/Storage/Safety
         // categories); preferences default to "everything enabled" matching §46.4.
         builder.Services.AddSingleton<INotificationService, PlaceholderNotificationService>();
+        // Phase 13.5 — placeholder IDiagnosticsService. Static fixtures
+        // (Yellow health + 1 open issue + 3-event history); SetMode stores
+        // in-memory. The §51 *operating* mode reported here (Off/Observe/
+        // Suggest/AutoCorrect) is conceptually distinct from the §51.5
+        // *settings* reaction mode (notify_only/pause_on_critical/
+        // abort_on_critical) which round-trips via the profile store —
+        // Phase 13.x reconciles.
+        builder.Services.AddSingleton<IDiagnosticsService, PlaceholderDiagnosticsService>();
 
         // §37 profile store. Phase 12h.6a introduced the in-memory impl;
         // Phase 12h.7 upgraded to FileProfileStore (settings survive daemon

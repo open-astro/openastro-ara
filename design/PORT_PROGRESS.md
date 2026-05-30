@@ -5,8 +5,8 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 ## Current
 
 - **Phase:** Phase 12h.6 — daemon round-trip for in-memory settings.
-- **Last merged:** `phase-13-3-session-placeholder` — PR #149, 2026-05-30. Browseable Library round-trip live server-side. Promoted to master via PR #150 alongside #146/#147/#148.
-- **Currently working on:** `phase-13-4-notifications-placeholder` — `PlaceholderNotificationService` with 3 sample notifications (Info/Warning/Critical across Sequence/Storage/Safety) + preferences with toggle support. Wires all 5 §46 notification endpoints to the service.
+- **Last merged:** `phase-13-4-notifications-placeholder` — PR #151, 2026-05-30. 5 §46 notification routes now functional with sample data + working preferences toggles.
+- **Currently working on:** `phase-13-5-diagnostics-placeholder` — `PlaceholderDiagnosticsService` with 1 open issue + 3 history events. 3 §51 diagnostic routes go 501-stub → functional (state, mode, history). Settings-level diagnostics mode (12h.6j round-trip) stays separate from the §51 monitor operating-mode reported here — different concepts.
 - **Note:** Phase 12h.3 (Smart Settings Search) + 12h.4 (PHD2) + 12h.5 (Alpaca chooser) all merged via PRs #110-#128 between 2026-05-29 and 2026-05-30; a dedicated `port-progress-refresh` sub-PR will backfill the Completed section once Phase 12h closes out.
 
 ## Completed
