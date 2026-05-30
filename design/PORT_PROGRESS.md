@@ -5,8 +5,8 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 ## Current
 
 - **Phase:** Phase 12h.6 — daemon round-trip for in-memory settings.
-- **Last merged:** `phase-12h6L-profile-equipment-connection` — PR #140, 2026-05-30. **§37 surface complete**: all 11 profile sections (imaging defaults, storage, notifications, site, filenames, safety policies, autofocus, plate solve, diagnostics mode, PHD2, equipment-connection) round-trip from WILMA to the daemon.
-- **Currently working on:** `phase-12h7-file-profile-store` — replace `InMemoryProfileStore` with `FileProfileStore` so settings survive daemon restart. Atomic JSON writes to `{profileDir}/profile.json`; path resolves env > `/var/lib/openastroara` > `~/.local/share/openastroara`. New `ProfileSnapshotDto` composes all 11 section DTOs.
+- **Last merged:** `phase-14a-aot-json-context-foundation` — PR #143, 2026-05-30. Closes the AOT-readiness gap; `dotnet run` smoke passes end-to-end (daemon serves /healthz + profile GET/PUT round-trip + persists to disk).
+- **Currently working on:** `phase-14b-ci-server-smoke` — adds a runtime smoke step to the server-build CI job so future PRs catch JsonTypeInfo/serializer-context regressions at PR time instead of post-merge.
 - **Note:** Phase 12h.3 (Smart Settings Search) + 12h.4 (PHD2) + 12h.5 (Alpaca chooser) all merged via PRs #110-#128 between 2026-05-29 and 2026-05-30; a dedicated `port-progress-refresh` sub-PR will backfill the Completed section once Phase 12h closes out.
 
 ## Completed
