@@ -155,11 +155,18 @@ public static class SystemEndpoints {
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("CommitProfileShareImport");
 
-        profiles.MapGet("/{id:guid}/sky-data-recommendations", (Guid id) =>
-                NotImplementedStub("GET /api/v1/profiles/{id}/sky-data-recommendations", "§36.2"))
+        // Phase 13.16 — sky-data-recommendations wired to IDataManagerService.
+        // Recommends the not-installed packages from the catalog; real impl
+        // ranks them by relevance to the profile's site latitude + target
+        // catalog. Placeholder returns the not-installed entries directly.
+        profiles.MapGet("/{id:guid}/sky-data-recommendations",
+                async (Guid id, IDataManagerService svc, CancellationToken ct) => {
+                    var packages = await svc.ListPackagesAsync(ct);
+                    var recommended = packages.Where(p => !p.IsInstalled).ToList();
+                    return Results.Ok((IReadOnlyList<DataPackageDto>)recommended);
+                })
             .Produces<IReadOnlyList<DataPackageDto>>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status404NotFound)
-            .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("GetProfileSkyDataRecommendations");
 
         return app;

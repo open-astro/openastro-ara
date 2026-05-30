@@ -95,11 +95,20 @@ public static class ServerStateEndpoints {
             .Produces<IReadOnlyList<LogEntryDto>>(StatusCodes.Status200OK)
             .WithName("TailLogs");
 
-        // /readyz (§60.8) — distinct from /healthz which Phase 4 owns.
-        app.MapGet("/readyz", () => NotImplementedStub("GET /readyz", "§60.8"))
+        // /readyz (§60.8) — Phase 13.16. Distinct from /healthz (Phase 4)
+        // which only signals "process is alive." /readyz signals "service
+        // is ready to accept requests" — i.e. DI graph built + endpoints
+        // mapped. Placeholder returns 200 unconditionally since the
+        // daemon doesn't yet have async startup work (file-based
+        // ProfileStore load is sync in the ctor). Real impl probes the
+        // §28 frame catalog DB connection + the §44 backup stream pump
+        // and returns 503 if either's not ready.
+        app.MapGet("/readyz", (HttpContext http) => {
+                http.Response.Headers.CacheControl = "no-store";
+                return Results.Text("ready", contentType: "text/plain");
+            })
            .Produces(StatusCodes.Status200OK)
            .ProducesProblem(StatusCodes.Status503ServiceUnavailable)
-           .ProducesProblem(StatusCodes.Status501NotImplemented)
            .WithName("ReadinessCheck")
            .WithTags("Health");
 

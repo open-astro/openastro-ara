@@ -5,8 +5,8 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 ## Current
 
 - **Phase:** Phase 12h.6 — daemon round-trip for in-memory settings.
-- **Last merged:** `phase-13-14-calibration-mosaic-darks-placeholder` — PR #164, 2026-05-30. Promoted to master via PR #165 alongside #162/#163 (Phase 13.12-13.14).
-- **Currently working on:** `phase-13-15-sequence-extras-placeholder` — `PlaceholderSequenceTemplateService` (3 built-in templates) + `PlaceholderSequenceImportService` (synthetic NINA import) + `PlaceholderAutoFlatsService` (§48 decision-accept). 4 §38 routes functional. Smoke gate's 501-probe moves to `/readyz` (anchor for the remainder of Phase 13's rollout).
+- **Last merged:** `phase-13-15-sequence-extras-placeholder` — PR #166, 2026-05-30. §38 surface complete (templates + NINA import + auto-flats).
+- **Currently working on:** `phase-13-16-readyz-sky-recommendations` — wires the last small 501-stubs that don't need their own service. `/readyz` returns 200 "ready"; `/profiles/{id}/sky-data-recommendations` returns not-installed packages from IDataManagerService. Smoke gate's 501-probe moves to `/sessions/{zero-guid}/hfr-analysis` (anchor for the §40.7 time-series aggregation).
 - **Note:** Phase 12h.3 (Smart Settings Search) + 12h.4 (PHD2) + 12h.5 (Alpaca chooser) all merged via PRs #110-#128 between 2026-05-29 and 2026-05-30; a dedicated `port-progress-refresh` sub-PR will backfill the Completed section once Phase 12h closes out.
 
 ## Completed
