@@ -4,10 +4,10 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** Phase 12h.6 — daemon round-trip for in-memory settings.
-- **Last merged:** `phase-13-15-sequence-extras-placeholder` — PR #166, 2026-05-30. §38 surface complete (templates + NINA import + auto-flats).
-- **Currently working on:** `phase-13-16-readyz-sky-recommendations` — wires the last small 501-stubs that don't need their own service. `/readyz` returns 200 "ready"; `/profiles/{id}/sky-data-recommendations` returns not-installed packages from IDataManagerService. Smoke gate's 501-probe moves to `/sessions/{zero-guid}/hfr-analysis` (anchor for the §40.7 time-series aggregation).
-- **Note:** Phase 12h.3 (Smart Settings Search) + 12h.4 (PHD2) + 12h.5 (Alpaca chooser) all merged via PRs #110-#128 between 2026-05-29 and 2026-05-30; a dedicated `port-progress-refresh` sub-PR will backfill the Completed section once Phase 12h closes out.
+- **Phase:** Phase 13 — server placeholder library (effectively complete via 13.1–13.17).
+- **Last merged:** `phase-13-17-ws-broadcaster-placeholder` — PR #169, 2026-05-30. Sits on `port/ara`; one sub-PR pending promotion to master.
+- **Currently working on:** Tracking refresh — backfill Phase 13 sub-PR entries into "Completed" (13.1–13.17) so the file matches what's actually on master + port/ara.
+- **Next substantive work:** Real `/api/v1/ws` upgrade handler (§60.9 lifecycle — handshake, ping/pong heartbeat, resume protocol via `InMemoryWsServices.ResumeFromAsync`, close codes 1000/1001/1009/1011/1012/4001-4004). The placeholder broadcaster + event channel from 13.17 sit ready behind `IWsBroadcaster` + `IWsEventChannel`.
 
 ## Completed
 
@@ -130,6 +130,30 @@ Folded into Phase 0.5p (global.json + csproj target framework bumps).
 - ✅ **14a** (PR #143) — `AraJsonSerializerContext` source-gen for all 133 DTO records + 7 `CursorPage<T>` instantiations + 8 `IReadOnlyList<T>` collection wrappers + `ProblemDetails`. Closes the long-running AOT-readiness gap that was blocking `dotnet run` smoke testing. Daemon now starts cleanly in Development mode; profile GET/PUT round-trip works end-to-end.
 - ✅ **14b** (PR #144, tag `phase-14b-complete`) — server runtime smoke step in CI. After `dotnet build`, the workflow backgrounds the daemon, polls `/healthz`, probes a real DTO endpoint + a 501-stub Problem endpoint, and asserts `profile.json` is written with snake_case keys. Would have caught the 12h.6a JsonTypeInfo bug at PR time.
 
+### Phase 13 — Server placeholder library (PRs #147–#169)
+
+The §60.x endpoint surface was already laid down in Phases 5–9 (141 routes returning 501). Phase 13 walks that surface and replaces each 501-stub with a placeholder service that returns realistic wire shapes, so WILMA client codegen + UI can be exercised end-to-end before real infra (cameras, FITS files, sequencer engine) lands. Each sub-PR also advances the CI smoke gate's 501-probe to a still-unwired endpoint to catch placeholder regressions.
+
+- ✅ **13.1** (PR #147) — `IFrameRepository` placeholder + real `/frames/{id}/preview` + `/frames/{id}/thumbnail` endpoints serving 1×1 PNG samples.
+- ✅ **13.2** (PR #148) — `GET /frames/{id}` + `ListAsync` with sample frames (mixed light/dark/flat/bias types, real `FrameType` enum tokens).
+- ✅ **13.3** (PR #149) — `PlaceholderSessionService` returning a session list whose ids match frame `session_id` fields from 13.2.
+- ✅ **13.4** (PR #151) — `PlaceholderNotificationService` (§42 in-memory CRUD + read/dismiss + bulk operations).
+- ✅ **13.5** (PR #152) — `PlaceholderDiagnosticsService` returning §51 yellow-health state + history. Catches the §51-vs-§51.5 `DiagnosticsMode` enum-collision footgun (monitor mode ≠ settings mode).
+- ✅ **13.6** (PR #154) — `PlaceholderStatsService` covering all 8 §50 chart views (HFR series, RA/Dec error, focuser, dither, temperature, weather, eccentricity, FWHM).
+- ✅ **13.7** (PR #155) — `PlaceholderServerStateService` (§39 snapshot + resume token).
+- ✅ **13.8** (PR #157) — `PlaceholderLogService` (§32 ring-buffered log list + filtered query).
+- ✅ **13.9** (PR #158) — `PlaceholderBugReportService` (§54 bundle creation + status).
+- ✅ **13.10** (PR #159) — `PlaceholderDataManagerService` + `PlaceholderProfileShareService` + `PlaceholderBackupStreamService` (sky-data packages + profile share import/export + §43 streaming hooks).
+- ✅ **13.11** (PR #160) — `PlaceholderBackupZipService` (§43 ZIP snapshots — claim/upload/finalize/abort lifecycle).
+- ✅ **13.12** (PR #162) — `PlaceholderEquipmentServices` covering all 12 device types (camera, telescope, focuser, filterwheel, guider, rotator, dome, switch, weather, safetymonitor, flatdevice, covercalibrator). Shared `Accepted` helper for 202 OperationAccepted responses.
+- ✅ **13.13** (PR #163) — `PlaceholderSequenceService` (CRUD) + `PlaceholderSequencerService` (lifecycle: start/pause/resume/abort).
+- ✅ **13.14** (PR #164) — `PlaceholderCalibrationService` + `PlaceholderDarkLibraryService` + `PlaceholderMosaicService` (matching flats, auto-flats, dark library build status, mosaic panels with §47.3 `crosses_ra_wrap` flag).
+- ✅ **13.15** (PR #166) — `PlaceholderSequenceTemplateService` + NINA import + `PlaceholderAutoFlatsService`.
+- ✅ **13.16** (PR #167) — `/readyz` returns 200 "ready"; `/profiles/{id}/sky-data-recommendations` returns not-installed packages from `IDataManagerService`. Smoke gate 501-probe migrates to `/sessions/{zero-guid}/hfr-analysis` (anchor for the §40.7 time-series aggregation).
+- ✅ **13.17** (PR #169) — `InMemoryWsServices` implementing both `IWsBroadcaster` (publish) and `IWsEventChannel` (consume) via a shared singleton. 1000-event replay buffer for §60.9.6 resume; bounded channel (`DropOldest`) for backpressure. `/api/v1/ws` upgrade itself stays 501 — real lifecycle is post-Phase-13 work. Also fixed a latent AOT registration gap on `WsCatalogResponse` that had been silently 500-ing `/ws/catalog` since Phase 14a (smoke gate now probes it).
+
+After Phase 13 the daemon serves realistic shapes for ~all WILMA-facing routes. Functional ground (not placeholders): `/healthz`, `/api/v1/server/info`, `/api/v1/equipment/discover/{type}`, `/api/v1/ws/catalog`, all `/api/v1/profiles/*` settings round-trip + persistence (Phase 12h.6 + 12h.7), `/frames/{id}/preview` + `/thumbnail` (Phase 13.1).
+
 ### Phase 0.5p-followup buildfix — Core + Astrometry + Equipment cleanup (PR #43)
 - ✅ `OpenAstroAra.Core` — `Notification.cs` scrubbed (CustomDisplayPart references removed; warning/error variants now route to `Logger` with `[CallerXxx]` attribute propagation so the original call site is preserved); `MyMessageBox.cs` `Show(...)` maps affirmative defaults (Yes→No, OK→Cancel) to safe non-affirmative results to prevent `SequenceHasChanged.AskHasChanged` silently auto-detaching; `System.Management 10.0.0` added for WMI usage in `Logger.cs` + `SerialPortProvider.cs`.
 - ✅ `OpenAstroAra.Astrometry` — `DatabaseInteraction.cs` reduced to a minimal stub (`GetUT1_UTC` returns 0 with cancellation honored via `Task.FromCanceled<double>(token)`; `GetDisplayAlias` Levenshtein logic preserved); `AstroUtil.cs` + `TopocentricCoordinates.cs` cleaned of stale `using OpenAstroAra.Core.Database;`.
@@ -144,9 +168,9 @@ Folded into Phase 0.5p (global.json + csproj target framework bumps).
 
 ## Next
 
-- **Phase 11** — Flutter WILMA client scaffold + first-run flow + server discovery + handshake. Generates Dart client from `OpenAstroAra.Server/openapi.yaml` via `openapi_generator` per §12.1.
-- **Phase 12-13** — Flutter views (app shell, all main tabs) + image preview pipeline end-to-end.
-- **Phase 14** — CI matrix expansion (cross-platform client-test macOS/Windows/Linux + server-e2e Docker arm64 + settings-registry gate + Alpaca-simulator pinning per §14.3 / §14.5). Initial `client-test` job + Dart unit tests landed early in Phase 12-tests.
+- **Real `/api/v1/ws` upgrade handler** — §60.9 WS lifecycle on top of the 13.17 broadcaster/channel. Handshake validation (X-Ara-WS-Version: 1), 30s ping/60s pong heartbeat, resume protocol via `last_seen_seq` + `InMemoryWsServices.ResumeFromAsync`, RFC 6455 close codes (1000/1001/1009/1011/1012/4001–4004).
+- **Real-infra ops** — server restart via systemd, FITS file download, frame catalog DB-backed bulk operations, session resume-target/restretch, `/sessions/{id}/hfr-analysis` aggregation (last 501-probe target).
+- **Phase 14** — CI matrix expansion (cross-platform client-test macOS/Windows/Linux + server-e2e Docker arm64 + Alpaca-simulator pinning per §14.3 / §14.5). 14a + 14b landed; 14c+ pending.
 - **Phase 15** — TODO sweep + RPi smoke test + release v0.0.1-ara.1.
 
 ## Tag inventory

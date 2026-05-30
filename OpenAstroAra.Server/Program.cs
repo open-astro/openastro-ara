@@ -158,6 +158,14 @@ public class Program {
         builder.Services.AddSingleton<ISequenceTemplateService, PlaceholderSequenceTemplateService>();
         builder.Services.AddSingleton<ISequenceImportService, PlaceholderSequenceImportService>();
         builder.Services.AddSingleton<IAutoFlatsService, PlaceholderAutoFlatsService>();
+        // Phase 13.17 — §60.9 WS broadcaster + event channel placeholders.
+        // Single InMemoryWsServices instance backs both interfaces so the
+        // publish + consume sides share state. The /api/v1/ws upgrade
+        // handler stays 501 until a separate sub-PR wires the real
+        // WebSocket lifecycle on top of these services.
+        builder.Services.AddSingleton<InMemoryWsServices>();
+        builder.Services.AddSingleton<IWsBroadcaster>(sp => sp.GetRequiredService<InMemoryWsServices>());
+        builder.Services.AddSingleton<IWsEventChannel>(sp => sp.GetRequiredService<InMemoryWsServices>());
 
         // §37 profile store. Phase 12h.6a introduced the in-memory impl;
         // Phase 12h.7 upgraded to FileProfileStore (settings survive daemon
