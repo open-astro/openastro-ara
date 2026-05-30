@@ -119,6 +119,10 @@ public class Program {
         // entries; rotate accepts; download is 404 (no Serilog file sinks
         // wired yet — Phase 14 §29.9.2).
         builder.Services.AddSingleton<ILogService, PlaceholderLogService>();
+        // Phase 13.9 — placeholder IBugReportService for the §54 "Send me a
+        // bug report" UI. Prepare returns a synthetic ready record; download
+        // is 404 (real ZIP bundling lands in Phase 14 §54.3).
+        builder.Services.AddSingleton<IBugReportService, PlaceholderBugReportService>();
 
         // §37 profile store. Phase 12h.6a introduced the in-memory impl;
         // Phase 12h.7 upgraded to FileProfileStore (settings survive daemon

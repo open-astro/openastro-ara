@@ -17,6 +17,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Services;
 
 namespace OpenAstroAra.Server.Endpoints;
 
@@ -36,16 +37,21 @@ public static class SystemEndpoints {
         // ─── Bug report (§54) ───
         var bug = app.MapGroup("/api/v1/bugreport").WithTags("BugReport");
 
-        bug.MapPost("/prepare", () => NotImplementedStub("POST /api/v1/bugreport/prepare", "§54"))
+        // Phase 13.9 — wired to IBugReportService (placeholder).
+        bug.MapPost("/prepare",
+                async ([FromHeader(Name = "Idempotency-Key")] string? idempotencyKey, IBugReportService svc, CancellationToken ct) =>
+                    Results.Accepted(value: await svc.PrepareAsync(idempotencyKey, ct)))
            .Produces<BugReportPreparationDto>(StatusCodes.Status202Accepted)
-           .ProducesProblem(StatusCodes.Status501NotImplemented)
            .WithName("PrepareBugReport");
 
         bug.MapGet("/download",
-                (Guid preparationId) => NotImplementedStub("GET /api/v1/bugreport/download", "§54"))
+                async (Guid preparationId, IBugReportService svc, CancellationToken ct) => {
+                    var result = await svc.OpenDownloadAsync(preparationId, ct);
+                    if (result is null) return Results.NotFound();
+                    return Results.Stream(result.Value.Stream, "application/zip", result.Value.FileName);
+                })
             .Produces<byte[]>(StatusCodes.Status200OK, "application/zip")
             .ProducesProblem(StatusCodes.Status404NotFound)
-            .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("DownloadBugReport");
 
         // ─── Data Manager (§36.2) ───
