@@ -18,6 +18,10 @@ using OpenAstroAra.Server.Contracts;
 
 namespace OpenAstroAra.Server.Services;
 
+// Phase 14a: source-gen context lives in the parent namespace; bring it
+// in here so Persist/LoadOrDefaults can use the typed overloads (no
+// reflection, no AOT warnings).
+
 /// <summary>
 /// Phase 12h.7 — file-backed profile store. Wraps an in-memory cache
 /// for hot reads; serializes the full <see cref="ProfileSnapshotDto"/>
@@ -43,7 +47,12 @@ public sealed class FileProfileStore : IProfileStore {
     private readonly string _profilePath;
     private readonly string _tempPath;
     private readonly ILogger<FileProfileStore>? _logger;
-    private readonly JsonSerializerOptions _jsonOptions;
+    // Pretty-printed variant of the AOT-safe context for on-disk
+    // readability. Reading uses the default (non-indented) instance.
+    private static readonly AraJsonSerializerContext _indentedContext =
+        new(new JsonSerializerOptions(AraJsonSerializerContext.Default.Options) {
+            WriteIndented = true,
+        });
 
     private ProfileSnapshotDto _snapshot;
 
@@ -52,11 +61,6 @@ public sealed class FileProfileStore : IProfileStore {
         _profilePath = Path.Combine(profileDir, "profile.json");
         _tempPath = _profilePath + ".tmp";
         _logger = logger;
-
-        _jsonOptions = new JsonSerializerOptions {
-            PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
-            WriteIndented = true,
-        };
 
         _snapshot = LoadOrDefaults();
     }
@@ -104,19 +108,12 @@ public sealed class FileProfileStore : IProfileStore {
     private void Persist(ProfileSnapshotDto snapshot) {
         try {
             Directory.CreateDirectory(_profileDir);
-            // IL2026/IL3050 suppressed: same pre-existing AOT-readiness
-            // gap as the rest of the daemon, tracked as a Phase 14
-            // hardening candidate in design/PORT_TODO.md (single
-            // JsonSerializerContext covering every DTO).
-#pragma warning disable IL2026, IL3050
-            var json = JsonSerializer.Serialize(snapshot, _jsonOptions);
-#pragma warning restore IL2026, IL3050
+            var json = JsonSerializer.Serialize(snapshot, _indentedContext.ProfileSnapshotDto);
             File.WriteAllText(_tempPath, json);
             File.Move(_tempPath, _profilePath, overwrite: true);
         } catch (Exception ex) {
             // Best-effort persistence. In-memory state still updated;
-            // the user's next save attempt will retry. Phase 14 hardening
-            // can promote this to a user-visible warning.
+            // the user's next save attempt will retry.
             _logger?.LogWarning(ex, "Failed to persist profile to {Path}", _profilePath);
         }
     }
@@ -136,10 +133,7 @@ public sealed class FileProfileStore : IProfileStore {
         }
         try {
             var json = File.ReadAllText(_profilePath);
-            // IL2026/IL3050 suppressed: see Persist() above.
-#pragma warning disable IL2026, IL3050
-            var loaded = JsonSerializer.Deserialize<ProfileSnapshotDto>(json, _jsonOptions);
-#pragma warning restore IL2026, IL3050
+            var loaded = JsonSerializer.Deserialize(json, AraJsonSerializerContext.Default.ProfileSnapshotDto);
             if (loaded is null) {
                 _logger?.LogWarning("Profile file {Path} deserialized to null — using defaults", _profilePath);
                 return defaults;

@@ -57,9 +57,22 @@ public class Program {
         // `covercalibrator`) matches both the URL path parameter and the JSON
         // payload field, and other enums (FrameType etc.) follow the same
         // convention. Properties use snake_case (standard JSON convention).
+        //
+        // Phase 14a: AraJsonSerializerContext is inserted at the head of
+        // the resolver chain so every DTO uses pre-generated type metadata
+        // instead of falling back to reflection. This unblocks `dotnet run`
+        // in Development mode (OpenAPI introspection was tripping over the
+        // missing source-gen). The non-generic JsonStringEnumConverter +
+        // LowerCaseNamingPolicy is still required because the AOT-safe
+        // generic JsonStringEnumConverter<TEnum> doesn't support custom
+        // naming policies — IL3050 is suppressed since this only matters
+        // for full AOT publish (not yet enabled in CI per §14.3 deferred).
         builder.Services.ConfigureHttpJsonOptions(opts => {
+            opts.SerializerOptions.TypeInfoResolverChain.Insert(0, AraJsonSerializerContext.Default);
+#pragma warning disable IL3050
             opts.SerializerOptions.Converters.Add(
                 new JsonStringEnumConverter(LowerCaseNamingPolicy.Instance));
+#pragma warning restore IL3050
             opts.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower;
         });
 
