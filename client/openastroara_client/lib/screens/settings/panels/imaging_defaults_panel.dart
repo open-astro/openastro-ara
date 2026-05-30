@@ -77,6 +77,10 @@ class _ImagingDefaultsPanelState extends ConsumerState<ImagingDefaultsPanel> {
           orElse: () => const [],
         );
     if (servers.isEmpty) return null;
+    // Most-recently-saved server is the de-facto active one — same
+    // convention as the §52.2 Alpaca chooser dialog + §54 help dialog.
+    // A dedicated active-server provider is on the §55.1 v0.1.0 roadmap
+    // when multi-server switching lands.
     return ProfileApi(servers.last);
   }
 
