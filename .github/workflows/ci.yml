@@ -151,12 +151,14 @@ jobs:
           # Verify a still-stubbed endpoint serializes its RFC 7807 Problem
           # body (catches ProblemDetails-not-registered regressions). NOT
           # using -f here because curl with -f exits non-zero on 4xx/5xx
-          # before writing %{http_code}. /api/v1/sequences/templates is
-          # still 501 until the §38.6/7 template fixture set lands.
-          echo "Probing /api/v1/sequences/templates (expect 501 Problem JSON) …"
+          # before writing %{http_code}. /sessions/{guid}/hfr-analysis
+          # is still 501 until the §40.7 time-series aggregation lands —
+          # serves as the gate's anchor through the remainder of Phase 13.
+          ZERO_GUID="00000000-0000-0000-0000-000000000000"
+          echo "Probing /api/v1/sessions/\$ZERO_GUID/hfr-analysis (expect 501 Problem JSON) …"
           PROBLEM_STATUS=$(curl -sS -o "$RUNNER_TEMP/problem.json" \
             -w '%{http_code}' \
-            "http://localhost:$OPENASTROARA_PORT/api/v1/sequences/templates")
+            "http://localhost:$OPENASTROARA_PORT/api/v1/sessions/$ZERO_GUID/hfr-analysis")
           if [ "$PROBLEM_STATUS" != "501" ]; then
             echo "✗ expected 501, got $PROBLEM_STATUS"
             cat "$RUNNER_TEMP/problem.json"

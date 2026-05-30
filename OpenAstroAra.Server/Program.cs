@@ -154,6 +154,10 @@ public class Program {
         builder.Services.AddSingleton<ICalibrationService, PlaceholderCalibrationService>();
         builder.Services.AddSingleton<IDarkLibraryService, PlaceholderDarkLibraryService>();
         builder.Services.AddSingleton<IMosaicService, PlaceholderMosaicService>();
+        // Phase 13.15 — sequence templates + NINA import + auto-flats.
+        builder.Services.AddSingleton<ISequenceTemplateService, PlaceholderSequenceTemplateService>();
+        builder.Services.AddSingleton<ISequenceImportService, PlaceholderSequenceImportService>();
+        builder.Services.AddSingleton<IAutoFlatsService, PlaceholderAutoFlatsService>();
 
         // §37 profile store. Phase 12h.6a introduced the in-memory impl;
         // Phase 12h.7 upgraded to FileProfileStore (settings survive daemon
