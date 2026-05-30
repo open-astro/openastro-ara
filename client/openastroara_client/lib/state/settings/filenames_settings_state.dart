@@ -4,8 +4,10 @@ import '../../services/profile_api.dart';
 
 /// §29.2 File-saving naming options that don't already live in
 /// `StorageSettings`. Keeps state non-overlapping with the storage panel:
-///   - dateSeparator: how `$$DATE*$$` tokens render
-///   - compressDarksAndBias: applies RICE to bias/dark frames
+///   - dateSeparator: how `$$DATE*$$` tokens render (`/` = directory hop,
+///     `_` = flat filename)
+///   - compressDarksAndBias: applies RICE to bias/dark frames (default on
+///     since they're highly compressible and don't lose information)
 ///
 /// Phase 12h.6f wires the daemon round-trip via [ProfileApi]
 /// (`/api/v1/profile/filenames`). The main filename template + file
