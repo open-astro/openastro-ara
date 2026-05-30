@@ -172,20 +172,25 @@ public static class ImageEndpoints {
             .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("GetSessionHfrAnalysis");
 
-        // ─── Backup stream (§44) ───
+        // ─── Backup stream (§44) — Phase 13.10 wired to IBackupStreamService ───
         var backup = app.MapGroup("/api/v1/backup/stream").WithTags("BackupStream");
 
-        backup.MapPost("/subscribe", () => NotImplementedStub("POST /api/v1/backup/stream/subscribe", "§44"))
+        backup.MapPost("/subscribe",
+                async (IBackupStreamService svc, CancellationToken ct) => {
+                    var sub = await svc.SubscribeAsync(ct);
+                    return Results.Created($"/api/v1/backup/stream/sub/{sub.SubscriptionId}", value: sub);
+                })
               .Produces<BackupSubscriptionDto>(StatusCodes.Status201Created)
-              .ProducesProblem(StatusCodes.Status501NotImplemented)
               .WithName("SubscribeBackupStream");
 
-        backup.MapPost("/claim", ([FromBody] BackupClaimRequestDto request) =>
-                NotImplementedStub("POST /api/v1/backup/stream/claim", "§44"))
+        backup.MapPost("/claim",
+                async ([FromBody] BackupClaimRequestDto request, IBackupStreamService svc, CancellationToken ct) => {
+                    var frame = await svc.ClaimAsync(request, ct);
+                    return frame is null ? Results.NotFound() : Results.Ok(frame);
+                })
             .Accepts<BackupClaimRequestDto>("application/json")
             .Produces<BackupFrameDto>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status404NotFound)
-            .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("ClaimBackupFrame");
 
         return app;

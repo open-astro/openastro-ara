@@ -5,8 +5,8 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 ## Current
 
 - **Phase:** Phase 12h.6 — daemon round-trip for in-memory settings.
-- **Last merged:** `phase-13-8-log-service-placeholder` — PR #157, 2026-05-30. §29.9 log surface (tail/rotate/download) functional with filtering.
-- **Currently working on:** `phase-13-9-bug-report-placeholder` — `PlaceholderBugReportService` for §54 "Send me a bug report" flow. Prepare returns ready record with 256KB estimate; download 404 (real ZIP bundling lands in Phase 14 §54.3).
+- **Last merged:** `phase-13-9-bug-report-placeholder` — PR #158, 2026-05-30. §54 bug-report prepare/download wired (download 404 per the "no infra yet" pattern).
+- **Currently working on:** `phase-13-10-system-services-placeholder` — bundles three more system services (DataManager, ProfileShare, BackupStream) in one PR. Wires 11 more routes (data-manager packages/state/download/cancel/delete, profile share-export/import-preview/import-commit, backup-stream subscribe/claim) going 501-stub → functional with synthetic fixtures.
 - **Note:** Phase 12h.3 (Smart Settings Search) + 12h.4 (PHD2) + 12h.5 (Alpaca chooser) all merged via PRs #110-#128 between 2026-05-29 and 2026-05-30; a dedicated `port-progress-refresh` sub-PR will backfill the Completed section once Phase 12h closes out.
 
 ## Completed
