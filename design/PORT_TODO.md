@@ -37,6 +37,7 @@ Per §0 rule 6 + §15 step 7 + COMMIT-PR-RULES.md CodeRabbit rule "out-of-scope 
 ## Phase 15 sweep candidates
 
 - ✅ **Consolidate `_SwitchRow` into shared editable-field widget set.** Resolved in PR #104 (Phase 12h.2-switch) — lifted into `lib/widgets/settings/editable_field.dart` as `SettingsSwitchRow` with optional `hint` slot. All 6 panel copies removed.
+- ⏳ **Filename template `$$TOKEN$$` vs `$TOKEN$`.** All 4 sources of truth (WILMA `StorageSettings()` constructor, `ProfileApi` JSON fallback, `InMemoryProfileStore`, `FileProfileStore` `DefaultSnapshot`) currently use the double-dollar form. Sonnet flagged on PR #141 that NINA's filename-template render path likely expects single-dollar (`$TOKEN$`). Whether that's actually correct against the upstream NINA code is unverified — if so, a coordinated 4-file edit is needed in a follow-up PR. Same situation as the `\\` vs `\` separator question settled in PR #131 — consistency-across-defaults is fine for v0.0.1; semantic correctness against the rendering side needs a separate pass when the §29.2 rendering code lands.
 
 ## Phase 14 hardening candidates
 
