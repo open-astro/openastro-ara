@@ -68,3 +68,20 @@ public sealed record NotificationsSettingsDto(
     bool OnAutofocusFailed,
     bool OnPlateSolveFailed,
     bool OnDiskSpaceLow);
+
+/// <summary>
+/// §37.12 site preferences — location + horizon + observing conditions.
+/// `TwilightDefinition` is one of `civil`/`nautical`/`astronomical` on the
+/// wire (snake_case lower for enums per §60.6).
+/// </summary>
+public sealed record SiteSettingsDto(
+    string SiteName,
+    double LatitudeDeg,
+    double LongitudeDeg,
+    double ElevationM,
+    string TimeZone,
+    bool UseCustomHorizon,
+    double DefaultHorizonAltitudeDeg,
+    int BortleClass,
+    double TypicalSeeingArcsec,
+    string TwilightDefinition);

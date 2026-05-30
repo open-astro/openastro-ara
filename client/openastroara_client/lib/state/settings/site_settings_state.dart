@@ -1,8 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../services/profile_api.dart';
+
 /// §37.12 Site preferences — location + horizon + observing conditions.
-/// Phase 12h.2-site holds the values in memory; 12h.2b wires
-/// `/api/v1/profile/site` for daemon round-trip.
+/// Phase 12h.6e wires the daemon round-trip via [ProfileApi]; local state
+/// is still the source of truth between syncs.
 
 enum TwilightDefinition { civil, nautical, astronomical }
 
@@ -119,6 +121,16 @@ class SiteSettingsNotifier extends Notifier<SiteSettings> {
 
   void setTwilightDefinition(TwilightDefinition d) =>
       state = state.copyWith(twilightDefinition: d);
+
+  Future<void> hydrateFromServer(ProfileApi api) async {
+    state = await api.getSiteSettings();
+  }
+
+  Future<SiteSettings> persistToServer(ProfileApi api) async {
+    final echoed = await api.putSiteSettings(state);
+    state = echoed;
+    return echoed;
+  }
 }
 
 final siteSettingsProvider =
