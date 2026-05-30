@@ -96,30 +96,33 @@ public static class SystemEndpoints {
             .Produces<DataManagerStateDto>(StatusCodes.Status200OK)
             .WithName("GetDataManagerState");
 
-        // ─── Backup (§43) ───
+        // ─── Backup (§43) — Phase 13.11 wired to IBackupService ───
         var backup = app.MapGroup("/api/v1/backup").WithTags("Backup");
 
-        backup.MapPost("/create-zip", () => NotImplementedStub("POST /api/v1/backup/create-zip", "§43"))
+        backup.MapPost("/create-zip",
+                async ([FromHeader(Name = "Idempotency-Key")] string? idempotencyKey, IBackupService svc, CancellationToken ct) =>
+                    Results.Accepted(value: await svc.CreateZipAsync(idempotencyKey, ct)))
               .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
-              .ProducesProblem(StatusCodes.Status501NotImplemented)
               .WithName("CreateBackupZip");
 
-        backup.MapPost("/restore-zip", ([FromBody] RestoreRequestDto request) =>
-                NotImplementedStub("POST /api/v1/backup/restore-zip", "§43"))
+        backup.MapPost("/restore-zip",
+                async ([FromBody] RestoreRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey, IBackupService svc, CancellationToken ct) =>
+                    Results.Accepted(value: await svc.RestoreZipAsync(request, idempotencyKey, ct)))
             .Accepts<RestoreRequestDto>("application/json")
             .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
             .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
-            .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("RestoreBackupZip");
 
-        backup.MapGet("/snapshots", () => NotImplementedStub("GET /api/v1/backup/snapshots", "§43"))
+        backup.MapGet("/snapshots",
+                async (IBackupService svc, CancellationToken ct) =>
+                    Results.Ok(await svc.ListSnapshotsAsync(ct)))
               .Produces<IReadOnlyList<BackupZipDto>>(StatusCodes.Status200OK)
-              .ProducesProblem(StatusCodes.Status501NotImplemented)
               .WithName("ListBackupSnapshots");
 
-        backup.MapGet("/clone-status", () => NotImplementedStub("GET /api/v1/backup/clone-status", "§43"))
+        backup.MapGet("/clone-status",
+                async (IBackupService svc, CancellationToken ct) =>
+                    Results.Ok(await svc.GetCloneStatusAsync(ct)))
               .Produces<System.Text.Json.JsonElement>(StatusCodes.Status200OK)
-              .ProducesProblem(StatusCodes.Status501NotImplemented)
               .WithName("GetBackupCloneStatus");
 
         // ─── Profile sharing (§70) — Phase 13.10 wired to IProfileShareService ───

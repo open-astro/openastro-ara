@@ -129,6 +129,8 @@ public class Program {
         builder.Services.AddSingleton<IDataManagerService, PlaceholderDataManagerService>();
         builder.Services.AddSingleton<IProfileShareService, PlaceholderProfileShareService>();
         builder.Services.AddSingleton<IBackupStreamService, PlaceholderBackupStreamService>();
+        // Phase 13.11 — placeholder IBackupService for §43 ZIP snapshots.
+        builder.Services.AddSingleton<IBackupService, PlaceholderBackupService>();
 
         // §37 profile store. Phase 12h.6a introduced the in-memory impl;
         // Phase 12h.7 upgraded to FileProfileStore (settings survive daemon
