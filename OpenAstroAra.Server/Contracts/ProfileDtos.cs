@@ -47,3 +47,24 @@ public sealed record StorageSettingsDto(
     string FileFormat,
     string Compression,
     string FilenameTemplate);
+
+/// <summary>
+/// §54 notifications settings — channel toggles + per-channel tokens +
+/// trigger toggles. Token fields are stored as plain strings here for
+/// v0.0.1 simplicity; Phase 14 hardening will swap to either a
+/// secret-ref by name (read from systemd-creds or similar) or
+/// at-rest encryption per §40.
+/// </summary>
+public sealed record NotificationsSettingsDto(
+    bool InAppBanner,
+    bool OsDesktop,
+    bool SoundAlert,
+    string PushoverToken,
+    string TelegramBotToken,
+    bool OnSequenceComplete,
+    bool OnSequencePaused,
+    bool OnCriticalDiagnostic,
+    bool OnSafetyEvent,
+    bool OnAutofocusFailed,
+    bool OnPlateSolveFailed,
+    bool OnDiskSpaceLow);

@@ -66,6 +66,21 @@ public static class ProfileEndpoints {
             .WithName("PutStorageSettings")
             .WithSummary("Replace the active profile's storage settings.");
 
+        profile.MapGet("/notifications", (IProfileStore store) =>
+                Results.Ok(store.GetNotificationsSettings()))
+            .Produces<NotificationsSettingsDto>(StatusCodes.Status200OK)
+            .WithName("GetNotificationsSettings")
+            .WithSummary("Get the active profile's notifications settings.");
+
+        profile.MapPut("/notifications", (NotificationsSettingsDto body, IProfileStore store) => {
+                store.PutNotificationsSettings(body);
+                return Results.Ok(body);
+            })
+            .Accepts<NotificationsSettingsDto>("application/json")
+            .Produces<NotificationsSettingsDto>(StatusCodes.Status200OK)
+            .WithName("PutNotificationsSettings")
+            .WithSummary("Replace the active profile's notifications settings.");
+
         return app;
     }
 }

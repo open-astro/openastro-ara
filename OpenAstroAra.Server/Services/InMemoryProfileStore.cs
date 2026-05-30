@@ -64,4 +64,29 @@ public sealed class InMemoryProfileStore : IProfileStore {
     public void PutStorageSettings(StorageSettingsDto value) {
         lock (_lock) { _storage = value; }
     }
+
+    // Defaults match NotificationsSettings() — every trigger + channel on,
+    // tokens empty (the user fills them after wiring their pushover/telegram
+    // accounts).
+    private NotificationsSettingsDto _notifications = new(
+        InAppBanner: true,
+        OsDesktop: true,
+        SoundAlert: true,
+        PushoverToken: "",
+        TelegramBotToken: "",
+        OnSequenceComplete: true,
+        OnSequencePaused: true,
+        OnCriticalDiagnostic: true,
+        OnSafetyEvent: true,
+        OnAutofocusFailed: true,
+        OnPlateSolveFailed: true,
+        OnDiskSpaceLow: true);
+
+    public NotificationsSettingsDto GetNotificationsSettings() {
+        lock (_lock) { return _notifications; }
+    }
+
+    public void PutNotificationsSettings(NotificationsSettingsDto value) {
+        lock (_lock) { _notifications = value; }
+    }
 }

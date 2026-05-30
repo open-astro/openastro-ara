@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import '../models/server.dart';
 import '../state/imaging/exposure_state.dart' show FrameKind;
 import '../state/settings/imaging_defaults_state.dart';
+import '../state/settings/notifications_settings_state.dart';
 import '../state/settings/storage_settings_state.dart';
 
 /// Client-side wrapper around §37 profile endpoints. Phase 12h.6a landed the
@@ -55,6 +56,24 @@ class ProfileApi {
       data: _storageSettingsToJson(value),
     );
     return _storageSettingsFromJson(res.data ?? const {});
+  }
+
+  /// GET the active profile's notifications-settings section.
+  Future<NotificationsSettings> getNotificationsSettings() async {
+    final res = await _dio.get<Map<String, dynamic>>(
+      '/api/v1/profile/notifications',
+    );
+    return _notificationsSettingsFromJson(res.data ?? const {});
+  }
+
+  /// PUT the active profile's notifications-settings section.
+  Future<NotificationsSettings> putNotificationsSettings(
+      NotificationsSettings value) async {
+    final res = await _dio.put<Map<String, dynamic>>(
+      '/api/v1/profile/notifications',
+      data: _notificationsSettingsToJson(value),
+    );
+    return _notificationsSettingsFromJson(res.data ?? const {});
   }
 
   // ── JSON mapping ────────────────────────────────────────────────────────
@@ -157,4 +176,40 @@ class ProfileApi {
         return StorageCompression.rice;
     }
   }
+
+  // ── Notifications settings JSON mapping ────────────────────────────────
+
+  static NotificationsSettings _notificationsSettingsFromJson(
+          Map<String, dynamic> j) =>
+      NotificationsSettings(
+        inAppBanner: (j['in_app_banner'] as bool?) ?? true,
+        osDesktop: (j['os_desktop'] as bool?) ?? true,
+        soundAlert: (j['sound_alert'] as bool?) ?? true,
+        pushoverToken: (j['pushover_token'] as String?) ?? '',
+        telegramBotToken: (j['telegram_bot_token'] as String?) ?? '',
+        onSequenceComplete: (j['on_sequence_complete'] as bool?) ?? true,
+        onSequencePaused: (j['on_sequence_paused'] as bool?) ?? true,
+        onCriticalDiagnostic: (j['on_critical_diagnostic'] as bool?) ?? true,
+        onSafetyEvent: (j['on_safety_event'] as bool?) ?? true,
+        onAutofocusFailed: (j['on_autofocus_failed'] as bool?) ?? true,
+        onPlateSolveFailed: (j['on_plate_solve_failed'] as bool?) ?? true,
+        onDiskSpaceLow: (j['on_disk_space_low'] as bool?) ?? true,
+      );
+
+  static Map<String, dynamic> _notificationsSettingsToJson(
+          NotificationsSettings v) =>
+      {
+        'in_app_banner': v.inAppBanner,
+        'os_desktop': v.osDesktop,
+        'sound_alert': v.soundAlert,
+        'pushover_token': v.pushoverToken,
+        'telegram_bot_token': v.telegramBotToken,
+        'on_sequence_complete': v.onSequenceComplete,
+        'on_sequence_paused': v.onSequencePaused,
+        'on_critical_diagnostic': v.onCriticalDiagnostic,
+        'on_safety_event': v.onSafetyEvent,
+        'on_autofocus_failed': v.onAutofocusFailed,
+        'on_plate_solve_failed': v.onPlateSolveFailed,
+        'on_disk_space_low': v.onDiskSpaceLow,
+      };
 }
