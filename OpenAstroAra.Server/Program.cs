@@ -93,6 +93,11 @@ public class Program {
         // Phase 13.3 — placeholder ISessionService composing on the frame repo
         // so the §40 Library + session-drilldown UI has consistent fixture data.
         builder.Services.AddSingleton<ISessionService, PlaceholderSessionService>();
+        // Phase 13.4 — placeholder INotificationService so WILMA's §46 inbox +
+        // §46.4 preferences view has wire shapes to render. Three sample
+        // notifications (Info/Warning/Critical across Sequence/Storage/Safety
+        // categories); preferences default to "everything enabled" matching §46.4.
+        builder.Services.AddSingleton<INotificationService, PlaceholderNotificationService>();
 
         // §37 profile store. Phase 12h.6a introduced the in-memory impl;
         // Phase 12h.7 upgraded to FileProfileStore (settings survive daemon

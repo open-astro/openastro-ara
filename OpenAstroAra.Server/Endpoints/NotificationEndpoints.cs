@@ -17,59 +17,57 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Services;
 
 namespace OpenAstroAra.Server.Endpoints;
 
 /// <summary>
 /// Phase 9 notification endpoints per PORT_PLAYBOOK.md §10.9 + §46.
+/// Phase 13.4 wires every route to INotificationService (placeholder
+/// today; §46.5 SQLite-backed impl lands alongside the §28 frame
+/// catalog DB).
 /// </summary>
 public static class NotificationEndpoints {
-
-    private static IResult NotImplementedStub(string endpoint, string section) =>
-        Results.Problem(
-            type: "https://openastro.net/errors/not-implemented",
-            title: "Endpoint not yet implemented",
-            statusCode: StatusCodes.Status501NotImplemented,
-            detail: $"{endpoint} is part of Phase 9's incremental implementation ({section}). Stub registered so the OpenAPI surface is stable; service wiring lands per area.");
 
     public static IEndpointRouteBuilder MapNotificationEndpoints(this IEndpointRouteBuilder app) {
         var notifications = app.MapGroup("/api/v1/notifications").WithTags("Notifications");
 
         notifications.MapGet("",
-                (int? limit, string? cursor, bool? unreadOnly) =>
-                    NotImplementedStub("GET /api/v1/notifications", "§46"))
+                async (int? limit, string? cursor, bool? unreadOnly, INotificationService svc, CancellationToken ct) =>
+                    Results.Ok(await svc.ListAsync(limit ?? 50, cursor, unreadOnly, ct)))
             .Produces<CursorPage<NotificationDto>>(StatusCodes.Status200OK)
-            .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("ListNotifications");
 
         notifications.MapPost("/{id:guid}/dismiss",
-                (Guid id, [FromBody] NotificationActionRequestDto request) =>
-                    NotImplementedStub("POST /api/v1/notifications/{id}/dismiss", "§46"))
+                async (Guid id, [FromBody] NotificationActionRequestDto request, INotificationService svc, CancellationToken ct) => {
+                    var updated = await svc.DismissAsync(id, request, ct);
+                    return updated is null ? Results.NotFound() : Results.Ok(updated);
+                })
             .Accepts<NotificationActionRequestDto>("application/json")
             .Produces<NotificationDto>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status404NotFound)
-            .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("DismissNotification");
 
-        notifications.MapPost("/{id:guid}/mark-read", (Guid id) =>
-                NotImplementedStub("POST /api/v1/notifications/{id}/mark-read", "§46"))
+        notifications.MapPost("/{id:guid}/mark-read",
+                async (Guid id, INotificationService svc, CancellationToken ct) => {
+                    var updated = await svc.MarkReadAsync(id, ct);
+                    return updated is null ? Results.NotFound() : Results.Ok(updated);
+                })
             .Produces<NotificationDto>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status404NotFound)
-            .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("MarkNotificationRead");
 
-        notifications.MapGet("/preferences", () =>
-                NotImplementedStub("GET /api/v1/notifications/preferences", "§46.4"))
+        notifications.MapGet("/preferences",
+                async (INotificationService svc, CancellationToken ct) =>
+                    Results.Ok(await svc.GetPreferencesAsync(ct)))
             .Produces<NotificationPreferenceDto>(StatusCodes.Status200OK)
-            .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("GetNotificationPreferences");
 
-        notifications.MapPut("/preferences", ([FromBody] NotificationPreferenceDto preferences) =>
-                NotImplementedStub("PUT /api/v1/notifications/preferences", "§46.4"))
+        notifications.MapPut("/preferences",
+                async ([FromBody] NotificationPreferenceDto preferences, INotificationService svc, CancellationToken ct) =>
+                    Results.Ok(await svc.SetPreferencesAsync(preferences, ct)))
             .Accepts<NotificationPreferenceDto>("application/json")
             .Produces<NotificationPreferenceDto>(StatusCodes.Status200OK)
-            .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
-            .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("SetNotificationPreferences");
 
         return app;
