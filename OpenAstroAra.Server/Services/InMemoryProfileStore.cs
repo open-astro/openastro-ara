@@ -194,4 +194,16 @@ public sealed class InMemoryProfileStore : IProfileStore {
     public void PutPlateSolveSettings(PlateSolveSettingsDto value) {
         lock (_lock) { _plateSolve = value; }
     }
+
+    // Default matches DiagnosticsModeNotifier's build() — notify_only is
+    // the safe ship-it default per §51 (never auto-pauses a sequence).
+    private DiagnosticsModeDto _diagnosticsMode = new(Mode: "notify_only");
+
+    public DiagnosticsModeDto GetDiagnosticsMode() {
+        lock (_lock) { return _diagnosticsMode; }
+    }
+
+    public void PutDiagnosticsMode(DiagnosticsModeDto value) {
+        lock (_lock) { _diagnosticsMode = value; }
+    }
 }

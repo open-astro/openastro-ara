@@ -46,4 +46,7 @@ public interface IProfileStore {
 
     PlateSolveSettingsDto GetPlateSolveSettings();
     void PutPlateSolveSettings(PlateSolveSettingsDto value);
+
+    DiagnosticsModeDto GetDiagnosticsMode();
+    void PutDiagnosticsMode(DiagnosticsModeDto value);
 }

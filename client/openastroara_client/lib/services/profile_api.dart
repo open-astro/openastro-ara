@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import '../models/server.dart';
 import '../state/imaging/exposure_state.dart' show FrameKind;
 import '../state/settings/autofocus_settings_state.dart';
+import '../state/settings/diagnostics_mode_state.dart';
 import '../state/settings/filenames_settings_state.dart';
 import '../state/settings/imaging_defaults_state.dart';
 import '../state/settings/notifications_settings_state.dart';
@@ -167,6 +168,23 @@ class ProfileApi {
     return _plateSolveSettingsFromJson(res.data ?? const {});
   }
 
+  /// GET the active profile's diagnostics mode.
+  Future<DiagnosticsMode> getDiagnosticsMode() async {
+    final res = await _dio.get<Map<String, dynamic>>(
+      '/api/v1/profile/diagnostics-mode',
+    );
+    return _diagnosticsModeFromString((res.data ?? const {})['mode'] as String?);
+  }
+
+  /// PUT the active profile's diagnostics mode.
+  Future<DiagnosticsMode> putDiagnosticsMode(DiagnosticsMode value) async {
+    final res = await _dio.put<Map<String, dynamic>>(
+      '/api/v1/profile/diagnostics-mode',
+      data: {'mode': _diagnosticsModeToString(value)},
+    );
+    return _diagnosticsModeFromString((res.data ?? const {})['mode'] as String?);
+  }
+
   // ── JSON mapping ────────────────────────────────────────────────────────
   // The server's `ConfigureHttpJsonOptions` uses snake_case, so the wire
   // shape is `exposure_seconds` etc. (not `defaultExposure`).
@@ -265,6 +283,31 @@ class ProfileApi {
       case 'rice':
       default:
         return StorageCompression.rice;
+    }
+  }
+
+  // ── Diagnostics mode JSON mapping ──────────────────────────────────────
+
+  static DiagnosticsMode _diagnosticsModeFromString(String? s) {
+    switch (s) {
+      case 'pause_on_critical':
+        return DiagnosticsMode.pauseOnCritical;
+      case 'abort_on_critical':
+        return DiagnosticsMode.abortOnCritical;
+      case 'notify_only':
+      default:
+        return DiagnosticsMode.notifyOnly;
+    }
+  }
+
+  static String _diagnosticsModeToString(DiagnosticsMode m) {
+    switch (m) {
+      case DiagnosticsMode.notifyOnly:
+        return 'notify_only';
+      case DiagnosticsMode.pauseOnCritical:
+        return 'pause_on_critical';
+      case DiagnosticsMode.abortOnCritical:
+        return 'abort_on_critical';
     }
   }
 

@@ -156,6 +156,21 @@ public static class ProfileEndpoints {
             .WithName("PutPlateSolveSettings")
             .WithSummary("Replace the active profile's plate-solve settings.");
 
+        profile.MapGet("/diagnostics-mode", (IProfileStore store) =>
+                Results.Ok(store.GetDiagnosticsMode()))
+            .Produces<DiagnosticsModeDto>(StatusCodes.Status200OK)
+            .WithName("GetDiagnosticsMode")
+            .WithSummary("Get the active profile's diagnostics mode.");
+
+        profile.MapPut("/diagnostics-mode", (DiagnosticsModeDto body, IProfileStore store) => {
+                store.PutDiagnosticsMode(body);
+                return Results.Ok(body);
+            })
+            .Accepts<DiagnosticsModeDto>("application/json")
+            .Produces<DiagnosticsModeDto>(StatusCodes.Status200OK)
+            .WithName("PutDiagnosticsMode")
+            .WithSummary("Replace the active profile's diagnostics mode.");
+
         return app;
     }
 }
