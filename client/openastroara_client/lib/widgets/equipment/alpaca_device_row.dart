@@ -14,10 +14,15 @@ class AlpacaDeviceRow extends ConsumerWidget {
   final EquipmentDeviceType deviceType;
   final String deviceTypeLabel;
 
+  /// Optional per-panel hint shown under the label (e.g. flat panel needs to
+  /// mention that Alpaca calls it `CoverCalibrator`; weather is optional).
+  final String? hint;
+
   const AlpacaDeviceRow({
     super.key,
     required this.deviceType,
     required this.deviceTypeLabel,
+    this.hint,
   });
 
   @override
@@ -28,10 +33,21 @@ class AlpacaDeviceRow extends ConsumerWidget {
       child: Row(children: [
         SizedBox(
           width: 280,
-          child: Text('Alpaca device',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AraColors.textSecondary,
-                  )),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Alpaca device',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: AraColors.textSecondary,
+                      )),
+              if (hint != null)
+                Text(hint!,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: AraColors.textDisabled,
+                        )),
+            ],
+          ),
         ),
         Expanded(
           child: Text(

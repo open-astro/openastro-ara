@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../state/settings/equipment_connection_state.dart';
+import '../../../widgets/equipment/alpaca_device_row.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
 
@@ -19,9 +20,9 @@ class EquipmentFlatPanel extends ConsumerWidget {
       padding: const EdgeInsets.all(24),
       children: [
         const SettingsSectionHeader('Connection'),
-        const SettingsRow(
-          label: 'Alpaca device',
-          value: 'Not selected (CoverCalibrator)',
+        const AlpacaDeviceRow(
+          deviceType: EquipmentDeviceType.flatPanel,
+          deviceTypeLabel: 'flat panel',
           hint: '§10.6 — Alpaca exposes flat panels as CoverCalibrator',
         ),
         SettingsSwitchRow(

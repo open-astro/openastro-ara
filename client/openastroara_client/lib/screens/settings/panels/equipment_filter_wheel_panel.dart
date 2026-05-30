@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../state/settings/equipment_connection_state.dart';
 import '../../../state/settings/filter_wheel_labels_state.dart';
+import '../../../widgets/equipment/alpaca_device_row.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
 
@@ -22,7 +23,10 @@ class EquipmentFilterWheelPanel extends ConsumerWidget {
       padding: const EdgeInsets.all(24),
       children: [
         const SettingsSectionHeader('Connection'),
-        const SettingsRow(label: 'Alpaca device', value: 'Not selected'),
+        const AlpacaDeviceRow(
+          deviceType: EquipmentDeviceType.filterWheel,
+          deviceTypeLabel: 'filter wheel',
+        ),
         SettingsSwitchRow(
           label: 'Auto-connect on boot',
           helpKey: 'eq.auto_connect_on_boot',
