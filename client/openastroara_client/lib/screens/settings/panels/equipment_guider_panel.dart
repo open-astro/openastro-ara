@@ -1,20 +1,90 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../services/profile_api.dart';
+import '../../../state/saved_server_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
 import '../../../state/settings/phd2_settings_state.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
 
-/// §63 PHD2 / Guider panel — editable in 12h.4. PHD2-internal settings
-/// (host/port/profile + dithering + per-session calibration) live in
-/// `phd2SettingsProvider`. The §35 meridian-flip re-cal-guider toggle is
+/// §63 PHD2 / Guider panel — editable. Phase 12h.6k added the daemon
+/// round-trip for the §63 PHD2 fields (host/port/profile + dithering +
+/// per-session calibration). The §52.2 auto-connect-on-boot toggle uses
+/// `equipmentConnectionProvider` and round-trips with the bulk
+/// equipment-connection sub-PR; the §35 meridian-flip re-cal toggle is
 /// surfaced read-only here as a reference — edit it in Safety → Policies.
-class EquipmentGuiderPanel extends ConsumerWidget {
+class EquipmentGuiderPanel extends ConsumerStatefulWidget {
   const EquipmentGuiderPanel({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<EquipmentGuiderPanel> createState() =>
+      _EquipmentGuiderPanelState();
+}
+
+class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
+  bool _saving = false;
+  String? _lastError;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _hydrate());
+  }
+
+  Future<void> _hydrate() async {
+    final api = _api();
+    if (api == null) return;
+    try {
+      await ref.read(phd2SettingsProvider.notifier).hydrateFromServer(api);
+    } catch (e) {
+      if (mounted) setState(() => _lastError = 'Could not load saved values: $e');
+    }
+  }
+
+  Future<void> _save() async {
+    setState(() {
+      _saving = true;
+      _lastError = null;
+    });
+    final api = _api();
+    final messenger = ScaffoldMessenger.of(context);
+    if (api == null) {
+      setState(() {
+        _saving = false;
+        _lastError = 'No active server — connect to a daemon first.';
+      });
+      messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
+      return;
+    }
+    try {
+      await ref.read(phd2SettingsProvider.notifier).persistToServer(api);
+      if (!mounted) return;
+      messenger.showSnackBar(
+        const SnackBar(content: Text('PHD2 settings saved to daemon.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _lastError = 'Save failed: $e');
+      messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  ProfileApi? _api() {
+    final servers = ref.read(savedServersProvider).maybeWhen(
+          data: (list) => list,
+          orElse: () => const [],
+        );
+    if (servers.isEmpty) return null;
+    // Most-recently-saved server is the de-facto active one — same
+    // convention as §52.2 Alpaca chooser + §54 help dialog.
+    return ProfileApi(servers.last);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final connection = ref.watch(equipmentConnectionProvider);
     final connN = ref.read(equipmentConnectionProvider.notifier);
     final phd2 = ref.watch(phd2SettingsProvider);
@@ -125,19 +195,24 @@ class EquipmentGuiderPanel extends ConsumerWidget {
           hint: '§35 meridian-flip behaviour',
         ),
         const SizedBox(height: 24),
+        if (_lastError != null) ...[
+          Text(
+            _lastError!,
+            style: TextStyle(color: Theme.of(context).colorScheme.error),
+          ),
+          const SizedBox(height: 12),
+        ],
         Row(mainAxisAlignment: MainAxisAlignment.end, children: [
           FilledButton.icon(
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text(
-                    'PHD2 settings saved (in memory). Daemon round-trip lands in 12h.2b.',
-                  ),
-                ),
-              );
-            },
-            icon: const Icon(Icons.save, size: 16),
-            label: const Text('Save'),
+            onPressed: _saving ? null : _save,
+            icon: _saving
+                ? const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.save, size: 16),
+            label: Text(_saving ? 'Saving…' : 'Save'),
           ),
         ]),
       ],

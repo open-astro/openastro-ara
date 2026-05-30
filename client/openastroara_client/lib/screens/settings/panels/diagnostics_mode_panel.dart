@@ -1,20 +1,73 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../services/profile_api.dart';
+import '../../../state/saved_server_state.dart';
 import '../../../state/settings/diagnostics_mode_state.dart';
 import '../../../theme/ara_colors.dart';
 
-/// §51 diagnostics mode picker. Phase 12h.2-diagnostics wires the radio
-/// selection through `diagnosticsModeProvider`. 12h.2b persists via
-/// `/api/v1/profile/diagnostics-mode`.
-class DiagnosticsModePanel extends ConsumerWidget {
+/// §51 diagnostics mode picker. Phase 12h.6j added the daemon round-
+/// trip. Unlike the other settings panels (which use a Save button),
+/// this picker auto-saves on each radio-button tap — the UX expectation
+/// for single-choice radios is "I tapped it, it's set." A failed PUT
+/// shows a snackbar; local state still reflects the user's choice.
+class DiagnosticsModePanel extends ConsumerStatefulWidget {
   const DiagnosticsModePanel({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final selected = ref.watch(diagnosticsModeProvider);
-    final notifier = ref.read(diagnosticsModeProvider.notifier);
+  ConsumerState<DiagnosticsModePanel> createState() =>
+      _DiagnosticsModePanelState();
+}
 
+class _DiagnosticsModePanelState extends ConsumerState<DiagnosticsModePanel> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _hydrate());
+  }
+
+  Future<void> _hydrate() async {
+    final api = _api();
+    if (api == null) return;
+    try {
+      await ref.read(diagnosticsModeProvider.notifier).hydrateFromServer(api);
+    } catch (_) {
+      // Hydration failures are silent — the user can still pick + save.
+    }
+  }
+
+  Future<void> _selectAndSave(DiagnosticsMode mode) async {
+    ref.read(diagnosticsModeProvider.notifier).setMode(mode);
+    final api = _api();
+    final messenger = ScaffoldMessenger.of(context);
+    if (api == null) {
+      messenger.showSnackBar(const SnackBar(
+        content: Text('No active server — selection is local-only.'),
+      ));
+      return;
+    }
+    try {
+      await ref.read(diagnosticsModeProvider.notifier).persistToServer(api);
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(SnackBar(content: Text('Save failed: $e')));
+    }
+  }
+
+  ProfileApi? _api() {
+    final servers = ref.read(savedServersProvider).maybeWhen(
+          data: (list) => list,
+          orElse: () => const [],
+        );
+    if (servers.isEmpty) return null;
+    // Most-recently-saved server is the de-facto active one — same
+    // convention as §52.2 Alpaca chooser + §54 help dialog.
+    return ProfileApi(servers.last);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = ref.watch(diagnosticsModeProvider);
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
@@ -26,7 +79,7 @@ class DiagnosticsModePanel extends ConsumerWidget {
               'notifications. Sequence execution is never auto-paused by '
               'diagnostics alone.',
           selected: selected == DiagnosticsMode.notifyOnly,
-          onTap: () => notifier.setMode(DiagnosticsMode.notifyOnly),
+          onTap: () => _selectAndSave(DiagnosticsMode.notifyOnly),
         ),
         _ModeOption(
           mode: DiagnosticsMode.pauseOnCritical,
@@ -36,7 +89,7 @@ class DiagnosticsModePanel extends ConsumerWidget {
               'range, mount drift, etc) auto-pause the current sequence '
               'and ring the §35 alarm.',
           selected: selected == DiagnosticsMode.pauseOnCritical,
-          onTap: () => notifier.setMode(DiagnosticsMode.pauseOnCritical),
+          onTap: () => _selectAndSave(DiagnosticsMode.pauseOnCritical),
         ),
         _ModeOption(
           mode: DiagnosticsMode.abortOnCritical,
@@ -46,7 +99,7 @@ class DiagnosticsModePanel extends ConsumerWidget {
               'of pause. Use for unattended observatory automation where '
               'you trust the safety policies to recover.',
           selected: selected == DiagnosticsMode.abortOnCritical,
-          onTap: () => notifier.setMode(DiagnosticsMode.abortOnCritical),
+          onTap: () => _selectAndSave(DiagnosticsMode.abortOnCritical),
         ),
       ],
     );

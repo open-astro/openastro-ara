@@ -1,8 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../services/profile_api.dart';
+
 /// §54 Notifications settings — channel toggles + trigger toggles + per-
-/// channel tokens. Phase 12h.2-notifications holds the values in memory;
-/// 12h.2b will wire `/api/v1/profile/notifications` for daemon round-trip.
+/// channel tokens. Phase 12h.6d wires the daemon round-trip via
+/// [ProfileApi]; local state is still the source of truth between syncs.
 
 class NotificationsSettings {
   // Channels.
@@ -90,6 +92,16 @@ class NotificationsSettingsNotifier extends Notifier<NotificationsSettings> {
   void setOnPlateSolveFailed(bool v) =>
       state = state.copyWith(onPlateSolveFailed: v);
   void setOnDiskSpaceLow(bool v) => state = state.copyWith(onDiskSpaceLow: v);
+
+  Future<void> hydrateFromServer(ProfileApi api) async {
+    state = await api.getNotificationsSettings();
+  }
+
+  Future<NotificationsSettings> persistToServer(ProfileApi api) async {
+    final echoed = await api.putNotificationsSettings(state);
+    state = echoed;
+    return echoed;
+  }
 }
 
 final notificationsSettingsProvider =

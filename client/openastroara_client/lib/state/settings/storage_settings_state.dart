@@ -1,8 +1,12 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../services/profile_api.dart';
+
 /// §29 Storage settings — save directory + file format + compression +
-/// filename template. Phase 12h.2-storage holds the values in memory;
-/// 12h.2b will wire `/api/v1/profile/storage` for daemon round-trip.
+/// filename template. Phase 12h.6c wires the daemon round-trip via
+/// [ProfileApi]: [StorageSettingsNotifier.hydrateFromServer] runs on
+/// panel mount, [StorageSettingsNotifier.persistToServer] runs from the
+/// Save button. Local state is still the source of truth between syncs.
 
 enum StorageFileFormat { fits, xisf, fitsRice, fitsGzip }
 enum StorageCompression { off, rice, gzip }
@@ -56,6 +60,16 @@ class StorageSettingsNotifier extends Notifier<StorageSettings> {
     final v = t.trim();
     if (v.isEmpty) return;
     state = state.copyWith(filenameTemplate: v);
+  }
+
+  Future<void> hydrateFromServer(ProfileApi api) async {
+    state = await api.getStorageSettings();
+  }
+
+  Future<StorageSettings> persistToServer(ProfileApi api) async {
+    final echoed = await api.putStorageSettings(state);
+    state = echoed;
+    return echoed;
   }
 }
 

@@ -72,6 +72,16 @@ public class Program {
         // Phase 9 — IWsBroadcaster + IWsEventChannel + dispatch worker
         builder.Services.AddSingleton<IEquipmentDiscoveryService, AlpacaEquipmentDiscoveryService>();
 
+        // §37 profile store. Phase 12h.6a introduced the in-memory impl;
+        // Phase 12h.7 upgraded to FileProfileStore (settings survive daemon
+        // restart). Profile path resolution:
+        //   1. OPENASTROARA_PROFILE_DIR env var (e.g. for tests + dev runs)
+        //   2. /var/lib/openastroara (matches §13 systemd unit StateDirectory=)
+        //   3. ~/.local/share/openastroara as a per-user fallback
+        var profileDir = ResolveProfileDir();
+        builder.Services.AddSingleton<IProfileStore>(sp =>
+            new FileProfileStore(profileDir, sp.GetService<ILogger<FileProfileStore>>()));
+
         var app = builder.Build();
 
         app.UseCors();
@@ -108,6 +118,11 @@ public class Program {
         app.MapSystemEndpoints();
         app.MapWebSocketEndpoints();
 
+        // Phase 12h.6a: §37 profile endpoints. imaging-defaults is real
+        // (in-memory store); other sections follow as 12h.6b-N adds DTOs +
+        // section-specific endpoint pairs on top of the same IProfileStore.
+        app.MapProfileEndpoints();
+
         // §60 meta endpoint — server identification + capabilities.
         // Lightweight identity payload per the playbook contract: server_uuid (stable per
         // install), nickname (user-set in profile, defaults to hostname), version, api,
@@ -142,6 +157,28 @@ public class Program {
     private sealed class LowerCaseNamingPolicy : JsonNamingPolicy {
         public static readonly LowerCaseNamingPolicy Instance = new();
         public override string ConvertName(string name) => name.ToLowerInvariant();
+    }
+
+    /// <summary>
+    /// Resolve where the §37 profile file lives. Order:
+    ///   1. <c>OPENASTROARA_PROFILE_DIR</c> env var — tests + dev runs use this
+    ///   2. <c>/var/lib/openastroara</c> — matches the §13 systemd unit's
+    ///      <c>StateDirectory=openastroara</c> so the profile is owned by the
+    ///      daemon user with locked-down perms
+    ///   3. <c>~/.local/share/openastroara</c> — XDG-style per-user fallback
+    ///      for developers running `dotnet run` outside systemd
+    /// </summary>
+    private static string ResolveProfileDir() {
+        var envDir = System.Environment.GetEnvironmentVariable("OPENASTROARA_PROFILE_DIR");
+        if (!string.IsNullOrWhiteSpace(envDir)) return envDir;
+
+        const string systemDir = "/var/lib/openastroara";
+        if (Directory.Exists(systemDir)) return systemDir;
+
+        var home = System.Environment.GetEnvironmentVariable("HOME")
+            ?? System.Environment.GetEnvironmentVariable("USERPROFILE")
+            ?? Path.GetTempPath();
+        return Path.Combine(home, ".local", "share", "openastroara");
     }
 
     private static int ResolvePort(Microsoft.Extensions.Configuration.IConfiguration config) {
