@@ -106,6 +106,11 @@ public class Program {
         // abort_on_critical) which round-trips via the profile store —
         // Phase 13.x reconciles.
         builder.Services.AddSingleton<IDiagnosticsService, PlaceholderDiagnosticsService>();
+        // Phase 13.6 — placeholder IStatsService covering all 8 §50 chart
+        // views with synthetic fixture data. Numbers are intentionally small
+        // so the Stats tab renders something sensible without claiming the
+        // system has acquired 50 nights of data.
+        builder.Services.AddSingleton<IStatsService, PlaceholderStatsService>();
 
         // §37 profile store. Phase 12h.6a introduced the in-memory impl;
         // Phase 12h.7 upgraded to FileProfileStore (settings survive daemon

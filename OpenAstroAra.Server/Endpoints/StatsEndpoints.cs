@@ -16,68 +16,77 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Services;
 
 namespace OpenAstroAra.Server.Endpoints;
 
 /// <summary>
 /// Phase 9 stats endpoints per PORT_PLAYBOOK.md §10.9 + §50.
+/// Phase 13.6 wires every chart view to <see cref="IStatsService"/>
+/// (placeholder today; real DB-backed aggregations land alongside the
+/// §28 frame catalog DB).
 /// </summary>
 public static class StatsEndpoints {
-
-    private static IResult NotImplementedStub(string endpoint, string section) =>
-        Results.Problem(
-            type: "https://openastro.net/errors/not-implemented",
-            title: "Endpoint not yet implemented",
-            statusCode: StatusCodes.Status501NotImplemented,
-            detail: $"{endpoint} is part of Phase 9's incremental implementation ({section}). Stub registered so the OpenAPI surface is stable; service wiring lands per area.");
 
     public static IEndpointRouteBuilder MapStatsEndpoints(this IEndpointRouteBuilder app) {
         var stats = app.MapGroup("/api/v1/stats").WithTags("Stats");
 
-        stats.MapGet("/overview", () => NotImplementedStub("GET /api/v1/stats/overview", "§50"))
-             .Produces<StatsOverviewDto>(StatusCodes.Status200OK)
-             .ProducesProblem(StatusCodes.Status501NotImplemented)
-             .WithName("GetStatsOverview");
+        stats.MapGet("/overview",
+                async (IStatsService svc, CancellationToken ct) =>
+                    Results.Ok(await svc.GetOverviewAsync(ct)))
+            .Produces<StatsOverviewDto>(StatusCodes.Status200OK)
+            .WithName("GetStatsOverview");
 
-        stats.MapGet("/targets", () => NotImplementedStub("GET /api/v1/stats/targets", "§50"))
-             .Produces<StatsTargetsDto>(StatusCodes.Status200OK)
-             .ProducesProblem(StatusCodes.Status501NotImplemented)
-             .WithName("GetStatsTargets");
+        stats.MapGet("/targets",
+                async (IStatsService svc, CancellationToken ct) =>
+                    Results.Ok(await svc.GetTargetsAsync(ct)))
+            .Produces<StatsTargetsDto>(StatusCodes.Status200OK)
+            .WithName("GetStatsTargets");
 
-        stats.MapGet("/focus-temp", (DateTimeOffset? since) =>
-                NotImplementedStub("GET /api/v1/stats/focus-temp", "§50"))
+        stats.MapGet("/focus-temp",
+                async (DateTimeOffset? since, IStatsService svc, CancellationToken ct) =>
+                    Results.Ok(await svc.GetFocusTempAsync(since, ct)))
             .Produces<StatsFocusTempDto>(StatusCodes.Status200OK)
-            .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("GetStatsFocusTemp");
 
-        stats.MapGet("/guiding", (DateTimeOffset? since) =>
-                NotImplementedStub("GET /api/v1/stats/guiding", "§50"))
+        stats.MapGet("/guiding",
+                async (DateTimeOffset? since, IStatsService svc, CancellationToken ct) =>
+                    Results.Ok(await svc.GetGuidingAsync(since, ct)))
             .Produces<StatsGuidingDto>(StatusCodes.Status200OK)
-            .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("GetStatsGuiding");
 
-        stats.MapGet("/frame-quality", (string? filter) =>
-                NotImplementedStub("GET /api/v1/stats/frame-quality", "§50"))
+        stats.MapGet("/frame-quality",
+                async (string? filter, IStatsService svc, CancellationToken ct) =>
+                    Results.Ok(await svc.GetFrameQualityAsync(filter, ct)))
             .Produces<StatsFrameQualityDto>(StatusCodes.Status200OK)
-            .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("GetStatsFrameQuality");
 
-        stats.MapGet("/best-frames", (int? limit) =>
-                NotImplementedStub("GET /api/v1/stats/best-frames", "§50"))
+        stats.MapGet("/best-frames",
+                async (int? limit, IStatsService svc, CancellationToken ct) =>
+                    Results.Ok(await svc.GetBestFramesAsync(limit ?? 10, ct)))
             .Produces<StatsBestFramesDto>(StatusCodes.Status200OK)
-            .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("GetStatsBestFrames");
 
-        stats.MapGet("/calendar", (DateOnly? fromDate, DateOnly? toDate) =>
-                NotImplementedStub("GET /api/v1/stats/calendar", "§50"))
+        stats.MapGet("/calendar",
+                async (DateOnly? fromDate, DateOnly? toDate, IStatsService svc, CancellationToken ct) => {
+                    var from = fromDate ?? DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-30);
+                    var to = toDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
+                    return Results.Ok(await svc.GetCalendarAsync(from, to, ct));
+                })
             .Produces<StatsCalendarDto>(StatusCodes.Status200OK)
-            .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("GetStatsCalendar");
 
-        stats.MapGet("/export/csv", (string? scope) =>
-                NotImplementedStub("GET /api/v1/stats/export/csv", "§50.16"))
+        // CSV export remains 404 until the §28 frame catalog backs it —
+        // null from the service signals "feature unavailable" rather than
+        // 501-stubbing the whole route. Real impl streams the result.
+        stats.MapGet("/export/csv",
+                async (string? scope, IStatsService svc, CancellationToken ct) => {
+                    var result = await svc.OpenCsvExportAsync(scope ?? "frames", ct);
+                    if (result is null) return Results.NotFound();
+                    return Results.Stream(result.Value.Stream, "text/csv", result.Value.FileName);
+                })
             .Produces<byte[]>(StatusCodes.Status200OK, "text/csv")
-            .ProducesProblem(StatusCodes.Status501NotImplemented)
+            .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("ExportStatsCsv");
 
         return app;
