@@ -160,15 +160,23 @@ jobs:
           # has no native WS support but emits the Upgrade handshake when
           # given the right headers; --max-time bounds the dwell since the
           # channel is idle and the server has nothing to send.
+          #
+          # Capture to a file because `curl --max-time` exits 28 on timeout
+          # (intentional here — we WANT the curl to time out after seeing
+          # the 101 line) and `set -o pipefail` (active in CI bash) would
+          # treat that as a failed pipeline even though grep matched. The
+          # `|| true` absorbs curl's exit code; the final `grep` asserts
+          # the 101 was actually received.
           echo "Probing /api/v1/ws upgrade …"
           curl -sS -i -N --max-time 2 \
             -H 'Connection: Upgrade' \
             -H 'Upgrade: websocket' \
             -H 'Sec-WebSocket-Version: 13' \
             -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' \
-            "http://localhost:$OPENASTROARA_PORT/api/v1/ws" 2>&1 \
-            | tee /dev/stderr \
-            | grep -q '^HTTP/1.1 101 Switching Protocols'
+            "http://localhost:$OPENASTROARA_PORT/api/v1/ws" \
+            > "$RUNNER_TEMP/ws-upgrade.txt" 2>&1 || true
+          cat "$RUNNER_TEMP/ws-upgrade.txt" >&2
+          grep -q '^HTTP/1.1 101 Switching Protocols' "$RUNNER_TEMP/ws-upgrade.txt"
           # Verify a still-stubbed endpoint serializes its RFC 7807 Problem
           # body (catches ProblemDetails-not-registered regressions). NOT
           # using -f here because curl with -f exits non-zero on 4xx/5xx
