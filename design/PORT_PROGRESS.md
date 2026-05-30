@@ -5,8 +5,8 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 ## Current
 
 - **Phase:** Phase 12h.6 — daemon round-trip for in-memory settings.
-- **Last merged:** `phase-13-15-sequence-extras-placeholder` — PR #166, 2026-05-30. §38 surface complete (templates + NINA import + auto-flats).
-- **Currently working on:** `phase-13-16-readyz-sky-recommendations` — wires the last small 501-stubs that don't need their own service. `/readyz` returns 200 "ready"; `/profiles/{id}/sky-data-recommendations` returns not-installed packages from IDataManagerService. Smoke gate's 501-probe moves to `/sessions/{zero-guid}/hfr-analysis` (anchor for the §40.7 time-series aggregation).
+- **Last merged:** `phase-13-16-readyz-sky-recommendations` — PR #167, 2026-05-30. Promoted to master via PR #168 alongside #166 (Phase 13.15-13.16).
+- **Currently working on:** `phase-13-17-ws-broadcaster-placeholder` — `InMemoryWsServices` (publish + consume via single shared instance). 1000-event replay buffer for §60.9.6 resume protocol; bounded channel with DropOldest backpressure. `/api/v1/ws` upgrade handler stays 501 — real WS lifecycle is the next sub-PR. Also fixed a latent pre-existing AOT regression: `WsCatalogResponse` wasn't in `AraJsonSerializerContext` so `/ws/catalog` had been silently 500-ing since Phase 14a (smoke gate didn't probe it; now does).
 - **Note:** Phase 12h.3 (Smart Settings Search) + 12h.4 (PHD2) + 12h.5 (Alpaca chooser) all merged via PRs #110-#128 between 2026-05-29 and 2026-05-30; a dedicated `port-progress-refresh` sub-PR will backfill the Completed section once Phase 12h closes out.
 
 ## Completed

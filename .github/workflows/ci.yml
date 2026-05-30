@@ -148,6 +148,13 @@ jobs:
           curl -fsS "http://localhost:$OPENASTROARA_PORT/api/v1/diagnostics/state" \
             | tee /dev/stderr \
             | grep -q '"health":"yellow"'
+          # Probe /api/v1/ws/catalog — caught a Phase 13.17 regression where
+          # WsCatalogResponse wasn't in the AraJsonSerializerContext (always
+          # 500'd; the smoke gate didn't notice because no probe hit it).
+          echo "Probing /api/v1/ws/catalog …"
+          curl -fsS "http://localhost:$OPENASTROARA_PORT/api/v1/ws/catalog" \
+            | tee /dev/stderr \
+            | grep -q '"events":\['
           # Verify a still-stubbed endpoint serializes its RFC 7807 Problem
           # body (catches ProblemDetails-not-registered regressions). NOT
           # using -f here because curl with -f exits non-zero on 4xx/5xx

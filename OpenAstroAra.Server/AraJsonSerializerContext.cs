@@ -17,6 +17,7 @@ using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Mvc;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Contracts.WsEvents;
+using OpenAstroAra.Server.Endpoints;
 
 namespace OpenAstroAra.Server;
 
@@ -186,6 +187,8 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(TelescopeStateDto))]
 [JsonSerializable(typeof(TemplateInstantiateRequestDto))]
 [JsonSerializable(typeof(WsEventEnvelopeDto))]
+// /api/v1/ws/catalog response shape (defined inline in WebSocketEndpoints).
+[JsonSerializable(typeof(WebSocketEndpoints.WsCatalogResponse))]
 // Concrete CursorPage<T> instantiations — one per paginated endpoint.
 [JsonSerializable(typeof(CursorPage<CalibrationSessionDto>))]
 [JsonSerializable(typeof(CursorPage<DiagnosticEventDto>))]
