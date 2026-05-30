@@ -1,5 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../services/profile_api.dart';
+
 /// §29.2 File-saving naming options that don't already live in
 /// `StorageSettings`. Keeps state non-overlapping with the storage panel:
 ///   - dateSeparator: how `$$DATE*$$` tokens render (`/` = directory hop,
@@ -7,9 +9,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 ///   - compressDarksAndBias: applies RICE to bias/dark frames (default on
 ///     since they're highly compressible and don't lose information)
 ///
-/// The actual filename template + file format + compression live in
-/// `StorageSettings` (the storage panel is the canonical edit point).
-/// 12h.2b round-trips both via `/api/v1/profile/storage`.
+/// Phase 12h.6f wires the daemon round-trip via [ProfileApi]
+/// (`/api/v1/profile/filenames`). The main filename template + file
+/// format live in `StorageSettings` and round-trip via 12h.6c.
 
 enum DateSeparator { forwardSlash, underscore, dash }
 
@@ -41,6 +43,16 @@ class FilenamesSettingsNotifier extends Notifier<FilenamesSettings> {
       state = state.copyWith(dateSeparator: d);
   void setCompressDarksAndBias(bool v) =>
       state = state.copyWith(compressDarksAndBias: v);
+
+  Future<void> hydrateFromServer(ProfileApi api) async {
+    state = await api.getFilenamesSettings();
+  }
+
+  Future<FilenamesSettings> persistToServer(ProfileApi api) async {
+    final echoed = await api.putFilenamesSettings(state);
+    state = echoed;
+    return echoed;
+  }
 }
 
 final filenamesSettingsProvider =

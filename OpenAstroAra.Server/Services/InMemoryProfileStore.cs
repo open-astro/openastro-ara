@@ -112,4 +112,18 @@ public sealed class InMemoryProfileStore : IProfileStore {
     public void PutSiteSettings(SiteSettingsDto value) {
         lock (_lock) { _site = value; }
     }
+
+    // Defaults match FilenamesSettings() — slash separator + RICE-compress
+    // darks/bias on (highly compressible + lossless).
+    private FilenamesSettingsDto _filenames = new(
+        DateSeparator: "forward_slash",
+        CompressDarksAndBias: true);
+
+    public FilenamesSettingsDto GetFilenamesSettings() {
+        lock (_lock) { return _filenames; }
+    }
+
+    public void PutFilenamesSettings(FilenamesSettingsDto value) {
+        lock (_lock) { _filenames = value; }
+    }
 }
