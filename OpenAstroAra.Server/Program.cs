@@ -103,7 +103,10 @@ public class Program {
         // §46.4 preferences view has wire shapes to render. Three sample
         // notifications (Info/Warning/Critical across Sequence/Storage/Safety
         // categories); preferences default to "everything enabled" matching §46.4.
-        builder.Services.AddSingleton<INotificationService, PlaceholderNotificationService>();
+        // §46.5 SqliteNotificationService — persistent log table + JSON-blob
+        // preferences in app_config. EnsureSeededAsync runs after IAraDatabase
+        // init for first-time seed of the 3 fixture notifications.
+        builder.Services.AddSingleton<INotificationService, SqliteNotificationService>();
         // Phase 13.5 — placeholder IDiagnosticsService. Static fixtures
         // (Yellow health + 1 open issue + 3-event history); SetMode stores
         // in-memory. The §51 *operating* mode reported here (Off/Observe/
@@ -279,6 +282,11 @@ public class Program {
         var frameRepo = app.Services.GetRequiredService<IFrameRepository>();
         if (frameRepo is SqliteFrameRepository sqliteRepo) {
             sqliteRepo.EnsureSeededAsync(CancellationToken.None).GetAwaiter().GetResult();
+        }
+        // §46.5 notifications fixture seed — same idempotent pattern.
+        var notificationSvc = app.Services.GetRequiredService<INotificationService>();
+        if (notificationSvc is SqliteNotificationService sqliteNotif) {
+            sqliteNotif.EnsureSeededAsync(CancellationToken.None).GetAwaiter().GetResult();
         }
 
         app.Logger.LogInformation("OpenAstroAra.Server listening on :{Port}", port);

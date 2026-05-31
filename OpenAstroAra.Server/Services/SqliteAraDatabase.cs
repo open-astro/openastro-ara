@@ -111,6 +111,38 @@ public sealed class SqliteAraDatabase : IAraDatabase {
         await ExecAsync(conn, "CREATE INDEX IF NOT EXISTS idx_frames_session_id ON frames(session_id);", ct);
         await ExecAsync(conn, "CREATE INDEX IF NOT EXISTS idx_frames_captured_utc ON frames(captured_utc);", ct);
 
+        // §46.5 notifications log. Indexes on posted_utc (most lookups
+        // are time-ordered) + read (unread-only filter is the hot path
+        // for WILMA's notification bell badge count).
+        await ExecAsync(conn, """
+            CREATE TABLE IF NOT EXISTS notifications (
+                id                  TEXT PRIMARY KEY NOT NULL,
+                posted_utc          TEXT NOT NULL,
+                severity            TEXT NOT NULL,
+                category            TEXT NOT NULL,
+                title               TEXT NOT NULL,
+                message             TEXT NOT NULL,
+                read                INTEGER NOT NULL DEFAULT 0,
+                dismissed           INTEGER NOT NULL DEFAULT 0,
+                dismissed_utc       TEXT,
+                payload_json        TEXT,
+                related_entity_type TEXT,
+                related_entity_id   TEXT
+            );
+            """, ct);
+        await ExecAsync(conn, "CREATE INDEX IF NOT EXISTS idx_notifications_posted_utc ON notifications(posted_utc);", ct);
+        await ExecAsync(conn, "CREATE INDEX IF NOT EXISTS idx_notifications_read ON notifications(read);", ct);
+
+        // §46.4 + general key/value config. Single row per key. Used so
+        // far by notification preferences (single JSON blob value); future
+        // sections (alarm-sound file path, etc.) reuse.
+        await ExecAsync(conn, """
+            CREATE TABLE IF NOT EXISTS app_config (
+                key   TEXT PRIMARY KEY NOT NULL,
+                value TEXT NOT NULL
+            );
+            """, ct);
+
         _logger?.LogInformation("SQLite catalog initialized at {Path}", DatabasePath);
     }
 
