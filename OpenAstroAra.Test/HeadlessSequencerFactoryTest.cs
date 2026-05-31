@@ -127,21 +127,13 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void WithDefaults_factory_resolves_Annotation_via_JSON() {
+        public void WithDefaults_factory_resolves_Annotation_via_prototype_lookup() {
+            // Annotation is an ISequenceItem, not ISequenceContainer — items
+            // get resolved via SequenceItemCreationConverter when a container's
+            // Items array references them. Verify the prototype lookup here;
+            // the full container-with-items-children path lands when we have
+            // a real NINA sequence fixture to test against (§38k-6+).
             var factory = HeadlessSequencerFactory.WithDefaults();
-            var deserializer = new SequenceBodyDeserializer(factory, logger: null);
-            var body = JsonDocument.Parse("""
-                {
-                    "schemaVersion": "openastroara-sequence-v1",
-                    "$type": "OpenAstroAra.Sequencer.SequenceItem.Utility.Annotation, OpenAstroAra.Sequencer"
-                }
-                """).RootElement.Clone();
-
-            // Annotation is an ISequenceItem, not ISequenceContainer — the
-            // deserializer's top-level type is ISequenceContainer so this
-            // round-trips through the SequenceItemCreationConverter once a
-            // container holds it. For now verify the factory's prototype
-            // lookup directly:
             var prototype = factory.GetItem<Annotation>();
             Assert.That(prototype, Is.Not.Null);
             Assert.That(prototype, Is.InstanceOf<Annotation>());
