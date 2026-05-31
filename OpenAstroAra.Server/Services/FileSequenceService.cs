@@ -36,6 +36,7 @@ namespace OpenAstroAra.Server.Services;
 public sealed class FileSequenceService : ISequenceService {
     private readonly string _libraryDir;
     private readonly ILogger<FileSequenceService>? _logger;
+    private readonly ISequencerService? _sequencer;
     private readonly object _writeLock = new();
     private static readonly AraJsonSerializerContext _indentedContext =
         new(new JsonSerializerOptions(AraJsonSerializerContext.Default.Options) {
@@ -49,9 +50,13 @@ public sealed class FileSequenceService : ISequenceService {
     public const string TemplatesDirName = "templates";
     public const string ActiveDirName = "active";
 
-    public FileSequenceService(string profileDir, ILogger<FileSequenceService>? logger = null) {
+    public FileSequenceService(string profileDir, ILogger<FileSequenceService>? logger = null)
+        : this(profileDir, sequencer: null, logger) { }
+
+    public FileSequenceService(string profileDir, ISequencerService? sequencer, ILogger<FileSequenceService>? logger = null) {
         var sequencesRoot = Path.Combine(profileDir, "sequences");
         _libraryDir = Path.Combine(sequencesRoot, LibraryDirName);
+        _sequencer = sequencer;
         _logger = logger;
 
         // §38.2 scaffold: create all four subdirs on startup. Library is the
@@ -67,7 +72,7 @@ public sealed class FileSequenceService : ISequenceService {
         }
     }
 
-    public Task<CursorPage<SequenceListItemDto>> ListAsync(int limit, string? cursor, CancellationToken ct) {
+    public async Task<CursorPage<SequenceListItemDto>> ListAsync(int limit, string? cursor, CancellationToken ct) {
         var entries = new List<SequenceDto>();
         try {
             foreach (var path in Directory.EnumerateFiles(_libraryDir, "*.json")) {
@@ -79,20 +84,29 @@ public sealed class FileSequenceService : ISequenceService {
             // First-run before any sequence is saved.
         }
 
-        var items = entries
+        var ordered = entries
             .OrderByDescending(s => s.ModifiedUtc)
             .Take(Math.Max(1, limit))
-            .Select(s => {
-                var stats = SequenceBodyInspector.Inspect(s.Body);
-                return new SequenceListItemDto(
-                    s.Id, s.Name, s.Description, s.CreatedUtc, s.ModifiedUtc,
-                    CurrentRunState: null,
-                    InstructionCount: stats.InstructionCount,
-                    TargetCount: stats.TargetCount,
-                    TemplateOrigin: s.TemplateOrigin);
-            })
             .ToList();
-        return Task.FromResult(new CursorPage<SequenceListItemDto>(items, NextCursor: null, HasMore: false));
+
+        var items = new List<SequenceListItemDto>(ordered.Count);
+        foreach (var s in ordered) {
+            var stats = SequenceBodyInspector.Inspect(s.Body);
+            // §38.3 — surface the current run state in the list so WILMA
+            // can render a "running" badge without a per-id /state probe.
+            SequenceRunState? currentState = null;
+            if (_sequencer is not null) {
+                var runState = await _sequencer.GetRunStateAsync(s.Id, ct);
+                currentState = runState?.State;
+            }
+            items.Add(new SequenceListItemDto(
+                s.Id, s.Name, s.Description, s.CreatedUtc, s.ModifiedUtc,
+                CurrentRunState: currentState,
+                InstructionCount: stats.InstructionCount,
+                TargetCount: stats.TargetCount,
+                TemplateOrigin: s.TemplateOrigin));
+        }
+        return new CursorPage<SequenceListItemDto>(items, NextCursor: null, HasMore: false);
     }
 
     public Task<SequenceDto?> GetAsync(Guid id, CancellationToken ct) {
