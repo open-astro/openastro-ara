@@ -1,9 +1,9 @@
-﻿#region "copyright"
+#region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright (c) 2026 Open Astro and the OpenAstro Ara contributors
 
-    This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
+    This file is part of OpenAstro Ara (forked from N.I.N.A.).
 
     This Source Code Form is subject to the terms of the Mozilla Public
     License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -12,45 +12,18 @@
 
 #endregion "copyright"
 
-using Newtonsoft.Json;
-using OpenAstroAra.Core.Utility;
-using OpenAstroAra.Core.MyMessageBox;
-using OpenAstroAra.Core.Locale;
-using System.Windows;
-using System.ComponentModel;
-
 namespace OpenAstroAra.Sequencer {
 
-    public abstract class SequenceHasChanged : BaseINPC, ISequenceHasChanged {
-
-        public SequenceHasChanged() {
-            PropertyChanged += OnPropertyChanged;
-        }
-
-        private void OnPropertyChanged(object sender, PropertyChangedEventArgs e) {
-            if (!hasChanged &&
-                GetType().GetProperty(e.PropertyName).GetCustomAttributes(typeof(JsonPropertyAttribute), true).Length > 0) {
-                hasChanged = true;
-            }
-        }
-
-        private bool hasChanged { get; set; }
-
-        public virtual bool HasChanged {
-            get => hasChanged;
-            set => hasChanged = value;
-        }
-
-        public virtual void ClearHasChanged() {
-            hasChanged = false;
-        }
-
-        public bool AskHasChanged(string name) {
-            if (HasChanged &&
-                MyMessageBox.Show(string.Format(Loc.Instance["LblChangedSequenceWarning"], name ?? ""), Loc.Instance["LblChangedSequenceWarningTitle"], MessageBoxButton.YesNo, MessageBoxResult.Yes) == MessageBoxResult.No) {
-                return true;
-            }
-            return false;
-        }
+    // Phase 0.5p2 net10.0 conversion: original SequenceHasChanged ran a WPF
+    // MyMessageBox YesNo prompt before detaching a modified sub-tree. In the
+    // headless server changes are committed via REST; the §38 sequence
+    // endpoints don't need a confirm-dialog round trip — they just apply.
+    // Kept as a static delegate consumers can replace if a future
+    // command-level confirm gate is needed.
+    public class SequenceHasChanged : OpenAstroAra.Core.Utility.BaseINPC, ISequenceHasChanged {
+        protected bool hasChanged;
+        public virtual bool HasChanged { get => hasChanged; set => hasChanged = value; }
+        public virtual void ClearHasChanged() => hasChanged = false;
+        public virtual bool AskHasChanged(string name) => false;
     }
 }

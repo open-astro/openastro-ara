@@ -13,6 +13,7 @@
 #endregion "copyright"
 
 using OpenAstroAra.Core.Utility;
+using System.Windows.Data;
 using OpenAstroAra.Profile;
 using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Sequencer.Conditions;
@@ -30,9 +31,6 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
-using System.Windows;
-using System.Windows.Data;
-
 namespace OpenAstroAra.Sequencer {
 
     public class SequencerFactory : BaseINPC, ISequencerFactory {

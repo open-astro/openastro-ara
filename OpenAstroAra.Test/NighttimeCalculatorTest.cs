@@ -20,6 +20,8 @@ using System.Threading.Tasks;
 
 namespace OpenAstroAra.Test {
 
+    [Platform("Win")]
+
     [TestFixture]
     public class NighttimeCalculatorTest {
 

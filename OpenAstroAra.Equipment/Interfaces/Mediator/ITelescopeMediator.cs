@@ -19,11 +19,10 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using OpenAstroAra.Core.Model;
-using OpenAstroAra.Equipment.Interfaces.ViewModel;
 
 namespace OpenAstroAra.Equipment.Interfaces.Mediator {
 
-    public interface ITelescopeMediator : IDeviceMediator<ITelescopeVM, ITelescopeConsumer, TelescopeInfo> {
+    public interface ITelescopeMediator : IDeviceMediator<object, ITelescopeConsumer, TelescopeInfo> {
 
         void MoveAxis(TelescopeAxes axis, double rate);
 

@@ -14,7 +14,6 @@
 
 using OpenAstroAra.Core.Utility;
 using System;
-using System.Windows;
 using System.Xml.Serialization;
 
 namespace OpenAstroAra.Astrometry {

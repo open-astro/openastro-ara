@@ -31,7 +31,6 @@ namespace OpenAstroAra.Profile {
     [KnownType(typeof(ApplicationSettings))]
     [KnownType(typeof(AstrometrySettings))]
     [KnownType(typeof(CameraSettings))]
-    [KnownType(typeof(ColorSchemaSettings))]
     [KnownType(typeof(DomeSettings))]
     [KnownType(typeof(FilterWheelSettings))]
     [KnownType(typeof(FocuserSettings))]
@@ -90,7 +89,6 @@ namespace OpenAstroAra.Profile {
             ApplicationSettings = new ApplicationSettings();
             AstrometrySettings = new AstrometrySettings();
             CameraSettings = new CameraSettings();
-            ColorSchemaSettings = new ColorSchemaSettings();
             DomeSettings = new DomeSettings();
             FilterWheelSettings = new FilterWheelSettings();
             FlatWizardSettings = new FlatWizardSettings();
@@ -124,7 +122,6 @@ namespace OpenAstroAra.Profile {
             ApplicationSettings.PropertyChanged += SettingsChanged;
             AstrometrySettings.PropertyChanged += SettingsChanged;
             CameraSettings.PropertyChanged += SettingsChanged;
-            ColorSchemaSettings.PropertyChanged += SettingsChanged;
             DomeSettings.PropertyChanged += SettingsChanged;
             FilterWheelSettings.PropertyChanged += SettingsChanged;
             FlatWizardSettings.PropertyChanged += SettingsChanged;
@@ -228,9 +225,6 @@ namespace OpenAstroAra.Profile {
 
         [DataMember]
         public ICameraSettings CameraSettings { get; set; }
-
-        [DataMember]
-        public IColorSchemaSettings ColorSchemaSettings { get; set; }
 
         [DataMember]
         public IDomeSettings DomeSettings { get; set; }

@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright � 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright � 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -16,10 +16,6 @@ using OpenAstroAra.Core.Enum;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Threading;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Image.ImageAnalysis;
 using OpenAstroAra.Image.Interfaces;
@@ -35,9 +31,9 @@ namespace OpenAstroAra.Image.ImageData {
 
         public IImageData RawImageData { get; private set; }
 
-        private BitmapSource image;
+        private byte[] image;
 
-        public BitmapSource Image {
+        public byte[] Image {
             get => this.image ?? OriginalImage;
             private set {
                 this.image = value;
@@ -45,9 +41,9 @@ namespace OpenAstroAra.Image.ImageData {
             }
         }
 
-        public BitmapSource OriginalImage { get; private set; }
+        public byte[] OriginalImage { get; private set; }
 
-        public RenderedImage(BitmapSource image, IImageData rawImageData, IProfileService profileService, IStarDetection starDetection, IStarAnnotator starAnnotator) {
+        public RenderedImage(byte[] image, IImageData rawImageData, IProfileService profileService, IStarDetection starDetection, IStarAnnotator starAnnotator) {
             this.OriginalImage = image;
             this.RawImageData = rawImageData;
             this.profileService = profileService;
@@ -55,81 +51,43 @@ namespace OpenAstroAra.Image.ImageData {
             this.starAnnotator = starAnnotator;
         }
 
-        public static async Task<IRenderedImage> FromBitmapSource(BitmapSource source, IExposureDataFactory exposureDataFactory, IProfileService profileService, IStarDetection starDetection, IStarAnnotator starAnnotator, bool calculateStatistics = false) {
+        public static async Task<IRenderedImage> FromBitmapSource(byte[] source, IExposureDataFactory exposureDataFactory, IProfileService profileService, IStarDetection starDetection, IStarAnnotator starAnnotator, bool calculateStatistics = false) {
             var exposureData = await exposureDataFactory.CreateImageArrayExposureDataFromBitmapSource(source);
             var rawImageData = await exposureData.ToImageData();
             return Create(source, rawImageData, profileService, starDetection, starAnnotator, calculateStatistics: calculateStatistics);
         }
 
-        public static RenderedImage Create(BitmapSource source, IImageData rawImageData, IProfileService profileService, IStarDetection starDetection, IStarAnnotator starAnnotator, bool calculateStatistics = false) {
+        public static RenderedImage Create(byte[] source, IImageData rawImageData, IProfileService profileService, IStarDetection starDetection, IStarAnnotator starAnnotator, bool calculateStatistics = false) {
             return new RenderedImage(source, rawImageData, profileService, starDetection, starAnnotator);
         }
 
-        public virtual IRenderedImage ReRender() {
-            return new RenderedImage(this.RawImageData.RenderBitmapSource(), this.RawImageData, profileService, starDetection, starAnnotator);
-        }
+        // ReRender / Debayer / Stretch / DetectStars / GetThumbnail /
+        // UpdateAnalysis bodies removed — they used the deleted WPF-coupled
+        // ImageUtility + DebayeredImage + WPF BitmapSource transforms.
+        // Replacements arrive when OpenCvSharp4 wiring lands per playbook
+        // §line-2105.
 
-        public IDebayeredImage Debayer(bool saveColorChannels = false, bool saveLumChannel = false, SensorType bayerPattern = SensorType.RGGB) {
-            return DebayeredImage.Debayer(this, profileService, starDetection, starAnnotator, saveColorChannels: saveColorChannels, saveLumChannel: saveLumChannel, bayerPattern: bayerPattern);
-        }
+        public virtual IRenderedImage ReRender() =>
+            throw new NotImplementedException("ReRender pending OpenCvSharp4 wiring.");
 
-        public virtual async Task<IRenderedImage> Stretch(double factor, double blackClipping, bool unlinked) {
-            var stretchedImage = await ImageUtility.Stretch(this, factor, blackClipping);
-            return new RenderedImage(stretchedImage, this.RawImageData, profileService, starDetection, starAnnotator);
-        }
+        public IDebayeredImage Debayer(bool saveColorChannels = false, bool saveLumChannel = false, SensorType bayerPattern = SensorType.RGGB) =>
+            throw new NotImplementedException("Debayer pending OpenCvSharp4 wiring.");
 
-        public async Task<IRenderedImage> DetectStars(
-            bool annotateImage,
-            StarSensitivityEnum sensitivity,
-            NoiseReductionEnum noiseReduction,
-            CancellationToken cancelToken = default,
-            IProgress<ApplicationStatus> progress = default(Progress<ApplicationStatus>)) {
-            var starDetectionParams = new StarDetectionParams() {
-                IsAutoFocus = false,
-                Sensitivity = sensitivity,
-                NoiseReduction = noiseReduction,
-            };
-            if (profileService.ActiveProfile.FocuserSettings.AutoFocusInnerCropRatio < 1) {
-                starDetectionParams.InnerCropRatio = profileService.ActiveProfile.FocuserSettings.AutoFocusInnerCropRatio;
-                starDetectionParams.UseROI = true;
-            }
-            if (profileService.ActiveProfile.FocuserSettings.AutoFocusOuterCropRatio < 1) {
-                starDetectionParams.OuterCropRatio = profileService.ActiveProfile.FocuserSettings.AutoFocusOuterCropRatio;
-                starDetectionParams.UseROI = true;
-            }
-            if (profileService.ActiveProfile.FocuserSettings.AutoFocusUseBrightestStars > 0) {
-                starDetectionParams.NumberOfAFStars = profileService.ActiveProfile.FocuserSettings.AutoFocusUseBrightestStars;
-            }
+        public virtual Task<IRenderedImage> Stretch(double factor, double blackClipping, bool unlinked) =>
+            throw new NotImplementedException("Stretch pending OpenCvSharp4 wiring; use OpenAstroAra.Stretch headless pipeline.");
 
-            var starDetectionResult = await starDetection.Detect(this, this.Image.Format, starDetectionParams, progress, cancelToken);
-            if (annotateImage && starDetectionResult != null) {
-                cancelToken.ThrowIfCancellationRequested();
-                var maxStars = profileService.ActiveProfile.ImageSettings.AnnotateUnlimitedStars ? -1 : 200;
-                this.Image = await starAnnotator.GetAnnotatedImage(starDetectionParams, starDetectionResult, this.OriginalImage, maxStars: maxStars, token: cancelToken);
-            }
+        public Task<IRenderedImage> DetectStars(
+                bool annotateImage,
+                StarSensitivityEnum sensitivity,
+                NoiseReductionEnum noiseReduction,
+                CancellationToken cancelToken = default,
+                IProgress<ApplicationStatus> progress = default(Progress<ApplicationStatus>)) =>
+            throw new NotImplementedException("DetectStars pending OpenCvSharp4 wiring.");
 
-            UpdateAnalysis(starDetectionParams, starDetectionResult);
-            return this;
-        }
+        public Task<byte[]> GetThumbnail() =>
+            throw new NotImplementedException("GetThumbnail pending OpenCvSharp4 wiring.");
 
-        public async Task<BitmapSource> GetThumbnail() {
-            BitmapSource image = null;
-            await _dispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(() => {
-                try {
-                    var factor = 300 / this.Image.Width;
-                    image = new WriteableBitmap(new TransformedBitmap(this.Image, new ScaleTransform(factor, factor)));
-                    image.Freeze();
-                } catch(Exception e) {
-                    Logger.Error(e);
-                }                
-            }));
-            return image;
-        }
-
-        public void UpdateAnalysis(StarDetectionParams p, StarDetectionResult result) {
-            starDetection.UpdateAnalysis(this.RawImageData.StarDetectionAnalysis, p, result);
-        }
-
-        private static Dispatcher _dispatcher = Application.Current?.Dispatcher ?? Dispatcher.CurrentDispatcher;
+        public void UpdateAnalysis(StarDetectionParams p, StarDetectionResult result) =>
+            throw new NotImplementedException("UpdateAnalysis pending OpenCvSharp4 wiring.");
     }
 }

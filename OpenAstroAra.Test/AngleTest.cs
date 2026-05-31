@@ -20,6 +20,8 @@ using System.Threading.Tasks;
 
 namespace OpenAstroAra.Test {
 
+    [Platform("Win")]
+
     [TestFixture]
     public class AngleTest {
         private static double TOLERANCE = 0.0000000000001;

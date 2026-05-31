@@ -21,8 +21,6 @@ using System.ComponentModel.Composition;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using System.Windows.Media;
-
 namespace OpenAstroAra.Sequencer.Conditions {
 
     [ExportMetadata("Name", "Lbl_SequenceCondition_LoopCondition_Name")]

@@ -20,7 +20,6 @@ using System.IO;
 using System.Linq;
 using System.Runtime.Serialization;
 using System.Threading;
-using System.Windows;
 using OpenAstroAra.Core.Utility.Notification;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Profile.Interfaces;
@@ -210,7 +209,7 @@ namespace OpenAstroAra.Profile {
             Loc.Instance.ReloadLocale(ActiveProfile.ApplicationSettings.Culture);
             var eventHandler = LocaleChanged;
             if (eventHandler != null) { 
-                Application.Current.Dispatcher?.Invoke(eventHandler, this, null);
+                eventHandler.Invoke(this, null);
             }
         }
 
@@ -218,7 +217,7 @@ namespace OpenAstroAra.Profile {
             ActiveProfile.AstrometrySettings.Latitude = latitude;
             var eventHandler = LocationChanged;
             if (eventHandler != null) {
-                Application.Current.Dispatcher?.Invoke(eventHandler, this, null);
+                eventHandler.Invoke(this, null);
             }
         }
 
@@ -226,7 +225,7 @@ namespace OpenAstroAra.Profile {
             ActiveProfile.AstrometrySettings.Longitude = longitude;
             var eventHandler = LocationChanged;
             if (eventHandler != null) {
-                Application.Current.Dispatcher?.Invoke(LocationChanged, this, null);
+                LocationChanged.Invoke(this, null);
             }
         }
 
@@ -234,7 +233,7 @@ namespace OpenAstroAra.Profile {
             ActiveProfile.AstrometrySettings.Elevation = elevation;
             var eventHandler = LocationChanged;
             if (eventHandler != null) {
-                Application.Current.Dispatcher?.Invoke(eventHandler, this, null);
+                eventHandler.Invoke(this, null);
             }
         }
 
@@ -257,7 +256,7 @@ namespace OpenAstroAra.Profile {
 
             var eventHandler = HorizonChanged;
             if (eventHandler != null) {
-                Application.Current.Dispatcher?.Invoke(eventHandler, this, null);
+                eventHandler.Invoke(this, null);
             }
         }
 
@@ -317,7 +316,6 @@ namespace OpenAstroAra.Profile {
             get => activeProfile;
             private set {
                 activeProfile = value;
-                Application.Current.Resources["ActiveProfile"] = activeProfile;
                 RaisePropertyChanged();
             }
         }
@@ -328,7 +326,7 @@ namespace OpenAstroAra.Profile {
                     try {
                         var eventHandlerBeforeProfileChanging = BeforeProfileChanging;
                         if (eventHandlerBeforeProfileChanging != null) {
-                            Application.Current.Dispatcher?.Invoke(eventHandlerBeforeProfileChanging, this, new EventArgs());
+                            eventHandlerBeforeProfileChanging.Invoke(this, new EventArgs());
 
                         }
                         var old = activeProfile;
@@ -348,16 +346,16 @@ namespace OpenAstroAra.Profile {
 
                         var eventHandlerProfile = ProfileChanged;
                         if (eventHandlerProfile != null) {
-                            Application.Current.Dispatcher?.Invoke(eventHandlerProfile, this, new ProfileChangedEventArgs(old, ActiveProfile));
+                            eventHandlerProfile.Invoke(this, new ProfileChangedEventArgs(old, ActiveProfile));
 
                         }
                         var eventHandlerLocale = LocaleChanged;
                         if (eventHandlerLocale != null) {
-                            Application.Current.Dispatcher?.Invoke(eventHandlerLocale, this, null);
+                            eventHandlerLocale.Invoke(this, null);
                         }
                         var eventHandlerLocation = LocationChanged;
                         if (eventHandlerLocation != null) {
-                            Application.Current.Dispatcher?.Invoke(eventHandlerLocation, this, null);
+                            eventHandlerLocation.Invoke(this, null);
                         }
                         RegisterChangedEventHandlers();
                     } catch (Exception ex) {
@@ -459,45 +457,10 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        public static System.Threading.Tasks.Task ActivateInstanceWatcher(
-            IProfileService profileService,
-            Window mainWindow
-            ) {
-            var currentProfile = profileService.ActiveProfile.Id.ToString();
-            return System.Threading.Tasks.Task.Factory.StartNew(
-                () => {
-                    var profileChanged = new ManualResetEventSlim();
-                    profileService.ProfileChanged += (x, y) => profileChanged.Set();
-
-                    var activated = new EventWaitHandle(false,
-                        EventResetMode.AutoReset,
-                        "NINA_ActivateInstance:" + currentProfile);
-
-                    while (true) {
-                        var handles = new WaitHandle[] {
-                            profileChanged.WaitHandle,
-                            activated };
-                        var response = WaitHandle.WaitAny(handles, TimeSpan.FromSeconds(1));
-                        if (258 == response) // timeout
-                        {
-                            continue;
-                        }
-
-                        if (handles[response] == profileChanged.WaitHandle) {
-                            profileChanged.Reset();
-                            activated.Dispose();
-                            handles[1] = activated = new EventWaitHandle(false,
-                                EventResetMode.AutoReset,
-                                "NINA_ActivateInstance:" +
-                                    profileService.ActiveProfile.Id.ToString());
-                        }
-                        if (handles[response] == activated) {
-                            mainWindow.Dispatcher.Invoke(
-                                    () => mainWindow.Activate());
-                        }
-                    }
-                }, System.Threading.Tasks.TaskCreationOptions.LongRunning);
-        }
+        // ActivateInstanceWatcher removed — multi-launch-detection +
+        // window-activation is a WPF desktop-app feature. The headless server
+        // runs as a single systemd unit; multi-instance handling lives at the
+        // systemd layer, not in-process.
     }
 
     public class ProfileChangedEventArgs : EventArgs {

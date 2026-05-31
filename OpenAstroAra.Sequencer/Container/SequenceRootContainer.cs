@@ -13,6 +13,7 @@
 #endregion "copyright"
 
 using Newtonsoft.Json;
+using System.Windows.Input;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Sequencer.Container.ExecutionStrategy;
 using OpenAstroAra.Sequencer.SequenceItem;
@@ -26,8 +27,6 @@ using System.Runtime.Serialization;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows.Input;
-using OpenAstroAra.Core.MyMessageBox;
 using OpenAstroAra.Core.Locale;
 using OpenAstroAra.Sequencer.Utility;
 using OpenAstroAra.Core.Utility.Extensions;
@@ -51,28 +50,10 @@ namespace OpenAstroAra.Sequencer.Container {
         public SequenceRootContainer() : base(new SequentialStrategy()) {
         }
 
-        public override ICommand ResetProgressCommand => new GalaSoft.MvvmLight.Command.RelayCommand<object>(
-            (o) => {
-                if (MyMessageBox.Show(Loc.Instance["Lbl_SequenceContainer_SequenceRootContainer_ResetPrompt"], Loc.Instance["Lbl_SequenceContainer_SequenceRootContainer_ResetPromptCaption"], System.Windows.MessageBoxButton.YesNo, System.Windows.MessageBoxResult.No) == System.Windows.MessageBoxResult.Yes) {
-                    base.ResetProgressCommand.Execute(o);
-                }
-            }
-        );
-
-        public override ICommand DetachCommand => new GalaSoft.MvvmLight.Command.RelayCommand<object>(
-            (o) => {
-                if (MyMessageBox.Show(Loc.Instance["Lbl_SequenceContainer_SequenceRootContainer_ClearPrompt"], Loc.Instance["Lbl_SequenceContainer_SequenceRootContainer_ClearCaption"], System.Windows.MessageBoxButton.YesNo, System.Windows.MessageBoxResult.No) == System.Windows.MessageBoxResult.Yes) {
-                    foreach (var trigger in GetTriggersSnapshot()) {
-                        trigger.Detach();
-                    }
-                    SequenceTitle = Loc.Instance["Lbl_SequenceContainer_SequenceRootContainer_Name"];
-                    ClearContainer(Items[0] as ISequenceContainer);
-                    ClearContainer(Items[1] as ISequenceContainer);
-                    ClearContainer(Items[2] as ISequenceContainer);
-                    GC.Collect(2);
-                }
-            }
-        );
+        // Reset/Detach UI commands removed — the WPF MyMessageBox confirm-dialog
+        // round-trip has no headless equivalent. Triggered from REST via the
+        // §38 sequence endpoints which call the corresponding domain method
+        // directly.
 
         private void ClearContainer(ISequenceContainer container) {
             foreach (var item in container.GetItemsSnapshot()) {

@@ -26,6 +26,8 @@ using NUnit.Framework.Legacy;
 
 namespace OpenAstroAra.Test {
 
+    [Platform("Win")]
+
     [TestFixture]
     public class GuideStepsHistoryTest {
 

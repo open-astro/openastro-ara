@@ -15,7 +15,7 @@
 using OpenAstroAra.Core.Enum;
 using System;
 using System.IO;
-using System.Management;
+using System.Runtime;
 using System.Runtime.CompilerServices;
 using Serilog;
 using Serilog.Core;
@@ -92,16 +92,8 @@ namespace OpenAstroAra.Core.Utility {
             return sb.ToString();
         }
 
-        private static long GetTotalPhysicalMemory() {
-            ObjectQuery winQuery = new ObjectQuery("SELECT * FROM Win32_ComputerSystem");
-            ManagementObjectSearcher searcher = new ManagementObjectSearcher(winQuery);
-
-            foreach (ManagementObject item in searcher.Get()) {
-                return Convert.ToInt64(item["TotalPhysicalMemory"]);
-            }
-
-            return 0; // Return 0 if the information could not be retrieved
-        }
+        private static long GetTotalPhysicalMemory() =>
+            GC.GetGCMemoryInfo().TotalAvailableMemoryBytes;
 
         private static string PadBoth(string msg, int length, char paddingChar, params string[] msgParams) {
             var source = string.Format(msg, msgParams);

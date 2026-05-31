@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -280,17 +280,6 @@ namespace OpenAstroAra.Core.Utility {
             var result = lowDiff < highDiff ? lowAdjustedValue : highAdjustedValue;
             // Add the sign back in case value was negative
             return result * Math.Sign(value);
-        }
-
-        public static Microsoft.Win32.OpenFileDialog GetFilteredFileDialog(string path, string filename, string filter) {
-            Microsoft.Win32.OpenFileDialog dialog = new Microsoft.Win32.OpenFileDialog();
-
-            if (File.Exists(path)) {
-                dialog.InitialDirectory = Path.GetDirectoryName(path);
-            }
-            dialog.FileName = filename;
-            dialog.Filter = filter;
-            return dialog;
         }
 
         public static void SaveSettings(ApplicationSettingsBase settings, [CallerMemberName] string memberName = "") {

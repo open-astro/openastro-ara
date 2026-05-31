@@ -13,7 +13,6 @@
 #endregion "copyright"
 
 using OpenAstroAra.Core.Enum;
-using System.Windows.Media;
 
 namespace OpenAstroAra.Profile.Interfaces {
 
@@ -54,8 +53,8 @@ namespace OpenAstroAra.Profile.Interfaces {
         double SkyGuardValueMaxDithering { get; set; }
         double SkyGuardTimeLapsDithering { get; set; }
         double SkyGuardTimeOutGuiding { get; set; }
-        Color GuideChartRightAscensionColor { get; set; }
-        Color GuideChartDeclinationColor { get; set; }
+        string GuideChartRightAscensionColor { get; set; }
+        string GuideChartDeclinationColor { get; set; }
         bool GuideChartShowCorrections { get; set; }
     }
 }

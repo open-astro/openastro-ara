@@ -10,17 +10,13 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
-using System.Windows;
-using System.Windows.Media.Imaging;
-using System.Windows.Threading;
-
 namespace OpenAstroAra.Astrometry {
     public abstract class SkyObjectBase : BaseINPC, IDeepSkyObject {
         [Obsolete]
-        protected SkyObjectBase(string id, string imageRepository, CustomHorizon customHorizon) : this(id, null as Func<SkyObjectBase, Task<BitmapSource>>, customHorizon) {
+        protected SkyObjectBase(string id, string imageRepository, CustomHorizon customHorizon) : this(id, null as Func<SkyObjectBase, Task<byte[]>>, customHorizon) {
         }
 
-        protected SkyObjectBase(string id, Func<SkyObjectBase, Task<BitmapSource>> imageFactory, CustomHorizon customHorizon) {
+        protected SkyObjectBase(string id, Func<SkyObjectBase, Task<byte[]>> imageFactory, CustomHorizon customHorizon) {
             Id = id;
             Name = id;
             this.customHorizon = customHorizon;
@@ -230,18 +226,19 @@ namespace OpenAstroAra.Astrometry {
             }
         }
 
-        private BitmapSource _image;
+        private byte[] _image;
         protected CustomHorizon customHorizon;
 
-        private Func<SkyObjectBase, Task<BitmapSource>> imageFactory;
+        private Func<SkyObjectBase, Task<byte[]>> imageFactory;
 
-        public BitmapSource Image {
+        public byte[] Image {
             get {
                 if (_image == null) {
                     if(imageFactory != null) {
                         _ = Task.Run(async () => {
                             _image = await Task.Run(() => imageFactory(this));
-                            _image.Freeze();
+                            // .Freeze() was the WPF BitmapSource thread-affinity
+                            // release; byte[] is immutable so nothing to do.
                             RaisePropertyChanged(nameof(Image));
                         });
                     }

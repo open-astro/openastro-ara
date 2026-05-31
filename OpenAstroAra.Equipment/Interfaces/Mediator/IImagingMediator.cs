@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -15,17 +15,15 @@
 using OpenAstroAra.Core.Interfaces;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Core.Utility;
-using OpenAstroAra.Equipment.Interfaces.ViewModel;
 using OpenAstroAra.Equipment.Model;
 using OpenAstroAra.Image.Interfaces;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows.Media.Imaging;
 
 namespace OpenAstroAra.Equipment.Interfaces.Mediator {
 
-    public interface IImagingMediator : IMediator<IImagingVM> {
+    public interface IImagingMediator {
 
         Task<IExposureData> CaptureImage(
             CaptureSequence sequence,
@@ -53,7 +51,6 @@ namespace OpenAstroAra.Equipment.Interfaces.Mediator {
 
         void DestroyImage();
 
-        void SetImage(BitmapSource img);
         int GetImageRotation();
         void SetImageRotation(int rotation);
 

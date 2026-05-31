@@ -13,6 +13,8 @@
 #endregion "copyright"
 
 using OpenAstroAra.Core.Model;
+using System.Windows.Data;
+using System.Windows.Input;
 using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.DragDrop;
@@ -26,9 +28,6 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
 using System.Linq;
-using System.Windows;
-using System.Windows.Data;
-using System.Windows.Input;
 using OpenAstroAra.Core.Utility.Notification;
 using OpenAstroAra.Core.Locale;
 using System.Threading.Tasks;
@@ -169,7 +168,7 @@ namespace OpenAstroAra.Sequencer {
                     }
 
                     foreach (var template in Templates.Where(t => t.Group != DefaultTemplatesGroup).ToList()) {
-                        await Application.Current.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Normal, new Action(() => Templates.Remove(template)));
+                        await Task.Run(() => Templates.Remove(template));
                     }
                     TemplatesLoadingProgress = 0;
                     TemplatesLoadingTotalCount = 1;
@@ -193,14 +192,14 @@ namespace OpenAstroAra.Sequencer {
                         TemplatesLoadingProgress++;
                     }
 
-                    await Application.Current.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Normal, new Action(() => {
+                    await Task.Run(() => {
                         try {
                             TemplatesView.Refresh();
                             TemplatesMenuView.Refresh();
                         } catch (Exception ex) {
                             Logger.Error(ex);
                         }
-                    }));
+                    });
                 } catch (Exception ex) {
                     Logger.Error(ex);
                     Notification.ShowError(Loc.Instance["Lbl_SequenceTemplateController_LoadUserTemplatesFailed"]);

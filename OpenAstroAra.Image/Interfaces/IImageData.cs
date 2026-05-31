@@ -20,8 +20,6 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows.Media.Imaging;
-
 namespace OpenAstroAra.Image.Interfaces {
 
     public interface IImageData {
@@ -39,7 +37,7 @@ namespace OpenAstroAra.Image.Interfaces {
 
         IRenderedImage RenderImage();
 
-        BitmapSource RenderBitmapSource();
+        byte[] RenderBitmapSource();
 
         ImagePatterns GetImagePatterns();
 

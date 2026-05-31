@@ -13,14 +13,11 @@
 #endregion "copyright"
 
 using OpenAstroAra.Core.Model;
-using OpenAstroAra.Sequencer.SequenceItem.Autofocus;
 using OpenAstroAra.Sequencer.SequenceItem.Camera;
 using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.SequenceItem.FilterWheel;
 using OpenAstroAra.Sequencer.SequenceItem.Focuser;
-using OpenAstroAra.Sequencer.SequenceItem.Imaging;
 using OpenAstroAra.Sequencer.SequenceItem.Telescope;
-using OpenAstroAra.Sequencer.Trigger.MeridianFlip;
 using OpenAstroAra.Sequencer.SequenceItem.Utility;
 using OpenAstroAra.Astrometry;
 using System;
@@ -38,7 +35,6 @@ using Newtonsoft.Json.Serialization;
 using OpenAstroAra.Sequencer.Container.ExecutionStrategy;
 using OpenAstroAra.Sequencer.Serialization;
 using OpenAstroAra.Sequencer.Validations;
-using OpenAstroAra.Core.MyMessageBox;
 using OpenAstroAra.Core.Locale;
 using OpenAstroAra.Sequencer.SequenceItem;
 
@@ -110,15 +106,11 @@ namespace OpenAstroAra.Sequencer {
                 builder.AppendLine();
                 builder.Append(Loc.Instance["LblStartSequenceAnyway"]);
 
-                var diag = MyMessageBox.Show(
-                    builder.ToString(),
-                    Loc.Instance["LblPreSequenceChecklistHeader"],
-                    System.Windows.MessageBoxButton.OKCancel,
-                    System.Windows.MessageBoxResult.Cancel
-                );
-                if (diag == System.Windows.MessageBoxResult.Cancel) {
-                    return false;
-                }
+                // Pre-sequence-issue confirmation dialog removed; headless caller
+                // gets the issue list via REST and decides whether to start.
+                // For now, proceed past warnings (skipIssuePrompt path).
+                // §38 will surface issues through the sequence start endpoint.
+                _ = builder;
             }
             return true;
         }
