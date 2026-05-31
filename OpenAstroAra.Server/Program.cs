@@ -176,7 +176,13 @@ public class Program {
         // profileDir is resolved (filesystem-backed per §38.2). Runtime control
         // (ISequencerService) still placeholder until the real §38 orchestrator
         // wires up the Sequencer library engine.
-        builder.Services.AddSingleton<ISequencerService, PlaceholderSequencerService>();
+        // §38j-5 — sequencer reads the saved body for real instruction count.
+        // Func<> resolver breaks the FileSequenceService ↔ PlaceholderSequencerService
+        // construction-time cycle (both reference each other now).
+        builder.Services.AddSingleton<ISequencerService>(sp =>
+            new PlaceholderSequencerService(
+                sp.GetService<IWsBroadcaster>(),
+                () => sp.GetService<ISequenceService>()));
         // Phase 13.14 — calibration + dark library + mosaic placeholders.
         builder.Services.AddSingleton<ICalibrationService, PlaceholderCalibrationService>();
         builder.Services.AddSingleton<IDarkLibraryService, PlaceholderDarkLibraryService>();
