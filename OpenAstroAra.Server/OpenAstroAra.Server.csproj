@@ -29,6 +29,8 @@
     -->
     <!-- §72 FITS via CFITSIO. Portable net10.0 + AOT-compatible. -->
     <ProjectReference Include="..\OpenAstroAra.Fits\OpenAstroAra.Fits.csproj" />
+    <!-- §65 stretch algorithms + JPEG encoding (SkiaSharp). -->
+    <ProjectReference Include="..\OpenAstroAra.Stretch\OpenAstroAra.Stretch.csproj" />
   </ItemGroup>
 
   <ItemGroup>
