@@ -182,7 +182,8 @@ public class Program {
         builder.Services.AddSingleton<IDarkLibraryService, PlaceholderDarkLibraryService>();
         builder.Services.AddSingleton<IMosaicService, PlaceholderMosaicService>();
         // Phase 13.15 — sequence templates + NINA import + auto-flats.
-        builder.Services.AddSingleton<ISequenceTemplateService, PlaceholderSequenceTemplateService>();
+        // ISequenceTemplateService is wired later (after profileDir is resolved)
+        // so it can read disk templates from {profileDir}/sequences/templates/.
         builder.Services.AddSingleton<ISequenceImportService, PlaceholderSequenceImportService>();
         builder.Services.AddSingleton<IAutoFlatsService, PlaceholderAutoFlatsService>();
         // Phase 13.17 — §60.9 WS broadcaster + event channel placeholders.
@@ -209,6 +210,15 @@ public class Program {
         // so saved sequences survive daemon restart.
         builder.Services.AddSingleton<ISequenceService>(sp =>
             new FileSequenceService(profileDir, sp.GetService<ILogger<FileSequenceService>>()));
+
+        // §38.7 — disk-shipped templates under {profileDir}/sequences/templates/
+        // merged on top of the 3 hardcoded built-ins. .deb install can drop
+        // additional templates without a code change.
+        builder.Services.AddSingleton<ISequenceTemplateService>(sp =>
+            new PlaceholderSequenceTemplateService(
+                sp.GetRequiredService<ISequenceService>(),
+                profileDir,
+                sp.GetService<ILogger<PlaceholderSequenceTemplateService>>()));
 
         // §28 SQLite catalog. Scaffold-only at this point: the connection
         // + schema land here so subsequent sub-PRs can flip the placeholder
