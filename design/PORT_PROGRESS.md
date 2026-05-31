@@ -4,10 +4,10 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** Real-infra SQLite swaps — §28 catalog, §72 FITS storage, §46.5 notifications, §50 stats, §51 diagnostics all backed by the catalog DB.
+- **Phase:** §65 stretch pipeline (algorithms + preview + cache + profile defaults), §28.8 orphan scan, §13 systemd restart all on master. SQLite catalog covers §28 + §46.5 + §50 + §51 + §72.
 - **Last merged on `port/ara`:** This tracking refresh.
-- **Currently working on:** PORT_PROGRESS.md refresh for §72 (FITS) + §46.5 (notifications) + §50 (stats) + §51 (diagnostics) work.
-- **Next substantive work:** §65 stretch pipeline (OpenCvSharp4 + real previews) and §38 sequence orchestrator (the load-bearing piece that drives equipment + writes captured frames into the catalog via `FitsImage`). The two design-blocked items per `design/PORT_TODO.md` (Sequencer WPF-removal authorization + Alpaca simulator choice) still await user input.
+- **Currently working on:** PORT_PROGRESS.md refresh for the §65 + §28.8 + §13 + variant-cache + DELETE-variants batch.
+- **Next substantive work:** §38 sequence orchestrator — the load-bearing piece that drives equipment, writes captures via `FitsImage`, persists frames into the catalog, and emits §60.9 WS events. After §38, real ASCOM Alpaca drivers per device (12 services), §51 diagnostics monitor worker, §65.5 batch re-stretch jobs, and Phase 15 release prep. Two design-blocked items still await user input per `design/PORT_TODO.md`: Sequencer WPF-removal authorization + Alpaca simulator choice.
 
 ## Completed
 
@@ -175,6 +175,29 @@ After the §60.9 WS lifecycle landed, four sub-PRs flipped the last batch of end
 - ✅ **#182** — `/server/{restart,restart-on-idle}`: optional `?reason=` query string (defaults to `operator_requested`). Real systemd-driven restart still in Phase 14 hardening.
 
 After this sweep, **the only remaining 501 stub is `/api/v1/frames/{id}/download` (§72)** — kept as the CI smoke gate's 501 anchor since it depends on real FITS file storage.
+
+### §65 stretch pipeline (PRs #207–#216 + variant cache + DELETE)
+
+End-to-end §65 implementation on top of §72 `FitsImage` + the §28 catalog:
+
+- ✅ **#207** — §65.1 algorithms: 7 pure-math stretches (linear, log, asinh, sqrt, equalized, manual, auto_stf) in new `OpenAstroAra.Stretch` project. 14 xUnit tests for monotonicity + dynamic range + distribution spreading. Quickselect for percentile/median/MAD. AOT-safe, no native deps.
+- ✅ **#208** — Preview pipeline: SkiaSharp `JpegEncoder` (gray + thumbnail variants) + wire into `SqliteFrameRepository.GetPreviewAsync` / `GetThumbnailAsync`. Read FITS via `FitsImage.ReadImageData16` → stretch → encode JPEG.
+- ✅ **#209** — Promotion of #207 + #208 to master.
+- ✅ **#210** — §65.2 `stretch_defaults` profile section: 12th section on the §37 profile (light_default + manual_params + asinh_beta + linear_clip_percentiles). `IProfileStore` + endpoints + AOT registration. Persistence verified across daemon restart.
+- ✅ **#211** — Thread profile `stretch_defaults` through `GetPreviewAsync` / `GetThumbnailAsync` algorithm + param resolution. Frame-type auto-override (Darks/Bias/Flats → linear) still wins.
+- ✅ **#215** — §65.4 variant cache: disk-backed LRU at `<frame>.preview.<stretch-id>.jpg` (manual stretches hash-coalesce by rounded params). Cap 6 variants/frame, atomic write per §28.7.
+- ✅ **#216** — §65.6 `DELETE /api/v1/frames/{id}/preview/variants` cache-reset endpoint.
+
+Future §65 sub-PRs:
+- §65.5 batch re-stretch (`POST /sessions/{id}/restretch` actually enqueues a job + WS events `session.restretch.{progress,complete,failed}`)
+- §65.4 storage-pressure eviction (currently only LRU + per-frame cap)
+- WS events on cache lifecycle (`frame.preview.ready` / `variant.ready` / `variant.evicted`)
+
+### §28.8 orphan scan + §13 systemd restart (PRs #212–#214)
+
+- ✅ **#212** — `CaptureScanService` runs on startup: writability check on save path, stale `.tmp` sweep (>5min old), orphan FITS recovery via `FitsImage.ReadHeaders` + INSERT into the catalog. Synthetic recovery session for orphans without a parent session id. Sub-ms no-op on fresh installs.
+- ✅ **#213** — §13 systemd-driven `/api/v1/server/restart`: spawns `systemctl restart openastroara-server` with a 2-second delay so the 202 response reaches the client before the daemon dies. Silent no-op on non-Linux dev envs.
+- ✅ **#214** — Promotion of #210–#213 to master.
 
 ### §72 FITS storage (PRs #197–#200)
 
