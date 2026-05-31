@@ -85,11 +85,12 @@ public class Program {
         // Phase 9 — IWsBroadcaster + IWsEventChannel + dispatch worker
         builder.Services.AddSingleton<IEquipmentDiscoveryService, AlpacaEquipmentDiscoveryService>();
 
-        // Phase 13.1 — placeholder IFrameRepository so the §65 preview/thumbnail
-        // endpoints return a real (tiny gray) JPEG instead of 501-stubbing. Real
-        // OpenCvSharp4-backed implementation lands in Phase 13.2+ alongside the
-        // §28 frame catalog DB.
-        builder.Services.AddSingleton<IFrameRepository, PlaceholderFrameRepository>();
+        // §28 SqliteFrameRepository — reads frames from the catalog with
+        // sample data seeded on first init. Bulk ops still return placeholder
+        // Accepted responses; next sub-PR makes them actually mutate. Preview
+        // + thumbnail still serve the 1×1 JPEG placeholder until §65 lands;
+        // OpenDownloadAsync returns null until §72 FITS storage lands.
+        builder.Services.AddSingleton<IFrameRepository, SqliteFrameRepository>();
         // Phase 13.3 — placeholder ISessionService composing on the frame repo
         // so the §40 Library + session-drilldown UI has consistent fixture data.
         builder.Services.AddSingleton<ISessionService, PlaceholderSessionService>();
@@ -266,6 +267,14 @@ public class Program {
         // broken catalog), so let it propagate.
         var araDb = app.Services.GetRequiredService<IAraDatabase>();
         araDb.InitializeAsync(CancellationToken.None).GetAwaiter().GetResult();
+
+        // Seed the frame catalog with fixture data on first run. Idempotent
+        // (skips if frames table already has rows) — survives daemon
+        // restart with persistence intact.
+        var frameRepo = app.Services.GetRequiredService<IFrameRepository>();
+        if (frameRepo is SqliteFrameRepository sqliteRepo) {
+            sqliteRepo.EnsureSeededAsync(CancellationToken.None).GetAwaiter().GetResult();
+        }
 
         app.Logger.LogInformation("OpenAstroAra.Server listening on :{Port}", port);
         app.Run();

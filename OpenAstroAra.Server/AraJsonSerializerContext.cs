@@ -212,5 +212,7 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(IReadOnlyList<MosaicPanelDto>))]
 [JsonSerializable(typeof(IReadOnlyList<SequenceTemplateDto>))]
 [JsonSerializable(typeof(IReadOnlyList<WsEventEnvelopeDto>))]
+// §28 catalog needs JSON-blob round-trip for the per-frame `tags` column.
+[JsonSerializable(typeof(IReadOnlyList<string>))]
 public partial class AraJsonSerializerContext : JsonSerializerContext {
 }
