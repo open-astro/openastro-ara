@@ -305,9 +305,18 @@ public class Program {
         const string systemDir = "/var/lib/openastroara";
         if (Directory.Exists(systemDir)) return systemDir;
 
-        var home = System.Environment.GetEnvironmentVariable("HOME")
-            ?? System.Environment.GetEnvironmentVariable("USERPROFILE")
-            ?? Path.GetTempPath();
+        // XDG fallback. Treat empty + root ($HOME=/) as unset — the
+        // chiseled arm64 Docker base ships USER 1000 with $HOME=/ since
+        // there's no /etc/passwd entry, so the naive ?? chain would
+        // resolve to /.local/share/openastroara which UID 1000 can't
+        // create. Fall through to the OS temp dir in that case.
+        var home = System.Environment.GetEnvironmentVariable("HOME");
+        if (string.IsNullOrWhiteSpace(home) || home == "/") {
+            home = System.Environment.GetEnvironmentVariable("USERPROFILE");
+        }
+        if (string.IsNullOrWhiteSpace(home) || home == "/") {
+            home = Path.GetTempPath();
+        }
         return Path.Combine(home, ".local", "share", "openastroara");
     }
 
