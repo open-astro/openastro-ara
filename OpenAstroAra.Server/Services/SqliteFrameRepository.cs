@@ -56,11 +56,13 @@ public sealed class SqliteFrameRepository : IFrameRepository {
 
     private readonly IAraDatabase _db;
     private readonly IProfileStore _profile;
+    private readonly IWsBroadcaster? _ws;
     private readonly ILogger<SqliteFrameRepository>? _logger;
 
-    public SqliteFrameRepository(IAraDatabase db, IProfileStore profile, ILogger<SqliteFrameRepository>? logger) {
+    public SqliteFrameRepository(IAraDatabase db, IProfileStore profile, IWsBroadcaster? ws = null, ILogger<SqliteFrameRepository>? logger = null) {
         _db = db;
         _profile = profile;
+        _ws = ws;
         _logger = logger;
     }
 
@@ -595,6 +597,13 @@ public sealed class SqliteFrameRepository : IFrameRepository {
     // this knob (range 1-20) in a future sub-PR; for now it's a const.
     private const int MaxVariantsPerFrame = 6;
 
+    // §29 storage-pressure threshold. When the captures volume free space
+    // drops below this, the §65.4 variant-eviction path nukes all alt-
+    // stretch variants for the current frame (NOT defaults, NOT FITS, NOT
+    // thumbnails). 1 GB is the v0.0.1 fixed value; §29.4 settings panel
+    // exposes it as a tunable in a future sub-PR.
+    private const long StoragePressureBytes = 1L * 1024L * 1024L * 1024L;
+
     private static string ComputeCacheKey(string fitsPath, OpenAstroAra.Stretch.StretchAlgorithm algorithm,
             OpenAstroAra.Stretch.StretchParams parameters) {
         var stretchId = algorithm switch {
@@ -644,9 +653,16 @@ public sealed class SqliteFrameRepository : IFrameRepository {
         }
     }
 
-    private static void EvictVariantsIfNeeded(string fitsPath) {
+    private void EvictVariantsIfNeeded(string fitsPath) {
         var dir = Path.GetDirectoryName(fitsPath);
         if (string.IsNullOrEmpty(dir)) return;
+
+        // §65.4 storage-pressure check. If the captures volume is below the
+        // §29 critical threshold, evict ALL alt-stretch variants for this
+        // frame — not just past the per-frame cap. They're recoverable
+        // cache; FITS + defaults + thumbnails are not.
+        var aggressiveEviction = IsUnderStoragePressure(dir);
+
         var stem = Path.GetFileNameWithoutExtension(fitsPath);
         var pattern = $"{stem}.preview.*.jpg";
         try {
@@ -660,12 +676,63 @@ public sealed class SqliteFrameRepository : IFrameRepository {
                 .Select(p => new FileInfo(p))
                 .OrderByDescending(fi => fi.LastAccessTimeUtc)
                 .ToList();
-            if (variants.Count <= MaxVariantsPerFrame) return;
-            foreach (var stale in variants.Skip(MaxVariantsPerFrame)) {
-                try { stale.Delete(); } catch { /* ignore */ }
+
+            // Storage pressure: keep nothing. LRU cap: keep top N.
+            var keep = aggressiveEviction ? 0 : MaxVariantsPerFrame;
+            if (variants.Count <= keep) return;
+            foreach (var stale in variants.Skip(keep)) {
+                try {
+                    stale.Delete();
+                    EmitVariantEvictedAsync(fitsPath, stale.Name,
+                        reason: aggressiveEviction ? "storage_pressure" : "lru_eviction");
+                } catch { /* ignore */ }
             }
         } catch (DirectoryNotFoundException) { /* nothing to evict */ }
           catch (UnauthorizedAccessException) { /* read-only mount; skip */ }
+    }
+
+    private static bool IsUnderStoragePressure(string dir) {
+        try {
+            var root = Path.GetPathRoot(Path.GetFullPath(dir));
+            if (string.IsNullOrEmpty(root)) return false;
+            var info = new DriveInfo(root);
+            return info.IsReady && info.AvailableFreeSpace < StoragePressureBytes;
+        } catch (ArgumentException) {
+            return false;
+        } catch (IOException) {
+            return false;
+        } catch (UnauthorizedAccessException) {
+            return false;
+        }
+    }
+
+    private void EmitVariantEvictedAsync(string fitsPath, string variantFileName, string reason) {
+        if (_ws is null) return;
+        var stretchId = ExtractStretchIdFromVariantName(variantFileName);
+        // Fire-and-forget; WS publish failure mustn't abort cache management.
+        _ = Task.Run(async () => {
+            try {
+                var json = $$"""
+                    {"frame_path":"{{fitsPath.Replace("\\", "\\\\").Replace("\"", "\\\"")}}","stretch_id":"{{stretchId}}","reason":"{{reason}}"}
+                    """;
+                using var doc = System.Text.Json.JsonDocument.Parse(json);
+                await _ws.PublishAsync("frame.preview.variant.evicted", doc.RootElement.Clone(), CancellationToken.None);
+            } catch { /* swallow */ }
+        });
+    }
+
+    private static string ExtractStretchIdFromVariantName(string fileName) {
+        // <stem>.preview.<stretch-id>.jpg → return <stretch-id>
+        // <stem>.preview.manual.<hash>.jpg → return "manual"
+        var parts = fileName.Split('.');
+        // … some files have extra dots in the stem; locate the "preview"
+        // segment and take the next one as the stretch id.
+        for (var i = 0; i < parts.Length - 1; i++) {
+            if (parts[i].Equals("preview", StringComparison.OrdinalIgnoreCase)) {
+                return parts[i + 1];
+            }
+        }
+        return "unknown";
     }
 
     // Frame type ↔ string. The enum is JSON-serialized as lowercase via
