@@ -34,10 +34,22 @@ namespace OpenAstroAra.Server.Services;
 /// </summary>
 public sealed class PlaceholderServerStateService : IServerStateService {
     private static readonly JsonDocument _empty = JsonDocument.Parse("{}");
-    private const string SampleResumeToken = "ws-placeholder-00000000-0000-0000-0000-000000000000";
 
-    public Task<ServerStateDto> GetSnapshotAsync(CancellationToken ct) =>
-        Task.FromResult(new ServerStateDto(
+    private readonly IWsBroadcaster? _broadcaster;
+
+    public PlaceholderServerStateService(IWsBroadcaster? broadcaster = null) {
+        _broadcaster = broadcaster;
+    }
+
+    public Task<ServerStateDto> GetSnapshotAsync(CancellationToken ct) {
+        // §60.9.6 resume protocol: ws_resume_token is the client's
+        // last-seen seq, in v0.0.1 just the broadcaster's current seq
+        // stringified. WILMA stores this in its local state and presents
+        // it back on reconnect via the §60.9.6 resume request.
+        var seq = _broadcaster?.CurrentSequence ?? 0;
+        var resumeToken = seq.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+        return Task.FromResult(new ServerStateDto(
             ServerUuid: ServerIdentity.Uuid,
             Nickname: ServerIdentity.Nickname,
             Version: ServerIdentity.Version,
@@ -46,8 +58,8 @@ public sealed class PlaceholderServerStateService : IServerStateService {
             CurrentUtc: DateTimeOffset.UtcNow,
             CurrentProfileId: null,
             PendingRestart: null,
-            WsResumeToken: SampleResumeToken,
-            WsEventCursor: 0,
+            WsResumeToken: resumeToken,
+            WsEventCursor: seq,
             // Subsystem summary blobs are empty objects today; each
             // subsystem will fill its own shape when its placeholder /
             // real impl lands (§60.9.4).
@@ -55,6 +67,7 @@ public sealed class PlaceholderServerStateService : IServerStateService {
             ActiveSequenceRun: _empty.RootElement.Clone(),
             DiagnosticsHealth: _empty.RootElement.Clone(),
             NotificationsSummary: _empty.RootElement.Clone()));
+    }
 
     public Task<ApiVersionsDto> GetVersionsAsync(CancellationToken ct) =>
         // Version data answers WILMA's §54 "About" screen + the §63.1
