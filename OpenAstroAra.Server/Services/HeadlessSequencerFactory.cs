@@ -1,0 +1,97 @@
+#region "copyright"
+
+/*
+    Copyright (c) 2026 Open Astro and the OpenAstro Ara contributors
+
+    This file is part of OpenAstro Ara (forked from N.I.N.A.).
+
+    This Source Code Form is subject to the terms of the Mozilla Public
+    License, v. 2.0. If a copy of the MPL was not distributed with this
+    file, You can obtain one at http://mozilla.org/MPL/2.0/.
+*/
+
+#endregion "copyright"
+
+using System.Windows.Data;
+using OpenAstroAra.Sequencer;
+using OpenAstroAra.Sequencer.Conditions;
+using OpenAstroAra.Sequencer.Container;
+using OpenAstroAra.Sequencer.SequenceItem;
+using OpenAstroAra.Sequencer.Trigger;
+using OpenAstroAra.Sequencer.Utility.DateTimeProvider;
+
+namespace OpenAstroAra.Server.Services;
+
+/// <summary>
+/// Headless implementation of <see cref="ISequencerFactory"/> for the
+/// OpenAstroAra daemon. The inherited <c>SequencerFactory</c> needs an
+/// <c>IProfileService</c> + a <c>PluginOptionsAccessor</c> + builds WPF
+/// <c>CollectionViewSource</c> wrappers for sidebar UI — none of which
+/// the daemon needs since Flutter drives the sidebar via REST + WS.
+/// This implementation provides just enough surface to satisfy the
+/// JSON converters: prototype lookup via <see cref="GetItem{T}"/>
+/// /etc., plus the <c>DateTimeProviders</c> list the
+/// <c>SequenceDateTimeProviderCreationConverter</c> reads.
+///
+/// Items / Conditions / Triggers / Container start empty; per-type
+/// registrations land in subsequent §38k sub-PRs as we wire equipment-
+/// bound instruction prototypes (TakeExposure, SetFilter, Slew, etc.)
+/// into the DI tree.
+/// </summary>
+public sealed class HeadlessSequencerFactory : ISequencerFactory {
+
+    public IList<ISequenceItem> Items { get; }
+    public IList<ISequenceCondition> Conditions { get; }
+    public IList<ISequenceContainer> Container { get; }
+    public IList<ISequenceTrigger> Triggers { get; }
+    public IList<IDateTimeProvider> DateTimeProviders { get; }
+
+    // The four View properties are WPF state for the legacy sidebar.
+    // Headless callers don't read them, but the interface requires them.
+    // CollectionViewSource is shimmed in OpenAstroAra.Sequencer/Compat;
+    // GetDefaultView returns a working CollectionViewSource over the
+    // backing list.
+    public ICollectionView ItemsView { get; }
+    public ICollectionView InstructionsView { get; }
+    public ICollectionView ConditionsView { get; }
+    public ICollectionView TriggersView { get; }
+
+    public string ViewFilter { get; set; } = string.Empty;
+
+    public HeadlessSequencerFactory(
+            IList<ISequenceItem>? items = null,
+            IList<ISequenceCondition>? conditions = null,
+            IList<ISequenceContainer>? container = null,
+            IList<ISequenceTrigger>? triggers = null,
+            IList<IDateTimeProvider>? dateTimeProviders = null) {
+        Items = items ?? new List<ISequenceItem>();
+        Conditions = conditions ?? new List<ISequenceCondition>();
+        Container = container ?? new List<ISequenceContainer>();
+        Triggers = triggers ?? new List<ISequenceTrigger>();
+        DateTimeProviders = dateTimeProviders ?? new List<IDateTimeProvider>();
+
+        // Headless views are best-effort over the backing lists. Sidebar
+        // grouping / sorting / filtering are client-side concerns.
+        ItemsView = CollectionViewSource.GetDefaultView(Items);
+        InstructionsView = CollectionViewSource.GetDefaultView(Items);
+        ConditionsView = CollectionViewSource.GetDefaultView(Conditions);
+        TriggersView = CollectionViewSource.GetDefaultView(Triggers);
+    }
+
+    // Same Clone-prototype-or-default pattern as the inherited
+    // SequencerFactory (see SequencerFactory.cs lines 144-158). Returning
+    // null when no prototype matches lets the JSON converters fall back
+    // to UnknownSequenceContainer / UnknownSequenceItem.
+
+    public T GetContainer<T>() where T : ISequenceContainer =>
+        (T)(Container.FirstOrDefault(x => x.GetType() == typeof(T))?.Clone() ?? default(T)!);
+
+    public T GetItem<T>() where T : ISequenceItem =>
+        (T)(Items.FirstOrDefault(x => x.GetType() == typeof(T))?.Clone() ?? default(T)!);
+
+    public T GetCondition<T>() where T : ISequenceCondition =>
+        (T)(Conditions.FirstOrDefault(x => x.GetType() == typeof(T))?.Clone() ?? default(T)!);
+
+    public T GetTrigger<T>() where T : ISequenceTrigger =>
+        (T)(Triggers.FirstOrDefault(x => x.GetType() == typeof(T))?.Clone() ?? default(T)!);
+}
