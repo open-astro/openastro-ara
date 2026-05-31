@@ -1,9 +1,9 @@
 #region "copyright"
 
 /*
-    Copyright � 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright (c) 2026 Open Astro and the OpenAstro Ara contributors
 
-    This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
+    This file is part of OpenAstro Ara (forked from N.I.N.A.).
 
     This Source Code Form is subject to the terms of the Mozilla Public
     License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -13,14 +13,21 @@
 #endregion "copyright"
 
 using OpenAstroAra.Core.Interfaces;
-using OpenAstroAra.Equipment.Interfaces.ViewModel;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace OpenAstroAra.Equipment.Interfaces.Mediator {
 
-    public interface IDeviceMediator<THandler, TConsumer, TInfo> : IMediator<THandler> where THandler : IDeviceVM<TInfo> where TConsumer : IDeviceConsumer<TInfo> {
+    // §8.1 mediator → service migration: WPF VM constraint dropped per playbook
+    // ("UI VMs are dropped wholesale"). THandler is now an unconstrained type
+    // parameter — concrete handler implementations live in the headless server
+    // (e.g., AlpacaCameraDriver implements ICameraVM-equivalent surface).
+    // Filename + interface name kept as *Mediator for now to minimize the
+    // cross-file rename surface area; the *Service rename is a follow-up sweep.
+    public interface IDeviceMediator<THandler, TConsumer, TInfo> where TConsumer : IDeviceConsumer<TInfo> {
+
+        void RegisterHandler(THandler handler);
 
         void RegisterConsumer(TConsumer consumer);
 
@@ -44,10 +51,6 @@ namespace OpenAstroAra.Equipment.Interfaces.Mediator {
 
         void SendCommandBlind(string command, bool raw = true);
 
-        /// <summary>
-        /// Returns the device instance from the handler for direct access
-        /// Please use this only when no other method is available via the viewmodel
-        /// </summary>
         IDevice GetDevice();
 
         event Func<object, EventArgs, Task> Connected;

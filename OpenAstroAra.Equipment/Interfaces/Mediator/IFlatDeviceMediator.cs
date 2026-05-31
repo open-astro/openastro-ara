@@ -17,11 +17,10 @@ using System.Threading;
 using System.Threading.Tasks;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Equipment.Equipment.MyFlatDevice;
-using OpenAstroAra.Equipment.Interfaces.ViewModel;
 
 namespace OpenAstroAra.Equipment.Interfaces.Mediator {
 
-    public interface IFlatDeviceMediator : IDeviceMediator<IFlatDeviceVM, IFlatDeviceConsumer, FlatDeviceInfo> {
+    public interface IFlatDeviceMediator : IDeviceMediator<object, IFlatDeviceConsumer, FlatDeviceInfo> {
 
         Task SetBrightness(int brightness, IProgress<ApplicationStatus> progress, CancellationToken token);
 

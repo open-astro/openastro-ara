@@ -6,8 +6,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using System.Windows.Media;
-
 namespace OpenAstroAra.Astrometry {
     public class MoonInfo : BaseINPC {
 
@@ -89,12 +87,15 @@ namespace OpenAstroAra.Astrometry {
 
         public AstroUtil.MoonPhase Phase => AstroUtil.GetMoonPhase(DateTime.Now);
 
-        public Color Color {
+        // Phase 0.5p2 net10.0 conversion: WPF Color shade for the moon-icon
+        // tinting is client-side concern (Flutter renders the chart). Returning
+        // an ARGB hex string preserves the wire format.
+        public string Color {
             get {
                 double angle = Math.Abs(AstroUtil.GetMoonPositionAngle(DateTime.Now));
                 byte gray = (byte)(angle * 255 / 180);
                 byte alpha = (byte)(255 - gray);
-                return Color.FromArgb(alpha, gray, gray, gray);
+                return $"#{alpha:X2}{gray:X2}{gray:X2}{gray:X2}";
             }
         }
 

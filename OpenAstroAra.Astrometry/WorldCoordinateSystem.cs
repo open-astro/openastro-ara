@@ -13,8 +13,6 @@
 #endregion "copyright"
 
 using System;
-using System.Windows;
-
 namespace OpenAstroAra.Astrometry {
 
     /// <summary>

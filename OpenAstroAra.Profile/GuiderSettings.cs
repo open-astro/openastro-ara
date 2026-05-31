@@ -17,7 +17,6 @@ using OpenAstroAra.Profile.Interfaces;
 using System;
 using System.IO;
 using System.Runtime.Serialization;
-using System.Windows.Media;
 
 namespace OpenAstroAra.Profile {
 
@@ -75,8 +74,8 @@ namespace OpenAstroAra.Profile {
             var defaultSkyGuardPath = Environment.ExpandEnvironmentVariables(@"%PROGRAMFILES%\SkyGuard\SkyGuard.exe");
             skyGuardPath = File.Exists(defaultSkyGuardPath) ? defaultSkyGuardPath : string.Empty;
 
-            guideChartRightAscensionColor = Colors.Blue;
-            guideChartDeclinationColor = Colors.Red;
+            guideChartRightAscensionColor = "#FF0000FF";
+            guideChartDeclinationColor = "#FFFF0000";
             guideChartShowCorrections = true;
         }
 
@@ -581,9 +580,9 @@ namespace OpenAstroAra.Profile {
         #endregion
 
 
-        private Color guideChartRightAscensionColor;        
+        private string guideChartRightAscensionColor;        
         [DataMember]
-        public Color GuideChartRightAscensionColor {
+        public string GuideChartRightAscensionColor {
             get => guideChartRightAscensionColor;
             set {
                 if (guideChartRightAscensionColor != value) {
@@ -593,9 +592,9 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private Color guideChartDeclinationColor;        
+        private string guideChartDeclinationColor;        
         [DataMember]
-        public Color GuideChartDeclinationColor {
+        public string GuideChartDeclinationColor {
             get => guideChartDeclinationColor;
             set {
                 if (guideChartDeclinationColor != value) {

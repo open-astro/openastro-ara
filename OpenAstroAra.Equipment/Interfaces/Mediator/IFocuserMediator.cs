@@ -13,14 +13,13 @@
 #endregion "copyright"
 
 using OpenAstroAra.Equipment.Equipment.MyFocuser;
-using OpenAstroAra.Equipment.Interfaces.ViewModel;
 using OxyPlot;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace OpenAstroAra.Equipment.Interfaces.Mediator {
 
-    public interface IFocuserMediator : IDeviceMediator<IFocuserVM, IFocuserConsumer, FocuserInfo> {
+    public interface IFocuserMediator : IDeviceMediator<object, IFocuserConsumer, FocuserInfo> {
 
         void ToggleTempComp(bool tempComp);
 

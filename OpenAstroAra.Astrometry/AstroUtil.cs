@@ -24,8 +24,6 @@ using System.ComponentModel;
 using System.Globalization;
 using System.Linq;
 using System.Text.RegularExpressions;
-using System.Windows.Media.Media3D;
-
 namespace OpenAstroAra.Astrometry {
 
     public class AstroUtil {

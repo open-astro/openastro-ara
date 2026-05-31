@@ -13,12 +13,15 @@
 #endregion "copyright"
 
 using OpenAstroAra.Equipment.Equipment.MySafetyMonitor;
-using OpenAstroAra.Equipment.Interfaces.ViewModel;
 using System;
 
 namespace OpenAstroAra.Equipment.Interfaces.Mediator {
 
-    public interface ISafetyMonitorMediator : IDeviceMediator<ISafetyMonitorVM, ISafetyMonitorConsumer, SafetyMonitorInfo> {
+    public interface ISafetyMonitorMediator : IDeviceMediator<object, ISafetyMonitorConsumer, SafetyMonitorInfo> {
         event EventHandler<IsSafeEventArgs> IsSafeChanged;
+    }
+
+    public class IsSafeEventArgs : EventArgs {
+        public bool IsSafe { get; init; }
     }
 }
