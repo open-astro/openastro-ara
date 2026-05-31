@@ -264,6 +264,12 @@ public class Program {
         builder.Services.AddSingleton<IAraDatabase>(sp =>
             new SqliteAraDatabase(profileDir, sp.GetService<ILogger<SqliteAraDatabase>>()));
 
+        // §28.2 startup reconciler — checks for an active/current.json left
+        // by a previous run that didn't shut down cleanly. Registered as
+        // singleton so future hosted services can reference it; the actual
+        // reconciliation call runs once during startup below.
+        builder.Services.AddSingleton<SequenceStartupReconciler>();
+
         var app = builder.Build();
 
         app.UseCors();
@@ -360,6 +366,30 @@ public class Program {
         var notificationSvc = app.Services.GetRequiredService<INotificationService>();
         if (notificationSvc is SqliteNotificationService sqliteNotif) {
             sqliteNotif.EnsureSeededAsync(CancellationToken.None).GetAwaiter().GetResult();
+        }
+
+        // §28.2 — reconcile any interrupted-sequence checkpoint left by a
+        // previous run. Per the §28.2 policy ("do not auto-resume") the
+        // reconciler clears the checkpoint and returns the previous state
+        // so we can surface a §46 notification ("the previous sequence
+        // ended unexpectedly") on the next inbox load. Sits after the
+        // notification seed so the inserted row lands in a populated table
+        // — the seed is no-op once any row exists.
+        var reconcilerResult = app.Services
+            .GetRequiredService<SequenceStartupReconciler>()
+            .Reconcile();
+        if (reconcilerResult.Outcome != SequenceStartupReconciler.Outcome.Clean) {
+            var startupLogger = app.Services.GetRequiredService<ILogger<Program>>();
+            startupLogger.LogWarning(
+                "Startup reconciliation: {Outcome} (previous sequence: {SeqId})",
+                reconcilerResult.Outcome,
+                reconcilerResult.PreviousState?.SequenceId);
+            try {
+                var notif = StartupNotificationFactory.ForReconcilerResult(reconcilerResult);
+                notificationSvc.CreateAsync(notif, CancellationToken.None).GetAwaiter().GetResult();
+            } catch (Exception ex) {
+                startupLogger.LogWarning(ex, "Failed to emit §46 reconciliation notification");
+            }
         }
         // §51 diagnostics fixture seed — three events (one open issue + two
         // historical) so the panel has data to render before the monitor
