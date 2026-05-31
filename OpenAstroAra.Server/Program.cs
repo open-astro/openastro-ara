@@ -119,7 +119,11 @@ public class Program {
         // views with synthetic fixture data. Numbers are intentionally small
         // so the Stats tab renders something sensible without claiming the
         // system has acquired 50 nights of data.
-        builder.Services.AddSingleton<IStatsService, PlaceholderStatsService>();
+        // §50 SqliteStatsService — aggregations over the §28 catalog. Views
+        // that need data not yet captured (focuser position, separated RA/Dec
+        // RMS) return empty payloads; they wire up when §38 sequence
+        // orchestrator persists those columns.
+        builder.Services.AddSingleton<IStatsService, SqliteStatsService>();
         // Phase 13.7 — placeholder IServerStateService for the §60.4 state
         // snapshot + §33.2.1 versions + §54 release notes. Restart endpoints
         // throw (§13 systemd-watchdog work needed).
