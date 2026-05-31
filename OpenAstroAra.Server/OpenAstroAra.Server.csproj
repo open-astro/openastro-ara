@@ -26,9 +26,9 @@
       non-Windows without EnableWindowsTargeting on consumers, which
       defeats the purpose. Wiring up happens incrementally as each
       domain project is itself cross-platform-clean (Phase 4+ refactors).
-      For now the scaffold has no ProjectReferences; endpoints come
-      online as their dependencies become available.
     -->
+    <!-- §72 FITS via CFITSIO. Portable net10.0 + AOT-compatible. -->
+    <ProjectReference Include="..\OpenAstroAra.Fits\OpenAstroAra.Fits.csproj" />
   </ItemGroup>
 
   <ItemGroup>

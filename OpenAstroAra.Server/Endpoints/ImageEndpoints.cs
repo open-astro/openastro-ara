@@ -28,13 +28,6 @@ namespace OpenAstroAra.Server.Endpoints;
 /// </summary>
 public static class ImageEndpoints {
 
-    private static IResult NotImplementedStub(string endpoint, string section) =>
-        Results.Problem(
-            type: "https://openastro.net/errors/not-implemented",
-            title: "Endpoint not yet implemented",
-            statusCode: StatusCodes.Status501NotImplemented,
-            detail: $"{endpoint} is part of Phase 8's incremental implementation ({section}). Stub registered so the OpenAPI surface is stable; service wiring lands per area.");
-
     public static IEndpointRouteBuilder MapImageEndpoints(this IEndpointRouteBuilder app) {
         // ─── Frames (§40, §65) ───
         var frames = app.MapGroup("/api/v1/frames").WithTags("Frames");
@@ -81,11 +74,20 @@ public static class ImageEndpoints {
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("GetFrameThumbnail");
 
-        frames.MapGet("/{id:guid}/download", (Guid id) =>
-                NotImplementedStub("GET /api/v1/frames/{id}/download", "§72"))
+        // §72 FITS download — serves the captured file from the catalog's
+        // file_path column. 404 when the frame isn't in the catalog OR
+        // the FITS file is missing on disk (deleted out-of-band, drive
+        // unmounted, or the sample-seeded frames whose file_path values
+        // point at non-existent paths). 200 with `application/fits`
+        // content-type otherwise.
+        frames.MapGet("/{id:guid}/download",
+                async (Guid id, IFrameRepository repo, CancellationToken ct) => {
+                    var result = await repo.OpenDownloadAsync(id, ct);
+                    if (result is null) return Results.NotFound();
+                    return Results.File(result.Value.FitsStream, "application/fits", result.Value.FileName);
+                })
             .Produces<byte[]>(StatusCodes.Status200OK, "application/fits")
             .ProducesProblem(StatusCodes.Status404NotFound)
-            .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("DownloadFrame");
 
         frames.MapPost("/bulk/rate",
