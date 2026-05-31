@@ -44,14 +44,19 @@ public sealed class PlaceholderSequencerService : ISequencerService {
     // constructor injection would deadlock the DI container; the Func defers
     // resolution to call time.
     private readonly Func<ISequenceService?>? _sequencesResolver;
+    private readonly ActiveSequenceCheckpoint? _checkpoint;
     private readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, RunState> _runs = new();
 
     public PlaceholderSequencerService(IWsBroadcaster? ws = null)
-        : this(ws, sequencesResolver: null) { }
+        : this(ws, sequencesResolver: null, checkpoint: null) { }
 
-    public PlaceholderSequencerService(IWsBroadcaster? ws, Func<ISequenceService?>? sequencesResolver) {
+    public PlaceholderSequencerService(
+            IWsBroadcaster? ws,
+            Func<ISequenceService?>? sequencesResolver,
+            ActiveSequenceCheckpoint? checkpoint = null) {
         _ws = ws;
         _sequencesResolver = sequencesResolver;
+        _checkpoint = checkpoint;
     }
 
     public Task<SequenceRunStateDto?> GetRunStateAsync(Guid id, CancellationToken ct) =>
@@ -81,6 +86,10 @@ public sealed class PlaceholderSequencerService : ISequencerService {
 
         var run = new RunState(instructionCount);
         _runs[id] = run;
+        // §38j-6 — write the checkpoint immediately so the active/current.json
+        // exists from start-of-run, not just after the first instruction
+        // completes. The §28.2 reconciler can spot interrupted runs.
+        _checkpoint?.Write(run.ToDto(id));
         _ = Task.Run(() => RunWorkerAsync(id, run));
         return PlaceholderEquipmentHelpers.Accepted("sequencer.start", idempotencyKey);
     }
@@ -138,6 +147,10 @@ public sealed class PlaceholderSequencerService : ISequencerService {
                 run.FramesCompleted = i + 1;
                 await EmitAsync("sequence.instruction_complete", sequenceId, run);
                 await EmitAsync("sequence.progress", sequenceId, run);
+                // §38j-6 — refresh the active/current.json on each progress
+                // step so a daemon crash leaves a recent snapshot for the
+                // §28.2 reconciler.
+                _checkpoint?.Write(run.ToDto(sequenceId));
             }
             // No discrete "Aborted" state — `Stopped` covers both abort
             // and stop per the DTO enum. Source event-type differs by
@@ -155,6 +168,11 @@ public sealed class PlaceholderSequencerService : ISequencerService {
         } catch (Exception) {
             run.State = SequenceRunState.Failed;
             await EmitAsync("sequence.failed", sequenceId, run);
+        } finally {
+            // §38j-6 — terminal transition clears active/current.json (a
+            // missing file is the canonical "nothing was running" signal
+            // for §28.2 reconciliation).
+            _checkpoint?.Clear();
         }
     }
 
