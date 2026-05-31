@@ -4,10 +4,10 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** Post-§60.9 placeholder cleanup — all but one 501 stub closed out via #179–#182. Promoted to master via PR #183 (2026-05-30).
+- **Phase:** §28 frame catalog DB complete (5 sub-PRs #190–#194, promoted to master via PR #195, 2026-05-31). Phase 14c/14d CI matrix expansion landed in #187 + #188 (master via #189).
 - **Last merged on `port/ara`:** This tracking refresh.
-- **Currently working on:** PORT_PROGRESS.md refresh for the four post-§60.9 placeholder-wiring sub-PRs.
-- **Next substantive work:** The remaining 501 stub is `/api/v1/frames/{id}/download` (§72) — the CI smoke gate's deliberate 501 anchor; depends on real FITS file storage. Real-infra options for what comes after: Phase 14 CI matrix expansion (cross-platform client-test, Alpaca simulator pinning per §14.5, server-e2e Docker arm64), §28 frame catalog DB-backed bulk ops, §13 systemd-driven daemon restart, §65 stretch pipeline. None of these are placeholder-shaped — they need real infrastructure decisions.
+- **Currently working on:** PORT_PROGRESS.md refresh for the §28 series + Phase 14 CI matrix work.
+- **Next substantive work:** §72 FITS file storage via CFITSIO P/Invoke. After that, §38 sequence orchestrator + §65 stretch pipeline. The two design-blocked items per `design/PORT_TODO.md` (Sequencer WPF-removal authorization + Alpaca simulator choice) still await user input.
 
 ## Completed
 
@@ -175,6 +175,31 @@ After the §60.9 WS lifecycle landed, four sub-PRs flipped the last batch of end
 - ✅ **#182** — `/server/{restart,restart-on-idle}`: optional `?reason=` query string (defaults to `operator_requested`). Real systemd-driven restart still in Phase 14 hardening.
 
 After this sweep, **the only remaining 501 stub is `/api/v1/frames/{id}/download` (§72)** — kept as the CI smoke gate's 501 anchor since it depends on real FITS file storage.
+
+### §28 frame catalog DB (PRs #190–#195)
+
+Replaces the in-memory `PlaceholderFrameRepository` + `PlaceholderSessionService` with a SQLite-backed catalog. Sessions + frames persist across daemon restarts; bulk rate/tag/delete actually mutate rows; sessions list+get return live aggregates from frames.
+
+- ✅ **#190** — SQLite scaffold: `IAraDatabase` + §28.6 PRAGMAs (WAL, synchronous=NORMAL, etc.) + §28.1 schema (sessions + frames tables) via `CREATE TABLE IF NOT EXISTS`. DI-registered but not yet consumed.
+- ✅ **#191** — `SqliteFrameRepository` read path (`ListAsync`, `GetAsync`) + sample seed. Idempotent — survives daemon restart with persistence intact. Same Guids as the prior placeholder so existing CI probes (hfr-analysis on sample session) keep finding the data.
+- ✅ **#192** — Bulk ops actually mutate the catalog: `UPDATE` for rate, read-merge-write JSON-blob for tags, `DELETE` for delete. Single transaction per batch.
+- ✅ **#193** — `SqliteSessionService`: reads sessions row, aggregates derived fields (target name, light/cal counts, filters used) from frames at read time. Composes on `IFrameRepository` for `GetFramesAsync` + `GetHfrAnalysisAsync`.
+- ✅ **#194** — Delete `PlaceholderFrameRepository` + `PlaceholderSessionService`. After this, `IFrameRepository` + `ISessionService` are exclusively SQLite-backed.
+- ✅ **#195** — Promotion to master.
+
+Future §28 sub-PRs (deferred until they have a real-infra prerequisite):
+- §28.7 atomic-write pipeline — lands with §72 FITS storage (the rename + dir fsync is per-file, not per-row)
+- §28.8 startup scan + orphan recovery — needs §72 FITS files to scan
+- §28.2 recovery routine — needs §38 sequence orchestrator + equipment reconnect path
+
+### Phase 14 CI matrix expansion (PRs #187 + #188)
+
+Phase 14 §14.3 cross-platform expansion of the existing client-test + server-build jobs.
+
+- ✅ **14c (#187)** — `client-test` job extended from `ubuntu-latest` to `{ubuntu, macos, windows}` matrix. `defaults.run.shell: bash` portable across all three; `fail-fast: false`.
+- ✅ **14d (#188)** — server-e2e. After the existing arm64 image build, `docker run` it via qemu and probe `/healthz` (text "ok" per §60.4) + `/api/v1/server/info` (Guid serialization through AOT in the arm64 binary). Catches arm64-specific regressions the x64-host smoke gate doesn't see.
+
+Remaining Phase 14 work: 14e — Alpaca-simulator pinning + integration tests (deferred pending user direction on which simulator to use).
 
 ### Phase 0.5p-followup buildfix — Core + Astrometry + Equipment cleanup (PR #43)
 - ✅ `OpenAstroAra.Core` — `Notification.cs` scrubbed (CustomDisplayPart references removed; warning/error variants now route to `Logger` with `[CallerXxx]` attribute propagation so the original call site is preserved); `MyMessageBox.cs` `Show(...)` maps affirmative defaults (Yes→No, OK→Cancel) to safe non-affirmative results to prevent `SequenceHasChanged.AskHasChanged` silently auto-detaching; `System.Management 10.0.0` added for WMI usage in `Logger.cs` + `SerialPortProvider.cs`.
