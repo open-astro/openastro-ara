@@ -207,9 +207,14 @@ public class Program {
 
         // Phase 38a — §38.2 filesystem-backed sequence library at
         // {profileDir}/sequences/library/. Replaces the in-memory placeholder
-        // so saved sequences survive daemon restart.
+        // so saved sequences survive daemon restart. §38j-4 — also injected
+        // the optional ISequencerService so ListAsync can surface the
+        // current run state per item (running/paused/etc badge).
         builder.Services.AddSingleton<ISequenceService>(sp =>
-            new FileSequenceService(profileDir, sp.GetService<ILogger<FileSequenceService>>()));
+            new FileSequenceService(
+                profileDir,
+                sp.GetService<ISequencerService>(),
+                sp.GetService<ILogger<FileSequenceService>>()));
 
         // §38.7 — disk-shipped templates under {profileDir}/sequences/templates/
         // merged on top of the 3 hardcoded built-ins. .deb install can drop
