@@ -13,23 +13,41 @@
 #endregion "copyright"
 
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
 using OpenAstroAra.Server.Contracts;
 
 namespace OpenAstroAra.Server.Services;
 
 /// <summary>
-/// Phase 13.15 — placeholder <see cref="ISequenceTemplateService"/>.
-/// Three built-in fixture templates so the §38.6 template picker has
-/// real entries to render. Instantiate creates a fresh
-/// <see cref="SequenceDto"/> via the existing <see cref="ISequenceService"/>
-/// so the new sequence shows up in the list immediately.
+/// §38.6 / §38.7 template service. Three hardcoded built-in templates
+/// give the picker something to render out-of-box; additional user/.deb-
+/// shipped templates can be dropped as JSON files into
+/// <c>{profileDir}/sequences/templates/</c> per playbook §38.2 and the
+/// service merges them with the built-ins.
+///
+/// Instantiate substitutes <c>{{token}}</c> placeholders in the template
+/// Body via <see cref="SequenceTemplateVariables.Substitute"/> and
+/// creates a fresh <see cref="SequenceDto"/> via the existing
+/// <see cref="ISequenceService"/> so the new sequence shows up in the
+/// list immediately.
 /// </summary>
 public sealed class PlaceholderSequenceTemplateService : ISequenceTemplateService {
     private readonly ISequenceService _sequences;
+    private readonly string? _templatesDir;
+    private readonly ILogger<PlaceholderSequenceTemplateService>? _logger;
     private static readonly JsonDocument _emptyBody = JsonDocument.Parse("{}");
 
     public PlaceholderSequenceTemplateService(ISequenceService sequences) {
         _sequences = sequences;
+    }
+
+    public PlaceholderSequenceTemplateService(
+            ISequenceService sequences,
+            string profileDir,
+            ILogger<PlaceholderSequenceTemplateService>? logger = null) {
+        _sequences = sequences;
+        _templatesDir = Path.Combine(profileDir, "sequences", FileSequenceService.TemplatesDirName);
+        _logger = logger;
     }
 
     private static JsonElement TemplateBody(string targetTokenName, string filterSet, int framesPerFilter, int integrationMinutes) {
@@ -69,11 +87,40 @@ public sealed class PlaceholderSequenceTemplateService : ISequenceTemplateServic
             Body: TemplateBody("target_name", "LRGB", 60, 240)),
     };
 
-    public Task<IReadOnlyList<SequenceTemplateDto>> ListAsync(CancellationToken ct) =>
-        Task.FromResult<IReadOnlyList<SequenceTemplateDto>>(BuiltIns);
+    public Task<IReadOnlyList<SequenceTemplateDto>> ListAsync(CancellationToken ct) {
+        // Built-ins first; disk templates (§38.7) merged on top with the same
+        // name overriding the built-in (lets the .deb ship updated templates
+        // without code changes).
+        if (_templatesDir is null) return Task.FromResult<IReadOnlyList<SequenceTemplateDto>>(BuiltIns);
+
+        var byName = BuiltIns.ToDictionary(t => t.Name, t => t, StringComparer.Ordinal);
+        foreach (var disk in LoadDiskTemplates()) {
+            byName[disk.Name] = disk;
+        }
+        return Task.FromResult<IReadOnlyList<SequenceTemplateDto>>(byName.Values.ToList());
+    }
+
+    private IEnumerable<SequenceTemplateDto> LoadDiskTemplates() {
+        if (_templatesDir is null || !Directory.Exists(_templatesDir)) yield break;
+        foreach (var path in Directory.EnumerateFiles(_templatesDir, "*.json")) {
+            SequenceTemplateDto? dto = null;
+            try {
+                var json = File.ReadAllText(path);
+                dto = JsonSerializer.Deserialize(json, AraJsonSerializerContext.Default.SequenceTemplateDto);
+            } catch (Exception ex) {
+                _logger?.LogWarning(ex, "Skipping invalid sequence template at {Path}", path);
+            }
+            if (dto is not null) yield return dto;
+        }
+    }
 
     public Task<SequenceDto> InstantiateAsync(string templateName, TemplateInstantiateRequestDto request, CancellationToken ct) {
-        var template = BuiltIns.FirstOrDefault(t => t.Name == templateName);
+        // Look in disk templates first (§38.7 override behavior) then fall back to built-ins.
+        SequenceTemplateDto? template = null;
+        if (_templatesDir is not null) {
+            template = LoadDiskTemplates().FirstOrDefault(t => t.Name == templateName);
+        }
+        template ??= BuiltIns.FirstOrDefault(t => t.Name == templateName);
         if (template is null) {
             // Endpoint catches null returns and 404s. ISequenceTemplateService's
             // contract is non-nullable, so synthesize a "not found" SequenceDto
@@ -134,7 +181,11 @@ public sealed class PlaceholderSequenceTemplateService : ISequenceTemplateServic
         }
     }
 
-    public bool TemplateExists(string templateName) => BuiltIns.Any(t => t.Name == templateName);
+    public bool TemplateExists(string templateName) {
+        if (BuiltIns.Any(t => t.Name == templateName)) return true;
+        if (_templatesDir is null) return false;
+        return LoadDiskTemplates().Any(t => t.Name == templateName);
+    }
 }
 
 /// <summary>
