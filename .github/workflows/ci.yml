@@ -27,9 +27,10 @@ name: CI
 #     → add `client-test` job: `flutter analyze && flutter test` on Linux.
 #
 #   Phase 14 (full CI matrix per §14.3)
-#     → full matrix: server-build (linux), server-e2e (Docker arm64),
-#       client-macos / -windows / -linux / -test, settings-registry gate,
-#       Alpaca-simulator pinning auto-download (§14.5.1).
+#     → 14c [LANDED]: client-test extended to {linux, macos, windows} matrix.
+#     → 14d [LANDED]: server-e2e — actually `docker run` the arm64 image
+#       via qemu, probe /healthz + /api/v1/server/info from the host.
+#     → still ahead: Alpaca-simulator pinning auto-download (§14.5.1).
 #
 # Until then, every job in this file MUST stay green on a vanilla `port/ara`
 # checkout — sub-PRs that delete or rename projects should not break CI.
@@ -278,7 +279,54 @@ jobs:
           platforms: linux/arm64
           push: false
           tags: openastroara-server:arm64
-          load: false  # smoke test only — don't load arm64 manifest into x64 docker daemon
+          load: true  # Phase 14d: load into the local daemon so the e2e step can `docker run`.
+
+      # Phase 14d server-e2e: actually run the arm64 image via qemu and probe
+      # /healthz to prove the published artifact + Dockerfile produce a
+      # working container. The x64 GitHub runner emulates arm64 instructions
+      # — slow (~2× wall clock vs. native) but representative.
+      - name: Run arm64 container + health probe
+        run: |
+          set -euo pipefail
+          docker run -d --platform linux/arm64 \
+            --name oara-e2e \
+            -p 5555:5555 \
+            openastroara-server:arm64
+          # Wait up to 60s for /healthz to come up. The arm64-on-x64
+          # emulated cold start takes 5-15s vs. <1s native, hence the
+          # generous ceiling. Print container logs on any failure to
+          # make CI debugging straightforward.
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:5555/healthz >/dev/null 2>&1; then
+              echo "✓ /healthz responded after ${i}s"
+              break
+            fi
+            if [ "$i" = "60" ]; then
+              echo "✗ /healthz did not respond within 60s"
+              docker logs oara-e2e || true
+              exit 1
+            fi
+            sleep 1
+          done
+          # /healthz body must be the plain text "ok" per §60.4.
+          BODY="$(curl -fsS http://localhost:5555/healthz)"
+          test "$BODY" = "ok" || (echo "✗ /healthz body was '$BODY', expected 'ok'"; exit 1)
+          # /api/v1/server/info should serialize cleanly under AOT in the
+          # arm64 container — catches AOT-readiness regressions that the
+          # x64-host smoke gate doesn't (different runtime, same code).
+          # ServerInfoDto field names: server_uuid, nickname, version,
+          # api, mdns_service, tier. Asserting `server_uuid` because it's
+          # the most distinctive (a Guid serialization) — confirms both
+          # the AOT-serialized envelope + the snake_case naming policy
+          # round-trip correctly in the arm64 binary.
+          curl -fsS http://localhost:5555/api/v1/server/info \
+            | tee /dev/stderr \
+            | grep -q '"server_uuid":"'
+          echo "✓ server-e2e clean"
+
+      - name: Tear down container
+        if: always()
+        run: docker rm -f oara-e2e || true
 
       # === Phase 10.5: .deb packaging ===
       # Assemble an arm64 .deb on every push so the user can scp it to a
@@ -339,8 +387,24 @@ jobs:
         run: node scripts/check-help-registry.mjs
 
   client-test:
-    name: Client (analyze + test)
-    runs-on: ubuntu-latest
+    name: Client (analyze + test) — ${{ matrix.os }}
+    # §14.3 cross-platform client-test matrix. Linux is the canonical
+    # development target; macOS + Windows verify Dart code stays
+    # portable since the WILMA client ships to all three platforms.
+    # `fail-fast: false` so a flake on one OS doesn't mask a real
+    # regression on another.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        # Use bash on all three platforms so the version-reading + cd
+        # steps don't need OS-specific variants. Windows runners ship
+        # with Git Bash, which honors `set -euo pipefail` + POSIX
+        # parameter expansion exactly like Linux/macOS.
+        shell: bash
     steps:
       - name: Checkout (no LFS)
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.x pinned per zizmor + CodeRabbit security policy
