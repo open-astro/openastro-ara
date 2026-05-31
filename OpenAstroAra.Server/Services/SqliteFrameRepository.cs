@@ -92,7 +92,9 @@ public sealed class SqliteFrameRepository : IFrameRepository {
             await sessionCmd.ExecuteNonQueryAsync(ct);
         }
 
-        // Three fixture frames mirroring PlaceholderFrameRepository.SampleFrames.
+        // Three fixture frames: two Lights + one Dark, all in the sample
+        // session. Same Guids the prior placeholder used so existing CI
+        // smoke probes + WILMA manual tests find the same fixtures.
         var qualityScore = new QualityScoreBreakdownDto(
             Composite: 0.87,
             HfrComponent: 0.92,
