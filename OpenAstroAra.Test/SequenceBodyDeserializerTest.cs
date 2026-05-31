@@ -121,16 +121,13 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void TryDeserialize_returns_false_on_completely_malformed_json() {
-            // Construct a JsonElement that looks ok via System.Text.Json but
-            // whose serialized form bewilders Newtonsoft. Using a clone of
-            // a JSON that round-trips to an empty string is the simplest:
-            // an empty object should round-trip cleanly — picks the
-            // graceful-degradation path again.
+        public void TryDeserialize_empty_object_body_yields_graceful_degradation() {
+            // An empty JSON object has no $type, so the converter hits the
+            // same fallback as the explicit "missing $type" case — produces
+            // UnknownSequenceContainer rather than throwing.
             var deserializer = NewDeserializer();
             var body = Parse("""{ }""");
             var ok = deserializer.TryDeserialize(body, out var container, out _);
-            // Empty object: no $type → UnknownSequenceContainer.
             Assert.That(ok, Is.True);
             Assert.That(container!.GetType().Name, Is.EqualTo("UnknownSequenceContainer"));
         }
