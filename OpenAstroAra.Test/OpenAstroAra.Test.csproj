@@ -36,6 +36,7 @@
     <ProjectReference Include="..\OpenAstroAra.PlateSolving\OpenAstroAra.PlateSolving.csproj" />
     <ProjectReference Include="..\OpenAstroAra.Profile\OpenAstroAra.Profile.csproj" />
     <ProjectReference Include="..\OpenAstroAra.Sequencer\OpenAstroAra.Sequencer.csproj" />
+    <ProjectReference Include="..\OpenAstroAra.Server\OpenAstroAra.Server.csproj" />
   </ItemGroup>
 
   <ItemGroup>

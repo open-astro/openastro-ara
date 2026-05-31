@@ -32,25 +32,41 @@ public sealed class PlaceholderSequenceTemplateService : ISequenceTemplateServic
         _sequences = sequences;
     }
 
+    private static JsonElement TemplateBody(string targetTokenName, string filterSet, int framesPerFilter, int integrationMinutes) {
+        // §38.6 placeholder bodies — exercise the {{token}} substitution path
+        // end-to-end without prescribing the full §38.1 sequence schema yet.
+        // Real template authoring lands when the sequencer renderer is in place.
+        var json = $$"""
+            {
+              "schemaVersion": "openastroara-sequence-v1",
+              "target": "{{"{{"}}{{targetTokenName}}{{"}}"}}",
+              "filterSet": "{{filterSet}}",
+              "framesPerFilter": {{framesPerFilter}},
+              "integrationMinutes": {{integrationMinutes}}
+            }
+            """;
+        return JsonDocument.Parse(json).RootElement.Clone();
+    }
+
     private static readonly SequenceTemplateDto[] BuiltIns = new[] {
         new SequenceTemplateDto(
             Name: "single-target-lrgb",
             Category: "single-target",
             Description: "One target, 4 filters (L/R/G/B), default per-filter framecount + dithering.",
             IsBuiltIn: true,
-            Body: _emptyBody.RootElement.Clone()),
+            Body: TemplateBody("target_name", "LRGB", 30, 120)),
         new SequenceTemplateDto(
             Name: "single-target-narrowband",
             Category: "single-target",
             Description: "One target, 3 narrowband filters (Ha/OIII/SII), longer per-filter exposures.",
             IsBuiltIn: true,
-            Body: _emptyBody.RootElement.Clone()),
+            Body: TemplateBody("target_name", "SHO", 20, 180)),
         new SequenceTemplateDto(
             Name: "all-night-dso-roster",
             Category: "multi-target",
             Description: "Cycle through a target list; rotate when altitude crosses §35.4 limit.",
             IsBuiltIn: true,
-            Body: _emptyBody.RootElement.Clone()),
+            Body: TemplateBody("target_name", "LRGB", 60, 240)),
     };
 
     public Task<IReadOnlyList<SequenceTemplateDto>> ListAsync(CancellationToken ct) =>
@@ -64,15 +80,58 @@ public sealed class PlaceholderSequenceTemplateService : ISequenceTemplateServic
             // here — endpoint converts to 404 via existence-check.
             throw new KeyNotFoundException($"Template '{templateName}' not found.");
         }
+
+        // Phase 38d — §38.6 template-variable substitution. The template Body is
+        // serialized to text, {{token}} placeholders are swapped for the
+        // request's Parameters values via SequenceTemplateVariables.Substitute,
+        // then the result is parsed back to a JsonElement. Unknown tokens are
+        // preserved literally so §38.5 validation can flag them.
+        var substitutedBody = SubstituteTemplateBody(template.Body, request.Parameters);
+
         // Reuse the §38 create path so the new sequence shows up in
         // /api/v1/sequences immediately.
         return _sequences.CreateAsync(
             new SequenceCreateRequestDto(
                 Name: request.NewSequenceName,
                 Description: $"Instantiated from template '{templateName}'",
-                Body: template.Body,
+                Body: substitutedBody,
                 TemplateOrigin: templateName),
             idempotencyKey: null, ct);
+    }
+
+    private static JsonElement SubstituteTemplateBody(JsonElement templateBody, JsonElement? parameters) {
+        var rawText = templateBody.GetRawText();
+        if (parameters is null || !parameters.Value.ValueKind.Equals(JsonValueKind.Object)) {
+            // No parameters supplied; return template body unchanged.
+            using var doc = JsonDocument.Parse(rawText);
+            return doc.RootElement.Clone();
+        }
+        // Flatten Parameters top-level string/number properties into a
+        // dict for the substitutor. Numbers are stringified via raw text
+        // (preserves precision better than ToString on the parsed double).
+        var values = new Dictionary<string, string>();
+        foreach (var prop in parameters.Value.EnumerateObject()) {
+            values[prop.Name] = prop.Value.ValueKind switch {
+                JsonValueKind.String => prop.Value.GetString() ?? string.Empty,
+                JsonValueKind.Number => prop.Value.GetRawText(),
+                JsonValueKind.True => "true",
+                JsonValueKind.False => "false",
+                JsonValueKind.Null => string.Empty,
+                _ => prop.Value.GetRawText(),
+            };
+        }
+        var (result, _) = OpenAstroAra.Core.Utility.SequenceTemplateVariables.Substitute(rawText, values);
+        try {
+            using var doc = JsonDocument.Parse(result);
+            return doc.RootElement.Clone();
+        } catch (JsonException) {
+            // Substitution produced invalid JSON (e.g. an unquoted brace inside
+            // a string field). Fall back to the original body so the caller
+            // can still create the sequence; §38.5 validation flags the
+            // unresolved placeholders during the next save.
+            using var doc = JsonDocument.Parse(rawText);
+            return doc.RootElement.Clone();
+        }
     }
 
     public bool TemplateExists(string templateName) => BuiltIns.Any(t => t.Name == templateName);
