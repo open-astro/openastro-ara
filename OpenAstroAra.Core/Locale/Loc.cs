@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -16,7 +16,6 @@ using OpenAstroAra.Core.Utility;
 using System;
 using System.Globalization;
 using System.Resources;
-using System.Windows.Data;
 
 namespace OpenAstroAra.Core.Locale {
 
@@ -54,11 +53,4 @@ namespace OpenAstroAra.Core.Locale {
         }
     }
 
-    public class LocExtension : Binding {
-
-        public LocExtension(string name) : base($"[{name}]") {
-            this.Mode = BindingMode.OneWay;
-            this.Source = Loc.Instance;
-        }
-    }
 }
