@@ -19,18 +19,24 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!--
-      Inherited domain projects are net10.0-windows (kept WPF deps until
-      OpenCvSharp4 migration in §26 / Phase 4+). Server itself stays
-      net10.0 (cross-platform) but cannot ProjectReference them on
-      non-Windows without EnableWindowsTargeting on consumers, which
-      defeats the purpose. Wiring up happens incrementally as each
-      domain project is itself cross-platform-clean (Phase 4+ refactors).
-    -->
     <!-- §72 FITS via CFITSIO. Portable net10.0 + AOT-compatible. -->
     <ProjectReference Include="..\OpenAstroAra.Fits\OpenAstroAra.Fits.csproj" />
     <!-- §65 stretch algorithms + JPEG encoding (SkiaSharp). -->
     <ProjectReference Include="..\OpenAstroAra.Stretch\OpenAstroAra.Stretch.csproj" />
+    <!--
+      Inherited NINA domain projects, now headless net10.0 per playbook §5.2
+      (Phase 0.5p2). Wired in dependency order per §8 Phase 4 csproj scaffold.
+      Pixel-level Image processing is stubbed via NotImplementedException
+      pending OpenCvSharp4 wiring per §line-2105; the wire-level Server
+      endpoints don't need it today.
+    -->
+    <ProjectReference Include="..\OpenAstroAra.Core\OpenAstroAra.Core.csproj" />
+    <ProjectReference Include="..\OpenAstroAra.Astrometry\OpenAstroAra.Astrometry.csproj" />
+    <ProjectReference Include="..\OpenAstroAra.Profile\OpenAstroAra.Profile.csproj" />
+    <ProjectReference Include="..\OpenAstroAra.Image\OpenAstroAra.Image.csproj" />
+    <ProjectReference Include="..\OpenAstroAra.Equipment\OpenAstroAra.Equipment.csproj" />
+    <ProjectReference Include="..\OpenAstroAra.PlateSolving\OpenAstroAra.PlateSolving.csproj" />
+    <ProjectReference Include="..\OpenAstroAra.Sequencer\OpenAstroAra.Sequencer.csproj" />
   </ItemGroup>
 
   <ItemGroup>
