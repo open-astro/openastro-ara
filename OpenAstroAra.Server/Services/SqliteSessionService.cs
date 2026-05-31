@@ -126,26 +126,40 @@ public sealed class SqliteSessionService : ISessionService {
         var framesPage = await _frames.ListAsync(limit: 200, cursor: null, sessionId, targetName: null, ct);
         var frameIds = framesPage.Items.Select(f => f.Id).ToList();
 
+        var startUtc = DateTimeOffset.UtcNow;
         var job = _jobs.Enqueue("sessions.restretch", frameIds.Count, async (report, jobCt) => {
             var done = 0;
-            foreach (var frameId in frameIds) {
-                if (jobCt.IsCancellationRequested) break;
-                try {
-                    await _frames.GetPreviewAsync(frameId, request: new FramePreviewRequestDto(
-                        StretchPalette: request.StretchPalette,
-                        BlackPoint: request.BlackPoint,
-                        MidtonePoint: request.MidtonePoint,
-                        WhitePoint: request.WhitePoint,
-                        MaxDimensionPx: null,
-                        ApplyDebayer: false), jobCt);
-                } catch (Exception) {
-                    // Per-frame stretch failures don't abort the batch —
-                    // user gets the rest. Future enhancement: per-frame
-                    // failure list on the job DTO.
+            try {
+                foreach (var frameId in frameIds) {
+                    if (jobCt.IsCancellationRequested) break;
+                    try {
+                        await _frames.GetPreviewAsync(frameId, request: new FramePreviewRequestDto(
+                            StretchPalette: request.StretchPalette,
+                            BlackPoint: request.BlackPoint,
+                            MidtonePoint: request.MidtonePoint,
+                            WhitePoint: request.WhitePoint,
+                            MaxDimensionPx: null,
+                            ApplyDebayer: false), jobCt);
+                    } catch (Exception) {
+                        // Per-frame stretch failures don't abort the batch —
+                        // user gets the rest. Future enhancement: per-frame
+                        // failure list on the job DTO.
+                    }
+                    done++;
+                    report(done);
+                    await EmitProgressAsync(sessionId, done, frameIds.Count, frameId, jobCt);
                 }
-                done++;
-                report(done);
-                await EmitProgressAsync(job: null!, sessionId, done, frameIds.Count, frameId, jobCt);
+                // §65.7 terminal event — emit complete after the loop. Use
+                // CancellationToken.None so we still fire on cancellation
+                // (so WILMA can clear its in-flight banner) rather than
+                // racing the cancel CTS.
+                var elapsed = (DateTimeOffset.UtcNow - startUtc).TotalSeconds;
+                await EmitTerminalAsync("session.restretch.complete",
+                    sessionId, framesProcessed: done, durationSeconds: elapsed, error: null);
+            } catch (Exception ex) {
+                await EmitTerminalAsync("session.restretch.failed",
+                    sessionId, framesProcessed: done, durationSeconds: null, error: ex.Message);
+                throw;
             }
         });
 
@@ -160,7 +174,7 @@ public sealed class SqliteSessionService : ISessionService {
             IdempotencyKey: idempotencyKey);
     }
 
-    private async Task EmitProgressAsync(BatchJobDto? job, Guid sessionId, int done, int total, Guid currentFrameId, CancellationToken ct) {
+    private async Task EmitProgressAsync(Guid sessionId, int done, int total, Guid currentFrameId, CancellationToken ct) {
         // §65.7 session.restretch.progress payload shape. Build the JSON
         // by hand so the AOT analyzer sees a static literal rather than
         // reflective serialization of an anonymous type (IL2026/IL3050).
@@ -172,6 +186,29 @@ public sealed class SqliteSessionService : ISessionService {
             await _ws.PublishAsync("session.restretch.progress", doc.RootElement.Clone(), ct);
         } catch {
             // WS publish best-effort — never let it abort the job.
+        }
+    }
+
+    private async Task EmitTerminalAsync(string eventType, Guid sessionId, int framesProcessed, double? durationSeconds, string? error) {
+        // §65.7 session.restretch.{complete,failed} payload shapes. Same
+        // hand-built JSON pattern as the progress event for AOT safety.
+        try {
+            string json;
+            if (eventType.EndsWith(".complete")) {
+                var dur = durationSeconds ?? 0;
+                json = $$"""
+                    {"session_id":"{{sessionId}}","frames_processed":{{framesProcessed}},"duration_seconds":{{dur.ToString("F3", System.Globalization.CultureInfo.InvariantCulture)}}}
+                    """;
+            } else {
+                var safeError = (error ?? "").Replace("\\", "\\\\").Replace("\"", "\\\"");
+                json = $$"""
+                    {"session_id":"{{sessionId}}","frames_processed":{{framesProcessed}},"error":"{{safeError}}"}
+                    """;
+            }
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            await _ws.PublishAsync(eventType, doc.RootElement.Clone(), CancellationToken.None);
+        } catch {
+            // Same as progress — never let WS issues abort the worker.
         }
     }
 
