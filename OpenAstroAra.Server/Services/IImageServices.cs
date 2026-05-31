@@ -69,4 +69,19 @@ public interface IDiagnosticsService {
     Task<DiagnosticsStateDto> GetStateAsync(CancellationToken ct);
     Task<DiagnosticsStateDto> SetModeAsync(DiagnosticsModeRequestDto request, CancellationToken ct);
     Task<CursorPage<DiagnosticEventDto>> GetHistoryAsync(int limit, string? cursor, CancellationToken ct);
+
+    /// <summary>
+    /// Insert a diagnostic event from a server-side emitter (e.g. §28.2
+    /// startup reconciler on a Corrupt outcome, §38 sequence-lifecycle
+    /// monitor, equipment failure handlers). Endpoints don't call this —
+    /// it's for the §51 monitor pipeline. <paramref name="event"/>
+    /// supplies the wire shape; emitter can additionally pass an optional
+    /// <paramref name="recommendedAction"/> + <paramref name="autoCorrectible"/>
+    /// for the columns absent from the read DTO.
+    /// </summary>
+    Task CreateEventAsync(
+        DiagnosticEventDto @event,
+        string? recommendedAction,
+        bool? autoCorrectible,
+        CancellationToken ct);
 }

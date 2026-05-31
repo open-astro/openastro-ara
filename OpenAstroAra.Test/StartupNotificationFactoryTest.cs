@@ -120,5 +120,58 @@ namespace OpenAstroAra.Test {
             Assert.That(a.Id, Is.Not.EqualTo(b.Id));
             Assert.That(a.Id, Is.Not.EqualTo(Guid.Empty));
         }
+
+        // §38j-9 — diagnostic-event factory for Corrupt outcomes.
+
+        [Test]
+        public void DiagnosticForCorruptResult_with_quarantine_yields_Red_auto_cleared_event() {
+            var path = "/profile/sequences/active/current.json.corrupt.1717999000";
+            var result = new SequenceStartupReconciler.Result(
+                SequenceStartupReconciler.Outcome.Corrupt,
+                PreviousState: null,
+                QuarantinedPath: path);
+
+            var (evt, rec, autoCorr) = StartupNotificationFactory.DiagnosticForCorruptResult(result);
+
+            Assert.That(evt.Severity, Is.EqualTo(DiagnosticHealth.Red));
+            Assert.That(evt.EventType, Is.EqualTo("sequence.checkpoint.corrupt"));
+            // Pre-cleared — the quarantine already took care of the file,
+            // so nothing for the user to do; §51 panel sees this in history,
+            // not the open-issues count.
+            Assert.That(evt.ClearedUtc, Is.Not.Null);
+            Assert.That(evt.AutoActionTaken, Is.True);
+            Assert.That(evt.AutoActionDescription, Does.Contain(path));
+            Assert.That(evt.Description, Does.Contain(path));
+            Assert.That(autoCorr, Is.True);
+            Assert.That(rec, Is.Null);  // nothing for the user to do
+        }
+
+        [Test]
+        public void DiagnosticForCorruptResult_without_quarantine_uses_delete_fallback_copy() {
+            var result = new SequenceStartupReconciler.Result(
+                SequenceStartupReconciler.Outcome.Corrupt,
+                PreviousState: null,
+                QuarantinedPath: null);
+
+            var (evt, _, _) = StartupNotificationFactory.DiagnosticForCorruptResult(result);
+
+            Assert.That(evt.Severity, Is.EqualTo(DiagnosticHealth.Red));
+            Assert.That(evt.AutoActionDescription, Does.Contain("Deleted"));
+            Assert.That(evt.Description, Does.Contain("could not be quarantined")
+                .Or.Contain("deleted").IgnoreCase);
+        }
+
+        [Test]
+        public void DiagnosticForCorruptResult_rejects_non_Corrupt_outcomes() {
+            var clean = new SequenceStartupReconciler.Result(
+                SequenceStartupReconciler.Outcome.Clean, null, null);
+            var interrupted = new SequenceStartupReconciler.Result(
+                SequenceStartupReconciler.Outcome.Interrupted, SampleState(), null);
+
+            Assert.Throws<ArgumentException>(
+                () => StartupNotificationFactory.DiagnosticForCorruptResult(clean));
+            Assert.Throws<ArgumentException>(
+                () => StartupNotificationFactory.DiagnosticForCorruptResult(interrupted));
+        }
     }
 }
