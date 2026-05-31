@@ -232,6 +232,14 @@ jobs:
             || (echo "✗ profile.json not written"; tail -50 "$RUNNER_TEMP/server.log"; exit 1)
           grep -q '"exposure_seconds"' "$OPENASTROARA_PROFILE_DIR/profile.json" \
             || (echo "✗ profile.json missing snake_case keys"; exit 1)
+          # §28 SQLite catalog should exist after startup (scaffold landed
+          # in #190; subsequent sub-PRs flip placeholder repositories onto
+          # it). Asserts the file was created + has the WAL companion files
+          # (proves WAL mode PRAGMA stuck).
+          test -f "$OPENASTROARA_PROFILE_DIR/openastroara.db" \
+            || (echo "✗ openastroara.db not created"; tail -50 "$RUNNER_TEMP/server.log"; exit 1)
+          test -f "$OPENASTROARA_PROFILE_DIR/openastroara.db-wal" \
+            || (echo "✗ openastroara.db-wal missing — WAL mode didn't apply"; exit 1)
           echo "✓ smoke clean"
           kill $SERVER_PID 2>/dev/null || true
           wait $SERVER_PID 2>/dev/null || true
