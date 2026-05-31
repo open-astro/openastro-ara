@@ -5,9 +5,9 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 ## Current
 
 - **Phase:** Phase 0.5p2 merged — all 7 NINA-inherited library projects (Core, Astrometry, Profile, Image, Equipment, PlateSolving, Sequencer) + OpenAstroAra.Test now target `net10.0` headless per playbook §5.2/§8. WPF UI deleted wholesale per §4.2; mediator-VM constraint dropped per §8.1; `BitmapSource` → `byte[]` for type signatures with OpenCvSharp4 wiring deferred per §line-2105; CFITSIO + NOVAS native test gating per platform.
-- **Last merged on `port/ara`:** PR #242 (Phase 0.5p2 net10.0 conversion, 496 files +611/-53902) — promoted to master via #243.
-- **Currently working on:** Nothing — Phase 0.5p2 closes the long-standing implicit gap that left 7 projects at `net10.0-windows`. The daemon can now `ProjectReference` the full library tree per playbook §8 Phase 4 csproj scaffold.
-- **Next substantive work:** wire Server → `Astrometry`, `Profile`, `Image`, `Equipment`, `PlateSolving`, `Sequencer` `ProjectReference`s (currently only Fits + Stretch are referenced); §38 real sequence orchestrator (needs real ASCOM drivers); OpenCvSharp4 + libraw wiring per §line-2105 to un-stub the `NotImplementedException`s in `Image/ImageData/`; `IXxxMediator → IXxxService` rename per §8.1 mapping table (cosmetic follow-up).
+- **Last merged on `port/ara`:** PR #244 (Server wires ProjectReferences to all 7 NINA libs) — promoted to master via #245. Phase 0.5p2 conversion landed via #242 / #243.
+- **Currently working on:** Nothing — the structural net10.0-headless conversion is complete; daemon csproj cleanly bundles the full library tree per playbook §8 Phase 4 scaffold.
+- **Next substantive work:** §38 real sequence orchestrator (needs real ASCOM drivers wired); OpenCvSharp4 + libraw wiring per §line-2105 to un-stub the `NotImplementedException`s in `Image/ImageData/` (Debayer, DetectStars, Stretch, SaveTiff, FromBitmapSource, CreateRAWExposureData); `IXxxMediator → IXxxService` rename per §8.1 mapping table (cosmetic follow-up); Phase 14e Alpaca simulator (user-blocked); v0.0.1-ara.1 release tag + RPi smoke test (user-blocked).
 
 ## Completed
 
