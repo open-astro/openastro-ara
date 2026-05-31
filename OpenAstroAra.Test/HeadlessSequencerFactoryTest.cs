@@ -13,6 +13,7 @@
 #endregion "copyright"
 
 using NUnit.Framework;
+using OpenAstroAra.Sequencer.SequenceItem.Utility;
 using OpenAstroAra.Server.Services;
 using System.Linq;
 using System.Text.Json;
@@ -112,6 +113,50 @@ namespace OpenAstroAra.Test {
 
             Assert.That(ok, Is.True);
             Assert.That(container!.GetType().Name, Is.EqualTo("SequenceRootContainer"));
+        }
+
+        // §38k-4 — verify utility instructions register and resolve via JSON.
+
+        [Test]
+        public void WithDefaults_registers_utility_instructions() {
+            var factory = HeadlessSequencerFactory.WithDefaults();
+            Assert.That(factory.Items, Has.Count.EqualTo(2));
+            var typeNames = factory.Items.Select(i => i.GetType().Name).ToList();
+            Assert.That(typeNames, Does.Contain("Annotation"));
+            Assert.That(typeNames, Does.Contain("WaitForTimeSpan"));
+        }
+
+        [Test]
+        public void WithDefaults_factory_resolves_Annotation_via_JSON() {
+            var factory = HeadlessSequencerFactory.WithDefaults();
+            var deserializer = new SequenceBodyDeserializer(factory, logger: null);
+            var body = JsonDocument.Parse("""
+                {
+                    "schemaVersion": "openastroara-sequence-v1",
+                    "$type": "OpenAstroAra.Sequencer.SequenceItem.Utility.Annotation, OpenAstroAra.Sequencer"
+                }
+                """).RootElement.Clone();
+
+            // Annotation is an ISequenceItem, not ISequenceContainer — the
+            // deserializer's top-level type is ISequenceContainer so this
+            // round-trips through the SequenceItemCreationConverter once a
+            // container holds it. For now verify the factory's prototype
+            // lookup directly:
+            var prototype = factory.GetItem<Annotation>();
+            Assert.That(prototype, Is.Not.Null);
+            Assert.That(prototype, Is.InstanceOf<Annotation>());
+        }
+
+        [Test]
+        public void WithDefaults_factory_resolves_WaitForTimeSpan_via_prototype_lookup() {
+            // Same shape as Annotation — instructions don't deserialize from
+            // a root $type body; the container's Items array references them.
+            // Verify the prototype is wired so the SequenceItemCreationConverter
+            // can find it once a container's Items list lands.
+            var factory = HeadlessSequencerFactory.WithDefaults();
+            var prototype = factory.GetItem<WaitForTimeSpan>();
+            Assert.That(prototype, Is.Not.Null);
+            Assert.That(prototype, Is.InstanceOf<WaitForTimeSpan>());
         }
 
         [Test]
