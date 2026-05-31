@@ -82,12 +82,15 @@ public sealed class FileSequenceService : ISequenceService {
         var items = entries
             .OrderByDescending(s => s.ModifiedUtc)
             .Take(Math.Max(1, limit))
-            .Select(s => new SequenceListItemDto(
-                s.Id, s.Name, s.Description, s.CreatedUtc, s.ModifiedUtc,
-                CurrentRunState: null,
-                InstructionCount: 0,
-                TargetCount: 0,
-                TemplateOrigin: s.TemplateOrigin))
+            .Select(s => {
+                var stats = SequenceBodyInspector.Inspect(s.Body);
+                return new SequenceListItemDto(
+                    s.Id, s.Name, s.Description, s.CreatedUtc, s.ModifiedUtc,
+                    CurrentRunState: null,
+                    InstructionCount: stats.InstructionCount,
+                    TargetCount: stats.TargetCount,
+                    TemplateOrigin: s.TemplateOrigin);
+            })
             .ToList();
         return Task.FromResult(new CursorPage<SequenceListItemDto>(items, NextCursor: null, HasMore: false));
     }
