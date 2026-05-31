@@ -4,10 +4,10 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** Phase 0.5p2 merged — all 7 NINA-inherited library projects (Core, Astrometry, Profile, Image, Equipment, PlateSolving, Sequencer) + OpenAstroAra.Test now target `net10.0` headless per playbook §5.2/§8. WPF UI deleted wholesale per §4.2; mediator-VM constraint dropped per §8.1; `BitmapSource` → `byte[]` for type signatures with OpenCvSharp4 wiring deferred per §line-2105; CFITSIO + NOVAS native test gating per platform.
-- **Last merged on `port/ara`:** PR #244 (Server wires ProjectReferences to all 7 NINA libs) — promoted to master via #245. Phase 0.5p2 conversion landed via #242 / #243.
-- **Currently working on:** Nothing — the structural net10.0-headless conversion is complete; daemon csproj cleanly bundles the full library tree per playbook §8 Phase 4 scaffold.
-- **Next substantive work:** §38 real sequence orchestrator (needs real ASCOM drivers wired); OpenCvSharp4 + libraw wiring per §line-2105 to un-stub the `NotImplementedException`s in `Image/ImageData/` (Debayer, DetectStars, Stretch, SaveTiff, FromBitmapSource, CreateRAWExposureData); `IXxxMediator → IXxxService` rename per §8.1 mapping table (cosmetic follow-up); Phase 14e Alpaca simulator (user-blocked); v0.0.1-ara.1 release tag + RPi smoke test (user-blocked).
+- **Phase:** §38 sequence library + orchestrator scaffold — `FileSequenceService` (§38a) + filename template sanitizer/validator (§38b, §38i) + template-variable substitutor (§38c, §38d) + structural + capturable-instruction schema validator (§38e, §38j-3) + four-subdir storage layout scaffold (§38f) + disk-shipped templates (§38g) + NINA import schemaVersion backfill (§38h) + body inspector for list metadata (§38j-2) + checkpoint write path (§38j-6) + §28.2 daemon-startup reconciler with §46 notification surfacing (§38j-7 + §38j-8). The placeholder sequencer now reads the real instruction count from the saved body (§38j-5) and the list endpoint surfaces live `CurrentRunState` per item (§38j-4). Server PublishAot paused (§38j-1) to unblock Newtonsoft-backed `$type` deserialization on NINA-verbatim sequence bodies.
+- **Last merged on `port/ara`:** PR #278 (§38j-8 §46 startup notification) — promoted to master via #277. The §38j subset (§38j-1...§38j-8) covers everything except the real engine wiring (`SequenceJsonConverter` + `SequencerFactory`), which lands once equipment-mock plumbing is up.
+- **Currently working on:** Nothing — §38j-8 is the last bite-sized hardening pass; next work needs a substantive design pass on the real engine vs. continuing to harden the placeholder.
+- **Next substantive work:** §38 **real sequence engine** — wire NINA's `SequencerFactory` + `SequenceJsonConverter` so the daemon executes actual sequence JSON instead of the placeholder's 1-second-per-instruction simulation. Needs equipment-side mocks (camera/filter-wheel/focuser) before the engine can drive a run end-to-end. OpenCvSharp4 + libraw wiring per §line-2105 to un-stub the `NotImplementedException`s in `Image/ImageData/` (Debayer, DetectStars, Stretch, SaveTiff, FromBitmapSource, CreateRAWExposureData); `IXxxMediator → IXxxService` rename per §8.1 mapping table (cosmetic follow-up); Phase 14e Alpaca simulator (user-blocked); v0.0.1-ara.1 release tag + RPi smoke test (user-blocked).
 
 ## Completed
 
@@ -262,7 +262,34 @@ Replaces the in-memory `PlaceholderFrameRepository` + `PlaceholderSessionService
 Future §28 sub-PRs (deferred until they have a real-infra prerequisite):
 - §28.7 atomic-write pipeline — lands with §72 FITS storage (the rename + dir fsync is per-file, not per-row)
 - §28.8 startup scan + orphan recovery — needs §72 FITS files to scan
-- §28.2 recovery routine — needs §38 sequence orchestrator + equipment reconnect path
+- §28.2 recovery routine — landed with §38j-6 + §38j-7 + §38j-8 (see §38 below). Sequence checkpoint writes + daemon-startup reconciliation + §46 notification emission are in place; equipment reconnect path remains a §38 real-engine concern.
+
+### §38 sequence library + orchestrator scaffold (PRs #236, #248–#278)
+
+Filesystem-backed sequence library + NINA-verbatim JSON schema + placeholder sequencer with realistic run-state + WS event emission. The real engine (NINA's `SequencerFactory` + `SequenceJsonConverter`) is deferred until equipment mocks land — every §38 sub-PR so far hardens the storage + lifecycle scaffold so the real engine can drop in cleanly.
+
+- ✅ **§38-mock (#236)** — `PlaceholderSequencerService` with the full run-state machine (idle → running → paused → running → complete) + §60.9 WS events on every transition. 1-second-per-instruction simulation so WILMA's sequencer UI sees realistic progress.
+- ✅ **§38a (#248)** — `FileSequenceService`: filesystem-backed sequence library per §38.2 storage layout (`{profileDir}/sequences/library/{id}.json`). Atomic write via temp + rename. Replaces the in-memory placeholder.
+- ✅ **§38b (#250)** — `FilenameTemplateSanitizer` — §38.6.1 sanitization helper (strip control chars, replace path separators) + 10 NUnit fixtures.
+- ✅ **§38c (#252)** — `SequenceTemplateVariables` — §38.6 `{{token}}` substitutor + 10 fixtures covering known/unknown tokens + escape rules.
+- ✅ **§38d (#254)** — wire `SequenceTemplateVariables.Substitute` into the template instantiate flow so `POST /api/v1/sequences/templates/{name}/instantiate` actually substitutes the body before save.
+- ✅ **§38e (#256)** — `SequenceSchemaValidator` — §38.5 structural validation (`schemaVersion` field present + recognized, body parseable) wired to a 422 RFC 7807 response on `POST /api/v1/sequences`.
+- ✅ **§38f (#258)** — scaffold all four §38.2 subdirs (`library/`, `imported/`, `templates/`, `active/`) on `FileSequenceService` startup so disk template + import landing zones exist before first use.
+- ✅ **§38g (#260)** — load disk-shipped sequence templates from `{profileDir}/sequences/templates/` via `DiskSequenceTemplateService`. Disk entries override built-ins by name.
+- ✅ **§38h (#262)** — NINA import: `/api/v1/sequences/import` backfills `schemaVersion: openastroara-sequence-v1` on raw NINA `.json` uploads and persists the raw upload under `imported/{id}.json` for traceability.
+- ✅ **§38i (#264)** — `FilenameTemplateValidator` — §38.6.1 sequence-start template check that rejects empty-token bodies + control chars before a run starts, surfaced via a 422 on the sequencer start endpoint.
+- ✅ **§38j-1 (#266)** — pause `<PublishAot>true</PublishAot>` on Server so Newtonsoft.Json (NINA's `TypeNameHandling.All` `$type` discriminator path) deserializes the verbatim NINA schema. AOT will be revisited via `[JsonPolymorphic]` post-v0.0.1.
+- ✅ **§38j-2 (#267)** — `SequenceBodyInspector` — heuristically counts instructions + targets in a NINA-shaped `$type` body so list responses surface `instructionCount` + `targetCount` per item without deserializing the whole graph.
+- ✅ **§38j-3 (#269)** — `SequenceSchemaValidator` gains a capturable-instruction reachability check; strict-mode validation rejects bodies whose root container has zero capturable instructions.
+- ✅ **§38j-4 (#271)** — `FileSequenceService.ListAsync` surfaces live `CurrentRunState` per item by composing on `ISequencerService.GetRunStateAsync(id)`. Resolved a DI cycle via `Func<T>` lazy injection.
+- ✅ **§38j-5 (#272)** — `PlaceholderSequencerService.StartAsync` reads the real instruction count from the stored body via `SequenceBodyInspector.Inspect()` instead of the hardcoded `DefaultMockInstructionCount = 5`. Falls back to the mock default when no body exists (unit-test path).
+- ✅ **§38j-6 (#274)** — `ActiveSequenceCheckpoint` — atomic writer for `{profileDir}/sequences/active/current.json` per §28.1 + §38.2. Writes on every progress step + `StartAsync`; clears in the worker's `finally` block. Provides the canonical "is a sequence running" signal for §28.2 startup reconciliation.
+- ✅ **§38j-7 (#276)** — `SequenceStartupReconciler` — §28.2 daemon-startup pass that classifies the previous shutdown as `Clean` / `Interrupted` / `Corrupt`. Interrupted clears the checkpoint per the "no auto-resume" policy. Corrupt applies the §28.1 `.corrupt.<unix-ts>` quarantine.
+- ✅ **§38j-8 (#278)** — emit §46 notification on reconciler `Interrupted` (Warning) or `Corrupt` (Critical). Adds `INotificationService.CreateAsync` as the server-emitter surface. `StartupNotificationFactory` translates `Result` → `NotificationDto` so the copy + severity decisions are unit-testable.
+
+Future §38 sub-PRs (queued, blocked on equipment-side prerequisites):
+- **Real engine wiring** — `SequenceJsonConverter` + `SequencerFactory` drive actual sequence JSON; needs camera/filter-wheel/focuser mocks before it can exercise a run end-to-end.
+- **§38.7 disk-shipped starter templates** — `lrgb-dso.json`, `narrowband-shoo.json`, `comet.json` packaged into the `.deb` at `/opt/openastroara/templates/`. The DiskSequenceTemplateService already discovers `*.json` in the templates dir; needs the actual JSON files + Server.csproj `Content` entries.
 
 ### Phase 14 CI matrix expansion (PRs #187 + #188)
 
