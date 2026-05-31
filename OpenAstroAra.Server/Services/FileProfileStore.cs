@@ -68,6 +68,9 @@ public sealed class FileProfileStore : IProfileStore {
     public ImagingDefaultsDto GetImagingDefaults() { lock (_lock) { return _snapshot.ImagingDefaults; } }
     public void PutImagingDefaults(ImagingDefaultsDto value) => UpdateAndPersist(s => s with { ImagingDefaults = value });
 
+    public StretchDefaultsDto GetStretchDefaults() { lock (_lock) { return _snapshot.StretchDefaults; } }
+    public void PutStretchDefaults(StretchDefaultsDto value) => UpdateAndPersist(s => s with { StretchDefaults = value });
+
     public StorageSettingsDto GetStorageSettings() { lock (_lock) { return _snapshot.Storage; } }
     public void PutStorageSettings(StorageSettingsDto value) => UpdateAndPersist(s => s with { Storage = value });
 
@@ -196,5 +199,15 @@ public sealed class FileProfileStore : IProfileStore {
         EquipmentConnection: new(
             Camera: true, Mount: true, Focuser: true, FilterWheel: true,
             Rotator: true, Guider: false, FlatPanel: true, Dome: false,
-            Weather: false, SafetyMonitor: true));
+            Weather: false, SafetyMonitor: true),
+        // §65.2 stretch defaults. Lights default to auto_stf (matches
+        // PixInsight + NINA UX). Manual sliders seed at the §65.2 example
+        // values (bp=0.02, mp=0.5, wp=0.98). Asinh β = 3.0 (§65.1 default).
+        // Linear clip percentiles per §65.1 (0.5% / 99.5%).
+        StretchDefaults: new(
+            LightDefault: "auto_stf",
+            ManualDefaultParams: new(Blackpoint: 0.02, Midpoint: 0.5, Whitepoint: 0.98),
+            AsinhDefaultBeta: 3.0,
+            LinearClipPercentilesLow: 0.005,
+            LinearClipPercentilesHigh: 0.995));
 }

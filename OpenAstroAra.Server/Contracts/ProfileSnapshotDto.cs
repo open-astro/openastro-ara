@@ -51,4 +51,5 @@ public sealed record ProfileSnapshotDto(
     PlateSolveSettingsDto PlateSolve,
     DiagnosticsModeDto DiagnosticsMode,
     Phd2SettingsDto Phd2,
-    EquipmentConnectionDto EquipmentConnection);
+    EquipmentConnectionDto EquipmentConnection,
+    StretchDefaultsDto StretchDefaults);

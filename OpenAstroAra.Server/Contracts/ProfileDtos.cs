@@ -197,3 +197,25 @@ public sealed record EquipmentConnectionDto(
     bool Dome,
     bool Weather,
     bool SafetyMonitor);
+
+/// <summary>
+/// §65.2 stretch defaults per profile. <c>LightDefault</c> is the
+/// stretch palette ID applied to Light frames when the request doesn't
+/// override; calibration frames (Dark/Bias/Flat) always render `linear`
+/// regardless. <c>ManualDefaultParams</c> seeds the §40.5 frame-viewer
+/// sliders. <c>AsinhDefaultBeta</c> is the Lupton β when `asinh` is
+/// selected without a request-time override. <c>LinearClipPercentilesLow</c>
+/// + <c>High</c> are the §65.1 black/white-point clipping percentiles
+/// applied by the `linear` algorithm (defaults 0.5% / 99.5%).
+/// </summary>
+public sealed record StretchDefaultsDto(
+    string LightDefault,
+    StretchManualDefaultsDto ManualDefaultParams,
+    double AsinhDefaultBeta,
+    double LinearClipPercentilesLow,
+    double LinearClipPercentilesHigh);
+
+public sealed record StretchManualDefaultsDto(
+    double Blackpoint,
+    double Midpoint,
+    double Whitepoint);

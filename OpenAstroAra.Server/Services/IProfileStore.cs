@@ -55,4 +55,7 @@ public interface IProfileStore {
 
     EquipmentConnectionDto GetEquipmentConnection();
     void PutEquipmentConnection(EquipmentConnectionDto value);
+
+    StretchDefaultsDto GetStretchDefaults();
+    void PutStretchDefaults(StretchDefaultsDto value);
 }

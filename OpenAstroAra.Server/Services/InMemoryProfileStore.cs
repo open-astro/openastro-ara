@@ -251,4 +251,21 @@ public sealed class InMemoryProfileStore : IProfileStore {
     public void PutEquipmentConnection(EquipmentConnectionDto value) {
         lock (_lock) { _equipmentConnection = value; }
     }
+
+    // §65.2 stretch defaults — auto_stf for Lights, calibration frames
+    // always render linear via the frame-type auto-override.
+    private StretchDefaultsDto _stretchDefaults = new(
+        LightDefault: "auto_stf",
+        ManualDefaultParams: new(Blackpoint: 0.02, Midpoint: 0.5, Whitepoint: 0.98),
+        AsinhDefaultBeta: 3.0,
+        LinearClipPercentilesLow: 0.005,
+        LinearClipPercentilesHigh: 0.995);
+
+    public StretchDefaultsDto GetStretchDefaults() {
+        lock (_lock) { return _stretchDefaults; }
+    }
+
+    public void PutStretchDefaults(StretchDefaultsDto value) {
+        lock (_lock) { _stretchDefaults = value; }
+    }
 }

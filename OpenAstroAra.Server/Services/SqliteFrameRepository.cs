@@ -55,10 +55,12 @@ public sealed class SqliteFrameRepository : IFrameRepository {
         Convert.FromBase64String(PlaceholderJpegBase64);
 
     private readonly IAraDatabase _db;
+    private readonly IProfileStore _profile;
     private readonly ILogger<SqliteFrameRepository>? _logger;
 
-    public SqliteFrameRepository(IAraDatabase db, ILogger<SqliteFrameRepository>? logger) {
+    public SqliteFrameRepository(IAraDatabase db, IProfileStore profile, ILogger<SqliteFrameRepository>? logger) {
         _db = db;
+        _profile = profile;
         _logger = logger;
     }
 
@@ -347,9 +349,10 @@ public sealed class SqliteFrameRepository : IFrameRepository {
         }
 
         var (pixels, width, height) = LoadFitsPixels(filePath);
-        var algorithm = ResolveAlgorithm(request.StretchPalette, frameType);
+        var stretchDefaults = _profile.GetStretchDefaults();
+        var algorithm = ResolveAlgorithm(request.StretchPalette, frameType, stretchDefaults.LightDefault);
         var stretched = OpenAstroAra.Stretch.Stretcher.Apply(algorithm, pixels,
-            BuildParams(request, algorithm));
+            BuildParams(request, algorithm, stretchDefaults));
         var jpeg = OpenAstroAra.Stretch.JpegEncoder.EncodeGray(stretched, width, height);
         return (jpeg, "image/jpeg");
     }
@@ -363,7 +366,8 @@ public sealed class SqliteFrameRepository : IFrameRepository {
         // Thumbnail: §65.4 always uses the default stretch (re-stretch on
         // thumbnails is not supported in v0.0.1). Per-frame-type override
         // still applies — calibration frames get linear.
-        var algorithm = ResolveAlgorithm(null, frameType);
+        var stretchDefaults = _profile.GetStretchDefaults();
+        var algorithm = ResolveAlgorithm(null, frameType, stretchDefaults.LightDefault);
         var stretched = OpenAstroAra.Stretch.Stretcher.Apply(algorithm, pixels);
         var jpeg = OpenAstroAra.Stretch.JpegEncoder.EncodeThumbnail(stretched, width, height);
         return (jpeg, "image/jpeg");
@@ -388,16 +392,19 @@ public sealed class SqliteFrameRepository : IFrameRepository {
 
     /// <summary>
     /// §65.2 defaults policy: frame-type auto-override beats request
-    /// palette beats profile default. Profile default plumbing arrives
-    /// with the §65.5 stretch-defaults endpoints; for now Light defaults
-    /// to AutoStf.
+    /// palette beats profile default. Calibration frames (Dark/Bias/Flat)
+    /// always render `linear`. Light frames use the request palette if
+    /// provided, otherwise the profile's `light_default`.
     /// </summary>
-    private static OpenAstroAra.Stretch.StretchAlgorithm ResolveAlgorithm(string? requested, FrameType frameType) {
-        // Frame-type auto-override (always wins for calibration frames).
+    private static OpenAstroAra.Stretch.StretchAlgorithm ResolveAlgorithm(string? requested, FrameType frameType, string profileLightDefault) {
         if (frameType is FrameType.Dark or FrameType.Bias or FrameType.Flat or FrameType.DarkFlat) {
             return OpenAstroAra.Stretch.StretchAlgorithm.Linear;
         }
-        return (requested?.ToLowerInvariant()) switch {
+        return ParseAlgorithm(requested) ?? ParseAlgorithm(profileLightDefault) ?? OpenAstroAra.Stretch.StretchAlgorithm.AutoStf;
+    }
+
+    private static OpenAstroAra.Stretch.StretchAlgorithm? ParseAlgorithm(string? value) =>
+        value?.ToLowerInvariant() switch {
             "auto_stf" => OpenAstroAra.Stretch.StretchAlgorithm.AutoStf,
             "linear" => OpenAstroAra.Stretch.StretchAlgorithm.Linear,
             "log" => OpenAstroAra.Stretch.StretchAlgorithm.Log,
@@ -405,15 +412,24 @@ public sealed class SqliteFrameRepository : IFrameRepository {
             "sqrt" => OpenAstroAra.Stretch.StretchAlgorithm.Sqrt,
             "equalized" => OpenAstroAra.Stretch.StretchAlgorithm.Equalized,
             "manual" => OpenAstroAra.Stretch.StretchAlgorithm.Manual,
-            _ => OpenAstroAra.Stretch.StretchAlgorithm.AutoStf,
+            _ => null,
         };
-    }
 
-    private static OpenAstroAra.Stretch.StretchParams BuildParams(FramePreviewRequestDto request, OpenAstroAra.Stretch.StretchAlgorithm algorithm) {
+    private static OpenAstroAra.Stretch.StretchParams BuildParams(
+            FramePreviewRequestDto request,
+            OpenAstroAra.Stretch.StretchAlgorithm algorithm,
+            StretchDefaultsDto profileDefaults) {
+        // Manual + asinh + linear thread per-profile defaults through when
+        // the request doesn't override; auto_stf + log + sqrt + equalized
+        // don't consume these parameters.
+        var manualSeeds = profileDefaults.ManualDefaultParams;
         return new OpenAstroAra.Stretch.StretchParams(
-            Blackpoint: request.BlackPoint ?? 0.0,
-            Midpoint: request.MidtonePoint ?? 0.5,
-            Whitepoint: request.WhitePoint ?? 1.0);
+            Blackpoint: request.BlackPoint ?? manualSeeds.Blackpoint,
+            Midpoint: request.MidtonePoint ?? manualSeeds.Midpoint,
+            Whitepoint: request.WhitePoint ?? manualSeeds.Whitepoint,
+            Beta: profileDefaults.AsinhDefaultBeta,
+            LinearClipLow: profileDefaults.LinearClipPercentilesLow,
+            LinearClipHigh: profileDefaults.LinearClipPercentilesHigh);
     }
 
     public async Task<(Stream FitsStream, string FileName)?> OpenDownloadAsync(Guid id, CancellationToken ct) {
