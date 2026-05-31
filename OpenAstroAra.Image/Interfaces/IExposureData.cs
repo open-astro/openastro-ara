@@ -18,8 +18,6 @@ using OpenAstroAra.Image.ImageData;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows.Media.Imaging;
-
 namespace OpenAstroAra.Image.Interfaces {
 
     public interface IExposureData {
@@ -39,8 +37,8 @@ namespace OpenAstroAra.Image.Interfaces {
 
         ImageArrayExposureData CreateImageArrayExposureData(ushort[] input, int width, int height, int bitDepth, bool isBayered, ImageMetaData metaData);
 
-        Task<ImageArrayExposureData> CreateImageArrayExposureDataFromBitmapSource(BitmapSource source);
+        Task<ImageArrayExposureData> CreateImageArrayExposureDataFromBitmapSource(byte[] source);
 
-        Task<IRenderedImage> CreateRenderedImageFromBitmapSource(BitmapSource source, bool calculateStatistics = false);
+        Task<IRenderedImage> CreateRenderedImageFromBitmapSource(byte[] source, bool calculateStatistics = false);
     }
 }

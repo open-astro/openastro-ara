@@ -18,9 +18,6 @@ using OpenAstroAra.Image.Interfaces;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-
 namespace OpenAstroAra.Image.ImageData {
 
     public class ImageArrayExposureData : BaseExposureData {
@@ -69,7 +66,7 @@ namespace OpenAstroAra.Image.ImageData {
                     metaData: this.MetaData));
         }
 
-        public static async Task<ImageArrayExposureData> FromBitmapSource(BitmapSource source, IImageDataFactory imageDataFactory) {            
+        public static async Task<ImageArrayExposureData> FromBitmapSource(byte[] source, IImageDataFactory imageDataFactory) {            
             var pixels = await Task.Run(() => ArrayFromSource(source));
             return new ImageArrayExposureData(
                 input: pixels,
@@ -81,14 +78,14 @@ namespace OpenAstroAra.Image.ImageData {
                 imageDataFactory: imageDataFactory);
         }
 
-        private static ushort[] ArrayFromSource(BitmapSource source) {
+        private static ushort[] ArrayFromSource(byte[] source) {
             if (source.Format == PixelFormats.Gray16) {
                 return ArrayFrom16BitSource(source);
             } else if (source.Format == PixelFormats.Gray8 || source.Format == PixelFormats.Indexed8) {
                 return ArrayFrom8BitSource(source);
             } else if (source.Format == PixelFormats.Bgr24 || source.Format == PixelFormats.Bgr32 || source.Format == PixelFormats.Pbgra32) {
                 WriteableBitmap convertedSource = new WriteableBitmap(
-                   (BitmapSource)(new FormatConvertedBitmap(source, PixelFormats.Gray8, null, 0))
+                   (byte[])(new FormatConvertedBitmap(source, PixelFormats.Gray8, null, 0))
                 );
                 return ArrayFrom8BitSource(convertedSource);
             } else {
@@ -96,7 +93,7 @@ namespace OpenAstroAra.Image.ImageData {
             }
         }
 
-        private static ushort[] ArrayFrom8BitSource(BitmapSource source) {
+        private static ushort[] ArrayFrom8BitSource(byte[] source) {
             int stride = (source.PixelWidth * source.Format.BitsPerPixel + 7) / 8;
             int arraySize = stride * source.PixelHeight;
             byte[] pixels = new byte[arraySize];
@@ -110,7 +107,7 @@ namespace OpenAstroAra.Image.ImageData {
             return array;
         }
 
-        private static ushort[] ArrayFrom16BitSource(BitmapSource source) {
+        private static ushort[] ArrayFrom16BitSource(byte[] source) {
             int stride = (source.PixelWidth * source.Format.BitsPerPixel + 7) / 8;
             int arraySize = stride * source.PixelHeight;
             ushort[] pixels = new ushort[arraySize];

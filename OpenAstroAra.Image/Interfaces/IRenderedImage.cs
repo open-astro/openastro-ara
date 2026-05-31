@@ -18,16 +18,14 @@ using OpenAstroAra.Image.ImageAnalysis;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows.Media.Imaging;
-
 namespace OpenAstroAra.Image.Interfaces {
 
     public interface IRenderedImage {
         IImageData RawImageData { get; }
 
-        BitmapSource OriginalImage { get; }
+        byte[] OriginalImage { get; }
 
-        BitmapSource Image { get; }
+        byte[] Image { get; }
 
         IDebayeredImage Debayer(bool saveColorChannels = false, bool saveLumChannel = false, SensorType bayerPattern = SensorType.RGGB);
 
@@ -42,7 +40,7 @@ namespace OpenAstroAra.Image.Interfaces {
             CancellationToken cancelToken = default,
             IProgress<ApplicationStatus> progress = default(Progress<ApplicationStatus>));
 
-        Task<BitmapSource> GetThumbnail();
+        Task<byte[]> GetThumbnail();
         void UpdateAnalysis(StarDetectionParams p, StarDetectionResult result);
     }
 }
