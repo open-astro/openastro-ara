@@ -335,13 +335,86 @@ public sealed class SqliteFrameRepository : IFrameRepository {
             Tags: tags);
     }
 
-    public Task<(byte[] Bytes, string ContentType)?> GetPreviewAsync(Guid id, FramePreviewRequestDto request, CancellationToken ct) =>
-        // §65 stretch pipeline replaces this with real previews from the
-        // captured FITS file.
-        Task.FromResult<(byte[] Bytes, string ContentType)?>((PlaceholderJpegBytes, "image/jpeg"));
+    public async Task<(byte[] Bytes, string ContentType)?> GetPreviewAsync(Guid id, FramePreviewRequestDto request, CancellationToken ct) {
+        var (filePath, frameType) = await GetPathAndTypeAsync(id, ct);
+        if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath)) {
+            // §28.8 orphan-scan would auto-recover an existing FITS into the
+            // catalog; this code path runs *after* that, so a missing file
+            // means the user deleted it out-of-band or the drive isn't
+            // mounted. Fall back to the 1×1 placeholder so the UI still
+            // renders something rather than 404 + broken-image icon.
+            return (PlaceholderJpegBytes, "image/jpeg");
+        }
 
-    public Task<(byte[] Bytes, string ContentType)?> GetThumbnailAsync(Guid id, CancellationToken ct) =>
-        Task.FromResult<(byte[] Bytes, string ContentType)?>((PlaceholderJpegBytes, "image/jpeg"));
+        var (pixels, width, height) = LoadFitsPixels(filePath);
+        var algorithm = ResolveAlgorithm(request.StretchPalette, frameType);
+        var stretched = OpenAstroAra.Stretch.Stretcher.Apply(algorithm, pixels,
+            BuildParams(request, algorithm));
+        var jpeg = OpenAstroAra.Stretch.JpegEncoder.EncodeGray(stretched, width, height);
+        return (jpeg, "image/jpeg");
+    }
+
+    public async Task<(byte[] Bytes, string ContentType)?> GetThumbnailAsync(Guid id, CancellationToken ct) {
+        var (filePath, frameType) = await GetPathAndTypeAsync(id, ct);
+        if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath)) {
+            return (PlaceholderJpegBytes, "image/jpeg");
+        }
+        var (pixels, width, height) = LoadFitsPixels(filePath);
+        // Thumbnail: §65.4 always uses the default stretch (re-stretch on
+        // thumbnails is not supported in v0.0.1). Per-frame-type override
+        // still applies — calibration frames get linear.
+        var algorithm = ResolveAlgorithm(null, frameType);
+        var stretched = OpenAstroAra.Stretch.Stretcher.Apply(algorithm, pixels);
+        var jpeg = OpenAstroAra.Stretch.JpegEncoder.EncodeThumbnail(stretched, width, height);
+        return (jpeg, "image/jpeg");
+    }
+
+    private async Task<(string? FilePath, FrameType FrameType)> GetPathAndTypeAsync(Guid id, CancellationToken ct) {
+        await using var conn = _db.OpenConnection();
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT file_path, frame_type FROM frames WHERE id = $id LIMIT 1;";
+        cmd.Parameters.AddWithValue("$id", id.ToString());
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct)) return (null, FrameType.Light);
+        return (reader.GetString(0), ParseFrameType(reader.GetString(1)));
+    }
+
+    private static (ushort[] Pixels, int Width, int Height) LoadFitsPixels(string filePath) {
+        using var fits = OpenAstroAra.Fits.FitsImage.Open(filePath);
+        var (w, h) = fits.GetDimensions();
+        var pixels = fits.ReadImageData16();
+        return (pixels, w, h);
+    }
+
+    /// <summary>
+    /// §65.2 defaults policy: frame-type auto-override beats request
+    /// palette beats profile default. Profile default plumbing arrives
+    /// with the §65.5 stretch-defaults endpoints; for now Light defaults
+    /// to AutoStf.
+    /// </summary>
+    private static OpenAstroAra.Stretch.StretchAlgorithm ResolveAlgorithm(string? requested, FrameType frameType) {
+        // Frame-type auto-override (always wins for calibration frames).
+        if (frameType is FrameType.Dark or FrameType.Bias or FrameType.Flat or FrameType.DarkFlat) {
+            return OpenAstroAra.Stretch.StretchAlgorithm.Linear;
+        }
+        return (requested?.ToLowerInvariant()) switch {
+            "auto_stf" => OpenAstroAra.Stretch.StretchAlgorithm.AutoStf,
+            "linear" => OpenAstroAra.Stretch.StretchAlgorithm.Linear,
+            "log" => OpenAstroAra.Stretch.StretchAlgorithm.Log,
+            "asinh" => OpenAstroAra.Stretch.StretchAlgorithm.Asinh,
+            "sqrt" => OpenAstroAra.Stretch.StretchAlgorithm.Sqrt,
+            "equalized" => OpenAstroAra.Stretch.StretchAlgorithm.Equalized,
+            "manual" => OpenAstroAra.Stretch.StretchAlgorithm.Manual,
+            _ => OpenAstroAra.Stretch.StretchAlgorithm.AutoStf,
+        };
+    }
+
+    private static OpenAstroAra.Stretch.StretchParams BuildParams(FramePreviewRequestDto request, OpenAstroAra.Stretch.StretchAlgorithm algorithm) {
+        return new OpenAstroAra.Stretch.StretchParams(
+            Blackpoint: request.BlackPoint ?? 0.0,
+            Midpoint: request.MidtonePoint ?? 0.5,
+            Whitepoint: request.WhitePoint ?? 1.0);
+    }
 
     public async Task<(Stream FitsStream, string FileName)?> OpenDownloadAsync(Guid id, CancellationToken ct) {
         // §72: serve the captured FITS bytes from the path stored in the
