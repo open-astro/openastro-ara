@@ -27,9 +27,9 @@ name: CI
 #     → add `client-test` job: `flutter analyze && flutter test` on Linux.
 #
 #   Phase 14 (full CI matrix per §14.3)
-#     → full matrix: server-build (linux), server-e2e (Docker arm64),
-#       client-macos / -windows / -linux / -test, settings-registry gate,
-#       Alpaca-simulator pinning auto-download (§14.5.1).
+#     → 14c [LANDED]: client-test extended to {linux, macos, windows} matrix.
+#     → still ahead: server-e2e (Docker arm64) + Alpaca-simulator pinning
+#       auto-download (§14.5.1).
 #
 # Until then, every job in this file MUST stay green on a vanilla `port/ara`
 # checkout — sub-PRs that delete or rename projects should not break CI.
@@ -339,8 +339,24 @@ jobs:
         run: node scripts/check-help-registry.mjs
 
   client-test:
-    name: Client (analyze + test)
-    runs-on: ubuntu-latest
+    name: Client (analyze + test) — ${{ matrix.os }}
+    # §14.3 cross-platform client-test matrix. Linux is the canonical
+    # development target; macOS + Windows verify Dart code stays
+    # portable since the WILMA client ships to all three platforms.
+    # `fail-fast: false` so a flake on one OS doesn't mask a real
+    # regression on another.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        # Use bash on all three platforms so the version-reading + cd
+        # steps don't need OS-specific variants. Windows runners ship
+        # with Git Bash, which honors `set -euo pipefail` + POSIX
+        # parameter expansion exactly like Linux/macOS.
+        shell: bash
     steps:
       - name: Checkout (no LFS)
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.x pinned per zizmor + CodeRabbit security policy
