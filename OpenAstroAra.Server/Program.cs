@@ -91,9 +91,14 @@ public class Program {
         // + thumbnail still serve the 1×1 JPEG placeholder until §65 lands;
         // OpenDownloadAsync returns null until §72 FITS storage lands.
         builder.Services.AddSingleton<IFrameRepository, SqliteFrameRepository>();
-        // Phase 13.3 — placeholder ISessionService composing on the frame repo
-        // so the §40 Library + session-drilldown UI has consistent fixture data.
-        builder.Services.AddSingleton<ISessionService, PlaceholderSessionService>();
+        // §28 SqliteSessionService — sessions from the catalog with derived
+        // fields (target name, frame counts, filters) aggregated from the
+        // frames table at read time per §28.1's schema. Composes on
+        // IFrameRepository for GetFramesAsync + GetHfrAnalysisAsync so
+        // /api/v1/sessions/{id}/frames stays consistent with
+        // /api/v1/frames?sessionId=…. Mutating endpoints (resume-target,
+        // restretch) keep the placeholder Accepted shape until §38 + §65 land.
+        builder.Services.AddSingleton<ISessionService, SqliteSessionService>();
         // Phase 13.4 — placeholder INotificationService so WILMA's §46 inbox +
         // §46.4 preferences view has wire shapes to render. Three sample
         // notifications (Info/Warning/Critical across Sequence/Storage/Safety
