@@ -33,30 +33,56 @@ namespace OpenAstroAra.Server.Services;
 /// when Alpaca driver placeholders get swapped to real impls.
 /// </summary>
 public sealed class PlaceholderSequencerService : ISequencerService {
-    private const int MockInstructionCount = 5;
+    /// <summary>Default instruction count when no sequence body is found (DI-test paths).</summary>
+    private const int DefaultMockInstructionCount = 5;
     private const int MockInstructionDurationMs = 1000;
 
     private readonly IWsBroadcaster? _ws;
+    // Lazy resolver — both this service AND FileSequenceService now reference
+    // each other (ISequenceService.ListAsync surfaces run state per §38j-4;
+    // ISequencerService.StartAsync reads instruction count per §38j-5). Direct
+    // constructor injection would deadlock the DI container; the Func defers
+    // resolution to call time.
+    private readonly Func<ISequenceService?>? _sequencesResolver;
     private readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, RunState> _runs = new();
 
-    public PlaceholderSequencerService(IWsBroadcaster? ws = null) {
+    public PlaceholderSequencerService(IWsBroadcaster? ws = null)
+        : this(ws, sequencesResolver: null) { }
+
+    public PlaceholderSequencerService(IWsBroadcaster? ws, Func<ISequenceService?>? sequencesResolver) {
         _ws = ws;
+        _sequencesResolver = sequencesResolver;
     }
 
     public Task<SequenceRunStateDto?> GetRunStateAsync(Guid id, CancellationToken ct) =>
         Task.FromResult(_runs.TryGetValue(id, out var run) ? run.ToDto(id) : null);
 
-    public Task<OperationAcceptedDto> StartAsync(Guid id, SequenceStartRequestDto request, string? idempotencyKey, CancellationToken ct) {
+    public async Task<OperationAcceptedDto> StartAsync(Guid id, SequenceStartRequestDto request, string? idempotencyKey, CancellationToken ct) {
         var existing = _runs.GetValueOrDefault(id);
         if (existing is not null && existing.State is SequenceRunState.Running or SequenceRunState.Paused or SequenceRunState.Starting) {
             // Already running — return the same operation id rather than
             // spawning a second worker.
-            return Task.FromResult(PlaceholderEquipmentHelpers.Accepted("sequencer.start", idempotencyKey));
+            return PlaceholderEquipmentHelpers.Accepted("sequencer.start", idempotencyKey);
         }
-        var run = new RunState();
+
+        // §38j-5 — inspect the saved sequence body so the mock progresses
+        // through the real instruction count instead of a hardcoded 5.
+        // Falls back to the mock default when no stored body exists (lets
+        // unit tests construct PlaceholderSequencerService without ISequenceService).
+        var instructionCount = DefaultMockInstructionCount;
+        var sequences = _sequencesResolver?.Invoke();
+        if (sequences is not null) {
+            var dto = await sequences.GetAsync(id, ct);
+            if (dto is not null) {
+                var stats = SequenceBodyInspector.Inspect(dto.Body);
+                if (stats.InstructionCount > 0) instructionCount = stats.InstructionCount;
+            }
+        }
+
+        var run = new RunState(instructionCount);
         _runs[id] = run;
         _ = Task.Run(() => RunWorkerAsync(id, run));
-        return Task.FromResult(PlaceholderEquipmentHelpers.Accepted("sequencer.start", idempotencyKey));
+        return PlaceholderEquipmentHelpers.Accepted("sequencer.start", idempotencyKey);
     }
 
     public Task<OperationAcceptedDto> PauseAsync(Guid id, string? idempotencyKey, CancellationToken ct) {
@@ -95,7 +121,7 @@ public sealed class PlaceholderSequencerService : ISequencerService {
         try {
             run.State = SequenceRunState.Running;
             await EmitAsync("sequence.started", sequenceId, run);
-            for (var i = 0; i < MockInstructionCount; i++) {
+            for (var i = 0; i < run.InstructionCount; i++) {
                 if (run.Cts.IsCancellationRequested) break;
                 while (run.State == SequenceRunState.Paused && !run.Cts.IsCancellationRequested) {
                     await Task.Delay(100, run.Cts.Token).ContinueWith(_ => { });
@@ -136,7 +162,7 @@ public sealed class PlaceholderSequencerService : ISequencerService {
         if (_ws is null) return;
         try {
             var json = $$"""
-                {"sequence_id":"{{sequenceId}}","run_id":"{{run.RunId}}","state":"{{run.State.ToString().ToLowerInvariant()}}","current_instruction_index":{{(run.CurrentInstructionIndex.HasValue ? run.CurrentInstructionIndex.Value.ToString() : "null")}},"frames_completed":{{run.FramesCompleted}},"frames_total":{{MockInstructionCount}}}
+                {"sequence_id":"{{sequenceId}}","run_id":"{{run.RunId}}","state":"{{run.State.ToString().ToLowerInvariant()}}","current_instruction_index":{{(run.CurrentInstructionIndex.HasValue ? run.CurrentInstructionIndex.Value.ToString() : "null")}},"frames_completed":{{run.FramesCompleted}},"frames_total":{{run.InstructionCount}}}
                 """;
             using var doc = System.Text.Json.JsonDocument.Parse(json);
             await _ws.PublishAsync(eventType, doc.RootElement.Clone(), CancellationToken.None);
@@ -151,9 +177,14 @@ public sealed class PlaceholderSequencerService : ISequencerService {
         public int? CurrentInstructionIndex { get; set; }
         public string? CurrentInstructionDescription { get; set; }
         public int FramesCompleted { get; set; }
+        public int InstructionCount { get; }
         public DateTimeOffset StartedUtc { get; } = DateTimeOffset.UtcNow;
         public DateTimeOffset? CompletedUtc { get; set; }
         public CancellationTokenSource Cts { get; } = new();
+
+        public RunState(int instructionCount) {
+            InstructionCount = instructionCount;
+        }
 
         public SequenceRunStateDto ToDto(Guid sequenceId) => new(
             SequenceId: sequenceId,
@@ -164,7 +195,7 @@ public sealed class PlaceholderSequencerService : ISequencerService {
             StartedUtc: StartedUtc,
             CompletedUtc: CompletedUtc,
             FramesCompleted: FramesCompleted,
-            FramesTotal: MockInstructionCount,
+            FramesTotal: InstructionCount,
             CurrentInstructionDescription: CurrentInstructionDescription);
     }
 }
