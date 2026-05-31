@@ -132,6 +132,10 @@ public class Program {
         // snapshot + §33.2.1 versions + §54 release notes. Restart endpoints
         // throw (§13 systemd-watchdog work needed).
         builder.Services.AddSingleton<IServerStateService, PlaceholderServerStateService>();
+        // §65.5 batch-job tracker — backs /jobs/{id} status + the
+        // session-restretch worker. In-memory by design: jobs are
+        // ephemeral, state resets on daemon restart.
+        builder.Services.AddSingleton<IBatchJobService, InMemoryBatchJobService>();
         // Phase 13.8 — placeholder ILogService. Tail returns 8 fixture
         // entries; rotate accepts; download is 404 (no Serilog file sinks
         // wired yet — Phase 14 §29.9.2).
@@ -258,6 +262,9 @@ public class Program {
         // (in-memory store); other sections follow as 12h.6b-N adds DTOs +
         // section-specific endpoint pairs on top of the same IProfileStore.
         app.MapProfileEndpoints();
+
+        // §65.5 / §60.5 background-job status endpoints.
+        app.MapJobsEndpoints();
 
         // §60 meta endpoint — server identification + capabilities.
         // Lightweight identity payload per the playbook contract: server_uuid (stable per
