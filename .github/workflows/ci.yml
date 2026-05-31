@@ -121,6 +121,12 @@ jobs:
       - name: dotnet test (Fits, Release)
         run: dotnet test OpenAstroAra.Fits.Tests/OpenAstroAra.Fits.Tests.csproj -c Release --verbosity normal
 
+      # §65 stretch algorithms — pure-math project, no native deps. Tests
+      # cover monotonicity + dynamic-range + distribution-spreading for
+      # all 7 §65.1 stretch IDs.
+      - name: dotnet test (Stretch, Release)
+        run: dotnet test OpenAstroAra.Stretch.Tests/OpenAstroAra.Stretch.Tests.csproj -c Release --verbosity normal
+
       # Phase 14b smoke gate — actually run the daemon and hit a real
       # endpoint to catch the class of regressions where `dotnet build`
       # succeeds but the runtime trips an AOT JsonTypeInfo or
