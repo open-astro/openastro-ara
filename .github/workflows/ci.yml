@@ -95,19 +95,31 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      # §72.2 — install CFITSIO so OpenAstroAra.Fits can resolve the
+      # native library at runtime (build doesn't need it, but a future
+      # FitsImageTests step will). Debian's libcfitsio10 (runtime) +
+      # libcfitsio-dev (headers, for ldconfig + symlinks) cover both.
+      - name: Install CFITSIO (Linux)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libcfitsio-dev
+
       - name: dotnet restore (Server)
         run: dotnet restore OpenAstroAra.Server/OpenAstroAra.Server.csproj
 
       - name: dotnet build (Server, Release)
         run: dotnet build OpenAstroAra.Server/OpenAstroAra.Server.csproj -c Release --no-restore
 
-      # §72.1 FITS scaffold — verify OpenAstroAra.Fits builds independently.
-      # No Server consumer yet, so the Server build above doesn't transitively
-      # restore + build it. Subsequent sub-PRs reference the project from
-      # Server, at which point this dedicated step becomes redundant + can be
-      # dropped.
+      # §72 FITS — verify the project + its xUnit tests. Tests exercise
+      # write→read round-trip + atomic-rename + stale-temp purge against
+      # the libcfitsio installed above. The dedicated build step becomes
+      # redundant once Server takes a project reference; the test step
+      # stays.
       - name: dotnet build (Fits, Release)
         run: dotnet build OpenAstroAra.Fits/OpenAstroAra.Fits.csproj -c Release
+
+      - name: dotnet test (Fits, Release)
+        run: dotnet test OpenAstroAra.Fits.Tests/OpenAstroAra.Fits.Tests.csproj -c Release --verbosity normal
 
       # Phase 14b smoke gate — actually run the daemon and hit a real
       # endpoint to catch the class of regressions where `dotnet build`
