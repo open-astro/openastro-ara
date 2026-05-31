@@ -27,6 +27,8 @@ using static OpenAstroAra.Astrometry.AstroUtil;
 
 namespace OpenAstroAra.Test {
 
+    [Platform("Win")]
+
     [TestFixture]
     public class NighttimeDataTest {
         private DateTime date;

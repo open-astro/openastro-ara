@@ -7,6 +7,7 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace OpenAstroAra.Test.AstrometryTest {
+    [Platform("Win")]
     [TestFixture]
     public class WorldCoordinateSystemTest {
         [Test]

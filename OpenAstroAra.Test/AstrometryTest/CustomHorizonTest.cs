@@ -18,6 +18,8 @@ using System.Reflection;
 
 namespace OpenAstroAra.Test.AstrometryTest {
 
+    [Platform("Win")]
+
     [TestFixture]
     public class CustomHorizonTest {
 

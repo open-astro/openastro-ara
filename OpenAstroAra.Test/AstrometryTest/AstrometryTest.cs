@@ -18,6 +18,8 @@ using System.Text.RegularExpressions;
 
 namespace OpenAstroAra.Test.AstrometryTest {
 
+    [Platform("Win")]
+
     [TestFixture]
     public class AstrometryTest {
         private const double DEWPOINT_TOLERANCE = 0.5;
