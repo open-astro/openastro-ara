@@ -179,10 +179,9 @@ public class Program {
         // §38j-5 — sequencer reads the saved body for real instruction count.
         // Func<> resolver breaks the FileSequenceService ↔ PlaceholderSequencerService
         // construction-time cycle (both reference each other now).
-        builder.Services.AddSingleton<ISequencerService>(sp =>
-            new PlaceholderSequencerService(
-                sp.GetService<IWsBroadcaster>(),
-                () => sp.GetService<ISequenceService>()));
+        // §38j-6 — also writes active/current.json checkpoint per §28.1.
+        // Registered later (after profileDir is resolved) so the checkpoint
+        // dep can be constructed.
         // Phase 13.14 — calibration + dark library + mosaic placeholders.
         builder.Services.AddSingleton<ICalibrationService, PlaceholderCalibrationService>();
         builder.Services.AddSingleton<IDarkLibraryService, PlaceholderDarkLibraryService>();
@@ -221,6 +220,23 @@ public class Program {
                 profileDir,
                 sp.GetService<ISequencerService>(),
                 sp.GetService<ILogger<FileSequenceService>>()));
+
+        // §38j-6 — active-sequence checkpoint at
+        // {profileDir}/sequences/active/current.json per §28.1 / §38.2.
+        builder.Services.AddSingleton(sp =>
+            new ActiveSequenceCheckpoint(
+                profileDir,
+                sp.GetService<ILogger<ActiveSequenceCheckpoint>>()));
+
+        // §38j-5 + §38j-6 — sequencer registered here (post profileDir +
+        // ActiveSequenceCheckpoint). Func<> resolver breaks the
+        // FileSequenceService ↔ PlaceholderSequencerService construction-time
+        // cycle (both reference each other now).
+        builder.Services.AddSingleton<ISequencerService>(sp =>
+            new PlaceholderSequencerService(
+                sp.GetService<IWsBroadcaster>(),
+                () => sp.GetService<ISequenceService>(),
+                sp.GetService<ActiveSequenceCheckpoint>()));
 
         // §38.7 — disk-shipped templates under {profileDir}/sequences/templates/
         // merged on top of the 3 hardcoded built-ins. .deb install can drop
