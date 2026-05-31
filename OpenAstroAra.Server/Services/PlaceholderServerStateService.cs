@@ -36,20 +36,29 @@ public sealed class PlaceholderServerStateService : IServerStateService {
     private static readonly JsonDocument _empty = JsonDocument.Parse("{}");
 
     private readonly IWsBroadcaster? _broadcaster;
+    private readonly IDiagnosticsService? _diagnostics;
+    private readonly INotificationService? _notifications;
 
-    public PlaceholderServerStateService(IWsBroadcaster? broadcaster = null) {
+    public PlaceholderServerStateService(
+            IWsBroadcaster? broadcaster = null,
+            IDiagnosticsService? diagnostics = null,
+            INotificationService? notifications = null) {
         _broadcaster = broadcaster;
+        _diagnostics = diagnostics;
+        _notifications = notifications;
     }
 
-    public Task<ServerStateDto> GetSnapshotAsync(CancellationToken ct) {
+    public async Task<ServerStateDto> GetSnapshotAsync(CancellationToken ct) {
         // §60.9.6 resume protocol: ws_resume_token is the client's
         // last-seen seq, in v0.0.1 just the broadcaster's current seq
-        // stringified. WILMA stores this in its local state and presents
-        // it back on reconnect via the §60.9.6 resume request.
+        // stringified.
         var seq = _broadcaster?.CurrentSequence ?? 0;
         var resumeToken = seq.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
-        return Task.FromResult(new ServerStateDto(
+        var diagSummary = await BuildDiagnosticsSummaryAsync(ct);
+        var notifSummary = await BuildNotificationsSummaryAsync(ct);
+
+        return new ServerStateDto(
             ServerUuid: ServerIdentity.Uuid,
             Nickname: ServerIdentity.Nickname,
             Version: ServerIdentity.Version,
@@ -60,13 +69,49 @@ public sealed class PlaceholderServerStateService : IServerStateService {
             PendingRestart: null,
             WsResumeToken: resumeToken,
             WsEventCursor: seq,
-            // Subsystem summary blobs are empty objects today; each
-            // subsystem will fill its own shape when its placeholder /
-            // real impl lands (§60.9.4).
+            // equipment_states + active_sequence_run still empty until
+            // real Alpaca drivers + §38 orchestrator land.
             EquipmentStates: _empty.RootElement.Clone(),
             ActiveSequenceRun: _empty.RootElement.Clone(),
-            DiagnosticsHealth: _empty.RootElement.Clone(),
-            NotificationsSummary: _empty.RootElement.Clone()));
+            DiagnosticsHealth: diagSummary,
+            NotificationsSummary: notifSummary);
+    }
+
+    private async Task<JsonElement> BuildDiagnosticsSummaryAsync(CancellationToken ct) {
+        if (_diagnostics is null) return _empty.RootElement.Clone();
+        try {
+            var state = await _diagnostics.GetStateAsync(ct);
+            var health = state.Health.ToString().ToLowerInvariant();
+            var json = $$"""
+                {"health":"{{health}}","open_issue_count":{{state.OpenIssueCount}},"last_hour_issue_count":{{state.LastHourIssueCount}}}
+                """;
+            using var doc = JsonDocument.Parse(json);
+            return doc.RootElement.Clone();
+        } catch {
+            return _empty.RootElement.Clone();
+        }
+    }
+
+    private async Task<JsonElement> BuildNotificationsSummaryAsync(CancellationToken ct) {
+        if (_notifications is null) return _empty.RootElement.Clone();
+        try {
+            // Pull the first page of unread notifications to count + classify
+            // by severity. 200 cap matches the cursor-page max so the count
+            // accurately reflects "all unread" in any realistic single-night
+            // session.
+            var page = await _notifications.ListAsync(limit: 200, cursor: null, unreadOnly: true, ct);
+            var critical = page.Items.Count(n =>
+                n.Severity == Contracts.NotificationSeverity.Critical && !n.Dismissed);
+            var warning = page.Items.Count(n =>
+                n.Severity == Contracts.NotificationSeverity.Warning && !n.Dismissed);
+            var json = $$"""
+                {"unread_count":{{page.Items.Count}},"critical_count":{{critical}},"warning_count":{{warning}}}
+                """;
+            using var doc = JsonDocument.Parse(json);
+            return doc.RootElement.Clone();
+        } catch {
+            return _empty.RootElement.Clone();
+        }
     }
 
     public Task<ApiVersionsDto> GetVersionsAsync(CancellationToken ct) =>
