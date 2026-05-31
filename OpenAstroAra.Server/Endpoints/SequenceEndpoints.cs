@@ -60,6 +60,8 @@ public static class SequenceEndpoints {
 
         seq.MapPost("",
                 async ([FromBody] SequenceCreateRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ISequenceService svc, CancellationToken ct) => {
+                    var (valid, reason) = SequenceSchemaValidator.Validate(request.Body);
+                    if (!valid) return Results.UnprocessableEntity(new { error = reason });
                     var dto = await svc.CreateAsync(request, key, ct);
                     return Results.Created($"/api/v1/sequences/{dto.Id}", dto);
                 })
@@ -70,6 +72,12 @@ public static class SequenceEndpoints {
 
         seq.MapPatch("/{id:guid}",
                 async (Guid id, [FromBody] SequenceUpdateRequestDto request, ISequenceService svc, CancellationToken ct) => {
+                    // §38.5: only validate Body if it's being updated (PATCH semantics —
+                    // null Body means "leave existing body unchanged").
+                    if (request.Body.HasValue) {
+                        var (valid, reason) = SequenceSchemaValidator.Validate(request.Body.Value);
+                        if (!valid) return Results.UnprocessableEntity(new { error = reason });
+                    }
                     var dto = await svc.UpdateAsync(id, request, ct);
                     return dto is null ? Results.NotFound() : Results.Ok(dto);
                 })
