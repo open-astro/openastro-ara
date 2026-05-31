@@ -89,9 +89,41 @@ public sealed class PlaceholderServerStateService : IServerStateService {
             BreakingChanges: Array.Empty<string>(),
             UpgradeGuideUrl: null));
 
-    public Task<OperationAcceptedDto> RestartAsync(string reason, string? idempotencyKey, CancellationToken ct) =>
-        Task.FromResult(PlaceholderEquipmentHelpers.Accepted("server.restart", idempotencyKey));
+    public Task<OperationAcceptedDto> RestartAsync(string reason, string? idempotencyKey, CancellationToken ct) {
+        var accepted = PlaceholderEquipmentHelpers.Accepted("server.restart", idempotencyKey);
+        // Fire-and-forget: spawn `systemctl restart openastroara-server`
+        // 2 seconds from now so the 202 response reaches the client
+        // before the daemon dies. Linux + systemd only — on macOS/Windows
+        // dev runs the spawn fails silently (no systemctl in PATH) which
+        // is the correct behavior: the WILMA-visible 202 still confirms
+        // the request was accepted, just no actual restart fires.
+        _ = Task.Run(async () => {
+            await Task.Delay(TimeSpan.FromSeconds(2));
+            TrySpawnSystemctl("restart", "openastroara-server");
+        });
+        return Task.FromResult(accepted);
+    }
 
     public Task<OperationAcceptedDto> RestartOnIdleAsync(string reason, string? idempotencyKey, CancellationToken ct) =>
+        // §34.7 restart-on-idle needs the §28 sequence-state check (don't
+        // restart mid-capture). Placeholder until §38 orchestrator is
+        // online + we can ask "is the daemon currently busy?".
         Task.FromResult(PlaceholderEquipmentHelpers.Accepted("server.restart-on-idle", idempotencyKey));
+
+    private static void TrySpawnSystemctl(string verb, string unit) {
+        try {
+            var psi = new System.Diagnostics.ProcessStartInfo("systemctl", $"{verb} {unit}") {
+                UseShellExecute = false,
+                RedirectStandardOutput = false,
+                RedirectStandardError = false,
+                CreateNoWindow = true,
+            };
+            System.Diagnostics.Process.Start(psi);
+        } catch {
+            // No systemctl in PATH (non-Linux dev runs, or restricted
+            // environment without polkit permission). Swallow — the 202
+            // was already sent and there's nothing useful to log from a
+            // process that's about to be killed anyway.
+        }
+    }
 }
