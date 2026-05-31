@@ -14,6 +14,7 @@
 
 using NUnit.Framework;
 using OpenAstroAra.Server.Services;
+using System.Linq;
 using System.Text.Json;
 
 namespace OpenAstroAra.Test {
@@ -60,6 +61,79 @@ namespace OpenAstroAra.Test {
         // with a real T : ISequenceX constraint; that's exercised via the
         // SequenceBodyDeserializer integration test below rather than
         // explicitly enumerating each generic method here.
+
+        // §38k-3 — verify WithDefaults() registers the three structural
+        // containers and that the JSON converter can now resolve them
+        // (instead of falling back to UnknownSequenceContainer).
+
+        [Test]
+        public void WithDefaults_registers_the_three_structural_containers() {
+            var factory = HeadlessSequencerFactory.WithDefaults();
+            Assert.That(factory.Container, Has.Count.EqualTo(3));
+            var typeNames = factory.Container.Select(c => c.GetType().Name).ToList();
+            Assert.That(typeNames, Does.Contain("SequenceRootContainer"));
+            Assert.That(typeNames, Does.Contain("SequentialContainer"));
+            Assert.That(typeNames, Does.Contain("ParallelContainer"));
+        }
+
+        [Test]
+        public void WithDefaults_factory_resolves_SequentialContainer_via_JSON() {
+            // End-to-end: the JSON converter's GetContainer<T> reflection
+            // lookup hits the registered prototype, clones it, returns a
+            // real SequentialContainer rather than UnknownSequenceContainer.
+            var factory = HeadlessSequencerFactory.WithDefaults();
+            var deserializer = new SequenceBodyDeserializer(factory, logger: null);
+            var body = JsonDocument.Parse("""
+                {
+                    "schemaVersion": "openastroara-sequence-v1",
+                    "$type": "OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer"
+                }
+                """).RootElement.Clone();
+
+            var ok = deserializer.TryDeserialize(body, out var container, out var error);
+
+            Assert.That(ok, Is.True, $"unexpected error: {error}");
+            Assert.That(container, Is.Not.Null);
+            Assert.That(container!.GetType().Name, Is.EqualTo("SequentialContainer"));
+        }
+
+        [Test]
+        public void WithDefaults_factory_resolves_SequenceRootContainer_via_JSON() {
+            var factory = HeadlessSequencerFactory.WithDefaults();
+            var deserializer = new SequenceBodyDeserializer(factory, logger: null);
+            var body = JsonDocument.Parse("""
+                {
+                    "schemaVersion": "openastroara-sequence-v1",
+                    "$type": "OpenAstroAra.Sequencer.Container.SequenceRootContainer, OpenAstroAra.Sequencer"
+                }
+                """).RootElement.Clone();
+
+            var ok = deserializer.TryDeserialize(body, out var container, out _);
+
+            Assert.That(ok, Is.True);
+            Assert.That(container!.GetType().Name, Is.EqualTo("SequenceRootContainer"));
+        }
+
+        [Test]
+        public void WithDefaults_factory_still_degrades_for_unknown_type() {
+            // Even with structural containers registered, an unknown $type
+            // (e.g. an equipment-bound instruction we haven't wired yet)
+            // still falls back to UnknownSequenceContainer rather than
+            // throwing — preserves the §38k-1 graceful-degradation invariant.
+            var factory = HeadlessSequencerFactory.WithDefaults();
+            var deserializer = new SequenceBodyDeserializer(factory, logger: null);
+            var body = JsonDocument.Parse("""
+                {
+                    "schemaVersion": "openastroara-sequence-v1",
+                    "$type": "Fictional.Namespace.NoSuchContainer, Fictional.Assembly"
+                }
+                """).RootElement.Clone();
+
+            var ok = deserializer.TryDeserialize(body, out var container, out _);
+
+            Assert.That(ok, Is.True);
+            Assert.That(container!.GetType().Name, Is.EqualTo("UnknownSequenceContainer"));
+        }
 
         [Test]
         public void Pairs_with_SequenceBodyDeserializer_for_unknown_type_path() {
