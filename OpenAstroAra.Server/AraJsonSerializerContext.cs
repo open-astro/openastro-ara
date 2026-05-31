@@ -179,6 +179,8 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(StatsTargetsDto))]
 [JsonSerializable(typeof(StatsTargetSummaryDto))]
 [JsonSerializable(typeof(StorageSettingsDto))]
+[JsonSerializable(typeof(StretchDefaultsDto))]
+[JsonSerializable(typeof(StretchManualDefaultsDto))]
 [JsonSerializable(typeof(SwitchDto))]
 [JsonSerializable(typeof(SwitchPortDto))]
 [JsonSerializable(typeof(SwitchValueRequestDto))]
