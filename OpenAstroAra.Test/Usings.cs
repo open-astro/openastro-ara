@@ -1,5 +1,6 @@
 global using NUnit.Framework;
 using OpenAstroAra.Core.Utility;
+using System.IO;
 
 [SetUpFixture]
 public class Init {

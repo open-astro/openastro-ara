@@ -66,54 +66,13 @@ namespace OpenAstroAra.Image.ImageData {
                     metaData: this.MetaData));
         }
 
-        public static async Task<ImageArrayExposureData> FromBitmapSource(byte[] source, IImageDataFactory imageDataFactory) {            
-            var pixels = await Task.Run(() => ArrayFromSource(source));
-            return new ImageArrayExposureData(
-                input: pixels,
-                width: source.PixelWidth,
-                height: source.PixelHeight,
-                bitDepth: source.Format.BitsPerPixel,
-                isBayered: false,
-                metaData: new ImageMetaData(),
-                imageDataFactory: imageDataFactory);
-        }
-
-        private static ushort[] ArrayFromSource(byte[] source) {
-            if (source.Format == PixelFormats.Gray16) {
-                return ArrayFrom16BitSource(source);
-            } else if (source.Format == PixelFormats.Gray8 || source.Format == PixelFormats.Indexed8) {
-                return ArrayFrom8BitSource(source);
-            } else if (source.Format == PixelFormats.Bgr24 || source.Format == PixelFormats.Bgr32 || source.Format == PixelFormats.Pbgra32) {
-                WriteableBitmap convertedSource = new WriteableBitmap(
-                   (byte[])(new FormatConvertedBitmap(source, PixelFormats.Gray8, null, 0))
-                );
-                return ArrayFrom8BitSource(convertedSource);
-            } else {
-                throw new FormatException(string.Format("Pixelformat {0} not supported", source.Format));
-            }
-        }
-
-        private static ushort[] ArrayFrom8BitSource(byte[] source) {
-            int stride = (source.PixelWidth * source.Format.BitsPerPixel + 7) / 8;
-            int arraySize = stride * source.PixelHeight;
-            byte[] pixels = new byte[arraySize];
-            source.CopyPixels(pixels, stride, 0);
-
-            ushort[] array = new ushort[pixels.Length];
-            for (int i = 0; i < array.Length; i++) {
-                array[i] = (ushort)(pixels[i] * (ushort.MaxValue / (double)byte.MaxValue));
-            }
-
-            return array;
-        }
-
-        private static ushort[] ArrayFrom16BitSource(byte[] source) {
-            int stride = (source.PixelWidth * source.Format.BitsPerPixel + 7) / 8;
-            int arraySize = stride * source.PixelHeight;
-            ushort[] pixels = new ushort[arraySize];
-            source.CopyPixels(pixels, stride, 0);
-
-            return pixels;
-        }
+        // FromBitmapSource / ArrayFromSource / ArrayFrom8BitSource /
+        // ArrayFrom16BitSource removed — the WPF BitmapSource pixel-format
+        // matrix is replaced by OpenCvSharp4 Mat conversions per playbook
+        // §line-2105. The headless daemon's capture path uses raw ushort[]
+        // arrays directly (via the §72 CFITSIO P/Invoke + the §65 stretch
+        // pipeline), so this no-longer-used WPF entry point is stubbed.
+        public static Task<ImageArrayExposureData> FromBitmapSource(byte[] source, IImageDataFactory imageDataFactory) =>
+            throw new NotImplementedException("FromBitmapSource pending OpenCvSharp4 wiring.");
     }
 }

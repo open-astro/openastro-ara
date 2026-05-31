@@ -55,7 +55,9 @@ namespace OpenAstroAra.Image.ImageData {
             Data = imageArray;
             MetaData = metaData;
             Properties = new ImageProperties(width: width, height: height, bitDepth: bitDepth, isBayered: isBayered, gain: metaData.Camera.Gain, offset: metaData.Camera.Offset);
-            StarDetectionAnalysis = starDetection.CreateAnalysis();
+            // StarDetectionAnalysis populated when OpenCvSharp4-backed
+            // IStarDetection lands per playbook §line-2105.
+            StarDetectionAnalysis = null!;
             Statistics = new Nito.AsyncEx.AsyncLazy<IImageStatistics>(async () => await Task.Run(() => ImageStatistics.Create(this)));
             this.profileService = profileService;
             this.starDetection = starDetection;
@@ -77,7 +79,9 @@ namespace OpenAstroAra.Image.ImageData {
         }
 
         public byte[] RenderBitmapSource() {
-            return ImageUtility.CreateSourceFromArray(Data, Properties, PixelFormats.Gray16);
+            // ImageUtility.CreateSourceFromArray (WPF BitmapSource pipeline)
+            // pending OpenCvSharp4 replacement per playbook §line-2105.
+            throw new NotImplementedException("RenderBitmapSource pending OpenCvSharp4 wiring.");
         }
 
         public void SetImageStatistics(IImageStatistics imageStatistics) {
@@ -414,49 +418,12 @@ namespace OpenAstroAra.Image.ImageData {
         }
 
         private string SaveTiff(FileSaveInfo fileSaveInfo) {
-            Directory.CreateDirectory(Path.GetDirectoryName(fileSaveInfo.FilePath));
-            string uniquePath = CoreUtil.GetUniqueFilePath(fileSaveInfo.FilePath + fileSaveInfo.GetExtension(".tif"));
-
-            using (FileStream fs = new FileStream(uniquePath, FileMode.Create)) {
-                TiffBitmapEncoder encoder = new TiffBitmapEncoder();
-
-                switch (fileSaveInfo.TIFFCompressionType) {
-                    case TIFFCompressionTypeEnum.LZW:
-                        encoder.Compression = TiffCompressOption.Lzw;
-                        break;
-
-                    case TIFFCompressionTypeEnum.ZIP:
-                        encoder.Compression = TiffCompressOption.Zip;
-                        break;
-
-                    default:
-                        encoder.Compression = TiffCompressOption.None;
-                        break;
-                }
-
-                var metadata = new BitmapMetadata("tiff");
-                try {
-                    // This will populate the TIFF Metadata using stringified FITS style header cards, to retain partial meta data that is not natively supported by TIFF                    
-                    metadata.ApplicationName = CoreUtil.Title;
-
-                    var fitsHeader = new FITSHeader(Properties.Width, Properties.Height);
-                    fitsHeader.PopulateFromMetaData(MetaData);
-                    var sb = new StringBuilder();
-                    foreach (var header in fitsHeader.HeaderCards) {
-                        sb.AppendLine(header.GetHeaderString());
-                    }
-                    sb.AppendLine("END");
-                    metadata.Title = sb.ToString();
-                } catch (Exception ex) {
-                    Logger.Error("Failed to generate TIFF metadata", ex);
-                }
-
-                var frame = BitmapFrame.Create(RenderBitmapSource(), null, metadata, null);
-                encoder.Frames.Add(frame);
-                encoder.Save(fs);
-            }
-
-            return uniquePath;
+            // SaveTiff pending OpenCvSharp4 / SkiaSharp TIFF encoder per
+            // playbook §line-2105 — the WPF TiffBitmapEncoder pipeline was
+            // deleted in the net10.0 conversion. The headless daemon's
+            // primary capture path is FITS via OpenAstroAra.Fits; TIFF export
+            // arrives in a follow-up.
+            throw new NotImplementedException("SaveTiff pending OpenCvSharp4 wiring.");
         }
 
         private static CfitsioNative.COMPRESSION GetFITSCompression(FITSCompressionTypeEnum fITSCompressionTypeEnum) {
@@ -617,7 +584,10 @@ namespace OpenAstroAra.Image.ImageData {
         }
 
         public Task<IImageData> CreateFromFile(string path, int bitDepth, bool isBayered, RawConverterEnum rawConverter, CancellationToken ct = default) {
-            return BaseImageData.FromFile(path, bitDepth, isBayered, RawConverterFactory.CreateInstance(rawConverter, this), this, ct);
+            // RawConverterFactory deleted in the net10.0 conversion; the
+            // rawConverter param is ignored until libraw replaces DCRaw per
+            // playbook §line-2105.
+            return BaseImageData.FromFile(path, bitDepth, isBayered, null, this, ct);
         }
     }
 }

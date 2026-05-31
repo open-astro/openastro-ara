@@ -12,12 +12,10 @@
 
 #endregion "copyright"
 
-using System.Windows.Media.Imaging;
-
 namespace OpenAstroAra.PlateSolving {
 
     public class PlateSolveProgress {
-        public BitmapSource Thumbnail { get; set; }
+        public byte[] Thumbnail { get; set; }
 
         public PlateSolveResult PlateSolveResult { get; set; }
     }

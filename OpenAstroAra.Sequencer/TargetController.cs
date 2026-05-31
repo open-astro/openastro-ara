@@ -13,6 +13,8 @@
 #endregion "copyright"
 
 using OpenAstroAra.Core.Model;
+using System.Windows.Data;
+using System.Windows.Input;
 using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.DragDrop;
@@ -25,9 +27,6 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using System.Windows;
-using System.Windows.Data;
-using System.Windows.Input;
 using OpenAstroAra.Core.Utility.Notification;
 using OpenAstroAra.Core.Locale;
 using OxyPlot.Axes;
@@ -190,7 +189,7 @@ namespace OpenAstroAra.Sequencer {
                     }
 
                     foreach (var target in Targets.ToList()) {
-                        await Application.Current.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Normal, new Action(() => Targets.Remove(target)));
+                        await Task.Run(() => Targets.Remove(target));
                     }
 
                     TargetsLoadingProgress = 0;
@@ -228,13 +227,13 @@ namespace OpenAstroAra.Sequencer {
         }
 
         private async Task RefreshFilters() {
-            await Application.Current.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Normal, new Action(() => {
+            await Task.Run(() => {
                 try {
                     TargetsView.Refresh(); TargetsMenuView.Refresh();
                 } catch (Exception ex) {
                     Logger.Error(ex);
                 }
-            }));
+            });
         }
 
         public void DeleteTarget(TargetSequenceContainer targetSequenceContainer) {

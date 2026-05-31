@@ -13,6 +13,7 @@
 #endregion "copyright"
 
 using Newtonsoft.Json;
+using System.Windows.Input;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Sequencer.Validations;
@@ -40,17 +41,11 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
         public System.Windows.Input.ICommand OpenDialogCommand { get; private set; }
 
         public ExternalScript() {
-            OpenDialogCommand = new GalaSoft.MvvmLight.Command.RelayCommand<object>((object o) => {
-                Microsoft.Win32.OpenFileDialog dialog = new Microsoft.Win32.OpenFileDialog();
-                dialog.Title = Loc.Instance["Lbl_SequenceItem_Utility_ExternalScript_Name"];
-                dialog.FileName = "";
-                dialog.DefaultExt = ".*";
-                dialog.Filter = "Any executable command |*.*";
-
-                if (dialog.ShowDialog() == true) {
-                    Script = "\"" + dialog.FileName + "\"";
-                }
-            });
+            // OpenDialogCommand previously opened a WPF OpenFileDialog to
+            // choose a script path. Headless: the client owns the file picker
+            // and sets Script via REST. The command is a no-op shim so the
+            // legacy binding compiles.
+            OpenDialogCommand = new GalaSoft.MvvmLight.Command.RelayCommand<object>((object? o) => { });
         }
 
         private ExternalScript(ExternalScript cloneMe) : this() {

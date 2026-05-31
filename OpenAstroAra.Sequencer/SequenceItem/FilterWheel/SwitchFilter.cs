@@ -51,7 +51,10 @@ namespace OpenAstroAra.Sequencer.SequenceItem.FilterWheel {
             this.profileService = profileservice;
             this.filterWheelMediator = filterWheelMediator;
 
-            WeakEventManager<IProfileService, EventArgs>.AddHandler(profileService, nameof(profileService.ProfileChanged), ProfileService_ProfileChanged);
+            // WeakEventManager dropped per playbook line 1533 — direct event
+            // subscription. In the headless server SwitchFilter instances are
+            // short-lived (per-instruction) so a strong handler is fine.
+            profileService.ProfileChanged += ProfileService_ProfileChanged;
         }
 
         private void MatchFilter() {
