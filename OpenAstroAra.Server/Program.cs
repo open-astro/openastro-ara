@@ -304,6 +304,16 @@ public class Program {
             sqliteDiag.EnsureSeededAsync(CancellationToken.None).GetAwaiter().GetResult();
         }
 
+        // §28.8 startup orphan scan — sweep stale .tmp files + recover
+        // orphan FITS into the catalog. On fresh installs (no captures
+        // dir) this is a sub-ms no-op; once real captures from the §38
+        // sequence orchestrator land, it auto-heals across daemon crashes.
+        var captureScan = new CaptureScanService(
+            app.Services.GetRequiredService<IProfileStore>(),
+            app.Services.GetRequiredService<IAraDatabase>(),
+            app.Services.GetService<ILogger<CaptureScanService>>());
+        captureScan.RunAsync(CancellationToken.None).GetAwaiter().GetResult();
+
         app.Logger.LogInformation("OpenAstroAra.Server listening on :{Port}", port);
         app.Run();
     }
