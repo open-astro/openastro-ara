@@ -29,9 +29,9 @@ namespace OpenAstroAra.Server.Services;
 /// (typically &lt;100 entries) this is fine; a larger library would benefit
 /// from an index, but that's outside §38 scope.
 ///
-/// Not registered yet for the <c>imported/</c>, <c>templates/</c>, <c>active/</c>
-/// subdirs from §38.2 — those land with the §38 import flow + §38 template
-/// instantiator. This impl covers the <c>library/</c> root only.
+/// Constructor also scaffolds the §38.2 sibling subdirs (<c>imported/</c>,
+/// <c>templates/</c>, <c>active/</c>) so future sub-PRs that need them have
+/// a stable layout without each one re-implementing the same mkdir step.
 /// </summary>
 public sealed class FileSequenceService : ISequenceService {
     private readonly string _libraryDir;
@@ -42,12 +42,28 @@ public sealed class FileSequenceService : ISequenceService {
             WriteIndented = true,
         });
 
+    // §38.2 subdir names — kept as constants so consumers (import flow,
+    // template loader, active checkpointer) reference the same paths.
+    public const string LibraryDirName = "library";
+    public const string ImportedDirName = "imported";
+    public const string TemplatesDirName = "templates";
+    public const string ActiveDirName = "active";
+
     public FileSequenceService(string profileDir, ILogger<FileSequenceService>? logger = null) {
-        _libraryDir = Path.Combine(profileDir, "sequences", "library");
+        var sequencesRoot = Path.Combine(profileDir, "sequences");
+        _libraryDir = Path.Combine(sequencesRoot, LibraryDirName);
         _logger = logger;
-        try { Directory.CreateDirectory(_libraryDir); }
-        catch (Exception ex) {
-            _logger?.LogWarning(ex, "Failed to create sequence library dir {Path}", _libraryDir);
+
+        // §38.2 scaffold: create all four subdirs on startup. Library is the
+        // only one this service writes; the others are scaffolded here so the
+        // import flow / template loader / active checkpointer can rely on
+        // their existence without each one duplicating the mkdir + log path.
+        foreach (var dirName in new[] { LibraryDirName, ImportedDirName, TemplatesDirName, ActiveDirName }) {
+            var path = Path.Combine(sequencesRoot, dirName);
+            try { Directory.CreateDirectory(path); }
+            catch (Exception ex) {
+                _logger?.LogWarning(ex, "Failed to create sequences subdir {Path}", path);
+            }
         }
     }
 
