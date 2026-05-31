@@ -173,6 +173,11 @@ public sealed class SqliteNotificationService : INotificationService {
         }
     }
 
+    public async Task CreateAsync(NotificationDto notification, CancellationToken ct) {
+        await using var conn = _db.OpenConnection();
+        await InsertAsync(conn, notification, ct);
+    }
+
     public async Task<NotificationPreferenceDto> SetPreferencesAsync(NotificationPreferenceDto preferences, CancellationToken ct) {
         var json = JsonSerializer.Serialize(preferences,
             AraJsonSerializerContext.Default.NotificationPreferenceDto);
