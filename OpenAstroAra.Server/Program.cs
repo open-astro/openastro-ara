@@ -264,7 +264,29 @@ public class Program {
         builder.Services.AddSingleton<IAraDatabase>(sp =>
             new SqliteAraDatabase(profileDir, sp.GetService<ILogger<SqliteAraDatabase>>()));
 
+        // §28.2 startup reconciler — checks for an active/current.json left
+        // by a previous run that didn't shut down cleanly. Registered as
+        // singleton so future hosted services can reference it; the actual
+        // reconciliation call runs once during startup below.
+        builder.Services.AddSingleton<SequenceStartupReconciler>();
+
         var app = builder.Build();
+
+        // §28.2 — reconcile any interrupted-sequence checkpoint left by a
+        // previous run. Per the §28.2 policy ("do not auto-resume") the
+        // reconciler just clears the checkpoint and returns the previous
+        // state for the notification layer. Notification emission lands
+        // in a follow-up when the §46 notification pipeline runs at startup.
+        var reconcilerResult = app.Services
+            .GetRequiredService<SequenceStartupReconciler>()
+            .Reconcile();
+        if (reconcilerResult.Outcome != SequenceStartupReconciler.Outcome.Clean) {
+            var logger = app.Services.GetRequiredService<ILogger<Program>>();
+            logger.LogWarning(
+                "Startup reconciliation: {Outcome} (previous sequence: {SeqId})",
+                reconcilerResult.Outcome,
+                reconcilerResult.PreviousState?.SequenceId);
+        }
 
         app.UseCors();
 
