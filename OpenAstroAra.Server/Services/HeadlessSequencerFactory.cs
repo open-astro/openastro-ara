@@ -17,6 +17,7 @@ using OpenAstroAra.Sequencer;
 using OpenAstroAra.Sequencer.Conditions;
 using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.SequenceItem;
+using OpenAstroAra.Sequencer.SequenceItem.Utility;
 using OpenAstroAra.Sequencer.Trigger;
 using OpenAstroAra.Sequencer.Utility.DateTimeProvider;
 
@@ -110,6 +111,13 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
     /// </summary>
     public static HeadlessSequencerFactory WithDefaults() {
         return new HeadlessSequencerFactory(
+            items: new List<ISequenceItem> {
+                // §38k-4 — utility instructions with no equipment deps.
+                // Future §38k subs add equipment-bound instructions (TakeExposure,
+                // SetFilter, etc.) as each equipment-service tree gets wired.
+                new Annotation(),
+                new WaitForTimeSpan(),
+            },
             container: new List<ISequenceContainer> {
                 new SequenceRootContainer(),
                 new SequentialContainer(),
