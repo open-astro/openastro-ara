@@ -368,13 +368,21 @@ public class Program {
             sqliteNotif.EnsureSeededAsync(CancellationToken.None).GetAwaiter().GetResult();
         }
 
+        // §51 diagnostics fixture seed — three events (one open issue + two
+        // historical) so the panel has data to render before the monitor
+        // worker is online.
+        var diagnosticsSvc = app.Services.GetRequiredService<IDiagnosticsService>();
+        if (diagnosticsSvc is SqliteDiagnosticsService sqliteDiag) {
+            sqliteDiag.EnsureSeededAsync(CancellationToken.None).GetAwaiter().GetResult();
+        }
+
         // §28.2 — reconcile any interrupted-sequence checkpoint left by a
         // previous run. Per the §28.2 policy ("do not auto-resume") the
         // reconciler clears the checkpoint and returns the previous state
-        // so we can surface a §46 notification ("the previous sequence
-        // ended unexpectedly") on the next inbox load. Sits after the
-        // notification seed so the inserted row lands in a populated table
-        // — the seed is no-op once any row exists.
+        // so we can surface a §46 notification + (on Corrupt only) a §51
+        // diagnostic event. Sits after both the notification and the
+        // diagnostics seeds — each seed is no-op once any row exists, so
+        // emit-before-seed would silently skip those fixtures.
         var reconcilerResult = app.Services
             .GetRequiredService<SequenceStartupReconciler>()
             .Reconcile();
@@ -390,13 +398,16 @@ public class Program {
             } catch (Exception ex) {
                 startupLogger.LogWarning(ex, "Failed to emit §46 reconciliation notification");
             }
-        }
-        // §51 diagnostics fixture seed — three events (one open issue + two
-        // historical) so the panel has data to render before the monitor
-        // worker is online.
-        var diagnosticsSvc = app.Services.GetRequiredService<IDiagnosticsService>();
-        if (diagnosticsSvc is SqliteDiagnosticsService sqliteDiag) {
-            sqliteDiag.EnsureSeededAsync(CancellationToken.None).GetAwaiter().GetResult();
+            if (reconcilerResult.Outcome == SequenceStartupReconciler.Outcome.Corrupt) {
+                try {
+                    var (evt, rec, autoCorr) =
+                        StartupNotificationFactory.DiagnosticForCorruptResult(reconcilerResult);
+                    diagnosticsSvc.CreateEventAsync(evt, rec, autoCorr, CancellationToken.None)
+                        .GetAwaiter().GetResult();
+                } catch (Exception ex) {
+                    startupLogger.LogWarning(ex, "Failed to emit §51 checkpoint-corrupt diagnostic");
+                }
+            }
         }
 
         // §28.8 startup orphan scan — sweep stale .tmp files + recover

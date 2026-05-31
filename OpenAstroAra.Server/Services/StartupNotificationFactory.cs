@@ -66,6 +66,44 @@ public static class StartupNotificationFactory {
         };
     }
 
+    /// <summary>
+    /// Build the §51 diagnostic event for a Corrupt reconciler outcome. We
+    /// don't emit a diagnostic for Interrupted — that's a routine "previous
+    /// session ended" signal, not an open issue. Corrupt is a real
+    /// data-integrity problem worth surfacing in the §51 panel as a Red,
+    /// auto-cleared event (we already handled the file via quarantine, so
+    /// no user action is required to clear it).
+    /// </summary>
+    public static (DiagnosticEventDto Event, string? RecommendedAction, bool? AutoCorrectible)
+            DiagnosticForCorruptResult(SequenceStartupReconciler.Result result) {
+        if (result.Outcome != SequenceStartupReconciler.Outcome.Corrupt) {
+            throw new ArgumentException(
+                $"DiagnosticForCorruptResult only handles Corrupt; got {result.Outcome}",
+                nameof(result));
+        }
+        var now = DateTimeOffset.UtcNow;
+        var dto = new DiagnosticEventDto(
+            Id: Guid.NewGuid(),
+            EventType: "sequence.checkpoint.corrupt",
+            Severity: DiagnosticHealth.Red,
+            Description: BuildCorruptDiagnosticDescription(result.QuarantinedPath),
+            DetectedUtc: now,
+            // Pre-cleared — the reconciler already quarantined the file, so
+            // there's nothing for the user to do. §51 panel shows this in
+            // history; it's never in the open-issues count.
+            ClearedUtc: now,
+            AutoActionTaken: true,
+            AutoActionDescription: result.QuarantinedPath is null
+                ? "Deleted the unreadable checkpoint to allow startup to proceed."
+                : $"Quarantined the unreadable checkpoint to {result.QuarantinedPath}.");
+        return (dto, RecommendedAction: null, AutoCorrectible: true);
+    }
+
+    private static string BuildCorruptDiagnosticDescription(string? quarantinedPath) =>
+        quarantinedPath is null
+            ? "Sequence checkpoint file was unreadable. It could not be quarantined and was deleted so startup could proceed."
+            : $"Sequence checkpoint file was unreadable. Quarantined to {quarantinedPath} for diagnostics.";
+
     private static string BuildInterruptedMessage(SequenceRunStateDto? previous) {
         if (previous is null) {
             return "A sequence was running when the daemon stopped. It was not auto-resumed; re-start it from the Sequencer panel if needed.";

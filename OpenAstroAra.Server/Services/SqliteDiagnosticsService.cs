@@ -214,6 +214,27 @@ public sealed class SqliteDiagnosticsService : IDiagnosticsService {
             : DiagnosticsMode.Observe;
     }
 
+    public async Task CreateEventAsync(
+            DiagnosticEventDto @event,
+            string? recommendedAction,
+            bool? autoCorrectible,
+            CancellationToken ct) {
+        await using var conn = _db.OpenConnection();
+        await InsertEventAsync(
+            conn,
+            id: @event.Id,
+            eventType: @event.EventType,
+            severity: @event.Severity,
+            description: @event.Description,
+            detectedUtc: @event.DetectedUtc,
+            clearedUtc: @event.ClearedUtc,
+            autoActionTaken: @event.AutoActionTaken,
+            autoActionDescription: @event.AutoActionDescription,
+            recommendedAction: recommendedAction,
+            autoCorrectible: autoCorrectible,
+            ct: ct);
+    }
+
     private static async Task InsertEventAsync(
             SqliteConnection conn, Guid id, string eventType,
             DiagnosticHealth severity, string description,
