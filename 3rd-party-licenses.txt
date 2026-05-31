@@ -1,0 +1,124 @@
+OpenAstro Ara — Third-party License Inventory
+==============================================
+
+This file lists the third-party components bundled with OpenAstro Ara binary
+distributions (server + Flutter client) along with their licenses. The list
+covers runtime dependencies only; build-time tooling (compilers, test
+frameworks, etc.) is not enumerated.
+
+For the canonical lineage attribution + per-file copyright header
+conventions, see NOTICE.md.
+
+This file is curated for v0.0.1-ara.1. Future releases regenerate it from
+the dotnet + pubspec package graphs.
+
+===================================================================
+RUNTIME — OpenAstroAra.Server (.NET 10, linux-arm64 self-contained)
+===================================================================
+
+CFITSIO
+-------
+Source: https://heasarc.gsfc.nasa.gov/fitsio/
+Used via: P/Invoke from OpenAstroAra.Fits/CFitsIO.cs
+License: ISC-style (HEASARC-provided "Software License"). Permits use,
+   modification, and redistribution; no warranty.
+Bundled as: libcfitsio10 system package (apt-installed; not statically
+   linked into the OpenAstroAra binary)
+
+SkiaSharp + SkiaSharp.NativeAssets.Linux
+----------------------------------------
+Source: https://github.com/mono/SkiaSharp
+Used via: OpenAstroAra.Stretch/JpegEncoder.cs (JPEG encoding for §65
+   stretch previews)
+License: MIT
+Bundled as: Native runtime libs in publish/runtimes/linux-arm64/
+
+Microsoft.AspNetCore.OpenApi
+Microsoft.AspNetCore.* (ASP.NET Core runtime, Kestrel)
+Microsoft.Extensions.* (DI, Logging, Hosting, Configuration)
+Microsoft.Data.Sqlite + Microsoft.EntityFrameworkCore.Sqlite
+System.* (BCL)
+----------------------------------------
+Source: https://github.com/dotnet/runtime + https://github.com/dotnet/aspnetcore
+   + https://github.com/dotnet/efcore + https://github.com/dotnet/extensions
+License: MIT
+Bundled as: assemblies in the self-contained publish
+
+Scalar.AspNetCore
+-----------------
+Source: https://github.com/scalar/scalar
+Used via: Program.cs `MapScalarApiReference()` for API docs UI
+License: MIT
+
+Serilog.AspNetCore
+------------------
+Source: https://github.com/serilog/serilog-aspnetcore
+Used via: ILogger pipeline + file sink at /var/log/openastroara/
+License: Apache-2.0
+
+Zeroconf
+--------
+Source: https://github.com/novotnyllc/Zeroconf
+Used via: mDNS service announcement for _openastroara._tcp.local
+License: MIT
+
+ASCOM.Alpaca.Components + ASCOM.Alpaca.Device + ASCOM.Tools
+-----------------------------------------------------------
+Source: https://github.com/ASCOMInitiative/ASCOMLibrary
+Used via: OpenAstroAra.Equipment Alpaca discovery + per-device proxies
+License: ASCOM License (modified Creative Commons; redistribution and
+   derivative works permitted with attribution)
+
+================================================================
+CLIENT — OpenAstroAra Flutter (Dart 3.x, Flutter pinned 3.27.x)
+================================================================
+
+dio
+---
+Source: https://pub.dev/packages/dio
+License: MIT
+
+web_socket_channel
+------------------
+Source: https://pub.dev/packages/web_socket_channel
+License: BSD-3-Clause
+
+flutter_riverpod / riverpod / riverpod_annotation
+-------------------------------------------------
+Source: https://pub.dev/packages/flutter_riverpod
+License: MIT
+
+multicast_dns
+-------------
+Source: https://pub.dev/packages/multicast_dns
+License: BSD-3-Clause
+
+flutter_secure_storage
+----------------------
+Source: https://pub.dev/packages/flutter_secure_storage
+License: BSD-3-Clause
+(Reserved for v0.1.0 remote-access tokens per §67.4; not used in v0.0.1.)
+
+file_picker
+-----------
+Source: https://pub.dev/packages/file_picker
+License: MIT
+
+================================================
+INHERITED LINEAGE — Source-level (not bundled)
+================================================
+
+This codebase is a hard fork of N.I.N.A. (Nighttime Imaging 'N' Astronomy)
+by Stefan Berg and contributors. Source files inherited from N.I.N.A.
+preserve the original copyright header. The N.I.N.A. codebase itself is
+distributed under MPL-2.0, the same license as this fork. See NOTICE.md
+and the per-file copyright headers for full attribution.
+
+==========
+SEE ALSO
+==========
+
+- LICENSE.txt — full Mozilla Public License 2.0 text
+- COPYING — license summary
+- AUTHORS — contributors (append-only)
+- NOTICE.md — attribution + lineage details
