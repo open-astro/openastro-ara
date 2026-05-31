@@ -343,9 +343,31 @@ public sealed class SqliteFrameRepository : IFrameRepository {
     public Task<(byte[] Bytes, string ContentType)?> GetThumbnailAsync(Guid id, CancellationToken ct) =>
         Task.FromResult<(byte[] Bytes, string ContentType)?>((PlaceholderJpegBytes, "image/jpeg"));
 
-    public Task<(Stream FitsStream, string FileName)?> OpenDownloadAsync(Guid id, CancellationToken ct) =>
-        // §72 FITS storage replaces this with the real file stream.
-        Task.FromResult<(Stream FitsStream, string FileName)?>(null);
+    public async Task<(Stream FitsStream, string FileName)?> OpenDownloadAsync(Guid id, CancellationToken ct) {
+        // §72: serve the captured FITS bytes from the path stored in the
+        // catalog. Two failure modes both map to 404 at the endpoint:
+        //   - Frame id not in the catalog
+        //   - File missing on disk (deleted out-of-band, drive not mounted,
+        //     or just never written yet for the seeded sample frames)
+        await using var conn = _db.OpenConnection();
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT file_path FROM frames WHERE id = $id LIMIT 1;";
+        cmd.Parameters.AddWithValue("$id", id.ToString());
+        var filePath = (string?)(await cmd.ExecuteScalarAsync(ct));
+        if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath)) {
+            return null;
+        }
+        // FileStream owned by the response pipeline — ASP.NET Core
+        // disposes it when the response finishes sending.
+        var stream = new FileStream(
+            filePath,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.Read,
+            bufferSize: 81920,
+            useAsync: true);
+        return (stream, Path.GetFileName(filePath));
+    }
 
     // Bulk ops now actually mutate the catalog. Execution is synchronous
     // (sub-ms for typical batches up to a few hundred frames); the 202
