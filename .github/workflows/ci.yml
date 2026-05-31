@@ -101,6 +101,14 @@ jobs:
       - name: dotnet build (Server, Release)
         run: dotnet build OpenAstroAra.Server/OpenAstroAra.Server.csproj -c Release --no-restore
 
+      # §72.1 FITS scaffold — verify OpenAstroAra.Fits builds independently.
+      # No Server consumer yet, so the Server build above doesn't transitively
+      # restore + build it. Subsequent sub-PRs reference the project from
+      # Server, at which point this dedicated step becomes redundant + can be
+      # dropped.
+      - name: dotnet build (Fits, Release)
+        run: dotnet build OpenAstroAra.Fits/OpenAstroAra.Fits.csproj -c Release
+
       # Phase 14b smoke gate — actually run the daemon and hit a real
       # endpoint to catch the class of regressions where `dotnet build`
       # succeeds but the runtime trips an AOT JsonTypeInfo or
