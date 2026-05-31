@@ -201,6 +201,25 @@ public static class ProfileEndpoints {
             .WithName("PutEquipmentConnection")
             .WithSummary("Replace the active profile's equipment auto-connect bools.");
 
+        // §65.2 stretch defaults — controls the §40.5 frame-viewer's
+        // default palette for Light frames + manual-slider seed values.
+        // Calibration frames (Dark/Bias/Flat) always render linear and
+        // ignore this setting per §65.2.
+        profile.MapGet("/stretch-defaults", (IProfileStore store) =>
+                Results.Ok(store.GetStretchDefaults()))
+            .Produces<StretchDefaultsDto>(StatusCodes.Status200OK)
+            .WithName("GetStretchDefaults")
+            .WithSummary("Get the active profile's stretch defaults (§65.2).");
+
+        profile.MapPut("/stretch-defaults", (StretchDefaultsDto body, IProfileStore store) => {
+                store.PutStretchDefaults(body);
+                return Results.Ok(body);
+            })
+            .Accepts<StretchDefaultsDto>("application/json")
+            .Produces<StretchDefaultsDto>(StatusCodes.Status200OK)
+            .WithName("PutStretchDefaults")
+            .WithSummary("Replace the active profile's stretch defaults.");
+
         return app;
     }
 }
