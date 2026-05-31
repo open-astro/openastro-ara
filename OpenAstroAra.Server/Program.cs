@@ -177,6 +177,14 @@ public class Program {
         builder.Services.AddSingleton<IProfileStore>(sp =>
             new FileProfileStore(profileDir, sp.GetService<ILogger<FileProfileStore>>()));
 
+        // §28 SQLite catalog. Scaffold-only at this point: the connection
+        // + schema land here so subsequent sub-PRs can flip the placeholder
+        // frame/session repositories over one method at a time. Profile
+        // and catalog live in the same dir so a single OPENASTROARA_PROFILE_DIR
+        // (or systemd StateDirectory=) configures both.
+        builder.Services.AddSingleton<IAraDatabase>(sp =>
+            new SqliteAraDatabase(profileDir, sp.GetService<ILogger<SqliteAraDatabase>>()));
+
         var app = builder.Build();
 
         app.UseCors();
@@ -250,6 +258,14 @@ public class Program {
             MdnsService: "_openastroara._tcp.local",
             Tier: "scaffold"  // upgraded to "ready" once Phase 6-9 endpoints land
         )));
+
+        // §28 catalog init — applies PRAGMAs + creates schema before any
+        // request can land. Synchronous-blocking here is fine: we're still
+        // on the startup path and the work is single-digit ms on a fresh
+        // DB. A failure here is a hard-fail-fast (we can't recover from a
+        // broken catalog), so let it propagate.
+        var araDb = app.Services.GetRequiredService<IAraDatabase>();
+        araDb.InitializeAsync(CancellationToken.None).GetAwaiter().GetResult();
 
         app.Logger.LogInformation("OpenAstroAra.Server listening on :{Port}", port);
         app.Run();
