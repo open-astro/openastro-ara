@@ -189,36 +189,102 @@ public sealed class PlaceholderSequenceTemplateService : ISequenceTemplateServic
 }
 
 /// <summary>
-/// Phase 13.15 — placeholder <see cref="ISequenceImportService"/>.
-/// Returns a synthetic import result with one warning and no dropped
-/// instructions, mirroring what a real NINA XML translation would look
-/// like for a simple sequence. Real translator + warning catalog land
-/// in Phase 14 §38.4.
+/// §38.4 NINA import service. Persists the raw upload under
+/// <c>{profileDir}/sequences/imported/from-nina-YYYY-MM-DD/{newName}.json</c>
+/// for audit + manual recovery, then creates a fresh library sequence
+/// with <c>schemaVersion</c> backfilled if the source omitted it.
+///
+/// Phase 38h covers the simple-import path. Full §38.4 still needs:
+///   - Equipment-ID remapping against the Alpaca-discovered device set
+///   - Unsupported-instruction wrapping in SkippedInstruction placeholders
+///   - NINA container/instruction type-name normalization
+/// All three need real device state + the full §38.1 schema knowledge,
+/// so they arrive once the §38 orchestrator is wired.
 /// </summary>
 public sealed class PlaceholderSequenceImportService : ISequenceImportService {
     private readonly ISequenceService _sequences;
+    private readonly string? _importedDir;
+    private readonly ILogger<PlaceholderSequenceImportService>? _logger;
 
     public PlaceholderSequenceImportService(ISequenceService sequences) {
         _sequences = sequences;
     }
 
+    public PlaceholderSequenceImportService(
+            ISequenceService sequences,
+            string profileDir,
+            ILogger<PlaceholderSequenceImportService>? logger = null) {
+        _sequences = sequences;
+        _importedDir = Path.Combine(profileDir, "sequences", FileSequenceService.ImportedDirName);
+        _logger = logger;
+    }
+
     public async Task<SequenceImportResultDto> ImportAsync(SequenceImportRequestDto request, CancellationToken ct) {
-        // Create an empty sequence so the import has a real id to point at.
+        var warnings = new List<string>();
+        var body = request.NinaSequenceFile;
+
+        // §38.4 step 3: ensure schemaVersion is present. NINA exports don't
+        // include it; ARA-saved exports do. Detect missing + backfill so
+        // the §38.5 validator accepts the imported sequence on first save.
+        if (body.ValueKind == JsonValueKind.Object &&
+            !body.TryGetProperty(SequenceSchemaValidator.SchemaVersionField, out _)) {
+            body = BackfillSchemaVersion(body);
+            warnings.Add($"schemaVersion was missing; backfilled to '{SequenceSchemaValidator.SchemaVersion}'.");
+        }
+
+        // §38.4 step 6: persist the raw upload under imported/from-nina-YYYY-MM-DD/
+        // for audit + recovery. Best-effort; failures log but don't abort the
+        // import — the in-library copy is what the user actually works with.
+        TryPersistOriginal(request.NewName, request.NinaSequenceFile);
+
         var created = await _sequences.CreateAsync(
             new SequenceCreateRequestDto(
                 Name: request.NewName,
-                Description: "Imported from NINA (§38.4 — placeholder)",
-                Body: request.NinaSequenceFile,
+                Description: "Imported from NINA",
+                Body: body,
                 TemplateOrigin: null),
             idempotencyKey: null, ct);
+
         return new SequenceImportResultDto(
             CreatedSequenceId: created.Id,
             Name: created.Name,
-            Warnings: new[] {
-                "Placeholder import: no real NINA XML translator wired yet (§38.4 lands in Phase 14).",
-            },
+            Warnings: warnings.ToArray(),
             DroppedInstructionTypes: Array.Empty<string>(),
             LossyTranslation: false);
+    }
+
+    private static JsonElement BackfillSchemaVersion(JsonElement body) {
+        // Re-emit the object with schemaVersion prepended. Preserves all
+        // original fields and their order otherwise.
+        using var ms = new System.IO.MemoryStream();
+        using (var w = new Utf8JsonWriter(ms)) {
+            w.WriteStartObject();
+            w.WriteString(SequenceSchemaValidator.SchemaVersionField, SequenceSchemaValidator.SchemaVersion);
+            foreach (var prop in body.EnumerateObject()) {
+                if (prop.NameEquals(SequenceSchemaValidator.SchemaVersionField)) continue;
+                prop.WriteTo(w);
+            }
+            w.WriteEndObject();
+        }
+        using var doc = JsonDocument.Parse(ms.ToArray());
+        return doc.RootElement.Clone();
+    }
+
+    private void TryPersistOriginal(string name, JsonElement original) {
+        if (_importedDir is null) return;
+        try {
+            var dateBucket = $"from-nina-{DateTime.UtcNow:yyyy-MM-dd}";
+            var bucketDir = Path.Combine(_importedDir, dateBucket);
+            Directory.CreateDirectory(bucketDir);
+
+            var safeName = OpenAstroAra.Core.Utility.FilenameTemplateSanitizer.SanitizeComponent(name);
+            if (string.IsNullOrEmpty(safeName)) safeName = "unnamed";
+            var filename = $"{safeName}-{DateTime.UtcNow:HHmmss}.json";
+            var path = Path.Combine(bucketDir, filename);
+            File.WriteAllText(path, original.GetRawText());
+        } catch (Exception ex) {
+            _logger?.LogWarning(ex, "Failed to persist NINA import original for '{Name}'", name);
+        }
     }
 }
 

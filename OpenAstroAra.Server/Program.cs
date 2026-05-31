@@ -182,9 +182,9 @@ public class Program {
         builder.Services.AddSingleton<IDarkLibraryService, PlaceholderDarkLibraryService>();
         builder.Services.AddSingleton<IMosaicService, PlaceholderMosaicService>();
         // Phase 13.15 — sequence templates + NINA import + auto-flats.
-        // ISequenceTemplateService is wired later (after profileDir is resolved)
-        // so it can read disk templates from {profileDir}/sequences/templates/.
-        builder.Services.AddSingleton<ISequenceImportService, PlaceholderSequenceImportService>();
+        // ISequenceTemplateService + ISequenceImportService are wired later
+        // (after profileDir is resolved) so they can use the §38.2 sequences
+        // subdirs.
         builder.Services.AddSingleton<IAutoFlatsService, PlaceholderAutoFlatsService>();
         // Phase 13.17 — §60.9 WS broadcaster + event channel placeholders.
         // Single InMemoryWsServices instance backs both interfaces so the
@@ -219,6 +219,15 @@ public class Program {
                 sp.GetRequiredService<ISequenceService>(),
                 profileDir,
                 sp.GetService<ILogger<PlaceholderSequenceTemplateService>>()));
+
+        // §38.4 — NINA import service persists the raw upload under
+        // {profileDir}/sequences/imported/from-nina-YYYY-MM-DD/ for audit
+        // and backfills schemaVersion when the source omits it.
+        builder.Services.AddSingleton<ISequenceImportService>(sp =>
+            new PlaceholderSequenceImportService(
+                sp.GetRequiredService<ISequenceService>(),
+                profileDir,
+                sp.GetService<ILogger<PlaceholderSequenceImportService>>()));
 
         // §28 SQLite catalog. Scaffold-only at this point: the connection
         // + schema land here so subsequent sub-PRs can flip the placeholder
