@@ -103,7 +103,10 @@ public class Program {
         // §46.4 preferences view has wire shapes to render. Three sample
         // notifications (Info/Warning/Critical across Sequence/Storage/Safety
         // categories); preferences default to "everything enabled" matching §46.4.
-        builder.Services.AddSingleton<INotificationService, PlaceholderNotificationService>();
+        // §46.5 SqliteNotificationService — persistent log table + JSON-blob
+        // preferences in app_config. EnsureSeededAsync runs after IAraDatabase
+        // init for first-time seed of the 3 fixture notifications.
+        builder.Services.AddSingleton<INotificationService, SqliteNotificationService>();
         // Phase 13.5 — placeholder IDiagnosticsService. Static fixtures
         // (Yellow health + 1 open issue + 3-event history); SetMode stores
         // in-memory. The §51 *operating* mode reported here (Off/Observe/
@@ -116,7 +119,11 @@ public class Program {
         // views with synthetic fixture data. Numbers are intentionally small
         // so the Stats tab renders something sensible without claiming the
         // system has acquired 50 nights of data.
-        builder.Services.AddSingleton<IStatsService, PlaceholderStatsService>();
+        // §50 SqliteStatsService — aggregations over the §28 catalog. Views
+        // that need data not yet captured (focuser position, separated RA/Dec
+        // RMS) return empty payloads; they wire up when §38 sequence
+        // orchestrator persists those columns.
+        builder.Services.AddSingleton<IStatsService, SqliteStatsService>();
         // Phase 13.7 — placeholder IServerStateService for the §60.4 state
         // snapshot + §33.2.1 versions + §54 release notes. Restart endpoints
         // throw (§13 systemd-watchdog work needed).
@@ -279,6 +286,11 @@ public class Program {
         var frameRepo = app.Services.GetRequiredService<IFrameRepository>();
         if (frameRepo is SqliteFrameRepository sqliteRepo) {
             sqliteRepo.EnsureSeededAsync(CancellationToken.None).GetAwaiter().GetResult();
+        }
+        // §46.5 notifications fixture seed — same idempotent pattern.
+        var notificationSvc = app.Services.GetRequiredService<INotificationService>();
+        if (notificationSvc is SqliteNotificationService sqliteNotif) {
+            sqliteNotif.EnsureSeededAsync(CancellationToken.None).GetAwaiter().GetResult();
         }
 
         app.Logger.LogInformation("OpenAstroAra.Server listening on :{Port}", port);
