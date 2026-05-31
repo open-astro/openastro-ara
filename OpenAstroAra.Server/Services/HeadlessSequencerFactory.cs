@@ -94,4 +94,26 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
 
     public T GetTrigger<T>() where T : ISequenceTrigger =>
         (T)(Triggers.FirstOrDefault(x => x.GetType() == typeof(T))?.Clone() ?? default(T)!);
+
+    /// <summary>
+    /// Build a factory pre-populated with the equipment-independent
+    /// container prototypes — <see cref="SequenceRootContainer"/>,
+    /// <see cref="SequentialContainer"/>, <see cref="ParallelContainer"/>.
+    /// These are the structural containers a NINA sequence root needs to
+    /// resolve before any equipment-bound instructions land; registering
+    /// them unblocks the JSON converter on the most common $type values
+    /// at the top of a saved sequence body.
+    ///
+    /// Per-instruction prototypes (TakeExposure, SetFilter, etc.) wire in
+    /// subsequent §38k sub-PRs as each instruction's equipment-service
+    /// dependency tree gets DI-wired.
+    /// </summary>
+    public static HeadlessSequencerFactory WithDefaults() {
+        return new HeadlessSequencerFactory(
+            container: new List<ISequenceContainer> {
+                new SequenceRootContainer(),
+                new SequentialContainer(),
+                new ParallelContainer(),
+            });
+    }
 }

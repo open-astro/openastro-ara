@@ -271,13 +271,15 @@ public class Program {
         builder.Services.AddSingleton<SequenceStartupReconciler>();
 
         // §38k engine wiring — HeadlessSequencerFactory + SequenceBodyDeserializer.
-        // The factory starts empty (no Items / Conditions / Triggers / Container
-        // prototypes registered); per-type registration lands as we wire each
+        // The factory ships with the three equipment-independent container
+        // prototypes (SequenceRootContainer / SequentialContainer / ParallelContainer)
+        // per §38k-3; per-instruction registration lands as we wire each
         // equipment-bound ISequenceItem subclass. SequenceBodyDeserializer is
-        // safe to consume now — unknown $type values gracefully degrade to
-        // UnknownSequenceContainer until the prototypes exist.
+        // safe to consume now — unknown $type values still gracefully degrade
+        // to UnknownSequenceContainer for instruction types that aren't
+        // registered yet.
         builder.Services.AddSingleton<OpenAstroAra.Sequencer.ISequencerFactory>(_ =>
-            new HeadlessSequencerFactory());
+            HeadlessSequencerFactory.WithDefaults());
         builder.Services.AddSingleton<SequenceBodyDeserializer>();
 
         var app = builder.Build();
