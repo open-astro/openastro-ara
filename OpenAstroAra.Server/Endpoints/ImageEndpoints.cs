@@ -39,10 +39,10 @@ public static class ImageEndpoints {
         // ─── Frames (§40, §65) ───
         var frames = app.MapGroup("/api/v1/frames").WithTags("Frames");
 
-        // Phase 13.2 — wired to IFrameRepository. PlaceholderFrameRepository
-        // returns three sample frames (two Lights + one Dark, all M31 in the
-        // same fake session) so the WILMA Library + frame-detail UI has real
-        // wire shapes to render. Phase 13.3+ swaps in the §28 DB-backed impl.
+        // Wired to IFrameRepository. SqliteFrameRepository reads from the
+        // §28 catalog (seeded with three sample frames on first init for
+        // dev/UI work; real frames arrive once §72 FITS storage + §38
+        // sequence orchestrator land).
         frames.MapGet("",
                 async (int? limit, string? cursor, Guid? sessionId, string? targetName, IFrameRepository repo, CancellationToken ct) =>
                     Results.Ok(await repo.ListAsync(limit ?? 50, cursor, sessionId, targetName, ct)))
@@ -57,9 +57,9 @@ public static class ImageEndpoints {
               .ProducesProblem(StatusCodes.Status404NotFound)
               .WithName("GetFrame");
 
-        // Phase 13.1 — wired to IFrameRepository (PlaceholderFrameRepository
-        // returns a small precomputed JPEG so the wire is testable end-to-end).
-        // Real OpenCvSharp4 + §28 frame catalog DB lands in Phase 13.2+.
+        // Wired to IFrameRepository. SqliteFrameRepository returns a 1×1
+        // JPEG placeholder for now; §65 stretch pipeline replaces it with
+        // a real OpenCvSharp4 render from the captured FITS.
         frames.MapPost("/{id:guid}/preview", async (Guid id, [FromBody] FramePreviewRequestDto request, IFrameRepository repo, CancellationToken ct) => {
                 var result = await repo.GetPreviewAsync(id, request, ct);
                 return result is null
