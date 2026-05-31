@@ -314,9 +314,14 @@ jobs:
           # /api/v1/server/info should serialize cleanly under AOT in the
           # arm64 container — catches AOT-readiness regressions that the
           # x64-host smoke gate doesn't (different runtime, same code).
+          # ServerInfoDto field names: server_uuid, nickname, version,
+          # api, mdns_service, tier. Asserting `server_uuid` because it's
+          # the most distinctive (a Guid serialization) — confirms both
+          # the AOT-serialized envelope + the snake_case naming policy
+          # round-trip correctly in the arm64 binary.
           curl -fsS http://localhost:5555/api/v1/server/info \
             | tee /dev/stderr \
-            | grep -q '"daemon_version"'
+            | grep -q '"server_uuid":"'
           echo "✓ server-e2e clean"
 
       - name: Tear down container
