@@ -41,6 +41,11 @@ public interface IFrameRepository {
     Task<OperationAcceptedDto> BulkRateAsync(BulkRateRequestDto request, string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> BulkTagAsync(BulkTagRequestDto request, string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> BulkDeleteAsync(BulkDeleteRequestDto request, string? idempotencyKey, CancellationToken ct);
+    /// <summary>
+    /// §65.6 cache reset: delete all alt-stretch variants for a frame.
+    /// Returns true if the frame exists, false if not found (→ 404).
+    /// </summary>
+    Task<bool> DeletePreviewVariantsAsync(Guid id, CancellationToken ct);
 }
 
 /// <summary>Session catalog + per-session operations (§40, §65).</summary>

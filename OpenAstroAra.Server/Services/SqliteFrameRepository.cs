@@ -571,6 +571,25 @@ public sealed class SqliteFrameRepository : IFrameRepository {
         await cmd.ExecuteNonQueryAsync(ct);
     }
 
+    public async Task<bool> DeletePreviewVariantsAsync(Guid id, CancellationToken ct) {
+        var (filePath, _) = await GetPathAndTypeAsync(id, ct);
+        if (string.IsNullOrEmpty(filePath)) return false;
+        // Frame exists in the catalog; missing FITS on disk doesn't make
+        // this 404 (user may have rotated storage). Variants live next to
+        // the FITS via the §65.4 cache-key pattern.
+        var dir = Path.GetDirectoryName(filePath);
+        if (string.IsNullOrEmpty(dir)) return true;
+        var stem = Path.GetFileNameWithoutExtension(filePath);
+        var pattern = $"{stem}.preview.*.jpg";
+        try {
+            foreach (var variant in Directory.EnumerateFiles(dir, pattern)) {
+                try { File.Delete(variant); } catch { /* skip locked */ }
+            }
+        } catch (DirectoryNotFoundException) { /* nothing to delete */ }
+          catch (UnauthorizedAccessException) { /* read-only mount */ }
+        return true;
+    }
+
     // §65.4 cache cap. Six alt-stretch variants per frame plus the default
     // = seven total. Settings → Image Processing → Preview Cache will expose
     // this knob (range 1-20) in a future sub-PR; for now it's a const.
