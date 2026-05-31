@@ -270,6 +270,16 @@ public class Program {
         // reconciliation call runs once during startup below.
         builder.Services.AddSingleton<SequenceStartupReconciler>();
 
+        // §38k engine wiring — HeadlessSequencerFactory + SequenceBodyDeserializer.
+        // The factory starts empty (no Items / Conditions / Triggers / Container
+        // prototypes registered); per-type registration lands as we wire each
+        // equipment-bound ISequenceItem subclass. SequenceBodyDeserializer is
+        // safe to consume now — unknown $type values gracefully degrade to
+        // UnknownSequenceContainer until the prototypes exist.
+        builder.Services.AddSingleton<OpenAstroAra.Sequencer.ISequencerFactory>(_ =>
+            new HeadlessSequencerFactory());
+        builder.Services.AddSingleton<SequenceBodyDeserializer>();
+
         var app = builder.Build();
 
         app.UseCors();
