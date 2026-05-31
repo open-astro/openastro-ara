@@ -44,6 +44,14 @@ public interface INotificationService {
     Task<NotificationDto?> MarkReadAsync(Guid id, CancellationToken ct);
     Task<NotificationPreferenceDto> GetPreferencesAsync(CancellationToken ct);
     Task<NotificationPreferenceDto> SetPreferencesAsync(NotificationPreferenceDto preferences, CancellationToken ct);
+
+    /// <summary>
+    /// Insert a notification from a server-side emitter (e.g. §28.2 startup
+    /// reconciler, §38 sequence lifecycle, §51 diagnostics monitor). Endpoints
+    /// don't call this — it's for internal pipelines that need to surface a
+    /// §46 entry to the inbox.
+    /// </summary>
+    Task CreateAsync(NotificationDto notification, CancellationToken ct);
 }
 
 /// <summary>Stats (§50). Per-view methods so an AOT-friendly switch picks the right serializer.</summary>
