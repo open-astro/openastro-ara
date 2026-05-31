@@ -9,12 +9,18 @@
   </PropertyGroup>
 
   <!--
-    AOT-mode publishing per PORT_PLAYBOOK.md §71. Disabled in Debug
-    builds (avoid analyzer noise during inner loop) but enforced
-    for Release publishes.
+    AOT-mode publishing was on per playbook §71 but is paused for the §38
+    orchestrator wiring. NINA's sequence JSON schema (preserved verbatim
+    per playbook §38.1) uses Newtonsoft.Json with `TypeNameHandling.All`
+    for the polymorphic container/instruction/trigger/condition types,
+    which is reflection-heavy and AOT-incompatible. Re-enabling AOT
+    requires porting the converter to System.Text.Json with
+    [JsonPolymorphic] / [JsonDerivedType] for every NINA type discriminator
+    — substantial follow-up tracked for v0.1.0. AraJsonSerializerContext
+    source-gen stays in place so DTOs still benefit from it; only the
+    sequence-body deserialization uses reflection.
   -->
   <PropertyGroup Condition="'$(Configuration)'=='Release'">
-    <PublishAot>true</PublishAot>
     <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>
 
