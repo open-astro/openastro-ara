@@ -4,10 +4,10 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** §65 stretch pipeline (algorithms + preview + cache + profile defaults), §28.8 orphan scan, §13 systemd restart all on master. SQLite catalog covers §28 + §46.5 + §50 + §51 + §72.
+- **Phase:** Post-§65 release-prep — §65 stretch pipeline server-side complete (incl. batch worker + WS lifecycle events + storage-pressure eviction); §60.9 server-state polished (real `ws_resume_token`, `diagnostics_health`, `notifications_summary`, `server.restart_imminent`); Phase 15 docs underway (NOTICE.md, RELEASE_NOTES.md, DEPLOY.md all on master).
 - **Last merged on `port/ara`:** This tracking refresh.
-- **Currently working on:** PORT_PROGRESS.md refresh for the §65 + §28.8 + §13 + variant-cache + DELETE-variants batch.
-- **Next substantive work:** §38 sequence orchestrator — the load-bearing piece that drives equipment, writes captures via `FitsImage`, persists frames into the catalog, and emits §60.9 WS events. After §38, real ASCOM Alpaca drivers per device (12 services), §51 diagnostics monitor worker, §65.5 batch re-stretch jobs, and Phase 15 release prep. Two design-blocked items still await user input per `design/PORT_TODO.md`: Sequencer WPF-removal authorization + Alpaca simulator choice.
+- **Currently working on:** PORT_PROGRESS.md refresh for the §60.9 polish batch + §65 closeout + Phase 15 doc deliverables.
+- **Next substantive work:** §38 sequence orchestrator — drives equipment, writes captures via `FitsImage`, persists frames into the catalog, emits §60.9 WS events. After §38: real ASCOM Alpaca drivers (12 services), §51 monitor worker (writer side), `3rd-party-licenses.txt`. Two design-blocked items still await user input per `design/PORT_TODO.md`: Sequencer WPF-removal authorization + Alpaca simulator choice.
 
 ## Completed
 
@@ -175,6 +175,26 @@ After the §60.9 WS lifecycle landed, four sub-PRs flipped the last batch of end
 - ✅ **#182** — `/server/{restart,restart-on-idle}`: optional `?reason=` query string (defaults to `operator_requested`). Real systemd-driven restart still in Phase 14 hardening.
 
 After this sweep, **the only remaining 501 stub is `/api/v1/frames/{id}/download` (§72)** — kept as the CI smoke gate's 501 anchor since it depends on real FITS file storage.
+
+### Phase 15 release-prep docs (PRs #228–#231)
+
+Ship-list documentation per playbook §15.
+
+- ✅ **#228** — `NOTICE.md` (attribution + license inventory + trademark disclaimer per §17.2)
+- ✅ **#229** — `RELEASE_NOTES.md` for v0.0.1-ara.1 (referenced by `release.yml`'s `body_path` per §33.7)
+- ✅ **#230** — `DEPLOY.md` Pi installation guide (.deb quick-start, ext4 storage setup, fstab, UPS advisory, logs, update/uninstall, troubleshooting)
+- ✅ **#231** — Promotion to master.
+
+Still missing from the §15 ship-list: `3rd-party-licenses.txt` — auto-generated from the package graph at release time, deferred until the .deb release pipeline is wired.
+
+### §60.9 server-state polish (PRs #224–#227)
+
+`GET /api/v1/server/state` now returns a fully populated §60.9 snapshot.
+
+- ✅ **#224** — §60.9.6 real `ws_resume_token` from broadcaster `CurrentSequence` (was a literal placeholder string). `ws_event_cursor` aligned with same value.
+- ✅ **#225** — §60.9.4 real `diagnostics_health` + `notifications_summary` blobs aggregated from the SQLite-backed services.
+- ✅ **#226** — §34.7 `server.restart_imminent` WS event fired before the systemctl spawn so WILMA's reconnect modal can show the right copy.
+- ✅ **#227** — Promotion to master.
 
 ### §65 stretch pipeline (PRs #207–#216 + variant cache + DELETE)
 
