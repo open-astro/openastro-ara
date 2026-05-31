@@ -15,7 +15,6 @@
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Core.Model.Equipment;
 using OpenAstroAra.Equipment.Equipment.MyFilterWheel;
-using OpenAstroAra.Equipment.Interfaces.ViewModel;
 using System;
 using System.Collections.Generic;
 using System.Threading;
@@ -23,7 +22,7 @@ using System.Threading.Tasks;
 
 namespace OpenAstroAra.Equipment.Interfaces.Mediator {
 
-    public interface IFilterWheelMediator : IDeviceMediator<IFilterWheelVM, IFilterWheelConsumer, FilterWheelInfo> {
+    public interface IFilterWheelMediator : IDeviceMediator<object, IFilterWheelConsumer, FilterWheelInfo> {
 
         Task<FilterInfo> ChangeFilter(FilterInfo inputFilter, CancellationToken token = new CancellationToken(), IProgress<ApplicationStatus> progress = null);
         event Func<object, FilterChangedEventArgs, Task> FilterChanged;

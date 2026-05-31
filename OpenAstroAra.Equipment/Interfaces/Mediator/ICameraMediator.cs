@@ -15,7 +15,6 @@
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Equipment.Equipment.MyCamera;
-using OpenAstroAra.Equipment.Interfaces.ViewModel;
 using OpenAstroAra.Equipment.Model;
 using OpenAstroAra.Image.Interfaces;
 using System;
@@ -25,7 +24,7 @@ using System.Threading.Tasks;
 
 namespace OpenAstroAra.Equipment.Interfaces.Mediator {
 
-    public interface ICameraMediator : IDeviceMediator<ICameraVM, ICameraConsumer, CameraInfo> {
+    public interface ICameraMediator : IDeviceMediator<object, ICameraConsumer, CameraInfo> {
 
         Task Capture(CaptureSequence sequence, CancellationToken token,
             IProgress<ApplicationStatus> progress);

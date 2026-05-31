@@ -17,14 +17,13 @@ using OpenAstroAra.Core.Interfaces;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Equipment.Equipment.MyGuider;
 using OpenAstroAra.Equipment.Equipment.MyGuider.PHD2;
-using OpenAstroAra.Equipment.Interfaces.ViewModel;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace OpenAstroAra.Equipment.Interfaces.Mediator {
 
-    public interface IGuiderMediator : IDeviceMediator<IGuiderVM, IGuiderConsumer, GuiderInfo> {
+    public interface IGuiderMediator : IDeviceMediator<object, IGuiderConsumer, GuiderInfo> {
 
         Task<bool> Dither(CancellationToken token);
 

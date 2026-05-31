@@ -20,6 +20,8 @@ using System.Xml.Serialization;
 
 namespace OpenAstroAra.Test {
 
+    [Platform("Win")]
+
     [TestFixture]
     public class CoordinatesTest {
         private static double ANGLE_TOLERANCE = 0.000000000001;

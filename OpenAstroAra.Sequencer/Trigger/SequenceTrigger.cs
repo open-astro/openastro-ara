@@ -13,6 +13,7 @@
 #endregion "copyright"
 
 using Newtonsoft.Json;
+using System.Windows.Input;
 using OpenAstroAra.Core.Enum;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Sequencer.Container;
@@ -26,8 +27,6 @@ using System.Runtime.Serialization;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows.Input;
-using System.Windows.Media;
 using OpenAstroAra.Sequencer.Utility;
 
 namespace OpenAstroAra.Sequencer.Trigger {
@@ -62,7 +61,7 @@ namespace OpenAstroAra.Sequencer.Trigger {
         public virtual bool AllowMultiplePerSet => false;
 
         public string Description { get; set; }
-        public GeometryGroup Icon { get; set; }
+        public string Icon { get; set; }
         public string Category { get; set; }
 
         private bool showMenu;

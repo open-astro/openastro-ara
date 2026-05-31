@@ -13,6 +13,7 @@
 #endregion "copyright"
 
 using Newtonsoft.Json;
+using System.Windows.Input;
 using OpenAstroAra.Core.Enum;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Sequencer.Container;
@@ -21,8 +22,6 @@ using OpenAstroAra.Core.Utility;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows.Input;
-using System.Windows.Media;
 using OpenAstroAra.Sequencer.Utility;
 using OpenAstroAra.Core.Locale;
 using OpenAstroAra.Core.Utility.Notification;
@@ -55,7 +54,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem {
         public string Category { get; set; }
         public string Description { get; set; }
         public virtual ICommand DetachCommand => new GalaSoft.MvvmLight.Command.RelayCommand(Detach);
-        public GeometryGroup Icon { get; set; }
+        public string Icon { get; set; }
         public ICommand MoveDownCommand => new GalaSoft.MvvmLight.Command.RelayCommand(MoveDown);
         public ICommand MoveUpCommand => new GalaSoft.MvvmLight.Command.RelayCommand(MoveUp);
         public ICommand DisableEnableCommand => new GalaSoft.MvvmLight.Command.RelayCommand(() => {
@@ -140,7 +139,10 @@ namespace OpenAstroAra.Sequencer.SequenceItem {
         public abstract object Clone();
 
         public void Detach() {
-            if (!(this is ISimpleDSOContainer) || !AskHasChanged(Name)) {
+            // ISimpleDSOContainer-guarded confirm-prompt removed — interface
+            // was in the deleted ViewModel namespace per playbook §8.1.
+            // Headless detach always proceeds; REST callers gate.
+            if (!AskHasChanged(Name)) {
                 Parent?.Remove(this);
             }
         }

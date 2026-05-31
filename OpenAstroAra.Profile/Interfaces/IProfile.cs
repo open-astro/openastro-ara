@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -27,7 +27,6 @@ namespace OpenAstroAra.Profile.Interfaces {
         IApplicationSettings ApplicationSettings { get; set; }
         IAstrometrySettings AstrometrySettings { get; set; }
         ICameraSettings CameraSettings { get; set; }
-        IColorSchemaSettings ColorSchemaSettings { get; set; }
         IDomeSettings DomeSettings { get; set; }
         IFilterWheelSettings FilterWheelSettings { get; set; }
         IFlatWizardSettings FlatWizardSettings { get; set; }

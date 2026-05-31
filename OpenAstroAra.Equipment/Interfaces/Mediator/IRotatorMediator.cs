@@ -13,14 +13,13 @@
 #endregion "copyright"
 
 using OpenAstroAra.Equipment.Equipment.MyRotator;
-using OpenAstroAra.Equipment.Interfaces.ViewModel;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace OpenAstroAra.Equipment.Interfaces.Mediator {
 
-    public interface IRotatorMediator : IDeviceMediator<IRotatorVM, IRotatorConsumer, RotatorInfo> {
+    public interface IRotatorMediator : IDeviceMediator<object, IRotatorConsumer, RotatorInfo> {
 
         void Sync(float skyAngle);
 

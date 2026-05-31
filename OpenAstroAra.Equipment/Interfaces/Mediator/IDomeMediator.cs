@@ -15,14 +15,13 @@
 using OpenAstroAra.Astrometry;
 using OpenAstroAra.Core.Enum;
 using OpenAstroAra.Equipment.Equipment.MyDome;
-using OpenAstroAra.Equipment.Interfaces.ViewModel;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace OpenAstroAra.Equipment.Interfaces.Mediator {
 
-    public interface IDomeMediator : IDeviceMediator<IDomeVM, IDomeConsumer, DomeInfo> {
+    public interface IDomeMediator : IDeviceMediator<object, IDomeConsumer, DomeInfo> {
         bool IsFollowingScope { get; }
 
         Task WaitForDomeSynchronization(CancellationToken cancellationToken);

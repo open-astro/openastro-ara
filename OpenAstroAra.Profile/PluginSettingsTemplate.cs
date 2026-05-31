@@ -5,7 +5,6 @@ using System;
 using System.Runtime.InteropServices;
 using System.Runtime.Serialization;
 using System.Collections.Generic;
-using System.Windows.Media;
 using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Core.Utility;
 
@@ -48,8 +47,6 @@ namespace OpenAstroAra.Profile.Interfaces {
     }
 
     public interface IPluginOptionsAccessor {
-        Color GetValueColor(string name, Color defaultValue);
-        void SetValueColor(string name, Color value);
         T GetValueEnum<T>(string name, T value) where T : struct, Enum;
         void SetValueEnum<T>(string name, T defaultValue) where T : struct, Enum;
         void SetValueBoolean(string name, Boolean value);
@@ -886,13 +883,6 @@ namespace OpenAstroAra.Profile {
             return defaultValue;
         }
         
-        public Color GetValueColor(string name, Color defaultValue) {
-            if (profileService.ActiveProfile.PluginSettings.TryGetValue(pluginGuid, name, out int result)) {
-                return IntToColor(result);
-            }
-            return defaultValue;
-        }
-
         public T GetValueEnum<T>(string name, T defaultValue) where T : struct, Enum {
             if (profileService.ActiveProfile.PluginSettings.TryGetValue(pluginGuid, name, out string resultString)) {
                 if (Enum.TryParse<T>(resultString, out var result)) {
@@ -900,22 +890,6 @@ namespace OpenAstroAra.Profile {
                 }
             }
             return defaultValue;
-        }
-
-        private static int ColorToInt(Color color) {
-            return color.A << 24 | color.R << 16 | color.G << 8 | color.B;
-        }
-
-        private static Color IntToColor(int colorInt) {
-            byte a = (byte)(colorInt >> 24);
-            byte r = (byte)(colorInt >> 16);
-            byte g = (byte)(colorInt >> 8);
-            byte b = (byte)(colorInt);
-            return Color.FromArgb(a, r, g, b);
-        }
-
-        public void SetValueColor(string name, Color value) {
-            profileService.ActiveProfile.PluginSettings.SetValue(pluginGuid, name, ColorToInt(value));
         }
 
         public void SetValueEnum<T>(string name, T value) where T : struct, Enum {

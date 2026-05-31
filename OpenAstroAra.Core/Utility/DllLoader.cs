@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -21,9 +21,11 @@ namespace OpenAstroAra.Core.Utility {
 
     public static class DllLoader {
 
+        [System.Runtime.Versioning.SupportedOSPlatform("windows")]
         [DllImport("kernel32", CharSet = CharSet.Unicode, SetLastError = true)]
         private static extern IntPtr LoadLibrary(string librayName);
 
+        [System.Runtime.Versioning.SupportedOSPlatform("windows")]
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
         private static extern bool SetDllDirectory(string lpPathName);
@@ -31,19 +33,23 @@ namespace OpenAstroAra.Core.Utility {
         private static object lockobj = new object();
 
         public static void LoadDll(string dllSubPath) {
-            string path;
+            // Phase 0.5p2 net10.0 conversion: explicit pre-load was a Windows-
+            // only optimization using kernel32 LoadLibrary + SetDllDirectory.
+            // On Linux/macOS the .NET runtime's ALC resolves native libs via
+            // dlopen at first P/Invoke call, so an eager pre-load is a no-op.
+            if (!OperatingSystem.IsWindows()) return;
 
-            //IntPtr.Size will be 4 in 32-bit processes, 8 in 64-bit processes
-            if (IsX86()) { 
+            string path;
+            if (IsX86()) {
                 path = Path.Combine(System.AppDomain.CurrentDomain.BaseDirectory, "External", "x86", dllSubPath);
-            } else { 
+            } else {
                 path = Path.Combine(System.AppDomain.CurrentDomain.BaseDirectory, "External", "x64", dllSubPath);
             }
-
-            LoadDllFromAbsolutePath(path);            
+            LoadDllFromAbsolutePath(path);
         }
 
         public static void LoadDllFromAbsolutePath(string dllPath) {
+            if (!OperatingSystem.IsWindows()) return;
             lock (lockobj) {
                 SetDllDirectory(System.IO.Path.GetDirectoryName(dllPath));
 

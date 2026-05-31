@@ -4,10 +4,10 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** Post-§65 release-prep — §65 stretch pipeline server-side complete (incl. batch worker + WS lifecycle events + storage-pressure eviction); §60.9 server-state polished (real `ws_resume_token`, `diagnostics_health`, `notifications_summary`, `server.restart_imminent`); Phase 15 docs underway (NOTICE.md, RELEASE_NOTES.md, DEPLOY.md all on master).
-- **Last merged on `port/ara`:** This tracking refresh.
-- **Currently working on:** PORT_PROGRESS.md refresh for the §60.9 polish batch + §65 closeout + Phase 15 doc deliverables.
-- **Next substantive work:** §38 sequence orchestrator — drives equipment, writes captures via `FitsImage`, persists frames into the catalog, emits §60.9 WS events. After §38: real ASCOM Alpaca drivers (12 services), §51 monitor worker (writer side), `3rd-party-licenses.txt`. Two design-blocked items still await user input per `design/PORT_TODO.md`: Sequencer WPF-removal authorization + Alpaca simulator choice.
+- **Phase:** Post-§65 release-prep — §65 stretch pipeline server-side complete; §60.9 server-state polished; Phase 15 docs on master (NOTICE.md, RELEASE_NOTES.md, DEPLOY.md, 3rd-party-licenses.txt); §38 mock sequencer state machine in place; real `daemon_git_sha` from `AssemblyInformationalVersionAttribute`; all `JsonStringEnumConverter` registrations now AOT-traceable (per-enum generic) with the IL3050 pragma removed.
+- **Last merged on `port/ara`:** PR #240 (per-enum AOT-safe enum converters) — promoted to master via #241.
+- **Currently working on:** Nothing — Phase 15 sweep candidates in `design/PORT_TODO.md` are all `✅`; remaining substantial work is design-blocked.
+- **Next substantive work:** §38 real sequence orchestrator (needs real ASCOM drivers), §51 monitor worker writer side, Phase 14e Alpaca simulator. Three design-blocked items await user input per `design/PORT_TODO.md`: Sequencer WPF-removal authorization, Alpaca simulator choice, filename-template `$$TOKEN$$` vs `$TOKEN$` verification against NINA upstream.
 
 ## Completed
 

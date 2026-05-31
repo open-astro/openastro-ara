@@ -12,8 +12,8 @@
 
 #endregion "copyright"
 
-using Dasync.Collections;
 using Newtonsoft.Json;
+using System.Windows.Input;
 using OpenAstroAra.Core.Enum;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Sequencer.Conditions;
@@ -31,10 +31,6 @@ using System.Runtime.Serialization;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows;
-using System.Windows.Data;
-using System.Windows.Input;
-
 namespace OpenAstroAra.Sequencer.Container {
 
     [JsonObject(MemberSerialization.OptIn)]

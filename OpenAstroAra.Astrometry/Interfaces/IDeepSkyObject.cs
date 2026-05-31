@@ -3,8 +3,6 @@ using OxyPlot;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
-using System.Windows.Media.Imaging;
-
 namespace OpenAstroAra.Astrometry.Interfaces {
     public interface IDeepSkyObject : INotifyPropertyChanged {
         string Id { get; set; }
@@ -30,7 +28,7 @@ namespace OpenAstroAra.Astrometry.Interfaces {
         List<DataPoint> Horizon { get; }
         List<string> AlsoKnownAs { get; set; }
         bool DoesTransitSouth { get; }
-        BitmapSource Image { get; }
+        byte[] Image { get; }
 
         void SetDateAndPosition(DateTime start, double latitude, double longitude);
         void SetCustomHorizon(CustomHorizon customHorizon);

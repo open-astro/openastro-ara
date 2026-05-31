@@ -13,10 +13,9 @@
 #endregion "copyright"
 
 using OpenAstroAra.Equipment.Equipment.MyWeatherData;
-using OpenAstroAra.Equipment.Interfaces.ViewModel;
 
 namespace OpenAstroAra.Equipment.Interfaces.Mediator {
 
-    public interface IWeatherDataMediator : IDeviceMediator<IWeatherDataVM, IWeatherDataConsumer, WeatherDataInfo> {
+    public interface IWeatherDataMediator : IDeviceMediator<object, IWeatherDataConsumer, WeatherDataInfo> {
     }
 }

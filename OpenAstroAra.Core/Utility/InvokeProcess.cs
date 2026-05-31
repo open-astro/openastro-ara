@@ -76,17 +76,16 @@ namespace OpenAstroAra.Core.Utility {
             public SafeLocalMemHandle lpSecurityDescriptor = new SafeLocalMemHandle(IntPtr.Zero, false);
             public bool bInheritHandle;
         }
-        [SuppressUnmanagedCodeSecurity, HostProtection(SecurityAction.LinkDemand, MayLeakOnAbort = true)]
+        [SuppressUnmanagedCodeSecurity]
         internal sealed class SafeLocalMemHandle : SafeHandleZeroOrMinusOneIsInvalid {
             internal SafeLocalMemHandle() : base(true) { }
-            [SecurityPermission(SecurityAction.LinkDemand, UnmanagedCode = true)]
             internal SafeLocalMemHandle(IntPtr existingHandle, bool ownsHandle) : base(ownsHandle) {
                 SetHandle(existingHandle);
             }
             [DllImport("advapi32.dll", CharSet = CharSet.Auto, SetLastError = true)]
             internal static extern bool ConvertStringSecurityDescriptorToSecurityDescriptor(string stringSecurityDescriptor,
                 int stringSDRevision, out SafeLocalMemHandle pSecurityDescriptor, IntPtr securityDescriptorSize);
-            [ReliabilityContract(Consistency.WillNotCorruptState, Cer.Success), DllImport("kernel32.dll")]
+            [DllImport("kernel32.dll")]
             private static extern IntPtr LocalFree(IntPtr hMem);
             protected override bool ReleaseHandle() {
                 return (LocalFree(handle) == IntPtr.Zero);

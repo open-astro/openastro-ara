@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -18,17 +18,17 @@ using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Threading;
-using System.Windows;
-using System.Windows.Threading;
 
 namespace OpenAstroAra.Core.Utility {
 
     public class AsyncObservableCollection<T> : ObservableCollection<T> {
 
+        // Per PORT_PLAYBOOK Â§line-1533: WPF Dispatcher replaced with the
+        // ambient SynchronizationContext captured at construction time.
+        // In the headless server there's no UI dispatcher, so this falls back
+        // to direct invocation on the caller's thread.
         private readonly SynchronizationContext _synchronizationContext =
-            Application.Current?.Dispatcher != null
-            ? new DispatcherSynchronizationContext(Application.Current.Dispatcher)
-            : null;
+            SynchronizationContext.Current;
 
         public AsyncObservableCollection() {
         }
@@ -38,7 +38,7 @@ namespace OpenAstroAra.Core.Utility {
         }
 
         protected void RunOnSynchronizationContext(Action action) {
-            if (SynchronizationContext.Current == _synchronizationContext) {
+            if (_synchronizationContext is null || SynchronizationContext.Current == _synchronizationContext) {
                 action();
             } else {
                 _synchronizationContext.Send(_ => action(), null);

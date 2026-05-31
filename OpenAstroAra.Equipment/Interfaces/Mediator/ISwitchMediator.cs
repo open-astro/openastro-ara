@@ -17,11 +17,10 @@ using OpenAstroAra.Equipment.Equipment.MySwitch;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using OpenAstroAra.Equipment.Interfaces.ViewModel;
 
 namespace OpenAstroAra.Equipment.Interfaces.Mediator {
 
-    public interface ISwitchMediator : IDeviceMediator<ISwitchVM, ISwitchConsumer, SwitchInfo> {
+    public interface ISwitchMediator : IDeviceMediator<object, ISwitchConsumer, SwitchInfo> {
 
         Task SetSwitchValue(short switchIndex, double value, IProgress<ApplicationStatus> progress, CancellationToken ct);
     }

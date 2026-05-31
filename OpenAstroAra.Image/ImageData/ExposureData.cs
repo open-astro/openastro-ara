@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -19,9 +19,7 @@ using System.Threading.Tasks;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Core.Locale;
 using OpenAstroAra.Image.Interfaces;
-using System.Windows.Media.Imaging;
 using OpenAstroAra.Core.Enum;
-using OpenAstroAra.Image.RawConverter;
 using OpenAstroAra.Image.ImageAnalysis;
 using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Core.Interfaces;
@@ -306,9 +304,10 @@ namespace OpenAstroAra.Image.ImageData {
             return new Flipped2DExposureData(flipped2DArray, bitDepth, isBayered, metaData, imageDataFactory, profileService.ActiveProfile.CameraSettings.ASCOMCreate32BitData);
         }
 
-        public RAWExposureData CreateRAWExposureData(RawConverterEnum converter, byte[] rawBytes, string rawType, int bitDepth, ImageMetaData metaData) {
-            return new RAWExposureData(RawConverterFactory.CreateInstance(converter, imageDataFactory), rawBytes, rawType, bitDepth, metaData, imageDataFactory);
-        }
+        public RAWExposureData CreateRAWExposureData(RawConverterEnum converter, byte[] rawBytes, string rawType, int bitDepth, ImageMetaData metaData) =>
+            // RawConverterFactory deleted (DCRaw + FreeImage WPF dependencies);
+            // RAW decoding lands with libraw integration per playbook Â§line-2105.
+            throw new NotImplementedException("CreateRAWExposureData pending libraw integration.");
 
         public ImageArrayExposureData CreateImageArrayExposureData(ushort[] input, int width, int height, int bitDepth, bool isBayered, ImageMetaData metaData) {
             return new ImageArrayExposureData(input, width, height, bitDepth, isBayered, metaData, imageDataFactory);
@@ -317,11 +316,11 @@ namespace OpenAstroAra.Image.ImageData {
             return new ImageArrayExposureData(input, width, height, bitDepth, isBayered, metaData, imageDataFactory);
         }
 
-        public Task<ImageArrayExposureData> CreateImageArrayExposureDataFromBitmapSource(BitmapSource source) {
+        public Task<ImageArrayExposureData> CreateImageArrayExposureDataFromBitmapSource(byte[] source) {
             return ImageArrayExposureData.FromBitmapSource(source, imageDataFactory);
         }
 
-        public Task<IRenderedImage> CreateRenderedImageFromBitmapSource(BitmapSource source, bool calculateStatistics = false) {
+        public Task<IRenderedImage> CreateRenderedImageFromBitmapSource(byte[] source, bool calculateStatistics = false) {
             return RenderedImage.FromBitmapSource(source, this, profileService, starDetectionSelector.GetBehavior(), starAnnotatorSelector.GetBehavior(), calculateStatistics);
         }
     }

@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright � 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright � 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -22,7 +22,6 @@ using OpenAstroAra.Image.FileFormat.FITS;
 using OpenAstroAra.Image.FileFormat.XISF;
 using OpenAstroAra.Image.ImageAnalysis;
 using OpenAstroAra.Image.Interfaces;
-using OpenAstroAra.Image.RawConverter;
 using OpenAstroAra.Profile.Interfaces;
 using System;
 using System.Collections.Generic;
@@ -32,9 +31,6 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-
 namespace OpenAstroAra.Image.ImageData {
 
     public partial class BaseImageData : IImageData {
@@ -59,7 +55,9 @@ namespace OpenAstroAra.Image.ImageData {
             Data = imageArray;
             MetaData = metaData;
             Properties = new ImageProperties(width: width, height: height, bitDepth: bitDepth, isBayered: isBayered, gain: metaData.Camera.Gain, offset: metaData.Camera.Offset);
-            StarDetectionAnalysis = starDetection.CreateAnalysis();
+            // StarDetectionAnalysis populated when OpenCvSharp4-backed
+            // IStarDetection lands per playbook §line-2105.
+            StarDetectionAnalysis = null!;
             Statistics = new Nito.AsyncEx.AsyncLazy<IImageStatistics>(async () => await Task.Run(() => ImageStatistics.Create(this)));
             this.profileService = profileService;
             this.starDetection = starDetection;
@@ -80,8 +78,10 @@ namespace OpenAstroAra.Image.ImageData {
             return RenderedImage.Create(RenderBitmapSource(), this, profileService, starDetection, starAnnotator);
         }
 
-        public BitmapSource RenderBitmapSource() {
-            return ImageUtility.CreateSourceFromArray(Data, Properties, PixelFormats.Gray16);
+        public byte[] RenderBitmapSource() {
+            // ImageUtility.CreateSourceFromArray (WPF BitmapSource pipeline)
+            // pending OpenCvSharp4 replacement per playbook §line-2105.
+            throw new NotImplementedException("RenderBitmapSource pending OpenCvSharp4 wiring.");
         }
 
         public void SetImageStatistics(IImageStatistics imageStatistics) {
@@ -418,49 +418,12 @@ namespace OpenAstroAra.Image.ImageData {
         }
 
         private string SaveTiff(FileSaveInfo fileSaveInfo) {
-            Directory.CreateDirectory(Path.GetDirectoryName(fileSaveInfo.FilePath));
-            string uniquePath = CoreUtil.GetUniqueFilePath(fileSaveInfo.FilePath + fileSaveInfo.GetExtension(".tif"));
-
-            using (FileStream fs = new FileStream(uniquePath, FileMode.Create)) {
-                TiffBitmapEncoder encoder = new TiffBitmapEncoder();
-
-                switch (fileSaveInfo.TIFFCompressionType) {
-                    case TIFFCompressionTypeEnum.LZW:
-                        encoder.Compression = TiffCompressOption.Lzw;
-                        break;
-
-                    case TIFFCompressionTypeEnum.ZIP:
-                        encoder.Compression = TiffCompressOption.Zip;
-                        break;
-
-                    default:
-                        encoder.Compression = TiffCompressOption.None;
-                        break;
-                }
-
-                var metadata = new BitmapMetadata("tiff");
-                try {
-                    // This will populate the TIFF Metadata using stringified FITS style header cards, to retain partial meta data that is not natively supported by TIFF                    
-                    metadata.ApplicationName = CoreUtil.Title;
-
-                    var fitsHeader = new FITSHeader(Properties.Width, Properties.Height);
-                    fitsHeader.PopulateFromMetaData(MetaData);
-                    var sb = new StringBuilder();
-                    foreach (var header in fitsHeader.HeaderCards) {
-                        sb.AppendLine(header.GetHeaderString());
-                    }
-                    sb.AppendLine("END");
-                    metadata.Title = sb.ToString();
-                } catch (Exception ex) {
-                    Logger.Error("Failed to generate TIFF metadata", ex);
-                }
-
-                var frame = BitmapFrame.Create(RenderBitmapSource(), null, metadata, null);
-                encoder.Frames.Add(frame);
-                encoder.Save(fs);
-            }
-
-            return uniquePath;
+            // SaveTiff pending OpenCvSharp4 / SkiaSharp TIFF encoder per
+            // playbook §line-2105 — the WPF TiffBitmapEncoder pipeline was
+            // deleted in the net10.0 conversion. The headless daemon's
+            // primary capture path is FITS via OpenAstroAra.Fits; TIFF export
+            // arrives in a follow-up.
+            throw new NotImplementedException("SaveTiff pending OpenCvSharp4 wiring.");
         }
 
         private static CfitsioNative.COMPRESSION GetFITSCompression(FITSCompressionTypeEnum fITSCompressionTypeEnum) {
@@ -560,31 +523,12 @@ namespace OpenAstroAra.Image.ImageData {
         /// <param name="rawConverter">Which type of raw converter to use, when image is in RAW format</param>
         /// <param name="ct">Token to cancel operation</param>
         /// <returns></returns>
-        public static Task<IImageData> FromFile(string path, int bitDepth, bool isBayered, IRawConverter rawConverter, IImageDataFactory imageDataFactory, CancellationToken ct = default) {
+        public static Task<IImageData> FromFile(string path, int bitDepth, bool isBayered, object? rawConverter, IImageDataFactory imageDataFactory, CancellationToken ct = default) {
             return Task.Run(async () => {
                 if (!File.Exists(path)) {
                     throw new FileNotFoundException();
                 }
-                BitmapDecoder decoder;
                 switch (Path.GetExtension(path).ToLower()) {
-                    case ".gif":
-                        decoder = new GifBitmapDecoder(new Uri(path), BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
-                        return BitmapToImageArray(decoder, isBayered, imageDataFactory);
-
-                    case ".tif":
-                    case ".tiff":
-                        decoder = new TiffBitmapDecoder(new Uri(path), BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
-                        return BitmapToImageArray(decoder, isBayered, imageDataFactory);
-
-                    case ".jpg":
-                    case ".jpeg":
-                        decoder = new JpegBitmapDecoder(new Uri(path), BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
-                        return BitmapToImageArray(decoder, isBayered, imageDataFactory);
-
-                    case ".png":
-                        decoder = new PngBitmapDecoder(new Uri(path), BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
-                        return BitmapToImageArray(decoder, isBayered, imageDataFactory);
-
                     case ".xisf":
                         return await XISF.Load(new Uri(path), isBayered, imageDataFactory, ct);
 
@@ -594,20 +538,12 @@ namespace OpenAstroAra.Image.ImageData {
                     case ".fz":
                         return await FITS.Load(new Uri(path), isBayered, imageDataFactory, ct);
 
-                    case ".cr2":
-                    case ".cr3":
-                    case ".nef":
-                    case ".raf":
-                    case ".raw":
-                    case ".pef":
-                    case ".dng":
-                    case ".arw":
-                    case ".orf":
-                    case ".rw2":
-                        return await RawToImageArray(path, bitDepth, rawConverter, ct);
-
                     default:
-                        throw new NotSupportedException();
+                        // Non-FITS / non-XISF formats (gif/tiff/jpg/png/cr2/etc.)
+                        // pending OpenCvSharp4 + libraw integration per playbook
+                        // §line-2105 — the previous WPF BitmapDecoder + DCRaw
+                        // pipeline was deleted in the net10.0 conversion.
+                        throw new NotSupportedException($"File format {Path.GetExtension(path)} pending OpenCvSharp4 wiring.");
                 }
             }, ct);
         }
@@ -617,95 +553,13 @@ namespace OpenAstroAra.Image.ImageData {
                 throw new FileNotFoundException();
             }
 
-            var supportedExtensions = new Regex(@".*\.(gif|tiff?|jpe?g|[dp]ng|xisf|fits?|cr[23]|nef|ra[fw]|pef|arw|orf)", RegexOptions.IgnoreCase);
+            // Until OpenCvSharp4 lands, only FITS + XISF are supported headless.
+            var supportedExtensions = new Regex(@".*\.(xisf|fits?|fz|fts)", RegexOptions.IgnoreCase);
             return supportedExtensions.IsMatch(path);
         }
 
-        private static async Task<IImageData> RawToImageArray(string path, int bitDepth, IRawConverter rawConverter, CancellationToken ct) {
-            using (var fs = new FileStream(path, FileMode.Open)) {
-                using (var ms = new MemoryStream()) {
-                    await fs.CopyToAsync(ms);
-                    var rawType = Path.GetExtension(path).ToLower().Substring(1);
-                    var data = await rawConverter.Convert(s: ms, bitDepth: bitDepth, rawType: rawType, metaData: new ImageMetaData(), token: ct);
-                    return data;
-                }
-            }
-        }
-
-        private static IImageData BitmapToImageArray(BitmapDecoder decoder, bool isBayered, IImageDataFactory imageDataFactory) {
-            var bmp = new FormatConvertedBitmap();
-            bmp.BeginInit();
-            bmp.Source = decoder.Frames[0];
-            bmp.DestinationFormat = PixelFormats.Gray16;
-            bmp.EndInit();
-
-            var metaData = new ImageMetaData();
-            if (decoder.Frames[0].Metadata is BitmapMetadata bmpMd) {
-                try {
-                    if (!string.IsNullOrWhiteSpace(bmpMd.Title)) {
-                        /* Parse potential FITS header on a best guess base by checking for a start of "SIMPLE" and stop at "END" or no more lines 
-                         * Anything that would break the parse will just result in a failed meta data read and empty meta data is used instead.
-                         */
-                        if (bmpMd.Title.StartsWith("SIMPLE")) {
-                            var fitsHeader = new FITSHeader(bmp.PixelWidth, bmp.PixelHeight);
-                            // Assume FITS style meta data is available
-                            using (StringReader reader = new StringReader(bmpMd.Title)) {
-                                string line = string.Empty;
-                                do {
-                                    line = reader.ReadLine();
-                                    if (line == null) { continue; }
-                                    if (line == "END") { break; }
-
-                                    // do something with the line
-                                    var indexSlash = line.IndexOf('/');
-
-                                    var key = line.Substring(0, 8).Trim();
-
-                                    var value = string.Empty;
-                                    if (indexSlash > 0) {
-                                        value = line.Substring(9, indexSlash - 10).Trim();
-                                    } else {
-                                        value = line.Substring(9, 80 - 9).Trim();
-                                    }
-
-                                    var comment = string.Empty;
-                                    if (indexSlash > 0) {
-                                        comment = line.Substring(indexSlash + 1, line.Length - indexSlash - 1).Trim();
-                                    }
-
-
-                                    if (value.Contains(".")) {
-                                        if (double.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var parsedValue)) {
-                                            fitsHeader.Add(key, parsedValue, comment);
-                                        }
-                                    } else {
-                                        if (int.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var parsedValue)) {
-                                            fitsHeader.Add(key, parsedValue, comment);
-                                        }
-                                    }
-
-
-                                } while (line != null);
-
-                                try {
-                                    metaData = fitsHeader.ExtractMetaData();
-                                } catch (Exception ex) {
-                                    Logger.Error(ex.Message);
-                                }
-                            }
-                        }
-                    }
-
-                } catch (Exception ex) {
-                    Logger.Error("Failed to parse FITS like metadata from TIFF", ex);
-                }
-            }
-
-            var stride = (bmp.PixelWidth * bmp.Format.BitsPerPixel + 7) / 8;
-            var pixels = new ushort[bmp.PixelWidth * bmp.PixelHeight];
-            bmp.CopyPixels(pixels, stride, 0);
-            return imageDataFactory.CreateBaseImageData(pixels, bmp.PixelWidth, bmp.PixelHeight, 16, isBayered, metaData);
-        }
+        // BitmapToImageArray (WPF BitmapDecoder + FormatConvertedBitmap) deleted;
+        // replacement lands with OpenCvSharp4 wiring per playbook §line-2105.
 
         #endregion "Load"
     }
@@ -730,7 +584,10 @@ namespace OpenAstroAra.Image.ImageData {
         }
 
         public Task<IImageData> CreateFromFile(string path, int bitDepth, bool isBayered, RawConverterEnum rawConverter, CancellationToken ct = default) {
-            return BaseImageData.FromFile(path, bitDepth, isBayered, RawConverterFactory.CreateInstance(rawConverter, this), this, ct);
+            // RawConverterFactory deleted in the net10.0 conversion; the
+            // rawConverter param is ignored until libraw replaces DCRaw per
+            // playbook §line-2105.
+            return BaseImageData.FromFile(path, bitDepth, isBayered, null, this, ct);
         }
     }
 }

@@ -15,8 +15,6 @@
 using OpenAstroAra.Core.Enum;
 using OpenAstroAra.Sequencer.DragDrop;
 using System;
-using System.Windows.Media;
-
 namespace OpenAstroAra.Sequencer {
 
     public interface ISequenceEntity : ICloneable, IDroppable {
@@ -27,7 +25,7 @@ namespace OpenAstroAra.Sequencer {
         /// </summary>
         string Description { get; set; }
 
-        GeometryGroup Icon { get; set; }
+        string Icon { get; set; }
         string Category { get; set; }
 
         /// <summary>

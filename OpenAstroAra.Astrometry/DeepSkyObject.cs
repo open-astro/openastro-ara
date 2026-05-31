@@ -21,9 +21,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Timers;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-
 namespace OpenAstroAra.Astrometry {
 
     class DeepSkyObjectDailyRefresher {
@@ -96,13 +93,13 @@ namespace OpenAstroAra.Astrometry {
 
     public class DeepSkyObject : SkyObjectBase {
         public DeepSkyObject(string id, Coordinates coords,CustomHorizon customHorizon)
-            : this(id, coords, null as Func<SkyObjectBase, Task<BitmapSource>>, customHorizon) {
+            : this(id, coords, null as Func<SkyObjectBase, Task<byte[]>>, customHorizon) {
         }
         public DeepSkyObject(string id, Coordinates coords, string imageRepository, CustomHorizon customHorizon)
-            : this(id, coords, null as Func<SkyObjectBase, Task<BitmapSource>>, customHorizon) {
+            : this(id, coords, null as Func<SkyObjectBase, Task<byte[]>>, customHorizon) {
         }
 
-        public DeepSkyObject(string id, Coordinates coords, Func<SkyObjectBase, Task<BitmapSource>> imageFactory, CustomHorizon customHorizon)
+        public DeepSkyObject(string id, Coordinates coords, Func<SkyObjectBase, Task<byte[]>> imageFactory, CustomHorizon customHorizon)
             : base(id, imageFactory, customHorizon) {
             _coordinates = coords;
             Moon = new MoonInfo(_coordinates);

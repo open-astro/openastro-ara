@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -19,40 +19,8 @@ using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Linq;
 using System.Threading;
-using System.Windows;
-using System.Windows.Threading;
 
 namespace OpenAstroAra.Core.Utility {
-    [Obsolete]
-    public class AsyncObservableLimitedSizedStack<T> : ObservableLimitedSizedStack<T>, INotifyCollectionChanged, IEnumerable {
-
-        private static SynchronizationContext _synchronizationContext =
-            Application.Current?.Dispatcher != null
-            ? new DispatcherSynchronizationContext(Application.Current.Dispatcher)
-            : null;
-
-        public AsyncObservableLimitedSizedStack(int maxSize) : base(maxSize) {
-        }
-
-        public AsyncObservableLimitedSizedStack(int maxSize, IEnumerable<T> collection) : base(maxSize, collection) {
-        }
-
-        private void RunOnSynchronizationContext(Action action) {
-            if (SynchronizationContext.Current == _synchronizationContext) {
-                action();
-            } else {
-                _synchronizationContext.Send(_ => action(), null);
-            }
-        }
-
-        protected override void ClearItems() {
-            RunOnSynchronizationContext(() => base.ClearItems());
-        }
-
-        protected override void AddItem(T item) {
-            RunOnSynchronizationContext(() => base.AddItem(item));
-        }
-    }
     [Obsolete]
     public class ObservableLimitedSizedStack<T> : ICollection<T>, INotifyCollectionChanged, INotifyPropertyChanged, IEnumerable {
         private int _maxSize;

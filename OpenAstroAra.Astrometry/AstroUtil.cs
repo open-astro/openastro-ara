@@ -13,6 +13,7 @@
 #endregion "copyright"
 
 using OpenAstroAra.Astrometry.RiseAndSet;
+using OpenAstroAra.Core.Enum;
 using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Profile;
 using Nito.AsyncEx;
@@ -23,8 +24,6 @@ using System.ComponentModel;
 using System.Globalization;
 using System.Linq;
 using System.Text.RegularExpressions;
-using System.Windows.Media.Media3D;
-
 namespace OpenAstroAra.Astrometry {
 
     public class AstroUtil {

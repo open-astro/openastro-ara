@@ -53,8 +53,9 @@ namespace OpenAstroAra.PlateSolving {
         /// <param name="solver"> Plate Solver that should be used</param>
         /// <returns></returns>
         private static IPlateSolver GetPlateSolver(IPlateSolveSettings plateSolveSettings, PlateSolverEnum solver) {
+            // ASTROMETRY_NET (cloud astrometry.net) solver removed per playbook
+            // §18.I "just ASTAP impl per §18.I" — ARA ships local solvers only.
             return solver switch {
-                PlateSolverEnum.ASTROMETRY_NET => new AstrometryPlateSolver(plateSolveSettings.AstrometryURL, plateSolveSettings.AstrometryAPIKey),
                 PlateSolverEnum.LOCAL => new LocalPlateSolver(plateSolveSettings.CygwinLocation),
                 PlateSolverEnum.PLATESOLVE2 => new Platesolve2Solver(plateSolveSettings.PS2Location),
                 PlateSolverEnum.PLATESOLVE3 => new Platesolve3Solver(plateSolveSettings.PS3Location),

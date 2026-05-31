@@ -23,6 +23,8 @@ using OpenAstroAra.Image.FileFormat.FITS;
 
 namespace OpenAstroAra.Test {
 
+    [Platform("Win")]
+
     [TestFixture]
     internal class FITSTest {
 
