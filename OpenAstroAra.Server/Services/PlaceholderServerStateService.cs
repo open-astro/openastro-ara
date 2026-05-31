@@ -149,17 +149,33 @@ public sealed class PlaceholderServerStateService : IServerStateService {
 
     public Task<OperationAcceptedDto> RestartAsync(string reason, string? idempotencyKey, CancellationToken ct) {
         var accepted = PlaceholderEquipmentHelpers.Accepted("server.restart", idempotencyKey);
-        // Fire-and-forget: spawn `systemctl restart openastroara-server`
-        // 2 seconds from now so the 202 response reaches the client
-        // before the daemon dies. Linux + systemd only — on macOS/Windows
-        // dev runs the spawn fails silently (no systemctl in PATH) which
-        // is the correct behavior: the WILMA-visible 202 still confirms
-        // the request was accepted, just no actual restart fires.
+        // §34.7 server.restart_imminent — give WILMA a heads-up before the
+        // socket dies so the §60.9 reconnect-modal can show the right copy.
+        // Sent synchronously inside the request so it's broadcast before
+        // the 202 returns + before the systemctl spawn fires.
         _ = Task.Run(async () => {
+            await EmitRestartImminentAsync(reason);
+            // 2-second window matches the spec line 712 mapping; WILMA shows
+            // the restart banner during this gap.
             await Task.Delay(TimeSpan.FromSeconds(2));
             TrySpawnSystemctl("restart", "openastroara-server");
         });
         return Task.FromResult(accepted);
+    }
+
+    private async Task EmitRestartImminentAsync(string reason) {
+        if (_broadcaster is null) return;
+        var safeReason = (reason ?? "").Replace("\\", "\\\\").Replace("\"", "\\\"");
+        var restartAt = DateTimeOffset.UtcNow.AddSeconds(2).ToString("O");
+        try {
+            var json = $$"""
+                {"reason":"{{safeReason}}","restart_at_utc":"{{restartAt}}"}
+                """;
+            using var doc = JsonDocument.Parse(json);
+            await _broadcaster.PublishAsync("server.restart_imminent", doc.RootElement.Clone(), CancellationToken.None);
+        } catch {
+            // Broadcast best-effort — never let it abort the restart.
+        }
     }
 
     public Task<OperationAcceptedDto> RestartOnIdleAsync(string reason, string? idempotencyKey, CancellationToken ct) =>
