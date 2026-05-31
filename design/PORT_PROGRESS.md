@@ -4,10 +4,10 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** Post-§65 release-prep — §65 stretch pipeline server-side complete; §60.9 server-state polished; Phase 15 docs on master (NOTICE.md, RELEASE_NOTES.md, DEPLOY.md, 3rd-party-licenses.txt); §38 mock sequencer state machine in place; real `daemon_git_sha` from `AssemblyInformationalVersionAttribute`; all `JsonStringEnumConverter` registrations now AOT-traceable (per-enum generic) with the IL3050 pragma removed.
-- **Last merged on `port/ara`:** PR #240 (per-enum AOT-safe enum converters) — promoted to master via #241.
-- **Currently working on:** Nothing — Phase 15 sweep candidates in `design/PORT_TODO.md` are all `✅`; remaining substantial work is design-blocked.
-- **Next substantive work:** §38 real sequence orchestrator (needs real ASCOM drivers), §51 monitor worker writer side, Phase 14e Alpaca simulator. Three design-blocked items await user input per `design/PORT_TODO.md`: Sequencer WPF-removal authorization, Alpaca simulator choice, filename-template `$$TOKEN$$` vs `$TOKEN$` verification against NINA upstream.
+- **Phase:** Phase 0.5p2 merged — all 7 NINA-inherited library projects (Core, Astrometry, Profile, Image, Equipment, PlateSolving, Sequencer) + OpenAstroAra.Test now target `net10.0` headless per playbook §5.2/§8. WPF UI deleted wholesale per §4.2; mediator-VM constraint dropped per §8.1; `BitmapSource` → `byte[]` for type signatures with OpenCvSharp4 wiring deferred per §line-2105; CFITSIO + NOVAS native test gating per platform.
+- **Last merged on `port/ara`:** PR #242 (Phase 0.5p2 net10.0 conversion, 496 files +611/-53902) — promoted to master via #243.
+- **Currently working on:** Nothing — Phase 0.5p2 closes the long-standing implicit gap that left 7 projects at `net10.0-windows`. The daemon can now `ProjectReference` the full library tree per playbook §8 Phase 4 csproj scaffold.
+- **Next substantive work:** wire Server → `Astrometry`, `Profile`, `Image`, `Equipment`, `PlateSolving`, `Sequencer` `ProjectReference`s (currently only Fits + Stretch are referenced); §38 real sequence orchestrator (needs real ASCOM drivers); OpenCvSharp4 + libraw wiring per §line-2105 to un-stub the `NotImplementedException`s in `Image/ImageData/`; `IXxxMediator → IXxxService` rename per §8.1 mapping table (cosmetic follow-up).
 
 ## Completed
 
