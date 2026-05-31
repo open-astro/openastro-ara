@@ -172,7 +172,10 @@ public class Program {
         builder.Services.AddSingleton<IGuiderService, PlaceholderGuiderService>();
         builder.Services.AddSingleton<IPolarAlignService, PlaceholderPolarAlignService>();
         // Phase 13.13 — §38 sequence CRUD + runtime control.
-        builder.Services.AddSingleton<ISequenceService, PlaceholderSequenceService>();
+        // ISequenceService swapped to FileSequenceService below after
+        // profileDir is resolved (filesystem-backed per §38.2). Runtime control
+        // (ISequencerService) still placeholder until the real §38 orchestrator
+        // wires up the Sequencer library engine.
         builder.Services.AddSingleton<ISequencerService, PlaceholderSequencerService>();
         // Phase 13.14 — calibration + dark library + mosaic placeholders.
         builder.Services.AddSingleton<ICalibrationService, PlaceholderCalibrationService>();
@@ -200,6 +203,12 @@ public class Program {
         var profileDir = ResolveProfileDir();
         builder.Services.AddSingleton<IProfileStore>(sp =>
             new FileProfileStore(profileDir, sp.GetService<ILogger<FileProfileStore>>()));
+
+        // Phase 38a — §38.2 filesystem-backed sequence library at
+        // {profileDir}/sequences/library/. Replaces the in-memory placeholder
+        // so saved sequences survive daemon restart.
+        builder.Services.AddSingleton<ISequenceService>(sp =>
+            new FileSequenceService(profileDir, sp.GetService<ILogger<FileSequenceService>>()));
 
         // §28 SQLite catalog. Scaffold-only at this point: the connection
         // + schema land here so subsequent sub-PRs can flip the placeholder
