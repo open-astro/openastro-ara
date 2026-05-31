@@ -21,6 +21,7 @@ using Microsoft.Extensions.Logging;
 using Scalar.AspNetCore;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Endpoints;
 using OpenAstroAra.Server.Services;
 
@@ -58,21 +59,23 @@ public class Program {
         // payload field, and other enums (FrameType etc.) follow the same
         // convention. Properties use snake_case (standard JSON convention).
         //
-        // Phase 14a: AraJsonSerializerContext is inserted at the head of
-        // the resolver chain so every DTO uses pre-generated type metadata
-        // instead of falling back to reflection. This unblocks `dotnet run`
-        // in Development mode (OpenAPI introspection was tripping over the
-        // missing source-gen). The non-generic JsonStringEnumConverter +
-        // LowerCaseNamingPolicy is still required because the AOT-safe
-        // generic JsonStringEnumConverter<TEnum> doesn't support custom
-        // naming policies — IL3050 is suppressed since this only matters
-        // for full AOT publish (not yet enabled in CI per §14.3 deferred).
+        // Phase 14a: AraJsonSerializerContext is inserted at the head of the
+        // resolver chain so every DTO uses pre-generated type metadata. Per-
+        // enum generic JsonStringEnumConverter<TEnum> registrations replace
+        // the non-generic factory — each generic instantiation is AOT-
+        // traceable, so no IL3050 suppression is needed even when full AOT
+        // publish is enabled in CI.
         builder.Services.ConfigureHttpJsonOptions(opts => {
             opts.SerializerOptions.TypeInfoResolverChain.Insert(0, AraJsonSerializerContext.Default);
-#pragma warning disable IL3050
-            opts.SerializerOptions.Converters.Add(
-                new JsonStringEnumConverter(LowerCaseNamingPolicy.Instance));
-#pragma warning restore IL3050
+            var policy = LowerCaseNamingPolicy.Instance;
+            opts.SerializerOptions.Converters.Add(new JsonStringEnumConverter<DeviceType>(policy));
+            opts.SerializerOptions.Converters.Add(new JsonStringEnumConverter<EquipmentConnectionState>(policy));
+            opts.SerializerOptions.Converters.Add(new JsonStringEnumConverter<SequenceRunState>(policy));
+            opts.SerializerOptions.Converters.Add(new JsonStringEnumConverter<FrameType>(policy));
+            opts.SerializerOptions.Converters.Add(new JsonStringEnumConverter<NotificationSeverity>(policy));
+            opts.SerializerOptions.Converters.Add(new JsonStringEnumConverter<NotificationCategory>(policy));
+            opts.SerializerOptions.Converters.Add(new JsonStringEnumConverter<DiagnosticHealth>(policy));
+            opts.SerializerOptions.Converters.Add(new JsonStringEnumConverter<DiagnosticsMode>(policy));
             opts.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower;
         });
 

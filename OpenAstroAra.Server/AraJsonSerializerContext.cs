@@ -50,8 +50,8 @@ namespace OpenAstroAra.Server;
 // separator (`darkflat`, `safetymonitor`) used in both URL path segments
 // and JSON payloads. Without this flag, source-gen defers enum
 // serialization to the converters registered on JsonSerializerOptions
-// — Program.cs registers a JsonStringEnumConverter(LowerCaseNamingPolicy)
-// which produces the §60.6 shape.
+// — Program.cs registers per-enum JsonStringEnumConverter<TEnum> with
+// LowerCaseNamingPolicy which produces the §60.6 shape AOT-safely.
 [JsonSourceGenerationOptions(
     PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)]
 [JsonSerializable(typeof(ApiSurfaceVersionDto))]
