@@ -85,14 +85,20 @@ public class Program {
         // Phase 9 — IWsBroadcaster + IWsEventChannel + dispatch worker
         builder.Services.AddSingleton<IEquipmentDiscoveryService, AlpacaEquipmentDiscoveryService>();
 
-        // Phase 13.1 — placeholder IFrameRepository so the §65 preview/thumbnail
-        // endpoints return a real (tiny gray) JPEG instead of 501-stubbing. Real
-        // OpenCvSharp4-backed implementation lands in Phase 13.2+ alongside the
-        // §28 frame catalog DB.
-        builder.Services.AddSingleton<IFrameRepository, PlaceholderFrameRepository>();
-        // Phase 13.3 — placeholder ISessionService composing on the frame repo
-        // so the §40 Library + session-drilldown UI has consistent fixture data.
-        builder.Services.AddSingleton<ISessionService, PlaceholderSessionService>();
+        // §28 SqliteFrameRepository — reads frames from the catalog with
+        // sample data seeded on first init. Bulk ops still return placeholder
+        // Accepted responses; next sub-PR makes them actually mutate. Preview
+        // + thumbnail still serve the 1×1 JPEG placeholder until §65 lands;
+        // OpenDownloadAsync returns null until §72 FITS storage lands.
+        builder.Services.AddSingleton<IFrameRepository, SqliteFrameRepository>();
+        // §28 SqliteSessionService — sessions from the catalog with derived
+        // fields (target name, frame counts, filters) aggregated from the
+        // frames table at read time per §28.1's schema. Composes on
+        // IFrameRepository for GetFramesAsync + GetHfrAnalysisAsync so
+        // /api/v1/sessions/{id}/frames stays consistent with
+        // /api/v1/frames?sessionId=…. Mutating endpoints (resume-target,
+        // restretch) keep the placeholder Accepted shape until §38 + §65 land.
+        builder.Services.AddSingleton<ISessionService, SqliteSessionService>();
         // Phase 13.4 — placeholder INotificationService so WILMA's §46 inbox +
         // §46.4 preferences view has wire shapes to render. Three sample
         // notifications (Info/Warning/Critical across Sequence/Storage/Safety
@@ -177,6 +183,14 @@ public class Program {
         builder.Services.AddSingleton<IProfileStore>(sp =>
             new FileProfileStore(profileDir, sp.GetService<ILogger<FileProfileStore>>()));
 
+        // §28 SQLite catalog. Scaffold-only at this point: the connection
+        // + schema land here so subsequent sub-PRs can flip the placeholder
+        // frame/session repositories over one method at a time. Profile
+        // and catalog live in the same dir so a single OPENASTROARA_PROFILE_DIR
+        // (or systemd StateDirectory=) configures both.
+        builder.Services.AddSingleton<IAraDatabase>(sp =>
+            new SqliteAraDatabase(profileDir, sp.GetService<ILogger<SqliteAraDatabase>>()));
+
         var app = builder.Build();
 
         app.UseCors();
@@ -251,6 +265,22 @@ public class Program {
             Tier: "scaffold"  // upgraded to "ready" once Phase 6-9 endpoints land
         )));
 
+        // §28 catalog init — applies PRAGMAs + creates schema before any
+        // request can land. Synchronous-blocking here is fine: we're still
+        // on the startup path and the work is single-digit ms on a fresh
+        // DB. A failure here is a hard-fail-fast (we can't recover from a
+        // broken catalog), so let it propagate.
+        var araDb = app.Services.GetRequiredService<IAraDatabase>();
+        araDb.InitializeAsync(CancellationToken.None).GetAwaiter().GetResult();
+
+        // Seed the frame catalog with fixture data on first run. Idempotent
+        // (skips if frames table already has rows) — survives daemon
+        // restart with persistence intact.
+        var frameRepo = app.Services.GetRequiredService<IFrameRepository>();
+        if (frameRepo is SqliteFrameRepository sqliteRepo) {
+            sqliteRepo.EnsureSeededAsync(CancellationToken.None).GetAwaiter().GetResult();
+        }
+
         app.Logger.LogInformation("OpenAstroAra.Server listening on :{Port}", port);
         app.Run();
     }
@@ -289,9 +319,18 @@ public class Program {
         const string systemDir = "/var/lib/openastroara";
         if (Directory.Exists(systemDir)) return systemDir;
 
-        var home = System.Environment.GetEnvironmentVariable("HOME")
-            ?? System.Environment.GetEnvironmentVariable("USERPROFILE")
-            ?? Path.GetTempPath();
+        // XDG fallback. Treat empty + root ($HOME=/) as unset — the
+        // chiseled arm64 Docker base ships USER 1000 with $HOME=/ since
+        // there's no /etc/passwd entry, so the naive ?? chain would
+        // resolve to /.local/share/openastroara which UID 1000 can't
+        // create. Fall through to the OS temp dir in that case.
+        var home = System.Environment.GetEnvironmentVariable("HOME");
+        if (string.IsNullOrWhiteSpace(home) || home == "/") {
+            home = System.Environment.GetEnvironmentVariable("USERPROFILE");
+        }
+        if (string.IsNullOrWhiteSpace(home) || home == "/") {
+            home = Path.GetTempPath();
+        }
         return Path.Combine(home, ".local", "share", "openastroara");
     }
 
