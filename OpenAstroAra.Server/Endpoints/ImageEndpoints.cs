@@ -64,6 +64,20 @@ public static class ImageEndpoints {
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("GetFramePreview");
 
+        // §65.6 cache reset — flush all alt-stretch variants for a frame.
+        // Useful when the user changes stretch_defaults and wants old cached
+        // renders to roll forward, or when storage pressure makes them
+        // suspect. Default-stretch preview + thumbnail are unaffected by the
+        // §65.4 naming pattern this scans for.
+        frames.MapDelete("/{id:guid}/preview/variants",
+                async (Guid id, IFrameRepository repo, CancellationToken ct) => {
+                    var deleted = await repo.DeletePreviewVariantsAsync(id, ct);
+                    return deleted ? Results.NoContent() : Results.NotFound();
+                })
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("DeleteFramePreviewVariants");
+
         frames.MapGet("/{id:guid}/thumbnail", async (Guid id, IFrameRepository repo, CancellationToken ct) => {
                 var result = await repo.GetThumbnailAsync(id, ct);
                 return result is null

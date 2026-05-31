@@ -340,20 +340,30 @@ public sealed class SqliteFrameRepository : IFrameRepository {
     public async Task<(byte[] Bytes, string ContentType)?> GetPreviewAsync(Guid id, FramePreviewRequestDto request, CancellationToken ct) {
         var (filePath, frameType) = await GetPathAndTypeAsync(id, ct);
         if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath)) {
-            // §28.8 orphan-scan would auto-recover an existing FITS into the
-            // catalog; this code path runs *after* that, so a missing file
-            // means the user deleted it out-of-band or the drive isn't
-            // mounted. Fall back to the 1×1 placeholder so the UI still
-            // renders something rather than 404 + broken-image icon.
             return (PlaceholderJpegBytes, "image/jpeg");
         }
 
-        var (pixels, width, height) = LoadFitsPixels(filePath);
         var stretchDefaults = _profile.GetStretchDefaults();
         var algorithm = ResolveAlgorithm(request.StretchPalette, frameType, stretchDefaults.LightDefault);
-        var stretched = OpenAstroAra.Stretch.Stretcher.Apply(algorithm, pixels,
-            BuildParams(request, algorithm, stretchDefaults));
+        var stretchParams = BuildParams(request, algorithm, stretchDefaults);
+
+        // §65.4 variant cache: look for an existing JPEG on disk before
+        // re-running the stretch + encode. Cache key includes the algorithm
+        // ID + a hash of the manual stretch params (rounded to 3 decimal
+        // places so rapid slider drags don't blow the cache).
+        var cachePath = ComputeCacheKey(filePath, algorithm, stretchParams);
+        if (TryServeFromCache(cachePath) is byte[] cached) {
+            // Touch atime so the LRU sweep keeps the most-recently-served
+            // variants warm.
+            try { File.SetLastAccessTimeUtc(cachePath, DateTime.UtcNow); } catch { /* ignore */ }
+            return (cached, "image/jpeg");
+        }
+
+        var (pixels, width, height) = LoadFitsPixels(filePath);
+        var stretched = OpenAstroAra.Stretch.Stretcher.Apply(algorithm, pixels, stretchParams);
         var jpeg = OpenAstroAra.Stretch.JpegEncoder.EncodeGray(stretched, width, height);
+        TryWriteCache(cachePath, jpeg);
+        EvictVariantsIfNeeded(filePath);
         return (jpeg, "image/jpeg");
     }
 
@@ -559,6 +569,103 @@ public sealed class SqliteFrameRepository : IFrameRepository {
             JsonSerializer.Serialize(tags, AraJsonSerializerContext.Default.IReadOnlyListString));
         cmd.Parameters.AddWithValue("$id", frameId.ToString());
         await cmd.ExecuteNonQueryAsync(ct);
+    }
+
+    public async Task<bool> DeletePreviewVariantsAsync(Guid id, CancellationToken ct) {
+        var (filePath, _) = await GetPathAndTypeAsync(id, ct);
+        if (string.IsNullOrEmpty(filePath)) return false;
+        // Frame exists in the catalog; missing FITS on disk doesn't make
+        // this 404 (user may have rotated storage). Variants live next to
+        // the FITS via the §65.4 cache-key pattern.
+        var dir = Path.GetDirectoryName(filePath);
+        if (string.IsNullOrEmpty(dir)) return true;
+        var stem = Path.GetFileNameWithoutExtension(filePath);
+        var pattern = $"{stem}.preview.*.jpg";
+        try {
+            foreach (var variant in Directory.EnumerateFiles(dir, pattern)) {
+                try { File.Delete(variant); } catch { /* skip locked */ }
+            }
+        } catch (DirectoryNotFoundException) { /* nothing to delete */ }
+          catch (UnauthorizedAccessException) { /* read-only mount */ }
+        return true;
+    }
+
+    // §65.4 cache cap. Six alt-stretch variants per frame plus the default
+    // = seven total. Settings → Image Processing → Preview Cache will expose
+    // this knob (range 1-20) in a future sub-PR; for now it's a const.
+    private const int MaxVariantsPerFrame = 6;
+
+    private static string ComputeCacheKey(string fitsPath, OpenAstroAra.Stretch.StretchAlgorithm algorithm,
+            OpenAstroAra.Stretch.StretchParams parameters) {
+        var stretchId = algorithm switch {
+            OpenAstroAra.Stretch.StretchAlgorithm.AutoStf => "auto_stf",
+            OpenAstroAra.Stretch.StretchAlgorithm.Linear => "linear",
+            OpenAstroAra.Stretch.StretchAlgorithm.Log => "log",
+            OpenAstroAra.Stretch.StretchAlgorithm.Asinh => "asinh",
+            OpenAstroAra.Stretch.StretchAlgorithm.Sqrt => "sqrt",
+            OpenAstroAra.Stretch.StretchAlgorithm.Equalized => "equalized",
+            OpenAstroAra.Stretch.StretchAlgorithm.Manual => "manual",
+            _ => "default",
+        };
+        var dir = Path.GetDirectoryName(fitsPath) ?? "";
+        var stem = Path.GetFileNameWithoutExtension(fitsPath);
+        // Manual stretch params hash so slider drags coalesce in the cache
+        // (§65.4 rounds to 3 decimal places to bound entry count).
+        if (algorithm == OpenAstroAra.Stretch.StretchAlgorithm.Manual) {
+            var bp = Math.Round(parameters.Blackpoint, 3);
+            var mp = Math.Round(parameters.Midpoint, 3);
+            var wp = Math.Round(parameters.Whitepoint, 3);
+            var hash = $"{bp:F3}_{mp:F3}_{wp:F3}".Replace('.', 'p');
+            return Path.Combine(dir, $"{stem}.preview.{stretchId}.{hash}.jpg");
+        }
+        return Path.Combine(dir, $"{stem}.preview.{stretchId}.jpg");
+    }
+
+    private static byte[]? TryServeFromCache(string cachePath) {
+        if (!File.Exists(cachePath)) return null;
+        try {
+            return File.ReadAllBytes(cachePath);
+        } catch (IOException) {
+            return null;
+        }
+    }
+
+    private static void TryWriteCache(string cachePath, byte[] bytes) {
+        try {
+            // Atomic write per §28.7 — temp + rename so a concurrent reader
+            // never sees a partial JPEG.
+            var tmp = cachePath + ".tmp";
+            File.WriteAllBytes(tmp, bytes);
+            File.Move(tmp, cachePath, overwrite: true);
+        } catch (IOException) {
+            // Cache write best-effort; serving the bytes inline is what
+            // matters. Storage pressure / read-only mounts shouldn't
+            // 500 the request.
+        }
+    }
+
+    private static void EvictVariantsIfNeeded(string fitsPath) {
+        var dir = Path.GetDirectoryName(fitsPath);
+        if (string.IsNullOrEmpty(dir)) return;
+        var stem = Path.GetFileNameWithoutExtension(fitsPath);
+        var pattern = $"{stem}.preview.*.jpg";
+        try {
+            var variants = Directory.EnumerateFiles(dir, pattern)
+                // Default stretch is the un-suffixed "preview.jpg" (legacy
+                // path); explicit stretch variants always have a .preview.<id>.
+                // Both compete for the same per-frame budget — but per §65.4
+                // thumbnails are excluded (named .thumb.jpg). Our naming
+                // above always includes .preview. so all matches are
+                // variant entries.
+                .Select(p => new FileInfo(p))
+                .OrderByDescending(fi => fi.LastAccessTimeUtc)
+                .ToList();
+            if (variants.Count <= MaxVariantsPerFrame) return;
+            foreach (var stale in variants.Skip(MaxVariantsPerFrame)) {
+                try { stale.Delete(); } catch { /* ignore */ }
+            }
+        } catch (DirectoryNotFoundException) { /* nothing to evict */ }
+          catch (UnauthorizedAccessException) { /* read-only mount; skip */ }
     }
 
     // Frame type ↔ string. The enum is JSON-serialized as lowercase via
