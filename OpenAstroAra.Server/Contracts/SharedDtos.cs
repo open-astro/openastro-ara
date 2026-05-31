@@ -37,3 +37,16 @@ public sealed record OperationAcceptedDto(
     string OperationType,
     DateTimeOffset AcceptedUtc,
     string? IdempotencyKey);
+
+/// <summary>
+/// §65.5 batch-job state. Returned by GET /api/v1/jobs/{id}.
+/// </summary>
+public sealed record BatchJobDto(
+    Guid JobId,
+    string JobType,
+    string State,
+    int Done,
+    int Total,
+    DateTimeOffset StartedUtc,
+    DateTimeOffset? FinishedUtc,
+    string? ErrorMessage);
