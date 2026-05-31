@@ -143,6 +143,27 @@ public sealed class SqliteAraDatabase : IAraDatabase {
             );
             """, ct);
 
+        // §51 diagnostics log. Same table holds open issues + historical
+        // events: cleared_utc IS NULL means open. Issue-specific fields
+        // (recommended_action, auto_correctible) are nullable for non-
+        // issue events (sequence.started, frame.complete, etc.).
+        await ExecAsync(conn, """
+            CREATE TABLE IF NOT EXISTS diagnostic_events (
+                id                      TEXT PRIMARY KEY NOT NULL,
+                event_type              TEXT NOT NULL,
+                severity                TEXT NOT NULL,
+                description             TEXT NOT NULL,
+                detected_utc            TEXT NOT NULL,
+                cleared_utc             TEXT,
+                auto_action_taken       INTEGER NOT NULL DEFAULT 0,
+                auto_action_description TEXT,
+                recommended_action      TEXT,
+                auto_correctible        INTEGER
+            );
+            """, ct);
+        await ExecAsync(conn, "CREATE INDEX IF NOT EXISTS idx_diag_detected_utc ON diagnostic_events(detected_utc);", ct);
+        await ExecAsync(conn, "CREATE INDEX IF NOT EXISTS idx_diag_open ON diagnostic_events(cleared_utc) WHERE cleared_utc IS NULL;", ct);
+
         _logger?.LogInformation("SQLite catalog initialized at {Path}", DatabasePath);
     }
 

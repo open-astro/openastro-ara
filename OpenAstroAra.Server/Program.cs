@@ -114,7 +114,11 @@ public class Program {
         // *settings* reaction mode (notify_only/pause_on_critical/
         // abort_on_critical) which round-trips via the profile store —
         // the real-infra phase reconciles the two when §51 monitor lands.
-        builder.Services.AddSingleton<IDiagnosticsService, PlaceholderDiagnosticsService>();
+        // §51 SqliteDiagnosticsService — diagnostic_events table holds
+        // both open issues (cleared_utc IS NULL) + historical events.
+        // Mode persists in app_config across restart. Monitor worker that
+        // *writes* events wires up alongside the §38 sequence orchestrator.
+        builder.Services.AddSingleton<IDiagnosticsService, SqliteDiagnosticsService>();
         // Phase 13.6 — placeholder IStatsService covering all 8 §50 chart
         // views with synthetic fixture data. Numbers are intentionally small
         // so the Stats tab renders something sensible without claiming the
@@ -291,6 +295,13 @@ public class Program {
         var notificationSvc = app.Services.GetRequiredService<INotificationService>();
         if (notificationSvc is SqliteNotificationService sqliteNotif) {
             sqliteNotif.EnsureSeededAsync(CancellationToken.None).GetAwaiter().GetResult();
+        }
+        // §51 diagnostics fixture seed — three events (one open issue + two
+        // historical) so the panel has data to render before the monitor
+        // worker is online.
+        var diagnosticsSvc = app.Services.GetRequiredService<IDiagnosticsService>();
+        if (diagnosticsSvc is SqliteDiagnosticsService sqliteDiag) {
+            sqliteDiag.EnsureSeededAsync(CancellationToken.None).GetAwaiter().GetResult();
         }
 
         app.Logger.LogInformation("OpenAstroAra.Server listening on :{Port}", port);
