@@ -35,10 +35,14 @@ namespace OpenAstroAra.Server.Services;
 public sealed class SqliteSessionService : ISessionService {
     private readonly IAraDatabase _db;
     private readonly IFrameRepository _frames;
+    private readonly IBatchJobService _jobs;
+    private readonly IWsBroadcaster _ws;
 
-    public SqliteSessionService(IAraDatabase db, IFrameRepository frames) {
+    public SqliteSessionService(IAraDatabase db, IFrameRepository frames, IBatchJobService jobs, IWsBroadcaster ws) {
         _db = db;
         _frames = frames;
+        _jobs = jobs;
+        _ws = ws;
     }
 
     public async Task<CursorPage<SessionDto>> ListAsync(int limit, string? cursor, CancellationToken ct) {
@@ -104,10 +108,109 @@ public sealed class SqliteSessionService : ISessionService {
         // 202 keeps the wire contract intact.
         Task.FromResult(PlaceholderEquipmentHelpers.Accepted("sessions.resume-target", idempotencyKey));
 
-    public Task<OperationAcceptedDto> RestretchAsync(Guid sessionId, SessionRestretchRequestDto request, string? idempotencyKey, CancellationToken ct) =>
-        // §65 stretch pipeline required for real re-stretch; placeholder
-        // 202 keeps the wire contract intact.
-        Task.FromResult(PlaceholderEquipmentHelpers.Accepted("sessions.restretch", idempotencyKey));
+    public async Task<OperationAcceptedDto> RestretchAsync(Guid sessionId, SessionRestretchRequestDto request, string? idempotencyKey, CancellationToken ct) {
+        // §65.5 batch re-stretch. Enqueue a job that iterates the session's
+        // frames, computes the requested alt-stretch for each via
+        // IFrameRepository.GetPreviewAsync (which populates the §65.4
+        // variant cache on disk), and emits WS progress events.
+        //
+        // Existence check first — unknown session = 404 at the endpoint.
+        var session = await GetAsync(sessionId, ct);
+        if (session is null) {
+            // The endpoint layer guards 404 via GetAsync before calling here,
+            // but defense-in-depth: still return a placeholder Accepted so
+            // we don't surface a different error shape.
+            return PlaceholderEquipmentHelpers.Accepted("sessions.restretch", idempotencyKey);
+        }
+
+        var framesPage = await _frames.ListAsync(limit: 200, cursor: null, sessionId, targetName: null, ct);
+        var frameIds = framesPage.Items.Select(f => f.Id).ToList();
+
+        var startUtc = DateTimeOffset.UtcNow;
+        var job = _jobs.Enqueue("sessions.restretch", frameIds.Count, async (report, jobCt) => {
+            var done = 0;
+            try {
+                foreach (var frameId in frameIds) {
+                    if (jobCt.IsCancellationRequested) break;
+                    try {
+                        await _frames.GetPreviewAsync(frameId, request: new FramePreviewRequestDto(
+                            StretchPalette: request.StretchPalette,
+                            BlackPoint: request.BlackPoint,
+                            MidtonePoint: request.MidtonePoint,
+                            WhitePoint: request.WhitePoint,
+                            MaxDimensionPx: null,
+                            ApplyDebayer: false), jobCt);
+                    } catch (Exception) {
+                        // Per-frame stretch failures don't abort the batch —
+                        // user gets the rest. Future enhancement: per-frame
+                        // failure list on the job DTO.
+                    }
+                    done++;
+                    report(done);
+                    await EmitProgressAsync(sessionId, done, frameIds.Count, frameId, jobCt);
+                }
+                // §65.7 terminal event — emit complete after the loop. Use
+                // CancellationToken.None so we still fire on cancellation
+                // (so WILMA can clear its in-flight banner) rather than
+                // racing the cancel CTS.
+                var elapsed = (DateTimeOffset.UtcNow - startUtc).TotalSeconds;
+                await EmitTerminalAsync("session.restretch.complete",
+                    sessionId, framesProcessed: done, durationSeconds: elapsed, error: null);
+            } catch (Exception ex) {
+                await EmitTerminalAsync("session.restretch.failed",
+                    sessionId, framesProcessed: done, durationSeconds: null, error: ex.Message);
+                throw;
+            }
+        });
+
+        // Reuse OperationAcceptedDto with operation_id == job_id so WILMA
+        // can correlate the 202 → /jobs/{id} status polling. operation_type
+        // includes the job-id suffix isn't necessary; WILMA reads job_id
+        // from the operation_id field.
+        return new OperationAcceptedDto(
+            OperationId: job.JobId,
+            OperationType: "sessions.restretch",
+            AcceptedUtc: DateTimeOffset.UtcNow,
+            IdempotencyKey: idempotencyKey);
+    }
+
+    private async Task EmitProgressAsync(Guid sessionId, int done, int total, Guid currentFrameId, CancellationToken ct) {
+        // §65.7 session.restretch.progress payload shape. Build the JSON
+        // by hand so the AOT analyzer sees a static literal rather than
+        // reflective serialization of an anonymous type (IL2026/IL3050).
+        try {
+            var json = $$"""
+                {"session_id":"{{sessionId}}","done":{{done}},"total":{{total}},"current_frame_id":"{{currentFrameId}}"}
+                """;
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            await _ws.PublishAsync("session.restretch.progress", doc.RootElement.Clone(), ct);
+        } catch {
+            // WS publish best-effort — never let it abort the job.
+        }
+    }
+
+    private async Task EmitTerminalAsync(string eventType, Guid sessionId, int framesProcessed, double? durationSeconds, string? error) {
+        // §65.7 session.restretch.{complete,failed} payload shapes. Same
+        // hand-built JSON pattern as the progress event for AOT safety.
+        try {
+            string json;
+            if (eventType.EndsWith(".complete")) {
+                var dur = durationSeconds ?? 0;
+                json = $$"""
+                    {"session_id":"{{sessionId}}","frames_processed":{{framesProcessed}},"duration_seconds":{{dur.ToString("F3", System.Globalization.CultureInfo.InvariantCulture)}}}
+                    """;
+            } else {
+                var safeError = (error ?? "").Replace("\\", "\\\\").Replace("\"", "\\\"");
+                json = $$"""
+                    {"session_id":"{{sessionId}}","frames_processed":{{framesProcessed}},"error":"{{safeError}}"}
+                    """;
+            }
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            await _ws.PublishAsync(eventType, doc.RootElement.Clone(), CancellationToken.None);
+        } catch {
+            // Same as progress — never let WS issues abort the worker.
+        }
+    }
 
     public async Task<HfrAnalysisDto?> GetHfrAnalysisAsync(Guid sessionId, CancellationToken ct) {
         // 404 unless the session exists in the catalog.

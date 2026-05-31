@@ -189,6 +189,7 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(TelescopeStateDto))]
 [JsonSerializable(typeof(TemplateInstantiateRequestDto))]
 [JsonSerializable(typeof(WsEventEnvelopeDto))]
+[JsonSerializable(typeof(BatchJobDto))]
 [JsonSerializable(typeof(WsResumeRequestDto))]
 [JsonSerializable(typeof(WsResumeResponseDto))]
 // /api/v1/ws/catalog response shape (defined inline in WebSocketEndpoints).
