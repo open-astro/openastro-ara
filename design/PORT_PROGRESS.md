@@ -4,10 +4,10 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Current
 
-- **Phase:** §28 frame catalog DB complete (5 sub-PRs #190–#194, promoted to master via PR #195, 2026-05-31). Phase 14c/14d CI matrix expansion landed in #187 + #188 (master via #189).
+- **Phase:** Real-infra SQLite swaps — §28 catalog, §72 FITS storage, §46.5 notifications, §50 stats, §51 diagnostics all backed by the catalog DB.
 - **Last merged on `port/ara`:** This tracking refresh.
-- **Currently working on:** PORT_PROGRESS.md refresh for the §28 series + Phase 14 CI matrix work.
-- **Next substantive work:** §72 FITS file storage via CFITSIO P/Invoke. After that, §38 sequence orchestrator + §65 stretch pipeline. The two design-blocked items per `design/PORT_TODO.md` (Sequencer WPF-removal authorization + Alpaca simulator choice) still await user input.
+- **Currently working on:** PORT_PROGRESS.md refresh for §72 (FITS) + §46.5 (notifications) + §50 (stats) + §51 (diagnostics) work.
+- **Next substantive work:** §65 stretch pipeline (OpenCvSharp4 + real previews) and §38 sequence orchestrator (the load-bearing piece that drives equipment + writes captured frames into the catalog via `FitsImage`). The two design-blocked items per `design/PORT_TODO.md` (Sequencer WPF-removal authorization + Alpaca simulator choice) still await user input.
 
 ## Completed
 
@@ -175,6 +175,35 @@ After the §60.9 WS lifecycle landed, four sub-PRs flipped the last batch of end
 - ✅ **#182** — `/server/{restart,restart-on-idle}`: optional `?reason=` query string (defaults to `operator_requested`). Real systemd-driven restart still in Phase 14 hardening.
 
 After this sweep, **the only remaining 501 stub is `/api/v1/frames/{id}/download` (§72)** — kept as the CI smoke gate's 501 anchor since it depends on real FITS file storage.
+
+### §72 FITS storage (PRs #197–#200)
+
+CFITSIO via P/Invoke per playbook §72.3, packaged into the new portable `OpenAstroAra.Fits` project (net10.0, AOT-compatible). Managed `FitsImage` wrapper with §28.7 atomic-write pipeline. **Closes the last 501 stub on the surface** — every endpoint now serves a real response.
+
+- ✅ **#197** — Scaffold: project + `[LibraryImport]` P/Invoke wrappers for CFITSIO.
+- ✅ **#198** — `FitsImage` managed wrapper + atomic-rename + parent-dir fsync; xUnit tests verify round-trip + atomic semantics + stale-temp purge against `libcfitsio-dev` installed on the Linux CI runner.
+- ✅ **#199** — Wire `/api/v1/frames/{id}/download` to the catalog's `file_path` via `FileStream`; last 501 stub gone. `NotImplementedStub` helper deleted.
+- ✅ **#200** — Promotion to master.
+
+### §46.5 SQLite notifications log (PRs #201 + #203)
+
+Persistent notifications + JSON-blob preferences in `app_config`. Replaces in-memory placeholder.
+
+- ✅ **#201** — `notifications` + `app_config` tables; `SqliteNotificationService` with list/dismiss/mark-read + UPSERT preferences; 3 fixture seed.
+- ✅ **#203** — Promotion (with #202).
+
+### §50 SQLite stats (PRs #202 + #203)
+
+Aggregations over the §28 catalog. Views needing data not yet captured (focuser position, separated RA/Dec RMS) return empty payloads until §38 sequence orchestrator persists those columns.
+
+- ✅ **#202** — `SqliteStatsService` covering all 8 chart views (overview, targets, focus-temp, guiding, frame-quality, best-frames, calendar, CSV export).
+- ✅ **#203** — Promotion (with #201).
+
+### §51 SQLite diagnostics (PR #204)
+
+Open issues + history in one `diagnostic_events` table (`cleared_utc IS NULL` = open). Operating mode persists in `app_config` — survives daemon restart (placeholder reset to Observe every launch).
+
+- ✅ **#204** — `SqliteDiagnosticsService` + state/mode/history/seed. Monitor worker that *writes* events arrives with §38.
 
 ### §28 frame catalog DB (PRs #190–#195)
 
