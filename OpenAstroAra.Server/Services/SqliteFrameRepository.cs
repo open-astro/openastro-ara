@@ -345,16 +345,108 @@ public sealed class SqliteFrameRepository : IFrameRepository {
         // §72 FITS storage replaces this with the real file stream.
         Task.FromResult<(Stream FitsStream, string FileName)?>(null);
 
-    // Bulk ops still placeholder-Accepted — actual mutation lands in the
-    // next sub-PR of this §28 series so each swap is reviewable on its own.
-    public Task<OperationAcceptedDto> BulkRateAsync(BulkRateRequestDto request, string? idempotencyKey, CancellationToken ct) =>
-        Task.FromResult(PlaceholderEquipmentHelpers.Accepted("frames.bulk-rate", idempotencyKey));
+    // Bulk ops now actually mutate the catalog. Execution is synchronous
+    // (sub-ms for typical batches up to a few hundred frames); the 202
+    // OperationAccepted shape is preserved so future async-job-queue
+    // refactors (real workers with WS event emission) stay wire-compat.
+    // Idempotency-Key dedup at the persistence layer is a separate concern
+    // (lands when the §60.5 in-memory dedup cache PR lands).
 
-    public Task<OperationAcceptedDto> BulkTagAsync(BulkTagRequestDto request, string? idempotencyKey, CancellationToken ct) =>
-        Task.FromResult(PlaceholderEquipmentHelpers.Accepted("frames.bulk-tag", idempotencyKey));
+    public async Task<OperationAcceptedDto> BulkRateAsync(BulkRateRequestDto request, string? idempotencyKey, CancellationToken ct) {
+        if (request.FrameIds.Count > 0) {
+            await using var conn = _db.OpenConnection();
+            await using var tx = (SqliteTransaction)await conn.BeginTransactionAsync(ct);
+            await using var cmd = conn.CreateCommand();
+            cmd.Transaction = tx;
+            cmd.CommandText = "UPDATE frames SET rating = $rating WHERE id = $id;";
+            var ratingParam = cmd.Parameters.Add("$rating", Microsoft.Data.Sqlite.SqliteType.Integer);
+            var idParam = cmd.Parameters.Add("$id", Microsoft.Data.Sqlite.SqliteType.Text);
+            ratingParam.Value = request.Rating;
+            foreach (var frameId in request.FrameIds) {
+                idParam.Value = frameId.ToString();
+                await cmd.ExecuteNonQueryAsync(ct);
+            }
+            await tx.CommitAsync(ct);
+        }
+        return PlaceholderEquipmentHelpers.Accepted("frames.bulk-rate", idempotencyKey);
+    }
 
-    public Task<OperationAcceptedDto> BulkDeleteAsync(BulkDeleteRequestDto request, string? idempotencyKey, CancellationToken ct) =>
-        Task.FromResult(PlaceholderEquipmentHelpers.Accepted("frames.bulk-delete", idempotencyKey));
+    public async Task<OperationAcceptedDto> BulkTagAsync(BulkTagRequestDto request, string? idempotencyKey, CancellationToken ct) {
+        if (request.FrameIds.Count > 0 && (request.AddTags.Count > 0 || request.RemoveTags.Count > 0)) {
+            await using var conn = _db.OpenConnection();
+            await using var tx = (SqliteTransaction)await conn.BeginTransactionAsync(ct);
+
+            // Tags is a JSON-blob column; SQLite has no set ops on JSON
+            // arrays in v3.x portably, so read-merge-write per row. Set
+            // ordering preserved as insertion order via LinkedHashSet via
+            // List + Contains check.
+            foreach (var frameId in request.FrameIds) {
+                IReadOnlyList<string> current = await ReadTagsAsync(conn, tx, frameId, ct);
+                var merged = new List<string>(current);
+                foreach (var rem in request.RemoveTags) {
+                    merged.RemoveAll(t => string.Equals(t, rem, StringComparison.OrdinalIgnoreCase));
+                }
+                foreach (var add in request.AddTags) {
+                    if (!merged.Any(t => string.Equals(t, add, StringComparison.OrdinalIgnoreCase))) {
+                        merged.Add(add);
+                    }
+                }
+                await WriteTagsAsync(conn, tx, frameId, merged, ct);
+            }
+            await tx.CommitAsync(ct);
+        }
+        return PlaceholderEquipmentHelpers.Accepted("frames.bulk-tag", idempotencyKey);
+    }
+
+    public async Task<OperationAcceptedDto> BulkDeleteAsync(BulkDeleteRequestDto request, string? idempotencyKey, CancellationToken ct) {
+        if (request.FrameIds.Count > 0) {
+            await using var conn = _db.OpenConnection();
+            await using var tx = (SqliteTransaction)await conn.BeginTransactionAsync(ct);
+            await using var cmd = conn.CreateCommand();
+            cmd.Transaction = tx;
+            cmd.CommandText = "DELETE FROM frames WHERE id = $id;";
+            var idParam = cmd.Parameters.Add("$id", Microsoft.Data.Sqlite.SqliteType.Text);
+            foreach (var frameId in request.FrameIds) {
+                idParam.Value = frameId.ToString();
+                await cmd.ExecuteNonQueryAsync(ct);
+            }
+            await tx.CommitAsync(ct);
+            // request.DeleteFromDisk: §72 FITS storage is not yet wired,
+            // so there's no file to delete in v0.0.1. The flag is
+            // preserved on the wire so clients can opt in once storage
+            // lands without a contract change.
+        }
+        return PlaceholderEquipmentHelpers.Accepted("frames.bulk-delete", idempotencyKey);
+    }
+
+    private static async Task<IReadOnlyList<string>> ReadTagsAsync(
+            SqliteConnection conn, SqliteTransaction tx, Guid frameId, CancellationToken ct) {
+        await using var cmd = conn.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = "SELECT tags_json FROM frames WHERE id = $id LIMIT 1;";
+        cmd.Parameters.AddWithValue("$id", frameId.ToString());
+        var result = await cmd.ExecuteScalarAsync(ct);
+        if (result is null || result is DBNull) return Array.Empty<string>();
+        try {
+            return JsonSerializer.Deserialize(
+                (string)result, AraJsonSerializerContext.Default.IReadOnlyListString)
+                ?? Array.Empty<string>();
+        } catch (JsonException) {
+            return Array.Empty<string>();
+        }
+    }
+
+    private static async Task WriteTagsAsync(
+            SqliteConnection conn, SqliteTransaction tx, Guid frameId,
+            IReadOnlyList<string> tags, CancellationToken ct) {
+        await using var cmd = conn.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = "UPDATE frames SET tags_json = $tags WHERE id = $id;";
+        cmd.Parameters.AddWithValue("$tags",
+            JsonSerializer.Serialize(tags, AraJsonSerializerContext.Default.IReadOnlyListString));
+        cmd.Parameters.AddWithValue("$id", frameId.ToString());
+        await cmd.ExecuteNonQueryAsync(ct);
+    }
 
     // Frame type ↔ string. The enum is JSON-serialized as lowercase via
     // the global JsonStringEnumConverter, but we don't have a JSON
