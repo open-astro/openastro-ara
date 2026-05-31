@@ -116,11 +116,15 @@ public sealed class PlaceholderServerStateService : IServerStateService {
 
     public Task<ApiVersionsDto> GetVersionsAsync(CancellationToken ct) =>
         // Version data answers WILMA's §54 "About" screen + the §63.1
-        // compatibility check. Most values are static for v0.0.1; real
-        // git sha + OS release land via build-time injection in Phase 14.
+        // compatibility check. Daemon git sha pulled from
+        // AssemblyInformationalVersionAttribute which .NET auto-populates
+        // with `<version>+<sourceRevisionId>` when built from a git repo
+        // (controlled by the IncludeSourceRevisionInInformationalVersion
+        // MSBuild flag, default true). Falls back to "unknown" if absent
+        // (running from a non-git checkout, e.g., the chiseled .deb).
         Task.FromResult(new ApiVersionsDto(
             DaemonVersion: ServerIdentity.Version,
-            DaemonGitSha: "placeholder",
+            DaemonGitSha: ExtractGitSha(),
             DotnetVersion: System.Environment.Version.ToString(),
             OsRelease: System.Runtime.InteropServices.RuntimeInformation.OSDescription,
             OsArch: System.Runtime.InteropServices.RuntimeInformation.OSArchitecture.ToString().ToLowerInvariant(),
@@ -183,6 +187,19 @@ public sealed class PlaceholderServerStateService : IServerStateService {
         // restart mid-capture). Placeholder until §38 orchestrator is
         // online + we can ask "is the daemon currently busy?".
         Task.FromResult(PlaceholderEquipmentHelpers.Accepted("server.restart-on-idle", idempotencyKey));
+
+    private static string ExtractGitSha() {
+        var attr = typeof(PlaceholderServerStateService).Assembly
+            .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+            .FirstOrDefault() as System.Reflection.AssemblyInformationalVersionAttribute;
+        if (attr is null) return "unknown";
+        // Format: "<assemblyVersion>+<gitSha>". Split on '+' and return the
+        // suffix; if there's no '+' the source-revision wasn't included
+        // (clean builds without git, e.g., the chiseled .deb).
+        var info = attr.InformationalVersion;
+        var plus = info.IndexOf('+');
+        return plus >= 0 && plus + 1 < info.Length ? info[(plus + 1)..] : "unknown";
+    }
 
     private static void TrySpawnSystemctl(string verb, string unit) {
         try {
