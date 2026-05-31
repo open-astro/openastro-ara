@@ -95,11 +95,31 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      # §72.2 — install CFITSIO so OpenAstroAra.Fits can resolve the
+      # native library at runtime (build doesn't need it, but a future
+      # FitsImageTests step will). Debian's libcfitsio10 (runtime) +
+      # libcfitsio-dev (headers, for ldconfig + symlinks) cover both.
+      - name: Install CFITSIO (Linux)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libcfitsio-dev
+
       - name: dotnet restore (Server)
         run: dotnet restore OpenAstroAra.Server/OpenAstroAra.Server.csproj
 
       - name: dotnet build (Server, Release)
         run: dotnet build OpenAstroAra.Server/OpenAstroAra.Server.csproj -c Release --no-restore
+
+      # §72 FITS — verify the project + its xUnit tests. Tests exercise
+      # write→read round-trip + atomic-rename + stale-temp purge against
+      # the libcfitsio installed above. The dedicated build step becomes
+      # redundant once Server takes a project reference; the test step
+      # stays.
+      - name: dotnet build (Fits, Release)
+        run: dotnet build OpenAstroAra.Fits/OpenAstroAra.Fits.csproj -c Release
+
+      - name: dotnet test (Fits, Release)
+        run: dotnet test OpenAstroAra.Fits.Tests/OpenAstroAra.Fits.Tests.csproj -c Release --verbosity normal
 
       # Phase 14b smoke gate — actually run the daemon and hit a real
       # endpoint to catch the class of regressions where `dotnet build`
@@ -206,27 +226,15 @@ jobs:
             "http://localhost:$OPENASTROARA_PORT/api/v1/sessions/$ZERO_GUID/hfr-analysis")
           test "$NOT_FOUND_STATUS" = "404" \
             || (echo "✗ expected 404, got $NOT_FOUND_STATUS"; exit 1)
-          # Verify a still-stubbed endpoint serializes its RFC 7807 Problem
-          # body (catches ProblemDetails-not-registered regressions). NOT
-          # using -f here because curl with -f exits non-zero on 4xx/5xx
-          # before writing %{http_code}. /frames/{id}/download is the new
-          # 501-probe anchor — depends on real FITS file storage (§72).
-          echo "Probing /api/v1/frames/\$ZERO_GUID/download (expect 501 Problem JSON) …"
-          PROBLEM_STATUS=$(curl -sS -o "$RUNNER_TEMP/problem.json" \
-            -w '%{http_code}' \
+          # §72 wired /frames/{id}/download to the catalog's file_path —
+          # was the last 501 stub. With no FITS files on disk yet (the
+          # sample seed has fake paths), the zero-guid path returns 404,
+          # not 501. The Problem-body shape probe is gone with the stubs.
+          echo "Probing /api/v1/frames/\$ZERO_GUID/download (expect 404 — no such frame) …"
+          DOWNLOAD_STATUS=$(curl -sS -o /dev/null -w '%{http_code}' \
             "http://localhost:$OPENASTROARA_PORT/api/v1/frames/$ZERO_GUID/download")
-          if [ "$PROBLEM_STATUS" != "501" ]; then
-            echo "✗ expected 501, got $PROBLEM_STATUS"
-            cat "$RUNNER_TEMP/problem.json"
-            tail -50 "$RUNNER_TEMP/server.log"
-            exit 1
-          fi
-          # Body should be valid RFC 7807 Problem JSON, not an empty/garbled
-          # response — a `JsonTypeInfo not provided` 500 would also have a
-          # body, so we check for the `type` field that Results.Problem(...)
-          # always emits.
-          grep -q '"type"' "$RUNNER_TEMP/problem.json" \
-            || (echo "✗ 501 body missing Problem 'type' field:"; cat "$RUNNER_TEMP/problem.json"; exit 1)
+          test "$DOWNLOAD_STATUS" = "404" \
+            || (echo "✗ expected 404, got $DOWNLOAD_STATUS"; tail -50 "$RUNNER_TEMP/server.log"; exit 1)
           # Verify the FileProfileStore wrote profile.json with snake_case keys.
           test -f "$OPENASTROARA_PROFILE_DIR/profile.json" \
             || (echo "✗ profile.json not written"; tail -50 "$RUNNER_TEMP/server.log"; exit 1)
