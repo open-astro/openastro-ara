@@ -18,6 +18,7 @@ using OpenAstroAra.Sequencer;
 using OpenAstroAra.Sequencer.Conditions;
 using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.SequenceItem;
+using OpenAstroAra.Sequencer.SequenceItem.Focuser;
 using OpenAstroAra.Sequencer.SequenceItem.SafetyMonitor;
 using OpenAstroAra.Sequencer.SequenceItem.Telescope;
 using OpenAstroAra.Sequencer.SequenceItem.Utility;
@@ -116,15 +117,17 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
     public static HeadlessSequencerFactory WithDefaults(
             ISafetyMonitorMediator? safetyMonitorMediator = null,
             ITelescopeMediator? telescopeMediator = null,
-            IGuiderMediator? guiderMediator = null) {
-        // §38k-9 / §38k-10 / §38k-11 — equipment-mediator stubs default to
-        // no-op headless impls so call sites that don't yet have real
-        // Alpaca-backed mediators still get a usable prototype set. As real
-        // drivers land (§14e Alpaca simulator pinning gates this),
+            IGuiderMediator? guiderMediator = null,
+            IFocuserMediator? focuserMediator = null) {
+        // §38k-9 / §38k-10 / §38k-11 / §38k-12 — equipment-mediator stubs
+        // default to no-op headless impls so call sites that don't yet have
+        // real Alpaca-backed mediators still get a usable prototype set. As
+        // real drivers land (§14e Alpaca simulator pinning gates this),
         // Program.cs's DI can hand in real mediators here instead.
         safetyMonitorMediator ??= new HeadlessSafetyMonitorMediator();
         telescopeMediator ??= new HeadlessTelescopeMediator();
         guiderMediator ??= new HeadlessGuiderMediator();
+        focuserMediator ??= new HeadlessFocuserMediator();
 
         return new HeadlessSequencerFactory(
             items: new List<ISequenceItem> {
@@ -151,6 +154,12 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
                 new ParkScope(telescopeMediator, guiderMediator),
                 new FindHome(telescopeMediator, guiderMediator),
                 new SlewScopeToRaDec(telescopeMediator, guiderMediator),
+                // §38k-12 — focuser-bound instructions. All three take only
+                // IFocuserMediator. The headless stub no-ops the move ops
+                // and returns 0 for the resulting position.
+                new MoveFocuserAbsolute(focuserMediator),
+                new MoveFocuserRelative(focuserMediator),
+                new MoveFocuserByTemperature(focuserMediator),
             },
             conditions: new List<ISequenceCondition> {
                 // §38k-7 — no-equipment conditions. LoopCondition bounds a
