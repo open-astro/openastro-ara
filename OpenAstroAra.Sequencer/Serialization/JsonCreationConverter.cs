@@ -89,17 +89,60 @@ namespace OpenAstroAra.Sequencer.Serialization {
 
         protected Type GetType(string typeString) {
             var t = Type.GetType(typeString);
-            if (t == null) {
-                //Migration from Versions prior to the module split
-                t = Type.GetType(typeString.Replace(", NINA", ", OpenAstroAra.Sequencer"));
-                if (t == null) {
-                    t = Type.GetType(typeString.Replace(", NINA", ", OpenAstroAra.Core"));
-                    if (t == null) {
-                        t = Type.GetType(typeString.Replace(", NINA", ", OpenAstroAra.Astrometry"));
-                    }
-                }
-            }
+            if (t != null) return t;
+
+            // Two distinct migrations live here:
+            //
+            // 1. NINA → OpenAstroAra namespace+assembly rename (post-0.5l/0.5g
+            //    project rename). A NINA-original sequence body has
+            //    "NINA.Sequencer.Container.SequentialContainer, NINA.Sequencer";
+            //    we need to swap to
+            //    "OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer".
+            //    The previous logic only swapped a ", NINA" assembly suffix,
+            //    leaving the namespace on the class side as NINA.*. That
+            //    yielded no Type.GetType hit and all NINA imports fell to
+            //    UnknownSequence* — the bug §38k-6 closes.
+            // 2. Pre-module-split → post-split (when N.I.N.A. used a single
+            //    "NINA" assembly). The class side keeps its short namespace
+            //    (e.g. "NINA.Sequencer.X") but the assembly token is ", NINA";
+            //    after the split that assembly became OpenAstroAra.Sequencer /
+            //    .Core / .Astrometry depending on the type. Kept as the
+            //    second-pass fallback below.
+            t = Type.GetType(NinaTypeRemapper.RemapNamespace(typeString));
+            if (t != null) return t;
+
+            // Pre-split assembly migration fallbacks. Only kicks in when the
+            // namespace remap above didn't find a match, so legacy "single-
+            // NINA-assembly" bodies still resolve.
+            t = Type.GetType(typeString.Replace(", NINA", ", OpenAstroAra.Sequencer"));
+            if (t != null) return t;
+            t = Type.GetType(typeString.Replace(", NINA", ", OpenAstroAra.Core"));
+            if (t != null) return t;
+            t = Type.GetType(typeString.Replace(", NINA", ", OpenAstroAra.Astrometry"));
             return t;
+        }
+    }
+
+    /// <summary>
+    /// Static helper for the §38k-6 NINA → OpenAstroAra namespace+assembly
+    /// remap used by <see cref="JsonCreationConverter{T}.GetType"/>. Lifted
+    /// out of the generic class so tests can exercise it without having to
+    /// pick a concrete <c>T</c>.
+    /// </summary>
+    public static class NinaTypeRemapper {
+        /// <summary>
+        /// Remap a NINA-namespace AQTN to the OpenAstroAra namespaces. Handles
+        /// the three top-level rename pairs from §0.5g (NINA.Core →
+        /// OpenAstroAra.Core), §0.5h (NINA.Astrometry → OpenAstroAra.Astrometry),
+        /// and §0.5l (NINA.Sequencer → OpenAstroAra.Sequencer). Matches against
+        /// both the class side (left of the comma) and the assembly side
+        /// (right of the comma).
+        /// </summary>
+        public static string RemapNamespace(string typeString) {
+            return typeString
+                .Replace("NINA.Sequencer", "OpenAstroAra.Sequencer")
+                .Replace("NINA.Astrometry", "OpenAstroAra.Astrometry")
+                .Replace("NINA.Core", "OpenAstroAra.Core");
         }
     }
 }
