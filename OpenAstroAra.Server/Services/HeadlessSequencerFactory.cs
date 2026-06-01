@@ -19,6 +19,7 @@ using OpenAstroAra.Sequencer.Conditions;
 using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.SequenceItem;
 using OpenAstroAra.Sequencer.SequenceItem.SafetyMonitor;
+using OpenAstroAra.Sequencer.SequenceItem.Telescope;
 using OpenAstroAra.Sequencer.SequenceItem.Utility;
 using OpenAstroAra.Sequencer.Trigger;
 using OpenAstroAra.Sequencer.Utility.DateTimeProvider;
@@ -113,13 +114,15 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
     /// dependency tree gets DI-wired.
     /// </summary>
     public static HeadlessSequencerFactory WithDefaults(
-            ISafetyMonitorMediator? safetyMonitorMediator = null) {
-        // §38k-9 — equipment-mediator stubs default to no-op headless impls
-        // so call sites that don't yet have real Alpaca-backed mediators
-        // still get a usable prototype set. As real drivers land (§14e
-        // Alpaca simulator pinning gates this), Program.cs's DI can hand
-        // in real mediators here instead.
+            ISafetyMonitorMediator? safetyMonitorMediator = null,
+            ITelescopeMediator? telescopeMediator = null) {
+        // §38k-9 / §38k-10 — equipment-mediator stubs default to no-op
+        // headless impls so call sites that don't yet have real Alpaca-
+        // backed mediators still get a usable prototype set. As real
+        // drivers land (§14e Alpaca simulator pinning gates this),
+        // Program.cs's DI can hand in real mediators here instead.
         safetyMonitorMediator ??= new HeadlessSafetyMonitorMediator();
+        telescopeMediator ??= new HeadlessTelescopeMediator();
 
         return new HeadlessSequencerFactory(
             items: new List<ISequenceItem> {
@@ -133,6 +136,10 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
                 // serialization round-trip + validation while the real
                 // Alpaca-backed wiring is pending.
                 new WaitUntilSafe(safetyMonitorMediator),
+                // §38k-10 — second equipment-mediator + telescope-bound
+                // instruction. SetTracking calls telescopeMediator.SetTrackingMode
+                // at Execute time; the headless stub no-ops.
+                new SetTracking(telescopeMediator),
             },
             conditions: new List<ISequenceCondition> {
                 // §38k-7 — no-equipment conditions. LoopCondition bounds a
