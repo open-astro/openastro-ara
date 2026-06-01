@@ -115,14 +115,16 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
     /// </summary>
     public static HeadlessSequencerFactory WithDefaults(
             ISafetyMonitorMediator? safetyMonitorMediator = null,
-            ITelescopeMediator? telescopeMediator = null) {
-        // §38k-9 / §38k-10 — equipment-mediator stubs default to no-op
-        // headless impls so call sites that don't yet have real Alpaca-
-        // backed mediators still get a usable prototype set. As real
+            ITelescopeMediator? telescopeMediator = null,
+            IGuiderMediator? guiderMediator = null) {
+        // §38k-9 / §38k-10 / §38k-11 — equipment-mediator stubs default to
+        // no-op headless impls so call sites that don't yet have real
+        // Alpaca-backed mediators still get a usable prototype set. As real
         // drivers land (§14e Alpaca simulator pinning gates this),
         // Program.cs's DI can hand in real mediators here instead.
         safetyMonitorMediator ??= new HeadlessSafetyMonitorMediator();
         telescopeMediator ??= new HeadlessTelescopeMediator();
+        guiderMediator ??= new HeadlessGuiderMediator();
 
         return new HeadlessSequencerFactory(
             items: new List<ISequenceItem> {
@@ -140,6 +142,15 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
                 // instruction. SetTracking calls telescopeMediator.SetTrackingMode
                 // at Execute time; the headless stub no-ops.
                 new SetTracking(telescopeMediator),
+                // §38k-11 — telescope+guider-bound instructions. ParkScope
+                // stops guiding before parking; FindHome + SlewScopeToRaDec
+                // also coordinate the guider. UnparkScope is telescope-only
+                // but registered alongside for completeness of the telescope
+                // instruction surface.
+                new UnparkScope(telescopeMediator),
+                new ParkScope(telescopeMediator, guiderMediator),
+                new FindHome(telescopeMediator, guiderMediator),
+                new SlewScopeToRaDec(telescopeMediator, guiderMediator),
             },
             conditions: new List<ISequenceCondition> {
                 // §38k-7 — no-equipment conditions. LoopCondition bounds a
