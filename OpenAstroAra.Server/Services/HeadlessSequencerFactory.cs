@@ -13,13 +13,16 @@
 #endregion "copyright"
 
 using System.Windows.Data;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Sequencer;
 using OpenAstroAra.Sequencer.Conditions;
 using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.SequenceItem;
+using OpenAstroAra.Sequencer.SequenceItem.SafetyMonitor;
 using OpenAstroAra.Sequencer.SequenceItem.Utility;
 using OpenAstroAra.Sequencer.Trigger;
 using OpenAstroAra.Sequencer.Utility.DateTimeProvider;
+using OpenAstroAra.Server.Services.Equipment;
 
 namespace OpenAstroAra.Server.Services;
 
@@ -109,14 +112,27 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
     /// subsequent §38k sub-PRs as each instruction's equipment-service
     /// dependency tree gets DI-wired.
     /// </summary>
-    public static HeadlessSequencerFactory WithDefaults() {
+    public static HeadlessSequencerFactory WithDefaults(
+            ISafetyMonitorMediator? safetyMonitorMediator = null) {
+        // §38k-9 — equipment-mediator stubs default to no-op headless impls
+        // so call sites that don't yet have real Alpaca-backed mediators
+        // still get a usable prototype set. As real drivers land (§14e
+        // Alpaca simulator pinning gates this), Program.cs's DI can hand
+        // in real mediators here instead.
+        safetyMonitorMediator ??= new HeadlessSafetyMonitorMediator();
+
         return new HeadlessSequencerFactory(
             items: new List<ISequenceItem> {
                 // §38k-4 — utility instructions with no equipment deps.
-                // Future §38k subs add equipment-bound instructions (TakeExposure,
-                // SetFilter, etc.) as each equipment-service tree gets wired.
                 new Annotation(),
                 new WaitForTimeSpan(),
+                // §38k-9 — first equipment-bound instruction prototype.
+                // WaitUntilSafe polls ISafetyMonitorMediator.GetInfo() until
+                // IsSafe transitions true; with the headless stub it reports
+                // "not connected" so the JSON path still works for
+                // serialization round-trip + validation while the real
+                // Alpaca-backed wiring is pending.
+                new WaitUntilSafe(safetyMonitorMediator),
             },
             conditions: new List<ISequenceCondition> {
                 // §38k-7 — no-equipment conditions. LoopCondition bounds a

@@ -271,15 +271,19 @@ public class Program {
         builder.Services.AddSingleton<SequenceStartupReconciler>();
 
         // §38k engine wiring — HeadlessSequencerFactory + SequenceBodyDeserializer.
-        // The factory ships with the three equipment-independent container
-        // prototypes (SequenceRootContainer / SequentialContainer / ParallelContainer)
-        // per §38k-3; per-instruction registration lands as we wire each
-        // equipment-bound ISequenceItem subclass. SequenceBodyDeserializer is
-        // safe to consume now — unknown $type values still gracefully degrade
-        // to UnknownSequenceContainer for instruction types that aren't
-        // registered yet.
-        builder.Services.AddSingleton<OpenAstroAra.Sequencer.ISequencerFactory>(_ =>
-            HeadlessSequencerFactory.WithDefaults());
+        // The factory ships with structural container prototypes (§38k-3),
+        // utility instructions (§38k-4), no-equipment conditions (§38k-7),
+        // and the first equipment-bound instruction (§38k-9: WaitUntilSafe
+        // backed by HeadlessSafetyMonitorMediator). Real Alpaca-backed
+        // mediators swap in at this DI registration point as Phase 14e
+        // simulator pinning lands; SequenceBodyDeserializer is safe to
+        // consume now — unknown $type values still gracefully degrade to
+        // UnknownSequenceContainer for unregistered instruction types.
+        builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.ISafetyMonitorMediator,
+            OpenAstroAra.Server.Services.Equipment.HeadlessSafetyMonitorMediator>();
+        builder.Services.AddSingleton<OpenAstroAra.Sequencer.ISequencerFactory>(sp =>
+            HeadlessSequencerFactory.WithDefaults(
+                sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.ISafetyMonitorMediator>()));
         builder.Services.AddSingleton<SequenceBodyDeserializer>();
 
         var app = builder.Build();
