@@ -13,6 +13,7 @@
 #endregion "copyright"
 
 using NUnit.Framework;
+using OpenAstroAra.Sequencer.Conditions;
 using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.SequenceItem;
 using OpenAstroAra.Sequencer.SequenceItem.Utility;
@@ -108,6 +109,75 @@ namespace OpenAstroAra.Test {
             Assert.That(roundTripped.Items, Has.Count.EqualTo(2));
             Assert.That(roundTripped.Items[0].GetType().Name, Is.EqualTo("Annotation"));
             Assert.That(roundTripped.Items[1].GetType().Name, Is.EqualTo("WaitForTimeSpan"));
+        }
+
+        // §38k-8 — round-trip with a Conditions array (mirrors the §38k-5
+        // Items round-trip; closes the gap I flagged when reviewing #294).
+
+        [Test]
+        public void Roundtrip_SequentialContainer_with_LoopCondition_preserves_Iterations() {
+            // Verifies the SequenceConditionCreationConverter path resolves
+            // a registered LoopCondition prototype and that the Iterations
+            // JsonProperty value survives the clone-then-populate path.
+            var factory = HeadlessSequencerFactory.WithDefaults();
+            var converter = new SequenceJsonConverter(factory);
+
+            var original = new SequentialContainer();
+            original.Conditions.Add(new LoopCondition { Iterations = 7 });
+
+            var json = converter.Serialize(original);
+
+            // Conditions lives on IConditionable / the concrete SequenceContainer;
+            // not on ISequenceContainer. Cast to the concrete type.
+            var roundTripped = (SequentialContainer)converter.Deserialize(json);
+
+            Assert.That(roundTripped, Is.Not.Null);
+            Assert.That(roundTripped.Conditions, Has.Count.EqualTo(1));
+            var loop = roundTripped.Conditions[0] as LoopCondition;
+            Assert.That(loop, Is.Not.Null);
+            Assert.That(loop!.Iterations, Is.EqualTo(7));
+        }
+
+        [Test]
+        public void Roundtrip_SequentialContainer_with_two_conditions_preserves_order_and_types() {
+            var factory = HeadlessSequencerFactory.WithDefaults();
+            var converter = new SequenceJsonConverter(factory);
+
+            var original = new SequentialContainer();
+            original.Conditions.Add(new LoopCondition { Iterations = 3 });
+            original.Conditions.Add(new TimeSpanCondition());
+
+            var json = converter.Serialize(original);
+
+            var roundTripped = (SequentialContainer)converter.Deserialize(json);
+
+            Assert.That(roundTripped.Conditions, Has.Count.EqualTo(2));
+            Assert.That(roundTripped.Conditions[0].GetType().Name, Is.EqualTo("LoopCondition"));
+            Assert.That(roundTripped.Conditions[1].GetType().Name, Is.EqualTo("TimeSpanCondition"));
+        }
+
+        [Test]
+        public void Roundtrip_Container_with_both_Items_and_Conditions_preserves_both() {
+            // Combined: Items + Conditions populate together. Confirms the
+            // two converter paths don't interfere when the body is fully
+            // realistic.
+            var factory = HeadlessSequencerFactory.WithDefaults();
+            var converter = new SequenceJsonConverter(factory);
+
+            var original = new SequentialContainer { Name = "Looped capture" };
+            original.Items.Add(new Annotation { Name = "Note in loop" });
+            original.Items.Add(new WaitForTimeSpan { Time = 30 });
+            original.Conditions.Add(new LoopCondition { Iterations = 5 });
+
+            var json = converter.Serialize(original);
+
+            var roundTripped = (SequentialContainer)converter.Deserialize(json);
+
+            Assert.That(roundTripped.Name, Is.EqualTo("Looped capture"));
+            Assert.That(roundTripped.Items, Has.Count.EqualTo(2));
+            Assert.That(roundTripped.Conditions, Has.Count.EqualTo(1));
+            Assert.That(roundTripped.Conditions[0].GetType().Name, Is.EqualTo("LoopCondition"));
+            Assert.That(((LoopCondition)roundTripped.Conditions[0]).Iterations, Is.EqualTo(5));
         }
 
         [Test]
