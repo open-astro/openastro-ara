@@ -120,8 +120,11 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public void WithDefaults_registers_utility_instructions() {
+            // Items list grows over §38k-N PRs as we wire instruction
+            // prototypes — assert on presence of the §38k-4 utility entries
+            // rather than exact count so equipment-bound additions (§38k-9+)
+            // don't break this fixture.
             var factory = HeadlessSequencerFactory.WithDefaults();
-            Assert.That(factory.Items, Has.Count.EqualTo(2));
             var typeNames = factory.Items.Select(i => i.GetType().Name).ToList();
             Assert.That(typeNames, Does.Contain("Annotation"));
             Assert.That(typeNames, Does.Contain("WaitForTimeSpan"));
