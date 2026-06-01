@@ -285,11 +285,14 @@ public class Program {
             OpenAstroAra.Server.Services.Equipment.HeadlessTelescopeMediator>();
         builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.IGuiderMediator,
             OpenAstroAra.Server.Services.Equipment.HeadlessGuiderMediator>();
+        builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.IFocuserMediator,
+            OpenAstroAra.Server.Services.Equipment.HeadlessFocuserMediator>();
         builder.Services.AddSingleton<OpenAstroAra.Sequencer.ISequencerFactory>(sp =>
             HeadlessSequencerFactory.WithDefaults(
                 sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.ISafetyMonitorMediator>(),
                 sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator>(),
-                sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.IGuiderMediator>()));
+                sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.IGuiderMediator>(),
+                sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.IFocuserMediator>()));
         builder.Services.AddSingleton<SequenceBodyDeserializer>();
 
         var app = builder.Build();
