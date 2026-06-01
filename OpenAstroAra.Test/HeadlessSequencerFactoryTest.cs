@@ -13,6 +13,7 @@
 #endregion "copyright"
 
 using NUnit.Framework;
+using OpenAstroAra.Sequencer.Conditions;
 using OpenAstroAra.Sequencer.SequenceItem.Utility;
 using OpenAstroAra.Server.Services;
 using System.Linq;
@@ -149,6 +150,33 @@ namespace OpenAstroAra.Test {
             var prototype = factory.GetItem<WaitForTimeSpan>();
             Assert.That(prototype, Is.Not.Null);
             Assert.That(prototype, Is.InstanceOf<WaitForTimeSpan>());
+        }
+
+        // §38k-7 — verify condition prototypes register and resolve.
+
+        [Test]
+        public void WithDefaults_registers_condition_prototypes() {
+            var factory = HeadlessSequencerFactory.WithDefaults();
+            Assert.That(factory.Conditions, Has.Count.EqualTo(2));
+            var typeNames = factory.Conditions.Select(c => c.GetType().Name).ToList();
+            Assert.That(typeNames, Does.Contain("LoopCondition"));
+            Assert.That(typeNames, Does.Contain("TimeSpanCondition"));
+        }
+
+        [Test]
+        public void WithDefaults_factory_resolves_LoopCondition_via_prototype_lookup() {
+            var factory = HeadlessSequencerFactory.WithDefaults();
+            var prototype = factory.GetCondition<LoopCondition>();
+            Assert.That(prototype, Is.Not.Null);
+            Assert.That(prototype, Is.InstanceOf<LoopCondition>());
+        }
+
+        [Test]
+        public void WithDefaults_factory_resolves_TimeSpanCondition_via_prototype_lookup() {
+            var factory = HeadlessSequencerFactory.WithDefaults();
+            var prototype = factory.GetCondition<TimeSpanCondition>();
+            Assert.That(prototype, Is.Not.Null);
+            Assert.That(prototype, Is.InstanceOf<TimeSpanCondition>());
         }
 
         [Test]

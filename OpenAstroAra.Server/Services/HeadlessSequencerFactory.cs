@@ -118,6 +118,14 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
                 new Annotation(),
                 new WaitForTimeSpan(),
             },
+            conditions: new List<ISequenceCondition> {
+                // §38k-7 — no-equipment conditions. LoopCondition bounds a
+                // container by iteration count; TimeSpanCondition bounds it
+                // by elapsed wall-clock time. Both are parameterless +
+                // self-contained.
+                new LoopCondition(),
+                new TimeSpanCondition(),
+            },
             container: new List<ISequenceContainer> {
                 new SequenceRootContainer(),
                 new SequentialContainer(),
