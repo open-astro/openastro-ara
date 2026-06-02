@@ -29,7 +29,7 @@ This split is why **WILMA is not a thin client** — it's a planning workstation
 **Repository:** single monorepo at `github.com/open-astro/openastro-ara`. Server (.NET) and client (Flutter) live in the same repo because the client is generated from the server's OpenAPI spec — they must move together. Final layout after the port:
 
 ```
-openastro-ara/                              (repo root, branch: port/ara)
+openastro-ara/                              (repo root, default branch: master)
 ├── README.md  NOTICE.md  LICENSE.txt  COPYING  AUTHORS
 ├── DEPLOY.md  RELEASE_NOTES.md  3rd-party-licenses.txt
 ├── global.json  OpenAstroAra.sln  .gitignore  Dockerfile
@@ -186,13 +186,13 @@ openastro-ara/                              (repo root, branch: port/ara)
 
 1. **No questions.** If you would otherwise ask "which option do you prefer?", pick the option this document recommends. If silent, pick the option that minimizes diff size, write a one-line note in `design/PORT_DECISIONS.md`, and continue.
 2. **No scope creep.** This is a *port + restructure*, not a redesign. The sequencer, equipment state machines, profile schema, coordinate math, plate-solver integration, PHD2 client, and image processing logic all come from NINA as-is. Do not "improve" working logic — just move it across the new boundary.
-3. **No half-finished states.** Always work on `port/ara` (the working branch for the entire port). Each commit must leave the solution buildable for everything ported so far.
+3. **No half-finished states.** Work on a per-PR feature branch cut from `master` (naming per §19.1, e.g. `phase/38k-13-focuser-mediator`); merge it back to `master` via PR. Each commit must leave the solution buildable for everything ported so far. (Workflow simplified 2026-06-02 — see §22 and `design/PORT_DECISIONS.md`; the former `port/ara` integration branch is retired.)
 4. **Cite when stuck.** When you genuinely cannot translate a construct, leave a `// TODO(port): <one sentence>` and a placeholder that compiles, log it in `design/PORT_TODO.md`, and move on. Sweep TODOs in Phase 15.
 5. **Verify continuously.** After every phase, run the build + tests gate in §15. Do not start the next phase until the gate is green for everything completed so far.
 6. **Commit cadence.** One commit per logical unit (one project converted, one endpoint implemented, one view ported). Commit messages: `port(<area>): <what>`. Never amend; always new commits. Never `--no-verify`.
 7. **No upstream plugin compatibility.** ARA is a hard fork. The plugin SDK is **deferred to v0.1.0** — Phase 0.5 deletes the plugin loader and plugin browser UI entirely. Do not preserve any compatibility with NINA plugins.
 8. **Full-auto operation.** You are running with auto-approve on. Hard git safety rails (§19) apply unconditionally — no force pushes, no `--no-verify`, no destructive ops outside the explicit deletion lists.
-9. **Tag every phase boundary; open the PR; merge it; continue.** Per `design/COMMIT-PR-RULES.md`, the port ships as a sequence of phase PRs (plus sub-PRs within Phase 0.5 and Phase 12) targeting the `port/ara` integration branch. At the end of each phase or sub-phase, after the §15 gate is green: tag with `git tag phase-N[-letter]-complete && git push --tags`, update `design/PORT_PROGRESS.md`, push the sub-branch, open the PR, run the CodeRabbit poll-and-fix loop (see COMMIT-PR-RULES.md), then **AI merges the PR** once the §19.1 merge-gate clears (all required CI checks green; CodeRabbit quiescent ≥3 min with no unresolved actionable findings; self-review against the phase scope clean). After merge, pull the updated `port/ara` and continue to the next phase or sub-phase. Auto-continuation across sub-PRs within a phase happens automatically; between phases the same auto-continuation applies unless the user has explicitly paused.
+9. **Tag every phase boundary; open the PR; merge it; continue.** Per `design/COMMIT-PR-RULES.md`, the port ships as a sequence of PRs (each phase, plus sub-PRs within Phase 0.5 and Phase 12) cut from `master` and merged **directly back to `master`** — no integration branch. At the end of each phase or sub-phase, after the §15 gate is green: tag with `git tag phase-N[-letter]-complete && git push --tags`, update `design/PORT_PROGRESS.md`, push the feature branch, open the PR, run the review poll-and-fix loop (see COMMIT-PR-RULES.md), then **AI merges the PR** once the §19.1 merge-gate clears (all required CI checks green; review quiescent ≥3 min with no unresolved actionable findings; self-review against the phase scope clean), deleting the branch on merge. After merge, pull the updated `master` and continue to the next phase or sub-phase. Auto-continuation across sub-PRs within a phase happens automatically; between phases the same auto-continuation applies unless the user has explicitly paused.
 10. **Quota interruption is normal.** When the model session hits its weekly limit and resumes, the first action is to read `design/PORT_PROGRESS.md` to find out where to continue. See §20.
 
 ---
@@ -215,7 +215,8 @@ The AI executing this port should reject its own work if a feature lands behind 
 
 ```bash
 git fetch origin
-git checkout port/ara   # branch already exists
+git checkout master && git pull          # always branch from up-to-date master
+git checkout -b phase/<N>-<short-name>   # e.g. phase/38k-13-focuser-mediator (§19.1 naming)
 ```
 
 Create four tracking files in the `design/` directory and commit them empty (`design/` already exists and contains `PORT_PLAYBOOK.md`, `GAPS-ARA.md`, `COMMIT-PR-RULES.md`):
@@ -333,9 +334,9 @@ Phase 15  — TODO sweep + RPi smoke test + release v0.0.1-ara.1
             §22, DEPLOY.md + README written, .deb published, .dmg/.exe/.AppImage on GitHub Releases (desktop only per §18.G; mobile deferred to v0.1.0)
 ```
 
-**Sub-PR rhythm (Phase 0.5 + Phase 12):** Each sub-PR is opened as a separate GitHub PR targeting `port/ara`. AI runs `scripts/pre-pr-check.sh` (§14.4) → opens PR with screenshots if user-visible UI changed → CodeRabbit poll-and-fix loop runs (60 s polling per COMMIT-PR-RULES.md) → user merges → AI pulls updated `port/ara` and starts the next sub-PR automatically. Phase 15 final PR goes `port/ara → master`.
+**Sub-PR rhythm (Phase 0.5 + Phase 12):** Each sub-PR is opened as a separate GitHub PR targeting `master`. AI runs `scripts/pre-pr-check.sh` (§14.4) → opens PR with screenshots if user-visible UI changed → review poll-and-fix loop runs (per COMMIT-PR-RULES.md) → PR merges to `master` (branch deleted) → AI pulls updated `master` and starts the next sub-PR automatically.
 
-Do **not** start Phase N+1 until Phase N (and all its sub-PRs) passes the §15 gate AND has been merged into `port/ara` by the user.
+Do **not** start Phase N+1 until Phase N (and all its sub-PRs) passes the §15 gate AND has been merged into `master`.
 
 **Cross-cutting work:** distribution path (§34 .deb on apt.openastro.net) is set up during Phase 14 CI. Documentation (DEPLOY.md, NOTICE.md, README, MOUNT_TIPS.md) is written incrementally during the relevant phases — the AI updates docs as each feature lands, not at the end. Migration guide (§56) is written during Phase 15.
 
@@ -1230,7 +1231,7 @@ The AI runs this before every `gh pr create`. Exit code 0 = green; anything else
 # Exit non-zero on any failure.
 set -euo pipefail
 
-CHANGED_FILES="$(git diff --name-only origin/port/ara...HEAD)"
+CHANGED_FILES="$(git diff --name-only origin/master...HEAD)"
 
 if echo "$CHANGED_FILES" | grep -qE '\.cs$|\.csproj$|\.sln$|openapi\.yaml$'; then
   echo "→ Server changes detected; running C# gate..."
@@ -1661,10 +1662,20 @@ Placeholders during port. Every icon/splash/logo reference carries `TODO(brandin
 ARA targets deep-sky objects and comets — the long-exposure (30 s – 900 s) capture workflow where Alpaca's image-grab API is the right primitive. **Planetary and lunar lucky-imaging are out of scope, permanently, not deferred.** The architectural reason: ASCOM Alpaca has no video API (the `IVideo` interface is deprecated and unsupported by Alpaca), so high-frame-rate (5–30 fps) capture isn't possible through the protocol ARA has committed to (§52). NINA has the same limitation; this isn't an ARA-specific gap. Users who want planetary capture use FireCapture, SharpCap, or AstroDMx with vendor-native drivers — different tool category. ARA's sky atlas (§36) still browses planets and moon for educational purposes, but capture is DSO + comets. This decision propagates: no `lunar.json` / `planetary.json` sequence templates (§38.7), no SER file format support, no ROI capture, no high-frame-rate workflows. Anything reading "v0.1.0 planetary support" in older revisions of this doc is wrong — corrected by this section.
 
 ### 18.I — Plate solving
-- **ASTAP**: only solver. Cross-platform; users download per OS from astap.nl. Server config exposes ASTAP binary path + star-database path; per-OS defaults attempted on first run:
+- **ASTAP**: only solver. Cross-platform; users download per OS from astap.nl. Server config exposes ASTAP binary path + **one or more star-database paths**; per-OS binary defaults attempted on first run:
   - Linux: `which astap` → `/usr/bin/astap` or `/opt/astap/astap`
   - macOS: `/Applications/ASTAP.app/Contents/MacOS/astap`
   - Windows: `%PROGRAMFILES%\astap\astap.exe`
+- **Star databases — FOV-aware, multi-database.** The solver engine is the same across the whole field-of-view span (wide nebula → tiny galaxy); what actually determines whether a frame solves is the **star-database depth matched to the rig's pixel scale / FOV**. ASTAP ships several swappable Gaia-based databases, and the config must support **more than one installed at once** rather than a single fixed path:
+  - **Wide / very wide field** (short focal length, large FOV) → coarse, shallow database (e.g. `W08` / `G05`) — fast, avoids drowning in stars.
+  - **General all-purpose** (typical FOVs) → `V50` / `D50` — covers the bulk of sessions.
+  - **Narrow field / tiny galaxies** (long focal length, small FOV, few bright stars in frame) → dense deep database (e.g. `H17` / `H18`) — enough faint Gaia stars to get a match where shallow catalogs fail.
+  - **Selection:** the server picks the appropriate installed database from the active rig's computed FOV / pixel scale (focal length + sensor + binning) and passes it to ASTAP per-solve via the `-d <database_dir>` argument. If only one database is installed, it is used for all solves with a warning logged when the FOV falls outside its useful range. Exact database names/magnitude limits track astap.nl and may evolve — config stores paths, not hard-coded catalog identifiers.
+  - **Code gap (Phase 8):** the inherited NINA `ASTAPSolver.GetArguments` (`OpenAstroAra.PlateSolving/Solvers/ASTAPSolver.cs`) passes **no** `-d` argument today — it relies on whatever default database is configured inside ASTAP's own ini. FOV-aware selection requires adding a `-d <database_dir>` arg and threading a database path through `PlateSolveParameter`. This is net-new ARA code, not a straight port.
+- **Where ASTAP + databases live: on the Pi (server side), not the client.** The solver runs on the Pi, so its binary and star databases are a **server-managed, Pi-side asset** — the same storage domain as FITS frames / profiles / calibration (§29, on the **mandatory USB drive**), and explicitly *not* the WILMA/client-side sky-data domain (§36 Aladin HiPS surveys / DE440, which download to the client). Consequences:
+  - **Downloads execute server-side.** The wizard (running in WILMA) does not fetch databases to the client and copy them over — it calls a **server endpoint** that downloads the selected database(s) from astap.nl directly onto the Pi's USB storage, where ASTAP reads them. Client only triggers and shows progress (mirrors the §36.2 background-download UX, but the bytes land on the Pi).
+  - **"Browse" = the Pi's filesystem.** Any path picker for binary/database location browses the **server's** filesystem via the server API, not WILMA's local disk.
+  - **Default install location** is under the server's USB data root (per §29), e.g. `<usb-root>/astap/databases/`, so databases survive on the same drive policy as the rest of the Pi-side data and don't consume the SD card.
 - **Astrometry.net**: **deferred to v0.1.0.** ASTAP covers 99% of astrophotography solving needs and is well-maintained, ARM64-native, cross-platform. Adding astrometry.net means another binary management workflow, another index-file download manager (4100 / 4200 / 5000-series catalogs, ~1-30 GB each), and another solver-tuning surface — not worth the complexity for v0.0.1. Phase 8 strips astrometry.net call sites from inherited NINA code; v0.1.0 may add it back if there's user demand.
 - **PlateSolve2**: deleted entirely (Windows-only legacy).
 
@@ -1674,17 +1685,17 @@ ARA targets deep-sky objects and comets — the long-exposure (30 s – 900 s) c
 
 ### 19.1 Git safety
 
-- **Branch allowlist:** AI may commit/push to `port/ara` (integration branch, where all phase PRs land) and to per-sub-PR feature branches with **flat names** matching `phase-N[<letter>]` (e.g., `phase-0.5a`, `phase-12h`, `phase-1`) plus a small set of named prep branches (e.g., `prep-ci`). All other branches are off-limits without explicit user instruction. The main `port/ara` branch is integration-only — direct commits to it happen only after the user merges a sub-PR (AI pulls the merge commit; never authors directly). **Why flat names:** Git refs are tree-structured — a branch named `port/ara` makes `port/ara/anything` an invalid ref name (`fatal: cannot lock ref ...: 'refs/heads/port/ara' exists`). See `design/COMMIT-PR-RULES.md` per-phase rhythm section for the branch tree diagram.
+- **Branch allowlist:** AI may push per-PR feature branches matching `phase/<N>[-<letter>]-<short-name>` (slash namespace + hyphenated words, e.g., `phase/0.5a-plugin-strip`, `phase/12h-settings`, `phase/38k-13-focuser-mediator`) plus a small set of named prep branches (e.g., `prep-ci`). Each branches from `master` and merges back to `master` via PR. AI never commits directly to `master` — it lands only via merged PRs. All other branches are off-limits without explicit user instruction. **Naming note:** the slash namespace is now valid because there is no longer a branch literally named `phase` or `port/ara` to collide with it (the old flat-name workaround was forced only while `port/ara` existed as a branch — retired 2026-06-02). See `design/COMMIT-PR-RULES.md` per-phase rhythm section for the branch diagram.
 - **AI merges PRs under a strict merge-gate** (policy revised 2026-05-23 from "AI never merges" after the user granted full merge authority in PR #2; tightened later same day after user direction "wait for rabbit … we need checks and balances" in PR #9 thread). The AI merges a PR when **all** of the following hold:
   - All required CI checks are `pass` (no `pending`, no `failure`)
   - **CodeRabbit has actually reviewed the PR** — a real walkthrough or "no actionable comments" summary in the comment thread, not a "Review skipped" / "Review limit reached" / rate-limit message. A "pass" status check from CodeRabbit alongside a rate-limit comment **does not satisfy** this gate (CodeRabbit reports pass on the check even when the underlying review was throttled). The PR must also be quiescent (no new comments, no new commits) for ≥3 minutes after the review lands.
   - All actionable CodeRabbit findings have been addressed via additional commits on the same sub-branch (per the CodeRabbit poll-and-fix loop in COMMIT-PR-RULES.md); disagreements have reasoned replies; out-of-scope items are tracked in `design/PORT_TODO.md`
   - AI self-review against the playbook scope is clean (no out-of-scope changes, no unexplained deletions, no half-finished states per §0.3)
-  - For `port/ara → master` PRs (per §22 cadence): additionally verify all expected `phase-N-complete` (and applicable `phase-N-<letter>-complete`) tags exist on the merged commits
+  - At a phase boundary: verify the expected `phase-N-complete` (and applicable `phase-N-<letter>-complete`) tag has been pushed for the work being merged
 
   **Rate-limit handling:** if CodeRabbit returns rate-limit / no-credits / "Review limit reached", AI does NOT merge. AI posts `Held for CodeRabbit @<user> — rate-limited, refill in <X>` and either (a) waits for the auto-refill window then retriggers via `@coderabbitai review`, or (b) waits for user direction (e.g., billing fix). No "strict-letter" merge-on-skip — that defeats the checks-and-balances purpose of the gate.
 
-  Merge method: **squash** for prep + multi-commit sub-PRs that should land as one logical change on `port/ara`; **merge commit** for phase PRs that benefit from preserving per-commit granularity. AI picks based on the PR's commit history. **Always use `--delete-branch` for sub-PR merges** to keep the sub-branch list trimmed (per user direction 2026-05-23); N/A for `port/ara → master` promotions per §22.1 (the long-lived `port/ara` integration branch is never deleted mid-port). Push immediately. Pull `port/ara` and continue.
+  Merge method: **squash** for prep + multi-commit PRs that should land as one logical change on `master`; **merge commit** for phase PRs that benefit from preserving per-commit granularity. AI picks based on the PR's commit history. **Always use `--delete-branch`** so the merged feature branch is removed from origin immediately. Pull `master` and continue.
 
   If any of the gate conditions are ambiguous or the AI is uncertain whether to merge, it posts "Held for human review @<user> — <reason>" instead of merging. The user can override either way.
 - No `git push --force` or `--force-with-lease`. Plain `git push` only.
@@ -1765,31 +1776,29 @@ When porting NINA logic into ASP.NET Core endpoints, replace `Loc.Instance[...]`
 
 ---
 
-## 22. Periodic `port/ara → master` promotion + Phase 15 final pass
+## 22. Direct-to-master merge model + Phase 15 final pass
 
-### 22.0 Promotion cadence (revised 2026-05-23 from one-shot to periodic)
+### 22.0 Merge model (simplified 2026-06-02 — integration branch retired)
 
-The original plan was "single PR `port/ara → master` at Phase 15." Revised per user direction (PR #9 thread): promote `port/ara → master` **after each completed phase** (or sub-phase tag, when a sub-phase represents a coherent milestone — e.g., `phase-0.5a-complete` is a meaningful checkpoint; `phase-0.5b-complete` is too; `phase-12c-complete` may not be, judgment call). Reasons:
+This is a **single-developer** port. Each PR branches from `master` and merges **directly back to `master`** once the §19.1 merge-gate clears — there is no `port/ara` integration branch and no separate promotion step. (History: an earlier two-step model branched sub-PRs into `port/ara` and periodically promoted `port/ara → master`. For a solo team that just doubled the PR count — a sub-PR *plus* a promotion PR per change — with no batching benefit, since promotions already happened every phase. Retired in favor of standard GitHub Flow; see `design/PORT_DECISIONS.md`.) Properties this preserves:
 
-- Visibility: stakeholders + GitHub default-branch viewers see actual progress on `master` instead of a long-running side branch
-- Risk: smaller, sequential `port/ara → master` merges are easier to revert than one mega-merge at Phase 15
-- Release ergonomics: `master` always reflects the most-recently-validated phase milestone; nightly snapshot tooling (future §34) can publish from `master` continuously
+- Visibility: `master` shows real progress continuously (it always did under periodic promotion; now with less ceremony).
+- Risk: each per-feature PR is small and independently revertable — the same property the old periodic promotion bought, without the extra hop.
+- Release ergonomics: `master` always reflects the most-recently-validated work; nightly snapshot tooling (future §34) publishes from `master`.
 
-### 22.1 Promotion procedure (per phase)
+### 22.1 Per-PR procedure
 
-After AI merges the last sub-PR of a phase into `port/ara`:
+For each phase or sub-PR:
 
-1. Tag the boundary on `port/ara` HEAD: `git tag phase-N-complete && git push --tags`
-2. Open PR `port/ara → master` titled `port(promote): merge phase-N-complete to master`
-3. The §19.1 merge-gate applies: CI green + CodeRabbit reviewed + no unresolved actionable findings + clean self-review. Additionally:
-   - Verify the expected `phase-N-complete` tag (and applicable sub-tags) exist on the commits being merged
-   - Verify `port/ara` is ahead of `master` only by reviewed sub-PR commits (no surprises)
-4. **Merge method: merge commit** (not squash) — preserves per-phase + per-sub-PR commit history on `master`
-5. **Use `--delete-branch`** is N/A here (`port/ara` is a long-lived integration branch — never deleted until the port is fully complete)
+1. Branch from up-to-date `master`: `git checkout master && git pull && git checkout -b phase/<N>-<short-name>` (naming per §19.1).
+2. Do the work, run the §15 gate, push the branch, open the PR **targeting `master`**.
+3. Run the review poll-and-fix loop (COMMIT-PR-RULES.md). The §19.1 merge-gate applies: CI green + review reviewed + no unresolved actionable findings + clean self-review.
+4. At a **phase boundary**, before merging the last PR of the phase, tag it: `git tag phase-N-complete && git push --tags` (sub-phase tags `phase-N-<letter>-complete` where the sub-phase is a coherent milestone — judgment call).
+5. **Merge to `master`** with `gh pr merge --delete-branch` (squash for multi-commit PRs that should land as one logical change; merge commit where per-commit granularity matters — §19.1). Pull `master` and continue.
 
-### 22.2 Sub-branch cleanup (continuous)
+### 22.2 Branch cleanup (continuous)
 
-Every sub-PR merge uses `gh pr merge --squash --delete-branch` so merged sub-branches are removed from origin immediately. Locally, `git fetch --prune` removes the stale tracking refs. If a stale sub-branch is found on origin (e.g., from an aborted PR), it can be deleted with `git push origin --delete <branch>` — but only sub-branches AI itself created (`phase-*`, `prep-*`, `rules-*`); never delete long-lived integration branches (`port/ara`, `master`) or branches the user created.
+Every PR merge uses `gh pr merge --delete-branch` so merged feature branches are removed from origin immediately. Locally, `git fetch --prune` removes the stale tracking refs. If a stale branch is found on origin (e.g., from an aborted PR), it can be deleted with `git push origin --delete <branch>` — but only branches AI itself created (`phase/*`, `prep-*`, `rules-*`); never delete `master` or branches the user created.
 
 ### 22.3 Phase 15 (final release pass)
 
@@ -1812,9 +1821,7 @@ Every sub-PR merge uses `gh pr merge --squash --delete-branch` so merged sub-bra
    - Known issues, install instructions
    - Create fresh `## [Unreleased]` placeholder for v0.0.2 work
 5. Bump `CommonAssemblyInfo.cs` to `0.0.1.0`; informational `0.0.1-ara.1`. Bump `pubspec.yaml` to `0.0.1+1`.
-6. **Final `port/ara → master` PR.** Per §22.0 cadence, most phase promotions have already landed on `master` incrementally; this last PR catches the Phase 15 tail-end work (TODO sweep, version bumps, CHANGELOG entry, smoke-test fixes). Title: `port(release): merge phase-15-complete to master — v0.0.1-ara.1`. Body: `design/PORT_DECISIONS.md` contents. The §19.1 merge-gate applies; merge commit (not squash) to preserve history.
-
-   If for any reason periodic promotion was paused mid-port, this is the catch-all merge: all unmerged `port/ara` commits land on `master` here.
+6. **Final release PR.** Phase work has already been landing on `master` continuously (§22.0); this last PR carries the Phase 15 tail-end work (TODO sweep, version bumps, CHANGELOG entry, smoke-test fixes). Branch `phase/15-release` → `master`. Title: `port(release): phase-15-complete — v0.0.1-ara.1`. Body: `design/PORT_DECISIONS.md` contents. The §19.1 merge-gate applies; merge commit (not squash) to preserve history.
 
 ---
 
@@ -4838,11 +4845,13 @@ Server enumerates Alpaca devices, groups by type. User assigns each device-type 
 
 **Screen 11 — Plate solving (ASTAP)**
 
-- ASTAP binary path — auto-detect per OS (Linux: `which astap`; macOS: `/Applications/ASTAP.app/...`; Windows: `%PROGRAMFILES%\astap\astap.exe`), editable
-- Star database path — browse, recommend external/USB drive
+> ASTAP and its databases live **on the Pi (server)**, since that is where the solver runs (§18.I). Everything on this screen operates on the **server's** filesystem via the server API — binary detection, path browsing, and database downloads all target the Pi, **not** WILMA's local disk. (Contrast §36 sky-data downloads, which land on the client.) On a Pi, the binary auto-detect resolves the Linux path; the macOS/Windows paths apply only when the server runs on a desktop dev box.
+
+- ASTAP binary path — auto-detect on the **server** per its OS (Pi/Linux: `which astap`; macOS dev: `/Applications/ASTAP.app/...`; Windows dev: `%PROGRAMFILES%\astap\astap.exe`), editable
+- Star databases — **list, not a single path** (add/remove multiple; browse the **server's** filesystem, default under the §29 USB data root e.g. `<usb-root>/astap/databases/`). Each entry shows its FOV suitability (wide / general / narrow) so the user can cover the full span from wide field to tiny galaxies per §18.I. Recommended set (wide `W08`, general `V50`, narrow `H17`/`H18`) offered as **server-side downloads** — the client triggers the fetch and shows background progress while the Pi downloads from astap.nl straight onto its USB storage. At least one database is required to proceed.
 - Search radius (deg, default 30)
 - Downsample factor (default 2)
-- Test button: "Solve a test image" — feeds a bundled known image, verifies ASTAP works
+- Test button: "Solve a test image" — runs **on the server**, feeding **two** bundled known images (one wide-field, one narrow-field) and verifying ASTAP solves both, confirming the installed databases cover the FOV span
 
 **Screen 12 — Autofocus**
 

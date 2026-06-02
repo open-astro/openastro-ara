@@ -1,6 +1,6 @@
 # COMMIT-PR-RULES.md
 
-Authoritative reference for the per-phase + sub-PR rhythm, branch naming, code-review loop, and pre-PR gate used by the AI during the port. Read together with `design/PORT_PLAYBOOK.md` — which links here from §0 rule 9 (phase-boundary PR rhythm), §3 (phase plan + sub-PR mapping), §19.1 (git safety + branch allowlist), and §22 (final pass `port/ara → master`). Design phase is complete (see "Status" below); Phase 0.5 execution follows the rhythm specified here.
+Authoritative reference for the per-phase + sub-PR rhythm, branch naming, code-review loop, and pre-PR gate used by the AI during the port. Read together with `design/PORT_PLAYBOOK.md` — which links here from §0 rule 9 (phase-boundary PR rhythm), §3 (phase plan + sub-PR mapping), §19.1 (git safety + branch allowlist), and §22 (direct-to-master merge model). Design phase is complete (see "Status" below); execution follows the rhythm specified here. **Workflow note (2026-06-02):** the `port/ara` integration branch is retired — every PR now branches from `master` and merges directly back to `master` (see PORT_PLAYBOOK §22.0 + `design/PORT_DECISIONS.md`). Historical "Decided" entries below that mention `port/ara` are preserved as a record of what was true at the time.
 
 ## The constraint that drove this
 
@@ -11,27 +11,24 @@ Review capacity is limited by PR size. The current §22 plan is "one mega-PR at 
 ### Per-phase PR rhythm
 
 ```
-master                  ← final integration target
-  └─ port/ara           ← integration branch (where phase PRs land)
-       ├─ phase-0.5a    ← sub-PR for Phase 0.5 part a
-       ├─ phase-0.5b    ← sub-PR for Phase 0.5 part b
-       ├─ phase-1       ← Phase 1 (single PR fits)
-       └─ ...
+master                           ← the one long-lived branch; every PR merges directly here
+  ├─ phase/0.5a-plugin-strip     ← sub-PR for Phase 0.5 part a
+  ├─ phase/0.5b-mgen-strip       ← sub-PR for Phase 0.5 part b
+  ├─ phase/1-net10-bump          ← Phase 1 (single PR fits)
+  └─ ...
 ```
 
-**Git ref naming constraint:** sub-branches use **flat names** (`phase-0.5a`, `phase-1`, `prep-ci`), not nested under `port/ara/...`. Git refs are tree-structured — `port/ara` existing as a branch makes `port/ara/anything` an invalid ref name (`fatal: cannot lock ref ...: 'refs/heads/port/ara' exists; cannot create 'refs/heads/port/ara/...'`). The integration branch keeps the `port/ara` name (per PORT_PLAYBOOK.md §1); sub-branches sit alongside it at the top level.
+**Branch naming:** `phase/<N>[-<letter>]-<short-name>` — slash namespace, hyphenated words (e.g., `phase/0.5a-plugin-strip`, `phase/12h-settings`, `phase/38k-13-focuser-mediator`). Each branches from `master` and merges back to `master`. The slash namespace is valid because no branch is literally named `phase` (the old flat-name workaround — `phase-0.5a` — was forced only while `port/ara` existed as a branch and made `port/ara/...` illegal; retired 2026-06-02 along with the integration branch).
 
 Rhythm:
-1. AI checks out `port/ara`, creates `phase-N` (or sub-branch like `phase-0.5a`, `prep-ci`)
-2. Does the phase's work on the sub-branch (commits + pushes per commit)
+1. AI branches from up-to-date master: `git checkout master && git pull && git checkout -b phase/<N>-<short-name>`
+2. Does the phase's work on the branch (commits + pushes per commit)
 3. Completes phase, runs §15 gate
-4. Tags `phase-N-complete` on sub-branch
-5. Opens PR `phase-N → port/ara`
-6. Sonnet (running on the user's behalf) reviews; AI poll-and-fix loop runs (AI watches for the review comment; auto-fix trivial + correctness findings via new commits; reasoned replies for disagreements; out-of-scope items → `design/PORT_TODO.md`). If Sonnet hasn't reviewed within ~15 min, AI falls back to the built-in `/review` self-review as the gate signal (carried over from the CR-era fallback policy).
-7. **AI merges** once the §19.1 merge-gate clears (green CI + **review pass posted** — either a structured Sonnet review with no unaddressed findings, or a clean `/review` fallback; + ≥3 min quiescence + clean self-review against scope). Use `gh pr merge --squash --delete-branch` to remove the sub-branch from origin in the same step. If any gate condition is ambiguous, AI posts `Held for human review @<user> — <reason>` and waits instead.
-8. AI pulls updated `port/ara`. **If the just-merged sub-PR was the last in a phase** — determined by consulting the phase sub-PR list in PORT_PLAYBOOK.md §3 plus the per-phase sub-split table in this document (e.g., `phase-0.5a-6` is the last entry under Phase 0.5a's row; `phase-12h` is the last under Phase 12's row) — AI also tags `phase-N-complete` on `port/ara` HEAD and opens a `port/ara → master` promotion PR per PORT_PLAYBOOK.md §22.0 cadence. Then starts the next phase from updated `port/ara` once the promotion PR merges.
-
-Final integration: per §22.0 (revised 2026-05-23), `port/ara → master` is **periodic**, not one-shot — promoted after each phase boundary. The Phase 15 final pass catches whatever tail-end work hasn't been promoted yet. Same §19.1 merge-gate; merge commit (not squash) preserves per-phase history on `master`.
+4. At a **phase boundary**, tags `phase-N-complete` (sub-phase tags `phase-N-<letter>-complete` where the sub-phase is a coherent milestone)
+5. Opens PR **targeting `master`**
+6. Review poll-and-fix loop runs (AI watches for the review comment; auto-fix trivial + correctness findings via new commits; reasoned replies for disagreements; out-of-scope items → `design/PORT_TODO.md`). If no review appears within ~15 min, AI falls back to the built-in `/review` self-review as the gate signal.
+7. **AI merges** once the §19.1 merge-gate clears (green CI + **review pass posted** — a structured review with no unaddressed findings, or a clean `/review` fallback; + ≥3 min quiescence + clean self-review against scope). Use `gh pr merge --delete-branch` (squash for multi-commit PRs that should land as one logical change; merge commit where per-commit granularity matters — §19.1) to remove the branch from origin in the same step. If any gate condition is ambiguous, AI posts `Held for human review @<user> — <reason>` and waits instead.
+8. AI pulls updated `master` and starts the next sub-PR from there. **Whether the just-merged PR was the last in a phase** is determined by the phase sub-PR list in PORT_PLAYBOOK.md §3 plus the per-phase sub-split table in this document (e.g., `phase-12h` is the last under Phase 12's row); at a phase boundary AI ensures the `phase-N-complete` tag is pushed. There is no separate promotion step — the merge to `master` *is* the integration.
 
 ### Phase size audit
 
@@ -123,7 +120,7 @@ After the AI opens any PR (Phase 0.5 sub-PRs, Phase 12 sub-PRs, or any other pha
    | Out-of-scope suggestion (broader refactor, future feature) | Append entry to `design/PORT_TODO.md` with PR reference; reply: *"Acknowledged — tracked in design/PORT_TODO.md for follow-up"* |
 3. **Sonnet re-reviews after each fix push** if the user invokes it again; otherwise AI handles round-2 findings via the same poll-and-fix loop.
 4. **AI merges** under the §19.1 merge-gate (policy revised 2026-05-23).
-5. **After AI merge**, AI pulls the updated integration branch (`port/ara`) and starts the next sub-PR from there
+5. **After AI merge**, AI pulls updated `master` and starts the next sub-PR from there
 
 **Triggering a re-review:** Sonnet runs on the user's invocation (out-of-band of GitHub comments). AI does not @-mention any bot — if Sonnet's review is needed and hasn't appeared, AI either waits or falls back to `/review` per the 2026-05-26 fallback policy.
 

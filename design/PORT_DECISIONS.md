@@ -79,3 +79,25 @@ The cost of "no CR review" for these PRs was minimal — there was no logic to r
 - **§13 RPi compatibility:** the §13 RPi target is Debian 13 (Trixie), but Docker image base OS is independent of host OS. A chiseled Ubuntu container runs fine on a Debian host. The RPi's `apt`, `systemd`, etc. are unaffected by what's inside the daemon's container.
 - **`USER 1000` still works** even though chiseled has no `/etc/passwd`: the kernel uses the numeric UID directly. Matches typical RPi `pi` user UID 1000.
 - **PORT_PLAYBOOK.md §11.2 reconciliation:** §11.2 still lists the `bookworm-slim-arm64v8` tag as authoritative; the same separate doc PR that strikes `linux-x64` from §11.1 should also update the Dockerfile example here.
+
+## 2026-06-02 — Workflow simplification + `master` branch protection
+
+### Retired the `port/ara` integration branch — direct-to-master model
+- **Decision:** every PR now branches from `master` and merges **directly back to `master`**. The `port/ara` integration branch and the periodic `port/ara → master` promotion step (decided 2026-05-23, §22.0) are retired.
+- **Reason:** this is a single-developer port. The two-step model (sub-PR → `port/ara`, then a separate `port/ara → master` promotion per phase) doubled the PR count with no batching benefit, since promotions already happened every phase. Standard GitHub Flow (branch → PR → `master`) gives the same small-revertable-unit safety and keeps `master` continuously current, with half the ceremony. User direction 2026-06-02: *"making a branch for all work, submit PR and then merge into main would be the ideal way ... it's just me."*
+- **Branch naming:** the old flat-name workaround (`phase-12h`) was forced only because `port/ara` existing as a branch made `port/ara/...` an illegal Git ref. With `port/ara` gone, that constraint is lifted — new convention is `phase/<N>[-<letter>]-<short-name>` (slash namespace + hyphens, e.g. `phase/38k-13-focuser-mediator`). User chose this 2026-06-02.
+- **Default branch stays `master`** (not renamed to `main`) per user 2026-06-02.
+- **Encoded in:** PORT_PLAYBOOK.md §0 rule 3 + rule 9, §1, §3 sub-PR rhythm, §19.1 branch allowlist + merge method, §22 (retitled "Direct-to-master merge model + Phase 15 final pass"); COMMIT-PR-RULES.md header note + branch-tree diagram + per-phase rhythm + review-loop step 5; `.github/workflows/ci.yml` push trigger (dropped `port/ara`, now `master` only).
+
+### `port/ara` was found missing — root cause + recovery
+- The active `port/ara` branch was discovered **deleted** from origin (repo has `delete_branch_on_merge: false`, so it was a manual "Delete branch" click after the #306 promotion merge, or lost when the local repo was re-cloned). Its work was fully on `master` (the #306 promotion carried §38k-12, the newest sub-PR), so no commits were lost. Rather than recreate it, the workflow change above retires it entirely — `master` is now the single source of truth.
+
+### Branch protection on `master` (repository ruleset "master protection", id 17174314)
+- **Decision:** applied a GitHub **repository ruleset** (modern replacement for classic branch protection) targeting `~DEFAULT_BRANCH`. Rules: require PR to merge (0 approvals — CI is the gate, bump to 1 when the new review tool lands), require all 6 CI checks (Sanity / Server build / Settings+Help registry / Client analyze+test ×{ubuntu,macos,windows}), block branch deletion, block force-push (`non_fast_forward`), allowed merge methods merge+squash (no rebase), repository-admin bypass for hotfixes.
+- **Reason:** the missing-`port/ara` incident showed the repo had no deletion/force-push protection. Required-checks gating also formalizes the §19.1 "green CI before merge" rule server-side instead of by convention. Ruleset chosen over classic protection because it can later be promoted to an org-level rule covering AlpacaBridge + openastro-phd2 (the "CI hardening across all repos" track on the OpenAstro Platform project board, project #2).
+
+### Stale Phase-12 branches deleted
+- Deleted `phase-12h2-equipment-connect` (superseded by Phase 12h.6L / PR #140) and `phase-12h3-search` (was PR #107, closed-unmerged; the feature shipped via PRs #65 + #113–#123). Both confirmed already-on-`master` or abandoned before deletion.
+
+### Review tooling note
+- CodeRabbit is being replaced (the new review solution is in progress). Status options on the project board and the rewritten workflow docs are kept **review-tool-agnostic** (generic "In review" / "review poll-and-fix loop") so they don't bake in a specific bot. `.coderabbit.yaml` still contains a stale `port/ara` base-branch entry — left untouched pending the review-tooling decision, since the file is slated for replacement.
