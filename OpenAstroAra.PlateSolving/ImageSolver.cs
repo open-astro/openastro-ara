@@ -43,8 +43,11 @@ namespace OpenAstroAra.PlateSolving {
 
             var result = await solver.SolveAsync(source, parameter, progress, ct);
             if (parameter.BlindFailoverEnabled && result.Success == false && parameter.Coordinates != null && blindSolver != null) {
-                //Blind solve failover
-                Logger.Debug($"Initial solve failed. Falling back to blind solver");
+                //Blind solve failover.
+                //A hinted solve only searches within SearchRadius of the supplied position, so it fails when the
+                //mount reports a wrong/unsynced position (e.g. still parked near the pole). Log the decoded hint so
+                //the cause is visible, then retry blind (whole-sky) by dropping the coordinates.
+                Logger.Info($"Hinted solve failed around {parameter.Coordinates} within search radius {parameter.SearchRadius} degrees - the mount position may be unsynced or wrong. Falling back to blind solve.");
                 var blindParameter = parameter.Clone();
                 blindParameter.Coordinates = null;
                 result = await Solve(source, blindParameter, progress, ct);
