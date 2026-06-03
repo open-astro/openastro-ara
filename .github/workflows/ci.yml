@@ -375,8 +375,13 @@ jobs:
           echo "Computed .deb version: $VERSION"
 
       - name: Build .deb (arm64)
+        # Pass the version through the environment rather than interpolating
+        # `${{ }}` directly into the shell, so a crafted tag can't inject code
+        # (zizmor template-injection). build-deb.sh reads it as "$DEB_VERSION".
+        env:
+          DEB_VERSION: ${{ steps.deb-version.outputs.version }}
         run: |
-          packaging/build-deb.sh ./publish/arm64 "${{ steps.deb-version.outputs.version }}" ./dist
+          packaging/build-deb.sh ./publish/arm64 "$DEB_VERSION" ./dist
 
       - name: Upload .deb artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4 pinned per zizmor immutable-ref policy
@@ -463,3 +468,30 @@ jobs:
       - name: flutter test
         working-directory: client/openastroara_client
         run: flutter test
+
+  zizmor:
+    name: zizmor (workflow audit)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (no LFS)
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.x pinned per zizmor immutable-ref policy
+        with:
+          persist-credentials: false
+
+      - name: Install zizmor
+        # Prebuilt x86_64 release binary — no Rust toolchain / pip build needed.
+        run: |
+          set -euo pipefail
+          ver=1.25.2
+          curl -fsSL "https://github.com/zizmorcore/zizmor/releases/download/v${ver}/zizmor-x86_64-unknown-linux-gnu.tar.gz" \
+            -o /tmp/zizmor.tgz
+          tar -xzf /tmp/zizmor.tgz -C /tmp
+          sudo install /tmp/zizmor /usr/local/bin/zizmor
+          zizmor --version
+
+      - name: Audit workflows
+        # Offline audit: deterministic, no token/network. Audits the workflow
+        # files for security issues (injection, over-broad permissions, etc.).
+        # This now enforces the SHA-pinning policy the repo previously kept by
+        # hand (see the "pinned per zizmor" comments throughout this file).
+        run: zizmor --offline .github/workflows/

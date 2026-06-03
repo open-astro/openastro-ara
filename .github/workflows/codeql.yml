@@ -1,0 +1,49 @@
+# CodeQL security scanning for the C# / .NET server-side code.
+#
+# CodeQL supports C# but not Dart, so this analyzes the OpenAstroAra.* and
+# related .NET projects only; the Flutter client is covered by `flutter
+# analyze` in ci.yml. We use `build-mode: none` so CodeQL extracts directly
+# from source without a full `dotnet build` (no CFITSIO / SDK setup needed,
+# and it stays green on a vanilla checkout). Results land in the repo's
+# Security → Code scanning tab; this workflow does not gate merges.
+#
+# Actions are pinned to immutable commit SHAs per the repo's zizmor policy.
+name: CodeQL
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+  schedule:
+    # Weekly catch-all so advisories published after a quiet period still surface.
+    - cron: "27 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (csharp)
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write   # upload results to code scanning
+      contents: read
+      actions: read
+    steps:
+      - name: Checkout (no LFS)
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.x pinned per zizmor immutable-ref policy
+        with:
+          persist-credentials: false
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@d77b13a0df3134d64a457ea9003f600b09fa1c8a  # v3
+        with:
+          languages: csharp
+          build-mode: none
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@d77b13a0df3134d64a457ea9003f600b09fa1c8a  # v3
+        with:
+          category: "/language:csharp"
