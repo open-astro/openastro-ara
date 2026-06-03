@@ -469,6 +469,21 @@ jobs:
         working-directory: client/openastroara_client
         run: flutter test
 
+  unicode:
+    name: Unicode scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (no LFS)
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.x pinned per zizmor immutable-ref policy
+        with:
+          lfs: false
+          persist-credentials: false
+
+      - name: Scan for Trojan-Source / invisible Unicode
+        # Guards against CVE-2021-42574: bidi controls / zero-width characters
+        # (incl. BOMs) that make source render differently than it compiles.
+        run: python3 .github/scripts/check-unicode.py
+
   zizmor:
     name: zizmor (workflow audit)
     runs-on: ubuntu-latest
