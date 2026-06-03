@@ -1,4 +1,4 @@
-﻿// Accord Datasets Library
+// Accord Datasets Library
 // The Accord.NET Framework
 // http://accord-framework.net
 //

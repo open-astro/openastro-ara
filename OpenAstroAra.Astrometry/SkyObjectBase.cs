@@ -1,4 +1,4 @@
-﻿using OpenAstroAra.Astrometry.Interfaces;
+using OpenAstroAra.Astrometry.Interfaces;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Core.Utility;
 using OxyPlot;

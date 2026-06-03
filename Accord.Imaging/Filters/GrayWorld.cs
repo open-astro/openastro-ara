@@ -1,4 +1,4 @@
-﻿// Accord Imaging Library
+// Accord Imaging Library
 // The Accord.NET Framework
 // http://accord-framework.net
 //
@@ -61,8 +61,8 @@ namespace Accord.Imaging.Filters
     ///       Wikipedia Contributors, "Color normalization". Available at
     ///       http://en.wikipedia.org/wiki/Color_normalization </description></item>
     ///     <item><description>
-    ///       Jose M. Buenaposada; Luis Baumela. ﻿Variations of Grey World for
-    ///       face tracking﻿ (Report). </description></item>
+    ///       Jose M. Buenaposada; Luis Baumela. Variations of Grey World for
+    ///       face tracking (Report). </description></item>
     ///   </list>
     /// </para>
     /// </remarks>

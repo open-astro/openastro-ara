@@ -1,4 +1,4 @@
-﻿#region "copyright"
+#region "copyright"
 /*
     Copyright © 2016 - 2025 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors 
 

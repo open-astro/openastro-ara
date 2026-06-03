@@ -1,4 +1,4 @@
-﻿using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Image.ImageData;
 using System;
 using System.Collections.Generic;

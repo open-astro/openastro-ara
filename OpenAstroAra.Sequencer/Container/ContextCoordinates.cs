@@ -1,4 +1,4 @@
-﻿using OpenAstroAra.Astrometry;
+using OpenAstroAra.Astrometry;
 
 namespace OpenAstroAra.Sequencer.Container {
     public class ContextCoordinates {

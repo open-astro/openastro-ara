@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json;
+using Newtonsoft.Json;
 using OpenAstroAra.Core.Utility;
 using System;
 using System.Collections.Generic;
