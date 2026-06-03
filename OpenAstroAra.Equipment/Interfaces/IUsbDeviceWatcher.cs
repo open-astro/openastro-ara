@@ -1,4 +1,4 @@
-﻿using OpenAstroAra.Equipment.Utility;
+using OpenAstroAra.Equipment.Utility;
 using System;
 using System.Collections.Generic;
 using System.Linq;

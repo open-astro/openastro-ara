@@ -1,4 +1,4 @@
-﻿using OpenAstroAra.Astrometry;
+using OpenAstroAra.Astrometry;
 using OpenAstroAra.Core.Enum;
 using OpenAstroAra.Core.Model.Equipment;
 using OpenAstroAra.Core.Utility;

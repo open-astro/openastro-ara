@@ -1,4 +1,4 @@
-﻿// AForge Image Processing Library
+// AForge Image Processing Library
 // AForge.NET framework
 //
 // Copyright © Andrew Kirillov, 2005-2008

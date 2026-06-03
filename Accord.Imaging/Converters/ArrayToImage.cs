@@ -1,4 +1,4 @@
-﻿// Accord Imaging Library
+// Accord Imaging Library
 // The Accord.NET Framework
 // http://accord-framework.net
 //

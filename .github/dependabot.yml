@@ -1,0 +1,56 @@
+# Dependabot keeps dependencies — and our SHA-pinned GitHub Actions — current.
+#
+# CI pins actions to immutable commit SHAs (see .github/workflows/*.yml) for
+# supply-chain safety; the cost is that a bare SHA never updates itself.
+# Dependabot watches upstream releases and opens grouped PRs that bump versions
+# (preserving the SHA pin for actions) so security/bug fixes land without us
+# hand-tracking them. One grouped PR per ecosystem per week to avoid a flurry.
+version: 2
+updates:
+  # GitHub Actions used across the workflows (SHA-pinned).
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: ci
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+
+  # .NET / NuGet packages (OpenAstroAra.sln and its projects at the repo root).
+  - package-ecosystem: nuget
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: build
+    groups:
+      nuget:
+        patterns:
+          - "*"
+
+  # Flutter / Dart client.
+  - package-ecosystem: pub
+    directory: /client/openastroara_client
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: build
+    groups:
+      pub:
+        patterns:
+          - "*"
+
+  # Base image in the arm64 server Dockerfile.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: ci
+    groups:
+      docker:
+        patterns:
+          - "*"

@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json;
+using Newtonsoft.Json;
 using OpenAstroAra.Astrometry.Interfaces;
 using OpenAstroAra.Core.Locale;
 using OpenAstroAra.Core.Utility;

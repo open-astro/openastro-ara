@@ -1,4 +1,4 @@
-﻿using FluentAssertions;
+using FluentAssertions;
 using OpenAstroAra.Astrometry;
 using System;
 using System.Collections.Generic;

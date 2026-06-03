@@ -68,7 +68,7 @@ namespace OpenAstroAra.Test.Utility {
             // (Alpha 'α' is a Letter, so it IS printable + stays. The example was
             // about a specific Unicode-control or formatting char.)
             // Test true control char:
-            Assert.That(FilenameTemplateSanitizer.SanitizeComponent("Ha‎Test"),
+            Assert.That(FilenameTemplateSanitizer.SanitizeComponent("Ha\u200ETest"),
                 Is.EqualTo("Ha_Test"));  // U+200E LEFT-TO-RIGHT MARK is Format
         }
 

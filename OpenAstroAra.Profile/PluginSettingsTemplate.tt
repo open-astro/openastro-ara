@@ -1,4 +1,4 @@
-﻿<#@ template language="C#" #>
+<#@ template language="C#" #>
 <#@ output extension=".cs" #>
 <#@ assembly name="$(TargetPath)" #>
 

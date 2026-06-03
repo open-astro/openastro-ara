@@ -1,4 +1,4 @@
-﻿using OpenAstroAra.Core.Model;
+using OpenAstroAra.Core.Model;
 using OxyPlot;
 using System;
 using System.Collections.Generic;

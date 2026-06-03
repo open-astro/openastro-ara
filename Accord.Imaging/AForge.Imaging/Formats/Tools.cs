@@ -1,4 +1,4 @@
-﻿// AForge Image Formats Library
+// AForge Image Formats Library
 // AForge.NET framework
 //
 // Copyright © Andrew Kirillov, 2005-2008

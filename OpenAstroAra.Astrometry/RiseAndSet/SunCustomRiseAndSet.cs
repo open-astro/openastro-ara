@@ -1,4 +1,4 @@
-﻿using OpenAstroAra.Astrometry.Body;
+using OpenAstroAra.Astrometry.Body;
 using System;
 using System.Collections.Generic;
 using System.Linq;
