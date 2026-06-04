@@ -32,15 +32,14 @@ name: CI
 #       via qemu, probe /healthz + /api/v1/server/info from the host.
 #     → still ahead: Alpaca-simulator pinning auto-download (§14.5.1).
 #
-# Until then, every job in this file MUST stay green on a vanilla `port/ara`
-# checkout — sub-PRs that delete or rename projects should not break CI.
+# Until then, every job in this file MUST stay green on a vanilla `master`
+# checkout — PRs that delete or rename projects should not break CI.
 
 on:
   pull_request:
   push:
     branches:
       - master
-      - port/ara
   workflow_dispatch:
 
 permissions:

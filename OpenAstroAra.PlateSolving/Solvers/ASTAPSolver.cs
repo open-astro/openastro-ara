@@ -147,7 +147,8 @@ namespace OpenAstroAra.PlateSolving.Solvers {
                 args.Add($"-r {parameter.SearchRadius}");
 
                 var ra = Math.Round(parameter.Coordinates.RA, 6);
-                //Right Ascension in degrees
+                //Right Ascension in hours. ASTAP's -ra expects hours (0..24), and Coordinates.RA is in hours - do NOT
+                //"correct" this to RADegrees.
                 args.Add($"-ra {ra.ToString(CultureInfo.InvariantCulture)}");
 
                 var spd = Math.Round(parameter.Coordinates.Dec + 90.0, 6);
