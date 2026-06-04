@@ -12,6 +12,11 @@ concurrency:
 
 jobs:
   review:
+    # Skip Dependabot PRs: GitHub runs them with an isolated token that has no
+    # access to the CLAUDE_CODE_OAUTH_TOKEN secret, so the action's token
+    # exchange 401s and the check shows red. Dependency bumps gain little from
+    # an AI review anyway. See Settings → Secrets → Dependabot to enable instead.
+    if: github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     permissions:
       contents: read
