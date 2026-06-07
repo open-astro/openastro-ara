@@ -5,14 +5,12 @@
 // andrew.kirillov@gmail.com
 //
 
-namespace Accord.Imaging.Formats
-{
+namespace Accord.Imaging.Formats {
     using System.ComponentModel;
     /// <summary>
     /// Information about PNM image's frame.
     /// </summary>
-    public sealed class PNMImageInfo : ImageInfo
-    {
+    public sealed class PNMImageInfo : ImageInfo {
         // PNM file version (1-6)
         private int version;
         // maximum data value
@@ -22,8 +20,7 @@ namespace Accord.Imaging.Formats
         /// PNM file version (format), [1, 6].
         /// </summary>
         [Category("PNM Info")]
-        public int Version
-        {
+        public int Version {
             get { return version; }
             set { version = value; }
         }
@@ -37,8 +34,7 @@ namespace Accord.Imaging.Formats
         /// <see cref="ImageInfo.BitsPerPixel">supported bits per pixel</see> format.</para></remarks>
         /// 
         [Category("PNM Info")]
-        public int MaxDataValue
-        {
+        public int MaxDataValue {
             get { return maxDataValue; }
             set { maxDataValue = value; }
         }
@@ -68,8 +64,7 @@ namespace Accord.Imaging.Formats
         /// 
         /// <returns>A new object that is a copy of this instance.</returns>
         /// 
-        public override object Clone()
-        {
+        public override object Clone() {
             PNMImageInfo clone = new PNMImageInfo(width, height, bitsPerPixel, frameIndex, totalFrames);
 
             clone.version = version;

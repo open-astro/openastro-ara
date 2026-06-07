@@ -40,7 +40,7 @@ namespace OpenAstroAra.Test.Utility {
         public void RotationAbove360_NoInitialOffset() {
             //Arrange
             var rotation = 400d;
-            ObservableRotatingRectangle rectangle = new ObservableRotatingRectangle(0,0,0,0,0);
+            ObservableRotatingRectangle rectangle = new ObservableRotatingRectangle(0, 0, 0, 0, 0);
 
             //Act
             rectangle.Rotation = rotation;

@@ -2,12 +2,11 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © Andrew Kirillov, 2005-2009
+// Copyright ï¿½ Andrew Kirillov, 2005-2009
 // andrew.kirillov@aforgenet.com
 //
 
-namespace Accord.Imaging.ComplexFilters
-{
+namespace Accord.Imaging.ComplexFilters {
     using System;
     using Accord;
     using Accord.Compat;
@@ -43,8 +42,7 @@ namespace Accord.Imaging.ComplexFilters
     /// <img src="..\images\imaging\frequency_filter.jpg" width="256" height="256" />
     /// </remarks>
     /// 
-    public class FrequencyFilter : IComplexFilter
-    {
+    public class FrequencyFilter : IComplexFilter {
         private IntRange frequencyRange = new IntRange(0, 1024);
 
         /// <summary>
@@ -56,8 +54,7 @@ namespace Accord.Imaging.ComplexFilters
         /// 
         /// <para>Default value is set to <b>[0, 1024]</b>.</para></remarks>
         /// 
-        public IntRange FrequencyRange
-        {
+        public IntRange FrequencyRange {
             get { return frequencyRange; }
             set { frequencyRange = value; }
         }
@@ -74,8 +71,7 @@ namespace Accord.Imaging.ComplexFilters
         /// 
         /// <param name="frequencyRange">Range of frequencies to keep.</param>
         /// 
-        public FrequencyFilter(IntRange frequencyRange)
-        {
+        public FrequencyFilter(IntRange frequencyRange) {
             this.frequencyRange = frequencyRange;
         }
 
@@ -87,10 +83,8 @@ namespace Accord.Imaging.ComplexFilters
         /// 
         /// <exception cref="ArgumentException">The source complex image should be Fourier transformed.</exception>
         /// 
-        public void Apply(ComplexImage complexImage)
-        {
-            if (!complexImage.FourierTransformed)
-            {
+        public void Apply(ComplexImage complexImage) {
+            if (!complexImage.FourierTransformed) {
                 throw new ArgumentException("The source complex image should be Fourier transformed.");
             }
 
@@ -110,18 +104,15 @@ namespace Accord.Imaging.ComplexFilters
             Complex[,] data = complexImage.Data;
 
             // process all data
-            for (int i = 0; i < height; i++)
-            {
+            for (int i = 0; i < height; i++) {
                 int y = i - hh;
 
-                for (int j = 0; j < width; j++)
-                {
+                for (int j = 0; j < width; j++) {
                     int x = j - hw;
                     int d = (int)Math.Sqrt(x * x + y * y);
 
                     // filter values outside the range
-                    if ((d > max) || (d < min))
-                    {
+                    if ((d > max) || (d < min)) {
                         data[i, j] = Complex.Zero;
                     }
                 }

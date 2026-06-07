@@ -6,8 +6,7 @@
 // andrew.kirillov@aforgenet.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -58,8 +57,7 @@ namespace Accord.Imaging.Filters
     /// 
     /// <seealso cref="QuadrilateralTransformation"/>
     /// 
-    public class BackwardQuadrilateralTransformation : BaseInPlaceFilter
-    {
+    public class BackwardQuadrilateralTransformation : BaseInPlaceFilter {
         private Bitmap sourceImage = null;
         private UnmanagedImage sourceUnmanagedImage = null;
         private List<IntPoint> destinationQuadrilateral = null;
@@ -76,8 +74,7 @@ namespace Accord.Imaging.Filters
         /// <remarks><para>See <see cref="IFilterInformation.FormatTranslations"/>
         /// documentation for additional information.</para></remarks>
         ///
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -95,11 +92,9 @@ namespace Accord.Imaging.Filters
         /// only one source image is allowed: managed or unmanaged.</note></para>
         /// </remarks>
         ///
-        public Bitmap SourceImage
-        {
+        public Bitmap SourceImage {
             get { return sourceImage; }
-            set
-            {
+            set {
                 sourceImage = value;
 
                 if (value != null)
@@ -121,11 +116,9 @@ namespace Accord.Imaging.Filters
         /// only one source image is allowed: managed or unmanaged.</note></para>
         /// </remarks>
         ///
-        public UnmanagedImage SourceUnmanagedImage
-        {
+        public UnmanagedImage SourceUnmanagedImage {
             get { return sourceUnmanagedImage; }
-            set
-            {
+            set {
                 sourceUnmanagedImage = value;
 
                 if (value != null)
@@ -141,8 +134,7 @@ namespace Accord.Imaging.Filters
         /// in destination image where the source image will be transformed into.
         /// </para></remarks>
         ///
-        public List<IntPoint> DestinationQuadrilateral
-        {
+        public List<IntPoint> DestinationQuadrilateral {
             get { return destinationQuadrilateral; }
             set { destinationQuadrilateral = value; }
         }
@@ -155,8 +147,7 @@ namespace Accord.Imaging.Filters
         /// is used.</para>
         /// </remarks>
         /// 
-        public bool UseInterpolation
-        {
+        public bool UseInterpolation {
             get { return useInterpolation; }
             set { useInterpolation = value; }
         }
@@ -165,8 +156,7 @@ namespace Accord.Imaging.Filters
         /// Initializes a new instance of the <see cref="BackwardQuadrilateralTransformation"/> class.
         /// </summary>
         /// 
-        public BackwardQuadrilateralTransformation()
-        {
+        public BackwardQuadrilateralTransformation() {
             formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
             formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format24bppRgb;
             formatTranslations[PixelFormat.Format32bppRgb] = PixelFormat.Format32bppRgb;
@@ -182,8 +172,7 @@ namespace Accord.Imaging.Filters
         /// (see <see cref="SourceImage"/>).</param>
         /// 
         public BackwardQuadrilateralTransformation(Bitmap sourceImage)
-            : this()
-        {
+            : this() {
             this.sourceImage = sourceImage;
         }
 
@@ -195,8 +184,7 @@ namespace Accord.Imaging.Filters
         /// (see <see cref="SourceUnmanagedImage"/>).</param>
         /// 
         public BackwardQuadrilateralTransformation(UnmanagedImage sourceUnmanagedImage)
-            : this()
-        {
+            : this() {
             this.sourceUnmanagedImage = sourceUnmanagedImage;
         }
 
@@ -209,8 +197,7 @@ namespace Accord.Imaging.Filters
         /// <param name="destinationQuadrilateral">Quadrilateral in destination image to transform into.</param>
         /// 
         public BackwardQuadrilateralTransformation(Bitmap sourceImage, List<IntPoint> destinationQuadrilateral)
-            : this()
-        {
+            : this() {
             this.sourceImage = sourceImage;
             this.destinationQuadrilateral = destinationQuadrilateral;
         }
@@ -224,8 +211,7 @@ namespace Accord.Imaging.Filters
         /// <param name="destinationQuadrilateral">Quadrilateral in destination image to transform into.</param>
         /// 
         public BackwardQuadrilateralTransformation(UnmanagedImage sourceUnmanagedImage, List<IntPoint> destinationQuadrilateral)
-            : this()
-        {
+            : this() {
             this.sourceUnmanagedImage = sourceUnmanagedImage;
             this.destinationQuadrilateral = destinationQuadrilateral;
         }
@@ -238,14 +224,12 @@ namespace Accord.Imaging.Filters
         ///
         /// <exception cref="NullReferenceException">Destination quadrilateral was not set.</exception>
         /// 
-        protected override unsafe void ProcessFilter(UnmanagedImage image)
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage image) {
             if (destinationQuadrilateral == null)
                 throw new InvalidOperationException("Destination quadrilateral was not set.");
 
             // check overlay type
-            if (sourceImage != null)
-            {
+            if (sourceImage != null) {
                 // source and destination images must have same pixel format
                 if (image.PixelFormat != sourceImage.PixelFormat)
                     throw new InvalidImagePropertiesException("Source and destination images must have same pixel format.");
@@ -255,33 +239,25 @@ namespace Accord.Imaging.Filters
                     new Rectangle(0, 0, sourceImage.Width, sourceImage.Height),
                     ImageLockMode.ReadOnly, sourceImage.PixelFormat);
 
-                try
-                {
+                try {
                     ProcessFilter(image, new UnmanagedImage(srcData));
-                }
-                finally
-                {
+                } finally {
                     // unlock source image
                     sourceImage.UnlockBits(srcData);
                 }
-            }
-            else if (sourceUnmanagedImage != null)
-            {
+            } else if (sourceUnmanagedImage != null) {
                 // source and destination images must have same pixel format
                 if (image.PixelFormat != sourceUnmanagedImage.PixelFormat)
                     throw new InvalidImagePropertiesException("Source and destination images must have same pixel format.");
 
                 ProcessFilter(image, sourceUnmanagedImage);
-            }
-            else
-            {
+            } else {
                 throw new InvalidOperationException("Source image is not set.");
             }
         }
 
         // Process both images transforming source image into quadrilateral in destination image
-        private unsafe void ProcessFilter(UnmanagedImage dstImage, UnmanagedImage srcImage)
-        {
+        private unsafe void ProcessFilter(UnmanagedImage dstImage, UnmanagedImage srcImage) {
             // get source and destination images size
             int srcWidth = srcImage.Width;
             int srcHeight = srcImage.Height;
@@ -332,41 +308,32 @@ namespace Accord.Imaging.Filters
             // allign pointer to the first pixel to process
             ptr += (startY * dstStride + startX * pixelSize);
 
-            if (!useInterpolation)
-            {
+            if (!useInterpolation) {
                 byte* p;
 
                 // for each row
-                for (int y = startY; y < stopY; y++)
-                {
+                for (int y = startY; y < stopY; y++) {
                     // for each pixel
-                    for (int x = startX; x < stopX; x++)
-                    {
+                    for (int x = startX; x < stopX; x++) {
                         double factor = matrix[2, 0] * x + matrix[2, 1] * y + matrix[2, 2];
                         double srcX = (matrix[0, 0] * x + matrix[0, 1] * y + matrix[0, 2]) / factor;
                         double srcY = (matrix[1, 0] * x + matrix[1, 1] * y + matrix[1, 2]) / factor;
 
-                        if ((srcX >= 0) && (srcY >= 0) && (srcX < srcWidth) && (srcY < srcHeight))
-                        {
+                        if ((srcX >= 0) && (srcY >= 0) && (srcX < srcWidth) && (srcY < srcHeight)) {
                             // get pointer to the pixel in the source image
                             p = baseSrc + (int)srcY * srcStride + (int)srcX * pixelSize;
                             // copy pixel's values
-                            for (int i = 0; i < pixelSize; i++, ptr++, p++)
-                            {
+                            for (int i = 0; i < pixelSize; i++, ptr++, p++) {
                                 *ptr = *p;
                             }
-                        }
-                        else
-                        {
+                        } else {
                             // skip the pixel
                             ptr += pixelSize;
                         }
                     }
                     ptr += offset;
                 }
-            }
-            else
-            {
+            } else {
                 int srcWidthM1 = srcWidth - 1;
                 int srcHeightM1 = srcHeight - 1;
 
@@ -378,17 +345,14 @@ namespace Accord.Imaging.Filters
                 byte* p1, p2, p3, p4;
 
                 // for each row
-                for (int y = startY; y < stopY; y++)
-                {
+                for (int y = startY; y < stopY; y++) {
                     // for each pixel
-                    for (int x = startX; x < stopX; x++)
-                    {
+                    for (int x = startX; x < stopX; x++) {
                         double factor = matrix[2, 0] * x + matrix[2, 1] * y + matrix[2, 2];
                         double srcX = (matrix[0, 0] * x + matrix[0, 1] * y + matrix[0, 2]) / factor;
                         double srcY = (matrix[1, 0] * x + matrix[1, 1] * y + matrix[1, 2]) / factor;
 
-                        if ((srcX >= 0) && (srcY >= 0) && (srcX < srcWidth) && (srcY < srcHeight))
-                        {
+                        if ((srcX >= 0) && (srcY >= 0) && (srcX < srcWidth) && (srcY < srcHeight)) {
                             sx1 = (int)srcX;
                             sx2 = (sx1 == srcWidthM1) ? sx1 : sx1 + 1;
                             dx1 = srcX - sx1;
@@ -409,15 +373,12 @@ namespace Accord.Imaging.Filters
                             p4 += sx2 * pixelSize;
 
                             // interpolate using 4 points
-                            for (int i = 0; i < pixelSize; i++, ptr++, p1++, p2++, p3++, p4++)
-                            {
+                            for (int i = 0; i < pixelSize; i++, ptr++, p1++, p2++, p3++, p4++) {
                                 *ptr = (byte)(
                                     dy2 * (dx2 * (*p1) + dx1 * (*p2)) +
                                     dy1 * (dx2 * (*p3) + dx1 * (*p4)));
                             }
-                        }
-                        else
-                        {
+                        } else {
                             // skip the pixel
                             ptr += pixelSize;
                         }

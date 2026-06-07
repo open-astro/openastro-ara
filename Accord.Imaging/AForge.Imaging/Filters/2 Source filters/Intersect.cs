@@ -2,12 +2,11 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © AForge.NET, 2005-2011
+// Copyright ï¿½ AForge.NET, 2005-2011
 // contacts@aforgenet.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -45,25 +44,22 @@ namespace Accord.Imaging.Filters
     /// <seealso cref="Add"/>
     /// <seealso cref="Subtract"/>
     /// 
-    public sealed class Intersect : BaseInPlaceFilter2
-    {
+    public sealed class Intersect : BaseInPlaceFilter2 {
         // private format translation dictionary
-        private Dictionary<PixelFormat, PixelFormat> formatTranslations = new Dictionary<PixelFormat, PixelFormat>( );
+        private Dictionary<PixelFormat, PixelFormat> formatTranslations = new Dictionary<PixelFormat, PixelFormat>();
 
         /// <summary>
         /// Format translations dictionary.
         /// </summary>
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="Merge"/> class.
         /// </summary>
-        public Intersect( )
-        {
-            InitFormatTranslations( );
+        public Intersect() {
+            InitFormatTranslations();
         }
 
         /// <summary>
@@ -72,10 +68,9 @@ namespace Accord.Imaging.Filters
         /// 
         /// <param name="overlayImage">Overlay image.</param>
         /// 
-        public Intersect( Bitmap overlayImage )
-            : base( overlayImage )
-        {
-            InitFormatTranslations( );
+        public Intersect(Bitmap overlayImage)
+            : base(overlayImage) {
+            InitFormatTranslations();
         }
 
         /// <summary>
@@ -84,22 +79,20 @@ namespace Accord.Imaging.Filters
         /// 
         /// <param name="unmanagedOverlayImage">Unmanaged overlay image.</param>
         /// 
-        public Intersect( UnmanagedImage unmanagedOverlayImage )
-            : base( unmanagedOverlayImage )
-        {
-            InitFormatTranslations( );
+        public Intersect(UnmanagedImage unmanagedOverlayImage)
+            : base(unmanagedOverlayImage) {
+            InitFormatTranslations();
         }
 
         // Initialize format translation dictionary
-        private void InitFormatTranslations( )
-        {
-            formatTranslations[PixelFormat.Format8bppIndexed]    = PixelFormat.Format8bppIndexed;
-            formatTranslations[PixelFormat.Format24bppRgb]       = PixelFormat.Format24bppRgb;
-            formatTranslations[PixelFormat.Format32bppRgb]       = PixelFormat.Format32bppRgb;
-            formatTranslations[PixelFormat.Format32bppArgb]      = PixelFormat.Format32bppArgb;
+        private void InitFormatTranslations() {
+            formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
+            formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format24bppRgb;
+            formatTranslations[PixelFormat.Format32bppRgb] = PixelFormat.Format32bppRgb;
+            formatTranslations[PixelFormat.Format32bppArgb] = PixelFormat.Format32bppArgb;
             formatTranslations[PixelFormat.Format16bppGrayScale] = PixelFormat.Format16bppGrayScale;
-            formatTranslations[PixelFormat.Format48bppRgb]       = PixelFormat.Format48bppRgb;
-            formatTranslations[PixelFormat.Format64bppArgb]      = PixelFormat.Format64bppArgb;
+            formatTranslations[PixelFormat.Format48bppRgb] = PixelFormat.Format48bppRgb;
+            formatTranslations[PixelFormat.Format64bppArgb] = PixelFormat.Format64bppArgb;
         }
 
         /// <summary>
@@ -109,66 +102,58 @@ namespace Accord.Imaging.Filters
         /// <param name="image">Source image data.</param>
         /// <param name="overlay">Overlay image data.</param>
         ///
-        protected override unsafe void ProcessFilter( UnmanagedImage image, UnmanagedImage overlay )
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage image, UnmanagedImage overlay) {
             PixelFormat pixelFormat = image.PixelFormat;
             // get image dimension
-            int width  = image.Width;
+            int width = image.Width;
             int height = image.Height;
 
             if (
-                ( pixelFormat == PixelFormat.Format8bppIndexed ) ||
-                ( pixelFormat == PixelFormat.Format24bppRgb ) ||
-                ( pixelFormat == PixelFormat.Format32bppRgb ) ||
-                ( pixelFormat == PixelFormat.Format32bppArgb ) )
-            {
+                (pixelFormat == PixelFormat.Format8bppIndexed) ||
+                (pixelFormat == PixelFormat.Format24bppRgb) ||
+                (pixelFormat == PixelFormat.Format32bppRgb) ||
+                (pixelFormat == PixelFormat.Format32bppArgb)) {
                 // initialize other variables
-                int pixelSize = ( pixelFormat == PixelFormat.Format8bppIndexed ) ? 1 :
-                    ( pixelFormat == PixelFormat.Format24bppRgb ) ? 3 : 4;
-                int lineSize  = width * pixelSize;
+                int pixelSize = (pixelFormat == PixelFormat.Format8bppIndexed) ? 1 :
+                    (pixelFormat == PixelFormat.Format24bppRgb) ? 3 : 4;
+                int lineSize = width * pixelSize;
                 int srcOffset = image.Stride - lineSize;
                 int ovrOffset = overlay.Stride - lineSize;
 
                 // do the job
-                byte * ptr = (byte*) image.ImageData.ToPointer( );
-                byte * ovr = (byte*) overlay.ImageData.ToPointer( );
+                byte* ptr = (byte*)image.ImageData.ToPointer();
+                byte* ovr = (byte*)overlay.ImageData.ToPointer();
 
                 // for each line
-                for ( int y = 0; y < height; y++ )
-                {
+                for (int y = 0; y < height; y++) {
                     // for each pixel
-                    for ( int x = 0; x < lineSize; x++, ptr++, ovr++ )
-                    {
-                        if ( *ovr < *ptr )
+                    for (int x = 0; x < lineSize; x++, ptr++, ovr++) {
+                        if (*ovr < *ptr)
                             *ptr = *ovr;
                     }
                     ptr += srcOffset;
                     ovr += ovrOffset;
                 }
-            }
-            else
-            {
+            } else {
                 // initialize other variables
-                int pixelSize = ( pixelFormat == PixelFormat.Format16bppGrayScale ) ? 1 :
-                    ( pixelFormat == PixelFormat.Format48bppRgb ) ? 3 : 4;
-                int lineSize  = width * pixelSize;
+                int pixelSize = (pixelFormat == PixelFormat.Format16bppGrayScale) ? 1 :
+                    (pixelFormat == PixelFormat.Format48bppRgb) ? 3 : 4;
+                int lineSize = width * pixelSize;
                 int srcStride = image.Stride;
                 int ovrStride = overlay.Stride;
 
                 // do the job
-                byte* basePtr = (byte*) image.ImageData.ToPointer( );
-                byte* baseOvr = (byte*) overlay.ImageData.ToPointer( );
+                byte* basePtr = (byte*)image.ImageData.ToPointer();
+                byte* baseOvr = (byte*)overlay.ImageData.ToPointer();
 
                 // for each line
-                for ( int y = 0; y < height; y++ )
-                {
-                    ushort * ptr = (ushort*) ( basePtr + y * srcStride );
-                    ushort * ovr = (ushort*) ( baseOvr + y * ovrStride );
+                for (int y = 0; y < height; y++) {
+                    ushort* ptr = (ushort*)(basePtr + y * srcStride);
+                    ushort* ovr = (ushort*)(baseOvr + y * ovrStride);
 
                     // for each pixel
-                    for ( int x = 0; x < lineSize; x++, ptr++, ovr++ )
-                    {
-                        if ( *ovr < *ptr )
+                    for (int x = 0; x < lineSize; x++, ptr++, ovr++) {
+                        if (*ovr < *ptr)
                             *ptr = *ovr;
                     }
                 }

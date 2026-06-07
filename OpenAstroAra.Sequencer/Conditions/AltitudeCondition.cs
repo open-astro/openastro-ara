@@ -30,7 +30,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
     [Export(typeof(ISequenceCondition))]
     [JsonObject(MemberSerialization.OptIn)]
     public class AltitudeCondition : LoopForAltitudeBase {
-        
+
         private bool hasDsoParent;
 
         [ImportingConstructor]

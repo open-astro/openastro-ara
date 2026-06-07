@@ -20,8 +20,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System.Drawing;
     using System.Drawing.Imaging;
     using System.Collections.Generic;
@@ -37,8 +36,7 @@ namespace Accord.Imaging.Filters
     /// <para>The filter accepts 8 bpp grayscale and 24 color images for processing.</para>
     /// </remarks>
     /// 
-    public class FeaturesMarker : BaseFilter
-    {
+    public class FeaturesMarker : BaseFilter {
 
         private IEnumerable<SpeededUpRobustFeaturePoint> points;
         private Dictionary<PixelFormat, PixelFormat> formatTranslations = new Dictionary<PixelFormat, PixelFormat>();
@@ -50,8 +48,7 @@ namespace Accord.Imaging.Filters
         ///   Format translations dictionary.
         /// </summary>
         /// 
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -59,8 +56,7 @@ namespace Accord.Imaging.Filters
         ///   Gets or sets the initial size for a feature point in the map. Default is 5.
         /// </summary>
         /// 
-        public double Scale
-        {
+        public double Scale {
             get { return scale; }
             set { scale = value; }
         }
@@ -69,8 +65,7 @@ namespace Accord.Imaging.Filters
         ///   Gets or sets the set of points to mark.
         /// </summary>
         /// 
-        public IEnumerable<SpeededUpRobustFeaturePoint> Points
-        {
+        public IEnumerable<SpeededUpRobustFeaturePoint> Points {
             get { return points; }
             set { points = value; }
         }
@@ -80,16 +75,14 @@ namespace Accord.Imaging.Filters
         /// </summary>
         /// 
         public FeaturesMarker()
-            : this(new SpeededUpRobustFeaturePoint[0])
-        {
+            : this(new SpeededUpRobustFeaturePoint[0]) {
         }
 
         /// <summary>
         ///   Initializes a new instance of the <see cref="FeaturesMarker"/> class.
         /// </summary>
         /// 
-        public FeaturesMarker(IEnumerable<SpeededUpRobustFeaturePoint> points)
-        {
+        public FeaturesMarker(IEnumerable<SpeededUpRobustFeaturePoint> points) {
             init(points);
         }
 
@@ -97,8 +90,7 @@ namespace Accord.Imaging.Filters
         ///   Initializes a new instance of the <see cref="FeaturesMarker"/> class.
         /// </summary>
         /// 
-        public FeaturesMarker(IEnumerable<FastRetinaKeypoint> points)
-        {
+        public FeaturesMarker(IEnumerable<FastRetinaKeypoint> points) {
             init(points.Select(p =>
                 new SpeededUpRobustFeaturePoint(p.X, p.Y, p.Scale, 1, p.Orientation, 10)));
         }
@@ -107,8 +99,7 @@ namespace Accord.Imaging.Filters
         ///   Initializes a new instance of the <see cref="FeaturesMarker"/> class.
         /// </summary>
         /// 
-        public FeaturesMarker(IEnumerable<SpeededUpRobustFeaturePoint> points, double scale)
-        {
+        public FeaturesMarker(IEnumerable<SpeededUpRobustFeaturePoint> points, double scale) {
             init(points);
 
             this.scale = scale;
@@ -118,16 +109,14 @@ namespace Accord.Imaging.Filters
         ///   Initializes a new instance of the <see cref="FeaturesMarker"/> class.
         /// </summary>
         /// 
-        public FeaturesMarker(IEnumerable<FastRetinaKeypoint> points, double scale)
-        {
+        public FeaturesMarker(IEnumerable<FastRetinaKeypoint> points, double scale) {
             init(points.Select(p =>
                 new SpeededUpRobustFeaturePoint(p.X, p.Y, p.Scale, 1, p.Orientation, 10)));
 
             this.scale = scale;
         }
 
-        private void init(IEnumerable<SpeededUpRobustFeaturePoint> points)
-        {
+        private void init(IEnumerable<SpeededUpRobustFeaturePoint> points) {
             this.points = points;
 
             formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format24bppRgb;
@@ -142,8 +131,7 @@ namespace Accord.Imaging.Filters
         /// <param name="sourceData">Source image data.</param>
         /// <param name="destinationData">Destination image data.</param>
         ///
-        protected override void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData)
-        {
+        protected override void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData) {
             if (sourceData.PixelFormat == PixelFormat.Format8bppIndexed)
                 sourceData = toRGB.Apply(sourceData);
 
@@ -155,11 +143,9 @@ namespace Accord.Imaging.Filters
             using (Graphics g = Graphics.FromImage(managedImage))
             using (Pen positive = new Pen(Color.Red))
             using (Pen negative = new Pen(Color.Blue))
-            using (Pen line = new Pen(Color.FromArgb(0, 255, 0)))
-            {
+            using (Pen line = new Pen(Color.FromArgb(0, 255, 0))) {
                 // mark all points
-                foreach (SpeededUpRobustFeaturePoint p in points)
-                {
+                foreach (SpeededUpRobustFeaturePoint p in points) {
                     int S = (int)(scale * p.Scale);
                     int R = (int)(S / 2f);
 

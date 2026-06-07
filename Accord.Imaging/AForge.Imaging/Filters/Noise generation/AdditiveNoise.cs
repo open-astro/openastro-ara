@@ -1,12 +1,11 @@
 // AForge Image Processing Library
 // AForge.NET framework
 //
-// Copyright © AForge.NET, 2007-2011
+// Copyright ï¿½ AForge.NET, 2007-2011
 // contacts@aforgenet.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -42,8 +41,7 @@ namespace Accord.Imaging.Filters
     /// <img src="..\images\imaging\additive_noise.jpg" width="480" height="361" />
     /// </remarks>
     /// 
-    public class AdditiveNoise : BaseInPlacePartialFilter
-    {
+    public class AdditiveNoise : BaseInPlacePartialFilter {
         // random number generator to add noise
         IRandomNumberGenerator<double> generator = new UniformContinuousDistribution(new Range(-10, 10));
 
@@ -53,8 +51,7 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Format translations dictionary.
         /// </summary>
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -64,8 +61,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <remarks>Default generator is uniform generator in the range of (-10, 10).</remarks>
         /// 
-        public IRandomNumberGenerator<double> Generator
-        {
+        public IRandomNumberGenerator<double> Generator {
             get { return generator; }
             set { generator = value; }
         }
@@ -74,8 +70,7 @@ namespace Accord.Imaging.Filters
         /// Initializes a new instance of the <see cref="AdditiveNoise"/> class.
         /// </summary>
         /// 
-        public AdditiveNoise()
-        {
+        public AdditiveNoise() {
             formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
             formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format24bppRgb;
         }
@@ -87,8 +82,7 @@ namespace Accord.Imaging.Filters
         /// <param name="generator">Random number generator used to add noise.</param>
         /// 
         public AdditiveNoise(IRandomNumberGenerator<double> generator)
-            : this()
-        {
+            : this() {
             this.generator = generator;
         }
 
@@ -99,8 +93,7 @@ namespace Accord.Imaging.Filters
         /// <param name="image">Source image data.</param>
         /// <param name="rect">Image rectangle for processing by the filter.</param>
         ///
-        protected override unsafe void ProcessFilter(UnmanagedImage image, Rectangle rect)
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage image, Rectangle rect) {
             int pixelSize = (image.PixelFormat == PixelFormat.Format8bppIndexed) ? 1 : 3;
 
             int startY = rect.Top;
@@ -118,11 +111,9 @@ namespace Accord.Imaging.Filters
             ptr += (startY * image.Stride + rect.Left * pixelSize);
 
             // for each line
-            for (int y = startY; y < stopY; y++)
-            {
+            for (int y = startY; y < stopY; y++) {
                 // for each pixel
-                for (int x = startX; x < stopX; x++, ptr++)
-                {
+                for (int x = startX; x < stopX; x++, ptr++) {
                     *ptr = Math.Max((byte)0, Math.Min((byte)255, (byte)(*ptr + generator.Generate())));
                 }
                 ptr += offset;

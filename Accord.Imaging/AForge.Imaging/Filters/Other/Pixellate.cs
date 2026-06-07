@@ -1,12 +1,11 @@
 // AForge Image Processing Library
 // AForge.NET framework
 //
-// Copyright © Andrew Kirillov, 2005-2008
+// Copyright ï¿½ Andrew Kirillov, 2005-2008
 // andrew.kirillov@gmail.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -39,8 +38,7 @@ namespace Accord.Imaging.Filters
     /// <img src="..\images\imaging\pixellate.jpg" width="480" height="361" />
     /// </remarks>
     /// 
-    public class Pixellate : BaseInPlacePartialFilter
-    {
+    public class Pixellate : BaseInPlacePartialFilter {
         private int pixelWidth = 8;
         private int pixelHeight = 8;
 
@@ -50,8 +48,7 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Format translations dictionary.
         /// </summary>
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -64,8 +61,7 @@ namespace Accord.Imaging.Filters
         /// <seealso cref="PixelSize"/>
         /// <seealso cref="PixelHeight"/>
         /// 
-        public int PixelWidth
-        {
+        public int PixelWidth {
             get { return pixelWidth; }
             set { pixelWidth = Math.Max(2, Math.Min(32, value)); }
         }
@@ -79,8 +75,7 @@ namespace Accord.Imaging.Filters
         /// <seealso cref="PixelSize"/>
         /// <seealso cref="PixelWidth"/>
         /// 
-        public int PixelHeight
-        {
+        public int PixelHeight {
             get { return pixelHeight; }
             set { pixelHeight = Math.Max(2, Math.Min(32, value)); }
         }
@@ -92,8 +87,7 @@ namespace Accord.Imaging.Filters
         /// <remarks>The property is used to set both <see cref="PixelWidth"/> and
         /// <see cref="PixelHeight"/> simultaneously.</remarks>
         /// 
-        public int PixelSize
-        {
+        public int PixelSize {
             set { pixelWidth = pixelHeight = Math.Max(2, Math.Min(32, value)); }
         }
 
@@ -101,8 +95,7 @@ namespace Accord.Imaging.Filters
         /// Initializes a new instance of the <see cref="Pixellate"/> class.
         /// </summary>
         /// 
-        public Pixellate()
-        {
+        public Pixellate() {
             // initialize format translation dictionary
             formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
             formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format24bppRgb;
@@ -115,8 +108,7 @@ namespace Accord.Imaging.Filters
         /// <param name="pixelSize">Pixel size.</param>
         /// 
         public Pixellate(int pixelSize)
-            : this()
-        {
+            : this() {
             PixelSize = pixelSize;
         }
 
@@ -128,8 +120,7 @@ namespace Accord.Imaging.Filters
         /// <param name="pixelHeight">Pixel height.</param>
         /// 
         public Pixellate(int pixelWidth, int pixelHeight)
-            : this()
-        {
+            : this() {
             PixelWidth = pixelWidth;
             PixelHeight = pixelHeight;
         }
@@ -141,8 +132,7 @@ namespace Accord.Imaging.Filters
         /// <param name="image">Source image data.</param>
         /// <param name="rect">Image rectangle for processing by the filter.</param>
         ///
-        protected override unsafe void ProcessFilter(UnmanagedImage image, Rectangle rect)
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage image, Rectangle rect) {
             int pixelSize = (image.PixelFormat == PixelFormat.Format8bppIndexed) ? 1 : 3;
 
             // processing start and stop Y positions
@@ -166,22 +156,18 @@ namespace Accord.Imaging.Filters
 
             byte* dst = src;
 
-            if (image.PixelFormat == PixelFormat.Format8bppIndexed)
-            {
+            if (image.PixelFormat == PixelFormat.Format8bppIndexed) {
                 // Grayscale image
                 int[] tmp = new int[len];
 
-                for (int y1 = startY, y2 = startY; y1 < stopY; )
-                {
+                for (int y1 = startY, y2 = startY; y1 < stopY;) {
                     // collect pixels
                     Array.Clear(tmp, 0, len);
 
                     // calculate
-                    for (i = 0; (i < pixelHeight) && (y1 < stopY); i++, y1++)
-                    {
+                    for (i = 0; (i < pixelHeight) && (y1 < stopY); i++, y1++) {
                         // for each pixel
-                        for (x = 0; x < width; x++, src++)
-                        {
+                        for (x = 0; x < width; x++, src++) {
                             tmp[(int)(x / pixelWidth)] += (int)*src;
                         }
                         src += offset;
@@ -196,33 +182,26 @@ namespace Accord.Imaging.Filters
                     tmp[j] /= t2;
 
                     // save average value to destination image
-                    for (i = 0; (i < pixelHeight) && (y2 < stopY); i++, y2++)
-                    {
+                    for (i = 0; (i < pixelHeight) && (y2 < stopY); i++, y2++) {
                         // for each pixel
-                        for (x = 0; x < width; x++, dst++)
-                        {
+                        for (x = 0; x < width; x++, dst++) {
                             *dst = (byte)tmp[(int)(x / pixelWidth)];
                         }
                         dst += offset;
                     }
                 }
-            }
-            else
-            {
+            } else {
                 // RGB image
                 int[] tmp = new int[len * 3];
 
-                for (int y1 = startY, y2 = startY; y1 < stopY; )
-                {
+                for (int y1 = startY, y2 = startY; y1 < stopY;) {
                     // collect pixels
                     Array.Clear(tmp, 0, len * 3);
 
                     // calculate
-                    for (i = 0; (i < pixelHeight) && (y1 < stopY); i++, y1++)
-                    {
+                    for (i = 0; (i < pixelHeight) && (y1 < stopY); i++, y1++) {
                         // for each pixel
-                        for (x = 0; x < width; x++, src += 3)
-                        {
+                        for (x = 0; x < width; x++, src += 3) {
                             k = (x / pixelWidth) * 3;
                             tmp[k] += src[RGB.R];
                             tmp[k + 1] += src[RGB.G];
@@ -235,8 +214,7 @@ namespace Accord.Imaging.Filters
                     t1 = i * pixelWidth;
                     t2 = i * rem;
 
-                    for (j = 0, k = 0; j < len - 1; j++, k += 3)
-                    {
+                    for (j = 0, k = 0; j < len - 1; j++, k += 3) {
                         tmp[k] /= t1;
                         tmp[k + 1] /= t1;
                         tmp[k + 2] /= t1;
@@ -246,11 +224,9 @@ namespace Accord.Imaging.Filters
                     tmp[k + 2] /= t2;
 
                     // save average value to destination image
-                    for (i = 0; (i < pixelHeight) && (y2 < stopY); i++, y2++)
-                    {
+                    for (i = 0; (i < pixelHeight) && (y2 < stopY); i++, y2++) {
                         // for each pixel
-                        for (x = 0; x < width; x++, dst += 3)
-                        {
+                        for (x = 0; x < width; x++, dst += 3) {
                             k = (x / pixelWidth) * 3;
                             dst[RGB.R] = (byte)tmp[k];
                             dst[RGB.G] = (byte)tmp[k + 1];

@@ -35,7 +35,7 @@ namespace OpenAstroAra.Core.Utility {
 
             // First see if the supplied address is an IP address. Try to resolve the supplied hostname only if it isn't an IP address.
             if (IPAddress.TryParse(hostName, out var ip)) {
-                return new IPHostEntry { AddressList = [ ip ] };
+                return new IPHostEntry { AddressList = [ip] };
             } else {
                 return Dns.GetHostEntry(hostName, addressFamily);
             }

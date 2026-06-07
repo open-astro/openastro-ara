@@ -20,8 +20,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging
-{
+namespace Accord.Imaging {
     using System;
     using System.Drawing;
 
@@ -42,8 +41,7 @@ namespace Accord.Imaging
     /// </remarks>
     /// 
     [Serializable]
-    public class MatrixH
-    {
+    public class MatrixH {
 
         private float[] elements;
 
@@ -51,8 +49,7 @@ namespace Accord.Imaging
         ///   Creates a new projective matrix.
         /// </summary>
         /// 
-        public MatrixH()
-        {
+        public MatrixH() {
             // Start as the identity matrix
             this.elements = new float[] { 1, 0, 0, 0, 1, 0, 0, 0 };
         }
@@ -63,8 +60,7 @@ namespace Accord.Imaging
         /// 
         public MatrixH(float m11, float m12, float m13,
                        float m21, float m22, float m23,
-                       float m31, float m32)
-        {
+                       float m31, float m32) {
             this.elements = new float[8];
             this.elements[0] = m11; this.elements[1] = m12; this.elements[2] = m13;
             this.elements[3] = m21; this.elements[4] = m22; this.elements[5] = m23;
@@ -78,8 +74,7 @@ namespace Accord.Imaging
         public MatrixH(float m11, float m12, float m13,
                        float m21, float m22, float m23,
                        float m31, float m32, float m33)
-            : this(m11, m12, m13, m21, m22, m23, m31, m32)
-        {
+            : this(m11, m12, m13, m21, m22, m23, m31, m32) {
             for (int i = 0; i < elements.Length; i++)
                 elements[i] /= m33;
         }
@@ -88,20 +83,14 @@ namespace Accord.Imaging
         ///   Creates a new projective matrix.
         /// </summary>
         /// 
-        public MatrixH(float[] elements)
-        {
-            if (elements.Length == 8)
-            {
+        public MatrixH(float[] elements) {
+            if (elements.Length == 8) {
                 this.elements = elements;
-            }
-            else if (elements.Length == 9)
-            {
+            } else if (elements.Length == 9) {
                 this.elements = new float[8];
                 for (int i = 0; i < elements.Length; i++)
                     this.elements[i] = (float)(elements[i] / elements[8]);
-            }
-            else
-            {
+            } else {
                 throw new ArgumentException("The element vector should contain either 8 or 9 members.", "elements");
             }
         }
@@ -110,10 +99,8 @@ namespace Accord.Imaging
         ///   Creates a new projective matrix.
         /// </summary>
         /// 
-        public MatrixH(double[,] matrix)
-        {
-            if (matrix.GetLength(0) != 3 || matrix.GetLength(1) != 3)
-            {
+        public MatrixH(double[,] matrix) {
+            if (matrix.GetLength(0) != 3 || matrix.GetLength(1) != 3) {
                 throw new ArgumentException("The projective matrix should be a 3x3 matrix.", "matrix");
             }
 
@@ -127,10 +114,8 @@ namespace Accord.Imaging
         ///   Creates a new projective matrix.
         /// </summary>
         /// 
-        public MatrixH(float[,] matrix)
-        {
-            if (matrix.GetLength(0) != 3 || matrix.GetLength(1) != 3)
-            {
+        public MatrixH(float[,] matrix) {
+            if (matrix.GetLength(0) != 3 || matrix.GetLength(1) != 3) {
                 throw new ArgumentException("The projective matrix should be a 3x3 matrix.", "matrix");
             }
 
@@ -144,8 +129,7 @@ namespace Accord.Imaging
         ///   Gets the elements of this matrix.
         /// </summary>
         /// 
-        public float[] Elements
-        {
+        public float[] Elements {
             get { return elements; }
         }
 
@@ -153,8 +137,7 @@ namespace Accord.Imaging
         ///   Gets the offset x
         /// </summary>
         /// 
-        public float OffsetX
-        {
+        public float OffsetX {
             get { return elements[2]; }
         }
 
@@ -162,8 +145,7 @@ namespace Accord.Imaging
         ///   Gets the offset y
         /// </summary>
         /// 
-        public float OffsetY
-        {
+        public float OffsetY {
             get { return elements[5]; }
         }
 
@@ -171,10 +153,8 @@ namespace Accord.Imaging
         ///   Gets whether this matrix is invertible.
         /// </summary>
         /// 
-        public bool IsInvertible
-        {
-            get
-            {
+        public bool IsInvertible {
+            get {
                 float det =
                       elements[0] * (elements[4] - elements[5] * elements[7])
                     - elements[1] * (elements[3] - elements[5] * elements[6])
@@ -188,8 +168,7 @@ namespace Accord.Imaging
         ///   Gets whether this is an Affine transformation matrix.
         /// </summary>
         /// 
-        public bool IsAffine
-        {
+        public bool IsAffine {
             get { return (elements[6] == 0 && elements[7] == 0); }
         }
 
@@ -197,10 +176,8 @@ namespace Accord.Imaging
         ///   Gets whether this is the identity transformation.
         /// </summary>
         /// 
-        public bool IsIdentity
-        {
-            get
-            {
+        public bool IsIdentity {
+            get {
                 return
                     elements[0] == 1 && elements[1] == 0 && elements[2] == 0 &&
                     elements[3] == 0 && elements[4] == 1 && elements[5] == 0 &&
@@ -212,8 +189,7 @@ namespace Accord.Imaging
         ///   Resets this matrix to be the identity.
         /// </summary>
         /// 
-        public void Reset()
-        {
+        public void Reset() {
             elements[0] = 1; elements[1] = 0; elements[2] = 0;
             elements[3] = 0; elements[4] = 1; elements[5] = 0;
             elements[6] = 0; elements[7] = 0;
@@ -223,8 +199,7 @@ namespace Accord.Imaging
         ///   Returns the inverse matrix, if this matrix is invertible.
         /// </summary>
         /// 
-        public MatrixH Inverse()
-        {
+        public MatrixH Inverse() {
             //    m = 1 / [a(ei-fh) - b(di-fg) + c(dh-eg)]
             // 
             //                  (ei-fh)   (ch-bi)   (bf-ce)
@@ -255,8 +230,7 @@ namespace Accord.Imaging
         /// </summary>
         /// 
         /// <returns>The transposed version of this matrix, given by <c>H'</c>.</returns>
-        public MatrixH Transpose()
-        {
+        public MatrixH Transpose() {
             return new MatrixH(elements[0], elements[3], elements[6],
                                elements[1], elements[4], elements[7],
                                elements[2], elements[5]);
@@ -266,12 +240,10 @@ namespace Accord.Imaging
         ///   Transforms the given points using this transformation matrix.
         /// </summary>
         /// 
-        public PointH[] TransformPoints(params PointH[] points)
-        {
+        public PointH[] TransformPoints(params PointH[] points) {
             PointH[] r = new PointH[points.Length];
 
-            for (int j = 0; j < points.Length; j++)
-            {
+            for (int j = 0; j < points.Length; j++) {
                 r[j].X = elements[0] * points[j].X + elements[1] * points[j].Y + elements[2] * points[j].W;
                 r[j].Y = elements[3] * points[j].X + elements[4] * points[j].Y + elements[5] * points[j].W;
                 r[j].W = elements[6] * points[j].X + elements[7] * points[j].Y + points[j].W;
@@ -284,12 +256,10 @@ namespace Accord.Imaging
         ///   Transforms the given points using this transformation matrix.
         /// </summary>
         /// 
-        public PointF[] TransformPoints(params PointF[] points)
-        {
+        public PointF[] TransformPoints(params PointF[] points) {
             PointF[] r = new PointF[points.Length];
 
-            for (int j = 0; j < points.Length; j++)
-            {
+            for (int j = 0; j < points.Length; j++) {
                 float w = elements[6] * points[j].X + elements[7] * points[j].Y + 1f;
                 r[j].X = (elements[0] * points[j].X + elements[1] * points[j].Y + elements[2]) / w;
                 r[j].Y = (elements[3] * points[j].X + elements[4] * points[j].Y + elements[5]) / w;
@@ -302,8 +272,7 @@ namespace Accord.Imaging
         ///   Multiplies this matrix, returning a new matrix as result.
         /// </summary>
         /// 
-        public MatrixH Multiply(MatrixH matrix)
-        {
+        public MatrixH Multiply(MatrixH matrix) {
             float na = elements[0] * matrix.elements[0] + elements[1] * matrix.elements[3] + elements[2] * matrix.elements[6];
             float nb = elements[0] * matrix.elements[1] + elements[1] * matrix.elements[4] + elements[2] * matrix.elements[7];
             float nc = elements[0] * matrix.elements[2] + elements[1] * matrix.elements[5] + elements[2];
@@ -323,11 +292,10 @@ namespace Accord.Imaging
         ///   Compares two objects for equality.
         /// </summary>
         /// 
-        public override bool Equals(object obj)
-        {
+        public override bool Equals(object obj) {
             MatrixH m = obj as MatrixH;
 
-            if (obj != null) 
+            if (obj != null)
                 return this == m;
             return false;
         }
@@ -336,8 +304,7 @@ namespace Accord.Imaging
         ///   Returns the hash code for this instance.
         /// </summary>
         /// 
-        public override int GetHashCode()
-        {
+        public override int GetHashCode() {
             return elements.GetHashCode();
         }
 
@@ -345,9 +312,8 @@ namespace Accord.Imaging
         ///   Double[,] conversion.
         /// </summary>
         /// 
-        public static explicit operator double[,](MatrixH matrix)
-        {
-            return new double[,] 
+        public static explicit operator double[,](MatrixH matrix) {
+            return new double[,]
             {
                 { matrix.elements[0], matrix.elements[1], matrix.elements[2] },
                 { matrix.elements[3], matrix.elements[4], matrix.elements[5] },
@@ -359,9 +325,8 @@ namespace Accord.Imaging
         ///   Single[,] conversion.
         /// </summary>
         /// 
-        public static explicit operator float[,](MatrixH matrix)
-        {
-            return new float[,] 
+        public static explicit operator float[,](MatrixH matrix) {
+            return new float[,]
             {
                 { matrix.elements[0], matrix.elements[1], matrix.elements[2] },
                 { matrix.elements[3], matrix.elements[4], matrix.elements[5] },
@@ -373,8 +338,7 @@ namespace Accord.Imaging
         ///   Double[,] conversion.
         /// </summary>
         /// 
-        public double[,] ToDoubleArray()
-        {
+        public double[,] ToDoubleArray() {
             return (double[,])this;
         }
 
@@ -382,8 +346,7 @@ namespace Accord.Imaging
         ///   Single[,] conversion.
         /// </summary>
         /// 
-        public float[,] ToSingleArray()
-        {
+        public float[,] ToSingleArray() {
             return (float[,])this;
         }
 
@@ -391,8 +354,7 @@ namespace Accord.Imaging
         ///   Matrix multiplication.
         /// </summary>
         /// 
-        public static MatrixH operator *(MatrixH left, MatrixH right)
-        {
+        public static MatrixH operator *(MatrixH left, MatrixH right) {
             return left.Multiply(right);
         }
 

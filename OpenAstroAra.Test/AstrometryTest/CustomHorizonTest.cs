@@ -23,7 +23,7 @@ namespace OpenAstroAra.Test.AstrometryTest {
     [TestFixture]
     public class CustomHorizonTest {
 
-        [Test]        
+        [Test]
         [TestCase("commas.hrz", 17)]
         [TestCase("full360.hrz", 361)]
         [TestCase("incomplete.hrz", 5)]

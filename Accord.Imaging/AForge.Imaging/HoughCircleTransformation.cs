@@ -2,12 +2,11 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © Andrew Kirillov, 2005-2010
+// Copyright ï¿½ Andrew Kirillov, 2005-2010
 // andrew.kirillov@aforgenet.com
 //
 
-namespace Accord.Imaging
-{
+namespace Accord.Imaging {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -21,8 +20,7 @@ namespace Accord.Imaging
     /// 
     /// <seealso cref="HoughCircleTransformation"/>
     /// 
-    public class HoughCircle : IComparable
-    {
+    public class HoughCircle : IComparable {
         /// <summary>
         /// Circle center's X coordinate.
         /// </summary>
@@ -58,8 +56,7 @@ namespace Accord.Imaging
         /// <param name="intensity">Circle's absolute intensity.</param>
         /// <param name="relativeIntensity">Circle's relative intensity.</param>
         /// 
-        public HoughCircle(int x, int y, int radius, short intensity, double relativeIntensity)
-        {
+        public HoughCircle(int x, int y, int radius, short intensity, double relativeIntensity) {
             X = x;
             Y = y;
             Radius = radius;
@@ -83,8 +80,7 @@ namespace Accord.Imaging
         /// <para><note>Object are compared using their <see cref="Intensity">intensity</see> value.</note></para>
         /// </remarks>
         /// 
-        public int CompareTo(object obj)
-        {
+        public int CompareTo(object obj) {
             return (-Intensity.CompareTo(((HoughCircle)obj).Intensity));
         }
     }
@@ -123,8 +119,7 @@ namespace Accord.Imaging
     /// 
     /// <seealso cref="HoughLineTransformation"/>
     /// 
-    public class HoughCircleTransformation
-    {
+    public class HoughCircleTransformation {
         // circle radius to detect
         private int radiusToDetect;
 
@@ -149,8 +144,7 @@ namespace Accord.Imaging
         /// 
         /// <para>Default value is set to <b>10</b>.</para></remarks>
         ///
-        public short MinCircleIntensity
-        {
+        public short MinCircleIntensity {
             get { return minCircleIntensity; }
             set { minCircleIntensity = value; }
         }
@@ -164,8 +158,7 @@ namespace Accord.Imaging
         /// 
         /// <para>Default value is set to <b>4</b>. Minimum value is <b>1</b>. Maximum value is <b>10</b>.</para></remarks>
         /// 
-        public int LocalPeakRadius
-        {
+        public int LocalPeakRadius {
             get { return localPeakRadius; }
             set { localPeakRadius = Math.Max(1, Math.Min(10, value)); }
         }
@@ -176,8 +169,7 @@ namespace Accord.Imaging
         /// 
         /// <remarks><para>The property provides maximum found circle's intensity.</para></remarks>
         /// 
-        public short MaxIntensity
-        {
+        public short MaxIntensity {
             get { return maxMapIntensity; }
         }
 
@@ -188,8 +180,7 @@ namespace Accord.Imaging
         /// <remarks><para>The property provides total number of found circles, which intensity is higher (or equal to),
         /// than the requested <see cref="MinCircleIntensity">minimum intensity</see>.</para></remarks>
         /// 
-        public int CirclesCount
-        {
+        public int CirclesCount {
             get { return circles.Count; }
         }
 
@@ -199,8 +190,7 @@ namespace Accord.Imaging
         /// 
         /// <param name="radiusToDetect">Circles' radius to detect.</param>
         /// 
-        public HoughCircleTransformation(int radiusToDetect)
-        {
+        public HoughCircleTransformation(int radiusToDetect) {
             this.radiusToDetect = radiusToDetect;
         }
 
@@ -212,11 +202,9 @@ namespace Accord.Imaging
         /// 
         /// <exception cref="UnsupportedImageFormatException">Unsupported pixel format of the source image.</exception>
         /// 
-        public void ProcessImage(Bitmap image)
-        {
+        public void ProcessImage(Bitmap image) {
             // check image format
-            if (image.PixelFormat != PixelFormat.Format8bppIndexed)
-            {
+            if (image.PixelFormat != PixelFormat.Format8bppIndexed) {
                 throw new UnsupportedImageFormatException("Unsupported pixel format of the source image.");
             }
 
@@ -225,13 +213,10 @@ namespace Accord.Imaging
                 new Rectangle(0, 0, image.Width, image.Height),
                 ImageLockMode.ReadOnly, PixelFormat.Format8bppIndexed);
 
-            try
-            {
+            try {
                 // process the image
                 ProcessImage(new UnmanagedImage(imageData));
-            }
-            finally
-            {
+            } finally {
                 // unlock image
                 image.UnlockBits(imageData);
             }
@@ -245,8 +230,7 @@ namespace Accord.Imaging
         /// 
         /// <exception cref="UnsupportedImageFormatException">Unsupported pixel format of the source image.</exception>
         /// 
-        public void ProcessImage(BitmapData imageData)
-        {
+        public void ProcessImage(BitmapData imageData) {
             ProcessImage(new UnmanagedImage(imageData));
         }
 
@@ -258,10 +242,8 @@ namespace Accord.Imaging
         /// 
         /// <exception cref="UnsupportedImageFormatException">Unsupported pixel format of the source image.</exception>
         /// 
-        public void ProcessImage(UnmanagedImage image)
-        {
-            if (image.PixelFormat != PixelFormat.Format8bppIndexed)
-            {
+        public void ProcessImage(UnmanagedImage image) {
+            if (image.PixelFormat != PixelFormat.Format8bppIndexed) {
                 throw new UnsupportedImageFormatException("Unsupported pixel format of the source image.");
             }
 
@@ -275,18 +257,14 @@ namespace Accord.Imaging
             houghMap = new short[height, width];
 
             // do the job
-            unsafe
-            {
+            unsafe {
                 byte* src = (byte*)image.ImageData.ToPointer();
 
                 // for each row
-                for (int y = 0; y < height; y++)
-                {
+                for (int y = 0; y < height; y++) {
                     // for each pixel
-                    for (int x = 0; x < width; x++, src++)
-                    {
-                        if (*src != 0)
-                        {
+                    for (int x = 0; x < width; x++, src++) {
+                        if (*src != 0) {
                             DrawHoughCircle(x, y);
                         }
                     }
@@ -296,12 +274,9 @@ namespace Accord.Imaging
 
             // find max value in Hough map
             maxMapIntensity = 0;
-            for (int i = 0; i < height; i++)
-            {
-                for (int j = 0; j < width; j++)
-                {
-                    if (houghMap[i, j] > maxMapIntensity)
-                    {
+            for (int i = 0; i < height; i++) {
+                for (int j = 0; j < width; j++) {
+                    if (houghMap[i, j] > maxMapIntensity) {
                         maxMapIntensity = houghMap[i, j];
                     }
                 }
@@ -311,7 +286,7 @@ namespace Accord.Imaging
         }
 
         /// <summary>
-        /// Ñonvert Hough map to bitmap. 
+        /// ï¿½onvert Hough map to bitmap. 
         /// </summary>
         /// 
         /// <returns>Returns 8 bppp grayscale bitmap, which shows Hough map.</returns>
@@ -319,8 +294,7 @@ namespace Accord.Imaging
         /// <exception cref="ApplicationException">Hough transformation was not yet done by calling
         /// ProcessImage() method.</exception>
         /// 
-        public Bitmap ToBitmap()
-        {
+        public Bitmap ToBitmap() {
             // check if Hough transformation was made already
             if (houghMap == null)
                 throw new InvalidOperationException("Hough transformation was not done yet.");
@@ -340,14 +314,11 @@ namespace Accord.Imaging
             float scale = 255.0f / maxMapIntensity;
 
             // do the job
-            unsafe
-            {
+            unsafe {
                 byte* dst = (byte*)imageData.Scan0.ToPointer();
 
-                for (int y = 0; y < height; y++)
-                {
-                    for (int x = 0; x < width; x++, dst++)
-                    {
+                for (int y = 0; y < height; y++) {
+                    for (int x = 0; x < width; x++, dst++) {
                         *dst = (byte)System.Math.Min(255, (int)(scale * houghMap[y, x]));
                     }
                     dst += offset;
@@ -369,8 +340,7 @@ namespace Accord.Imaging
         /// <returns>Returns arrary of most intesive circles. If there are no circles detected,
         /// the returned array has zero length.</returns>
         /// 
-        public HoughCircle[] GetMostIntensiveCircles(int count)
-        {
+        public HoughCircle[] GetMostIntensiveCircles(int count) {
             // lines count
             int n = Math.Min(count, circles.Count);
 
@@ -390,8 +360,7 @@ namespace Accord.Imaging
         /// <returns>Returns arrary of most intesive circles. If there are no circles detected,
         /// the returned array has zero length.</returns>
         /// 
-        public HoughCircle[] GetCirclesByRelativeIntensity(double minRelativeIntensity)
-        {
+        public HoughCircle[] GetCirclesByRelativeIntensity(double minRelativeIntensity) {
             int count = 0, n = circles.Count;
 
             while ((count < n) && (((HoughCircle)circles[count]).RelativeIntensity >= minRelativeIntensity))
@@ -402,8 +371,7 @@ namespace Accord.Imaging
 
 
         // Collect circles with intesities greater or equal then specified
-        private void CollectCircles()
-        {
+        private void CollectCircles() {
             short intensity;
             bool foundGreater;
 
@@ -411,11 +379,9 @@ namespace Accord.Imaging
             circles.Clear();
 
             // for each Y coordinate
-            for (int y = 0; y < height; y++)
-            {
+            for (int y = 0; y < height; y++) {
                 // for each X coordinate
-                for (int x = 0; x < width; x++)
-                {
+                for (int x = 0; x < width; x++) {
                     // get current value
                     intensity = houghMap[y, x];
 
@@ -425,8 +391,7 @@ namespace Accord.Imaging
                     foundGreater = false;
 
                     // check neighboors
-                    for (int ty = y - localPeakRadius, tyMax = y + localPeakRadius; ty < tyMax; ty++)
-                    {
+                    for (int ty = y - localPeakRadius, tyMax = y + localPeakRadius; ty < tyMax; ty++) {
                         // continue if the coordinate is out of map
                         if (ty < 0)
                             continue;
@@ -434,8 +399,7 @@ namespace Accord.Imaging
                         if ((foundGreater == true) || (ty >= height))
                             break;
 
-                        for (int tx = x - localPeakRadius, txMax = x + localPeakRadius; tx < txMax; tx++)
-                        {
+                        for (int tx = x - localPeakRadius, txMax = x + localPeakRadius; tx < txMax; tx++) {
                             // continue or break if the coordinate is out of map
                             if (tx < 0)
                                 continue;
@@ -443,8 +407,7 @@ namespace Accord.Imaging
                                 break;
 
                             // compare the neighboor with current value
-                            if (houghMap[ty, tx] > intensity)
-                            {
+                            if (houghMap[ty, tx] > intensity) {
                                 foundGreater = true;
                                 break;
                             }
@@ -452,8 +415,7 @@ namespace Accord.Imaging
                     }
 
                     // was it local maximum ?
-                    if (!foundGreater)
-                    {
+                    if (!foundGreater) {
                         // we have local maximum
                         circles.Add(new HoughCircle(x, y, radiusToDetect, intensity, (double)intensity / maxMapIntensity));
                     }
@@ -468,23 +430,18 @@ namespace Accord.Imaging
         //
         // TODO: more optimizations of circle drawing could be done.
         //
-        private void DrawHoughCircle(int xCenter, int yCenter)
-        {
+        private void DrawHoughCircle(int xCenter, int yCenter) {
             int x = 0;
             int y = radiusToDetect;
             int p = (5 - radiusToDetect * 4) / 4;
 
             SetHoughCirclePoints(xCenter, yCenter, x, y);
 
-            while (x < y)
-            {
+            while (x < y) {
                 x++;
-                if (p < 0)
-                {
+                if (p < 0) {
                     p += 2 * x + 1;
-                }
-                else
-                {
+                } else {
                     y--;
                     p += 2 * (x - y) + 1;
                 }
@@ -493,24 +450,18 @@ namespace Accord.Imaging
         }
 
         // Set circle points
-        private void SetHoughCirclePoints(int cx, int cy, int x, int y)
-        {
-            if (x == 0)
-            {
+        private void SetHoughCirclePoints(int cx, int cy, int x, int y) {
+            if (x == 0) {
                 SetHoughPoint(cx, cy + y);
                 SetHoughPoint(cx, cy - y);
                 SetHoughPoint(cx + y, cy);
                 SetHoughPoint(cx - y, cy);
-            }
-            else if (x == y)
-            {
+            } else if (x == y) {
                 SetHoughPoint(cx + x, cy + y);
                 SetHoughPoint(cx - x, cy + y);
                 SetHoughPoint(cx + x, cy - y);
                 SetHoughPoint(cx - x, cy - y);
-            }
-            else if (x < y)
-            {
+            } else if (x < y) {
                 SetHoughPoint(cx + x, cy + y);
                 SetHoughPoint(cx - x, cy + y);
                 SetHoughPoint(cx + x, cy - y);
@@ -523,10 +474,8 @@ namespace Accord.Imaging
         }
 
         // Set point
-        private void SetHoughPoint(int x, int y)
-        {
-            if ((x >= 0) && (y >= 0) && (x < width) && (y < height))
-            {
+        private void SetHoughPoint(int x, int y) {
+            if ((x >= 0) && (y >= 0) && (x < width) && (y < height)) {
                 houghMap[y, x]++;
             }
         }

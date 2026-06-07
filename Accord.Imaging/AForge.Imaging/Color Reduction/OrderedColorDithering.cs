@@ -6,8 +6,7 @@
 // contacts@aforgenet.com
 //
 
-namespace Accord.Imaging.ColorReduction
-{
+namespace Accord.Imaging.ColorReduction {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -47,8 +46,7 @@ namespace Accord.Imaging.ColorReduction
     /// <img src="..\images\imaging\ordered_color_dithering.png" width="480" height="361" />
     /// </remarks>
     /// 
-    public class OrderedColorDithering
-    {
+    public class OrderedColorDithering {
         private bool useCaching = false;
 
         private Color[] colorTable = new Color[16]
@@ -60,12 +58,12 @@ namespace Accord.Imaging.ColorReduction
         };
 
         private byte[,] matrix = new byte[4, 4]
-		{
-			{  2, 18,  6, 22 },
-			{ 26, 10, 30, 14 },
-			{  8, 24,  4, 20 },
-			{ 32, 16, 28, 12 }
-		};
+        {
+            {  2, 18,  6, 22 },
+            { 26, 10, 30, 14 },
+            {  8, 24,  4, 20 },
+            { 32, 16, 28, 12 }
+        };
 
         /// <summary>
         /// Threshold matrix - values to add source image's values.
@@ -86,11 +84,9 @@ namespace Accord.Imaging.ColorReduction
         /// </para>
         /// </remarks>
         /// 
-        public byte[,] ThresholdMatrix
-        {
+        public byte[,] ThresholdMatrix {
             get { return (byte[,])matrix.Clone(); }
-            set
-            {
+            set {
                 if (value == null)
                     throw new InvalidOperationException("Threshold matrix cannot be set to null.");
 
@@ -114,11 +110,9 @@ namespace Accord.Imaging.ColorReduction
         /// 
         /// <exception cref="ArgumentException">Color table length must be in the [2, 256] range.</exception>
         /// 
-        public Color[] ColorTable
-        {
+        public Color[] ColorTable {
             get { return colorTable; }
-            set
-            {
+            set {
                 if ((colorTable.Length < 2) || (colorTable.Length > 256))
                     throw new ArgumentException("Color table length must be in the [2, 256] range.");
 
@@ -142,8 +136,7 @@ namespace Accord.Imaging.ColorReduction
         /// <para>Default value is set to <see langword="false"/>.</para>
         /// </remarks>
         /// 
-        public bool UseCaching
-        {
+        public bool UseCaching {
             get { return useCaching; }
             set { useCaching = value; }
         }
@@ -152,8 +145,7 @@ namespace Accord.Imaging.ColorReduction
         /// Initializes a new instance of the <see cref="OrderedColorDithering"/> class.
         /// </summary>
         /// 
-        public OrderedColorDithering()
-        {
+        public OrderedColorDithering() {
         }
 
         /// <summary>
@@ -162,8 +154,7 @@ namespace Accord.Imaging.ColorReduction
         /// 
         /// <param name="matrix">Threshold matrix (see <see cref="ThresholdMatrix"/> property).</param>
         /// 
-        public OrderedColorDithering(byte[,] matrix)
-        {
+        public OrderedColorDithering(byte[,] matrix) {
             ThresholdMatrix = matrix;
         }
 
@@ -178,20 +169,16 @@ namespace Accord.Imaging.ColorReduction
         /// 
         /// <exception cref="UnsupportedImageFormatException">Unsupported pixel format of the source image. It must 24 or 32 bpp color image.</exception>
         /// 
-        public Bitmap Apply(Bitmap sourceImage)
-        {
+        public Bitmap Apply(Bitmap sourceImage) {
             BitmapData data = sourceImage.LockBits(new Rectangle(0, 0, sourceImage.Width, sourceImage.Height),
                 ImageLockMode.ReadOnly, sourceImage.PixelFormat);
 
             Bitmap result = null;
 
-            try
-            {
+            try {
                 result = Apply(new UnmanagedImage(data));
                 result.CopyResolutionFrom(sourceImage);
-            }
-            finally
-            {
+            } finally {
                 sourceImage.UnlockBits(data);
             }
 
@@ -209,13 +196,11 @@ namespace Accord.Imaging.ColorReduction
         /// 
         /// <exception cref="UnsupportedImageFormatException">Unsupported pixel format of the source image. It must 24 or 32 bpp color image.</exception>
         /// 
-        public Bitmap Apply(UnmanagedImage sourceImage)
-        {
+        public Bitmap Apply(UnmanagedImage sourceImage) {
             if ((sourceImage.PixelFormat != PixelFormat.Format24bppRgb) &&
                  (sourceImage.PixelFormat != PixelFormat.Format32bppRgb) &&
                  (sourceImage.PixelFormat != PixelFormat.Format32bppArgb) &&
-                 (sourceImage.PixelFormat != PixelFormat.Format32bppPArgb))
-            {
+                 (sourceImage.PixelFormat != PixelFormat.Format32bppPArgb)) {
                 throw new UnsupportedImageFormatException("Unsupported pixel format of the source image.");
             }
 
@@ -233,8 +218,7 @@ namespace Accord.Imaging.ColorReduction
                 PixelFormat.Format8bppIndexed : PixelFormat.Format4bppIndexed);
             // and init its palette
             ColorPalette cp = destImage.Palette;
-            for (int i = 0, n = colorTable.Length; i < n; i++)
-            {
+            for (int i = 0, n = colorTable.Length; i < n; i++) {
                 cp.Entries[i] = colorTable[i];
             }
             destImage.Palette = cp;
@@ -250,8 +234,7 @@ namespace Accord.Imaging.ColorReduction
 
 
             // do the job
-            unsafe
-            {
+            unsafe {
                 byte* ptr = (byte*)sourceImage.ImageData.ToPointer();
                 byte* dstBase = (byte*)destData.Scan0.ToPointer();
                 byte colorIndex;
@@ -259,13 +242,11 @@ namespace Accord.Imaging.ColorReduction
                 bool is8bpp = (colorTable.Length > 16);
 
                 // for each line
-                for (int y = 0; y < height; y++)
-                {
+                for (int y = 0; y < height; y++) {
                     byte* dst = dstBase + y * destData.Stride;
 
                     // for each pixels
-                    for (int x = 0; x < width; x++, ptr += pixelSize)
-                    {
+                    for (int x = 0; x < width; x++, ptr += pixelSize) {
                         toAdd = matrix[(y % rows), (x % cols)];
                         r = ptr[RGB.R] + toAdd;
                         g = ptr[RGB.G] + toAdd;
@@ -282,19 +263,13 @@ namespace Accord.Imaging.ColorReduction
                         GetClosestColor(r, g, b, out colorIndex);
 
                         // write color index as pixel's value to destination image
-                        if (is8bpp)
-                        {
+                        if (is8bpp) {
                             *dst = colorIndex;
                             dst++;
-                        }
-                        else
-                        {
-                            if (x % 2 == 0)
-                            {
+                        } else {
+                            if (x % 2 == 0) {
                                 *dst |= (byte)(colorIndex << 4);
-                            }
-                            else
-                            {
+                            } else {
                                 *dst |= (colorIndex);
                                 dst++;
                             }
@@ -312,36 +287,29 @@ namespace Accord.Imaging.ColorReduction
         private Dictionary<Color, byte> cache = new Dictionary<Color, byte>();
 
         // Get closest color from palette to the specified color
-        private Color GetClosestColor(int red, int green, int blue, out byte colorIndex)
-        {
+        private Color GetClosestColor(int red, int green, int blue, out byte colorIndex) {
             Color color = Color.FromArgb(red, green, blue);
 
-            if ((useCaching) && (cache.ContainsKey(color)))
-            {
+            if ((useCaching) && (cache.ContainsKey(color))) {
                 colorIndex = cache[color];
-            }
-            else
-            {
+            } else {
                 colorIndex = 0;
                 int minError = int.MaxValue;
 
-                for (int i = 0, n = colorTable.Length; i < n; i++)
-                {
+                for (int i = 0, n = colorTable.Length; i < n; i++) {
                     int dr = red - colorTable[i].R;
                     int dg = green - colorTable[i].G;
                     int db = blue - colorTable[i].B;
 
                     int error = dr * dr + dg * dg + db * db;
 
-                    if (error < minError)
-                    {
+                    if (error < minError) {
                         minError = error;
                         colorIndex = (byte)i;
                     }
                 }
 
-                if (useCaching)
-                {
+                if (useCaching) {
                     cache.Add(color, colorIndex);
                 }
             }

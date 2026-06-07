@@ -2,14 +2,14 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © Andrew Kirillov, 2005-2009
+// Copyright ï¿½ Andrew Kirillov, 2005-2009
 // andrew.kirillov@aforgenet.com
 //
 // Accord Imaging Library
 // The Accord.NET Framework
 // http://accord-framework.net
 //
-// Copyright © César Souza, 2009-2017
+// Copyright ï¿½ Cï¿½sar Souza, 2009-2017
 // cesarsouza at gmail.com
 //
 //    This library is free software; you can redistribute it and/or
@@ -27,8 +27,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging
-{
+namespace Accord.Imaging {
     using System;
     using System.Drawing;
     using System.Drawing.Imaging;
@@ -72,8 +71,7 @@ namespace Accord.Imaging
     /// </code>
     /// </remarks>
     /// 
-    public class RecursiveBlobCounter : BlobCounterBase
-    {
+    public class RecursiveBlobCounter : BlobCounterBase {
         // temporary variable
         private int[] tempLabels;
         private int stride;
@@ -98,11 +96,9 @@ namespace Accord.Imaging
         ///
         /// <para>Default value is set to <b>(0, 0, 0)</b> - black colour.</para></remarks>
         /// 
-        public Color BackgroundThreshold
-        {
+        public Color BackgroundThreshold {
             get { return Color.FromArgb(backgroundThresholdR, backgroundThresholdG, backgroundThresholdB); }
-            set
-            {
+            set {
                 backgroundThresholdR = value.R;
                 backgroundThresholdG = value.G;
                 backgroundThresholdB = value.B;
@@ -119,8 +115,7 @@ namespace Accord.Imaging
         /// <see cref="BlobCounterBase.ProcessImage(BitmapData)"/> or <see cref="BlobCounterBase.ProcessImage(UnmanagedImage)"/>
         /// method should be called to collect objects map.</remarks>
         /// 
-        public RecursiveBlobCounter()
-        {
+        public RecursiveBlobCounter() {
         }
 
         /// <summary>
@@ -130,8 +125,7 @@ namespace Accord.Imaging
         /// <param name="image">Image to look for objects in.</param>
         /// 
         public RecursiveBlobCounter(Bitmap image)
-            : base(image)
-        {
+            : base(image) {
         }
 
         /// <summary>
@@ -141,8 +135,7 @@ namespace Accord.Imaging
         /// <param name="imageData">Image data to look for objects in.</param>
         /// 
         public RecursiveBlobCounter(BitmapData imageData)
-            : base(imageData)
-        {
+            : base(imageData) {
         }
 
         /// <summary>
@@ -152,8 +145,7 @@ namespace Accord.Imaging
         /// <param name="image">Unmanaged image to look for objects in.</param>
         /// 
         public RecursiveBlobCounter(UnmanagedImage image)
-            : base(image)
-        {
+            : base(image) {
         }
 
         /// <summary>
@@ -166,8 +158,7 @@ namespace Accord.Imaging
         /// 
         /// <exception cref="UnsupportedImageFormatException">Unsupported pixel format of the source image.</exception>
         /// 
-        protected override void BuildObjectsMap(UnmanagedImage image)
-        {
+        protected override void BuildObjectsMap(UnmanagedImage image) {
             this.stride = image.Stride;
 
             // check pixel format
@@ -175,21 +166,18 @@ namespace Accord.Imaging
                  (image.PixelFormat != PixelFormat.Format24bppRgb) &&
                  (image.PixelFormat != PixelFormat.Format32bppRgb) &&
                  (image.PixelFormat != PixelFormat.Format32bppArgb) &&
-                 (image.PixelFormat != PixelFormat.Format32bppPArgb))
-            {
+                 (image.PixelFormat != PixelFormat.Format32bppPArgb)) {
                 throw new UnsupportedImageFormatException("Unsupported pixel format of the source image.");
             }
 
             // allocate temporary labels array
             tempLabels = new int[(ImageWidth + 2) * (ImageHeight + 2)];
             // fill boundaries with reserved value
-            for (int x = 0, mx = ImageWidth + 2; x < mx; x++)
-            {
+            for (int x = 0, mx = ImageWidth + 2; x < mx; x++) {
                 tempLabels[x] = -1;
                 tempLabels[x + (ImageHeight + 1) * (ImageWidth + 2)] = -1;
             }
-            for (int y = 0, my = ImageHeight + 2; y < my; y++)
-            {
+            for (int y = 0, my = ImageHeight + 2; y < my; y++) {
                 tempLabels[y * (ImageWidth + 2)] = -1;
                 tempLabels[y * (ImageWidth + 2) + ImageWidth + 1] = -1;
             }
@@ -198,24 +186,19 @@ namespace Accord.Imaging
             ObjectsCount = 0;
 
             // do the job
-            unsafe
-            {
+            unsafe {
                 byte* src = (byte*)image.ImageData.ToPointer();
                 int p = ImageWidth + 2 + 1;
 
-                if (image.PixelFormat == PixelFormat.Format8bppIndexed)
-                {
+                if (image.PixelFormat == PixelFormat.Format8bppIndexed) {
                     int offset = stride - ImageWidth;
 
                     // for each line
-                    for (int y = 0; y < ImageHeight; y++)
-                    {
+                    for (int y = 0; y < ImageHeight; y++) {
                         // for each pixel
-                        for (int x = 0; x < ImageWidth; x++, src++, p++)
-                        {
+                        for (int x = 0; x < ImageWidth; x++, src++, p++) {
                             // check for non-labeled pixel
-                            if ((*src > backgroundThresholdG) && (tempLabels[p] == 0))
-                            {
+                            if ((*src > backgroundThresholdG) && (tempLabels[p] == 0)) {
                                 ObjectsCount++;
                                 LabelPixel(src, p);
                             }
@@ -223,26 +206,21 @@ namespace Accord.Imaging
                         src += offset;
                         p += 2;
                     }
-                }
-                else
-                {
+                } else {
                     pixelSize = Bitmap.GetPixelFormatSize(image.PixelFormat) / 8;
                     int offset = stride - ImageWidth * pixelSize;
 
                     // for each line
-                    for (int y = 0; y < ImageHeight; y++)
-                    {
+                    for (int y = 0; y < ImageHeight; y++) {
                         // for each pixel
-                        for (int x = 0; x < ImageWidth; x++, src += pixelSize, p++)
-                        {
+                        for (int x = 0; x < ImageWidth; x++, src += pixelSize, p++) {
                             // check for non-labeled pixel
                             if ((
                                     (src[RGB.R] > backgroundThresholdR) ||
                                     (src[RGB.G] > backgroundThresholdG) ||
                                     (src[RGB.B] > backgroundThresholdB)
                                   ) &&
-                                (tempLabels[p] == 0))
-                            {
+                                (tempLabels[p] == 0)) {
                                 ObjectsCount++;
                                 LabelColorPixel(src, p);
                             }
@@ -260,10 +238,8 @@ namespace Accord.Imaging
                 Array.Copy(tempLabels, (y + 1) * (ImageWidth + 2) + 1, ObjectLabels, y * ImageWidth, ImageWidth);
         }
 
-        private unsafe void LabelPixel(byte* pixel, int labelPointer)
-        {
-            if ((tempLabels[labelPointer] == 0) && (*pixel > backgroundThresholdG))
-            {
+        private unsafe void LabelPixel(byte* pixel, int labelPointer) {
+            if ((tempLabels[labelPointer] == 0) && (*pixel > backgroundThresholdG)) {
                 tempLabels[labelPointer] = ObjectsCount;
 
                 LabelPixel(pixel + 1, labelPointer + 1);                              // x + 1, y
@@ -277,13 +253,11 @@ namespace Accord.Imaging
             }
         }
 
-        private unsafe void LabelColorPixel(byte* pixel, int labelPointer)
-        {
+        private unsafe void LabelColorPixel(byte* pixel, int labelPointer) {
             if ((tempLabels[labelPointer] == 0) && (
                 (pixel[RGB.R] > backgroundThresholdR) ||
                 (pixel[RGB.G] > backgroundThresholdG) ||
-                (pixel[RGB.B] > backgroundThresholdB)))
-            {
+                (pixel[RGB.B] > backgroundThresholdB))) {
                 tempLabels[labelPointer] = ObjectsCount;
 
                 LabelColorPixel(pixel + pixelSize, labelPointer + 1);                              // x + 1, y

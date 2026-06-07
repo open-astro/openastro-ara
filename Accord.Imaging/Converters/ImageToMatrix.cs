@@ -20,8 +20,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging.Converters
-{
+namespace Accord.Imaging.Converters {
     using System.Drawing;
     using System.Drawing.Imaging;
     using Accord.Imaging;
@@ -123,8 +122,7 @@ namespace Accord.Imaging.Converters
         IConverter<Bitmap, Complex[,]>,
         IConverter<Bitmap, Complex[][]>,
         IConverter<UnmanagedImage, Complex[,]>,
-        IConverter<UnmanagedImage, Complex[][]>
-    {
+        IConverter<UnmanagedImage, Complex[][]> {
 
         /// <summary>
         ///   Gets or sets the maximum double value in the
@@ -161,8 +159,7 @@ namespace Accord.Imaging.Converters
         /// </param>
         /// <param name="channel">The channel to extract. Default is 0.</param>
         ///   
-        public ImageToMatrix(double min, double max, int channel)
-        {
+        public ImageToMatrix(double min, double max, int channel) {
             this.Min = min;
             this.Max = max;
             this.Channel = channel;
@@ -173,8 +170,7 @@ namespace Accord.Imaging.Converters
         /// </summary>
         /// 
         public ImageToMatrix()
-            : this(0, 1)
-        {
+            : this(0, 1) {
         }
 
         /// <summary>
@@ -200,8 +196,7 @@ namespace Accord.Imaging.Converters
         /// <param name="input">The input image to be converted.</param>
         /// <param name="output">The converted image.</param>
         /// 
-        public void Convert(Bitmap input, out double[,] output)
-        {
+        public void Convert(Bitmap input, out double[,] output) {
             Accord.Imaging.Tools.CheckGrayscale(input);
 
             BitmapData bitmapData = input.LockBits(ImageLockMode.ReadOnly);
@@ -218,8 +213,7 @@ namespace Accord.Imaging.Converters
         /// <param name="input">The input image to be converted.</param>
         /// <param name="output">The converted image.</param>
         /// 
-        public void Convert(Bitmap input, out double[][] output)
-        {
+        public void Convert(Bitmap input, out double[][] output) {
             Accord.Imaging.Tools.CheckGrayscale(input);
 
             BitmapData bitmapData = input.LockBits(ImageLockMode.ReadOnly);
@@ -236,8 +230,7 @@ namespace Accord.Imaging.Converters
         /// <param name="input">The input image to be converted.</param>
         /// <param name="output">The converted image.</param>
         /// 
-        public void Convert(Bitmap input, out float[,] output)
-        {
+        public void Convert(Bitmap input, out float[,] output) {
             Accord.Imaging.Tools.CheckGrayscale(input);
 
             BitmapData bitmapData = input.LockBits(ImageLockMode.ReadOnly);
@@ -254,8 +247,7 @@ namespace Accord.Imaging.Converters
         /// <param name="input">The input image to be converted.</param>
         /// <param name="output">The converted image.</param>
         /// 
-        public void Convert(Bitmap input, out float[][] output)
-        {
+        public void Convert(Bitmap input, out float[][] output) {
             Accord.Imaging.Tools.CheckGrayscale(input);
 
             BitmapData bitmapData = input.LockBits(ImageLockMode.ReadOnly);
@@ -272,8 +264,7 @@ namespace Accord.Imaging.Converters
         /// <param name="input">The input image to be converted.</param>
         /// <param name="output">The converted image.</param>
         /// 
-        public void Convert(Bitmap input, out byte[,] output)
-        {
+        public void Convert(Bitmap input, out byte[,] output) {
             Accord.Imaging.Tools.CheckGrayscale(input);
 
             BitmapData bitmapData = input.LockBits(ImageLockMode.ReadOnly);
@@ -290,8 +281,7 @@ namespace Accord.Imaging.Converters
         /// <param name="input">The input image to be converted.</param>
         /// <param name="output">The converted image.</param>
         /// 
-        public void Convert(Bitmap input, out byte[][] output)
-        {
+        public void Convert(Bitmap input, out byte[][] output) {
             Accord.Imaging.Tools.CheckGrayscale(input);
 
             BitmapData bitmapData = input.LockBits(ImageLockMode.ReadOnly);
@@ -308,8 +298,7 @@ namespace Accord.Imaging.Converters
         /// <param name="input">The input image to be converted.</param>
         /// <param name="output">The converted image.</param>
         /// 
-        public void Convert(Bitmap input, out Color[,] output)
-        {
+        public void Convert(Bitmap input, out Color[,] output) {
             Accord.Imaging.Tools.CheckGrayscale(input);
 
             BitmapData bitmapData = input.LockBits(ImageLockMode.ReadOnly);
@@ -326,8 +315,7 @@ namespace Accord.Imaging.Converters
         /// <param name="input">The input image to be converted.</param>
         /// <param name="output">The converted image.</param>
         /// 
-        public void Convert(Bitmap input, out Color[][] output)
-        {
+        public void Convert(Bitmap input, out Color[][] output) {
             Accord.Imaging.Tools.CheckGrayscale(input);
 
             BitmapData bitmapData = input.LockBits(ImageLockMode.ReadOnly);
@@ -345,8 +333,7 @@ namespace Accord.Imaging.Converters
         /// <param name="input">The input image to be converted.</param>
         /// <param name="output">The converted image.</param>
         /// 
-        public void Convert(Bitmap input, out Complex[,] output)
-        {
+        public void Convert(Bitmap input, out Complex[,] output) {
             Accord.Imaging.Tools.CheckGrayscale(input);
 
             BitmapData bitmapData = input.LockBits(ImageLockMode.ReadOnly);
@@ -363,8 +350,7 @@ namespace Accord.Imaging.Converters
         /// <param name="input">The input image to be converted.</param>
         /// <param name="output">The converted image.</param>
         /// 
-        public void Convert(Bitmap input, out Complex[][] output)
-        {
+        public void Convert(Bitmap input, out Complex[][] output) {
             Accord.Imaging.Tools.CheckGrayscale(input);
 
             BitmapData bitmapData = input.LockBits(ImageLockMode.ReadOnly);
@@ -381,8 +367,7 @@ namespace Accord.Imaging.Converters
         /// <param name="input">The input image to be converted.</param>
         /// <param name="output">The converted image.</param>
         /// 
-        public void Convert(Bitmap input, out double[,,] output)
-        {
+        public void Convert(Bitmap input, out double[,,] output) {
             Accord.Imaging.Tools.CheckGrayscale(input);
 
             BitmapData bitmapData = input.LockBits(ImageLockMode.ReadOnly);
@@ -399,8 +384,7 @@ namespace Accord.Imaging.Converters
         /// <param name="input">The input image to be converted.</param>
         /// <param name="output">The converted image.</param>
         /// 
-        public void Convert(Bitmap input, out double[][][] output)
-        {
+        public void Convert(Bitmap input, out double[][][] output) {
             Accord.Imaging.Tools.CheckGrayscale(input);
 
             BitmapData bitmapData = input.LockBits(ImageLockMode.ReadOnly);
@@ -417,8 +401,7 @@ namespace Accord.Imaging.Converters
         /// <param name="input">The input image to be converted.</param>
         /// <param name="output">The converted image.</param>
         /// 
-        public void Convert(Bitmap input, out float[,,] output)
-        {
+        public void Convert(Bitmap input, out float[,,] output) {
             Accord.Imaging.Tools.CheckGrayscale(input);
 
             BitmapData bitmapData = input.LockBits(ImageLockMode.ReadOnly);
@@ -435,8 +418,7 @@ namespace Accord.Imaging.Converters
         /// <param name="input">The input image to be converted.</param>
         /// <param name="output">The converted image.</param>
         /// 
-        public void Convert(Bitmap input, out float[][][] output)
-        {
+        public void Convert(Bitmap input, out float[][][] output) {
             Accord.Imaging.Tools.CheckGrayscale(input);
 
             BitmapData bitmapData = input.LockBits(ImageLockMode.ReadOnly);
@@ -453,8 +435,7 @@ namespace Accord.Imaging.Converters
         /// <param name="input">The input image to be converted.</param>
         /// <param name="output">The converted image.</param>
         /// 
-        public void Convert(Bitmap input, out byte[,,] output)
-        {
+        public void Convert(Bitmap input, out byte[,,] output) {
             Accord.Imaging.Tools.CheckGrayscale(input);
 
             BitmapData bitmapData = input.LockBits(ImageLockMode.ReadOnly);
@@ -471,8 +452,7 @@ namespace Accord.Imaging.Converters
         /// <param name="input">The input image to be converted.</param>
         /// <param name="output">The converted image.</param>
         /// 
-        public void Convert(Bitmap input, out byte[][][] output)
-        {
+        public void Convert(Bitmap input, out byte[][][] output) {
             Accord.Imaging.Tools.CheckGrayscale(input);
 
             BitmapData bitmapData = input.LockBits(ImageLockMode.ReadOnly);
@@ -493,8 +473,7 @@ namespace Accord.Imaging.Converters
         /// <param name="input">The input image to be converted.</param>
         /// <param name="output">The converted image.</param>
         /// 
-        public void Convert(UnmanagedImage input, out double[,] output)
-        {
+        public void Convert(UnmanagedImage input, out double[,] output) {
             int width = input.Width;
             int height = input.Height;
             int pixelSize = input.PixelSize;
@@ -502,15 +481,12 @@ namespace Accord.Imaging.Converters
 
             output = new double[height, width];
 
-            unsafe
-            {
-                fixed (double* ptrData = output)
-                {
+            unsafe {
+                fixed (double* ptrData = output) {
                     double* dst = ptrData;
                     byte* src = (byte*)input.ImageData.ToPointer() + Channel;
 
-                    for (int y = 0; y < height; y++)
-                    {
+                    for (int y = 0; y < height; y++) {
                         for (int x = 0; x < width; x++, src += pixelSize, dst++)
                             *dst = Vector.Scale(*src, (byte)0, (byte)255, Min, Max);
                         src += offset;
@@ -526,8 +502,7 @@ namespace Accord.Imaging.Converters
         /// <param name="input">The input image to be converted.</param>
         /// <param name="output">The converted image.</param>
         /// 
-        public void Convert(UnmanagedImage input, out double[][] output)
-        {
+        public void Convert(UnmanagedImage input, out double[][] output) {
             int width = input.Width;
             int height = input.Height;
             int pixelSize = input.PixelSize;
@@ -535,12 +510,10 @@ namespace Accord.Imaging.Converters
 
             output = Jagged.Zeros(height, width);
 
-            unsafe
-            {
+            unsafe {
                 byte* src = (byte*)input.ImageData.ToPointer() + Channel;
 
-                for (int y = 0; y < height; y++)
-                {
+                for (int y = 0; y < height; y++) {
                     for (int x = 0; x < width; x++, src += pixelSize)
                         output[y][x] = Vector.Scale(*src, (byte)0, (byte)255, Min, Max);
                     src += offset;
@@ -555,8 +528,7 @@ namespace Accord.Imaging.Converters
         /// <param name="input">The input image to be converted.</param>
         /// <param name="output">The converted image.</param>
         /// 
-        public void Convert(UnmanagedImage input, out float[,] output)
-        {
+        public void Convert(UnmanagedImage input, out float[,] output) {
             int width = input.Width;
             int height = input.Height;
             int pixelSize = input.PixelSize;
@@ -567,15 +539,12 @@ namespace Accord.Imaging.Converters
             float min = (float)Min;
             float max = (float)Max;
 
-            unsafe
-            {
-                fixed (float* ptrData = output)
-                {
+            unsafe {
+                fixed (float* ptrData = output) {
                     float* dst = ptrData;
                     byte* src = (byte*)input.ImageData.ToPointer() + Channel;
 
-                    for (int y = 0; y < height; y++)
-                    {
+                    for (int y = 0; y < height; y++) {
                         for (int x = 0; x < width; x++, src += pixelSize, dst++)
                             *dst = Vector.Scale(*src, (byte)0, (byte)255, min, max);
                         src += offset;
@@ -591,8 +560,7 @@ namespace Accord.Imaging.Converters
         /// <param name="input">The input image to be converted.</param>
         /// <param name="output">The converted image.</param>
         /// 
-        public void Convert(UnmanagedImage input, out float[][] output)
-        {
+        public void Convert(UnmanagedImage input, out float[][] output) {
             int width = input.Width;
             int height = input.Height;
             int pixelSize = input.PixelSize;
@@ -603,12 +571,10 @@ namespace Accord.Imaging.Converters
             float min = (float)Min;
             float max = (float)Max;
 
-            unsafe
-            {
+            unsafe {
                 byte* src = (byte*)input.ImageData.ToPointer() + Channel;
 
-                for (int y = 0; y < height; y++)
-                {
+                for (int y = 0; y < height; y++) {
                     for (int x = 0; x < width; x++, src += pixelSize)
                         output[y][x] = Vector.Scale(*src, (byte)0, (byte)255, min, max);
                     src += offset;
@@ -625,8 +591,7 @@ namespace Accord.Imaging.Converters
         /// <param name="input">The input image to be converted.</param>
         /// <param name="output">The converted image.</param>
         /// 
-        public void Convert(UnmanagedImage input, out byte[,] output)
-        {
+        public void Convert(UnmanagedImage input, out byte[,] output) {
             int width = input.Width;
             int height = input.Height;
             int pixelSize = input.PixelSize;
@@ -634,15 +599,12 @@ namespace Accord.Imaging.Converters
 
             output = new byte[height, width];
 
-            unsafe
-            {
-                fixed (byte* ptrData = output)
-                {
+            unsafe {
+                fixed (byte* ptrData = output) {
                     byte* dst = ptrData;
                     byte* src = (byte*)input.ImageData.ToPointer() + Channel;
 
-                    for (int y = 0; y < height; y++)
-                    {
+                    for (int y = 0; y < height; y++) {
                         for (int x = 0; x < width; x++, src += pixelSize, dst++)
                             *dst = *src;
                         src += offset;
@@ -660,8 +622,7 @@ namespace Accord.Imaging.Converters
         /// <param name="input">The input image to be converted.</param>
         /// <param name="output">The converted image.</param>
         /// 
-        public void Convert(UnmanagedImage input, out byte[][] output)
-        {
+        public void Convert(UnmanagedImage input, out byte[][] output) {
             int width = input.Width;
             int height = input.Height;
             int pixelSize = input.PixelSize;
@@ -669,12 +630,10 @@ namespace Accord.Imaging.Converters
 
             output = Jagged.Zeros<byte>(height, width);
 
-            unsafe
-            {
+            unsafe {
                 byte* src = (byte*)input.ImageData.ToPointer() + Channel;
 
-                for (int y = 0; y < height; y++)
-                {
+                for (int y = 0; y < height; y++) {
                     for (int x = 0; x < width; x++, src += pixelSize)
                         output[y][x] = *src;
                     src += offset;
@@ -691,8 +650,7 @@ namespace Accord.Imaging.Converters
         /// <param name="input">The input image to be converted.</param>
         /// <param name="output">The converted image.</param>
         /// 
-        public void Convert(UnmanagedImage input, out Color[,] output)
-        {
+        public void Convert(UnmanagedImage input, out Color[,] output) {
             int width = input.Width;
             int height = input.Height;
             int pixelSize = input.PixelSize;
@@ -700,44 +658,33 @@ namespace Accord.Imaging.Converters
 
             output = new Color[input.Height, input.Width];
 
-            unsafe
-            {
-                if (input.PixelFormat == PixelFormat.Format8bppIndexed)
-                {
+            unsafe {
+                if (input.PixelFormat == PixelFormat.Format8bppIndexed) {
                     byte* src = (byte*)input.ImageData.ToPointer();
 
-                    for (int y = 0; y < height; y++)
-                    {
+                    for (int y = 0; y < height; y++) {
                         for (int x = 0; x < width; x++, src += pixelSize)
                             output[y, x] = Color.FromArgb(*src, *src, *src);
                         src += offset;
                     }
-                }
-                else if (input.PixelFormat == PixelFormat.Format24bppRgb
-                      || input.PixelFormat == PixelFormat.Format32bppRgb)
-                {
+                } else if (input.PixelFormat == PixelFormat.Format24bppRgb
+                        || input.PixelFormat == PixelFormat.Format32bppRgb) {
                     byte* src = (byte*)input.ImageData.ToPointer();
 
-                    for (int y = 0; y < height; y++)
-                    {
+                    for (int y = 0; y < height; y++) {
                         for (int x = 0; x < width; x++, src += pixelSize)
                             output[y, x] = Color.FromArgb(src[RGB.R], src[RGB.G], src[RGB.B]);
                         src += offset;
                     }
-                }
-                else if (input.PixelFormat == PixelFormat.Format32bppArgb)
-                {
+                } else if (input.PixelFormat == PixelFormat.Format32bppArgb) {
                     byte* src = (byte*)input.ImageData.ToPointer();
 
-                    for (int y = 0; y < height; y++)
-                    {
+                    for (int y = 0; y < height; y++) {
                         for (int x = 0; x < width; x++, src += pixelSize)
                             output[y, x] = Color.FromArgb(src[RGB.A], src[RGB.R], src[RGB.G], src[RGB.B]);
                         src += offset;
                     }
-                }
-                else
-                {
+                } else {
                     throw new UnsupportedImageFormatException("Pixel format is not supported.");
                 }
             }
@@ -752,8 +699,7 @@ namespace Accord.Imaging.Converters
         /// <param name="input">The input image to be converted.</param>
         /// <param name="output">The converted image.</param>
         /// 
-        public void Convert(UnmanagedImage input, out Color[][] output)
-        {
+        public void Convert(UnmanagedImage input, out Color[][] output) {
             int width = input.Width;
             int height = input.Height;
             int pixelSize = input.PixelSize;
@@ -761,44 +707,33 @@ namespace Accord.Imaging.Converters
 
             output = Jagged.Zeros<Color>(input.Height, input.Width);
 
-            unsafe
-            {
-                if (input.PixelFormat == PixelFormat.Format8bppIndexed)
-                {
+            unsafe {
+                if (input.PixelFormat == PixelFormat.Format8bppIndexed) {
                     byte* src = (byte*)input.ImageData.ToPointer();
 
-                    for (int y = 0; y < height; y++)
-                    {
+                    for (int y = 0; y < height; y++) {
                         for (int x = 0; x < width; x++, src += pixelSize)
                             output[y][x] = Color.FromArgb(*src, *src, *src);
                         src += offset;
                     }
-                }
-                else if (input.PixelFormat == PixelFormat.Format24bppRgb
-                      || input.PixelFormat == PixelFormat.Format32bppRgb)
-                {
+                } else if (input.PixelFormat == PixelFormat.Format24bppRgb
+                        || input.PixelFormat == PixelFormat.Format32bppRgb) {
                     byte* src = (byte*)input.ImageData.ToPointer();
 
-                    for (int y = 0; y < height; y++)
-                    {
+                    for (int y = 0; y < height; y++) {
                         for (int x = 0; x < width; x++, src += pixelSize)
                             output[y][x] = Color.FromArgb(src[RGB.R], src[RGB.G], src[RGB.B]);
                         src += offset;
                     }
-                }
-                else if (input.PixelFormat == PixelFormat.Format32bppArgb)
-                {
+                } else if (input.PixelFormat == PixelFormat.Format32bppArgb) {
                     byte* src = (byte*)input.ImageData.ToPointer();
 
-                    for (int y = 0; y < height; y++)
-                    {
+                    for (int y = 0; y < height; y++) {
                         for (int x = 0; x < width; x++, src += pixelSize)
                             output[y][x] = Color.FromArgb(src[RGB.A], src[RGB.R], src[RGB.G], src[RGB.B]);
                         src += offset;
                     }
-                }
-                else
-                {
+                } else {
                     throw new UnsupportedImageFormatException("Pixel format is not supported.");
                 }
             }
@@ -813,8 +748,7 @@ namespace Accord.Imaging.Converters
         /// <param name="input">The input image to be converted.</param>
         /// <param name="output">The converted image.</param>
         /// 
-        public void Convert(UnmanagedImage input, out Complex[,] output)
-        {
+        public void Convert(UnmanagedImage input, out Complex[,] output) {
             int width = input.Width;
             int height = input.Height;
             int pixelSize = input.PixelSize;
@@ -822,12 +756,10 @@ namespace Accord.Imaging.Converters
 
             output = new Complex[input.Height, input.Width];
 
-            unsafe
-            {
+            unsafe {
                 byte* src = (byte*)input.ImageData.ToPointer() + Channel;
 
-                for (int y = 0; y < height; y++)
-                {
+                for (int y = 0; y < height; y++) {
                     for (int x = 0; x < width; x++, src += pixelSize)
                         output[y, x] = Vector.Scale(*src, (byte)0, (byte)255, Min, Max);
                     src += offset;
@@ -844,8 +776,7 @@ namespace Accord.Imaging.Converters
         /// <param name="input">The input image to be converted.</param>
         /// <param name="output">The converted image.</param>
         /// 
-        public void Convert(UnmanagedImage input, out Complex[][] output)
-        {
+        public void Convert(UnmanagedImage input, out Complex[][] output) {
             int width = input.Width;
             int height = input.Height;
             int pixelSize = input.PixelSize;
@@ -853,12 +784,10 @@ namespace Accord.Imaging.Converters
 
             output = Jagged.Create<Complex>(height, width);
 
-            unsafe
-            {
+            unsafe {
                 byte* src = (byte*)input.ImageData.ToPointer() + Channel;
 
-                for (int y = 0; y < height; y++)
-                {
+                for (int y = 0; y < height; y++) {
                     for (int x = 0; x < width; x++, src += pixelSize)
                         output[y][x] = Vector.Scale(*src, (byte)0, (byte)255, Min, Max);
                     src += offset;
@@ -875,8 +804,7 @@ namespace Accord.Imaging.Converters
         /// <param name="input">The input image to be converted.</param>
         /// <param name="output">The converted image.</param>
         /// 
-        public void Convert(UnmanagedImage input, out double[][][] output)
-        {
+        public void Convert(UnmanagedImage input, out double[][][] output) {
             int width = input.Width;
             int height = input.Height;
             int pixelSize = input.PixelSize;
@@ -887,14 +815,11 @@ namespace Accord.Imaging.Converters
             if (Channel != 0)
                 throw new InvalidOperationException("The Channel property will be ignored when converting to a rank-3 tensor.");
 
-            unsafe
-            {
+            unsafe {
                 byte* src = (byte*)input.ImageData.ToPointer();
 
-                for (int y = 0; y < height; y++)
-                {
-                    for (int x = 0; x < width; x++)
-                    {
+                for (int y = 0; y < height; y++) {
+                    for (int x = 0; x < width; x++) {
                         for (int d = 0; d < pixelSize; d++, src++)
                             output[y][x][d] = Vector.Scale(*src, (byte)0, (byte)255, Min, Max);
                     }
@@ -912,8 +837,7 @@ namespace Accord.Imaging.Converters
         /// <param name="input">The input image to be converted.</param>
         /// <param name="output">The converted image.</param>
         /// 
-        public void Convert(UnmanagedImage input, out float[,,] output)
-        {
+        public void Convert(UnmanagedImage input, out float[,,] output) {
             int width = input.Width;
             int height = input.Height;
             int pixelSize = input.PixelSize;
@@ -924,14 +848,11 @@ namespace Accord.Imaging.Converters
             if (Channel != 0)
                 throw new InvalidOperationException("The Channel property will be ignored when converting to a rank-3 tensor.");
 
-            unsafe
-            {
+            unsafe {
                 byte* src = (byte*)input.ImageData.ToPointer();
 
-                for (int y = 0; y < height; y++)
-                {
-                    for (int x = 0; x < width; x++)
-                    {
+                for (int y = 0; y < height; y++) {
+                    for (int x = 0; x < width; x++) {
                         for (int d = 0; d < pixelSize; d++, src++)
                             output[y, x, d] = (float)Vector.Scale(*src, (float)0, (float)255, Min, Max);
                     }
@@ -949,8 +870,7 @@ namespace Accord.Imaging.Converters
         /// <param name="input">The input image to be converted.</param>
         /// <param name="output">The converted image.</param>
         /// 
-        public void Convert(UnmanagedImage input, out float[][][] output)
-        {
+        public void Convert(UnmanagedImage input, out float[][][] output) {
             int width = input.Width;
             int height = input.Height;
             int pixelSize = input.PixelSize;
@@ -961,14 +881,11 @@ namespace Accord.Imaging.Converters
             if (Channel != 0)
                 throw new InvalidOperationException("The Channel property will be ignored when converting to a rank-3 tensor.");
 
-            unsafe
-            {
+            unsafe {
                 byte* src = (byte*)input.ImageData.ToPointer();
 
-                for (int y = 0; y < height; y++)
-                {
-                    for (int x = 0; x < width; x++)
-                    {
+                for (int y = 0; y < height; y++) {
+                    for (int x = 0; x < width; x++) {
                         for (int d = 0; d < pixelSize; d++, src++)
                             output[y][x][d] = (float)Vector.Scale(*src, (byte)0, (byte)255, Min, Max);
                     }
@@ -986,8 +903,7 @@ namespace Accord.Imaging.Converters
         /// <param name="input">The input image to be converted.</param>
         /// <param name="output">The converted image.</param>
         /// 
-        public void Convert(UnmanagedImage input, out byte[,,] output)
-        {
+        public void Convert(UnmanagedImage input, out byte[,,] output) {
             int width = input.Width;
             int height = input.Height;
             int pixelSize = input.PixelSize;
@@ -998,14 +914,11 @@ namespace Accord.Imaging.Converters
             if (Channel != 0)
                 throw new InvalidOperationException("The Channel property will be ignored when converting to a rank-3 tensor.");
 
-            unsafe
-            {
+            unsafe {
                 byte* src = (byte*)input.ImageData.ToPointer();
 
-                for (int y = 0; y < height; y++)
-                {
-                    for (int x = 0; x < width; x++)
-                    {
+                for (int y = 0; y < height; y++) {
+                    for (int x = 0; x < width; x++) {
                         for (int d = 0; d < pixelSize; d++, src++)
                             output[y, x, d] = (byte)Vector.Scale(*src, (byte)0, (byte)255, Min, Max);
                     }
@@ -1023,8 +936,7 @@ namespace Accord.Imaging.Converters
         /// <param name="input">The input image to be converted.</param>
         /// <param name="output">The converted image.</param>
         /// 
-        public void Convert(UnmanagedImage input, out byte[][][] output)
-        {
+        public void Convert(UnmanagedImage input, out byte[][][] output) {
             int width = input.Width;
             int height = input.Height;
             int pixelSize = input.PixelSize;
@@ -1035,14 +947,11 @@ namespace Accord.Imaging.Converters
             if (Channel != 0)
                 throw new InvalidOperationException("The Channel property will be ignored when converting to a rank-3 tensor.");
 
-            unsafe
-            {
+            unsafe {
                 byte* src = (byte*)input.ImageData.ToPointer();
 
-                for (int y = 0; y < height; y++)
-                {
-                    for (int x = 0; x < width; x++)
-                    {
+                for (int y = 0; y < height; y++) {
+                    for (int x = 0; x < width; x++) {
                         for (int d = 0; d < pixelSize; d++, src++)
                             output[y][x][d] = (byte)Vector.Scale(*src, (byte)0, (byte)255, Min, Max);
                     }
@@ -1060,8 +969,7 @@ namespace Accord.Imaging.Converters
         /// <param name="input">The input image to be converted.</param>
         /// <param name="output">The converted image.</param>
         /// 
-        public void Convert(UnmanagedImage input, out double[,,] output)
-        {
+        public void Convert(UnmanagedImage input, out double[,,] output) {
             int width = input.Width;
             int height = input.Height;
             int pixelSize = input.PixelSize;
@@ -1072,14 +980,11 @@ namespace Accord.Imaging.Converters
             if (Channel != 0)
                 throw new InvalidOperationException("The Channel property will be ignored when converting to a rank-3 tensor.");
 
-            unsafe
-            {
+            unsafe {
                 byte* src = (byte*)input.ImageData.ToPointer();
 
-                for (int y = 0; y < height; y++)
-                {
-                    for (int x = 0; x < width; x++)
-                    {
+                for (int y = 0; y < height; y++) {
+                    for (int x = 0; x < width; x++) {
                         for (int d = 0; d < pixelSize; d++, src++)
                             output[y, x, d] = Vector.Scale(*src, (double)0, (double)255, Min, Max);
                     }

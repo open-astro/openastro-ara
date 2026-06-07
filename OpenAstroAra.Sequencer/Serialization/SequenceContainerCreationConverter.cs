@@ -35,9 +35,9 @@ namespace OpenAstroAra.Sequencer.Serialization {
                 try {
                     var method = factory.GetType().GetMethod(nameof(factory.GetContainer)).MakeGenericMethod(new Type[] { t });
                     var obj = method.Invoke(factory, null);
-                    if(obj == null) {
+                    if (obj == null) {
                         Logger.Error($"Encountered unknown sequence container: {token?.ToString()}");
-                        return new UnknownSequenceContainer(token?.ToString());                        
+                        return new UnknownSequenceContainer(token?.ToString());
                     }
                     return (ISequenceContainer)obj;
                 } catch (Exception e) {

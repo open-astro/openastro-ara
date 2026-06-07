@@ -149,7 +149,8 @@ namespace OpenAstroAra.Core.Model {
                     }
                     horizonMap[azimuth] = altitude;
                 }
-            };
+            }
+            ;
 
             GroomHorizonData(horizonMap);
             return new CustomHorizon(horizonMap);

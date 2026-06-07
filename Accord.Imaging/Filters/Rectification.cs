@@ -20,8 +20,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System.Collections.Generic;
     using System.Drawing;
     using System.Drawing.Imaging;
@@ -30,8 +29,7 @@ namespace Accord.Imaging.Filters
     ///   Rectification filter for projective transformation.
     /// </summary>
     /// 
-    public class Rectification : BaseTransformationFilter
-    {
+    public class Rectification : BaseTransformationFilter {
 
         private MatrixH homography;
         private Color fillColor = Color.FromArgb(0, Color.Black);
@@ -43,8 +41,7 @@ namespace Accord.Imaging.Filters
         ///   Format translations dictionary.
         /// </summary>
         /// 
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -53,8 +50,7 @@ namespace Accord.Imaging.Filters
         ///   the filter to the overlay image specified at filter creation.
         /// </summary>
         /// 
-        public MatrixH Homography
-        {
+        public MatrixH Homography {
             get { return homography; }
             set { homography = value; }
         }
@@ -68,8 +64,7 @@ namespace Accord.Imaging.Filters
         ///   to 24bpp. The alpha channel will be used internally by the filter.
         /// </remarks>
         /// 
-        public Color FillColor
-        {
+        public Color FillColor {
             get { return fillColor; }
             set { fillColor = value; }
         }
@@ -90,8 +85,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <param name="homography">The homography matrix mapping a second image to the overlay image.</param>
         /// 
-        public Rectification(MatrixH homography)
-        {
+        public Rectification(MatrixH homography) {
             this.homography = homography;
             formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
             formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format24bppRgb;
@@ -102,8 +96,7 @@ namespace Accord.Imaging.Filters
         ///   Computes the new image size.
         /// </summary>
         /// 
-        protected override Size CalculateNewImageSize(UnmanagedImage sourceData)
-        {
+        protected override Size CalculateNewImageSize(UnmanagedImage sourceData) {
             return new Size(sourceData.Width, sourceData.Height);
         }
 
@@ -112,8 +105,7 @@ namespace Accord.Imaging.Filters
         ///   Process the image filter.
         /// </summary>
         /// 
-        protected override void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData)
-        {
+        protected override void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData) {
 
             // get source image size
             int width = sourceData.Width;
@@ -141,16 +133,13 @@ namespace Accord.Imaging.Filters
 
 
             // do the job
-            unsafe
-            {
+            unsafe {
                 byte* src = (byte*)sourceData.ImageData.ToPointer();
                 byte* dst = (byte*)destinationData.ImageData.ToPointer();
 
                 // Project the second image
-                for (int y = 0; y < newHeight; y++)
-                {
-                    for (int x = 0; x < newWidth; x++, dst += srcPixelSize)
-                    {
+                for (int y = 0; y < newHeight; y++) {
+                    for (int x = 0; x < newWidth; x++, dst += srcPixelSize) {
                         double cx = x;
                         double cy = y;
 
@@ -164,54 +153,41 @@ namespace Accord.Imaging.Filters
                         int oy = (int)(hy);
 
                         // validate source pixel's coordinates
-                        if ((ox >= 0) && (oy >= 0) && (ox < width) && (oy < height))
-                        {
+                        if ((ox >= 0) && (oy >= 0) && (ox < width) && (oy < height)) {
                             int c = oy * srcStride + ox * srcPixelSize;
 
                             // just copy the source into the destination image
-                            if (srcPixelSize == 3)
-                            {
+                            if (srcPixelSize == 3) {
                                 // 24bpp
                                 dst[0] = src[c + 0];
                                 dst[1] = src[c + 1];
                                 dst[2] = src[c + 2];
-                            }
-                            else if (srcPixelSize == 4)
-                            {
+                            } else if (srcPixelSize == 4) {
                                 // 32bpp
                                 dst[0] = src[c + 0];
                                 dst[1] = src[c + 1];
                                 dst[2] = src[c + 2];
                                 dst[3] = src[c + 3];
-                            }
-                            else
-                            {
+                            } else {
                                 // 8bpp
                                 dst[0] = src[c];
                             }
-                        }
-                        else
-                        {
+                        } else {
                             // Fill.
 
                             // just copy the source into the destination image
-                            if (srcPixelSize == 3)
-                            {
+                            if (srcPixelSize == 3) {
                                 // 24bpp
                                 dst[0] = fillB;
                                 dst[1] = fillG;
                                 dst[2] = fillR;
-                            }
-                            else if (srcPixelSize == 4)
-                            {
+                            } else if (srcPixelSize == 4) {
                                 // 32bpp
                                 dst[0] = fillA;
                                 dst[1] = fillB;
                                 dst[2] = fillG;
                                 dst[3] = fillR;
-                            }
-                            else
-                            {
+                            } else {
                                 // 8bpp
                                 dst[0] = fillR;
                             }

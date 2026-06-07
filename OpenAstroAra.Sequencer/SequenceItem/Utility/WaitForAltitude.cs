@@ -37,7 +37,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
     public class WaitForAltitude : WaitForAltitudeBase, IValidatable {
         private bool hasDsoParent;
         private string aboveOrBelow;
- 
+
         [ImportingConstructor]
         public WaitForAltitude(IProfileService profileService) : base(profileService, useCustomHorizon: false) {
             AboveOrBelow = ">";
@@ -47,14 +47,14 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
         private WaitForAltitude(WaitForAltitude cloneMe) : this(cloneMe.ProfileService) {
             CopyMetaData(cloneMe);
         }
-        
+
         public override object Clone() {
             return new WaitForAltitude(this) {
                 AboveOrBelow = AboveOrBelow,
                 Data = Data.Clone()
             };
         }
-        
+
         [JsonProperty]
         public string AboveOrBelow {
             get => aboveOrBelow;
@@ -115,7 +115,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
             var contextCoordinates = RetrieveContextCoordinates(this.Parent);
             if (contextCoordinates != null) {
                 Data.Coordinates.Coordinates = contextCoordinates.Coordinates;
-               HasDsoParent = true;
+                HasDsoParent = true;
             } else {
                 HasDsoParent = false;
             }

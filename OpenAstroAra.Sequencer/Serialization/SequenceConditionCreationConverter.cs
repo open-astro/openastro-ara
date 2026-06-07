@@ -30,7 +30,7 @@ namespace OpenAstroAra.Sequencer.Serialization {
         public override ISequenceCondition Create(Type objectType, JObject jObject) {
             if (jObject.TryGetValue("$type", out var token)) {
                 var t = GetType(jObject.GetValue("$type").ToString());
-                if(t == null) {
+                if (t == null) {
                     return new UnknownSequenceCondition(token?.ToString());
                 }
                 try {

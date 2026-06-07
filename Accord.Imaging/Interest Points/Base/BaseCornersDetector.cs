@@ -20,8 +20,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging
-{
+namespace Accord.Imaging {
     using Accord.Math;
     using System;
     using System.Collections.Generic;
@@ -39,8 +38,7 @@ namespace Accord.Imaging
     /// <seealso cref="Accord.Imaging.ICornersDetector" />
     /// 
     [Serializable]
-    public abstract class BaseCornersDetector : BaseSparseFeatureExtractor<CornerFeaturePoint>, ICornersDetector
-    {
+    public abstract class BaseCornersDetector : BaseSparseFeatureExtractor<CornerFeaturePoint>, ICornersDetector {
         /// <summary>
         /// Process image looking for corners.
         /// </summary>
@@ -51,8 +49,7 @@ namespace Accord.Imaging
         /// 
         /// <exception cref="UnsupportedImageFormatException">The source image has incorrect pixel format.</exception>
         /// 
-        public new List<IntPoint> ProcessImage(Bitmap image)
-        {
+        public new List<IntPoint> ProcessImage(Bitmap image) {
             // check image format
             if (!SupportedFormats.Contains(image.PixelFormat))
                 throw new UnsupportedImageFormatException("Unsupported pixel format of the source image.");
@@ -62,13 +59,10 @@ namespace Accord.Imaging
 
             List<IntPoint> corners;
 
-            try
-            {
+            try {
                 // process the image
                 corners = ProcessImage(new UnmanagedImage(imageData));
-            }
-            finally
-            {
+            } finally {
                 // unlock image
                 image.UnlockBits(imageData);
             }
@@ -88,8 +82,7 @@ namespace Accord.Imaging
         ///   actual feature extraction, transforming the input image into a list of features.
         /// </summary>
         /// 
-        protected sealed override IEnumerable<CornerFeaturePoint> InnerTransform(UnmanagedImage input)
-        {
+        protected sealed override IEnumerable<CornerFeaturePoint> InnerTransform(UnmanagedImage input) {
             return InnerProcess(input).Select(x => new CornerFeaturePoint(x));
         }
 
@@ -103,8 +96,7 @@ namespace Accord.Imaging
         /// 
         /// <exception cref="UnsupportedImageFormatException">The source image has incorrect pixel format.</exception>
         /// 
-        public new List<IntPoint> ProcessImage(BitmapData imageData)
-        {
+        public new List<IntPoint> ProcessImage(BitmapData imageData) {
             return ProcessImage(new UnmanagedImage(imageData));
         }
 
@@ -118,8 +110,7 @@ namespace Accord.Imaging
         /// 
         /// <exception cref="UnsupportedImageFormatException">The source image has incorrect pixel format.</exception>
         /// 
-        public new List<IntPoint> ProcessImage(UnmanagedImage input)
-        {
+        public new List<IntPoint> ProcessImage(UnmanagedImage input) {
             // check image format
             if (!SupportedFormats.Contains(input.PixelFormat))
                 throw new UnsupportedImageFormatException("Unsupported pixel format of the source image.");

@@ -125,7 +125,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Switch {
             for (short i = 0; i < 20; i++) {
                 dummySwitches.Add(new DummySwitch((short)(i + 1)));
             }
-            return dummySwitches;        
+            return dummySwitches;
         }
 
         public bool Validate() {

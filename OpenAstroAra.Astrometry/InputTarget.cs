@@ -133,7 +133,7 @@ namespace OpenAstroAra.Astrometry {
         }
 
         private void RaiseCoordinatesChanged() {
-            if(!deserializing) { 
+            if (!deserializing) {
                 RaisePropertyChanged(nameof(PositionAngle));
                 RaisePropertyChanged(nameof(InputCoordinates));
 

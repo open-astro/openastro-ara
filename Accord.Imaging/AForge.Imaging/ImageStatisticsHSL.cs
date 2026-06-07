@@ -2,12 +2,11 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © AForge.NET, 2007-2011
+// Copyright ï¿½ AForge.NET, 2007-2011
 // contacts@aforgenet.com
 //
 
-namespace Accord.Imaging
-{
+namespace Accord.Imaging {
     using System;
     using System.Drawing;
     using System.Drawing.Imaging;
@@ -41,8 +40,7 @@ namespace Accord.Imaging
     /// 
     /// <seealso cref="Accord.Math.ContinuousHistogram"/>
     /// 
-    public class ImageStatisticsHSL
-    {
+    public class ImageStatisticsHSL {
         private ContinuousHistogram luminance;
         private ContinuousHistogram saturation;
 
@@ -56,8 +54,7 @@ namespace Accord.Imaging
         /// Histogram of saturation channel.
         /// </summary>
         /// 
-        public ContinuousHistogram Saturation
-        {
+        public ContinuousHistogram Saturation {
             get { return saturation; }
         }
 
@@ -65,8 +62,7 @@ namespace Accord.Imaging
         /// Histogram of luminance channel.
         /// </summary>
         /// 
-        public ContinuousHistogram Luminance
-        {
+        public ContinuousHistogram Luminance {
             get { return luminance; }
         }
 
@@ -78,8 +74,7 @@ namespace Accord.Imaging
         /// excludes all black pixels, what affects mean, standard deviation, etc.</para>
         /// </remarks>
         /// 
-        public ContinuousHistogram SaturationWithoutBlack
-        {
+        public ContinuousHistogram SaturationWithoutBlack {
             get { return saturationWithoutBlack; }
         }
 
@@ -91,8 +86,7 @@ namespace Accord.Imaging
         /// excludes all black pixels, what affects mean, standard deviation, etc.</para>
         /// </remarks>
         /// 
-        public ContinuousHistogram LuminanceWithoutBlack
-        {
+        public ContinuousHistogram LuminanceWithoutBlack {
             get { return luminanceWithoutBlack; }
         }
 
@@ -100,8 +94,7 @@ namespace Accord.Imaging
         /// Total pixels count in the processed image.
         /// </summary>
         /// 
-        public int PixelsCount
-        {
+        public int PixelsCount {
             get { return pixels; }
         }
 
@@ -109,8 +102,7 @@ namespace Accord.Imaging
         /// Total pixels count in the processed image excluding black pixels.
         /// </summary>
         /// 
-        public int PixelsCountWithoutBlack
-        {
+        public int PixelsCountWithoutBlack {
             get { return pixelsWithoutBlack; }
         }
 
@@ -122,8 +114,7 @@ namespace Accord.Imaging
         /// 
         /// <exception cref="UnsupportedImageFormatException">Source pixel format is not supported.</exception>
         /// 
-        public ImageStatisticsHSL(Bitmap image)
-        {
+        public ImageStatisticsHSL(Bitmap image) {
             CheckSourceFormat(image.PixelFormat);
 
             // lock bitmap data
@@ -131,16 +122,12 @@ namespace Accord.Imaging
                 new Rectangle(0, 0, image.Width, image.Height),
                 ImageLockMode.ReadOnly, PixelFormat.Format24bppRgb);
 
-            try
-            {
+            try {
                 // gather statistics
-                unsafe
-                {
+                unsafe {
                     ProcessImage(new UnmanagedImage(imageData), null, 0);
                 }
-            }
-            finally
-            {
+            } finally {
                 // unlock image
                 image.UnlockBits(imageData);
             }
@@ -162,8 +149,7 @@ namespace Accord.Imaging
         /// <exception cref="ArgumentException">Mask image must be 8 bpp grayscale image.</exception>
         /// <exception cref="ArgumentException">Mask must have the same size as the source image to get statistics for.</exception>
         /// 
-        public ImageStatisticsHSL(Bitmap image, Bitmap mask)
-        {
+        public ImageStatisticsHSL(Bitmap image, Bitmap mask) {
             CheckSourceFormat(image.PixelFormat);
             CheckMaskProperties(mask.PixelFormat, new Size(mask.Width, mask.Height), new Size(image.Width, image.Height));
 
@@ -175,16 +161,12 @@ namespace Accord.Imaging
                 new Rectangle(0, 0, mask.Width, mask.Height),
                 ImageLockMode.ReadOnly, mask.PixelFormat);
 
-            try
-            {
+            try {
                 // gather statistics
-                unsafe
-                {
+                unsafe {
                     ProcessImage(new UnmanagedImage(imageData), (byte*)maskData.Scan0.ToPointer(), maskData.Stride);
                 }
-            }
-            finally
-            {
+            } finally {
                 // unlock images
                 image.UnlockBits(imageData);
                 mask.UnlockBits(maskData);
@@ -206,8 +188,7 @@ namespace Accord.Imaging
         /// <exception cref="UnsupportedImageFormatException">Source pixel format is not supported.</exception>
         /// <exception cref="ArgumentException">Mask must have the same size as the source image to get statistics for.</exception>
         /// 
-        public ImageStatisticsHSL(Bitmap image, byte[,] mask)
-        {
+        public ImageStatisticsHSL(Bitmap image, byte[,] mask) {
             CheckSourceFormat(image.PixelFormat);
             CheckMaskProperties(PixelFormat.Format8bppIndexed,
                 new Size(mask.GetLength(1), mask.GetLength(0)), new Size(image.Width, image.Height));
@@ -217,19 +198,14 @@ namespace Accord.Imaging
                 new Rectangle(0, 0, image.Width, image.Height),
                 ImageLockMode.ReadOnly, image.PixelFormat);
 
-            try
-            {
+            try {
                 // gather statistics
-                unsafe
-                {
-                    fixed (byte* maskPtr = mask)
-                    {
+                unsafe {
+                    fixed (byte* maskPtr = mask) {
                         ProcessImage(new UnmanagedImage(imageData), maskPtr, mask.GetLength(1));
                     }
                 }
-            }
-            finally
-            {
+            } finally {
                 // unlock image
                 image.UnlockBits(imageData);
             }
@@ -243,11 +219,9 @@ namespace Accord.Imaging
         /// 
         /// <exception cref="UnsupportedImageFormatException">Source pixel format is not supported.</exception>
         /// 
-        public ImageStatisticsHSL(UnmanagedImage image)
-        {
+        public ImageStatisticsHSL(UnmanagedImage image) {
             CheckSourceFormat(image.PixelFormat);
-            unsafe
-            {
+            unsafe {
                 ProcessImage(image, null, 0);
             }
         }
@@ -268,13 +242,11 @@ namespace Accord.Imaging
         /// <exception cref="ArgumentException">Mask image must be 8 bpp grayscale image.</exception>
         /// <exception cref="ArgumentException">Mask must have the same size as the source image to get statistics for.</exception>
         /// 
-        public ImageStatisticsHSL(UnmanagedImage image, UnmanagedImage mask)
-        {
+        public ImageStatisticsHSL(UnmanagedImage image, UnmanagedImage mask) {
             CheckSourceFormat(image.PixelFormat);
             CheckMaskProperties(mask.PixelFormat, new Size(mask.Width, mask.Height), new Size(image.Width, image.Height));
 
-            unsafe
-            {
+            unsafe {
                 ProcessImage(image, (byte*)mask.ImageData.ToPointer(), mask.Stride);
             }
         }
@@ -294,24 +266,20 @@ namespace Accord.Imaging
         /// <exception cref="UnsupportedImageFormatException">Source pixel format is not supported.</exception>
         /// <exception cref="ArgumentException">Mask must have the same size as the source image to get statistics for.</exception>
         /// 
-        public ImageStatisticsHSL(UnmanagedImage image, byte[,] mask)
-        {
+        public ImageStatisticsHSL(UnmanagedImage image, byte[,] mask) {
             CheckSourceFormat(image.PixelFormat);
             CheckMaskProperties(PixelFormat.Format8bppIndexed,
                 new Size(mask.GetLength(1), mask.GetLength(0)), new Size(image.Width, image.Height));
 
-            unsafe
-            {
-                fixed (byte* maskPtr = mask)
-                {
+            unsafe {
+                fixed (byte* maskPtr = mask) {
                     ProcessImage(image, maskPtr, mask.GetLength(1));
                 }
             }
         }
 
         // Gather statistics for the specified image
-        private unsafe void ProcessImage(UnmanagedImage image, byte* mask, int maskLineSize)
-        {
+        private unsafe void ProcessImage(UnmanagedImage image, byte* mask, int maskLineSize) {
             // get image dimension
             int width = image.Width;
             int height = image.Height;
@@ -332,14 +300,11 @@ namespace Accord.Imaging
             // do the job
             byte* p = (byte*)image.ImageData.ToPointer();
 
-            if (mask == null)
-            {
+            if (mask == null) {
                 // for each line
-                for (int y = 0; y < height; y++)
-                {
+                for (int y = 0; y < height; y++) {
                     // for each pixel
-                    for (int x = 0; x < width; x++, p += pixelSize)
-                    {
+                    for (int x = 0; x < width; x++, p += pixelSize) {
                         rgb.Red = p[RGB.R];
                         rgb.Green = p[RGB.G];
                         rgb.Blue = p[RGB.B];
@@ -351,8 +316,7 @@ namespace Accord.Imaging
                         l[(int)(hsl.Luminance * 255)]++;
                         pixels++;
 
-                        if (hsl.Luminance != 0.0)
-                        {
+                        if (hsl.Luminance != 0.0) {
                             swb[(int)(hsl.Saturation * 255)]++;
                             lwb[(int)(hsl.Luminance * 255)]++;
                             pixelsWithoutBlack++;
@@ -360,15 +324,11 @@ namespace Accord.Imaging
                     }
                     p += offset;
                 }
-            }
-            else
-            {
+            } else {
                 // for each line
-                for (int y = 0; y < height; y++)
-                {
+                for (int y = 0; y < height; y++) {
                     // for each pixel
-                    for (int x = 0; x < width; x++, p += pixelSize, mask++)
-                    {
+                    for (int x = 0; x < width; x++, p += pixelSize, mask++) {
                         if (*mask == 0)
                             continue;
 
@@ -383,8 +343,7 @@ namespace Accord.Imaging
                         l[(int)(hsl.Luminance * 255)]++;
                         pixels++;
 
-                        if (hsl.Luminance != 0.0)
-                        {
+                        if (hsl.Luminance != 0.0) {
                             swb[(int)(hsl.Saturation * 255)]++;
                             lwb[(int)(hsl.Luminance * 255)]++;
                             pixelsWithoutBlack++;
@@ -404,25 +363,20 @@ namespace Accord.Imaging
         }
 
         // Check pixel format of the source image
-        private static void CheckSourceFormat(PixelFormat pixelFormat)
-        {
+        private static void CheckSourceFormat(PixelFormat pixelFormat) {
             if ((pixelFormat != PixelFormat.Format24bppRgb) &&
                 (pixelFormat != PixelFormat.Format32bppRgb) &&
-                (pixelFormat != PixelFormat.Format32bppArgb))
-            {
+                (pixelFormat != PixelFormat.Format32bppArgb)) {
                 throw new UnsupportedImageFormatException("Source pixel format is not supported.");
             }
         }
 
-        private static void CheckMaskProperties(PixelFormat maskFormat, Size maskSize, Size sourceImageSize)
-        {
-            if (maskFormat != PixelFormat.Format8bppIndexed)
-            {
+        private static void CheckMaskProperties(PixelFormat maskFormat, Size maskSize, Size sourceImageSize) {
+            if (maskFormat != PixelFormat.Format8bppIndexed) {
                 throw new ArgumentException("Mask image must be 8 bpp grayscale image.");
             }
 
-            if ((maskSize.Width != sourceImageSize.Width) || (maskSize.Height != sourceImageSize.Height))
-            {
+            if ((maskSize.Width != sourceImageSize.Width) || (maskSize.Height != sourceImageSize.Height)) {
                 throw new ArgumentException("Mask must have the same size as the source image to get statistics for.");
             }
         }

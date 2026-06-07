@@ -20,8 +20,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging
-{
+namespace Accord.Imaging {
     using Accord.Math;
     using System;
     using System.Drawing;
@@ -30,15 +29,13 @@ namespace Accord.Imaging
     ///   Extension methods for drawwing structures.
     /// </summary>
     /// 
-    public static class DrawingExtensions
-    {
+    public static class DrawingExtensions {
 
         /// <summary>
         ///   Convert the given hyperrectangle in to a System.Drawing.Rectangle.
         /// </summary>
         /// 
-        public static Rectangle ToRectangle(this Hyperrectangle rect)
-        {
+        public static Rectangle ToRectangle(this Hyperrectangle rect) {
             if (rect.NumberOfDimensions != 2)
                 throw new ArgumentException("rect");
 
@@ -53,8 +50,7 @@ namespace Accord.Imaging
         ///   Convert the given hyperrectangle in to a System.Drawing.RectangleF.
         /// </summary>
         /// 
-        public static RectangleF ToRectangleF(this Hyperrectangle rect)
-        {
+        public static RectangleF ToRectangleF(this Hyperrectangle rect) {
             if (rect.NumberOfDimensions != 2)
                 throw new ArgumentException("rect");
 
@@ -69,8 +65,7 @@ namespace Accord.Imaging
         ///   Convert the given System.Drawing.Rectangle to a <see cref="Hyperrectangle"/>.
         /// </summary>
         /// 
-        public static Hyperrectangle ToHyperrectangle(this Rectangle rect)
-        {
+        public static Hyperrectangle ToHyperrectangle(this Rectangle rect) {
             return new Hyperrectangle(new double[] { rect.Left, rect.Top }, new double[] { rect.Right, rect.Bottom });
         }
 
@@ -78,8 +73,7 @@ namespace Accord.Imaging
         ///   Convert the given System.Drawing.RectangleF to a <see cref="Hyperrectangle"/>.
         /// </summary>
         /// 
-        public static Hyperrectangle ToHyperrectangle(this RectangleF rect)
-        {
+        public static Hyperrectangle ToHyperrectangle(this RectangleF rect) {
             return new Hyperrectangle(new double[] { rect.Left, rect.Top }, new double[] { rect.Right, rect.Bottom });
         }
     }

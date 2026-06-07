@@ -23,8 +23,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging
-{
+namespace Accord.Imaging {
     using Filters;
     using System;
     using System.Drawing;
@@ -35,8 +34,7 @@ namespace Accord.Imaging
     ///   Co-occurrence Degree.
     /// </summary>
     /// 
-    public enum CooccurrenceDegree
-    {
+    public enum CooccurrenceDegree {
         /// <summary>
         ///   Find co-occurrences at 0° degrees.
         /// </summary>
@@ -108,8 +106,7 @@ namespace Accord.Imaging
     /// <seealso cref="Haralick"/>
     /// <seealso cref="HaralickDescriptor"/>
     /// 
-    public class GrayLevelCooccurrenceMatrix : ICloneable
-    {
+    public class GrayLevelCooccurrenceMatrix : ICloneable {
         private CooccurrenceDegree degree;
         private bool autoGray = true;
         private bool normalize = true;
@@ -123,8 +120,7 @@ namespace Accord.Imaging
         ///   the maximum gray value will be assumed 255.
         /// </summary>
         /// 
-        public bool AutoGray
-        {
+        public bool AutoGray {
             get { return autoGray; }
             set { autoGray = value; }
         }
@@ -138,8 +134,7 @@ namespace Accord.Imaging
         ///   <c>true</c> if the GLCM should be normalized; otherwise, <c>false</c>.
         /// </value>
         /// 
-        public bool Normalize
-        {
+        public bool Normalize {
             get { return normalize; }
             set { normalize = value; }
         }
@@ -149,8 +144,7 @@ namespace Accord.Imaging
         ///   be found. Default is <see cref="CooccurrenceDegree.Degree0"/>.
         /// </summary>
         /// 
-        public CooccurrenceDegree Degree
-        {
+        public CooccurrenceDegree Degree {
             get { return degree; }
             set { degree = value; }
         }
@@ -160,8 +154,7 @@ namespace Accord.Imaging
         ///   texture should be analyzed. Default is 1.
         /// </summary>
         /// 
-        public int Distance
-        {
+        public int Distance {
             get { return distance; }
             set { distance = value; }
         }
@@ -171,8 +164,7 @@ namespace Accord.Imaging
         ///   last <see cref="Compute(UnmanagedImage)">computed GLCM</see>.
         /// </summary>
         /// 
-        public int Pairs
-        {
+        public int Pairs {
             get { return numPairs; }
         }
 
@@ -180,8 +172,7 @@ namespace Accord.Imaging
         ///   Initializes a new instance of the <see cref="GrayLevelCooccurrenceMatrix"/> class.
         /// </summary>
         /// 
-        public GrayLevelCooccurrenceMatrix()
-        {
+        public GrayLevelCooccurrenceMatrix() {
         }
 
         /// <summary>
@@ -191,8 +182,7 @@ namespace Accord.Imaging
         /// <param name="distance">The distance at which the texture should be analyzed. Default is 1.</param>
         /// <param name="degree">The direction to look for co-occurrences. Default is <see cref="CooccurrenceDegree.Degree0"/>.</param>
         /// 
-        public GrayLevelCooccurrenceMatrix(int distance = 1, CooccurrenceDegree degree = CooccurrenceDegree.Degree0)
-        {
+        public GrayLevelCooccurrenceMatrix(int distance = 1, CooccurrenceDegree degree = CooccurrenceDegree.Degree0) {
             this.distance = distance;
             this.degree = degree;
         }
@@ -209,8 +199,7 @@ namespace Accord.Imaging
         ///   dividing each element by the number of pairs. Default is true.</param>
         /// 
         public GrayLevelCooccurrenceMatrix(int distance, CooccurrenceDegree degree,
-            bool normalize = true, bool autoGray = true)
-        {
+            bool normalize = true, bool autoGray = true) {
             this.distance = distance;
             this.degree = degree;
             this.normalize = normalize;
@@ -227,16 +216,12 @@ namespace Accord.Imaging
         /// <returns>A square matrix of double-precision values containing
         /// the GLCM for the given <paramref name="source"/>.</returns>
         /// 
-        public double[,] Compute(Bitmap source)
-        {
+        public double[,] Compute(Bitmap source) {
             var bitmapData = source.LockBits(ImageLockMode.ReadOnly);
 
-            try
-            {
+            try {
                 return Compute(bitmapData);
-            }
-            finally
-            {
+            } finally {
                 source.UnlockBits(bitmapData);
             }
         }
@@ -251,8 +236,7 @@ namespace Accord.Imaging
         /// <returns>A square matrix of double-precision values containing
         /// the GLCM for the given <paramref name="source"/>.</returns>
         /// 
-        public double[,] Compute(BitmapData source)
-        {
+        public double[,] Compute(BitmapData source) {
             using (var unmanagedImage = new UnmanagedImage(source))
                 return Compute(unmanagedImage);
         }
@@ -267,8 +251,7 @@ namespace Accord.Imaging
         /// <returns>A square matrix of double-precision values containing
         /// the GLCM for the given <paramref name="source"/>.</returns>
         /// 
-        public double[,] Compute(UnmanagedImage source)
-        {
+        public double[,] Compute(UnmanagedImage source) {
             return Compute(source, new Rectangle(0, 0, source.Width, source.Height));
         }
 
@@ -283,8 +266,7 @@ namespace Accord.Imaging
         /// <returns>A square matrix of double-precision values containing the GLCM for the
         ///   <paramref name="region"/> of the given <paramref name="source"/>.</returns>
         /// 
-        public double[,] Compute(UnmanagedImage source, Rectangle region)
-        {
+        public double[,] Compute(UnmanagedImage source, Rectangle region) {
             if (source.PixelFormat != PixelFormat.Format8bppIndexed)
                 throw new UnsupportedImageFormatException("Only grayscale 8bpp images are supported.");
 
@@ -297,8 +279,7 @@ namespace Accord.Imaging
             int startX = region.X;
             int startY = region.Y;
 
-            unsafe
-            {
+            unsafe {
                 byte* src = (byte*)source.ImageData.ToPointer() + startY * stride + startX;
 
                 if (autoGray)
@@ -309,13 +290,10 @@ namespace Accord.Imaging
                 double[,] cooccurrence = new double[size, size];
 
 
-                switch (degree)
-                {
+                switch (degree) {
                     case CooccurrenceDegree.Degree0:
-                        for (int y = startY; y < height; y++)
-                        {
-                            for (int x = startX + distance; x < width; x++)
-                            {
+                        for (int y = startY; y < height; y++) {
+                            for (int x = startX + distance; x < width; x++) {
                                 byte a = src[stride * y + (x - distance)];
                                 byte b = src[stride * y + x];
                                 cooccurrence[a, b]++;
@@ -325,10 +303,8 @@ namespace Accord.Imaging
                         break;
 
                     case CooccurrenceDegree.Degree45:
-                        for (int y = startY + distance; y < height; y++)
-                        {
-                            for (int x = startX; x < width - distance; x++)
-                            {
+                        for (int y = startY + distance; y < height; y++) {
+                            for (int x = startX; x < width - distance; x++) {
                                 byte a = src[stride * y + x];
                                 byte b = src[stride * (y - distance) + (x + distance)];
                                 cooccurrence[a, b]++;
@@ -338,10 +314,8 @@ namespace Accord.Imaging
                         break;
 
                     case CooccurrenceDegree.Degree90:
-                        for (int y = startY + distance; y < height; y++)
-                        {
-                            for (int x = startX; x < width; x++)
-                            {
+                        for (int y = startY + distance; y < height; y++) {
+                            for (int x = startX; x < width; x++) {
                                 byte a = src[stride * (y - distance) + x];
                                 byte b = src[stride * y + x];
                                 cooccurrence[a, b]++;
@@ -351,11 +325,9 @@ namespace Accord.Imaging
                         break;
 
                     case CooccurrenceDegree.Degree135:
-                        for (int y = startY + distance; y < height; y++)
-                        {
+                        for (int y = startY + distance; y < height; y++) {
                             int steps = width - 1;
-                            for (int x = startX; x < width - distance; x++)
-                            {
+                            for (int x = startX; x < width - distance; x++) {
                                 byte a = src[stride * y + (steps - x)];
                                 byte b = src[stride * (y - distance) + (steps - distance - x)];
                                 cooccurrence[a, b]++;
@@ -365,10 +337,8 @@ namespace Accord.Imaging
                         break;
                 }
 
-                if (normalize && numPairs > 0)
-                {
-                    fixed (double* ptrMatrix = cooccurrence)
-                    {
+                if (normalize && numPairs > 0) {
+                    fixed (double* ptrMatrix = cooccurrence) {
                         double* c = ptrMatrix;
                         for (int i = 0; i < cooccurrence.Length; i++, c++)
                             *c /= numPairs;
@@ -379,11 +349,9 @@ namespace Accord.Imaging
             }
         }
 
-        unsafe private static int max(int width, int height, int offset, byte* src)
-        {
+        unsafe private static int max(int width, int height, int offset, byte* src) {
             int maxGray = 0;
-            for (int y = 0; y < height; y++)
-            {
+            for (int y = 0; y < height; y++) {
                 for (int x = 0; x < width; x++, src++)
                     if (*src > maxGray) maxGray = *src;
                 src += offset;
@@ -400,8 +368,7 @@ namespace Accord.Imaging
         ///   A new object that is a copy of this instance.
         /// </returns>
         /// 
-        public object Clone()
-        {
+        public object Clone() {
             var clone = new GrayLevelCooccurrenceMatrix();
             clone.autoGray = autoGray;
             clone.degree = degree;

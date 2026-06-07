@@ -1,12 +1,11 @@
 // AForge Image Processing Library
 // AForge.NET framework
 //
-// Copyright © Andrew Kirillov, 2005-2009
+// Copyright ï¿½ Andrew Kirillov, 2005-2009
 // andrew.kirillov@aforgenet.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -41,21 +40,19 @@ namespace Accord.Imaging.Filters
     /// <img src="..\images\imaging\threshold.jpg" width="480" height="361" />
     /// </remarks>
     /// 
-    public class Threshold : BaseInPlacePartialFilter
-    {
+    public class Threshold : BaseInPlacePartialFilter {
         /// <summary>
         /// Threshold value.
         /// </summary>
         protected int threshold = 128;
 
         // private format translation dictionary
-        private Dictionary<PixelFormat, PixelFormat> formatTranslations = new Dictionary<PixelFormat, PixelFormat>( );
+        private Dictionary<PixelFormat, PixelFormat> formatTranslations = new Dictionary<PixelFormat, PixelFormat>();
 
         /// <summary>
         /// Format translations dictionary.
         /// </summary>
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -65,8 +62,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <remarks>Default value is set to <b>128</b>.</remarks>
         /// 
-        public int ThresholdValue
-        {
+        public int ThresholdValue {
             get { return threshold; }
             set { threshold = value; }
         }
@@ -75,10 +71,9 @@ namespace Accord.Imaging.Filters
         /// Initializes a new instance of the <see cref="Threshold"/> class.
         /// </summary>
         /// 
-        public Threshold( )
-        {
+        public Threshold() {
             // initialize format translation dictionary
-            formatTranslations[PixelFormat.Format8bppIndexed]    = PixelFormat.Format8bppIndexed;
+            formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
             formatTranslations[PixelFormat.Format16bppGrayScale] = PixelFormat.Format16bppGrayScale;
         }
 
@@ -88,9 +83,8 @@ namespace Accord.Imaging.Filters
         /// 
         /// <param name="threshold">Threshold value.</param>
         /// 
-        public Threshold( int threshold )
-            : this( )
-        {
+        public Threshold(int threshold)
+            : this() {
             this.threshold = threshold;
         }
 
@@ -101,48 +95,40 @@ namespace Accord.Imaging.Filters
         /// <param name="image">Source image data.</param>
         /// <param name="rect">Image rectangle for processing by the filter.</param>
         /// 
-        protected override unsafe void ProcessFilter( UnmanagedImage image, Rectangle rect )
-        {
-            int startX  = rect.Left;
-            int startY  = rect.Top;
-            int stopX   = startX + rect.Width;
-            int stopY   = startY + rect.Height;
+        protected override unsafe void ProcessFilter(UnmanagedImage image, Rectangle rect) {
+            int startX = rect.Left;
+            int startY = rect.Top;
+            int stopX = startX + rect.Width;
+            int stopY = startY + rect.Height;
 
-            if ( image.PixelFormat == PixelFormat.Format8bppIndexed )
-            {
+            if (image.PixelFormat == PixelFormat.Format8bppIndexed) {
                 int offset = image.Stride - rect.Width;
 
                 // do the job
-                byte* ptr = (byte*) image.ImageData.ToPointer( );
+                byte* ptr = (byte*)image.ImageData.ToPointer();
 
                 // allign pointer to the first pixel to process
-                ptr += ( startY * image.Stride + startX );
+                ptr += (startY * image.Stride + startX);
 
                 // for each line	
-                for ( int y = startY; y < stopY; y++ )
-                {
+                for (int y = startY; y < stopY; y++) {
                     // for each pixel
-                    for ( int x = startX; x < stopX; x++, ptr++ )
-                    {
-                        *ptr = (byte) ( ( *ptr >= threshold ) ? 255 : 0 );
+                    for (int x = startX; x < stopX; x++, ptr++) {
+                        *ptr = (byte)((*ptr >= threshold) ? 255 : 0);
                     }
                     ptr += offset;
                 }
-            }
-            else
-            {
-                byte* basePtr = (byte*) image.ImageData.ToPointer( ) + startX * 2;
+            } else {
+                byte* basePtr = (byte*)image.ImageData.ToPointer() + startX * 2;
                 int stride = image.Stride;
 
                 // for each line	
-                for ( int y = startY; y < stopY; y++ )
-                {
-                    ushort* ptr = (ushort*) ( basePtr + stride * y );
+                for (int y = startY; y < stopY; y++) {
+                    ushort* ptr = (ushort*)(basePtr + stride * y);
 
                     // for each pixel
-                    for ( int x = startX; x < stopX; x++, ptr++ )
-                    {
-                        *ptr = (ushort) ( ( *ptr >= threshold ) ? 65535 : 0 );
+                    for (int x = startX; x < stopX; x++, ptr++) {
+                        *ptr = (ushort)((*ptr >= threshold) ? 65535 : 0);
                     }
                 }
             }

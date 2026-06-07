@@ -46,8 +46,7 @@ public sealed class ActiveSequenceCheckpoint {
         _activeDir = System.IO.Path.Combine(profileDir, "sequences", FileSequenceService.ActiveDirName);
         _path = System.IO.Path.Combine(_activeDir, FileName);
         _logger = logger;
-        try { Directory.CreateDirectory(_activeDir); }
-        catch (Exception ex) {
+        try { Directory.CreateDirectory(_activeDir); } catch (Exception ex) {
             _logger?.LogWarning(ex, "Failed to create active sequences dir {Path}", _activeDir);
         }
     }

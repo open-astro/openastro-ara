@@ -2,14 +2,14 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © Andrew Kirillov, 2005-2009
+// Copyright ï¿½ Andrew Kirillov, 2005-2009
 // andrew.kirillov@aforgenet.com
 //
 // Accord Imaging Library
 // The Accord.NET Framework
 // http://accord-framework.net
 //
-// Copyright © César Souza, 2009-2017
+// Copyright ï¿½ Cï¿½sar Souza, 2009-2017
 // cesarsouza at gmail.com
 //
 //    This library is free software; you can redistribute it and/or
@@ -27,8 +27,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -69,8 +68,7 @@ namespace Accord.Imaging.Filters
     /// <seealso cref="BlobCounter"/>
     /// <seealso cref="BlobCounterBase"/>
     ///
-    public class BlobsFiltering : BaseInPlaceFilter
-    {
+    public class BlobsFiltering : BaseInPlaceFilter {
         private BlobCounter blobCounter = new BlobCounter();
 
         // private format translation dictionary
@@ -79,8 +77,7 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Format translations dictionary.
         /// </summary>
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -91,8 +88,7 @@ namespace Accord.Imaging.Filters
         /// <remarks><para>See documentation for <see cref="BlobCounterBase.CoupledSizeFiltering"/> property
         /// of <see cref="BlobCounterBase"/> class for more information.</para></remarks>
         /// 
-        public bool CoupledSizeFiltering
-        {
+        public bool CoupledSizeFiltering {
             get { return blobCounter.CoupledSizeFiltering; }
             set { blobCounter.CoupledSizeFiltering = value; }
         }
@@ -101,8 +97,7 @@ namespace Accord.Imaging.Filters
         /// Minimum allowed width of blob.
         /// </summary>
         /// 
-        public int MinWidth
-        {
+        public int MinWidth {
             get { return blobCounter.MinWidth; }
             set { blobCounter.MinWidth = value; }
         }
@@ -111,8 +106,7 @@ namespace Accord.Imaging.Filters
         /// Minimum allowed height of blob.
         /// </summary>
         /// 
-        public int MinHeight
-        {
+        public int MinHeight {
             get { return blobCounter.MinHeight; }
             set { blobCounter.MinHeight = value; }
         }
@@ -121,8 +115,7 @@ namespace Accord.Imaging.Filters
         /// Maximum allowed width of blob.
         /// </summary>
         /// 
-        public int MaxWidth
-        {
+        public int MaxWidth {
             get { return blobCounter.MaxWidth; }
             set { blobCounter.MaxWidth = value; }
         }
@@ -131,8 +124,7 @@ namespace Accord.Imaging.Filters
         /// Maximum allowed height of blob.
         /// </summary>
         /// 
-        public int MaxHeight
-        {
+        public int MaxHeight {
             get { return blobCounter.MaxHeight; }
             set { blobCounter.MaxHeight = value; }
         }
@@ -144,8 +136,7 @@ namespace Accord.Imaging.Filters
         /// <remarks><para>See <see cref="BlobCounterBase.BlobsFilter"/> for information
         /// about custom blobs' filtering routine.</para></remarks>
         /// 
-        public IBlobsFilter BlobsFilter
-        {
+        public IBlobsFilter BlobsFilter {
             get { return blobCounter.BlobsFilter; }
             set { blobCounter.BlobsFilter = value; }
         }
@@ -154,8 +145,7 @@ namespace Accord.Imaging.Filters
         /// Initializes a new instance of the <see cref="BlobsFiltering"/> class.
         /// </summary>
         /// 
-        public BlobsFiltering()
-        {
+        public BlobsFiltering() {
             blobCounter.FilterBlobs = true;
             blobCounter.MinWidth = 1;
             blobCounter.MinHeight = 1;
@@ -198,8 +188,7 @@ namespace Accord.Imaging.Filters
         /// class.</para></remarks>
         /// 
         public BlobsFiltering(int minWidth, int minHeight, int maxWidth, int maxHeight, bool coupledSizeFiltering)
-            : this()
-        {
+            : this() {
             blobCounter.MinWidth = minWidth;
             blobCounter.MinHeight = minHeight;
             blobCounter.MaxWidth = maxWidth;
@@ -215,8 +204,7 @@ namespace Accord.Imaging.Filters
         /// (see <see cref="BlobCounterBase.BlobsFilter"/>).</param>
         ///
         public BlobsFiltering(IBlobsFilter blobsFilter)
-            : this()
-        {
+            : this() {
             blobCounter.BlobsFilter = blobsFilter;
         }
 
@@ -226,8 +214,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <param name="image">Source image data.</param>
         ///
-        protected override unsafe void ProcessFilter(UnmanagedImage image)
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage image) {
             // use blob counter to build objects map and filter them
             blobCounter.ProcessImage(image);
             int[] objectsMap = blobCounter.ObjectLabels;
@@ -239,29 +226,22 @@ namespace Accord.Imaging.Filters
             // do the job
             byte* ptr = (byte*)image.ImageData.ToPointer();
 
-            if (image.PixelFormat == PixelFormat.Format8bppIndexed)
-            {
+            if (image.PixelFormat == PixelFormat.Format8bppIndexed) {
                 int offset = image.Stride - width;
 
-                for (int y = 0, p = 0; y < height; y++)
-                {
-                    for (int x = 0; x < width; x++, ptr++, p++)
-                    {
+                for (int y = 0, p = 0; y < height; y++) {
+                    for (int x = 0; x < width; x++, ptr++, p++) {
                         if (objectsMap[p] == 0)
                             *ptr = 0;
                     }
                     ptr += offset;
                 }
-            }
-            else
-            {
+            } else {
                 int pixelSize = Bitmap.GetPixelFormatSize(image.PixelFormat) / 8;
                 int offset = image.Stride - width * pixelSize;
 
-                for (int y = 0, p = 0; y < height; y++)
-                {
-                    for (int x = 0; x < width; x++, ptr += pixelSize, p++)
-                    {
+                for (int y = 0, p = 0; y < height; y++) {
+                    for (int x = 0; x < width; x++, ptr += pixelSize, p++) {
                         if (objectsMap[p] == 0)
                             ptr[RGB.R] = ptr[RGB.G] = ptr[RGB.B] = 0;
                     }

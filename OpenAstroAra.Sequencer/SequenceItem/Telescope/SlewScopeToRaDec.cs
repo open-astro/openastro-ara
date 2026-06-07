@@ -85,7 +85,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Telescope {
         }
 
         public override async Task Execute(IProgress<ApplicationStatus> progress, CancellationToken token) {
-            if(telescopeMediator.GetInfo().AtPark) {
+            if (telescopeMediator.GetInfo().AtPark) {
                 Notification.ShowError(Loc.Instance["LblTelescopeParkedWarning"]);
                 throw new SequenceEntityFailedException(Loc.Instance["LblTelescopeParkedWarning"]);
             }
@@ -120,7 +120,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Telescope {
             var info = telescopeMediator.GetInfo();
             if (!info.Connected) {
                 i.Add(Loc.Instance["LblTelescopeNotConnected"]);
-            } 
+            }
             Issues = i;
             return i.Count == 0;
         }

@@ -20,8 +20,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging.Moments
-{
+namespace Accord.Imaging.Moments {
     using System.Drawing;
     using System.Drawing.Imaging;
     using Accord.Imaging;
@@ -32,8 +31,7 @@ namespace Accord.Imaging.Moments
     /// </summary>
     /// 
     [Serializable]
-    public abstract class MomentsBase
-    {
+    public abstract class MomentsBase {
         /// <summary>
         ///   Gets or sets the maximum order of the moments.
         /// </summary>
@@ -48,8 +46,7 @@ namespace Accord.Imaging.Moments
         /// 
         /// <param name="order">The maximum order for the moments.</param>
         ///
-        protected MomentsBase(int order)
-        {
+        protected MomentsBase(int order) {
             Order = order;
         }
 
@@ -62,8 +59,7 @@ namespace Accord.Imaging.Moments
         /// <param name="area">The region of interest in the image to compute moments for.</param>
         ///
         protected MomentsBase(Bitmap image, Rectangle area, int order)
-            : this(order)
-        {
+            : this(order) {
             Compute(image, area);
         }
 
@@ -76,8 +72,7 @@ namespace Accord.Imaging.Moments
         /// <param name="area">The region of interest in the image to compute moments for.</param>
         /// 
         protected MomentsBase(UnmanagedImage image, Rectangle area, int order)
-            : this(order)
-        {
+            : this(order) {
             Compute(image, area);
         }
 
@@ -90,8 +85,7 @@ namespace Accord.Imaging.Moments
         /// <param name="area">The region of interest in the image to compute moments for.</param>
         ///
         protected MomentsBase(float[,] image, Rectangle area, int order)
-            : this(order)
-        {
+            : this(order) {
             Compute(image, area);
         }
 
@@ -103,8 +97,7 @@ namespace Accord.Imaging.Moments
         /// <param name="image">The image whose moments should be computed.</param>
         /// 
         protected MomentsBase(Bitmap image, int order)
-            : this(order)
-        {
+            : this(order) {
             Compute(image, Rectangle.Empty);
         }
 
@@ -116,8 +109,7 @@ namespace Accord.Imaging.Moments
         /// <param name="image">The image whose moments should be computed.</param>
         ///
         protected MomentsBase(UnmanagedImage image, int order)
-            : this(order)
-        {
+            : this(order) {
             Compute(image, Rectangle.Empty);
         }
 
@@ -129,8 +121,7 @@ namespace Accord.Imaging.Moments
         /// <param name="image">The image whose moments should be computed.</param>
         ///
         protected MomentsBase(float[,] image, int order)
-            : this(order)
-        {
+            : this(order) {
             Compute(image, Rectangle.Empty);
         }
 
@@ -141,8 +132,7 @@ namespace Accord.Imaging.Moments
         /// 
         /// <param name="image">The image whose moments should be computed.</param>
         /// 
-        public void Compute(Bitmap image)
-        {
+        public void Compute(Bitmap image) {
             Compute(image, new Rectangle(0, 0, image.Width, image.Height));
         }
 
@@ -152,8 +142,7 @@ namespace Accord.Imaging.Moments
         /// 
         /// <param name="image">The image whose moments should be computed.</param>
         /// 
-        public void Compute(UnmanagedImage image)
-        {
+        public void Compute(UnmanagedImage image) {
             Compute(image, new Rectangle(0, 0, image.Width, image.Height));
         }
 
@@ -163,8 +152,7 @@ namespace Accord.Imaging.Moments
         /// 
         /// <param name="image">The image whose moments should be computed.</param>
         /// 
-        public void Compute(BitmapData image)
-        {
+        public void Compute(BitmapData image) {
             Compute(image, new Rectangle(0, 0, image.Width, image.Height));
         }
 
@@ -175,19 +163,15 @@ namespace Accord.Imaging.Moments
         /// <param name="image">The image whose moments should be computed.</param>
         /// <param name="area">The region of interest in the image to compute moments for.</param>
         /// 
-        public void Compute(Bitmap image, Rectangle area)
-        {
+        public void Compute(Bitmap image, Rectangle area) {
             // lock source bitmap data
             BitmapData imageData = image.LockBits(
                 new Rectangle(0, 0, image.Width, image.Height),
                 ImageLockMode.ReadOnly, image.PixelFormat);
 
-            try
-            {
+            try {
                 Compute(new UnmanagedImage(imageData), area);
-            }
-            finally
-            {
+            } finally {
                 image.UnlockBits(imageData);
             }
         }
@@ -199,8 +183,7 @@ namespace Accord.Imaging.Moments
         /// <param name="image">The image whose moments should be computed.</param>
         /// <param name="area">The region of interest in the image to compute moments for.</param>
         /// 
-        public void Compute(BitmapData image, Rectangle area)
-        {
+        public void Compute(BitmapData image, Rectangle area) {
             Compute(new UnmanagedImage(image), area);
         }
 

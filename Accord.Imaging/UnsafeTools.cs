@@ -20,15 +20,13 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging
-{
+namespace Accord.Imaging {
 
     /// <summary>
     ///   Static tool functions for imaging.
     /// </summary>
     /// 
-    public static unsafe class UnsafeTools
-    {
+    public static unsafe class UnsafeTools {
 
         /// <summary>
         ///   Computes the sum of all pixels 
@@ -42,12 +40,10 @@ namespace Accord.Imaging
         /// 
         /// <returns>The sum of all pixels within the region.</returns>
         /// 
-        public static int Sum(byte* src, int width, int height, int stride)
-        {
+        public static int Sum(byte* src, int width, int height, int stride) {
             int sum = 0;
 
-            for (int y = 0; y < height; y++)
-            {
+            for (int y = 0; y < height; y++) {
                 for (int x = 0; x < width; x++, src++)
                     sum += *src;
 
@@ -69,8 +65,7 @@ namespace Accord.Imaging
         /// 
         /// <returns>The mean pixel value within the region.</returns>
         /// 
-        public static double Mean(byte* src, int width, int height, int stride)
-        {
+        public static double Mean(byte* src, int width, int height, int stride) {
             return Sum(src, width, height, stride) / (double)(width * height);
         }
 
@@ -87,11 +82,9 @@ namespace Accord.Imaging
         /// 
         /// <returns>The scatter value within the region.</returns>
         /// 
-        public static double Scatter(byte* src, int width, int height, int stride, double mean)
-        {
+        public static double Scatter(byte* src, int width, int height, int stride, double mean) {
             double scatter = 0;
-            for (int y = 0; y < height; y++)
-            {
+            for (int y = 0; y < height; y++) {
                 for (int x = 0; x < width; x++, src++)
                     scatter += (*src - mean) * (*src - mean);
 
@@ -114,8 +107,7 @@ namespace Accord.Imaging
         /// 
         /// <returns>The variance value within the region.</returns>
         /// 
-        public static double Variance(byte* src, int width, int height, int stride, double mean)
-        {
+        public static double Variance(byte* src, int width, int height, int stride, double mean) {
             return Scatter(src, width, height, stride, mean) / (double)(width * height - 1);
         }
     }

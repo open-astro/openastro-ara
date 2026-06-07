@@ -2,12 +2,11 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © Andrew Kirillov, 2005-2009
+// Copyright ï¿½ Andrew Kirillov, 2005-2009
 // andrew.kirillov@aforgenet.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -38,8 +37,7 @@ namespace Accord.Imaging.Filters
     /// <img src="..\images\imaging\simple_skeletonization.png" width="150" height="150" />
     /// </remarks>
     /// 
-    public class SimpleSkeletonization : BaseUsingCopyPartialFilter
-    {
+    public class SimpleSkeletonization : BaseUsingCopyPartialFilter {
         private byte bg = 0;
         private byte fg = 255;
 
@@ -53,8 +51,7 @@ namespace Accord.Imaging.Filters
         /// <remarks><para>See <see cref="IFilterInformation.FormatTranslations"/>
         /// documentation for additional information.</para></remarks>
         /// 
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -66,8 +63,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <para>Default value is set to <b>0</b> - black.</para></remarks>
         /// 
-        public byte Background
-        {
+        public byte Background {
             get { return bg; }
             set { bg = value; }
         }
@@ -80,8 +76,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <para>Default value is set to <b>255</b> - white.</para></remarks>
         /// 
-        public byte Foreground
-        {
+        public byte Foreground {
             get { return fg; }
             set { fg = value; }
         }
@@ -89,8 +84,7 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Initializes a new instance of the <see cref="SimpleSkeletonization"/> class.
         /// </summary>
-        public SimpleSkeletonization()
-        {
+        public SimpleSkeletonization() {
             formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
         }
 
@@ -102,8 +96,7 @@ namespace Accord.Imaging.Filters
         /// <param name="fg">Foreground pixel color.</param>
         /// 
         public SimpleSkeletonization(byte bg, byte fg)
-            : this()
-        {
+            : this() {
             this.bg = bg;
             this.fg = fg;
         }
@@ -116,8 +109,7 @@ namespace Accord.Imaging.Filters
         /// <param name="destinationData">Destination image data.</param>
         /// <param name="rect">Image rectangle for processing by the filter.</param>
         /// 
-        protected override unsafe void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData, Rectangle rect)
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData, Rectangle rect) {
             // processing start and stop X,Y positions
             int startX = rect.Left;
             int startY = rect.Top;
@@ -143,32 +135,27 @@ namespace Accord.Imaging.Filters
             dst += (startY * dstStride);
 
             // for each line
-            for (int y = startY; y < stopY; y++)
-            {
+            for (int y = startY; y < stopY; y++) {
                 // make destination image filled with background color
                 Accord.SystemTools.SetUnmanagedMemory(dst + startX, bg, stopX - startX);
 
                 start = -1;
                 // for each pixel
-                for (int x = startX; x < stopX; x++, src++)
-                {
+                for (int x = startX; x < stopX; x++, src++) {
                     // looking for foreground pixel
-                    if (start == -1)
-                    {
+                    if (start == -1) {
                         if (*src == fg)
                             start = x;
                         continue;
                     }
 
                     // looking for non foreground pixel
-                    if (*src != fg)
-                    {
+                    if (*src != fg) {
                         dst[start + ((x - start) >> 1)] = (byte)fg;
                         start = -1;
                     }
                 }
-                if (start != -1)
-                {
+                if (start != -1) {
                     dst[start + ((stopX - start) >> 1)] = (byte)fg;
                 }
                 src += srcOffset;
@@ -181,32 +168,27 @@ namespace Accord.Imaging.Filters
             src0 += (startY * srcStride);
 
             // for each column
-            for (int x = startX; x < stopX; x++)
-            {
+            for (int x = startX; x < stopX; x++) {
                 src = src0 + x;
                 dst = dst0 + x;
 
                 start = -1;
                 // for each row
-                for (int y = startY; y < stopY; y++, src += srcStride)
-                {
+                for (int y = startY; y < stopY; y++, src += srcStride) {
                     // looking for foreground pixel
-                    if (start == -1)
-                    {
+                    if (start == -1) {
                         if (*src == fg)
                             start = y;
                         continue;
                     }
 
                     // looking for non foreground pixel
-                    if (*src != fg)
-                    {
+                    if (*src != fg) {
                         dst[dstStride * (start + ((y - start) >> 1))] = (byte)fg;
                         start = -1;
                     }
                 }
-                if (start != -1)
-                {
+                if (start != -1) {
                     dst[dstStride * (start + ((stopY - start) >> 1))] = (byte)fg;
                 }
             }

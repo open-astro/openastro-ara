@@ -228,7 +228,7 @@ namespace OpenAstroAra.Profile {
         public bool FITSUseLegacyWriter {
             get => fitsUseLegacyWriter;
             set {
-                if(fitsUseLegacyWriter != value) {
+                if (fitsUseLegacyWriter != value) {
                     fitsUseLegacyWriter = value;
                     RaisePropertyChanged();
                 }
@@ -238,7 +238,7 @@ namespace OpenAstroAra.Profile {
         public string GetFilePattern(string imageType) {
             var pattern = FilePattern;
 
-            if(imageType == "DARK" && !string.IsNullOrWhiteSpace(FilePatternDARK)) {
+            if (imageType == "DARK" && !string.IsNullOrWhiteSpace(FilePatternDARK)) {
                 pattern = FilePatternDARK;
             }
             if (imageType == "FLAT" && !string.IsNullOrWhiteSpace(FilePatternFLAT)) {

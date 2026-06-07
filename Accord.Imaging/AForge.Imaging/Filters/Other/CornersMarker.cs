@@ -2,12 +2,11 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © Andrew Kirillov, 2005-2009
+// Copyright ï¿½ Andrew Kirillov, 2005-2009
 // andrew.kirillov@aforgenet.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -39,29 +38,26 @@ namespace Accord.Imaging.Filters
     /// <img src="..\images\imaging\susan_corners.png" width="320" height="240" />
     /// </remarks>
     /// 
-    public class CornersMarker : BaseInPlaceFilter
-    {
+    public class CornersMarker : BaseInPlaceFilter {
         // color used to mark corners
         private Color markerColor = Color.White;
         // algorithm used to detect corners
         private ICornersDetector detector = null;
 
         // private format translation dictionary
-        private Dictionary<PixelFormat, PixelFormat> formatTranslations = new Dictionary<PixelFormat, PixelFormat>( );
+        private Dictionary<PixelFormat, PixelFormat> formatTranslations = new Dictionary<PixelFormat, PixelFormat>();
 
         /// <summary>
         /// Format translations dictionary.
         /// </summary>
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
         /// <summary>
         /// Color used to mark corners.
         /// </summary>
-        public Color MarkerColor
-        {
+        public Color MarkerColor {
             get { return markerColor; }
             set { markerColor = value; }
         }
@@ -69,8 +65,7 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Interface of corners' detection algorithm used to detect corners.
         /// </summary>
-        public ICornersDetector Detector
-        {
+        public ICornersDetector Detector {
             get { return detector; }
             set { detector = value; }
         }
@@ -81,8 +76,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <param name="detector">Interface of corners' detection algorithm.</param>
         /// 
-        public CornersMarker( ICornersDetector detector ) : this( detector, Color.White )
-        {
+        public CornersMarker(ICornersDetector detector) : this(detector, Color.White) {
         }
 
         /// <summary>
@@ -92,15 +86,14 @@ namespace Accord.Imaging.Filters
         /// <param name="detector">Interface of corners' detection algorithm.</param>
         /// <param name="markerColor">Marker's color used to mark corner.</param>
         /// 
-        public CornersMarker( ICornersDetector detector, Color markerColor )
-        {
-            this.detector    = detector;
+        public CornersMarker(ICornersDetector detector, Color markerColor) {
+            this.detector = detector;
             this.markerColor = markerColor;
 
             formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
-            formatTranslations[PixelFormat.Format24bppRgb]    = PixelFormat.Format24bppRgb;
-            formatTranslations[PixelFormat.Format32bppRgb]    = PixelFormat.Format32bppRgb;
-            formatTranslations[PixelFormat.Format32bppArgb]   = PixelFormat.Format32bppArgb;
+            formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format24bppRgb;
+            formatTranslations[PixelFormat.Format32bppRgb] = PixelFormat.Format32bppRgb;
+            formatTranslations[PixelFormat.Format32bppArgb] = PixelFormat.Format32bppArgb;
         }
 
         /// <summary>
@@ -109,14 +102,12 @@ namespace Accord.Imaging.Filters
         /// 
         /// <param name="image">Source image data.</param>
         ///
-        protected override unsafe void ProcessFilter( UnmanagedImage image )
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage image) {
             // get collection of corners
-            List<IntPoint> corners = detector.ProcessImage( image );
+            List<IntPoint> corners = detector.ProcessImage(image);
             // mark all corners
-            foreach ( IntPoint corner in corners )
-            {
-                Drawing.FillRectangle( image, new Rectangle( corner.X - 1, corner.Y - 1, 3, 3 ), markerColor );
+            foreach (IntPoint corner in corners) {
+                Drawing.FillRectangle(image, new Rectangle(corner.X - 1, corner.Y - 1, 3, 3), markerColor);
             }
         }
     }

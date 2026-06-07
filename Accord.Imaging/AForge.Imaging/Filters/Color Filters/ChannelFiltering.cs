@@ -1,12 +1,11 @@
 // AForge Image Processing Library
 // AForge.NET framework
 //
-// Copyright © Andrew Kirillov, 2005-2008
+// Copyright ï¿½ Andrew Kirillov, 2005-2008
 // andrew.kirillov@gmail.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -50,8 +49,7 @@ namespace Accord.Imaging.Filters
     /// 
     /// <seealso cref="ColorFiltering"/>
     /// 
-    public class ChannelFiltering : BaseInPlacePartialFilter
-    {
+    public class ChannelFiltering : BaseInPlacePartialFilter {
         private IntRange red = new IntRange(0, 255);
         private IntRange green = new IntRange(0, 255);
         private IntRange blue = new IntRange(0, 255);
@@ -74,8 +72,7 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Format translations dictionary.
         /// </summary>
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -84,11 +81,9 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Red channel's range.
         /// </summary>
-        public IntRange Red
-        {
+        public IntRange Red {
             get { return red; }
-            set
-            {
+            set {
                 red = value;
                 CalculateMap(red, fillR, redFillOutsideRange, mapRed);
             }
@@ -97,11 +92,9 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Red fill value.
         /// </summary>
-        public byte FillRed
-        {
+        public byte FillRed {
             get { return fillR; }
-            set
-            {
+            set {
                 fillR = value;
                 CalculateMap(red, fillR, redFillOutsideRange, mapRed);
             }
@@ -110,11 +103,9 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Green channel's range.
         /// </summary>
-        public IntRange Green
-        {
+        public IntRange Green {
             get { return green; }
-            set
-            {
+            set {
                 green = value;
                 CalculateMap(green, fillG, greenFillOutsideRange, mapGreen);
             }
@@ -123,11 +114,9 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Green fill value.
         /// </summary>
-        public byte FillGreen
-        {
+        public byte FillGreen {
             get { return fillG; }
-            set
-            {
+            set {
                 fillG = value;
                 CalculateMap(green, fillG, greenFillOutsideRange, mapGreen);
             }
@@ -136,11 +125,9 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Blue channel's range.
         /// </summary>
-        public IntRange Blue
-        {
+        public IntRange Blue {
             get { return blue; }
-            set
-            {
+            set {
                 blue = value;
                 CalculateMap(blue, fillB, blueFillOutsideRange, mapBlue);
             }
@@ -149,11 +136,9 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Blue fill value.
         /// </summary>
-        public byte FillBlue
-        {
+        public byte FillBlue {
             get { return fillB; }
-            set
-            {
+            set {
                 fillB = value;
                 CalculateMap(blue, fillB, blueFillOutsideRange, mapBlue);
             }
@@ -165,11 +150,9 @@ namespace Accord.Imaging.Filters
         /// 
         /// <remarks>Default value is set to <see langword="true"/>.</remarks>
         /// 
-        public bool RedFillOutsideRange
-        {
+        public bool RedFillOutsideRange {
             get { return redFillOutsideRange; }
-            set
-            {
+            set {
                 redFillOutsideRange = value;
                 CalculateMap(red, fillR, redFillOutsideRange, mapRed);
             }
@@ -181,11 +164,9 @@ namespace Accord.Imaging.Filters
         /// 
         /// <remarks>Default value is set to <see langword="true"/>.</remarks>
         /// 
-        public bool GreenFillOutsideRange
-        {
+        public bool GreenFillOutsideRange {
             get { return greenFillOutsideRange; }
-            set
-            {
+            set {
                 greenFillOutsideRange = value;
                 CalculateMap(green, fillG, greenFillOutsideRange, mapGreen);
             }
@@ -197,11 +178,9 @@ namespace Accord.Imaging.Filters
         /// 
         /// <remarks>Default value is set to <see langword="true"/>.</remarks>
         ///
-        public bool BlueFillOutsideRange
-        {
+        public bool BlueFillOutsideRange {
             get { return blueFillOutsideRange; }
-            set
-            {
+            set {
                 blueFillOutsideRange = value;
                 CalculateMap(blue, fillB, blueFillOutsideRange, mapBlue);
             }
@@ -215,8 +194,7 @@ namespace Accord.Imaging.Filters
         /// </summary>
         /// 
         public ChannelFiltering()
-            : this(new IntRange(0, 255), new IntRange(0, 255), new IntRange(0, 255))
-        {
+            : this(new IntRange(0, 255), new IntRange(0, 255), new IntRange(0, 255)) {
         }
 
         /// <summary>
@@ -227,8 +205,7 @@ namespace Accord.Imaging.Filters
         /// <param name="green">Green channel's filtering range.</param>
         /// <param name="blue">Blue channel's filtering range.</param>
         /// 
-        public ChannelFiltering(IntRange red, IntRange green, IntRange blue)
-        {
+        public ChannelFiltering(IntRange red, IntRange green, IntRange blue) {
             Red = red;
             Green = green;
             Blue = blue;
@@ -245,8 +222,7 @@ namespace Accord.Imaging.Filters
         /// <param name="image">Source image data.</param>
         /// <param name="rect">Image rectangle for processing by the filter.</param>
         ///
-        protected override unsafe void ProcessFilter(UnmanagedImage image, Rectangle rect)
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage image, Rectangle rect) {
             // get pixel size
             int pixelSize = (image.PixelFormat == PixelFormat.Format24bppRgb) ? 3 : 4;
 
@@ -263,11 +239,9 @@ namespace Accord.Imaging.Filters
             ptr += (startY * image.Stride + startX * pixelSize);
 
             // for each row
-            for (int y = startY; y < stopY; y++)
-            {
+            for (int y = startY; y < stopY; y++) {
                 // for each pixel
-                for (int x = startX; x < stopX; x++, ptr += pixelSize)
-                {
+                for (int x = startX; x < stopX; x++, ptr += pixelSize) {
                     // red
                     ptr[RGB.R] = mapRed[ptr[RGB.R]];
                     // green
@@ -288,16 +262,11 @@ namespace Accord.Imaging.Filters
         /// <param name="fillOutsideRange">Fill outside or inside the range.</param>
         /// <param name="map">Filtering map.</param>
         /// 
-        private static void CalculateMap(IntRange range, byte fill, bool fillOutsideRange, byte[] map)
-        {
-            for (int i = 0; i < 256; i++)
-            {
-                if ((i >= range.Min) && (i <= range.Max))
-                {
+        private static void CalculateMap(IntRange range, byte fill, bool fillOutsideRange, byte[] map) {
+            for (int i = 0; i < 256; i++) {
+                if ((i >= range.Min) && (i <= range.Max)) {
                     map[i] = (fillOutsideRange) ? (byte)i : fill;
-                }
-                else
-                {
+                } else {
                     map[i] = (fillOutsideRange) ? fill : (byte)i;
                 }
             }

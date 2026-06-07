@@ -29,7 +29,7 @@ namespace OpenAstroAra.Astrometry {
             var sunRiseAndSet = AstroUtil.GetSunRiseAndSet(date, latitude, longitude, elevation);
             if (nightRise == null) {
                 return sunRiseAndSet.Rise - sunRiseAndSet.Set ?? TimeSpan.Zero;
-            }            
+            }
 
             return sunRiseAndSet.Rise - nightRise ?? TimeSpan.Zero;
         }

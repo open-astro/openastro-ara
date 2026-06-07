@@ -95,7 +95,7 @@ namespace OpenAstroAra.Astrometry {
                 || ((360.0 - diffDegrees) - toleranceDegrees) <= EQUALS_EPSILON;
         }
         public bool Equals(Angle that, Angle tolerance, bool oneEightyIsEqual) {
-            if(!oneEightyIsEqual) { return this.Equals(that, tolerance); }
+            if (!oneEightyIsEqual) { return this.Equals(that, tolerance); }
 
             var thisDegrees = AstroUtil.EuclidianModulus(this.Degree, 180.0);
             var thatDegrees = AstroUtil.EuclidianModulus(that.Degree, 180.0);

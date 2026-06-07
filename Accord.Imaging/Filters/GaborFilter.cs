@@ -29,8 +29,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System.Collections.Generic;
     using System.Drawing.Imaging;
     using Accord.Math;
@@ -88,8 +87,7 @@ namespace Accord.Imaging.Filters
     /// <img src="..\images\lines-gabor.png" /> 
     /// </example>
     /// 
-    public class GaborFilter : BaseFilter
-    {
+    public class GaborFilter : BaseFilter {
         private Dictionary<PixelFormat, PixelFormat> formatTranslations
             = new Dictionary<PixelFormat, PixelFormat>();
 
@@ -108,8 +106,7 @@ namespace Accord.Imaging.Filters
         ///   Gets or sets the size of the filter. Default is 3.
         /// </summary>
         /// 
-        public int Size
-        {
+        public int Size {
             get { return size; }
             set { size = value; recompute = true; }
         }
@@ -118,8 +115,7 @@ namespace Accord.Imaging.Filters
         ///   Gets or sets the Gaussian variance for the filter. Default is 2.
         /// </summary>
         /// 
-        public double Sigma
-        {
+        public double Sigma {
             get { return sigma; }
             set { sigma = value; recompute = true; }
         }
@@ -128,8 +124,7 @@ namespace Accord.Imaging.Filters
         ///   Gets or sets the orientation for the filter, in radians. Default is 0.6.
         /// </summary>
         /// 
-        public double Theta
-        {
+        public double Theta {
             get { return theta; }
             set { theta = value; recompute = true; }
         }
@@ -138,8 +133,7 @@ namespace Accord.Imaging.Filters
         ///   Gets or sets the wavelength for the filter. Default is 4.0.
         /// </summary>
         /// 
-        public double Lambda
-        {
+        public double Lambda {
             get { return lambda; }
             set { lambda = value; recompute = true; }
         }
@@ -148,8 +142,7 @@ namespace Accord.Imaging.Filters
         ///   Gets or sets the aspect ratio for the filter. Default is 0.3.
         /// </summary>
         /// 
-        public double Gamma
-        {
+        public double Gamma {
             get { return gamma; }
             set { gamma = value; recompute = true; }
         }
@@ -158,8 +151,7 @@ namespace Accord.Imaging.Filters
         ///   Gets or sets the phase offset for the filter. Default is 1.0.
         /// </summary>
         /// 
-        public double Psi
-        {
+        public double Psi {
             get { return psi; }
             set { psi = value; recompute = true; }
         }
@@ -168,8 +160,7 @@ namespace Accord.Imaging.Filters
         ///   Initializes a new instance of the <see cref="GaborFilter"/> class.
         /// </summary>
         /// 
-        public GaborFilter()
-        {
+        public GaborFilter() {
             formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
             formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format24bppRgb;
             recompute = true;
@@ -180,8 +171,7 @@ namespace Accord.Imaging.Filters
         ///   Format translations dictionary.
         /// </summary>
         /// 
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -192,20 +182,17 @@ namespace Accord.Imaging.Filters
         /// <param name="sourceData">Source image data.</param>
         /// <param name="destinationData">Destination image data.</param>
         /// 
-        protected unsafe override void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData)
-        {
+        protected unsafe override void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData) {
             // check image format
             if ((sourceData.PixelFormat != PixelFormat.Format8bppIndexed) &&
                 (sourceData.PixelFormat != PixelFormat.Format24bppRgb))
                 throw new UnsupportedImageFormatException("Unsupported image format.");
 
-            if (sourceData.PixelFormat != PixelFormat.Format8bppIndexed)
-            {
+            if (sourceData.PixelFormat != PixelFormat.Format8bppIndexed) {
                 sourceData = Grayscale.CommonAlgorithms.BT709.Apply(sourceData);
             }
 
-            if (recompute)
-            {
+            if (recompute) {
                 recompute = false;
                 kernel = Gabor.Kernel2D(size: size,
                                         lambda: lambda,
@@ -238,16 +225,13 @@ namespace Accord.Imaging.Filters
             int min = int.MaxValue;
 
             // for each image row
-            for (int y = 0; y < height; y++)
-            {
+            for (int y = 0; y < height; y++) {
                 // for each pixel in the row
-                for (int x = 0; x < width; x++, src++)
-                {
+                for (int x = 0; x < width; x++, src++) {
                     double sum = 0;
 
                     // for each kernel row
-                    for (int i = 0; i < kernelHeight; i++)
-                    {
+                    for (int i = 0; i < kernelHeight; i++) {
                         int ir = i - centerY;
                         int t = y + ir;
 
@@ -262,8 +246,7 @@ namespace Accord.Imaging.Filters
                         int col = ir * srcStride;
 
                         // for each kernel value in the row
-                        for (int j = 0; j < kernelWidth; j++)
-                        {
+                        for (int j = 0; j < kernelWidth; j++) {
                             int jr = j - centerX;
                             t = x + jr;
 
@@ -271,8 +254,7 @@ namespace Accord.Imaging.Filters
                             if (t < 0)
                                 continue;
 
-                            if (t < width)
-                            {
+                            if (t < width) {
                                 double k = kernel[i, j];
                                 sum += k * src[col + jr];
                             }
@@ -294,36 +276,27 @@ namespace Accord.Imaging.Filters
             int dstStride = destinationData.Stride;
             int dstOffset = dstStride - width * pixelSize;
 
-            if (destinationData.PixelFormat == PixelFormat.Format8bppIndexed)
-            {
+            if (destinationData.PixelFormat == PixelFormat.Format8bppIndexed) {
                 // for each image row
-                for (int y = 0; y < height; y++)
-                {
+                for (int y = 0; y < height; y++) {
                     // for each pixel in the row
-                    for (int x = 0; x < width; x++, dst++)
-                    {
+                    for (int x = 0; x < width; x++, dst++) {
                         *dst = (byte)((255 * (response[y, x] - min)) / (max - min));
                     }
 
                     dst += dstOffset;
                 }
-            }
-            else
-            {
+            } else {
                 // for each image row
-                for (int y = 0; y < height; y++)
-                {
+                for (int y = 0; y < height; y++) {
                     // for each pixel in the row
-                    for (int x = 0; x < width; x++, dst += pixelSize)
-                    {
+                    for (int x = 0; x < width; x++, dst += pixelSize) {
                         int v = response[y, x];
 
-                        if (v > 0)
-                        {
+                        if (v > 0) {
                             dst[RGB.R] = (byte)((255 * v) / max);
-                        }
-                        else // (v <= 0)
-                        {
+                        } else // (v <= 0)
+                          {
                             dst[RGB.B] = (byte)((255 * v) / min);
                         }
                     }

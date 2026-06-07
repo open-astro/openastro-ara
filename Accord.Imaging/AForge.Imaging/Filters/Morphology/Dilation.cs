@@ -2,14 +2,14 @@
 // The Accord.NET Framework
 // http://accord-framework.net
 //
-// Copyright © César Souza, 2009-2017
+// Copyright ï¿½ Cï¿½sar Souza, 2009-2017
 // cesarsouza at gmail.com
 //
 // AForge Image Processing Library
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © AForge.NET, 2005-2010
+// Copyright ï¿½ AForge.NET, 2005-2010
 // contacts@aforgenet.com
 //
 //    This library is free software; you can redistribute it and/or
@@ -27,8 +27,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -71,8 +70,7 @@ namespace Accord.Imaging.Filters
     /// <seealso cref="Dilation3x3"/>
     /// <seealso cref="BinaryDilation3x3"/>
     /// 
-    public class Dilation : BaseUsingCopyPartialFilter
-    {
+    public class Dilation : BaseUsingCopyPartialFilter {
         // structuring element
         private short[,] se = new short[3, 3] { { 1, 1, 1 }, { 1, 1, 1 }, { 1, 1, 1 } };
         private int size = 3;
@@ -83,8 +81,7 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Format translations dictionary.
         /// </summary>
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -96,8 +93,7 @@ namespace Accord.Imaging.Filters
         /// default structuring element - 3x3 structuring element with all elements equal to 1.
         /// </para></remarks>
         /// 
-        public Dilation()
-        {
+        public Dilation() {
             // initialize format translation dictionary
             formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
             formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format24bppRgb;
@@ -117,8 +113,7 @@ namespace Accord.Imaging.Filters
         /// <exception cref="ArgumentException">Invalid size of structuring element.</exception>
         /// 
         public Dilation(short[,] se)
-            : this()
-        {
+            : this() {
             int s = se.GetLength(0);
 
             // check structuring element size
@@ -137,8 +132,7 @@ namespace Accord.Imaging.Filters
         /// <param name="destinationData">Destination image data.</param>
         /// <param name="rect">Image rectangle for processing by the filter.</param>
         /// 
-        protected override unsafe void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData, Rectangle rect)
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData, Rectangle rect) {
             PixelFormat pixelFormat = sourceData.PixelFormat;
 
             // processing start and stop X,Y positions
@@ -153,8 +147,7 @@ namespace Accord.Imaging.Filters
             // flag to indicate if at least one pixel for the given structuring element was found
             bool foundSomething;
 
-            if ((pixelFormat == PixelFormat.Format8bppIndexed) || (pixelFormat == PixelFormat.Format24bppRgb))
-            {
+            if ((pixelFormat == PixelFormat.Format8bppIndexed) || (pixelFormat == PixelFormat.Format24bppRgb)) {
                 int pixelSize = (pixelFormat == PixelFormat.Format8bppIndexed) ? 1 : 3;
 
                 int dstStride = destinationData.Stride;
@@ -168,13 +161,11 @@ namespace Accord.Imaging.Filters
                 baseSrc += (startX * pixelSize);
                 baseDst += (startX * pixelSize);
 
-                if (pixelFormat == PixelFormat.Format8bppIndexed)
-                {
+                if (pixelFormat == PixelFormat.Format8bppIndexed) {
                     // grayscale image
 
                     // compute each line
-                    for (int y = startY; y < stopY; y++)
-                    {
+                    for (int y = startY; y < stopY; y++) {
                         byte* src = baseSrc + y * srcStride;
                         byte* dst = baseDst + y * dstStride;
 
@@ -184,14 +175,12 @@ namespace Accord.Imaging.Filters
                         int t, ir, jr, i, j;
 
                         // for each pixel
-                        for (int x = startX; x < stopX; x++, src++, dst++)
-                        {
+                        for (int x = startX; x < stopX; x++, src++, dst++) {
                             max = 0;
                             foundSomething = false;
 
                             // for each structuring element's row
-                            for (i = 0; i < size; i++)
-                            {
+                            for (i = 0; i < size; i++) {
                                 ir = i - r;
                                 t = y + ir;
 
@@ -203,18 +192,15 @@ namespace Accord.Imaging.Filters
                                     break;
 
                                 // for each structuring slement's column
-                                for (j = 0; j < size; j++)
-                                {
+                                for (j = 0; j < size; j++) {
                                     jr = j - r;
                                     t = x + jr;
 
                                     // skip column
                                     if (t < startX)
                                         continue;
-                                    if (t < stopX)
-                                    {
-                                        if (se[i, j] == 1)
-                                        {
+                                    if (t < stopX) {
+                                        if (se[i, j] == 1) {
                                             foundSomething = true;
                                             // get new MAX value
                                             v = src[ir * srcStride + jr];
@@ -228,14 +214,11 @@ namespace Accord.Imaging.Filters
                             *dst = (foundSomething) ? max : *src;
                         }
                     }
-                }
-                else
-                {
+                } else {
                     // 24 bpp color image
 
                     // compute each line
-                    for (int y = startY; y < stopY; y++)
-                    {
+                    for (int y = startY; y < stopY; y++) {
                         byte* src = baseSrc + y * srcStride;
                         byte* dst = baseDst + y * dstStride;
 
@@ -246,14 +229,12 @@ namespace Accord.Imaging.Filters
                         int t, ir, jr, i, j;
 
                         // for each pixel
-                        for (int x = startX; x < stopX; x++, src += 3, dst += 3)
-                        {
+                        for (int x = startX; x < stopX; x++, src += 3, dst += 3) {
                             maxR = maxG = maxB = 0;
                             foundSomething = false;
 
                             // for each structuring element's row
-                            for (i = 0; i < size; i++)
-                            {
+                            for (i = 0; i < size; i++) {
                                 ir = i - r;
                                 t = y + ir;
 
@@ -265,18 +246,15 @@ namespace Accord.Imaging.Filters
                                     break;
 
                                 // for each structuring element's column
-                                for (j = 0; j < size; j++)
-                                {
+                                for (j = 0; j < size; j++) {
                                     jr = j - r;
                                     t = x + jr;
 
                                     // skip column
                                     if (t < startX)
                                         continue;
-                                    if (t < stopX)
-                                    {
-                                        if (se[i, j] == 1)
-                                        {
+                                    if (t < stopX) {
+                                        if (se[i, j] == 1) {
                                             foundSomething = true;
                                             // get new MAX values
                                             p = &src[ir * srcStride + jr * 3];
@@ -300,14 +278,11 @@ namespace Accord.Imaging.Filters
                                 }
                             }
                             // result pixel
-                            if (foundSomething)
-                            {
+                            if (foundSomething) {
                                 dst[RGB.R] = maxR;
                                 dst[RGB.G] = maxG;
                                 dst[RGB.B] = maxB;
-                            }
-                            else
-                            {
+                            } else {
                                 dst[RGB.R] = src[RGB.R];
                                 dst[RGB.G] = src[RGB.G];
                                 dst[RGB.B] = src[RGB.B];
@@ -315,9 +290,7 @@ namespace Accord.Imaging.Filters
                         }
                     }
                 }
-            }
-            else
-            {
+            } else {
                 int pixelSize = (pixelFormat == PixelFormat.Format16bppGrayScale) ? 1 : 3;
 
                 int dstStride = destinationData.Stride / 2;
@@ -331,13 +304,11 @@ namespace Accord.Imaging.Filters
                 baseSrc += (startX * pixelSize);
                 baseDst += (startX * pixelSize);
 
-                if (pixelFormat == PixelFormat.Format16bppGrayScale)
-                {
+                if (pixelFormat == PixelFormat.Format16bppGrayScale) {
                     // 16 bpp grayscale image
 
                     // compute each line
-                    for (int y = startY; y < stopY; y++)
-                    {
+                    for (int y = startY; y < stopY; y++) {
                         ushort* src = baseSrc + y * srcStride;
                         ushort* dst = baseDst + y * dstStride;
 
@@ -347,14 +318,12 @@ namespace Accord.Imaging.Filters
                         int t, ir, jr, i, j;
 
                         // for each pixel
-                        for (int x = startX; x < stopX; x++, src++, dst++)
-                        {
+                        for (int x = startX; x < stopX; x++, src++, dst++) {
                             max = 0;
                             foundSomething = false;
 
                             // for each structuring element's row
-                            for (i = 0; i < size; i++)
-                            {
+                            for (i = 0; i < size; i++) {
                                 ir = i - r;
                                 t = y + ir;
 
@@ -366,18 +335,15 @@ namespace Accord.Imaging.Filters
                                     break;
 
                                 // for each structuring slement's column
-                                for (j = 0; j < size; j++)
-                                {
+                                for (j = 0; j < size; j++) {
                                     jr = j - r;
                                     t = x + jr;
 
                                     // skip column
                                     if (t < startX)
                                         continue;
-                                    if (t < stopX)
-                                    {
-                                        if (se[i, j] == 1)
-                                        {
+                                    if (t < stopX) {
+                                        if (se[i, j] == 1) {
                                             foundSomething = true;
                                             // get new MAX value
                                             v = src[ir * srcStride + jr];
@@ -391,14 +357,11 @@ namespace Accord.Imaging.Filters
                             *dst = (foundSomething) ? max : *src;
                         }
                     }
-                }
-                else
-                {
+                } else {
                     // 48 bpp color image
 
                     // compute each line
-                    for (int y = startY; y < stopY; y++)
-                    {
+                    for (int y = startY; y < stopY; y++) {
                         ushort* src = baseSrc + y * srcStride;
                         ushort* dst = baseDst + y * dstStride;
 
@@ -409,14 +372,12 @@ namespace Accord.Imaging.Filters
                         int t, ir, jr, i, j;
 
                         // for each pixel
-                        for (int x = startX; x < stopX; x++, src += 3, dst += 3)
-                        {
+                        for (int x = startX; x < stopX; x++, src += 3, dst += 3) {
                             maxR = maxG = maxB = 0;
                             foundSomething = false;
 
                             // for each structuring element's row
-                            for (i = 0; i < size; i++)
-                            {
+                            for (i = 0; i < size; i++) {
                                 ir = i - r;
                                 t = y + ir;
 
@@ -428,18 +389,15 @@ namespace Accord.Imaging.Filters
                                     break;
 
                                 // for each structuring element's column
-                                for (j = 0; j < size; j++)
-                                {
+                                for (j = 0; j < size; j++) {
                                     jr = j - r;
                                     t = x + jr;
 
                                     // skip column
                                     if (t < startX)
                                         continue;
-                                    if (t < stopX)
-                                    {
-                                        if (se[i, j] == 1)
-                                        {
+                                    if (t < stopX) {
+                                        if (se[i, j] == 1) {
                                             foundSomething = true;
                                             // get new MAX values
                                             p = &src[ir * srcStride + jr * 3];
@@ -463,14 +421,11 @@ namespace Accord.Imaging.Filters
                                 }
                             }
                             // result pixel
-                            if (foundSomething)
-                            {
+                            if (foundSomething) {
                                 dst[RGB.R] = maxR;
                                 dst[RGB.G] = maxG;
                                 dst[RGB.B] = maxB;
-                            }
-                            else
-                            {
+                            } else {
                                 dst[RGB.R] = src[RGB.R];
                                 dst[RGB.G] = src[RGB.G];
                                 dst[RGB.B] = src[RGB.B];

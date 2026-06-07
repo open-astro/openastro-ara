@@ -37,7 +37,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
     public class WaitUntilAboveHorizon : WaitForAltitudeBase, IValidatable {
 
         private bool hasDsoParent;
-   
+
         [ImportingConstructor]
         public WaitUntilAboveHorizon(IProfileService profileService) : base(profileService, useCustomHorizon: true) {
             ProfileService = profileService;

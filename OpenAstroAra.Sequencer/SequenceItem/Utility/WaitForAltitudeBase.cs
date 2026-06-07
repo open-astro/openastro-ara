@@ -90,5 +90,3 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
         #endregion
     }
 }
-
-

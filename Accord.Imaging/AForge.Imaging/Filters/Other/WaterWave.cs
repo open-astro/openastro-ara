@@ -6,8 +6,7 @@
 // andrew.kirillov@aforgenet.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -44,8 +43,7 @@ namespace Accord.Imaging.Filters
     /// <img src="..\images\imaging\water_wave.jpg" width="480" height="361" />
     /// </remarks>
     /// 
-    public class WaterWave : BaseFilter
-    {
+    public class WaterWave : BaseFilter {
         // private format translation dictionary
         private Dictionary<PixelFormat, PixelFormat> formatTranslations = new Dictionary<PixelFormat, PixelFormat>();
 
@@ -60,8 +58,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <remarks><para>Default value is set to <b>5</b>.</para></remarks>
         /// 
-        public int HorizontalWavesCount
-        {
+        public int HorizontalWavesCount {
             get { return xWavesCount; }
             set { xWavesCount = Math.Max(1, Math.Min(10000, value)); }
         }
@@ -72,8 +69,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <remarks><para>Default value is set to <b>5</b>.</para></remarks>
         /// 
-        public int VerticalWavesCount
-        {
+        public int VerticalWavesCount {
             get { return yWavesCount; }
             set { yWavesCount = Math.Max(1, Math.Min(10000, value)); }
         }
@@ -84,8 +80,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <remarks><para>Default value is set to <b>10</b>.</para></remarks>
         /// 
-        public int HorizontalWavesAmplitude
-        {
+        public int HorizontalWavesAmplitude {
             get { return xWavesAmplitude; }
             set { xWavesAmplitude = Math.Max(0, Math.Min(10000, value)); }
         }
@@ -96,8 +91,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <remarks><para>Default value is set to <b>10</b>.</para></remarks>
         /// 
-        public int VerticalWavesAmplitude
-        {
+        public int VerticalWavesAmplitude {
             get { return yWavesAmplitude; }
             set { yWavesAmplitude = Math.Max(0, Math.Min(10000, value)); }
         }
@@ -109,8 +103,7 @@ namespace Accord.Imaging.Filters
         /// <remarks><para>See <see cref="IFilterInformation.FormatTranslations"/>
         /// documentation for additional information.</para></remarks>
         /// 
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -118,8 +111,7 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Initializes a new instance of the <see cref="WaterWave"/> class.
         /// </summary>
-        public WaterWave()
-        {
+        public WaterWave() {
             formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
             formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format24bppRgb;
             formatTranslations[PixelFormat.Format32bppRgb] = PixelFormat.Format32bppRgb;
@@ -133,8 +125,7 @@ namespace Accord.Imaging.Filters
         /// <param name="sourceData">Source image data.</param>
         /// <param name="destinationData">Destination image data.</param>
         /// 
-        protected override unsafe void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData)
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData) {
             int pixelSize = Image.GetPixelFormatSize(sourceData.PixelFormat) / 8;
 
             // processing start and stop X,Y positions
@@ -161,19 +152,16 @@ namespace Accord.Imaging.Filters
             double yFactor = 2 * Math.PI * yWavesCount / height;
 
             // for each line
-            for (int y = 0; y < height; y++)
-            {
+            for (int y = 0; y < height; y++) {
                 double yPart = Math.Sin(yFactor * y) * yWavesAmplitude;
 
                 // for each pixel
-                for (int x = 0; x < width; x++)
-                {
+                for (int x = 0; x < width; x++) {
                     ox = x + yPart;
                     oy = y + Math.Cos(xFactor * x) * xWavesAmplitude;
 
                     // check if the source pixel is inside of image
-                    if ((ox >= 0) && (oy >= 0) && (ox < width) && (oy < height))
-                    {
+                    if ((ox >= 0) && (oy >= 0) && (ox < width) && (oy < height)) {
                         // perform bilinear interpolation
                         oy1 = (int)oy;
                         oy2 = (oy1 == ymax) ? oy1 : oy1 + 1;
@@ -190,17 +178,13 @@ namespace Accord.Imaging.Filters
                         p3 = src + oy2 * srcStride + ox1 * pixelSize;
                         p4 = src + oy2 * srcStride + ox2 * pixelSize;
 
-                        for (int i = 0; i < pixelSize; i++, dst++, p1++, p2++, p3++, p4++)
-                        {
+                        for (int i = 0; i < pixelSize; i++, dst++, p1++, p2++, p3++, p4++) {
                             *dst = (byte)(
                                 dy2 * (dx2 * (*p1) + dx1 * (*p2)) +
                                 dy1 * (dx2 * (*p3) + dx1 * (*p4)));
                         }
-                    }
-                    else
-                    {
-                        for (int i = 0; i < pixelSize; i++, dst++)
-                        {
+                    } else {
+                        for (int i = 0; i < pixelSize; i++, dst++) {
                             *dst = 0;
                         }
                     }
@@ -210,4 +194,3 @@ namespace Accord.Imaging.Filters
         }
     }
 }
-

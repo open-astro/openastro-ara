@@ -2,7 +2,7 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © Andrew Kirillov, 2005-2009
+// Copyright ï¿½ Andrew Kirillov, 2005-2009
 // andrew.kirillov@aforgenet.com
 //
 // Found description in
@@ -10,8 +10,7 @@
 // Model and Parameterized Relaxation Labeling"
 // by Ioannis Matalas, Student Member, IEEE, Ralph Benjamin, and Richard Kitney
 //
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -60,8 +59,7 @@ namespace Accord.Imaging.Filters
     /// <img src="..\images\imaging\adaptive_smooth.png" width="480" height="361" />
     /// </remarks>
     /// 
-    public class AdaptiveSmoothing : BaseUsingCopyPartialFilter
-    {
+    public class AdaptiveSmoothing : BaseUsingCopyPartialFilter {
         private double factor = 3.0;
 
         // private format translation dictionary
@@ -70,8 +68,7 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Format translations dictionary.
         /// </summary>
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -85,8 +82,7 @@ namespace Accord.Imaging.Filters
         /// <para>Default value is set to <b>3</b>.</para>
         /// </remarks>
         /// 
-        public double Factor
-        {
+        public double Factor {
             get { return factor; }
             set { factor = value; }
         }
@@ -95,8 +91,7 @@ namespace Accord.Imaging.Filters
         /// Initializes a new instance of the <see cref="AdaptiveSmoothing"/> class.
         /// </summary>
         /// 
-        public AdaptiveSmoothing()
-        {
+        public AdaptiveSmoothing() {
             formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
             formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format24bppRgb;
         }
@@ -108,8 +103,7 @@ namespace Accord.Imaging.Filters
         /// <param name="factor">Factor value.</param>
         /// 
         public AdaptiveSmoothing(double factor)
-            : this()
-        {
+            : this() {
             this.factor = factor;
         }
 
@@ -121,8 +115,7 @@ namespace Accord.Imaging.Filters
         /// <param name="destinationData">Destination image data.</param>
         /// <param name="rect">Image rectangle for processing by the filter.</param>
         /// 
-        protected override unsafe void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData, Rectangle rect)
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData, Rectangle rect) {
             int pixelSize = Image.GetPixelFormatSize(sourceData.PixelFormat) / 8;
             int pixelSize2 = pixelSize * 2;
 
@@ -156,15 +149,12 @@ namespace Accord.Imaging.Filters
             src += (startY * srcStride + startX * pixelSize);
             dst += (startY * dstStride + startX * pixelSize);
 
-            for (int y = startYP2; y < stopYM2; y++)
-            {
+            for (int y = startYP2; y < stopYM2; y++) {
                 src += pixelSize2;
                 dst += pixelSize2;
 
-                for (int x = startXP2; x < stopXM2; x++)
-                {
-                    for (int i = 0; i < pixelSize; i++, src++, dst++)
-                    {
+                for (int x = startXP2; x < stopXM2; x++) {
+                    for (int i = 0; i < pixelSize; i++, src++, dst++) {
                         weightTotal = 0;
                         total = 0;
 

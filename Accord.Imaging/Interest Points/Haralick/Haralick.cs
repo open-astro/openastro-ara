@@ -20,8 +20,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging
-{
+namespace Accord.Imaging {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -35,8 +34,7 @@ namespace Accord.Imaging
     ///   <see cref="Haralick"/>'s operation modes.
     /// </summary>
     /// 
-    public enum HaralickMode
-    {
+    public enum HaralickMode {
         /// <summary>
         ///   Features will be combined using 
         ///   <see cref="HaralickDescriptorDictionary.Average"/>.
@@ -126,8 +124,7 @@ namespace Accord.Imaging
     /// <seealso cref="HarrisCornersDetector"/>
     /// 
     [Serializable]
-    public class Haralick : BaseFeatureExtractor<FeatureDescriptor>
-    {
+    public class Haralick : BaseFeatureExtractor<FeatureDescriptor> {
         int cellSize = 0;  // size of the cell, in number of pixels
         bool normalize = false;
         int distance = 1;
@@ -148,8 +145,7 @@ namespace Accord.Imaging
         ///   entire image).
         /// </summary>
         /// 
-        public int CellSize
-        {
+        public int CellSize {
             get { return cellSize; }
             set { cellSize = value; }
         }
@@ -160,8 +156,7 @@ namespace Accord.Imaging
         ///   Default is <see cref="HaralickMode.NormalizedAverage"/>.
         /// </summary>
         /// 
-        public HashSet<CooccurrenceDegree> Degrees
-        {
+        public HashSet<CooccurrenceDegree> Degrees {
             get { return degrees; }
         }
 
@@ -181,8 +176,7 @@ namespace Accord.Imaging
         ///   specifying how the different features should be combined.
         /// </value>
         /// 
-        public HaralickMode Mode
-        {
+        public HaralickMode Mode {
             get { return mode; }
             set { mode = value; }
         }
@@ -193,8 +187,7 @@ namespace Accord.Imaging
         ///   the first 13 original Haralick's features will be used.
         /// </summary>
         /// 
-        public int Features
-        {
+        public int Features {
             get { return featureCount; }
             set { featureCount = value; }
         }
@@ -219,8 +212,7 @@ namespace Accord.Imaging
         ///   histogram feature vectors. Default is false.
         /// </summary>
         /// 
-        public bool Normalize
-        {
+        public bool Normalize {
             get { return normalize; }
             set { normalize = value; }
         }
@@ -233,8 +225,7 @@ namespace Accord.Imaging
         ///   The angulation degrees on which the <see cref="HaralickDescriptor">Haralick's
         ///   features</see> should be computed. Default is to use all directions.</param>
         /// 
-        public Haralick(params CooccurrenceDegree[] degrees)
-        {
+        public Haralick(params CooccurrenceDegree[] degrees) {
             init(cellSize, normalize, degrees);
         }
 
@@ -249,8 +240,7 @@ namespace Accord.Imaging
         ///   Whether to normalize generated 
         ///   histograms. Default is false.</param>
         /// 
-        public Haralick(int cellSize, bool normalize)
-        {
+        public Haralick(int cellSize, bool normalize) {
             init(cellSize, normalize, null);
         }
 
@@ -268,24 +258,19 @@ namespace Accord.Imaging
         ///   The angulation degrees on which the <see cref="HaralickDescriptor">Haralick's
         ///   features</see> should be computed. Default is to use all directions.</param>
         /// 
-        public Haralick(int cellSize, bool normalize, params CooccurrenceDegree[] degrees)
-        {
+        public Haralick(int cellSize, bool normalize, params CooccurrenceDegree[] degrees) {
             init(cellSize, normalize, degrees);
         }
 
-        private void init(int size, bool norm, CooccurrenceDegree[] deg)
-        {
+        private void init(int size, bool norm, CooccurrenceDegree[] deg) {
             this.degrees = new HashSet<CooccurrenceDegree>();
 
-            if (deg == null || deg.Length == 0)
-            {
+            if (deg == null || deg.Length == 0) {
                 this.degrees.Add(CooccurrenceDegree.Degree0);
                 this.degrees.Add(CooccurrenceDegree.Degree45);
                 this.degrees.Add(CooccurrenceDegree.Degree90);
                 this.degrees.Add(CooccurrenceDegree.Degree135);
-            }
-            else
-            {
+            } else {
                 foreach (var degree in deg)
                     this.degrees.Add(degree);
             }
@@ -305,20 +290,16 @@ namespace Accord.Imaging
         ///   actual feature extraction, transforming the input image into a list of features.
         /// </summary>
         /// 
-        protected override IEnumerable<FeatureDescriptor> InnerTransform(UnmanagedImage image)
-        {
+        protected override IEnumerable<FeatureDescriptor> InnerTransform(UnmanagedImage image) {
             // TODO: Improve memory usage of this method by
             // caching into class variables whenever possible
 
             // make sure we have grayscale image
             UnmanagedImage grayImage = null;
 
-            if (image.PixelFormat == PixelFormat.Format8bppIndexed)
-            {
+            if (image.PixelFormat == PixelFormat.Format8bppIndexed) {
                 grayImage = image;
-            }
-            else
-            {
+            } else {
                 // create temporary grayscale image
                 grayImage = Grayscale.CommonAlgorithms.BT709.Apply(image);
             }
@@ -332,23 +313,19 @@ namespace Accord.Imaging
             this.matrix = new GrayLevelCooccurrenceMatrix(distance,
                 CooccurrenceDegree.Degree0, normalize: true, autoGray: autoGray);
 
-            if (cellSize > 0)
-            {
+            if (cellSize > 0) {
                 int cellCountX = (int)Math.Floor(width / (double)cellSize);
                 int cellCountY = (int)Math.Floor(height / (double)cellSize);
                 this.features = new HaralickDescriptorDictionary[cellCountX, cellCountY];
 
                 // For each cell
-                for (int i = 0; i < cellCountX; i++)
-                {
-                    for (int j = 0; j < cellCountY; j++)
-                    {
+                for (int i = 0; i < cellCountX; i++) {
+                    for (int j = 0; j < cellCountY; j++) {
                         var dict = new HaralickDescriptorDictionary();
 
                         var region = new Rectangle(i * cellSize, j * cellSize, cellSize, cellSize);
 
-                        foreach (CooccurrenceDegree degree in degrees)
-                        {
+                        foreach (CooccurrenceDegree degree in degrees) {
                             matrix.Degree = degree;
                             double[,] glcm = matrix.Compute(grayImage, region);
                             dict[degree] = new HaralickDescriptor(glcm);
@@ -357,18 +334,15 @@ namespace Accord.Imaging
                         this.features[i, j] = dict;
                     }
                 }
-            }
-            else
-            {
+            } else {
                 var dict = new HaralickDescriptorDictionary();
-                foreach (CooccurrenceDegree degree in degrees)
-                {
+                foreach (CooccurrenceDegree degree in degrees) {
                     matrix.Degree = degree;
                     double[,] glcm = matrix.Compute(grayImage);
                     dict[degree] = new HaralickDescriptor(glcm);
                 }
 
-                this.features = new HaralickDescriptorDictionary[,] { {  dict } };
+                this.features = new HaralickDescriptorDictionary[,] { { dict } };
             }
 
             // Free some resources which wont be needed anymore
@@ -379,8 +353,7 @@ namespace Accord.Imaging
 
             var blocks = new List<FeatureDescriptor>();
 
-            switch (mode)
-            {
+            switch (mode) {
                 case HaralickMode.Average:
                     foreach (HaralickDescriptorDictionary feature in features)
                         blocks.Add(feature.Average(featureCount));
@@ -402,8 +375,7 @@ namespace Accord.Imaging
                     break;
             }
 
-            if (normalize)
-            {
+            if (normalize) {
                 // TODO: Remove this block and instead propose a general architecture 
                 //       for applying normalizations to descriptor blocks
                 foreach (FeatureDescriptor block in blocks)
@@ -414,16 +386,14 @@ namespace Accord.Imaging
         }
 
 
-        private Haralick()
-        {
+        private Haralick() {
         }
 
         /// <summary>
         /// Creates a new object that is a copy of the current instance.
         /// </summary>
         /// 
-        protected override object Clone(ISet<PixelFormat> supportedFormats)
-        {
+        protected override object Clone(ISet<PixelFormat> supportedFormats) {
             var clone = new Haralick();
             clone.SupportedFormats = supportedFormats;
             clone.autoGray = autoGray;

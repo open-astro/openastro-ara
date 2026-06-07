@@ -10,7 +10,7 @@ namespace OpenAstroAra.Profile.Interfaces {
         int PollInterval { get; set; }
         int DiscoveryPort { get; set; }
         double DiscoveryDuration { get; set; }
-        bool ResolveDnsName{ get; set; }
+        bool ResolveDnsName { get; set; }
         bool UseIPv4 { get; set; }
         bool UseIPv6 { get; set; }
         bool UseHttps { get; set; }

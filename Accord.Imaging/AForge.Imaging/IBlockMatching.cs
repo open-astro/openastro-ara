@@ -2,14 +2,13 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © Andrew Kirillov, 2005-2009
+// Copyright ï¿½ Andrew Kirillov, 2005-2009
 // andrew.kirillov@aforgenet.com
 //
-// Copyright © Joan Charmant, 2008
+// Copyright ï¿½ Joan Charmant, 2008
 // joan.charmant@gmail.com
 //
-namespace Accord.Imaging
-{
+namespace Accord.Imaging {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -31,8 +30,7 @@ namespace Accord.Imaging
     /// </para>
     /// </remarks>
     /// 
-    public interface IBlockMatching
-    {
+    public interface IBlockMatching {
         /// <summary>
         /// Process images matching blocks between them.
         /// </summary>
@@ -43,7 +41,7 @@ namespace Accord.Imaging
         /// 
         /// <returns>Returns list of found block matches.</returns>
         /// 
-        List<BlockMatch> ProcessImage( Bitmap sourceImage, List<IntPoint> coordinates, Bitmap searchImage );
+        List<BlockMatch> ProcessImage(Bitmap sourceImage, List<IntPoint> coordinates, Bitmap searchImage);
 
         /// <summary>
         /// Process images matching blocks between them.
@@ -55,7 +53,7 @@ namespace Accord.Imaging
         /// 
         /// <returns>Returns list of found block matches.</returns>
         /// 
-        List<BlockMatch> ProcessImage( BitmapData sourceImageData, List<IntPoint> coordinates, BitmapData searchImageData );
+        List<BlockMatch> ProcessImage(BitmapData sourceImageData, List<IntPoint> coordinates, BitmapData searchImageData);
 
         /// <summary>
         /// Process images matching blocks between them.
@@ -67,6 +65,6 @@ namespace Accord.Imaging
         /// 
         /// <returns>Returns list of found block matches.</returns>
         /// 
-        List<BlockMatch> ProcessImage( UnmanagedImage sourceImage, List<IntPoint> coordinates, UnmanagedImage searchImage );
+        List<BlockMatch> ProcessImage(UnmanagedImage sourceImage, List<IntPoint> coordinates, UnmanagedImage searchImage);
     }
 }

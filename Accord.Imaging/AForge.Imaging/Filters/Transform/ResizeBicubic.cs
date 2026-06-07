@@ -2,14 +2,14 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © AForge.NET, 2005-2011
+// Copyright ï¿½ AForge.NET, 2005-2011
 // contacts@aforgenet.com
 //
 // Accord Imaging Library
 // The Accord.NET Framework
 // http://accord-framework.net
 //
-// Copyright © César Souza, 2009-2017
+// Copyright ï¿½ Cï¿½sar Souza, 2009-2017
 // cesarsouza at gmail.com
 //
 //    This library is free software; you can redistribute it and/or
@@ -27,8 +27,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -63,16 +62,14 @@ namespace Accord.Imaging.Filters
     /// <seealso cref="ResizeNearestNeighbor"/>
     /// <seealso cref="ResizeBilinear"/>
     ///
-    public class ResizeBicubic : BaseResizeFilter
-    {
+    public class ResizeBicubic : BaseResizeFilter {
         // format translation dictionary
         private Dictionary<PixelFormat, PixelFormat> formatTranslations = new Dictionary<PixelFormat, PixelFormat>();
 
         /// <summary>
         /// Format translations dictionary.
         /// </summary>
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -84,8 +81,7 @@ namespace Accord.Imaging.Filters
         /// <param name="newHeight">Height of new image.</param>
         /// 
         public ResizeBicubic(int newWidth, int newHeight) :
-            base(newWidth, newHeight)
-        {
+            base(newWidth, newHeight) {
             formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
             formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format24bppRgb;
             formatTranslations[PixelFormat.Format32bppRgb] = PixelFormat.Format32bppRgb;
@@ -99,8 +95,7 @@ namespace Accord.Imaging.Filters
         /// <param name="sourceData">Source image data.</param>
         /// <param name="destinationData">Destination image data.</param>
         /// 
-        protected override unsafe void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData)
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData) {
             // get source image size
             int width = sourceData.Width;
             int height = sourceData.Height;
@@ -120,18 +115,15 @@ namespace Accord.Imaging.Filters
             int xmax = width - 1;
 
             // check pixel format
-            if (destinationData.PixelFormat == PixelFormat.Format8bppIndexed)
-            {
+            if (destinationData.PixelFormat == PixelFormat.Format8bppIndexed) {
                 // grayscale
-                for (int y = 0; y < newHeight; y++)
-                {
+                for (int y = 0; y < newHeight; y++) {
                     // Y coordinates
                     double oy = (double)y * yFactor - 0.5;
                     int oy1 = (int)oy;
                     double dy = oy - (double)oy1;
 
-                    for (int x = 0; x < newWidth; x++, dst++)
-                    {
+                    for (int x = 0; x < newWidth; x++, dst++) {
                         // X coordinates
                         double ox = (double)x * xFactor - 0.5f;
                         int ox1 = (int)ox;
@@ -140,8 +132,7 @@ namespace Accord.Imaging.Filters
                         // initial pixel value
                         double g = 0;
 
-                        for (int n = -1; n < 3; n++)
-                        {
+                        for (int n = -1; n < 3; n++) {
                             // get Y cooefficient
                             double k1 = Interpolation.BiCubicKernel(dy - (double)n);
 
@@ -151,8 +142,7 @@ namespace Accord.Imaging.Filters
                             if (oy2 > ymax)
                                 oy2 = ymax;
 
-                            for (int m = -1; m < 3; m++)
-                            {
+                            for (int m = -1; m < 3; m++) {
                                 // get X cooefficient
                                 double k2 = k1 * Interpolation.BiCubicKernel((double)m - dx);
 
@@ -169,19 +159,15 @@ namespace Accord.Imaging.Filters
                     }
                     dst += dstOffset;
                 }
-            }
-            else if (pixelSize == 3)
-            {
+            } else if (pixelSize == 3) {
                 // RGB
-                for (int y = 0; y < newHeight; y++)
-                {
+                for (int y = 0; y < newHeight; y++) {
                     // Y coordinates
                     double oy = (double)y * yFactor - 0.5f;
                     int oy1 = (int)oy;
                     double dy = oy - (double)oy1;
 
-                    for (int x = 0; x < newWidth; x++, dst += 3)
-                    {
+                    for (int x = 0; x < newWidth; x++, dst += 3) {
                         // X coordinates
                         double ox = (double)x * xFactor - 0.5f;
                         int ox1 = (int)ox;
@@ -192,8 +178,7 @@ namespace Accord.Imaging.Filters
                         double g = 0;
                         double b = 0;
 
-                        for (int n = -1; n < 3; n++)
-                        {
+                        for (int n = -1; n < 3; n++) {
                             // get Y cooefficient
                             double k1 = Interpolation.BiCubicKernel(dy - (double)n);
 
@@ -203,8 +188,7 @@ namespace Accord.Imaging.Filters
                             if (oy2 > ymax)
                                 oy2 = ymax;
 
-                            for (int m = -1; m < 3; m++)
-                            {
+                            for (int m = -1; m < 3; m++) {
                                 // get X cooefficient
                                 double k2 = k1 * Interpolation.BiCubicKernel((double)m - dx);
 
@@ -229,19 +213,15 @@ namespace Accord.Imaging.Filters
                     }
                     dst += dstOffset;
                 }
-            }
-            else if (pixelSize == 4)
-            {
+            } else if (pixelSize == 4) {
                 // ARGB
-                for (int y = 0; y < newHeight; y++)
-                {
+                for (int y = 0; y < newHeight; y++) {
                     // Y coordinates
                     double oy = (double)y * yFactor - 0.5f;
                     int oy1 = (int)oy;
                     double dy = oy - (double)oy1;
 
-                    for (int x = 0; x < newWidth; x++, dst += 3)
-                    {
+                    for (int x = 0; x < newWidth; x++, dst += 3) {
                         // X coordinates
                         double ox = (double)x * xFactor - 0.5f;
                         int ox1 = (int)ox;
@@ -253,8 +233,7 @@ namespace Accord.Imaging.Filters
                         double g = 0;
                         double b = 0;
 
-                        for (int n = -1; n < 3; n++)
-                        {
+                        for (int n = -1; n < 3; n++) {
                             // get Y cooefficient
                             double k1 = Interpolation.BiCubicKernel(dy - (double)n);
 
@@ -264,8 +243,7 @@ namespace Accord.Imaging.Filters
                             if (oy2 > ymax)
                                 oy2 = ymax;
 
-                            for (int m = -1; m < 3; m++)
-                            {
+                            for (int m = -1; m < 3; m++) {
                                 // get X cooefficient
                                 double k2 = k1 * Interpolation.BiCubicKernel((double)m - dx);
 
@@ -292,9 +270,7 @@ namespace Accord.Imaging.Filters
                     }
                     dst += dstOffset;
                 }
-            }
-            else
-            {
+            } else {
                 throw new InvalidOperationException("Execution should never reach here.");
             }
         }

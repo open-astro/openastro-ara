@@ -20,8 +20,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging.Moments
-{
+namespace Accord.Imaging.Moments {
     using System.Drawing;
     using Accord.Imaging;
 
@@ -29,8 +28,7 @@ namespace Accord.Imaging.Moments
     ///   Common interface for image moments.
     /// </summary>
     /// 
-    public interface IMoments
-    {
+    public interface IMoments {
 
         /// <summary>
         ///   Computes the center moments for the specified image.

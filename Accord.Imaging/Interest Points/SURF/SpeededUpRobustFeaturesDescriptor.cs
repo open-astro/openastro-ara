@@ -23,8 +23,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging
-{
+namespace Accord.Imaging {
     using System;
     using System.Collections.Generic;
     using Accord.Imaging;
@@ -37,8 +36,7 @@ namespace Accord.Imaging
     /// <seealso cref="SpeededUpRobustFeaturePoint"/>
     ///
     [Serializable]
-    public class SpeededUpRobustFeaturesDescriptor : ICloneable
-    {
+    public class SpeededUpRobustFeaturesDescriptor : ICloneable {
 
         private bool invariant = true;
         private bool extended = false;
@@ -52,8 +50,7 @@ namespace Accord.Imaging
         /// 
         /// <value><c>true</c> for rotation invariant features; <c>false</c> otherwise.</value>
         /// 
-        public bool Invariant
-        {
+        public bool Invariant {
             get { return invariant; }
             set { invariant = value; }
         }
@@ -66,8 +63,7 @@ namespace Accord.Imaging
         /// 
         /// <value><c>true</c> for extended features; <c>false</c> otherwise.</value>
         /// 
-        public bool Extended
-        {
+        public bool Extended {
             get { return extended; }
             set { extended = value; }
         }
@@ -80,8 +76,7 @@ namespace Accord.Imaging
         /// <value>The integral image from where the
         /// features have been detected.</value>
         /// 
-        public IntegralImage Image
-        {
+        public IntegralImage Image {
             get { return integral; }
         }
 
@@ -93,8 +88,7 @@ namespace Accord.Imaging
         ///   The integral image which is the source of the feature points.
         /// </param>
         /// 
-        public SpeededUpRobustFeaturesDescriptor(IntegralImage integralImage)
-        {
+        public SpeededUpRobustFeaturesDescriptor(IntegralImage integralImage) {
             this.integral = integralImage;
         }
 
@@ -107,15 +101,13 @@ namespace Accord.Imaging
         /// 
         /// <param name="point">The point to be described.</param>
         /// 
-        public void Compute(SpeededUpRobustFeaturePoint point)
-        {
+        public void Compute(SpeededUpRobustFeaturePoint point) {
             // Get rounded feature point data
             int x = (int)System.Math.Round(point.X, 0);
             int y = (int)System.Math.Round(point.Y, 0);
             int s = (int)System.Math.Round(point.Scale, 0);
 
-            if (this.invariant)
-            {
+            if (this.invariant) {
                 // Get the orientation (for rotation invariance)
                 point.Orientation = this.GetOrientation(x, y, s);
             }
@@ -132,10 +124,8 @@ namespace Accord.Imaging
         /// 
         /// <param name="points">The list of points to be described.</param>
         /// 
-        public void Compute(IEnumerable<SpeededUpRobustFeaturePoint> points)
-        {
-            foreach (SpeededUpRobustFeaturePoint point in points)
-            {
+        public void Compute(IEnumerable<SpeededUpRobustFeaturePoint> points) {
+            foreach (SpeededUpRobustFeaturePoint point in points) {
                 Compute(point);
             }
         }
@@ -144,8 +134,7 @@ namespace Accord.Imaging
         ///   Determine dominant orientation for the feature point.
         /// </summary>
         /// 
-        public double GetOrientation(SpeededUpRobustFeaturePoint point)
-        {
+        public double GetOrientation(SpeededUpRobustFeaturePoint point) {
             // Get rounded feature point data
             int x = (int)System.Math.Round(point.X, 0);
             int y = (int)System.Math.Round(point.Y, 0);
@@ -165,15 +154,11 @@ namespace Accord.Imaging
         ///   Determine dominant orientation for feature point.
         /// </summary>
         /// 
-        public double GetOrientation(int x, int y, int scale)
-        {
+        public double GetOrientation(int x, int y, int scale) {
             // Calculate Haar responses for points within radius of 6*scale
-            for (int i = -6, idx = 0; i <= 6; i++)
-            {
-                for (int j = -6; j <= 6; j++)
-                {
-                    if (i * i + j * j < 36)
-                    {
+            for (int i = -6, idx = 0; i <= 6; i++) {
+                for (int j = -6; j <= 6; j++) {
+                    if (i * i + j * j < 36) {
                         double g = gauss25[id[i + 6], id[j + 6]];
                         resX[idx] = g * haarX(y + j * scale, x + i * scale, 4 * scale);
                         resY[idx] = g * haarY(y + j * scale, x + i * scale, 4 * scale);
@@ -187,22 +172,17 @@ namespace Accord.Imaging
             double orientation = 0, max = 0;
 
             // Loop slides pi/3 window around feature point
-            for (double ang1 = 0; ang1 < 2.0 * Math.PI; ang1 += 0.15)
-            {
+            for (double ang1 = 0; ang1 < 2.0 * Math.PI; ang1 += 0.15) {
                 double ang2 = (ang1 + Math.PI / 3 > 2 * Math.PI ? ang1 - 5 * Math.PI / 3 : ang1 + Math.PI / 3);
                 double sumX = 0;
                 double sumY = 0;
 
-                for (int k = 0; k < ang.Length; k++)
-                {
+                for (int k = 0; k < ang.Length; k++) {
                     // determine whether the point is within the window
-                    if (ang1 < ang2 && ang1 < ang[k] && ang[k] < ang2)
-                    {
+                    if (ang1 < ang2 && ang1 < ang[k] && ang[k] < ang2) {
                         sumX += resX[k];
                         sumY += resY[k];
-                    }
-                    else if (ang2 < ang1 && ((ang[k] > 0 && ang[k] < ang2) || (ang[k] > ang1 && ang[k] < Math.PI)))
-                    {
+                    } else if (ang2 < ang1 && ((ang[k] > 0 && ang[k] < ang2) || (ang[k] > ang1 && ang[k] < Math.PI))) {
                         sumX += resX[k];
                         sumY += resY[k];
                     }
@@ -210,8 +190,7 @@ namespace Accord.Imaging
 
                 // If the vector produced from this window is longer than all 
                 // previous vectors then this forms the new dominant direction
-                if (sumX * sumX + sumY * sumY > max)
-                {
+                if (sumX * sumX + sumY * sumY > max) {
                     // store largest orientation
                     max = sumX * sumX + sumY * sumY;
                     orientation = Accord.Math.Tools.Angle(sumX, sumY);
@@ -227,8 +206,7 @@ namespace Accord.Imaging
         ///   Construct descriptor vector for this interest point
         /// </summary>
         /// 
-        public double[] GetDescriptor(int x, int y, int scale, double orientation)
-        {
+        public double[] GetDescriptor(int x, int y, int scale, double orientation) {
             // Determine descriptor size
             double[] descriptor = (this.extended) ? new double[128] : new double[64];
 
@@ -239,29 +217,24 @@ namespace Accord.Imaging
             double cx = -0.5; // Subregion centers for the
             double cy = +0.0; // 4x4 Gaussian weighting.
 
-            if (!this.invariant)
-            {
+            if (!this.invariant) {
                 cos = 1;
                 sin = 0;
-            }
-            else
-            {
+            } else {
                 cos = System.Math.Cos(orientation);
                 sin = System.Math.Sin(orientation);
             }
 
             // Calculate descriptor for this interest point
             int i = -8;
-            while (i < 12)
-            {
+            while (i < 12) {
                 int j = -8;
                 i = i - 4;
 
                 cx += 1f;
                 cy = -0.5f;
 
-                while (j < 12)
-                {
+                while (j < 12) {
                     cy += 1f;
                     j = j - 4;
 
@@ -277,10 +250,8 @@ namespace Accord.Imaging
                     double dx_yn = 0, dy_xn = 0;
                     double mdx_yn = 0, mdy_xn = 0;
 
-                    for (int k = i; k < i + 9; k++)
-                    {
-                        for (int l = j; l < j + 9; l++)
-                        {
+                    for (int k = i; k < i + 9; k++) {
+                        for (int l = j; l < j + 9; l++) {
                             // Get coordinates of sample point on the rotated axis
                             int sample_x = (int)System.Math.Round(x + (-l * scale * sin + k * scale * cos), 0);
                             int sample_y = (int)System.Math.Round(y + (+l * scale * cos + k * scale * sin), 0);
@@ -295,34 +266,25 @@ namespace Accord.Imaging
                             double rry = gauss_s1 * (rx * cos + ry * sin);
 
 
-                            if (this.extended)
-                            {
+                            if (this.extended) {
                                 // split x responses for different signs of y
-                                if (rry >= 0)
-                                {
+                                if (rry >= 0) {
                                     dx += rrx;
                                     mdx += System.Math.Abs(rrx);
-                                }
-                                else
-                                {
+                                } else {
                                     dx_yn += rrx;
                                     mdx_yn += System.Math.Abs(rrx);
                                 }
 
                                 // split y responses for different signs of x
-                                if (rrx >= 0)
-                                {
+                                if (rrx >= 0) {
                                     dy += rry;
                                     mdy += System.Math.Abs(rry);
-                                }
-                                else
-                                {
+                                } else {
                                     dy_xn += rry;
                                     mdy_xn += System.Math.Abs(rry);
                                 }
-                            }
-                            else
-                            {
+                            } else {
                                 dx += rrx;
                                 dy += rry;
                                 mdx += System.Math.Abs(rrx);
@@ -340,8 +302,7 @@ namespace Accord.Imaging
                     descriptor[count++] = mdy * gauss_s2;
 
                     // Add the extended components
-                    if (this.extended)
-                    {
+                    if (this.extended) {
                         descriptor[count++] = dx_yn * gauss_s2;
                         descriptor[count++] = dy_xn * gauss_s2;
                         descriptor[count++] = mdx_yn * gauss_s2;
@@ -359,8 +320,7 @@ namespace Accord.Imaging
             // Normalize to obtain an unitary vector
             length = System.Math.Sqrt(length);
 
-            if (length > 0)
-            {
+            if (length > 0) {
                 for (int d = 0; d < descriptor.Length; ++d)
                     descriptor[d] /= length;
             }
@@ -368,8 +328,7 @@ namespace Accord.Imaging
             return descriptor;
         }
 
-        private double haarX(int row, int column, int size)
-        {
+        private double haarX(int row, int column, int size) {
             double a = integral.GetRectangleSum(column, row - size / 2,
                 column + size / 2 - 1, row - size / 2 + size - 1);
 
@@ -379,8 +338,7 @@ namespace Accord.Imaging
             return (a - b) / 255.0;
         }
 
-        private double haarY(int row, int column, int size)
-        {
+        private double haarY(int row, int column, int size) {
             double a = integral.GetRectangleSum(column - size / 2, row,
                 column - size / 2 + size - 1, row + size / 2 - 1);
 
@@ -398,16 +356,14 @@ namespace Accord.Imaging
         ///   Get the value of the Gaussian with std dev sigma at the point (x,y)
         /// </summary>
         /// 
-        private static double gaussian(int x, int y, double sigma)
-        {
+        private static double gaussian(int x, int y, double sigma) {
             return (1.0 / (2.0 * Math.PI * sigma * sigma)) * System.Math.Exp(-(x * x + y * y) / (2.0f * sigma * sigma));
         }
 
         /// <summary>
         ///   Get the value of the Gaussian with std dev sigma at the point (x,y)
         /// </summary>
-        private static double gaussian(double x, double y, double sigma)
-        {
+        private static double gaussian(double x, double y, double sigma) {
             return 1.0 / (2.0 * Math.PI * sigma * sigma) * System.Math.Exp(-(x * x + y * y) / (2.0f * sigma * sigma));
         }
 
@@ -415,7 +371,7 @@ namespace Accord.Imaging
         ///   Gaussian look-up table for sigma = 2.5
         /// </summary>
         /// 
-        private static readonly double[,] gauss25 = 
+        private static readonly double[,] gauss25 =
         {
             { 0.02350693969273, 0.01849121369071, 0.01239503121241, 0.00708015417522, 0.00344628101733, 0.00142945847484, 0.00050524879060 },
             { 0.02169964028389, 0.01706954162243, 0.01144205592615, 0.00653580605408, 0.00318131834134, 0.00131955648461, 0.00046640341759 },
@@ -440,8 +396,7 @@ namespace Accord.Imaging
         ///   A new object that is a copy of this instance.
         /// </returns>
         /// 
-        public object Clone()
-        {
+        public object Clone() {
             var clone = new SpeededUpRobustFeaturesDescriptor(integral);
             clone.extended = extended;
             clone.invariant = invariant;

@@ -24,8 +24,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using Accord.Imaging;
     using Accord.Imaging.Filters;
     using System;
@@ -59,8 +58,7 @@ namespace Accord.Imaging.Filters
     /// <img src="..\images\imaging\ZhangSuen_skeletonization.png" width="150" height="150" />
     /// </remarks>
     /// 
-    public class ZhangSuenSkeletonization : BaseUsingCopyPartialFilter
-    {
+    public class ZhangSuenSkeletonization : BaseUsingCopyPartialFilter {
         private byte bg = byte.MinValue;
         private byte fg = byte.MaxValue;
 
@@ -74,8 +72,7 @@ namespace Accord.Imaging.Filters
         /// <remarks><para>See <see cref="IFilterInformation.FormatTranslations"/>
         /// documentation for additional information.</para></remarks>
         /// 
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -87,8 +84,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <para>Default value is set to <b>0</b> - black.</para></remarks>
         /// 
-        public byte Background
-        {
+        public byte Background {
             get { return bg; }
             set { bg = value; }
         }
@@ -101,8 +97,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <para>Default value is set to <b>255</b> - white.</para></remarks>
         /// 
-        public byte Foreground
-        {
+        public byte Foreground {
             get { return fg; }
             set { fg = value; }
         }
@@ -110,8 +105,7 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Initializes a new instance of the <see cref="SimpleSkeletonization"/> class.
         /// </summary>
-        public ZhangSuenSkeletonization()
-        {
+        public ZhangSuenSkeletonization() {
             formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
         }
 
@@ -122,8 +116,7 @@ namespace Accord.Imaging.Filters
         /// <param name="bg">Background pixel color.</param>
         /// <param name="fg">Foreground pixel color.</param>
         /// 
-        public ZhangSuenSkeletonization(byte bg, byte fg) : this()
-        {
+        public ZhangSuenSkeletonization(byte bg, byte fg) : this() {
             this.bg = bg;
             this.fg = fg;
         }
@@ -136,8 +129,7 @@ namespace Accord.Imaging.Filters
         /// <param name="destination">Destination image data.</param>
         /// <param name="rect">Image rectangle for processing by the filter.</param>
         /// 
-        protected override unsafe void ProcessFilter(UnmanagedImage source, UnmanagedImage destination, Rectangle rect)
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage source, UnmanagedImage destination, Rectangle rect) {
             source.Copy(destination);
 
             // processing start and stop X,Y positions
@@ -156,15 +148,13 @@ namespace Accord.Imaging.Filters
 
             IntPtr delPtr = IntPtr.Zero;
             RuntimeHelpers.PrepareConstrainedRegions();
-            try
-            {
+            try {
                 delPtr = Marshal.AllocHGlobal(delSize);
                 var del0 = (byte*)delPtr.ToPointer(); for (var i = 0; i < delSize; i++) del0[i] = 0xFF;
 
                 bool endOfAlgorithm;
 
-                do
-                {
+                do {
                     endOfAlgorithm = true;
 
                     // Setp 1
@@ -192,9 +182,7 @@ namespace Accord.Imaging.Filters
                         del0);
 
                 } while (!endOfAlgorithm);
-            }
-            finally
-            {
+            } finally {
                 Marshal.FreeHGlobal(delPtr);
             }
 
@@ -204,8 +192,7 @@ namespace Accord.Imaging.Filters
             dst0 = dst0 + (rect.Top + 1) * dstStride + rect.Left + 1;
 
             // for each line
-            for (var y = startY; y < stopY; y++)
-            {
+            for (var y = startY; y < stopY; y++) {
                 // for each pixel
                 for (var x = startX; x < stopX; x++, dst0++)
                     *dst0 = (*dst0) == byte.MinValue ? bg : fg;
@@ -222,14 +209,11 @@ namespace Accord.Imaging.Filters
             byte* thinnedImageAddress, int thinnedImageStride, int thinnedImageOffset,
             byte* delVectorAddress,
             int[] sixNeighbors,
-            ref bool endOfAlgorithm)
-        {
+            ref bool endOfAlgorithm) {
             // for each line
-            for (var y = startY; y < stopY; y++)
-            {
+            for (var y = startY; y < stopY; y++) {
                 // for each pixel
-                for (var x = startX; x < stopX; x++, thinnedImageAddress++, delVectorAddress++)
-                {
+                for (var x = startX; x < stopX; x++, thinnedImageAddress++, delVectorAddress++) {
                     var neighbors = new byte[]
                     {
                             *(thinnedImageAddress),
@@ -253,16 +237,14 @@ namespace Accord.Imaging.Filters
                         // sumNeighbors <= 6 * 255 && sumNeighbors >= 2 * 255
                         sumNeighbors < 1785 && sumNeighbors > 255 &&
                         neighbors[sixNeighbors[0]] * neighbors[sixNeighbors[1]] * neighbors[sixNeighbors[2]] == byte.MinValue &&
-                        neighbors[sixNeighbors[3]] * neighbors[sixNeighbors[4]] * neighbors[sixNeighbors[5]] == byte.MinValue)
-                    {
+                        neighbors[sixNeighbors[3]] * neighbors[sixNeighbors[4]] * neighbors[sixNeighbors[5]] == byte.MinValue) {
                         // No. of 0, 255 patterns (transitions from 0 to 255) in the ordered sequence
                         var numberOfTransitions = 0;
                         for (var i = 1; i < neighbors.Length - 1; i++)
                             if (neighbors[i] == byte.MinValue && neighbors[i + 1] == byte.MaxValue)
                                 numberOfTransitions++;
 
-                        if (numberOfTransitions == 1)
-                        {
+                        if (numberOfTransitions == 1) {
                             *delVectorAddress = 0x00;
                             endOfAlgorithm = false;
                         }
@@ -275,11 +257,9 @@ namespace Accord.Imaging.Filters
         unsafe void delete(
             int startX, int startY, int stopX, int stopY,
             byte* thinnedImageAddress, int thinnedImageOffset,
-            byte* delVectorAddress)
-        {
+            byte* delVectorAddress) {
             // for each line
-            for (var y = startY; y < stopY; y++)
-            {
+            for (var y = startY; y < stopY; y++) {
                 // for each pixel
                 for (var x = startX; x < stopX; x++, thinnedImageAddress++, delVectorAddress++)
                     *thinnedImageAddress &= *delVectorAddress;

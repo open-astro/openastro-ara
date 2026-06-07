@@ -6,10 +6,10 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © AForge.NET, 2007-2011
+// Copyright ï¿½ AForge.NET, 2007-2011
 // contacts@aforgenet.com
 //
-// Copyright © César Souza, 2009-2017
+// Copyright ï¿½ Cï¿½sar Souza, 2009-2017
 // cesarsouza at gmail.com
 //
 //    This library is free software; you can redistribute it and/or
@@ -27,8 +27,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging
-{
+namespace Accord.Imaging {
     using System;
     using System.Drawing;
 
@@ -57,8 +56,7 @@ namespace Accord.Imaging
     /// <seealso cref="YCbCr"/>
     /// 
     [Serializable]
-    public struct RGB
-    {
+    public struct RGB {
         /// <summary>
         /// Index of red component.
         /// </summary>
@@ -102,11 +100,9 @@ namespace Accord.Imaging
         /// <summary>
         /// <see cref="System.Drawing.Color">Color</see> value of the class.
         /// </summary>
-        public System.Drawing.Color Color
-        {
+        public System.Drawing.Color Color {
             get { return Color.FromArgb(Alpha, Red, Green, Blue); }
-            set
-            {
+            set {
                 Red = value.R;
                 Green = value.G;
                 Blue = value.B;
@@ -122,8 +118,7 @@ namespace Accord.Imaging
         /// <param name="green">Green component.</param>
         /// <param name="blue">Blue component.</param>
         /// 
-        public RGB(byte red, byte green, byte blue)
-        {
+        public RGB(byte red, byte green, byte blue) {
             this.Red = red;
             this.Green = green;
             this.Blue = blue;
@@ -139,8 +134,7 @@ namespace Accord.Imaging
         /// <param name="blue">Blue component.</param>
         /// <param name="alpha">Alpha component.</param>
         /// 
-        public RGB(byte red, byte green, byte blue, byte alpha)
-        {
+        public RGB(byte red, byte green, byte blue, byte alpha) {
             this.Red = red;
             this.Green = green;
             this.Blue = blue;
@@ -153,8 +147,7 @@ namespace Accord.Imaging
         /// 
         /// <param name="color">Initialize from specified <see cref="System.Drawing.Color">color.</see></param>
         /// 
-        public RGB(System.Drawing.Color color)
-        {
+        public RGB(System.Drawing.Color color) {
             this.Red = color.R;
             this.Green = color.G;
             this.Blue = color.B;
@@ -166,8 +159,7 @@ namespace Accord.Imaging
         /// </summary>
         /// <param name="rgb">The RGB color.</param>
         /// <returns>The result of the conversion.</returns>
-        public static explicit operator HSL(RGB rgb)
-        {
+        public static explicit operator HSL(RGB rgb) {
             return HSL.FromRGB(rgb);
         }
 
@@ -176,8 +168,7 @@ namespace Accord.Imaging
         /// </summary>
         /// <param name="rgb">The RGB color.</param>
         /// <returns>The result of the conversion.</returns>
-        public static explicit operator YCbCr(RGB rgb)
-        {
+        public static explicit operator YCbCr(RGB rgb) {
             return YCbCr.FromRGB(rgb);
         }
     }

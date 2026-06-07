@@ -157,11 +157,11 @@ namespace OpenAstroAra.Profile {
         }
 
         public void AddEmptyTrainedExposureSetting() {
-            TrainedFlatExposureSettings.Add(new TrainedFlatExposureSetting(-1, new BinningMode(1,1), -1, -1, -1, -1));
+            TrainedFlatExposureSettings.Add(new TrainedFlatExposureSetting(-1, new BinningMode(1, 1), -1, -1, -1, -1));
         }
 
         public void AddTrainedFlatExposureSetting(short? filterPosition, BinningMode binning, int gain, int offset, int brightness, double exposureTime) {
-            var existingSetting = GetTrainedFlatExposureSetting(filterPosition, binning, gain, offset);           
+            var existingSetting = GetTrainedFlatExposureSetting(filterPosition, binning, gain, offset);
 
             if (existingSetting == null) {
                 var filter = filterPosition ?? -1;
@@ -175,7 +175,7 @@ namespace OpenAstroAra.Profile {
 
         public bool RemoveFlatExposureSetting(TrainedFlatExposureSetting setting) {
             var remove = TrainedFlatExposureSettings.Remove(setting);
-            if(remove) {
+            if (remove) {
                 RaisePropertyChanged(nameof(TrainedFlatExposureSettings));
             }
             return remove;
@@ -297,7 +297,7 @@ namespace OpenAstroAra.Profile {
         public int Brightness {
             get => brightness;
             set {
-                if(value < 0) { value = 0; }
+                if (value < 0) { value = 0; }
                 if (brightness == value) return;
                 brightness = value;
                 RaisePropertyChanged();

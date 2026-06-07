@@ -32,8 +32,7 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 
-namespace Accord.Imaging
-{
+namespace Accord.Imaging {
     using Accord.Math;
     using Accord.Imaging;
     using System;
@@ -67,8 +66,7 @@ namespace Accord.Imaging
     /// <seealso cref="FastRetinaKeypointDetector"/>
     ///
     [Serializable]
-    public class FastRetinaKeypointDescriptor : ICloneable
-    {
+    public class FastRetinaKeypointDescriptor : ICloneable {
         private FastRetinaKeypointPattern pattern;
 
         /// <summary>
@@ -116,8 +114,7 @@ namespace Accord.Imaging
         /// </summary>
         /// 
         internal FastRetinaKeypointDescriptor(UnmanagedImage image,
-            IntegralImage integral, FastRetinaKeypointPattern pattern)
-        {
+            IntegralImage integral, FastRetinaKeypointPattern pattern) {
             this.Extended = false;
             this.IsOrientationNormal = true;
             this.IsScaleNormal = true;
@@ -136,8 +133,7 @@ namespace Accord.Imaging
         /// 
         /// <param name="points">The point to be described.</param>
         /// 
-        public void Compute(IList<FastRetinaKeypoint> points)
-        {
+        public void Compute(IList<FastRetinaKeypoint> points) {
             const int CV_FREAK_SMALLEST_KP_SIZE = FastRetinaKeypointPattern.Size;
             const int CV_FREAK_NB_SCALES = FastRetinaKeypointPattern.Scales;
             const int CV_FREAK_NB_ORIENTATION = FastRetinaKeypointPattern.Orientations;
@@ -158,10 +154,8 @@ namespace Accord.Imaging
             // 1. Compute the scale index corresponding to the keypoint
             //  size and remove keypoints which are close to the border
             //
-            if (IsScaleNormal)
-            {
-                for (int k = points.Count - 1; k >= 0; k--)
-                {
+            if (IsScaleNormal) {
+                for (int k = points.Count - 1; k >= 0; k--) {
                     // Is k non-zero? If so, decrement it and continue.
                     double ratio = points[k].Scale / CV_FREAK_SMALLEST_KP_SIZE;
                     scaleIndex[k] = Math.Max((int)(Math.Log(ratio) * step + 0.5), 0);
@@ -173,20 +167,16 @@ namespace Accord.Imaging
                     if (points[k].X <= patternSizes[scaleIndex[k]] ||
                          points[k].Y <= patternSizes[scaleIndex[k]] ||
                          points[k].X >= Image.Width - patternSizes[scaleIndex[k]] ||
-                         points[k].Y >= Image.Height - patternSizes[scaleIndex[k]])
-                    {
+                         points[k].Y >= Image.Height - patternSizes[scaleIndex[k]]) {
                         points.RemoveAt(k);  // No, it doesn't. Remove the point.
                         scaleIndex.RemoveAt(k);
                     }
                 }
-            }
-
-            else // if (!IsScaleNormal)
-            {
+            } else // if (!IsScaleNormal)
+              {
                 int scale = Math.Max((int)(Constants.Log3 * step + 0.5), 0);
 
-                for (int k = points.Count - 1; k >= 0; k--)
-                {
+                for (int k = points.Count - 1; k >= 0; k--) {
                     // equivalent to the formulae when the scale is normalized with 
                     // a constant size of keypoints[k].size = 3 * SMALLEST_KP_SIZE
 
@@ -197,8 +187,7 @@ namespace Accord.Imaging
                     if (points[k].X <= patternSizes[scaleIndex[k]] ||
                         points[k].Y <= patternSizes[scaleIndex[k]] ||
                         points[k].X >= Image.Width - patternSizes[scaleIndex[k]] ||
-                        points[k].Y >= Image.Height - patternSizes[scaleIndex[k]])
-                    {
+                        points[k].Y >= Image.Height - patternSizes[scaleIndex[k]]) {
                         points.RemoveAt(k);
                         scaleIndex.RemoveAt(k);
                     }
@@ -211,26 +200,21 @@ namespace Accord.Imaging
             //
 
             // For each interest (key/corners) point
-            for (int k = 0; k < points.Count; k++)
-            {
+            for (int k = 0; k < points.Count; k++) {
                 int thetaIndex = 0;
 
                 // Estimate orientation
-                if (!IsOrientationNormal)
-                {
+                if (!IsOrientationNormal) {
                     // Orientation is not normalized, assign 0.
                     points[k].Orientation = thetaIndex = 0;
-                }
-
-                else // if (IsOrientationNormal)
-                {
+                } else // if (IsOrientationNormal)
+                  {
                     // Get intensity values in the unrotated patch
                     for (int i = 0; i < pointsValues.Length; i++)
                         pointsValues[i] = mean(points[k].X, points[k].Y, scaleIndex[k], 0, i);
 
                     int a = 0, b = 0;
-                    for (int m = 0; m < orientationPairs.Length; m++)
-                    {
+                    for (int m = 0; m < orientationPairs.Length; m++) {
                         var p = orientationPairs[m];
                         int delta = (pointsValues[p.i] - pointsValues[p.j]);
                         a += delta * (p.weight_dx) / 2048;
@@ -254,35 +238,27 @@ namespace Accord.Imaging
                 // Extract either the standard descriptors of 512-bits (64 bytes)
                 //   or the extended descriptors of 1024-bits (128 bytes) length.
                 //
-                if (!Extended)
-                {
+                if (!Extended) {
                     points[k].Descriptor = new byte[64];
-                    for (int m = 0; m < descriptionPairs.Length; m++)
-                    {
+                    for (int m = 0; m < descriptionPairs.Length; m++) {
                         var p = descriptionPairs[m];
                         byte[] descriptor = points[k].Descriptor;
 
-                        unchecked
-                        {
+                        unchecked {
                             if (pointsValues[p.i] > pointsValues[p.j])
                                 descriptor[m / 8] |= (byte)(1 << m % 8);
                             else descriptor[m / 8] &= (byte)~(1 << m % 8);
                         }
 
                     }
-                }
-
-                else // if (Extended)
-                {
+                } else // if (Extended)
+                  {
                     points[k].Descriptor = new byte[128];
-                    for (int i = 1, m = 0; i < pointsValues.Length; i++)
-                    {
-                        for (int j = 0; j < i; j++, m++)
-                        {
+                    for (int i = 1, m = 0; i < pointsValues.Length; i++) {
+                        for (int j = 0; j < i; j++, m++) {
                             byte[] descriptor = points[k].Descriptor;
 
-                            unchecked
-                            {
+                            unchecked {
                                 if (pointsValues[i] > pointsValues[j])
                                     descriptor[m / 8] |= (byte)(1 << m % 8);
                                 else descriptor[m / 8] &= (byte)~(1 << m % 8);
@@ -294,8 +270,7 @@ namespace Accord.Imaging
         }
 
 
-        private unsafe int mean(double kx, double ky, int scale, int orientation, int pointIndex)
-        {
+        private unsafe int mean(double kx, double ky, int scale, int orientation, int pointIndex) {
             const int CV_FREAK_NB_ORIENTATION = FastRetinaKeypointPattern.Orientations;
             const int CV_FREAK_NB_POINTS = FastRetinaKeypointPattern.Points;
 
@@ -315,8 +290,7 @@ namespace Accord.Imaging
             float radius = freak.sigma;
 
             // calculate output:
-            if (radius < 0.5)
-            {
+            if (radius < 0.5) {
                 // interpolation multipliers:
                 int r_x = (int)((xf - x) * 1024);
                 int r_y = (int)((yf - y) * 1024);
@@ -354,8 +328,7 @@ namespace Accord.Imaging
             return ret_val;
         }
 
-        private FastRetinaKeypointDescriptor()
-        {
+        private FastRetinaKeypointDescriptor() {
         }
 
         /// <summary>
@@ -366,8 +339,7 @@ namespace Accord.Imaging
         ///   A new object that is a copy of this instance.
         /// </returns>
         /// 
-        public object Clone()
-        {
+        public object Clone() {
             var clone = new FastRetinaKeypointDescriptor();
             clone.Extended = Extended;
             clone.Image = Image.Clone();

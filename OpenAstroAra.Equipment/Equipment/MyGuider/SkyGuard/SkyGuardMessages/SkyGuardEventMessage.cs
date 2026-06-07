@@ -181,4 +181,3 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.SkyGuard.SkyGuardMessages {
         }
     }
 }
-

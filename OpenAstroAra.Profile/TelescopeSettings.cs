@@ -204,10 +204,10 @@ namespace OpenAstroAra.Profile {
         public TelescopeLocationSyncDirection TelescopeLocationSyncDirection {
             get => telescopeLocationSyncDirection;
             set {
-                if(telescopeLocationSyncDirection != value) {
+                if (telescopeLocationSyncDirection != value) {
                     telescopeLocationSyncDirection = value;
                     RaisePropertyChanged();
-                }                
+                }
             }
         }
 
@@ -216,7 +216,7 @@ namespace OpenAstroAra.Profile {
         public bool TimeSync {
             get => timeSync;
             set {
-                if(timeSync != value) {
+                if (timeSync != value) {
                     timeSync = value;
                     RaisePropertyChanged();
                 }

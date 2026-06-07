@@ -234,7 +234,7 @@ namespace OpenAstroAra.Astrometry {
         public byte[] Image {
             get {
                 if (_image == null) {
-                    if(imageFactory != null) {
+                    if (imageFactory != null) {
                         _ = Task.Run(async () => {
                             _image = await Task.Run(() => imageFactory(this));
                             // .Freeze() was the WPF BitmapSource thread-affinity

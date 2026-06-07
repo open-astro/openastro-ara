@@ -77,7 +77,7 @@ namespace OpenAstroAra.Sequencer.Serialization {
                     default:
                         return new UnknownSequenceItem(unknownEntityName);
                 }
-                
+
             }
 
             return target;

@@ -2,12 +2,11 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © AForge.NET, 2005-2010
+// Copyright ï¿½ AForge.NET, 2005-2010
 // contacts@aforgenet.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -72,10 +71,9 @@ namespace Accord.Imaging.Filters
     /// <img src="..\images\imaging\thinning.png" width="150" height="150" />
     /// </remarks>
     /// 
-    public class FilterIterator : IFilter, IFilterInformation
-    {
-        private IFilter	baseFilter;
-        private int		iterations = 1;
+    public class FilterIterator : IFilter, IFilterInformation {
+        private IFilter baseFilter;
+        private int iterations = 1;
 
         /// <summary>
         /// Format translations dictionary.
@@ -88,9 +86,8 @@ namespace Accord.Imaging.Filters
         /// <see cref="BaseFilter"/> filter.</note></para>
         /// </remarks>
         /// 
-        public Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
-            get { return ( (IFilterInformation) baseFilter).FormatTranslations; }
+        public Dictionary<PixelFormat, PixelFormat> FormatTranslations {
+            get { return ((IFilterInformation)baseFilter).FormatTranslations; }
         }
 
         /// <summary>
@@ -100,8 +97,7 @@ namespace Accord.Imaging.Filters
         /// <remarks><para>The base filter is the filter to be applied specified amount of iterations to
         /// a specified image.</para></remarks>
         /// 
-        public IFilter BaseFilter
-        {
+        public IFilter BaseFilter {
             get { return baseFilter; }
             set { baseFilter = value; }
         }
@@ -115,10 +111,9 @@ namespace Accord.Imaging.Filters
         /// <para>Default value is set to <b>1</b>.</para>
         /// </remarks>
         /// 
-        public int Iterations
-        {
+        public int Iterations {
             get { return iterations; }
-            set { iterations = Math.Max( 1, Math.Min( 255, value ) ); }
+            set { iterations = Math.Max(1, Math.Min(255, value)); }
         }
 
         /// <summary>
@@ -127,8 +122,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <param name="baseFilter">Filter to iterate.</param>
         /// 
-        public FilterIterator( IFilter baseFilter )
-        {
+        public FilterIterator(IFilter baseFilter) {
             this.baseFilter = baseFilter;
         }
 
@@ -139,8 +133,7 @@ namespace Accord.Imaging.Filters
         /// <param name="baseFilter">Filter to iterate.</param>
         /// <param name="iterations">Iterations amount.</param>
         /// 
-        public FilterIterator( IFilter baseFilter, int iterations )
-        {
+        public FilterIterator(IFilter baseFilter, int iterations) {
             this.baseFilter = baseFilter;
             this.iterations = iterations;
         }
@@ -157,18 +150,17 @@ namespace Accord.Imaging.Filters
         /// <remarks>The method keeps the source image unchanged and returns
         /// the result of image processing filter as new image.</remarks> 
         ///
-        public Bitmap Apply( Bitmap image )
-        {
+        public Bitmap Apply(Bitmap image) {
             // lock source bitmap data
             BitmapData imageData = image.LockBits(
-                new Rectangle( 0, 0, image.Width, image.Height ),
-                ImageLockMode.ReadOnly, image.PixelFormat );
+                new Rectangle(0, 0, image.Width, image.Height),
+                ImageLockMode.ReadOnly, image.PixelFormat);
 
             // apply the filter
-            Bitmap dstImage = Apply( imageData );
+            Bitmap dstImage = Apply(imageData);
 
             // unlock source image
-            image.UnlockBits( imageData );
+            image.UnlockBits(imageData);
 
             return dstImage;
         }
@@ -186,18 +178,16 @@ namespace Accord.Imaging.Filters
         /// of image processing filter as new image. The source image data are kept
         /// unchanged.</remarks>
         /// 
-        public Bitmap Apply( BitmapData imageData )
-        {
+        public Bitmap Apply(BitmapData imageData) {
             // initial iteration
-            Bitmap dstImg = baseFilter.Apply( imageData );
+            Bitmap dstImg = baseFilter.Apply(imageData);
             Bitmap tmpImg;
 
             // continue to iterate
-            for ( int i = 1; i < iterations; i++ )
-            {
+            for (int i = 1; i < iterations; i++) {
                 tmpImg = dstImg;
-                dstImg = baseFilter.Apply( tmpImg );
-                tmpImg.Dispose( );
+                dstImg = baseFilter.Apply(tmpImg);
+                tmpImg.Dispose();
             }
 
             return dstImg;
@@ -215,18 +205,16 @@ namespace Accord.Imaging.Filters
         /// <remarks>The method keeps the source image unchanged and returns
         /// the result of image processing filter as new image.</remarks>
         /// 
-        public UnmanagedImage Apply( UnmanagedImage image )
-        {
+        public UnmanagedImage Apply(UnmanagedImage image) {
             // initial iteration
-            UnmanagedImage dstImg = baseFilter.Apply( image );
+            UnmanagedImage dstImg = baseFilter.Apply(image);
             UnmanagedImage tmpImg;
 
             // continue to iterate
-            for ( int i = 1; i < iterations; i++ )
-            {
+            for (int i = 1; i < iterations; i++) {
                 tmpImg = dstImg;
-                dstImg = baseFilter.Apply( tmpImg );
-                tmpImg.Dispose( );
+                dstImg = baseFilter.Apply(tmpImg);
+                tmpImg.Dispose();
             }
 
             return dstImg;
@@ -247,29 +235,24 @@ namespace Accord.Imaging.Filters
         /// <see cref="FormatTranslations"/> property for information about pixel format conversions).</note></para>
         /// </remarks>
         /// 
-        public void Apply( UnmanagedImage sourceImage, UnmanagedImage destinationImage )
-        {
-            if ( iterations == 1 )
-            {
-                baseFilter.Apply( sourceImage, destinationImage );
-            }
-            else
-            {
+        public void Apply(UnmanagedImage sourceImage, UnmanagedImage destinationImage) {
+            if (iterations == 1) {
+                baseFilter.Apply(sourceImage, destinationImage);
+            } else {
                 // initial iteration
-                UnmanagedImage dstImg = baseFilter.Apply( sourceImage );
+                UnmanagedImage dstImg = baseFilter.Apply(sourceImage);
                 UnmanagedImage tmpImg;
 
                 iterations--;
                 // continue to iterate
-                for ( int i = 1; i < iterations; i++ )
-                {
+                for (int i = 1; i < iterations; i++) {
                     tmpImg = dstImg;
-                    dstImg = baseFilter.Apply( tmpImg );
-                    tmpImg.Dispose( );
+                    dstImg = baseFilter.Apply(tmpImg);
+                    tmpImg.Dispose();
                 }
 
                 // put result of last iteration into the specified destination
-                baseFilter.Apply( dstImg, destinationImage );
+                baseFilter.Apply(dstImg, destinationImage);
             }
         }
     }

@@ -8,8 +8,7 @@
 // Original implementation by Maxim Saplin, 2012
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -57,8 +56,7 @@ namespace Accord.Imaging.Filters
     /// <img src="..\images\imaging\bilateral.jpg" width="480" height="361" />
     /// </remarks>
     /// 
-    public class BilateralSmoothing : BaseUsingCopyPartialFilter
-    {
+    public class BilateralSmoothing : BaseUsingCopyPartialFilter {
         private Dictionary<PixelFormat, PixelFormat> formatTranslations = new Dictionary<PixelFormat, PixelFormat>();
 
         private const int maxKernelSize = 255;
@@ -86,8 +84,7 @@ namespace Accord.Imaging.Filters
         /// <para>Default value is set to <see langword="true"/>.</para>
         /// </remarks>
         /// 
-        public bool LimitKernelSize
-        {
+        public bool LimitKernelSize {
             get { return limitKernelSize; }
             set { limitKernelSize = value; }
         }
@@ -102,8 +99,7 @@ namespace Accord.Imaging.Filters
         /// <para>Default value is set to <see langword="false"/>.</para>
         /// </remarks>
         /// 
-        public bool EnableParallelProcessing
-        {
+        public bool EnableParallelProcessing {
             get { return enableParallelProcessing; }
             set { enableParallelProcessing = value; }
         }
@@ -127,14 +123,11 @@ namespace Accord.Imaging.Filters
         /// eception message for details).</exception>
         /// <exception cref="ArgumentException">The value of this must be an odd integer.</exception>
         /// 
-        public int KernelSize
-        {
-            get
-            {
+        public int KernelSize {
+            get {
                 return kernelSize;
             }
-            set
-            {
+            set {
                 if (value > maxKernelSize)
                     throw new ArgumentOutOfRangeException("value", "Maximum allowed value of KernelSize property is " + maxKernelSize.ToString());
 
@@ -159,14 +152,11 @@ namespace Accord.Imaging.Filters
         /// <para>Default value is set to <b>10</b>.</para>
         /// </remarks>
         /// 
-        public double SpatialFactor
-        {
-            get
-            {
+        public double SpatialFactor {
+            get {
                 return spatialFactor;
             }
-            set
-            {
+            set {
                 spatialFactor = Math.Max(1, value);
                 spatialPropertiesChanged = true;
             }
@@ -180,14 +170,11 @@ namespace Accord.Imaging.Filters
         /// <para>Default value is set to <b>2</b>.</para>
         /// </remarks>
         /// 
-        public double SpatialPower
-        {
-            get
-            {
+        public double SpatialPower {
+            get {
                 return spatialPower;
             }
-            set
-            {
+            set {
                 spatialPower = Math.Max(1, value);
                 spatialPropertiesChanged = true;
             }
@@ -201,14 +188,11 @@ namespace Accord.Imaging.Filters
         /// <para>Default value is set to <b>50</b>.</para>
         /// </remarks>
         /// 
-        public double ColorFactor
-        {
-            get
-            {
+        public double ColorFactor {
+            get {
                 return colorFactor;
             }
-            set
-            {
+            set {
                 colorFactor = Math.Max(1, value);
                 colorPropertiesChanged = true;
             }
@@ -222,14 +206,11 @@ namespace Accord.Imaging.Filters
         /// <para>Default value is set to <b>2</b>.</para>
         /// </remarks>
         /// 
-        public double ColorPower
-        {
-            get
-            {
+        public double ColorPower {
+            get {
                 return colorPower;
             }
-            set
-            {
+            set {
                 colorPower = Math.Max(1, value);
                 colorPropertiesChanged = true;
             }
@@ -242,8 +223,7 @@ namespace Accord.Imaging.Filters
         /// <remarks><para>See <see cref="IFilterInformation.FormatTranslations"/>
         /// documentation for additional information.</para></remarks>
         ///
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -251,8 +231,7 @@ namespace Accord.Imaging.Filters
         /// Initializes a new instance of the <see cref="BilateralSmoothing"/> class.
         /// </summary>
         /// 
-        public BilateralSmoothing()
-        {
+        public BilateralSmoothing() {
             formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
             formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format24bppRgb;
             formatTranslations[PixelFormat.Format32bppRgb] = PixelFormat.Format32bppRgb;
@@ -263,25 +242,20 @@ namespace Accord.Imaging.Filters
         private double[,] colorFunc;
 
         // For performance improvements Color and Spatial functions are recalculated prior to filter execution and put into 2 dimensional arrays
-        private void InitSpatialFunc()
-        {
+        private void InitSpatialFunc() {
             if ((spatialFunc == null) || (spatialFunc.Length != kernelSize * kernelSize) ||
-                 (spatialPropertiesChanged))
-            {
-                if ((spatialFunc == null) || (spatialFunc.Length != kernelSize * kernelSize))
-                {
+                 (spatialPropertiesChanged)) {
+                if ((spatialFunc == null) || (spatialFunc.Length != kernelSize * kernelSize)) {
                     spatialFunc = new double[kernelSize, kernelSize];
                 }
 
                 int kernelRadius = kernelSize / 2;
 
-                for (int i = 0; i < kernelSize; i++)
-                {
+                for (int i = 0; i < kernelSize; i++) {
                     int ti = i - kernelRadius;
                     int ti2 = ti * ti;
 
-                    for (int k = 0; k < kernelSize; k++)
-                    {
+                    for (int k = 0; k < kernelSize; k++) {
                         int tk = k - kernelRadius;
                         int tk2 = tk * tk;
 
@@ -294,19 +268,14 @@ namespace Accord.Imaging.Filters
         }
 
         // For performance improvements Color and Spatial functions are recalculated prior to filter execution and put into 2 dimensional arrays
-        private void InitColorFunc()
-        {
-            if ((colorFunc == null) || (colorPropertiesChanged))
-            {
-                if (colorFunc == null)
-                {
+        private void InitColorFunc() {
+            if ((colorFunc == null) || (colorPropertiesChanged)) {
+                if (colorFunc == null) {
                     colorFunc = new double[colorsCount, colorsCount];
                 }
 
-                for (int i = 0; i < colorsCount; i++)
-                {
-                    for (int k = 0; k < colorsCount; k++)
-                    {
+                for (int i = 0; i < colorsCount; i++) {
+                    for (int k = 0; k < colorsCount; k++) {
                         colorFunc[i, k] = Math.Exp(-0.5 * (Math.Pow(Math.Abs(i - k) / colorFactor, colorPower)));
                     }
                 }
@@ -315,8 +284,7 @@ namespace Accord.Imaging.Filters
             }
         }
 
-        private void InitFilter()
-        {
+        private void InitFilter() {
             InitSpatialFunc();
             InitColorFunc();
         }
@@ -329,27 +297,20 @@ namespace Accord.Imaging.Filters
         /// <param name="destinationData">Destination image data.</param>
         /// <param name="rect">Image rectangle for processing by the filter.</param>
         /// 
-        protected override unsafe void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData, Rectangle rect)
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData, Rectangle rect) {
             int kernelHalf = kernelSize / 2;
 
             InitFilter();
 
-            if ((rect.Width <= kernelSize) || (rect.Height <= kernelSize))
-            {
+            if ((rect.Width <= kernelSize) || (rect.Height <= kernelSize)) {
                 ProcessWithEdgeChecks(sourceData, destinationData, rect);
-            }
-            else
-            {
+            } else {
                 Rectangle safeArea = rect;
                 safeArea.Inflate(-kernelHalf, -kernelHalf);
 
-                if ((Environment.ProcessorCount > 1) && (enableParallelProcessing))
-                {
+                if ((Environment.ProcessorCount > 1) && (enableParallelProcessing)) {
                     ProcessWithoutChecksParallel(sourceData, destinationData, safeArea);
-                }
-                else
-                {
+                } else {
                     ProcessWithoutChecks(sourceData, destinationData, safeArea);
                 }
 
@@ -369,8 +330,7 @@ namespace Accord.Imaging.Filters
         }
 
         // Perform parallel image processing without checking pixels' coordinates to make sure those are in bounds
-        private unsafe void ProcessWithoutChecksParallel(UnmanagedImage source, UnmanagedImage destination, Rectangle rect)
-        {
+        private unsafe void ProcessWithoutChecksParallel(UnmanagedImage source, UnmanagedImage destination, Rectangle rect) {
             int startX = rect.Left;
             int startY = rect.Top;
             int stopX = rect.Right;
@@ -397,10 +357,8 @@ namespace Accord.Imaging.Filters
             srcBase += startX * pixelSize;
             dstBase += startX * pixelSize;
 
-            if (pixelSize > 1)
-            {
-                Parallel.For(startY, stopY, delegate(int y)
-                {
+            if (pixelSize > 1) {
+                Parallel.For(startY, stopY, delegate (int y) {
                     byte* src = srcBase + y * srcStride;
                     byte* dst = dstBase + y * dstStride;
 
@@ -412,8 +370,7 @@ namespace Accord.Imaging.Filters
 
                     double sCoefR, sCoefG, sCoefB, sMembR, sMembG, sMembB, coefR, coefG, coefB;
 
-                    for (int x = startX; x < stopX; x++, src += pixelSize, dst += pixelSize)
-                    {
+                    for (int x = startX; x < stopX; x++, src += pixelSize, dst += pixelSize) {
                         // lower right corner - to start processing from that point
                         srcPixel = src + srcKernelFistPixelOffset;
 
@@ -430,13 +387,11 @@ namespace Accord.Imaging.Filters
 
                         // move from lower right to upper left corner
                         ty = kernelSize;
-                        while (ty != 0)
-                        {
+                        while (ty != 0) {
                             ty--;
 
                             tx = kernelSize;
-                            while (tx != 0)
-                            {
+                            while (tx != 0) {
                                 tx--;
 
                                 srcR = srcPixel[RGB.R];
@@ -466,12 +421,9 @@ namespace Accord.Imaging.Filters
                         dst[RGB.B] = (byte)(sMembB / sCoefB);
                     }
                 });
-            }
-            else
-            {
+            } else {
                 // 8bpp grayscale images
-                Parallel.For(startY, stopY, delegate(int y)
-                {
+                Parallel.For(startY, stopY, delegate (int y) {
                     byte* src = srcBase + y * srcStride;
                     byte* dst = dstBase + y * dstStride;
 
@@ -482,8 +434,7 @@ namespace Accord.Imaging.Filters
 
                     int tx, ty;
 
-                    for (int x = startX; x < stopX; x++, src++, dst++)
-                    {
+                    for (int x = startX; x < stopX; x++, src++, dst++) {
                         // lower right corner - to start processing from that point
                         srcPixel = src + srcKernelFistPixelOffset;
 
@@ -494,13 +445,11 @@ namespace Accord.Imaging.Filters
 
                         // move from lower right to upper left corner
                         ty = kernelSize;
-                        while (ty != 0)
-                        {
+                        while (ty != 0) {
                             ty--;
 
                             tx = kernelSize;
-                            while (tx != 0)
-                            {
+                            while (tx != 0) {
                                 tx--;
 
                                 srcC = *(srcPixel);
@@ -522,8 +471,7 @@ namespace Accord.Imaging.Filters
         }
 
         // Perform image processing without checking pixels' coordinates to make sure those are in bounds
-        private unsafe void ProcessWithoutChecks(UnmanagedImage source, UnmanagedImage destination, Rectangle rect)
-        {
+        private unsafe void ProcessWithoutChecks(UnmanagedImage source, UnmanagedImage destination, Rectangle rect) {
             int startX = rect.Left;
             int startY = rect.Top;
             int stopX = rect.Right;
@@ -553,18 +501,15 @@ namespace Accord.Imaging.Filters
             src += startY * srcStride + startX * pixelSize;
             dst += startY * dstStride + startX * pixelSize;
 
-            if (pixelSize > 1)
-            {
+            if (pixelSize > 1) {
                 byte srcR, srcG, srcB;
                 byte srcR0, srcG0, srcB0;
                 byte* srcPixel;
 
                 double sCoefR, sCoefG, sCoefB, sMembR, sMembG, sMembB, coefR, coefG, coefB;
 
-                for (int y = startY; y < stopY; y++)
-                {
-                    for (int x = startX; x < stopX; x++, src += pixelSize, dst += pixelSize)
-                    {
+                for (int y = startY; y < stopY; y++) {
+                    for (int x = startX; x < stopX; x++, src += pixelSize, dst += pixelSize) {
                         // lower right corner - to start processing from that point
                         srcPixel = src + srcKernelFistPixelOffset;
 
@@ -581,13 +526,11 @@ namespace Accord.Imaging.Filters
 
                         // move from lower right to upper left corner
                         ty = kernelSize;
-                        while (ty != 0)
-                        {
+                        while (ty != 0) {
                             ty--;
 
                             tx = kernelSize;
-                            while (tx != 0)
-                            {
+                            while (tx != 0) {
                                 tx--;
 
                                 srcR = srcPixel[RGB.R];
@@ -619,19 +562,15 @@ namespace Accord.Imaging.Filters
                     src += srcOffset;
                     dst += dstOffset;
                 }
-            }
-            else
-            {
+            } else {
                 // 8bpp grayscale images
                 byte srcC;
                 byte srcC0;
                 byte* srcPixel;
                 double sCoefC, sMembC, coefC;
 
-                for (int y = startY; y < stopY; y++)
-                {
-                    for (int x = startX; x < stopX; x++, src++, dst++)
-                    {
+                for (int y = startY; y < stopY; y++) {
+                    for (int x = startX; x < stopX; x++, src++, dst++) {
                         // lower right corner - to start processing from that point
                         srcPixel = src + srcKernelFistPixelOffset;
 
@@ -642,13 +581,11 @@ namespace Accord.Imaging.Filters
 
                         // move from lower right to upper left corner
                         ty = kernelSize;
-                        while (ty != 0)
-                        {
+                        while (ty != 0) {
                             ty--;
 
                             tx = kernelSize;
-                            while (tx != 0)
-                            {
+                            while (tx != 0) {
                                 tx--;
 
                                 srcC = *(srcPixel);
@@ -672,8 +609,7 @@ namespace Accord.Imaging.Filters
         }
 
         // Perform image processing with checking pixels' coordinates to make sure those are in bounds
-        private unsafe void ProcessWithEdgeChecks(UnmanagedImage source, UnmanagedImage destination, Rectangle rect)
-        {
+        private unsafe void ProcessWithEdgeChecks(UnmanagedImage source, UnmanagedImage destination, Rectangle rect) {
             int width = source.Width;
             int height = source.Height;
 
@@ -707,8 +643,7 @@ namespace Accord.Imaging.Filters
             src += startY * srcStride + startX * pixelSize;
             dst += startY * dstStride + startX * pixelSize;
 
-            if (pixelSize > 1)
-            {
+            if (pixelSize > 1) {
                 // color images
                 byte srcR, srcG, srcB;
                 byte srcR0, srcG0, srcB0;
@@ -716,10 +651,8 @@ namespace Accord.Imaging.Filters
 
                 double sCoefR, sCoefG, sCoefB, sMembR, sMembG, sMembB, coefR, coefG, coefB;
 
-                for (int y = startY; y < stopY; y++)
-                {
-                    for (int x = startX; x < stopX; x++, src += pixelSize, dst += pixelSize)
-                    {
+                for (int y = startY; y < stopY; y++) {
+                    for (int x = startX; x < stopX; x++, src += pixelSize, dst += pixelSize) {
                         // lower right corner - to start processing from that point
                         srcPixel = src + srcKernelFistPixelOffset;
 
@@ -736,8 +669,7 @@ namespace Accord.Imaging.Filters
 
                         // move from lower right to upper left corner
                         ty = kernelSize;
-                        while (ty != 0)
-                        {
+                        while (ty != 0) {
                             ty--;
                             ry = ty - kernelHalf;
 
@@ -748,8 +680,7 @@ namespace Accord.Imaging.Filters
                             }
 
                             tx = kernelSize;
-                            while (tx != 0)
-                            {
+                            while (tx != 0) {
                                 tx--;
                                 rx = tx - kernelHalf;
 
@@ -789,19 +720,15 @@ namespace Accord.Imaging.Filters
                     src += srcOffset;
                     dst += dstOffset;
                 }
-            }
-            else
-            {
+            } else {
                 // 8bpp grayscale images
                 byte srcC;
                 byte srcC0;
                 byte* srcPixel;
                 double sCoefC, sMembC, coefC;
 
-                for (int y = startY; y < stopY; y++)
-                {
-                    for (int x = startX; x < stopX; x++, src++, dst++)
-                    {
+                for (int y = startY; y < stopY; y++) {
+                    for (int x = startX; x < stopX; x++, src++, dst++) {
                         // lower right corner - to start processing from that point
                         srcPixel = src + srcKernelFistPixelOffset;
 
@@ -812,8 +739,7 @@ namespace Accord.Imaging.Filters
 
                         // move from lower right to upper left corner
                         ty = kernelSize;
-                        while (ty != 0)
-                        {
+                        while (ty != 0) {
                             ty--;
                             ry = (int)(ty - kernelHalf);
 
@@ -824,8 +750,7 @@ namespace Accord.Imaging.Filters
                             }
 
                             tx = kernelSize;
-                            while (tx != 0)
-                            {
+                            while (tx != 0) {
                                 tx--;
                                 rx = (int)(tx - kernelHalf);
 

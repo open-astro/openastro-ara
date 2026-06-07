@@ -2,12 +2,11 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © Andrew Kirillov, 2005-2009
+// Copyright ï¿½ Andrew Kirillov, 2005-2009
 // andrew.kirillov@aforgenet.com
 //
 
-namespace Accord.Imaging
-{
+namespace Accord.Imaging {
     using System;
     using System.Drawing;
     using System.Drawing.Imaging;
@@ -20,8 +19,7 @@ namespace Accord.Imaging
     /// template matching algorithms - algorithms, which search for the given template in specified
     /// image.</para></remarks>
     /// 
-    public interface ITemplateMatching
-    {
+    public interface ITemplateMatching {
         /// <summary>
         /// Process image looking for matchings with specified template.
         /// </summary>
@@ -32,7 +30,7 @@ namespace Accord.Imaging
         /// 
         /// <returns>Returns array of found matchings.</returns>
         /// 
-        TemplateMatch[] ProcessImage( Bitmap image, Bitmap template, Rectangle searchZone );
+        TemplateMatch[] ProcessImage(Bitmap image, Bitmap template, Rectangle searchZone);
 
         /// <summary>
         /// Process image looking for matchings with specified template.
@@ -44,7 +42,7 @@ namespace Accord.Imaging
         /// 
         /// <returns>Returns array of found matchings.</returns>
         /// 
-        TemplateMatch[] ProcessImage( BitmapData imageData, BitmapData templateData, Rectangle searchZone );
+        TemplateMatch[] ProcessImage(BitmapData imageData, BitmapData templateData, Rectangle searchZone);
 
         /// <summary>
         /// Process image looking for matchings with specified template.
@@ -56,6 +54,6 @@ namespace Accord.Imaging
         /// 
         /// <returns>Returns array of found matchings.</returns>
         /// 
-        TemplateMatch[] ProcessImage( UnmanagedImage image, UnmanagedImage template, Rectangle searchZone );
+        TemplateMatch[] ProcessImage(UnmanagedImage image, UnmanagedImage template, Rectangle searchZone);
     }
 }

@@ -1,12 +1,11 @@
 // AForge Image Processing Library
 // AForge.NET framework
 //
-// Copyright © AForge.NET, 2007-2011
+// Copyright ï¿½ AForge.NET, 2007-2011
 // contacts@aforgenet.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -50,8 +49,7 @@ namespace Accord.Imaging.Filters
     /// 
     /// <seealso cref="YCbCrExtractChannel"/>
     /// 
-    public class YCbCrReplaceChannel : BaseInPlacePartialFilter
-    {
+    public class YCbCrReplaceChannel : BaseInPlacePartialFilter {
         private short channel = YCbCr.YIndex;
         private Bitmap channelImage;
         private UnmanagedImage unmanagedChannelImage;
@@ -62,8 +60,7 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Format translations dictionary.
         /// </summary>
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -75,17 +72,14 @@ namespace Accord.Imaging.Filters
         /// 
         /// <exception cref="ArgumentException">Invalid channel was specified.</exception>
         /// 
-        public short Channel
-        {
+        public short Channel {
             get { return channel; }
-            set
-            {
+            set {
                 if (
                     (value != YCbCr.YIndex) &&
                     (value != YCbCr.CbIndex) &&
                     (value != YCbCr.CrIndex)
-                    )
-                {
+                    ) {
                     throw new ArgumentException("Invalid YCbCr channel was specified.");
                 }
                 channel = value;
@@ -103,13 +97,10 @@ namespace Accord.Imaging.Filters
         /// 
         /// <exception cref="InvalidImagePropertiesException">Channel image should be 8bpp indexed image (grayscale).</exception>
         /// 
-        public Bitmap ChannelImage
-        {
+        public Bitmap ChannelImage {
             get { return channelImage; }
-            set
-            {
-                if (value != null)
-                {
+            set {
+                if (value != null) {
                     // check for valid format
                     if (value.PixelFormat != PixelFormat.Format8bppIndexed)
                         throw new InvalidImagePropertiesException("Channel image should be 8bpp indexed image (grayscale).");
@@ -131,13 +122,10 @@ namespace Accord.Imaging.Filters
         /// 
         /// <exception cref="InvalidImagePropertiesException">Channel image should be 8bpp indexed image (grayscale).</exception>
         /// 
-        public UnmanagedImage UnmanagedChannelImage
-        {
+        public UnmanagedImage UnmanagedChannelImage {
             get { return unmanagedChannelImage; }
-            set
-            {
-                if (value != null)
-                {
+            set {
+                if (value != null) {
                     // check for valid format
                     if (value.PixelFormat != PixelFormat.Format8bppIndexed)
                         throw new InvalidImagePropertiesException("Channel image should be 8bpp indexed image (grayscale).");
@@ -149,8 +137,7 @@ namespace Accord.Imaging.Filters
         }
 
         // private constructor
-        private YCbCrReplaceChannel()
-        {
+        private YCbCrReplaceChannel() {
             // initialize format translation dictionary
             formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format24bppRgb;
             formatTranslations[PixelFormat.Format32bppRgb] = PixelFormat.Format32bppRgb;
@@ -164,8 +151,7 @@ namespace Accord.Imaging.Filters
         /// <param name="channel">YCbCr channel to replace.</param>
         /// 
         public YCbCrReplaceChannel(short channel)
-            : this()
-        {
+            : this() {
             this.Channel = channel;
         }
 
@@ -177,8 +163,7 @@ namespace Accord.Imaging.Filters
         /// <param name="channelImage">Channel image to use for replacement.</param>
         /// 
         public YCbCrReplaceChannel(short channel, Bitmap channelImage)
-            : this()
-        {
+            : this() {
             this.Channel = channel;
             this.ChannelImage = channelImage;
         }
@@ -191,8 +176,7 @@ namespace Accord.Imaging.Filters
         /// <param name="channelImage">Unmanaged channel image to use for replacement.</param>
         /// 
         public YCbCrReplaceChannel(short channel, UnmanagedImage channelImage)
-            : this()
-        {
+            : this() {
             this.Channel = channel;
             this.UnmanagedChannelImage = channelImage;
         }
@@ -208,8 +192,7 @@ namespace Accord.Imaging.Filters
         /// <exception cref="InvalidImagePropertiesException">Channel image size does not match source
         /// image size.</exception>
         ///
-        protected override unsafe void ProcessFilter(UnmanagedImage image, Rectangle rect)
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage image, Rectangle rect) {
             if ((channelImage == null) && (unmanagedChannelImage == null))
                 throw new InvalidOperationException("Channel image was not specified.");
 
@@ -230,8 +213,7 @@ namespace Accord.Imaging.Filters
             int chStride = 0;
 
             // check channel's image type
-            if (channelImage != null)
-            {
+            if (channelImage != null) {
                 // check channel's image dimension
                 if ((width != channelImage.Width) || (height != channelImage.Height))
                     throw new InvalidImagePropertiesException("Channel image size does not match source image size.");
@@ -243,9 +225,7 @@ namespace Accord.Imaging.Filters
 
                 ch = (byte*)chData.Scan0.ToPointer();
                 chStride = chData.Stride;
-            }
-            else
-            {
+            } else {
                 // check channel's image dimension
                 if ((width != unmanagedChannelImage.Width) || (height != unmanagedChannelImage.Height))
                     throw new InvalidImagePropertiesException("Channel image size does not match source image size.");
@@ -266,11 +246,9 @@ namespace Accord.Imaging.Filters
             ch += (startY * chStride + startX);
 
             // for each line
-            for (int y = startY; y < stopY; y++)
-            {
+            for (int y = startY; y < stopY; y++) {
                 // for each pixel
-                for (int x = startX; x < stopX; x++, dst += pixelSize, ch++)
-                {
+                for (int x = startX; x < stopX; x++, dst += pixelSize, ch++) {
                     rgb.Red = dst[RGB.R];
                     rgb.Green = dst[RGB.G];
                     rgb.Blue = dst[RGB.B];
@@ -278,8 +256,7 @@ namespace Accord.Imaging.Filters
                     // convert to YCbCr
                     Accord.Imaging.YCbCr.FromRGB(rgb, ref ycbcr);
 
-                    switch (channel)
-                    {
+                    switch (channel) {
                         case YCbCr.YIndex:
                             ycbcr.Y = (float)*ch / 255;
                             break;
@@ -304,8 +281,7 @@ namespace Accord.Imaging.Filters
                 ch += offsetCh;
             }
 
-            if (chData != null)
-            {
+            if (chData != null) {
                 // unlock
                 channelImage.UnlockBits(chData);
             }

@@ -320,9 +320,9 @@ namespace OpenAstroAra.Image.ImageData {
             return p;
         }
 
-        
+
         public async Task<string> SaveToDisk(FileSaveInfo fileSaveInfo, CancellationToken token, bool forceFileType, IList<ImagePattern> customPatterns) {
-            if(customPatterns == null) { customPatterns = new List<ImagePattern>(); }
+            if (customPatterns == null) { customPatterns = new List<ImagePattern>(); }
             var pattern = fileSaveInfo.FilePattern;
             string actualPath = string.Empty;
             try {
@@ -349,10 +349,10 @@ namespace OpenAstroAra.Image.ImageData {
             } catch (Exception ex) {
                 Logger.Error(ex);
                 throw;
-            } 
+            }
             return actualPath;
         }
-        
+
         private string ExtractDSLRTemperatureAndMoveFile(string actualPath) {
             var oldPath = actualPath;
             try {
@@ -374,8 +374,8 @@ namespace OpenAstroAra.Image.ImageData {
             }
             return actualPath;
         }
-        
-        
+
+
         public Task<string> SaveToDisk(FileSaveInfo fileSaveInfo, CancellationToken token, bool forceFileType = false) {
             return SaveToDisk(fileSaveInfo, token, forceFileType, new List<ImagePattern>());
         }
@@ -441,7 +441,7 @@ namespace OpenAstroAra.Image.ImageData {
         private string SaveFits(FileSaveInfo fileSaveInfo) {
             string extension = ".fits";
 
-            if(fileSaveInfo.FITSUseLegacyWriter) {
+            if (fileSaveInfo.FITSUseLegacyWriter) {
                 Directory.CreateDirectory(Path.GetDirectoryName(fileSaveInfo.FilePath));
                 var uniquePath = CoreUtil.GetUniqueFilePath(fileSaveInfo.FilePath + fileSaveInfo.GetExtension(extension));
                 FITS f = new FITS(
@@ -466,7 +466,7 @@ namespace OpenAstroAra.Image.ImageData {
                 Directory.CreateDirectory(Path.GetDirectoryName(fileSaveInfo.FilePath));
 
                 var uniquePath = CoreUtil.GetUniqueFilePath(fileSaveInfo.FilePath + fileSaveInfo.GetExtension(extension), "{0}_{1}");
-                
+
                 var compression = GetFITSCompression(fileSaveInfo.FITSCompressionType);
 
                 CFitsioFITS f = null;

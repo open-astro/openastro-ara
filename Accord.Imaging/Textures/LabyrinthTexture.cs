@@ -6,10 +6,10 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © Andrew Kirillov, 2005-2009
+// Copyright ï¿½ Andrew Kirillov, 2005-2009
 // andrew.kirillov@aforgenet.com
 //
-// Copyright © César Souza, 2009-2017
+// Copyright ï¿½ Cï¿½sar Souza, 2009-2017
 // cesarsouza at gmail.com
 //
 //    This library is free software; you can redistribute it and/or
@@ -27,8 +27,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging.Textures
-{
+namespace Accord.Imaging.Textures {
     using Accord.Math;
     using System;
 
@@ -54,8 +53,7 @@ namespace Accord.Imaging.Textures
     /// <img src="..\images\imaging\labyrinth_texture.jpg" width="320" height="240" />
     /// </remarks>
     /// 
-    public class LabyrinthTexture : BaseTextureGenerator, ITextureGenerator
-    {
+    public class LabyrinthTexture : BaseTextureGenerator, ITextureGenerator {
         // Perlin noise function used for texture generation
         private PerlinNoise noise = new PerlinNoise(1, 0.65, 1.0 / 16, 1.0);
 
@@ -63,8 +61,7 @@ namespace Accord.Imaging.Textures
         /// Initializes a new instance of the <see cref="LabyrinthTexture"/> class.
         /// </summary>
         /// 
-        public LabyrinthTexture()
-        {
+        public LabyrinthTexture() {
         }
 
         /// <summary>
@@ -78,16 +75,13 @@ namespace Accord.Imaging.Textures
         /// 
         /// <remarks>Generates new texture of the specified size.</remarks>
         ///  
-        public override float[,] Generate(int width, int height)
-        {
+        public override float[,] Generate(int width, int height) {
             var texture = new float[height, width];
 
             int r = Accord.Math.Random.Generator.Random.Next(5000);
 
-            for (int y = 0; y < height; y++)
-            {
-                for (int x = 0; x < width; x++)
-                {
+            for (int y = 0; y < height; y++) {
+                for (int x = 0; x < width; x++) {
                     float a = (float)Math.Abs(noise.Function2D(x + r, y + r));
                     texture[y, x] = Math.Min(1.0f, a);
                 }

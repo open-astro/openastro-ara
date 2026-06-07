@@ -1,12 +1,11 @@
 // AForge Image Processing Library
 // AForge.NET framework
 //
-// Copyright © Andrew Kirillov, 2005-2008
+// Copyright ï¿½ Andrew Kirillov, 2005-2008
 // andrew.kirillov@aforgenet.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -61,8 +60,7 @@ namespace Accord.Imaging.Filters
     /// <seealso cref="DifferenceEdgeDetector"/>
     /// <seealso cref="HomogenityEdgeDetector"/>
     /// 
-    public class SobelEdgeDetector : BaseUsingCopyPartialFilter
-    {
+    public class SobelEdgeDetector : BaseUsingCopyPartialFilter {
         private bool scaleIntensity = true;
 
         // private format translation dictionary
@@ -71,8 +69,7 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Format translations dictionary.
         /// </summary>
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -87,8 +84,7 @@ namespace Accord.Imaging.Filters
         /// <para>Default value is set to <see langword="true"/>.</para>
         /// </remarks>
         /// 
-        public bool ScaleIntensity
-        {
+        public bool ScaleIntensity {
             get { return scaleIntensity; }
             set { scaleIntensity = value; }
         }
@@ -97,8 +93,7 @@ namespace Accord.Imaging.Filters
         /// Initializes a new instance of the <see cref="SobelEdgeDetector"/> class.
         /// </summary>
         /// 
-        public SobelEdgeDetector()
-        {
+        public SobelEdgeDetector() {
             // initialize format translation dictionary
             formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
         }
@@ -111,8 +106,7 @@ namespace Accord.Imaging.Filters
         /// <param name="destinationData">Destination image data.</param>
         /// <param name="rect">Image rectangle for processing by the filter.</param>
         /// 
-        protected override unsafe void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData, Rectangle rect)
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData, Rectangle rect) {
             // processing start and stop X,Y positions
             int startX = rect.Left + 1;
             int startY = rect.Top + 1;
@@ -137,11 +131,9 @@ namespace Accord.Imaging.Filters
             double g, max = 0;
 
             // for each line
-            for (int y = startY; y < stopY; y++)
-            {
+            for (int y = startY; y < stopY; y++) {
                 // for each pixel
-                for (int x = startX; x < stopX; x++, src++, dst++)
-                {
+                for (int x = startX; x < stopX; x++, src++, dst++) {
                     g = Math.Min(255,
                         Math.Abs(src[-srcStride - 1] + src[-srcStride + 1]
                                 - src[srcStride - 1] - src[srcStride + 1]
@@ -160,19 +152,16 @@ namespace Accord.Imaging.Filters
 
 
             // do we need scaling
-            if ((scaleIntensity) && (max != 255))
-            {
+            if ((scaleIntensity) && (max != 255)) {
                 // make the second pass for intensity scaling
                 double factor = 255.0 / (double)max;
                 dst = (byte*)destinationData.ImageData.ToPointer();
                 dst += dstStride * startY + startX;
 
                 // for each line
-                for (int y = startY; y < stopY; y++)
-                {
+                for (int y = startY; y < stopY; y++) {
                     // for each pixel
-                    for (int x = startX; x < stopX; x++, dst++)
-                    {
+                    for (int x = startX; x < stopX; x++, dst++) {
                         *dst = (byte)(factor * (*dst));
                     }
                     dst += dstOffset;

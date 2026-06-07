@@ -102,7 +102,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
         }
 
         public static void LogErrorStatus(string op, int statusCode) {
-            if(statusCode != 0) {
+            if (statusCode != 0) {
                 Logger.Error($"{op} failed with {statusCode} = {fits_get_errstatus(statusCode)}");
             }
         }

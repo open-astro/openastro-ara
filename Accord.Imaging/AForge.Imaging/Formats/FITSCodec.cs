@@ -5,8 +5,7 @@
 // andrew.kirillov@gmail.com
 //
 
-namespace Accord.Imaging.Formats
-{
+namespace Accord.Imaging.Formats {
     using System;
     using System.IO;
     using System.Drawing;
@@ -17,8 +16,7 @@ namespace Accord.Imaging.Formats
     /// <summary>
     /// Information about FITS image's frame.
     /// </summary>
-    public sealed class FITSImageInfo : ImageInfo
-    {
+    public sealed class FITSImageInfo : ImageInfo {
         private int originalBitsPerPixl;
         private double minDataValue;
         private double maxDataValue;
@@ -37,8 +35,7 @@ namespace Accord.Imaging.Formats
         /// </para></remarks>
         /// 
         [Category("FITS Info")]
-        public int OriginalBitsPerPixl
-        {
+        public int OriginalBitsPerPixl {
             get { return originalBitsPerPixl; }
             set { originalBitsPerPixl = value; }
         }
@@ -52,8 +49,7 @@ namespace Accord.Imaging.Formats
         /// <see cref="ImageInfo.BitsPerPixel">supported bits per pixel</see> format.</para></remarks>
         /// 
         [Category("FITS Info")]
-        public double MinDataValue
-        {
+        public double MinDataValue {
             get { return minDataValue; }
             set { minDataValue = value; }
         }
@@ -67,8 +63,7 @@ namespace Accord.Imaging.Formats
         /// <see cref="ImageInfo.BitsPerPixel">supported bits per pixel</see> format.</para></remarks>
         /// 
         [Category("FITS Info")]
-        public double MaxDataValue
-        {
+        public double MaxDataValue {
             get { return maxDataValue; }
             set { maxDataValue = value; }
         }
@@ -77,8 +72,7 @@ namespace Accord.Imaging.Formats
         /// Telescope used for object's observation.
         /// </summary>
         [Category("FITS Info")]
-        public string Telescope
-        {
+        public string Telescope {
             get { return telescope; }
             set { telescope = value; }
         }
@@ -87,8 +81,7 @@ namespace Accord.Imaging.Formats
         /// Object acquired during observation.
         /// </summary>
         [Category("FITS Info")]
-        public string Object
-        {
+        public string Object {
             get { return acquiredObject; }
             set { acquiredObject = value; }
         }
@@ -97,8 +90,7 @@ namespace Accord.Imaging.Formats
         /// Observer doing object's acquiring.
         /// </summary>
         [Category("FITS Info")]
-        public string Observer
-        {
+        public string Observer {
             get { return observer; }
             set { observer = value; }
         }
@@ -107,8 +99,7 @@ namespace Accord.Imaging.Formats
         /// Instrument used for observation.
         /// </summary>
         [Category("FITS Info")]
-        public string Instrument
-        {
+        public string Instrument {
             get { return instrument; }
             set { instrument = value; }
         }
@@ -138,8 +129,7 @@ namespace Accord.Imaging.Formats
         /// 
         /// <returns>A new object that is a copy of this instance.</returns>
         /// 
-        public override object Clone()
-        {
+        public override object Clone() {
             FITSImageInfo clone = new FITSImageInfo(width, height, bitsPerPixel, frameIndex, totalFrames);
 
             clone.originalBitsPerPixl = originalBitsPerPixl;
@@ -174,8 +164,7 @@ namespace Accord.Imaging.Formats
     ///
     [FormatDecoder("fit")]
     [FormatDecoder("fits")]
-    public class FITSCodec : IImageDecoder
-    {
+    public class FITSCodec : IImageDecoder {
         // stream with FITS encoded data
         private Stream stream = null;
         // information about images retrieved from header
@@ -195,13 +184,11 @@ namespace Accord.Imaging.Formats
         /// <exception cref="NotSupportedException">Format of the FITS image is not supported.</exception>
         /// <exception cref="ArgumentException">The stream contains invalid (broken) FITS image.</exception>
         /// 
-        public Bitmap DecodeSingleFrame(Stream stream)
-        {
+        public Bitmap DecodeSingleFrame(Stream stream) {
             FITSImageInfo imageInfo = ReadHeader(stream);
 
             // check if there any image frame
-            if (imageInfo.TotalFrames == 0)
-            {
+            if (imageInfo.TotalFrames == 0) {
                 throw new ArgumentException("The FITS stream does not contain any image in main section.");
             }
             // read and return first frame
@@ -220,8 +207,7 @@ namespace Accord.Imaging.Formats
         /// <exception cref="NotSupportedException">Format of the FITS image is not supported.</exception>
         /// <exception cref="ArgumentException">The stream contains invalid (broken) FITS image.</exception>
         /// 
-        public int Open(Stream stream)
-        {
+        public int Open(Stream stream) {
             // close previous decoding
             Close();
 
@@ -245,11 +231,9 @@ namespace Accord.Imaging.Formats
         /// <exception cref="ArgumentOutOfRangeException">Stream does not contain frame with specified index.</exception>
         /// <exception cref="ArgumentException">The stream contains invalid (broken) FITS image.</exception>
         /// 
-        public Bitmap DecodeFrame(int frameIndex, out ImageInfo imageInfo)
-        {
+        public Bitmap DecodeFrame(int frameIndex, out ImageInfo imageInfo) {
             // check requested frame index
-            if (frameIndex >= this.imageInfo.TotalFrames)
-            {
+            if (frameIndex >= this.imageInfo.TotalFrames) {
                 throw new ArgumentOutOfRangeException("Currently opened stream does not contain frame with specified index.");
             }
 
@@ -274,16 +258,14 @@ namespace Accord.Imaging.Formats
         /// <remarks><para>The method does not close stream itself, but just closes
         /// decoding cleaning all associated data with it.</para></remarks>
         /// 
-        public void Close()
-        {
+        public void Close() {
             stream = null;
             imageInfo = null;
         }
 
         // Read and process FITS header. After the header is read stream pointer will
         // point to data or extension.
-        private static FITSImageInfo ReadHeader(Stream stream)
-        {
+        private static FITSImageInfo ReadHeader(Stream stream) {
             byte[] headerRecord = new byte[80];
             int recordsRead = 1;
             bool endKeyWasFound = false;
@@ -293,25 +275,19 @@ namespace Accord.Imaging.Formats
             // read first record and check for correct image
             if (
                 (Tools.ReadStream(stream, headerRecord, 0, 80) < 80) ||
-                (Encoding.UTF8.GetString(headerRecord, 0, 8) != "SIMPLE  "))
-            {
+                (Encoding.UTF8.GetString(headerRecord, 0, 8) != "SIMPLE  ")) {
                 throw new FormatException("The stream does not contatin FITS image.");
-            }
-            else
-            {
+            } else {
                 // check if the image has standard FITS format
-                if (Encoding.UTF8.GetString(headerRecord, 10, 70).Split('/')[0].Trim() != "T")
-                {
+                if (Encoding.UTF8.GetString(headerRecord, 10, 70).Split('/')[0].Trim() != "T") {
                     throw new NotSupportedException("The stream contains not standard FITS data file.");
                 }
             }
 
             // read header and locate data block
-            while (true)
-            {
+            while (true) {
                 // read next record
-                if (Tools.ReadStream(stream, headerRecord, 0, 80) < 80)
-                {
+                if (Tools.ReadStream(stream, headerRecord, 0, 80) < 80) {
                     throw new ArgumentException("The stream does not contain valid FITS image.");
                 }
                 recordsRead++;
@@ -327,53 +303,42 @@ namespace Accord.Imaging.Formats
                 if (keyword == "END     ")
                     endKeyWasFound = true;
 
-                if (endKeyWasFound)
-                {
-                    if (recordsRead % 36 == 0)
-                    {
+                if (endKeyWasFound) {
+                    if (recordsRead % 36 == 0) {
                         // found data or extension header
 
                         // make a small check of some header values
-                        if ((imageInfo.BitsPerPixel == 0) || (imageInfo.Width == 0) || (imageInfo.Height == 0))
-                        {
+                        if ((imageInfo.BitsPerPixel == 0) || (imageInfo.Width == 0) || (imageInfo.Height == 0)) {
                             imageInfo.TotalFrames = 0;
                         }
 
                         // let's return here and let other routines process data
                         break;
                     }
-                }
-                else
-                {
+                } else {
                     // get string representation of value/comments
                     string strValue = Encoding.UTF8.GetString(headerRecord, 10, 70);
 
                     // check important keywords
-                    if (keyword == "BITPIX  ")
-                    {
+                    if (keyword == "BITPIX  ") {
                         int value = ExtractIntegerValue(strValue);
 
-                        if ((value != 8) && (value != 16) && (value != 32) && (value != -32) && (value != -64))
-                        {
+                        if ((value != 8) && (value != 16) && (value != 32) && (value != -32) && (value != -64)) {
                             throw new NotSupportedException("Data format (" + value + ") is not supported.");
                         }
 
                         // bits per pixel
                         imageInfo.BitsPerPixel = (value == 8) ? 8 : 16;
                         imageInfo.OriginalBitsPerPixl = value;
-                    }
-                    else if (Encoding.UTF8.GetString(headerRecord, 0, 5) == "NAXIS")
-                    {
+                    } else if (Encoding.UTF8.GetString(headerRecord, 0, 5) == "NAXIS") {
                         // information about data axis
                         int value = ExtractIntegerValue(strValue);
 
                         // check axis
-                        switch (headerRecord[5])
-                        {
+                        switch (headerRecord[5]) {
                             // number of axis
                             case (byte)' ':
-                                switch (value)
-                                {
+                                switch (value) {
                                     case 1:
                                     default:
                                         throw new NotSupportedException("FITS files with data dimension of " + value + " are not supported.");
@@ -402,21 +367,13 @@ namespace Accord.Imaging.Formats
                                 imageInfo.TotalFrames = value;
                                 break;
                         }
-                    }
-                    else if (keyword == "TELESCOP")
-                    {
+                    } else if (keyword == "TELESCOP") {
                         imageInfo.Telescope = ExtractStringValue(strValue);
-                    }
-                    else if (keyword == "OBJECT  ")
-                    {
+                    } else if (keyword == "OBJECT  ") {
                         imageInfo.Object = ExtractStringValue(strValue);
-                    }
-                    else if (keyword == "OBSERVER")
-                    {
+                    } else if (keyword == "OBSERVER") {
                         imageInfo.Observer = ExtractStringValue(strValue);
-                    }
-                    else if (keyword == "INSTRUME")
-                    {
+                    } else if (keyword == "INSTRUME") {
                         imageInfo.Instrument = ExtractStringValue(strValue);
                     }
 
@@ -443,8 +400,7 @@ namespace Accord.Imaging.Formats
             // packed into data cube, so entire scan of all the data is required.
 
             // if is stream is seekable
-            if (!stream.CanSeek)
-            {
+            if (!stream.CanSeek) {
                 throw new ArgumentException("The stream must be seekable.");
             }
 
@@ -463,28 +419,24 @@ namespace Accord.Imaging.Formats
             double min = double.MaxValue;
             double max = double.MinValue;
 
-            for (int i = 0; i < totalLines; i++)
-            {
+            for (int i = 0; i < totalLines; i++) {
                 // read next line
                 if (Tools.ReadStream(stream, buffer, 0, lineLength) < lineLength)
                     throw new ArgumentException("The stream does not contain valid FITS image.");
 
                 // scan the line
-                for (int j = 0; j < lineLength; )
-                {
+                for (int j = 0; j < lineLength;) {
                     double value = 0;
 
                     // read values accordint to their format
-                    switch (originalBitsPerPixel)
-                    {
+                    switch (originalBitsPerPixel) {
                         case 8:    // 8 bit unsigned integer
                             value = buffer[j++];
                             break;
                         case 16:    // 16 bit signed integer
                             {
                                 short tempValue = 0;
-                                unchecked
-                                {
+                                unchecked {
                                     tempValue = (short)((buffer[j++] << 8) | buffer[j++]);
                                 }
                                 value = tempValue;
@@ -544,8 +496,7 @@ namespace Accord.Imaging.Formats
         }
 
         // Read image frame from the specified stream (current stream's position is used)
-        private static unsafe Bitmap ReadImageFrame(Stream stream, FITSImageInfo imageInfo)
-        {
+        private static unsafe Bitmap ReadImageFrame(Stream stream, FITSImageInfo imageInfo) {
             int width = imageInfo.Width;
             int height = imageInfo.Height;
 
@@ -566,8 +517,7 @@ namespace Accord.Imaging.Formats
             double max = imageInfo.MaxDataValue;
 
             // check number of bits per pixel and load image appropriately
-            if (imageInfo.BitsPerPixel == 16)
-            {
+            if (imageInfo.BitsPerPixel == 16) {
                 // 16 bpp grayscale image
                 double coef = 65535.0 / (max - min);
 
@@ -577,8 +527,7 @@ namespace Accord.Imaging.Formats
                 byte[] temp = new byte[8];
 
                 // load all rows
-                for (int y = height - 1; y >= 0; y--)
-                {
+                for (int y = height - 1; y >= 0; y--) {
                     // load next line
                     if (Tools.ReadStream(stream, line, 0, lineSize) < lineSize)
                         throw new ArgumentException("The stream does not contain valid FITS image.");
@@ -586,17 +535,14 @@ namespace Accord.Imaging.Formats
                     // fill next image row
                     ushort* row = (ushort*)(ptr + stride * y);
 
-                    for (int x = 0, i = 0; x < width; x++, row++)
-                    {
+                    for (int x = 0, i = 0; x < width; x++, row++) {
                         double value = 0;
 
-                        switch (originalBitsPerPixel)
-                        {
+                        switch (originalBitsPerPixel) {
                             case 16:    // 16 bit signed integer
                                 {
                                     short tempValue = 0;
-                                    unchecked
-                                    {
+                                    unchecked {
                                         tempValue = (short)((line[i++] << 8) + line[i++]);
                                     }
                                     value = tempValue;
@@ -642,9 +588,7 @@ namespace Accord.Imaging.Formats
                         *row = (ushort)((value - min) * coef);
                     }
                 }
-            }
-            else
-            {
+            } else {
                 // 8 bpp grayscale image
                 double coef = 255.0 / (max - min);
 
@@ -652,8 +596,7 @@ namespace Accord.Imaging.Formats
                 byte[] line = new byte[width];
 
                 // load all rows
-                for (int y = height - 1; y >= 0; y--)
-                {
+                for (int y = height - 1; y >= 0; y--) {
                     // load next line
                     if (Tools.ReadStream(stream, line, 0, width) < width)
                         throw new ArgumentException("The stream does not contain valid FITS image.");
@@ -661,8 +604,7 @@ namespace Accord.Imaging.Formats
                     // fill next image row
                     byte* row = ptr + stride * y;
 
-                    for (int x = 0; x < width; x++, row++)
-                    {
+                    for (int x = 0; x < width; x++, row++) {
                         *row = (byte)(((double)line[x] - min) * coef);
                     }
                 }
@@ -674,25 +616,20 @@ namespace Accord.Imaging.Formats
         }
 
         // Extract integer value from string representation of value/comments
-        private static int ExtractIntegerValue(string strValue)
-        {
-            try
-            {
+        private static int ExtractIntegerValue(string strValue) {
+            try {
                 // split value from comment
                 string[] strs = strValue.Split('/');
 
                 // return value as integer
                 return int.Parse(strs[0].Trim());
-            }
-            catch
-            {
+            } catch {
                 throw new ArgumentException("The stream does not contain valid FITS image.");
             }
         }
 
         // Extract string value
-        private static string ExtractStringValue(string strValue)
-        {
+        private static string ExtractStringValue(string strValue) {
             // split value from comment
             string[] strs = strValue.Split('/');
 

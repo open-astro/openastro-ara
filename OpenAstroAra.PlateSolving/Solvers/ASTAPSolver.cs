@@ -104,9 +104,9 @@ namespace OpenAstroAra.PlateSolving.Solvers {
 
                 result.Pixscale = AstroUtil.DegreeToArcsec(Math.Sqrt(Math.Pow(cr1y, 2) + Math.Pow(cr2y, 2)));
             }
-            if(!double.IsNaN(result.Pixscale)) {
+            if (!double.IsNaN(result.Pixscale)) {
                 result.Radius = AstroUtil.ArcsecToDegree(Math.Sqrt(Math.Pow(imageProperties.ImageWidth * result.Pixscale, 2) + Math.Pow(imageProperties.ImageHeight * result.Pixscale, 2)) / 2d);
-            }            
+            }
             result.PositionAngle = 360 - (wcs.Rotation - 180);
             result.Flipped = !wcs.Flipped;
 

@@ -24,8 +24,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System.Collections.Generic;
     using System.Drawing;
     using System.Drawing.Imaging;
@@ -38,8 +37,7 @@ namespace Accord.Imaging.Filters
     ///   Reference: http://www.vcskicks.com/box-blur.php
     /// </remarks>
     /// 
-    public class FastBoxBlur : BaseInPlacePartialFilter
-    {
+    public class FastBoxBlur : BaseInPlacePartialFilter {
         private byte _horizontalKernelSize = 3;
         private byte _verticalKernelSize = 3;
         private readonly Dictionary<PixelFormat, PixelFormat> _formatTranslations = new Dictionary<PixelFormat, PixelFormat>();
@@ -48,8 +46,7 @@ namespace Accord.Imaging.Filters
         /// Format translations dictionary.
         /// </summary>
         /// 
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return _formatTranslations; }
         }
 
@@ -59,11 +56,9 @@ namespace Accord.Imaging.Filters
         /// Default value is 3.
         /// </summary>
         /// 
-        public byte HorizontalKernelSize
-        {
+        public byte HorizontalKernelSize {
             get { return _horizontalKernelSize; }
-            set
-            {
+            set {
                 _horizontalKernelSize = System.Math.Max((byte)3, System.Math.Min((byte)99, value));
             }
         }
@@ -73,11 +68,9 @@ namespace Accord.Imaging.Filters
         /// Default value is 3.
         /// </summary>
         /// 
-        public byte VerticalKernelSize
-        {
+        public byte VerticalKernelSize {
             get { return _verticalKernelSize; }
-            set
-            {
+            set {
                 _verticalKernelSize = System.Math.Max((byte)3, System.Math.Min((byte)99, value));
             }
         }
@@ -86,8 +79,7 @@ namespace Accord.Imaging.Filters
         /// Initializes a new instance of the <see cref="FastBoxBlur"/> class.
         /// </summary>
         /// 
-        public FastBoxBlur()
-        {
+        public FastBoxBlur() {
             // initialize format translation dictionary
             _formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
             _formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format24bppRgb;
@@ -105,8 +97,7 @@ namespace Accord.Imaging.Filters
         /// <param name="verticalKernelSize">Vertical kernel size.</param>
         /// 
         public FastBoxBlur(byte horizontalKernelSize, byte verticalKernelSize)
-            : this()
-        {
+            : this() {
             HorizontalKernelSize = horizontalKernelSize;
             VerticalKernelSize = verticalKernelSize;
         }
@@ -118,23 +109,20 @@ namespace Accord.Imaging.Filters
         /// <param name="image">Source image data.</param>
         /// <param name="rect">Image rectangle for processing by the filter.</param>
         /// 
-        protected override unsafe void ProcessFilter(UnmanagedImage image, Rectangle rect)
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage image, Rectangle rect) {
             HorizontalBoxBlur(ref image, rect, KernelSizeInRange(_horizontalKernelSize));
 
             VerticalBoxBlur(ref image, rect, KernelSizeInRange(_verticalKernelSize));
         }
 
-        static IntRange KernelSizeInRange(byte kernelSize)
-        {
+        static IntRange KernelSizeInRange(byte kernelSize) {
             kernelSize |= 1;
             int middleKernelSize = kernelSize / 2;
 
             return new IntRange(-middleKernelSize, middleKernelSize + 1);
         }
 
-        static unsafe void HorizontalBoxBlur(ref UnmanagedImage image, Rectangle rect, IntRange kernelSizeRange)
-        {
+        static unsafe void HorizontalBoxBlur(ref UnmanagedImage image, Rectangle rect, IntRange kernelSizeRange) {
             var pixelSize = ((image.PixelFormat == PixelFormat.Format8bppIndexed) ||
                 (image.PixelFormat == PixelFormat.Format16bppGrayScale)) ? 1 : 3;
 
@@ -149,21 +137,17 @@ namespace Accord.Imaging.Filters
             if (image.PixelFormat == PixelFormat.Format8bppIndexed
                 || image.PixelFormat == PixelFormat.Format24bppRgb
                 || image.PixelFormat == PixelFormat.Format32bppRgb
-                || image.PixelFormat == PixelFormat.Format32bppArgb)
-            {
+                || image.PixelFormat == PixelFormat.Format32bppArgb) {
                 int offset = image.Stride - (stopX - startX);
 
                 // align pointer to the first pixel to process
                 byte* ptr = basePtr + (startY * image.Stride + rect.Left * pixelSize);
 
-                for (int y = startY; y < stopY; y++)
-                {
-                    for (int x = startX; x < stopX; x++, ptr++)
-                    {
+                for (int y = startY; y < stopY; y++) {
+                    for (int x = startX; x < stopX; x++, ptr++) {
                         int sum = 0;
 
-                        for (int xFilter = kernelSizeRange.Min; xFilter < kernelSizeRange.Max; xFilter++)
-                        {
+                        for (int xFilter = kernelSizeRange.Min; xFilter < kernelSizeRange.Max; xFilter++) {
                             int xBound = x / pixelSize + xFilter;
 
                             // Only if in bounds
@@ -179,24 +163,20 @@ namespace Accord.Imaging.Filters
                     ptr += offset;
                 }
 
-            }
-            else // 16bpp per channel (ushort*)
-            {
+            } else // 16bpp per channel (ushort*)
+              {
                 int stride = image.Stride;
 
                 // align pointer to the first pixel to process
                 basePtr += (startY * image.Stride + rect.Left * pixelSize * 2);
 
-                for (int y = startY; y < stopY; y++)
-                {
+                for (int y = startY; y < stopY; y++) {
                     ushort* ptr = (ushort*)(basePtr);
 
-                    for (var x = startX; x < stopX; x++, ptr++)
-                    {
+                    for (var x = startX; x < stopX; x++, ptr++) {
                         int sum = 0;
 
-                        for (var xFilter = kernelSizeRange.Min; xFilter < kernelSizeRange.Max; xFilter++)
-                        {
+                        for (var xFilter = kernelSizeRange.Min; xFilter < kernelSizeRange.Max; xFilter++) {
                             int xBound = x / pixelSize + xFilter;
 
                             //Only if in bounds
@@ -213,8 +193,7 @@ namespace Accord.Imaging.Filters
             }
         }
 
-        static unsafe void VerticalBoxBlur(ref UnmanagedImage image, Rectangle rect, IntRange kernelSizeRange)
-        {
+        static unsafe void VerticalBoxBlur(ref UnmanagedImage image, Rectangle rect, IntRange kernelSizeRange) {
             var pixelSize = ((image.PixelFormat == PixelFormat.Format8bppIndexed) ||
                 (image.PixelFormat == PixelFormat.Format16bppGrayScale)) ? 1 : 3;
 
@@ -229,21 +208,17 @@ namespace Accord.Imaging.Filters
             if (image.PixelFormat == PixelFormat.Format8bppIndexed ||
                 image.PixelFormat == PixelFormat.Format24bppRgb ||
                 image.PixelFormat == PixelFormat.Format32bppArgb ||
-                image.PixelFormat == PixelFormat.Format32bppRgb)
-            {
+                image.PixelFormat == PixelFormat.Format32bppRgb) {
                 int offset = image.Stride - (stopX - startX);
 
                 // align pointer to the first pixel to process
                 var ptr = basePtr + (startY * image.Stride + rect.Left * pixelSize);
 
-                for (int y = startY; y < stopY; y++)
-                {
-                    for (int x = startX; x < stopX; x++, ptr++)
-                    {
+                for (int y = startY; y < stopY; y++) {
+                    for (int x = startX; x < stopX; x++, ptr++) {
                         int sum = 0;
 
-                        for (int yFilter = kernelSizeRange.Min; yFilter < kernelSizeRange.Max; yFilter++)
-                        {
+                        for (int yFilter = kernelSizeRange.Min; yFilter < kernelSizeRange.Max; yFilter++) {
                             int yBound = y + yFilter;
 
                             //Only if in bounds
@@ -258,22 +233,18 @@ namespace Accord.Imaging.Filters
 
                     ptr += offset;
                 }
-            }
-            else // 16bpp per channel (ushort*)
-            {
+            } else // 16bpp per channel (ushort*)
+              {
                 // align pointer to the first pixel to process
                 basePtr += (startY * image.Stride + rect.Left * pixelSize * 2);
 
-                for (int y = startY; y < stopY; y++)
-                {
+                for (int y = startY; y < stopY; y++) {
                     ushort* ptr = (ushort*)(basePtr);
 
-                    for (int x = startX; x < stopX; x++, ptr++)
-                    {
+                    for (int x = startX; x < stopX; x++, ptr++) {
                         int sum = 0;
 
-                        for (int yFilter = kernelSizeRange.Min; yFilter < kernelSizeRange.Max; yFilter++)
-                        {
+                        for (int yFilter = kernelSizeRange.Min; yFilter < kernelSizeRange.Max; yFilter++) {
                             int yBound = y + yFilter;
 
                             //Only if in bounds

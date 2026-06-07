@@ -20,8 +20,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging
-{
+namespace Accord.Imaging {
     using System;
     using System.Drawing;
     using System.Drawing.Imaging;
@@ -58,8 +57,7 @@ namespace Accord.Imaging
     /// <seealso cref="IntegralImage"/>
     /// 
     [SecurityCritical]
-    public unsafe class IntegralImage2 : IDisposable
-    {
+    public unsafe class IntegralImage2 : IDisposable {
 
         private long[,] nSumImage; // normal  integral image
         private long[,] sSumImage; // squared integral image
@@ -87,8 +85,7 @@ namespace Accord.Imaging
         ///   Gets the image's width.
         /// </summary>
         /// 
-        public int Width
-        {
+        public int Width {
             get { return (int)width; }
         }
 
@@ -96,8 +93,7 @@ namespace Accord.Imaging
         ///   Gets the image's height.
         /// </summary>
         /// 
-        public int Height
-        {
+        public int Height {
             get { return (int)height; }
         }
 
@@ -105,8 +101,7 @@ namespace Accord.Imaging
         ///   Gets the Integral Image for values' sum.
         /// </summary>
         /// 
-        public long[,] Image
-        {
+        public long[,] Image {
             get { return nSumImage; }
         }
 
@@ -114,8 +109,7 @@ namespace Accord.Imaging
         ///   Gets the Integral Image for values' squared sum.
         /// </summary>
         /// 
-        public long[,] Squared
-        {
+        public long[,] Squared {
             get { return sSumImage; }
         }
 
@@ -123,8 +117,7 @@ namespace Accord.Imaging
         ///   Gets the Integral Image for tilted values' sum.
         /// </summary>
         /// 
-        public long[,] Rotated
-        {
+        public long[,] Rotated {
             get { return tSumImage; }
         }
 
@@ -132,8 +125,7 @@ namespace Accord.Imaging
         ///   Constructs a new Integral image of the given size.
         /// </summary>
         /// 
-        protected IntegralImage2(int width, int height, bool computeTilted)
-        {
+        protected IntegralImage2(int width, int height, bool computeTilted) {
             this.width = width;
             this.height = height;
 
@@ -151,8 +143,7 @@ namespace Accord.Imaging
             this.sSumHandle = GCHandle.Alloc(sSumImage, GCHandleType.Pinned);
             this.sSum = (long*)sSumHandle.AddrOfPinnedObject().ToPointer();
 
-            if (computeTilted)
-            {
+            if (computeTilted) {
                 this.tSumImage = new long[tHeight, tWidth];
                 this.tSumHandle = GCHandle.Alloc(tSumImage, GCHandleType.Pinned);
                 this.tSum = (long*)tSumHandle.AddrOfPinnedObject().ToPointer();
@@ -169,8 +160,7 @@ namespace Accord.Imaging
         ///   The <see cref="IntegralImage2"/> representation of 
         ///   the <paramref name="image">source image</paramref>.</returns>
         /// 
-        public static IntegralImage2 FromBitmap(Bitmap image)
-        {
+        public static IntegralImage2 FromBitmap(Bitmap image) {
             return FromBitmap(image, 0, false);
         }
 
@@ -185,8 +175,7 @@ namespace Accord.Imaging
         ///   The <see cref="IntegralImage2"/> representation of 
         ///   the <paramref name="image">source image</paramref>.</returns>
         /// 
-        public static IntegralImage2 FromBitmap(Bitmap image, int channel)
-        {
+        public static IntegralImage2 FromBitmap(Bitmap image, int channel) {
             return FromBitmap(image, channel, false);
         }
 
@@ -202,8 +191,7 @@ namespace Accord.Imaging
         ///   The <see cref="IntegralImage2"/> representation of 
         ///   the <paramref name="image">source image</paramref>.</returns>
         /// 
-        public static IntegralImage2 FromBitmap(Bitmap image, bool computeTilted)
-        {
+        public static IntegralImage2 FromBitmap(Bitmap image, bool computeTilted) {
             return FromBitmap(image, 0, computeTilted);
         }
 
@@ -220,14 +208,12 @@ namespace Accord.Imaging
         ///   The <see cref="IntegralImage2"/> representation of 
         ///   the <paramref name="image">source image</paramref>.</returns>
         /// 
-        public static IntegralImage2 FromBitmap(Bitmap image, int channel, bool computeTilted)
-        {
+        public static IntegralImage2 FromBitmap(Bitmap image, int channel, bool computeTilted) {
             // check image format
             if (!(image.PixelFormat == PixelFormat.Format8bppIndexed ||
                 image.PixelFormat == PixelFormat.Format24bppRgb ||
                 image.PixelFormat == PixelFormat.Format32bppArgb ||
-                image.PixelFormat == PixelFormat.Format32bppRgb))
-            {
+                image.PixelFormat == PixelFormat.Format32bppRgb)) {
                 throw new UnsupportedImageFormatException("Only grayscale, 24 and 32 bpp RGB images are supported.");
             }
 
@@ -254,8 +240,7 @@ namespace Accord.Imaging
         ///   The <see cref="IntegralImage2"/> representation of 
         ///   the <paramref name="imageData">source image</paramref>.</returns>
         /// 
-        public static IntegralImage2 FromBitmap(BitmapData imageData)
-        {
+        public static IntegralImage2 FromBitmap(BitmapData imageData) {
             return FromBitmap(imageData, 0);
         }
 
@@ -270,10 +255,8 @@ namespace Accord.Imaging
         ///   The <see cref="IntegralImage2"/> representation of 
         ///   the <paramref name="imageData">source image</paramref>.</returns>
         /// 
-        public static IntegralImage2 FromBitmap(BitmapData imageData, int channel)
-        {
-            using (UnmanagedImage uImage = new UnmanagedImage(imageData))
-            {
+        public static IntegralImage2 FromBitmap(BitmapData imageData, int channel) {
+            using (UnmanagedImage uImage = new UnmanagedImage(imageData)) {
                 return FromBitmap(uImage, channel);
             }
         }
@@ -291,10 +274,8 @@ namespace Accord.Imaging
         ///   The <see cref="IntegralImage2"/> representation of 
         ///   the <paramref name="imageData">source image</paramref>.</returns>
         /// 
-        public static IntegralImage2 FromBitmap(BitmapData imageData, int channel, bool computeTilted)
-        {
-            using (UnmanagedImage uImage = new UnmanagedImage(imageData))
-            {
+        public static IntegralImage2 FromBitmap(BitmapData imageData, int channel, bool computeTilted) {
+            using (UnmanagedImage uImage = new UnmanagedImage(imageData)) {
                 return FromBitmap(uImage, channel, computeTilted);
             }
         }
@@ -311,10 +292,8 @@ namespace Accord.Imaging
         ///   The <see cref="IntegralImage2"/> representation of 
         ///   the <paramref name="imageData">source image</paramref>.</returns>
         /// 
-        public static IntegralImage2 FromBitmap(BitmapData imageData, bool computeTilted)
-        {
-            using (UnmanagedImage uImage = new UnmanagedImage(imageData))
-            {
+        public static IntegralImage2 FromBitmap(BitmapData imageData, bool computeTilted) {
+            using (UnmanagedImage uImage = new UnmanagedImage(imageData)) {
                 return FromBitmap(uImage, 0, computeTilted);
             }
         }
@@ -330,8 +309,7 @@ namespace Accord.Imaging
         ///   The <see cref="IntegralImage2"/> representation of 
         ///   the <paramref name="image">source image</paramref>.</returns>
         /// 
-        public static IntegralImage2 FromBitmap(UnmanagedImage image, int channel)
-        {
+        public static IntegralImage2 FromBitmap(UnmanagedImage image, int channel) {
 
             return FromBitmap(image, channel, false);
         }
@@ -346,8 +324,7 @@ namespace Accord.Imaging
         ///   The <see cref="IntegralImage2"/> representation of 
         ///   the <paramref name="image">source image</paramref>.</returns>
         /// 
-        public static IntegralImage2 FromBitmap(UnmanagedImage image)
-        {
+        public static IntegralImage2 FromBitmap(UnmanagedImage image) {
             return FromBitmap(image, 0, false);
         }
 
@@ -363,8 +340,7 @@ namespace Accord.Imaging
         ///   The <see cref="IntegralImage2"/> representation of 
         ///   the <paramref name="image">source image</paramref>.</returns>
         /// 
-        public static IntegralImage2 FromBitmap(UnmanagedImage image, bool computeTilted)
-        {
+        public static IntegralImage2 FromBitmap(UnmanagedImage image, bool computeTilted) {
             return FromBitmap(image, 0, computeTilted);
         }
 
@@ -381,14 +357,12 @@ namespace Accord.Imaging
         ///   The <see cref="IntegralImage2"/> representation of 
         ///   the <paramref name="image">source image</paramref>.</returns>
         /// 
-        public static IntegralImage2 FromBitmap(UnmanagedImage image, int channel, bool computeTilted)
-        {
+        public static IntegralImage2 FromBitmap(UnmanagedImage image, int channel, bool computeTilted) {
             // check image format
             if (!(image.PixelFormat == PixelFormat.Format8bppIndexed ||
                 image.PixelFormat == PixelFormat.Format24bppRgb ||
                 image.PixelFormat == PixelFormat.Format32bppArgb ||
-                image.PixelFormat == PixelFormat.Format32bppRgb))
-            {
+                image.PixelFormat == PixelFormat.Format32bppRgb)) {
                 throw new UnsupportedImageFormatException("Only grayscale, 24 and 32 bpp RGB images are supported.");
             }
 
@@ -409,8 +383,7 @@ namespace Accord.Imaging
 #if NET45 || NET46 || NET462 || NETSTANDARD2_0
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
 #endif
-        public void Update(UnmanagedImage image, int channel)
-        {
+        public void Update(UnmanagedImage image, int channel) {
             int width = image.Width;
             int height = image.Height;
             int offset = image.Offset;
@@ -435,14 +408,12 @@ namespace Accord.Imaging
             //var t1 = Task.Factory.StartNew(() =>
             //{
             // for each line
-            for (int y = 1; y <= height; y++, src += offset)
-            {
+            for (int y = 1; y <= height; y++, src += offset) {
                 size_t yy = nWidth * (y);
                 size_t y1 = nWidth * (y - 1);
 
                 // for each pixel
-                for (int x = 1; x <= width; x++, src += pixelSize)
-                {
+                for (int x = 1; x <= width; x++, src += pixelSize) {
                     image.CheckBounds(src);
 
                     long p1 = *src;
@@ -461,18 +432,15 @@ namespace Accord.Imaging
 
             //var t2 = Task.Factory.StartNew(() =>
             //{
-            if (this.tSumImage != null)
-            {
+            if (this.tSumImage != null) {
                 src = srcStart;
 
                 // Left-to-right, top-to-bottom pass
-                for (int y = 1; y <= height; y++, src += offset)
-                {
+                for (int y = 1; y <= height; y++, src += offset) {
                     size_t yy = tWidth * (y);
                     size_t y1 = tWidth * (y - 1);
 
-                    for (int x = 2; x < width + 2; x++, src += pixelSize)
-                    {
+                    for (int x = 2; x < width + 2; x++, src += pixelSize) {
                         image.CheckBounds(src);
 
                         size_t a = y1 + (x - 1);
@@ -488,8 +456,7 @@ namespace Accord.Imaging
                     size_t yy = tWidth * (height);
                     size_t y1 = tWidth * (height + 1);
 
-                    for (int x = 2; x < width + 2; x++, src += pixelSize)
-                    {
+                    for (int x = 2; x < width + 2; x++, src += pixelSize) {
                         size_t a = yy + (x - 1);
                         size_t c = yy + (x - 2);
                         size_t b = y1 + (x - 1);
@@ -501,13 +468,11 @@ namespace Accord.Imaging
 
 
                 // Right-to-left, bottom-to-top pass
-                for (int y = height; y >= 0; y--)
-                {
+                for (int y = height; y >= 0; y--) {
                     size_t yy = tWidth * (y);
                     size_t y1 = tWidth * (y + 1);
 
-                    for (int x = width + 1; x >= 1; x--)
-                    {
+                    for (int x = width + 1; x >= 1; x--) {
                         size_t r = yy + (x);
                         size_t b = y1 + (x - 1);
 
@@ -515,12 +480,10 @@ namespace Accord.Imaging
                     }
                 }
 
-                for (int y = height + 1; y >= 0; y--)
-                {
+                for (int y = height + 1; y >= 0; y--) {
                     size_t yy = tWidth * (y);
 
-                    for (int x = width + 1; x >= 2; x--)
-                    {
+                    for (int x = width + 1; x >= 2; x--) {
                         size_t r = yy + (x);
                         size_t b = yy + (x - 2);
 
@@ -548,8 +511,7 @@ namespace Accord.Imaging
 #if NET45 || NET46 || NET462 || NETSTANDARD2_0
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
 #endif
-        public long GetSum(int x, int y, int width, int height)
-        {
+        public long GetSum(int x, int y, int width, int height) {
             size_t a = nWidth * (y) + (x);
             size_t b = nWidth * (y + height) + (x + width);
             size_t c = nWidth * (y + height) + (x);
@@ -573,8 +535,7 @@ namespace Accord.Imaging
 #if NET45 || NET46 || NET462 || NETSTANDARD2_0
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
 #endif
-        public long GetSum2(int x, int y, int width, int height)
-        {
+        public long GetSum2(int x, int y, int width, int height) {
             size_t a = nWidth * (y) + (x);
             size_t b = nWidth * (y + height) + (x + width);
             size_t c = nWidth * (y + height) + (x);
@@ -599,8 +560,7 @@ namespace Accord.Imaging
 #if NET45 || NET46 || NET462 || NETSTANDARD2_0
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
 #endif
-        public long GetSumT(int x, int y, int width, int height)
-        {
+        public long GetSumT(int x, int y, int width, int height) {
             size_t a = tWidth * (y + width) + (x + width + 1);
             size_t b = tWidth * (y + height) + (x - height + 1);
             size_t c = tWidth * (y) + (x + 1);
@@ -618,8 +578,7 @@ namespace Accord.Imaging
         ///   releasing, or resetting unmanaged resources.
         /// </summary>
         /// 
-        public void Dispose()
-        {
+        public void Dispose() {
             Dispose(true);
             GC.SuppressFinalize(this);
         }
@@ -629,8 +588,7 @@ namespace Accord.Imaging
         ///   before the <see cref="IntegralImage2"/> is reclaimed by garbage collection.
         /// </summary>
         /// 
-        ~IntegralImage2()
-        {
+        ~IntegralImage2() {
             Dispose(false);
         }
 
@@ -642,27 +600,22 @@ namespace Accord.Imaging
         /// and unmanaged resources; <c>false</c> to release only unmanaged
         /// resources.</param>
         /// 
-        protected virtual void Dispose(bool disposing)
-        {
-            if (disposing)
-            {
+        protected virtual void Dispose(bool disposing) {
+            if (disposing) {
                 // free managed resources
                 // (i.e. IDisposable objects)
             }
 
             // free native resources
-            if (nSumHandle.IsAllocated)
-            {
+            if (nSumHandle.IsAllocated) {
                 nSumHandle.Free();
                 nSum = null;
             }
-            if (sSumHandle.IsAllocated)
-            {
+            if (sSumHandle.IsAllocated) {
                 sSumHandle.Free();
                 sSum = null;
             }
-            if (tSumHandle.IsAllocated)
-            {
+            if (tSumHandle.IsAllocated) {
                 tSumHandle.Free();
                 tSum = null;
             }

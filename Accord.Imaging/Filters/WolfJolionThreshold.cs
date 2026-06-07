@@ -20,8 +20,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using Accord.Imaging;
     using Accord.Imaging.Filters;
     using System;
@@ -70,8 +69,7 @@ namespace Accord.Imaging.Filters
     /// <seealso cref="NiblackThreshold"/>
     /// <seealso cref="SauvolaThreshold"/>
     /// 
-    public class WolfJolionThreshold : BaseFilter
-    {
+    public class WolfJolionThreshold : BaseFilter {
         private Dictionary<PixelFormat, PixelFormat> formatTranslations;
 
         private int radius = 15;
@@ -83,8 +81,7 @@ namespace Accord.Imaging.Filters
         ///   radius. Default is 15.
         /// </summary>
         /// 
-        public int Radius
-        {
+        public int Radius {
             get { return radius; }
             set { radius = value; }
         }
@@ -94,8 +91,7 @@ namespace Accord.Imaging.Filters
         ///   parameter k. Default is 0.5.
         /// </summary>
         /// 
-        public double K
-        {
+        public double K {
             get { return k; }
             set { k = value; }
         }
@@ -105,8 +101,7 @@ namespace Accord.Imaging.Filters
         ///   standard deviation, R. Default is 128.
         /// </summary>
         /// 
-        public double R
-        {
+        public double R {
             get { return r; }
             set { r = value; }
         }
@@ -115,8 +110,7 @@ namespace Accord.Imaging.Filters
         ///   Format translations dictionary.
         /// </summary>
         /// 
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -124,8 +118,7 @@ namespace Accord.Imaging.Filters
         ///   Initializes a new instance of the <see cref="WolfJolionThreshold"/> class.
         /// </summary>
         /// 
-        public WolfJolionThreshold()
-        {
+        public WolfJolionThreshold() {
             formatTranslations = new Dictionary<PixelFormat, PixelFormat>();
             formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
             formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format24bppRgb;
@@ -141,8 +134,7 @@ namespace Accord.Imaging.Filters
         /// <param name="sourceData">Source image data.</param>
         /// <param name="destinationData">Destination image data.</param>
         /// 
-        protected override unsafe void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData)
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData) {
             int width = sourceData.Width;
             int height = sourceData.Height;
 
@@ -169,8 +161,7 @@ namespace Accord.Imaging.Filters
             UnmanagedImage var = fv.Apply(sourceData);
 
             // do the processing job
-            if (sourceData.PixelFormat == PixelFormat.Format8bppIndexed)
-            {
+            if (sourceData.PixelFormat == PixelFormat.Format8bppIndexed) {
                 byte* srcVar = (byte*)var.ImageData.ToPointer();
                 byte* srcMean = (byte*)mean.ImageData.ToPointer();
 
@@ -180,10 +171,8 @@ namespace Accord.Imaging.Filters
                 // Store minimum value from image.
                 int minG = Min(width, height, src, srcOffset);
 
-                for (int y = 0; y < height; y++)
-                {
-                    for (int x = 0; x < width; x++, src++, srcMean++, srcVar++, dst++)
-                    {
+                for (int y = 0; y < height; y++) {
+                    for (int x = 0; x < width; x++, src++, srcMean++, srcVar++, dst++) {
                         double mP = *srcMean;
                         double vP = *srcVar;
 
@@ -200,13 +189,10 @@ namespace Accord.Imaging.Filters
             }
         }
 
-        unsafe private static int Max(int width, int height, byte* src, int offset)
-        {
+        unsafe private static int Max(int width, int height, byte* src, int offset) {
             int max = 0;
-            for (int y = 0; y < height; y++)
-            {
-                for (int x = 0; x < width; x++, src++)
-                {
+            for (int y = 0; y < height; y++) {
+                for (int x = 0; x < width; x++, src++) {
                     if (*src > max)
                         max = *src;
                 }
@@ -217,13 +203,10 @@ namespace Accord.Imaging.Filters
             return max;
         }
 
-        unsafe private static int Min(int width, int height, byte* src, int offset)
-        {
+        unsafe private static int Min(int width, int height, byte* src, int offset) {
             int max = 255;
-            for (int y = 0; y < height; y++)
-            {
-                for (int x = 0; x < width; x++, src++)
-                {
+            for (int y = 0; y < height; y++) {
+                for (int x = 0; x < width; x++, src++) {
                     if (*src > max)
                         max = *src;
                 }

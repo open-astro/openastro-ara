@@ -107,7 +107,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
                                     result.PositionAngle = 360 - double.Parse(resultArr[2] + "." + resultArr[3], CultureInfo.InvariantCulture);
 
                                     result.Flipped = (double.Parse(resultArr[4] + "." + resultArr[5], CultureInfo.InvariantCulture) >= 0);
-                                    
+
                                 } else {
                                     result.Pixscale = double.Parse(resultArr[0], CultureInfo.InvariantCulture);
                                     result.PositionAngle = 360 - double.Parse(resultArr[1], CultureInfo.InvariantCulture);

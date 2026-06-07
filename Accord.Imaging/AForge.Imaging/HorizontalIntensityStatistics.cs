@@ -2,12 +2,11 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © AForge.NET, 2005-2011
+// Copyright ï¿½ AForge.NET, 2005-2011
 // contacts@aforgenet.com
 //
 
-namespace Accord.Imaging
-{
+namespace Accord.Imaging {
     using System;
     using System.Drawing;
     using System.Drawing.Imaging;
@@ -44,8 +43,7 @@ namespace Accord.Imaging
     /// 
     /// <seealso cref="VerticalIntensityStatistics"/>
     /// 
-    public class HorizontalIntensityStatistics
-    {
+    public class HorizontalIntensityStatistics {
         // histograms for RGB channgels
         private Histogram red = null;
         private Histogram green = null;
@@ -57,12 +55,9 @@ namespace Accord.Imaging
         /// Histogram for red channel.
         /// </summary>
         /// 
-        public Histogram Red
-        {
-            get
-            {
-                if (red == null)
-                {
+        public Histogram Red {
+            get {
+                if (red == null) {
                     throw new InvalidImagePropertiesException(ExceptionMessage.ColorHistogramException);
                 }
                 return red;
@@ -73,12 +68,9 @@ namespace Accord.Imaging
         /// Histogram for green channel.
         /// </summary>
         /// 
-        public Histogram Green
-        {
-            get
-            {
-                if (green == null)
-                {
+        public Histogram Green {
+            get {
+                if (green == null) {
                     throw new InvalidImagePropertiesException(ExceptionMessage.ColorHistogramException);
                 }
                 return green;
@@ -89,10 +81,8 @@ namespace Accord.Imaging
         /// Histogram for blue channel.
         /// </summary>
         /// 
-        public Histogram Blue
-        {
-            get
-            {
+        public Histogram Blue {
+            get {
                 if (blue == null)
                     throw new InvalidImagePropertiesException(ExceptionMessage.ColorHistogramException);
 
@@ -104,10 +94,8 @@ namespace Accord.Imaging
         /// Histogram for gray channel (intensities).
         /// </summary>
         /// 
-        public Histogram Gray
-        {
-            get
-            {
+        public Histogram Gray {
+            get {
                 if (gray == null)
                     throw new InvalidImagePropertiesException(ExceptionMessage.GrayHistogramException);
 
@@ -125,8 +113,7 @@ namespace Accord.Imaging
         /// should be used to retrieve histogram for particular RGB channel of the processed
         /// color image.</para></remarks>
         /// 
-        public bool IsGrayscale
-        {
+        public bool IsGrayscale {
             get { return (gray != null); }
         }
 
@@ -138,8 +125,7 @@ namespace Accord.Imaging
         ///
         /// <exception cref="UnsupportedImageFormatException">Unsupported pixel format of the source image.</exception>
         /// 
-        public HorizontalIntensityStatistics(Bitmap image)
-        {
+        public HorizontalIntensityStatistics(Bitmap image) {
             // check image format
             if (
                 (image.PixelFormat != PixelFormat.Format8bppIndexed) &&
@@ -149,8 +135,7 @@ namespace Accord.Imaging
                 (image.PixelFormat != PixelFormat.Format32bppArgb) &&
                 (image.PixelFormat != PixelFormat.Format48bppRgb) &&
                 (image.PixelFormat != PixelFormat.Format64bppArgb)
-                )
-            {
+                ) {
                 throw new UnsupportedImageFormatException("Unsupported pixel format of the source image.");
             }
 
@@ -159,13 +144,10 @@ namespace Accord.Imaging
                 new Rectangle(0, 0, image.Width, image.Height),
                 ImageLockMode.ReadOnly, image.PixelFormat);
 
-            try
-            {
+            try {
                 // gather statistics
                 ProcessImage(new UnmanagedImage(imageData));
-            }
-            finally
-            {
+            } finally {
                 // unlock image
                 image.UnlockBits(imageData);
             }
@@ -180,8 +162,7 @@ namespace Accord.Imaging
         /// <exception cref="UnsupportedImageFormatException">Unsupported pixel format of the source image.</exception>
         /// 
         public HorizontalIntensityStatistics(BitmapData imageData)
-            : this(new UnmanagedImage(imageData))
-        {
+            : this(new UnmanagedImage(imageData)) {
         }
 
         /// <summary>
@@ -192,8 +173,7 @@ namespace Accord.Imaging
         /// 
         /// <exception cref="UnsupportedImageFormatException">Unsupported pixel format of the source image.</exception>
         /// 
-        public HorizontalIntensityStatistics(UnmanagedImage image)
-        {
+        public HorizontalIntensityStatistics(UnmanagedImage image) {
             // check image format
             if (
                 (image.PixelFormat != PixelFormat.Format8bppIndexed) &&
@@ -203,8 +183,7 @@ namespace Accord.Imaging
                 (image.PixelFormat != PixelFormat.Format32bppArgb) &&
                 (image.PixelFormat != PixelFormat.Format48bppRgb) &&
                 (image.PixelFormat != PixelFormat.Format64bppArgb)
-                )
-            {
+                ) {
                 throw new UnsupportedImageFormatException("Unsupported pixel format of the source image.");
             }
 
@@ -218,8 +197,7 @@ namespace Accord.Imaging
         /// 
         /// <param name="image">Source image.</param>
         /// 
-        private void ProcessImage(UnmanagedImage image)
-        {
+        private void ProcessImage(UnmanagedImage image) {
             PixelFormat pixelFormat = image.PixelFormat;
             // get image dimension
             int width = image.Width;
@@ -228,11 +206,9 @@ namespace Accord.Imaging
             red = green = blue = gray = null;
 
             // do the job
-            unsafe
-            {
+            unsafe {
                 // check pixel format
-                if (pixelFormat == PixelFormat.Format8bppIndexed)
-                {
+                if (pixelFormat == PixelFormat.Format8bppIndexed) {
                     // 8 bpp grayscale image
                     byte* p = (byte*)image.ImageData.ToPointer();
                     int offset = image.Stride - width;
@@ -241,11 +217,9 @@ namespace Accord.Imaging
                     int[] g = new int[width];
 
                     // for each pixel
-                    for (int y = 0; y < height; y++)
-                    {
+                    for (int y = 0; y < height; y++) {
                         // for each pixel
-                        for (int x = 0; x < width; x++, p++)
-                        {
+                        for (int x = 0; x < width; x++, p++) {
                             g[x] += *p;
                         }
                         p += offset;
@@ -253,9 +227,7 @@ namespace Accord.Imaging
 
                     // create histogram for gray level
                     gray = new Histogram(g);
-                }
-                else if (pixelFormat == PixelFormat.Format16bppGrayScale)
-                {
+                } else if (pixelFormat == PixelFormat.Format16bppGrayScale) {
                     // 16 bpp grayscale image
                     byte* basePtr = (byte*)image.ImageData.ToPointer();
                     int stride = image.Stride;
@@ -264,25 +236,21 @@ namespace Accord.Imaging
                     int[] g = new int[width];
 
                     // for each pixel
-                    for (int y = 0; y < height; y++)
-                    {
+                    for (int y = 0; y < height; y++) {
                         ushort* p = (ushort*)(basePtr + stride * y);
 
                         // for each pixel
-                        for (int x = 0; x < width; x++, p++)
-                        {
+                        for (int x = 0; x < width; x++, p++) {
                             g[x] += *p;
                         }
                     }
 
                     // create historgram for gray level
                     gray = new Histogram(g);
-                }
-                else if (
-                    (pixelFormat == PixelFormat.Format24bppRgb) ||
-                    (pixelFormat == PixelFormat.Format32bppRgb) ||
-                    (pixelFormat == PixelFormat.Format32bppArgb))
-                {
+                } else if (
+                      (pixelFormat == PixelFormat.Format24bppRgb) ||
+                      (pixelFormat == PixelFormat.Format32bppRgb) ||
+                      (pixelFormat == PixelFormat.Format32bppArgb)) {
                     // 24/32 bpp color image
                     byte* p = (byte*)image.ImageData.ToPointer();
                     int pixelSize = (pixelFormat == PixelFormat.Format24bppRgb) ? 3 : 4;
@@ -294,11 +262,9 @@ namespace Accord.Imaging
                     int[] b = new int[width];
 
                     // for each line
-                    for (int y = 0; y < height; y++)
-                    {
+                    for (int y = 0; y < height; y++) {
                         // for each pixel
-                        for (int x = 0; x < width; x++, p += pixelSize)
-                        {
+                        for (int x = 0; x < width; x++, p += pixelSize) {
                             r[x] += p[RGB.R];
                             g[x] += p[RGB.G];
                             b[x] += p[RGB.B];
@@ -310,11 +276,9 @@ namespace Accord.Imaging
                     red = new Histogram(r);
                     green = new Histogram(g);
                     blue = new Histogram(b);
-                }
-                else if (
-                    (pixelFormat == PixelFormat.Format48bppRgb) ||
-                    (pixelFormat == PixelFormat.Format64bppArgb))
-                {
+                } else if (
+                      (pixelFormat == PixelFormat.Format48bppRgb) ||
+                      (pixelFormat == PixelFormat.Format64bppArgb)) {
                     // 48/64 bpp color image
                     byte* basePtr = (byte*)image.ImageData.ToPointer();
                     int stride = image.Stride;
@@ -326,13 +290,11 @@ namespace Accord.Imaging
                     int[] b = new int[width];
 
                     // for each line
-                    for (int y = 0; y < height; y++)
-                    {
+                    for (int y = 0; y < height; y++) {
                         ushort* p = (ushort*)(basePtr + stride * y);
 
                         // for each pixel
-                        for (int x = 0; x < width; x++, p += pixelSize)
-                        {
+                        for (int x = 0; x < width; x++, p += pixelSize) {
                             r[x] += p[RGB.R];
                             g[x] += p[RGB.G];
                             b[x] += p[RGB.B];

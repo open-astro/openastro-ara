@@ -51,9 +51,9 @@ public static class SequenceEndpoints {
            .WithName("ListSequences");
 
         seq.MapGet("/{id:guid}", async (Guid id, ISequenceService svc, CancellationToken ct) => {
-                var dto = await svc.GetAsync(id, ct);
-                return dto is null ? Results.NotFound() : Results.Ok(dto);
-            })
+            var dto = await svc.GetAsync(id, ct);
+            return dto is null ? Results.NotFound() : Results.Ok(dto);
+        })
            .Produces<SequenceDto>(StatusCodes.Status200OK)
            .ProducesProblem(StatusCodes.Status404NotFound)
            .WithName("GetSequence");

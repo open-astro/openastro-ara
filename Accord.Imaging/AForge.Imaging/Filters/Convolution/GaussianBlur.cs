@@ -2,14 +2,14 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © Andrew Kirillov, 2005-2009
+// Copyright ï¿½ Andrew Kirillov, 2005-2009
 // andrew.kirillov@aforgenet.com
 //
 // Accord Imaging Library
 // The Accord.NET Framework
 // http://accord-framework.net
 //
-// Copyright © César Souza, 2009-2017
+// Copyright ï¿½ Cï¿½sar Souza, 2009-2017
 // cesarsouza at gmail.com
 //
 //    This library is free software; you can redistribute it and/or
@@ -27,8 +27,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using Accord.Math;
     using System;
     using System.Drawing;
@@ -70,8 +69,7 @@ namespace Accord.Imaging.Filters
     /// 
     /// <seealso cref="Convolution"/>
     /// 
-    public sealed class GaussianBlur : Convolution
-    {
+    public sealed class GaussianBlur : Convolution {
         private double sigma = 1.4;
         private int size = 5;
 
@@ -85,11 +83,9 @@ namespace Accord.Imaging.Filters
         /// <para>Default value is set to <b>1.4</b>.</para>
         /// </remarks>
         /// 
-        public double Sigma
-        {
+        public double Sigma {
             get { return sigma; }
-            set
-            {
+            set {
                 // get new sigma value
                 sigma = Math.Max(0.5, Math.Min(5.0, value));
                 // create filter
@@ -106,11 +102,9 @@ namespace Accord.Imaging.Filters
         /// <para>Default value is set to <b>5</b>.</para>
         /// </remarks>
         /// 
-        public int Size
-        {
+        public int Size {
             get { return size; }
-            set
-            {
+            set {
                 size = Math.Max(3, Math.Min(21, value | 1));
                 CreateFilter();
             }
@@ -120,8 +114,7 @@ namespace Accord.Imaging.Filters
         /// Initializes a new instance of the <see cref="GaussianBlur"/> class.
         /// </summary>
         /// 
-        public GaussianBlur()
-        {
+        public GaussianBlur() {
             CreateFilter();
             base.ProcessAlpha = true;
         }
@@ -132,8 +125,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <param name="sigma">Gaussian sigma value.</param>
         /// 
-        public GaussianBlur(double sigma)
-        {
+        public GaussianBlur(double sigma) {
             Sigma = sigma;
             base.ProcessAlpha = true;
         }
@@ -145,8 +137,7 @@ namespace Accord.Imaging.Filters
         /// <param name="sigma">Gaussian sigma value.</param>
         /// <param name="size">Kernel size.</param>
         /// 
-        public GaussianBlur(double sigma, int size)
-        {
+        public GaussianBlur(double sigma, int size) {
             Sigma = sigma;
             Size = size;
             base.ProcessAlpha = true;
@@ -156,8 +147,7 @@ namespace Accord.Imaging.Filters
 
 
         // Create Gaussian filter
-        private void CreateFilter()
-        {
+        private void CreateFilter() {
             // create kernel
             double[,] kernel = Normal.Kernel2D(sigma * sigma, size);
 
@@ -166,10 +156,8 @@ namespace Accord.Imaging.Filters
             int divisor = 0;
             double min = kernel[0, 0];
 
-            for (int i = 0; i < size; i++)
-            {
-                for (int j = 0; j < size; j++)
-                {
+            for (int i = 0; i < size; i++) {
+                for (int j = 0; j < size; j++) {
                     double v = kernel[i, j] / min;
 
                     if (v > ushort.MaxValue)

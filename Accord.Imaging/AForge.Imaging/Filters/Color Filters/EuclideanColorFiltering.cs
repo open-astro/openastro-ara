@@ -2,12 +2,11 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © Andrew Kirillov, 2005-2010
+// Copyright ï¿½ Andrew Kirillov, 2005-2010
 // andrew.kirillov@aforgenet.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -43,21 +42,19 @@ namespace Accord.Imaging.Filters
     /// 
     /// <seealso cref="ColorFiltering"/>
     /// 
-    public class EuclideanColorFiltering : BaseInPlacePartialFilter
-    {
+    public class EuclideanColorFiltering : BaseInPlacePartialFilter {
         private short radius = 100;
-        private RGB center = new RGB( 255, 255, 255 );
-        private RGB fill = new RGB( 0, 0, 0 );
+        private RGB center = new RGB(255, 255, 255);
+        private RGB fill = new RGB(0, 0, 0);
         private bool fillOutside = true;
 
         // private format translation dictionary
-        private Dictionary<PixelFormat, PixelFormat> formatTranslations = new Dictionary<PixelFormat, PixelFormat>( );
+        private Dictionary<PixelFormat, PixelFormat> formatTranslations = new Dictionary<PixelFormat, PixelFormat>();
 
         /// <summary>
         /// Format translations dictionary.
         /// </summary>
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -67,12 +64,10 @@ namespace Accord.Imaging.Filters
         /// 
         /// <remarks>Default value is 100.</remarks>
         /// 
-        public short Radius
-        {
+        public short Radius {
             get { return radius; }
-            set
-            {
-                radius = System.Math.Max( (short) 0, System.Math.Min( (short) 450, value ) );
+            set {
+                radius = System.Math.Max((short)0, System.Math.Min((short)450, value));
             }
         }
 
@@ -82,8 +77,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <remarks>Default value is (255, 255, 255) - white color.</remarks>
         /// 
-        public RGB CenterColor
-        {
+        public RGB CenterColor {
             get { return center; }
             set { center = value; }
         }
@@ -91,8 +85,7 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Fill color used to fill filtered pixels.
         /// </summary>
-        public RGB FillColor
-        {
+        public RGB FillColor {
             get { return fill; }
             set { fill = value; }
         }
@@ -105,8 +98,7 @@ namespace Accord.Imaging.Filters
         /// <remarks><para>Default value is set to <see langword="true"/>, which means
         /// the filter removes colors outside of the specified range.</para></remarks>
         /// 
-        public bool FillOutside
-        {
+        public bool FillOutside {
             get { return fillOutside; }
             set { fillOutside = value; }
         }
@@ -116,10 +108,9 @@ namespace Accord.Imaging.Filters
         /// Initializes a new instance of the <see cref="EuclideanColorFiltering"/> class.
         /// </summary>
         /// 
-        public EuclideanColorFiltering()
-        {
-            formatTranslations[PixelFormat.Format24bppRgb]  = PixelFormat.Format24bppRgb;
-            formatTranslations[PixelFormat.Format32bppRgb]  = PixelFormat.Format32bppRgb;
+        public EuclideanColorFiltering() {
+            formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format24bppRgb;
+            formatTranslations[PixelFormat.Format32bppRgb] = PixelFormat.Format32bppRgb;
             formatTranslations[PixelFormat.Format32bppArgb] = PixelFormat.Format32bppArgb;
         }
 
@@ -130,9 +121,8 @@ namespace Accord.Imaging.Filters
         /// <param name="center">RGB sphere's center.</param>
         /// <param name="radius">RGB sphere's radius.</param>
         /// 
-        public EuclideanColorFiltering( RGB center, short radius ) :
-            this( )
-        {
+        public EuclideanColorFiltering(RGB center, short radius) :
+            this() {
             this.center = center;
             this.radius = radius;
         }
@@ -144,16 +134,15 @@ namespace Accord.Imaging.Filters
         /// <param name="image">Source image data.</param>
         /// <param name="rect">Image rectangle for processing by the filter.</param>
         ///
-        protected override unsafe void ProcessFilter( UnmanagedImage image, Rectangle rect )
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage image, Rectangle rect) {
             // get pixel size
-            int pixelSize = ( image.PixelFormat == PixelFormat.Format24bppRgb ) ? 3 : 4;
+            int pixelSize = (image.PixelFormat == PixelFormat.Format24bppRgb) ? 3 : 4;
 
-            int startX  = rect.Left;
-            int startY  = rect.Top;
-            int stopX   = startX + rect.Width;
-            int stopY   = startY + rect.Height;
-            int offset  = image.Stride - rect.Width * pixelSize;
+            int startX = rect.Left;
+            int startY = rect.Top;
+            int stopX = startX + rect.Width;
+            int stopY = startY + rect.Height;
+            int offset = image.Stride - rect.Width * pixelSize;
             int radius2 = radius * radius;
 
             int dr, dg, db;
@@ -167,37 +156,30 @@ namespace Accord.Imaging.Filters
             byte fB = fill.Blue;
 
             // do the job
-            byte* ptr = (byte*) image.ImageData.ToPointer( );
+            byte* ptr = (byte*)image.ImageData.ToPointer();
 
             // allign pointer to the first pixel to process
-            ptr += ( startY * image.Stride + startX * pixelSize );
+            ptr += (startY * image.Stride + startX * pixelSize);
 
             // for each row
-            for ( int y = startY; y < stopY; y++ )
-            {
+            for (int y = startY; y < stopY; y++) {
                 // for each pixel
-                for ( int x = startX; x < stopX; x++, ptr += pixelSize )
-                {
+                for (int x = startX; x < stopX; x++, ptr += pixelSize) {
                     dr = cR - ptr[RGB.R];
                     dg = cG - ptr[RGB.G];
                     db = cB - ptr[RGB.B];
 
                     // calculate the distance
-                    if ( dr * dr + dg * dg + db * db <= radius2 )
-                    {
+                    if (dr * dr + dg * dg + db * db <= radius2) {
                         // inside sphere
-                        if ( !fillOutside )
-                        {
+                        if (!fillOutside) {
                             ptr[RGB.R] = fR;
                             ptr[RGB.G] = fG;
                             ptr[RGB.B] = fB;
                         }
-                    }
-                    else
-                    {
+                    } else {
                         // outside sphere
-                        if ( fillOutside )
-                        {
+                        if (fillOutside) {
                             ptr[RGB.R] = fR;
                             ptr[RGB.G] = fG;
                             ptr[RGB.B] = fB;

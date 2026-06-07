@@ -18,7 +18,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider {
         public RMSError() : this(0, 0, 0, 0, 0, 1) { }
         public RMSError(double rA, double dec, double peakRA, double peakDec, double total, double scale) {
             RA = new RMSUnit(rA, rA * scale);
-            Dec = new RMSUnit(dec, dec * scale);          
+            Dec = new RMSUnit(dec, dec * scale);
             PeakRA = new RMSUnit(peakRA, peakRA * scale); ;
             PeakDec = new RMSUnit(peakDec, peakDec * scale);
             Total = new RMSUnit(total, total * scale);

@@ -50,7 +50,7 @@ namespace OpenAstroAra.Sequencer.Utility {
                     count = value;
                     RaisePropertyChanged(nameof(Count));
                     RaisePropertyChanged(nameof(TotalTime));
-                }                
+                }
             }
         }
         public string Filter { get; }

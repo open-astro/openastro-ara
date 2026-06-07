@@ -73,7 +73,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
 
                 //Extract solution coordinates
                 result = ReadResult(outputPath, parameter, imageProperties);
-            } catch(OperationCanceledException) {
+            } catch (OperationCanceledException) {
                 if (!cancelToken.IsCancellationRequested) {
                     Logger.Error("Platesolver timed out after 10 minutes");
                 }
@@ -81,10 +81,10 @@ namespace OpenAstroAra.PlateSolving.Solvers {
                 progress?.Report(new ApplicationStatus() { Status = string.Empty });
 
                 var filePrefix = FAILED_FILENAME;
-                if(!string.IsNullOrWhiteSpace(source?.MetaData?.Target?.Name)) {
+                if (!string.IsNullOrWhiteSpace(source?.MetaData?.Target?.Name)) {
                     filePrefix += $".{CoreUtil.ReplaceAllInvalidFilenameChars(source.MetaData.Target.Name)}";
                 }
-                if(parameter.Coordinates == null) {
+                if (parameter.Coordinates == null) {
                     filePrefix += ".blind";
                 }
 
@@ -106,13 +106,13 @@ namespace OpenAstroAra.PlateSolving.Solvers {
         private void MoveOrDeleteFile(PlateSolveResult result, string file, string movedFilePrefix, CancellationToken cancelToken) {
             try {
                 if (!result.Success && !cancelToken.IsCancellationRequested) {
-                    if(File.Exists(file)) {
+                    if (File.Exists(file)) {
                         var destination = Path.Combine(FAILED_DIRECTORY, $"{movedFilePrefix}.{Path.GetExtension(file)}");
                         if (File.Exists(destination)) {
                             File.Delete(destination);
                         }
                         File.Move(file, destination);
-                    }                    
+                    }
                 } else {
                     File.Delete(file);
                 }

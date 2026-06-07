@@ -27,8 +27,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging
-{
+namespace Accord.Imaging {
     using System;
     using System.Drawing;
     using System.Drawing.Imaging;
@@ -83,8 +82,7 @@ namespace Accord.Imaging
     /// </code>
     /// </remarks>
     /// 
-    public class UnmanagedImage : IDisposable
-    {
+    public class UnmanagedImage : IDisposable {
         // pointer to image data in unmanaged memory
         private IntPtr imageData;
 
@@ -104,40 +102,35 @@ namespace Accord.Imaging
         /// <summary>
         /// Pointer to image data in unmanaged memory.
         /// </summary>
-        public IntPtr ImageData
-        {
+        public IntPtr ImageData {
             get { return imageData; }
         }
 
         /// <summary>
         /// Image width in pixels.
         /// </summary>
-        public int Width
-        {
+        public int Width {
             get { return width; }
         }
 
         /// <summary>
         /// Image height in pixels.
         /// </summary>
-        public int Height
-        {
+        public int Height {
             get { return height; }
         }
 
         /// <summary>
         /// Image stride (line size in bytes).
         /// </summary>
-        public int Stride
-        {
+        public int Stride {
             get { return stride; }
         }
 
         /// <summary>
         /// Image pixel format.
         /// </summary>
-        public PixelFormat PixelFormat
-        {
+        public PixelFormat PixelFormat {
             get { return pixelFormat; }
         }
 
@@ -146,8 +139,7 @@ namespace Accord.Imaging
         /// </summary>
         /// 
         [Obsolete("Please use NumberOfBytes instead.")]
-        public int Bytes
-        {
+        public int Bytes {
             get { return NumberOfBytes; }
         }
 
@@ -155,8 +147,7 @@ namespace Accord.Imaging
         /// Gets the image size, in bytes.
         /// </summary>
         /// 
-        public int NumberOfBytes
-        {
+        public int NumberOfBytes {
             get { return stride * height; }
         }
 
@@ -164,8 +155,7 @@ namespace Accord.Imaging
         /// Gets the image size, in pixels.
         /// </summary>
         /// 
-        public int Size
-        {
+        public int Size {
             get { return width * height; }
         }
 
@@ -174,8 +164,7 @@ namespace Accord.Imaging
         /// as <see cref="Stride"/> - <see cref="Width"/> * <see cref="PixelSize"/>.
         /// </summary>
         /// 
-        public int Offset
-        {
+        public int Offset {
             get { return stride - width * PixelSize; }
         }
 
@@ -184,8 +173,7 @@ namespace Accord.Imaging
         /// example, a 8-bpp grayscale image would have pixel size 1.
         /// </summary>
         /// 
-        public int PixelSize
-        {
+        public int PixelSize {
             get { return System.Drawing.Bitmap.GetPixelFormatSize(pixelFormat) / 8; }
         }
 
@@ -203,8 +191,7 @@ namespace Accord.Imaging
         /// and correspond to unmanaged memory buffer. If some attributes are specified incorrectly,
         /// this may lead to exceptions working with the unmanaged memory.</note></para></remarks>
         /// 
-        public UnmanagedImage(IntPtr imageData, int width, int height, int stride, PixelFormat pixelFormat)
-        {
+        public UnmanagedImage(IntPtr imageData, int width, int height, int stride, PixelFormat pixelFormat) {
             init(imageData, width, height, stride, pixelFormat);
         }
 
@@ -218,13 +205,11 @@ namespace Accord.Imaging
         /// copy of managed image. This means that managed image must stay locked for the time of using the instance
         /// of unamanged image.</note></remarks>
         /// 
-        public UnmanagedImage(BitmapData bitmapData)
-        {
+        public UnmanagedImage(BitmapData bitmapData) {
             init(bitmapData.Scan0, bitmapData.Width, bitmapData.Height, bitmapData.Stride, bitmapData.PixelFormat);
         }
 
-        private void init(IntPtr imageData, int width, int height, int stride, PixelFormat pixelFormat)
-        {
+        private void init(IntPtr imageData, int width, int height, int stride, PixelFormat pixelFormat) {
             this.imageData = imageData;
             this.width = width;
             this.height = height;
@@ -236,8 +221,7 @@ namespace Accord.Imaging
         /// Destroys the instance of the <see cref="UnmanagedImage"/> class.
         /// </summary>
         /// 
-        ~UnmanagedImage()
-        {
+        ~UnmanagedImage() {
             Dispose(false);
         }
 
@@ -253,8 +237,7 @@ namespace Accord.Imaging
         /// was created using constructor, this method does not free unmanaged memory.</note></par>
         /// </remarks>
         /// 
-        public void Dispose()
-        {
+        public void Dispose() {
             Dispose(true);
             // remove me from the Finalization queue 
             GC.SuppressFinalize(this);
@@ -266,16 +249,13 @@ namespace Accord.Imaging
         /// 
         /// <param name="disposing">Indicates if disposing was initiated manually.</param>
         /// 
-        protected virtual void Dispose(bool disposing)
-        {
-            if (disposing)
-            {
+        protected virtual void Dispose(bool disposing) {
+            if (disposing) {
                 // dispose managed resources
             }
 
             // free image memory if the image was allocated using this class
-            if ((mustBeDisposed) && (imageData != IntPtr.Zero))
-            {
+            if ((mustBeDisposed) && (imageData != IntPtr.Zero)) {
                 System.Runtime.InteropServices.Marshal.FreeHGlobal(imageData);
                 System.GC.RemoveMemoryPressure(stride * height);
                 imageData = IntPtr.Zero;
@@ -290,8 +270,7 @@ namespace Accord.Imaging
         /// 
         /// <remarks><para>The method does complete cloning of the object.</para></remarks>
         /// 
-        public UnmanagedImage Clone()
-        {
+        public UnmanagedImage Clone() {
             // allocate memory for the image
             IntPtr newImageData = System.Runtime.InteropServices.Marshal.AllocHGlobal(stride * height);
             System.GC.AddMemoryPressure(stride * height);
@@ -305,8 +284,7 @@ namespace Accord.Imaging
         }
 
         [Conditional("DEBUG")]
-        internal unsafe void CheckBounds(byte* address)
-        {
+        internal unsafe void CheckBounds(byte* address) {
             byte* src = (byte*)imageData.ToPointer();
             byte* end = src + stride * height;
             if (address < src || address >= end)
@@ -324,24 +302,18 @@ namespace Accord.Imaging
         /// 
         /// <exception cref="InvalidImagePropertiesException">Destination image has different size or pixel format.</exception>
         /// 
-        public void Copy(UnmanagedImage destImage)
-        {
+        public void Copy(UnmanagedImage destImage) {
             if (
                 (width != destImage.width) || (height != destImage.height) ||
-                (pixelFormat != destImage.pixelFormat))
-            {
+                (pixelFormat != destImage.pixelFormat)) {
                 throw new InvalidImagePropertiesException("Destination image has different size or pixel format.");
             }
 
-            if (stride == destImage.stride)
-            {
+            if (stride == destImage.stride) {
                 // copy entire image
                 Accord.SystemTools.CopyUnmanagedMemory(destImage.imageData, imageData, stride * height);
-            }
-            else
-            {
-                unsafe
-                {
+            } else {
+                unsafe {
                     int dstStride = destImage.stride;
                     int copyLength = (stride < dstStride) ? stride : dstStride;
 
@@ -349,8 +321,7 @@ namespace Accord.Imaging
                     byte* dst = (byte*)destImage.imageData.ToPointer();
 
                     // copy line by line
-                    for (int i = 0; i < height; i++)
-                    {
+                    for (int i = 0; i < height; i++) {
                         Accord.SystemTools.CopyUnmanagedMemory(dst, src, copyLength);
 
                         dst += dstStride;
@@ -391,15 +362,13 @@ namespace Accord.Imaging
         /// <exception cref="UnsupportedImageFormatException">Unsupported pixel format was specified.</exception>
         /// <exception cref="InvalidImagePropertiesException">Invalid image size was specified.</exception>
         /// 
-        public static UnmanagedImage Create(int width, int height, PixelFormat pixelFormat)
-        {
+        public static UnmanagedImage Create(int width, int height, PixelFormat pixelFormat) {
             int bytesPerPixel = GetBytesPerPixel(pixelFormat);
 
             // calculate stride
             int stride = width * bytesPerPixel;
 
-            if (stride % 4 != 0)
-            {
+            if (stride % 4 != 0) {
                 stride += (4 - (stride % 4));
             }
 
@@ -438,8 +407,7 @@ namespace Accord.Imaging
         /// <exception cref="UnsupportedImageFormatException">Unsupported pixel format was specified.</exception>
         /// <exception cref="InvalidImagePropertiesException">Invalid image size was specified.</exception>
         /// 
-        public static UnmanagedImage Create(int width, int height, int stride, PixelFormat pixelFormat)
-        {
+        public static UnmanagedImage Create(int width, int height, int stride, PixelFormat pixelFormat) {
 
             // check image size
             if ((width <= 0) || (height <= 0))
@@ -459,11 +427,9 @@ namespace Accord.Imaging
             return image;
         }
 
-        private static int GetBytesPerPixel(PixelFormat pixelFormat)
-        {
+        private static int GetBytesPerPixel(PixelFormat pixelFormat) {
             // calculate bytes per pixel
-            switch (pixelFormat)
-            {
+            switch (pixelFormat) {
                 case PixelFormat.Format8bppIndexed:
                     return 1;
                 case PixelFormat.Format16bppGrayScale:
@@ -494,8 +460,7 @@ namespace Accord.Imaging
         /// same size and pixel format (it calls <see cref="ToManagedImage(bool)"/> specifying
         /// <see langword="true"/> for the <b>makeCopy</b> parameter).</para></remarks>
         /// 
-        public Bitmap ToManagedImage()
-        {
+        public Bitmap ToManagedImage() {
             return ToManagedImage(true);
         }
 
@@ -518,22 +483,16 @@ namespace Accord.Imaging
         /// <see cref="UnmanagedImage(IntPtr, int, int, int, PixelFormat)"/> constructor specifying some
         /// invalid parameters.</exception>
         /// 
-        public Bitmap ToManagedImage(bool makeCopy)
-        {
+        public Bitmap ToManagedImage(bool makeCopy) {
             Bitmap dstImage = null;
 
-            try
-            {
-                if (!makeCopy)
-                {
+            try {
+                if (!makeCopy) {
                     dstImage = new Bitmap(width, height, stride, pixelFormat, imageData);
-                    if (pixelFormat == PixelFormat.Format8bppIndexed)
-                    {
+                    if (pixelFormat == PixelFormat.Format8bppIndexed) {
                         Image.SetGrayscalePalette(dstImage);
                     }
-                }
-                else
-                {
+                } else {
                     // create new image of required format
                     dstImage = (pixelFormat == PixelFormat.Format8bppIndexed) ?
                         Accord.Imaging.Image.CreateGrayscaleImage(width, height) :
@@ -545,23 +504,18 @@ namespace Accord.Imaging
                     int dstStride = dstData.Stride;
                     int lineSize = Math.Min(stride, dstStride);
 
-                    unsafe
-                    {
+                    unsafe {
                         byte* dst = (byte*)dstData.Scan0.ToPointer();
                         byte* src = (byte*)imageData.ToPointer();
 
-                        if (stride != dstStride)
-                        {
+                        if (stride != dstStride) {
                             // copy image
-                            for (int y = 0; y < height; y++)
-                            {
+                            for (int y = 0; y < height; y++) {
                                 Accord.SystemTools.CopyUnmanagedMemory(dst, src, lineSize);
                                 dst += dstStride;
                                 src += stride;
                             }
-                        }
-                        else
-                        {
+                        } else {
                             Accord.SystemTools.CopyUnmanagedMemory(dst, src, stride * height);
                         }
                     }
@@ -571,11 +525,8 @@ namespace Accord.Imaging
                 }
 
                 return dstImage;
-            }
-            catch (Exception)
-            {
-                if (dstImage != null)
-                {
+            } catch (Exception) {
+                if (dstImage != null) {
                     dstImage.Dispose();
                 }
 
@@ -599,19 +550,16 @@ namespace Accord.Imaging
         /// 
         /// <exception cref="UnsupportedImageFormatException">Unsupported pixel format of source image.</exception>
         /// 
-        public static UnmanagedImage FromByteArray(byte[] bytes, int width, int height, PixelFormat pixelFormat)
-        {
+        public static UnmanagedImage FromByteArray(byte[] bytes, int width, int height, PixelFormat pixelFormat) {
             int pixelSize = pixelFormat.GetPixelFormatSizeInBytes();
             if (bytes.Length != width * height * pixelSize)
                 throw new ArgumentException("The vector of bytes needs to have length (width * height * pixelSize)", "bytes");
 
             UnmanagedImage image = UnmanagedImage.Create(width, height, width * pixelSize, pixelFormat);
 
-            unsafe
-            {
+            unsafe {
                 byte* dst = (byte*)image.ImageData;
-                fixed (byte* src = bytes)
-                {
+                fixed (byte* src = bytes) {
                     Accord.SystemTools.CopyUnmanagedMemory(dst, src, bytes.Length);
                 }
             }
@@ -632,18 +580,14 @@ namespace Accord.Imaging
         /// 
         /// <exception cref="UnsupportedImageFormatException">Unsupported pixel format of source image.</exception>
         /// 
-        public static UnmanagedImage FromManagedImage(Bitmap image)
-        {
+        public static UnmanagedImage FromManagedImage(Bitmap image) {
             UnmanagedImage dstImage = null;
 
             BitmapData sourceData = image.LockBits(ImageLockMode.ReadOnly);
 
-            try
-            {
+            try {
                 dstImage = FromManagedImage(sourceData);
-            }
-            finally
-            {
+            } finally {
                 image.UnlockBits(sourceData);
             }
 
@@ -664,8 +608,7 @@ namespace Accord.Imaging
         /// 
         /// <exception cref="UnsupportedImageFormatException">Unsupported pixel format of source image.</exception>
         /// 
-        public static UnmanagedImage FromManagedImage(BitmapData imageData)
-        {
+        public static UnmanagedImage FromManagedImage(BitmapData imageData) {
             PixelFormat pixelFormat = imageData.PixelFormat;
 
             // check source pixel format
@@ -678,16 +621,14 @@ namespace Accord.Imaging
                 (pixelFormat != PixelFormat.Format32bppPArgb) &&
                 (pixelFormat != PixelFormat.Format48bppRgb) &&
                 (pixelFormat != PixelFormat.Format64bppArgb) &&
-                (pixelFormat != PixelFormat.Format64bppPArgb))
-            {
+                (pixelFormat != PixelFormat.Format64bppPArgb)) {
                 throw new UnsupportedImageFormatException("Unsupported pixel format of the source image.");
             }
 
             return FromUnmanagedData(imageData.Scan0, imageData.Width, imageData.Height, imageData.Stride, pixelFormat);
         }
 
-        private static UnmanagedImage FromUnmanagedData(IntPtr imageData, int width, int height, int stride, PixelFormat pixelFormat)
-        {
+        private static UnmanagedImage FromUnmanagedData(IntPtr imageData, int width, int height, int stride, PixelFormat pixelFormat) {
             // allocate memory for the image
             IntPtr dstImageData = Marshal.AllocHGlobal(stride * height);
             System.GC.AddMemoryPressure(stride * height);
@@ -725,38 +666,30 @@ namespace Accord.Imaging
         /// <exception cref="UnsupportedImageFormatException">Unsupported pixel format of the source image. Use Collect16bppPixelValues() method for
         /// images with 16 bpp channels.</exception>
         /// 
-        public byte[] Collect8bppPixelValues(List<IntPoint> points)
-        {
+        public byte[] Collect8bppPixelValues(List<IntPoint> points) {
             int pixelSize = Bitmap.GetPixelFormatSize(pixelFormat) / 8;
 
-            if ((pixelFormat == PixelFormat.Format16bppGrayScale) || (pixelSize > 4))
-            {
+            if ((pixelFormat == PixelFormat.Format16bppGrayScale) || (pixelSize > 4)) {
                 throw new UnsupportedImageFormatException("Unsupported pixel format of the source image. Use Collect16bppPixelValues() method for it.");
             }
 
             byte[] pixelValues = new byte[points.Count * ((pixelFormat == PixelFormat.Format8bppIndexed) ? 1 : 3)];
 
-            unsafe
-            {
+            unsafe {
                 byte* basePtr = (byte*)imageData.ToPointer();
                 byte* ptr;
 
-                if (pixelFormat == PixelFormat.Format8bppIndexed)
-                {
+                if (pixelFormat == PixelFormat.Format8bppIndexed) {
                     int i = 0;
 
-                    foreach (IntPoint point in points)
-                    {
+                    foreach (IntPoint point in points) {
                         ptr = basePtr + stride * point.Y + point.X;
                         pixelValues[i++] = *ptr;
                     }
-                }
-                else
-                {
+                } else {
                     int i = 0;
 
-                    foreach (IntPoint point in points)
-                    {
+                    foreach (IntPoint point in points) {
                         ptr = basePtr + stride * point.Y + point.X * pixelSize;
                         pixelValues[i++] = ptr[RGB.R];
                         pixelValues[i++] = ptr[RGB.G];
@@ -774,8 +707,7 @@ namespace Accord.Imaging
         /// 
         /// <returns>Returns list of points, which have other than black color.</returns>
         /// 
-        public List<IntPoint> CollectActivePixels()
-        {
+        public List<IntPoint> CollectActivePixels() {
             return CollectActivePixels(new Rectangle(0, 0, width, height));
         }
 
@@ -787,8 +719,7 @@ namespace Accord.Imaging
         /// 
         /// <returns>Returns list of points, which have other than black color.</returns>
         ///
-        public List<IntPoint> CollectActivePixels(Rectangle rect)
-        {
+        public List<IntPoint> CollectActivePixels(Rectangle rect) {
             List<IntPoint> pixels = new List<IntPoint>();
 
             int pixelSize = Bitmap.GetPixelFormatSize(pixelFormat) / 8;
@@ -801,66 +732,46 @@ namespace Accord.Imaging
             int stopX = rect.Right;
             int stopY = rect.Bottom;
 
-            unsafe
-            {
+            unsafe {
                 byte* basePtr = (byte*)imageData.ToPointer();
 
-                if ((pixelFormat == PixelFormat.Format16bppGrayScale) || (pixelSize > 4))
-                {
+                if ((pixelFormat == PixelFormat.Format16bppGrayScale) || (pixelSize > 4)) {
                     int pixelWords = pixelSize >> 1;
 
-                    for (int y = startY; y < stopY; y++)
-                    {
+                    for (int y = startY; y < stopY; y++) {
                         ushort* ptr = (ushort*)(basePtr + y * stride + startX * pixelSize);
 
-                        if (pixelWords == 1)
-                        {
+                        if (pixelWords == 1) {
                             // grayscale images
-                            for (int x = startX; x < stopX; x++, ptr++)
-                            {
-                                if (*ptr != 0)
-                                {
+                            for (int x = startX; x < stopX; x++, ptr++) {
+                                if (*ptr != 0) {
                                     pixels.Add(new IntPoint(x, y));
                                 }
                             }
-                        }
-                        else
-                        {
+                        } else {
                             // color images
-                            for (int x = startX; x < stopX; x++, ptr += pixelWords)
-                            {
-                                if ((ptr[RGB.R] != 0) || (ptr[RGB.G] != 0) || (ptr[RGB.B] != 0))
-                                {
+                            for (int x = startX; x < stopX; x++, ptr += pixelWords) {
+                                if ((ptr[RGB.R] != 0) || (ptr[RGB.G] != 0) || (ptr[RGB.B] != 0)) {
                                     pixels.Add(new IntPoint(x, y));
                                 }
                             }
                         }
                     }
-                }
-                else
-                {
-                    for (int y = startY; y < stopY; y++)
-                    {
+                } else {
+                    for (int y = startY; y < stopY; y++) {
                         byte* ptr = basePtr + y * stride + startX * pixelSize;
 
-                        if (pixelSize == 1)
-                        {
+                        if (pixelSize == 1) {
                             // grayscale images
-                            for (int x = startX; x < stopX; x++, ptr++)
-                            {
-                                if (*ptr != 0)
-                                {
+                            for (int x = startX; x < stopX; x++, ptr++) {
+                                if (*ptr != 0) {
                                     pixels.Add(new IntPoint(x, y));
                                 }
                             }
-                        }
-                        else
-                        {
+                        } else {
                             // color images
-                            for (int x = startX; x < stopX; x++, ptr += pixelSize)
-                            {
-                                if ((ptr[RGB.R] != 0) || (ptr[RGB.G] != 0) || (ptr[RGB.B] != 0))
-                                {
+                            for (int x = startX; x < stopX; x++, ptr += pixelSize) {
+                                if ((ptr[RGB.R] != 0) || (ptr[RGB.G] != 0) || (ptr[RGB.B] != 0)) {
                                     pixels.Add(new IntPoint(x, y));
                                 }
                             }
@@ -882,10 +793,8 @@ namespace Accord.Imaging
         /// <remarks><para><note>For images having 16 bpp per color plane, the method extends the specified color
         /// value to 16 bit by multiplying it by 256.</note></para></remarks>
         ///
-        public void SetPixels(List<IntPoint> coordinates, Color color)
-        {
-            unsafe
-            {
+        public void SetPixels(List<IntPoint> coordinates, Color color) {
+            unsafe {
                 int pixelSize = Bitmap.GetPixelFormatSize(pixelFormat) / 8;
                 byte* basePtr = (byte*)imageData.ToPointer();
 
@@ -894,16 +803,12 @@ namespace Accord.Imaging
                 byte blue = color.B;
                 byte alpha = color.A;
 
-                switch (pixelFormat)
-                {
-                    case PixelFormat.Format8bppIndexed:
-                        {
+                switch (pixelFormat) {
+                    case PixelFormat.Format8bppIndexed: {
                             byte grayValue = (byte)(0.2125 * red + 0.7154 * green + 0.0721 * blue);
 
-                            foreach (IntPoint point in coordinates)
-                            {
-                                if ((point.X >= 0) && (point.Y >= 0) && (point.X < width) && (point.Y < height))
-                                {
+                            foreach (IntPoint point in coordinates) {
+                                if ((point.X >= 0) && (point.Y >= 0) && (point.X < width) && (point.Y < height)) {
                                     byte* ptr = basePtr + point.Y * stride + point.X;
                                     *ptr = grayValue;
                                 }
@@ -912,14 +817,11 @@ namespace Accord.Imaging
                         break;
 
                     case PixelFormat.Format24bppRgb:
-                    case PixelFormat.Format32bppRgb:
-                        {
+                    case PixelFormat.Format32bppRgb: {
 
 
-                            foreach (IntPoint point in coordinates)
-                            {
-                                if ((point.X >= 0) && (point.Y >= 0) && (point.X < width) && (point.Y < height))
-                                {
+                            foreach (IntPoint point in coordinates) {
+                                if ((point.X >= 0) && (point.Y >= 0) && (point.X < width) && (point.Y < height)) {
                                     byte* ptr = basePtr + point.Y * stride + point.X * pixelSize;
                                     ptr[RGB.R] = red;
                                     ptr[RGB.G] = green;
@@ -929,12 +831,9 @@ namespace Accord.Imaging
                         }
                         break;
 
-                    case PixelFormat.Format32bppArgb:
-                        {
-                            foreach (IntPoint point in coordinates)
-                            {
-                                if ((point.X >= 0) && (point.Y >= 0) && (point.X < width) && (point.Y < height))
-                                {
+                    case PixelFormat.Format32bppArgb: {
+                            foreach (IntPoint point in coordinates) {
+                                if ((point.X >= 0) && (point.Y >= 0) && (point.X < width) && (point.Y < height)) {
                                     byte* ptr = basePtr + point.Y * stride + point.X * pixelSize;
                                     ptr[RGB.R] = red;
                                     ptr[RGB.G] = green;
@@ -945,14 +844,11 @@ namespace Accord.Imaging
                         }
                         break;
 
-                    case PixelFormat.Format16bppGrayScale:
-                        {
+                    case PixelFormat.Format16bppGrayScale: {
                             ushort grayValue = (ushort)((ushort)(0.2125 * red + 0.7154 * green + 0.0721 * blue) << 8);
 
-                            foreach (IntPoint point in coordinates)
-                            {
-                                if ((point.X >= 0) && (point.Y >= 0) && (point.X < width) && (point.Y < height))
-                                {
+                            foreach (IntPoint point in coordinates) {
+                                if ((point.X >= 0) && (point.Y >= 0) && (point.X < width) && (point.Y < height)) {
                                     ushort* ptr = (ushort*)(basePtr + point.Y * stride) + point.X;
                                     *ptr = grayValue;
                                 }
@@ -960,16 +856,13 @@ namespace Accord.Imaging
                         }
                         break;
 
-                    case PixelFormat.Format48bppRgb:
-                        {
+                    case PixelFormat.Format48bppRgb: {
                             ushort red16 = (ushort)(red << 8);
                             ushort green16 = (ushort)(green << 8);
                             ushort blue16 = (ushort)(blue << 8);
 
-                            foreach (IntPoint point in coordinates)
-                            {
-                                if ((point.X >= 0) && (point.Y >= 0) && (point.X < width) && (point.Y < height))
-                                {
+                            foreach (IntPoint point in coordinates) {
+                                if ((point.X >= 0) && (point.Y >= 0) && (point.X < width) && (point.Y < height)) {
                                     ushort* ptr = (ushort*)(basePtr + point.Y * stride + point.X * pixelSize);
                                     ptr[RGB.R] = red16;
                                     ptr[RGB.G] = green16;
@@ -979,17 +872,14 @@ namespace Accord.Imaging
                         }
                         break;
 
-                    case PixelFormat.Format64bppArgb:
-                        {
+                    case PixelFormat.Format64bppArgb: {
                             ushort red16 = (ushort)(red << 8);
                             ushort green16 = (ushort)(green << 8);
                             ushort blue16 = (ushort)(blue << 8);
                             ushort alpha16 = (ushort)(alpha << 8);
 
-                            foreach (IntPoint point in coordinates)
-                            {
-                                if ((point.X >= 0) && (point.Y >= 0) && (point.X < width) && (point.Y < height))
-                                {
+                            foreach (IntPoint point in coordinates) {
+                                if ((point.X >= 0) && (point.Y >= 0) && (point.X < width) && (point.Y < height)) {
                                     ushort* ptr = (ushort*)(basePtr + point.Y * stride + point.X * pixelSize);
                                     ptr[RGB.R] = red16;
                                     ptr[RGB.G] = green16;
@@ -1015,8 +905,7 @@ namespace Accord.Imaging
         /// 
         /// <remarks><para>See <see cref="SetPixel(int, int, Color)"/> for more information.</para></remarks>
         ///
-        public void SetPixel(IntPoint point, Color color)
-        {
+        public void SetPixel(IntPoint point, Color color) {
             SetPixel(point.X, point.Y, color);
         }
 
@@ -1038,8 +927,7 @@ namespace Accord.Imaging
         /// </para>
         /// </remarks>
         /// 
-        public void SetPixel(int x, int y, Color color)
-        {
+        public void SetPixel(int x, int y, Color color) {
             SetPixel(x, y, color.R, color.G, color.B, color.A);
         }
 
@@ -1060,23 +948,18 @@ namespace Accord.Imaging
         /// value to 16 bit by multiplying it by 256.</note></para>
         /// </remarks>
         /// 
-        public void SetPixel(int x, int y, byte value)
-        {
+        public void SetPixel(int x, int y, byte value) {
             SetPixel(x, y, value, value, value, 255);
         }
 
-        private void SetPixel(int x, int y, byte r, byte g, byte b, byte a)
-        {
-            if ((x >= 0) && (y >= 0) && (x < width) && (y < height))
-            {
-                unsafe
-                {
+        private void SetPixel(int x, int y, byte r, byte g, byte b, byte a) {
+            if ((x >= 0) && (y >= 0) && (x < width) && (y < height)) {
+                unsafe {
                     int pixelSize = Bitmap.GetPixelFormatSize(pixelFormat) / 8;
                     byte* ptr = (byte*)imageData.ToPointer() + y * stride + x * pixelSize;
                     ushort* ptr2 = (ushort*)ptr;
 
-                    switch (pixelFormat)
-                    {
+                    switch (pixelFormat) {
                         case PixelFormat.Format8bppIndexed:
                             *ptr = (byte)(0.2125 * r + 0.7154 * g + 0.0721 * b);
                             break;
@@ -1129,8 +1012,7 @@ namespace Accord.Imaging
         /// 
         /// <remarks><para>See <see cref="GetPixel(int, int)"/> for more information.</para></remarks>
         ///
-        public Color GetPixel(IntPoint point)
-        {
+        public Color GetPixel(IntPoint point) {
             return GetPixel(point.X, point.Y);
         }
 
@@ -1153,27 +1035,22 @@ namespace Accord.Imaging
         /// <exception cref="ArgumentOutOfRangeException">The specified pixel coordinate is out of image's bounds.</exception>
         /// <exception cref="UnsupportedImageFormatException">Pixel format of this image is not supported by the method.</exception>
         /// 
-        public Color GetPixel(int x, int y)
-        {
-            if ((x < 0) || (y < 0))
-            {
+        public Color GetPixel(int x, int y) {
+            if ((x < 0) || (y < 0)) {
                 throw new ArgumentOutOfRangeException("x", "The specified pixel coordinate is out of image's bounds.");
             }
 
-            if ((x >= width) || (y >= height))
-            {
+            if ((x >= width) || (y >= height)) {
                 throw new ArgumentOutOfRangeException("y", "The specified pixel coordinate is out of image's bounds.");
             }
 
             Color color = new Color();
 
-            unsafe
-            {
+            unsafe {
                 int pixelSize = Bitmap.GetPixelFormatSize(pixelFormat) / 8;
                 byte* ptr = (byte*)imageData.ToPointer() + y * stride + x * pixelSize;
 
-                switch (pixelFormat)
-                {
+                switch (pixelFormat) {
                     case PixelFormat.Format8bppIndexed:
                         color = Color.FromArgb(*ptr, *ptr, *ptr);
                         break;
@@ -1221,38 +1098,30 @@ namespace Accord.Imaging
         /// <exception cref="UnsupportedImageFormatException">Unsupported pixel format of the source image. Use Collect8bppPixelValues() method for
         /// images with 8 bpp channels.</exception>
         ///
-        public ushort[] Collect16bppPixelValues(List<IntPoint> points)
-        {
+        public ushort[] Collect16bppPixelValues(List<IntPoint> points) {
             int pixelSize = Bitmap.GetPixelFormatSize(pixelFormat) / 8;
 
-            if ((pixelFormat == PixelFormat.Format8bppIndexed) || (pixelSize == 3) || (pixelSize == 4))
-            {
+            if ((pixelFormat == PixelFormat.Format8bppIndexed) || (pixelSize == 3) || (pixelSize == 4)) {
                 throw new UnsupportedImageFormatException("Unsupported pixel format of the source image. Use Collect8bppPixelValues() method for it.");
             }
 
             ushort[] pixelValues = new ushort[points.Count * ((pixelFormat == PixelFormat.Format16bppGrayScale) ? 1 : 3)];
 
-            unsafe
-            {
+            unsafe {
                 byte* basePtr = (byte*)imageData.ToPointer();
                 ushort* ptr;
 
-                if (pixelFormat == PixelFormat.Format16bppGrayScale)
-                {
+                if (pixelFormat == PixelFormat.Format16bppGrayScale) {
                     int i = 0;
 
-                    foreach (IntPoint point in points)
-                    {
+                    foreach (IntPoint point in points) {
                         ptr = (ushort*)(basePtr + stride * point.Y + point.X * pixelSize);
                         pixelValues[i++] = *ptr;
                     }
-                }
-                else
-                {
+                } else {
                     int i = 0;
 
-                    foreach (IntPoint point in points)
-                    {
+                    foreach (IntPoint point in points) {
                         ptr = (ushort*)(basePtr + stride * point.Y + point.X * pixelSize);
                         pixelValues[i++] = ptr[RGB.R];
                         pixelValues[i++] = ptr[RGB.G];
@@ -1268,8 +1137,7 @@ namespace Accord.Imaging
         ///   Converts the image into a sequence of bytes.
         /// </summary>
         /// 
-        public byte[] ToByteArray()
-        {
+        public byte[] ToByteArray() {
             // Note: actualNumberOfBytes is different from this.NumberOfBytes
             // because it does not need to take the GDI+ stride into account
 
@@ -1279,11 +1147,9 @@ namespace Accord.Imaging
 
             int offset = Offset;
 
-            unsafe
-            {
+            unsafe {
                 byte* src = (byte*)this.ImageData;
-                for (int y = 0, k = 0; y < height; y++)
-                {
+                for (int y = 0, k = 0; y < height; y++) {
                     for (int x = 0; x < width; x++)
                         for (int c = 0; c < pixelSize; c++, k++, src++)
                             bytes[k] = *src;

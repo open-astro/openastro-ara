@@ -141,8 +141,7 @@ public sealed class PlaceholderSequencerService : ISequencerService {
                 run.CurrentInstructionDescription = $"capture #{i + 1}";
                 await EmitAsync("sequence.instruction_started", sequenceId, run);
 
-                try { await Task.Delay(MockInstructionDurationMs, run.Cts.Token); }
-                catch (OperationCanceledException) { break; }
+                try { await Task.Delay(MockInstructionDurationMs, run.Cts.Token); } catch (OperationCanceledException) { break; }
 
                 run.FramesCompleted = i + 1;
                 await EmitAsync("sequence.instruction_complete", sequenceId, run);

@@ -6,8 +6,7 @@
 // andrew.kirillov@aforgenet.com
 //
 
-namespace Accord.Imaging
-{
+namespace Accord.Imaging {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -112,8 +111,7 @@ namespace Accord.Imaging
     /// 
     /// <seealso cref="HoughLineTransformation"/>
     /// 
-    public class HoughLine : IComparable<HoughLine>
-    {
+    public class HoughLine : IComparable<HoughLine> {
         /// <summary>
         /// Line's slope - angle between polar axis and line's radius (normal going
         /// from pole to the line). Measured in degrees, [0, 180).
@@ -167,8 +165,7 @@ namespace Accord.Imaging
         /// <param name="intensity">Line's absolute intensity.</param>
         /// <param name="relativeIntensity">Line's relative intensity.</param>
         /// 
-        public HoughLine(double theta, short radius, short intensity, double relativeIntensity)
-        {
+        public HoughLine(double theta, short radius, short intensity, double relativeIntensity) {
             Theta = theta;
             Radius = radius;
             Intensity = intensity;
@@ -191,8 +188,7 @@ namespace Accord.Imaging
         /// <para><note>Object are compared using their <see cref="Intensity">intensity</see> value.</note></para>
         /// </remarks>
         /// 
-        public int CompareTo(HoughLine other)
-        {
+        public int CompareTo(HoughLine other) {
             if (Intensity == other.Intensity)
                 return -(Radius.CompareTo(other.Radius));
             return -(Intensity.CompareTo(other.Intensity));
@@ -202,8 +198,7 @@ namespace Accord.Imaging
         /// Returns a <see cref="System.String" /> that represents this instance.
         /// </summary>
         /// 
-        public override string ToString()
-        {
+        public override string ToString() {
             return "Theta: {0}, radius: {1}, intensity: {2}".Format(Theta, Radius, Intensity);
         }
 
@@ -214,15 +209,13 @@ namespace Accord.Imaging
         /// <param name="image">The image where this Hough line should be drawn to.</param>
         /// <param name="color">The color to be used when drawing the line.</param>
         /// 
-        public void Draw(UnmanagedImage image, Color color)
-        {
+        public void Draw(UnmanagedImage image, Color color) {
             // get line's radius and theta values
             int r = this.Radius;
             double t = this.Theta;
 
             // check if line is in lower part of the image
-            if (r < 0)
-            {
+            if (r < 0) {
                 t += 180;
                 r = -r;
             }
@@ -236,8 +229,7 @@ namespace Accord.Imaging
 
             double x0 = 0, x1 = 0, y0 = 0, y1 = 0;
 
-            if (this.Theta != 0)
-            {
+            if (this.Theta != 0) {
                 // none-vertical line
                 x0 = -w2; // most left point
                 x1 = w2;  // most right point
@@ -245,9 +237,7 @@ namespace Accord.Imaging
                 // calculate corresponding y values
                 y0 = (-Math.Cos(t) * x0 + r) / Math.Sin(t);
                 y1 = (-Math.Cos(t) * x1 + r) / Math.Sin(t);
-            }
-            else
-            {
+            } else {
                 // vertical line
                 x0 = this.Radius;
                 x1 = this.Radius;
@@ -314,8 +304,7 @@ namespace Accord.Imaging
     /// 
     /// <seealso cref="HoughLine"/>
     /// 
-    public class HoughLineTransformation
-    {
+    public class HoughLineTransformation {
         // Hough transformation quality settings
         private int stepsPerDegree;
         private int houghHeight;
@@ -341,11 +330,9 @@ namespace Accord.Imaging
         /// 
         /// <para>Default value is set to <b>1</b>. Minimum value is <b>1</b>. Maximum value is <b>10</b>.</para></remarks>
         /// 
-        public int StepsPerDegree
-        {
+        public int StepsPerDegree {
             get { return stepsPerDegree; }
-            set
-            {
+            set {
                 stepsPerDegree = Math.Max(1, Math.Min(10, value));
                 houghHeight = 180 * stepsPerDegree;
                 thetaStep = Math.PI / houghHeight;
@@ -354,8 +341,7 @@ namespace Accord.Imaging
                 sinMap = new double[houghHeight];
                 cosMap = new double[houghHeight];
 
-                for (int i = 0; i < houghHeight; i++)
-                {
+                for (int i = 0; i < houghHeight; i++) {
                     sinMap[i] = Math.Sin(i * thetaStep);
                     cosMap[i] = Math.Cos(i * thetaStep);
                 }
@@ -371,8 +357,7 @@ namespace Accord.Imaging
         /// 
         /// <para>Default value is set to <b>10</b>.</para></remarks>
         ///
-        public short MinLineIntensity
-        {
+        public short MinLineIntensity {
             get { return minLineIntensity; }
             set { minLineIntensity = value; }
         }
@@ -386,8 +371,7 @@ namespace Accord.Imaging
         /// 
         /// <para>Default value is set to <b>4</b>. Minimum value is <b>1</b>. Maximum value is <b>10</b>.</para></remarks>
         /// 
-        public int LocalPeakRadius
-        {
+        public int LocalPeakRadius {
             get { return localPeakRadius; }
             set { localPeakRadius = Math.Max(1, Math.Min(10, value)); }
         }
@@ -398,8 +382,7 @@ namespace Accord.Imaging
         /// 
         /// <remarks><para>The property provides maximum found line's intensity.</para></remarks>
         /// 
-        public short MaxIntensity
-        {
+        public short MaxIntensity {
             get { return maxMapIntensity; }
         }
 
@@ -410,8 +393,7 @@ namespace Accord.Imaging
         /// <remarks><para>The property provides total number of found lines, which intensity is higher (or equal to),
         /// than the requested <see cref="MinLineIntensity">minimum intensity</see>.</para></remarks>
         /// 
-        public int LinesCount
-        {
+        public int LinesCount {
             get { return lines.Count; }
         }
 
@@ -419,8 +401,7 @@ namespace Accord.Imaging
         /// Initializes a new instance of the <see cref="HoughLineTransformation"/> class.
         /// </summary>
         /// 
-        public HoughLineTransformation()
-        {
+        public HoughLineTransformation() {
             StepsPerDegree = 1;
         }
 
@@ -432,8 +413,7 @@ namespace Accord.Imaging
         /// 
         /// <exception cref="UnsupportedImageFormatException">Unsupported pixel format of the source image.</exception>
         /// 
-        public void ProcessImage(Bitmap image)
-        {
+        public void ProcessImage(Bitmap image) {
             ProcessImage(image, new Rectangle(0, 0, image.Width, image.Height));
         }
 
@@ -446,24 +426,19 @@ namespace Accord.Imaging
         /// 
         /// <exception cref="UnsupportedImageFormatException">Unsupported pixel format of the source image.</exception>
         /// 
-        public void ProcessImage(Bitmap image, Rectangle rect)
-        {
+        public void ProcessImage(Bitmap image, Rectangle rect) {
             // check image format
-            if (image.PixelFormat != PixelFormat.Format8bppIndexed)
-            {
+            if (image.PixelFormat != PixelFormat.Format8bppIndexed) {
                 throw new UnsupportedImageFormatException("Unsupported pixel format of the source image.");
             }
 
             // lock source image
             BitmapData imageData = image.LockBits(ImageLockMode.ReadOnly);
 
-            try
-            {
+            try {
                 // process the image
                 ProcessImage(new UnmanagedImage(imageData), rect);
-            }
-            finally
-            {
+            } finally {
                 // unlock image
                 image.UnlockBits(imageData);
             }
@@ -477,8 +452,7 @@ namespace Accord.Imaging
         /// 
         /// <exception cref="UnsupportedImageFormatException">Unsupported pixel format of the source image.</exception>
         /// 
-        public void ProcessImage(BitmapData imageData)
-        {
+        public void ProcessImage(BitmapData imageData) {
             ProcessImage(new UnmanagedImage(imageData),
                 new Rectangle(0, 0, imageData.Width, imageData.Height));
         }
@@ -492,8 +466,7 @@ namespace Accord.Imaging
         /// 
         /// <exception cref="UnsupportedImageFormatException">Unsupported pixel format of the source image.</exception>
         /// 
-        public void ProcessImage(BitmapData imageData, Rectangle rect)
-        {
+        public void ProcessImage(BitmapData imageData, Rectangle rect) {
             ProcessImage(new UnmanagedImage(imageData), rect);
         }
 
@@ -505,8 +478,7 @@ namespace Accord.Imaging
         /// 
         /// <exception cref="UnsupportedImageFormatException">Unsupported pixel format of the source image.</exception>
         /// 
-        public void ProcessImage(UnmanagedImage image)
-        {
+        public void ProcessImage(UnmanagedImage image) {
             ProcessImage(image, new Rectangle(0, 0, image.Width, image.Height));
         }
 
@@ -519,10 +491,8 @@ namespace Accord.Imaging
         /// 
         /// <exception cref="UnsupportedImageFormatException">Unsupported pixel format of the source image.</exception>
         /// 
-        public void ProcessImage(UnmanagedImage image, Rectangle rect)
-        {
-            if (image.PixelFormat != PixelFormat.Format8bppIndexed)
-            {
+        public void ProcessImage(UnmanagedImage image, Rectangle rect) {
+            if (image.PixelFormat != PixelFormat.Format8bppIndexed) {
                 throw new UnsupportedImageFormatException("Unsupported pixel format of the source image.");
             }
 
@@ -549,22 +519,17 @@ namespace Accord.Imaging
             houghMap = new short[houghHeight, houghWidth];
 
             // do the job
-            unsafe
-            {
+            unsafe {
                 byte* src = (byte*)image.ImageData.ToPointer() +
                     rect.Top * image.Stride + rect.Left;
 
                 // for each row
-                for (int y = startY; y < stopY; y++)
-                {
+                for (int y = startY; y < stopY; y++) {
                     // for each pixel
-                    for (int x = startX; x < stopX; x++, src++)
-                    {
-                        if (*src != 0)
-                        {
+                    for (int x = startX; x < stopX; x++, src++) {
+                        if (*src != 0) {
                             // for each Theta value
-                            for (int theta = 0; theta < houghHeight; theta++)
-                            {
+                            for (int theta = 0; theta < houghHeight; theta++) {
                                 int radius = (int)Math.Round(cosMap[theta] * x - sinMap[theta] * y) + halfHoughWidth;
 
                                 if ((radius < 0) || (radius >= houghWidth))
@@ -580,12 +545,9 @@ namespace Accord.Imaging
 
             // find max value in Hough map
             maxMapIntensity = 0;
-            for (int i = 0; i < houghHeight; i++)
-            {
-                for (int j = 0; j < houghWidth; j++)
-                {
-                    if (houghMap[i, j] > maxMapIntensity)
-                    {
+            for (int i = 0; i < houghHeight; i++) {
+                for (int j = 0; j < houghWidth; j++) {
+                    if (houghMap[i, j] > maxMapIntensity) {
                         maxMapIntensity = houghMap[i, j];
                     }
                 }
@@ -603,8 +565,7 @@ namespace Accord.Imaging
         /// <exception cref="ApplicationException">Hough transformation was not yet done by calling
         /// ProcessImage() method.</exception>
         /// 
-        public Bitmap ToBitmap()
-        {
+        public Bitmap ToBitmap() {
             // check if Hough transformation was made already
             if (houghMap == null)
                 throw new InvalidOperationException("Hough transformation was not done yet.");
@@ -622,14 +583,11 @@ namespace Accord.Imaging
             float scale = 255.0f / maxMapIntensity;
 
             // do the job
-            unsafe
-            {
+            unsafe {
                 byte* dst = (byte*)imageData.Scan0.ToPointer();
 
-                for (int y = 0; y < height; y++)
-                {
-                    for (int x = 0; x < width; x++, dst++)
-                    {
+                for (int y = 0; y < height; y++) {
+                    for (int x = 0; x < width; x++, dst++) {
                         *dst = (byte)System.Math.Min(255, (int)(scale * houghMap[y, x]));
                     }
                     dst += offset;
@@ -651,8 +609,7 @@ namespace Accord.Imaging
         /// <returns>Returns array of most intesive lines. If there are no lines detected,
         /// the returned array has zero length.</returns>
         /// 
-        public HoughLine[] GetMostIntensiveLines(int count)
-        {
+        public HoughLine[] GetMostIntensiveLines(int count) {
             // lines count
             int n = Math.Min(count, lines.Count);
 
@@ -672,8 +629,7 @@ namespace Accord.Imaging
         /// <returns>Returns array of lines. If there are no lines detected,
         /// the returned array has zero length.</returns>
         /// 
-        public HoughLine[] GetLinesByRelativeIntensity(double minRelativeIntensity)
-        {
+        public HoughLine[] GetLinesByRelativeIntensity(double minRelativeIntensity) {
             int count = 0, n = lines.Count;
 
             while ((count < n) && (((HoughLine)lines[count]).RelativeIntensity >= minRelativeIntensity))
@@ -684,8 +640,7 @@ namespace Accord.Imaging
 
 
         // Collect lines with intesities greater or equal then specified
-        private void CollectLines()
-        {
+        private void CollectLines() {
             int maxTheta = houghMap.GetLength(0);
             int maxRadius = houghMap.GetLength(1);
 
@@ -698,11 +653,9 @@ namespace Accord.Imaging
             lines.Clear();
 
             // for each Theta value
-            for (int theta = 0; theta < maxTheta; theta++)
-            {
+            for (int theta = 0; theta < maxTheta; theta++) {
                 // for each Radius value
-                for (int radius = 0; radius < maxRadius; radius++)
-                {
+                for (int radius = 0; radius < maxRadius; radius++) {
                     // get current value
                     intensity = houghMap[theta, radius];
 
@@ -712,8 +665,7 @@ namespace Accord.Imaging
                     foundGreater = false;
 
                     // check neighboors
-                    for (int tt = theta - localPeakRadius, ttMax = theta + localPeakRadius; tt < ttMax; tt++)
-                    {
+                    for (int tt = theta - localPeakRadius, ttMax = theta + localPeakRadius; tt < ttMax; tt++) {
                         // break if it is not local maximum
                         if (foundGreater == true)
                             break;
@@ -722,19 +674,16 @@ namespace Accord.Imaging
                         int cycledRadius = radius;
 
                         // check limits
-                        if (cycledTheta < 0)
-                        {
+                        if (cycledTheta < 0) {
                             cycledTheta = maxTheta + cycledTheta;
                             cycledRadius = maxRadius - cycledRadius;
                         }
-                        if (cycledTheta >= maxTheta)
-                        {
+                        if (cycledTheta >= maxTheta) {
                             cycledTheta -= maxTheta;
                             cycledRadius = maxRadius - cycledRadius;
                         }
 
-                        for (int tr = cycledRadius - localPeakRadius, trMax = cycledRadius + localPeakRadius; tr < trMax; tr++)
-                        {
+                        for (int tr = cycledRadius - localPeakRadius, trMax = cycledRadius + localPeakRadius; tr < trMax; tr++) {
                             // skip out of map values
                             if (tr < 0)
                                 continue;
@@ -742,8 +691,7 @@ namespace Accord.Imaging
                                 break;
 
                             // compare the neighboor with current value
-                            if (houghMap[cycledTheta, tr] > intensity)
-                            {
+                            if (houghMap[cycledTheta, tr] > intensity) {
                                 foundGreater = true;
                                 break;
                             }
@@ -751,8 +699,7 @@ namespace Accord.Imaging
                     }
 
                     // was it local maximum ?
-                    if (!foundGreater)
-                    {
+                    if (!foundGreater) {
                         // we have local maximum
                         lines.Add(new HoughLine(theta / (double)stepsPerDegree, (short)(radius - halfHoughWidth), intensity, (double)intensity / maxMapIntensity));
                     }

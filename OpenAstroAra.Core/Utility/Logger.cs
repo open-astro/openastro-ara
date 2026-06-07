@@ -77,7 +77,7 @@ namespace OpenAstroAra.Core.Utility {
                 sb.AppendLine(PadBoth("{0}", 70, '-', RuntimeInformation.FrameworkDescription));
                 sb.AppendLine(PadBoth("", 70, '-'));
                 sb.AppendLine(PadBoth("Processor Count {0}", 70, '-', Environment.ProcessorCount.ToString()));
-            } catch { 
+            } catch {
                 sb.AppendLine(PadBoth("Unable to determine OS information", 70, '-'));
             }
 
@@ -218,7 +218,7 @@ namespace OpenAstroAra.Core.Utility {
             private static readonly string UNKNOWN = "UNKNOWN";
 
             public void Enrich(LogEvent logEvent, ILogEventPropertyFactory propertyFactory) {
-                
+
                 var legacyLogLevel = logEvent.Level switch {
                     LogEventLevel.Verbose => TRACE,
                     LogEventLevel.Debug => DEBUG,

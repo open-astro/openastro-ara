@@ -41,7 +41,7 @@ namespace OpenAstroAra.Astrometry {
             DllLoader.LoadDll(Path.Combine("NOVAS", DLLNAME));
 
             short a = 0;
-            if(File.Exists(EphemerisLocation)) {
+            if (File.Exists(EphemerisLocation)) {
                 var code = EphemOpen(EphemerisLocation, ref JPL_EPHEM_START_DATE, ref JPL_EPHEM_END_DATE, ref a);
                 if (code > 0) {
                     Logger.Error($"Failed to load ephemerides file due to error {code}");
@@ -49,7 +49,7 @@ namespace OpenAstroAra.Astrometry {
             } else {
                 Logger.Error($"Ephemeris file not found at {EphemerisLocation}");
             }
-            
+
         }
 
         #region "Public Methods"

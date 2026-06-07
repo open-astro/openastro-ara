@@ -117,7 +117,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
 
         public override string ToString() {
             return $"Condition: {nameof(MoonIlluminationCondition)}, " +
-                $"CurrentMoonIllumination: { CurrentMoonIllumination}%, Comparator: {Comparator}, UserMoonIllumination: {UserMoonIllumination}%";
+                $"CurrentMoonIllumination: {CurrentMoonIllumination}%, Comparator: {Comparator}, UserMoonIllumination: {UserMoonIllumination}%";
         }
 
         public override bool Check(ISequenceItem previousItem, ISequenceItem nextItem) {

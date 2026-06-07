@@ -173,14 +173,14 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
                     Hours = t.Hour;
                     Minutes = t.Minute;
                     Seconds = t.Second;
-                    
+
                 }
                 timeDeterminedSuccessfully = true;
-            } catch(Exception ex) {
+            } catch (Exception ex) {
                 timeDeterminedSuccessfully = false;
                 failureReason = ex is TimeProviderException tpe ? tpe.LocalizedMessage : ex.Message;
                 Validate();
-            }            
+            }
         }
 
         public override void AfterParentChanged() {
@@ -201,7 +201,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
             var timeOnlyNow = TimeOnly.FromDateTime(now);
             var timeOnlyThen = TimeOnly.FromDateTime(then);
 
-            if(timeOnlyNow < RolloverTime && timeOnlyThen >= RolloverTime) {
+            if (timeOnlyNow < RolloverTime && timeOnlyThen >= RolloverTime) {
                 then = then.AddDays(-1);
             }
 

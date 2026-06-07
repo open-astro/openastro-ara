@@ -3,8 +3,8 @@ using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
- 
- 
+
+
 namespace OpenAstroAra.Core.Utility {
     /// <summary>
     ///     Based on https://referencesource.microsoft.com/#PresentationFramework/src/Framework/MS/Internal/Annotations/ObservableDictionary.cs

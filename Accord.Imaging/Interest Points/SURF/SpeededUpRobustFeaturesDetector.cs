@@ -23,8 +23,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging
-{
+namespace Accord.Imaging {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -39,8 +38,7 @@ namespace Accord.Imaging
     ///   SURF Feature descriptor types.
     /// </summary>
     /// 
-    public enum SpeededUpRobustFeatureDescriptorType
-    {
+    public enum SpeededUpRobustFeatureDescriptorType {
         /// <summary>
         ///   Do not compute descriptors.
         /// </summary>
@@ -105,8 +103,7 @@ namespace Accord.Imaging
     /// <seealso cref="SpeededUpRobustFeaturesDescriptor"/>
     ///
     [Serializable]
-    public class SpeededUpRobustFeaturesDetector : BaseSparseFeatureExtractor<SpeededUpRobustFeaturePoint>
-    {
+    public class SpeededUpRobustFeaturesDetector : BaseSparseFeatureExtractor<SpeededUpRobustFeaturePoint> {
         private int octaves = 5;
         private int initial = 2;
 
@@ -140,8 +137,7 @@ namespace Accord.Imaging
         ///   The initial step to use when building the <see cref="ResponseLayerCollection">
         ///   response filter</see>. Default is 2. </param>
         ///   
-        public SpeededUpRobustFeaturesDetector(double threshold = 0.0002f, int octaves = 5, int initial = 2)
-        {
+        public SpeededUpRobustFeaturesDetector(double threshold = 0.0002f, int octaves = 5, int initial = 2) {
             this.threshold = threshold;
             this.octaves = octaves;
             this.initial = initial;
@@ -169,8 +165,7 @@ namespace Accord.Imaging
         /// 
         /// <value><c>true</c> if to compute orientation; otherwise, <c>false</c>.</value>
         /// 
-        public bool ComputeOrientation
-        {
+        public bool ComputeOrientation {
             get { return computeOrientation; }
             set { computeOrientation = value; }
         }
@@ -189,8 +184,7 @@ namespace Accord.Imaging
         /// 
         /// <value><c>true</c> if to compute orientation; otherwise, <c>false</c>.</value>
         /// 
-        public SpeededUpRobustFeatureDescriptorType ComputeDescriptors
-        {
+        public SpeededUpRobustFeatureDescriptorType ComputeDescriptors {
             get { return featureType; }
             set { featureType = value; }
         }
@@ -202,8 +196,7 @@ namespace Accord.Imaging
         /// 
         /// <value>The non-maximum suppression threshold.</value>
         /// 
-        public double Threshold
-        {
+        public double Threshold {
             get { return threshold; }
             set { threshold = value; }
         }
@@ -215,13 +208,10 @@ namespace Accord.Imaging
         ///   doubling of scale in the image. Default is 5.
         /// </summary>
         /// 
-        public int Octaves
-        {
+        public int Octaves {
             get { return octaves; }
-            set
-            {
-                if (octaves != value)
-                {
+            set {
+                if (octaves != value) {
                     octaves = value;
                     responses = null;
                 }
@@ -234,13 +224,10 @@ namespace Accord.Imaging
         ///   Default is 2.
         /// </summary>
         /// 
-        public int Step
-        {
+        public int Step {
             get { return initial; }
-            set
-            {
-                if (initial != value)
-                {
+            set {
+                if (initial != value) {
                     initial = value;
                     responses = null;
                 }
@@ -252,28 +239,21 @@ namespace Accord.Imaging
         ///   actual feature extraction, transforming the input image into a list of features.
         /// </summary>
         /// 
-        protected override IEnumerable<SpeededUpRobustFeaturePoint> InnerTransform(UnmanagedImage image)
-        {
+        protected override IEnumerable<SpeededUpRobustFeaturePoint> InnerTransform(UnmanagedImage image) {
             // 1. Compute the integral for the given image
-            if (image.PixelFormat == PixelFormat.Format8bppIndexed)
-            {
+            if (image.PixelFormat == PixelFormat.Format8bppIndexed) {
                 integral = IntegralImage.FromBitmap(image);
-            }
-            else
-            {
+            } else {
                 // create temporary grayscale image
                 using (UnmanagedImage grayImage = Grayscale.CommonAlgorithms.BT709.Apply(image))
                     integral = IntegralImage.FromBitmap(grayImage);
             }
 
             // 2. Create and compute interest point response map
-            if (responses == null)
-            {
+            if (responses == null) {
                 // re-create only if really needed
                 responses = new ResponseLayerCollection(image.Width, image.Height, octaves, initial);
-            }
-            else
-            {
+            } else {
                 responses.Update(image.Width, image.Height, initial);
             }
 
@@ -285,8 +265,7 @@ namespace Accord.Imaging
             var featureList = new List<SpeededUpRobustFeaturePoint>();
 
             // for each image pyramid in the response map
-            foreach (ResponseLayer[] layers in responses)
-            {
+            foreach (ResponseLayer[] layers in responses) {
                 // Grab the three layers forming the pyramid
                 ResponseLayer bot = layers[0]; // bottom layer
                 ResponseLayer mid = layers[1]; // middle layer
@@ -301,30 +280,25 @@ namespace Accord.Imaging
                 int r = 1;
 
                 // for each row
-                for (int y = border + 1; y < top.Height - border; y++)
-                {
+                for (int y = border + 1; y < top.Height - border; y++) {
                     // for each pixel
-                    for (int x = border + 1; x < top.Width - border; x++)
-                    {
+                    for (int x = border + 1; x < top.Width - border; x++) {
                         int mscale = mid.Width / top.Width;
                         int bscale = bot.Width / top.Width;
 
                         double currentValue = mid.Responses[y * mscale][x * mscale];
 
                         // for each windows' row
-                        for (int i = -r; (currentValue >= threshold) && (i <= r); i++)
-                        {
+                        for (int i = -r; (currentValue >= threshold) && (i <= r); i++) {
                             // for each windows' pixel
-                            for (int j = -r; j <= r; j++)
-                            {
+                            for (int j = -r; j <= r; j++) {
                                 int yi = y + i;
                                 int xj = x + j;
 
                                 // for each response layer
                                 if (top.Responses[yi][xj] >= currentValue ||
                                     bot.Responses[yi * bscale][xj * bscale] >= currentValue || ((i != 0 || j != 0) &&
-                                    mid.Responses[yi * mscale][xj * mscale] >= currentValue))
-                                {
+                                    mid.Responses[yi * mscale][xj * mscale] >= currentValue)) {
                                     currentValue = 0;
                                     break;
                                 }
@@ -332,15 +306,13 @@ namespace Accord.Imaging
                         }
 
                         // check if this point is really interesting
-                        if (currentValue >= threshold)
-                        {
+                        if (currentValue >= threshold) {
                             // interpolate to sub-pixel precision
                             double[] offset = interpolate(y, x, top, mid, bot);
 
                             if (System.Math.Abs(offset[0]) < 0.5 &&
                                 System.Math.Abs(offset[1]) < 0.5 &&
-                                System.Math.Abs(offset[2]) < 0.5)
-                            {
+                                System.Math.Abs(offset[2]) < 0.5) {
                                 featureList.Add(new SpeededUpRobustFeaturePoint(
                                     (x + offset[0]) * tstep,
                                     (y + offset[1]) * tstep,
@@ -355,15 +327,12 @@ namespace Accord.Imaging
 
             descriptor = null;
 
-            if (featureType != SpeededUpRobustFeatureDescriptorType.None)
-            {
+            if (featureType != SpeededUpRobustFeatureDescriptorType.None) {
                 descriptor = new SpeededUpRobustFeaturesDescriptor(integral);
                 descriptor.Extended = featureType == SpeededUpRobustFeatureDescriptorType.Extended;
                 descriptor.Invariant = computeOrientation;
                 descriptor.Compute(featureList);
-            }
-            else if (computeOrientation)
-            {
+            } else if (computeOrientation) {
                 descriptor = new SpeededUpRobustFeaturesDescriptor(integral);
                 foreach (var p in featureList)
                     p.Orientation = descriptor.GetOrientation(p);
@@ -377,10 +346,8 @@ namespace Accord.Imaging
         ///   feature descriptor</see> for the last processed image.
         /// </summary>
         /// 
-        public SpeededUpRobustFeaturesDescriptor GetDescriptor()
-        {
-            if (descriptor == null)
-            {
+        public SpeededUpRobustFeaturesDescriptor GetDescriptor() {
+            if (descriptor == null) {
                 descriptor = new SpeededUpRobustFeaturesDescriptor(integral);
                 descriptor.Extended = featureType == SpeededUpRobustFeatureDescriptorType.Extended;
                 descriptor.Invariant = computeOrientation;
@@ -390,8 +357,7 @@ namespace Accord.Imaging
         }
 
 
-        private static double[] interpolate(int y, int x, ResponseLayer top, ResponseLayer mid, ResponseLayer bot)
-        {
+        private static double[] interpolate(int y, int x, ResponseLayer top, ResponseLayer mid, ResponseLayer bot) {
             int bs = bot.Width / top.Width;
             int ms = mid.Width / top.Width;
             int xp1 = x + 1, yp1 = y + 1;
@@ -435,8 +401,7 @@ namespace Accord.Imaging
         /// Creates a new object that is a copy of the current instance.
         /// </summary>
         /// 
-        protected override object Clone(ISet<PixelFormat> supportedFormats)
-        {
+        protected override object Clone(ISet<PixelFormat> supportedFormats) {
             var clone = new SpeededUpRobustFeaturesDetector(threshold, octaves, initial);
             clone.SupportedFormats = supportedFormats;
             clone.computeOrientation = computeOrientation;
@@ -452,7 +417,7 @@ namespace Accord.Imaging
             return clone;
         }
 
-       
+
         /// <summary>
         ///   Releases unmanaged and - optionally - managed resources.
         /// </summary>
@@ -460,10 +425,8 @@ namespace Accord.Imaging
         /// <param name="disposing"><c>true</c> to release both managed and unmanaged
         ///   resources; <c>false</c> to release only unmanaged resources.</param>
         /// 
-        protected override void Dispose(bool disposing)
-        {
-            if (disposing)
-            {
+        protected override void Dispose(bool disposing) {
+            if (disposing) {
                 // free managed resources
             }
 

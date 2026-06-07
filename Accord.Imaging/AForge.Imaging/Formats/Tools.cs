@@ -5,8 +5,7 @@
 // andrew.kirillov@gmail.com
 //
 
-namespace Accord.Imaging.Formats
-{
+namespace Accord.Imaging.Formats {
     using System;
     using System.Drawing;
     using System.Drawing.Imaging;
@@ -15,8 +14,7 @@ namespace Accord.Imaging.Formats
     /// <summary>
     /// Set of tools used internally in AForge.Imaging.Formats library.
     /// </summary>
-    internal class Tools
-    {
+    internal class Tools {
         /// <summary>
         /// Create and initialize new grayscale image.
         /// </summary>
@@ -30,16 +28,14 @@ namespace Accord.Imaging.Formats
         /// could be used instead, which does the some. But it was not used to get
         /// rid of dependency on AForge.Imaing library.</para></remarks>
         /// 
-        public static Bitmap CreateGrayscaleImage( int width, int height )
-        {
+        public static Bitmap CreateGrayscaleImage(int width, int height) {
             // create new image
-            Bitmap image = new Bitmap( width, height, PixelFormat.Format8bppIndexed );
+            Bitmap image = new Bitmap(width, height, PixelFormat.Format8bppIndexed);
             // get palette
             ColorPalette cp = image.Palette;
             // init palette with grayscale colors
-            for ( int i = 0; i < 256; i++ )
-            {
-                cp.Entries[i] = Color.FromArgb( i, i, i );
+            for (int i = 0; i < 256; i++) {
+                cp.Entries[i] = Color.FromArgb(i, i, i);
             }
             // set palette back
             image.Palette = cp;
@@ -65,16 +61,13 @@ namespace Accord.Imaging.Formats
         /// may return with less bytes read.</para>
         /// </remarks>
         /// 
-        public static int ReadStream( Stream stream, byte[] buffer, int offset, int count )
-        {
+        public static int ReadStream(Stream stream, byte[] buffer, int offset, int count) {
             int totalBytesRead = 0, bytesRead = 0;
 
-            while ( totalBytesRead != count )
-            {
-                bytesRead = stream.Read( buffer, offset + totalBytesRead, count - totalBytesRead );
+            while (totalBytesRead != count) {
+                bytesRead = stream.Read(buffer, offset + totalBytesRead, count - totalBytesRead);
 
-                if ( bytesRead == 0 )
-                {
+                if (bytesRead == 0) {
                     break;
                 }
 

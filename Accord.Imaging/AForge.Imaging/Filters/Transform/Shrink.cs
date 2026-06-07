@@ -1,12 +1,11 @@
 // AForge Image Processing Library
 // AForge.NET framework
 //
-// Copyright © Andrew Kirillov, 2005-2008
+// Copyright ï¿½ Andrew Kirillov, 2005-2008
 // andrew.kirillov@gmail.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -35,20 +34,18 @@ namespace Accord.Imaging.Filters
     /// <img src="..\images\imaging\shrink.jpg" width="295" height="226" />
     /// </remarks>
     /// 
-    public class Shrink : BaseTransformationFilter
-    {
-        private Color colorToRemove = Color.FromArgb( 0, 0, 0 );
+    public class Shrink : BaseTransformationFilter {
+        private Color colorToRemove = Color.FromArgb(0, 0, 0);
         // top-left coordinates of the object (calculated by CalculateNewImageSize())
         private int minX, minY;
 
         // format translation dictionary
-        private Dictionary<PixelFormat, PixelFormat> formatTranslations = new Dictionary<PixelFormat, PixelFormat>( );
+        private Dictionary<PixelFormat, PixelFormat> formatTranslations = new Dictionary<PixelFormat, PixelFormat>();
 
         /// <summary>
         /// Format translations dictionary.
         /// </summary>
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -56,8 +53,7 @@ namespace Accord.Imaging.Filters
         /// Color to remove from boundaries.
         /// </summary>
         /// 
-        public Color ColorToRemove
-        {
+        public Color ColorToRemove {
             get { return colorToRemove; }
             set { colorToRemove = value; }
         }
@@ -66,10 +62,9 @@ namespace Accord.Imaging.Filters
         /// Initializes a new instance of the <see cref="Shrink"/> class.
         /// </summary>
         /// 
-        public Shrink( )
-        {
+        public Shrink() {
             formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
-            formatTranslations[PixelFormat.Format24bppRgb]    = PixelFormat.Format24bppRgb;
+            formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format24bppRgb;
         }
 
         /// <summary>
@@ -78,8 +73,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <param name="colorToRemove">Color to remove from boundaries.</param>
         /// 
-        public Shrink( Color colorToRemove ) : this( )
-        {
+        public Shrink(Color colorToRemove) : this() {
             this.colorToRemove = colorToRemove;
         }
 
@@ -91,13 +85,12 @@ namespace Accord.Imaging.Filters
         /// 
         /// <returns>New image size - size of the destination image.</returns>
         /// 
-        protected override System.Drawing.Size CalculateNewImageSize( UnmanagedImage sourceData )
-        {
+        protected override System.Drawing.Size CalculateNewImageSize(UnmanagedImage sourceData) {
             // get source image size
             int width = sourceData.Width;
             int height = sourceData.Height;
             int offset = sourceData.Stride -
-                ( ( sourceData.PixelFormat == PixelFormat.Format8bppIndexed ) ? width : width * 3 );
+                ((sourceData.PixelFormat == PixelFormat.Format8bppIndexed) ? width : width * 3);
 
             // color to remove
             byte r = colorToRemove.R;
@@ -110,51 +103,41 @@ namespace Accord.Imaging.Filters
             int maxY = 0;
 
             // find rectangle which contains something except color to remove
-            unsafe
-            {
-                byte* src = (byte*) sourceData.ImageData.ToPointer( );
+            unsafe {
+                byte* src = (byte*)sourceData.ImageData.ToPointer();
 
-                if ( sourceData.PixelFormat == PixelFormat.Format8bppIndexed )
-                {
+                if (sourceData.PixelFormat == PixelFormat.Format8bppIndexed) {
                     // grayscale
-                    for ( int y = 0; y < height; y++ )
-                    {
-                        for ( int x = 0; x < width; x++, src++ )
-                        {
-                            if ( *src != g )
-                            {
-                                if ( x < minX )
+                    for (int y = 0; y < height; y++) {
+                        for (int x = 0; x < width; x++, src++) {
+                            if (*src != g) {
+                                if (x < minX)
                                     minX = x;
-                                if ( x > maxX )
+                                if (x > maxX)
                                     maxX = x;
-                                if ( y < minY )
+                                if (y < minY)
                                     minY = y;
-                                if ( y > maxY )
+                                if (y > maxY)
                                     maxY = y;
                             }
                         }
                         src += offset;
                     }
-                }
-                else
-                {
+                } else {
                     // RGB
-                    for ( int y = 0; y < height; y++ )
-                    {
-                        for ( int x = 0; x < width; x++, src += 3 )
-                        {
+                    for (int y = 0; y < height; y++) {
+                        for (int x = 0; x < width; x++, src += 3) {
                             if (
-                                ( src[RGB.R] != r ) ||
-                                ( src[RGB.G] != g ) ||
-                                ( src[RGB.B] != b ) )
-                            {
-                                if ( x < minX )
+                                (src[RGB.R] != r) ||
+                                (src[RGB.G] != g) ||
+                                (src[RGB.B] != b)) {
+                                if (x < minX)
                                     minX = x;
-                                if ( x > maxX )
+                                if (x > maxX)
                                     maxX = x;
-                                if ( y < minY )
+                                if (y < minY)
                                     minY = y;
-                                if ( y > maxY )
+                                if (y > maxY)
                                     maxY = y;
                             }
                         }
@@ -164,12 +147,11 @@ namespace Accord.Imaging.Filters
             }
 
             // check
-            if ( ( minX == width ) && ( minY == height ) && ( maxX == 0 ) && ( maxY == 0 ) )
-            {
+            if ((minX == width) && (minY == height) && (maxX == 0) && (maxY == 0)) {
                 minX = minY = 0;
             }
 
-            return new Size( maxX - minX + 1, maxY - minY + 1 );
+            return new Size(maxX - minX + 1, maxY - minY + 1);
         }
 
         /// <summary>
@@ -179,36 +161,31 @@ namespace Accord.Imaging.Filters
         /// <param name="sourceData">Source image data.</param>
         /// <param name="destinationData">Destination image data.</param>
         /// 
-        protected override unsafe void ProcessFilter( UnmanagedImage sourceData, UnmanagedImage destinationData )
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData) {
             // get destination image size
-            int newWidth  = destinationData.Width;
+            int newWidth = destinationData.Width;
             int newHeight = destinationData.Height;
 
             int srcStride = sourceData.Stride;
             int dstStride = destinationData.Stride;
-            int copySize  = newWidth;
+            int copySize = newWidth;
 
             // do the job
-            byte* src = (byte*) sourceData.ImageData.ToPointer( );
-            byte* dst = (byte*) destinationData.ImageData.ToPointer( );
+            byte* src = (byte*)sourceData.ImageData.ToPointer();
+            byte* dst = (byte*)destinationData.ImageData.ToPointer();
 
-            src += ( minY * srcStride );
+            src += (minY * srcStride);
 
-            if ( destinationData.PixelFormat == PixelFormat.Format8bppIndexed )
-            {
+            if (destinationData.PixelFormat == PixelFormat.Format8bppIndexed) {
                 src += minX;
-            }
-            else
-            {
+            } else {
                 src += minX * 3;
                 copySize *= 3;
             }
 
             // copy image
-            for ( int y = 0; y < newHeight; y++ )
-            {
-                Accord.SystemTools.CopyUnmanagedMemory( dst, src, copySize );
+            for (int y = 0; y < newHeight; y++) {
+                Accord.SystemTools.CopyUnmanagedMemory(dst, src, copySize);
                 dst += dstStride;
                 src += srcStride;
             }

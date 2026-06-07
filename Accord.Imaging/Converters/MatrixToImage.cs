@@ -20,8 +20,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging.Converters
-{
+namespace Accord.Imaging.Converters {
     using System.Drawing;
     using System.Drawing.Imaging;
     using Accord.Imaging;
@@ -92,10 +91,10 @@ namespace Accord.Imaging.Converters
         IConverter<float[][], UnmanagedImage>,
         IConverter<byte[][], Bitmap>,
         IConverter<byte[][], UnmanagedImage>
-        //IConverter<byte[][][], Bitmap>,
-        //IConverter<byte[][][], UnmanagedImage>,
-        //IConverter<byte[,,], Bitmap>,
-        //IConverter<byte[,,], UnmanagedImage>
+    //IConverter<byte[][][], Bitmap>,
+    //IConverter<byte[][][], UnmanagedImage>,
+    //IConverter<byte[,,], Bitmap>,
+    //IConverter<byte[,,], UnmanagedImage>
     {
 
         /// <summary>
@@ -131,8 +130,7 @@ namespace Accord.Imaging.Converters
         ///   associated with the brightest color. Default is 1.
         /// </param>
         ///   
-        public MatrixToImage(double min, double max)
-        {
+        public MatrixToImage(double min, double max) {
             this.Min = min;
             this.Max = max;
             this.Format = PixelFormat.Format8bppIndexed;
@@ -143,8 +141,7 @@ namespace Accord.Imaging.Converters
         /// </summary>
         /// 
         public MatrixToImage()
-            : this(0, 1)
-        {
+            : this(0, 1) {
         }
 
 
@@ -155,8 +152,7 @@ namespace Accord.Imaging.Converters
         /// <param name="input">The input image to be converted.</param>
         /// <param name="output">The converted image.</param>
         /// 
-        public void Convert(double[,] input, out UnmanagedImage output)
-        {
+        public void Convert(double[,] input, out UnmanagedImage output) {
             Bitmap image;
 
             Convert(input, out image);
@@ -171,8 +167,7 @@ namespace Accord.Imaging.Converters
         /// <param name="input">The input image to be converted.</param>
         /// <param name="output">The converted image.</param>
         /// 
-        public void Convert(double[][] input, out UnmanagedImage output)
-        {
+        public void Convert(double[][] input, out UnmanagedImage output) {
             Bitmap image;
 
             Convert(input, out image);
@@ -187,8 +182,7 @@ namespace Accord.Imaging.Converters
         /// <param name="input">The input image to be converted.</param>
         /// <param name="output">The converted image.</param>
         /// 
-        public void Convert(float[,] input, out UnmanagedImage output)
-        {
+        public void Convert(float[,] input, out UnmanagedImage output) {
             Bitmap image;
 
             Convert(input, out image);
@@ -203,8 +197,7 @@ namespace Accord.Imaging.Converters
         /// <param name="input">The input image to be converted.</param>
         /// <param name="output">The converted image.</param>
         /// 
-        public void Convert(float[][] input, out UnmanagedImage output)
-        {
+        public void Convert(float[][] input, out UnmanagedImage output) {
             Bitmap image;
 
             Convert(input, out image);
@@ -219,8 +212,7 @@ namespace Accord.Imaging.Converters
         /// <param name="input">The input image to be converted.</param>
         /// <param name="output">The converted image.</param>
         /// 
-        public void Convert(byte[,] input, out UnmanagedImage output)
-        {
+        public void Convert(byte[,] input, out UnmanagedImage output) {
             Bitmap image;
 
             Convert(input, out image);
@@ -235,8 +227,7 @@ namespace Accord.Imaging.Converters
         /// <param name="input">The input image to be converted.</param>
         /// <param name="output">The converted image.</param>
         /// 
-        public void Convert(byte[][] input, out UnmanagedImage output)
-        {
+        public void Convert(byte[][] input, out UnmanagedImage output) {
             Bitmap image;
 
             Convert(input, out image);
@@ -283,8 +274,7 @@ namespace Accord.Imaging.Converters
         /// <param name="input">The input image to be converted.</param>
         /// <param name="output">The converted image.</param>
         /// 
-        public void Convert(int[,] input, out UnmanagedImage output)
-        {
+        public void Convert(int[,] input, out UnmanagedImage output) {
             Bitmap image;
 
             Convert(input, out image);
@@ -299,8 +289,7 @@ namespace Accord.Imaging.Converters
         /// <param name="input">The input image to be converted.</param>
         /// <param name="output">The converted image.</param>
         /// 
-        public void Convert(int[][] input, out UnmanagedImage output)
-        {
+        public void Convert(int[][] input, out UnmanagedImage output) {
             Bitmap image;
 
             Convert(input, out image);
@@ -315,8 +304,7 @@ namespace Accord.Imaging.Converters
         /// <param name="input">The input image to be converted.</param>
         /// <param name="output">The converted image.</param>
         /// 
-        public void Convert(short[,] input, out UnmanagedImage output)
-        {
+        public void Convert(short[,] input, out UnmanagedImage output) {
             Bitmap image;
 
             Convert(input, out image);
@@ -331,8 +319,7 @@ namespace Accord.Imaging.Converters
         /// <param name="input">The input image to be converted.</param>
         /// <param name="output">The converted image.</param>
         /// 
-        public void Convert(short[][] input, out UnmanagedImage output)
-        {
+        public void Convert(short[][] input, out UnmanagedImage output) {
             Bitmap image;
 
             Convert(input, out image);
@@ -347,8 +334,7 @@ namespace Accord.Imaging.Converters
         /// <param name="input">The input image to be converted.</param>
         /// <param name="output">The converted image.</param>
         /// 
-        public void Convert(double[,] input, out Bitmap output)
-        {
+        public void Convert(double[,] input, out Bitmap output) {
             int width = input.GetLength(1);
             int height = input.GetLength(0);
 
@@ -362,14 +348,11 @@ namespace Accord.Imaging.Converters
 
             int offset = data.Stride - width * pixelSize;
 
-            unsafe
-            {
+            unsafe {
                 byte* dst = (byte*)data.Scan0.ToPointer();
 
-                for (int y = 0; y < height; y++)
-                {
-                    for (int x = 0; x < width; x++)
-                    {
+                for (int y = 0; y < height; y++) {
+                    for (int x = 0; x < width; x++) {
                         double v = 255 * (input[y, x] - Min) / (Max - Min);
                         byte value = unchecked((byte)v);
 
@@ -380,12 +363,10 @@ namespace Accord.Imaging.Converters
                     dst += offset;
                 }
 
-                if (pixelSize == 4)
-                {
+                if (pixelSize == 4) {
                     dst = (byte*)data.Scan0.ToPointer();
 
-                    for (int y = 0; y < height; y++)
-                    {
+                    for (int y = 0; y < height; y++) {
                         for (int x = 0; x < width; x++, dst += pixelSize)
                             dst[RGB.A] = 0;
                         dst += offset;
@@ -403,8 +384,7 @@ namespace Accord.Imaging.Converters
         /// <param name="input">The input image to be converted.</param>
         /// <param name="output">The converted image.</param>
         /// 
-        public void Convert(double[][] input, out Bitmap output)
-        {
+        public void Convert(double[][] input, out Bitmap output) {
             int width = input.Columns();
             int height = input.Rows();
 
@@ -418,14 +398,11 @@ namespace Accord.Imaging.Converters
 
             int offset = data.Stride - width * pixelSize;
 
-            unsafe
-            {
+            unsafe {
                 byte* dst = (byte*)data.Scan0.ToPointer();
 
-                for (int y = 0; y < height; y++)
-                {
-                    for (int x = 0; x < width; x++)
-                    {
+                for (int y = 0; y < height; y++) {
+                    for (int x = 0; x < width; x++) {
                         double v = 255 * (input[y][x] - Min) / (Max - Min);
                         byte value = unchecked((byte)v);
 
@@ -436,12 +413,10 @@ namespace Accord.Imaging.Converters
                     dst += offset;
                 }
 
-                if (pixelSize == 4)
-                {
+                if (pixelSize == 4) {
                     dst = (byte*)data.Scan0.ToPointer();
 
-                    for (int y = 0; y < height; y++)
-                    {
+                    for (int y = 0; y < height; y++) {
                         for (int x = 0; x < width; x++, dst += pixelSize)
                             dst[RGB.A] = 0;
                         dst += offset;
@@ -459,8 +434,7 @@ namespace Accord.Imaging.Converters
         /// <param name="input">The input image to be converted.</param>
         /// <param name="output">The converted image.</param>
         /// 
-        public void Convert(float[,] input, out Bitmap output)
-        {
+        public void Convert(float[,] input, out Bitmap output) {
             int width = input.GetLength(1);
             int height = input.GetLength(0);
 
@@ -477,14 +451,11 @@ namespace Accord.Imaging.Converters
             float min = (float)Min;
             float max = (float)Max;
 
-            unsafe
-            {
+            unsafe {
                 byte* dst = (byte*)data.Scan0.ToPointer();
 
-                for (int y = 0; y < height; y++)
-                {
-                    for (int x = 0; x < width; x++)
-                    {
+                for (int y = 0; y < height; y++) {
+                    for (int x = 0; x < width; x++) {
                         byte value = (byte)Vector.Scale(input[y, x], Min, Max, (byte)0, (byte)255);
 
                         for (int c = 0; c < pixelSize; c++, dst++)
@@ -494,12 +465,10 @@ namespace Accord.Imaging.Converters
                     dst += offset;
                 }
 
-                if (pixelSize == 4)
-                {
+                if (pixelSize == 4) {
                     dst = (byte*)data.Scan0.ToPointer();
 
-                    for (int y = 0; y < height; y++)
-                    {
+                    for (int y = 0; y < height; y++) {
                         for (int x = 0; x < width; x++, dst += pixelSize)
                             dst[RGB.A] = 0;
                         dst += offset;
@@ -518,8 +487,7 @@ namespace Accord.Imaging.Converters
         /// <param name="input">The input image to be converted.</param>
         /// <param name="output">The converted image.</param>
         /// 
-        public void Convert(float[][] input, out Bitmap output)
-        {
+        public void Convert(float[][] input, out Bitmap output) {
             int width = input.Columns();
             int height = input.Rows();
 
@@ -536,14 +504,11 @@ namespace Accord.Imaging.Converters
             float min = (float)Min;
             float max = (float)Max;
 
-            unsafe
-            {
+            unsafe {
                 byte* dst = (byte*)data.Scan0.ToPointer();
 
-                for (int y = 0; y < height; y++)
-                {
-                    for (int x = 0; x < width; x++)
-                    {
+                for (int y = 0; y < height; y++) {
+                    for (int x = 0; x < width; x++) {
                         byte value = (byte)Vector.Scale(input[y][x], Min, Max, (byte)0, (byte)255);
 
                         for (int c = 0; c < pixelSize; c++, dst++)
@@ -553,12 +518,10 @@ namespace Accord.Imaging.Converters
                     dst += offset;
                 }
 
-                if (pixelSize == 4)
-                {
+                if (pixelSize == 4) {
                     dst = (byte*)data.Scan0.ToPointer();
 
-                    for (int y = 0; y < height; y++)
-                    {
+                    for (int y = 0; y < height; y++) {
                         for (int x = 0; x < width; x++, dst += pixelSize)
                             dst[RGB.A] = 0;
                         dst += offset;
@@ -576,8 +539,7 @@ namespace Accord.Imaging.Converters
         /// <param name="input">The input image to be converted.</param>
         /// <param name="output">The converted image.</param>
         /// 
-        public void Convert(byte[,] input, out Bitmap output)
-        {
+        public void Convert(byte[,] input, out Bitmap output) {
             int width = input.GetLength(1);
             int height = input.GetLength(0);
 
@@ -591,14 +553,11 @@ namespace Accord.Imaging.Converters
 
             int offset = data.Stride - width * pixelSize;
 
-            unsafe
-            {
+            unsafe {
                 byte* dst = (byte*)data.Scan0.ToPointer();
 
-                for (int y = 0; y < height; y++)
-                {
-                    for (int x = 0; x < width; x++)
-                    {
+                for (int y = 0; y < height; y++) {
+                    for (int x = 0; x < width; x++) {
                         byte value = input[y, x];
 
                         for (int c = 0; c < pixelSize; c++, dst++)
@@ -608,12 +567,10 @@ namespace Accord.Imaging.Converters
                     dst += offset;
                 }
 
-                if (pixelSize == 4)
-                {
+                if (pixelSize == 4) {
                     dst = (byte*)data.Scan0.ToPointer();
 
-                    for (int y = 0; y < height; y++)
-                    {
+                    for (int y = 0; y < height; y++) {
                         for (int x = 0; x < width; x++, dst += pixelSize)
                             dst[RGB.A] = 0;
                         dst += offset;
@@ -672,8 +629,7 @@ namespace Accord.Imaging.Converters
         /// <param name="input">The input image to be converted.</param>
         /// <param name="output">The converted image.</param>
         /// 
-        public void Convert(byte[][] input, out Bitmap output)
-        {
+        public void Convert(byte[][] input, out Bitmap output) {
             int width = input.Columns();
             int height = input.Rows();
 
@@ -687,14 +643,11 @@ namespace Accord.Imaging.Converters
 
             int offset = data.Stride - width * pixelSize;
 
-            unsafe
-            {
+            unsafe {
                 byte* dst = (byte*)data.Scan0.ToPointer();
 
-                for (int y = 0; y < height; y++)
-                {
-                    for (int x = 0; x < width; x++)
-                    {
+                for (int y = 0; y < height; y++) {
+                    for (int x = 0; x < width; x++) {
                         byte value = input[y][x];
 
                         for (int c = 0; c < pixelSize; c++, dst++)
@@ -704,12 +657,10 @@ namespace Accord.Imaging.Converters
                     dst += offset;
                 }
 
-                if (pixelSize == 4)
-                {
+                if (pixelSize == 4) {
                     dst = (byte*)data.Scan0.ToPointer();
 
-                    for (int y = 0; y < height; y++)
-                    {
+                    for (int y = 0; y < height; y++) {
                         for (int x = 0; x < width; x++, dst += pixelSize)
                             dst[RGB.A] = 0;
                         dst += offset;
@@ -767,8 +718,7 @@ namespace Accord.Imaging.Converters
         /// <param name="input">The input image to be converted.</param>
         /// <param name="output">The converted image.</param>
         /// 
-        public void Convert(int[,] input, out Bitmap output)
-        {
+        public void Convert(int[,] input, out Bitmap output) {
             int width = input.GetLength(1);
             int height = input.GetLength(0);
 
@@ -782,14 +732,11 @@ namespace Accord.Imaging.Converters
 
             int offset = data.Stride - width * pixelSize;
 
-            unsafe
-            {
+            unsafe {
                 byte* dst = (byte*)data.Scan0.ToPointer();
 
-                for (int y = 0; y < height; y++)
-                {
-                    for (int x = 0; x < width; x++)
-                    {
+                for (int y = 0; y < height; y++) {
+                    for (int x = 0; x < width; x++) {
                         byte value = (byte)input[y, x];
 
                         for (int c = 0; c < pixelSize; c++, dst++)
@@ -799,12 +746,10 @@ namespace Accord.Imaging.Converters
                     dst += offset;
                 }
 
-                if (pixelSize == 4)
-                {
+                if (pixelSize == 4) {
                     dst = (byte*)data.Scan0.ToPointer();
 
-                    for (int y = 0; y < height; y++)
-                    {
+                    for (int y = 0; y < height; y++) {
                         for (int x = 0; x < width; x++, dst += pixelSize)
                             dst[RGB.A] = 0;
                         dst += offset;
@@ -823,8 +768,7 @@ namespace Accord.Imaging.Converters
         /// <param name="input">The input image to be converted.</param>
         /// <param name="output">The converted image.</param>
         /// 
-        public void Convert(int[][] input, out Bitmap output)
-        {
+        public void Convert(int[][] input, out Bitmap output) {
             int width = input.Columns();
             int height = input.Rows();
 
@@ -838,14 +782,11 @@ namespace Accord.Imaging.Converters
 
             int offset = data.Stride - width * pixelSize;
 
-            unsafe
-            {
+            unsafe {
                 byte* dst = (byte*)data.Scan0.ToPointer();
 
-                for (int y = 0; y < height; y++)
-                {
-                    for (int x = 0; x < width; x++)
-                    {
+                for (int y = 0; y < height; y++) {
+                    for (int x = 0; x < width; x++) {
                         byte value = (byte)input[y][x];
 
                         for (int c = 0; c < pixelSize; c++, dst++)
@@ -855,12 +796,10 @@ namespace Accord.Imaging.Converters
                     dst += offset;
                 }
 
-                if (pixelSize == 4)
-                {
+                if (pixelSize == 4) {
                     dst = (byte*)data.Scan0.ToPointer();
 
-                    for (int y = 0; y < height; y++)
-                    {
+                    for (int y = 0; y < height; y++) {
                         for (int x = 0; x < width; x++, dst += pixelSize)
                             dst[RGB.A] = 0;
                         dst += offset;
@@ -878,8 +817,7 @@ namespace Accord.Imaging.Converters
         /// <param name="input">The input image to be converted.</param>
         /// <param name="output">The converted image.</param>
         /// 
-        public void Convert(short[,] input, out Bitmap output)
-        {
+        public void Convert(short[,] input, out Bitmap output) {
             int width = input.GetLength(1);
             int height = input.GetLength(0);
 
@@ -893,14 +831,11 @@ namespace Accord.Imaging.Converters
 
             int offset = data.Stride - width * pixelSize;
 
-            unsafe
-            {
+            unsafe {
                 byte* dst = (byte*)data.Scan0.ToPointer();
 
-                for (int y = 0; y < height; y++)
-                {
-                    for (int x = 0; x < width; x++)
-                    {
+                for (int y = 0; y < height; y++) {
+                    for (int x = 0; x < width; x++) {
                         byte value = (byte)input[y, x];
 
                         for (int c = 0; c < pixelSize; c++, dst++)
@@ -910,12 +845,10 @@ namespace Accord.Imaging.Converters
                     dst += offset;
                 }
 
-                if (pixelSize == 4)
-                {
+                if (pixelSize == 4) {
                     dst = (byte*)data.Scan0.ToPointer();
 
-                    for (int y = 0; y < height; y++)
-                    {
+                    for (int y = 0; y < height; y++) {
                         for (int x = 0; x < width; x++, dst += pixelSize)
                             dst[RGB.A] = 0;
                         dst += offset;
@@ -934,8 +867,7 @@ namespace Accord.Imaging.Converters
         /// <param name="input">The input image to be converted.</param>
         /// <param name="output">The converted image.</param>
         /// 
-        public void Convert(short[][] input, out Bitmap output)
-        {
+        public void Convert(short[][] input, out Bitmap output) {
             int width = input.Columns();
             int height = input.Rows();
 
@@ -949,14 +881,11 @@ namespace Accord.Imaging.Converters
 
             int offset = data.Stride - width * pixelSize;
 
-            unsafe
-            {
+            unsafe {
                 byte* dst = (byte*)data.Scan0.ToPointer();
 
-                for (int y = 0; y < height; y++)
-                {
-                    for (int x = 0; x < width; x++)
-                    {
+                for (int y = 0; y < height; y++) {
+                    for (int x = 0; x < width; x++) {
                         byte value = (byte)input[y][x];
 
                         for (int c = 0; c < pixelSize; c++, dst++)
@@ -966,12 +895,10 @@ namespace Accord.Imaging.Converters
                     dst += offset;
                 }
 
-                if (pixelSize == 4)
-                {
+                if (pixelSize == 4) {
                     dst = (byte*)data.Scan0.ToPointer();
 
-                    for (int y = 0; y < height; y++)
-                    {
+                    for (int y = 0; y < height; y++) {
                         for (int x = 0; x < width; x++, dst += pixelSize)
                             dst[RGB.A] = 0;
                         dst += offset;

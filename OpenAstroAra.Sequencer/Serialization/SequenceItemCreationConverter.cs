@@ -35,8 +35,8 @@ namespace OpenAstroAra.Sequencer.Serialization {
                 return sequenceContainerCreationConverter.Create(objectType, jObject);
             }
 
-            if(jObject.TryGetValue("ImageType", out var value)) {                
-                if(value.Value<string>() == "DARKFLAT") {
+            if (jObject.TryGetValue("ImageType", out var value)) {
+                if (value.Value<string>() == "DARKFLAT") {
                     // Migration of values prior to 3.0
                     jObject["ImageType"] = new JValue("DARK");
                 }

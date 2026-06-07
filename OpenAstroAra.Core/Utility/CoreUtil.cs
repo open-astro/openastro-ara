@@ -106,10 +106,10 @@ namespace OpenAstroAra.Core.Utility {
         /// <param name="unixTimeStamp">Milliseconds after 1970</param>
         /// <returns>DateTime</returns>
         public static DateTime UnixTimeStampToDateTime(long unixTimeStamp) {
-        // Unix timestamp is seconds past epoch
-        System.DateTime dtDateTime = new DateTime(1970, 1, 1, 0, 0, 0, 0, System.DateTimeKind.Utc);
-        dtDateTime = dtDateTime.AddSeconds(unixTimeStamp).ToLocalTime();
-        return dtDateTime;
+            // Unix timestamp is seconds past epoch
+            System.DateTime dtDateTime = new DateTime(1970, 1, 1, 0, 0, 0, 0, System.DateTimeKind.Utc);
+            dtDateTime = dtDateTime.AddSeconds(unixTimeStamp).ToLocalTime();
+            return dtDateTime;
         }
 
         /// <summary>
@@ -129,14 +129,14 @@ namespace OpenAstroAra.Core.Utility {
         public static async Task<TimeSpan> Delay(TimeSpan span, CancellationToken token) {
             var now = DateTime.UtcNow;
             if (span.Ticks >= 0) await Task.Delay(span, token);
-            return DateTime.UtcNow.Subtract(now);        
+            return DateTime.UtcNow.Subtract(now);
         }
 
         public static Task<TimeSpan> Wait(TimeSpan t, CancellationToken token = new CancellationToken(), IProgress<ApplicationStatus> progress = default, string status = "") {
             return Wait(t, false, token, progress, status);
         }
 
-        public static async Task<TimeSpan> Wait(TimeSpan t, bool progressCountDown, CancellationToken token = new CancellationToken(), IProgress<ApplicationStatus> progress = default,  string status = "") {
+        public static async Task<TimeSpan> Wait(TimeSpan t, bool progressCountDown, CancellationToken token = new CancellationToken(), IProgress<ApplicationStatus> progress = default, string status = "") {
             status = string.IsNullOrWhiteSpace(status) ? OpenAstroAra.Core.Locale.Loc.Instance["LblWaiting"] : status;
 
             var elapsed = new TimeSpan(0);
@@ -145,10 +145,10 @@ namespace OpenAstroAra.Core.Utility {
                 elapsed += delta;
                 token.ThrowIfCancellationRequested();
 
-                if (progress != null) { 
+                if (progress != null) {
                     string progressStatus;
                     if (t.Hours > 0) {
-                        if(progressCountDown) {
+                        if (progressCountDown) {
                             var remaining = t - elapsed;
                             progressStatus = $"{status} {remaining.Hours:D2}:{remaining.Minutes:D2}:{remaining.Seconds:D2}";
                         } else {
@@ -291,7 +291,7 @@ namespace OpenAstroAra.Core.Utility {
             }
         }
 
-        public static void CopyDirectory(string source, string target) {            
+        public static void CopyDirectory(string source, string target) {
             var diSource = new DirectoryInfo(source);
             var diTarget = new DirectoryInfo(target);
 
@@ -311,10 +311,10 @@ namespace OpenAstroAra.Core.Utility {
                 try {
                     Logger.Info($"Copy file from {fi} to {destinationFile}");
                     fi.CopyTo(destinationFile, true);
-                } catch(Exception ex) {
+                } catch (Exception ex) {
                     Logger.Error($"Failed to copy file {fi} to {destinationFile}.", ex);
                 }
-                
+
             }
 
             // Copy each subdirectory using recursion.

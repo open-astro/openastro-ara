@@ -56,7 +56,7 @@ namespace OpenAstroAra.Equipment.Interfaces.Mediator {
 
         void SetSubSambleRectangle(ObservableRectangle observableRectangle);
 
-        event EventHandler<ImagePreparedEventArgs> ImagePrepared;        
+        event EventHandler<ImagePreparedEventArgs> ImagePrepared;
     }
 
     public class ImagePreparedEventArgs : EventArgs {

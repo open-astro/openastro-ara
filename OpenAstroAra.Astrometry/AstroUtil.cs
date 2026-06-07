@@ -195,7 +195,7 @@ namespace OpenAstroAra.Astrometry {
 
             var deltaUT = 0d;
             if (DeltaUTCache.TryGetValue(utcDate.Date, out deltaUT)) {
-                if(deltaUT != 0) {
+                if (deltaUT != 0) {
                     return deltaUT;
                 }
             }
@@ -222,9 +222,9 @@ namespace OpenAstroAra.Astrometry {
             try {
                 if (!DeltaUTCache.ContainsKey(utcDate.Date)) {
                     DeltaUTCache.AddOrUpdate(utcDate.Date, deltaUT, (a, b) => b);
-                }                
-            } catch(Exception) { }
-            
+                }
+            } catch (Exception) { }
+
 
             return deltaUT;
         }
@@ -430,9 +430,9 @@ namespace OpenAstroAra.Astrometry {
             }
 
             // Prevent "-0" when using ToString
-            if(arcsec == 0) { arcsec = 0; }
-            if(arcmin == 0) { arcmin = 0; }
-            if(degree == 0) { degree = 0; }
+            if (arcsec == 0) { arcsec = 0; }
+            if (arcmin == 0) { arcmin = 0; }
+            if (degree == 0) { degree = 0; }
 
             return string.Format(pattern, degree, arcmin, arcsec);
         }
@@ -925,14 +925,14 @@ namespace OpenAstroAra.Astrometry {
         /// <param name="maxIterations">[Optional] Maximum Iterations - When exceeded NaN is returned</param>
         /// <returns></returns>
         public static double CalculateRefractedAltitude(double altitude, double pressurehPa, double tempCelcius, double relativeHumidity, double wavelength, double iterationIncrementInArcsec = 1, double maxIterations = 1000) {
-            if(altitude < 0) { throw new ArgumentException("Altitude must be greater than or equals 0"); }
+            if (altitude < 0) { throw new ArgumentException("Altitude must be greater than or equals 0"); }
 
             double refa = 0d;
             double refb = 0d;
             double Z = AstroUtil.ToRadians(90 - altitude);
 
             SOFA.RefractionConstants(pressurehPa, tempCelcius, relativeHumidity, wavelength, ref refa, ref refb);
-            
+
             var increment = AstroUtil.ToRadians(AstroUtil.ArcsecToDegree(iterationIncrementInArcsec));
             var roller = increment;
             var iterations = 0;
@@ -940,7 +940,7 @@ namespace OpenAstroAra.Astrometry {
                 double refractedZenithDistanceRadian = Z - roller;
                 // dZ = A tan Z + B tan^3 Z.  
                 var dZ2 = refa * Math.Tan(refractedZenithDistanceRadian) + refb * Math.Pow(Math.Tan(refractedZenithDistanceRadian), 3);
-                if(double.IsNaN(dZ2)) {
+                if (double.IsNaN(dZ2)) {
                     return double.NaN;
                 }
                 var originalZenithDistanceRadian = refractedZenithDistanceRadian + dZ2;

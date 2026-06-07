@@ -32,15 +32,13 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 
-namespace Accord.Imaging
-{
+namespace Accord.Imaging {
     using Accord.Math;
     using System;
     using System.Collections.Generic;
 
     [Serializable]
-    internal class FastRetinaKeypointPattern : ICloneable
-    {
+    internal class FastRetinaKeypointPattern : ICloneable {
 
         /// <summary>
         ///   Pattern scale resolution.
@@ -86,16 +84,14 @@ namespace Accord.Imaging
         public OrientationPair[] orientationPairs = new OrientationPair[45];
 
 
-        public FastRetinaKeypointPattern(int octaves = 4, float scale = 22.0f)
-        {
+        public FastRetinaKeypointPattern(int octaves = 4, float scale = 22.0f) {
             this.Octaves = octaves;
             this.Scale = scale;
 
             build(octaves, scale);
         }
 
-        private void build(int octaves, float scale)
-        {
+        private void build(int octaves, float scale) {
             lookupTable = new PatternPoint[Scales * Orientations * Points];
 
             double scaleStep = Math.Pow(2.0, (double)(octaves) / Scales);
@@ -129,21 +125,17 @@ namespace Accord.Imaging
 
 
             // fill the lookup table
-            for (int scaleIdx = 0; scaleIdx < Scales; scaleIdx++)
-            {
+            for (int scaleIdx = 0; scaleIdx < Scales; scaleIdx++) {
                 patternSizes[scaleIdx] = 0;
                 double scalingFactor = Math.Pow(scaleStep, scaleIdx);
 
-                for (int orientationIdx = 0; orientationIdx < Orientations; orientationIdx++)
-                {
+                for (int orientationIdx = 0; orientationIdx < Orientations; orientationIdx++) {
                     // orientation of the pattern
                     double theta = orientationIdx * 2 * Math.PI / Orientations;
                     int pointIdx = 0;
 
-                    for (int i = 0; i < 8; i++)
-                    {
-                        for (int k = 0; k < n[i]; k++)
-                        {
+                    for (int i = 0; i < 8; i++) {
+                        for (int k = 0; k < n[i]; k++) {
                             // Compute orientation offset so that groups
                             // of points on each circles become staggered
                             //
@@ -191,8 +183,7 @@ namespace Accord.Imaging
             orientationPairs[39].i = 30; orientationPairs[39].j = 33; orientationPairs[40].i = 31; orientationPairs[40].j = 34; orientationPairs[41].i = 32; orientationPairs[41].j = 35;
             orientationPairs[42].i = 36; orientationPairs[42].j = 39; orientationPairs[43].i = 37; orientationPairs[43].j = 40; orientationPairs[44].i = 38; orientationPairs[44].j = 41;
 
-            for (int m = 0; m < orientationPairs.Length; m++)
-            {
+            for (int m = 0; m < orientationPairs.Length; m++) {
                 float dx = lookupTable[orientationPairs[m].i].x - lookupTable[orientationPairs[m].j].x;
                 float dy = lookupTable[orientationPairs[m].i].y - lookupTable[orientationPairs[m].j].y;
                 float norm_sq = (dx * dx + dy * dy);
@@ -213,10 +204,8 @@ namespace Accord.Imaging
 
 
 
-        public struct PatternPoint
-        {
-            public PatternPoint(float x, float y, float sigma)
-            {
+        public struct PatternPoint {
+            public PatternPoint(float x, float y, float sigma) {
                 this.x = x;
                 this.y = y;
                 this.sigma = sigma;
@@ -227,20 +216,17 @@ namespace Accord.Imaging
             public float sigma;
         };
 
-        public struct DescriptionPair
-        {
+        public struct DescriptionPair {
             public int i; // index of the first point
             public int j; // index of the second point
 
-            public DescriptionPair(int i, int j)
-            {
+            public DescriptionPair(int i, int j) {
                 this.i = i;
                 this.j = j;
             }
         };
 
-        public struct OrientationPair
-        {
+        public struct OrientationPair {
             public int i; // index of the first point
             public int j; // index of the second point
             public int weight_dx; // dx/(norm_sq))*4096
@@ -293,8 +279,7 @@ namespace Accord.Imaging
         ///   A new object that is a copy of this instance.
         /// </returns>
         /// 
-        public object Clone()
-        {
+        public object Clone() {
             return new FastRetinaKeypointPattern(Octaves, Scale);
         }
     }

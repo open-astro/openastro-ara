@@ -2,12 +2,11 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © Andrew Kirillov, 2005-2009
+// Copyright ï¿½ Andrew Kirillov, 2005-2009
 // andrew.kirillov@aforgenet.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -60,8 +59,7 @@ namespace Accord.Imaging.Filters
     /// <img src="..\images\imaging\textured_filter2.jpg" width="480" height="361" />
     /// </remarks>
     /// 
-    public class TexturedFilter : BaseFilter
-    {
+    public class TexturedFilter : BaseFilter {
         // texture generator
         private ITextureGenerator textureGenerator;
         // generated texture
@@ -84,8 +82,7 @@ namespace Accord.Imaging.Filters
         ///
         /// <remarks><para>See <see cref="IFilterInformation.FormatTranslations"/> for more information.</para></remarks>
         ///
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -101,8 +98,7 @@ namespace Accord.Imaging.Filters
         /// <para>See <see cref="TexturedFilter"/> class description for more details.</para>
         /// </remarks>
         /// 
-        public double FilterLevel
-        {
+        public double FilterLevel {
             get { return filterLevel; }
             set { filterLevel = Math.Max(0.0, Math.Min(1.0, value)); }
         }
@@ -120,8 +116,7 @@ namespace Accord.Imaging.Filters
         /// <para>See <see cref="TexturedFilter"/> class description for more details.</para>
         /// </remarks>
         /// 
-        public double PreserveLevel
-        {
+        public double PreserveLevel {
             get { return preserveLevel; }
             set { preserveLevel = Math.Max(0.0, Math.Min(1.0, value)); }
         }
@@ -139,8 +134,7 @@ namespace Accord.Imaging.Filters
         /// generator is specified than the static generated texture is not used.</note></para>
         /// </remarks>
         /// 
-        public float[,] Texture
-        {
+        public float[,] Texture {
             get { return texture; }
             set { texture = value; }
         }
@@ -154,8 +148,7 @@ namespace Accord.Imaging.Filters
         /// <para><note>The property has priority over the <see cref="Texture"/> property.</note></para>
         /// </remarks>
         /// 
-        public ITextureGenerator TextureGenerator
-        {
+        public ITextureGenerator TextureGenerator {
             get { return textureGenerator; }
             set { textureGenerator = value; }
         }
@@ -174,11 +167,9 @@ namespace Accord.Imaging.Filters
         /// <exception cref="UnsupportedImageFormatException">The specified filter does not produce image of supported format.</exception>
         /// <exception cref="ArgumentException">The specified filter does not implement IFilterInformation interface.</exception>
         /// 
-        public IFilter Filter1
-        {
+        public IFilter Filter1 {
             get { return filter1; }
-            set
-            {
+            set {
                 var info = value as IFilterInformation;
 
                 if (info == null)
@@ -212,12 +203,10 @@ namespace Accord.Imaging.Filters
         /// <exception cref="UnsupportedImageFormatException">The specified filter does not produce image of supported format.</exception>
         /// <exception cref="ArgumentException">The specified filter does not implement IFilterInformation interface.</exception>
         /// 
-        public IFilter Filter2
-        {
+        public IFilter Filter2 {
             get { return filter2; }
 
-            set
-            {
+            set {
                 IFilterInformation info = value as IFilterInformation;
 
                 if (info == null)
@@ -235,8 +224,7 @@ namespace Accord.Imaging.Filters
         }
 
         // Private constructor to 
-        private TexturedFilter()
-        {
+        private TexturedFilter() {
             formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format24bppRgb;
         }
 
@@ -248,8 +236,7 @@ namespace Accord.Imaging.Filters
         /// <param name="filter1">First filter.</param>
         /// 
         public TexturedFilter(float[,] texture, IFilter filter1)
-            : this()
-        {
+            : this() {
             this.texture = texture;
             this.filter1 = filter1;
         }
@@ -263,8 +250,7 @@ namespace Accord.Imaging.Filters
         /// <param name="filter2">Second filter.</param>
         /// 
         public TexturedFilter(float[,] texture, IFilter filter1, IFilter filter2)
-            : this()
-        {
+            : this() {
             this.texture = texture;
             this.filter1 = filter1;
             this.filter2 = filter2;
@@ -278,8 +264,7 @@ namespace Accord.Imaging.Filters
         /// <param name="filter1">First filter.</param>
         /// 
         public TexturedFilter(ITextureGenerator generator, IFilter filter1)
-            : this()
-        {
+            : this() {
             this.textureGenerator = generator;
             this.filter1 = filter1;
         }
@@ -293,8 +278,7 @@ namespace Accord.Imaging.Filters
         /// <param name="filter2">Second filter.</param>
         /// 
         public TexturedFilter(ITextureGenerator generator, IFilter filter1, IFilter filter2)
-            : this()
-        {
+            : this() {
             this.textureGenerator = generator;
             this.filter1 = filter1;
             this.filter2 = filter2;
@@ -310,23 +294,18 @@ namespace Accord.Imaging.Filters
         /// <exception cref="InvalidImagePropertiesException">Texture size does not match image size.</exception>
         /// <exception cref="ApplicationException">Filters should not change image dimension.</exception>
         /// 
-        protected override unsafe void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData)
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData) {
             // get source image dimension
             int width = sourceData.Width;
             int height = sourceData.Height;
 
             // if generator was specified, then generate a texture
             // otherwise use provided texture
-            if (textureGenerator != null)
-            {
+            if (textureGenerator != null) {
                 texture = textureGenerator.Generate(width, height);
-            }
-            else
-            {
+            } else {
                 // check existing texture
-                if ((texture.GetLength(0) != height) || (texture.GetLength(1) != width))
-                {
+                if ((texture.GetLength(0) != height) || (texture.GetLength(1) != width)) {
                     // sorry, but source image must have the same dimension as texture
                     throw new InvalidImagePropertiesException("Texture size does not match image size.");
                 }
@@ -336,15 +315,13 @@ namespace Accord.Imaging.Filters
             UnmanagedImage filteredImage1 = filter1.Apply(sourceData);
 
             // check size of the result image
-            if ((width != filteredImage1.Width) || (height != filteredImage1.Height))
-            {
+            if ((width != filteredImage1.Width) || (height != filteredImage1.Height)) {
                 filteredImage1.Dispose();
                 throw new InvalidOperationException("Filters should not change image dimension.");
             }
 
             // convert 1st image to RGB if required
-            if (filteredImage1.PixelFormat == PixelFormat.Format8bppIndexed)
-            {
+            if (filteredImage1.PixelFormat == PixelFormat.Format8bppIndexed) {
                 GrayscaleToRGB coloringFilter = new GrayscaleToRGB();
                 UnmanagedImage temp = coloringFilter.Apply(filteredImage1);
                 filteredImage1.Dispose();
@@ -353,12 +330,10 @@ namespace Accord.Imaging.Filters
 
             UnmanagedImage filteredImage2 = null;
             // apply second filter, if it was specified
-            if (filter2 != null)
-            {
+            if (filter2 != null) {
                 filteredImage2 = filter2.Apply(sourceData);
                 // check size of the result image
-                if ((width != filteredImage2.Width) || (height != filteredImage2.Height))
-                {
+                if ((width != filteredImage2.Width) || (height != filteredImage2.Height)) {
                     filteredImage1.Dispose();
                     filteredImage2.Dispose();
                     // we are not handling such situations yet
@@ -366,8 +341,7 @@ namespace Accord.Imaging.Filters
                 }
 
                 // convert 2nd image to RGB if required
-                if (filteredImage2.PixelFormat == PixelFormat.Format8bppIndexed)
-                {
+                if (filteredImage2.PixelFormat == PixelFormat.Format8bppIndexed) {
                     GrayscaleToRGB coloringFilter = new GrayscaleToRGB();
                     UnmanagedImage temp = coloringFilter.Apply(filteredImage2);
                     filteredImage2.Dispose();
@@ -376,14 +350,12 @@ namespace Accord.Imaging.Filters
             }
 
             // use source image as a second image, if second filter is not set
-            if (filteredImage2 == null)
-            {
+            if (filteredImage2 == null) {
                 filteredImage2 = sourceData;
             }
 
             // do the job
-            unsafe
-            {
+            unsafe {
                 byte* dst = (byte*)destinationData.ImageData.ToPointer();
                 byte* src1 = (byte*)filteredImage1.ImageData.ToPointer();
                 byte* src2 = (byte*)filteredImage2.ImageData.ToPointer();
@@ -392,19 +364,15 @@ namespace Accord.Imaging.Filters
                 int src1Offset = filteredImage1.Stride - 3 * width;
                 int src2Offset = filteredImage2.Stride - 3 * width;
 
-                if (preserveLevel != 0.0)
-                {
+                if (preserveLevel != 0.0) {
                     // for each line
-                    for (int y = 0; y < height; y++)
-                    {
+                    for (int y = 0; y < height; y++) {
                         // for each pixel
-                        for (int x = 0; x < width; x++)
-                        {
+                        for (int x = 0; x < width; x++) {
                             double t1 = texture[y, x];
                             double t2 = 1 - t1;
 
-                            for (int i = 0; i < 3; i++, src1++, src2++, dst++)
-                            {
+                            for (int i = 0; i < 3; i++, src1++, src2++, dst++) {
                                 *dst = (byte)Math.Min(255.0f,
                                     filterLevel * (t1 * (*src1) + t2 * (*src2)) +
                                     preserveLevel * (*src2));
@@ -414,20 +382,15 @@ namespace Accord.Imaging.Filters
                         src2 += src2Offset;
                         dst += dstOffset;
                     }
-                }
-                else
-                {
+                } else {
                     // for each line
-                    for (int y = 0; y < height; y++)
-                    {
+                    for (int y = 0; y < height; y++) {
                         // for each pixel
-                        for (int x = 0; x < width; x++)
-                        {
+                        for (int x = 0; x < width; x++) {
                             double t1 = texture[y, x];
                             double t2 = 1 - t1;
 
-                            for (int i = 0; i < 3; i++, src1++, src2++, dst++)
-                            {
+                            for (int i = 0; i < 3; i++, src1++, src2++, dst++) {
                                 *dst = (byte)Math.Min(255.0f, t1 * *src1 + t2 * *src2);
                             }
                         }
@@ -440,8 +403,7 @@ namespace Accord.Imaging.Filters
 
             // dispose temp images
             filteredImage1.Dispose();
-            if (filteredImage2 != sourceData)
-            {
+            if (filteredImage2 != sourceData) {
                 filteredImage2.Dispose();
             }
         }

@@ -1,14 +1,14 @@
 // AForge Image Processing Library
 // AForge.NET framework
 //
-// Copyright © Andrew Kirillov, 2005-2008
+// Copyright ï¿½ Andrew Kirillov, 2005-2008
 // andrew.kirillov@gmail.com
 //
 // Accord Imaging Library
 // The Accord.NET Framework
 // http://accord-framework.net
 //
-// Copyright © César Souza, 2009-2017
+// Copyright ï¿½ Cï¿½sar Souza, 2009-2017
 // cesarsouza at gmail.com
 //
 //    This library is free software; you can redistribute it and/or
@@ -26,8 +26,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Drawing;
     using System.Drawing.Imaging;
@@ -40,8 +39,7 @@ namespace Accord.Imaging.Filters
     /// which implement image rotation algorithms.</para>
     /// </remarks>
     /// 
-    public abstract class BaseResizeFilter : BaseTransformationFilter
-    {
+    public abstract class BaseResizeFilter : BaseTransformationFilter {
         /// <summary>
         ///   New image width.
         /// </summary>
@@ -58,11 +56,9 @@ namespace Accord.Imaging.Filters
         ///   Width of the new resized image.
         /// </summary>
         /// 
-        public int NewWidth
-        {
+        public int NewWidth {
             get { return newWidth; }
-            set
-            {
+            set {
                 if (value <= 0)
                     throw new ArgumentOutOfRangeException("Value must be higher than zero.");
                 this.newWidth = value;
@@ -73,11 +69,9 @@ namespace Accord.Imaging.Filters
         ///   Height of the new resized image.
         /// </summary>
         /// 
-        public int NewHeight
-        {
+        public int NewHeight {
             get { return newHeight; }
-            set
-            {
+            set {
                 if (value <= 0)
                     throw new ArgumentOutOfRangeException("Value must be higher than zero.");
                 this.newHeight = value;
@@ -91,8 +85,7 @@ namespace Accord.Imaging.Filters
         /// <param name="newWidth">Width of the new resized image.</param>
         /// <param name="newHeight">Height of the new resize image.</param>
         /// 
-        protected BaseResizeFilter(int newWidth, int newHeight)
-        {
+        protected BaseResizeFilter(int newWidth, int newHeight) {
             this.NewWidth = newWidth;
             this.NewHeight = newHeight;
         }
@@ -105,8 +98,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <returns>New image size - size of the destination image.</returns>
         /// 
-        protected override System.Drawing.Size CalculateNewImageSize(UnmanagedImage sourceData)
-        {
+        protected override System.Drawing.Size CalculateNewImageSize(UnmanagedImage sourceData) {
             return new Size(newWidth, newHeight);
         }
     }

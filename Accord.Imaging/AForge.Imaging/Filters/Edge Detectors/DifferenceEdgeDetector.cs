@@ -1,12 +1,11 @@
 // AForge Image Processing Library
 // AForge.NET framework
 //
-// Copyright © Andrew Kirillov, 2005-2008
+// Copyright ï¿½ Andrew Kirillov, 2005-2008
 // andrew.kirillov@aforgenet.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -51,16 +50,14 @@ namespace Accord.Imaging.Filters
     /// <seealso cref="HomogenityEdgeDetector"/>
     /// <seealso cref="SobelEdgeDetector"/>
     /// 
-    public class DifferenceEdgeDetector : BaseUsingCopyPartialFilter
-    {
+    public class DifferenceEdgeDetector : BaseUsingCopyPartialFilter {
         // private format translation dictionary
         private Dictionary<PixelFormat, PixelFormat> formatTranslations = new Dictionary<PixelFormat, PixelFormat>();
 
         /// <summary>
         /// Format translations dictionary.
         /// </summary>
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -68,8 +65,7 @@ namespace Accord.Imaging.Filters
         /// Initializes a new instance of the <see cref="DifferenceEdgeDetector"/> class.
         /// </summary>
         /// 
-        public DifferenceEdgeDetector()
-        {
+        public DifferenceEdgeDetector() {
             // initialize format translation dictionary
             formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
         }
@@ -82,8 +78,7 @@ namespace Accord.Imaging.Filters
         /// <param name="destinationData">Destination image data.</param>
         /// <param name="rect">Image rectangle for processing by the filter.</param>
         /// 
-        protected override unsafe void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData, Rectangle rect)
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData, Rectangle rect) {
             // processing start and stop X,Y positions
             int startX = rect.Left + 1;
             int startY = rect.Top + 1;
@@ -107,11 +102,9 @@ namespace Accord.Imaging.Filters
             dst += dstStride * startY + startX;
 
             // for each line
-            for (int y = startY; y < stopY; y++)
-            {
+            for (int y = startY; y < stopY; y++) {
                 // for each pixel
-                for (int x = startX; x < stopX; x++, src++, dst++)
-                {
+                for (int x = startX; x < stopX; x++, src++, dst++) {
                     // left diagonal
                     max = (int)src[-srcStride - 1] - src[srcStride + 1];
                     if (max < 0)

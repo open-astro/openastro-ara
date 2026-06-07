@@ -44,7 +44,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
         public override object Clone() {
             return new SunAltitudeCondition(this) {
                 Data = Data.Clone()
-           };
+            };
         }
 
         private DateTimeOffset lastCalculation = DateTimeOffset.MinValue;

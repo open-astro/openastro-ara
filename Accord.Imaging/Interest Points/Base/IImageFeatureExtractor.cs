@@ -20,8 +20,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging
-{
+namespace Accord.Imaging {
     using Accord.MachineLearning;
     using System;
     using System.Collections.Generic;
@@ -42,12 +41,11 @@ namespace Accord.Imaging
     /// 
     public interface IImageFeatureExtractor<
 #if !NET35
-        out 
+        out
 #endif
         TFeature> :
         IFeatureExtractor<TFeature, Bitmap>,
-        IFeatureExtractor<TFeature, UnmanagedImage>, ICloneable, IDisposable
-    {
+        IFeatureExtractor<TFeature, UnmanagedImage>, ICloneable, IDisposable {
     }
 
     /// <summary>
@@ -57,10 +55,9 @@ namespace Accord.Imaging
     [Obsolete("This class will be removed.")]
     public interface IFeatureDetector<
 #if !NET35
-        out 
+        out
 #endif
-        TPoint>
-    {
+        TPoint> {
         /// <summary>
         ///   Obsolete. Please use the <see cref="ICovariantTransform{TInput, TOutput}.Transform(TInput)"/> method instead.
         /// </summary>

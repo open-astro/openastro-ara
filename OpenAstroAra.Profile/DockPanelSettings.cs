@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 namespace OpenAstroAra.Profile {
     [Serializable()]
     [DataContract]
-    public class DockPanelSettings : Settings, IDockPanelSettings  {
+    public class DockPanelSettings : Settings, IDockPanelSettings {
         [OnDeserializing]
         public void OnDeserializing(StreamingContext context) {
             SetDefaultValues();

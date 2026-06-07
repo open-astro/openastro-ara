@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -25,7 +25,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
         public FITSHeaderCard(string key, string value, string comment) {
             this.Key = key;
             if (value == null) { value = string.Empty; }
-            
+
             /*
              * FITS Standard 4.0, Section 4.2.1:
              * A single quote is represented within a string as two successive single quotes
@@ -54,7 +54,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
                 comment = comment.Substring(0, commentLength);
             }
 
-            
+
             this.Value = $"'{value}'".PadRight(totalLength - commentLength - commentSeparatorLenght + 2);
             this.Comment = comment;
         }

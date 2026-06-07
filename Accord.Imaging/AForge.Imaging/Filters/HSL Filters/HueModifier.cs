@@ -2,12 +2,11 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © AForge.NET, 2005-2011
+// Copyright ï¿½ AForge.NET, 2005-2011
 // contacts@aforgenet.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -37,8 +36,7 @@ namespace Accord.Imaging.Filters
     /// <img src="..\images\imaging\hue_modifier.jpg" width="480" height="361" />
     /// </remarks>
     /// 
-    public class HueModifier : BaseInPlacePartialFilter
-    {
+    public class HueModifier : BaseInPlacePartialFilter {
         private int hue = 0;
 
         // private format translation dictionary
@@ -47,8 +45,7 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Format translations dictionary.
         /// </summary>
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -58,8 +55,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <remarks><para>Default value is set to <b>0</b>.</para></remarks>
         /// 
-        public int Hue
-        {
+        public int Hue {
             get { return hue; }
             set { hue = Math.Max(0, Math.Min(359, value)); }
         }
@@ -68,8 +64,7 @@ namespace Accord.Imaging.Filters
         /// Initializes a new instance of the <see cref="HueModifier"/> class.
         /// </summary>
         /// 
-        public HueModifier()
-        {
+        public HueModifier() {
             formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format24bppRgb;
             formatTranslations[PixelFormat.Format32bppRgb] = PixelFormat.Format32bppRgb;
             formatTranslations[PixelFormat.Format32bppArgb] = PixelFormat.Format32bppArgb;
@@ -82,8 +77,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <param name="hue">Hue value to set.</param>
         /// 
-        public HueModifier(int hue) : this()
-        {
+        public HueModifier(int hue) : this() {
             this.hue = hue;
         }
 
@@ -94,8 +88,7 @@ namespace Accord.Imaging.Filters
         /// <param name="image">Source image data.</param>
         /// <param name="rect">Image rectangle for processing by the filter.</param>
         ///
-        protected override unsafe void ProcessFilter(UnmanagedImage image, Rectangle rect)
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage image, Rectangle rect) {
             int pixelSize = Bitmap.GetPixelFormatSize(image.PixelFormat) / 8;
 
             int startX = rect.Left;
@@ -114,11 +107,9 @@ namespace Accord.Imaging.Filters
             ptr += (startY * image.Stride + startX * pixelSize);
 
             // for each row
-            for (int y = startY; y < stopY; y++)
-            {
+            for (int y = startY; y < stopY; y++) {
                 // for each pixel
-                for (int x = startX; x < stopX; x++, ptr += pixelSize)
-                {
+                for (int x = startX; x < stopX; x++, ptr += pixelSize) {
                     rgb.Red = ptr[RGB.R];
                     rgb.Green = ptr[RGB.G];
                     rgb.Blue = ptr[RGB.B];

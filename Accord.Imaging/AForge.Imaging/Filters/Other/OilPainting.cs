@@ -2,14 +2,13 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © Andrew Kirillov, 2005-2009
+// Copyright ï¿½ Andrew Kirillov, 2005-2009
 // andrew.kirillov@aforgenet.com
 //
 // Original idea found in Paint.NET project
 // http://www.eecs.wsu.edu/paint.net/
 //
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -43,8 +42,7 @@ namespace Accord.Imaging.Filters
     /// <img src="..\images\imaging\oil_painting.jpg" width="480" height="361" />
     /// </remarks>
     /// 
-    public class OilPainting : BaseUsingCopyPartialFilter
-    {
+    public class OilPainting : BaseUsingCopyPartialFilter {
         private int brushSize = 5;
 
         // private format translation dictionary
@@ -57,8 +55,7 @@ namespace Accord.Imaging.Filters
         /// <remarks><para>See <see cref="IFilterInformation.FormatTranslations"/>
         /// documentation for additional information.</para></remarks>
         /// 
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -70,8 +67,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <para>Default value is set to <b>5</b>.</para></remarks>
         /// 
-        public int BrushSize
-        {
+        public int BrushSize {
             get { return brushSize; }
             set { brushSize = Math.Max(3, Math.Min(21, value | 1)); }
         }
@@ -79,8 +75,7 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Initializes a new instance of the <see cref="OilPainting"/> class.
         /// </summary>
-        public OilPainting()
-        {
+        public OilPainting() {
             formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
             formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format24bppRgb;
             formatTranslations[PixelFormat.Format32bppRgb] = PixelFormat.Format32bppRgb;
@@ -94,8 +89,7 @@ namespace Accord.Imaging.Filters
         /// <param name="brushSize">Brush size.</param>
         /// 
         public OilPainting(int brushSize)
-            : this()
-        {
+            : this() {
             BrushSize = brushSize;
         }
 
@@ -107,8 +101,7 @@ namespace Accord.Imaging.Filters
         /// <param name="destinationData">Destination image data.</param>
         /// <param name="rect">Image rectangle for processing by the filter.</param>
         /// 
-        protected override unsafe void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData, Rectangle rect)
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData, Rectangle rect) {
             int pixelSize = Image.GetPixelFormatSize(sourceData.PixelFormat) / 8;
 
             // processing start and stop X,Y positions
@@ -139,22 +132,18 @@ namespace Accord.Imaging.Filters
             src += (startY * srcStride + startX * pixelSize);
             dst += (startY * dstStride + startX * pixelSize);
 
-            if (destinationData.PixelFormat == PixelFormat.Format8bppIndexed)
-            {
+            if (destinationData.PixelFormat == PixelFormat.Format8bppIndexed) {
                 // Grayscale image
 
                 // for each line
-                for (int y = startY; y < stopY; y++)
-                {
+                for (int y = startY; y < stopY; y++) {
                     // for each pixel
-                    for (int x = startX; x < stopX; x++, src++, dst++)
-                    {
+                    for (int x = startX; x < stopX; x++, src++, dst++) {
                         // clear arrays
                         Array.Clear(intensities, 0, 256);
 
                         // for each kernel row
-                        for (i = -radius; i <= radius; i++)
-                        {
+                        for (i = -radius; i <= radius; i++) {
                             t = y + i;
 
                             // skip row
@@ -165,16 +154,14 @@ namespace Accord.Imaging.Filters
                                 break;
 
                             // for each kernel column
-                            for (j = -radius; j <= radius; j++)
-                            {
+                            for (j = -radius; j <= radius; j++) {
                                 t = x + j;
 
                                 // skip column
                                 if (t < startX)
                                     continue;
 
-                                if (t < stopX)
-                                {
+                                if (t < stopX) {
                                     intensity = src[i * srcStride + j];
                                     intensities[intensity]++;
                                 }
@@ -185,10 +172,8 @@ namespace Accord.Imaging.Filters
                         maxIntensity = 0;
                         j = 0;
 
-                        for (i = 0; i < 256; i++)
-                        {
-                            if (intensities[i] > j)
-                            {
+                        for (i = 0; i < 256; i++) {
+                            if (intensities[i] > j) {
                                 maxIntensity = (byte)i;
                                 j = intensities[i];
                             }
@@ -200,20 +185,16 @@ namespace Accord.Imaging.Filters
                     src += srcOffset;
                     dst += dstOffset;
                 }
-            }
-            else
-            {
+            } else {
                 // RGB image
                 int[] red = new int[256];
                 int[] green = new int[256];
                 int[] blue = new int[256];
 
                 // for each line
-                for (int y = startY; y < stopY; y++)
-                {
+                for (int y = startY; y < stopY; y++) {
                     // for each pixel
-                    for (int x = startX; x < stopX; x++, src += pixelSize, dst += pixelSize)
-                    {
+                    for (int x = startX; x < stopX; x++, src += pixelSize, dst += pixelSize) {
                         // clear arrays
                         Array.Clear(intensities, 0, 256);
                         Array.Clear(red, 0, 256);
@@ -221,8 +202,7 @@ namespace Accord.Imaging.Filters
                         Array.Clear(blue, 0, 256);
 
                         // for each kernel row
-                        for (i = -radius; i <= radius; i++)
-                        {
+                        for (i = -radius; i <= radius; i++) {
                             t = y + i;
 
                             // skip row
@@ -233,16 +213,14 @@ namespace Accord.Imaging.Filters
                                 break;
 
                             // for each kernel column
-                            for (j = -radius; j <= radius; j++)
-                            {
+                            for (j = -radius; j <= radius; j++) {
                                 t = x + j;
 
                                 // skip column
                                 if (t < startX)
                                     continue;
 
-                                if (t < stopX)
-                                {
+                                if (t < stopX) {
                                     p = &src[i * srcStride + j * pixelSize];
 
                                     // grayscale value using BT709
@@ -264,10 +242,8 @@ namespace Accord.Imaging.Filters
                         maxIntensity = 0;
                         j = 0;
 
-                        for (i = 0; i < 256; i++)
-                        {
-                            if (intensities[i] > j)
-                            {
+                        for (i = 0; i < 256; i++) {
+                            if (intensities[i] > j) {
                                 maxIntensity = (byte)i;
                                 j = intensities[i];
                             }

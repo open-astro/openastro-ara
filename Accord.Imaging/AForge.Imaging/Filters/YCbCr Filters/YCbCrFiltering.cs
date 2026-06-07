@@ -1,12 +1,11 @@
 // AForge Image Processing Library
 // AForge.NET framework
 //
-// Copyright © AForge.NET, 2007-2011
+// Copyright ï¿½ AForge.NET, 2007-2011
 // contacts@aforgenet.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -45,8 +44,7 @@ namespace Accord.Imaging.Filters
     /// <seealso cref="ColorFiltering"/>
     /// <seealso cref="HSLFiltering"/>
     /// 
-    public class YCbCrFiltering : BaseInPlacePartialFilter
-    {
+    public class YCbCrFiltering : BaseInPlacePartialFilter {
         private Range yRange = new Range(0.0f, 1.0f);
         private Range cbRange = new Range(-0.5f, 0.5f);
         private Range crRange = new Range(-0.5f, 0.5f);
@@ -66,8 +64,7 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Format translations dictionary.
         /// </summary>
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -77,8 +74,7 @@ namespace Accord.Imaging.Filters
         /// Range of Y component, [0, 1].
         /// </summary>
         /// 
-        public Range Y
-        {
+        public Range Y {
             get { return yRange; }
             set { yRange = value; }
         }
@@ -87,8 +83,7 @@ namespace Accord.Imaging.Filters
         /// Range of Cb component, [-0.5, 0.5].
         /// </summary>
         /// 
-        public Range Cb
-        {
+        public Range Cb {
             get { return cbRange; }
             set { cbRange = value; }
         }
@@ -97,8 +92,7 @@ namespace Accord.Imaging.Filters
         /// Range of Cr component, [-0.5, 0.5].
         /// </summary>
         /// 
-        public Range Cr
-        {
+        public Range Cr {
             get { return crRange; }
             set { crRange = value; }
         }
@@ -106,11 +100,9 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Fill color used to fill filtered pixels.
         /// </summary>
-        public YCbCr FillColor
-        {
+        public YCbCr FillColor {
             get { return new YCbCr(fillY, fillCb, fillCr); }
-            set
-            {
+            set {
                 fillY = value.Y;
                 fillCb = value.Cb;
                 fillCr = value.Cr;
@@ -125,8 +117,7 @@ namespace Accord.Imaging.Filters
         /// <remarks><para>Default value is set to <see langword="true"/>, which means
         /// the filter removes colors outside of the specified range.</para></remarks>
         /// 
-        public bool FillOutsideRange
-        {
+        public bool FillOutsideRange {
             get { return fillOutsideRange; }
             set { fillOutsideRange = value; }
         }
@@ -140,8 +131,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <para>Default value is set to <see langword="true"/>.</para></remarks>
         /// 
-        public bool UpdateY
-        {
+        public bool UpdateY {
             get { return updateY; }
             set { updateY = value; }
         }
@@ -155,8 +145,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <para>Default value is set to <see langword="true"/>.</para></remarks>
         /// 
-        public bool UpdateCb
-        {
+        public bool UpdateCb {
             get { return updateCb; }
             set { updateCb = value; }
         }
@@ -170,8 +159,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <para>Default value is set to <see langword="true"/>.</para></remarks>
         /// 
-        public bool UpdateCr
-        {
+        public bool UpdateCr {
             get { return updateCr; }
             set { updateCr = value; }
         }
@@ -182,8 +170,7 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Initializes a new instance of the <see cref="YCbCrFiltering"/> class.
         /// </summary>
-        public YCbCrFiltering()
-        {
+        public YCbCrFiltering() {
             formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format24bppRgb;
             formatTranslations[PixelFormat.Format32bppRgb] = PixelFormat.Format32bppRgb;
             formatTranslations[PixelFormat.Format32bppArgb] = PixelFormat.Format32bppArgb;
@@ -198,8 +185,7 @@ namespace Accord.Imaging.Filters
         /// <param name="crRange">Range of Cr component.</param>
         /// 
         public YCbCrFiltering(Range yRange, Range cbRange, Range crRange) :
-            this()
-        {
+            this() {
             this.yRange = yRange;
             this.cbRange = cbRange;
             this.crRange = crRange;
@@ -212,8 +198,7 @@ namespace Accord.Imaging.Filters
         /// <param name="image">Source image data.</param>
         /// <param name="rect">Image rectangle for processing by the filter.</param>
         ///
-        protected override unsafe void ProcessFilter(UnmanagedImage image, Rectangle rect)
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage image, Rectangle rect) {
             // get pixel size
             int pixelSize = (image.PixelFormat == PixelFormat.Format24bppRgb) ? 3 : 4;
 
@@ -235,11 +220,9 @@ namespace Accord.Imaging.Filters
             ptr += (startY * image.Stride + startX * pixelSize);
 
             // for each row
-            for (int y = startY; y < stopY; y++)
-            {
+            for (int y = startY; y < stopY; y++) {
                 // for each pixel
-                for (int x = startX; x < stopX; x++, ptr += pixelSize)
-                {
+                for (int x = startX; x < stopX; x++, ptr += pixelSize) {
                     updated = false;
                     rgb.Red = ptr[RGB.R];
                     rgb.Green = ptr[RGB.G];
@@ -253,10 +236,16 @@ namespace Accord.Imaging.Filters
                         (ycbcr.Y >= yRange.Min) && (ycbcr.Y <= yRange.Max) &&
                         (ycbcr.Cb >= cbRange.Min) && (ycbcr.Cb <= cbRange.Max) &&
                         (ycbcr.Cr >= crRange.Min) && (ycbcr.Cr <= crRange.Max)
-                        )
-                    {
-                        if (!fillOutsideRange)
-                        {
+                        ) {
+                        if (!fillOutsideRange) {
+                            if (updateY) ycbcr.Y = fillY;
+                            if (updateCb) ycbcr.Cb = fillCb;
+                            if (updateCr) ycbcr.Cr = fillCr;
+
+                            updated = true;
+                        }
+                    } else {
+                        if (fillOutsideRange) {
                             if (updateY) ycbcr.Y = fillY;
                             if (updateCb) ycbcr.Cb = fillCb;
                             if (updateCr) ycbcr.Cr = fillCr;
@@ -264,20 +253,8 @@ namespace Accord.Imaging.Filters
                             updated = true;
                         }
                     }
-                    else
-                    {
-                        if (fillOutsideRange)
-                        {
-                            if (updateY) ycbcr.Y = fillY;
-                            if (updateCb) ycbcr.Cb = fillCb;
-                            if (updateCr) ycbcr.Cr = fillCr;
 
-                            updated = true;
-                        }
-                    }
-
-                    if (updated)
-                    {
+                    if (updated) {
                         // convert back to RGB
                         Accord.Imaging.YCbCr.ToRGB(ycbcr, ref rgb);
 

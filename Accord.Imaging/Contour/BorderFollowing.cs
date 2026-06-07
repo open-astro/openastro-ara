@@ -20,8 +20,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging
-{
+namespace Accord.Imaging {
     using AForge;
     using Accord.Imaging;
     using System.Collections.Generic;
@@ -54,8 +53,7 @@ namespace Accord.Imaging
     /// 
     /// </example>
     /// 
-    public class BorderFollowing : IContourExtractionAlgorithm
-    {
+    public class BorderFollowing : IContourExtractionAlgorithm {
 
         /// <summary>
         ///   Gets or sets the pixel value threshold above which a pixel
@@ -68,8 +66,7 @@ namespace Accord.Imaging
         ///   Initializes a new instance of the <see cref="BorderFollowing"/> class.
         /// </summary>
         /// 
-        public BorderFollowing()
-        {
+        public BorderFollowing() {
         }
 
         /// <summary>
@@ -79,8 +76,7 @@ namespace Accord.Imaging
         /// <param name="threshold">The pixel value threshold above which a pixel
         /// is considered black (belonging to the object). Default is zero.</param>
         /// 
-        public BorderFollowing(byte threshold)
-        {
+        public BorderFollowing(byte threshold) {
             this.Threshold = threshold;
         }
 
@@ -92,8 +88,7 @@ namespace Accord.Imaging
         /// <param name="image">A grayscale image.</param>
         /// <returns>A list of <see cref="IntPoint"/>s defining a contour.</returns>
         /// 
-        public List<IntPoint> FindContour(Bitmap image)
-        {
+        public List<IntPoint> FindContour(Bitmap image) {
             // lock source bitmap data
             BitmapData srcData = image.LockBits(
                 new Rectangle(0, 0, image.Width, image.Height),
@@ -101,13 +96,10 @@ namespace Accord.Imaging
 
             List<IntPoint> contour = null;
 
-            try
-            {
+            try {
                 // extract image contour
                 contour = FindContour(srcData);
-            }
-            finally
-            {
+            } finally {
                 // unlock source image
                 image.UnlockBits(srcData);
             }
@@ -125,8 +117,7 @@ namespace Accord.Imaging
         /// A list of <see cref="IntPoint"/>s defining a contour.
         /// </returns>
         /// 
-        public List<IntPoint> FindContour(BitmapData image)
-        {
+        public List<IntPoint> FindContour(BitmapData image) {
             return FindContour(new UnmanagedImage(image));
         }
 
@@ -137,8 +128,7 @@ namespace Accord.Imaging
         /// <param name="image">A grayscale image.</param>
         /// <returns>A list of <see cref="IntPoint"/>s defining a contour.</returns>
         /// 
-        public List<IntPoint> FindContour(UnmanagedImage image)
-        {
+        public List<IntPoint> FindContour(UnmanagedImage image) {
             CheckPixelFormat(image.PixelFormat);
 
             int width = image.Width;
@@ -147,8 +137,7 @@ namespace Accord.Imaging
 
             List<IntPoint> contour = new List<IntPoint>();
 
-            unsafe
-            {
+            unsafe {
                 byte* src = (byte*)image.ImageData.ToPointer();
 
                 byte* start = null;
@@ -164,15 +153,12 @@ namespace Accord.Imaging
                 bool found = false;
 
                 byte* col = src;
-                for (int x = 0; x < width && !found; x++, col++)
-                {
+                for (int x = 0; x < width && !found; x++, col++) {
                     byte* row = col;
-                    for (int y = 0; y < height && !found; y++, row += stride)
-                    {
+                    for (int y = 0; y < height && !found; y++, row += stride) {
                         image.CheckBounds(row);
 
-                        if (*row > Threshold)
-                        {
+                        if (*row > Threshold) {
                             start = row;
                             prevPosition = new IntPoint(x, y);
                             contour.Add(prevPosition);
@@ -181,8 +167,7 @@ namespace Accord.Imaging
                     }
                 }
 
-                if (contour.Count == 0)
-                {
+                if (contour.Count == 0) {
                     // Empty image
                     return contour;
                 }
@@ -193,7 +178,7 @@ namespace Accord.Imaging
                 //    find a neighbor pixel which is black.
 
                 int[] windowOffset =
-                { 
+                {
                     +1,          // 0: Right
                     -stride + 1, // 1: Top-Right
                     -stride,     // 2: Top
@@ -214,15 +199,13 @@ namespace Accord.Imaging
                     found = false;
 
                     // Search in the neighborhood window
-                    for (int i = 0; i < windowOffset.Length; i++)
-                    {
+                    for (int i = 0; i < windowOffset.Length; i++) {
                         // Find the next candidate neighbor point
                         IntPoint next = prevPosition + positionOffset[direction];
 
                         // Check if it is inside the blob area
                         if (next.X < 0 || next.X >= width ||
-                            next.Y < 0 || next.Y >= height)
-                        {
+                            next.Y < 0 || next.Y >= height) {
                             // It isn't. Change direction and continue.
                             direction = (direction + 1) % windowOffset.Length;
                             continue;
@@ -234,16 +217,14 @@ namespace Accord.Imaging
                         image.CheckBounds(neighbor); // Make sure we are in the image
 
                         // Check if it is a colored pixel
-                        if (*neighbor <= Threshold)
-                        {
+                        if (*neighbor <= Threshold) {
                             // It isn't. Change direction and continue.
                             direction = (direction + 1) % windowOffset.Length;
                             continue;
                         }
 
                         // Check if it is a previously found pixel
-                        if (neighbor == previous || neighbor == start)
-                        {
+                        if (neighbor == previous || neighbor == start) {
                             // We found a dead end.
                             found = false; break;
                         }
@@ -253,8 +234,7 @@ namespace Accord.Imaging
                         found = true; break;
                     }
 
-                    if (found)
-                    {
+                    if (found) {
                         // Navigate to neighbor pixel
                         previous = current;
                         current = unchecked(current + windowOffset[direction]);
@@ -277,11 +257,9 @@ namespace Accord.Imaging
 
 
         // Check for supported pixel format
-        private static void CheckPixelFormat(PixelFormat format)
-        {
+        private static void CheckPixelFormat(PixelFormat format) {
             // check pixel format
-            if ((format != PixelFormat.Format8bppIndexed))
-            {
+            if ((format != PixelFormat.Format8bppIndexed)) {
                 throw new UnsupportedImageFormatException("Unsupported pixel format of the source image.");
             }
         }
@@ -289,7 +267,7 @@ namespace Accord.Imaging
 
 
         // lookup tables
-        private static readonly IntPoint[] positionOffset = 
+        private static readonly IntPoint[] positionOffset =
         {
             new IntPoint( 1,  0), // 0: Right
             new IntPoint( 1, -1), // 1: Top-Right
@@ -301,7 +279,7 @@ namespace Accord.Imaging
             new IntPoint( 1,  1), // 7: Bottom-Right
         };
 
-        private static readonly int[] nextDirection = 
+        private static readonly int[] nextDirection =
         {
             7, // 0: Right
             7, // 1: Top-Right

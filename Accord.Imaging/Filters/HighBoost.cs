@@ -20,8 +20,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
 
     /// <summary>
@@ -38,8 +37,7 @@ namespace Accord.Imaging.Filters
     ///  This filter implementation has been contributed by Diego Catalano.</para>
     /// </remarks>
     /// 
-    public class HighBoost : Convolution
-    {
+    public class HighBoost : Convolution {
         private int boost = 8;
         private int size = 3;
 
@@ -53,11 +51,9 @@ namespace Accord.Imaging.Filters
         /// <para>Default value is set to <b>5</b>.</para>
         /// </remarks>
         /// 
-        public int Size
-        {
+        public int Size {
             get { return size; }
-            set
-            {
+            set {
                 size = Math.Max(3, Math.Min(21, value | 1));
                 createFilter();
             }
@@ -67,11 +63,9 @@ namespace Accord.Imaging.Filters
         ///   Gets or sets the boost value. Default is 9.
         /// </summary>
         /// 
-        public int Boost
-        {
+        public int Boost {
             get { return boost; }
-            set
-            {
+            set {
                 boost = value;
                 this.Kernel[size / 2, size / 2] = boost;
             }
@@ -81,8 +75,7 @@ namespace Accord.Imaging.Filters
         ///   Initializes a new instance of the <see cref="HighBoost"/> class.
         /// </summary>
         /// 
-        public HighBoost()
-        {
+        public HighBoost() {
             createFilter();
             base.ProcessAlpha = true;
         }
@@ -93,8 +86,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <param name="boost">The boost value. Default is 8.</param>
         /// 
-        public HighBoost(int boost)
-        {
+        public HighBoost(int boost) {
             Boost = boost;
             base.ProcessAlpha = true;
         }
@@ -106,16 +98,14 @@ namespace Accord.Imaging.Filters
         /// <param name="boost">The boost value. Default is 8.</param>
         /// <param name="size">The kernel size. Default is 3.</param>
         /// 
-        public HighBoost(int boost, int size)
-        {
+        public HighBoost(int boost, int size) {
             Size = size;
             Boost = boost;
             base.ProcessAlpha = true;
         }
 
 
-        private void createFilter()
-        {
+        private void createFilter() {
             // integer kernel
             int[,] kernel = new int[size, size];
 

@@ -23,13 +23,13 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
         public LoopForAltitudeBase(IProfileService profileService, bool useCustomHorizon) {
             ProfileService = profileService;
             Data = new WaitLoopData(profileService, useCustomHorizon, CalculateExpectedTime, GetType().Name);
-            ConditionWatchdog = new ConditionWatchdog(Interrupt, TimeSpan.FromSeconds(5)); 
+            ConditionWatchdog = new ConditionWatchdog(Interrupt, TimeSpan.FromSeconds(5));
         }
 
-       [JsonProperty]
+        [JsonProperty]
         public WaitLoopData Data { get; set; }
         public IProfileService ProfileService { get; set; }
- 
+
         [OnDeserialized]
         public void OnDeserialized(StreamingContext context) {
             RunWatchdogIfInsideSequenceRoot();
@@ -110,5 +110,3 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
         #endregion
     }
 }
-
-

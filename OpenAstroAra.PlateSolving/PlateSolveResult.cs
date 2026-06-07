@@ -59,7 +59,7 @@ namespace OpenAstroAra.PlateSolving {
         public bool Flipped { get; set; }
 
         public bool Success { get; set; }
-        
+
         [ObservableProperty]
         [NotifyPropertyChangedFor(nameof(RaErrorString))]
         [NotifyPropertyChangedFor(nameof(RaPixError))]

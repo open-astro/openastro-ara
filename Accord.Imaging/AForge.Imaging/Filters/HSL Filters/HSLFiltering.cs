@@ -1,12 +1,11 @@
 // AForge Image Processing Library
 // AForge.NET framework
 //
-// Copyright © AForge.NET, 2007-2011
+// Copyright ï¿½ AForge.NET, 2007-2011
 // contacts@aforgenet.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -61,8 +60,7 @@ namespace Accord.Imaging.Filters
     /// <seealso cref="ColorFiltering"/>
     /// <seealso cref="YCbCrFiltering"/>
     /// 
-    public class HSLFiltering : BaseInPlacePartialFilter
-    {
+    public class HSLFiltering : BaseInPlacePartialFilter {
         private IntRange hue = new IntRange(0, 359);
         private Range saturation = new Range(0.0f, 1.0f);
         private Range luminance = new Range(0.0f, 1.0f);
@@ -82,8 +80,7 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Format translations dictionary.
         /// </summary>
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -96,8 +93,7 @@ namespace Accord.Imaging.Filters
         /// <remarks><note>Because of hue values are cycled, the minimum value of the hue
         /// range may have bigger integer value than the maximum value, for example [330, 30].</note></remarks>
         /// 
-        public IntRange Hue
-        {
+        public IntRange Hue {
             get { return hue; }
             set { hue = value; }
         }
@@ -105,8 +101,7 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Range of saturation component, [0, 1].
         /// </summary>
-        public Range Saturation
-        {
+        public Range Saturation {
             get { return saturation; }
             set { saturation = value; }
         }
@@ -114,8 +109,7 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Range of luminance component, [0, 1].
         /// </summary>
-        public Range Luminance
-        {
+        public Range Luminance {
             get { return luminance; }
             set { luminance = value; }
         }
@@ -123,11 +117,9 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Fill color used to fill filtered pixels.
         /// </summary>
-        public HSL FillColor
-        {
+        public HSL FillColor {
             get { return new HSL(fillH, fillS, fillL); }
-            set
-            {
+            set {
                 fillH = value.Hue;
                 fillS = value.Saturation;
                 fillL = value.Luminance;
@@ -142,8 +134,7 @@ namespace Accord.Imaging.Filters
         /// <remarks><para>Default value is set to <see langword="true"/>, which means
         /// the filter removes colors outside of the specified range.</para></remarks>
         /// 
-        public bool FillOutsideRange
-        {
+        public bool FillOutsideRange {
             get { return fillOutsideRange; }
             set { fillOutsideRange = value; }
         }
@@ -157,8 +148,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <para>Default value is set to <see langword="true"/>.</para></remarks>
         /// 
-        public bool UpdateHue
-        {
+        public bool UpdateHue {
             get { return updateH; }
             set { updateH = value; }
         }
@@ -172,8 +162,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <para>Default value is set to <see langword="true"/>.</para></remarks>
         /// 
-        public bool UpdateSaturation
-        {
+        public bool UpdateSaturation {
             get { return updateS; }
             set { updateS = value; }
         }
@@ -187,8 +176,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <para>Default value is set to <see langword="true"/>.</para></remarks>
         /// 
-        public bool UpdateLuminance
-        {
+        public bool UpdateLuminance {
             get { return updateL; }
             set { updateL = value; }
         }
@@ -199,8 +187,7 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Initializes a new instance of the <see cref="HSLFiltering"/> class.
         /// </summary>
-        public HSLFiltering()
-        {
+        public HSLFiltering() {
             formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format24bppRgb;
             formatTranslations[PixelFormat.Format32bppRgb] = PixelFormat.Format32bppRgb;
             formatTranslations[PixelFormat.Format32bppArgb] = PixelFormat.Format32bppArgb;
@@ -215,8 +202,7 @@ namespace Accord.Imaging.Filters
         /// <param name="luminance">Range of luminance component.</param>
         /// 
         public HSLFiltering(IntRange hue, Range saturation, Range luminance) :
-            this()
-        {
+            this() {
             this.hue = hue;
             this.saturation = saturation;
             this.luminance = luminance;
@@ -229,8 +215,7 @@ namespace Accord.Imaging.Filters
         /// <param name="image">Source image data.</param>
         /// <param name="rect">Image rectangle for processing by the filter.</param>
         ///
-        protected override unsafe void ProcessFilter(UnmanagedImage image, Rectangle rect)
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage image, Rectangle rect) {
             // get pixel size
             int pixelSize = (image.PixelFormat == PixelFormat.Format24bppRgb) ? 3 : 4;
 
@@ -252,11 +237,9 @@ namespace Accord.Imaging.Filters
             ptr += (startY * image.Stride + startX * pixelSize);
 
             // for each row
-            for (int y = startY; y < stopY; y++)
-            {
+            for (int y = startY; y < stopY; y++) {
                 // for each pixel
-                for (int x = startX; x < stopX; x++, ptr += pixelSize)
-                {
+                for (int x = startX; x < stopX; x++, ptr += pixelSize) {
                     updated = false;
                     rgb.Red = ptr[RGB.R];
                     rgb.Green = ptr[RGB.G];
@@ -273,10 +256,16 @@ namespace Accord.Imaging.Filters
                         ((hue.Min < hue.Max) && (hsl.Hue >= hue.Min) && (hsl.Hue <= hue.Max)) ||
                         ((hue.Min > hue.Max) && ((hsl.Hue >= hue.Min) || (hsl.Hue <= hue.Max)))
                         )
-                        )
-                    {
-                        if (!fillOutsideRange)
-                        {
+                        ) {
+                        if (!fillOutsideRange) {
+                            if (updateH) hsl.Hue = fillH;
+                            if (updateS) hsl.Saturation = fillS;
+                            if (updateL) hsl.Luminance = fillL;
+
+                            updated = true;
+                        }
+                    } else {
+                        if (fillOutsideRange) {
                             if (updateH) hsl.Hue = fillH;
                             if (updateS) hsl.Saturation = fillS;
                             if (updateL) hsl.Luminance = fillL;
@@ -284,20 +273,8 @@ namespace Accord.Imaging.Filters
                             updated = true;
                         }
                     }
-                    else
-                    {
-                        if (fillOutsideRange)
-                        {
-                            if (updateH) hsl.Hue = fillH;
-                            if (updateS) hsl.Saturation = fillS;
-                            if (updateL) hsl.Luminance = fillL;
 
-                            updated = true;
-                        }
-                    }
-
-                    if (updated)
-                    {
+                    if (updated) {
                         // convert back to RGB
                         Accord.Imaging.HSL.ToRGB(hsl, ref rgb);
 

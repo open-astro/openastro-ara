@@ -93,9 +93,9 @@ namespace OpenAstroAra.Sequencer.Conditions {
 
         public bool Validate() {
             var i = new List<string>();
-            if(HasFixedTimeProvider) {
+            if (HasFixedTimeProvider) {
                 var referenceDate = NighttimeCalculator.GetReferenceDate(DateTime.Now);
-                if(lastReferenceDate != referenceDate) {                    
+                if (lastReferenceDate != referenceDate) {
                     UpdateTime();
                 }
             }
@@ -242,9 +242,9 @@ namespace OpenAstroAra.Sequencer.Conditions {
             if (lastCutOffTime >= remainingTime) {
                 hasTimeRemaining = false;
             }
-            
+
             if (!hasTimeRemaining && nextItemDuration > TimeSpan.Zero) {
-                if(nextItem != null) {
+                if (nextItem != null) {
                     Logger.Info($"No more time remaining. Remaining: {remainingTime - DateTime.Now}, Next Item {nextItem.Name ?? ""}, Next Item Estimated Duration {nextItemDuration}, Next Item Attempts: {nextItem.Attempts}");
                     // There is no time remaining due to the next instruction taking longer - mark the stop time so that all following checks are marked as finished until we exceed the set time
                     lastCutOffTime = (new DateTime(DateTime.Now.Year, DateTime.Now.Month, DateTime.Now.Day, Hours, Minutes, Seconds)).AddSeconds(10);

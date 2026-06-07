@@ -37,7 +37,7 @@ namespace OpenAstroAra.Equipment.Utility {
                 data.Camera.Name = info.Name;
                 try { data.Camera.Temperature = info.Temperature; } catch { data.Camera.Temperature = double.NaN; }
                 data.Camera.Gain = -1;
-                if(info.CanGetGain) {
+                if (info.CanGetGain) {
                     try { data.Camera.Gain = info.Gain; } catch { data.Camera.Gain = -1; }
                 }
                 try { data.Camera.Offset = info.Offset; } catch { data.Camera.Offset = -1; }

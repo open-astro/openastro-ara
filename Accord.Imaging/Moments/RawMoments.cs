@@ -20,8 +20,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging.Moments
-{
+namespace Accord.Imaging.Moments {
     using System;
     using System.Drawing;
     using System.Drawing.Imaging;
@@ -71,8 +70,7 @@ namespace Accord.Imaging.Moments
     /// <seealso cref="CentralMoments"/>
     /// 
     [Serializable]
-    public class RawMoments : MomentsBase, IMoments
-    {
+    public class RawMoments : MomentsBase, IMoments {
 
         /// <summary>
         ///   Gets the default maximum moment order.
@@ -182,8 +180,7 @@ namespace Accord.Imaging.Moments
         /// </summary>
         /// 
         public RawMoments(Bitmap image, Rectangle area, int order = DefaultOrder)
-            : base(order)
-        {
+            : base(order) {
             Compute(image, area);
         }
 
@@ -233,8 +230,7 @@ namespace Accord.Imaging.Moments
         /// <param name="secondOrder"><c>True</c> to compute second order moments, <c>false</c> otherwise.</param>
         /// 
         [Obsolete("Use the Order property to determine the maximum order to be computed.")]
-        public void Compute(float[,] image, Rectangle area, bool secondOrder)
-        {
+        public void Compute(float[,] image, Rectangle area, bool secondOrder) {
             Order = secondOrder ? 2 : 1;
             Compute(image, area);
         }
@@ -246,8 +242,7 @@ namespace Accord.Imaging.Moments
         /// <param name="image">The image.</param>
         /// <param name="area">The region of interest in the image to compute moments for.</param>
         /// 
-        public override void Compute(float[,] image, Rectangle area)
-        {
+        public override void Compute(float[,] image, Rectangle area) {
             int height = image.GetLength(0);
             int width = image.GetLength(1);
 
@@ -264,20 +259,16 @@ namespace Accord.Imaging.Moments
 
             int offset = width - (windowWidth - windowX);
 
-            unsafe
-            {
-                fixed (float* ptrImage = image)
-                {
+            unsafe {
+                fixed (float* ptrImage = image) {
                     float* src = ptrImage + windowY * width + windowX;
 
                     // TODO: Walk using x and y directly instead of i and j.
 
-                    for (int j = windowY; j < windowHeight; j++)
-                    {
+                    for (int j = windowY; j < windowHeight; j++) {
                         float y = j - windowY;
 
-                        for (int i = windowX; i < windowWidth; i++, src++)
-                        {
+                        for (int i = windowX; i < windowWidth; i++, src++) {
                             float x = i - windowX;
 
                             float v = *src;
@@ -286,15 +277,13 @@ namespace Accord.Imaging.Moments
                             M01 += y * v;
                             M10 += x * v;
 
-                            if (Order >= 2)
-                            {
+                            if (Order >= 2) {
                                 M11 += x * y * v;
                                 M02 += y * y * v;
                                 M20 += x * x * v;
                             }
 
-                            if (Order >= 3)
-                            {
+                            if (Order >= 3) {
                                 M12 += x * y * y * v;
                                 M21 += x * x * y * v;
 
@@ -320,8 +309,7 @@ namespace Accord.Imaging.Moments
         /// <param name="image">The image.</param>
         /// <param name="area">The region of interest in the image to compute moments for.</param>
         /// 
-        public override void Compute(UnmanagedImage image, Rectangle area)
-        {
+        public override void Compute(UnmanagedImage image, Rectangle area) {
             int height = image.Height;
             int width = image.Width;
             int stride = image.Stride;
@@ -338,20 +326,16 @@ namespace Accord.Imaging.Moments
             int windowWidth = Math.Min(windowX + area.Width, width);
             int windowHeight = Math.Min(windowY + area.Height, height);
 
-            unsafe
-            {
-                if (image.PixelFormat == PixelFormat.Format8bppIndexed)
-                {
+            unsafe {
+                if (image.PixelFormat == PixelFormat.Format8bppIndexed) {
                     int offset = stride - (windowWidth - windowX);
 
                     byte* src = (byte*)image.ImageData.ToPointer() + windowY * stride + windowX;
 
-                    for (int j = windowY; j < windowHeight; j++)
-                    {
+                    for (int j = windowY; j < windowHeight; j++) {
                         float y = j - windowY;
 
-                        for (int i = windowX; i < windowWidth; i++, src++)
-                        {
+                        for (int i = windowX; i < windowWidth; i++, src++) {
                             float x = i - windowX;
 
                             float v = *src;
@@ -360,15 +344,13 @@ namespace Accord.Imaging.Moments
                             M01 += y * v;
                             M10 += x * v;
 
-                            if (Order >= 2)
-                            {
+                            if (Order >= 2) {
                                 M11 += x * y * v;
                                 M02 += y * y * v;
                                 M20 += x * x * v;
                             }
 
-                            if (Order >= 3)
-                            {
+                            if (Order >= 3) {
                                 M12 += x * y * y * v;
                                 M21 += x * x * y * v;
 
@@ -379,21 +361,17 @@ namespace Accord.Imaging.Moments
 
                         src += offset;
                     }
-                }
-                else
-                {
+                } else {
                     // color images
                     int pixelSize = Bitmap.GetPixelFormatSize(image.PixelFormat) / 8;
                     int offset = stride - (windowWidth - windowX) * pixelSize;
 
                     byte* src = (byte*)image.ImageData.ToPointer() + windowY * stride + windowX * pixelSize;
 
-                    for (int j = windowY; j < windowHeight; j++)
-                    {
+                    for (int j = windowY; j < windowHeight; j++) {
                         float y = j - windowY;
 
-                        for (int i = windowX; i < windowWidth; i++, src += pixelSize)
-                        {
+                        for (int i = windowX; i < windowWidth; i++, src += pixelSize) {
                             float x = i - windowX;
 
                             // BT709 - 0.2125, 0.7154, 0.0721 
@@ -403,15 +381,13 @@ namespace Accord.Imaging.Moments
                             M01 += y * v;
                             M10 += x * v;
 
-                            if (Order >= 2)
-                            {
+                            if (Order >= 2) {
                                 M11 += x * y * v;
                                 M02 += y * y * v;
                                 M20 += x * x * v;
                             }
 
-                            if (Order >= 3)
-                            {
+                            if (Order >= 3) {
                                 M12 += x * y * y * v;
                                 M21 += x * x * y * v;
 
@@ -436,8 +412,7 @@ namespace Accord.Imaging.Moments
         ///   Resets all moments to zero.
         /// </summary>
         /// 
-        protected void Reset()
-        {
+        protected void Reset() {
             M00 = M10 = M01 = 0;
             M11 = M20 = M02 = 0;
 

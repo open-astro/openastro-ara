@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -67,8 +67,8 @@ namespace OpenAstroAra.Core.Model {
 
         public double Scale { get; private set; } = 1;
 
-        public double PeakRA { 
-            get => peakRA; 
+        public double PeakRA {
+            get => peakRA;
             set {
                 peakRA = value;
                 RaisePropertyChanged();
@@ -76,8 +76,8 @@ namespace OpenAstroAra.Core.Model {
             }
         }
 
-        public double PeakDec { 
-            get => peakDec; 
+        public double PeakDec {
+            get => peakDec;
             set {
                 peakDec = value;
                 RaisePropertyChanged();

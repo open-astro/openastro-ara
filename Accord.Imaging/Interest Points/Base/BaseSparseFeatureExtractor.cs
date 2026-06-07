@@ -20,8 +20,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging
-{
+namespace Accord.Imaging {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -39,16 +38,14 @@ namespace Accord.Imaging
     /// 
     [Serializable]
     public abstract class BaseSparseFeatureExtractor<TPoint> : BaseFeatureExtractor<TPoint>, ICornersDetector
-        where TPoint : IFeaturePoint<double[]>
-    {
+        where TPoint : IFeaturePoint<double[]> {
 
         /// <summary>
         ///   Obsolete. Please use the <see cref="BaseFeatureExtractor{T}.Transform(Bitmap)"/> method instead.
         /// </summary>
         /// 
         [Obsolete("Please use the Transform(input) method instead.")]
-        public new List<TPoint> ProcessImage(Bitmap image)
-        {
+        public new List<TPoint> ProcessImage(Bitmap image) {
             return new List<TPoint>(Transform(image));
         }
 
@@ -57,8 +54,7 @@ namespace Accord.Imaging
         /// </summary>
         /// 
         [Obsolete("Please use the Transform(input) method instead.")]
-        public new List<TPoint> ProcessImage(BitmapData imageData)
-        {
+        public new List<TPoint> ProcessImage(BitmapData imageData) {
             return new List<TPoint>(Transform(new UnmanagedImage(imageData)));
         }
 
@@ -67,26 +63,22 @@ namespace Accord.Imaging
         /// </summary>
         /// 
         [Obsolete("Please use the Transform(input) method instead.")]
-        public new List<TPoint> ProcessImage(UnmanagedImage image)
-        {
+        public new List<TPoint> ProcessImage(UnmanagedImage image) {
             return new List<TPoint>(Transform(image));
         }
 
 
-        List<IntPoint> ICornersDetector.ProcessImage(Bitmap image)
-        {
+        List<IntPoint> ICornersDetector.ProcessImage(Bitmap image) {
             return Transform(image).Select(x => new IntPoint((int)x.X, (int)x.Y)).ToList();
         }
 
-        List<IntPoint> ICornersDetector.ProcessImage(BitmapData imageData)
-        {
+        List<IntPoint> ICornersDetector.ProcessImage(BitmapData imageData) {
             return Transform(new UnmanagedImage(imageData)).Select(x => new IntPoint((int)x.X, (int)x.Y)).ToList();
         }
 
-        List<IntPoint> ICornersDetector.ProcessImage(UnmanagedImage image)
-        {
+        List<IntPoint> ICornersDetector.ProcessImage(UnmanagedImage image) {
             return Transform(image).Select(x => new IntPoint((int)x.X, (int)x.Y)).ToList();
         }
-     
+
     }
 }

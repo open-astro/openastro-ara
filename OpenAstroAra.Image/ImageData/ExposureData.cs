@@ -83,7 +83,7 @@ namespace OpenAstroAra.Image.ImageData {
         }
 
         public override async Task<IImageData> ToImageData(IProgress<ApplicationStatus> progress = default, CancellationToken cancelToken = default) {
-            switch(flatArray) {
+            switch (flatArray) {
                 case int[] integers:
                     return imageDataFactory.CreateBaseImageData(
                         imageArray: new ImageArrayInt(integers),

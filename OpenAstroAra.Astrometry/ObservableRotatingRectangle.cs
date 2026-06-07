@@ -22,7 +22,7 @@ namespace OpenAstroAra.Astrometry {
         public ObservableRotatingRectangle(double x, double y, double width, double height) : base(x, y, width, height) {
         }
 
-        public ObservableRotatingRectangle(double rotationOffset, double x, double y, double width, double height) : this(x,y,width,height) {
+        public ObservableRotatingRectangle(double rotationOffset, double x, double y, double width, double height) : this(x, y, width, height) {
             _rotationOffset = rotationOffset;
             OriginalOffset = _rotationOffset;
         }

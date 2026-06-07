@@ -60,5 +60,3 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
         }
     }
 }
-
-

@@ -51,7 +51,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
                             try {
                                 await WatchDogOperation();
                             } catch (OperationCanceledException) {
-                                Logger.Debug("Condition watchdog was canceled");                            
+                                Logger.Debug("Condition watchdog was canceled");
                             } catch (Exception ex) {
                                 Logger.Error(ex);
                             }

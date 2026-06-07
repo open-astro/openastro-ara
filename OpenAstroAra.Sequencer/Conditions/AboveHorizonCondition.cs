@@ -84,7 +84,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
             return $"Condition: {nameof(AboveHorizonCondition)}";
         }
 
-         public override bool Check(ISequenceItem previousItem, ISequenceItem nextItem) {
+        public override bool Check(ISequenceItem previousItem, ISequenceItem nextItem) {
             CalculateExpectedTime();
             var targetAltitude = Data.GetTargetAltitudeWithHorizon(DateTime.Now);
             var check = Data.CurrentAltitude >= targetAltitude;

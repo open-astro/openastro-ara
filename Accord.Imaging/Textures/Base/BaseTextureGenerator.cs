@@ -6,10 +6,10 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © Andrew Kirillov, 2005-2009
+// Copyright ï¿½ Andrew Kirillov, 2005-2009
 // andrew.kirillov@aforgenet.com
 //
-// Copyright © César Souza, 2009-2017
+// Copyright ï¿½ Cï¿½sar Souza, 2009-2017
 // cesarsouza at gmail.com
 //
 //    This library is free software; you can redistribute it and/or
@@ -27,8 +27,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging.Textures
-{
+namespace Accord.Imaging.Textures {
     using System;
     using System.Drawing;
 
@@ -40,8 +39,7 @@ namespace Accord.Imaging.Textures
     /// it as two dimensional array of intensities in the range of [0, 1] - texture's values.</para>
     /// </remarks>
     /// 
-    public abstract class BaseTextureGenerator : ITextureGenerator
-    {
+    public abstract class BaseTextureGenerator : ITextureGenerator {
         /// <summary>
         /// Generate texture.
         /// </summary>
@@ -57,8 +55,7 @@ namespace Accord.Imaging.Textures
         /// <remarks>Resets the generator - resets all internal variables, regenerates
         /// internal random numbers, etc.</remarks>
         [Obsolete("The texture generators now use a different seed at each call to Generate.")]
-        public void Reset()
-        {
+        public void Reset() {
 
         }
 
@@ -73,8 +70,7 @@ namespace Accord.Imaging.Textures
         /// 
         /// <remarks>Generates new texture of the specified size.</remarks>
         /// 
-        public virtual Bitmap GenerateBitmap(int width, int height)
-        {
+        public virtual Bitmap GenerateBitmap(int width, int height) {
             return Generate(width, height).ToBitmap();
         }
     }

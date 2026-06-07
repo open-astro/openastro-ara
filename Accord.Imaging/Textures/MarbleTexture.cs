@@ -27,8 +27,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging.Textures
-{
+namespace Accord.Imaging.Textures {
     using Accord.Math;
     using System;
 
@@ -56,8 +55,7 @@ namespace Accord.Imaging.Textures
     /// <img src="..\images\imaging\marble_texture.jpg" width="320" height="240" />
     /// </remarks>
     /// 
-    public class MarbleTexture : BaseTextureGenerator, ITextureGenerator
-    {
+    public class MarbleTexture : BaseTextureGenerator, ITextureGenerator {
         // Perlin noise function used for texture generation
         private PerlinNoise noise = new PerlinNoise(2, 0.65, 1.0 / 32, 1.0);
 
@@ -70,11 +68,9 @@ namespace Accord.Imaging.Textures
         /// 
         /// <remarks>Default value is set to <b>5</b>.</remarks>
         /// 
-        public double XPeriod
-        {
+        public double XPeriod {
             get { return xPeriod; }
-            set
-            {
+            set {
                 if (value < 2)
                     throw new ArgumentOutOfRangeException("The X period must be equal to or higher than 2.");
                 xPeriod = value;
@@ -87,11 +83,9 @@ namespace Accord.Imaging.Textures
         /// 
         /// <remarks>Default value is set to <b>10</b>.</remarks>
         /// 
-        public double YPeriod
-        {
+        public double YPeriod {
             get { return yPeriod; }
-            set
-            {
+            set {
                 if (value < 2)
                     throw new ArgumentOutOfRangeException("The Y period must be equal to or higher than 2.");
                 yPeriod = value;
@@ -102,8 +96,7 @@ namespace Accord.Imaging.Textures
         /// Initializes a new instance of the <see cref="MarbleTexture"/> class.
         /// </summary>
         /// 
-        public MarbleTexture()
-        {
+        public MarbleTexture() {
 
         }
 
@@ -114,8 +107,7 @@ namespace Accord.Imaging.Textures
         /// <param name="xPeriod">X period value.</param>
         /// <param name="yPeriod">Y period value.</param>
         /// 
-        public MarbleTexture(double xPeriod, double yPeriod)
-        {
+        public MarbleTexture(double xPeriod, double yPeriod) {
             this.xPeriod = xPeriod;
             this.yPeriod = yPeriod;
         }
@@ -131,18 +123,15 @@ namespace Accord.Imaging.Textures
         /// 
         /// <remarks>Generates new texture of the specified size.</remarks>
         /// 
-        public override float[,] Generate(int width, int height)
-        {
+        public override float[,] Generate(int width, int height) {
             var texture = new float[height, width];
             double xFact = xPeriod / width;
             double yFact = yPeriod / height;
 
             int r = Accord.Math.Random.Generator.Random.Next(5000);
 
-            for (int y = 0; y < height; y++)
-            {
-                for (int x = 0; x < width; x++)
-                {
+            for (int y = 0; y < height; y++) {
+                for (int x = 0; x < width; x++) {
                     double a = (x * xFact + y * yFact + noise.Function2D(x + r, y + r));
                     texture[y, x] = Math.Min(1.0f, (float)Math.Abs(Math.Sin(a * Math.PI)));
 

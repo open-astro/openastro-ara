@@ -27,8 +27,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging
-{
+namespace Accord.Imaging {
     using System;
     /// <summary>
     ///   YCbCr components.
@@ -51,8 +50,7 @@ namespace Accord.Imaging
     /// <seealso cref="RGB"/>
     /// 
     [Serializable]
-    public struct YCbCr
-    {
+    public struct YCbCr {
         /// <summary>
         /// Index of <b>Y</b> component.
         /// </summary>
@@ -91,8 +89,7 @@ namespace Accord.Imaging
         /// <param name="cb"><b>Cb</b> component.</param>
         /// <param name="cr"><b>Cr</b> component.</param>
         /// 
-        public YCbCr(float y, float cb, float cr)
-        {
+        public YCbCr(float y, float cb, float cr) {
             this.Y = Math.Max(0.0f, Math.Min(1.0f, y));
             this.Cb = Math.Max(-0.5f, Math.Min(0.5f, cb));
             this.Cr = Math.Max(-0.5f, Math.Min(0.5f, cr));
@@ -105,8 +102,7 @@ namespace Accord.Imaging
         /// <param name="rgb">Source color in <b>RGB</b> color space.</param>
         /// <param name="ycbcr">Destination color in <b>YCbCr</b> color space.</param>
         /// 
-        public static void FromRGB(RGB rgb, ref YCbCr ycbcr)
-        {
+        public static void FromRGB(RGB rgb, ref YCbCr ycbcr) {
             float r = (float)rgb.Red / 255;
             float g = (float)rgb.Green / 255;
             float b = (float)rgb.Blue / 255;
@@ -124,8 +120,7 @@ namespace Accord.Imaging
         /// 
         /// <returns>Returns <see cref="YCbCr"/> instance, which represents converted color value.</returns>
         /// 
-        public static YCbCr FromRGB(RGB rgb)
-        {
+        public static YCbCr FromRGB(RGB rgb) {
             YCbCr ycbcr = new YCbCr();
             FromRGB(rgb, ref ycbcr);
             return ycbcr;
@@ -138,8 +133,7 @@ namespace Accord.Imaging
         /// <param name="ycbcr">Source color in <b>YCbCr</b> color space.</param>
         /// <param name="rgb">Destination color in <b>RGB</b> color space.</param>
         /// 
-        public static void ToRGB(YCbCr ycbcr, ref RGB rgb)
-        {
+        public static void ToRGB(YCbCr ycbcr, ref RGB rgb) {
             // Don't worry about zeros. Compiler will remove them
             float r = Math.Max(0.0f, Math.Min(1.0f, (float)(ycbcr.Y + 0.0000 * ycbcr.Cb + 1.4022 * ycbcr.Cr)));
             float g = Math.Max(0.0f, Math.Min(1.0f, (float)(ycbcr.Y - 0.3456 * ycbcr.Cb - 0.7145 * ycbcr.Cr)));
@@ -157,8 +151,7 @@ namespace Accord.Imaging
         /// 
         /// <returns>Returns <see cref="RGB"/> instance, which represents converted color value.</returns>
         /// 
-        public RGB ToRGB()
-        {
+        public RGB ToRGB() {
             RGB rgb = new RGB();
             ToRGB(this, ref rgb);
             return rgb;
@@ -169,8 +162,7 @@ namespace Accord.Imaging
         /// </summary>
         /// <param name="yCbCr">The YCbCr color.</param>
         /// <returns>The result of the conversion.</returns>
-        public static explicit operator RGB(YCbCr yCbCr)
-        {
+        public static explicit operator RGB(YCbCr yCbCr) {
             return yCbCr.ToRGB();
         }
 
@@ -179,8 +171,7 @@ namespace Accord.Imaging
         /// </summary>
         /// <param name="yCbCr">The YCbCr color.</param>
         /// <returns>The result of the conversion.</returns>
-        public static explicit operator HSL(YCbCr yCbCr)
-        {
+        public static explicit operator HSL(YCbCr yCbCr) {
             return HSL.FromRGB(yCbCr.ToRGB());
         }
     }

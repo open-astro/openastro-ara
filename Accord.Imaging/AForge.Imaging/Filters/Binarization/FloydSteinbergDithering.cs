@@ -1,12 +1,11 @@
 // AForge Image Processing Library
 // AForge.NET framework
 //
-// Copyright © Andrew Kirillov, 2005-2008
+// Copyright ï¿½ Andrew Kirillov, 2005-2008
 // andrew.kirillov@gmail.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Drawing;
     using System.Drawing.Imaging;
@@ -47,18 +46,16 @@ namespace Accord.Imaging.Filters
     /// <seealso cref="SierraDithering"/>
     /// <seealso cref="StuckiDithering"/>
     /// 
-    public sealed class FloydSteinbergDithering : ErrorDiffusionToAdjacentNeighbors
-    {
+    public sealed class FloydSteinbergDithering : ErrorDiffusionToAdjacentNeighbors {
         /// <summary>
         /// Initializes a new instance of the <see cref="FloydSteinbergDithering"/> class.
         /// </summary>
         /// 
-        public FloydSteinbergDithering( )
-            : base( new int[2][] {
+        public FloydSteinbergDithering()
+            : base(new int[2][] {
             new int[1] { 7 },
             new int[3] { 3, 5, 1 }
-        } )
-        {
+        }) {
         }
     }
 }

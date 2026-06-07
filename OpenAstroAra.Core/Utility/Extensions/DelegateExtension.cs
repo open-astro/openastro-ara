@@ -25,14 +25,13 @@ namespace OpenAstroAra.Core.Utility.Extensions {
             }
 
             var invocationList = func.GetInvocationList().Cast<Func<object, TArgs, Task>>();
-            var tasks = invocationList.Select(async f =>
-            {
+            var tasks = invocationList.Select(async f => {
                 var stopwatch = Stopwatch.StartNew();
                 try {
                     await f(sender, e);
-                } catch(Exception ex) {
+                } catch (Exception ex) {
                     Logger.Error(ex);
-                }                
+                }
                 stopwatch.Stop();
 
                 if (stopwatch.ElapsedMilliseconds > 1000) {

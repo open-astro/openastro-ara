@@ -20,8 +20,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing.Imaging;
@@ -82,8 +81,7 @@ namespace Accord.Imaging.Filters
     ///
     /// </example>
     /// 
-    public class DifferenceOfGaussians : BaseInPlaceFilter
-    {
+    public class DifferenceOfGaussians : BaseInPlaceFilter {
         private Dictionary<PixelFormat, PixelFormat> formatTranslations;
 
         GaussianBlur first;
@@ -94,8 +92,7 @@ namespace Accord.Imaging.Filters
         ///   Gets or sets the first Gaussian filter.
         /// </summary>
         /// 
-        public GaussianBlur First
-        {
+        public GaussianBlur First {
             get { return first; }
             set { first = value; }
         }
@@ -104,8 +101,7 @@ namespace Accord.Imaging.Filters
         ///   Gets or sets the second Gaussian filter.
         /// </summary>
         /// 
-        public GaussianBlur Second
-        {
+        public GaussianBlur Second {
             get { return first; }
             set { first = value; }
         }
@@ -115,8 +111,7 @@ namespace Accord.Imaging.Filters
         ///   the difference of the two Gaussian blurs.
         /// </summary>
         /// 
-        public Subtract Subtract
-        {
+        public Subtract Subtract {
             get { return subtract; }
             set { subtract = value; }
         }
@@ -126,8 +121,7 @@ namespace Accord.Imaging.Filters
         ///   Format translations dictionary.
         /// </summary>
         /// 
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -135,8 +129,7 @@ namespace Accord.Imaging.Filters
         ///   Initializes a new instance of the <see cref="DifferenceOfGaussians"/> class.
         /// </summary>
         /// 
-        public DifferenceOfGaussians()
-        {
+        public DifferenceOfGaussians() {
             formatTranslations = new Dictionary<PixelFormat, PixelFormat>();
             formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
             formatTranslations[PixelFormat.Format16bppGrayScale] = PixelFormat.Format16bppGrayScale;
@@ -146,14 +139,12 @@ namespace Accord.Imaging.Filters
             formatTranslations[PixelFormat.Format48bppRgb] = PixelFormat.Format48bppRgb;
             formatTranslations[PixelFormat.Format64bppArgb] = PixelFormat.Format64bppArgb;
 
-            this.first = new GaussianBlur()
-            {
+            this.first = new GaussianBlur() {
                 Size = 3,
                 Sigma = 0.4
             };
 
-            this.second = new GaussianBlur()
-            {
+            this.second = new GaussianBlur() {
                 Size = 5,
                 Sigma = 0.4
             };
@@ -170,8 +161,7 @@ namespace Accord.Imaging.Filters
         /// <param name="windowSize2">The second window size. Default is 4.</param>
         /// 
         public DifferenceOfGaussians(int windowSize1, int windowSize2)
-            : this()
-        {
+            : this() {
             this.first.Size = windowSize1;
             this.second.Size = windowSize2;
         }
@@ -187,8 +177,7 @@ namespace Accord.Imaging.Filters
         /// <param name="sigma2">The sigma for the second Gaussian. Default is 0.4</param>
         /// 
         public DifferenceOfGaussians(int windowSize1, int windowSize2, double sigma1, double sigma2)
-            : this(windowSize1, windowSize2)
-        {
+            : this(windowSize1, windowSize2) {
             this.first.Sigma = sigma1;
             this.second.Sigma = sigma2;
         }
@@ -203,8 +192,7 @@ namespace Accord.Imaging.Filters
         /// <param name="sigma">The sigma for both Gaussian filters. Default is 0.4.</param>
         /// 
         public DifferenceOfGaussians(int windowSize1, int windowSize2, double sigma)
-            : this(windowSize1, windowSize2, sigma, sigma)
-        {
+            : this(windowSize1, windowSize2, sigma, sigma) {
         }
 
 
@@ -214,8 +202,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <param name="image">Source image data.</param>
         /// 
-        protected override void ProcessFilter(UnmanagedImage image)
-        {
+        protected override void ProcessFilter(UnmanagedImage image) {
             // Apply first Gaussian blur
             var image1 = first.Apply(image);
 

@@ -6,8 +6,7 @@
 // andrew.kirillov@aforgenet.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -24,16 +23,14 @@ namespace Accord.Imaging.Filters
     /// 
     /// <seealso cref="SimpleQuadrilateralTransformation"/>
     ///
-    [Obsolete( "The class is deprecated and SimpleQuadrilateralTransformation should be used instead" )]
-    public class QuadrilateralTransformationNearestNeighbor : BaseTransformationFilter
-    {
+    [Obsolete("The class is deprecated and SimpleQuadrilateralTransformation should be used instead")]
+    public class QuadrilateralTransformationNearestNeighbor : BaseTransformationFilter {
         private SimpleQuadrilateralTransformation baseFilter = null;
 
         /// <summary>
         /// Format translations dictionary.
         /// </summary>
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return baseFilter.FormatTranslations; }
         }
 
@@ -50,10 +47,9 @@ namespace Accord.Imaging.Filters
         /// come from length of longest edges.
         /// </para></remarks>
         /// 
-        public bool AutomaticSizeCalculaton
-        {
+        public bool AutomaticSizeCalculaton {
             get { return baseFilter.AutomaticSizeCalculaton; }
-            set { baseFilter.AutomaticSizeCalculaton = value;  }
+            set { baseFilter.AutomaticSizeCalculaton = value; }
         }
 
         /// <summary>
@@ -64,8 +60,7 @@ namespace Accord.Imaging.Filters
         /// in the source image to be transformed.</para>
         /// </remarks>
         /// 
-        public List<IntPoint> SourceCorners
-        {
+        public List<IntPoint> SourceCorners {
             get { return baseFilter.SourceQuadrilateral; }
             set { baseFilter.SourceQuadrilateral = value; }
         }
@@ -82,8 +77,7 @@ namespace Accord.Imaging.Filters
         /// is calculated automatically based on <see cref="SourceCorners"/> property.</note></para>
         /// </remarks>
         /// 
-        public int NewWidth
-        {
+        public int NewWidth {
             get { return baseFilter.NewWidth; }
             set { baseFilter.NewWidth = value; }
         }
@@ -100,8 +94,7 @@ namespace Accord.Imaging.Filters
         /// is calculated automatically based on <see cref="SourceCorners"/> property.</note></para>
         /// </remarks>
         /// 
-        public int NewHeight
-        {
+        public int NewHeight {
             get { return baseFilter.NewHeight; }
             set { baseFilter.NewHeight = value; }
         }
@@ -118,9 +111,8 @@ namespace Accord.Imaging.Filters
         /// <see langword="false"/>, which means that destination image will have width and
         /// height as specified by user.</para></remarks>
         /// 
-        public QuadrilateralTransformationNearestNeighbor( List<IntPoint> sourceCorners, int newWidth, int newHeight )
-		{
-            baseFilter = new SimpleQuadrilateralTransformation( sourceCorners, newWidth, newHeight );
+        public QuadrilateralTransformationNearestNeighbor(List<IntPoint> sourceCorners, int newWidth, int newHeight) {
+            baseFilter = new SimpleQuadrilateralTransformation(sourceCorners, newWidth, newHeight);
             baseFilter.UseInterpolation = false;
         }
 
@@ -134,9 +126,8 @@ namespace Accord.Imaging.Filters
         /// <see langword="true"/>, which means that destination image will have width and
         /// height automatically calculated based on <see cref="SourceCorners"/> property.</para></remarks>
         ///
-        public QuadrilateralTransformationNearestNeighbor( List<IntPoint> sourceCorners ) 
-        {
-            baseFilter = new SimpleQuadrilateralTransformation( sourceCorners );
+        public QuadrilateralTransformationNearestNeighbor(List<IntPoint> sourceCorners) {
+            baseFilter = new SimpleQuadrilateralTransformation(sourceCorners);
             baseFilter.UseInterpolation = false;
         }
 
@@ -147,9 +138,8 @@ namespace Accord.Imaging.Filters
         /// <param name="sourceData">Source image data.</param>
         /// <param name="destinationData">Destination image data.</param>
         /// 
-        protected override unsafe void ProcessFilter( UnmanagedImage sourceData, UnmanagedImage destinationData )
-        {
-            baseFilter.Apply( sourceData, destinationData );
+        protected override unsafe void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData) {
+            baseFilter.Apply(sourceData, destinationData);
         }
 
         /// <summary>
@@ -162,21 +152,18 @@ namespace Accord.Imaging.Filters
         /// 
         /// <exception cref="ArgumentException">The specified quadrilateral's corners are outside of the given image.</exception>
         /// 
-        protected override System.Drawing.Size CalculateNewImageSize( UnmanagedImage sourceData )
-        {
+        protected override System.Drawing.Size CalculateNewImageSize(UnmanagedImage sourceData) {
             // perform checking of source corners - they must feet into the image
-            foreach ( IntPoint point in baseFilter.SourceQuadrilateral )
-            {
-                if ( ( point.X < 0 ) ||
-                     ( point.Y < 0 ) ||
-                     ( point.X >= sourceData.Width ) ||
-                     ( point.Y >= sourceData.Height ) )
-                {
-                    throw new ArgumentException( "The specified quadrilateral's corners are outside of the given image." );
+            foreach (IntPoint point in baseFilter.SourceQuadrilateral) {
+                if ((point.X < 0) ||
+                     (point.Y < 0) ||
+                     (point.X >= sourceData.Width) ||
+                     (point.Y >= sourceData.Height)) {
+                    throw new ArgumentException("The specified quadrilateral's corners are outside of the given image.");
                 }
             }
 
-            return new Size( baseFilter.NewWidth, baseFilter.NewHeight );
+            return new Size(baseFilter.NewWidth, baseFilter.NewHeight);
         }
     }
 }

@@ -2,14 +2,14 @@
 // The Accord.NET Framework
 // http://accord-framework.net
 //
-// Copyright © César Souza, 2009-2017
+// Copyright ï¿½ Cï¿½sar Souza, 2009-2017
 // cesarsouza at gmail.com
 //
 // AForge Image Processing Library
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © AForge.NET, 2005-2010
+// Copyright ï¿½ AForge.NET, 2005-2010
 // contacts@aforgenet.com
 //
 //    This library is free software; you can redistribute it and/or
@@ -27,8 +27,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -66,16 +65,14 @@ namespace Accord.Imaging.Filters
     /// <seealso cref="Dilation"/>
     /// <seealso cref="Opening"/>
     /// 
-    public class Closing : IFilter, IInPlaceFilter, IInPlacePartialFilter, IFilterInformation
-    {
+    public class Closing : IFilter, IInPlaceFilter, IInPlacePartialFilter, IFilterInformation {
         private Erosion errosion = new Erosion();
         private Dilation dilation = new Dilation();
 
         /// <summary>
         /// Format translations dictionary.
         /// </summary>
-        public Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return errosion.FormatTranslations; }
         }
 
@@ -99,8 +96,7 @@ namespace Accord.Imaging.Filters
         /// <remarks><para>See documentation to <see cref="Erosion"/> and <see cref="Dilation"/>
         /// classes for information about structuring element constraints.</para></remarks>
         /// 
-        public Closing(short[,] se)
-        {
+        public Closing(short[,] se) {
             errosion = new Erosion(se);
             dilation = new Dilation(se);
         }
@@ -119,8 +115,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <exception cref="UnsupportedImageFormatException">Unsupported pixel format of the source image.</exception>
         ///
-        public Bitmap Apply(Bitmap image)
-        {
+        public Bitmap Apply(Bitmap image) {
             Bitmap tempImage = dilation.Apply(image);
             Bitmap destImage = errosion.Apply(tempImage);
 
@@ -142,8 +137,7 @@ namespace Accord.Imaging.Filters
         /// of image processing filter as new image. The source image data are kept
         /// unchanged.</remarks>
         /// 
-        public Bitmap Apply(BitmapData imageData)
-        {
+        public Bitmap Apply(BitmapData imageData) {
             Bitmap tempImage = dilation.Apply(imageData);
             Bitmap destImage = errosion.Apply(tempImage);
 
@@ -166,8 +160,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <exception cref="UnsupportedImageFormatException">Unsupported pixel format of the source image.</exception>
         ///
-        public UnmanagedImage Apply(UnmanagedImage image)
-        {
+        public UnmanagedImage Apply(UnmanagedImage image) {
             UnmanagedImage destImage = dilation.Apply(image);
             errosion.ApplyInPlace(destImage);
 
@@ -193,8 +186,7 @@ namespace Accord.Imaging.Filters
         /// <exception cref="InvalidImagePropertiesException">Incorrect destination pixel format.</exception>
         /// <exception cref="InvalidImagePropertiesException">Destination image has wrong width and/or height.</exception>
         ///
-        public void Apply(UnmanagedImage sourceImage, UnmanagedImage destinationImage)
-        {
+        public void Apply(UnmanagedImage sourceImage, UnmanagedImage destinationImage) {
             dilation.Apply(sourceImage, destinationImage);
             errosion.ApplyInPlace(destinationImage);
         }
@@ -209,8 +201,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <exception cref="UnsupportedImageFormatException">Unsupported pixel format of the source image.</exception>
         ///  
-        public void ApplyInPlace(Bitmap image)
-        {
+        public void ApplyInPlace(Bitmap image) {
             dilation.ApplyInPlace(image);
             errosion.ApplyInPlace(image);
         }
@@ -225,8 +216,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <exception cref="UnsupportedImageFormatException">Unsupported pixel format of the source image.</exception>
         ///
-        public void ApplyInPlace(BitmapData imageData)
-        {
+        public void ApplyInPlace(BitmapData imageData) {
             dilation.ApplyInPlace(imageData);
             errosion.ApplyInPlace(imageData);
         }
@@ -241,8 +231,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <exception cref="UnsupportedImageFormatException">Unsupported pixel format of the source image.</exception>
         ///
-        public void ApplyInPlace(UnmanagedImage image)
-        {
+        public void ApplyInPlace(UnmanagedImage image) {
             dilation.ApplyInPlace(image);
             errosion.ApplyInPlace(image);
         }
@@ -258,8 +247,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <exception cref="UnsupportedImageFormatException">Unsupported pixel format of the source image.</exception>
         ///  
-        public void ApplyInPlace(Bitmap image, Rectangle rect)
-        {
+        public void ApplyInPlace(Bitmap image, Rectangle rect) {
             dilation.ApplyInPlace(image, rect);
             errosion.ApplyInPlace(image, rect);
         }
@@ -275,8 +263,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <exception cref="UnsupportedImageFormatException">Unsupported pixel format of the source image.</exception>
         ///
-        public void ApplyInPlace(BitmapData imageData, Rectangle rect)
-        {
+        public void ApplyInPlace(BitmapData imageData, Rectangle rect) {
             dilation.ApplyInPlace(imageData, rect);
             errosion.ApplyInPlace(imageData, rect);
         }
@@ -292,8 +279,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <exception cref="UnsupportedImageFormatException">Unsupported pixel format of the source image.</exception>
         /// 
-        public void ApplyInPlace(UnmanagedImage image, Rectangle rect)
-        {
+        public void ApplyInPlace(UnmanagedImage image, Rectangle rect) {
             dilation.ApplyInPlace(image, rect);
             errosion.ApplyInPlace(image, rect);
         }

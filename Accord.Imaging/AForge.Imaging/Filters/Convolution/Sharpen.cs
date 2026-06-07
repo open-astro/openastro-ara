@@ -1,16 +1,15 @@
 // AForge Image Processing Library
 // AForge.NET framework
 //
-// Copyright © Andrew Kirillov, 2005-2008
+// Copyright ï¿½ Andrew Kirillov, 2005-2008
 // andrew.kirillov@aforgenet.com
 //
 
-namespace Accord.Imaging.Filters
-{
-	/// <summary>
-	/// Sharpen filter
-	/// </summary>
-	/// 
+namespace Accord.Imaging.Filters {
+    /// <summary>
+    /// Sharpen filter
+    /// </summary>
+    /// 
     /// <remarks><para>The filter performs <see cref="Convolution">convolution filter</see> using
     /// the sharpen kernel:</para>
     /// 
@@ -38,17 +37,15 @@ namespace Accord.Imaging.Filters
     /// </remarks>
     /// 
     /// <seealso cref="Convolution"/>
-	/// 
-    public sealed class Sharpen : Convolution
-	{
-		/// <summary>
-		/// Initializes a new instance of the <see cref="Sharpen"/> class.
-		/// </summary>
-		public Sharpen( ) : base( new int[,] {
-										{  0, -1,  0 },
-										{ -1,  5, -1 },
-										{  0, -1,  0 } } )
-		{
-		}
-	}
+    /// 
+    public sealed class Sharpen : Convolution {
+        /// <summary>
+        /// Initializes a new instance of the <see cref="Sharpen"/> class.
+        /// </summary>
+        public Sharpen() : base(new int[,] {
+                                        {  0, -1,  0 },
+                                        { -1,  5, -1 },
+                                        {  0, -1,  0 } }) {
+        }
+    }
 }

@@ -2,15 +2,14 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © Andrew Kirillov, 2005-2009
+// Copyright ï¿½ Andrew Kirillov, 2005-2009
 // andrew.kirillov@aforgenet.com
 //
 // Original idea from CxImage
 // http://www.codeproject.com/bitmap/cximage.asp
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -40,8 +39,7 @@ namespace Accord.Imaging.Filters
     /// <img src="..\images\imaging\jitter.jpg" width="480" height="361" />
     /// </remarks>
     /// 
-    public class Jitter : BaseUsingCopyPartialFilter
-    {
+    public class Jitter : BaseUsingCopyPartialFilter {
         private int radius = 2;
 
         // random number generator
@@ -57,8 +55,7 @@ namespace Accord.Imaging.Filters
         /// <remarks><para>See <see cref="IFilterInformation.FormatTranslations"/>
         /// documentation for additional information.</para></remarks>
         /// 
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -71,8 +68,7 @@ namespace Accord.Imaging.Filters
         /// <para>Default value is set to <b>2</b>.</para>
         /// </remarks>
         /// 
-        public int Radius
-        {
+        public int Radius {
             get { return radius; }
             set { radius = Math.Max(1, Math.Min(10, value)); }
         }
@@ -80,8 +76,7 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Initializes a new instance of the <see cref="Jitter"/> class.
         /// </summary>
-        public Jitter()
-        {
+        public Jitter() {
             formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
             formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format24bppRgb;
             formatTranslations[PixelFormat.Format32bppRgb] = PixelFormat.Format32bppRgb;
@@ -95,8 +90,7 @@ namespace Accord.Imaging.Filters
         /// <param name="radius">Jittering radius.</param>
         /// 
         public Jitter(int radius)
-            : this()
-        {
+            : this() {
             Radius = radius;
         }
 
@@ -108,8 +102,7 @@ namespace Accord.Imaging.Filters
         /// <param name="destinationData">Destination image data.</param>
         /// <param name="rect">Image rectangle for processing by the filter.</param>
         /// 
-        protected override unsafe void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData, Rectangle rect)
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData, Rectangle rect) {
             int pixelSize = Image.GetPixelFormatSize(sourceData.PixelFormat) / 8;
 
             // processing start and stop X,Y positions
@@ -133,16 +126,12 @@ namespace Accord.Imaging.Filters
             byte* p;
 
             // copy source to destination before
-            if (srcStride == dstStride)
-            {
+            if (srcStride == dstStride) {
                 Accord.SystemTools.CopyUnmanagedMemory(dst, src, srcStride * sourceData.Height);
-            }
-            else
-            {
+            } else {
                 int len = sourceData.Width * pixelSize;
 
-                for (int y = 0, heigh = sourceData.Height; y < heigh; y++)
-                {
+                for (int y = 0, heigh = sourceData.Height; y < heigh; y++) {
                     Accord.SystemTools.CopyUnmanagedMemory(
                         dst + dstStride * y, src + srcStride * y, len);
                 }
@@ -156,27 +145,21 @@ namespace Accord.Imaging.Filters
             // loops for RGB and grayscale images.
 
             // for each line
-            for (int y = startY; y < stopY; y++)
-            {
+            for (int y = startY; y < stopY; y++) {
                 // for each pixel
-                for (int x = startX; x < stopX; x++)
-                {
+                for (int x = startX; x < stopX; x++) {
                     // generate radnom pixel's position
                     ox = x + rand.Next(max) - radius;
                     oy = y + rand.Next(max) - radius;
 
                     // check if the random pixel is inside our image
-                    if ((ox >= startX) && (oy >= startY) && (ox < stopX) && (oy < stopY))
-                    {
+                    if ((ox >= startX) && (oy >= startY) && (ox < stopX) && (oy < stopY)) {
                         p = src + oy * srcStride + ox * pixelSize;
 
-                        for (int i = 0; i < pixelSize; i++, dst++, p++)
-                        {
+                        for (int i = 0; i < pixelSize; i++, dst++, p++) {
                             *dst = *p;
                         }
-                    }
-                    else
-                    {
+                    } else {
                         dst += pixelSize;
                     }
                 }

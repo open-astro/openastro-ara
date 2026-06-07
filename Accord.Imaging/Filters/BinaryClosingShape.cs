@@ -24,8 +24,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing.Imaging;
@@ -48,8 +47,7 @@ namespace Accord.Imaging.Filters
     /// 
     /// <seealso cref="Closing"/>
     /// 
-    public class ClosingBinaryShape : BaseUsingCopyPartialFilter
-    {
+    public class ClosingBinaryShape : BaseUsingCopyPartialFilter {
         // private format translation dictionary
         private readonly Dictionary<PixelFormat, PixelFormat> formatTranslations = new Dictionary<PixelFormat, PixelFormat>();
 
@@ -57,8 +55,7 @@ namespace Accord.Imaging.Filters
         /// Format translations dictionary.
         /// </summary>
         /// 
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -66,8 +63,7 @@ namespace Accord.Imaging.Filters
         /// Initializes a new instance of the <see cref="ClosingBinaryShape"/> class.
         /// </summary>
         /// 
-        public ClosingBinaryShape()
-        {
+        public ClosingBinaryShape() {
             // initialize format translation dictionary
             formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
         }
@@ -83,22 +79,18 @@ namespace Accord.Imaging.Filters
         /// 
         /// <exception cref="InvalidImagePropertiesException">Processing rectangle mast be at least 4x4 in size.</exception>
         /// 
-        protected override void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData, Rectangle rect)
-        {
-            if ((rect.Width < 4) || (rect.Height < 4))
-            {
+        protected override void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData, Rectangle rect) {
+            if ((rect.Width < 4) || (rect.Height < 4)) {
                 throw new InvalidImagePropertiesException("Processing rectangle mast be at least 4x4 in size.");
             }
 
             List<byte[,]> patterns = Get3X3CornerPatterns();
             var hotPoints = new List<IntPoint>();
 
-            foreach (var point in sourceData.CollectActivePixels())
-            {
+            foreach (var point in sourceData.CollectActivePixels()) {
                 byte[,] matrix3X3 = GetNeighborValues(point, 1, ref sourceData);
 
-                foreach (byte[,] pattern in patterns)
-                {
+                foreach (byte[,] pattern in patterns) {
                     if (matrix3X3.IsEqual(pattern))
                         hotPoints.Add(point);
                 }
@@ -108,22 +100,18 @@ namespace Accord.Imaging.Filters
             var blackList = new List<int>();
             var pairPoints = new List<IntPoint>();
 
-            for (int i = 0; i < hotPoints.Count; i++)
-            {
+            for (int i = 0; i < hotPoints.Count; i++) {
                 float distance = float.MaxValue;
                 int index = -1;
 
-                for (int j = i + 1; j < hotPoints.Count; j++)
-                {
+                for (int j = i + 1; j < hotPoints.Count; j++) {
                     if (blackList.Contains(j))
                         continue;
 
                     bool isValidPoint = true;
 
-                    foreach (var value in sourceData.Collect8bppPixelValues(GetLineInPoints(hotPoints[i], hotPoints[j])))
-                    {
-                        if (value == byte.MaxValue)
-                        {
+                    foreach (var value in sourceData.Collect8bppPixelValues(GetLineInPoints(hotPoints[i], hotPoints[j]))) {
+                        if (value == byte.MaxValue) {
                             isValidPoint = false;
                             break;
                         }
@@ -153,8 +141,7 @@ namespace Accord.Imaging.Filters
                 Drawing.Line(destinationData, pairPoints[i], pairPoints[++i], Color.White);
         }
 
-        private static byte[,] GetNeighborValues(IntPoint subjectPoint, byte boxDistance, ref UnmanagedImage imageData)
-        {
+        private static byte[,] GetNeighborValues(IntPoint subjectPoint, byte boxDistance, ref UnmanagedImage imageData) {
             int rows = imageData.Height;
             int cols = imageData.Width;
 
@@ -169,11 +156,9 @@ namespace Accord.Imaging.Filters
             var result = new byte[squreSize, squreSize];
 
             int k = 0;
-            for (var i = minX; i <= maxX; i++, k++)
-            {
+            for (var i = minX; i <= maxX; i++, k++) {
                 var l = 0;
-                for (var j = minY; j <= maxY; j++, l++)
-                {
+                for (var j = minY; j <= maxY; j++, l++) {
                     if (i < 0 || i >= cols || j < 0 || j >= rows) continue;
 
                     existNeighborPoints.Add(new IntPoint(i, j));
@@ -194,8 +179,7 @@ namespace Accord.Imaging.Filters
             return result;
         }
 
-        private static List<byte[,]> Get3X3CornerPatterns()
-        {
+        private static List<byte[,]> Get3X3CornerPatterns() {
             const byte x = byte.MaxValue;
 
             var result = new List<byte[,]>(16)
@@ -301,8 +285,7 @@ namespace Accord.Imaging.Filters
             return result;
         }
 
-        private static List<IntPoint> GetLineInPoints(IntPoint point1, IntPoint point2)
-        {
+        private static List<IntPoint> GetLineInPoints(IntPoint point1, IntPoint point2) {
             int startX = point1.X;
             int startY = point1.Y;
             int stopX = point2.X;
@@ -313,8 +296,7 @@ namespace Accord.Imaging.Filters
 
             var result = new List<IntPoint>();
 
-            if (Math.Abs(dx) >= Math.Abs(dy))
-            {
+            if (Math.Abs(dx) >= Math.Abs(dy)) {
                 // the line is more horizontal, we'll plot along the X axis
                 float slope = (dx != 0) ? (float)dy / dx : 0;
                 int step = (dx > 0) ? 1 : -1;
@@ -322,16 +304,13 @@ namespace Accord.Imaging.Filters
                 // correct dx so last point is included as well
                 dx += step;
 
-                for (int x = 1; x < (dx - 1); x += step)
-                {
+                for (int x = 1; x < (dx - 1); x += step) {
                     var px = startX + x;
                     var py = (int)(startY + (slope * x));
 
                     result.Add(new IntPoint(px, py));
                 }
-            }
-            else
-            {
+            } else {
                 // the line is more vertical, we'll plot along the y axis.
                 float slope = (dy != 0) ? (float)dx / dy : 0;
                 int step = (dy > 0) ? 1 : -1;
@@ -339,8 +318,7 @@ namespace Accord.Imaging.Filters
                 // correct dy so last point is included as well
                 dy += step;
 
-                for (int y = 1; y < (dy - 1); y += step)
-                {
+                for (int y = 1; y < (dy - 1); y += step) {
                     var px = (int)(startX + (slope * y));
                     var py = startY + y;
 

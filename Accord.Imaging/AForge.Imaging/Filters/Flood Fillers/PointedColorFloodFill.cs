@@ -2,12 +2,11 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © AForge.NET, 2005-2010
+// Copyright ï¿½ AForge.NET, 2005-2010
 // contacts@aforgenet.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -47,8 +46,7 @@ namespace Accord.Imaging.Filters
     /// 
     /// <seealso cref="PointedMeanFloodFill"/>
     /// 
-    public unsafe class PointedColorFloodFill : BaseInPlacePartialFilter
-    {
+    public unsafe class PointedColorFloodFill : BaseInPlacePartialFilter {
         // map of pixels, which are already checked by the flood fill algorithm
         private bool[,] checkedPixels;
 
@@ -70,18 +68,17 @@ namespace Accord.Imaging.Filters
         byte fillR, fillG, fillB;
 
         // starting point to fill from
-        private IntPoint startingPoint = new IntPoint( 0, 0 );
+        private IntPoint startingPoint = new IntPoint(0, 0);
         // filling tolerance
-        private Color tolerance = Color.FromArgb( 0, 0, 0 );
+        private Color tolerance = Color.FromArgb(0, 0, 0);
 
         // format translation dictionary
-        private Dictionary<PixelFormat, PixelFormat> formatTranslations = new Dictionary<PixelFormat, PixelFormat>( );
+        private Dictionary<PixelFormat, PixelFormat> formatTranslations = new Dictionary<PixelFormat, PixelFormat>();
 
         /// <summary>
         /// Format translations dictionary.
         /// </summary>
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -101,8 +98,7 @@ namespace Accord.Imaging.Filters
         /// and blue components.</para>
         /// </remarks>
         /// 
-        public Color Tolerance
-        {
+        public Color Tolerance {
             get { return tolerance; }
             set { tolerance = value; }
         }
@@ -120,11 +116,9 @@ namespace Accord.Imaging.Filters
         /// <para>Default value is set to <b>black</b>.</para>
         /// </remarks>
         /// 
-        public Color FillColor
-        {
-            get { return Color.FromArgb( fillR, fillG, fillB ); }
-            set
-            {
+        public Color FillColor {
+            get { return Color.FromArgb(fillR, fillG, fillB); }
+            set {
                 fillR = value.R;
                 fillG = value.G;
                 fillB = value.B;
@@ -141,8 +135,7 @@ namespace Accord.Imaging.Filters
         /// <remarks>Default value is set to <b>(0, 0)</b>.</remarks>
         /// </remarks>
         /// 
-        public IntPoint StartingPoint
-        {
+        public IntPoint StartingPoint {
             get { return startingPoint; }
             set { startingPoint = value; }
         }
@@ -151,11 +144,10 @@ namespace Accord.Imaging.Filters
         /// Initializes a new instance of the <see cref="PointedColorFloodFill"/> class.
         /// </summary>
         /// 
-        public PointedColorFloodFill( )
-        {
+        public PointedColorFloodFill() {
             // initialize format translation dictionary
             formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
-            formatTranslations[PixelFormat.Format24bppRgb]    = PixelFormat.Format24bppRgb;
+            formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format24bppRgb;
         }
 
         /// <summary>
@@ -164,9 +156,8 @@ namespace Accord.Imaging.Filters
         /// 
         /// <param name="fillColor">Fill color.</param>
         /// 
-        public PointedColorFloodFill( Color fillColor )
-            : this( )
-        {
+        public PointedColorFloodFill(Color fillColor)
+            : this() {
             FillColor = fillColor;
         }
 
@@ -177,70 +168,63 @@ namespace Accord.Imaging.Filters
         /// <param name="image">Source image data.</param>
         /// <param name="rect">Image rectangle for processing by the filter.</param>
         ///
-        protected override unsafe void ProcessFilter( UnmanagedImage image, Rectangle rect )
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage image, Rectangle rect) {
             // skip, if there is nothing to fill
-            if ( !rect.Contains( startingPoint.X, startingPoint.Y ) )
+            if (!rect.Contains(startingPoint.X, startingPoint.Y))
                 return;
 
             // save bounding rectangle
             startX = rect.Left;
             startY = rect.Top;
-            stopX  = rect.Right - 1;
-            stopY  = rect.Bottom - 1;
+            stopX = rect.Right - 1;
+            stopY = rect.Bottom - 1;
 
             // save image properties
-            scan0 = (byte*) image.ImageData.ToPointer( );
+            scan0 = (byte*)image.ImageData.ToPointer();
             stride = image.Stride;
 
             // create map visited pixels
             checkedPixels = new bool[image.Height, image.Width];
 
-            if ( image.PixelFormat == PixelFormat.Format8bppIndexed )
-            {
-                byte startColor = *( (byte*) CoordsToPointerGray( startingPoint.X, startingPoint.Y ) );
-                minG = (byte) ( Math.Max(   0, startColor - tolerance.G ) );
-                maxG = (byte) ( Math.Min( 255, startColor + tolerance.G ) );
+            if (image.PixelFormat == PixelFormat.Format8bppIndexed) {
+                byte startColor = *((byte*)CoordsToPointerGray(startingPoint.X, startingPoint.Y));
+                minG = (byte)(Math.Max(0, startColor - tolerance.G));
+                maxG = (byte)(Math.Min(255, startColor + tolerance.G));
 
-                LinearFloodFill4Gray( startingPoint );
-            }
-            else
-            {
-                byte* startColor = (byte*) CoordsToPointerRGB( startingPoint.X, startingPoint.Y );
+                LinearFloodFill4Gray(startingPoint);
+            } else {
+                byte* startColor = (byte*)CoordsToPointerRGB(startingPoint.X, startingPoint.Y);
 
-                minR = (byte) ( Math.Max(   0, startColor[RGB.R] - tolerance.R ) );
-                maxR = (byte) ( Math.Min( 255, startColor[RGB.R] + tolerance.R ) );
-                minG = (byte) ( Math.Max(   0, startColor[RGB.G] - tolerance.G ) );
-                maxG = (byte) ( Math.Min( 255, startColor[RGB.G] + tolerance.G ) );
-                minB = (byte) ( Math.Max(   0, startColor[RGB.B] - tolerance.B ) );
-                maxB = (byte) ( Math.Min( 255, startColor[RGB.B] + tolerance.B ) );
+                minR = (byte)(Math.Max(0, startColor[RGB.R] - tolerance.R));
+                maxR = (byte)(Math.Min(255, startColor[RGB.R] + tolerance.R));
+                minG = (byte)(Math.Max(0, startColor[RGB.G] - tolerance.G));
+                maxG = (byte)(Math.Min(255, startColor[RGB.G] + tolerance.G));
+                minB = (byte)(Math.Max(0, startColor[RGB.B] - tolerance.B));
+                maxB = (byte)(Math.Min(255, startColor[RGB.B] + tolerance.B));
 
-                LinearFloodFill4RGB( startingPoint );
+                LinearFloodFill4RGB(startingPoint);
             }
         }
 
         // Liner flood fill in 4 directions for grayscale images
-        private unsafe void LinearFloodFill4Gray( IntPoint startingPoint )
-        {
-            Queue<IntPoint> points = new Queue<IntPoint>( );
-            points.Enqueue( startingPoint );
+        private unsafe void LinearFloodFill4Gray(IntPoint startingPoint) {
+            Queue<IntPoint> points = new Queue<IntPoint>();
+            points.Enqueue(startingPoint);
 
-            while ( points.Count > 0 )
-            {
-                IntPoint point = points.Dequeue( );
+            while (points.Count > 0) {
+                IntPoint point = points.Dequeue();
 
                 int x = point.X;
                 int y = point.Y;
 
                 // get image pointer for current (X, Y)
-                byte* p = (byte*) CoordsToPointerGray( x, y );
+                byte* p = (byte*)CoordsToPointerGray(x, y);
 
                 // find left end of line to fill
                 int leftLineEdge = x;
                 byte* ptr = p;
 
-                while ( true )
-                {
+                while (true) {
                     // fill current pixel
                     *ptr = fillG;
                     // mark the pixel as checked
@@ -250,7 +234,7 @@ namespace Accord.Imaging.Filters
                     ptr -= 1;
 
                     // check if we need to stop on the edge of image or color area
-                    if ( ( leftLineEdge < startX ) || ( checkedPixels[y, leftLineEdge] ) || ( !CheckGrayPixel( *ptr ) ) )
+                    if ((leftLineEdge < startX) || (checkedPixels[y, leftLineEdge]) || (!CheckGrayPixel(*ptr)))
                         break;
 
                 }
@@ -260,8 +244,7 @@ namespace Accord.Imaging.Filters
                 int rightLineEdge = x;
                 ptr = p;
 
-                while ( true )
-                {
+                while (true) {
                     // fill current pixel
                     *ptr = fillG;
                     // mark the pixel as checked
@@ -271,47 +254,38 @@ namespace Accord.Imaging.Filters
                     ptr += 1;
 
                     // check if we need to stop on the edge of image or color area
-                    if ( rightLineEdge > stopX || ( checkedPixels[y, rightLineEdge] ) || ( !CheckGrayPixel( *ptr ) ) )
+                    if (rightLineEdge > stopX || (checkedPixels[y, rightLineEdge]) || (!CheckGrayPixel(*ptr)))
                         break;
                 }
                 rightLineEdge--;
 
 
                 // loop to go up and down
-                ptr = (byte*) CoordsToPointerGray( leftLineEdge, y );
+                ptr = (byte*)CoordsToPointerGray(leftLineEdge, y);
 
                 bool upperPointIsQueued = false;
                 bool lowerPointIsQueued = false;
                 int upperY = y - 1;
                 int lowerY = y + 1;
 
-                for ( int i = leftLineEdge; i <= rightLineEdge; i++, ptr++ )
-                {
+                for (int i = leftLineEdge; i <= rightLineEdge; i++, ptr++) {
                     // go up
-                    if ( ( y > startY ) && ( !checkedPixels[y - 1, i] ) && ( CheckGrayPixel( *( ptr - stride ) ) ) )
-                    {
-                        if ( !upperPointIsQueued )
-                        {
-                            points.Enqueue( new IntPoint( i, upperY ) );
+                    if ((y > startY) && (!checkedPixels[y - 1, i]) && (CheckGrayPixel(*(ptr - stride)))) {
+                        if (!upperPointIsQueued) {
+                            points.Enqueue(new IntPoint(i, upperY));
                             upperPointIsQueued = true;
                         }
-                    }
-                    else
-                    {
+                    } else {
                         upperPointIsQueued = false;
                     }
 
                     // go down
-                    if ( ( y < stopY ) && ( !checkedPixels[y + 1, i] ) && ( CheckGrayPixel( *( ptr + stride ) ) ) )
-                    {
-                        if ( !lowerPointIsQueued )
-                        {
-                            points.Enqueue( new IntPoint( i, lowerY ) );
+                    if ((y < stopY) && (!checkedPixels[y + 1, i]) && (CheckGrayPixel(*(ptr + stride)))) {
+                        if (!lowerPointIsQueued) {
+                            points.Enqueue(new IntPoint(i, lowerY));
                             lowerPointIsQueued = true;
                         }
-                    }
-                    else
-                    {
+                    } else {
                         lowerPointIsQueued = false;
                     }
                 }
@@ -319,27 +293,24 @@ namespace Accord.Imaging.Filters
         }
 
         // Liner flood fill in 4 directions for RGB
-        private unsafe void LinearFloodFill4RGB( IntPoint startPoint )
-        {
-            Queue<IntPoint> points = new Queue<IntPoint>( );
-            points.Enqueue( startingPoint );
+        private unsafe void LinearFloodFill4RGB(IntPoint startPoint) {
+            Queue<IntPoint> points = new Queue<IntPoint>();
+            points.Enqueue(startingPoint);
 
-            while ( points.Count > 0 )
-            {
-                IntPoint point = points.Dequeue( );
+            while (points.Count > 0) {
+                IntPoint point = points.Dequeue();
 
                 int x = point.X;
                 int y = point.Y;
 
                 // get image pointer for current (X, Y)
-                byte* p = (byte*) CoordsToPointerRGB( x, y );
+                byte* p = (byte*)CoordsToPointerRGB(x, y);
 
                 // find left end of line to fill
                 int leftLineEdge = x;
                 byte* ptr = p;
 
-                while ( true )
-                {
+                while (true) {
                     // fill current pixel
                     ptr[RGB.R] = fillR;
                     ptr[RGB.G] = fillG;
@@ -351,7 +322,7 @@ namespace Accord.Imaging.Filters
                     ptr -= 3;
 
                     // check if we need to stop on the edge of image or color area
-                    if ( ( leftLineEdge < startX ) || ( checkedPixels[y, leftLineEdge] ) || ( !CheckRGBPixel( ptr ) ) )
+                    if ((leftLineEdge < startX) || (checkedPixels[y, leftLineEdge]) || (!CheckRGBPixel(ptr)))
                         break;
 
                 }
@@ -361,8 +332,7 @@ namespace Accord.Imaging.Filters
                 int rightLineEdge = x;
                 ptr = p;
 
-                while ( true )
-                {
+                while (true) {
                     // fill current pixel
                     ptr[RGB.R] = fillR;
                     ptr[RGB.G] = fillG;
@@ -374,46 +344,37 @@ namespace Accord.Imaging.Filters
                     ptr += 3;
 
                     // check if we need to stop on the edge of image or color area
-                    if ( rightLineEdge > stopX || ( checkedPixels[y, rightLineEdge] ) || ( !CheckRGBPixel( ptr ) ) )
+                    if (rightLineEdge > stopX || (checkedPixels[y, rightLineEdge]) || (!CheckRGBPixel(ptr)))
                         break;
                 }
                 rightLineEdge--;
 
                 // loop to go up and down
-                ptr = (byte*) CoordsToPointerRGB( leftLineEdge, y );
+                ptr = (byte*)CoordsToPointerRGB(leftLineEdge, y);
 
                 bool upperPointIsQueued = false;
                 bool lowerPointIsQueued = false;
                 int upperY = y - 1;
                 int lowerY = y + 1;
 
-                for ( int i = leftLineEdge; i <= rightLineEdge; i++, ptr += 3 )
-                {
+                for (int i = leftLineEdge; i <= rightLineEdge; i++, ptr += 3) {
                     // go up
-                    if ( ( y > startY ) && ( !checkedPixels[upperY, i] ) && ( CheckRGBPixel( ptr - stride ) ) )
-                    {
-                        if ( !upperPointIsQueued )
-                        {
-                            points.Enqueue( new IntPoint( i, upperY ) );
+                    if ((y > startY) && (!checkedPixels[upperY, i]) && (CheckRGBPixel(ptr - stride))) {
+                        if (!upperPointIsQueued) {
+                            points.Enqueue(new IntPoint(i, upperY));
                             upperPointIsQueued = true;
                         }
-                    }
-                    else
-                    {
+                    } else {
                         upperPointIsQueued = false;
                     }
 
                     // go down
-                    if ( ( y < stopY ) && ( !checkedPixels[lowerY, i] ) && ( CheckRGBPixel( ptr + stride ) ) )
-                    {
-                        if ( !lowerPointIsQueued )
-                        {
-                            points.Enqueue( new IntPoint( i, lowerY ) );
+                    if ((y < stopY) && (!checkedPixels[lowerY, i]) && (CheckRGBPixel(ptr + stride))) {
+                        if (!lowerPointIsQueued) {
+                            points.Enqueue(new IntPoint(i, lowerY));
                             lowerPointIsQueued = true;
                         }
-                    }
-                    else
-                    {
+                    } else {
                         lowerPointIsQueued = false;
                     }
                 }
@@ -421,29 +382,25 @@ namespace Accord.Imaging.Filters
         }
 
         // Check if pixel equals to the starting color within required tolerance
-        private unsafe bool CheckGrayPixel( byte pixel )
-        {
-            return ( pixel >= minG ) && ( pixel <= maxG );
+        private unsafe bool CheckGrayPixel(byte pixel) {
+            return (pixel >= minG) && (pixel <= maxG);
         }
 
         // Check if pixel equals to the starting color within required tolerance
-        private unsafe bool CheckRGBPixel( byte* pixel )
-        {
-            return  ( pixel[RGB.R] >= minR ) && ( pixel[RGB.R] <= maxR ) &&
-                    ( pixel[RGB.G] >= minG ) && ( pixel[RGB.G] <= maxG ) &&
-                    ( pixel[RGB.B] >= minB ) && ( pixel[RGB.B] <= maxB );
+        private unsafe bool CheckRGBPixel(byte* pixel) {
+            return (pixel[RGB.R] >= minR) && (pixel[RGB.R] <= maxR) &&
+                    (pixel[RGB.G] >= minG) && (pixel[RGB.G] <= maxG) &&
+                    (pixel[RGB.B] >= minB) && (pixel[RGB.B] <= maxB);
         }
 
         // Convert image coordinate to pointer for Grayscale images
-        private byte* CoordsToPointerGray( int x, int y )
-        {
-            return scan0 + ( stride * y ) + x;
+        private byte* CoordsToPointerGray(int x, int y) {
+            return scan0 + (stride * y) + x;
         }
 
         // Convert image coordinate to pointer for RGB images
-        private byte* CoordsToPointerRGB( int x, int y )
-        {
-            return scan0 + ( stride * y ) + x * 3;
+        private byte* CoordsToPointerRGB(int x, int y) {
+            return scan0 + (stride * y) + x * 3;
         }
     }
 }

@@ -6,10 +6,10 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © Andrew Kirillov, 2005-2009
+// Copyright ï¿½ Andrew Kirillov, 2005-2009
 // andrew.kirillov@aforgenet.com
 //
-// Copyright © César Souza, 2009-2017
+// Copyright ï¿½ Cï¿½sar Souza, 2009-2017
 // cesarsouza at gmail.com
 //
 //    This library is free software; you can redistribute it and/or
@@ -27,8 +27,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging.Textures
-{
+namespace Accord.Imaging.Textures {
     using Accord.Imaging.Converters;
     using System;
     using System.Drawing;
@@ -39,8 +38,7 @@ namespace Accord.Imaging.Textures
     /// </summary>
     /// 
     [Obsolete("Please use classes from the Accord.Imaging.Converters namespace instead.")]
-    public static class TextureTools
-    {
+    public static class TextureTools {
 
         /// <summary>
         ///   Obsolete. Please use the <see cref="ImageToMatrix"/> class instead. See remarks for an example.
@@ -56,8 +54,7 @@ namespace Accord.Imaging.Textures
         /// </example>
         /// 
         [Obsolete("Please use the MatrixToImage class instead.")]
-        public static Bitmap ToBitmap(float[,] texture)
-        {
+        public static Bitmap ToBitmap(float[,] texture) {
             MatrixToImage i2m = new MatrixToImage();
             Bitmap image;
             i2m.Convert(texture, out image);
@@ -78,8 +75,7 @@ namespace Accord.Imaging.Textures
         /// </example>
         /// 
         [Obsolete("Please use the ImageToMatrix class instead.")]
-        public static float[,] FromBitmap(Bitmap image)
-        {
+        public static float[,] FromBitmap(Bitmap image) {
             ImageToMatrix i2m = new ImageToMatrix();
             float[,] texture;
             i2m.Convert(image, out texture);
@@ -100,8 +96,7 @@ namespace Accord.Imaging.Textures
         /// </example>
         /// 
         [Obsolete("Please use the ImageToMatrix class instead.")]
-        public static float[,] FromBitmap(BitmapData imageData)
-        {
+        public static float[,] FromBitmap(BitmapData imageData) {
             return FromBitmap(new UnmanagedImage(imageData));
         }
 
@@ -119,8 +114,7 @@ namespace Accord.Imaging.Textures
         /// </example>
         /// 
         [Obsolete("Please use the ImageToMatrix class instead.")]
-        public static float[,] FromBitmap(UnmanagedImage image)
-        {
+        public static float[,] FromBitmap(UnmanagedImage image) {
             ImageToMatrix i2m = new ImageToMatrix();
             float[,] texture;
             i2m.Convert(image, out texture);

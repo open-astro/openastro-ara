@@ -6,8 +6,7 @@
 // contacts@aforgenet.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -44,8 +43,7 @@ namespace Accord.Imaging.Filters
     /// 
     /// <seealso cref="TransformFromPolar"/>
     /// 
-    public class TransformToPolar : BaseTransformationFilter
-    {
+    public class TransformToPolar : BaseTransformationFilter {
         private const double Pi2 = Math.PI * 2;
         private const double PiHalf = Math.PI / 2;
 
@@ -65,10 +63,9 @@ namespace Accord.Imaging.Filters
         /// <para>Default value is set to <b>1</b>.</para>
         /// </remarks>
         /// 
-        public double CirlceDepth
-        {
+        public double CirlceDepth {
             get { return circleDepth; }
-            set { circleDepth = Math.Max( 0, Math.Min( 1, value ) ); }
+            set { circleDepth = Math.Max(0, Math.Min(1, value)); }
         }
 
         private double offsetAngle = 0;
@@ -84,10 +81,9 @@ namespace Accord.Imaging.Filters
         /// <para>Default value is set to <b>0</b>.</para>
         /// </remarks>
         /// 
-        public double OffsetAngle
-        {
+        public double OffsetAngle {
             get { return offsetAngle; }
-            set { offsetAngle = Math.Max( -360, Math.Min( 360, value ) ); }
+            set { offsetAngle = Math.Max(-360, Math.Min(360, value)); }
         }
 
         private bool mapBackwards = false;
@@ -103,8 +99,7 @@ namespace Accord.Imaging.Filters
         /// <para>Default value is set to <see langword="false"/>.</para>
         /// </remarks>
         ///
-        public bool MapBackwards
-        {
+        public bool MapBackwards {
             get { return mapBackwards; }
             set { mapBackwards = value; }
         }
@@ -122,8 +117,7 @@ namespace Accord.Imaging.Filters
         /// <para>Default value is set to <see langword="true"/>.</para>
         /// </remarks>
         /// 
-        public bool MapFromTop
-        {
+        public bool MapFromTop {
             get { return mapFromTop; }
             set { mapFromTop = value; }
         }
@@ -143,13 +137,12 @@ namespace Accord.Imaging.Filters
         /// <para>Default value is set to <see cref="Color.White"/>.</para>
         /// </remarks>
         /// 
-        public Color FillColor
-        {
+        public Color FillColor {
             get { return fillColor; }
             set { fillColor = value; }
         }
 
-        private Size newSize = new Size( 200, 200 );
+        private Size newSize = new Size(200, 200);
         private bool useOriginalImageSize = true;
 
         /// <summary>
@@ -165,14 +158,12 @@ namespace Accord.Imaging.Filters
         /// <para>Default value is set to <b>200 x 200</b>.</para>
         /// </remarks>
         /// 
-        public Size NewSize
-        {
+        public Size NewSize {
             get { return newSize; }
-            set
-            {
+            set {
                 newSize = new Size(
-                    Math.Max( 1, Math.Min( 10000, value.Width ) ),
-                    Math.Max( 1, Math.Min( 10000, value.Height ) ) );
+                    Math.Max(1, Math.Min(10000, value.Width)),
+                    Math.Max(1, Math.Min(10000, value.Height)));
             }
         }
 
@@ -187,14 +178,13 @@ namespace Accord.Imaging.Filters
         /// <para>Default value is set to <see langword="true"/>.</para>
         /// </remarks>
         /// 
-        public bool UseOriginalImageSize
-        {
+        public bool UseOriginalImageSize {
             get { return useOriginalImageSize; }
             set { useOriginalImageSize = value; }
         }
 
         // private format translation dictionary
-        private Dictionary<PixelFormat, PixelFormat> formatTranslations = new Dictionary<PixelFormat, PixelFormat>( );
+        private Dictionary<PixelFormat, PixelFormat> formatTranslations = new Dictionary<PixelFormat, PixelFormat>();
 
         /// <summary>
         /// Format translations dictionary.
@@ -203,8 +193,7 @@ namespace Accord.Imaging.Filters
         /// <remarks><para>See <see cref="IFilterInformation.FormatTranslations"/>
         /// documentation for additional information.</para></remarks>
         /// 
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -212,13 +201,12 @@ namespace Accord.Imaging.Filters
         /// Initializes a new instance of the <see cref="TransformToPolar"/> class.
         /// </summary>
         /// 
-        public TransformToPolar( )
-        {
+        public TransformToPolar() {
             formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
-            formatTranslations[PixelFormat.Format24bppRgb]    = PixelFormat.Format24bppRgb;
-            formatTranslations[PixelFormat.Format32bppRgb]    = PixelFormat.Format32bppRgb;
-            formatTranslations[PixelFormat.Format32bppArgb]   = PixelFormat.Format32bppArgb;
-            formatTranslations[PixelFormat.Format32bppPArgb]  = PixelFormat.Format32bppPArgb;
+            formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format24bppRgb;
+            formatTranslations[PixelFormat.Format32bppRgb] = PixelFormat.Format32bppRgb;
+            formatTranslations[PixelFormat.Format32bppArgb] = PixelFormat.Format32bppArgb;
+            formatTranslations[PixelFormat.Format32bppPArgb] = PixelFormat.Format32bppPArgb;
         }
 
         /// <summary>
@@ -229,9 +217,8 @@ namespace Accord.Imaging.Filters
         /// 
         /// <returns>New image size - size of the destination image.</returns>
         /// 
-        protected override System.Drawing.Size CalculateNewImageSize( UnmanagedImage sourceData )
-        {
-            return ( useOriginalImageSize ) ? new Size( sourceData.Width, sourceData.Height ) : newSize;
+        protected override System.Drawing.Size CalculateNewImageSize(UnmanagedImage sourceData) {
+            return (useOriginalImageSize) ? new Size(sourceData.Width, sourceData.Height) : newSize;
         }
 
         /// <summary>
@@ -241,36 +228,34 @@ namespace Accord.Imaging.Filters
         /// <param name="sourceData">Source image data.</param>
         /// <param name="destinationData">Destination image data.</param>
         /// 
-        protected override unsafe void ProcessFilter( UnmanagedImage sourceData, UnmanagedImage destinationData )
-        {
-            int pixelSize = Bitmap.GetPixelFormatSize( destinationData.PixelFormat ) / 8;
+        protected override unsafe void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData) {
+            int pixelSize = Bitmap.GetPixelFormatSize(destinationData.PixelFormat) / 8;
 
             // get source image size
-            int width  = sourceData.Width;
+            int width = sourceData.Width;
             int height = sourceData.Height;
-            int widthM1  = width - 1;
+            int widthM1 = width - 1;
             int heightM1 = height - 1;
 
             // get destination image size
-            int newWidth  = destinationData.Width;
+            int newWidth = destinationData.Width;
             int newHeight = destinationData.Height;
 
             // invert cirlce depth
             double circleDisform = 1 - circleDepth;
 
             // get position of center pixel
-            double cx = (double) ( newWidth - 1 ) / 2;
-            double cy = (double) ( newHeight - 1 ) / 2;
-            double radius = ( cx < cy ) ? cx : cy;
+            double cx = (double)(newWidth - 1) / 2;
+            double cy = (double)(newHeight - 1) / 2;
+            double radius = (cx < cy) ? cx : cy;
             radius -= radius * circleDisform;
 
             // angle of the diagonal
-            double diagonalAngle = Math.Atan2( cy, cx );
+            double diagonalAngle = Math.Atan2(cy, cx);
 
             // offset angle in radians
             double offsetAngleR = offsetAngle / 180 * Math.PI;
-            if ( offsetAngleR < 0 )
-            {
+            if (offsetAngleR < 0) {
                 offsetAngleR = Pi2 - offsetAngleR;
             }
             // add extra offset to make sure rotation starts from Y axis and Pi*2 to
@@ -278,8 +263,8 @@ namespace Accord.Imaging.Filters
             offsetAngleR += PiHalf + Pi2;
 
             // do the job
-            byte* baseSrc = (byte*) sourceData.ImageData.ToPointer( );
-            byte* dst = (byte*) destinationData.ImageData.ToPointer( );
+            byte* baseSrc = (byte*)sourceData.ImageData.ToPointer();
+            byte* dst = (byte*)destinationData.ImageData.ToPointer();
 
             int srcStride = sourceData.Stride;
             int dstOffset = destinationData.Stride - newWidth * pixelSize;
@@ -295,68 +280,61 @@ namespace Accord.Imaging.Filters
             byte fillB = fillColor.B;
             byte fillG = fillColor.G;
             byte fillA = fillColor.A;
-            byte fillGrey = (byte) ( 0.2125 * fillR + 0.7154 * fillG + 0.0721 * fillB );
+            byte fillGrey = (byte)(0.2125 * fillR + 0.7154 * fillG + 0.0721 * fillB);
 
-            for ( int y = 0; y < newHeight; y++ )
-            {
+            for (int y = 0; y < newHeight; y++) {
                 double dy = y - cy;
                 double dydy = dy * dy;
 
-                for ( int x = 0; x < newWidth; x++ )
-                {
+                for (int x = 0; x < newWidth; x++) {
                     double dx = x - cx;
                     // distance from the center
-                    double distance = Math.Sqrt( dx * dx + dydy );
+                    double distance = Math.Sqrt(dx * dx + dydy);
                     // angle of the line connecting center and the current pixel
-                    double angle = Math.Atan2( dy, dx );
+                    double angle = Math.Atan2(dy, dx);
 
                     // calculate minimum angle between X axis and the
                     // line connecting center and the current pixel
-                    double oxAngle = ( angle > 0 ) ? angle : -angle;
-                    if ( oxAngle > PiHalf )
-                    {
+                    double oxAngle = (angle > 0) ? angle : -angle;
+                    if (oxAngle > PiHalf) {
                         oxAngle = Math.PI - oxAngle;
                     }
 
                     // calculate maximm distance from center for this angle - distance to image's edge
-                    double maxDistance = ( oxAngle > diagonalAngle ) ? ( cy / Math.Sin( oxAngle ) ) : ( cx / Math.Cos( oxAngle ) );
+                    double maxDistance = (oxAngle > diagonalAngle) ? (cy / Math.Sin(oxAngle)) : (cx / Math.Cos(oxAngle));
 
                     // calculate maximum allowed distance within wich we need to map Y axis of the source image
                     double maxAllowedDistance = radius + maxDistance * circleDisform;
 
-                    if ( distance < maxAllowedDistance + 1 )
-                    {
+                    if (distance < maxAllowedDistance + 1) {
                         // add angle offset and make sure it is in the [0, 2PI) range
                         angle += offsetAngleR;
                         angle = angle % Pi2;
 
                         // calculate pixel coordinates in the source image
-                        double sy = ( distance / maxAllowedDistance ) * heightM1;
+                        double sy = (distance / maxAllowedDistance) * heightM1;
 
-                        if ( sy > heightM1 )
-                        {
+                        if (sy > heightM1) {
                             sy = heightM1;
                         }
 
-                        if ( !mapFromTop )
-                        {
+                        if (!mapFromTop) {
                             sy = heightM1 - sy;
                         }
 
-                        double sx = ( angle / Pi2 ) * widthM1;
+                        double sx = (angle / Pi2) * widthM1;
 
-                        if ( mapBackwards )
-                        {
+                        if (mapBackwards) {
                             sx = widthM1 - sx;
                         }
 
-                        sx1 = (int) sx;
-                        sx2 = ( sx1 == widthM1 ) ? sx1 : sx1 + 1;
+                        sx1 = (int)sx;
+                        sx2 = (sx1 == widthM1) ? sx1 : sx1 + 1;
                         dx1 = sx - sx1;
                         dx2 = 1.0 - dx1;
 
-                        sy1 = (int) sy;
-                        sy2 = ( sy1 == heightM1 ) ? sy1 : sy1 + 1;
+                        sy1 = (int)sy;
+                        sy2 = (sy1 == heightM1) ? sy1 : sy1 + 1;
                         dy1 = sy - sy1;
                         dy2 = 1.0 - dy1;
 
@@ -370,28 +348,21 @@ namespace Accord.Imaging.Filters
                         p4 += sx2 * pixelSize;
 
                         // interpolate using 4 points
-                        for ( int i = 0; i < pixelSize; i++, dst++, p1++, p2++, p3++, p4++ )
-                        {
-                            *dst = (byte) (
-                                dy2 * ( dx2 * ( *p1 ) + dx1 * ( *p2 ) ) +
-                                dy1 * ( dx2 * ( *p3 ) + dx1 * ( *p4 ) ) );
+                        for (int i = 0; i < pixelSize; i++, dst++, p1++, p2++, p3++, p4++) {
+                            *dst = (byte)(
+                                dy2 * (dx2 * (*p1) + dx1 * (*p2)) +
+                                dy1 * (dx2 * (*p3) + dx1 * (*p4)));
                         }
-                    }
-                    else
-                    {
+                    } else {
                         // fill unprocessed pixel with default color
-                        if ( pixelSize == 1 )
-                        {
+                        if (pixelSize == 1) {
                             *dst = fillGrey;
-                        }
-                        else
-                        {
+                        } else {
                             dst[RGB.R] = fillR;
                             dst[RGB.G] = fillG;
                             dst[RGB.B] = fillB;
 
-                            if ( pixelSize > 3 )
-                            {
+                            if (pixelSize > 3) {
                                 dst[RGB.A] = fillA;
                             }
                         }

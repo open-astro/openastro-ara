@@ -23,8 +23,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System.Collections.Generic;
     using System.Drawing.Imaging;
     using Accord.Imaging;
@@ -75,19 +74,17 @@ namespace Accord.Imaging.Filters
     /// <seealso cref="RobinsonEdgeDetector"/>
     /// <seealso cref="CompassConvolution"/>
     /// 
-    public class KirschEdgeDetector : BaseFilter
-    {
+    public class KirschEdgeDetector : BaseFilter {
         CompassConvolution convolution;
 
         /// <summary>
         ///   Initializes a new instance of the <see cref="KirschEdgeDetector"/> class.
         /// </summary>
         /// 
-        public KirschEdgeDetector()
-        {
-            int[][,] sequence = 
+        public KirschEdgeDetector() {
+            int[][,] sequence =
             {
-                North, Northwest, West, Southwest, South, Southeast, East, Northeast 
+                North, Northwest, West, Southwest, South, Southeast, East, Northeast
             };
 
             convolution = new CompassConvolution(sequence);
@@ -97,8 +94,7 @@ namespace Accord.Imaging.Filters
         ///   Format translations dictionary.
         /// </summary>
         /// 
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return convolution.FormatTranslations; }
         }
 
@@ -109,8 +105,7 @@ namespace Accord.Imaging.Filters
         /// <param name="sourceData">Source image data.</param>
         /// <param name="destinationData">Destination image data.</param>
         /// 
-        protected override void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData)
-        {
+        protected override void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData) {
             convolution.Apply(sourceData, destinationData);
         }
 
@@ -119,7 +114,7 @@ namespace Accord.Imaging.Filters
         ///   Gets the North direction Kirsch kernel mask.
         /// </summary>
         /// 
-        public static readonly int[,] North = 
+        public static readonly int[,] North =
         {
             { -3, -3, 5 },
             { -3,  0, 5 },
@@ -130,7 +125,7 @@ namespace Accord.Imaging.Filters
         ///   Gets the Northwest direction Kirsch kernel mask.
         /// </summary>
         /// 
-        public static readonly int[,] Northwest = 
+        public static readonly int[,] Northwest =
         {
             { -3,  5,  5 },
             { -3,  0,  5 },
@@ -141,7 +136,7 @@ namespace Accord.Imaging.Filters
         ///   Gets the West direction Kirsch kernel mask.
         /// </summary>
         /// 
-        public static readonly int[,] West = 
+        public static readonly int[,] West =
         {
             {  5,  5,  5 },
             { -3,  0, -3 },
@@ -152,7 +147,7 @@ namespace Accord.Imaging.Filters
         ///   Gets the Southwest direction Kirsch kernel mask.
         /// </summary>
         /// 
-        public static readonly int[,] Southwest = 
+        public static readonly int[,] Southwest =
         {
             {  5,  5, -3 },
             {  5,  0, -3 },
@@ -163,7 +158,7 @@ namespace Accord.Imaging.Filters
         ///   Gets the South direction Kirsch kernel mask.
         /// </summary>
         /// 
-        public static readonly int[,] South = 
+        public static readonly int[,] South =
         {
             {  5, -3, -3 },
             {  5,  0, -3 },
@@ -174,7 +169,7 @@ namespace Accord.Imaging.Filters
         ///   Gets the Southeast direction Kirsch kernel mask.
         /// </summary>
         /// 
-        public static readonly int[,] Southeast = 
+        public static readonly int[,] Southeast =
         {
             { -3, -3, -3 },
             {  5,  0, -3 },
@@ -185,7 +180,7 @@ namespace Accord.Imaging.Filters
         ///   Gets the East direction Kirsch kernel mask.
         /// </summary>
         /// 
-        public static readonly int[,] East = 
+        public static readonly int[,] East =
         {
             { -3, -3, -3 },
             { -3,  0, -3 },
@@ -196,7 +191,7 @@ namespace Accord.Imaging.Filters
         ///   Gets the Northeast direction Kirsch kernel mask.
         /// </summary>
         /// 
-        public static readonly int[,] Northeast = 
+        public static readonly int[,] Northeast =
         {
             { -3, -3, -3 },
             { -3,  0,  5 },

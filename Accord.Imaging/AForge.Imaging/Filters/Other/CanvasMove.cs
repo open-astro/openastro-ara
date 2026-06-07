@@ -2,12 +2,11 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © AForge.NET, 2005-2011
+// Copyright ï¿½ AForge.NET, 2005-2011
 // contacts@aforgenet.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System.Drawing;
     using System.Collections.Generic;
     using System.Drawing.Imaging;
@@ -36,8 +35,7 @@ namespace Accord.Imaging.Filters
     /// <img src="..\images\imaging\canvas_move.jpg" width="480" height="361" />
     /// </remarks>
     /// 
-    public class CanvasMove : BaseInPlaceFilter
-    {
+    public class CanvasMove : BaseInPlaceFilter {
         // RGB fill color
         private byte fillRed = 255;
         private byte fillGreen = 255;
@@ -58,8 +56,7 @@ namespace Accord.Imaging.Filters
         /// <remarks><para>See <see cref="IFilterInformation.FormatTranslations"/>
         /// documentation for additional information.</para></remarks>
         /// 
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -71,11 +68,9 @@ namespace Accord.Imaging.Filters
         /// 
         /// <para>Default value is set to white - ARGB(255, 255, 255, 255).</para></remarks>
         /// 
-        public Color FillColorRGB
-        {
+        public Color FillColorRGB {
             get { return Color.FromArgb(fillAlpha, fillRed, fillGreen, fillBlue); }
-            set
-            {
+            set {
                 fillRed = value.R;
                 fillGreen = value.G;
                 fillBlue = value.B;
@@ -91,8 +86,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <para>Default value is set to white - 255.</para></remarks>
         ///
-        public byte FillColorGray
-        {
+        public byte FillColorGray {
             get { return fillGray; }
             set { fillGray = value; }
         }
@@ -101,15 +95,13 @@ namespace Accord.Imaging.Filters
         /// Point to move the canvas to.
         /// </summary>
         /// 
-        public IntPoint MovePoint
-        {
+        public IntPoint MovePoint {
             get { return movePoint; }
             set { movePoint = value; }
         }
 
         // Private constructor to do common initialization
-        private CanvasMove()
-        {
+        private CanvasMove() {
             formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
             formatTranslations[PixelFormat.Format16bppGrayScale] = PixelFormat.Format16bppGrayScale;
             formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format24bppRgb;
@@ -126,8 +118,7 @@ namespace Accord.Imaging.Filters
         /// <param name="movePoint">Point to move the canvas to.</param>
         /// 
         public CanvasMove(IntPoint movePoint)
-            : this()
-        {
+            : this() {
             this.movePoint = movePoint;
         }
 
@@ -139,8 +130,7 @@ namespace Accord.Imaging.Filters
         /// <param name="fillColorRGB">RGB color to use for filling areas empty areas in color images.</param>
         /// 
         public CanvasMove(IntPoint movePoint, Color fillColorRGB)
-            : this()
-        {
+            : this() {
             this.movePoint = movePoint;
             this.fillRed = fillColorRGB.R;
             this.fillGreen = fillColorRGB.G;
@@ -156,8 +146,7 @@ namespace Accord.Imaging.Filters
         /// <param name="fillColorGray">Gray color to use for filling empty areas in grayscale images.</param>
         /// 
         public CanvasMove(IntPoint movePoint, byte fillColorGray)
-            : this()
-        {
+            : this() {
             this.movePoint = movePoint;
             this.fillGray = fillColorGray;
         }
@@ -171,8 +160,7 @@ namespace Accord.Imaging.Filters
         /// <param name="fillColorGray">Gray color to use for filling empty areas in grayscale images.</param>
         /// 
         public CanvasMove(IntPoint movePoint, Color fillColorRGB, byte fillColorGray)
-            : this()
-        {
+            : this() {
             this.movePoint = movePoint;
             this.fillRed = fillColorRGB.R;
             this.fillGreen = fillColorRGB.G;
@@ -187,12 +175,10 @@ namespace Accord.Imaging.Filters
         /// 
         /// <param name="image">Source image data.</param>
         ///
-        protected override void ProcessFilter(UnmanagedImage image)
-        {
+        protected override void ProcessFilter(UnmanagedImage image) {
             int pixelSize = Image.GetPixelFormatSize(image.PixelFormat) / 8;
 
-            switch (pixelSize)
-            {
+            switch (pixelSize) {
                 case 1:
                 case 3:
                 case 4:
@@ -207,8 +193,7 @@ namespace Accord.Imaging.Filters
         }
 
         // Process the filter on the image with 8 bits per color channel
-        private unsafe void ProcessFilter8bpc(UnmanagedImage image)
-        {
+        private unsafe void ProcessFilter8bpc(UnmanagedImage image) {
             int pixelSize = Image.GetPixelFormatSize(image.PixelFormat) / 8;
             bool is32bpp = (pixelSize == 4);
 
@@ -233,14 +218,12 @@ namespace Accord.Imaging.Filters
             int xStop = width;
             int xStep = 1;
 
-            if (movePointY > 0)
-            {
+            if (movePointY > 0) {
                 yStart = height - 1;
                 yStop = -1;
                 yStep = -1;
             }
-            if (movePointX > 0)
-            {
+            if (movePointX > 0) {
                 xStart = width - 1;
                 xStop = -1;
                 xStep = -1;
@@ -250,60 +233,45 @@ namespace Accord.Imaging.Filters
             byte* src = (byte*)image.ImageData.ToPointer();
             byte* pixel, moved;
 
-            if (image.PixelFormat == PixelFormat.Format8bppIndexed)
-            {
+            if (image.PixelFormat == PixelFormat.Format8bppIndexed) {
                 // grayscale image
-                for (int y = yStart; y != yStop; y += yStep)
-                {
-                    for (int x = xStart; x != xStop; x += xStep)
-                    {
+                for (int y = yStart; y != yStop; y += yStep) {
+                    for (int x = xStart; x != xStop; x += xStep) {
                         // current pixel
                         pixel = src + y * stride + x;
 
-                        if (intersect.Contains(x, y))
-                        {
+                        if (intersect.Contains(x, y)) {
                             moved = src + (y - movePointY) * stride + (x - movePointX);
 
                             *pixel = *moved;
-                        }
-                        else
-                        {
+                        } else {
                             *pixel = fillGray;
                         }
                     }
                 }
-            }
-            else
-            {
+            } else {
                 // color image
-                for (int y = yStart; y != yStop; y += yStep)
-                {
-                    for (int x = xStart; x != xStop; x += xStep)
-                    {
+                for (int y = yStart; y != yStop; y += yStep) {
+                    for (int x = xStart; x != xStop; x += xStep) {
                         // current pixel
                         pixel = src + y * stride + x * pixelSize;
 
-                        if (intersect.Contains(x, y))
-                        {
+                        if (intersect.Contains(x, y)) {
                             moved = src + (y - movePointY) * stride + (x - movePointX) * pixelSize;
 
                             pixel[RGB.R] = moved[RGB.R];
                             pixel[RGB.G] = moved[RGB.G];
                             pixel[RGB.B] = moved[RGB.B];
 
-                            if (is32bpp)
-                            {
+                            if (is32bpp) {
                                 pixel[RGB.A] = moved[RGB.A];
                             }
-                        }
-                        else
-                        {
+                        } else {
                             pixel[RGB.R] = fillRed;
                             pixel[RGB.G] = fillGreen;
                             pixel[RGB.B] = fillBlue;
 
-                            if (is32bpp)
-                            {
+                            if (is32bpp) {
                                 pixel[RGB.A] = fillAlpha;
                             }
                         }
@@ -313,8 +281,7 @@ namespace Accord.Imaging.Filters
         }
 
         // Process the filter on the image with 16 bits per color channel
-        private unsafe void ProcessFilter16bpc(UnmanagedImage image)
-        {
+        private unsafe void ProcessFilter16bpc(UnmanagedImage image) {
             int pixelSize = Image.GetPixelFormatSize(image.PixelFormat) / 8;
             bool is64bpp = (pixelSize == 8);
 
@@ -345,14 +312,12 @@ namespace Accord.Imaging.Filters
             int xStop = width;
             int xStep = 1;
 
-            if (movePointY > 0)
-            {
+            if (movePointY > 0) {
                 yStart = height - 1;
                 yStop = -1;
                 yStep = -1;
             }
-            if (movePointX > 0)
-            {
+            if (movePointX > 0) {
                 xStart = width - 1;
                 xStop = -1;
                 xStep = -1;
@@ -362,59 +327,44 @@ namespace Accord.Imaging.Filters
             byte* src = (byte*)image.ImageData.ToPointer();
             ushort* pixel, moved;
 
-            if (image.PixelFormat == PixelFormat.Format16bppGrayScale)
-            {
+            if (image.PixelFormat == PixelFormat.Format16bppGrayScale) {
                 // grayscale image
-                for (int y = yStart; y != yStop; y += yStep)
-                {
-                    for (int x = xStart; x != xStop; x += xStep)
-                    {
+                for (int y = yStart; y != yStop; y += yStep) {
+                    for (int x = xStart; x != xStop; x += xStep) {
                         // current pixel
                         pixel = (ushort*)(src + y * stride + x * 2);
 
-                        if (intersect.Contains(x, y))
-                        {
+                        if (intersect.Contains(x, y)) {
                             moved = (ushort*)(src + (y - movePointY) * stride + (x - movePointX) * 2);
                             *pixel = *moved;
-                        }
-                        else
-                        {
+                        } else {
                             *pixel = fillGray;
                         }
                     }
                 }
-            }
-            else
-            {
+            } else {
                 // color image
-                for (int y = yStart; y != yStop; y += yStep)
-                {
-                    for (int x = xStart; x != xStop; x += xStep)
-                    {
+                for (int y = yStart; y != yStop; y += yStep) {
+                    for (int x = xStart; x != xStop; x += xStep) {
                         // current pixel
                         pixel = (ushort*)(src + y * stride + x * pixelSize);
 
-                        if (intersect.Contains(x, y))
-                        {
+                        if (intersect.Contains(x, y)) {
                             moved = (ushort*)(src + (y - movePointY) * stride + (x - movePointX) * pixelSize);
 
                             pixel[RGB.R] = moved[RGB.R];
                             pixel[RGB.G] = moved[RGB.G];
                             pixel[RGB.B] = moved[RGB.B];
 
-                            if (is64bpp)
-                            {
+                            if (is64bpp) {
                                 pixel[RGB.A] = moved[RGB.A];
                             }
-                        }
-                        else
-                        {
+                        } else {
                             pixel[RGB.R] = fillRed;
                             pixel[RGB.G] = fillGreen;
                             pixel[RGB.B] = fillBlue;
 
-                            if (is64bpp)
-                            {
+                            if (is64bpp) {
                                 pixel[RGB.A] = fillAlpha;
                             }
                         }

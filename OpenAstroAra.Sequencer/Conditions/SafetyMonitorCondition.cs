@@ -91,7 +91,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
 
         public override bool Check(ISequenceItem previousItem, ISequenceItem nextItem) {
             var info = safetyMonitorMediator.GetInfo();
-            IsSafe = info.Connected && info.IsSafe; 
+            IsSafe = info.Connected && info.IsSafe;
             if (!IsSafe && IsActive()) {
                 Logger.Info($"{nameof(SafetyMonitorCondition)} finished. Status=Unsafe");
             }

@@ -67,7 +67,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyCamera {
             CanSetTemperature = sdk.HasTemperatureControl();
             HasDewHeater = sdk.HasDewHeater();
 
-            ReadoutModes = sdk.GetReadoutModes();            
+            ReadoutModes = sdk.GetReadoutModes();
         }
 
         private bool supportBitScaling;
@@ -249,7 +249,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyCamera {
                 try {
                     downloadCts.CancelAfter(TimeSpan.FromSeconds(Math.Max(60, profileService.ActiveProfile.CameraSettings.Timeout)));
                     data = await sdk.GetExposure(exposureTaskTime, exposureTaskWidth, exposureTaskHeight, downloadCts.Token);
-                } catch { }                
+                } catch { }
             }
             if (data == null) { return null; }
 
@@ -302,8 +302,8 @@ namespace OpenAstroAra.Equipment.Equipment.MyCamera {
             set {
                 if (CanSetTemperature) {
                     if (sdk.SetCooler(value)) {
-                        if(value && HasAdjustableFan) { 
-                            sdk.SetFanPercentage(profileService.ActiveProfile.CameraSettings.GenericCameraFanSpeed); 
+                        if (value && HasAdjustableFan) {
+                            sdk.SetFanPercentage(profileService.ActiveProfile.CameraSettings.GenericCameraFanSpeed);
                         }
                         RaisePropertyChanged();
                     }
@@ -349,7 +349,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyCamera {
 
         public int FanSpeed {
             get {
-                if(HasAdjustableFan) { 
+                if (HasAdjustableFan) {
                     return sdk.GetFanPercentage();
                 } else {
                     return 0;
@@ -388,7 +388,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyCamera {
             get => profileService.ActiveProfile.CameraSettings.GenericCameraDewHeaterStrength;
             set {
                 profileService.ActiveProfile.CameraSettings.GenericCameraDewHeaterStrength = value;
-                if(DewHeaterOn) {
+                if (DewHeaterOn) {
                     sdk.SetDewHeater(profileService.ActiveProfile.CameraSettings.GenericCameraDewHeaterStrength);
                 }
                 RaisePropertyChanged();

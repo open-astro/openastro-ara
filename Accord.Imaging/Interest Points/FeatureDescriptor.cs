@@ -25,16 +25,14 @@
 
 using System;
 
-namespace Accord.Imaging
-{
+namespace Accord.Imaging {
 
     /// <summary>
     ///   Standard feature descriptor for <see cref="T:double[]" /> feature vectors.
     /// </summary>
     /// 
     [Serializable]
-    public class FeatureDescriptor : IFeatureDescriptor<double[]>
-    {
+    public class FeatureDescriptor : IFeatureDescriptor<double[]> {
         private double[] descriptor;
 
         /// <summary>
@@ -42,8 +40,7 @@ namespace Accord.Imaging
         ///   associated with this point.
         /// </summary>
         /// 
-        public double[] Descriptor
-        {
+        public double[] Descriptor {
             get { return descriptor; }
             set { descriptor = value; }
         }
@@ -54,8 +51,7 @@ namespace Accord.Imaging
         /// 
         /// <param name="value">The feature vector.</param>
         /// 
-        public FeatureDescriptor(double[] value)
-        {
+        public FeatureDescriptor(double[] value) {
             descriptor = value;
         }
 
@@ -70,8 +66,7 @@ namespace Accord.Imaging
         ///   The result of the conversion.
         /// </returns>
         /// 
-        public static implicit operator FeatureDescriptor(double[] value)
-        {
+        public static implicit operator FeatureDescriptor(double[] value) {
             return new FeatureDescriptor(value);
         }
 
@@ -80,8 +75,7 @@ namespace Accord.Imaging
         ///   to <see cref="Accord.Imaging.FeatureDescriptor"/>.
         /// </summary>
         /// 
-        public static FeatureDescriptor FromArray(double[] value)
-        {
+        public static FeatureDescriptor FromArray(double[] value) {
             return new FeatureDescriptor(value);
         }
 
@@ -96,8 +90,7 @@ namespace Accord.Imaging
         ///   The result of the conversion.
         /// </returns>
         /// 
-        public static implicit operator FeatureDescriptor(FeatureDescriptor<double[]> value)
-        {
+        public static implicit operator FeatureDescriptor(FeatureDescriptor<double[]> value) {
             return new FeatureDescriptor(value.Descriptor);
         }
 
@@ -106,8 +99,7 @@ namespace Accord.Imaging
         ///   to <see cref="Accord.Imaging.FeatureDescriptor"/>.
         /// </summary>
         /// 
-        public static FeatureDescriptor FromGeneric(FeatureDescriptor<double[]> value)
-        {
+        public static FeatureDescriptor FromGeneric(FeatureDescriptor<double[]> value) {
             return new FeatureDescriptor(value.Descriptor);
         }
 
@@ -116,8 +108,7 @@ namespace Accord.Imaging
         ///   to <see cref="Accord.Imaging.FeatureDescriptor{T}"/>.
         /// </summary>
         /// 
-        public static FeatureDescriptor<T> FromValue<T>(T value)
-        {
+        public static FeatureDescriptor<T> FromValue<T>(T value) {
             return new FeatureDescriptor<T>(value);
         }
 
@@ -125,8 +116,7 @@ namespace Accord.Imaging
         ///   Implements the operator ==.
         /// </summary>
         /// 
-        public static bool operator ==(FeatureDescriptor desc1, FeatureDescriptor desc2)
-        {
+        public static bool operator ==(FeatureDescriptor desc1, FeatureDescriptor desc2) {
             return desc1.descriptor == desc2;
         }
 
@@ -134,8 +124,7 @@ namespace Accord.Imaging
         ///   Implements the operator !=.
         /// </summary>
         /// 
-        public static bool operator !=(FeatureDescriptor desc1, FeatureDescriptor desc2)
-        {
+        public static bool operator !=(FeatureDescriptor desc1, FeatureDescriptor desc2) {
             return desc1.descriptor != desc2;
         }
 
@@ -149,8 +138,7 @@ namespace Accord.Imaging
         ///   <c>true</c> if the specified <see cref="System.Object"/> is equal to this instance; otherwise, <c>false</c>.
         /// </returns>
         /// 
-        public override bool Equals(object obj)
-        {
+        public override bool Equals(object obj) {
             if (!(obj is FeatureDescriptor))
                 return false;
             return descriptor == ((FeatureDescriptor)obj).descriptor;
@@ -165,8 +153,7 @@ namespace Accord.Imaging
         ///   algorithms and data structures like a hash table. 
         /// </returns>
         /// 
-        public override int GetHashCode()
-        {
+        public override int GetHashCode() {
             return descriptor.GetHashCode();
         }
     }
@@ -179,8 +166,7 @@ namespace Accord.Imaging
     /// <typeparam name="T">The type of feature vector, such as <see cref="T:double[]"/>.</typeparam>
     /// 
     [Serializable]
-    public struct FeatureDescriptor<T> : IFeatureDescriptor<T>
-    {
+    public struct FeatureDescriptor<T> : IFeatureDescriptor<T> {
         private T descriptor;
 
         /// <summary>
@@ -188,8 +174,7 @@ namespace Accord.Imaging
         ///   associated with this point.
         /// </summary>
         /// 
-        public T Descriptor
-        {
+        public T Descriptor {
             get { return descriptor; }
             set { descriptor = value; }
         }
@@ -200,8 +185,7 @@ namespace Accord.Imaging
         /// 
         /// <param name="value">The feature vector.</param>
         /// 
-        public FeatureDescriptor(T value)
-        {
+        public FeatureDescriptor(T value) {
             descriptor = value;
         }
 
@@ -216,8 +200,7 @@ namespace Accord.Imaging
         ///   The result of the conversion.
         /// </returns>
         /// 
-        public static implicit operator FeatureDescriptor<T>(T value)
-        {
+        public static implicit operator FeatureDescriptor<T>(T value) {
             return new FeatureDescriptor<T>(value);
         }
 
@@ -225,8 +208,7 @@ namespace Accord.Imaging
         ///   Implements the operator ==.
         /// </summary>
         /// 
-        public static bool operator ==(FeatureDescriptor<T> desc1, FeatureDescriptor<T> desc2)
-        {
+        public static bool operator ==(FeatureDescriptor<T> desc1, FeatureDescriptor<T> desc2) {
             return desc1.descriptor == desc2;
         }
 
@@ -234,8 +216,7 @@ namespace Accord.Imaging
         ///   Implements the operator !=.
         /// </summary>
         /// 
-        public static bool operator !=(FeatureDescriptor<T> desc1, FeatureDescriptor<T> desc2)
-        {
+        public static bool operator !=(FeatureDescriptor<T> desc1, FeatureDescriptor<T> desc2) {
             return desc1.descriptor != desc2;
         }
 
@@ -249,8 +230,7 @@ namespace Accord.Imaging
         ///   <c>true</c> if the specified <see cref="System.Object"/> is equal to this instance; otherwise, <c>false</c>.
         /// </returns>
         /// 
-        public override bool Equals(object obj)
-        {
+        public override bool Equals(object obj) {
             if (!(obj is FeatureDescriptor))
                 return false;
             return descriptor.Equals(((FeatureDescriptor<T>)obj).descriptor);
@@ -265,8 +245,7 @@ namespace Accord.Imaging
         ///   algorithms and data structures like a hash table. 
         /// </returns>
         /// 
-        public override int GetHashCode()
-        {
+        public override int GetHashCode() {
             return descriptor.GetHashCode();
         }
     }

@@ -27,8 +27,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging.Textures
-{
+namespace Accord.Imaging.Textures {
     using Accord.Math;
     using System;
 
@@ -58,8 +57,7 @@ namespace Accord.Imaging.Textures
     /// <img src="..\images\imaging\wood_texture.jpg" width="320" height="240" />
     /// </remarks>
     /// 
-    public class WoodTexture : BaseTextureGenerator, ITextureGenerator
-    {
+    public class WoodTexture : BaseTextureGenerator, ITextureGenerator {
         // Perlin noise function used for texture generation
         private PerlinNoise noise = new PerlinNoise(8, 0.5, 1.0 / 32, 0.05);
 
@@ -75,11 +73,9 @@ namespace Accord.Imaging.Textures
         /// 
         /// <para>Default value is set to <b>12</b>.</para></remarks>
         /// 
-        public double Rings
-        {
+        public double Rings {
             get { return rings; }
-            set
-            {
+            set {
                 if (value < 3)
                     throw new ArgumentOutOfRangeException("value", "Number of rings must be equal to or higher than 3.");
                 rings = value;
@@ -90,8 +86,7 @@ namespace Accord.Imaging.Textures
         /// Initializes a new instance of the <see cref="WoodTexture"/> class.
         /// </summary>
         /// 
-        public WoodTexture()
-        {
+        public WoodTexture() {
         }
 
         /// <summary>
@@ -100,8 +95,7 @@ namespace Accord.Imaging.Textures
         /// 
         /// <param name="rings">Wood rings amount.</param>
         /// 
-        public WoodTexture(double rings)
-        {
+        public WoodTexture(double rings) {
             this.rings = rings;
         }
 
@@ -116,18 +110,15 @@ namespace Accord.Imaging.Textures
         /// 
         /// <remarks>Generates new texture of the specified size.</remarks>
         /// 
-        public override float[,] Generate(int width, int height)
-        {
+        public override float[,] Generate(int width, int height) {
             var texture = new float[height, width];
             int w2 = width / 2;
             int h2 = height / 2;
 
             int r = Accord.Math.Random.Generator.Random.Next(5000);
 
-            for (int y = 0; y < height; y++)
-            {
-                for (int x = 0; x < width; x++)
-                {
+            for (int y = 0; y < height; y++) {
+                for (int x = 0; x < width; x++) {
                     double xv = (double)(x - w2) / width;
                     double yv = (double)(y - h2) / height;
 

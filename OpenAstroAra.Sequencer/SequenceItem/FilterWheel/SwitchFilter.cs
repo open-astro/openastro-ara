@@ -122,7 +122,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.FilterWheel {
             return i.Count == 0;
         }
 
-        public override void AfterParentChanged() {            
+        public override void AfterParentChanged() {
             Validate();
         }
 

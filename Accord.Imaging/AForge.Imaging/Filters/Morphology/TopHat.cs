@@ -2,12 +2,11 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © AForge.NET, 2005-2010
+// Copyright ï¿½ AForge.NET, 2005-2010
 // contacts@aforgenet.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -43,19 +42,17 @@ namespace Accord.Imaging.Filters
     /// 
     /// <see cref="BottomHat"/>
     /// 
-    public class TopHat : BaseInPlaceFilter
-    {
-        private Opening opening = new Opening( );
-        private Subtract subtract = new Subtract( );
+    public class TopHat : BaseInPlaceFilter {
+        private Opening opening = new Opening();
+        private Subtract subtract = new Subtract();
 
         // private format translation dictionary
-        private Dictionary<PixelFormat, PixelFormat> formatTranslations = new Dictionary<PixelFormat, PixelFormat>( );
+        private Dictionary<PixelFormat, PixelFormat> formatTranslations = new Dictionary<PixelFormat, PixelFormat>();
 
         /// <summary>
         /// Format translations dictionary.
         /// </summary>
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -63,13 +60,12 @@ namespace Accord.Imaging.Filters
         /// Initializes a new instance of the <see cref="TopHat"/> class.
         /// </summary>
         /// 
-        public TopHat( )
-        {
+        public TopHat() {
             // initialize format translation dictionary
-            formatTranslations[PixelFormat.Format8bppIndexed]    = PixelFormat.Format8bppIndexed;
-            formatTranslations[PixelFormat.Format24bppRgb]       = PixelFormat.Format24bppRgb;
+            formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
+            formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format24bppRgb;
             formatTranslations[PixelFormat.Format16bppGrayScale] = PixelFormat.Format16bppGrayScale;
-            formatTranslations[PixelFormat.Format48bppRgb]       = PixelFormat.Format48bppRgb;
+            formatTranslations[PixelFormat.Format48bppRgb] = PixelFormat.Format48bppRgb;
         }
 
         /// <summary>
@@ -78,9 +74,8 @@ namespace Accord.Imaging.Filters
         /// 
         /// <param name="se">Structuring element to pass to <see cref="Opening"/> operator.</param>
         /// 
-        public TopHat( short[,] se ) : this( )
-        {
-            opening = new Opening( se );
+        public TopHat(short[,] se) : this() {
+            opening = new Opening(se);
         }
 
         /// <summary>
@@ -89,15 +84,14 @@ namespace Accord.Imaging.Filters
         /// 
         /// <param name="image">Source image data.</param>
         ///
-        protected override unsafe void ProcessFilter( UnmanagedImage image )
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage image) {
             // perform opening on the source image
-            UnmanagedImage openedImage = opening.Apply( image );
+            UnmanagedImage openedImage = opening.Apply(image);
             // subtract opened image from source image
             subtract.UnmanagedOverlayImage = openedImage;
-            subtract.ApplyInPlace( image );
+            subtract.ApplyInPlace(image);
 
-            openedImage.Dispose( );
+            openedImage.Dispose();
         }
     }
 }

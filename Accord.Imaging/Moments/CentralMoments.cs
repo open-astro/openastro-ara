@@ -20,8 +20,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging.Moments
-{
+namespace Accord.Imaging.Moments {
     using System;
     using System.Drawing;
     using Accord.Imaging;
@@ -73,8 +72,7 @@ namespace Accord.Imaging.Moments
     /// <seealso cref="HuMoments"/>
     /// 
     [Serializable]
-    public class CentralMoments : MomentsBase, IMoments
-    {
+    public class CentralMoments : MomentsBase, IMoments {
         /// <summary>
         ///   Gets the default maximum moment order.
         /// </summary>
@@ -159,8 +157,7 @@ namespace Accord.Imaging.Moments
         /// <param name="moments">The raw moments to construct central moments.</param>
         /// 
         public CentralMoments(RawMoments moments)
-            : base(moments.Order)
-        {
+            : base(moments.Order) {
             Compute(moments);
         }
 
@@ -225,8 +222,7 @@ namespace Accord.Imaging.Moments
         /// 
         /// <param name="moments">The raw moments to use as base of calculations.</param>
         /// 
-        public void Compute(RawMoments moments)
-        {
+        public void Compute(RawMoments moments) {
             float x = moments.CenterX;
             float y = moments.CenterY;
 
@@ -254,8 +250,7 @@ namespace Accord.Imaging.Moments
         /// <param name="image">The image.</param>
         /// <param name="area">The region of interest in the image to compute moments for.</param>
         /// 
-        public override void Compute(float[,] image, Rectangle area)
-        {
+        public override void Compute(float[,] image, Rectangle area) {
             this.Compute(new RawMoments(image, area, Order));
         }
 
@@ -266,8 +261,7 @@ namespace Accord.Imaging.Moments
         /// <param name="image">The image whose moments should be computed.</param>
         /// <param name="area">The region of interest in the image to compute moments for.</param>
         /// 
-        public override void Compute(UnmanagedImage image, Rectangle area)
-        {
+        public override void Compute(UnmanagedImage image, Rectangle area) {
             this.Compute(new RawMoments(image, area, Order));
         }
 
@@ -277,8 +271,7 @@ namespace Accord.Imaging.Moments
         /// 
         /// <returns>The size of the ellipse containing the image.</returns>
         /// 
-        public SizeF GetSize()
-        {
+        public SizeF GetSize() {
             // Compute the covariance matrix
             //
             double a = Mu20 * invM00; //                | a    b |
@@ -299,8 +292,7 @@ namespace Accord.Imaging.Moments
         /// 
         /// <returns>The angle of orientation of the ellipse, in radians.</returns>
         /// 
-        public float GetOrientation()
-        {
+        public float GetOrientation() {
             // Compute the covariance matrix
             //
             double a = Mu20 * invM00; //                | a    b |
@@ -315,7 +307,7 @@ namespace Accord.Imaging.Moments
             // Compute angle
             float angle = (float)Math.Atan2(2.0 * b, e + s);
 
-            if (angle < 0) 
+            if (angle < 0)
                 angle = (float)(angle + Math.PI);
 
             return angle;
@@ -328,8 +320,7 @@ namespace Accord.Imaging.Moments
         /// <param name="angle">The angle of orientation of the ellipse, in radians.</param>
         /// <returns>The size of the ellipse containing the image.</returns>
         /// 
-        public SizeF GetSizeAndOrientation(out float angle)
-        {
+        public SizeF GetSizeAndOrientation(out float angle) {
             // Compute the covariance matrix
             //
             double a = Mu20 * invM00; //                | a    b |

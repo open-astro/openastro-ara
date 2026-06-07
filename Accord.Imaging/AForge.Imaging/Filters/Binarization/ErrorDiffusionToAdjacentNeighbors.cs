@@ -1,12 +1,11 @@
 // AForge Image Processing Library
 // AForge.NET framework
 //
-// Copyright © Andrew Kirillov, 2005-2008
+// Copyright ï¿½ Andrew Kirillov, 2005-2008
 // andrew.kirillov@gmail.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Drawing;
     using System.Drawing.Imaging;
@@ -58,8 +57,7 @@ namespace Accord.Imaging.Filters
     /// </code>
     /// </remarks>
     /// 
-    public class ErrorDiffusionToAdjacentNeighbors : ErrorDiffusionDithering
-    {
+    public class ErrorDiffusionToAdjacentNeighbors : ErrorDiffusionDithering {
         // diffusion coefficients
         private int[][] coefficients;
         // sum of all coefficients
@@ -72,11 +70,9 @@ namespace Accord.Imaging.Filters
         /// <remarks>Set of coefficients, which are used for error diffusion to
         /// pixel's neighbors.</remarks>
         /// 
-        public int[][] Coefficients
-        {
+        public int[][] Coefficients {
             get { return coefficients; }
-            set
-            {
+            set {
                 coefficients = value;
                 CalculateCoefficientsSum();
             }
@@ -88,8 +84,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <param name="coefficients">Diffusion coefficients.</param>
         /// 
-        public ErrorDiffusionToAdjacentNeighbors(int[][] coefficients)
-        {
+        public ErrorDiffusionToAdjacentNeighbors(int[][] coefficients) {
             this.coefficients = coefficients;
             CalculateCoefficientsSum();
         }
@@ -104,15 +99,13 @@ namespace Accord.Imaging.Filters
         /// <remarks>All parameters of the image and current processing pixel's coordinates
         /// are initialized by base class.</remarks>
         /// 
-        protected override unsafe void Diffuse(int errorValue, byte* ptr)
-        {
+        protected override unsafe void Diffuse(int errorValue, byte* ptr) {
             int ed;	// error diffusion
 
             // do error diffusion to right-standing neighbors
             int[] coefficientsRow = coefficients[0];
 
-            for (int jI = 1, jC = 0, k = coefficientsRow.Length; jC < k; jI++, jC++)
-            {
+            for (int jI = 1, jC = 0, k = coefficientsRow.Length; jC < k; jI++, jC++) {
                 if (x + jI >= stopX)
                     break;
 
@@ -122,8 +115,7 @@ namespace Accord.Imaging.Filters
             }
 
             // do error diffusion to bottom neigbors
-            for (int i = 1, n = coefficients.Length; i < n; i++)
-            {
+            for (int i = 1, n = coefficients.Length; i < n; i++) {
                 if (y + i >= stopY)
                     break;
 
@@ -134,8 +126,7 @@ namespace Accord.Imaging.Filters
                 coefficientsRow = coefficients[i];
 
                 // process the row
-                for (int jC = 0, k = coefficientsRow.Length, jI = -(k >> 1); jC < k; jI++, jC++)
-                {
+                for (int jC = 0, k = coefficientsRow.Length, jI = -(k >> 1); jC < k; jI++, jC++) {
                     if (x + jI >= stopX)
                         break;
                     if (x + jI < startX)
@@ -151,16 +142,13 @@ namespace Accord.Imaging.Filters
         #region Private Members
 
         // Calculate coefficients' sum
-        private void CalculateCoefficientsSum()
-        {
+        private void CalculateCoefficientsSum() {
             coefficientsSum = 0;
 
-            for (int i = 0, n = coefficients.Length; i < n; i++)
-            {
+            for (int i = 0, n = coefficients.Length; i < n; i++) {
                 int[] coefficientsRow = coefficients[i];
 
-                for (int j = 0, k = coefficientsRow.Length; j < k; j++)
-                {
+                for (int j = 0, k = coefficientsRow.Length; j < k; j++) {
                     coefficientsSum += coefficientsRow[j];
                 }
             }

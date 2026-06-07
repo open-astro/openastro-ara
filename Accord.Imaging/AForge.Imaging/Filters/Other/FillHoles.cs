@@ -27,8 +27,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -61,8 +60,7 @@ namespace Accord.Imaging.Filters
     /// <img src="..\images\imaging\filled_holes.png" width="320" height="240" />
     /// </remarks>
     /// 
-    public class FillHoles : BaseInPlaceFilter
-    {
+    public class FillHoles : BaseInPlaceFilter {
         // private format translation dictionary
         private Dictionary<PixelFormat, PixelFormat> formatTranslations = new Dictionary<PixelFormat, PixelFormat>();
         // coupled size filtering or not
@@ -83,8 +81,7 @@ namespace Accord.Imaging.Filters
         /// <para>Default value is set to <see langword="true"/>, what means coupled filtering by size.</para>
         /// </remarks>
         /// 
-        public bool CoupledSizeFiltering
-        {
+        public bool CoupledSizeFiltering {
             get { return coupledSizeFiltering; }
             set { coupledSizeFiltering = value; }
         }
@@ -98,11 +95,9 @@ namespace Accord.Imaging.Filters
         /// 
         /// <para>Default value is set to <see cref="int.MaxValue"/>.</para></remarks>
         ///
-        public int MaxHoleWidth
-        {
+        public int MaxHoleWidth {
             get { return maxHoleWidth; }
-            set
-            {
+            set {
                 if (value < 0)
                     throw new ArgumentOutOfRangeException("value", "Value must be positive.");
                 maxHoleWidth = value;
@@ -118,11 +113,9 @@ namespace Accord.Imaging.Filters
         /// 
         /// <para>Default value is set to <see cref="int.MaxValue"/>.</para></remarks>
         ///
-        public int MaxHoleHeight
-        {
+        public int MaxHoleHeight {
             get { return maxHoleHeight; }
-            set
-            {
+            set {
                 if (value < 0)
                     throw new ArgumentOutOfRangeException("value", "Value must be positive.");
                 maxHoleHeight = value;
@@ -132,16 +125,14 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Format translations dictionary.
         /// </summary>
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
         /// <summary>   
         /// Initializes a new instance of the <see cref="FillHoles"/> class.
         /// </summary>
-        public FillHoles()
-        {
+        public FillHoles() {
             formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
         }
 
@@ -151,8 +142,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <param name="image">Source image data.</param>
         ///
-        protected override unsafe void ProcessFilter(UnmanagedImage image)
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage image) {
             int width = image.Width;
             int height = image.Height;
 
@@ -160,8 +150,7 @@ namespace Accord.Imaging.Filters
 
             // 1 - invert the source image
             Invert invertFilter = new Invert();
-            using (UnmanagedImage invertedImage = invertFilter.Apply(image))
-            {
+            using (UnmanagedImage invertedImage = invertFilter.Apply(image)) {
                 // 2 - use blob counter to find holes (they are white objects now on the inverted image)
                 blobCounter.ProcessImage(invertedImage);
             }
@@ -172,24 +161,17 @@ namespace Accord.Imaging.Filters
             byte[] newObjectColors = new byte[blobs.Length + 1];
             newObjectColors[0] = 255; // don't touch the objects, which have 0 ID
 
-            for (int i = 0, n = blobs.Length; i < n; i++)
-            {
+            for (int i = 0, n = blobs.Length; i < n; i++) {
                 Blob blob = blobs[i];
 
                 if ((blob.Rectangle.Left == 0) || (blob.Rectangle.Top == 0) ||
-                     (blob.Rectangle.Right == width) || (blob.Rectangle.Bottom == height))
-                {
+                     (blob.Rectangle.Right == width) || (blob.Rectangle.Bottom == height)) {
                     newObjectColors[blob.ID] = 0;
-                }
-                else
-                {
+                } else {
                     if (((coupledSizeFiltering) && (blob.Rectangle.Width <= maxHoleWidth) && (blob.Rectangle.Height <= maxHoleHeight)) |
-                         ((!coupledSizeFiltering) && ((blob.Rectangle.Width <= maxHoleWidth) || (blob.Rectangle.Height <= maxHoleHeight))))
-                    {
+                         ((!coupledSizeFiltering) && ((blob.Rectangle.Width <= maxHoleWidth) || (blob.Rectangle.Height <= maxHoleHeight)))) {
                         newObjectColors[blob.ID] = 255;
-                    }
-                    else
-                    {
+                    } else {
                         newObjectColors[blob.ID] = 0;
                     }
                 }
@@ -201,10 +183,8 @@ namespace Accord.Imaging.Filters
 
             int[] objectLabels = blobCounter.ObjectLabels;
 
-            for (int y = 0, i = 0; y < height; y++)
-            {
-                for (int x = 0; x < width; x++, i++, ptr++)
-                {
+            for (int y = 0, i = 0; y < height; y++) {
+                for (int x = 0; x < width; x++, i++, ptr++) {
                     *ptr = newObjectColors[objectLabels[i]];
                 }
                 ptr += offset;

@@ -103,7 +103,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
         }
 
         public bool RunCheck(ISequenceItem previousItem, ISequenceItem nextItem) {
-            if(this.Status == SequenceEntityStatus.DISABLED) { return false; }
+            if (this.Status == SequenceEntityStatus.DISABLED) { return false; }
 
             var root = ItemUtility.GetRootContainer(this.Parent);
 

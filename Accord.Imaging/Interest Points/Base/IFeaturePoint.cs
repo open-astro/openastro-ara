@@ -20,15 +20,13 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging
-{
+namespace Accord.Imaging {
 
     /// <summary>
     ///   Common interface for feature points.
     /// </summary>
     /// 
-    public interface IFeaturePoint 
-    {
+    public interface IFeaturePoint {
         /// <summary>
         ///   Gets or sets the x-coordinate of this point.
         /// </summary>
@@ -46,8 +44,7 @@ namespace Accord.Imaging
     ///   Common interface for feature points.
     /// </summary>
     /// 
-    public interface IFeaturePoint<out T> : IFeaturePoint, IFeatureDescriptor<T>
-    {
+    public interface IFeaturePoint<out T> : IFeaturePoint, IFeatureDescriptor<T> {
     }
 
 }

@@ -99,21 +99,21 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
         public double Elevation { get; private set; }
         public CustomHorizon Horizon { get; set; }
         public ObserverInfo Observer { get; private set; }
-        
+
         public double TargetAltitude {
             get => targetAltitude;
             set {
                 if (targetAltitude != value) {
                     targetAltitude = value;
                     // While "thinking" we show this. 
-                    if(!ExpectedTime.EndsWith("\u231B")) {
+                    if (!ExpectedTime.EndsWith("\u231B")) {
                         ExpectedTime = ExpectedTime + "\u231B";
                     }
                     RaisePropertyChanged();
                 }
             }
         }
-                
+
         public ComparisonOperatorEnum[] ComparisonOperators => Enum.GetValues(typeof(ComparisonOperatorEnum))
             .Cast<ComparisonOperatorEnum>()
             .Where(p => p != ComparisonOperatorEnum.GREATER_THAN_OR_EQUAL)
@@ -203,5 +203,3 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
         }
     }
 }
-
-

@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -54,7 +54,7 @@ namespace OpenAstroAra.Image.ImageData {
             Observer.Latitude = profile.AstrometrySettings.Latitude;
             Observer.Longitude = profile.AstrometrySettings.Longitude;
             Observer.Elevation = profile.AstrometrySettings.Elevation;
-            Observer.Name= profile.AstrometrySettings.Observer;
+            Observer.Name = profile.AstrometrySettings.Observer;
             Observer.Observatory = profile.AstrometrySettings.Observatory;
             Observer.Site = profile.AstrometrySettings.Site;
         }
@@ -154,10 +154,10 @@ namespace OpenAstroAra.Image.ImageData {
         public RMS RecordedRMS { get; set; } = null;
 
         public void SetExposureTimes(DateTime startTime, DateTime endTime) {
-            if (startTime == DateTime.MinValue ||  startTime == DateTime.MaxValue) { return; }
+            if (startTime == DateTime.MinValue || startTime == DateTime.MaxValue) { return; }
             ExposureStart = startTime;
             if (endTime == DateTime.MinValue || endTime == DateTime.MaxValue) { return; }
-            var midpointDateTime = startTime + TimeSpan.FromTicks((endTime - startTime).Ticks / 2);            
+            var midpointDateTime = startTime + TimeSpan.FromTicks((endTime - startTime).Ticks / 2);
             ExposureMidPoint = midpointDateTime;
         }
     }

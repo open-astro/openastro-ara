@@ -2,14 +2,14 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © Andrew Kirillov, 2005-2009
+// Copyright ï¿½ Andrew Kirillov, 2005-2009
 // andrew.kirillov@aforgenet.com
 //
 // Accord Imaging Library
 // The Accord.NET Framework
 // http://accord-framework.net
 //
-// Copyright © César Souza, 2009-2017
+// Copyright ï¿½ Cï¿½sar Souza, 2009-2017
 // cesarsouza at gmail.com
 //
 //    This library is free software; you can redistribute it and/or
@@ -30,8 +30,7 @@
 // http://www.eecs.wsu.edu/paint.net/
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using Accord.Math;
     using System;
     using System.Drawing;
@@ -70,8 +69,7 @@ namespace Accord.Imaging.Filters
     /// 
     /// <seealso cref="Convolution"/>
     ///
-    public class GaussianSharpen : Convolution
-    {
+    public class GaussianSharpen : Convolution {
         private double sigma = 1.4;
         private int size = 5;
 
@@ -85,11 +83,9 @@ namespace Accord.Imaging.Filters
         /// <para>Default value is set to <b>1.4</b>.</para>
         /// </remarks>
         /// 
-        public double Sigma
-        {
+        public double Sigma {
             get { return sigma; }
-            set
-            {
+            set {
                 // get new sigma value
                 sigma = Math.Max(0.5, Math.Min(5.0, value));
                 // create filter
@@ -106,11 +102,9 @@ namespace Accord.Imaging.Filters
         /// <para>Default value is set to <b>5</b>.</para>
         /// </remarks>
         ///
-        public int Size
-        {
+        public int Size {
             get { return size; }
-            set
-            {
+            set {
                 size = Math.Max(3, Math.Min(21, value | 1));
                 CreateFilter();
             }
@@ -120,8 +114,7 @@ namespace Accord.Imaging.Filters
         /// Initializes a new instance of the <see cref="GaussianSharpen"/> class.
         /// </summary>
         /// 
-        public GaussianSharpen()
-        {
+        public GaussianSharpen() {
             CreateFilter();
         }
 
@@ -131,8 +124,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <param name="sigma">Gaussian sigma value.</param>
         /// 
-        public GaussianSharpen(double sigma)
-        {
+        public GaussianSharpen(double sigma) {
             Sigma = sigma;
         }
 
@@ -143,8 +135,7 @@ namespace Accord.Imaging.Filters
         /// <param name="sigma">Gaussian sigma value.</param>
         /// <param name="size">Kernel size.</param>
         /// 
-        public GaussianSharpen(double sigma, int size)
-        {
+        public GaussianSharpen(double sigma, int size) {
             Sigma = sigma;
             Size = size;
         }
@@ -152,8 +143,7 @@ namespace Accord.Imaging.Filters
 
 
         // Create Gaussian filter
-        private void CreateFilter()
-        {
+        private void CreateFilter() {
             // create Gaussian kernel
             double[,] kernel = Normal.Kernel2D(sigma * sigma, size);
             double min = kernel[0, 0];
@@ -164,10 +154,8 @@ namespace Accord.Imaging.Filters
             int divisor = 0;
 
             // calculate integer kernel
-            for (int i = 0; i < size; i++)
-            {
-                for (int j = 0; j < size; j++)
-                {
+            for (int i = 0; i < size; i++) {
+                for (int j = 0; j < size; j++) {
                     double v = kernel[i, j] / min;
 
                     if (v > ushort.MaxValue)
@@ -183,17 +171,12 @@ namespace Accord.Imaging.Filters
             // recalculate kernel
             int c = size >> 1;
 
-            for (int i = 0; i < size; i++)
-            {
-                for (int j = 0; j < size; j++)
-                {
-                    if ((i == c) && (j == c))
-                    {
+            for (int i = 0; i < size; i++) {
+                for (int j = 0; j < size; j++) {
+                    if ((i == c) && (j == c)) {
                         // calculate central value
                         intKernel[i, j] = 2 * sum - intKernel[i, j];
-                    }
-                    else
-                    {
+                    } else {
                         // invert value
                         intKernel[i, j] = -intKernel[i, j];
                     }

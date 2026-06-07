@@ -38,7 +38,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Camera {
         private ICameraMediator cameraMediator;
 
         [JsonProperty]
-        public int USBLimit{ get; set; } = 0;
+        public int USBLimit { get; set; } = 0;
 
         private IList<string> issues = new List<string>();
 

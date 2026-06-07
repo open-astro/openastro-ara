@@ -44,7 +44,7 @@ namespace OpenAstroAra.Core.Utility.TcpRaw {
                 try {
                     Logger.Trace($"TcpRaw: Connecting to {Address}:{Port}");
                     await client.ConnectAsync(Address, Port, token);
-                } catch(OperationCanceledException) {
+                } catch (OperationCanceledException) {
                     throw;
                 } catch (Exception ex) {
                     Logger.Error($"TcpRaw: Error connecting to {Address}:{Port}: {ex}");

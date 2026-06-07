@@ -74,16 +74,16 @@ namespace OpenAstroAra.Equipment.Interfaces {
         double GetTemperature();
 
         double GetCoolerPower();
-        
+
         Task<ushort[]> GetExposure(double exposureTime, int width, int height, CancellationToken ct);
         bool IsExposureReady();
 
         bool HasDewHeater();
-        bool SetDewHeater(int power);        
+        bool SetDewHeater(int power);
         bool IsDewHeaterOn();
 
         void StartVideoCapture(double exposureTime, int width, int height);
-        void StopVideoCapture();        
+        void StopVideoCapture();
         Task<ushort[]> GetVideoCapture(double exposureTime, int width, int height, CancellationToken ct);
         List<string> GetReadoutModes();
         int GetReadoutMode();

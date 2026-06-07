@@ -201,14 +201,14 @@ namespace OpenAstroAra.Profile {
         public bool ProfileWasSpecifiedFromCommandLineArgs { get; private set; }
 
         public event EventHandler LocaleChanged;
-        
+
         public void ChangeLocale(CultureInfo language) {
             ActiveProfile.ApplicationSettings.Language = language;
 
             CultureInfo.DefaultThreadCurrentUICulture = language;
             Loc.Instance.ReloadLocale(ActiveProfile.ApplicationSettings.Culture);
             var eventHandler = LocaleChanged;
-            if (eventHandler != null) { 
+            if (eventHandler != null) {
                 eventHandler.Invoke(this, null);
             }
         }

@@ -587,8 +587,7 @@ public sealed class SqliteFrameRepository : IFrameRepository {
             foreach (var variant in Directory.EnumerateFiles(dir, pattern)) {
                 try { File.Delete(variant); } catch { /* skip locked */ }
             }
-        } catch (DirectoryNotFoundException) { /* nothing to delete */ }
-          catch (UnauthorizedAccessException) { /* read-only mount */ }
+        } catch (DirectoryNotFoundException) { /* nothing to delete */ } catch (UnauthorizedAccessException) { /* read-only mount */ }
         return true;
     }
 
@@ -687,8 +686,7 @@ public sealed class SqliteFrameRepository : IFrameRepository {
                         reason: aggressiveEviction ? "storage_pressure" : "lru_eviction");
                 } catch { /* ignore */ }
             }
-        } catch (DirectoryNotFoundException) { /* nothing to evict */ }
-          catch (UnauthorizedAccessException) { /* read-only mount; skip */ }
+        } catch (DirectoryNotFoundException) { /* nothing to evict */ } catch (UnauthorizedAccessException) { /* read-only mount; skip */ }
     }
 
     private static bool IsUnderStoragePressure(string dir) {

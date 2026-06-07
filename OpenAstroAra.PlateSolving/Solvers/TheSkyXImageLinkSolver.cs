@@ -119,7 +119,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
 
             return result;
         }
-       
+
 
         private void MoveOrDeleteFile(PlateSolveResult result, string file, string movedFilePrefix, CancellationToken cancelToken) {
             try {
@@ -152,8 +152,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
     }
 
     internal sealed class ImageLink {
-        internal ImageLink(EndPoint endpoint) 
-        {
+        internal ImageLink(EndPoint endpoint) {
             this.EndPoint = endpoint;
         }
 

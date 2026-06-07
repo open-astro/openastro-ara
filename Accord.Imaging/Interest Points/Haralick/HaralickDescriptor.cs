@@ -23,8 +23,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging
-{
+namespace Accord.Imaging {
     using System;
     using Accord.Math;
     using Accord.Math.Decompositions;
@@ -80,8 +79,7 @@ namespace Accord.Imaging
     /// <seealso cref="Haralick"/>
     /// 
     [Serializable]
-    public class HaralickDescriptor
-    {
+    public class HaralickDescriptor {
         double[,] matrix;
 
 
@@ -132,8 +130,7 @@ namespace Accord.Imaging
         /// 
         /// <param name="cooccurrenceMatrix">The co-occurrence matrix to compute features from.</param>
         /// 
-        public HaralickDescriptor(double[,] cooccurrenceMatrix)
-        {
+        public HaralickDescriptor(double[,] cooccurrenceMatrix) {
             if (cooccurrenceMatrix == null)
                 throw new ArgumentNullException("cooccurrenceMatrix");
             if (cooccurrenceMatrix.Rows() != cooccurrenceMatrix.Columns())
@@ -158,12 +155,9 @@ namespace Accord.Imaging
         ///   Gets the matrix sum.
         /// </summary>
         /// 
-        public double Sum
-        {
-            get
-            {
-                if (sum == null)
-                {
+        public double Sum {
+            get {
+                if (sum == null) {
                     double s = 0;
                     foreach (double v in matrix)
                         s += v;
@@ -177,10 +171,8 @@ namespace Accord.Imaging
         ///   Gets the matrix mean μ.
         /// </summary>
         /// 
-        public double Mean
-        {
-            get
-            {
+        public double Mean {
+            get {
                 if (mean == null)
                     mean = Sum / matrix.Length;
                 return mean.Value;
@@ -193,12 +185,9 @@ namespace Accord.Imaging
         ///   given as p<sub>x</sub>(i) = Σ<sub>j</sub> p(i,j).
         /// </summary>
         /// 
-        public double[] RowMarginal
-        {
-            get
-            {
-                if (px == null)
-                {
+        public double[] RowMarginal {
+            get {
+                if (px == null) {
                     px = new double[size];
                     for (int i = 0; i < px.Length; i++)
                         for (int j = 0; j < size; j++)
@@ -214,12 +203,9 @@ namespace Accord.Imaging
         ///   given as p<sub>y</sub>(j) = Σ<sub>i</sub> p(i,j).
         /// </summary>
         /// 
-        public double[] ColumnMarginal
-        {
-            get
-            {
-                if (py == null)
-                {
+        public double[] ColumnMarginal {
+            get {
+                if (py == null) {
                     py = new double[size];
                     for (int j = 0; j < py.Length; j++)
                         for (int i = 0; i < size; i++)
@@ -234,10 +220,8 @@ namespace Accord.Imaging
         ///   <see cref="RowMarginal"/> vector.
         /// </summary>
         /// 
-        public double RowMean
-        {
-            get
-            {
+        public double RowMean {
+            get {
                 if (xmean == null)
                     xmean = RowMarginal.Mean();
                 return xmean.Value;
@@ -249,10 +233,8 @@ namespace Accord.Imaging
         ///   <see cref="ColumnMarginal"/> vector.
         /// </summary>
         /// 
-        public double ColumnMean
-        {
-            get
-            {
+        public double ColumnMean {
+            get {
                 if (ymean == null)
                     ymean = ColumnMarginal.Mean();
                 return ymean.Value;
@@ -264,10 +246,8 @@ namespace Accord.Imaging
         ///   <see cref="RowMarginal"/> vector.
         /// </summary>
         /// 
-        public double RowStandardDeviation
-        {
-            get
-            {
+        public double RowStandardDeviation {
+            get {
                 if (xdev == null)
                     xdev = RowMarginal.StandardDeviation(RowMean);
                 return xdev.Value;
@@ -279,10 +259,8 @@ namespace Accord.Imaging
         ///   <see cref="ColumnMarginal"/> vector.
         /// </summary>
         /// 
-        public double ColumnStandardDeviation
-        {
-            get
-            {
+        public double ColumnStandardDeviation {
+            get {
                 if (ydev == null)
                     ydev = ColumnMarginal.StandardDeviation(ColumnMean);
                 return ydev.Value;
@@ -294,10 +272,8 @@ namespace Accord.Imaging
         ///   <see cref="RowMarginal"/> vector.
         /// </summary>
         /// 
-        public double RowEntropy
-        {
-            get
-            {
+        public double RowEntropy {
+            get {
                 if (xentropy == null)
                     xentropy = RowMarginal.Entropy(epsilon);
                 return xentropy.Value;
@@ -309,10 +285,8 @@ namespace Accord.Imaging
         ///   <see cref="ColumnMarginal"/> vector.
         /// </summary>
         /// 
-        public double ColumnEntropy
-        {
-            get
-            {
+        public double ColumnEntropy {
+            get {
                 if (yentropy == null)
                     yentropy = ColumnMarginal.Entropy(epsilon);
                 return yentropy.Value;
@@ -324,12 +298,9 @@ namespace Accord.Imaging
         ///   of elements whose indices sum to k.
         /// </summary>
         /// 
-        public double[] Sums
-        {
-            get
-            {
-                if (xysum == null)
-                {
+        public double[] Sums {
+            get {
+                if (xysum == null) {
                     xysum = new double[2 * size];
                     for (int i = 0; i < size; i++)
                         for (int j = 0; j < size; j++)
@@ -344,12 +315,9 @@ namespace Accord.Imaging
         ///   whose absolute indices diferences equals to k.
         /// </summary>
         /// 
-        public double[] Differences
-        {
-            get
-            {
-                if (xydiff == null)
-                {
+        public double[] Differences {
+            get {
+                if (xydiff == null) {
                     xydiff = new double[size];
                     for (int i = 0; i < size; i++)
                         for (int j = 0; j < size; j++)
@@ -472,12 +440,9 @@ namespace Accord.Imaging
         ///   or Homogeneity.
         /// </summary>
         /// 
-        public double AngularSecondMomentum
-        {
-            get
-            {
-                if (angular == null)
-                {
+        public double AngularSecondMomentum {
+            get {
+                if (angular == null) {
                     double s = 0;
                     foreach (double v in matrix)
                         s += v * v;
@@ -492,12 +457,9 @@ namespace Accord.Imaging
         ///   the Contrast with Absolute values (instead of squares).
         /// </summary>
         /// 
-        public double LaplaceContrast
-        {
-            get
-            {
-                if (laplace == null)
-                {
+        public double LaplaceContrast {
+            get {
+                if (laplace == null) {
                     double[] p_xmy = Differences;
 
                     double s = 0;
@@ -515,12 +477,9 @@ namespace Accord.Imaging
         ///   the Contrast.
         /// </summary>
         /// 
-        public double Contrast
-        {
-            get
-            {
-                if (contrast == null)
-                {
+        public double Contrast {
+            get {
+                if (contrast == null) {
                     double[] p_xmy = Differences;
 
                     double s = 0;
@@ -539,20 +498,16 @@ namespace Accord.Imaging
         ///   the Correlation.
         /// </summary>
         /// 
-        public double Correlation
-        {
-            get
-            {
-                if (correlation == null)
-                {
+        public double Correlation {
+            get {
+                if (correlation == null) {
                     double mx = RowMean;
                     double my = ColumnMean;
                     double sx = RowStandardDeviation;
                     double sy = ColumnStandardDeviation;
                     correlation = 0;
 
-                    if (sx * sy > 0)
-                    {
+                    if (sx * sy > 0) {
                         double s = 0;
                         for (int i = 0; i < size; i++)
                             for (int j = 0; j < size; j++)
@@ -573,12 +528,9 @@ namespace Accord.Imaging
         ///   the Sum of Squares: Variance.
         /// </summary>
         /// 
-        public double SumOfSquares
-        {
-            get
-            {
-                if (variance == null)
-                {
+        public double SumOfSquares {
+            get {
+                if (variance == null) {
                     double s = 0, mu = Mean;
                     for (int i = 0; i < size; i++)
                         for (int j = 0; j < size; j++)
@@ -596,12 +548,9 @@ namespace Accord.Imaging
         ///   Can be regarded as a complement to <see cref="Contrast"/>.
         /// </summary>
         ///
-        public double InverseDifferenceMoment
-        {
-            get
-            {
-                if (inverse == null)
-                {
+        public double InverseDifferenceMoment {
+            get {
+                if (inverse == null) {
                     double s = 0;
                     for (int i = 0; i < size; i++)
                         for (int j = 0; j < size; j++)
@@ -618,12 +567,9 @@ namespace Accord.Imaging
         ///   to <see cref="LaplaceContrast"/>.
         /// </summary>
         /// 
-        public double TextureHomogeneity
-        {
-            get
-            {
-                if (textureHomogeneity == null)
-                {
+        public double TextureHomogeneity {
+            get {
+                if (textureHomogeneity == null) {
                     double s = 0;
                     for (int i = 0; i < size; i++)
                         for (int j = 0; j < size; j++)
@@ -639,12 +585,9 @@ namespace Accord.Imaging
         ///   the Sum Average.
         /// </summary>
         /// 
-        public double SumAverage
-        {
-            get
-            {
-                if (sumAverage == null)
-                {
+        public double SumAverage {
+            get {
+                if (sumAverage == null) {
                     double[] sums = Sums;
                     double s = 0;
                     for (int i = 0; i < sums.Length; i++)
@@ -662,12 +605,9 @@ namespace Accord.Imaging
         ///   the Sum Variance.
         /// </summary>
         /// 
-        public double SumVariance
-        {
-            get
-            {
-                if (sumVariance == null)
-                {
+        public double SumVariance {
+            get {
+                if (sumVariance == null) {
                     double[] sums = Sums;
                     double f8 = F08;
                     double s = 0;
@@ -686,10 +626,8 @@ namespace Accord.Imaging
         ///   the Sum Entropy.
         /// </summary>
         /// 
-        public double SumEntropy
-        {
-            get
-            {
+        public double SumEntropy {
+            get {
                 if (sumEntropy == null)
                     sumEntropy = Sums.Entropy(epsilon);
                 Accord.Diagnostics.Debug.Assert(!Double.IsNaN(sumEntropy.Value));
@@ -702,10 +640,8 @@ namespace Accord.Imaging
         ///   the Entropy.
         /// </summary>
         /// 
-        public double Entropy
-        {
-            get
-            {
+        public double Entropy {
+            get {
                 if (entropy == null)
                     entropy = matrix.Entropy(epsilon);
                 Accord.Diagnostics.Debug.Assert(!Double.IsNaN(entropy.Value));
@@ -718,10 +654,8 @@ namespace Accord.Imaging
         ///   the Difference Variance.
         /// </summary>
         /// 
-        public double DifferenceVariance
-        {
-            get
-            {
+        public double DifferenceVariance {
+            get {
                 if (diffVariance == null)
                     diffVariance = Differences.Variance();
                 Accord.Diagnostics.Debug.Assert(!Double.IsNaN(diffVariance.Value));
@@ -734,10 +668,8 @@ namespace Accord.Imaging
         ///   the Difference Entropy.
         /// </summary>
         /// 
-        public double DifferenceEntropy
-        {
-            get
-            {
+        public double DifferenceEntropy {
+            get {
                 if (diffEntropy == null)
                     diffEntropy = Differences.Entropy(epsilon);
                 Accord.Diagnostics.Debug.Assert(!Double.IsNaN(diffEntropy.Value));
@@ -750,12 +682,9 @@ namespace Accord.Imaging
         ///   the First Information Measure.
         /// </summary>
         /// 
-        public double FirstInformationMeasure
-        {
-            get
-            {
-                if (information1 == null)
-                {
+        public double FirstInformationMeasure {
+            get {
+                if (information1 == null) {
                     double hxy = Entropy;
                     double hxy1 = 0;
 
@@ -767,8 +696,7 @@ namespace Accord.Imaging
 
                     information1 = 0;
 
-                    if (hx + hy > 0)
-                    {
+                    if (hx + hy > 0) {
                         for (int i = 0; i < size; i++)
                             for (int j = 0; j < size; j++)
                                 hxy1 -= matrix[i, j] * Math.Log(px[i] * py[j] + epsilon);
@@ -788,12 +716,9 @@ namespace Accord.Imaging
         ///   the Second Information Measure.
         /// </summary>
         /// 
-        public double SecondInformationMeasure
-        {
-            get
-            {
-                if (information2 == null)
-                {
+        public double SecondInformationMeasure {
+            get {
+                if (information2 == null) {
                     double hxy = Entropy;
 
                     double hxy2 = 0;
@@ -821,22 +746,16 @@ namespace Accord.Imaging
         ///   the Maximal Correlation Coefficient.
         /// </summary>
         /// 
-        public double MaximalCorrelationCoefficient
-        {
-            get
-            {
-                if (maximal == null)
-                {
+        public double MaximalCorrelationCoefficient {
+            get {
+                if (maximal == null) {
                     double[] px = RowMarginal;
                     double[] py = ColumnMarginal;
 
                     double[,] Q = new double[size, size];
-                    for (int i = 0; i < size; i++)
-                    {
-                        for (int j = 0; j < size; j++)
-                        {
-                            for (int k = 0; k < size; k++)
-                            {
+                    for (int i = 0; i < size; i++) {
+                        for (int j = 0; j < size; j++) {
+                            for (int k = 0; k < size; k++) {
                                 double num = matrix[i, k] * matrix[j, k];
                                 double den = px[i] * py[i];
                                 Q[i, j] += num / den;
@@ -858,20 +777,15 @@ namespace Accord.Imaging
         ///   Gets the Cluster Shade textural feature.
         /// </summary>
         /// 
-        public double ClusterShade
-        {
-            get
-            {
-                if (clusterShade == null)
-                {
+        public double ClusterShade {
+            get {
+                if (clusterShade == null) {
                     double mx = RowMean;
                     double my = ColumnMean;
 
                     double s = 0;
-                    for (int i = 0; i < size; i++)
-                    {
-                        for (int j = 0; j < size; j++)
-                        {
+                    for (int i = 0; i < size; i++) {
+                        for (int j = 0; j < size; j++) {
                             double v = (i + j - mx - my);
                             s += (v * v * v) * matrix[i, j];
                         }
@@ -888,20 +802,15 @@ namespace Accord.Imaging
         ///   Gets the Cluster Prominence textural feature.
         /// </summary>
         /// 
-        public double ClusterProminence
-        {
-            get
-            {
-                if (clusterProminence == null)
-                {
+        public double ClusterProminence {
+            get {
+                if (clusterProminence == null) {
                     double mx = RowMean;
                     double my = ColumnMean;
 
                     double s = 0;
-                    for (int i = 0; i < size; i++)
-                    {
-                        for (int j = 0; j < size; j++)
-                        {
+                    for (int i = 0; i < size; i++) {
+                        for (int j = 0; j < size; j++) {
                             double v = (i + j - mx - my);
                             s += (v * v * v * v) * matrix[i, j];
                         }
@@ -927,14 +836,12 @@ namespace Accord.Imaging
         /// <returns>A vector with Haralick's features up 
         /// to the given number passed as input.</returns>
         /// 
-        public double[] GetVector(int features = 13)
-        {
+        public double[] GetVector(int features = 13) {
             double[] vector = new double[features];
 
             int i = features;
 
-            switch (features)
-            {
+            switch (features) {
                 case 01: vector[--i] = F01; break;
                 case 02: vector[--i] = F02; goto case 1;
                 case 03: vector[--i] = F03; goto case 2;

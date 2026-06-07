@@ -27,8 +27,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -63,16 +62,14 @@ namespace Accord.Imaging.Filters
     /// <seealso cref="Dilation"/>
     /// <seealso cref="Dilation3x3"/>
     /// 
-    public class BinaryDilation3x3 : BaseUsingCopyPartialFilter
-    {
+    public class BinaryDilation3x3 : BaseUsingCopyPartialFilter {
         // private format translation dictionary
         private Dictionary<PixelFormat, PixelFormat> formatTranslations = new Dictionary<PixelFormat, PixelFormat>();
 
         /// <summary>
         /// Format translations dictionary.
         /// </summary>
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -80,8 +77,7 @@ namespace Accord.Imaging.Filters
         /// Initializes a new instance of the <see cref="BinaryDilation3x3"/> class.
         /// </summary>
         /// 
-        public BinaryDilation3x3()
-        {
+        public BinaryDilation3x3() {
             // initialize format translation dictionary
             formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
         }
@@ -96,10 +92,8 @@ namespace Accord.Imaging.Filters
         /// 
         /// <exception cref="InvalidImagePropertiesException">Processing rectangle mast be at least 3x3 in size.</exception>
         /// 
-        protected override unsafe void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData, Rectangle rect)
-        {
-            if ((rect.Width < 3) || (rect.Height < 3))
-            {
+        protected override unsafe void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData, Rectangle rect) {
+            if ((rect.Width < 3) || (rect.Height < 3)) {
                 throw new InvalidImagePropertiesException("Processing rectangle mast be at least 3x3 in size.");
             }
 
@@ -130,8 +124,7 @@ namespace Accord.Imaging.Filters
             dst++;
 
             // for each pixel
-            for (int x = startX; x < stopX; x++, src++, dst++)
-            {
+            for (int x = startX; x < stopX; x++, src++, dst++) {
                 *dst = (byte)(*src | src[-1] | src[1] |
                     src[srcStride] | src[srcStride - 1] | src[srcStride + 1]);
             }
@@ -142,8 +135,7 @@ namespace Accord.Imaging.Filters
             dst += dstOffset;
 
             // --- process all lines except the last one
-            for (int y = startY; y < stopY; y++)
-            {
+            for (int y = startY; y < stopY; y++) {
                 *dst = (byte)(*src | src[1] |
                     src[-srcStride] | src[-srcStride + 1] |
                     src[srcStride] | src[srcStride + 1]);
@@ -152,8 +144,7 @@ namespace Accord.Imaging.Filters
                 dst++;
 
                 // for each pixel
-                for (int x = startX; x < stopX; x++, src++, dst++)
-                {
+                for (int x = startX; x < stopX; x++, src++, dst++) {
                     *dst = (byte)(*src | src[-1] | src[1] |
                         src[-srcStride] | src[-srcStride - 1] | src[-srcStride + 1] |
                         src[srcStride] | src[srcStride - 1] | src[srcStride + 1]);
@@ -174,8 +165,7 @@ namespace Accord.Imaging.Filters
             dst++;
 
             // for each pixel
-            for (int x = startX; x < stopX; x++, src++, dst++)
-            {
+            for (int x = startX; x < stopX; x++, src++, dst++) {
                 *dst = (byte)(*src | src[-1] | src[1] |
                     src[-srcStride] | src[-srcStride - 1] | src[-srcStride + 1]);
             }

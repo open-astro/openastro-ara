@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -20,7 +20,7 @@ namespace OpenAstroAra.Astrometry {
     public class FramingRectangle : ObservableRotatingRectangle {
 
         public FramingRectangle(double rotationOffset, double x, double y, double width, double height) : base(rotationOffset, x, y, width, height) {
-            
+
             this.OriginalX = x;
             this.OriginalY = y;
         }

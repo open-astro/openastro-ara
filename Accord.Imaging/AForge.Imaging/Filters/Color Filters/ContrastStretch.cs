@@ -2,12 +2,11 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © AForge.NET, 2005-2010
+// Copyright ï¿½ AForge.NET, 2005-2010
 // contacts@aforgenet.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using Accord;
     using System;
     using System.Collections.Generic;
@@ -44,24 +43,21 @@ namespace Accord.Imaging.Filters
     /// <img src="..\images\imaging\contrast_stretch.jpg" width="480" height="387" />
     /// </remarks>
     /// 
-    public class ContrastStretch : BaseInPlacePartialFilter
-    {
+    public class ContrastStretch : BaseInPlacePartialFilter {
         // private format translation dictionary
         private Dictionary<PixelFormat, PixelFormat> formatTranslations = new Dictionary<PixelFormat, PixelFormat>();
 
         /// <summary>
         /// Format translations dictionary.
         /// </summary>
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
         /// <summary>   
         /// Initializes a new instance of the <see cref="ContrastStretch"/> class.
         /// </summary>
-        public ContrastStretch()
-        {
+        public ContrastStretch() {
             formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
             formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format24bppRgb;
             formatTranslations[PixelFormat.Format32bppRgb] = PixelFormat.Format32bppRgb;
@@ -75,8 +71,7 @@ namespace Accord.Imaging.Filters
         /// <param name="image">Source image data.</param>
         /// <param name="rect">Image rectangle for processing by the filter.</param>
         ///
-        protected override unsafe void ProcessFilter(UnmanagedImage image, Rectangle rect)
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage image, Rectangle rect) {
             int pixelSize = Image.GetPixelFormatSize(image.PixelFormat) / 8;
 
             int startX = rect.Left;
@@ -93,18 +88,15 @@ namespace Accord.Imaging.Filters
             byte* ptr = (byte*)image.ImageData.ToPointer();
 
             // check image format
-            if (image.PixelFormat == PixelFormat.Format8bppIndexed)
-            {
+            if (image.PixelFormat == PixelFormat.Format8bppIndexed) {
                 // allign pointer to the first pixel to process
                 ptr += (startY * stride + startX);
 
                 byte min = 255;
                 byte max = 0;
 
-                for (int y = startY; y < stopY; y++)
-                {
-                    for (int x = startX; x < stopX; x++, ptr++)
-                    {
+                for (int y = startY; y < stopY; y++) {
+                    for (int x = startX; x < stopX; x++, ptr++) {
                         byte value = *ptr;
 
                         if (value < min)
@@ -117,19 +109,15 @@ namespace Accord.Imaging.Filters
                 }
 
                 levelsLinear.InGray = new IntRange(min, max);
-            }
-            else
-            {
+            } else {
                 // allign pointer to the first pixel to process
                 ptr += (startY * stride + startX * pixelSize);
 
                 byte minR = 255, minG = 255, minB = 255;
                 byte maxR = 0, maxG = 0, maxB = 0;
 
-                for (int y = startY; y < stopY; y++)
-                {
-                    for (int x = startX; x < stopX; x++, ptr += pixelSize)
-                    {
+                for (int y = startY; y < stopY; y++) {
+                    for (int x = startX; x < stopX; x++, ptr += pixelSize) {
                         // red
                         byte value = ptr[RGB.R];
 

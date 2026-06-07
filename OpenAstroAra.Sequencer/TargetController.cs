@@ -70,7 +70,7 @@ namespace OpenAstroAra.Sequencer {
         [ObservableProperty]
         private bool sortByRelevance;
         partial void OnSortByRelevanceChanged(bool oldValue, bool newValue) {
-            if(newValue) {
+            if (newValue) {
                 SortByName = false;
             }
         }
@@ -88,7 +88,7 @@ namespace OpenAstroAra.Sequencer {
             this.profileService = profileService;
 
             Targets = new List<TargetSequenceContainer>();
-            
+
             targetsView = new CollectionViewSource { Source = Targets };
             targetsView.GroupDescriptions.Add(new PropertyGroupDescription(nameof(TargetSequenceContainer.Grouping)));
             TargetsView.SortDescriptions.Add(new SortDescription(nameof(TargetSequenceContainer.Weight), ListSortDirection.Ascending));

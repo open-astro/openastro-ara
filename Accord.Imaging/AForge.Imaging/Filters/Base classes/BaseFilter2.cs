@@ -6,8 +6,7 @@
 // contacts@aforgenet.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -29,8 +28,7 @@ namespace Accord.Imaging.Filters
     /// </para>
     /// </remarks>
     /// 
-    public abstract class BaseFilter2 : BaseFilter
-    {
+    public abstract class BaseFilter2 : BaseFilter {
         private Bitmap overlayImage;
         private UnmanagedImage unmanagedOverlayImage;
 
@@ -51,11 +49,9 @@ namespace Accord.Imaging.Filters
         /// only one overlay image is allowed: managed or unmanaged.</note></para>
         /// </remarks>
         ///
-        public Bitmap OverlayImage
-        {
+        public Bitmap OverlayImage {
             get { return overlayImage; }
-            set
-            {
+            set {
                 overlayImage = value;
 
                 if (value != null)
@@ -80,11 +76,9 @@ namespace Accord.Imaging.Filters
         /// only one overlay image is allowed: managed or unmanaged.</note></para>
         /// </remarks>
         ///
-        public UnmanagedImage UnmanagedOverlayImage
-        {
+        public UnmanagedImage UnmanagedOverlayImage {
             get { return unmanagedOverlayImage; }
-            set
-            {
+            set {
                 unmanagedOverlayImage = value;
 
                 if (value != null)
@@ -104,8 +98,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <param name="overlayImage">Overlay image.</param>
         /// 
-        protected BaseFilter2(Bitmap overlayImage)
-        {
+        protected BaseFilter2(Bitmap overlayImage) {
             this.overlayImage = overlayImage;
         }
 
@@ -115,8 +108,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <param name="unmanagedOverlayImage">Unmanaged overlay image.</param>
         /// 
-        protected BaseFilter2(UnmanagedImage unmanagedOverlayImage)
-        {
+        protected BaseFilter2(UnmanagedImage unmanagedOverlayImage) {
             this.unmanagedOverlayImage = unmanagedOverlayImage;
         }
 
@@ -127,16 +119,14 @@ namespace Accord.Imaging.Filters
         /// <param name="sourceData">Source image data.</param>
         /// <param name="destinationData">Destination image data.</param>
         /// 
-        protected override unsafe void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData)
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData) {
             PixelFormat pixelFormat = sourceData.PixelFormat;
             // get image dimension
             int width = sourceData.Width;
             int height = sourceData.Height;
 
             // check overlay type
-            if (overlayImage != null)
-            {
+            if (overlayImage != null) {
                 // source image and overlay must have same pixel format
                 if (pixelFormat != overlayImage.PixelFormat)
                     throw new InvalidImagePropertiesException("Source and overlay images must have same pixel format.");
@@ -150,18 +140,13 @@ namespace Accord.Imaging.Filters
                     new Rectangle(0, 0, width, height),
                     ImageLockMode.ReadOnly, pixelFormat);
 
-                try
-                {
+                try {
                     ProcessFilter(sourceData, new UnmanagedImage(ovrData), destinationData);
-                }
-                finally
-                {
+                } finally {
                     // unlock overlay image
                     overlayImage.UnlockBits(ovrData);
                 }
-            }
-            else if (unmanagedOverlayImage != null)
-            {
+            } else if (unmanagedOverlayImage != null) {
                 // source image and overlay must have same pixel format
                 if (pixelFormat != unmanagedOverlayImage.PixelFormat)
                     throw new InvalidImagePropertiesException("Source and overlay images must have same pixel format.");
@@ -171,9 +156,7 @@ namespace Accord.Imaging.Filters
                     throw new InvalidImagePropertiesException("Overlay image size must be equal to source image size.");
 
                 ProcessFilter(sourceData, unmanagedOverlayImage, destinationData);
-            }
-            else
-            {
+            } else {
                 throw new InvalidOperationException("Overlay image is not set.");
             }
         }

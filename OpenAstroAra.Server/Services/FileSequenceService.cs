@@ -65,8 +65,7 @@ public sealed class FileSequenceService : ISequenceService {
         // their existence without each one duplicating the mkdir + log path.
         foreach (var dirName in new[] { LibraryDirName, ImportedDirName, TemplatesDirName, ActiveDirName }) {
             var path = Path.Combine(sequencesRoot, dirName);
-            try { Directory.CreateDirectory(path); }
-            catch (Exception ex) {
+            try { Directory.CreateDirectory(path); } catch (Exception ex) {
                 _logger?.LogWarning(ex, "Failed to create sequences subdir {Path}", path);
             }
         }

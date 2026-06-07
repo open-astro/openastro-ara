@@ -2,12 +2,11 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © Andrew Kirillov, 2005-2010
+// Copyright ï¿½ Andrew Kirillov, 2005-2010
 // andrew.kirillov@aforgenet.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -63,8 +62,7 @@ namespace Accord.Imaging.Filters
     /// <img src="..\images\imaging\image_warp.png" width="480" height="361" />
     /// </remarks>
     /// 
-    public class ImageWarp : BaseFilter
-    {
+    public class ImageWarp : BaseFilter {
         // private format translation dictionary
         private Dictionary<PixelFormat, PixelFormat> formatTranslations = new Dictionary<PixelFormat, PixelFormat>();
 
@@ -89,11 +87,9 @@ namespace Accord.Imaging.Filters
         /// it for a set of images for creating similar effects.</note></para>
         /// </remarks>
         /// 
-        public IntPoint[,] WarpMap
-        {
+        public IntPoint[,] WarpMap {
             get { return warpMap; }
-            set
-            {
+            set {
                 if (value == null)
                     throw new InvalidOperationException("Warp map can not be set to null.");
 
@@ -108,8 +104,7 @@ namespace Accord.Imaging.Filters
         /// <remarks><para>See <see cref="IFilterInformation.FormatTranslations"/>
         /// documentation for additional information.</para></remarks>
         /// 
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -119,8 +114,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <param name="warpMap">Map used for warping images (see <see cref="WarpMap"/>).</param>
         /// 
-        public ImageWarp(IntPoint[,] warpMap)
-        {
+        public ImageWarp(IntPoint[,] warpMap) {
             formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
             formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format24bppRgb;
             formatTranslations[PixelFormat.Format32bppRgb] = PixelFormat.Format32bppRgb;
@@ -136,8 +130,7 @@ namespace Accord.Imaging.Filters
         /// <param name="sourceData">Source image data.</param>
         /// <param name="destinationData">Destination image data.</param>
         /// 
-        protected override unsafe void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData)
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData) {
             int pixelSize = Image.GetPixelFormatSize(sourceData.PixelFormat) / 8;
 
             // image width and height
@@ -159,37 +152,29 @@ namespace Accord.Imaging.Filters
             byte* p;
 
             // for each line
-            for (int y = 0; y < heightToProcess; y++)
-            {
+            for (int y = 0; y < heightToProcess; y++) {
                 // for each pixel
-                for (int x = 0; x < widthToProcess; x++)
-                {
+                for (int x = 0; x < widthToProcess; x++) {
                     // get original pixel's coordinates
                     ox = x + warpMap[y, x].X;
                     oy = y + warpMap[y, x].Y;
 
                     // check if the random pixel is inside of image
-                    if ((ox >= 0) && (oy >= 0) && (ox < width) && (oy < height))
-                    {
+                    if ((ox >= 0) && (oy >= 0) && (ox < width) && (oy < height)) {
                         p = src + oy * srcStride + ox * pixelSize;
 
-                        for (int i = 0; i < pixelSize; i++, dst++, p++)
-                        {
+                        for (int i = 0; i < pixelSize; i++, dst++, p++) {
                             *dst = *p;
                         }
-                    }
-                    else
-                    {
-                        for (int i = 0; i < pixelSize; i++, dst++)
-                        {
+                    } else {
+                        for (int i = 0; i < pixelSize; i++, dst++) {
                             *dst = 0;
                         }
                     }
                 }
 
                 // copy remaining pixel in the row
-                if (width != widthToProcess)
-                {
+                if (width != widthToProcess) {
                     Accord.SystemTools.CopyUnmanagedMemory(dst, src + y * srcStride + widthToProcess * pixelSize, (width - widthToProcess) * pixelSize);
                 }
 
@@ -197,8 +182,7 @@ namespace Accord.Imaging.Filters
             }
 
             // copy remaining rows of pixels
-            for (int y = heightToProcess; y < height; y++, dst += dstStride)
-            {
+            for (int y = heightToProcess; y < height; y++, dst += dstStride) {
                 Accord.SystemTools.CopyUnmanagedMemory(dst, src + y * srcStride, width * pixelSize);
             }
         }

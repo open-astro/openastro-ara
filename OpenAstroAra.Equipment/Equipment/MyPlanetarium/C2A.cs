@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -90,7 +90,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyPlanetarium {
                 } else {
                     throw new PlanetariumFailedToGetCoordinates();
                 }
-            } catch(OperationCanceledException) {
+            } catch (OperationCanceledException) {
                 throw;
             } catch (Exception ex) {
                 Logger.Error(ex);

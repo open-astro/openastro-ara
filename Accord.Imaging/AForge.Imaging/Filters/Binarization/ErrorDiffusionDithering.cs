@@ -1,12 +1,11 @@
 // AForge Image Processing Library
 // AForge.NET framework
 //
-// Copyright © Andrew Kirillov, 2005-2008
+// Copyright ï¿½ Andrew Kirillov, 2005-2008
 // andrew.kirillov@gmail.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -32,8 +31,7 @@ namespace Accord.Imaging.Filters
     /// <para>The filter accepts 8 bpp grayscale images for processing.</para>
     /// </remarks>
     /// 
-    public abstract class ErrorDiffusionDithering : BaseInPlacePartialFilter
-    {
+    public abstract class ErrorDiffusionDithering : BaseInPlacePartialFilter {
         private byte threshold = 128;
 
         /// <summary>
@@ -42,8 +40,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <remarks>Default value is 128.</remarks>
         /// 
-        public byte ThresholdValue
-        {
+        public byte ThresholdValue {
             get { return threshold; }
             set { threshold = value; }
         }
@@ -89,8 +86,7 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Format translations dictionary.
         /// </summary>
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -98,8 +94,7 @@ namespace Accord.Imaging.Filters
         /// Initializes a new instance of the <see cref="ErrorDiffusionDithering"/> class.
         /// </summary>
         /// 
-        protected ErrorDiffusionDithering()
-        {
+        protected ErrorDiffusionDithering() {
             // initialize format translation dictionary
             formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
         }
@@ -123,8 +118,7 @@ namespace Accord.Imaging.Filters
         /// <param name="image">Source image data.</param>
         /// <param name="rect">Image rectangle for processing by the filter.</param>
         /// 
-        protected override unsafe void ProcessFilter(UnmanagedImage image, Rectangle rect)
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage image, Rectangle rect) {
             // processing start and stop X,Y positions
             startX = rect.Left;
             startY = rect.Top;
@@ -144,21 +138,16 @@ namespace Accord.Imaging.Filters
             ptr += (startY * stride + startX);
 
             // for each line
-            for (y = startY; y < stopY; y++)
-            {
+            for (y = startY; y < stopY; y++) {
                 // for each pixels
-                for (x = startX; x < stopX; x++, ptr++)
-                {
+                for (x = startX; x < stopX; x++, ptr++) {
                     v = *ptr;
 
                     // fill the next destination pixel
-                    if (v >= threshold)
-                    {
+                    if (v >= threshold) {
                         *ptr = 255;
                         error = v - 255;
-                    }
-                    else
-                    {
+                    } else {
                         *ptr = 0;
                         error = v;
                     }

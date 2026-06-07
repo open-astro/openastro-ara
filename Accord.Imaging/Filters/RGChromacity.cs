@@ -24,8 +24,7 @@
 using System.Collections.Generic;
 using System.Drawing.Imaging;
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     /// <summary>
     ///   RG Chromaticity.
     /// </summary>
@@ -41,16 +40,14 @@ namespace Accord.Imaging.Filters
     /// </para>
     /// </remarks>
     /// 
-    public class RGChromacity : BaseInPlaceFilter
-    {
+    public class RGChromacity : BaseInPlaceFilter {
         Dictionary<PixelFormat, PixelFormat> formatTranslations;
 
         /// <summary>
         ///   Format translations dictionary.
         /// </summary>
         /// 
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -58,8 +55,7 @@ namespace Accord.Imaging.Filters
         ///   Initializes a new instance of the <see cref="RGChromacity"/> class.
         /// </summary>
         /// 
-        public RGChromacity()
-        {
+        public RGChromacity() {
             formatTranslations = new Dictionary<PixelFormat, PixelFormat>();
             formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format24bppRgb;
             formatTranslations[PixelFormat.Format32bppArgb] = PixelFormat.Format32bppArgb;
@@ -71,8 +67,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <param name="image">Source image data.</param>
         /// 
-        protected unsafe override void ProcessFilter(UnmanagedImage image)
-        {
+        protected unsafe override void ProcessFilter(UnmanagedImage image) {
             int width = image.Width;
             int height = image.Height;
 
@@ -82,10 +77,8 @@ namespace Accord.Imaging.Filters
 
             byte* src = (byte*)image.ImageData.ToPointer();
 
-            for (int y = 0; y < height; y++)
-            {
-                for (int x = 0; x < width; x++, src += pixelSize)
-                {
+            for (int y = 0; y < height; y++) {
+                for (int x = 0; x < width; x++, src += pixelSize) {
                     double sum = src[RGB.R] + src[RGB.G] + src[RGB.B];
                     sum = sum == 0 ? 1 : sum;
 

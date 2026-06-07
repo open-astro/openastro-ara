@@ -6,10 +6,10 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © AForge.NET, 2005-2010
+// Copyright ï¿½ AForge.NET, 2005-2010
 // contacts@aforgenet.com
 //
-// Copyright © César Souza, 2009-2017
+// Copyright ï¿½ Cï¿½sar Souza, 2009-2017
 // cesarsouza at gmail.com
 //
 //    This library is free software; you can redistribute it and/or
@@ -27,8 +27,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging
-{
+namespace Accord.Imaging {
     using System;
     using System.Drawing;
     using System.Drawing.Imaging;
@@ -42,7 +41,7 @@ namespace Accord.Imaging
     /// <para>
     ///   This class implements integral image concept, which is described by
     ///   Viola and Jones in: <b>P. Viola and M. J. Jones, "Robust real-time face detection",
-    ///   Int. Journal of Computer Vision 57(2), pp. 137–154, 2004</b>.</para>
+    ///   Int. Journal of Computer Vision 57(2), pp. 137ï¿½154, 2004</b>.</para>
     ///   
     /// <para>
     ///   <i>"An integral image <b>I</b> of an input image <b>G</b> is defined as the image in which the
@@ -88,8 +87,7 @@ namespace Accord.Imaging
     /// <seealso cref="IntegralImage2"/>
     /// 
     [Serializable]
-    public class IntegralImage : ICloneable
-    {
+    public class IntegralImage : ICloneable {
         /// <summary>
         /// Integral image's array.
         /// </summary>
@@ -113,16 +111,14 @@ namespace Accord.Imaging
         /// <summary>
         /// Width of the source image the integral image was constructed for.
         /// </summary>
-        public int Width
-        {
+        public int Width {
             get { return width; }
         }
 
         /// <summary>
         /// Height of the source image the integral image was constructed for.
         /// </summary>
-        public int Height
-        {
+        public int Height {
             get { return height; }
         }
 
@@ -138,8 +134,7 @@ namespace Accord.Imaging
         /// rectangles' sums.</note></para>
         /// </remarks>
         /// 
-        public uint[][] Matrix
-        {
+        public uint[][] Matrix {
             get { return matrix; }
         }
 
@@ -156,17 +151,12 @@ namespace Accord.Imaging
         /// </remarks>
         /// 
         [Obsolete("Please use Matrix property instead.")]
-        public uint[,] InternalData
-        {
-            get
-            {
-                if (integralImage == null)
-                {
+        public uint[,] InternalData {
+            get {
+                if (integralImage == null) {
                     integralImage = new uint[height + 1, width + 1];
-                    for (int y = 0; y <= height; y++)
-                    {
-                        for (int x = 0; x <= width; x++)
-                        {
+                    for (int y = 0; y <= height; y++) {
+                        for (int x = 0; x <= width; x++) {
                             integralImage[y, x] = matrix[y][x];
                         }
                     }
@@ -187,8 +177,7 @@ namespace Accord.Imaging
         /// class directly. To create an instance of this class <see cref="FromBitmap(Bitmap)"/> or
         /// <see cref="FromBitmap(BitmapData)"/> method should be used.</remarks>
         ///
-        protected IntegralImage(int width, int height)
-        {
+        protected IntegralImage(int width, int height) {
             this.width = width;
             this.height = height;
             this.matrix = Jagged.Zeros<uint>(height + 1, width + 1);
@@ -204,11 +193,9 @@ namespace Accord.Imaging
         /// 
         /// <exception cref="UnsupportedImageFormatException">The source image has incorrect pixel format.</exception>
         /// 
-        public static IntegralImage FromBitmap(Bitmap image)
-        {
+        public static IntegralImage FromBitmap(Bitmap image) {
             // check image format
-            if (image.PixelFormat != PixelFormat.Format8bppIndexed)
-            {
+            if (image.PixelFormat != PixelFormat.Format8bppIndexed) {
                 throw new UnsupportedImageFormatException("Source image can be grayscale (8 bpp indexed) image only.");
             }
 
@@ -234,8 +221,7 @@ namespace Accord.Imaging
         /// 
         /// <exception cref="UnsupportedImageFormatException">The source image has incorrect pixel format.</exception>
         /// 
-        public static IntegralImage FromBitmap(BitmapData imageData)
-        {
+        public static IntegralImage FromBitmap(BitmapData imageData) {
             return FromBitmap(new UnmanagedImage(imageData));
         }
 
@@ -249,11 +235,9 @@ namespace Accord.Imaging
         /// 
         /// <exception cref="UnsupportedImageFormatException">The source image has incorrect pixel format.</exception>
         /// 
-        public static IntegralImage FromBitmap(UnmanagedImage image)
-        {
+        public static IntegralImage FromBitmap(UnmanagedImage image) {
             // check image format
-            if (image.PixelFormat != PixelFormat.Format8bppIndexed)
-            {
+            if (image.PixelFormat != PixelFormat.Format8bppIndexed) {
                 throw new ArgumentException("Source image can be grayscale (8 bpp indexed) image only.");
             }
 
@@ -267,18 +251,15 @@ namespace Accord.Imaging
             uint[][] matrix = im.matrix;
 
             // do the job
-            unsafe
-            {
+            unsafe {
                 byte* src = (byte*)image.ImageData.ToPointer();
 
                 // for each line
-                for (int y = 1; y <= height; y++)
-                {
+                for (int y = 1; y <= height; y++) {
                     uint rowSum = 0;
 
                     // for each pixel
-                    for (int x = 1; x <= width; x++, src++)
-                    {
+                    for (int x = 1; x <= width; x++, src++) {
                         image.CheckBounds(src);
 
                         rowSum += *src;
@@ -305,8 +286,7 @@ namespace Accord.Imaging
         /// 
         /// <remarks><para>Both specified points are included into the calculation rectangle.</para></remarks>
         /// 
-        public uint GetRectangleSum(int x1, int y1, int x2, int y2)
-        {
+        public uint GetRectangleSum(int x1, int y1, int x2, int y2) {
             // check if requested rectangle is out of the image
             if ((x2 < 0) || (y2 < 0) || (x1 >= width) || (y1 >= height))
                 return 0;
@@ -338,8 +318,7 @@ namespace Accord.Imaging
         /// (x, y-radius, x+radius-1, y+radius-1). B is the sum of rectangle with coordinates
         /// (x-radius, y-radius, x-1, y+radius-1).</para></remarks>
         ///
-        public int GetHaarXWavelet(int x, int y, int radius)
-        {
+        public int GetHaarXWavelet(int x, int y, int radius) {
             int y1 = y - radius;
             int y2 = y + radius - 1;
 
@@ -364,8 +343,7 @@ namespace Accord.Imaging
         /// (x-radius, y, x+radius-1, y+radius-1). B is the sum of rectangle with coordinates
         /// (x-radius, y-radius, x+radius-1, y-1).</para></remarks>
         ///
-        public int GetHaarYWavelet(int x, int y, int radius)
-        {
+        public int GetHaarYWavelet(int x, int y, int radius) {
             int x1 = x - radius;
             int x2 = x + radius - 1;
 
@@ -388,8 +366,7 @@ namespace Accord.Imaging
         /// 
         /// <remarks><para>Both specified points are included into the calculation rectangle.</para></remarks>
         /// 
-        public uint GetRectangleSumUnsafe(int x1, int y1, int x2, int y2)
-        {
+        public uint GetRectangleSumUnsafe(int x1, int y1, int x2, int y2) {
             x2++;
             y2++;
 
@@ -411,8 +388,7 @@ namespace Accord.Imaging
         /// 3x3 rectangle, then it is required to specify its center and radius equal to 1.</para>
         /// </remarks>
         /// 
-        public uint GetRectangleSum(int x, int y, int radius)
-        {
+        public uint GetRectangleSum(int x, int y, int radius) {
             return GetRectangleSum(x - radius, y - radius, x + radius, y + radius);
         }
 
@@ -431,8 +407,7 @@ namespace Accord.Imaging
         /// 3x3 rectangle, then it is required to specify its center and radius equal to 1.</para>
         /// </remarks>
         /// 
-        public uint GetRectangleSumUnsafe(int x, int y, int radius)
-        {
+        public uint GetRectangleSumUnsafe(int x, int y, int radius) {
             return GetRectangleSumUnsafe(x - radius, y - radius, x + radius, y + radius);
         }
 
@@ -449,8 +424,7 @@ namespace Accord.Imaging
         /// 
         /// <remarks>Both specified points are included into the calculation rectangle.</remarks>
         /// 
-        public float GetRectangleMean(int x1, int y1, int x2, int y2)
-        {
+        public float GetRectangleMean(int x1, int y1, int x2, int y2) {
             // check if requested rectangle is out of the image
             if ((x2 < 0) || (y2 < 0) || (x1 >= width) || (y1 >= height))
                 return 0;
@@ -482,8 +456,7 @@ namespace Accord.Imaging
         /// 
         /// <remarks>Both specified points are included into the calculation rectangle.</remarks>
         /// 
-        public float GetRectangleMeanUnsafe(int x1, int y1, int x2, int y2)
-        {
+        public float GetRectangleMeanUnsafe(int x1, int y1, int x2, int y2) {
             x2++;
             y2++;
 
@@ -507,8 +480,7 @@ namespace Accord.Imaging
         /// 3x3 rectangle, then it is required to specify its center and radius equal to 1.
         /// </remarks>
         /// 
-        public float GetRectangleMean(int x, int y, int radius)
-        {
+        public float GetRectangleMean(int x, int y, int radius) {
             return GetRectangleMean(x - radius, y - radius, x + radius, y + radius);
         }
 
@@ -527,8 +499,7 @@ namespace Accord.Imaging
         /// 3x3 rectangle, then it is required to specify its center and radius equal to 1.
         /// </remarks>
         /// 
-        public float GetRectangleMeanUnsafe(int x, int y, int radius)
-        {
+        public float GetRectangleMeanUnsafe(int x, int y, int radius) {
             return GetRectangleMeanUnsafe(x - radius, y - radius, x + radius, y + radius);
         }
 
@@ -540,8 +511,7 @@ namespace Accord.Imaging
         ///   A new object that is a copy of this instance.
         /// </returns>
         ///
-        public object Clone()
-        {
+        public object Clone() {
             var clone = new IntegralImage(width, height);
             integralImage.CopyTo(clone.integralImage, 0);
             return clone;

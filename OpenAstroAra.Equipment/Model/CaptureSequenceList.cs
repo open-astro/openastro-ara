@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -161,12 +161,12 @@ namespace OpenAstroAra.Equipment.Model {
             List<CaptureSequenceList> c = null;
             try {
                 XmlSerializer xmlSerializer = new XmlSerializer(typeof(List<CaptureSequenceList>));
-                xmlSerializer.UnknownAttribute += XmlSerializer_UnknownAttribute;                
+                xmlSerializer.UnknownAttribute += XmlSerializer_UnknownAttribute;
 
                 c = (List<CaptureSequenceList>)xmlSerializer.Deserialize(stream);
-                
+
                 foreach (var l in c) {
-                    foreach(var s in l.Items) {
+                    foreach (var s in l.Items) {
                         // Migration of values prior to 3.0
                         if (s.ImageType == "DARKFLAT") {
                             s.ImageType = CaptureSequence.ImageTypes.DARK;

@@ -209,7 +209,7 @@ namespace OpenAstroAra.Sequencer.Container {
                     item.AfterParentChanged();
 
                     IValidatable validatable = (item as IValidatable);
-                    if (validatable != null) {                        
+                    if (validatable != null) {
                         try {
                             validatable.Validate();
                         } catch (Exception ex) {
@@ -507,13 +507,13 @@ namespace OpenAstroAra.Sequencer.Container {
                 localTriggers = Triggers.ToArray();
             }
             foreach (var trigger in localTriggers) {
-                if(trigger.Status == SequenceEntityStatus.DISABLED) { continue; }
+                if (trigger.Status == SequenceEntityStatus.DISABLED) { continue; }
                 try {
                     if (trigger.ShouldTrigger(previousItem, nextItem)) {
                         var context = nextItem?.Parent ?? previousItem?.Parent ?? this;
                         await trigger.Run(context, progress, token);
                     }
-                } catch(Exception ex) {
+                } catch (Exception ex) {
                     Logger.Error(ex);
                 }
             }
@@ -545,10 +545,10 @@ namespace OpenAstroAra.Sequencer.Container {
                     if (validatable != null) {
                         try {
                             valid = validatable.Validate() && valid;
-                        } catch(Exception ex) {
+                        } catch (Exception ex) {
                             Logger.Error(ex);
                             valid = false;
-                        }                        
+                        }
                     }
                 }
                 foreach (var item in Conditions) {
@@ -592,7 +592,7 @@ namespace OpenAstroAra.Sequencer.Container {
                 var items = GetItemsSnapshot();
                 var itemsByStatus = items.GroupBy(x => x.Status);
                 var itemString = string.Empty;
-                foreach(var i in itemsByStatus) {
+                foreach (var i in itemsByStatus) {
                     itemString += $", Items[{i.Key}]: {i.Count()}";
                 }
 

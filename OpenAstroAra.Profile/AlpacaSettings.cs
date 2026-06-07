@@ -17,7 +17,7 @@ namespace OpenAstroAra.Profile {
 
         protected override void SetDefaultValues() {
             numberOfPolls = 1;
-            pollInterval = 100; 
+            pollInterval = 100;
             discoveryPort = 32227;
             discoveryDuration = 2d;
             resolveDnsName = false;

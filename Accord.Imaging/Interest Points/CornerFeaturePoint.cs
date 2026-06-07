@@ -20,8 +20,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging
-{
+namespace Accord.Imaging {
     using AForge;
     using System;
 
@@ -30,15 +29,13 @@ namespace Accord.Imaging
     /// </summary>
     /// 
     [Serializable]
-    public class CornerFeaturePoint : IFeaturePoint<double[]>
-    {
+    public class CornerFeaturePoint : IFeaturePoint<double[]> {
 
         /// <summary>
         ///   Initializes a new instance of the <see cref="CornerFeaturePoint"/> class.
         /// </summary>
         /// 
-        public CornerFeaturePoint(IntPoint point)
-        {
+        public CornerFeaturePoint(IntPoint point) {
             Descriptor = new double[] { point.X, point.Y };
         }
 

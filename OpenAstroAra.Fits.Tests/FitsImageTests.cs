@@ -27,8 +27,7 @@ public class FitsImageTests {
     // passes-through; xunit 2.x lacks Assert.Skip so no skipped marker.
     private static readonly bool CfitsioAvailable = CheckCfitsio();
     private static bool CheckCfitsio() {
-        try { FitsLibraryProbe.EnsureLoadable(); return true; }
-        catch { return false; }
+        try { FitsLibraryProbe.EnsureLoadable(); return true; } catch { return false; }
     }
 
     [Fact]

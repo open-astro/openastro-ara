@@ -2,12 +2,11 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © Andrew Kirillov, 2005-2010
+// Copyright ï¿½ Andrew Kirillov, 2005-2010
 // andrew.kirillov@aforgenet.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -46,8 +45,7 @@ namespace Accord.Imaging.Filters
     /// <seealso cref="HSLLinear"/>
     /// <seealso cref="YCbCrLinear"/>
     /// 
-    public class LevelsLinear : BaseInPlacePartialFilter
-    {
+    public class LevelsLinear : BaseInPlacePartialFilter {
         private IntRange inRed = new IntRange(0, 255);
         private IntRange inGreen = new IntRange(0, 255);
         private IntRange inBlue = new IntRange(0, 255);
@@ -66,8 +64,7 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Format translations dictionary.
         /// </summary>
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -76,11 +73,9 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Red component's input range.
         /// </summary>
-        public IntRange InRed
-        {
+        public IntRange InRed {
             get { return inRed; }
-            set
-            {
+            set {
                 inRed = value;
                 CalculateMap(inRed, outRed, mapRed);
             }
@@ -89,11 +84,9 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Green component's input range.
         /// </summary>
-        public IntRange InGreen
-        {
+        public IntRange InGreen {
             get { return inGreen; }
-            set
-            {
+            set {
                 inGreen = value;
                 CalculateMap(inGreen, outGreen, mapGreen);
             }
@@ -102,11 +95,9 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Blue component's input range.
         /// </summary>
-        public IntRange InBlue
-        {
+        public IntRange InBlue {
             get { return inBlue; }
-            set
-            {
+            set {
                 inBlue = value;
                 CalculateMap(inBlue, outBlue, mapBlue);
             }
@@ -115,11 +106,9 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Gray component's input range.
         /// </summary>
-        public IntRange InGray
-        {
+        public IntRange InGray {
             get { return inGreen; }
-            set
-            {
+            set {
                 inGreen = value;
                 CalculateMap(inGreen, outGreen, mapGreen);
             }
@@ -131,10 +120,8 @@ namespace Accord.Imaging.Filters
         /// 
         /// <remarks>The property allows to set red, green and blue input ranges to the same value.</remarks>
         /// 
-        public IntRange Input
-        {
-            set
-            {
+        public IntRange Input {
+            set {
                 inRed = inGreen = inBlue = value;
                 CalculateMap(inRed, outRed, mapRed);
                 CalculateMap(inGreen, outGreen, mapGreen);
@@ -145,11 +132,9 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Red component's output range.
         /// </summary>
-        public IntRange OutRed
-        {
+        public IntRange OutRed {
             get { return outRed; }
-            set
-            {
+            set {
                 outRed = value;
                 CalculateMap(inRed, outRed, mapRed);
             }
@@ -158,11 +143,9 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Green component's output range.
         /// </summary>
-        public IntRange OutGreen
-        {
+        public IntRange OutGreen {
             get { return outGreen; }
-            set
-            {
+            set {
                 outGreen = value;
                 CalculateMap(inGreen, outGreen, mapGreen);
             }
@@ -171,11 +154,9 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Blue component's output range.
         /// </summary>
-        public IntRange OutBlue
-        {
+        public IntRange OutBlue {
             get { return outBlue; }
-            set
-            {
+            set {
                 outBlue = value;
                 CalculateMap(inBlue, outBlue, mapBlue);
             }
@@ -184,11 +165,9 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Gray component's output range.
         /// </summary>
-        public IntRange OutGray
-        {
+        public IntRange OutGray {
             get { return outGreen; }
-            set
-            {
+            set {
                 outGreen = value;
                 CalculateMap(inGreen, outGreen, mapGreen);
             }
@@ -200,10 +179,8 @@ namespace Accord.Imaging.Filters
         /// 
         /// <remarks>The property allows to set red, green and blue output ranges to the same value.</remarks>
         /// 
-        public IntRange Output
-        {
-            set
-            {
+        public IntRange Output {
+            set {
                 outRed = outGreen = outBlue = value;
                 CalculateMap(inRed, outRed, mapRed);
                 CalculateMap(inGreen, outGreen, mapGreen);
@@ -217,8 +194,7 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Initializes a new instance of the <see cref="LevelsLinear"/> class.
         /// </summary>
-        public LevelsLinear()
-        {
+        public LevelsLinear() {
             CalculateMap(inRed, outRed, mapRed);
             CalculateMap(inGreen, outGreen, mapGreen);
             CalculateMap(inBlue, outBlue, mapBlue);
@@ -236,8 +212,7 @@ namespace Accord.Imaging.Filters
         /// <param name="image">Source image data.</param>
         /// <param name="rect">Image rectangle for processing by the filter.</param>
         ///
-        protected override unsafe void ProcessFilter(UnmanagedImage image, Rectangle rect)
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage image, Rectangle rect) {
             int pixelSize = Image.GetPixelFormatSize(image.PixelFormat) / 8;
 
             // processing start and stop X,Y positions
@@ -253,26 +228,19 @@ namespace Accord.Imaging.Filters
             // allign pointer to the first pixel to process
             ptr += (startY * image.Stride + startX * pixelSize);
 
-            if (image.PixelFormat == PixelFormat.Format8bppIndexed)
-            {
+            if (image.PixelFormat == PixelFormat.Format8bppIndexed) {
                 // grayscale image
-                for (int y = startY; y < stopY; y++)
-                {
-                    for (int x = startX; x < stopX; x++, ptr++)
-                    {
+                for (int y = startY; y < stopY; y++) {
+                    for (int x = startX; x < stopX; x++, ptr++) {
                         // gray
                         *ptr = mapGreen[*ptr];
                     }
                     ptr += offset;
                 }
-            }
-            else
-            {
+            } else {
                 // RGB image
-                for (int y = startY; y < stopY; y++)
-                {
-                    for (int x = startX; x < stopX; x++, ptr += pixelSize)
-                    {
+                for (int y = startY; y < stopY; y++) {
+                    for (int x = startX; x < stopX; x++, ptr += pixelSize) {
                         // red
                         ptr[RGB.R] = mapRed[ptr[RGB.R]];
                         // green
@@ -294,18 +262,15 @@ namespace Accord.Imaging.Filters
         /// <param name="outRange">Output range.</param>
         /// <param name="map">Conversion map.</param>
         /// 
-        private static void CalculateMap(IntRange inRange, IntRange outRange, byte[] map)
-        {
+        private static void CalculateMap(IntRange inRange, IntRange outRange, byte[] map) {
             double k = 0, b = 0;
 
-            if (inRange.Max != inRange.Min)
-            {
+            if (inRange.Max != inRange.Min) {
                 k = (double)(outRange.Max - outRange.Min) / (double)(inRange.Max - inRange.Min);
                 b = (double)(outRange.Min) - k * inRange.Min;
             }
 
-            for (int i = 0; i < 256; i++)
-            {
+            for (int i = 0; i < 256; i++) {
                 byte v = (byte)i;
 
                 if (v >= inRange.Max)

@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -30,6 +30,6 @@ namespace OpenAstroAra.Image.ImageData {
         public int BitDepth { get; private set; }
         public bool IsBayered { get; private set; }
         public int Gain { get; private set; }
-        public int Offset { get; private set;}
+        public int Offset { get; private set; }
     }
 }

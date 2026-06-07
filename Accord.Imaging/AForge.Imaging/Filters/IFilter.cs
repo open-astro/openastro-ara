@@ -2,12 +2,11 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © AForge.NET, 2005-2010
+// Copyright ï¿½ AForge.NET, 2005-2010
 // contacts@aforgenet.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Drawing;
     using System.Drawing.Imaging;
@@ -24,8 +23,7 @@ namespace Accord.Imaging.Filters
     /// <seealso cref="IInPlaceFilter"/>
     /// <seealso cref="IInPlacePartialFilter"/>
     /// 
-    public interface IFilter
-    {
+    public interface IFilter {
         /// <summary>
         /// Apply filter to an image.
         /// </summary>
@@ -38,7 +36,7 @@ namespace Accord.Imaging.Filters
         /// <remarks>The method keeps the source image unchanged and returns
         /// the result of image processing filter as new image.</remarks> 
         ///
-        Bitmap Apply( Bitmap image );
+        Bitmap Apply(Bitmap image);
 
         /// <summary>
         /// Apply filter to an image.
@@ -53,7 +51,7 @@ namespace Accord.Imaging.Filters
         /// of image processing filter as new image. The source image data are kept
         /// unchanged.</remarks>
         /// 
-        Bitmap Apply( BitmapData imageData );
+        Bitmap Apply(BitmapData imageData);
 
         /// <summary>
         /// Apply filter to an image.
@@ -67,7 +65,7 @@ namespace Accord.Imaging.Filters
         /// <remarks>The method keeps the source image unchanged and returns
         /// the result of image processing filter as new image.</remarks> 
         /// 
-        UnmanagedImage Apply( UnmanagedImage image );
+        UnmanagedImage Apply(UnmanagedImage image);
 
         /// <summary>
         /// Apply filter to an image.
@@ -86,6 +84,6 @@ namespace Accord.Imaging.Filters
         /// <exception cref="InvalidImagePropertiesException">In the case if destination image has incorrect
         /// size.</exception>
         /// 
-        void Apply( UnmanagedImage sourceImage, UnmanagedImage destinationImage );
+        void Apply(UnmanagedImage sourceImage, UnmanagedImage destinationImage);
     }
 }

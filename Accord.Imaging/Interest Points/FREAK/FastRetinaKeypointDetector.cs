@@ -20,8 +20,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging
-{
+namespace Accord.Imaging {
     using Accord.Compat;
     using Accord.Imaging.Filters;
     using AForge;
@@ -34,8 +33,7 @@ namespace Accord.Imaging
     ///   SURF Feature descriptor types.
     /// </summary>
     /// 
-    public enum FastRetinaKeypointDescriptorType
-    {
+    public enum FastRetinaKeypointDescriptorType {
         /// <summary>
         ///   Do not compute descriptors.
         /// </summary>
@@ -126,8 +124,7 @@ namespace Accord.Imaging
     /// <seealso cref="LocalBinaryPattern"/>
     /// 
     [Serializable]
-    public class FastRetinaKeypointDetector : BaseSparseFeatureExtractor<FastRetinaKeypoint>
-    {
+    public class FastRetinaKeypointDetector : BaseSparseFeatureExtractor<FastRetinaKeypoint> {
 
         private FastRetinaKeypointDescriptorType featureType = FastRetinaKeypointDescriptorType.Standard;
         private float scale = 22.0f;
@@ -163,8 +160,7 @@ namespace Accord.Imaging
         /// 
         /// <value><c>true</c> if to compute orientation; otherwise, <c>false</c>.</value>
         /// 
-        public FastRetinaKeypointDescriptorType ComputeDescriptors
-        {
+        public FastRetinaKeypointDescriptorType ComputeDescriptors {
             get { return featureType; }
             set { featureType = value; }
         }
@@ -174,13 +170,10 @@ namespace Accord.Imaging
         ///   building the feature descriptor. Default is 4.
         /// </summary>
         /// 
-        public int Octaves
-        {
+        public int Octaves {
             get { return pattern.Octaves; }
-            set
-            {
-                if (value != octaves)
-                {
+            set {
+                if (value != octaves) {
                     octaves = value;
                     pattern = null;
                 }
@@ -192,13 +185,10 @@ namespace Accord.Imaging
         ///   the feature descriptor. Default is 22.
         /// </summary>
         /// 
-        public float Scale
-        {
+        public float Scale {
             get { return pattern.Scale; }
-            set
-            {
-                if (value != scale)
-                {
+            set {
+                if (value != scale) {
                     scale = value;
                     pattern = null;
                 }
@@ -212,8 +202,7 @@ namespace Accord.Imaging
         /// <param name="threshold">The detection threshold for the 
         /// <see cref="FastCornersDetector">FAST detector</see>.</param>
         /// 
-        public FastRetinaKeypointDetector(int threshold)
-        {
+        public FastRetinaKeypointDetector(int threshold) {
             init(new FastCornersDetector(threshold));
         }
 
@@ -221,8 +210,7 @@ namespace Accord.Imaging
         ///   Initializes a new instance of the <see cref="FastRetinaKeypointDetector"/> class.
         /// </summary>
         /// 
-        public FastRetinaKeypointDetector()
-        {
+        public FastRetinaKeypointDetector() {
             init(new FastCornersDetector());
         }
 
@@ -232,13 +220,11 @@ namespace Accord.Imaging
         /// 
         /// <param name="detector">A corners detector.</param>
         /// 
-        public FastRetinaKeypointDetector(ICornersDetector detector)
-        {
+        public FastRetinaKeypointDetector(ICornersDetector detector) {
             init(detector);
         }
 
-        private void init(ICornersDetector detector)
-        {
+        private void init(ICornersDetector detector) {
             this.Detector = detector;
 
             base.SupportedFormats.UnionWith(new[]
@@ -255,15 +241,11 @@ namespace Accord.Imaging
         ///   actual feature extraction, transforming the input image into a list of features.
         /// </summary>
         /// 
-        protected override IEnumerable<FastRetinaKeypoint> InnerTransform(UnmanagedImage image)
-        {
+        protected override IEnumerable<FastRetinaKeypoint> InnerTransform(UnmanagedImage image) {
             // make sure we have grayscale image
-            if (image.PixelFormat == PixelFormat.Format8bppIndexed)
-            {
+            if (image.PixelFormat == PixelFormat.Format8bppIndexed) {
                 grayImage = image;
-            }
-            else
-            {
+            } else {
                 // create temporary grayscale image
                 grayImage = Grayscale.CommonAlgorithms.BT709.Apply(image);
             }
@@ -280,8 +262,7 @@ namespace Accord.Imaging
 
             // 3. Compute feature descriptors if required
             descriptor = null;
-            if (featureType != FastRetinaKeypointDescriptorType.None)
-            {
+            if (featureType != FastRetinaKeypointDescriptorType.None) {
                 descriptor = GetDescriptor();
                 descriptor.Compute(features);
             }
@@ -294,10 +275,8 @@ namespace Accord.Imaging
         ///   feature descriptor</see> for the last processed image.
         /// </summary>
         /// 
-        public FastRetinaKeypointDescriptor GetDescriptor()
-        {
-            if (descriptor == null || pattern == null)
-            {
+        public FastRetinaKeypointDescriptor GetDescriptor() {
+            if (descriptor == null || pattern == null) {
                 if (pattern == null)
                     pattern = new FastRetinaKeypointPattern(octaves, scale);
 
@@ -312,16 +291,14 @@ namespace Accord.Imaging
         /// Creates a new object that is a copy of the current instance.
         /// </summary>
         /// 
-        protected override object Clone(ISet<PixelFormat> supportedFormats)
-        {
+        protected override object Clone(ISet<PixelFormat> supportedFormats) {
             var clone = new FastRetinaKeypointDetector();
             clone.featureType = featureType;
             clone.octaves = octaves;
             clone.scale = scale;
             clone.SupportedFormats = supportedFormats;
 
-            if (descriptor != null)
-            {
+            if (descriptor != null) {
                 // clone.descriptor = (FastRetinaKeypointDescriptor)descriptor.Clone();
                 // clone.grayImage = grayImage.Clone();
                 // clone.integral = (IntegralImage)integral.Clone();

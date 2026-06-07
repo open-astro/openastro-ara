@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -160,7 +160,7 @@ namespace OpenAstroAra.Core.Model {
         }
 
         public bool Add(ImagePattern pattern) {
-            if(!patterns.ContainsKey(pattern.Key)) {
+            if (!patterns.ContainsKey(pattern.Key)) {
                 patterns.Add(pattern.Key, pattern);
             }
             return false;
@@ -180,11 +180,11 @@ namespace OpenAstroAra.Core.Model {
 
             string s = filePatternMacro;
             foreach (ImagePattern p in patterns.Values) {
-                if(p.Key == ImagePatternKeys.ImageType && !string.IsNullOrWhiteSpace(imageType)) {
+                if (p.Key == ImagePatternKeys.ImageType && !string.IsNullOrWhiteSpace(imageType)) {
                     s = s.Replace(p.Key, imageType);
                 } else {
                     s = s.Replace(p.Key, p.Value);
-                }                
+                }
             }
             var path = s.Split(Utility.CoreUtil.PATHSEPARATORS, StringSplitOptions.RemoveEmptyEntries);
 
@@ -196,9 +196,9 @@ namespace OpenAstroAra.Core.Model {
             return imageFileString;
         }
 
-            /// <summary>
+        /// <summary>
 
-            public static ImagePatterns CreateExample() {
+        public static ImagePatterns CreateExample() {
             var p = new ImagePatterns();
 
             p.Set(ImagePatternKeys.Filter, "L");

@@ -1,12 +1,11 @@
 // AForge Image Processing Library
 // AForge.NET framework
 //
-// Copyright © Andrew Kirillov, 2005-2008
+// Copyright ï¿½ Andrew Kirillov, 2005-2008
 // andrew.kirillov@gmail.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -18,7 +17,7 @@ namespace Accord.Imaging.Filters
     /// 
     /// <remarks><para>The class implements Otsu thresholding, which is described in
     /// <b>N. Otsu, "A threshold selection method from gray-level histograms", IEEE Trans. Systems,
-    /// Man and Cybernetics 9(1), pp. 62–66, 1979.</b></para>
+    /// Man and Cybernetics 9(1), pp. 62ï¿½66, 1979.</b></para>
     /// 
     /// <para>This implementation instead of minimizing the weighted within-class variance
     /// does maximization of between-class variance, what gives the same result. The approach is
@@ -46,8 +45,7 @@ namespace Accord.Imaging.Filters
     /// <seealso cref="IterativeThreshold"/>
     /// <seealso cref="SISThreshold"/>
     /// 
-    public class OtsuThreshold : BaseInPlacePartialFilter
-    {
+    public class OtsuThreshold : BaseInPlacePartialFilter {
         private Threshold thresholdFilter = new Threshold();
 
         // private format translation dictionary
@@ -56,8 +54,7 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Format translations dictionary.
         /// </summary>
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -68,8 +65,7 @@ namespace Accord.Imaging.Filters
         /// <remarks>The property is read only and represents the value, which
         /// was automaticaly calculated using Otsu algorithm.</remarks>
         /// 
-        public int ThresholdValue
-        {
+        public int ThresholdValue {
             get { return thresholdFilter.ThresholdValue; }
         }
 
@@ -77,8 +73,7 @@ namespace Accord.Imaging.Filters
         /// Initializes a new instance of the <see cref="OtsuThreshold"/> class.
         /// </summary>
         /// 
-        public OtsuThreshold()
-        {
+        public OtsuThreshold() {
             // initialize format translation dictionary
             formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
         }
@@ -98,8 +93,7 @@ namespace Accord.Imaging.Filters
         /// <exception cref="UnsupportedImageFormatException">Source pixel format is not supported by the routine. It should be
         /// 8 bpp grayscale (indexed) image.</exception>
         /// 
-        public int CalculateThreshold(Bitmap image, Rectangle rect)
-        {
+        public int CalculateThreshold(Bitmap image, Rectangle rect) {
             int calculatedThreshold = 0;
 
             // lock source bitmap data
@@ -107,12 +101,9 @@ namespace Accord.Imaging.Filters
                 new Rectangle(0, 0, image.Width, image.Height),
                 ImageLockMode.ReadOnly, image.PixelFormat);
 
-            try
-            {
+            try {
                 calculatedThreshold = CalculateThreshold(data, rect);
-            }
-            finally
-            {
+            } finally {
                 // unlock image
                 image.UnlockBits(data);
             }
@@ -135,8 +126,7 @@ namespace Accord.Imaging.Filters
         /// <exception cref="UnsupportedImageFormatException">Source pixel format is not supported by the routine. It should be
         /// 8 bpp grayscale (indexed) image.</exception>
         /// 
-        public int CalculateThreshold(BitmapData image, Rectangle rect)
-        {
+        public int CalculateThreshold(BitmapData image, Rectangle rect) {
             return CalculateThreshold(new UnmanagedImage(image), rect);
         }
 
@@ -155,8 +145,7 @@ namespace Accord.Imaging.Filters
         /// <exception cref="UnsupportedImageFormatException">Source pixel format is not supported by the routine. It should be
         /// 8 bpp grayscale (indexed) image.</exception>
         /// 
-        public int CalculateThreshold(UnmanagedImage image, Rectangle rect)
-        {
+        public int CalculateThreshold(UnmanagedImage image, Rectangle rect) {
             if (image.PixelFormat != PixelFormat.Format8bppIndexed)
                 throw new UnsupportedImageFormatException("Source pixel format is not supported by the routine.");
 
@@ -173,8 +162,7 @@ namespace Accord.Imaging.Filters
             int[] integerHistogram = new int[256];
             double[] histogram = new double[256];
 
-            unsafe
-            {
+            unsafe {
                 // collect histogram first
                 byte* ptr = (byte*)image.ImageData.ToPointer();
 
@@ -182,11 +170,9 @@ namespace Accord.Imaging.Filters
                 ptr += (startY * image.Stride + startX);
 
                 // for each line	
-                for (int y = startY; y < stopY; y++)
-                {
+                for (int y = startY; y < stopY; y++) {
                     // for each pixel
-                    for (int x = startX; x < stopX; x++, ptr++)
-                    {
+                    for (int x = startX; x < stopX; x++, ptr++) {
                         integerHistogram[*ptr]++;
                     }
                     ptr += offset;
@@ -197,8 +183,7 @@ namespace Accord.Imaging.Filters
                 // mean value of the processing region
                 double imageMean = 0;
 
-                for (int i = 0; i < 256; i++)
-                {
+                for (int i = 0; i < 256; i++) {
                     histogram[i] = (double)integerHistogram[i] / pixelCount;
                     imageMean += histogram[i] * i;
                 }
@@ -213,8 +198,7 @@ namespace Accord.Imaging.Filters
                 double class1MeanInit = 0;
 
                 // check all thresholds
-                for (int t = 0; (t < 256) && (class2Probability > 0); t++)
-                {
+                for (int t = 0; (t < 256) && (class2Probability > 0); t++) {
                     // calculate class means for the given threshold
                     double class1Mean = class1MeanInit;
                     double class2Mean = (imageMean - (class1Mean * class1Probability)) / class2Probability;
@@ -223,8 +207,7 @@ namespace Accord.Imaging.Filters
                     double betweenClassVariance = (class1Probability) * (1.0 - class1Probability) * Math.Pow(class1Mean - class2Mean, 2);
 
                     // check if we found new threshold candidate
-                    if (betweenClassVariance > max)
-                    {
+                    if (betweenClassVariance > max) {
                         max = betweenClassVariance;
                         calculatedThreshold = t;
                     }
@@ -237,8 +220,7 @@ namespace Accord.Imaging.Filters
 
                     class1MeanInit += (double)t * (double)histogram[t];
 
-                    if (class1Probability != 0)
-                    {
+                    if (class1Probability != 0) {
                         class1MeanInit /= class1Probability;
                     }
                 }
@@ -254,8 +236,7 @@ namespace Accord.Imaging.Filters
         /// <param name="image">Source image data.</param>
         /// <param name="rect">Image rectangle for processing by the filter.</param>
         /// 
-        protected override unsafe void ProcessFilter(UnmanagedImage image, Rectangle rect)
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage image, Rectangle rect) {
             // calculate threshold for the given image
             thresholdFilter.ThresholdValue = CalculateThreshold(image, rect);
 

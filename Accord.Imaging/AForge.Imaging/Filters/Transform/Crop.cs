@@ -1,12 +1,11 @@
 // AForge Image Processing Library
 // AForge.NET framework
 //
-// Copyright © Andrew Kirillov, 2005-2008
+// Copyright ï¿½ Andrew Kirillov, 2005-2008
 // andrew.kirillov@gmail.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -37,26 +36,23 @@ namespace Accord.Imaging.Filters
     /// <img src="..\images\imaging\crop.jpg" width="320" height="240" />
     /// </remarks>
     /// 
-    public class Crop : BaseTransformationFilter
-    {
+    public class Crop : BaseTransformationFilter {
         private Rectangle rect;
 
         // format translation dictionary
-        private Dictionary<PixelFormat, PixelFormat> formatTranslations = new Dictionary<PixelFormat, PixelFormat>( );
+        private Dictionary<PixelFormat, PixelFormat> formatTranslations = new Dictionary<PixelFormat, PixelFormat>();
 
         /// <summary>
         /// Format translations dictionary.
         /// </summary>
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
         /// <summary>
         /// Rectangle to crop.
         /// </summary>
-        public Rectangle Rectangle
-        {
+        public Rectangle Rectangle {
             get { return rect; }
             set { rect = value; }
         }
@@ -67,17 +63,16 @@ namespace Accord.Imaging.Filters
         /// 
         /// <param name="rect">Rectangle to crop.</param>
         /// 
-        public Crop( Rectangle rect )
-        {
+        public Crop(Rectangle rect) {
             this.rect = rect;
 
-            formatTranslations[PixelFormat.Format8bppIndexed]    = PixelFormat.Format8bppIndexed;
-            formatTranslations[PixelFormat.Format24bppRgb]       = PixelFormat.Format24bppRgb;
-            formatTranslations[PixelFormat.Format32bppRgb]       = PixelFormat.Format32bppRgb;
-            formatTranslations[PixelFormat.Format32bppArgb]      = PixelFormat.Format32bppArgb;
+            formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
+            formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format24bppRgb;
+            formatTranslations[PixelFormat.Format32bppRgb] = PixelFormat.Format32bppRgb;
+            formatTranslations[PixelFormat.Format32bppArgb] = PixelFormat.Format32bppArgb;
             formatTranslations[PixelFormat.Format16bppGrayScale] = PixelFormat.Format16bppGrayScale;
-            formatTranslations[PixelFormat.Format48bppRgb]       = PixelFormat.Format48bppRgb;
-            formatTranslations[PixelFormat.Format64bppArgb]      = PixelFormat.Format64bppArgb;
+            formatTranslations[PixelFormat.Format48bppRgb] = PixelFormat.Format48bppRgb;
+            formatTranslations[PixelFormat.Format64bppArgb] = PixelFormat.Format64bppArgb;
         }
 
         /// <summary>
@@ -88,9 +83,8 @@ namespace Accord.Imaging.Filters
         /// 
         /// <returns>New image size - size of the destination image.</returns>
         /// 
-        protected override System.Drawing.Size CalculateNewImageSize( UnmanagedImage sourceData )
-        {
-            return new Size( rect.Width, rect.Height );
+        protected override System.Drawing.Size CalculateNewImageSize(UnmanagedImage sourceData) {
+            return new Size(rect.Width, rect.Height);
         }
 
         /// <summary>
@@ -100,11 +94,10 @@ namespace Accord.Imaging.Filters
         /// <param name="sourceData">Source image data.</param>
         /// <param name="destinationData">Destination image data.</param>
         /// 
-        protected override unsafe void ProcessFilter( UnmanagedImage sourceData, UnmanagedImage destinationData )
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData) {
             // validate rectangle
             Rectangle srcRect = rect;
-            srcRect.Intersect( new Rectangle( 0, 0, sourceData.Width, sourceData.Height ) );
+            srcRect.Intersect(new Rectangle(0, 0, sourceData.Width, sourceData.Height));
 
             int xmin = srcRect.Left;
             int ymin = srcRect.Top;
@@ -113,25 +106,22 @@ namespace Accord.Imaging.Filters
 
             int srcStride = sourceData.Stride;
             int dstStride = destinationData.Stride;
-            int pixelSize = Image.GetPixelFormatSize( sourceData.PixelFormat ) / 8;
-            int copySize  = copyWidth * pixelSize;
+            int pixelSize = Image.GetPixelFormatSize(sourceData.PixelFormat) / 8;
+            int copySize = copyWidth * pixelSize;
 
             // do the job
-            byte* src = (byte*) sourceData.ImageData.ToPointer( ) + ymin * srcStride + xmin * pixelSize;
-            byte* dst = (byte*) destinationData.ImageData.ToPointer( );
+            byte* src = (byte*)sourceData.ImageData.ToPointer() + ymin * srcStride + xmin * pixelSize;
+            byte* dst = (byte*)destinationData.ImageData.ToPointer();
 
-            if ( rect.Top < 0 )
-            {
+            if (rect.Top < 0) {
                 dst -= dstStride * rect.Top;
             }
-            if ( rect.Left < 0 )
-            {
+            if (rect.Left < 0) {
                 dst -= pixelSize * rect.Left;
             }
 
             // for each line
-            for ( int y = ymin; y <= ymax; y++ )
-            {
+            for (int y = ymin; y <= ymax; y++) {
                 Accord.SystemTools.CopyUnmanagedMemory(dst, src, copySize);
                 src += srcStride;
                 dst += dstStride;

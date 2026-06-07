@@ -20,8 +20,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using Accord.Imaging;
     using Accord.Imaging.Filters;
     using System;
@@ -32,8 +31,7 @@ namespace Accord.Imaging.Filters
     ///   Combine channel filter.
     /// </summary>
     /// 
-    public class CombineChannel : BaseInPlaceFilter
-    {
+    public class CombineChannel : BaseInPlaceFilter {
 
         private Dictionary<PixelFormat, PixelFormat> formatTranslations = new Dictionary<PixelFormat, PixelFormat>();
 
@@ -53,8 +51,7 @@ namespace Accord.Imaging.Filters
         ///   for more information.</para>
         /// </remarks>
         /// 
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -62,8 +59,7 @@ namespace Accord.Imaging.Filters
         ///   Constructs a new CombineChannel filter.
         /// </summary>
         /// 
-        public CombineChannel(params UnmanagedImage[] channels)
-        {
+        public CombineChannel(params UnmanagedImage[] channels) {
             if (channels == null)
                 throw new ArgumentNullException("channels");
             if (channels.Length < 2)
@@ -91,8 +87,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <param name="image">Source image data.</param>
         /// 
-        protected unsafe override void ProcessFilter(UnmanagedImage image)
-        {
+        protected unsafe override void ProcessFilter(UnmanagedImage image) {
             int pixelSize = System.Drawing.Image.GetPixelFormatSize(image.PixelFormat) / 8;
 
             // get source image size
@@ -103,44 +98,33 @@ namespace Accord.Imaging.Filters
             if (image.Height != baseHeight || image.Width != baseWidth)
                 throw new InvalidImagePropertiesException("Image does not have expected dimensions.", "image");
 
-            if (pixelSize == 8)
-            {
+            if (pixelSize == 8) {
                 // for each channel
-                for (int c = 0; c < channels.Length; c++)
-                {
+                for (int c = 0; c < channels.Length; c++) {
                     byte* dst = (byte*)((int)image.ImageData + c);
                     byte* src = (byte*)channels[c].ImageData;
 
                     // copy channel to image
-                    for (int y = 0; y < height; y++)
-                    {
-                        for (int x = 0; x < width; x++)
-                        {
+                    for (int y = 0; y < height; y++) {
+                        for (int x = 0; x < width; x++) {
                             *(dst += pixelSize) = *(src++);
                         }
                     }
                 }
-            }
-            else if (pixelSize == 16)
-            {
+            } else if (pixelSize == 16) {
                 // for each channel
-                for (int c = 0; c < channels.Length; c++)
-                {
+                for (int c = 0; c < channels.Length; c++) {
                     short* dst = (short*)((int)image.ImageData + c);
                     short* src = (short*)channels[c].ImageData;
 
                     // copy channel to image
-                    for (int y = 0; y < height; y++)
-                    {
-                        for (int x = 0; x < width; x++)
-                        {
+                    for (int y = 0; y < height; y++) {
+                        for (int x = 0; x < width; x++) {
                             *(dst += pixelSize) = *(src++);
                         }
                     }
                 }
-            }
-            else
-            {
+            } else {
                 throw new UnsupportedImageFormatException("Unsupported pixel size.");
             }
         }

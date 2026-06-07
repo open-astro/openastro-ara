@@ -1,12 +1,11 @@
 // AForge Image Processing Library
 // AForge.NET framework
 //
-// Copyright © Andrew Kirillov, 2005-2009
+// Copyright ï¿½ Andrew Kirillov, 2005-2009
 // andrew.kirillov@aforgenet.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -36,19 +35,17 @@ namespace Accord.Imaging.Filters
     /// <img src="..\images\imaging\gamma.jpg" width="480" height="361" />
     /// </remarks>
     /// 
-    public class GammaCorrection : BaseInPlacePartialFilter
-    {
+    public class GammaCorrection : BaseInPlacePartialFilter {
         private double gamma;
         private byte[] table = new byte[256];
 
         // private format translation dictionary
-        private Dictionary<PixelFormat, PixelFormat> formatTranslations = new Dictionary<PixelFormat, PixelFormat>( );
+        private Dictionary<PixelFormat, PixelFormat> formatTranslations = new Dictionary<PixelFormat, PixelFormat>();
 
         /// <summary>
         /// Format translations dictionary.
         /// </summary>
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -58,19 +55,16 @@ namespace Accord.Imaging.Filters
         /// 
         /// <remarks>Default value is set to <b>2.2</b>.</remarks>
         /// 
-        public double Gamma
-        {
+        public double Gamma {
             get { return gamma; }
-            set
-            {
+            set {
                 // get gamma value
-                gamma = Math.Max( 0.1, Math.Min( 5.0, value ) );
+                gamma = Math.Max(0.1, Math.Min(5.0, value));
 
                 // calculate tranformation table
                 double g = 1 / gamma;
-                for ( int i = 0; i < 256; i++ )
-                {
-                    table[i] = (byte) Math.Min( 255, (int) ( Math.Pow( i / 255.0, g ) * 255 + 0.5 ) );
+                for (int i = 0; i < 256; i++) {
+                    table[i] = (byte)Math.Min(255, (int)(Math.Pow(i / 255.0, g) * 255 + 0.5));
                 }
             }
         }
@@ -79,8 +73,7 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Initializes a new instance of the <see cref="GammaCorrection"/> class.
         /// </summary>
-        public GammaCorrection( ) : this ( 2.2 )
-        {
+        public GammaCorrection() : this(2.2) {
         }
 
         /// <summary>
@@ -89,12 +82,11 @@ namespace Accord.Imaging.Filters
         /// 
         /// <param name="gamma">Gamma value.</param>
         /// 
-        public GammaCorrection( double gamma )
-        {
+        public GammaCorrection(double gamma) {
             Gamma = gamma;
 
             formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
-            formatTranslations[PixelFormat.Format24bppRgb]    = PixelFormat.Format24bppRgb;
+            formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format24bppRgb;
         }
 
 
@@ -105,28 +97,25 @@ namespace Accord.Imaging.Filters
         /// <param name="image">Source image data.</param>
         /// <param name="rect">Image rectangle for processing by the filter.</param>
         ///
-        protected override unsafe void ProcessFilter( UnmanagedImage image, Rectangle rect )
-        {
-            int pixelSize = ( image.PixelFormat == PixelFormat.Format8bppIndexed ) ? 1 : 3;
+        protected override unsafe void ProcessFilter(UnmanagedImage image, Rectangle rect) {
+            int pixelSize = (image.PixelFormat == PixelFormat.Format8bppIndexed) ? 1 : 3;
 
             // processing start and stop X,Y positions
-            int startX  = rect.Left * pixelSize;
-            int startY  = rect.Top;
-            int stopX   = startX + rect.Width * pixelSize;
-            int stopY   = startY + rect.Height;
-            int offset  = image.Stride - rect.Width * pixelSize;
+            int startX = rect.Left * pixelSize;
+            int startY = rect.Top;
+            int stopX = startX + rect.Width * pixelSize;
+            int stopY = startY + rect.Height;
+            int offset = image.Stride - rect.Width * pixelSize;
 
             // do the job
-            byte* ptr = (byte*) image.ImageData.ToPointer( );
+            byte* ptr = (byte*)image.ImageData.ToPointer();
 
             // allign pointer to the first pixel to process
-            ptr += ( startY * image.Stride + startX );
+            ptr += (startY * image.Stride + startX);
 
             // gamma correction
-            for ( int y = startY; y < stopY; y++ )
-            {
-                for ( int x = startX; x < stopX; x++, ptr++ )
-                {
+            for (int y = startY; y < stopY; y++) {
+                for (int x = startX; x < stopX; x++, ptr++) {
                     // process each pixel
                     *ptr = table[*ptr];
                 }

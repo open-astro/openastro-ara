@@ -2,12 +2,11 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © AForge.NET, 2005-2011
+// Copyright ï¿½ AForge.NET, 2005-2011
 // contacts@aforgenet.com
 //
 
-namespace Accord.Imaging
-{
+namespace Accord.Imaging {
     using System;
     using System.Drawing;
     using System.Drawing.Imaging;
@@ -40,8 +39,7 @@ namespace Accord.Imaging
     /// 
     /// <seealso cref="Accord.Statistics.Visualizations.Histogram"/>
     /// 
-    public class ImageStatistics
-    {
+    public class ImageStatistics {
         private Histogram red;
         private Histogram green;
         private Histogram blue;
@@ -62,12 +60,9 @@ namespace Accord.Imaging
         /// <remarks><para><note>The property is valid only for color images
         /// (see <see cref="IsGrayscale"/> property).</note></para></remarks>
         /// 
-        public Histogram Red
-        {
-            get
-            {
-                if (red == null)
-                {
+        public Histogram Red {
+            get {
+                if (red == null) {
                     throw new InvalidImagePropertiesException(ExceptionMessage.ColorHistogramException);
                 }
                 return red;
@@ -81,12 +76,9 @@ namespace Accord.Imaging
         /// <remarks><para><note>The property is valid only for color images
         /// (see <see cref="IsGrayscale"/> property).</note></para></remarks>
         /// 
-        public Histogram Green
-        {
-            get
-            {
-                if (green == null)
-                {
+        public Histogram Green {
+            get {
+                if (green == null) {
                     throw new InvalidImagePropertiesException(ExceptionMessage.ColorHistogramException);
                 }
                 return green;
@@ -100,12 +92,9 @@ namespace Accord.Imaging
         /// <remarks><para><note>The property is valid only for color images
         /// (see <see cref="IsGrayscale"/> property).</note></para></remarks>
         /// 
-        public Histogram Blue
-        {
-            get
-            {
-                if (blue == null)
-                {
+        public Histogram Blue {
+            get {
+                if (blue == null) {
                     throw new InvalidImagePropertiesException(ExceptionMessage.ColorHistogramException);
                 }
                 return blue;
@@ -119,12 +108,9 @@ namespace Accord.Imaging
         /// <remarks><para><note>The property is valid only for grayscale images
         /// (see <see cref="IsGrayscale"/> property).</note></para></remarks>
         /// 
-        public Histogram Gray
-        {
-            get
-            {
-                if (gray == null)
-                {
+        public Histogram Gray {
+            get {
+                if (gray == null) {
                     throw new InvalidImagePropertiesException(ExceptionMessage.GrayHistogramException);
                 }
                 return gray;
@@ -141,12 +127,9 @@ namespace Accord.Imaging
         /// <para><note>The property is valid only for color images
         /// (see <see cref="IsGrayscale"/> property).</note></para></remarks>
         /// 
-        public Histogram RedWithoutBlack
-        {
-            get
-            {
-                if (redWithoutBlack == null)
-                {
+        public Histogram RedWithoutBlack {
+            get {
+                if (redWithoutBlack == null) {
                     throw new InvalidImagePropertiesException(ExceptionMessage.ColorHistogramException);
                 }
                 return redWithoutBlack;
@@ -163,12 +146,9 @@ namespace Accord.Imaging
         /// <para><note>The property is valid only for color images
         /// (see <see cref="IsGrayscale"/> property).</note></para></remarks>
         /// 
-        public Histogram GreenWithoutBlack
-        {
-            get
-            {
-                if (greenWithoutBlack == null)
-                {
+        public Histogram GreenWithoutBlack {
+            get {
+                if (greenWithoutBlack == null) {
                     throw new InvalidImagePropertiesException(ExceptionMessage.ColorHistogramException);
                 }
                 return greenWithoutBlack;
@@ -185,12 +165,9 @@ namespace Accord.Imaging
         /// <para><note>The property is valid only for color images
         /// (see <see cref="IsGrayscale"/> property).</note></para></remarks>
         /// 
-        public Histogram BlueWithoutBlack
-        {
-            get
-            {
-                if (blueWithoutBlack == null)
-                {
+        public Histogram BlueWithoutBlack {
+            get {
+                if (blueWithoutBlack == null) {
                     throw new InvalidImagePropertiesException(ExceptionMessage.ColorHistogramException);
                 }
                 return blueWithoutBlack;
@@ -207,12 +184,9 @@ namespace Accord.Imaging
         /// <para><note>The property is valid only for grayscale images
         /// (see <see cref="IsGrayscale"/> property).</note></para></remarks>
         /// 
-        public Histogram GrayWithoutBlack
-        {
-            get
-            {
-                if (grayWithoutBlack == null)
-                {
+        public Histogram GrayWithoutBlack {
+            get {
+                if (grayWithoutBlack == null) {
                     throw new InvalidImagePropertiesException(ExceptionMessage.GrayHistogramException);
                 }
                 return grayWithoutBlack;
@@ -223,8 +197,7 @@ namespace Accord.Imaging
         /// Total pixels count in the processed image.
         /// </summary>
         /// 
-        public int PixelsCount
-        {
+        public int PixelsCount {
             get { return pixels; }
         }
 
@@ -232,8 +205,7 @@ namespace Accord.Imaging
         /// Total pixels count in the processed image excluding black pixels.
         /// </summary>
         /// 
-        public int PixelsCountWithoutBlack
-        {
+        public int PixelsCountWithoutBlack {
             get { return pixelsWithoutBlack; }
         }
 
@@ -246,8 +218,7 @@ namespace Accord.Imaging
         /// <see cref="Red"/>, <see cref="Green"/> and <see cref="Blue"/> properties should be used
         /// for color images.</para></remarks>
         /// 
-        public bool IsGrayscale
-        {
+        public bool IsGrayscale {
             get { return (gray != null); }
         }
 
@@ -259,23 +230,18 @@ namespace Accord.Imaging
         /// 
         /// <exception cref="UnsupportedImageFormatException">Source pixel format is not supported.</exception>
         /// 
-        public ImageStatistics(Bitmap image)
-        {
+        public ImageStatistics(Bitmap image) {
             CheckSourceFormat(image.PixelFormat);
 
             // lock bitmap data
             BitmapData imageData = image.LockBits(ImageLockMode.ReadOnly);
 
-            try
-            {
+            try {
                 // gather statistics
-                unsafe
-                {
+                unsafe {
                     ProcessImage(new UnmanagedImage(imageData), null, 0);
                 }
-            }
-            finally
-            {
+            } finally {
                 // unlock image
                 image.UnlockBits(imageData);
             }
@@ -297,8 +263,7 @@ namespace Accord.Imaging
         /// <exception cref="ArgumentException">Mask image must be 8 bpp grayscale image.</exception>
         /// <exception cref="ArgumentException">Mask must have the same size as the source image to get statistics for.</exception>
         /// 
-        public ImageStatistics(Bitmap image, Bitmap mask)
-        {
+        public ImageStatistics(Bitmap image, Bitmap mask) {
             CheckSourceFormat(image.PixelFormat);
             CheckMaskProperties(mask.PixelFormat, new Size(mask.Width, mask.Height), new Size(image.Width, image.Height));
 
@@ -306,16 +271,12 @@ namespace Accord.Imaging
             BitmapData imageData = image.LockBits(ImageLockMode.ReadOnly);
             BitmapData maskData = mask.LockBits(ImageLockMode.ReadOnly);
 
-            try
-            {
+            try {
                 // gather statistics
-                unsafe
-                {
+                unsafe {
                     ProcessImage(new UnmanagedImage(imageData), (byte*)maskData.Scan0.ToPointer(), maskData.Stride);
                 }
-            }
-            finally
-            {
+            } finally {
                 // unlock images
                 image.UnlockBits(imageData);
                 mask.UnlockBits(maskData);
@@ -337,8 +298,7 @@ namespace Accord.Imaging
         /// <exception cref="UnsupportedImageFormatException">Source pixel format is not supported.</exception>
         /// <exception cref="ArgumentException">Mask must have the same size as the source image to get statistics for.</exception>
         /// 
-        public ImageStatistics(Bitmap image, byte[,] mask)
-        {
+        public ImageStatistics(Bitmap image, byte[,] mask) {
             CheckSourceFormat(image.PixelFormat);
             CheckMaskProperties(PixelFormat.Format8bppIndexed,
                 new Size(mask.GetLength(1), mask.GetLength(0)), new Size(image.Width, image.Height));
@@ -346,19 +306,14 @@ namespace Accord.Imaging
             // lock bitmap data
             BitmapData imageData = image.LockBits(ImageLockMode.ReadOnly);
 
-            try
-            {
+            try {
                 // gather statistics
-                unsafe
-                {
-                    fixed (byte* maskPtr = mask)
-                    {
+                unsafe {
+                    fixed (byte* maskPtr = mask) {
                         ProcessImage(new UnmanagedImage(imageData), maskPtr, mask.GetLength(1));
                     }
                 }
-            }
-            finally
-            {
+            } finally {
                 // unlock image
                 image.UnlockBits(imageData);
             }
@@ -372,11 +327,9 @@ namespace Accord.Imaging
         /// 
         /// <exception cref="UnsupportedImageFormatException">Source pixel format is not supported.</exception>
         /// 
-        public ImageStatistics(UnmanagedImage image)
-        {
+        public ImageStatistics(UnmanagedImage image) {
             CheckSourceFormat(image.PixelFormat);
-            unsafe
-            {
+            unsafe {
                 ProcessImage(image, null, 0);
             }
         }
@@ -397,13 +350,11 @@ namespace Accord.Imaging
         /// <exception cref="ArgumentException">Mask image must be 8 bpp grayscale image.</exception>
         /// <exception cref="ArgumentException">Mask must have the same size as the source image to get statistics for.</exception>
         /// 
-        public ImageStatistics(UnmanagedImage image, UnmanagedImage mask)
-        {
+        public ImageStatistics(UnmanagedImage image, UnmanagedImage mask) {
             CheckSourceFormat(image.PixelFormat);
             CheckMaskProperties(mask.PixelFormat, new Size(mask.Width, mask.Height), new Size(image.Width, image.Height));
 
-            unsafe
-            {
+            unsafe {
                 ProcessImage(image, (byte*)mask.ImageData.ToPointer(), mask.Stride);
             }
         }
@@ -423,24 +374,20 @@ namespace Accord.Imaging
         /// <exception cref="UnsupportedImageFormatException">Source pixel format is not supported.</exception>
         /// <exception cref="ArgumentException">Mask must have the same size as the source image to get statistics for.</exception>
         /// 
-        public ImageStatistics(UnmanagedImage image, byte[,] mask)
-        {
+        public ImageStatistics(UnmanagedImage image, byte[,] mask) {
             CheckSourceFormat(image.PixelFormat);
             CheckMaskProperties(PixelFormat.Format8bppIndexed,
                 new Size(mask.GetLength(1), mask.GetLength(0)), new Size(image.Width, image.Height));
 
-            unsafe
-            {
-                fixed (byte* maskPtr = mask)
-                {
+            unsafe {
+                fixed (byte* maskPtr = mask) {
                     ProcessImage(image, maskPtr, mask.GetLength(1));
                 }
             }
         }
 
         // Gather statistics for the specified image
-        private unsafe void ProcessImage(UnmanagedImage image, byte* mask, int maskLineSize)
-        {
+        private unsafe void ProcessImage(UnmanagedImage image, byte* mask, int maskLineSize) {
             // get image dimension
             int width = image.Width;
             int height = image.Height;
@@ -453,8 +400,7 @@ namespace Accord.Imaging
             int maskOffset = maskLineSize - width;
 
             // check pixel format
-            if (image.PixelFormat == PixelFormat.Format8bppIndexed)
-            {
+            if (image.PixelFormat == PixelFormat.Format8bppIndexed) {
                 // alloc arrays
                 int[] g = new int[256];
                 int[] gwb = new int[256];
@@ -465,37 +411,29 @@ namespace Accord.Imaging
                 // do the job
                 byte* p = (byte*)image.ImageData.ToPointer();
 
-                if (mask == null)
-                {
+                if (mask == null) {
                     // for each pixel
-                    for (int y = 0; y < height; y++)
-                    {
+                    for (int y = 0; y < height; y++) {
                         // for each pixel
-                        for (int x = 0; x < width; x++, p++)
-                        {
+                        for (int x = 0; x < width; x++, p++) {
                             // get pixel value
                             value = *p;
 
                             g[value]++;
                             pixels++;
 
-                            if (value != 0)
-                            {
+                            if (value != 0) {
                                 gwb[value]++;
                                 pixelsWithoutBlack++;
                             }
                         }
                         p += offset;
                     }
-                }
-                else
-                {
+                } else {
                     // for each pixel
-                    for (int y = 0; y < height; y++)
-                    {
+                    for (int y = 0; y < height; y++) {
                         // for each pixel
-                        for (int x = 0; x < width; x++, p++, mask++)
-                        {
+                        for (int x = 0; x < width; x++, p++, mask++) {
                             if (*mask == 0)
                                 continue;
 
@@ -505,8 +443,7 @@ namespace Accord.Imaging
                             g[value]++;
                             pixels++;
 
-                            if (value != 0)
-                            {
+                            if (value != 0) {
                                 gwb[value]++;
                                 pixelsWithoutBlack++;
                             }
@@ -519,9 +456,7 @@ namespace Accord.Imaging
                 // create historgram for gray level
                 gray = new Histogram(g);
                 grayWithoutBlack = new Histogram(gwb);
-            }
-            else
-            {
+            } else {
                 // alloc arrays
                 int[] r = new int[256];
                 int[] g = new int[256];
@@ -538,14 +473,11 @@ namespace Accord.Imaging
                 // do the job
                 byte* p = (byte*)image.ImageData.ToPointer();
 
-                if (mask == null)
-                {
+                if (mask == null) {
                     // for each line
-                    for (int y = 0; y < height; y++)
-                    {
+                    for (int y = 0; y < height; y++) {
                         // for each pixel
-                        for (int x = 0; x < width; x++, p += pixelSize)
-                        {
+                        for (int x = 0; x < width; x++, p += pixelSize) {
                             // get pixel values
                             rValue = p[RGB.R];
                             gValue = p[RGB.G];
@@ -556,8 +488,7 @@ namespace Accord.Imaging
                             b[bValue]++;
                             pixels++;
 
-                            if ((rValue != 0) || (gValue != 0) || (bValue != 0))
-                            {
+                            if ((rValue != 0) || (gValue != 0) || (bValue != 0)) {
                                 rwb[rValue]++;
                                 gwb[gValue]++;
                                 bwb[bValue]++;
@@ -566,15 +497,11 @@ namespace Accord.Imaging
                         }
                         p += offset;
                     }
-                }
-                else
-                {
+                } else {
                     // for each line
-                    for (int y = 0; y < height; y++)
-                    {
+                    for (int y = 0; y < height; y++) {
                         // for each pixel
-                        for (int x = 0; x < width; x++, p += pixelSize, mask++)
-                        {
+                        for (int x = 0; x < width; x++, p += pixelSize, mask++) {
                             if (*mask == 0)
                                 continue;
 
@@ -588,8 +515,7 @@ namespace Accord.Imaging
                             b[bValue]++;
                             pixels++;
 
-                            if ((rValue != 0) || (gValue != 0) || (bValue != 0))
-                            {
+                            if ((rValue != 0) || (gValue != 0) || (bValue != 0)) {
                                 rwb[rValue]++;
                                 gwb[gValue]++;
                                 bwb[bValue]++;
@@ -613,19 +539,16 @@ namespace Accord.Imaging
         }
 
         // Check pixel format of the source image
-        private static void CheckSourceFormat(PixelFormat pixelFormat)
-        {
+        private static void CheckSourceFormat(PixelFormat pixelFormat) {
             if ((pixelFormat != PixelFormat.Format8bppIndexed) &&
                 (pixelFormat != PixelFormat.Format24bppRgb) &&
                 (pixelFormat != PixelFormat.Format32bppRgb) &&
-                (pixelFormat != PixelFormat.Format32bppArgb))
-            {
+                (pixelFormat != PixelFormat.Format32bppArgb)) {
                 throw new UnsupportedImageFormatException("Source pixel format is not supported.");
             }
         }
 
-        private static void CheckMaskProperties(PixelFormat maskFormat, Size maskSize, Size sourceImageSize)
-        {
+        private static void CheckMaskProperties(PixelFormat maskFormat, Size maskSize, Size sourceImageSize) {
             if (maskFormat != PixelFormat.Format8bppIndexed)
                 throw new ArgumentException("Mask image must be 8 bpp grayscale image.");
 

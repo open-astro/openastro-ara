@@ -195,8 +195,8 @@ namespace OpenAstroAra.Profile {
                 return autoFocusTotalNumberOfAttempts;
             }
             set {
-                if(value < 1) { value = 1; }
-                if(value > 5) { value = 5; }
+                if (value < 1) { value = 1; }
+                if (value > 5) { value = 5; }
                 if (autoFocusTotalNumberOfAttempts != value) {
                     autoFocusTotalNumberOfAttempts = value;
                     RaisePropertyChanged();

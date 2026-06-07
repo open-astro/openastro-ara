@@ -91,7 +91,7 @@ namespace OpenAstroAra.Test {
 
         //    //Act
         //    coordinates = coordinates.Transform(Epoch.J2000);
-            
+
         //    var transform = new ASCOM.Tools.Transform();
         //    transform.SetApparent(ra, dec);
 

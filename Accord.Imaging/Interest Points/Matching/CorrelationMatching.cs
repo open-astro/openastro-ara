@@ -48,8 +48,7 @@
 //   connection with the software or the use or other dealings in the software.
 //   
 
-namespace Accord.Imaging
-{
+namespace Accord.Imaging {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -86,8 +85,7 @@ namespace Accord.Imaging
     /// </remarks>
     ///
     [Serializable]
-    public class CorrelationMatching
-    {
+    public class CorrelationMatching {
 
         private Bitmap image1;
         private Bitmap image2;
@@ -101,8 +99,7 @@ namespace Accord.Imaging
         ///   all points).
         /// </summary>
         /// 
-        public double DistanceMax
-        {
+        public double DistanceMax {
             get { return dmax; }
             set { dmax = value; }
         }
@@ -111,8 +108,7 @@ namespace Accord.Imaging
         ///   Gets or sets the size of the correlation window.
         /// </summary>
         /// 
-        public int WindowSize
-        {
+        public int WindowSize {
             get { return windowSize; }
             set { windowSize = value; }
         }
@@ -125,8 +121,7 @@ namespace Accord.Imaging
         /// 
         [Obsolete("Please use the overload that accepts bitmaps.")]
         public CorrelationMatching(int windowSize)
-            : this(windowSize, 0)
-        {
+            : this(windowSize, 0) {
         }
 
         /// <summary>
@@ -134,8 +129,7 @@ namespace Accord.Imaging
         /// </summary>
         /// 
         public CorrelationMatching(int windowSize, Bitmap image1, Bitmap image2)
-            : this(windowSize, 0, image1, image2)
-        {
+            : this(windowSize, 0, image1, image2) {
         }
 
         /// <summary>
@@ -144,16 +138,14 @@ namespace Accord.Imaging
         /// 
         [Obsolete("Please use the overload that accepts bitmaps.")]
         public CorrelationMatching(int windowSize, double maxDistance)
-            : this(windowSize, maxDistance, null, null)
-        {
+            : this(windowSize, maxDistance, null, null) {
         }
 
         /// <summary>
         ///   Constructs a new Correlation Matching algorithm.
         /// </summary>
         /// 
-        public CorrelationMatching(int windowSize, double maxDistance, Bitmap image1, Bitmap image2)
-        {
+        public CorrelationMatching(int windowSize, double maxDistance, Bitmap image1, Bitmap image2) {
             if (windowSize % 2 == 0)
                 throw new ArgumentException("Window size should be odd", "windowSize");
 
@@ -170,8 +162,7 @@ namespace Accord.Imaging
         /// 
         [Obsolete("Please use Match(points1, points2) instead.")]
         public IntPoint[][] Match(Bitmap image1, Bitmap image2,
-            IEnumerable<IntPoint> points1, IEnumerable<IntPoint> points2)
-        {
+            IEnumerable<IntPoint> points1, IEnumerable<IntPoint> points2) {
             this.image1 = image1;
             this.image2 = image2;
             return Match(points1, points2);
@@ -181,8 +172,7 @@ namespace Accord.Imaging
         ///   Matches two sets of feature points computed from the given images.
         /// </summary>
         /// 
-        public IntPoint[][] Match(IEnumerable<IntPoint> points1, IEnumerable<IntPoint> points2)
-        {
+        public IntPoint[][] Match(IEnumerable<IntPoint> points1, IEnumerable<IntPoint> points2) {
             return Match(points1.ToArray(), points2.ToArray());
         }
 
@@ -191,9 +181,8 @@ namespace Accord.Imaging
         /// </summary>
         /// 
         [Obsolete("Please use Match(points1, points2) instead.")]
-        public IntPoint[][] Match(Bitmap image1, Bitmap image2, 
-            IntPoint[] points1, IntPoint[] points2)
-        {
+        public IntPoint[][] Match(Bitmap image1, Bitmap image2,
+            IntPoint[] points1, IntPoint[] points2) {
             this.image1 = image1;
             this.image2 = image2;
             return Match(points1, points2);
@@ -203,26 +192,19 @@ namespace Accord.Imaging
         ///   Matches two sets of feature points computed from the given images.
         /// </summary>
         /// 
-        public IntPoint[][] Match(IntPoint[] points1, IntPoint[] points2)
-        {
+        public IntPoint[][] Match(IntPoint[] points1, IntPoint[] points2) {
             // Make sure we are dealing with grayscale images.
             Bitmap grayImage1, grayImage2;
-            if (image1.PixelFormat == PixelFormat.Format8bppIndexed)
-            {
+            if (image1.PixelFormat == PixelFormat.Format8bppIndexed) {
                 grayImage1 = image1;
-            }
-            else
-            {
+            } else {
                 // create temporary grayscale image
                 grayImage1 = Grayscale.CommonAlgorithms.BT709.Apply(image1);
             }
 
-            if (image2.PixelFormat == PixelFormat.Format8bppIndexed)
-            {
+            if (image2.PixelFormat == PixelFormat.Format8bppIndexed) {
                 grayImage2 = image2;
-            }
-            else
-            {
+            } else {
                 // create temporary grayscale image
                 grayImage2 = Grayscale.CommonAlgorithms.BT709.Apply(image2);
             }
@@ -251,19 +233,16 @@ namespace Accord.Imaging
             List<int> p2ind = new List<int>();
 
             // For each point in the first set of points,
-            for (int i = 0; i < rows; i++)
-            {
+            for (int i = 0; i < rows; i++) {
                 // Get the point j in the second set of points with which
                 // this point i has a maximum correlation measure. (i->j)
                 int j = colp2forp1[i];
 
                 // Now, check if this point j in the second set also has
                 // a maximum correlation measure with the point i. (j->i)
-                if (rowp1forp2[j] == i)
-                {
+                if (rowp1forp2[j] == i) {
                     // The points are consistent. Ensure they are valid.
-                    if (correlationMatrix[i, j] != Double.NegativeInfinity)
-                    {
+                    if (correlationMatrix[i, j] != Double.NegativeInfinity) {
                         // We have a corresponding pair (i,j)
                         p1ind.Add(i);
                         p2ind.Add(j);
@@ -292,8 +271,7 @@ namespace Accord.Imaging
         private static double[,] computeCorrelationMatrix(
             Bitmap image1, IntPoint[] points1,
             Bitmap image2, IntPoint[] points2,
-            int windowSize, double maxDistance)
-        {
+            int windowSize, double maxDistance) {
 
             // Create the initial correlation matrix
             double[,] matrix = Matrix.Create(points1.Length, points2.Length, Double.NegativeInfinity);
@@ -328,8 +306,7 @@ namespace Accord.Imaging
 
 
             // For each index in the first set of points
-            foreach (int n1 in idx1)
-            {
+            foreach (int n1 in idx1) {
                 // Get the current point
                 IntPoint p1 = points1[n1];
                 double sum = 0;
@@ -338,10 +315,8 @@ namespace Accord.Imaging
                 {
                     byte* src = (byte*)bitmapData1.Scan0 + (p1.X - r) + (p1.Y - r) * stride1;
 
-                    for (int j = 0; j < windowSize; j++)
-                    {
-                        for (int i = 0; i < windowSize; i++)
-                        {
+                    for (int j = 0; j < windowSize; j++) {
+                        for (int i = 0; i < windowSize; i++) {
                             double w = (byte)(*(src + i));
                             w1[i, j] = w;
                             sum += w * w;
@@ -355,21 +330,17 @@ namespace Accord.Imaging
 
                 // Identify the indices of points in p2 that we need to consider.
                 int[] candidates;
-                if (maxDistance == 0)
-                {
+                if (maxDistance == 0) {
                     // We should consider all points
                     candidates = idx2;
-                }
-                else
-                {
+                } else {
                     // We should consider points that are within
                     //  distance maxDistance apart
 
                     // Compute distances from the current point
                     //  to all points in the second image.
                     double[] distances = new double[idx2.Length];
-                    for (int i = 0; i < idx2.Length; i++)
-                    {
+                    for (int i = 0; i < idx2.Length; i++) {
                         double dx = p1.X - points2[idx2[i]].X;
                         double dy = p1.Y - points2[idx2[i]].Y;
                         distances[i] = dx * dx + dy * dy;
@@ -380,16 +351,14 @@ namespace Accord.Imaging
 
 
                 // Calculate normalized correlation measure
-                foreach (int n2 in candidates)
-                {
+                foreach (int n2 in candidates) {
                     IntPoint p2 = points2[n2];
 
                     unsafe // Generate window in 2nd image
                     {
                         byte* src = (byte*)bitmapData2.Scan0 + (p2.X - r) + (p2.Y - r) * stride2;
 
-                        for (int j = 0; j < windowSize; j++)
-                        {
+                        for (int j = 0; j < windowSize; j++) {
                             for (int i = 0; i < windowSize; i++)
                                 w2[i, j] = (byte)(*(src + i));
                             src += stride2;
@@ -397,10 +366,8 @@ namespace Accord.Imaging
                     }
 
                     double sum1 = 0, sum2 = 0;
-                    for (int i = 0; i < windowSize; i++)
-                    {
-                        for (int j = 0; j < windowSize; j++)
-                        {
+                    for (int i = 0; i < windowSize; i++) {
+                        for (int j = 0; j < windowSize; j++) {
                             sum1 += w1[i, j] * w2[i, j];
                             sum2 += w2[i, j] * w2[i, j];
                         }

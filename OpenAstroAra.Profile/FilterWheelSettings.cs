@@ -87,7 +87,7 @@ namespace OpenAstroAra.Profile {
         public bool DisableGuidingOnFilterChange {
             get => disableGuidingOnFilterChange;
             set {
-                if(disableGuidingOnFilterChange != value) {
+                if (disableGuidingOnFilterChange != value) {
                     disableGuidingOnFilterChange = value;
                     RaisePropertyChanged();
                 }

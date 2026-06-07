@@ -2,12 +2,11 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © AForge.NET, 2007-2012
+// Copyright ï¿½ AForge.NET, 2007-2012
 // contacts@aforgenet.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -49,8 +48,7 @@ namespace Accord.Imaging.Filters
     ///
     /// <seealso cref="LevelsLinear"/>
     /// 
-    public class ContrastCorrection : BaseInPlacePartialFilter
-    {
+    public class ContrastCorrection : BaseInPlacePartialFilter {
         private LevelsLinear baseFilter = new LevelsLinear();
         private int factor;
 
@@ -64,20 +62,15 @@ namespace Accord.Imaging.Filters
         /// 
         /// <para>Default value is set to <b>10</b>.</para></remarks>
         /// 
-        public int Factor
-        {
+        public int Factor {
             get { return factor; }
-            set
-            {
+            set {
                 factor = Math.Max(-127, Math.Min(127, value));
 
-                if (factor > 0)
-                {
+                if (factor > 0) {
                     baseFilter.InRed = baseFilter.InGreen = baseFilter.InBlue = baseFilter.InGray = new IntRange(factor, 255 - factor);
                     baseFilter.OutRed = baseFilter.OutGreen = baseFilter.OutBlue = baseFilter.OutGray = new IntRange(0, 255);
-                }
-                else
-                {
+                } else {
                     baseFilter.OutRed = baseFilter.OutGreen = baseFilter.OutBlue = baseFilter.OutGray = new IntRange(-factor, 255 + factor);
                     baseFilter.InRed = baseFilter.InGreen = baseFilter.InBlue = baseFilter.InGray = new IntRange(0, 255);
                 }
@@ -91,8 +84,7 @@ namespace Accord.Imaging.Filters
         /// <remarks><para>See <see cref="IFilterInformation.FormatTranslations"/>
         /// documentation for additional information.</para></remarks>
         ///
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return baseFilter.FormatTranslations; }
         }
 
@@ -100,8 +92,7 @@ namespace Accord.Imaging.Filters
         /// Initializes a new instance of the <see cref="ContrastCorrection"/> class.
         /// </summary>
         /// 
-        public ContrastCorrection()
-        {
+        public ContrastCorrection() {
             Factor = 10;
         }
 
@@ -111,8 +102,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <param name="factor">Contrast <see cref="Factor">adjusting factor</see>.</param>
         /// 
-        public ContrastCorrection(int factor)
-        {
+        public ContrastCorrection(int factor) {
             Factor = factor;
         }
 
@@ -123,8 +113,7 @@ namespace Accord.Imaging.Filters
         /// <param name="image">Source image data.</param>
         /// <param name="rect">Image rectangle for processing by the filter.</param>
         ///
-        protected override unsafe void ProcessFilter(UnmanagedImage image, Rectangle rect)
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage image, Rectangle rect) {
             baseFilter.ApplyInPlace(image, rect);
         }
     }

@@ -93,9 +93,9 @@ namespace OpenAstroAra.Sequencer.Container {
         public event Func<object, SequenceEntityFailureEventArgs, Task> FailureEvent;
 
         public async Task RaiseFailureEvent(ISequenceEntity sender, Exception ex) {
-            try {                
+            try {
                 await (FailureEvent?.InvokeAsync(sender, new SequenceEntityFailureEventArgs(sender, ex)) ?? Task.CompletedTask);
-            } catch(Exception eventException) {
+            } catch (Exception eventException) {
                 Logger.Error(eventException);
             }
         }

@@ -2,16 +2,15 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © AForge.NET, 2005-2011
+// Copyright ï¿½ AForge.NET, 2005-2011
 // contacts@aforgenet.com
 //
 
-namespace Accord.Imaging.Filters
-{
-	/// <summary>
-	/// Blur filter.
-	/// </summary>
-	/// 
+namespace Accord.Imaging.Filters {
+    /// <summary>
+    /// Blur filter.
+    /// </summary>
+    /// 
     /// <remarks><para>The filter performs <see cref="Convolution">convolution filter</see> using
     /// the blur kernel:</para>
     /// 
@@ -46,19 +45,17 @@ namespace Accord.Imaging.Filters
     /// 
     /// <seealso cref="Convolution"/>
     /// 
-    public sealed class Blur : Convolution
-	{
-		/// <summary>
-		/// Initializes a new instance of the <see cref="Blur"/> class.
-		/// </summary>
-		public Blur( ) : base( new int[,] {
-								{ 1, 2, 3, 2, 1 },
-								{ 2, 4, 5, 4, 2 },
-								{ 3, 5, 6, 5, 3 },
-								{ 2, 4, 5, 4, 2 },
-								{ 1, 2, 3, 2, 1 } } )
-		{
+    public sealed class Blur : Convolution {
+        /// <summary>
+        /// Initializes a new instance of the <see cref="Blur"/> class.
+        /// </summary>
+        public Blur() : base(new int[,] {
+                                { 1, 2, 3, 2, 1 },
+                                { 2, 4, 5, 4, 2 },
+                                { 3, 5, 6, 5, 3 },
+                                { 2, 4, 5, 4, 2 },
+                                { 1, 2, 3, 2, 1 } }) {
             base.ProcessAlpha = true;
-		}
-	}
+        }
+    }
 }

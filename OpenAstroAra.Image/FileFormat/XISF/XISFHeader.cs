@@ -59,7 +59,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
             Xisf.Add(MetaData);
 
             Content = new XDocument(
-                new XDeclaration("1.0", "UTF-8", null), 
+                new XDeclaration("1.0", "UTF-8", null),
                 Xisf
             );
         }
@@ -877,7 +877,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
         /// <param name="imageProperties"></param>
         /// <param name="imageType"></param>
         public void AddImageMetaData(ImageProperties imageProperties, string imageType, XISFSampleFormat format = XISFSampleFormat.UInt16) {
-            if (imageType == "SNAPSHOT") { imageType = "LIGHT"; } 
+            if (imageType == "SNAPSHOT") { imageType = "LIGHT"; }
 
             XElement image = new XElement(xmlns + "Image",
                     new XAttribute("geometry", imageProperties.Width + ":" + imageProperties.Height + ":" + "1"),

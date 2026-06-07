@@ -298,7 +298,7 @@ namespace OpenAstroAra.Profile {
                     RaisePropertyChanged();
                 }
             }
-        
+
         }
 
         private int metaGuidePort;
@@ -422,13 +422,10 @@ namespace OpenAstroAra.Profile {
         /// Property allowing to set the endpoint URL for SkyGuard software
         /// </summary>
         [DataMember]
-        public string SkyGuardServerUrl
-        {
+        public string SkyGuardServerUrl {
             get => skyGuardServerUrl;
-            set
-            {
-                if (skyGuardServerUrl != value)
-                {
+            set {
+                if (skyGuardServerUrl != value) {
                     skyGuardServerUrl = value;
                     RaisePropertyChanged();
                 }
@@ -439,13 +436,10 @@ namespace OpenAstroAra.Profile {
         /// Property to set endpoint URL port for SkyGuard software
         /// </summary>
         [DataMember]
-        public int SkyGuardServerPort
-        {
+        public int SkyGuardServerPort {
             get => skyGuardServerPort;
-            set
-            {
-                if (skyGuardServerPort != value)
-                {
+            set {
+                if (skyGuardServerPort != value) {
                     skyGuardServerPort = value;
                     RaisePropertyChanged();
                 }
@@ -456,13 +450,10 @@ namespace OpenAstroAra.Profile {
         /// Property allowing to set SkyGuard.exe file path
         /// </summary>
         [DataMember]
-        public string SkyGuardPath
-        {
+        public string SkyGuardPath {
             get => skyGuardPath;
-            set
-            {
-                if (skyGuardPath != value)
-                {
+            set {
+                if (skyGuardPath != value) {
                     skyGuardPath = value;
                     RaisePropertyChanged();
                 }
@@ -473,13 +464,10 @@ namespace OpenAstroAra.Profile {
         /// Property to set callback port
         /// </summary>
         [DataMember]
-        public int SkyGuardCallbackPort
-        {
+        public int SkyGuardCallbackPort {
             get => skyGuardCallbackPort;
-            set
-            {
-                if (skyGuardCallbackPort != value)
-                {
+            set {
+                if (skyGuardCallbackPort != value) {
                     skyGuardCallbackPort = value;
                     RaisePropertyChanged();
                 }
@@ -490,13 +478,10 @@ namespace OpenAstroAra.Profile {
         /// Property to set callback port
         /// </summary>
         [DataMember]
-        public bool SkyGuardTimeLapsChecked
-        {
+        public bool SkyGuardTimeLapsChecked {
             get => skyGuardTimeLapsChecked;
-            set
-            {
-                if (skyGuardTimeLapsChecked != value)
-                {
+            set {
+                if (skyGuardTimeLapsChecked != value) {
                     skyGuardTimeLapsChecked = value;
                     RaisePropertyChanged();
                 }
@@ -504,13 +489,10 @@ namespace OpenAstroAra.Profile {
         }
 
         [DataMember]
-        public double SkyGuardValueMaxGuiding
-        {
+        public double SkyGuardValueMaxGuiding {
             get => skyGuardValueMaxGuiding;
-            set
-            {
-                if (skyGuardValueMaxGuiding != value)
-                {
+            set {
+                if (skyGuardValueMaxGuiding != value) {
                     skyGuardValueMaxGuiding = value;
                     RaisePropertyChanged();
                 }
@@ -518,13 +500,10 @@ namespace OpenAstroAra.Profile {
         }
 
         [DataMember]
-        public double SkyGuardTimeLapsGuiding
-        {
+        public double SkyGuardTimeLapsGuiding {
             get => skyGuardTimeLapsGuiding;
-            set
-            {
-                if (skyGuardTimeLapsGuiding != value)
-                {
+            set {
+                if (skyGuardTimeLapsGuiding != value) {
                     skyGuardTimeLapsGuiding = value;
                     RaisePropertyChanged();
                 }
@@ -565,13 +544,10 @@ namespace OpenAstroAra.Profile {
         }
 
         [DataMember]
-        public double SkyGuardTimeOutGuiding
-        {
+        public double SkyGuardTimeOutGuiding {
             get => skyGuardTimeOutGuiding;
-            set
-            {
-                if (skyGuardTimeOutGuiding != value)
-                {
+            set {
+                if (skyGuardTimeOutGuiding != value) {
                     skyGuardTimeOutGuiding = value;
                     RaisePropertyChanged();
                 }
@@ -580,7 +556,7 @@ namespace OpenAstroAra.Profile {
         #endregion
 
 
-        private string guideChartRightAscensionColor;        
+        private string guideChartRightAscensionColor;
         [DataMember]
         public string GuideChartRightAscensionColor {
             get => guideChartRightAscensionColor;
@@ -592,7 +568,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string guideChartDeclinationColor;        
+        private string guideChartDeclinationColor;
         [DataMember]
         public string GuideChartDeclinationColor {
             get => guideChartDeclinationColor;

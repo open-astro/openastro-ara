@@ -58,13 +58,13 @@ namespace OpenAstroAra.Sequencer.SequenceItem {
         public ICommand MoveDownCommand => new GalaSoft.MvvmLight.Command.RelayCommand(MoveDown);
         public ICommand MoveUpCommand => new GalaSoft.MvvmLight.Command.RelayCommand(MoveUp);
         public ICommand DisableEnableCommand => new GalaSoft.MvvmLight.Command.RelayCommand(() => {
-            if(Status != SequenceEntityStatus.DISABLED) {
+            if (Status != SequenceEntityStatus.DISABLED) {
                 Status = SequenceEntityStatus.DISABLED;
                 ShowMenu = false;
             } else {
                 Status = SequenceEntityStatus.CREATED;
             }
-            
+
         });
 
         public string Name {
@@ -162,7 +162,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem {
         }
 
         public virtual void ResetProgress() {
-            if(this.Status != SequenceEntityStatus.DISABLED) { 
+            if (this.Status != SequenceEntityStatus.DISABLED) {
                 this.Status = SequenceEntityStatus.CREATED;
             }
         }
@@ -225,7 +225,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem {
                             using var checkTokenSource = new CancellationTokenSource();
                             var checkTimeout = TimeSpan.FromMinutes(2);
                             try {
-                                if(this is ISequenceContainer) {
+                                if (this is ISequenceContainer) {
                                     await this.Execute(progress, localCts.Token);
                                 } else {
                                     var localToken = localCts.Token;
@@ -265,7 +265,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem {
                                 Logger.Error($"{this} - ", ex);
                                 success = false;
                                 root?.RaiseFailureEvent(this, ex);
-                            } finally { 
+                            } finally {
                                 try {
                                     checkTokenSource.Cancel();
                                 } catch { }
@@ -277,8 +277,8 @@ namespace OpenAstroAra.Sequencer.SequenceItem {
                         }
                     } catch (SequenceEntityFailedException ex) {
                         Logger.Error($"Failed: {this} - " + ex.Message);
-                        Status = SequenceEntityStatus.FAILED;                        
-                        root?.RaiseFailureEvent(this, ex);                        
+                        Status = SequenceEntityStatus.FAILED;
+                        root?.RaiseFailureEvent(this, ex);
                     } catch (SequenceEntityFailedValidationException ex) {
                         Logger.Error($"Failed validation: {this} - " + ex.Message);
                         Status = SequenceEntityStatus.FAILED;

@@ -6,10 +6,10 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © Andrew Kirillov, 2005-2009
+// Copyright ï¿½ Andrew Kirillov, 2005-2009
 // andrew.kirillov@aforgenet.com
 //
-// Copyright © César Souza, 2009-2017
+// Copyright ï¿½ Cï¿½sar Souza, 2009-2017
 // cesarsouza at gmail.com
 //
 //    This library is free software; you can redistribute it and/or
@@ -27,8 +27,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging.Textures
-{
+namespace Accord.Imaging.Textures {
     using System;
 
     /// <summary>
@@ -39,8 +38,7 @@ namespace Accord.Imaging.Textures
     /// it as two dimensional array of intensities in the range of [0, 1] - texture's values.</para>
     /// </remarks>
     /// 
-    public interface ITextureGenerator
-    {
+    public interface ITextureGenerator {
         /// <summary>
         /// Generate texture.
         /// </summary>

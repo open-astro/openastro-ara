@@ -20,8 +20,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System.Collections.Generic;
     using System.Drawing.Imaging;
     using Accord.Math.Wavelets;
@@ -67,8 +66,7 @@ namespace Accord.Imaging.Filters
     /// <img src="..\images\wavelet-2.png" /> 
     /// </example>
     /// 
-    public class WaveletTransform : BaseFilter
-    {
+    public class WaveletTransform : BaseFilter {
         private IWavelet wavelet;
         private bool backward;
 
@@ -81,8 +79,7 @@ namespace Accord.Imaging.Filters
         /// <param name="wavelet">A wavelet function.</param>
         /// 
         public WaveletTransform(IWavelet wavelet)
-            : this(wavelet, false)
-        {
+            : this(wavelet, false) {
         }
 
         /// <summary>
@@ -92,8 +89,7 @@ namespace Accord.Imaging.Filters
         /// <param name="wavelet">A wavelet function.</param>
         /// <param name="backward">True to perform backward transform, false otherwise.</param>
         /// 
-        public WaveletTransform(IWavelet wavelet, bool backward)
-        {
+        public WaveletTransform(IWavelet wavelet, bool backward) {
             this.wavelet = wavelet;
             this.backward = backward;
 
@@ -105,8 +101,7 @@ namespace Accord.Imaging.Filters
         ///   Format translations dictionary.
         /// </summary>
         /// 
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -114,8 +109,7 @@ namespace Accord.Imaging.Filters
         ///   Gets or sets the Wavelet function
         /// </summary>
         /// 
-        public IWavelet Wavelet
-        {
+        public IWavelet Wavelet {
             get { return wavelet; }
             set { wavelet = value; }
         }
@@ -124,8 +118,7 @@ namespace Accord.Imaging.Filters
         ///   Gets or sets whether the filter should be applied forward or backwards.
         /// </summary>
         /// 
-        public bool Backward
-        {
+        public bool Backward {
             get { return backward; }
             set { backward = value; }
         }
@@ -135,15 +128,13 @@ namespace Accord.Imaging.Filters
         ///   Applies the filter to the image.
         /// </summary>
         /// 
-        protected override void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData)
-        {
+        protected override void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData) {
 
             // check image format
             if (
                 (sourceData.PixelFormat != PixelFormat.Format8bppIndexed) &&
                 (sourceData.PixelFormat != PixelFormat.Format16bppGrayScale)
-                )
-            {
+                ) {
                 throw new UnsupportedImageFormatException("Only grayscale images are supported.");
             }
 
@@ -158,46 +149,36 @@ namespace Accord.Imaging.Filters
             int dstOffset = destinationData.Stride - width * dstPixelSize;
 
             // check image size
-            if ((!Accord.Math.Tools.IsPowerOf2(width)) || (!Accord.Math.Tools.IsPowerOf2(height)))
-            {
+            if ((!Accord.Math.Tools.IsPowerOf2(width)) || (!Accord.Math.Tools.IsPowerOf2(height))) {
                 throw new InvalidImagePropertiesException("Image width and height should be power of 2.");
             }
 
             // create new complex image
             double[,] data = new double[width, height];
 
-            if (sourceData.PixelFormat == PixelFormat.Format8bppIndexed)
-            {
+            if (sourceData.PixelFormat == PixelFormat.Format8bppIndexed) {
                 // do the job
-                unsafe
-                {
+                unsafe {
                     byte* src = (byte*)sourceData.ImageData.ToPointer();
 
                     // for each line
-                    for (int y = 0; y < height; y++)
-                    {
+                    for (int y = 0; y < height; y++) {
                         // for each pixel
-                        for (int x = 0; x < width; x++, src++)
-                        {
+                        for (int x = 0; x < width; x++, src++) {
                             data[y, x] = Vector.Scale(*src, (byte)0, (byte)255, -1.0, 1.0);
                         }
                         src += srcOffset;
                     }
                 }
-            }
-            else
-            {
+            } else {
                 // do the job
-                unsafe
-                {
+                unsafe {
                     ushort* src = (ushort*)sourceData.ImageData.ToPointer();
 
                     // for each line
-                    for (int y = 0; y < height; y++)
-                    {
+                    for (int y = 0; y < height; y++) {
                         // for each pixel
-                        for (int x = 0; x < width; x++, src++)
-                        {
+                        for (int x = 0; x < width; x++, src++) {
                             data[y, x] = Vector.Scale(*src, 0, 65535, -1.0, 1.0);
                         }
                         src += srcOffset;
@@ -206,43 +187,31 @@ namespace Accord.Imaging.Filters
             }
 
             // Apply the transform
-            if (backward)
-            {
+            if (backward) {
                 wavelet.Backward(data);
-            }
-            else
-            {
+            } else {
                 wavelet.Forward(data);
             }
 
 
-            if (sourceData.PixelFormat == PixelFormat.Format8bppIndexed)
-            {
-                unsafe
-                {
+            if (sourceData.PixelFormat == PixelFormat.Format8bppIndexed) {
+                unsafe {
                     byte* dst = (byte*)destinationData.ImageData.ToPointer();
 
 
-                    for (int y = 0; y < height; y++)
-                    {
-                        for (int x = 0; x < width; x++, dst++)
-                        {
+                    for (int y = 0; y < height; y++) {
+                        for (int x = 0; x < width; x++, dst++) {
                             *dst = (byte)Vector.Scale(data[y, x], -1, 1, 0, 255);
                         }
                         dst += dstOffset;
                     }
                 }
-            }
-            else
-            {
-                unsafe
-                {
+            } else {
+                unsafe {
                     ushort* dst = (ushort*)destinationData.ImageData.ToPointer();
 
-                    for (int y = 0; y < height; y++)
-                    {
-                        for (int x = 0; x < width; x++, dst++)
-                        {
+                    for (int y = 0; y < height; y++) {
+                        for (int x = 0; x < width; x++, dst++) {
                             *dst = (ushort)Vector.Scale(data[y, x], -1, 1, 0, 65535);
                         }
                         dst += dstOffset;
@@ -253,6 +222,3 @@ namespace Accord.Imaging.Filters
         }
     }
 }
-
-
-

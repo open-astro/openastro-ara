@@ -2,12 +2,11 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © AForge.NET, 2005-2011
+// Copyright ï¿½ AForge.NET, 2005-2011
 // contacts@aforgenet.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -41,18 +40,16 @@ namespace Accord.Imaging.Filters
     /// 
     /// <seealso cref="ReplaceChannel"/>
     /// 
-    public class ExtractChannel : BaseFilter
-    {
+    public class ExtractChannel : BaseFilter {
         private short channel = RGB.R;
 
         // private format translation dictionary
-        private Dictionary<PixelFormat, PixelFormat> formatTranslations = new Dictionary<PixelFormat, PixelFormat>( );
+        private Dictionary<PixelFormat, PixelFormat> formatTranslations = new Dictionary<PixelFormat, PixelFormat>();
 
         /// <summary>
         /// Format translations dictionary.
         /// </summary>
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -64,17 +61,14 @@ namespace Accord.Imaging.Filters
         /// 
         /// <exception cref="ArgumentException">Invalid channel is specified.</exception>
         /// 
-        public short Channel
-        {
+        public short Channel {
             get { return channel; }
-            set
-            {
+            set {
                 if (
-                    ( value != RGB.R ) && ( value != RGB.G ) &&
-                    ( value != RGB.B ) && ( value != RGB.A )
-                    )
-                {
-                    throw new ArgumentException( "Invalid channel is specified." );
+                    (value != RGB.R) && (value != RGB.G) &&
+                    (value != RGB.B) && (value != RGB.A)
+                    ) {
+                    throw new ArgumentException("Invalid channel is specified.");
                 }
                 channel = value;
             }
@@ -84,13 +78,12 @@ namespace Accord.Imaging.Filters
         /// Initializes a new instance of the <see cref="ExtractChannel"/> class.
         /// </summary>
         /// 
-        public ExtractChannel( )
-        {
+        public ExtractChannel() {
             // initialize format translation dictionary
-            formatTranslations[PixelFormat.Format24bppRgb]  = PixelFormat.Format8bppIndexed;
-            formatTranslations[PixelFormat.Format32bppRgb]  = PixelFormat.Format8bppIndexed;
+            formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format8bppIndexed;
+            formatTranslations[PixelFormat.Format32bppRgb] = PixelFormat.Format8bppIndexed;
             formatTranslations[PixelFormat.Format32bppArgb] = PixelFormat.Format8bppIndexed;
-            formatTranslations[PixelFormat.Format48bppRgb]  = PixelFormat.Format16bppGrayScale;
+            formatTranslations[PixelFormat.Format48bppRgb] = PixelFormat.Format16bppGrayScale;
             formatTranslations[PixelFormat.Format64bppArgb] = PixelFormat.Format16bppGrayScale;
         }
 
@@ -100,8 +93,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <param name="channel">ARGB channel to extract.</param>
         /// 
-        public ExtractChannel( short channel ) : this( )
-        {
+        public ExtractChannel(short channel) : this() {
             this.Channel = channel;
         }
 
@@ -115,62 +107,53 @@ namespace Accord.Imaging.Filters
         /// <exception cref="InvalidImagePropertiesException">Can not extract alpha channel from none ARGB image. The
         /// exception is throw, when alpha channel is requested from RGB image.</exception>
         /// 
-        protected override unsafe void ProcessFilter( UnmanagedImage sourceData, UnmanagedImage destinationData )
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData) {
             // get width and height
             int width = sourceData.Width;
             int height = sourceData.Height;
 
-            int pixelSize = Image.GetPixelFormatSize( sourceData.PixelFormat ) / 8;
+            int pixelSize = Image.GetPixelFormatSize(sourceData.PixelFormat) / 8;
 
-            if ( ( channel == RGB.A ) && ( pixelSize != 4 ) && ( pixelSize != 8 ) )
-            {
-                throw new InvalidImagePropertiesException( "Can not extract alpha channel from none ARGB image." );
+            if ((channel == RGB.A) && (pixelSize != 4) && (pixelSize != 8)) {
+                throw new InvalidImagePropertiesException("Can not extract alpha channel from none ARGB image.");
             }
 
-            if ( pixelSize <= 4 )
-            {
+            if (pixelSize <= 4) {
                 int srcOffset = sourceData.Stride - width * pixelSize;
                 int dstOffset = destinationData.Stride - width;
 
                 // do the job
-                byte * src = (byte*) sourceData.ImageData.ToPointer( );
-                byte * dst = (byte*) destinationData.ImageData.ToPointer( );
+                byte* src = (byte*)sourceData.ImageData.ToPointer();
+                byte* dst = (byte*)destinationData.ImageData.ToPointer();
 
                 // allign source pointer to the required channel
                 src += channel;
 
-                for ( int y = 0; y < height; y++ )
-                {
-                    for ( int x = 0; x < width; x++, src += pixelSize, dst++ )
-                    {
+                for (int y = 0; y < height; y++) {
+                    for (int x = 0; x < width; x++, src += pixelSize, dst++) {
                         *dst = *src;
                     }
                     src += srcOffset;
                     dst += dstOffset;
                 }
-            }
-            else
-            {
+            } else {
                 pixelSize /= 2;
 
-                byte* srcBase   = (byte*) sourceData.ImageData.ToPointer( );
-                byte* dstBase   = (byte*) destinationData.ImageData.ToPointer( );
+                byte* srcBase = (byte*)sourceData.ImageData.ToPointer();
+                byte* dstBase = (byte*)destinationData.ImageData.ToPointer();
                 int srcStride = sourceData.Stride;
                 int dstStride = destinationData.Stride;
 
                 // for each line
-                for ( int y = 0; y < height; y++ )
-                {
-                    ushort* src = (ushort*) ( srcBase + y * srcStride );
-                    ushort* dst = (ushort*) ( dstBase + y * dstStride );
+                for (int y = 0; y < height; y++) {
+                    ushort* src = (ushort*)(srcBase + y * srcStride);
+                    ushort* dst = (ushort*)(dstBase + y * dstStride);
 
                     // allign source pointer to the required channel
                     src += channel;
 
                     // for each pixel
-                    for ( int x = 0; x < width; x++, src += pixelSize, dst++ )
-                    {
+                    for (int x = 0; x < width; x++, src += pixelSize, dst++) {
                         *dst = *src;
                     }
                 }

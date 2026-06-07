@@ -1,12 +1,11 @@
 // AForge Image Processing Library
 // AForge.NET framework
 //
-// Copyright © Andrew Kirillov, 2005-2008
+// Copyright ï¿½ Andrew Kirillov, 2005-2008
 // andrew.kirillov@gmail.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -47,8 +46,7 @@ namespace Accord.Imaging.Filters
     /// <seealso cref="HSLFiltering"/>
     /// <seealso cref="YCbCrFiltering"/>
     /// 
-    public class ColorFiltering : BaseInPlacePartialFilter
-    {
+    public class ColorFiltering : BaseInPlacePartialFilter {
         private IntRange red = new IntRange(0, 255);
         private IntRange green = new IntRange(0, 255);
         private IntRange blue = new IntRange(0, 255);
@@ -64,8 +62,7 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Format translations dictionary.
         /// </summary>
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -74,8 +71,7 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Range of red color component.
         /// </summary>
-        public IntRange Red
-        {
+        public IntRange Red {
             get { return red; }
             set { red = value; }
         }
@@ -83,8 +79,7 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Range of green color component.
         /// </summary>
-        public IntRange Green
-        {
+        public IntRange Green {
             get { return green; }
             set { green = value; }
         }
@@ -92,8 +87,7 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Range of blue color component.
         /// </summary>
-        public IntRange Blue
-        {
+        public IntRange Blue {
             get { return blue; }
             set { blue = value; }
         }
@@ -101,11 +95,9 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Fill color used to fill filtered pixels.
         /// </summary>
-        public RGB FillColor
-        {
+        public RGB FillColor {
             get { return new RGB(fillR, fillG, fillB); }
-            set
-            {
+            set {
                 fillR = value.Red;
                 fillG = value.Green;
                 fillB = value.Blue;
@@ -120,8 +112,7 @@ namespace Accord.Imaging.Filters
         /// <remarks><para>Default value is set to <see langword="true"/>, which means
         /// the filter removes colors outside of the specified range.</para></remarks>
         /// 
-        public bool FillOutsideRange
-        {
+        public bool FillOutsideRange {
             get { return fillOutsideRange; }
             set { fillOutsideRange = value; }
         }
@@ -132,8 +123,7 @@ namespace Accord.Imaging.Filters
         /// Initializes a new instance of the <see cref="ColorFiltering"/> class.
         /// </summary>
         /// 
-        public ColorFiltering()
-        {
+        public ColorFiltering() {
             formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format24bppRgb;
             formatTranslations[PixelFormat.Format32bppRgb] = PixelFormat.Format32bppRgb;
             formatTranslations[PixelFormat.Format32bppArgb] = PixelFormat.Format32bppArgb;
@@ -148,8 +138,7 @@ namespace Accord.Imaging.Filters
         /// <param name="blue">Blue components filtering range.</param>
         /// 
         public ColorFiltering(IntRange red, IntRange green, IntRange blue) :
-            this()
-        {
+            this() {
             this.red = red;
             this.green = green;
             this.blue = blue;
@@ -162,8 +151,7 @@ namespace Accord.Imaging.Filters
         /// <param name="image">Source image data.</param>
         /// <param name="rect">Image rectangle for processing by the filter.</param>
         ///
-        protected override unsafe void ProcessFilter(UnmanagedImage image, Rectangle rect)
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage image, Rectangle rect) {
             // get pixel size
             int pixelSize = (image.PixelFormat == PixelFormat.Format24bppRgb) ? 3 : 4;
 
@@ -181,11 +169,9 @@ namespace Accord.Imaging.Filters
             ptr += (startY * image.Stride + startX * pixelSize);
 
             // for each row
-            for (int y = startY; y < stopY; y++)
-            {
+            for (int y = startY; y < stopY; y++) {
                 // for each pixel
-                for (int x = startX; x < stopX; x++, ptr += pixelSize)
-                {
+                for (int x = startX; x < stopX; x++, ptr += pixelSize) {
                     r = ptr[RGB.R];
                     g = ptr[RGB.G];
                     b = ptr[RGB.B];
@@ -195,19 +181,14 @@ namespace Accord.Imaging.Filters
                         (r >= red.Min) && (r <= red.Max) &&
                         (g >= green.Min) && (g <= green.Max) &&
                         (b >= blue.Min) && (b <= blue.Max)
-                        )
-                    {
-                        if (!fillOutsideRange)
-                        {
+                        ) {
+                        if (!fillOutsideRange) {
                             ptr[RGB.R] = fillR;
                             ptr[RGB.G] = fillG;
                             ptr[RGB.B] = fillB;
                         }
-                    }
-                    else
-                    {
-                        if (fillOutsideRange)
-                        {
+                    } else {
+                        if (fillOutsideRange) {
                             ptr[RGB.R] = fillR;
                             ptr[RGB.G] = fillG;
                             ptr[RGB.B] = fillB;

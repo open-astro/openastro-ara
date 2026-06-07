@@ -2,12 +2,11 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © AForge.NET, 2005-2011
+// Copyright ï¿½ AForge.NET, 2005-2011
 // contacts@aforgenet.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -46,8 +45,7 @@ namespace Accord.Imaging.Filters
     /// 
     /// <seealso cref="ExtractChannel"/>
     /// 
-    public class ExtractNormalizedRGBChannel : BaseFilter
-    {
+    public class ExtractNormalizedRGBChannel : BaseFilter {
         private short channel = RGB.R;
 
         // private format translation dictionary
@@ -56,8 +54,7 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Format translations dictionary.
         /// </summary>
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -69,13 +66,10 @@ namespace Accord.Imaging.Filters
         /// 
         /// <exception cref="ArgumentException">Invalid channel is specified.</exception>
         /// 
-        public short Channel
-        {
+        public short Channel {
             get { return channel; }
-            set
-            {
-                if ((value != RGB.R) && (value != RGB.G) && (value != RGB.B))
-                {
+            set {
+                if ((value != RGB.R) && (value != RGB.G) && (value != RGB.B)) {
                     throw new ArgumentException("Invalid channel is specified.");
                 }
                 channel = value;
@@ -86,8 +80,7 @@ namespace Accord.Imaging.Filters
         /// Initializes a new instance of the <see cref="ExtractNormalizedRGBChannel"/> class.
         /// </summary>
         /// 
-        public ExtractNormalizedRGBChannel()
-        {
+        public ExtractNormalizedRGBChannel() {
             // initialize format translation dictionary
             formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format8bppIndexed;
             formatTranslations[PixelFormat.Format32bppRgb] = PixelFormat.Format8bppIndexed;
@@ -103,8 +96,7 @@ namespace Accord.Imaging.Filters
         /// <param name="channel">Normalized RGB channel to extract.</param>
         /// 
         public ExtractNormalizedRGBChannel(short channel)
-            : this()
-        {
+            : this() {
             this.Channel = channel;
         }
 
@@ -115,8 +107,7 @@ namespace Accord.Imaging.Filters
         /// <param name="sourceData">Source image data.</param>
         /// <param name="destinationData">Destination image data.</param>
         /// 
-        protected override unsafe void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData)
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData) {
             // get width and height
             int width = sourceData.Width;
             int height = sourceData.Height;
@@ -124,8 +115,7 @@ namespace Accord.Imaging.Filters
             int pixelSize = Image.GetPixelFormatSize(sourceData.PixelFormat) / 8;
             int sum;
 
-            if (pixelSize <= 4)
-            {
+            if (pixelSize <= 4) {
                 int srcOffset = sourceData.Stride - width * pixelSize;
                 int dstOffset = destinationData.Stride - width;
 
@@ -133,10 +123,8 @@ namespace Accord.Imaging.Filters
                 byte* src = (byte*)sourceData.ImageData.ToPointer();
                 byte* dst = (byte*)destinationData.ImageData.ToPointer();
 
-                for (int y = 0; y < height; y++)
-                {
-                    for (int x = 0; x < width; x++, src += pixelSize, dst++)
-                    {
+                for (int y = 0; y < height; y++) {
+                    for (int x = 0; x < width; x++, src += pixelSize, dst++) {
                         sum = (src[RGB.R] + src[RGB.G] + src[RGB.B]);
 
                         *dst = (sum != 0) ? (byte)(255 * src[channel] / sum) : (byte)0;
@@ -144,9 +132,7 @@ namespace Accord.Imaging.Filters
                     src += srcOffset;
                     dst += dstOffset;
                 }
-            }
-            else
-            {
+            } else {
                 pixelSize /= 2;
 
                 byte* srcBase = (byte*)sourceData.ImageData.ToPointer();
@@ -155,14 +141,12 @@ namespace Accord.Imaging.Filters
                 int dstStride = destinationData.Stride;
 
                 // for each line
-                for (int y = 0; y < height; y++)
-                {
+                for (int y = 0; y < height; y++) {
                     ushort* src = (ushort*)(srcBase + y * srcStride);
                     ushort* dst = (ushort*)(dstBase + y * dstStride);
 
                     // for each pixel
-                    for (int x = 0; x < width; x++, src += pixelSize, dst++)
-                    {
+                    for (int x = 0; x < width; x++, src += pixelSize, dst++) {
                         sum = (src[RGB.R] + src[RGB.G] + src[RGB.B]);
 
                         *dst = (sum != 0) ? (ushort)(65535 * src[channel] / sum) : (ushort)0;

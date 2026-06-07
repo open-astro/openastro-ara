@@ -20,8 +20,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging
-{
+namespace Accord.Imaging {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -70,8 +69,7 @@ namespace Accord.Imaging
     /// </example>
     /// 
     [Serializable]
-    public class LocalBinaryPattern : BaseFeatureExtractor<FeatureDescriptor>
-    {
+    public class LocalBinaryPattern : BaseFeatureExtractor<FeatureDescriptor> {
         const int numberOfBins = 256;
 
         int cellSize = 6;  // size of the cell, in number of pixels
@@ -89,8 +87,7 @@ namespace Accord.Imaging
         ///   Gets the size of a cell, in pixels. Default is 6.
         /// </summary>
         /// 
-        public int CellSize
-        {
+        public int CellSize {
             get { return cellSize; }
             set { cellSize = value; }
         }
@@ -99,8 +96,7 @@ namespace Accord.Imaging
         ///   Gets the size of a block, in pixels. Default is 3.
         /// </summary>
         /// 
-        public int BlockSize
-        {
+        public int BlockSize {
             get { return blockSize; }
             set { blockSize = value; }
         }
@@ -123,8 +119,7 @@ namespace Accord.Imaging
         ///   histogram feature vectors. Default is true.
         /// </summary>
         /// 
-        public bool Normalize
-        {
+        public bool Normalize {
             get { return normalize; }
             set { normalize = value; }
         }
@@ -142,8 +137,7 @@ namespace Accord.Imaging
         /// <param name="normalize">
         ///   Whether to normalize generated histograms. Default is true.</param>
         /// 
-        public LocalBinaryPattern(int blockSize = 3, int cellSize = 6, bool normalize = true)
-        {
+        public LocalBinaryPattern(int blockSize = 3, int cellSize = 6, bool normalize = true) {
             this.cellSize = cellSize;
             this.blockSize = blockSize;
             this.normalize = normalize;
@@ -160,17 +154,13 @@ namespace Accord.Imaging
         ///   actual feature extraction, transforming the input image into a list of features.
         /// </summary>
         /// 
-        protected override IEnumerable<FeatureDescriptor> InnerTransform(UnmanagedImage image)
-        {
+        protected override IEnumerable<FeatureDescriptor> InnerTransform(UnmanagedImage image) {
             // make sure we have grayscale image
             UnmanagedImage grayImage = null;
 
-            if (image.PixelFormat == PixelFormat.Format8bppIndexed)
-            {
+            if (image.PixelFormat == PixelFormat.Format8bppIndexed) {
                 grayImage = image;
-            }
-            else
-            {
+            } else {
                 // create temporary grayscale image
                 grayImage = Grayscale.CommonAlgorithms.BT709.Apply(image);
             }
@@ -183,33 +173,26 @@ namespace Accord.Imaging
             int offset = stride - width;
 
             // 1. Calculate 8-pixel neighborhood binary patterns 
-            if (patterns == null || height > patterns.GetLength(0) || width > patterns.GetLength(1))
-            {
+            if (patterns == null || height > patterns.GetLength(0) || width > patterns.GetLength(1)) {
                 patterns = new int[height, width];
-            }
-            else
-            {
+            } else {
                 System.Diagnostics.Debug.Write(String.Format("Reusing storage for patterns. " +
                     "Need ({0}, {1}), have ({1}, {2})", height, width, patterns.Rows(), patterns.Columns()));
             }
 
-            unsafe
-            {
-                fixed (int* ptrPatterns = patterns)
-                {
+            unsafe {
+                fixed (int* ptrPatterns = patterns) {
                     // Begin skipping first line
                     byte* src = (byte*)grayImage.ImageData.ToPointer() + stride;
                     int* neighbors = ptrPatterns + width;
 
                     // for each line
-                    for (int y = 1; y < height - 1; y++)
-                    {
+                    for (int y = 1; y < height - 1; y++) {
                         // skip first column
                         neighbors++; src++;
 
                         // for each inner pixel in line (skipping first and last)
-                        for (int x = 1; x < width - 1; x++, src++, neighbors++)
-                        {
+                        for (int x = 1; x < width - 1; x++, src++, neighbors++) {
                             // Retrieve the pixel neighborhood
                             byte a11 = src[+stride + 1], a12 = src[+1], a13 = src[-stride + 1];
                             byte a21 = src[+stride + 0], a22 = src[0], a23 = src[-stride + 0];
@@ -243,29 +226,23 @@ namespace Accord.Imaging
             int cellCountX;
             int cellCountY;
 
-            if (cellSize > 0)
-            {
+            if (cellSize > 0) {
                 cellCountX = (int)Math.Floor(width / (double)cellSize);
                 cellCountY = (int)Math.Floor(height / (double)cellSize);
 
-                if (histograms == null || cellCountX > histograms.Rows() || cellCountY > histograms.Columns())
-                {
+                if (histograms == null || cellCountX > histograms.Rows() || cellCountY > histograms.Columns()) {
                     this.histograms = new int[cellCountX, cellCountY][];
                     for (int i = 0; i < cellCountX; i++)
                         for (int j = 0; j < cellCountY; j++)
                             this.histograms[i, j] = new int[numberOfBins];
-                }
-                else
-                {
+                } else {
                     System.Diagnostics.Debug.Write(String.Format("Reusing storage for histograms. " +
                         "Need ({0}, {1}), have ({1}, {2})", cellCountX, cellCountY, histograms.Rows(), histograms.Columns()));
                 }
 
                 // For each cell
-                for (int i = 0; i < cellCountX; i++)
-                {
-                    for (int j = 0; j < cellCountY; j++)
-                    {
+                for (int i = 0; i < cellCountX; i++) {
+                    for (int j = 0; j < cellCountY; j++) {
                         // Compute the histogram
                         int[] histogram = this.histograms[i, j];
 
@@ -278,18 +255,13 @@ namespace Accord.Imaging
                                 histogram[patterns[startCellY + y, startCellX + x]]++;
                     }
                 }
-            }
-            else
-            {
+            } else {
                 cellCountX = 1;
                 cellCountY = 1;
 
-                if (histograms == null)
-                {
+                if (histograms == null) {
                     this.histograms = new int[,][] { { new int[numberOfBins] } };
-                }
-                else
-                {
+                } else {
                     System.Diagnostics.Debug.Write(String.Format("Reusing storage for histograms. " +
                         "Need ({0}, {1}), have ({1}, {2})", cellCountX, cellCountY, histograms.Rows(), histograms.Columns()));
                 }
@@ -305,23 +277,18 @@ namespace Accord.Imaging
             int blocksCountX;
             int blocksCountY;
 
-            if (blockSize > 0)
-            {
+            if (blockSize > 0) {
                 blocksCountX = (int)Math.Floor(cellCountX / (double)blockSize);
                 blocksCountY = (int)Math.Floor(cellCountY / (double)blockSize);
-            }
-            else
-            {
+            } else {
                 blockSize = blocksCountX = blocksCountY = 1;
             }
 
 
             var blocks = new List<FeatureDescriptor>();
 
-            for (int i = 0; i < blocksCountX; i++)
-            {
-                for (int j = 0; j < blocksCountY; j++)
-                {
+            for (int i = 0; i < blocksCountX; i++) {
+                for (int j = 0; j < blocksCountY; j++) {
                     double[] block = new double[blockSize * blockSize * numberOfBins];
 
                     int startBlockX = i * blockSize;
@@ -329,10 +296,8 @@ namespace Accord.Imaging
                     int c = 0;
 
                     // for each cell in the block
-                    for (int x = 0; x < blockSize; x++)
-                    {
-                        for (int y = 0; y < blockSize; y++)
-                        {
+                    for (int x = 0; x < blockSize; x++) {
+                        for (int y = 0; y < blockSize; y++) {
                             int[] histogram = histograms[startBlockX + x, startBlockY + y];
 
                             // Copy all histograms to the block vector
@@ -357,8 +322,7 @@ namespace Accord.Imaging
         /// Creates a new object that is a copy of the current instance.
         /// </summary>
         /// 
-        protected override object Clone(ISet<PixelFormat> supportedFormats)
-        {
+        protected override object Clone(ISet<PixelFormat> supportedFormats) {
             var clone = new LocalBinaryPattern(blockSize, cellSize, normalize);
             clone.epsilon = epsilon;
             clone.SupportedFormats = supportedFormats;

@@ -92,10 +92,10 @@ namespace OpenAstroAra.Profile {
         public PluginSettings() {
             pluginStorage = new Dictionary<Guid, IDictionary<string, object>>();
         }
-        
+
         [DataMember]
         private IDictionary<Guid, IDictionary<string, object>> pluginStorage { get; set; }
-        
+
         protected override void SetDefaultValues() {
             pluginStorage = new Dictionary<Guid, IDictionary<string, object>>();
         }
@@ -105,18 +105,18 @@ namespace OpenAstroAra.Profile {
                 pluginStorage[pluginId] = new Dictionary<string, object>();
             }
 
-            if(pluginStorage[pluginId].TryGetValue(key, out var oldValueObj)) {
-                if(oldValueObj != null) {
-                    if(oldValueObj.GetType() == typeof(Boolean)) {
+            if (pluginStorage[pluginId].TryGetValue(key, out var oldValueObj)) {
+                if (oldValueObj != null) {
+                    if (oldValueObj.GetType() == typeof(Boolean)) {
                         var oldValue = (Boolean)oldValueObj;
-                        if(oldValue == value) {
+                        if (oldValue == value) {
                             Logger.Trace($"Skip setting plugin {pluginId} field {key} with value {value} as it is equals to old value {oldValue}");
                             return;
                         }
                     }
                 }
             }
-            
+
             Logger.Trace($"Setting plugin {pluginId} field {key} with value {value}");
             pluginStorage[pluginId][key] = value;
             RaisePropertyChanged(pluginId + "-" + key);
@@ -125,7 +125,7 @@ namespace OpenAstroAra.Profile {
         public bool TryGetValue(Guid pluginId, string key, out Boolean value) {
             if (pluginStorage.TryGetValue(pluginId, out var dic)) {
                 if (dic.TryGetValue(key, out var obj)) {
-                    if(obj.GetType() != typeof(Boolean)) {
+                    if (obj.GetType() != typeof(Boolean)) {
                         Logger.Trace("Incorrect type specified to get value");
                         value = default(Boolean);
                         return false;
@@ -142,18 +142,18 @@ namespace OpenAstroAra.Profile {
                 pluginStorage[pluginId] = new Dictionary<string, object>();
             }
 
-            if(pluginStorage[pluginId].TryGetValue(key, out var oldValueObj)) {
-                if(oldValueObj != null) {
-                    if(oldValueObj.GetType() == typeof(Byte)) {
+            if (pluginStorage[pluginId].TryGetValue(key, out var oldValueObj)) {
+                if (oldValueObj != null) {
+                    if (oldValueObj.GetType() == typeof(Byte)) {
                         var oldValue = (Byte)oldValueObj;
-                        if(oldValue == value) {
+                        if (oldValue == value) {
                             Logger.Trace($"Skip setting plugin {pluginId} field {key} with value {value} as it is equals to old value {oldValue}");
                             return;
                         }
                     }
                 }
             }
-            
+
             Logger.Trace($"Setting plugin {pluginId} field {key} with value {value}");
             pluginStorage[pluginId][key] = value;
             RaisePropertyChanged(pluginId + "-" + key);
@@ -162,7 +162,7 @@ namespace OpenAstroAra.Profile {
         public bool TryGetValue(Guid pluginId, string key, out Byte value) {
             if (pluginStorage.TryGetValue(pluginId, out var dic)) {
                 if (dic.TryGetValue(key, out var obj)) {
-                    if(obj.GetType() != typeof(Byte)) {
+                    if (obj.GetType() != typeof(Byte)) {
                         Logger.Trace("Incorrect type specified to get value");
                         value = default(Byte);
                         return false;
@@ -179,18 +179,18 @@ namespace OpenAstroAra.Profile {
                 pluginStorage[pluginId] = new Dictionary<string, object>();
             }
 
-            if(pluginStorage[pluginId].TryGetValue(key, out var oldValueObj)) {
-                if(oldValueObj != null) {
-                    if(oldValueObj.GetType() == typeof(SByte)) {
+            if (pluginStorage[pluginId].TryGetValue(key, out var oldValueObj)) {
+                if (oldValueObj != null) {
+                    if (oldValueObj.GetType() == typeof(SByte)) {
                         var oldValue = (SByte)oldValueObj;
-                        if(oldValue == value) {
+                        if (oldValue == value) {
                             Logger.Trace($"Skip setting plugin {pluginId} field {key} with value {value} as it is equals to old value {oldValue}");
                             return;
                         }
                     }
                 }
             }
-            
+
             Logger.Trace($"Setting plugin {pluginId} field {key} with value {value}");
             pluginStorage[pluginId][key] = value;
             RaisePropertyChanged(pluginId + "-" + key);
@@ -199,7 +199,7 @@ namespace OpenAstroAra.Profile {
         public bool TryGetValue(Guid pluginId, string key, out SByte value) {
             if (pluginStorage.TryGetValue(pluginId, out var dic)) {
                 if (dic.TryGetValue(key, out var obj)) {
-                    if(obj.GetType() != typeof(SByte)) {
+                    if (obj.GetType() != typeof(SByte)) {
                         Logger.Trace("Incorrect type specified to get value");
                         value = default(SByte);
                         return false;
@@ -216,18 +216,18 @@ namespace OpenAstroAra.Profile {
                 pluginStorage[pluginId] = new Dictionary<string, object>();
             }
 
-            if(pluginStorage[pluginId].TryGetValue(key, out var oldValueObj)) {
-                if(oldValueObj != null) {
-                    if(oldValueObj.GetType() == typeof(Char)) {
+            if (pluginStorage[pluginId].TryGetValue(key, out var oldValueObj)) {
+                if (oldValueObj != null) {
+                    if (oldValueObj.GetType() == typeof(Char)) {
                         var oldValue = (Char)oldValueObj;
-                        if(oldValue == value) {
+                        if (oldValue == value) {
                             Logger.Trace($"Skip setting plugin {pluginId} field {key} with value {value} as it is equals to old value {oldValue}");
                             return;
                         }
                     }
                 }
             }
-            
+
             Logger.Trace($"Setting plugin {pluginId} field {key} with value {value}");
             pluginStorage[pluginId][key] = value;
             RaisePropertyChanged(pluginId + "-" + key);
@@ -236,7 +236,7 @@ namespace OpenAstroAra.Profile {
         public bool TryGetValue(Guid pluginId, string key, out Char value) {
             if (pluginStorage.TryGetValue(pluginId, out var dic)) {
                 if (dic.TryGetValue(key, out var obj)) {
-                    if(obj.GetType() != typeof(Char)) {
+                    if (obj.GetType() != typeof(Char)) {
                         Logger.Trace("Incorrect type specified to get value");
                         value = default(Char);
                         return false;
@@ -253,18 +253,18 @@ namespace OpenAstroAra.Profile {
                 pluginStorage[pluginId] = new Dictionary<string, object>();
             }
 
-            if(pluginStorage[pluginId].TryGetValue(key, out var oldValueObj)) {
-                if(oldValueObj != null) {
-                    if(oldValueObj.GetType() == typeof(Decimal)) {
+            if (pluginStorage[pluginId].TryGetValue(key, out var oldValueObj)) {
+                if (oldValueObj != null) {
+                    if (oldValueObj.GetType() == typeof(Decimal)) {
                         var oldValue = (Decimal)oldValueObj;
-                        if(oldValue == value) {
+                        if (oldValue == value) {
                             Logger.Trace($"Skip setting plugin {pluginId} field {key} with value {value} as it is equals to old value {oldValue}");
                             return;
                         }
                     }
                 }
             }
-            
+
             Logger.Trace($"Setting plugin {pluginId} field {key} with value {value}");
             pluginStorage[pluginId][key] = value;
             RaisePropertyChanged(pluginId + "-" + key);
@@ -273,7 +273,7 @@ namespace OpenAstroAra.Profile {
         public bool TryGetValue(Guid pluginId, string key, out Decimal value) {
             if (pluginStorage.TryGetValue(pluginId, out var dic)) {
                 if (dic.TryGetValue(key, out var obj)) {
-                    if(obj.GetType() != typeof(Decimal)) {
+                    if (obj.GetType() != typeof(Decimal)) {
                         Logger.Trace("Incorrect type specified to get value");
                         value = default(Decimal);
                         return false;
@@ -290,18 +290,18 @@ namespace OpenAstroAra.Profile {
                 pluginStorage[pluginId] = new Dictionary<string, object>();
             }
 
-            if(pluginStorage[pluginId].TryGetValue(key, out var oldValueObj)) {
-                if(oldValueObj != null) {
-                    if(oldValueObj.GetType() == typeof(Double)) {
+            if (pluginStorage[pluginId].TryGetValue(key, out var oldValueObj)) {
+                if (oldValueObj != null) {
+                    if (oldValueObj.GetType() == typeof(Double)) {
                         var oldValue = (Double)oldValueObj;
-                        if(oldValue == value) {
+                        if (oldValue == value) {
                             Logger.Trace($"Skip setting plugin {pluginId} field {key} with value {value} as it is equals to old value {oldValue}");
                             return;
                         }
                     }
                 }
             }
-            
+
             Logger.Trace($"Setting plugin {pluginId} field {key} with value {value}");
             pluginStorage[pluginId][key] = value;
             RaisePropertyChanged(pluginId + "-" + key);
@@ -310,7 +310,7 @@ namespace OpenAstroAra.Profile {
         public bool TryGetValue(Guid pluginId, string key, out Double value) {
             if (pluginStorage.TryGetValue(pluginId, out var dic)) {
                 if (dic.TryGetValue(key, out var obj)) {
-                    if(obj.GetType() != typeof(Double)) {
+                    if (obj.GetType() != typeof(Double)) {
                         Logger.Trace("Incorrect type specified to get value");
                         value = default(Double);
                         return false;
@@ -327,18 +327,18 @@ namespace OpenAstroAra.Profile {
                 pluginStorage[pluginId] = new Dictionary<string, object>();
             }
 
-            if(pluginStorage[pluginId].TryGetValue(key, out var oldValueObj)) {
-                if(oldValueObj != null) {
-                    if(oldValueObj.GetType() == typeof(Single)) {
+            if (pluginStorage[pluginId].TryGetValue(key, out var oldValueObj)) {
+                if (oldValueObj != null) {
+                    if (oldValueObj.GetType() == typeof(Single)) {
                         var oldValue = (Single)oldValueObj;
-                        if(oldValue == value) {
+                        if (oldValue == value) {
                             Logger.Trace($"Skip setting plugin {pluginId} field {key} with value {value} as it is equals to old value {oldValue}");
                             return;
                         }
                     }
                 }
             }
-            
+
             Logger.Trace($"Setting plugin {pluginId} field {key} with value {value}");
             pluginStorage[pluginId][key] = value;
             RaisePropertyChanged(pluginId + "-" + key);
@@ -347,7 +347,7 @@ namespace OpenAstroAra.Profile {
         public bool TryGetValue(Guid pluginId, string key, out Single value) {
             if (pluginStorage.TryGetValue(pluginId, out var dic)) {
                 if (dic.TryGetValue(key, out var obj)) {
-                    if(obj.GetType() != typeof(Single)) {
+                    if (obj.GetType() != typeof(Single)) {
                         Logger.Trace("Incorrect type specified to get value");
                         value = default(Single);
                         return false;
@@ -364,18 +364,18 @@ namespace OpenAstroAra.Profile {
                 pluginStorage[pluginId] = new Dictionary<string, object>();
             }
 
-            if(pluginStorage[pluginId].TryGetValue(key, out var oldValueObj)) {
-                if(oldValueObj != null) {
-                    if(oldValueObj.GetType() == typeof(Int32)) {
+            if (pluginStorage[pluginId].TryGetValue(key, out var oldValueObj)) {
+                if (oldValueObj != null) {
+                    if (oldValueObj.GetType() == typeof(Int32)) {
                         var oldValue = (Int32)oldValueObj;
-                        if(oldValue == value) {
+                        if (oldValue == value) {
                             Logger.Trace($"Skip setting plugin {pluginId} field {key} with value {value} as it is equals to old value {oldValue}");
                             return;
                         }
                     }
                 }
             }
-            
+
             Logger.Trace($"Setting plugin {pluginId} field {key} with value {value}");
             pluginStorage[pluginId][key] = value;
             RaisePropertyChanged(pluginId + "-" + key);
@@ -384,7 +384,7 @@ namespace OpenAstroAra.Profile {
         public bool TryGetValue(Guid pluginId, string key, out Int32 value) {
             if (pluginStorage.TryGetValue(pluginId, out var dic)) {
                 if (dic.TryGetValue(key, out var obj)) {
-                    if(obj.GetType() != typeof(Int32)) {
+                    if (obj.GetType() != typeof(Int32)) {
                         Logger.Trace("Incorrect type specified to get value");
                         value = default(Int32);
                         return false;
@@ -401,18 +401,18 @@ namespace OpenAstroAra.Profile {
                 pluginStorage[pluginId] = new Dictionary<string, object>();
             }
 
-            if(pluginStorage[pluginId].TryGetValue(key, out var oldValueObj)) {
-                if(oldValueObj != null) {
-                    if(oldValueObj.GetType() == typeof(UInt32)) {
+            if (pluginStorage[pluginId].TryGetValue(key, out var oldValueObj)) {
+                if (oldValueObj != null) {
+                    if (oldValueObj.GetType() == typeof(UInt32)) {
                         var oldValue = (UInt32)oldValueObj;
-                        if(oldValue == value) {
+                        if (oldValue == value) {
                             Logger.Trace($"Skip setting plugin {pluginId} field {key} with value {value} as it is equals to old value {oldValue}");
                             return;
                         }
                     }
                 }
             }
-            
+
             Logger.Trace($"Setting plugin {pluginId} field {key} with value {value}");
             pluginStorage[pluginId][key] = value;
             RaisePropertyChanged(pluginId + "-" + key);
@@ -421,7 +421,7 @@ namespace OpenAstroAra.Profile {
         public bool TryGetValue(Guid pluginId, string key, out UInt32 value) {
             if (pluginStorage.TryGetValue(pluginId, out var dic)) {
                 if (dic.TryGetValue(key, out var obj)) {
-                    if(obj.GetType() != typeof(UInt32)) {
+                    if (obj.GetType() != typeof(UInt32)) {
                         Logger.Trace("Incorrect type specified to get value");
                         value = default(UInt32);
                         return false;
@@ -438,18 +438,18 @@ namespace OpenAstroAra.Profile {
                 pluginStorage[pluginId] = new Dictionary<string, object>();
             }
 
-            if(pluginStorage[pluginId].TryGetValue(key, out var oldValueObj)) {
-                if(oldValueObj != null) {
-                    if(oldValueObj.GetType() == typeof(Int64)) {
+            if (pluginStorage[pluginId].TryGetValue(key, out var oldValueObj)) {
+                if (oldValueObj != null) {
+                    if (oldValueObj.GetType() == typeof(Int64)) {
                         var oldValue = (Int64)oldValueObj;
-                        if(oldValue == value) {
+                        if (oldValue == value) {
                             Logger.Trace($"Skip setting plugin {pluginId} field {key} with value {value} as it is equals to old value {oldValue}");
                             return;
                         }
                     }
                 }
             }
-            
+
             Logger.Trace($"Setting plugin {pluginId} field {key} with value {value}");
             pluginStorage[pluginId][key] = value;
             RaisePropertyChanged(pluginId + "-" + key);
@@ -458,7 +458,7 @@ namespace OpenAstroAra.Profile {
         public bool TryGetValue(Guid pluginId, string key, out Int64 value) {
             if (pluginStorage.TryGetValue(pluginId, out var dic)) {
                 if (dic.TryGetValue(key, out var obj)) {
-                    if(obj.GetType() != typeof(Int64)) {
+                    if (obj.GetType() != typeof(Int64)) {
                         Logger.Trace("Incorrect type specified to get value");
                         value = default(Int64);
                         return false;
@@ -475,18 +475,18 @@ namespace OpenAstroAra.Profile {
                 pluginStorage[pluginId] = new Dictionary<string, object>();
             }
 
-            if(pluginStorage[pluginId].TryGetValue(key, out var oldValueObj)) {
-                if(oldValueObj != null) {
-                    if(oldValueObj.GetType() == typeof(UInt64)) {
+            if (pluginStorage[pluginId].TryGetValue(key, out var oldValueObj)) {
+                if (oldValueObj != null) {
+                    if (oldValueObj.GetType() == typeof(UInt64)) {
                         var oldValue = (UInt64)oldValueObj;
-                        if(oldValue == value) {
+                        if (oldValue == value) {
                             Logger.Trace($"Skip setting plugin {pluginId} field {key} with value {value} as it is equals to old value {oldValue}");
                             return;
                         }
                     }
                 }
             }
-            
+
             Logger.Trace($"Setting plugin {pluginId} field {key} with value {value}");
             pluginStorage[pluginId][key] = value;
             RaisePropertyChanged(pluginId + "-" + key);
@@ -495,7 +495,7 @@ namespace OpenAstroAra.Profile {
         public bool TryGetValue(Guid pluginId, string key, out UInt64 value) {
             if (pluginStorage.TryGetValue(pluginId, out var dic)) {
                 if (dic.TryGetValue(key, out var obj)) {
-                    if(obj.GetType() != typeof(UInt64)) {
+                    if (obj.GetType() != typeof(UInt64)) {
                         Logger.Trace("Incorrect type specified to get value");
                         value = default(UInt64);
                         return false;
@@ -512,18 +512,18 @@ namespace OpenAstroAra.Profile {
                 pluginStorage[pluginId] = new Dictionary<string, object>();
             }
 
-            if(pluginStorage[pluginId].TryGetValue(key, out var oldValueObj)) {
-                if(oldValueObj != null) {
-                    if(oldValueObj.GetType() == typeof(Int16)) {
+            if (pluginStorage[pluginId].TryGetValue(key, out var oldValueObj)) {
+                if (oldValueObj != null) {
+                    if (oldValueObj.GetType() == typeof(Int16)) {
                         var oldValue = (Int16)oldValueObj;
-                        if(oldValue == value) {
+                        if (oldValue == value) {
                             Logger.Trace($"Skip setting plugin {pluginId} field {key} with value {value} as it is equals to old value {oldValue}");
                             return;
                         }
                     }
                 }
             }
-            
+
             Logger.Trace($"Setting plugin {pluginId} field {key} with value {value}");
             pluginStorage[pluginId][key] = value;
             RaisePropertyChanged(pluginId + "-" + key);
@@ -532,7 +532,7 @@ namespace OpenAstroAra.Profile {
         public bool TryGetValue(Guid pluginId, string key, out Int16 value) {
             if (pluginStorage.TryGetValue(pluginId, out var dic)) {
                 if (dic.TryGetValue(key, out var obj)) {
-                    if(obj.GetType() != typeof(Int16)) {
+                    if (obj.GetType() != typeof(Int16)) {
                         Logger.Trace("Incorrect type specified to get value");
                         value = default(Int16);
                         return false;
@@ -549,18 +549,18 @@ namespace OpenAstroAra.Profile {
                 pluginStorage[pluginId] = new Dictionary<string, object>();
             }
 
-            if(pluginStorage[pluginId].TryGetValue(key, out var oldValueObj)) {
-                if(oldValueObj != null) {
-                    if(oldValueObj.GetType() == typeof(UInt16)) {
+            if (pluginStorage[pluginId].TryGetValue(key, out var oldValueObj)) {
+                if (oldValueObj != null) {
+                    if (oldValueObj.GetType() == typeof(UInt16)) {
                         var oldValue = (UInt16)oldValueObj;
-                        if(oldValue == value) {
+                        if (oldValue == value) {
                             Logger.Trace($"Skip setting plugin {pluginId} field {key} with value {value} as it is equals to old value {oldValue}");
                             return;
                         }
                     }
                 }
             }
-            
+
             Logger.Trace($"Setting plugin {pluginId} field {key} with value {value}");
             pluginStorage[pluginId][key] = value;
             RaisePropertyChanged(pluginId + "-" + key);
@@ -569,7 +569,7 @@ namespace OpenAstroAra.Profile {
         public bool TryGetValue(Guid pluginId, string key, out UInt16 value) {
             if (pluginStorage.TryGetValue(pluginId, out var dic)) {
                 if (dic.TryGetValue(key, out var obj)) {
-                    if(obj.GetType() != typeof(UInt16)) {
+                    if (obj.GetType() != typeof(UInt16)) {
                         Logger.Trace("Incorrect type specified to get value");
                         value = default(UInt16);
                         return false;
@@ -586,18 +586,18 @@ namespace OpenAstroAra.Profile {
                 pluginStorage[pluginId] = new Dictionary<string, object>();
             }
 
-            if(pluginStorage[pluginId].TryGetValue(key, out var oldValueObj)) {
-                if(oldValueObj != null) {
-                    if(oldValueObj.GetType() == typeof(String)) {
+            if (pluginStorage[pluginId].TryGetValue(key, out var oldValueObj)) {
+                if (oldValueObj != null) {
+                    if (oldValueObj.GetType() == typeof(String)) {
                         var oldValue = (String)oldValueObj;
-                        if(oldValue == value) {
+                        if (oldValue == value) {
                             Logger.Trace($"Skip setting plugin {pluginId} field {key} with value {value} as it is equals to old value {oldValue}");
                             return;
                         }
                     }
                 }
             }
-            
+
             Logger.Trace($"Setting plugin {pluginId} field {key} with value {value}");
             pluginStorage[pluginId][key] = value;
             RaisePropertyChanged(pluginId + "-" + key);
@@ -606,7 +606,7 @@ namespace OpenAstroAra.Profile {
         public bool TryGetValue(Guid pluginId, string key, out String value) {
             if (pluginStorage.TryGetValue(pluginId, out var dic)) {
                 if (dic.TryGetValue(key, out var obj)) {
-                    if(obj.GetType() != typeof(String)) {
+                    if (obj.GetType() != typeof(String)) {
                         Logger.Trace("Incorrect type specified to get value");
                         value = default(String);
                         return false;
@@ -623,18 +623,18 @@ namespace OpenAstroAra.Profile {
                 pluginStorage[pluginId] = new Dictionary<string, object>();
             }
 
-            if(pluginStorage[pluginId].TryGetValue(key, out var oldValueObj)) {
-                if(oldValueObj != null) {
-                    if(oldValueObj.GetType() == typeof(DateTime)) {
+            if (pluginStorage[pluginId].TryGetValue(key, out var oldValueObj)) {
+                if (oldValueObj != null) {
+                    if (oldValueObj.GetType() == typeof(DateTime)) {
                         var oldValue = (DateTime)oldValueObj;
-                        if(oldValue == value) {
+                        if (oldValue == value) {
                             Logger.Trace($"Skip setting plugin {pluginId} field {key} with value {value} as it is equals to old value {oldValue}");
                             return;
                         }
                     }
                 }
             }
-            
+
             Logger.Trace($"Setting plugin {pluginId} field {key} with value {value}");
             pluginStorage[pluginId][key] = value;
             RaisePropertyChanged(pluginId + "-" + key);
@@ -643,7 +643,7 @@ namespace OpenAstroAra.Profile {
         public bool TryGetValue(Guid pluginId, string key, out DateTime value) {
             if (pluginStorage.TryGetValue(pluginId, out var dic)) {
                 if (dic.TryGetValue(key, out var obj)) {
-                    if(obj.GetType() != typeof(DateTime)) {
+                    if (obj.GetType() != typeof(DateTime)) {
                         Logger.Trace("Incorrect type specified to get value");
                         value = default(DateTime);
                         return false;
@@ -660,18 +660,18 @@ namespace OpenAstroAra.Profile {
                 pluginStorage[pluginId] = new Dictionary<string, object>();
             }
 
-            if(pluginStorage[pluginId].TryGetValue(key, out var oldValueObj)) {
-                if(oldValueObj != null) {
-                    if(oldValueObj.GetType() == typeof(Guid)) {
+            if (pluginStorage[pluginId].TryGetValue(key, out var oldValueObj)) {
+                if (oldValueObj != null) {
+                    if (oldValueObj.GetType() == typeof(Guid)) {
                         var oldValue = (Guid)oldValueObj;
-                        if(oldValue == value) {
+                        if (oldValue == value) {
                             Logger.Trace($"Skip setting plugin {pluginId} field {key} with value {value} as it is equals to old value {oldValue}");
                             return;
                         }
                     }
                 }
             }
-            
+
             Logger.Trace($"Setting plugin {pluginId} field {key} with value {value}");
             pluginStorage[pluginId][key] = value;
             RaisePropertyChanged(pluginId + "-" + key);
@@ -680,7 +680,7 @@ namespace OpenAstroAra.Profile {
         public bool TryGetValue(Guid pluginId, string key, out Guid value) {
             if (pluginStorage.TryGetValue(pluginId, out var dic)) {
                 if (dic.TryGetValue(key, out var obj)) {
-                    if(obj.GetType() != typeof(Guid)) {
+                    if (obj.GetType() != typeof(Guid)) {
                         Logger.Trace("Incorrect type specified to get value");
                         value = default(Guid);
                         return false;
@@ -700,9 +700,9 @@ namespace OpenAstroAra.Profile {
                 }
             }
             fieldType = null;
-            return false;;
+            return false; ;
         }
-    } 
+    }
 
 
     public class PluginOptionsAccessor : IPluginOptionsAccessor {
@@ -721,11 +721,11 @@ namespace OpenAstroAra.Profile {
             }
             return Guid.Parse(((GuidAttribute)guidAttributes[0]).Value);
         }
-        
+
         public void SetValueBoolean(string name, Boolean value) {
             profileService.ActiveProfile.PluginSettings.SetValue(pluginGuid, name, value);
         }
-        
+
         public Boolean GetValueBoolean(string name, Boolean defaultValue) {
             if (profileService.ActiveProfile.PluginSettings.TryGetValue(pluginGuid, name, out Boolean result)) {
                 return result;
@@ -735,7 +735,7 @@ namespace OpenAstroAra.Profile {
         public void SetValueByte(string name, Byte value) {
             profileService.ActiveProfile.PluginSettings.SetValue(pluginGuid, name, value);
         }
-        
+
         public Byte GetValueByte(string name, Byte defaultValue) {
             if (profileService.ActiveProfile.PluginSettings.TryGetValue(pluginGuid, name, out Byte result)) {
                 return result;
@@ -745,7 +745,7 @@ namespace OpenAstroAra.Profile {
         public void SetValueSByte(string name, SByte value) {
             profileService.ActiveProfile.PluginSettings.SetValue(pluginGuid, name, value);
         }
-        
+
         public SByte GetValueSByte(string name, SByte defaultValue) {
             if (profileService.ActiveProfile.PluginSettings.TryGetValue(pluginGuid, name, out SByte result)) {
                 return result;
@@ -755,7 +755,7 @@ namespace OpenAstroAra.Profile {
         public void SetValueChar(string name, Char value) {
             profileService.ActiveProfile.PluginSettings.SetValue(pluginGuid, name, value);
         }
-        
+
         public Char GetValueChar(string name, Char defaultValue) {
             if (profileService.ActiveProfile.PluginSettings.TryGetValue(pluginGuid, name, out Char result)) {
                 return result;
@@ -765,7 +765,7 @@ namespace OpenAstroAra.Profile {
         public void SetValueDecimal(string name, Decimal value) {
             profileService.ActiveProfile.PluginSettings.SetValue(pluginGuid, name, value);
         }
-        
+
         public Decimal GetValueDecimal(string name, Decimal defaultValue) {
             if (profileService.ActiveProfile.PluginSettings.TryGetValue(pluginGuid, name, out Decimal result)) {
                 return result;
@@ -775,7 +775,7 @@ namespace OpenAstroAra.Profile {
         public void SetValueDouble(string name, Double value) {
             profileService.ActiveProfile.PluginSettings.SetValue(pluginGuid, name, value);
         }
-        
+
         public Double GetValueDouble(string name, Double defaultValue) {
             if (profileService.ActiveProfile.PluginSettings.TryGetValue(pluginGuid, name, out Double result)) {
                 return result;
@@ -785,7 +785,7 @@ namespace OpenAstroAra.Profile {
         public void SetValueSingle(string name, Single value) {
             profileService.ActiveProfile.PluginSettings.SetValue(pluginGuid, name, value);
         }
-        
+
         public Single GetValueSingle(string name, Single defaultValue) {
             if (profileService.ActiveProfile.PluginSettings.TryGetValue(pluginGuid, name, out Single result)) {
                 return result;
@@ -795,7 +795,7 @@ namespace OpenAstroAra.Profile {
         public void SetValueInt32(string name, Int32 value) {
             profileService.ActiveProfile.PluginSettings.SetValue(pluginGuid, name, value);
         }
-        
+
         public Int32 GetValueInt32(string name, Int32 defaultValue) {
             if (profileService.ActiveProfile.PluginSettings.TryGetValue(pluginGuid, name, out Int32 result)) {
                 return result;
@@ -805,7 +805,7 @@ namespace OpenAstroAra.Profile {
         public void SetValueUInt32(string name, UInt32 value) {
             profileService.ActiveProfile.PluginSettings.SetValue(pluginGuid, name, value);
         }
-        
+
         public UInt32 GetValueUInt32(string name, UInt32 defaultValue) {
             if (profileService.ActiveProfile.PluginSettings.TryGetValue(pluginGuid, name, out UInt32 result)) {
                 return result;
@@ -815,7 +815,7 @@ namespace OpenAstroAra.Profile {
         public void SetValueInt64(string name, Int64 value) {
             profileService.ActiveProfile.PluginSettings.SetValue(pluginGuid, name, value);
         }
-        
+
         public Int64 GetValueInt64(string name, Int64 defaultValue) {
             if (profileService.ActiveProfile.PluginSettings.TryGetValue(pluginGuid, name, out Int64 result)) {
                 return result;
@@ -825,7 +825,7 @@ namespace OpenAstroAra.Profile {
         public void SetValueUInt64(string name, UInt64 value) {
             profileService.ActiveProfile.PluginSettings.SetValue(pluginGuid, name, value);
         }
-        
+
         public UInt64 GetValueUInt64(string name, UInt64 defaultValue) {
             if (profileService.ActiveProfile.PluginSettings.TryGetValue(pluginGuid, name, out UInt64 result)) {
                 return result;
@@ -835,7 +835,7 @@ namespace OpenAstroAra.Profile {
         public void SetValueInt16(string name, Int16 value) {
             profileService.ActiveProfile.PluginSettings.SetValue(pluginGuid, name, value);
         }
-        
+
         public Int16 GetValueInt16(string name, Int16 defaultValue) {
             if (profileService.ActiveProfile.PluginSettings.TryGetValue(pluginGuid, name, out Int16 result)) {
                 return result;
@@ -845,7 +845,7 @@ namespace OpenAstroAra.Profile {
         public void SetValueUInt16(string name, UInt16 value) {
             profileService.ActiveProfile.PluginSettings.SetValue(pluginGuid, name, value);
         }
-        
+
         public UInt16 GetValueUInt16(string name, UInt16 defaultValue) {
             if (profileService.ActiveProfile.PluginSettings.TryGetValue(pluginGuid, name, out UInt16 result)) {
                 return result;
@@ -855,7 +855,7 @@ namespace OpenAstroAra.Profile {
         public void SetValueString(string name, String value) {
             profileService.ActiveProfile.PluginSettings.SetValue(pluginGuid, name, value);
         }
-        
+
         public String GetValueString(string name, String defaultValue) {
             if (profileService.ActiveProfile.PluginSettings.TryGetValue(pluginGuid, name, out String result)) {
                 return result;
@@ -865,7 +865,7 @@ namespace OpenAstroAra.Profile {
         public void SetValueDateTime(string name, DateTime value) {
             profileService.ActiveProfile.PluginSettings.SetValue(pluginGuid, name, value);
         }
-        
+
         public DateTime GetValueDateTime(string name, DateTime defaultValue) {
             if (profileService.ActiveProfile.PluginSettings.TryGetValue(pluginGuid, name, out DateTime result)) {
                 return result;
@@ -875,14 +875,14 @@ namespace OpenAstroAra.Profile {
         public void SetValueGuid(string name, Guid value) {
             profileService.ActiveProfile.PluginSettings.SetValue(pluginGuid, name, value);
         }
-        
+
         public Guid GetValueGuid(string name, Guid defaultValue) {
             if (profileService.ActiveProfile.PluginSettings.TryGetValue(pluginGuid, name, out Guid result)) {
                 return result;
             }
             return defaultValue;
         }
-        
+
         public T GetValueEnum<T>(string name, T defaultValue) where T : struct, Enum {
             if (profileService.ActiveProfile.PluginSettings.TryGetValue(pluginGuid, name, out string resultString)) {
                 if (Enum.TryParse<T>(resultString, out var result)) {

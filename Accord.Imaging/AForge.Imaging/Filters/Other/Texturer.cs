@@ -2,11 +2,10 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © Andrew Kirillov, 2005-2009
+// Copyright ï¿½ Andrew Kirillov, 2005-2009
 // andrew.kirillov@aforgenet.com
 //
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using Accord.Imaging.Textures;
     using System;
     using System.Collections.Generic;
@@ -17,7 +16,7 @@ namespace Accord.Imaging.Filters
     /// Texturer filter.
     /// </summary>
     /// 
-    /// <remarks><para>Adjust pixels’ color values using factors from the given texture. In conjunction with different type
+    /// <remarks><para>Adjust pixelsï¿½ color values using factors from the given texture. In conjunction with different type
     /// of texture generators, the filter may produce different type of interesting effects.</para>
     /// 
     /// <para>The filter uses specified texture to adjust values using the next formula:<br/>
@@ -49,8 +48,7 @@ namespace Accord.Imaging.Filters
     /// <img src="..\images\imaging\texturer.jpg" width="480" height="361" />
     /// </remarks>
     /// 
-    public class Texturer : BaseInPlacePartialFilter
-    {
+    public class Texturer : BaseInPlacePartialFilter {
         // texture generator
         private ITextureGenerator textureGenerator;
         // generated texture
@@ -70,8 +68,7 @@ namespace Accord.Imaging.Filters
         ///
         /// <remarks><para>See <see cref="IFilterInformation.FormatTranslations"/> for more information.</para></remarks>
         ///
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -87,8 +84,7 @@ namespace Accord.Imaging.Filters
         /// <para>See <see cref="Texturer"/> class description for more details.</para>
         /// </remarks>
         /// 
-        public double FilterLevel
-        {
+        public double FilterLevel {
             get { return filterLevel; }
             set { filterLevel = Math.Max(0.0, Math.Min(1.0, value)); }
         }
@@ -104,8 +100,7 @@ namespace Accord.Imaging.Filters
         /// <para>See <see cref="Texturer"/> class description for more details.</para>
         /// </remarks>
         /// 
-        public double PreserveLevel
-        {
+        public double PreserveLevel {
             get { return preserveLevel; }
             set { preserveLevel = Math.Max(0.0, Math.Min(1.0, value)); }
         }
@@ -124,8 +119,7 @@ namespace Accord.Imaging.Filters
         /// generator is specified than the static generated texture is not used.</note></para>
         /// </remarks>
         /// 
-        public float[,] Texture
-        {
+        public float[,] Texture {
             get { return texture; }
             set { texture = value; }
         }
@@ -139,15 +133,13 @@ namespace Accord.Imaging.Filters
         /// <para><note>The property has priority over the <see cref="Texture"/> property.</note></para>
         /// </remarks>
         /// 
-        public ITextureGenerator TextureGenerator
-        {
+        public ITextureGenerator TextureGenerator {
             get { return textureGenerator; }
             set { textureGenerator = value; }
         }
 
         // Private constructor to do common initialization
-        private Texturer()
-        {
+        private Texturer() {
             formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
             formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format24bppRgb;
         }
@@ -159,8 +151,7 @@ namespace Accord.Imaging.Filters
         /// <param name="texture">Generated texture.</param>
         /// 
         public Texturer(float[,] texture)
-            : this()
-        {
+            : this() {
             this.texture = texture;
         }
 
@@ -173,8 +164,7 @@ namespace Accord.Imaging.Filters
         /// <param name="preserveLevel">Preserve level value (see <see cref="PreserveLevel"/> property).</param>
         /// 
         public Texturer(float[,] texture, double filterLevel, double preserveLevel)
-            : this()
-        {
+            : this() {
             this.texture = texture;
             this.filterLevel = filterLevel;
             this.preserveLevel = preserveLevel;
@@ -187,8 +177,7 @@ namespace Accord.Imaging.Filters
         /// <param name="generator">Texture generator.</param>
         /// 
         public Texturer(ITextureGenerator generator)
-            : this()
-        {
+            : this() {
             this.textureGenerator = generator;
         }
 
@@ -201,8 +190,7 @@ namespace Accord.Imaging.Filters
         /// <param name="preserveLevel">Preserve level value (see <see cref="PreserveLevel"/> property).</param>
         /// 
         public Texturer(ITextureGenerator generator, double filterLevel, double preserveLevel)
-            : this()
-        {
+            : this() {
             this.textureGenerator = generator;
             this.filterLevel = filterLevel;
             this.preserveLevel = preserveLevel;
@@ -215,8 +203,7 @@ namespace Accord.Imaging.Filters
         /// <param name="image">Source image data.</param>
         /// <param name="rect">Image rectangle for processing by the filter.</param>
         ///
-        protected override unsafe void ProcessFilter(UnmanagedImage image, Rectangle rect)
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage image, Rectangle rect) {
             int pixelSize = Image.GetPixelFormatSize(image.PixelFormat) / 8;
 
             // processing width and height
@@ -229,12 +216,9 @@ namespace Accord.Imaging.Filters
 
             // if generator was specified, then generate a texture
             // otherwise use provided texture
-            if (textureGenerator != null)
-            {
+            if (textureGenerator != null) {
                 texture = textureGenerator.Generate(width, height);
-            }
-            else
-            {
+            } else {
                 widthToProcess = Math.Min(width, texture.GetLength(1));
                 heightToProcess = Math.Min(height, texture.GetLength(0));
             }
@@ -248,14 +232,11 @@ namespace Accord.Imaging.Filters
             ptr += (rect.Top * image.Stride + rect.Left * pixelSize);
 
             // texture
-            for (int y = 0; y < heightToProcess; y++)
-            {
-                for (int x = 0; x < widthToProcess; x++)
-                {
+            for (int y = 0; y < heightToProcess; y++) {
+                for (int x = 0; x < widthToProcess; x++) {
                     double t = texture[y, x];
                     // process each pixel
-                    for (int i = 0; i < pixelSize; i++, ptr++)
-                    {
+                    for (int i = 0; i < pixelSize; i++, ptr++) {
                         *ptr = (byte)Math.Min(255.0f, (preserveLevel * (*ptr)) + (filterLevel * (*ptr)) * t);
                     }
                 }

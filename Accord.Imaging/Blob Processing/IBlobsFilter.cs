@@ -27,8 +27,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging
-{
+namespace Accord.Imaging {
     /// <summary>
     /// Interface for custom blobs' filters used for filtering blobs after
     /// blob counting.
@@ -40,8 +39,7 @@ namespace Accord.Imaging
     /// for additional information.</para>
     /// </remarks>
     ///
-    public interface IBlobsFilter
-    {
+    public interface IBlobsFilter {
         /// <summary>
         /// Check specified blob and decide if should be kept or not.
         /// </summary>

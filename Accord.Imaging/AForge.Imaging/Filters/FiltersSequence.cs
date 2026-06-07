@@ -2,12 +2,11 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © AForge.NET, 2005-2010
+// Copyright ï¿½ AForge.NET, 2005-2010
 // contacts@aforgenet.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Drawing;
     using System.Drawing.Imaging;
@@ -37,8 +36,7 @@ namespace Accord.Imaging.Filters
     /// </code>
     /// </remarks>
     /// 
-    public class FiltersSequence : CollectionBase, IFilter
-    {
+    public class FiltersSequence : CollectionBase, IFilter {
         /// <summary>
         /// Initializes a new instance of the <see cref="FiltersSequence"/> class.
         /// </summary>
@@ -51,8 +49,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <param name="filters">Sequence of filters to apply.</param>
         /// 
-        public FiltersSequence(params IFilter[] filters)
-        {
+        public FiltersSequence(params IFilter[] filters) {
             InnerList.AddRange(filters);
         }
 
@@ -64,8 +61,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <returns>Returns filter at specified index.</returns>
         /// 
-        public IFilter this[int index]
-        {
+        public IFilter this[int index] {
             get { return ((IFilter)InnerList[index]); }
         }
 
@@ -75,8 +71,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <param name="filter">Filter to add to the sequence.</param>
         /// 
-        public void Add(IFilter filter)
-        {
+        public void Add(IFilter filter) {
             InnerList.Add(filter);
         }
 
@@ -94,21 +89,17 @@ namespace Accord.Imaging.Filters
         /// 
         /// <exception cref="ApplicationException">No filters were added into the filters' sequence.</exception>
         ///
-        public Bitmap Apply(Bitmap image)
-        {
+        public Bitmap Apply(Bitmap image) {
             Bitmap dstImage = null;
             // lock source bitmap data
             BitmapData imageData = image.LockBits(
                 new Rectangle(0, 0, image.Width, image.Height),
                 ImageLockMode.ReadOnly, image.PixelFormat);
 
-            try
-            {
+            try {
                 // apply the filter
                 dstImage = Apply(imageData);
-            }
-            finally
-            {
+            } finally {
                 // unlock source image
                 image.UnlockBits(imageData);
             }
@@ -131,8 +122,7 @@ namespace Accord.Imaging.Filters
         ///
         /// <exception cref="ApplicationException">No filters were added into the filters' sequence.</exception>
         ///
-        public Bitmap Apply(BitmapData imageData)
-        {
+        public Bitmap Apply(BitmapData imageData) {
             // to increase performance the method passes execution to the method, which
             // operates with unmanaged images - this saves time, because redundant managed
             // locks/unlocks are eliminated
@@ -161,8 +151,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <exception cref="ApplicationException">No filters were added into the filters' sequence.</exception>
         ///
-        public UnmanagedImage Apply(UnmanagedImage image)
-        {
+        public UnmanagedImage Apply(UnmanagedImage image) {
             int n = InnerList.Count;
 
             // check for empty sequence
@@ -176,8 +165,7 @@ namespace Accord.Imaging.Filters
             dstImg = ((IFilter)InnerList[0]).Apply(image);
 
             // apply other filters
-            for (int i = 1; i < n; i++)
-            {
+            for (int i = 1; i < n; i++) {
                 tmpImg = dstImg;
                 dstImg = ((IFilter)InnerList[i]).Apply(tmpImg);
                 tmpImg.Dispose();
@@ -202,20 +190,16 @@ namespace Accord.Imaging.Filters
         /// 
         /// <exception cref="ApplicationException">No filters were added into the filters' sequence.</exception>
         ///
-        public void Apply(UnmanagedImage sourceImage, UnmanagedImage destinationImage)
-        {
+        public void Apply(UnmanagedImage sourceImage, UnmanagedImage destinationImage) {
             int n = InnerList.Count;
 
             // check for empty sequence
             if (n == 0)
                 throw new InvalidOperationException("No filters in the sequence.");
 
-            if (n == 1)
-            {
+            if (n == 1) {
                 ((IFilter)InnerList[0]).Apply(sourceImage, destinationImage);
-            }
-            else
-            {
+            } else {
                 UnmanagedImage tmpImg1 = null;
                 UnmanagedImage tmpImg2 = null;
 
@@ -224,8 +208,7 @@ namespace Accord.Imaging.Filters
 
                 // apply other filters, except the last one
                 n--;
-                for (int i = 1; i < n; i++)
-                {
+                for (int i = 1; i < n; i++) {
                     tmpImg2 = tmpImg1;
                     tmpImg1 = ((IFilter)InnerList[i]).Apply(tmpImg2);
                     tmpImg2.Dispose();

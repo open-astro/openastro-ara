@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -97,10 +97,10 @@ namespace OpenAstroAra.Core.Utility {
                 Dictionary<string, object> values = new Dictionary<string, object>();
                 try {
                     while (await timer.WaitForNextTickAsync(token) && !token.IsCancellationRequested) {
-                        var getStart = DateTimeOffset.UtcNow;                        
+                        var getStart = DateTimeOffset.UtcNow;
                         values = GetValuesFunc();
 
-                        var updateStart = DateTimeOffset.UtcNow;                        
+                        var updateStart = DateTimeOffset.UtcNow;
                         UpdateValuesFunc(values);
 
                         var updateEnd = DateTimeOffset.UtcNow;

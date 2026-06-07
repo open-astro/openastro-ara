@@ -20,8 +20,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging.Converters
-{
+namespace Accord.Imaging.Converters {
     using System.Runtime.CompilerServices;
     using System.Drawing;
 
@@ -46,7 +45,6 @@ namespace Accord.Imaging.Converters
     /// </remarks>
     ///   
     [CompilerGenerated]
-    class NamespaceDoc
-    {
+    class NamespaceDoc {
     }
 }

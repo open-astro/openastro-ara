@@ -112,9 +112,9 @@ public static class ServerStateEndpoints {
         // §28 frame catalog DB connection + the §44 backup stream pump
         // and returns 503 if either's not ready.
         app.MapGet("/readyz", (HttpContext http) => {
-                http.Response.Headers.CacheControl = "no-store";
-                return Results.Text("ready", contentType: "text/plain");
-            })
+            http.Response.Headers.CacheControl = "no-store";
+            return Results.Text("ready", contentType: "text/plain");
+        })
            .Produces(StatusCodes.Status200OK)
            .ProducesProblem(StatusCodes.Status503ServiceUnavailable)
            .WithName("ReadinessCheck")

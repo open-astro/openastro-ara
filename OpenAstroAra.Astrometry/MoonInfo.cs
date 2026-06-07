@@ -101,9 +101,9 @@ namespace OpenAstroAra.Astrometry {
 
         private static object lockObj = new object();
         private void CalculateMoonData() {
-            lock(lockObj) { 
-                if(_referenceDate == DateTime.MinValue) { return;  }
-                if(!Points.ContainsKey(_referenceDate)) {
+            lock (lockObj) {
+                if (_referenceDate == DateTime.MinValue) { return; }
+                if (!Points.ContainsKey(_referenceDate)) {
                     var list = new List<DataPoint>();
 
                     DateTime start = _referenceDate;

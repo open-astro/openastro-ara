@@ -84,7 +84,7 @@ namespace OpenAstroAra.Astrometry {
                         Logger.Debug($"{nameof(DeepSkyObjectDailyRefresher)} -- Updated: {updated}; Pruned: {(count - DeepSkyObjects.Count)} / {count}");
 
                     }
-                } catch(Exception ex) {
+                } catch (Exception ex) {
                     Logger.Error(ex);
                 }
             }
@@ -92,7 +92,7 @@ namespace OpenAstroAra.Astrometry {
     }
 
     public class DeepSkyObject : SkyObjectBase {
-        public DeepSkyObject(string id, Coordinates coords,CustomHorizon customHorizon)
+        public DeepSkyObject(string id, Coordinates coords, CustomHorizon customHorizon)
             : this(id, coords, null as Func<SkyObjectBase, Task<byte[]>>, customHorizon) {
         }
         public DeepSkyObject(string id, Coordinates coords, string imageRepository, CustomHorizon customHorizon)

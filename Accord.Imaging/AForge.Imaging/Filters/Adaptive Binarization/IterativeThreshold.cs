@@ -1,32 +1,31 @@
 // AForge Image Processing Library
 // AForge.NET framework
 //
-// Copyright © Markus Falkensteiner, 2007
+// Copyright ï¿½ Markus Falkensteiner, 2007
 // mfalkensteiner@gmx.at
 //
-// Copyright © Andrew Kirillov, 2007-2009
+// Copyright ï¿½ Andrew Kirillov, 2007-2009
 // andrew.kirillov@aforgenet.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Drawing;
     using System.Drawing.Imaging;
 
-	/// <summary>
-	/// Iterative threshold search and binarization.
-	/// </summary>
-	/// 
-	/// <remarks>
+    /// <summary>
+    /// Iterative threshold search and binarization.
+    /// </summary>
+    /// 
+    /// <remarks>
     /// <para>The algorithm works in the following way:
     /// <list type="bullet">
     /// <item>select any start threshold;</item>
-    /// <item>compute average value of Background (µB) and Object (µO) values:
+    /// <item>compute average value of Background (ï¿½B) and Object (ï¿½O) values:
     /// 1) all pixels with a value that is below threshold, belong to the Background values;
     ///	2) all pixels greater or equal threshold, belong to the Object values.
     /// </item>
-    ///	<item>calculate new thresghold: (µB + µO) / 2;</item>
+    ///	<item>calculate new thresghold: (ï¿½B + ï¿½O) / 2;</item>
     /// <item>if |oldThreshold - newThreshold| is less than a given manimum allowed error, then stop iteration process
     /// and create the binary image with the new threshold.</item>
     /// </list>
@@ -58,8 +57,7 @@ namespace Accord.Imaging.Filters
     /// <seealso cref="OtsuThreshold"/>
     /// <seealso cref="SISThreshold"/>
     /// 
-    public class IterativeThreshold : Threshold
-    {
+    public class IterativeThreshold : Threshold {
         private int minError = 0;
 
         /// <summary>
@@ -68,8 +66,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <remarks>Default value is set to <b>0</b>.</remarks>
         /// 
-        public int MinimumError
-        {
+        public int MinimumError {
             get { return minError; }
             set { minError = value; }
         }
@@ -78,8 +75,7 @@ namespace Accord.Imaging.Filters
         /// Initializes a new instance of the <see cref="IterativeThreshold"/> class.
         /// </summary>
         /// 
-        public IterativeThreshold( )
-        {
+        public IterativeThreshold() {
         }
 
         /// <summary>
@@ -88,8 +84,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <param name="minError">Minimum allowed error, that ends the iteration process.</param>
         /// 
-        public IterativeThreshold( int minError )
-        {
+        public IterativeThreshold(int minError) {
             this.minError = minError;
         }
 
@@ -100,8 +95,7 @@ namespace Accord.Imaging.Filters
         /// <param name="minError">Minimum allowed error, that ends the iteration process.</param>
         /// <param name="threshold">Initial threshold value.</param>
         /// 
-        public IterativeThreshold( int minError, int threshold )
-        {
+        public IterativeThreshold(int minError, int threshold) {
             this.minError = minError;
             this.threshold = threshold;
         }
@@ -121,23 +115,19 @@ namespace Accord.Imaging.Filters
         /// <exception cref="UnsupportedImageFormatException">Source pixel format is not supported by the routine. It should
         /// 8 bpp grayscale (indexed) or 16 bpp grayscale image.</exception>
         /// 
-        public int CalculateThreshold( Bitmap image, Rectangle rect )
-        {
+        public int CalculateThreshold(Bitmap image, Rectangle rect) {
             int calculatedThreshold = 0;
 
             // lock source bitmap data
             BitmapData data = image.LockBits(
-                new Rectangle( 0, 0, image.Width, image.Height ),
-                ImageLockMode.ReadOnly, image.PixelFormat );
+                new Rectangle(0, 0, image.Width, image.Height),
+                ImageLockMode.ReadOnly, image.PixelFormat);
 
-            try
-            {
-                calculatedThreshold = CalculateThreshold( data, rect );
-            }
-            finally
-            {
+            try {
+                calculatedThreshold = CalculateThreshold(data, rect);
+            } finally {
                 // unlock image
-                image.UnlockBits( data );
+                image.UnlockBits(data);
             }
 
             return calculatedThreshold;
@@ -158,9 +148,8 @@ namespace Accord.Imaging.Filters
         /// <exception cref="UnsupportedImageFormatException">Source pixel format is not supported by the routine. It should
         /// 8 bpp grayscale (indexed) or 16 bpp grayscale image.</exception>
         /// 
-        public int CalculateThreshold( BitmapData image, Rectangle rect )
-        {
-            return CalculateThreshold( new UnmanagedImage( image ), rect );
+        public int CalculateThreshold(BitmapData image, Rectangle rect) {
+            return CalculateThreshold(new UnmanagedImage(image), rect);
         }
 
         /// <summary>
@@ -178,66 +167,57 @@ namespace Accord.Imaging.Filters
         /// <exception cref="UnsupportedImageFormatException">Source pixel format is not supported by the routine. It should
         /// 8 bpp grayscale (indexed) or 16 bpp grayscale image.</exception>
         /// 
-        public int CalculateThreshold( UnmanagedImage image, Rectangle rect )
-        {
-            if ( ( image.PixelFormat != PixelFormat.Format8bppIndexed ) &&
-                 ( image.PixelFormat != PixelFormat.Format16bppGrayScale ) )
-                throw new UnsupportedImageFormatException( "Source pixel format is not supported by the routine." );
+        public int CalculateThreshold(UnmanagedImage image, Rectangle rect) {
+            if ((image.PixelFormat != PixelFormat.Format8bppIndexed) &&
+                 (image.PixelFormat != PixelFormat.Format16bppGrayScale))
+                throw new UnsupportedImageFormatException("Source pixel format is not supported by the routine.");
 
             int calculatedThreshold = threshold;
 
             // get start and stop X-Y coordinates
-            int startX  = rect.Left;
-            int startY  = rect.Top;
-            int stopX   = startX + rect.Width;
-            int stopY   = startY + rect.Height;
+            int startX = rect.Left;
+            int startY = rect.Top;
+            int stopX = startX + rect.Width;
+            int stopY = startY + rect.Height;
 
             // histogram array
             int[] integerHistogram = null;
             int maxThreshold = 0;
 
-            unsafe
-            {
-                if ( image.PixelFormat == PixelFormat.Format8bppIndexed )
-                {
+            unsafe {
+                if (image.PixelFormat == PixelFormat.Format8bppIndexed) {
                     integerHistogram = new int[256];
                     maxThreshold = 256;
 
                     // collect histogram first
-                    byte* ptr = (byte*) image.ImageData.ToPointer( );
+                    byte* ptr = (byte*)image.ImageData.ToPointer();
                     int offset = image.Stride - rect.Width;
 
                     // allign pointer to the first pixel to process
-                    ptr += ( startY * image.Stride + startX );
+                    ptr += (startY * image.Stride + startX);
 
                     // for each line	
-                    for ( int y = startY; y < stopY; y++ )
-                    {
+                    for (int y = startY; y < stopY; y++) {
                         // for each pixel
-                        for ( int x = startX; x < stopX; x++, ptr++ )
-                        {
+                        for (int x = startX; x < stopX; x++, ptr++) {
                             integerHistogram[*ptr]++;
                         }
                         ptr += offset;
                     }
-                }
-                else
-                {
+                } else {
                     integerHistogram = new int[65536];
                     maxThreshold = 65536;
 
                     // collect histogram first
-                    byte* basePtr = (byte*) image.ImageData.ToPointer( ) + startX * 2;
+                    byte* basePtr = (byte*)image.ImageData.ToPointer() + startX * 2;
                     int stride = image.Stride;
 
                     // for each line	
-                    for ( int y = startY; y < stopY; y++ )
-                    {
-                        ushort* ptr = (ushort*) ( basePtr + y * stride );
+                    for (int y = startY; y < stopY; y++) {
+                        ushort* ptr = (ushort*)(basePtr + y * stride);
 
                         // for each pixel
-                        for ( int x = startX; x < stopX; x++, ptr++ )
-                        {
+                        for (int x = startX; x < stopX; x++, ptr++) {
                             integerHistogram[*ptr]++;
                         }
                     }
@@ -247,8 +227,7 @@ namespace Accord.Imaging.Filters
             // old threshold value
             int oldThreshold = 0;
 
-            do
-            {
+            do {
                 oldThreshold = calculatedThreshold;
 
                 // object's mean and amount of object's pixels
@@ -259,35 +238,28 @@ namespace Accord.Imaging.Filters
                 double meanBackground = 0;
                 int backgroundPixels = 0;
 
-                for ( int t = 0; t < calculatedThreshold; t++ )
-                {
-                    meanBackground += (double) t * integerHistogram[t];
+                for (int t = 0; t < calculatedThreshold; t++) {
+                    meanBackground += (double)t * integerHistogram[t];
                     backgroundPixels += integerHistogram[t];
                 }
                 // calculate object pixels
-                for ( int t = calculatedThreshold; t < maxThreshold; t++ )
-                {
-                    meanObject += (double) t * integerHistogram[t];
+                for (int t = calculatedThreshold; t < maxThreshold; t++) {
+                    meanObject += (double)t * integerHistogram[t];
                     objectPixels += integerHistogram[t];
                 }
                 meanBackground /= backgroundPixels;
                 meanObject /= objectPixels;
 
                 // calculate new threshold value
-                if ( backgroundPixels == 0 )
-                {
-                    calculatedThreshold = (int) meanObject;
-                }
-                else if ( objectPixels == 0 )
-                {
-                    calculatedThreshold = (int) meanBackground;
-                }
-                else
-                {
-                    calculatedThreshold = (int) ( ( meanBackground + meanObject ) / 2 );
+                if (backgroundPixels == 0) {
+                    calculatedThreshold = (int)meanObject;
+                } else if (objectPixels == 0) {
+                    calculatedThreshold = (int)meanBackground;
+                } else {
+                    calculatedThreshold = (int)((meanBackground + meanObject) / 2);
                 }
             }
-            while ( Math.Abs( oldThreshold - calculatedThreshold ) > minError );
+            while (Math.Abs(oldThreshold - calculatedThreshold) > minError);
 
             return calculatedThreshold;
         }
@@ -299,13 +271,12 @@ namespace Accord.Imaging.Filters
         /// <param name="image">Source image data.</param>
         /// <param name="rect">Image rectangle for processing by the filter.</param>
         /// 
-        protected override unsafe void ProcessFilter( UnmanagedImage image, Rectangle rect )
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage image, Rectangle rect) {
             // calculate threshold for the given image
-            threshold = CalculateThreshold( image, rect );
+            threshold = CalculateThreshold(image, rect);
 
             // process image data using base filter
-            base.ProcessFilter( image, rect );
+            base.ProcessFilter(image, rect);
         }
     }
 }
