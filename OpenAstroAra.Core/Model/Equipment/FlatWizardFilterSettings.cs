@@ -38,7 +38,7 @@ namespace OpenAstroAra.Core.Model.Equipment {
         private int minAbsoluteFlatDeviceBrightness;
         private int gain;
         private int offset;
-        private BinningMode binning;
+        private BinningMode binning = new BinningMode(1, 1);
 
         [OnDeserializing]
         public void OnDeserializing(StreamingContext context) {

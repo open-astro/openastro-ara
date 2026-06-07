@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -22,15 +22,15 @@ namespace OpenAstroAra.Core.Utility {
 
     public abstract class BaseINPC : ObservableObject {
 
-        protected void RaisePropertyChanged([CallerMemberName] string propertyName = null) {
+        protected void RaisePropertyChanged([CallerMemberName] string? propertyName = null) {
             OnPropertyChanged(new PropertyChangedEventArgs(propertyName));
         }
 
-        protected void ChildChanged(object sender, PropertyChangedEventArgs e) {
+        protected void ChildChanged(object? sender, PropertyChangedEventArgs e) {
             RaisePropertyChanged("IsChanged");
         }
 
-        protected void Items_CollectionChanged(object sender,
+        protected void Items_CollectionChanged(object? sender,
                System.Collections.Specialized.NotifyCollectionChangedEventArgs e) {
             if (e.OldItems != null) {
                 foreach (INotifyPropertyChanged item in e.OldItems) {
@@ -46,7 +46,7 @@ namespace OpenAstroAra.Core.Utility {
             }
         }
 
-        protected void Item_PropertyChanged(object sender, PropertyChangedEventArgs e) {
+        protected void Item_PropertyChanged(object? sender, PropertyChangedEventArgs e) {
             RaisePropertyChanged("IsChanged");
         }
 
@@ -60,19 +60,19 @@ namespace OpenAstroAra.Core.Utility {
     [Obsolete($"This class is used for migration purposes when serialization attribute is required, which is not compatible with ObservableObject")]
     public abstract class SerializableINPC : INotifyPropertyChanged {
 
-        protected void RaisePropertyChanged([CallerMemberName] string propertyName = null) {
+        protected void RaisePropertyChanged([CallerMemberName] string? propertyName = null) {
             var handler = PropertyChanged;
             handler?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
 
         [field: System.NonSerialized]
-        public event PropertyChangedEventHandler PropertyChanged;
+        public event PropertyChangedEventHandler? PropertyChanged;
 
-        protected void ChildChanged(object sender, PropertyChangedEventArgs e) {
+        protected void ChildChanged(object? sender, PropertyChangedEventArgs e) {
             RaisePropertyChanged("IsChanged");
         }
 
-        protected void Items_CollectionChanged(object sender,
+        protected void Items_CollectionChanged(object? sender,
                System.Collections.Specialized.NotifyCollectionChangedEventArgs e) {
             if (e.OldItems != null) {
                 foreach (INotifyPropertyChanged item in e.OldItems) {
@@ -88,7 +88,7 @@ namespace OpenAstroAra.Core.Utility {
             }
         }
 
-        protected void Item_PropertyChanged(object sender, PropertyChangedEventArgs e) {
+        protected void Item_PropertyChanged(object? sender, PropertyChangedEventArgs e) {
             RaisePropertyChanged("IsChanged");
         }
 

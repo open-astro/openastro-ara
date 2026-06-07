@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -17,7 +17,7 @@ using OpenAstroAra.Core.Utility;
 namespace OpenAstroAra.Core.Model {
 
     public class ApplicationStatus : BaseINPC {
-        private string _source;
+        private string _source = string.Empty;
 
         public string Source {
             get => _source;
@@ -27,7 +27,7 @@ namespace OpenAstroAra.Core.Model {
             }
         }
 
-        private string _status;
+        private string _status = string.Empty;
 
         public string Status {
             get => _status;
@@ -67,7 +67,7 @@ namespace OpenAstroAra.Core.Model {
             }
         }
 
-        private string _status2;
+        private string _status2 = string.Empty;
 
         public string Status2 {
             get => _status2;
@@ -107,7 +107,7 @@ namespace OpenAstroAra.Core.Model {
             }
         }
 
-        private string _status3;
+        private string _status3 = string.Empty;
 
         public string Status3 {
             get => _status3;

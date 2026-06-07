@@ -26,9 +26,9 @@ namespace OpenAstroAra.Core.Model {
     public class GuideInfo {
 
         [DataMember]
-        public IGuideStep GuideStep { get; set; }
+        public IGuideStep? GuideStep { get; set; }
 
         [DataMember]
-        public string State { get; set; }
+        public string State { get; set; } = string.Empty;
     }
 }

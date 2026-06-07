@@ -21,7 +21,7 @@ namespace OpenAstroAra.Core.Locale {
 
     public class Loc : BaseINPC, ILoc {
         private ResourceManager _locale;
-        private CultureInfo _activeCulture;
+        private CultureInfo? _activeCulture;
 
         private static readonly Lazy<Loc> lazy =
          new Lazy<Loc>(() => new Loc());

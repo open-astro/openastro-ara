@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -31,15 +31,15 @@ namespace OpenAstroAra.Core.Model.Equipment {
             AutoFocusExposureTime = -1;
         }
 
-        private string _name;
+        private string _name = string.Empty;
         private int _focusOffset;
         private short _position;
         private double _autoFocusExposureTime;
         private bool _autoFocusFilter;
-        private BinningMode _autoFocusBinning;
+        private BinningMode _autoFocusBinning = new BinningMode(1, 1);
         private int _autoFocusGain;
         private int _autoFocusOffset;
-        private FlatWizardFilterSettings _flatWizardFilterSettings;
+        private FlatWizardFilterSettings _flatWizardFilterSettings = new FlatWizardFilterSettings();
 
         [OnDeserializing]
         private void OnDeserializing(System.Runtime.Serialization.StreamingContext c) {

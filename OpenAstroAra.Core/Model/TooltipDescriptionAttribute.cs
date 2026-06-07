@@ -25,6 +25,7 @@ namespace OpenAstroAra.Core.Model {
 
         public TooltipDescriptionAttribute(string descriptionLabel, string tooltipLabel)
             : base(descriptionLabel) {
+            this.DescriptionLabel = descriptionLabel;
             this.TooltipLabelValue = tooltipLabel;
         }
 
