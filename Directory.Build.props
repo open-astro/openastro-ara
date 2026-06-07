@@ -1,0 +1,26 @@
+<Project>
+
+  <!--
+    Repo-wide Roslyn analyzer escalation (2026-06 compliance sweep).
+
+    Background: CI builds only Server + Fits and surfaces only default-level
+    analyzers, so most of the 14-project solution was never statically
+    analyzed. This file is the C# analogue of "run clang-tidy across the
+    whole tree": it turns on the full CAxxxx analyzer catalog and makes
+    nullable-reference checking a compile-time gate everywhere.
+
+    These are VISIBILITY levers, not a merge gate — TreatWarningsAsErrors is
+    intentionally left off so warnings never break the build. Promote to
+    errors per-rule once a cluster is cleaned up.
+
+    The vendored Accord.Imaging project is excluded: it's upstream third-party
+    code we re-vendor rather than patch, so analyzing it is pure noise.
+  -->
+  <PropertyGroup Condition="'$(MSBuildProjectName)' != 'Accord.Imaging (NETStandard)'">
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <AnalysisMode>All</AnalysisMode>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>
