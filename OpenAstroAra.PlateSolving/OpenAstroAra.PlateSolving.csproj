@@ -41,10 +41,7 @@
     <ProjectReference Include="..\OpenAstroAra.Profile\OpenAstroAra.Profile.csproj" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
     <PackageReference Include="System.Data.SqlClient" Version="4.9.0" />
-    <PackageReference Include="System.Net.Http" Version="4.3.4" />
-    <PackageReference Include="System.Text.RegularExpressions" Version="4.3.1" />
   </ItemGroup>
   <PropertyGroup>
     <Description>Plate-solving components of OpenAstro Ara (forked from N.I.N.A.) — multiple solver backends (ASTAP primary; astrometry.net deferred to v0.1.0 per playbook §0.10).</Description>
