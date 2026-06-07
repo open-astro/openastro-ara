@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -26,7 +26,7 @@ namespace OpenAstroAra.Core.Utility {
                 TaskCompletion = WatchTaskAsync(task);
         }
 
-        public Task TaskCompletion { get; private set; }
+        public Task? TaskCompletion { get; private set; }
 
         private async Task WatchTaskAsync(Task task) {
             try {
@@ -57,7 +57,7 @@ namespace OpenAstroAra.Core.Utility {
 
         public Task<TResult> Task { get; private set; }
 
-        public TResult Result => (Task.Status == TaskStatus.RanToCompletion) ?
+        public TResult? Result => (Task.Status == TaskStatus.RanToCompletion) ?
 Task.Result : default(TResult);
 
         public TaskStatus Status => Task.Status;
@@ -69,14 +69,14 @@ TaskStatus.RanToCompletion;
 
         public bool IsCanceled => Task.IsCanceled;
         public bool IsFaulted => Task.IsFaulted;
-        public AggregateException Exception => Task.Exception;
+        public AggregateException? Exception => Task.Exception;
 
-        public Exception InnerException => (Exception == null) ?
+        public Exception? InnerException => (Exception == null) ?
 null : Exception.InnerException;
 
-        public string ErrorMessage => (InnerException == null) ?
+        public string? ErrorMessage => (InnerException == null) ?
 null : InnerException.Message;
 
-        public event PropertyChangedEventHandler PropertyChanged;
+        public event PropertyChangedEventHandler? PropertyChanged;
     }
 }

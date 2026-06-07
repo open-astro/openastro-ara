@@ -28,7 +28,7 @@ namespace OpenAstroAra.Core.Utility {
 
     public static class CoreUtil {
         public static char[] PATHSEPARATORS = new char[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar };
-        public static string APPLICATIONDIRECTORY = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+        public static string APPLICATIONDIRECTORY = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? string.Empty;
         public static string APPLICATIONTEMPPATH = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "NINA");
         public static DateTime ApplicationStartDate = DateTime.Now;
         public static DateTime UnixEpoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
@@ -38,7 +38,7 @@ namespace OpenAstroAra.Core.Utility {
             get {
                 System.Reflection.Assembly assembly = System.Reflection.Assembly.GetExecutingAssembly();
                 FileVersionInfo fvi = FileVersionInfo.GetVersionInfo(assembly.Location);
-                string version = fvi.FileVersion;
+                string version = fvi.FileVersion ?? string.Empty;
                 return version;
             }
         }
@@ -90,7 +90,7 @@ namespace OpenAstroAra.Core.Utility {
                 fileNameOnly = Path.GetFileNameWithoutExtension(fileNameOnly);
             }
 
-            string path = Path.GetDirectoryName(fullPath);
+            string path = Path.GetDirectoryName(fullPath) ?? string.Empty;
             string newFullPath = fullPath;
 
             while (File.Exists(newFullPath)) {
@@ -132,11 +132,11 @@ namespace OpenAstroAra.Core.Utility {
             return DateTime.UtcNow.Subtract(now);
         }
 
-        public static Task<TimeSpan> Wait(TimeSpan t, CancellationToken token = new CancellationToken(), IProgress<ApplicationStatus> progress = default, string status = "") {
+        public static Task<TimeSpan> Wait(TimeSpan t, CancellationToken token = new CancellationToken(), IProgress<ApplicationStatus>? progress = default, string status = "") {
             return Wait(t, false, token, progress, status);
         }
 
-        public static async Task<TimeSpan> Wait(TimeSpan t, bool progressCountDown, CancellationToken token = new CancellationToken(), IProgress<ApplicationStatus> progress = default, string status = "") {
+        public static async Task<TimeSpan> Wait(TimeSpan t, bool progressCountDown, CancellationToken token = new CancellationToken(), IProgress<ApplicationStatus>? progress = default, string status = "") {
             status = string.IsNullOrWhiteSpace(status) ? OpenAstroAra.Core.Locale.Loc.Instance["LblWaiting"] : status;
 
             var elapsed = new TimeSpan(0);

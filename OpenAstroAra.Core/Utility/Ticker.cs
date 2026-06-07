@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -33,7 +33,7 @@ namespace OpenAstroAra.Core.Utility {
 
         public double OxyNow => DateTimeAxis.ToDouble(DateTime.Now);
 
-        private void Timer_Elapsed(object sender, ElapsedEventArgs e) {
+        private void Timer_Elapsed(object? sender, ElapsedEventArgs e) {
             RaisePropertyChanged(nameof(Now));
             RaisePropertyChanged(nameof(OxyNow));
         }

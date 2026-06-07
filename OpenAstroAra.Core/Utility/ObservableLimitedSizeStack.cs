@@ -94,7 +94,7 @@ namespace OpenAstroAra.Core.Utility {
 
         public bool IsReadOnly => false;
 
-        public LinkedListNode<T> First() {
+        public LinkedListNode<T>? First() {
             _lock.EnterReadLock();
             try {
                 return _underLyingLinkedList.First;
@@ -144,7 +144,7 @@ namespace OpenAstroAra.Core.Utility {
             }
         }
 
-        public LinkedListNode<T> Find(T value) {
+        public LinkedListNode<T>? Find(T value) {
             _lock.EnterReadLock();
             try {
                 return _underLyingLinkedList.Find(value);
@@ -153,7 +153,7 @@ namespace OpenAstroAra.Core.Utility {
             }
         }
 
-        public LinkedListNode<T> FindLast(T value) {
+        public LinkedListNode<T>? FindLast(T value) {
             _lock.EnterReadLock();
             try {
                 return _underLyingLinkedList.FindLast(value);
@@ -171,7 +171,7 @@ namespace OpenAstroAra.Core.Utility {
             }
         }
 
-        public event NotifyCollectionChangedEventHandler CollectionChanged;
+        public event NotifyCollectionChangedEventHandler? CollectionChanged;
 
         protected virtual void OnCollectionChanged(NotifyCollectionChangedEventArgs e) {
             var handler = CollectionChanged;
@@ -193,7 +193,7 @@ namespace OpenAstroAra.Core.Utility {
             handler?.Invoke(this, e);
         }
 
-        public event PropertyChangedEventHandler PropertyChanged;
+        public event PropertyChangedEventHandler? PropertyChanged;
 
         IEnumerator IEnumerable.GetEnumerator() {
             return (_underLyingLinkedList as IEnumerable).GetEnumerator();

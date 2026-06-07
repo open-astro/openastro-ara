@@ -27,7 +27,7 @@ namespace OpenAstroAra.Core.Utility {
         // ambient SynchronizationContext captured at construction time.
         // In the headless server there's no UI dispatcher, so this falls back
         // to direct invocation on the caller's thread.
-        private readonly SynchronizationContext _synchronizationContext =
+        private readonly SynchronizationContext? _synchronizationContext =
             SynchronizationContext.Current;
 
         public AsyncObservableCollection() {
@@ -65,7 +65,7 @@ namespace OpenAstroAra.Core.Utility {
             RunOnSynchronizationContext(() => base.ClearItems());
         }
 
-        public void AddSorted(T item, IComparer<T> comparer = null) {
+        public void AddSorted(T item, IComparer<T>? comparer = null) {
             if (comparer == null)
                 comparer = Comparer<T>.Default;
 

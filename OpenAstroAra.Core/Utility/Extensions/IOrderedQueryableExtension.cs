@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -25,7 +25,8 @@ namespace OpenAstroAra.Core.Utility.Extensions {
             var entityType = typeof(TSource);
 
             //Create x=>x.PropName
-            var propertyInfo = entityType.GetProperty(propertyName);
+            var propertyInfo = entityType.GetProperty(propertyName)
+                ?? throw new System.ArgumentException($"No public property '{propertyName}' on type '{entityType}'.", nameof(propertyName));
             ParameterExpression arg = Expression.Parameter(entityType, "x");
             MemberExpression property = Expression.Property(arg, propertyName);
             var selector = Expression.Lambda(property, new ParameterExpression[] { arg });
@@ -47,7 +48,7 @@ namespace OpenAstroAra.Core.Utility.Extensions {
               Note that we pass the selector as Expression to the method and we don't compile it.
               By doing so EF can extract "order by" columns and generate SQL for it.*/
             var newQuery = (IOrderedQueryable<TSource>)genericMethod
-                 .Invoke(genericMethod, new object[] { query, selector });
+                 .Invoke(genericMethod, new object[] { query, selector })!;
             return newQuery;
         }
 
@@ -56,7 +57,8 @@ namespace OpenAstroAra.Core.Utility.Extensions {
             var entityType = typeof(TSource);
 
             //Create x=>x.PropName
-            var propertyInfo = entityType.GetProperty(propertyName);
+            var propertyInfo = entityType.GetProperty(propertyName)
+                ?? throw new System.ArgumentException($"No public property '{propertyName}' on type '{entityType}'.", nameof(propertyName));
             ParameterExpression arg = Expression.Parameter(entityType, "x");
             MemberExpression property = Expression.Property(arg, propertyName);
             var selector = Expression.Lambda(property, new ParameterExpression[] { arg });
@@ -78,7 +80,7 @@ namespace OpenAstroAra.Core.Utility.Extensions {
               Note that we pass the selector as Expression to the method and we don't compile it.
               By doing so EF can extract "order by" columns and generate SQL for it.*/
             var newQuery = (IOrderedQueryable<TSource>)genericMethod
-                 .Invoke(genericMethod, new object[] { query, selector });
+                 .Invoke(genericMethod, new object[] { query, selector })!;
             return newQuery;
         }
     }

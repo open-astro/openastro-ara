@@ -113,7 +113,7 @@ namespace OpenAstroAra.Core.Utility {
         /// <param name="value"></param>
         /// <returns></returns>
         /// <exception cref="ArgumentNullException">key is null</exception>
-        public bool TryGetValue(TKey key, out TValue value) {
+        public bool TryGetValue(TKey key, [System.Diagnostics.CodeAnalysis.MaybeNullWhen(false)] out TValue value) {
             if (key == null)
                 throw new ArgumentNullException("key");
 
@@ -198,14 +198,13 @@ namespace OpenAstroAra.Core.Utility {
         /// </summary>
         /// <param name="key">key</param>
         /// <returns>the value stored in this locator part for key</returns>
-        public TValue this[TKey key] {
+        public TValue? this[TKey key] {
             get {
                 if (key == null) {
                     throw new ArgumentNullException("key");
                 }
 
-                TValue value = default(TValue);
-                _nameValues.TryGetValue(key, out value);
+                _nameValues.TryGetValue(key, out var value);
                 return value;
             }
             set {
@@ -217,8 +216,7 @@ namespace OpenAstroAra.Core.Utility {
                     throw new ArgumentNullException("value");
                 }
 
-                TValue oldValue = default(TValue);
-                _nameValues.TryGetValue(key, out oldValue);
+                _nameValues.TryGetValue(key, out var oldValue);
 
                 // If the new value is actually different, then we add it and fire
                 // a change notification
@@ -275,7 +273,7 @@ namespace OpenAstroAra.Core.Utility {
         /// <summary>
         ///
         /// </summary>
-        public event PropertyChangedEventHandler PropertyChanged;
+        public event PropertyChangedEventHandler? PropertyChanged;
 
         #endregion Public Events
 

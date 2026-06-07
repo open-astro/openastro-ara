@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -45,7 +45,10 @@ namespace OpenAstroAra.Core.Utility {
             base.ClearItems();
         }
 
-        private void RegisterPropertyChanged(IList items) {
+        private void RegisterPropertyChanged(IList? items) {
+            if (items == null) {
+                return;
+            }
             foreach (INotifyPropertyChanged item in items) {
                 if (item != null) {
                     item.PropertyChanged += new PropertyChangedEventHandler(Item_PropertyChanged);
@@ -53,7 +56,10 @@ namespace OpenAstroAra.Core.Utility {
             }
         }
 
-        private void DeregisterPropertyChanged(IList items) {
+        private void DeregisterPropertyChanged(IList? items) {
+            if (items == null) {
+                return;
+            }
             foreach (INotifyPropertyChanged item in items) {
                 if (item != null) {
                     item.PropertyChanged -= new PropertyChangedEventHandler(Item_PropertyChanged);
@@ -61,7 +67,7 @@ namespace OpenAstroAra.Core.Utility {
             }
         }
 
-        private void Item_PropertyChanged(object sender, PropertyChangedEventArgs e) {
+        private void Item_PropertyChanged(object? sender, PropertyChangedEventArgs e) {
             RunOnSynchronizationContext(() => base.OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Reset)));
         }
     }
