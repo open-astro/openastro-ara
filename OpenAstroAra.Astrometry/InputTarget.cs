@@ -44,7 +44,7 @@ namespace OpenAstroAra.Astrometry {
             InputCoordinates = new InputCoordinates();
         }
 
-        private void InputCoordinates_OnCoordinatesChanged(object sender, EventArgs e) {
+        private void InputCoordinates_OnCoordinatesChanged(object? sender, EventArgs e) {
             RaiseCoordinatesChanged();
         }
 
@@ -59,7 +59,7 @@ namespace OpenAstroAra.Astrometry {
             }
         }
 
-        private IDeepSkyObject deepSkyObject;
+        private IDeepSkyObject deepSkyObject = null!;  // set via DeepSkyObject in the constructor
 
         public IDeepSkyObject DeepSkyObject {
             get => deepSkyObject;
@@ -69,7 +69,7 @@ namespace OpenAstroAra.Astrometry {
             }
         }
 
-        private string targetName;
+        private string targetName = string.Empty;
 
         [JsonProperty]
         public string TargetName {
@@ -104,7 +104,7 @@ namespace OpenAstroAra.Astrometry {
             }
         }
 
-        private InputCoordinates inputCoordinates;
+        private InputCoordinates inputCoordinates = null!;  // set via InputCoordinates in the constructor
         private Angle latitude;
         private Angle longitude;
 
@@ -138,14 +138,14 @@ namespace OpenAstroAra.Astrometry {
                 RaisePropertyChanged(nameof(InputCoordinates));
 
                 DeepSkyObject.Name = TargetName;
-                DeepSkyObject.Coordinates = InputCoordinates?.Coordinates;
+                DeepSkyObject.Coordinates = InputCoordinates.Coordinates;
                 DeepSkyObject.RotationPositionAngle = PositionAngle;
 
                 this.CoordinatesChanged?.Invoke(this, new EventArgs());
             }
         }
 
-        public event EventHandler CoordinatesChanged;
+        public event EventHandler? CoordinatesChanged;
 
         public override string ToString() {
             return $"{InputCoordinates}; Position Angle: {PositionAngle}";

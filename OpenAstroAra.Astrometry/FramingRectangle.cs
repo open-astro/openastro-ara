@@ -27,7 +27,7 @@ namespace OpenAstroAra.Astrometry {
 
         public double OriginalX { get; }
         public double OriginalY { get; }
-        public Coordinates OriginalCoordinates { get; set; }
+        public Coordinates OriginalCoordinates { get; set; } = null!;  // assigned after construction
 
         private int id;
 
@@ -39,7 +39,7 @@ namespace OpenAstroAra.Astrometry {
             }
         }
 
-        private string name;
+        private string name = string.Empty;
         public string Name {
             get => name;
             set {
@@ -48,7 +48,7 @@ namespace OpenAstroAra.Astrometry {
             }
         }
 
-        private Coordinates coordinates;
+        private Coordinates coordinates = null!;  // assigned after construction
 
         public Coordinates Coordinates {
             get => coordinates;

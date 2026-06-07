@@ -33,7 +33,7 @@ namespace OpenAstroAra.Astrometry {
             }
         }
 
-        private string _name;
+        private string _name = string.Empty;
 
         public string Name {
             get => _name;

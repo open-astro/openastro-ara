@@ -62,7 +62,7 @@ namespace OpenAstroAra.Astrometry {
             return new TopocentricCoordinates(Azimuth.CopyByDegree(), Altitude.CopyByDegree(), Latitude.CopyByDegree(), Longitude.CopyByDegree(), Elevation, DateTime);
         }
 
-        public Coordinates Transform(Epoch epoch, DatabaseInteraction db = null) {
+        public Coordinates Transform(Epoch epoch, DatabaseInteraction? db = null) {
             return Transform(epoch: epoch, pressurehPa: 0.0d, tempCelcius: 0.0d, relativeHumidity: 0.0d, wavelength: 0.0d, db: db);
         }
 
@@ -76,7 +76,7 @@ namespace OpenAstroAra.Astrometry {
         /// <param name="wavelength">Wavelength of light in micrometers. 0.54 is approximately the center of a typical luminance bandpass and would be a reasonable default value to use</param>
         /// <param name="db">NINA database</param>
         /// <returns>Celestial coordinates</returns>
-        public Coordinates Transform(Epoch epoch, double pressurehPa, double tempCelcius, double relativeHumidity, double wavelength, DatabaseInteraction db = null) {
+        public Coordinates Transform(Epoch epoch, double pressurehPa, double tempCelcius, double relativeHumidity, double wavelength, DatabaseInteraction? db = null) {
             return Transform(now: DateTime.UtcNow, epoch: epoch, pressurehPa: pressurehPa, tempCelcius: tempCelcius, relativeHumidity: relativeHumidity, wavelength: wavelength, db: db);
         }
 
@@ -91,7 +91,7 @@ namespace OpenAstroAra.Astrometry {
         /// <param name="wavelength">Wavelength of light in micrometers. 0.54 is approximately the center of a typical luminance bandpass and would be a reasonable default value to use</param>
         /// <param name="db">NINA database</param>
         /// <returns>Celestial coordinates</returns>
-        public Coordinates Transform(DateTime now, Epoch epoch, double pressurehPa, double tempCelcius, double relativeHumidity, double wavelength, DatabaseInteraction db = null) {
+        public Coordinates Transform(DateTime now, Epoch epoch, double pressurehPa, double tempCelcius, double relativeHumidity, double wavelength, DatabaseInteraction? db = null) {
             var jdUTC = AstroUtil.GetJulianDate(now);
 
             var zenithDistance = AstroUtil.ToRadians(90d - Altitude.Degree);

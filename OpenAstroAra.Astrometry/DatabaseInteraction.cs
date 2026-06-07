@@ -65,7 +65,7 @@ namespace OpenAstroAra.Astrometry {
                 .ToList();
 
             // Do any of them start with what we're typing? If so, go with the longest
-            string result = cleanedAliases
+            string? result = cleanedAliases
                 .Where(alias => alias.cleanName.StartsWith(cleanedSearchName))
                 .Select(alias => alias.name)
                 .FirstOrDefault();
@@ -79,7 +79,7 @@ namespace OpenAstroAra.Astrometry {
                 .OrderBy(alias => Fastenshtein.Levenshtein.Distance(cleanedSearchName, alias.cleanName))
                 .ThenByDescending(alias => alias.cleanName.Length)
                 .Select(alias => alias.name)
-                .FirstOrDefault();
+                .FirstOrDefault() ?? string.Empty;
         }
 
         private string cleanForSearching(string token) {

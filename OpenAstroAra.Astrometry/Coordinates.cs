@@ -32,8 +32,8 @@ namespace OpenAstroAra.Astrometry {
         }
 
         private DateTime creationDate;
-        private Angle raAngle;
-        private Angle decAngle;
+        private Angle raAngle = Angle.Zero;
+        private Angle decAngle = Angle.Zero;
 
         /// <summary>
         /// Right Ascension in hours

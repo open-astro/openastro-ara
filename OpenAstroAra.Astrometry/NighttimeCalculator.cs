@@ -24,7 +24,7 @@ namespace OpenAstroAra.Astrometry {
 
     public class NighttimeCalculator : BaseINPC, INighttimeCalculator {
         private readonly IProfileService profileService;
-        private Timer ReferenceDateTimer = null;
+        private Timer? ReferenceDateTimer;
         private DateTime LastReferenceDate;
 
         public NighttimeCalculator(IProfileService profile) {
@@ -38,10 +38,10 @@ namespace OpenAstroAra.Astrometry {
             ReferenceDateTimer.Enabled = true;
         }
 
-        private void OnTimedEvent(object source, ElapsedEventArgs e) {
+        private void OnTimedEvent(object? source, ElapsedEventArgs e) {
             DateTime referenceDate = NighttimeCalculator.GetReferenceDate(DateTime.Now);
             if (LastReferenceDate != referenceDate) {
-                OnReferenceDayChanged?.Invoke(this, null);
+                OnReferenceDayChanged?.Invoke(this, EventArgs.Empty);
             }
         }
 
@@ -49,7 +49,7 @@ namespace OpenAstroAra.Astrometry {
 
         private object lockObj = new object();
 
-        public event EventHandler OnReferenceDayChanged;
+        public event EventHandler? OnReferenceDayChanged;
 
         public NighttimeData Calculate(DateTime? date = null) {
             lock (lockObj) {

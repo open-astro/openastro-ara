@@ -59,7 +59,7 @@ namespace OpenAstroAra.Astrometry {
             Coordinates = new TopocentricCoordinates(Coordinates.Azimuth, Coordinates.Altitude, latitude, longitude, elevation);
         }
 
-        private TopocentricCoordinates coordinates;
+        private TopocentricCoordinates coordinates = null!;  // set via Coordinates in every constructor
 
         public TopocentricCoordinates Coordinates {
             get => coordinates;

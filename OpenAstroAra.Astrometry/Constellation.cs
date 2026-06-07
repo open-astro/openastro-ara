@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -32,7 +32,7 @@ namespace OpenAstroAra.Astrometry {
 
         public string Name { get; private set; }
 
-        public List<Star> Stars { get; set; }
+        public List<Star> Stars { get; set; } = new List<Star>();
 
         public List<Tuple<Star, Star>> StarConnections { get; private set; }
     }

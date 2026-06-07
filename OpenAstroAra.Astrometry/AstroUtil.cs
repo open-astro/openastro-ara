@@ -140,7 +140,7 @@ namespace OpenAstroAra.Astrometry {
         /// </summary>
         /// <param name="date">Date to retrieve DeltaT for</param>
         /// <returns>DeltaT at given date</returns>
-        public static double DeltaT(DateTime date, DatabaseInteraction db = null) {
+        public static double DeltaT(DateTime date, DatabaseInteraction? db = null) {
             var utcDate = date.ToUniversalTime();
             double utc1 = 0, utc2 = 0, tai1 = 0, tai2 = 0;
             SOFA.Dtf2d("UTC", utcDate.Year, utcDate.Month, utcDate.Day, utcDate.Hour, utcDate.Minute, (double)utcDate.Second + (double)utcDate.Millisecond / 1000.0, ref utc1, ref utc2);
@@ -164,7 +164,7 @@ namespace OpenAstroAra.Astrometry {
         /// <param name="date"></param>
         /// <returns>UT1 - UTC in seconds</returns>
         /// <remarks>https://www.iers.org/IERS/EN/DataProducts/EarthOrientationData/eop.html</remarks>
-        public static double DeltaUT(DateTime date, DatabaseInteraction db = null) {
+        public static double DeltaUT(DateTime date, DatabaseInteraction? db = null) {
             if (DeltaUTReference != DateTime.UtcNow.Date) {
                 // Clear the cache when a app is open longer than a day
                 DeltaUTReference = DateTime.UtcNow.Date;
@@ -234,7 +234,7 @@ namespace OpenAstroAra.Astrometry {
         /// <param name="date">     </param>
         /// <param name="longitude"></param>
         /// <returns>Sidereal Time in hours</returns>
-        public static double GetLocalSiderealTime(DateTime date, double longitude, DatabaseInteraction db = null) {
+        public static double GetLocalSiderealTime(DateTime date, double longitude, DatabaseInteraction? db = null) {
             var jd = GetJulianDate(date);
 
             long jd_high = (long)jd;
@@ -620,7 +620,7 @@ namespace OpenAstroAra.Astrometry {
             return skyPosition;
         }
 
-        public static Tuple<NOVAS.SkyPosition, NOVAS.SkyPosition> GetMoonAndSunPosition(DateTime date, double jd, ObserverInfo observerInfo = null) {
+        public static Tuple<NOVAS.SkyPosition, NOVAS.SkyPosition> GetMoonAndSunPosition(DateTime date, double jd, ObserverInfo? observerInfo = null) {
             if (observerInfo == null) { observerInfo = new ObserverInfo(); }
             return new Tuple<NOVAS.SkyPosition, NOVAS.SkyPosition>(GetMoonPosition(date, jd, observerInfo), GetSunPosition(date, jd, observerInfo));
         }

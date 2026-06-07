@@ -44,7 +44,9 @@ namespace OpenAstroAra.Astrometry.RiseAndSet {
         }
 
         protected override BasicBody GetBody(DateTime date) {
-            return null;
+            // CustomRiseAndSet supplies Rise/Set directly and overrides Calculate(),
+            // so the body-sampling path in the base class that calls GetBody is never used.
+            throw new NotSupportedException($"{nameof(CustomRiseAndSet)} uses the supplied Rise/Set times and does not compute a body.");
         }
     }
 }

@@ -25,7 +25,7 @@ namespace OpenAstroAra.Astrometry {
             Name = name;
         }
 
-        private string name;
+        private string name = string.Empty;
 
         public string Name {
             get => name;
@@ -35,7 +35,7 @@ namespace OpenAstroAra.Astrometry {
             }
         }
 
-        private Coordinates coordinates;
+        private Coordinates coordinates = null!;  // set via Coordinates property before CalculateAltAz is called
 
         public Coordinates Coordinates {
             get => coordinates;

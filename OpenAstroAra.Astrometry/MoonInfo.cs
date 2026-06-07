@@ -14,7 +14,7 @@ namespace OpenAstroAra.Astrometry {
         }
 
         private Coordinates _coordinates;
-        private ObserverInfo _observer;
+        private ObserverInfo _observer = null!;  // set via SetReferenceDateAndObserver before any calculation
 
         private DataPoint _maxMoonAltitude;
 
@@ -31,8 +31,8 @@ namespace OpenAstroAra.Astrometry {
             }
         }
 
-        private List<DataPoint> datapoints;
-        public List<DataPoint> DataPoints => datapoints;
+        private List<DataPoint>? datapoints;
+        public List<DataPoint>? DataPoints => datapoints;
 
         private static Dictionary<DateTime, List<DataPoint>> Points = new Dictionary<DateTime, List<DataPoint>>();
 
@@ -63,7 +63,7 @@ namespace OpenAstroAra.Astrometry {
             }
         }
 
-        private string _separationText;
+        private string _separationText = string.Empty;
 
         public string SeparationText {
             get => _separationText;

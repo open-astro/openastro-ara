@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -18,7 +18,7 @@ using System.Collections.Generic;
 namespace OpenAstroAra.Astrometry {
 
     public class ConstellationBoundary {
-        public string Name { get; set; }
+        public string Name { get; set; } = string.Empty;
         public List<Coordinates> Boundaries { get; set; } = new List<Coordinates>();
     }
 }

@@ -37,7 +37,7 @@ namespace OpenAstroAra.Astrometry {
 
 
         private List<WeakReference<DeepSkyObject>> DeepSkyObjects = new List<WeakReference<DeepSkyObject>>();
-        private Timer ReferenceDateTimer = null;
+        private Timer? ReferenceDateTimer;
         private DateTime LastReferenceDate = NighttimeCalculator.GetReferenceDate(DateTime.Now);
 
         /// <summary>
@@ -50,7 +50,7 @@ namespace OpenAstroAra.Astrometry {
             }
 
         }
-        private void OnTimedEvent(object source, ElapsedEventArgs e) {
+        private void OnTimedEvent(object? source, ElapsedEventArgs e) {
             lock (DeepSkyObjects) {
                 try {
 
@@ -63,7 +63,7 @@ namespace OpenAstroAra.Astrometry {
                     if (referenceDate != LastReferenceDate) {
                         foreach (WeakReference<DeepSkyObject> wr in DeepSkyObjects) {
                             // Ignore weak references that are no longer valid
-                            if (wr != null && wr.TryGetTarget(out DeepSkyObject target)) {
+                            if (wr != null && wr.TryGetTarget(out DeepSkyObject? target)) {
                                 // If the target's reference date is our previous date, it's updatable.  Otherwise, it could
                                 // be for future planning or historical something or other, in which case we do nothing
                                 if (target.ReferenceDate == LastReferenceDate) {
@@ -78,7 +78,7 @@ namespace OpenAstroAra.Astrometry {
                     }
 
                     // Prune the list of weak references
-                    DeepSkyObjects.RemoveAll(i => i == null || !i.TryGetTarget(out DeepSkyObject _));
+                    DeepSkyObjects.RemoveAll(i => i == null || !i.TryGetTarget(out DeepSkyObject? _));
 
                     if (updated != 0 || count != DeepSkyObjects.Count) {
                         Logger.Debug($"{nameof(DeepSkyObjectDailyRefresher)} -- Updated: {updated}; Pruned: {(count - DeepSkyObjects.Count)} / {count}");
@@ -99,7 +99,7 @@ namespace OpenAstroAra.Astrometry {
             : this(id, coords, null as Func<SkyObjectBase, Task<byte[]>>, customHorizon) {
         }
 
-        public DeepSkyObject(string id, Coordinates coords, Func<SkyObjectBase, Task<byte[]>> imageFactory, CustomHorizon customHorizon)
+        public DeepSkyObject(string id, Coordinates coords, Func<SkyObjectBase, Task<byte[]>>? imageFactory, CustomHorizon customHorizon)
             : base(id, imageFactory, customHorizon) {
             _coordinates = coords;
             Moon = new MoonInfo(_coordinates);

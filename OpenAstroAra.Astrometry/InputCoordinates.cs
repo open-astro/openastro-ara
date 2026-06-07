@@ -45,7 +45,7 @@ namespace OpenAstroAra.Astrometry {
             Coordinates = coordinates;
         }
 
-        private Coordinates coordinates;
+        private Coordinates coordinates = null!;  // set via Coordinates in every constructor
 
         public Coordinates Coordinates {
             get => coordinates;
@@ -187,7 +187,7 @@ namespace OpenAstroAra.Astrometry {
             }
         }
 
-        public event EventHandler CoordinatesChanged;
+        public event EventHandler? CoordinatesChanged;
 
         public InputCoordinates Clone() =>
             new InputCoordinates(coordinates.Clone());

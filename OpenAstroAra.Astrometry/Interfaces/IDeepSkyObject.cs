@@ -28,7 +28,7 @@ namespace OpenAstroAra.Astrometry.Interfaces {
         List<DataPoint> Horizon { get; }
         List<string> AlsoKnownAs { get; set; }
         bool DoesTransitSouth { get; }
-        byte[] Image { get; }
+        byte[]? Image { get; }
 
         void SetDateAndPosition(DateTime start, double latitude, double longitude);
         void SetCustomHorizon(CustomHorizon customHorizon);

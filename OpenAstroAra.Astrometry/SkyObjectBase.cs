@@ -16,14 +16,14 @@ namespace OpenAstroAra.Astrometry {
         protected SkyObjectBase(string id, string imageRepository, CustomHorizon customHorizon) : this(id, null as Func<SkyObjectBase, Task<byte[]>>, customHorizon) {
         }
 
-        protected SkyObjectBase(string id, Func<SkyObjectBase, Task<byte[]>> imageFactory, CustomHorizon customHorizon) {
+        protected SkyObjectBase(string id, Func<SkyObjectBase, Task<byte[]>>? imageFactory, CustomHorizon customHorizon) {
             Id = id;
             Name = id;
             this.customHorizon = customHorizon;
             this.imageFactory = imageFactory;
         }
 
-        private string id;
+        private string id = string.Empty;
 
         public string Id {
             get => id;
@@ -33,7 +33,7 @@ namespace OpenAstroAra.Astrometry {
             }
         }
 
-        private string _name;
+        private string _name = string.Empty;
 
         public string Name {
             get => _name;
@@ -51,7 +51,7 @@ namespace OpenAstroAra.Astrometry {
         public abstract SiderealShiftTrackingRate ShiftTrackingRate { get; }
         public abstract SiderealShiftTrackingRate ShiftTrackingRateAt(DateTime at);
 
-        private string _dSOType;
+        private string _dSOType = string.Empty;
 
         public string DSOType {
             get => _dSOType;
@@ -61,7 +61,7 @@ namespace OpenAstroAra.Astrometry {
             }
         }
 
-        private string _constellation;
+        private string _constellation = string.Empty;
 
         public string Constellation {
             get => _constellation;
@@ -81,7 +81,7 @@ namespace OpenAstroAra.Astrometry {
             }
         }
 
-        private Angle _positionAngle;
+        private Angle _positionAngle = Angle.Zero;
 
         public Angle PositionAngle {
             get => _positionAngle;
@@ -152,7 +152,7 @@ namespace OpenAstroAra.Astrometry {
             }
         }
 
-        private List<DataPoint> _altitudes;
+        private List<DataPoint>? _altitudes;
 
         public List<DataPoint> Altitudes {
             get {
@@ -168,7 +168,7 @@ namespace OpenAstroAra.Astrometry {
             }
         }
 
-        private List<DataPoint> _horizon;
+        private List<DataPoint>? _horizon;
 
         public List<DataPoint> Horizon {
             get {
@@ -183,7 +183,7 @@ namespace OpenAstroAra.Astrometry {
             }
         }
 
-        private List<string> _alsoKnownAs;
+        private List<string>? _alsoKnownAs;
 
         public List<string> AlsoKnownAs {
             get {
@@ -226,12 +226,12 @@ namespace OpenAstroAra.Astrometry {
             }
         }
 
-        private byte[] _image;
+        private byte[]? _image;
         protected CustomHorizon customHorizon;
 
-        private Func<SkyObjectBase, Task<byte[]>> imageFactory;
+        private readonly Func<SkyObjectBase, Task<byte[]>>? imageFactory;
 
-        public byte[] Image {
+        public byte[]? Image {
             get {
                 if (_image == null) {
                     if (imageFactory != null) {
