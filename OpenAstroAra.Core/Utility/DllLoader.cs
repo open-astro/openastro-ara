@@ -51,7 +51,7 @@ namespace OpenAstroAra.Core.Utility {
         public static void LoadDllFromAbsolutePath(string dllPath) {
             if (!OperatingSystem.IsWindows()) return;
             lock (lockobj) {
-                SetDllDirectory(System.IO.Path.GetDirectoryName(dllPath));
+                SetDllDirectory(System.IO.Path.GetDirectoryName(dllPath) ?? string.Empty);
 
                 if (LoadLibrary(dllPath) == IntPtr.Zero) {
                     var error = Marshal.GetLastWin32Error().ToString();

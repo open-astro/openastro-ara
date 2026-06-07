@@ -61,8 +61,8 @@ namespace OpenAstroAra.Core.Utility {
             Context = context;
         }
 
-        private CancellationTokenSource cts;
-        private Task task;
+        private CancellationTokenSource? cts;
+        private Task? task;
         public Func<Dictionary<string, object>> GetValuesFunc { get; private set; }
         public Action<Dictionary<string, object>> UpdateValuesFunc { get; private set; }
         public string Context { get; }

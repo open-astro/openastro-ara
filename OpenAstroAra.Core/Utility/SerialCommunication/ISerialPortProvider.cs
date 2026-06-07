@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -19,11 +19,11 @@ namespace OpenAstroAra.Core.Utility.SerialCommunication {
 
     public interface ISerialPortProvider {
 
-        ISerialPort GetSerialPort(string portName, int baudRate, Parity parity, int dataBits,
+        ISerialPort? GetSerialPort(string portName, int baudRate, Parity parity, int dataBits,
             StopBits stopBits, Handshake handShake, bool dtrEnable,
             string newLine, int readTimeout, int writeTimeout);
 
-        ReadOnlyCollection<string> GetPortNames(string deviceQuery = null, bool addDivider = true,
+        ReadOnlyCollection<string> GetPortNames(string? deviceQuery = null, bool addDivider = true,
             bool addGenericPorts = true);
     }
 }

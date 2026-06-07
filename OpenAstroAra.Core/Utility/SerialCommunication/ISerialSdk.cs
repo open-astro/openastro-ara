@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -19,9 +19,9 @@ namespace OpenAstroAra.Core.Utility.SerialCommunication {
 
     public interface ISerialSdk {
 
-        Task<TResult> SendCommand<TResult>(ISerialCommand command) where TResult : Response, new();
+        Task<TResult?> SendCommand<TResult>(ISerialCommand command) where TResult : Response, new();
 
-        ISerialPort SerialPort { get; set; }
+        ISerialPort? SerialPort { get; set; }
         ISerialPortProvider SerialPortProvider { set; }
 
         bool InitializeSerialPort(string portName, object client, int baudRate = 9600, Parity parity = Parity.None, int dataBits = 8,

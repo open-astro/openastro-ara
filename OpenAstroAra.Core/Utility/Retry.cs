@@ -8,9 +8,9 @@ using System.Threading.Tasks;
 namespace OpenAstroAra.Core.Utility {
     public static class Retry {
         public static Task Do(Action action, TimeSpan retryInterval, int maxAttemptCount = 3) {
-            return Do<object>(() => {
+            return Do(() => {
                 action();
-                return null;
+                return Task.CompletedTask;
             }, retryInterval, maxAttemptCount);
         }
 

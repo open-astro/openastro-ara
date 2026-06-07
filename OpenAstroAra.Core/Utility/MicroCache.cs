@@ -116,13 +116,11 @@ namespace OpenAstroAra.Core.Utility {
 
         private sealed class LazyLock<L> {
             private volatile bool got;
-            private L value;
+            private L? value;
 
             public L Get(Func<L> activator) {
                 if (!got) {
-                    if (activator == null) {
-                        return default(L);
-                    }
+                    ArgumentNullException.ThrowIfNull(activator);
 
                     lock (this) {
                         if (!got) {
@@ -133,7 +131,7 @@ namespace OpenAstroAra.Core.Utility {
                     }
                 }
 
-                return value;
+                return value!;
             }
         }
     }

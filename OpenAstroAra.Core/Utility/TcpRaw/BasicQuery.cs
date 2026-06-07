@@ -27,9 +27,9 @@ namespace OpenAstroAra.Core.Utility.TcpRaw {
 
         public string Command { get; set; }
 
-        public string WaitFor { get; set; }
+        public string? WaitFor { get; set; }
 
-        public BasicQuery(string address, int port, string command, string waitFor = null) {
+        public BasicQuery(string address, int port, string command, string? waitFor = null) {
             Address = address;
             Port = port;
             Command = command;

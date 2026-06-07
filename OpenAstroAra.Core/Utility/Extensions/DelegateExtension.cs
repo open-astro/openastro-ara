@@ -36,7 +36,7 @@ namespace OpenAstroAra.Core.Utility.Extensions {
 
                 if (stopwatch.ElapsedMilliseconds > 1000) {
                     MethodInfo methodInfo = f.GetMethodInfo();
-                    string fullMethodName = $"{methodInfo.DeclaringType.FullName}.{methodInfo.Name}";
+                    string fullMethodName = $"{methodInfo.DeclaringType?.FullName}.{methodInfo.Name}";
                     Logger.Warning($"Eventhandler {fullMethodName} took {stopwatch.ElapsedMilliseconds} ms to execute.");
                 }
             });

@@ -93,7 +93,7 @@ namespace OpenAstroAra.Core.Model {
         public static CustomHorizon FromReader_Standard(TextReader sr) {
             var horizonMap = new SortedDictionary<double, double>();
 
-            string line;
+            string? line;
             while ((line = sr.ReadLine()?.Trim()) != null) {
                 // Lines starting with # are comments
                 if (!line.StartsWith("#") && !string.IsNullOrEmpty(line)) {
@@ -122,8 +122,8 @@ namespace OpenAstroAra.Core.Model {
             var horizonMap = new SortedDictionary<double, double>();
 
             using (JsonTextReader jsonReader = new JsonTextReader(sr)) {
-                var deserialized = (JToken)JSON_SERIALIZER.Deserialize(jsonReader);
-                if (deserialized.Type != JTokenType.Array) {
+                var deserialized = (JToken?)JSON_SERIALIZER.Deserialize(jsonReader);
+                if (deserialized == null || deserialized.Type != JTokenType.Array) {
                     throw new ArgumentException($"Expected JSON array in MW4-formatted horizon file");
                 }
                 var arr = (JArray)deserialized;

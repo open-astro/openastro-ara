@@ -109,7 +109,7 @@ namespace OpenAstroAra.Core.Utility.ExternalCommand {
             if (args.Length > 1) {
                 return string.Join(" ", new List<string>(args).GetRange(1, args.Length - 1).ToArray());
             }
-            return null;
+            return string.Empty;
         }
 
         public static string[] ParseArguments(string commandLine) {

@@ -176,7 +176,7 @@ namespace OpenAstroAra.Core.Model {
             return GetImageFileString(filePatternMacro, null);
         }
 
-        public string GetImageFileString(string filePatternMacro, string imageType) {
+        public string GetImageFileString(string filePatternMacro, string? imageType) {
 
             string s = filePatternMacro;
             foreach (ImagePattern p in patterns.Values) {
@@ -294,7 +294,7 @@ namespace OpenAstroAra.Core.Model {
             Category = c;
         }
 
-        public string Value { get; set; }
+        public string Value { get; set; } = string.Empty;
 
         public string Key { get; set; }
 

@@ -25,9 +25,9 @@ namespace OpenAstroAra.Core.Utility.SerialCommunication {
         protected virtual string LogName => "Generic Serial Sdk";
 
         private readonly ResponseCache _cache = new ResponseCache();
-        public ISerialPort SerialPort { get; set; }
+        public ISerialPort? SerialPort { get; set; }
 
-        private ISerialPortProvider _provider;
+        private ISerialPortProvider? _provider;
 
         public ISerialPortProvider SerialPortProvider {
             protected get => _provider ?? (_provider = new SerialPortProvider());
@@ -61,13 +61,13 @@ namespace OpenAstroAra.Core.Utility.SerialCommunication {
             return SerialPort != null;
         }
 
-        public Task<TResult> SendCommand<TResult>(ISerialCommand command) where TResult : Response, new() {
+        public Task<TResult?> SendCommand<TResult>(ISerialCommand command) where TResult : Response, new() {
             return Task.Run(() => {
                 if (command == null) throw new ArgumentNullException(nameof(command));
                 ssSerial.Wait();
                 TResult response;
                 if (_cache.HasValidResponse(command.GetType(), typeof(TResult))) {
-                    response = (TResult)_cache.Get(command.GetType(), typeof(TResult));
+                    response = (TResult)_cache.Get(command.GetType(), typeof(TResult))!;
                     ssSerial.Release();
                     return response;
                 }
@@ -82,7 +82,7 @@ namespace OpenAstroAra.Core.Utility.SerialCommunication {
                     var result = string.Empty;
                     var retries = 2;
                     while (string.IsNullOrEmpty(result) && retries >= 0) {
-                        result = ReadAndLog(command, ref retries);
+                        result = ReadAndLog(command, ref retries) ?? string.Empty;
                     }
 
                     response = new TResult { DeviceResponse = result };
@@ -129,8 +129,8 @@ namespace OpenAstroAra.Core.Utility.SerialCommunication {
             }
         }
 
-        private string ReadAndLog(ISerialCommand command, ref int retries) {
-            string result = null;
+        private string? ReadAndLog(ISerialCommand command, ref int retries) {
+            string? result = null;
             try {
                 result = SerialPort?.ReadLine();
                 Logger.Trace($"{LogName}: response : {result}");

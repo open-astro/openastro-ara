@@ -37,7 +37,7 @@ namespace OpenAstroAra.Core.Utility {
             if (string.IsNullOrWhiteSpace(input)) { return ""; }
 
             foreach (DictionaryEntry greekchar in GreekToAbbreviationMap) {
-                input = input.Replace(greekchar.Key.ToString(), greekchar.Value.ToString());
+                input = input.Replace(greekchar.Key.ToString() ?? string.Empty, greekchar.Value?.ToString() ?? string.Empty);
             }
             return input;
         }

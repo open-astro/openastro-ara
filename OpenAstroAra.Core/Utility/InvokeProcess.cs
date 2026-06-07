@@ -49,9 +49,9 @@ namespace OpenAstroAra.Core.Utility {
             public short wShowWindow;
             public short cbReserved2;
             public IntPtr lpReserved2 = IntPtr.Zero;
-            public SafeFileHandle hStdInput = new SafeFileHandle(IntPtr.Zero, false);
-            public SafeFileHandle hStdOutput = new SafeFileHandle(IntPtr.Zero, false);
-            public SafeFileHandle hStdError = new SafeFileHandle(IntPtr.Zero, false);
+            public SafeFileHandle? hStdInput = new SafeFileHandle(IntPtr.Zero, false);
+            public SafeFileHandle? hStdOutput = new SafeFileHandle(IntPtr.Zero, false);
+            public SafeFileHandle? hStdError = new SafeFileHandle(IntPtr.Zero, false);
             public StartupInfo() {
                 cb = Marshal.SizeOf(this);
             }
@@ -93,14 +93,14 @@ namespace OpenAstroAra.Core.Utility {
         }
         [DllImport("Kernel32", CharSet = CharSet.Auto, SetLastError = true, BestFitMapping = false)]
         internal static extern bool CreateProcess(
-             [MarshalAs(UnmanagedType.LPTStr)] string applicationName,
+             [MarshalAs(UnmanagedType.LPTStr)] string? applicationName,
              StringBuilder commandLine,
              SecurityAttributes processAttributes,
              SecurityAttributes threadAttributes,
              bool inheritHandles,
              int creationFlags,
              IntPtr environment,
-             [MarshalAs(UnmanagedType.LPTStr)] string currentDirectory,
+             [MarshalAs(UnmanagedType.LPTStr)] string? currentDirectory,
              StartupInfo startupInfo,
              ProcessInformation processInformation
         );

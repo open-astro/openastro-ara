@@ -32,7 +32,7 @@ namespace OpenAstroAra.Core.Utility.SerialCommunication {
 
         public SerialPortProvider() { }
 
-        public ISerialPort GetSerialPort(string portName, int baudRate, Parity parity, int dataBits, StopBits stopBits,
+        public ISerialPort? GetSerialPort(string portName, int baudRate, Parity parity, int dataBits, StopBits stopBits,
             Handshake handShake, bool dtrEnable, string newLine, int readTimeout, int writeTimeout) {
             if (string.IsNullOrEmpty(portName)) return null;
             return new SerialPortWrapper {
@@ -49,7 +49,7 @@ namespace OpenAstroAra.Core.Utility.SerialCommunication {
             };
         }
 
-        public ReadOnlyCollection<string> GetPortNames(string deviceQuery = null, bool addDivider = true, bool addGenericPorts = true) {
+        public ReadOnlyCollection<string> GetPortNames(string? deviceQuery = null, bool addDivider = true, bool addGenericPorts = true) {
             return new ReadOnlyCollection<string>(SerialPort.GetPortNames().OrderBy(s => s).ToList());
         }
     }

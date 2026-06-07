@@ -37,7 +37,7 @@ namespace OpenAstroAra.Core.Utility {
         private static bool IsBlittableImpl(Type type) {
             if (type.IsArray) {
                 var elem = type.GetElementType();
-                return elem.IsValueType && IsBlittableImpl(elem);
+                return elem != null && elem.IsValueType && IsBlittableImpl(elem);
             }
             try {
                 object instance = FormatterServices.GetUninitializedObject(type);
