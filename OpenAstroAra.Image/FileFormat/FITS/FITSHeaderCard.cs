@@ -22,7 +22,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
         /* Extended ascii encoding*/
         private static Encoding ascii = Encoding.GetEncoding("iso-8859-1");
 
-        public FITSHeaderCard(string key, string value, string comment) {
+        public FITSHeaderCard(string key, string value, string? comment) {
             this.Key = key;
             if (value == null) { value = string.Empty; }
 
@@ -59,7 +59,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
             this.Comment = comment;
         }
 
-        public FITSHeaderCard(string key, bool value, string comment) {
+        public FITSHeaderCard(string key, bool value, string? comment) {
             this.Key = key;
             this.Value = value ? "T" : "F";
             if (comment?.Length > 45) {
@@ -68,7 +68,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
             this.Comment = comment;
         }
 
-        public FITSHeaderCard(string key, double value, string comment) {
+        public FITSHeaderCard(string key, double value, string? comment) {
             this.Key = key;
             this.Value = (value.ToString("0.0##############", CultureInfo.InvariantCulture));
             if (comment?.Length > 45) {
@@ -77,7 +77,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
             this.Comment = comment;
         }
 
-        public FITSHeaderCard(string key, DateTime value, string comment) {
+        public FITSHeaderCard(string key, DateTime value, string? comment) {
             this.Key = key;
             this.Value = @"'" + value.ToString("yyyy-MM-ddTHH:mm:ss.fffffff", CultureInfo.InvariantCulture) + @"'";
             if (comment?.Length > 40) {
@@ -86,7 +86,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
             this.Comment = comment;
         }
 
-        public FITSHeaderCard(string key, int value, string comment) {
+        public FITSHeaderCard(string key, int value, string? comment) {
             this.Key = key;
             this.Value = value.ToString(CultureInfo.InvariantCulture);
             if (comment?.Length > 45) {
@@ -97,7 +97,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
 
         public string Key { get; }
         public string Value { get; }
-        public string Comment { get; }
+        public string? Comment { get; }
 
         public string OriginalValue {
             get {
@@ -120,7 +120,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
             if (!string.IsNullOrWhiteSpace(Comment)) {
                 header += " / ";
             }
-            var encodedComment = Comment.PadRight(80 - header.Length);
+            var encodedComment = (Comment ?? string.Empty).PadRight(80 - header.Length);
             header += encodedComment;
             return header;
         }

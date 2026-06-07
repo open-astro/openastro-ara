@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -18,9 +18,9 @@ using OpenAstroAra.Profile.Interfaces;
 namespace OpenAstroAra.Image.FileFormat {
 
     public class FileSaveInfo {
-        public string FilePath { get; set; }
-        public string FilePattern { get; set; }
-        public string ForceExtension { get; set; }
+        public string FilePath { get; set; } = string.Empty;
+        public string FilePattern { get; set; } = string.Empty;
+        public string ForceExtension { get; set; } = string.Empty;
         public FileTypeEnum FileType { get; set; } = FileTypeEnum.FITS;
         public TIFFCompressionTypeEnum TIFFCompressionType { get; set; } = TIFFCompressionTypeEnum.NONE;
         public XISFCompressionTypeEnum XISFCompressionType { get; set; } = XISFCompressionTypeEnum.NONE;
@@ -30,7 +30,7 @@ namespace OpenAstroAra.Image.FileFormat {
         public bool FITSAddFzExtension { get; set; } = false;
         public bool FITSUseLegacyWriter { get; set; } = true;
 
-        public FileSaveInfo(IProfileService profileService = null) {
+        public FileSaveInfo(IProfileService? profileService = null) {
             if (profileService != null) {
                 FilePath = profileService.ActiveProfile.ImageFileSettings.FilePath;
                 FilePattern = profileService.ActiveProfile.ImageFileSettings.FilePattern;

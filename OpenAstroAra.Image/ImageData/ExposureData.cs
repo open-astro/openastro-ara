@@ -38,7 +38,7 @@ namespace OpenAstroAra.Image.ImageData {
             this.imageDataFactory = imageDataFactory;
         }
 
-        public abstract Task<IImageData> ToImageData(IProgress<ApplicationStatus> progress = default, CancellationToken cancelToken = default);
+        public abstract Task<IImageData> ToImageData(IProgress<ApplicationStatus>? progress = default, CancellationToken cancelToken = default);
     }
 
     public class CachedExposureData : BaseExposureData {
@@ -49,7 +49,7 @@ namespace OpenAstroAra.Image.ImageData {
             this.imageData = imageData;
         }
 
-        public override Task<IImageData> ToImageData(IProgress<ApplicationStatus> progress = default, CancellationToken cancelToken = default) {
+        public override Task<IImageData> ToImageData(IProgress<ApplicationStatus>? progress = default, CancellationToken cancelToken = default) {
             return Task.FromResult(this.imageData);
         }
     }
@@ -82,7 +82,7 @@ namespace OpenAstroAra.Image.ImageData {
             Create32BitData = create32BitData;
         }
 
-        public override async Task<IImageData> ToImageData(IProgress<ApplicationStatus> progress = default, CancellationToken cancelToken = default) {
+        public override async Task<IImageData> ToImageData(IProgress<ApplicationStatus>? progress = default, CancellationToken cancelToken = default) {
             switch (flatArray) {
                 case int[] integers:
                     return imageDataFactory.CreateBaseImageData(
@@ -265,7 +265,7 @@ namespace OpenAstroAra.Image.ImageData {
             this.rawType = rawType;
         }
 
-        public override async Task<IImageData> ToImageData(IProgress<ApplicationStatus> progress = default, CancellationToken cancelToken = default) {
+        public override async Task<IImageData> ToImageData(IProgress<ApplicationStatus>? progress = default, CancellationToken cancelToken = default) {
             try {
                 progress?.Report(new ApplicationStatus { Status = Loc.Instance["LblPrepareExposure"] });
                 using (var memoryStream = new System.IO.MemoryStream(this.rawBytes)) {

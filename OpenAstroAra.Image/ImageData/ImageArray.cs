@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -25,24 +25,24 @@ namespace OpenAstroAra.Image.ImageData {
         public ImageArray(ushort[] flatArray) : this(flatArray, null, null) {
         }
 
-        public ImageArray(ushort[] flatArray, byte[] rawData, string rawType) {
+        public ImageArray(ushort[] flatArray, byte[]? rawData, string? rawType) {
             this.FlatArray = flatArray;
             this.RAWData = rawData;
             this.RAWType = rawType;
         }
 
-        public ushort[] FlatArray { get; private set; }
-        public int[] FlatArrayInt { get => null; }
+        public ushort[] FlatArray { get; private set; } = null!;
+        public int[]? FlatArrayInt { get => null; }
 
         /// <summary>
         /// Contains RAW DSLR Data if available
         /// </summary>
-        public byte[] RAWData { get; private set; }
+        public byte[]? RAWData { get; private set; }
 
         /// <summary>
         /// Contains the type of DSLR data (e.g. cr2)
         /// </summary>
-        public string RAWType { get; private set; }
+        public string? RAWType { get; private set; }
     }
 
     public class ImageArrayInt : IImageArray {
@@ -53,20 +53,20 @@ namespace OpenAstroAra.Image.ImageData {
         public ImageArrayInt(int[] flatArray) : this(flatArray, null, null) {
         }
 
-        public ImageArrayInt(int[] flatArray, byte[] rawData, string rawType) {
+        public ImageArrayInt(int[] flatArray, byte[]? rawData, string? rawType) {
             this.FlatArrayInt = flatArray;
             this.RAWData = rawData;
             this.RAWType = rawType;
         }
 
-        private ushort[] cachedFlatArray;
+        private ushort[]? cachedFlatArray;
         public ushort[] FlatArray {
             get {
                 if (cachedFlatArray != null)
                     return cachedFlatArray;
 
                 if (FlatArrayInt == null)
-                    return null;
+                    return Array.Empty<ushort>();
 
                 cachedFlatArray = new ushort[FlatArrayInt.Length];
                 for (int i = 0; i < FlatArrayInt.Length; i++) {
@@ -82,16 +82,16 @@ namespace OpenAstroAra.Image.ImageData {
             }
         }
 
-        public int[] FlatArrayInt { get; private set; }
+        public int[]? FlatArrayInt { get; private set; }
 
         /// <summary>
         /// Contains RAW DSLR Data if available
         /// </summary>
-        public byte[] RAWData { get; private set; }
+        public byte[]? RAWData { get; private set; }
 
         /// <summary>
         /// Contains the type of DSLR data (e.g. cr2)
         /// </summary>
-        public string RAWType { get; private set; }
+        public string? RAWType { get; private set; }
     }
 }

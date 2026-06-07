@@ -34,7 +34,7 @@ namespace OpenAstroAra.Image.ImageData {
             this.StarDetectionAnalysis.PropertyChanged += Child_PropertyChanged;
         }
 
-        private void Child_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e) {
+        private void Child_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e) {
             this.ChildChanged(sender, e);
         }
 

@@ -31,7 +31,7 @@ namespace OpenAstroAra.Image.ImageData {
 
         public IImageData RawImageData { get; private set; }
 
-        private byte[] image;
+        private byte[]? image;
 
         public byte[] Image {
             get => this.image ?? OriginalImage;
@@ -81,7 +81,7 @@ namespace OpenAstroAra.Image.ImageData {
                 StarSensitivityEnum sensitivity,
                 NoiseReductionEnum noiseReduction,
                 CancellationToken cancelToken = default,
-                IProgress<ApplicationStatus> progress = default(Progress<ApplicationStatus>)) =>
+                IProgress<ApplicationStatus>? progress = default(Progress<ApplicationStatus>)) =>
             throw new NotImplementedException("DetectStars pending OpenCvSharp4 wiring.");
 
         public Task<byte[]> GetThumbnail() =>

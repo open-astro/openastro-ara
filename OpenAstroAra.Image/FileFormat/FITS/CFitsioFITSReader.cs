@@ -12,7 +12,7 @@ using static OpenAstroAra.Image.FileFormat.FITS.CfitsioNative;
 namespace OpenAstroAra.Image.FileFormat.FITS {
     public class CFitsioFITSReader : IDisposable {
         private nint filePtr;
-        private string tempFile;
+        private string? tempFile;
 
         public CFitsioFITSReader(string filePath) {
             CfitsioNative.fits_open_file(out filePtr, filePath, CfitsioNative.IOMODE.READONLY, out var status);

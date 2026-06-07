@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -43,7 +43,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
         /// <summary>
         /// Array compression algorithm textual name
         /// </summary>
-        public string CompressionName { get; private set; }
+        public string? CompressionName { get; private set; }
 
         /// <summary>
         /// Compressed array size in bytes. -1 for an uncompressed array
@@ -68,12 +68,12 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
         /// <summary>
         /// XISF block checksum algorithm textual name
         /// </summary>
-        public string ChecksumName { get; private set; }
+        public string? ChecksumName { get; private set; }
 
         /// <summary>
         /// XISF block checksum value. Empty if no checksum applied
         /// </summary>
-        public string Checksum { get; private set; }
+        public string? Checksum { get; private set; }
 
         public XISFData(ushort[] data, FileSaveInfo fileSaveInfo) {
             CompressionType = fileSaveInfo.XISFCompressionType;
@@ -149,7 +149,6 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
 
                     outArray = new byte[compressedSize];
                     Array.Copy(tmpArray, outArray, outArray.Length);
-                    tmpArray = null;
                 } else if (CompressionType == XISFCompressionTypeEnum.LZ4HC) {
                     if (ByteShuffling) {
                         CompressionName = "lz4hc+sh";
@@ -163,7 +162,6 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
 
                     outArray = new byte[compressedSize];
                     Array.Copy(tmpArray, outArray, outArray.Length);
-                    tmpArray = null;
                 } else if (CompressionType == XISFCompressionTypeEnum.ZLIB) {
                     if (ByteShuffling) {
                         CompressionName = "zlib+sh";

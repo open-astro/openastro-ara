@@ -24,7 +24,7 @@ namespace OpenAstroAra.Image.Interfaces {
         int BitDepth { get; }
         ImageMetaData MetaData { get; }
 
-        Task<IImageData> ToImageData(IProgress<ApplicationStatus> progress = default, CancellationToken cancelToken = default);
+        Task<IImageData> ToImageData(IProgress<ApplicationStatus>? progress = default, CancellationToken cancelToken = default);
     }
 
     public interface IExposureDataFactory {

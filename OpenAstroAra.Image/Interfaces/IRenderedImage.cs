@@ -38,7 +38,7 @@ namespace OpenAstroAra.Image.Interfaces {
             StarSensitivityEnum sensitivity,
             NoiseReductionEnum noiseReduction,
             CancellationToken cancelToken = default,
-            IProgress<ApplicationStatus> progress = default(Progress<ApplicationStatus>));
+            IProgress<ApplicationStatus>? progress = default(Progress<ApplicationStatus>));
 
         Task<byte[]> GetThumbnail();
         void UpdateAnalysis(StarDetectionParams p, StarDetectionResult result);

@@ -8,7 +8,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
     public static class CfitsioNative {
 
         public class cfitsioException : Exception {
-            public string Op { get; private set; }
+            public string? Op { get; private set; }
             public int StatusCode { get; private set; }
             public cfitsioException(string op, int statusCode) : base($"{op} failed with {statusCode} = {fits_get_errstatus(statusCode)}") {
                 this.Op = op;
@@ -166,7 +166,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
             IntPtr fptr,
             [MarshalAs(UnmanagedType.LPStr, SizeConst = FLEN_KEYWORD)] string keyname,
             out long value,
-            [MarshalAs(UnmanagedType.LPStr, SizeConst = FLEN_COMMENT)] StringBuilder comm,
+            [MarshalAs(UnmanagedType.LPStr, SizeConst = FLEN_COMMENT)] StringBuilder? comm,
             out int status);
         public static long fits_read_key_long(IntPtr fptr, string keyname) {
             _fits_read_key_long(fptr, keyname, out var value, null, out var status);
@@ -179,7 +179,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
             IntPtr fptr,
             [MarshalAs(UnmanagedType.LPStr, SizeConst = FLEN_KEYWORD)] string keyname,
             out double value,
-            [MarshalAs(UnmanagedType.LPStr, SizeConst = FLEN_COMMENT)] StringBuilder comm,
+            [MarshalAs(UnmanagedType.LPStr, SizeConst = FLEN_COMMENT)] StringBuilder? comm,
             out int status);
 
         public static double fits_read_key_double(IntPtr fptr, string keyname) {
@@ -194,7 +194,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
             IntPtr fptr,
             [MarshalAs(UnmanagedType.LPStr, SizeConst = FLEN_KEYWORD)] string keyname,
             out float value,
-            [MarshalAs(UnmanagedType.LPStr, SizeConst = FLEN_COMMENT)] StringBuilder comm,
+            [MarshalAs(UnmanagedType.LPStr, SizeConst = FLEN_COMMENT)] StringBuilder? comm,
             out int status);
 
         public static float fits_read_key_float(IntPtr fptr, string keyname) {
@@ -209,7 +209,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
             IntPtr fptr,
             [MarshalAs(UnmanagedType.LPStr, SizeConst = FLEN_KEYWORD)] string keyname,
             out long value,
-            [MarshalAs(UnmanagedType.LPStr, SizeConst = FLEN_COMMENT)] StringBuilder comm,
+            [MarshalAs(UnmanagedType.LPStr, SizeConst = FLEN_COMMENT)] StringBuilder? comm,
             out int status);
 
         public static long fits_read_key_lng(IntPtr fptr, string keyname) {
@@ -401,7 +401,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
             IntPtr fptr,
             [MarshalAs(UnmanagedType.LPStr, SizeConst = FLEN_KEYWORD)] string keyname,
             [MarshalAs(UnmanagedType.LPStr, SizeConst = FLEN_VALUE)] StringBuilder value,
-            [MarshalAs(UnmanagedType.LPStr, SizeConst = FLEN_COMMENT)] StringBuilder comm,
+            [MarshalAs(UnmanagedType.LPStr, SizeConst = FLEN_COMMENT)] StringBuilder? comm,
             out int status);
 
         // int CFITS_API ffgkyn(fitsfile *fptr, int nkey, char *keyname, char *keyval, char *comm, int* status);
@@ -411,7 +411,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
             int nkey,
             [MarshalAs(UnmanagedType.LPStr, SizeConst = FLEN_KEYWORD)] StringBuilder keyname,
             [MarshalAs(UnmanagedType.LPStr, SizeConst = FLEN_VALUE)] StringBuilder value,
-            [MarshalAs(UnmanagedType.LPStr, SizeConst = FLEN_COMMENT)] StringBuilder comm,
+            [MarshalAs(UnmanagedType.LPStr, SizeConst = FLEN_COMMENT)] StringBuilder? comm,
             out int status);
         public static void fits_read_keyn(IntPtr fptr, int nkey, out string keyname, out string value, out string comm) {
             var keynamesb = new StringBuilder(FLEN_KEYWORD);
