@@ -90,7 +90,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string horizonFilePath;
+        private string horizonFilePath = string.Empty;
 
         [DataMember]
         public string HorizonFilePath {
@@ -104,9 +104,9 @@ namespace OpenAstroAra.Profile {
         }
 
         [NonSerialized]
-        private CustomHorizon horizon;
+        private CustomHorizon? horizon;
 
-        public CustomHorizon Horizon {
+        public CustomHorizon? Horizon {
             get => horizon;
             set {
                 horizon = value;
@@ -114,7 +114,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string observer;
+        private string observer = string.Empty;
 
         [DataMember]
         public string Observer {
@@ -127,7 +127,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string observatory;
+        private string observatory = string.Empty;
 
         [DataMember]
         public string Observatory {
@@ -140,7 +140,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string site;
+        private string site = string.Empty;
 
         [DataMember]
         public string Site {

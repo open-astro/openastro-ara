@@ -22,7 +22,7 @@ namespace OpenAstroAra.Profile.Interfaces {
         double Elevation { get; set; }
 
         string HorizonFilePath { get; set; }
-        CustomHorizon Horizon { get; set; }
+        CustomHorizon? Horizon { get; set; }
         string Observer { get; set; }
         string Observatory { get; set; }
         string Site { get; set; }

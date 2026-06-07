@@ -57,7 +57,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string lastDeviceName;
+        private string lastDeviceName = string.Empty;
 
         [DataMember]
         public string LastDeviceName {

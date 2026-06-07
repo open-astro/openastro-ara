@@ -195,7 +195,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string sharpCapSensorAnalysisFolder;
+        private string sharpCapSensorAnalysisFolder = string.Empty;
 
         [DataMember]
         public string SharpCapSensorAnalysisFolder {

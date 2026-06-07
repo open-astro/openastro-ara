@@ -36,7 +36,7 @@ namespace OpenAstroAra.Profile {
             rangeStartMechanicalPosition = 0.0f;
         }
 
-        private string id;
+        private string id = string.Empty;
 
         [DataMember]
         public string Id {
@@ -49,7 +49,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string lastDeviceName;
+        private string lastDeviceName = string.Empty;
 
         [DataMember]
         public string LastDeviceName {

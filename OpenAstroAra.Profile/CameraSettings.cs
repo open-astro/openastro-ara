@@ -82,7 +82,7 @@ namespace OpenAstroAra.Profile {
             ascomCreate32BitData = false;
         }
 
-        private string id;
+        private string id = string.Empty;
 
         [DataMember]
         public string Id {
@@ -95,7 +95,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string lastDeviceName;
+        private string lastDeviceName = string.Empty;
 
         [DataMember]
         public string LastDeviceName {
@@ -147,7 +147,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string serialPort;
+        private string serialPort = string.Empty;
 
         [DataMember]
         public string SerialPort {
@@ -216,7 +216,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string fileCameraFolder;
+        private string fileCameraFolder = string.Empty;
 
         [DataMember]
         public string FileCameraFolder {
@@ -229,7 +229,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string fileCameraExtension;
+        private string fileCameraExtension = string.Empty;
 
         [DataMember]
         public string FileCameraExtension {
@@ -307,7 +307,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private BinningMode fliFloodBin;
+        private BinningMode fliFloodBin = new BinningMode(1, 1);
 
         [DataMember]
         public BinningMode FLIFloodBin {
@@ -619,7 +619,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string trackingCameraASCOMServerPipeName;
+        private string trackingCameraASCOMServerPipeName = string.Empty;
 
         [DataMember]
         public string TrackingCameraASCOMServerPipeName {

@@ -19,7 +19,7 @@ namespace OpenAstroAra.Profile.Interfaces {
     public interface ISnapShotControlSettings : ISettings {
         double ExposureDuration { get; set; }
         int Gain { get; set; }
-        FilterInfo Filter { get; set; }
+        FilterInfo? Filter { get; set; }
         bool Save { get; set; }
         bool Loop { get; set; }
     }

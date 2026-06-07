@@ -60,7 +60,7 @@ namespace OpenAstroAra.Profile {
         /// <summary>
         /// Exclusive locked filestream to read and write the profile
         /// </summary>
-        private FileStream fs;
+        private FileStream? fs;
 
         public Profile() {
             SetDefaultValues();
@@ -84,6 +84,16 @@ namespace OpenAstroAra.Profile {
         /// <summary>
         /// Setting default values prior to deserialization
         /// </summary>
+        [System.Diagnostics.CodeAnalysis.MemberNotNull(
+            nameof(ApplicationSettings), nameof(AstrometrySettings), nameof(CameraSettings),
+            nameof(DomeSettings), nameof(FilterWheelSettings), nameof(FlatWizardSettings),
+            nameof(FocuserSettings), nameof(FramingAssistantSettings), nameof(GuiderSettings),
+            nameof(ImageFileSettings), nameof(ImageSettings), nameof(MeridianFlipSettings),
+            nameof(PlanetariumSettings), nameof(PlateSolveSettings), nameof(RotatorSettings),
+            nameof(FlatDeviceSettings), nameof(SequenceSettings), nameof(SwitchSettings),
+            nameof(TelescopeSettings), nameof(WeatherDataSettings), nameof(SnapShotControlSettings),
+            nameof(SafetyMonitorSettings), nameof(PluginSettings), nameof(GnssSettings),
+            nameof(DockPanelSettings), nameof(AlpacaSettings), nameof(ImageHistorySettings))]
         private void SetDefaultValues() {
             this.Description = string.Empty;
             ApplicationSettings = new ApplicationSettings();
@@ -153,7 +163,7 @@ namespace OpenAstroAra.Profile {
         /// </summary>
         /// <param name="sender"></param>
         /// <param name="e"></param>
-        private void SettingsChanged(object sender, PropertyChangedEventArgs e) {
+        private void SettingsChanged(object? sender, PropertyChangedEventArgs e) {
             RaisePropertyChanged("Settings");
         }
 
@@ -167,7 +177,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private FilterInfo GetFilterFromList(FilterInfo filterToMatch) {
+        private FilterInfo? GetFilterFromList(FilterInfo filterToMatch) {
             var filter = this.FilterWheelSettings.FilterWheelFilters.Where((f) => f.Name == filterToMatch.Name).FirstOrDefault();
             if (filter == null) {
                 filter = this.FilterWheelSettings.FilterWheelFilters.Where((f) => f.Position == filterToMatch.Position).FirstOrDefault();
@@ -308,7 +318,7 @@ namespace OpenAstroAra.Profile {
                 DataContractSerializer dcs = new DataContractSerializer(typeof(Profile));
                 dcs.WriteObject(stream, profileToClone);
                 stream.Position = 0;
-                var newProfile = (Profile)dcs.ReadObject(stream);
+                var newProfile = (Profile)dcs.ReadObject(stream)!;
                 newProfile.Name = newProfile.Name + " Copy";
                 newProfile.Id = Guid.NewGuid();
                 return newProfile;
@@ -328,11 +338,11 @@ namespace OpenAstroAra.Profile {
                 var backup = path + ".bkp";
 
                 static IProfile LoadProfile(string filePath) {
-                    FileStream fs = null;
+                    FileStream? fs = null;
                     try {
                         fs = new FileStream(filePath, FileMode.Open, FileAccess.ReadWrite, FileShare.Read);
                         var serializer = new DataContractSerializer(typeof(Profile));
-                        var obj = serializer.ReadObject(fs);
+                        var obj = serializer.ReadObject(fs)!;
 
                         var p = (Profile)obj;
                         p.MatchFilterSettingsWithFilterList();
@@ -453,18 +463,18 @@ namespace OpenAstroAra.Profile {
         /// </summary>
         /// <param name="path">path to the profile</param>
         /// <returns>Meta Info of the profile</returns>
-        public static ProfileMeta Peek(string path) {
+        public static ProfileMeta? Peek(string path) {
             using (MyStopWatch.Measure()) {
                 var journal = path + ".journal";
                 var backup = path + ".bkp";
 
-                static ProfileMeta LoadProfileMeta(string filePath) {
+                static ProfileMeta? LoadProfileMeta(string filePath) {
                     using (var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)) {
                         var serializer = new DataContractSerializer(typeof(ProfileMetaProxy), new DataContractSerializerSettings {
                             RootName = new XmlDictionary().Add("Profile"),
                             RootNamespace = new XmlDictionary().Add("http://schemas.datacontract.org/2004/07/OpenAstroAra.Profile")
                         });
-                        var obj = serializer.ReadObject(fs);
+                        var obj = serializer.ReadObject(fs)!;
                         var p = (ProfileMetaProxy)obj;
                         return new ProfileMeta() {
                             Id = p.Id,

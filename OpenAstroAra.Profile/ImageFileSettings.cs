@@ -45,7 +45,7 @@ namespace OpenAstroAra.Profile {
             fitsUseLegacyWriter = true;
         }
 
-        private string filePath;
+        private string filePath = string.Empty;
 
         [DataMember]
         public string FilePath {
@@ -58,7 +58,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string filePattern;
+        private string filePattern = string.Empty;
 
         [DataMember]
         public string FilePattern {
@@ -71,7 +71,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string filePatternDARK;
+        private string filePatternDARK = string.Empty;
 
         [DataMember]
         public string FilePatternDARK {
@@ -84,7 +84,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string filePatternFLAT;
+        private string filePatternFLAT = string.Empty;
 
         [DataMember]
         public string FilePatternFLAT {
@@ -97,7 +97,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string filePatternBIAS;
+        private string filePatternBIAS = string.Empty;
 
         [DataMember]
         public string FilePatternBIAS {

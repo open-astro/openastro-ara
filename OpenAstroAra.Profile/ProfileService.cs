@@ -40,7 +40,7 @@ namespace OpenAstroAra.Profile {
             Profiles = new AsyncObservableCollection<ProfileMeta>();
         }
 
-        private FileSystemWatcher profileFileWatcher;
+        private FileSystemWatcher? profileFileWatcher;
 
         public void CreateWatcher() {
             profileFileWatcher?.Dispose();
@@ -71,10 +71,10 @@ namespace OpenAstroAra.Profile {
 
         private void ProfileFileWatcher_Created(object sender, FileSystemEventArgs e) {
             lock (lockobj) {
-                ProfileMeta info = null;
+                ProfileMeta? info = null;
                 var retries = 0;
                 do {
-                    info = Profile.Peek(Path.Combine(PROFILEFOLDER, e.Name));
+                    info = Profile.Peek(Path.Combine(PROFILEFOLDER, e.Name ?? string.Empty));
                     if (info == null) {
                         Thread.Sleep(TimeSpan.FromMilliseconds(500));
                         retries++;
@@ -84,7 +84,7 @@ namespace OpenAstroAra.Profile {
                 if (info != null) {
                     Profiles.Add(info);
                 } else {
-                    var id = Guid.Parse(Path.GetFileNameWithoutExtension(e.Name));
+                    var id = Guid.Parse(Path.GetFileNameWithoutExtension(e.Name ?? string.Empty));
                     Profiles.Add(new ProfileMeta() { Id = id, Location = e.FullPath, LastUsed = DateTime.MinValue, IsActive = false, Name = "UNKOWN" });
                 }
             }
@@ -102,7 +102,7 @@ namespace OpenAstroAra.Profile {
         /// </summary>
         /// <param name="sender"></param>
         /// <param name="e"></param>
-        private void SaveTimer_Elapsed(object sender, System.Timers.ElapsedEventArgs e) {
+        private void SaveTimer_Elapsed(object? sender, System.Timers.ElapsedEventArgs e) {
             Save();
         }
 
@@ -121,7 +121,7 @@ namespace OpenAstroAra.Profile {
                     Directory
                         .GetFiles(PROFILEFOLDER, "*.profile")
                         .Select(Profile.Peek)
-                        .Where(p => p != null)
+                        .OfType<ProfileMeta>()
                         .OrderByDescending(x => x.LastUsed)
                         .ToList()
                         .ForEach(Profiles.Add);
@@ -176,7 +176,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private void SettingsChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e) {
+        private void SettingsChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e) {
             if (e.PropertyName == "Settings") {
                 System.Threading.Tasks.Task.Run(() => TryScheduleSave());
             }
@@ -200,7 +200,7 @@ namespace OpenAstroAra.Profile {
 
         public bool ProfileWasSpecifiedFromCommandLineArgs { get; private set; }
 
-        public event EventHandler LocaleChanged;
+        public event EventHandler? LocaleChanged;
 
         public void ChangeLocale(CultureInfo language) {
             ActiveProfile.ApplicationSettings.Language = language;
@@ -209,7 +209,7 @@ namespace OpenAstroAra.Profile {
             Loc.Instance.ReloadLocale(ActiveProfile.ApplicationSettings.Culture);
             var eventHandler = LocaleChanged;
             if (eventHandler != null) {
-                eventHandler.Invoke(this, null);
+                eventHandler.Invoke(this, EventArgs.Empty);
             }
         }
 
@@ -217,7 +217,7 @@ namespace OpenAstroAra.Profile {
             ActiveProfile.AstrometrySettings.Latitude = latitude;
             var eventHandler = LocationChanged;
             if (eventHandler != null) {
-                eventHandler.Invoke(this, null);
+                eventHandler.Invoke(this, EventArgs.Empty);
             }
         }
 
@@ -225,7 +225,7 @@ namespace OpenAstroAra.Profile {
             ActiveProfile.AstrometrySettings.Longitude = longitude;
             var eventHandler = LocationChanged;
             if (eventHandler != null) {
-                LocationChanged.Invoke(this, null);
+                eventHandler.Invoke(this, EventArgs.Empty);
             }
         }
 
@@ -233,7 +233,7 @@ namespace OpenAstroAra.Profile {
             ActiveProfile.AstrometrySettings.Elevation = elevation;
             var eventHandler = LocationChanged;
             if (eventHandler != null) {
-                eventHandler.Invoke(this, null);
+                eventHandler.Invoke(this, EventArgs.Empty);
             }
         }
 
@@ -256,16 +256,16 @@ namespace OpenAstroAra.Profile {
 
             var eventHandler = HorizonChanged;
             if (eventHandler != null) {
-                eventHandler.Invoke(this, null);
+                eventHandler.Invoke(this, EventArgs.Empty);
             }
         }
 
-        public event EventHandler LocationChanged;
-        public event EventHandler BeforeProfileChanging;
+        public event EventHandler? LocationChanged;
+        public event EventHandler? BeforeProfileChanging;
 
-        public event EventHandler ProfileChanged;
+        public event EventHandler? ProfileChanged;
 
-        public event EventHandler HorizonChanged;
+        public event EventHandler? HorizonChanged;
 
         public AsyncObservableCollection<ProfileMeta> Profiles { get; }
 
@@ -280,7 +280,7 @@ namespace OpenAstroAra.Profile {
                         profileFileWatcher.EnableRaisingEvents = false;
                     }
 
-                    IProfile clone = null;
+                    IProfile? clone = null;
                     if (profileInfo.Id == ActiveProfile.Id) {
                         clone = Profile.Clone(ActiveProfile);
                     } else {
@@ -310,7 +310,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private IProfile activeProfile;
+        private IProfile activeProfile = null!;  // set during initialization before ActiveProfile is exposed
 
         public IProfile ActiveProfile {
             get => activeProfile;
@@ -351,11 +351,11 @@ namespace OpenAstroAra.Profile {
                         }
                         var eventHandlerLocale = LocaleChanged;
                         if (eventHandlerLocale != null) {
-                            eventHandlerLocale.Invoke(this, null);
+                            eventHandlerLocale.Invoke(this, EventArgs.Empty);
                         }
                         var eventHandlerLocation = LocationChanged;
                         if (eventHandlerLocation != null) {
-                            eventHandlerLocation.Invoke(this, null);
+                            eventHandlerLocation.Invoke(this, EventArgs.Empty);
                         }
                         RegisterChangedEventHandlers();
                     } catch (Exception ex) {

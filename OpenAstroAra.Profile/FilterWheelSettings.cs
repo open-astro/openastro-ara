@@ -55,7 +55,7 @@ namespace OpenAstroAra.Profile {
             unidirectional = false;
         }
 
-        private string id;
+        private string id = string.Empty;
 
         [DataMember]
         public string Id {
@@ -68,7 +68,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string lastDeviceName;
+        private string lastDeviceName = string.Empty;
 
         [DataMember]
         public string LastDeviceName {
@@ -107,12 +107,12 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private void FilterWheelFilters_CollectionChanged(object sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e) {
+        private void FilterWheelFilters_CollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e) {
             RaisePropertyChanged(nameof(FilterWheelFilters));
         }
 
         [NonSerialized]
-        private ObserveAllCollection<FilterInfo> filterWheelFilters;
+        private ObserveAllCollection<FilterInfo> filterWheelFilters = new ObserveAllCollection<FilterInfo>();
 
         [DataMember]
         public ObserveAllCollection<FilterInfo> FilterWheelFilters {

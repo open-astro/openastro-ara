@@ -25,7 +25,7 @@ namespace OpenAstroAra.Profile.Interfaces {
         double ExposureTime { get; set; }
         int Gain { get; set; }
         short Binning { get; set; }
-        FilterInfo Filter { get; set; }
+        FilterInfo? Filter { get; set; }
         PlateSolverEnum PlateSolverType { get; set; }
         string PS2Location { get; set; }
         string PS3Location { get; set; }

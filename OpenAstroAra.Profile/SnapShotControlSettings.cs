@@ -46,10 +46,10 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private FilterInfo filter;
+        private FilterInfo? filter;
 
         [DataMember]
-        public FilterInfo Filter {
+        public FilterInfo? Filter {
             get => filter;
             set {
                 if (filter != value) {

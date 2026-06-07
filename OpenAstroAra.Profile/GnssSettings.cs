@@ -48,7 +48,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string gpsdHost;
+        private string gpsdHost = string.Empty;
 
         [DataMember]
         public string GpsdHost {

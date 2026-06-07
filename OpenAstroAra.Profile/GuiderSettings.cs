@@ -79,7 +79,7 @@ namespace OpenAstroAra.Profile {
             guideChartShowCorrections = true;
         }
 
-        private string lastDeviceName;
+        private string lastDeviceName = string.Empty;
 
         [DataMember]
         public string LastDeviceName {
@@ -144,7 +144,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string pHD2ServerUrl;
+        private string pHD2ServerUrl = string.Empty;
 
         [DataMember]
         public string PHD2ServerUrl {
@@ -183,7 +183,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string phd2Path;
+        private string phd2Path = string.Empty;
 
         [DataMember]
         public string PHD2Path {
@@ -237,7 +237,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string guiderName;
+        private string guiderName = string.Empty;
 
         [DataMember]
         public string GuiderName {
@@ -406,9 +406,9 @@ namespace OpenAstroAra.Profile {
         }
 
         #region SkyGuard settings
-        string skyGuardServerUrl;
+        string skyGuardServerUrl = string.Empty;
         int skyGuardServerPort;
-        string skyGuardPath;
+        string skyGuardPath = string.Empty;
         int skyGuardCallbackPort;
         bool skyGuardTimeLapsChecked;
         double skyGuardValueMaxGuiding;
@@ -556,7 +556,7 @@ namespace OpenAstroAra.Profile {
         #endregion
 
 
-        private string guideChartRightAscensionColor;
+        private string guideChartRightAscensionColor = string.Empty;
         [DataMember]
         public string GuideChartRightAscensionColor {
             get => guideChartRightAscensionColor;
@@ -568,7 +568,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string guideChartDeclinationColor;
+        private string guideChartDeclinationColor = string.Empty;
         [DataMember]
         public string GuideChartDeclinationColor {
             get => guideChartDeclinationColor;

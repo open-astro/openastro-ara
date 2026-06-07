@@ -68,7 +68,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private CultureInfo language;
+        private CultureInfo language = new CultureInfo("en-GB");
 
         public CultureInfo Language {
             get => language;
@@ -106,7 +106,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string skyAtlasImageRepository;
+        private string skyAtlasImageRepository = string.Empty;
 
         [Obsolete]
         [DataMember]
@@ -120,7 +120,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string skySurveyCacheDirectory;
+        private string skySurveyCacheDirectory = string.Empty;
 
         [DataMember]
         public string SkySurveyCacheDirectory {
@@ -133,16 +133,16 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        public IReadOnlyDictionary<string, string> SelectedPluggableBehaviorsLookup { get; private set; }
+        public IReadOnlyDictionary<string, string> SelectedPluggableBehaviorsLookup { get; private set; } = System.Collections.Immutable.ImmutableDictionary<string, string>.Empty;
 
-        private void SelectedPluggableBehaviors_CollectionChanged(object sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e) {
+        private void SelectedPluggableBehaviors_CollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e) {
             SelectedPluggableBehaviorsLookup = SelectedPluggableBehaviors.ToList().ToImmutableDictionary(kvp => kvp.Key, kvp => kvp.Value);
             RaisePropertyChanged(nameof(SelectedPluggableBehaviors));
             RaisePropertyChanged(nameof(SelectedPluggableBehaviorsLookup));
         }
 
         [NonSerialized]
-        private AsyncObservableCollection<KeyValuePair<string, string>> selectedPluggableBehaviors;
+        private AsyncObservableCollection<KeyValuePair<string, string>> selectedPluggableBehaviors = new();
 
         [DataMember]
         public AsyncObservableCollection<KeyValuePair<string, string>> SelectedPluggableBehaviors {

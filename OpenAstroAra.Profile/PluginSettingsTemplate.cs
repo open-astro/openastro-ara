@@ -38,12 +38,12 @@ namespace OpenAstroAra.Profile.Interfaces {
         void SetValue(Guid pluginId, string key, UInt16 value);
         bool TryGetValue(Guid pluginId, string key, out UInt16 value);
         void SetValue(Guid pluginId, string key, String value);
-        bool TryGetValue(Guid pluginId, string key, out String value);
+        bool TryGetValue(Guid pluginId, string key, out String? value);
         void SetValue(Guid pluginId, string key, DateTime value);
         bool TryGetValue(Guid pluginId, string key, out DateTime value);
         void SetValue(Guid pluginId, string key, Guid value);
         bool TryGetValue(Guid pluginId, string key, out Guid value);
-        bool TryGetTypeOfField(Guid pluginId, string key, out Type fieldType);
+        bool TryGetTypeOfField(Guid pluginId, string key, out Type? fieldType);
     }
 
     public interface IPluginOptionsAccessor {
@@ -603,7 +603,7 @@ namespace OpenAstroAra.Profile {
             RaisePropertyChanged(pluginId + "-" + key);
         }
 
-        public bool TryGetValue(Guid pluginId, string key, out String value) {
+        public bool TryGetValue(Guid pluginId, string key, out String? value) {
             if (pluginStorage.TryGetValue(pluginId, out var dic)) {
                 if (dic.TryGetValue(key, out var obj)) {
                     if (obj.GetType() != typeof(String)) {
@@ -692,7 +692,7 @@ namespace OpenAstroAra.Profile {
             value = default(Guid);
             return false;
         }
-        public bool TryGetTypeOfField(Guid pluginId, string key, out Type fieldType) {
+        public bool TryGetTypeOfField(Guid pluginId, string key, out Type? fieldType) {
             if (pluginStorage.TryGetValue(pluginId, out var dic)) {
                 if (dic.TryGetValue(key, out var obj)) {
                     fieldType = obj.GetType();
@@ -857,8 +857,8 @@ namespace OpenAstroAra.Profile {
         }
 
         public String GetValueString(string name, String defaultValue) {
-            if (profileService.ActiveProfile.PluginSettings.TryGetValue(pluginGuid, name, out String result)) {
-                return result;
+            if (profileService.ActiveProfile.PluginSettings.TryGetValue(pluginGuid, name, out String? result)) {
+                return result ?? defaultValue;
             }
             return defaultValue;
         }
@@ -884,7 +884,7 @@ namespace OpenAstroAra.Profile {
         }
 
         public T GetValueEnum<T>(string name, T defaultValue) where T : struct, Enum {
-            if (profileService.ActiveProfile.PluginSettings.TryGetValue(pluginGuid, name, out string resultString)) {
+            if (profileService.ActiveProfile.PluginSettings.TryGetValue(pluginGuid, name, out string? resultString)) {
                 if (Enum.TryParse<T>(resultString, out var result)) {
                     return result;
                 }
@@ -893,7 +893,7 @@ namespace OpenAstroAra.Profile {
         }
 
         public void SetValueEnum<T>(string name, T value) where T : struct, Enum {
-            profileService.ActiveProfile.PluginSettings.SetValue(pluginGuid, name, Enum.GetName(typeof(T), value));
+            profileService.ActiveProfile.PluginSettings.SetValue(pluginGuid, name, Enum.GetName(typeof(T), value) ?? string.Empty);
         }
     }
 }

@@ -102,7 +102,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string astrometryURL;
+        private string astrometryURL = string.Empty;
 
         [DataMember]
         public string AstrometryURL {
@@ -118,7 +118,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string astrometryAPIKey;
+        private string astrometryAPIKey = string.Empty;
 
         [DataMember]
         public string AstrometryAPIKey {
@@ -136,7 +136,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string cygwinLocation;
+        private string cygwinLocation = string.Empty;
 
         [DataMember]
         public string CygwinLocation {
@@ -162,7 +162,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string pS2Location;
+        private string pS2Location = string.Empty;
 
         [DataMember]
         public string PS2Location {
@@ -175,7 +175,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string pS3Location;
+        private string pS3Location = string.Empty;
 
         [DataMember]
         public string PS3Location {
@@ -266,10 +266,10 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private FilterInfo filter;
+        private FilterInfo? filter;
 
         [DataMember]
-        public FilterInfo Filter {
+        public FilterInfo? Filter {
             get => filter;
             set {
                 if (filter != value) {
@@ -279,7 +279,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string aspsLocation;
+        private string aspsLocation = string.Empty;
 
         [DataMember]
         public string AspsLocation {
@@ -292,7 +292,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string aSTAPLocation;
+        private string aSTAPLocation = string.Empty;
 
         [DataMember]
         public string ASTAPLocation {
@@ -396,7 +396,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string _theSkyXHost;
+        private string _theSkyXHost = string.Empty;
 
         [DataMember]
         public string TheSkyXHost {
@@ -437,7 +437,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string pinPointCatalogRoot;
+        private string pinPointCatalogRoot = string.Empty;
 
         [DataMember]
         public string PinPointCatalogRoot {
@@ -479,7 +479,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string pinPointAllSkyApiKey;
+        private string pinPointAllSkyApiKey = string.Empty;
 
         [DataMember]
         public string PinPointAllSkyApiKey {
@@ -495,7 +495,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string pinPointAllSkyApiHost;
+        private string pinPointAllSkyApiHost = string.Empty;
 
         [DataMember]
         public string PinPointAllSkyApiHost {

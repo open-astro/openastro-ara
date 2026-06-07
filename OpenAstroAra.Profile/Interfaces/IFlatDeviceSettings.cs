@@ -27,7 +27,7 @@ namespace OpenAstroAra.Profile.Interfaces {
         int SettleTime { get; set; }
         ObserveAllCollection<TrainedFlatExposureSetting> TrainedFlatExposureSettings { get; set; }
         bool RemoveFlatExposureSetting(TrainedFlatExposureSetting setting);
-        TrainedFlatExposureSetting GetTrainedFlatExposureSetting(short? filterPosition, BinningMode binning, int gain, int offset);
+        TrainedFlatExposureSetting? GetTrainedFlatExposureSetting(short? filterPosition, BinningMode binning, int gain, int offset);
         void AddEmptyTrainedExposureSetting();
         void AddTrainedFlatExposureSetting(short? filterPosition, BinningMode binning, int gain, int offset, int brightness, double exposureTime);
     }

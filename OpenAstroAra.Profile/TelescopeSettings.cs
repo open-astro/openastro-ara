@@ -43,7 +43,7 @@ namespace OpenAstroAra.Profile {
             telescopeLocationSyncDirection = TelescopeLocationSyncDirection.PROMPT;
         }
 
-        private string id;
+        private string id = string.Empty;
 
         [DataMember]
         public string Id {
@@ -56,7 +56,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string lastDeviceName;
+        private string lastDeviceName = string.Empty;
 
         [DataMember]
         public string LastDeviceName {
@@ -69,7 +69,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string name;
+        private string name = string.Empty;
 
         [DataMember]
         public string Name {
@@ -82,7 +82,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string mountName;
+        private string mountName = string.Empty;
 
         [DataMember]
         public string MountName {
@@ -121,7 +121,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string snapPortStart;
+        private string snapPortStart = string.Empty;
 
         [DataMember]
         public string SnapPortStart {
@@ -134,7 +134,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string snapPortStop;
+        private string snapPortStop = string.Empty;
 
         [DataMember]
         public string SnapPortStop {

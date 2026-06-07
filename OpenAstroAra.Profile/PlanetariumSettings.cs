@@ -45,7 +45,7 @@ namespace OpenAstroAra.Profile {
             preferredPlanetarium = PlanetariumEnum.CDC;
         }
 
-        private string stellariumHost;
+        private string stellariumHost = string.Empty;
 
         [DataMember]
         public string StellariumHost {
@@ -71,7 +71,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string cdCHost;
+        private string cdCHost = string.Empty;
 
         [DataMember]
         public string CdCHost {
@@ -97,7 +97,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string tsxHost;
+        private string tsxHost = string.Empty;
 
         [DataMember]
         public string TSXHost {
@@ -136,7 +136,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string hnskyHost;
+        private string hnskyHost = string.Empty;
 
         [DataMember]
         public string HNSKYHost {
@@ -162,7 +162,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string c2aHost;
+        private string c2aHost = string.Empty;
 
         [DataMember]
         public string C2AHost {
@@ -188,7 +188,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string skytechxHost;
+        private string skytechxHost = string.Empty;
 
         [DataMember]
         public string SkytechXHost {
