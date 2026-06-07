@@ -21,10 +21,10 @@
 //
 
 namespace Accord.Imaging.Filters {
+    using Accord.Math;
+    using Accord.Math.Wavelets;
     using System.Collections.Generic;
     using System.Drawing.Imaging;
-    using Accord.Math.Wavelets;
-    using Accord.Math;
 
     /// <summary>
     ///   Wavelet transform filter.

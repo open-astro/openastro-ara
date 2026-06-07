@@ -13,11 +13,14 @@
 #endregion "copyright"
 
 using Newtonsoft.Json;
-using OpenAstroAra.Core.Model;
-using OpenAstroAra.Sequencer.Container;
-using OpenAstroAra.Sequencer.Validations;
 using OpenAstroAra.Astrometry;
+using OpenAstroAra.Core.Locale;
+using OpenAstroAra.Core.Model;
+using OpenAstroAra.Core.Utility.Notification;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Sequencer.Container;
+using OpenAstroAra.Sequencer.Utility;
+using OpenAstroAra.Sequencer.Validations;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -26,9 +29,6 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using OpenAstroAra.Core.Locale;
-using OpenAstroAra.Core.Utility.Notification;
-using OpenAstroAra.Sequencer.Utility;
 
 namespace OpenAstroAra.Sequencer.SequenceItem.Telescope {
 

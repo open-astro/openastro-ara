@@ -21,13 +21,13 @@
 //
 
 namespace Accord.Imaging.Filters {
+    using Accord.Imaging;
+    using Accord.Math;
     using System;
     using System.Collections.Generic;
     using System.Drawing;
     using System.Drawing.Imaging;
-    using Accord.Imaging;
     using Matrix = Accord.Math.Matrix;
-    using Accord.Math;
 
     /// <summary>
     ///   Linear Gradient Blending filter.

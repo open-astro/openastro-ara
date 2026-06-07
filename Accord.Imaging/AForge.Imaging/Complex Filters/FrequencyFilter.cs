@@ -7,9 +7,9 @@
 //
 
 namespace Accord.Imaging.ComplexFilters {
-    using System;
     using Accord;
     using Accord.Compat;
+    using System;
     using System.Numerics;
 
     /// <summary>

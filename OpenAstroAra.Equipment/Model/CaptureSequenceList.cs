@@ -12,20 +12,20 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Astrometry;
+using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Locale;
+using OpenAstroAra.Core.Model.Equipment;
+using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Core.Utility.Notification;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Xml;
 using System.Xml.Serialization;
-using OpenAstroAra.Core.Enum;
-using OpenAstroAra.Core.Model.Equipment;
-using OpenAstroAra.Core.Locale;
-using System.Globalization;
 
 namespace OpenAstroAra.Equipment.Model {
 

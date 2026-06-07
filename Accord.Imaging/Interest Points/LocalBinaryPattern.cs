@@ -21,15 +21,15 @@
 //
 
 namespace Accord.Imaging {
+    using Accord.Compat;
+    using Accord.Imaging;
+    using Accord.Imaging.Filters;
+    using Accord.Math;
     using System;
     using System.Collections.Generic;
     using System.Drawing;
     using System.Drawing.Imaging;
-    using Accord.Math;
-    using Accord.Imaging;
-    using Accord.Imaging.Filters;
     using System.Threading;
-    using Accord.Compat;
 
     /// <summary>
     ///   Local Binary Patterns.

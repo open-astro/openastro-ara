@@ -12,14 +12,14 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Profile.Interfaces;
-using OpenAstroAra.Astrometry;
-using System;
 using Accord.Math;
+using OpenAstroAra.Astrometry;
 using OpenAstroAra.Core.Enum;
-using OpenAstroAra.Equipment.Interfaces;
 using OpenAstroAra.Core.Locale;
 using OpenAstroAra.Core.Utility.Notification;
+using OpenAstroAra.Equipment.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
+using System;
 
 namespace OpenAstroAra.Equipment.Equipment.MyDome {
 

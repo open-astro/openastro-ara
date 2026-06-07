@@ -6,13 +6,13 @@
 //
 
 namespace Accord.Imaging.Filters {
+    using Accord;
+    using Accord.Math.Random;
+    using Accord.Statistics.Distributions.Univariate;
     using System;
     using System.Collections.Generic;
     using System.Drawing;
     using System.Drawing.Imaging;
-    using Accord;
-    using Accord.Math.Random;
-    using Accord.Statistics.Distributions.Univariate;
 
     /// <summary>
     /// Additive noise filter.

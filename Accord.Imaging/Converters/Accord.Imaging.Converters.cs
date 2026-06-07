@@ -21,8 +21,8 @@
 //
 
 namespace Accord.Imaging.Converters {
-    using System.Runtime.CompilerServices;
     using System.Drawing;
+    using System.Runtime.CompilerServices;
 
     /// <summary>
     ///  Contains classes and methods to convert between different image representations, 

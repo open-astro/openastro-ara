@@ -21,12 +21,12 @@
 //
 
 namespace Accord.Imaging.Filters {
+    using Accord.Imaging;
+    using Accord.Imaging.Filters;
+    using AForge;
     using System.Collections.Generic;
     using System.Drawing;
     using System.Drawing.Imaging;
-    using AForge;
-    using Accord.Imaging;
-    using Accord.Imaging.Filters;
 
     /// <summary>
     ///   Filter to mark (highlight) pairs of points in a image.

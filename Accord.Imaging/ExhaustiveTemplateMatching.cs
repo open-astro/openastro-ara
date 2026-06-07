@@ -29,9 +29,9 @@
 
 namespace Accord.Imaging {
     using System;
+    using System.Collections.Generic;
     using System.Drawing;
     using System.Drawing.Imaging;
-    using System.Collections.Generic;
 
     /// <summary>
     /// Exhaustive template matching.

@@ -21,11 +21,11 @@
 //
 
 namespace Accord.Imaging.Converters {
-    using System.Drawing;
-    using System.Drawing.Imaging;
     using Accord.Imaging;
     using Accord.Math;
     using System;
+    using System.Drawing;
+    using System.Drawing.Imaging;
 
     /// <summary>
     ///   Multidimensional array to Bitmap converter.

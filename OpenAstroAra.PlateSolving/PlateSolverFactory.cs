@@ -12,12 +12,12 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Profile.Interfaces;
-using OpenAstroAra.PlateSolving.Solvers;
 using OpenAstroAra.Core.Enum;
-using OpenAstroAra.PlateSolving.Interfaces;
-using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Equipment.Interfaces;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
+using OpenAstroAra.PlateSolving.Interfaces;
+using OpenAstroAra.PlateSolving.Solvers;
+using OpenAstroAra.Profile.Interfaces;
 
 namespace OpenAstroAra.PlateSolving {
 

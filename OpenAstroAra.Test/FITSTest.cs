@@ -10,16 +10,16 @@
 */
 #endregion "copyright"
 using FluentAssertions;
-using OpenAstroAra.Image.ImageData;
-using OpenAstroAra.Core.Utility;
-using OpenAstroAra.Astrometry;
 using NUnit.Framework;
+using OpenAstroAra.Astrometry;
+using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Image.FileFormat.FITS;
+using OpenAstroAra.Image.ImageData;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using OpenAstroAra.Image.FileFormat.FITS;
 
 namespace OpenAstroAra.Test {
 

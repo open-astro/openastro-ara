@@ -21,14 +21,14 @@
 //
 
 namespace Accord.Imaging {
+    using Accord.Compat;
+    using Accord.Imaging;
+    using Accord.Imaging.Filters;
+    using Accord.Math;
     using System;
     using System.Collections.Generic;
     using System.Drawing;
     using System.Drawing.Imaging;
-    using Accord.Imaging;
-    using Accord.Imaging.Filters;
-    using Accord.Math;
-    using Accord.Compat;
 
     /// <summary>
     ///   <see cref="Haralick"/>'s operation modes.

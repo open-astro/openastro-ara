@@ -10,9 +10,9 @@
 */
 #endregion "copyright"
 using FluentAssertions;
-using OpenAstroAra.Astrometry;
 using NUnit.Framework;
 using NUnit.Framework.Legacy;
+using OpenAstroAra.Astrometry;
 using System.IO;
 using System.Text;
 using System.Windows;

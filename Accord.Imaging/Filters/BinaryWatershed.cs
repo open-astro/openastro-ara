@@ -24,14 +24,14 @@
 //
 
 namespace Accord.Imaging.Filters {
+    using Accord.Diagnostics;
+    using Accord.Imaging;
+    using Accord.Imaging.Converters;
+    using Accord.Imaging.Filters;
+    using Accord.Math;
     using System;
     using System.Collections.Generic;
     using System.Drawing.Imaging;
-    using Accord.Imaging;
-    using Accord.Imaging.Filters;
-    using Accord.Math;
-    using Accord.Diagnostics;
-    using Accord.Imaging.Converters;
 
     /// <summary>
     ///   Watershed filter.

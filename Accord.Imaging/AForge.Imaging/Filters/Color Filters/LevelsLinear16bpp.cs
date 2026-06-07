@@ -7,12 +7,12 @@
 //
 
 namespace Accord.Imaging.Filters {
+    using Accord;
+    using AForge;
     using System;
     using System.Collections.Generic;
     using System.Drawing;
     using System.Drawing.Imaging;
-    using AForge;
-    using Accord;
 
     /// <summary>
     /// Linear correction of RGB channels for images, which have 16 bpp planes (16 bit gray images or 48/64 bit colour images).

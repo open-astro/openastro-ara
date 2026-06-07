@@ -7,9 +7,9 @@
 
 namespace Accord.Imaging.Formats {
     using System;
-    using System.IO;
-    using System.Drawing;
     using System.ComponentModel;
+    using System.Drawing;
+    using System.IO;
 
     /// <summary>
     ///   Common interface for image decoders. Image decoders can read images stored

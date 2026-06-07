@@ -12,31 +12,31 @@
 
 #endregion "copyright"
 
+using Newtonsoft.Json;
+using Newtonsoft.Json.Serialization;
+using OpenAstroAra.Astrometry;
+using OpenAstroAra.Core.Locale;
 using OpenAstroAra.Core.Model;
-using OpenAstroAra.Sequencer.SequenceItem.Camera;
+using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Sequencer.Conditions;
 using OpenAstroAra.Sequencer.Container;
+using OpenAstroAra.Sequencer.Container.ExecutionStrategy;
+using OpenAstroAra.Sequencer.SequenceItem;
+using OpenAstroAra.Sequencer.SequenceItem.Camera;
 using OpenAstroAra.Sequencer.SequenceItem.FilterWheel;
 using OpenAstroAra.Sequencer.SequenceItem.Focuser;
+using OpenAstroAra.Sequencer.SequenceItem.Guider;
 using OpenAstroAra.Sequencer.SequenceItem.Telescope;
 using OpenAstroAra.Sequencer.SequenceItem.Utility;
-using OpenAstroAra.Astrometry;
+using OpenAstroAra.Sequencer.Serialization;
+using OpenAstroAra.Sequencer.Trigger;
+using OpenAstroAra.Sequencer.Validations;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using OpenAstroAra.Sequencer.SequenceItem.Guider;
-using OpenAstroAra.Sequencer.Conditions;
-using OpenAstroAra.Sequencer.Trigger;
-using OpenAstroAra.Core.Utility;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Serialization;
-using OpenAstroAra.Sequencer.Container.ExecutionStrategy;
-using OpenAstroAra.Sequencer.Serialization;
-using OpenAstroAra.Sequencer.Validations;
-using OpenAstroAra.Core.Locale;
-using OpenAstroAra.Sequencer.SequenceItem;
 
 namespace OpenAstroAra.Sequencer {
 

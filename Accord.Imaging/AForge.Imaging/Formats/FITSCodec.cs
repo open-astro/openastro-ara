@@ -7,11 +7,11 @@
 
 namespace Accord.Imaging.Formats {
     using System;
-    using System.IO;
+    using System.ComponentModel;
     using System.Drawing;
     using System.Drawing.Imaging;
+    using System.IO;
     using System.Text;
-    using System.ComponentModel;
 
     /// <summary>
     /// Information about FITS image's frame.

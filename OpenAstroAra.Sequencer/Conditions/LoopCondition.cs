@@ -13,8 +13,8 @@
 #endregion "copyright"
 
 using Newtonsoft.Json;
-using OpenAstroAra.Sequencer.SequenceItem;
 using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Sequencer.SequenceItem;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.Composition;

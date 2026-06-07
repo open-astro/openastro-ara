@@ -7,11 +7,11 @@
 //
 
 namespace Accord.Imaging.Filters {
+    using Accord.Imaging.Textures;
     using System;
     using System.Collections.Generic;
     using System.Drawing;
     using System.Drawing.Imaging;
-    using Accord.Imaging.Textures;
 
     /// <summary>
     /// Textured filter - filter an image using texture.

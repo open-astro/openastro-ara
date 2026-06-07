@@ -25,8 +25,8 @@
 
 namespace Accord.Imaging {
     using System;
-    using System.Text;
     using System.Drawing;
+    using System.Text;
 
     /// <summary>
     ///   Fast Retina Keypoint (FREAK) point.

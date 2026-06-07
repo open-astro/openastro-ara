@@ -12,14 +12,14 @@
 
 #endregion "copyright"
 
-using System.Net.WebSockets;
-using System.Text.Json;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Logging;
 using OpenAstroAra.Server.Contracts.WsEvents;
 using OpenAstroAra.Server.Services;
+using System.Net.WebSockets;
+using System.Text.Json;
 
 namespace OpenAstroAra.Server.Endpoints;
 

@@ -7,11 +7,11 @@
 //
 
 namespace Accord.Imaging {
+    using Accord.Statistics.Visualizations;
+    using AForge.Math;
     using System;
     using System.Drawing;
     using System.Drawing.Imaging;
-    using AForge.Math;
-    using Accord.Statistics.Visualizations;
 
     /// <summary>
     /// Vertical intensity statistics.

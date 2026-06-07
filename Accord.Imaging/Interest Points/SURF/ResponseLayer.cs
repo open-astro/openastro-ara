@@ -24,11 +24,11 @@
 //
 
 namespace Accord.Imaging {
+    using Accord.Imaging;
+    using Accord.Math;
     using System;
     using System.Collections;
     using System.Collections.Generic;
-    using Accord.Imaging;
-    using Accord.Math;
 
     /// <summary>
     ///   Response filter.

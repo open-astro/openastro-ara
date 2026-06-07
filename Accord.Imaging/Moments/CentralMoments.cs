@@ -21,9 +21,9 @@
 //
 
 namespace Accord.Imaging.Moments {
+    using Accord.Imaging;
     using System;
     using System.Drawing;
-    using Accord.Imaging;
 
     /// <summary>
     ///   Central image moments.

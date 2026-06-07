@@ -24,14 +24,14 @@
 //
 
 namespace Accord.Imaging.Filters {
-    using System;
-    using System.Collections.Generic;
-    using System.Drawing.Imaging;
+    using Accord.Diagnostics;
     using Accord.Imaging;
     using Accord.Imaging.Filters;
     using Accord.Math;
-    using Accord.Diagnostics;
     using Accord.Math.Distances;
+    using System;
+    using System.Collections.Generic;
+    using System.Drawing.Imaging;
 
     /// <summary>
     ///   Distance functions that can be used with <see cref="DistanceTransform"/>.

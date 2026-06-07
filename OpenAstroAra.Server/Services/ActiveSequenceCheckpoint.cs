@@ -12,9 +12,9 @@
 
 #endregion "copyright"
 
-using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using OpenAstroAra.Server.Contracts;
+using System.Text.Json;
 
 namespace OpenAstroAra.Server.Services;
 

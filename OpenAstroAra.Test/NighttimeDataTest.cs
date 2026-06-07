@@ -12,10 +12,10 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Astrometry;
-using OpenAstroAra.Astrometry.RiseAndSet;
 using NUnit.Framework;
 using NUnit.Framework.Legacy;
+using OpenAstroAra.Astrometry;
+using OpenAstroAra.Astrometry.RiseAndSet;
 using OxyPlot.Axes;
 using System;
 using System.Collections.Generic;

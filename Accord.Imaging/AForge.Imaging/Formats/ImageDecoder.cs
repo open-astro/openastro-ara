@@ -27,13 +27,13 @@
 //
 
 namespace Accord.Imaging.Formats {
+    using Accord.Compat;
     using System;
     using System.Collections.Generic;
     using System.Drawing;
     using System.Drawing.Imaging;
     using System.Globalization;
     using System.IO;
-    using Accord.Compat;
     using System.Linq;
     using System.Threading;
 

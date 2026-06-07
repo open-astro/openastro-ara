@@ -30,11 +30,11 @@
 //
 
 namespace Accord.Imaging.Filters {
-    using System.Collections.Generic;
-    using System.Drawing.Imaging;
-    using Accord.Math;
     using Accord.Imaging;
     using Accord.Imaging.Filters;
+    using Accord.Math;
+    using System.Collections.Generic;
+    using System.Drawing.Imaging;
 
     /// <summary>
     ///   Gabor filter.

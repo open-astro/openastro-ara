@@ -9,11 +9,11 @@
 //
 
 namespace Accord.Imaging.Filters {
+    using Accord.Compat;
     using System;
     using System.Collections.Generic;
     using System.Drawing;
     using System.Drawing.Imaging;
-    using Accord.Compat;
     using System.Threading.Tasks;
 
     /// <summary>

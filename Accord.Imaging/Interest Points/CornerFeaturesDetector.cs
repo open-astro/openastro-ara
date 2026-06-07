@@ -21,14 +21,14 @@
 //
 
 namespace Accord.Imaging {
+    using Accord.Compat;
+    using Accord.Imaging;
+    using AForge;
+    using System;
     using System.Collections.Generic;
     using System.Drawing;
     using System.Drawing.Imaging;
-    using AForge;
-    using Accord.Imaging;
-    using System;
     using System.Linq;
-    using Accord.Compat;
 
     /// <summary>
     ///   Feature detector based on corners.

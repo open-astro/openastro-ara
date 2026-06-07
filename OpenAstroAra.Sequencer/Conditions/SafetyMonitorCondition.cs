@@ -12,10 +12,14 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Sequencer.SequenceItem;
-using OpenAstroAra.Sequencer.Validations;
+using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Locale;
 using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Sequencer.SequenceItem;
+using OpenAstroAra.Sequencer.SequenceItem.Utility;
+using OpenAstroAra.Sequencer.Utility;
+using OpenAstroAra.Sequencer.Validations;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.Composition;
@@ -23,10 +27,6 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using OpenAstroAra.Core.Locale;
-using OpenAstroAra.Core.Enum;
-using OpenAstroAra.Sequencer.Utility;
-using OpenAstroAra.Sequencer.SequenceItem.Utility;
 
 namespace OpenAstroAra.Sequencer.Conditions {
 

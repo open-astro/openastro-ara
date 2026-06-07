@@ -13,10 +13,13 @@
 #endregion "copyright"
 
 using Newtonsoft.Json;
+using OpenAstroAra.Core.Locale;
 using OpenAstroAra.Core.Model;
+using OpenAstroAra.Core.Model.Equipment;
+using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Sequencer.Validations;
-using OpenAstroAra.Equipment.Interfaces.Mediator;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -26,10 +29,7 @@ using System.Runtime.Serialization;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using OpenAstroAra.Core.Model.Equipment;
-using OpenAstroAra.Core.Locale;
 using System.Windows;
-using OpenAstroAra.Core.Utility;
 
 namespace OpenAstroAra.Sequencer.SequenceItem.FilterWheel {
 

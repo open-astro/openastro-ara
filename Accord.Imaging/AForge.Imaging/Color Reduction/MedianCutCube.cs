@@ -7,10 +7,10 @@
 //
 
 namespace Accord.Imaging.ColorReduction {
+    using Accord.Imaging;
     using System;
     using System.Collections.Generic;
     using System.Drawing;
-    using Accord.Imaging;
 
     // Color cube used by Median Cut color quantization algorithm
     internal class MedianCutCube {

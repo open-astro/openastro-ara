@@ -9,16 +9,16 @@
     file, You can obtain one at http://mozilla.org/MPL/2.0/.
 */
 #endregion "copyright"
+using NUnit.Framework;
+using NUnit.Framework.Legacy;
 using OpenAstroAra.Astrometry;
 using OpenAstroAra.Core.Enum;
 using OpenAstroAra.Core.Model.Equipment;
-using OpenAstroAra.Equipment.Model;
 using OpenAstroAra.Equipment.Equipment.MyCamera;
 using OpenAstroAra.Equipment.Equipment.MyFilterWheel;
-using NUnit.Framework;
+using OpenAstroAra.Equipment.Model;
 using System;
 using System.Linq;
-using NUnit.Framework.Legacy;
 
 namespace OpenAstroAra.Test {
 

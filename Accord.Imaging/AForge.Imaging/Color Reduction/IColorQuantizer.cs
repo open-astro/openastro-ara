@@ -7,9 +7,9 @@
 //
 
 namespace Accord.Imaging.ColorReduction {
+    using Accord.Imaging;
     using System;
     using System.Drawing;
-    using Accord.Imaging;
 
     /// <summary>
     /// Interface which is implemented by different color quantization algorithms.

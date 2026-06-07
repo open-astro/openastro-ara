@@ -28,10 +28,10 @@
 //
 
 namespace Accord.Imaging {
+    using Accord.Math;
     using System;
     using System.Drawing;
     using System.Drawing.Imaging;
-    using Accord.Math;
 
     /// <summary>
     ///  Integral image.

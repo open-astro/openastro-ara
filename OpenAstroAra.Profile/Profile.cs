@@ -12,16 +12,16 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Profile.Interfaces;
+using OpenAstroAra.Core.Locale;
+using OpenAstroAra.Core.Model.Equipment;
 using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Profile.Interfaces;
 using System;
 using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Runtime.Serialization;
-using OpenAstroAra.Core.Model.Equipment;
 using System.Text;
-using OpenAstroAra.Core.Locale;
 using System.Xml;
 
 namespace OpenAstroAra.Profile {

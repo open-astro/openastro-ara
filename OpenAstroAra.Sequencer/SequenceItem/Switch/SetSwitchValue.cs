@@ -13,10 +13,13 @@
 #endregion "copyright"
 
 using Newtonsoft.Json;
+using OpenAstroAra.Core.Locale;
 using OpenAstroAra.Core.Model;
-using OpenAstroAra.Sequencer.Validations;
 using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Equipment.Equipment.MySwitch;
+using OpenAstroAra.Equipment.Interfaces;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Sequencer.Validations;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -25,9 +28,6 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using OpenAstroAra.Core.Locale;
-using OpenAstroAra.Equipment.Interfaces;
-using OpenAstroAra.Equipment.Equipment.MySwitch;
 
 namespace OpenAstroAra.Sequencer.SequenceItem.Switch {
 

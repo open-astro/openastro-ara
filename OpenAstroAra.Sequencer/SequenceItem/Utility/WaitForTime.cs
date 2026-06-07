@@ -12,23 +12,23 @@
 
 #endregion "copyright"
 
+using CommunityToolkit.Mvvm.ComponentModel;
 using Newtonsoft.Json;
-using OpenAstroAra.Core.Model;
-using OpenAstroAra.Sequencer.Utility.DateTimeProvider;
 using OpenAstroAra.Astrometry;
+using OpenAstroAra.Core.Locale;
+using OpenAstroAra.Core.Model;
+using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Sequencer.Utility.DateTimeProvider;
+using OpenAstroAra.Sequencer.Validations;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel.Composition;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using OpenAstroAra.Core.Utility;
-using OpenAstroAra.Sequencer.Validations;
-using OpenAstroAra.Core.Locale;
-using CommunityToolkit.Mvvm.ComponentModel;
-using System.Diagnostics;
 
 namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
 

@@ -28,11 +28,11 @@
 //
 
 namespace Accord.Imaging {
+    using AForge;
     using System;
     using System.Collections.Generic;
     using System.Drawing;
     using System.Drawing.Imaging;
-    using AForge;
 
     /// <summary>
     /// Possible object orders.

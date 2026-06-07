@@ -12,11 +12,11 @@
 
 #endregion "copyright"
 
+using Nito.AsyncEx;
 using OpenAstroAra.Astrometry.RiseAndSet;
 using OpenAstroAra.Core.Enum;
 using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Profile;
-using Nito.AsyncEx;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;

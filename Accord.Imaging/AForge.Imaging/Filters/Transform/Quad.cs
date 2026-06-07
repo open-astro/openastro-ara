@@ -6,9 +6,9 @@
 // andrew.kirillov@aforgenet.com
 //
 
+using AForge;
 using System;
 using System.Collections.Generic;
-using AForge;
 
 namespace Accord.Imaging.Filters {
     // The code is based on the code from the below link, which shows

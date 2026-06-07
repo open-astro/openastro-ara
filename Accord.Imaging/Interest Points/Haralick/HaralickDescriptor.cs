@@ -24,11 +24,11 @@
 //
 
 namespace Accord.Imaging {
-    using System;
     using Accord.Math;
     using Accord.Math.Decompositions;
     using Accord.Statistics;
     using AForge;
+    using System;
 
     /// <summary>
     ///   Haralick's Texture Features.

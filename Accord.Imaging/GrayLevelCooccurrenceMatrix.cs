@@ -26,9 +26,9 @@
 namespace Accord.Imaging {
     using Filters;
     using System;
+    using System.Collections.Generic;
     using System.Drawing;
     using System.Drawing.Imaging;
-    using System.Collections.Generic;
 
     /// <summary>
     ///   Co-occurrence Degree.

@@ -7,13 +7,13 @@
 //
 
 namespace Accord.Imaging {
+    using Accord;
+    using Accord.Math;
+    using AForge;
+    using AForge.Math;
     using System;
     using System.Drawing;
     using System.Drawing.Imaging;
-    using AForge;
-    using AForge.Math;
-    using Accord;
-    using Accord.Math;
 
     /// <summary>
     /// Gather statistics about image in YCbCr color space.

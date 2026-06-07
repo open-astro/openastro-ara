@@ -12,26 +12,26 @@
 
 #endregion "copyright"
 
+using CommunityToolkit.Mvvm.ComponentModel;
+using OpenAstroAra.Astrometry;
+using OpenAstroAra.Core.Locale;
 using OpenAstroAra.Core.Model;
-using System.Windows.Data;
-using System.Windows.Input;
+using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Core.Utility.Notification;
 using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.DragDrop;
 using OpenAstroAra.Sequencer.SequenceItem;
 using OpenAstroAra.Sequencer.Serialization;
-using OpenAstroAra.Core.Utility;
-using OpenAstroAra.Astrometry;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
 using System.Linq;
-using OpenAstroAra.Core.Utility.Notification;
-using OpenAstroAra.Core.Locale;
 using System.Threading.Tasks;
-using CommunityToolkit.Mvvm.ComponentModel;
+using System.Windows.Data;
+using System.Windows.Input;
 
 namespace OpenAstroAra.Sequencer {
 

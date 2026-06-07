@@ -12,23 +12,23 @@
 
 #endregion "copyright"
 
+using Accord.Statistics.Distributions.Univariate;
+using OpenAstroAra.Astrometry;
+using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Interfaces;
+using OpenAstroAra.Core.Locale;
+using OpenAstroAra.Core.Model;
 using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Core.Utility.Notification;
+using OpenAstroAra.Equipment.Equipment.MyGuider.PHD2;
+using OpenAstroAra.Equipment.Equipment.MyTelescope;
+using OpenAstroAra.Equipment.Interfaces;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Profile.Interfaces;
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using OpenAstroAra.Astrometry;
-using Accord.Statistics.Distributions.Univariate;
-using OpenAstroAra.Core.Enum;
-using OpenAstroAra.Equipment.Interfaces.Mediator;
-using OpenAstroAra.Core.Locale;
-using OpenAstroAra.Core.Interfaces;
-using OpenAstroAra.Equipment.Interfaces;
-using OpenAstroAra.Equipment.Equipment.MyTelescope;
-using OpenAstroAra.Core.Model;
-using System.Collections.Generic;
-using OpenAstroAra.Equipment.Equipment.MyGuider.PHD2;
 
 namespace OpenAstroAra.Equipment.Equipment.MyGuider {
 

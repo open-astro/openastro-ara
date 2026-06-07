@@ -7,11 +7,11 @@
 //
 
 namespace Accord.Imaging {
+    using Accord.Compat;
+    using Accord.Math;
     using System;
     using System.Drawing;
     using System.Drawing.Imaging;
-    using Accord.Math;
-    using Accord.Compat;
     using System.Numerics;
 
     /// <summary>

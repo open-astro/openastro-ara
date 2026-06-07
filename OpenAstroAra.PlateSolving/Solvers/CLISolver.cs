@@ -13,17 +13,17 @@
 #endregion "copyright"
 
 using OpenAstroAra.Core.Enum;
-using OpenAstroAra.Image.Interfaces;
+using OpenAstroAra.Core.Locale;
+using OpenAstroAra.Core.Model;
 using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Core.Utility.Extensions;
+using OpenAstroAra.Image.FileFormat;
+using OpenAstroAra.Image.Interfaces;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
-using OpenAstroAra.Image.FileFormat;
-using OpenAstroAra.Core.Model;
-using OpenAstroAra.Core.Locale;
-using System.Collections.Generic;
 
 namespace OpenAstroAra.PlateSolving.Solvers {
 

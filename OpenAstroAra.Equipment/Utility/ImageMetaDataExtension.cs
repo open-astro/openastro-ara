@@ -12,20 +12,20 @@
 
 #endregion "copyright"
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using OpenAstroAra.Core.Enum;
-using System.Text;
-using System.Threading.Tasks;
-using OpenAstroAra.Image.ImageData;
 using OpenAstroAra.Equipment.Equipment.MyCamera;
-using OpenAstroAra.Equipment.Equipment.MyTelescope;
 using OpenAstroAra.Equipment.Equipment.MyFilterWheel;
 using OpenAstroAra.Equipment.Equipment.MyFocuser;
 using OpenAstroAra.Equipment.Equipment.MyRotator;
+using OpenAstroAra.Equipment.Equipment.MyTelescope;
 using OpenAstroAra.Equipment.Equipment.MyWeatherData;
 using OpenAstroAra.Equipment.Interfaces;
+using OpenAstroAra.Image.ImageData;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
 
 namespace OpenAstroAra.Equipment.Utility {
 

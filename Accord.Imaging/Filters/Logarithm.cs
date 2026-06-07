@@ -24,11 +24,11 @@
 //
 
 namespace Accord.Imaging.Filters {
+    using Accord.Imaging;
+    using Accord.Imaging.Filters;
     using System;
     using System.Collections.Generic;
     using System.Drawing.Imaging;
-    using Accord.Imaging;
-    using Accord.Imaging.Filters;
 
     /// <summary>
     ///   Log filter.

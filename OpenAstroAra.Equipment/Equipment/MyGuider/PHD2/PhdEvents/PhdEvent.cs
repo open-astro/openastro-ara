@@ -12,10 +12,10 @@
 
 #endregion "copyright"
 
+using Newtonsoft.Json;
+using OpenAstroAra.Core.Interfaces;
 using OpenAstroAra.Core.Utility;
 using System.Runtime.Serialization;
-using OpenAstroAra.Core.Interfaces;
-using Newtonsoft.Json;
 
 namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.PhdEvents {
 

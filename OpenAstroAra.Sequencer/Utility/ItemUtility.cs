@@ -12,18 +12,18 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Astrometry;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using OpenAstroAra.Sequencer.Trigger;
-using OpenAstroAra.Sequencer.Interfaces;
-using OpenAstroAra.Sequencer.SequenceItem;
-using OpenAstroAra.Sequencer.SequenceItem.Utility;
 using OpenAstroAra.Core.Enum;
 using OpenAstroAra.Core.Locale;
 using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Sequencer.Container;
+using OpenAstroAra.Sequencer.Interfaces;
+using OpenAstroAra.Sequencer.SequenceItem;
+using OpenAstroAra.Sequencer.SequenceItem.Utility;
+using OpenAstroAra.Sequencer.Trigger;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace OpenAstroAra.Sequencer.Utility {
 

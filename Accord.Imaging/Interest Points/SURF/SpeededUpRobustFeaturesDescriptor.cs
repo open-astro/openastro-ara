@@ -24,9 +24,9 @@
 //
 
 namespace Accord.Imaging {
+    using Accord.Imaging;
     using System;
     using System.Collections.Generic;
-    using Accord.Imaging;
 
     /// <summary>
     ///   Speeded-Up Robust Features (SURF) Descriptor.

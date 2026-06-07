@@ -7,12 +7,12 @@
 //
 
 namespace Accord.Imaging.Filters {
+    using Accord;
+    using AForge;
     using System;
     using System.Collections.Generic;
     using System.Drawing;
     using System.Drawing.Imaging;
-    using AForge;
-    using Accord;
 
     /// <summary>
     /// Contrast adjusting in RGB color space.

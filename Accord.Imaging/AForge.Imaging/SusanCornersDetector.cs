@@ -31,12 +31,12 @@
 //
 
 namespace Accord.Imaging {
+    using Accord.Compat;
+    using Accord.Imaging.Filters;
     using System;
+    using System.Collections.Generic;
     using System.Drawing;
     using System.Drawing.Imaging;
-    using System.Collections.Generic;
-    using Accord.Imaging.Filters;
-    using Accord.Compat;
 
     /// <summary>
     /// Susan corners detector.

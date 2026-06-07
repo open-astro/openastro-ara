@@ -9,11 +9,11 @@
     file, You can obtain one at http://mozilla.org/MPL/2.0/.
 */
 #endregion "copyright"
-using NUnit.Framework;
 using FluentAssertions;
+using NUnit.Framework;
+using OpenAstroAra.Core.Model;
 using System;
 using System.IO;
-using OpenAstroAra.Core.Model;
 using System.Reflection;
 
 namespace OpenAstroAra.Test.AstrometryTest {

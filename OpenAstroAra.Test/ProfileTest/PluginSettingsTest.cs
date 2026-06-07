@@ -13,8 +13,8 @@
 #endregion "copyright"
 
 using FluentAssertions;
-using OpenAstroAra.Profile;
 using NUnit.Framework;
+using OpenAstroAra.Profile;
 using System;
 using System.Collections.Generic;
 using System.Linq;

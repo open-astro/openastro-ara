@@ -12,20 +12,20 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Astrometry;
-using System;
-using System.Threading;
-using System.Threading.Tasks;
-using OpenAstroAra.Core.Model;
-using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Core.Locale;
+using OpenAstroAra.Core.Model;
+using OpenAstroAra.Core.Model.Equipment;
+using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Core.Utility.Notification;
+using OpenAstroAra.Equipment.Interfaces;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Equipment.Model;
 using OpenAstroAra.PlateSolving.Interfaces;
-using OpenAstroAra.Equipment.Interfaces;
-using OpenAstroAra.Core.Utility.Notification;
-using OpenAstroAra.Core.Model.Equipment;
+using System;
 using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace OpenAstroAra.PlateSolving {
 

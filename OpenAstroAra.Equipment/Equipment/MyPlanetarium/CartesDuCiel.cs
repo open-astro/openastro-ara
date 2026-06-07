@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -13,17 +13,17 @@
 #endregion "copyright"
 
 using OpenAstroAra.Astrometry;
-using OpenAstroAra.Core.Utility.TcpRaw;
-using OpenAstroAra.Profile.Interfaces;
-using System;
-using System.Threading.Tasks;
-using System.Text.RegularExpressions;
 using OpenAstroAra.Core.Utility;
-using System.Linq;
-using System.Globalization;
+using OpenAstroAra.Core.Utility.TcpRaw;
 using OpenAstroAra.Equipment.Exceptions;
 using OpenAstroAra.Equipment.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
+using System;
+using System.Globalization;
+using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace OpenAstroAra.Equipment.Equipment.MyPlanetarium {
 
@@ -65,7 +65,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyPlanetarium {
                 if (!Match(columns[0].Replace("OK!", string.Empty), @"(([0-9]{1,2})([h|:]|[?]{2})([0-9]{1,2})([m|:]|[?]{2})?([0-9]{1,2}(?:\.[0-9]+){0,1})?([s|:]|[?]{2}))", out var raString)) { throw new PlanetariumObjectNotSelectedException(); }
                 var ra = AstroUtil.HMSToDegrees(raString);
 
-                if (!Match(columns[1], @"([\+|-]([0-9]{1,2})([d|°|:]|[?]{2})([0-9]{1,2})([m|'|:]|[?]{2})?([0-9]{1,2}(?:\.[0-9]+){0,1})?([s|""|:]|[?]{2}))", out var decString)) { throw new PlanetariumObjectNotSelectedException(); }
+                if (!Match(columns[1], @"([\+|-]([0-9]{1,2})([d|ï¿½|:]|[?]{2})([0-9]{1,2})([m|'|:]|[?]{2})?([0-9]{1,2}(?:\.[0-9]+){0,1})?([s|""|:]|[?]{2}))", out var decString)) { throw new PlanetariumObjectNotSelectedException(); }
                 var dec = AstroUtil.DMSToDegrees(decString);
 
                 if (!Match(columns.Last(), @"(?<=Equinox:).*", out var equinox)) { throw new PlanetariumObjectNotSelectedException(); }

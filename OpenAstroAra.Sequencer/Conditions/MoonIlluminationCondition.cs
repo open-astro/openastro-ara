@@ -13,20 +13,20 @@
 #endregion "copyright"
 
 using Newtonsoft.Json;
+using OpenAstroAra.Astrometry;
 using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Equipment.Equipment.MyGuider.SkyGuard.SkyGuardMessages;
 using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Sequencer.SequenceItem;
-using OpenAstroAra.Core.Utility;
-using OpenAstroAra.Astrometry;
+using OpenAstroAra.Sequencer.SequenceItem.Utility;
+using OpenAstroAra.Sequencer.Utility;
 using System;
 using System.ComponentModel.Composition;
 using System.Linq;
+using System.Runtime.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-using OpenAstroAra.Sequencer.Utility;
-using System.Runtime.Serialization;
-using OpenAstroAra.Equipment.Equipment.MyGuider.SkyGuard.SkyGuardMessages;
-using OpenAstroAra.Sequencer.SequenceItem.Utility;
 
 namespace OpenAstroAra.Sequencer.Conditions {
 

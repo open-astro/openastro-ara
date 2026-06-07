@@ -12,7 +12,6 @@
 
 #endregion "copyright"
 
-using System.Windows.Data;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Sequencer;
 using OpenAstroAra.Sequencer.Conditions;
@@ -25,6 +24,7 @@ using OpenAstroAra.Sequencer.SequenceItem.Utility;
 using OpenAstroAra.Sequencer.Trigger;
 using OpenAstroAra.Sequencer.Utility.DateTimeProvider;
 using OpenAstroAra.Server.Services.Equipment;
+using System.Windows.Data;
 
 namespace OpenAstroAra.Server.Services;
 

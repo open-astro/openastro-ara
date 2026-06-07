@@ -13,18 +13,18 @@
 #endregion "copyright"
 
 using Newtonsoft.Json;
-using System.Windows.Input;
 using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Locale;
 using OpenAstroAra.Core.Model;
-using OpenAstroAra.Sequencer.Container;
-using OpenAstroAra.Sequencer.Validations;
 using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Core.Utility.Notification;
+using OpenAstroAra.Sequencer.Container;
+using OpenAstroAra.Sequencer.Utility;
+using OpenAstroAra.Sequencer.Validations;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using OpenAstroAra.Sequencer.Utility;
-using OpenAstroAra.Core.Locale;
-using OpenAstroAra.Core.Utility.Notification;
+using System.Windows.Input;
 
 namespace OpenAstroAra.Sequencer.SequenceItem {
 

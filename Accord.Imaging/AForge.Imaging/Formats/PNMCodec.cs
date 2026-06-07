@@ -28,9 +28,9 @@
 
 namespace Accord.Imaging.Formats {
     using System;
-    using System.IO;
     using System.Drawing;
     using System.Drawing.Imaging;
+    using System.IO;
     using System.Text;
 
     /// <summary>

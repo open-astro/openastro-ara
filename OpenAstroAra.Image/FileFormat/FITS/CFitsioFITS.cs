@@ -1,15 +1,15 @@
+using OpenAstroAra.Astrometry;
+using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Image.ImageData;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 using static OpenAstroAra.Image.FileFormat.FITS.CfitsioNative;
-using OpenAstroAra.Image.ImageData;
-using System.Globalization;
-using OpenAstroAra.Core.Enum;
-using OpenAstroAra.Astrometry;
-using OpenAstroAra.Core.Utility;
 
 namespace OpenAstroAra.Image.FileFormat.FITS {
     public class CFitsioFITS {

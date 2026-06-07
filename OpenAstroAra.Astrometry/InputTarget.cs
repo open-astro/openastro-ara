@@ -13,11 +13,11 @@
 #endregion "copyright"
 
 using Newtonsoft.Json;
-using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Astrometry;
-using System;
-using OpenAstroAra.Core.Model;
 using OpenAstroAra.Astrometry.Interfaces;
+using OpenAstroAra.Core.Model;
+using OpenAstroAra.Core.Utility;
+using System;
 using System.Runtime.Serialization;
 
 namespace OpenAstroAra.Astrometry {

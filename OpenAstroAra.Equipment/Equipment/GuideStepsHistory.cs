@@ -13,12 +13,12 @@
 #endregion "copyright"
 
 using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Interfaces;
+using OpenAstroAra.Core.Model;
 using OpenAstroAra.Core.Utility;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using OpenAstroAra.Core.Model;
-using OpenAstroAra.Core.Interfaces;
 
 namespace OpenAstroAra.Equipment.Equipment {
 

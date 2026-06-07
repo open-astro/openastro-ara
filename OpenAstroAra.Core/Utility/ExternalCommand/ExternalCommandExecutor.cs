@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -13,13 +13,13 @@
 #endregion "copyright"
 
 using OpenAstroAra.Core.Model;
+using OpenAstroAra.Core.Utility.Extensions;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
-using OpenAstroAra.Core.Utility.Extensions;
 
 namespace OpenAstroAra.Core.Utility.ExternalCommand {
 

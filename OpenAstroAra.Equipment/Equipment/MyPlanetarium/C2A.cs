@@ -12,15 +12,15 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Astrometry;
+using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Core.Utility.TcpRaw;
-using OpenAstroAra.Profile.Interfaces;
-using System.Threading.Tasks;
-using System;
 using OpenAstroAra.Equipment.Exceptions;
 using OpenAstroAra.Equipment.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
+using System;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace OpenAstroAra.Equipment.Equipment.MyPlanetarium {
 

@@ -7,13 +7,12 @@
 //
 
 namespace Accord.Imaging.Filters {
+    using Accord.Math.Geometry;
+    using AForge;
     using System;
     using System.Collections.Generic;
     using System.Drawing;
     using System.Drawing.Imaging;
-
-    using AForge;
-    using Accord.Math.Geometry;
 
     /// <summary>
     /// Performs backward quadrilateral transformation into an area in destination image.

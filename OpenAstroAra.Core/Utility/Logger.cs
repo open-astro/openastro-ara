@@ -13,17 +13,17 @@
 #endregion "copyright"
 
 using OpenAstroAra.Core.Enum;
+using Serilog;
+using Serilog.Core;
+using Serilog.Events;
+using Serilog.Sinks.File;
 using System;
+using System.Globalization;
 using System.IO;
 using System.Runtime;
 using System.Runtime.CompilerServices;
-using Serilog;
-using Serilog.Core;
-using Serilog.Sinks.File;
-using System.Text;
-using Serilog.Events;
-using System.Globalization;
 using System.Runtime.InteropServices;
+using System.Text;
 
 namespace OpenAstroAra.Core.Utility {
 

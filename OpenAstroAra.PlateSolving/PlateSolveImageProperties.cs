@@ -12,8 +12,8 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Image.Interfaces;
 using OpenAstroAra.Astrometry;
+using OpenAstroAra.Image.Interfaces;
 
 namespace OpenAstroAra.PlateSolving {
 

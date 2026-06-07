@@ -12,9 +12,9 @@
 
 #endregion "copyright"
 
+using OpenAstroAra.Core.Model;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
-using OpenAstroAra.Core.Model;
 
 namespace OpenAstroAra.Core.Utility {
 

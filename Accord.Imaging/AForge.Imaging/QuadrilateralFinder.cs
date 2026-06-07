@@ -8,13 +8,12 @@
 
 
 namespace Accord.Imaging {
+    using Accord.Math.Geometry;
+    using AForge;
     using System;
     using System.Collections.Generic;
     using System.Drawing;
     using System.Drawing.Imaging;
-
-    using AForge;
-    using Accord.Math.Geometry;
 
     /// <summary>
     /// Searching of quadrilateral/triangle corners.

@@ -7,13 +7,13 @@
 //
 
 namespace Accord.Imaging {
+    using Accord.Imaging.Formats;
+    using AForge;
     using System;
-    using System.IO;
     using System.Drawing;
     using System.Drawing.Imaging;
-    using AForge;
+    using System.IO;
     using System.Net;
-    using Accord.Imaging.Formats;
 
     /// <summary>
     /// Core image relatad methods.

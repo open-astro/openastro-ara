@@ -12,10 +12,10 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Astrometry;
-using OpenAstroAra.Core.Utility;
 using NUnit.Framework;
 using NUnit.Framework.Legacy;
+using OpenAstroAra.Astrometry;
+using OpenAstroAra.Core.Utility;
 
 namespace OpenAstroAra.Test.Utility {
 

@@ -28,11 +28,11 @@
 //
 
 namespace Accord.Imaging {
+    using Accord.Compat;
     using System;
+    using System.Collections.Generic;
     using System.Drawing;
     using System.Drawing.Imaging;
-    using System.Collections.Generic;
-    using Accord.Compat;
 
     /// <summary>
     /// Moravec corners detector.

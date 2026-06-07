@@ -12,6 +12,12 @@
 
 #endregion "copyright"
 
+using OpenAstroAra.Core.Locale;
+using OpenAstroAra.Core.Model;
+using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Equipment.Model;
+using OpenAstroAra.PlateSolving.Interfaces;
 using OpenAstroAra.Profile.Interfaces;
 using System;
 using System.Collections.Generic;
@@ -19,12 +25,6 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using OpenAstroAra.Equipment.Interfaces.Mediator;
-using OpenAstroAra.Core.Model;
-using OpenAstroAra.Core.Utility;
-using OpenAstroAra.Equipment.Model;
-using OpenAstroAra.PlateSolving.Interfaces;
-using OpenAstroAra.Core.Locale;
 
 namespace OpenAstroAra.PlateSolving {
 

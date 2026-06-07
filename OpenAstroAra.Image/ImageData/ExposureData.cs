@@ -12,17 +12,17 @@
 
 #endregion "copyright"
 
+using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Interfaces;
+using OpenAstroAra.Core.Locale;
+using OpenAstroAra.Core.Model;
 using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Image.ImageAnalysis;
+using OpenAstroAra.Image.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using OpenAstroAra.Core.Model;
-using OpenAstroAra.Core.Locale;
-using OpenAstroAra.Image.Interfaces;
-using OpenAstroAra.Core.Enum;
-using OpenAstroAra.Image.ImageAnalysis;
-using OpenAstroAra.Profile.Interfaces;
-using OpenAstroAra.Core.Interfaces;
 
 namespace OpenAstroAra.Image.ImageData {
 

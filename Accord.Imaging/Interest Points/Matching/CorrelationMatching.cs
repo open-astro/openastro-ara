@@ -49,13 +49,13 @@
 //   
 
 namespace Accord.Imaging {
+    using Accord.Imaging.Filters;
+    using Accord.Math;
     using System;
     using System.Collections.Generic;
     using System.Drawing;
     using System.Drawing.Imaging;
     using System.Linq;
-    using Accord.Math;
-    using Accord.Imaging.Filters;
 
     /// <summary>
     ///   Maximum cross-correlation feature point matching algorithm.

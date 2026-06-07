@@ -12,14 +12,14 @@
 
 #endregion "copyright"
 
-using System;
-using System.IO;
-using System.Threading;
-using System.Threading.Tasks;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Image.Interfaces;
 using OpenAstroAra.PlateSolving.Interfaces;
+using System;
+using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace OpenAstroAra.PlateSolving.Solvers {
 

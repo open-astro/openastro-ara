@@ -13,13 +13,13 @@
 
 #endregion "copyright"
 
+using ASCOM.Alpaca.Discovery;
+using ASCOM.Common;
+using OpenAstroAra.Equipment.Interfaces;
 using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using ASCOM.Alpaca.Discovery;
-using ASCOM.Common;
-using OpenAstroAra.Equipment.Interfaces;
 
 namespace OpenAstroAra.Equipment.Providers {
 

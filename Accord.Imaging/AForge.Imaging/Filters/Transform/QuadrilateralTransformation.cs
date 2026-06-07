@@ -7,12 +7,11 @@
 //
 
 namespace Accord.Imaging.Filters {
+    using AForge;
     using System;
     using System.Collections.Generic;
     using System.Drawing;
     using System.Drawing.Imaging;
-
-    using AForge;
 
     /// <summary>
     /// Performs quadrilateral transformation of an area in a given source image.

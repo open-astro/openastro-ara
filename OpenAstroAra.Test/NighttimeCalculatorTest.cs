@@ -9,9 +9,9 @@
     file, You can obtain one at http://mozilla.org/MPL/2.0/.
 */
 #endregion "copyright"
-using OpenAstroAra.Astrometry;
 using NUnit.Framework;
 using NUnit.Framework.Legacy;
+using OpenAstroAra.Astrometry;
 using System;
 using System.Collections.Generic;
 using System.Linq;

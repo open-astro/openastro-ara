@@ -8,9 +8,9 @@
 
 namespace Accord.Imaging.Filters {
     using System;
+    using System.Collections;
     using System.Drawing;
     using System.Drawing.Imaging;
-    using System.Collections;
 
     /// <summary>
     /// Filters' collection to apply to an image in sequence.

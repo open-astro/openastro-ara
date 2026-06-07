@@ -12,10 +12,10 @@
 
 #endregion "copyright"
 
-using System;
-using OpenAstroAra.Sequencer.Trigger;
 using Newtonsoft.Json.Linq;
 using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Sequencer.Trigger;
+using System;
 
 namespace OpenAstroAra.Sequencer.Serialization {
 

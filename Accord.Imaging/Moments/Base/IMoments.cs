@@ -21,8 +21,8 @@
 //
 
 namespace Accord.Imaging.Moments {
-    using System.Drawing;
     using Accord.Imaging;
+    using System.Drawing;
 
     /// <summary>
     ///   Common interface for image moments.

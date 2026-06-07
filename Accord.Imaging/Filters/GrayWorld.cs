@@ -35,10 +35,10 @@
 //
 
 namespace Accord.Imaging.Filters {
-    using System.Collections.Generic;
-    using System.Drawing.Imaging;
     using Accord.Imaging;
     using Accord.Imaging.Filters;
+    using System.Collections.Generic;
+    using System.Drawing.Imaging;
 
     /// <summary>
     ///   Gray World filter for color normalization.

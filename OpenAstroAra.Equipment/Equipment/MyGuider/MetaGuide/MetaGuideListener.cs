@@ -12,11 +12,11 @@
 
 #endregion "copyright"
 
+using Nito.AsyncEx;
+using Nito.AsyncEx.Synchronous;
 using OpenAstroAra.Core.Locale;
 using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Core.Utility.Notification;
-using Nito.AsyncEx;
-using Nito.AsyncEx.Synchronous;
 using System;
 using System.Net;
 using System.Net.Sockets;

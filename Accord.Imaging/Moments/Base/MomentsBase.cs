@@ -21,10 +21,10 @@
 //
 
 namespace Accord.Imaging.Moments {
-    using System.Drawing;
-    using System.Drawing.Imaging;
     using Accord.Imaging;
     using System;
+    using System.Drawing;
+    using System.Drawing.Imaging;
 
     /// <summary>
     ///   Base class for image moments.

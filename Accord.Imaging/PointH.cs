@@ -21,8 +21,8 @@
 //
 
 namespace Accord.Imaging {
-    using System.Drawing;
     using System;
+    using System.Drawing;
 
     /// <summary>
     ///   Represents an ordered pair of real x- and y-coordinates and scalar w that defines

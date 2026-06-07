@@ -13,15 +13,15 @@
 #endregion "copyright"
 
 using Newtonsoft.Json;
-using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Astrometry;
+using OpenAstroAra.Astrometry.Interfaces;
+using OpenAstroAra.Core.Locale;
+using OpenAstroAra.Core.Utility;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using OpenAstroAra.Core.Locale;
-using OpenAstroAra.Astrometry.Interfaces;
 
 namespace OpenAstroAra.Sequencer.Utility.DateTimeProvider {
 

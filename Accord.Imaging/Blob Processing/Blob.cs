@@ -28,11 +28,11 @@
 //
 
 namespace Accord.Imaging {
+    using AForge;
     using System;
+    using System.ComponentModel;
     using System.Drawing;
     using System.Drawing.Imaging;
-    using System.ComponentModel;
-    using AForge;
 
     /// <summary>
     /// Image's blob.

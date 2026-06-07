@@ -24,10 +24,10 @@
 //
 
 namespace Accord.Imaging {
-    using System;
-    using System.Collections.Generic;
     using Accord.Math;
     using Accord.Statistics;
+    using System;
+    using System.Collections.Generic;
     using System.Runtime.Serialization;
 
     /// <summary>

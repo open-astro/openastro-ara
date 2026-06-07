@@ -12,18 +12,18 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Image.Interfaces;
-using OpenAstroAra.Profile.Interfaces;
+using OpenAstroAra.Core.Locale;
+using OpenAstroAra.Core.Model;
 using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Image.Interfaces;
+using OpenAstroAra.PlateSolving.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using OpenAstroAra.Core.Model;
-using OpenAstroAra.Core.Locale;
-using OpenAstroAra.PlateSolving.Interfaces;
 
 namespace OpenAstroAra.PlateSolving {
 

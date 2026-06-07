@@ -24,8 +24,8 @@
 //
 
 namespace Accord.Imaging {
-    using System;
     using Accord.Imaging;
+    using System;
 
     /// <summary>
     ///   Gray-Level Difference Method (GLDM).

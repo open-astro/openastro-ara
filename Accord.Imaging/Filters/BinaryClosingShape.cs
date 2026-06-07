@@ -25,12 +25,12 @@
 //
 
 namespace Accord.Imaging.Filters {
+    using Accord.Imaging;
+    using Accord.Math;
     using System;
     using System.Collections.Generic;
-    using System.Drawing.Imaging;
-    using Accord.Imaging;
     using System.Drawing;
-    using Accord.Math;
+    using System.Drawing.Imaging;
 
     /// <summary>
     ///   Closing Binary Shape operator from Mathematical Morphology with 3x3 structuring element.

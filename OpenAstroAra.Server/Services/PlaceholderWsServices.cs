@@ -12,10 +12,10 @@
 
 #endregion "copyright"
 
+using OpenAstroAra.Server.Contracts.WsEvents;
 using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
-using OpenAstroAra.Server.Contracts.WsEvents;
 
 namespace OpenAstroAra.Server.Services;
 

@@ -12,18 +12,18 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Core.Enum;
-using OpenAstroAra.Image.ImageData;
 using OpenAstroAra.Astrometry;
+using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Image.ImageData;
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
-using OpenAstroAra.Core.Utility;
-using System.Collections.Generic;
 
 namespace OpenAstroAra.Image.FileFormat.XISF {
     /*

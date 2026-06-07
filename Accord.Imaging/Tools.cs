@@ -46,17 +46,17 @@
 //   
 
 namespace Accord.Imaging {
-    using System;
-    using System.Drawing;
-    using System.Drawing.Imaging;
+    using Accord.Imaging;
+    using Accord.Imaging.Converters;
     using Accord.Math;
     using Accord.Math.Decompositions;
-    using Accord.Imaging;
     using Accord.Math.Geometry;
     using AForge.Math;
-    using System.IO;
-    using Accord.Imaging.Converters;
+    using System;
     using System.Collections.Generic;
+    using System.Drawing;
+    using System.Drawing.Imaging;
+    using System.IO;
 
     /// <summary>
     ///   Static tool functions for imaging.

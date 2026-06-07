@@ -35,10 +35,10 @@
 //
 
 namespace Accord.Imaging.Filters {
-    using System.Collections.Generic;
-    using System.Drawing.Imaging;
     using Accord.Imaging;
     using Accord.Imaging.Filters;
+    using System.Collections.Generic;
+    using System.Drawing.Imaging;
 
     /// <summary>
     ///   White Patch filter for color normalization.

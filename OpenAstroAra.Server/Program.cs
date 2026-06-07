@@ -18,12 +18,12 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Scalar.AspNetCore;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Endpoints;
 using OpenAstroAra.Server.Services;
+using Scalar.AspNetCore;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace OpenAstroAra.Server;
 

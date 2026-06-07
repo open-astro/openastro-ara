@@ -9,20 +9,20 @@
     file, You can obtain one at http://mozilla.org/MPL/2.0/.
 */
 #endregion "copyright"
+using FluentAssertions;
+using NUnit.Framework;
+using NUnit.Framework.Legacy;
+using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Interfaces;
+using OpenAstroAra.Equipment.Equipment;
 using OpenAstroAra.Equipment.Equipment.MyGuider;
 using OpenAstroAra.Equipment.Equipment.MyGuider.PHD2;
-using OpenAstroAra.Core.Enum;
-using NUnit.Framework;
+using OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.PhdEvents;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using OpenAstroAra.Core.Interfaces;
-using OpenAstroAra.Equipment.Equipment;
-using OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.PhdEvents;
-using FluentAssertions;
-using NUnit.Framework.Legacy;
 
 namespace OpenAstroAra.Test {
 

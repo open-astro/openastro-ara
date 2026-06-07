@@ -13,16 +13,16 @@
 #endregion "copyright"
 
 using Newtonsoft.Json;
-using OpenAstroAra.Sequencer.SequenceItem;
+using OpenAstroAra.Core.Enum;
 using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Sequencer.SequenceItem;
+using OpenAstroAra.Sequencer.Utility;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.Composition;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using OpenAstroAra.Sequencer.Utility;
-using OpenAstroAra.Core.Enum;
 
 namespace OpenAstroAra.Sequencer.Conditions {
 

@@ -13,13 +13,13 @@
 #endregion "copyright"
 
 using NUnit.Framework;
+using NUnit.Framework.Legacy;
+using OpenAstroAra.Core.Utility;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using OpenAstroAra.Core.Utility;
-using NUnit.Framework.Legacy;
 
 namespace OpenAstroAra.Test.Utility {
 

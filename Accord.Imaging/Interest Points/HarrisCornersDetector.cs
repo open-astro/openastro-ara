@@ -21,15 +21,15 @@
 //
 
 namespace Accord.Imaging {
+    using Accord.Compat;
+    using Accord.Imaging;
+    using Accord.Imaging.Filters;
+    using Accord.Math;
+    using AForge;
     using System;
     using System.Collections.Generic;
     using System.Drawing;
     using System.Drawing.Imaging;
-    using Accord.Math;
-    using AForge;
-    using Accord.Imaging;
-    using Accord.Imaging.Filters;
-    using Accord.Compat;
 
     /// <summary>
     ///   Corners measures to be used in <see cref="HarrisCornersDetector"/>.

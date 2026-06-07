@@ -13,15 +13,15 @@
 #endregion "copyright"
 
 using Newtonsoft.Json;
-using OpenAstroAra.Profile.Interfaces;
+using Nito.AsyncEx;
 using OpenAstroAra.Astrometry;
+using OpenAstroAra.Astrometry.RiseAndSet;
+using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Locale;
+using OpenAstroAra.Profile.Interfaces;
+using OpenAstroAra.Sequencer.SequenceItem.Utility;
 using System;
 using System.ComponentModel.Composition;
-using OpenAstroAra.Sequencer.SequenceItem.Utility;
-using OpenAstroAra.Core.Enum;
-using OpenAstroAra.Astrometry.RiseAndSet;
-using OpenAstroAra.Core.Locale;
-using Nito.AsyncEx;
 
 namespace OpenAstroAra.Sequencer.Conditions {
 

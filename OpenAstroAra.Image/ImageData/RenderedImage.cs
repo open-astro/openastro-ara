@@ -13,14 +13,14 @@
 #endregion "copyright"
 
 using OpenAstroAra.Core.Enum;
-using System;
-using System.Threading;
-using System.Threading.Tasks;
 using OpenAstroAra.Core.Model;
+using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Image.ImageAnalysis;
 using OpenAstroAra.Image.Interfaces;
 using OpenAstroAra.Profile.Interfaces;
-using OpenAstroAra.Core.Utility;
+using System;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace OpenAstroAra.Image.ImageData {
 

@@ -7,9 +7,9 @@
 //
 
 namespace Accord.Imaging.ComplexFilters {
-    using System;
     using AForge;
     using AForge.Math;
+    using System;
 
     /// <summary>
     /// Image processing filter, which operates with Fourier transformed

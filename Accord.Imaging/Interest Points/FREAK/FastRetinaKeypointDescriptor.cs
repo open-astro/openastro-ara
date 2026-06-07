@@ -33,8 +33,8 @@
 //
 
 namespace Accord.Imaging {
-    using Accord.Math;
     using Accord.Imaging;
+    using Accord.Math;
     using System;
     using System.Collections.Generic;
 

@@ -16,11 +16,11 @@ using OpenAstroAra.Sequencer.Conditions;
 using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.SequenceItem;
 using OpenAstroAra.Sequencer.Trigger;
-using System.Windows.Data;
 using OpenAstroAra.Sequencer.Utility.DateTimeProvider;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Windows.Data;
 namespace OpenAstroAra.Sequencer {
 
     public interface ISequencerFactory {

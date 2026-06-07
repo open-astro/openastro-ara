@@ -12,9 +12,9 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Profile.Interfaces;
-using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Equipment.Interfaces;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Profile.Interfaces;
 
 namespace OpenAstroAra.PlateSolving.Interfaces {
 
