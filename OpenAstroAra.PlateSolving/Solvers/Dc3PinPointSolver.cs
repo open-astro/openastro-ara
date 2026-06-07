@@ -49,9 +49,9 @@ namespace OpenAstroAra.PlateSolving.Solvers {
         protected override async Task<PlateSolveResult> SolveAsyncImpl(IImageData source,
                                                                        PlateSolveParameter parameter,
                                                                        PlateSolveImageProperties imageProperties,
-                                                                       IProgress<ApplicationStatus> progress,
+                                                                       IProgress<ApplicationStatus>? progress,
                                                                        CancellationToken ct) {
-            string filePath = null;
+            string? filePath = null;
             bool attached = false;
             bool success = false;
 
@@ -59,7 +59,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
                 Success = false,
             };
 
-            dynamic pinPoint = null;
+            dynamic? pinPoint = null;
 
             try {
                 // Save the image to the solving working directory
@@ -75,8 +75,8 @@ namespace OpenAstroAra.PlateSolving.Solvers {
 
                     // Instantiate a new PinPoint object via its COM interface
                     try {
-                        Type PinPointType = Type.GetTypeFromProgID("PinPoint.Plate");
-                        pinPoint = Activator.CreateInstance(PinPointType);
+                        Type? PinPointType = Type.GetTypeFromProgID("PinPoint.Plate");
+                        pinPoint = Activator.CreateInstance(PinPointType ?? throw new ArgumentNullException(nameof(PinPointType)))!;
                     } catch (ArgumentNullException) {
                         Logger.Error($"Failed to initialize PinPoint. It or its 64bit component does not appear to be installed.");
 
@@ -131,9 +131,9 @@ namespace OpenAstroAra.PlateSolving.Solvers {
                 }, ct);
 
                 // Fill out the solve results, deallocate the PinPoint object, and return
-                if (success) {
+                if (success && pinPoint != null) {
                     plateSolveResult.Success = true;
-                    plateSolveResult.Coordinates = new Coordinates(pinPoint.RightAscension, pinPoint.Declination, Epoch.J2000, Coordinates.RAType.Hours);
+                    plateSolveResult.Coordinates = new Coordinates(pinPoint!.RightAscension, pinPoint.Declination, Epoch.J2000, Coordinates.RAType.Hours);
                     plateSolveResult.PositionAngle = pinPoint.PositionAngle;
                     plateSolveResult.Pixscale = Math.Abs(pinPoint.ArcsecPerPixelHoriz);
 
@@ -171,8 +171,8 @@ namespace OpenAstroAra.PlateSolving.Solvers {
         protected override void EnsureSolverValid(PlateSolveParameter parameter) {
 
             try {
-                Type PinPointType = Type.GetTypeFromProgID("PinPoint.Plate");
-                dynamic pinPoint = Activator.CreateInstance(PinPointType);
+                Type? PinPointType = Type.GetTypeFromProgID("PinPoint.Plate");
+                dynamic pinPoint = Activator.CreateInstance(PinPointType ?? throw new ArgumentNullException(nameof(PinPointType)))!;
                 Marshal.ReleaseComObject(pinPoint);
             } catch (ArgumentNullException) {
             }

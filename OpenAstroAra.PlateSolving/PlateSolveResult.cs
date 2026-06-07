@@ -49,9 +49,9 @@ namespace OpenAstroAra.PlateSolving {
 
         public double Radius { get; set; }
 
-        private Coordinates coordinates;
+        private Coordinates? coordinates;
 
-        public Coordinates Coordinates {
+        public Coordinates? Coordinates {
             get => coordinates;
             set => coordinates = value?.Transform(Epoch.J2000);
         }
@@ -65,7 +65,7 @@ namespace OpenAstroAra.PlateSolving {
         [NotifyPropertyChangedFor(nameof(RaPixError))]
         [NotifyPropertyChangedFor(nameof(DecPixError))]
         [NotifyPropertyChangedFor(nameof(DecErrorString))]
-        private Separation separation;
+        private Separation? separation;
 
         public string RaErrorString => Separation == null ? "--" : AstroUtil.DegreesToHMS(Separation.RA.Degree);
 

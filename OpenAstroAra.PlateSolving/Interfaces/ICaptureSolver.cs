@@ -23,6 +23,6 @@ namespace OpenAstroAra.PlateSolving.Interfaces {
     public interface ICaptureSolver {
         IImageSolver ImageSolver { get; set; }
 
-        Task<PlateSolveResult> Solve(CaptureSequence seq, CaptureSolverParameter parameter, IProgress<PlateSolveProgress> solveProgress, IProgress<ApplicationStatus> progress, CancellationToken ct);
+        Task<PlateSolveResult> Solve(CaptureSequence seq, CaptureSolverParameter parameter, IProgress<PlateSolveProgress>? solveProgress, IProgress<ApplicationStatus>? progress, CancellationToken ct);
     }
 }

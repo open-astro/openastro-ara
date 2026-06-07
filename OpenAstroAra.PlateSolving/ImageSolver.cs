@@ -34,7 +34,7 @@ namespace OpenAstroAra.PlateSolving {
             this.blindSolver = blindSolver;
         }
 
-        public async Task<PlateSolveResult> Solve(IImageData source, PlateSolveParameter parameter, IProgress<ApplicationStatus> progress, CancellationToken ct) {
+        public async Task<PlateSolveResult> Solve(IImageData source, PlateSolveParameter parameter, IProgress<ApplicationStatus>? progress, CancellationToken ct) {
             ValidatePrerequisites(parameter);
             var solver = GetSolver(parameter);
 
@@ -64,7 +64,7 @@ namespace OpenAstroAra.PlateSolving {
             return result;
         }
 
-        protected IProfileService profileService;
+        protected IProfileService? profileService;
         private IPlateSolver plateSolver;
         private IPlateSolver blindSolver;
 

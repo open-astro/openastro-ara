@@ -36,9 +36,11 @@ namespace OpenAstroAra.PlateSolving.Solvers {
             string outputFilePath,
             PlateSolveParameter parameter,
             PlateSolveImageProperties imageProperties) {
+            var coordinates = parameter.Coordinates
+                ?? throw new ArgumentException("PlateSolve2 requires hint coordinates.", nameof(parameter));
             var args = new string[] {
-                    AstroUtil.ToRadians(parameter.Coordinates.RADegrees).ToString(CultureInfo.InvariantCulture),
-                    AstroUtil.ToRadians(parameter.Coordinates.Dec).ToString(CultureInfo.InvariantCulture),
+                    AstroUtil.ToRadians(coordinates.RADegrees).ToString(CultureInfo.InvariantCulture),
+                    AstroUtil.ToRadians(coordinates.Dec).ToString(CultureInfo.InvariantCulture),
                     AstroUtil.ToRadians(imageProperties.FoVW).ToString(CultureInfo.InvariantCulture),
                     AstroUtil.ToRadians(imageProperties.FoVH).ToString(CultureInfo.InvariantCulture),
                     parameter.Regions.ToString(),
@@ -61,7 +63,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
             PlateSolveResult result = new PlateSolveResult() { Success = false };
             if (File.Exists(outputFilePath)) {
                 using (var s = new StreamReader(outputFilePath)) {
-                    string line;
+                    string? line;
                     int linenr = 0;
                     while ((line = s.ReadLine()) != null) {
                         string[] resultArr = line.Split(',');
@@ -134,7 +136,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
         }
 
         protected override string GetOutputPath(string imageFilePath) {
-            return Path.Combine(Path.GetDirectoryName(imageFilePath), Path.GetFileNameWithoutExtension(imageFilePath)) + ".apm";
+            return Path.Combine(Path.GetDirectoryName(imageFilePath) ?? string.Empty, Path.GetFileNameWithoutExtension(imageFilePath)) + ".apm";
         }
     }
 }

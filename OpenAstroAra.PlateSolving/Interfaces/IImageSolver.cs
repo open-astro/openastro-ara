@@ -22,6 +22,6 @@ namespace OpenAstroAra.PlateSolving.Interfaces {
 
     public interface IImageSolver {
 
-        Task<PlateSolveResult> Solve(IImageData source, PlateSolveParameter parameter, IProgress<ApplicationStatus> progress, CancellationToken ct);
+        Task<PlateSolveResult> Solve(IImageData source, PlateSolveParameter parameter, IProgress<ApplicationStatus>? progress, CancellationToken ct);
     }
 }

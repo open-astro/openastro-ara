@@ -51,7 +51,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
 
         }
 
-        public async Task<PlateSolveResult> SolveAsync(IImageData source, PlateSolveParameter parameter, IProgress<ApplicationStatus> progress, CancellationToken canceltoken) {
+        public async Task<PlateSolveResult> SolveAsync(IImageData source, PlateSolveParameter parameter, IProgress<ApplicationStatus>? progress, CancellationToken canceltoken) {
             EnsureSolverValid(parameter);
             var imageProperties = PlateSolveImageProperties.Create(parameter, source);
             return await SolveAsyncImpl(source, parameter, imageProperties, progress, canceltoken);
@@ -61,7 +61,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
             IImageData source,
             PlateSolveParameter parameter,
             PlateSolveImageProperties imageProperties,
-            IProgress<ApplicationStatus> progress,
+            IProgress<ApplicationStatus>? progress,
             CancellationToken canceltoken);
 
         protected virtual void EnsureSolverValid(PlateSolveParameter parameter) {

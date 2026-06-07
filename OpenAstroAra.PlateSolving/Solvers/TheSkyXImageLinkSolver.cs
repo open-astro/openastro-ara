@@ -47,7 +47,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
             this._tsxPort = tsxPort;
         }
 
-        protected override async Task<PlateSolveResult> SolveAsyncImpl(IImageData source, PlateSolveParameter parameter, PlateSolveImageProperties imageProperties, IProgress<ApplicationStatus> progress, CancellationToken cancelToken) {
+        protected override async Task<PlateSolveResult> SolveAsyncImpl(IImageData source, PlateSolveParameter parameter, PlateSolveImageProperties imageProperties, IProgress<ApplicationStatus>? progress, CancellationToken cancelToken) {
 
             PlateSolveResult result = new PlateSolveResult() { Success = false };
 
@@ -248,7 +248,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
             }
         }
 
-        public ImageLinkResults GetLastImageLinkResults() {
+        public ImageLinkResults? GetLastImageLinkResults() {
             var sb = new StringBuilder();
             sb.AppendLine("var result;");
             sb.AppendLine("var objResult = {");
@@ -304,7 +304,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
                 var bytesSent = theSkyXSocket.Send(messageBytes, 0, (messageBytes != null) ? messageBytes.Length : 0, SocketFlags.None, out var socketError);
                 if ((socketError == SocketError.Success) && (bytesSent > 0)) {
                     var receivedBytes = new byte[maxResultLength];
-                    var bytesReceived = theSkyXSocket.Receive(receivedBytes, 0, (receivedBytes != null) ? receivedBytes.Length : 0, SocketFlags.None, out socketError);
+                    var bytesReceived = theSkyXSocket.Receive(receivedBytes, 0, receivedBytes.Length, SocketFlags.None, out socketError);
                     if ((socketError == SocketError.Success) && (bytesReceived > 0)) {
                         resultText = Encoding.UTF8.GetString(receivedBytes, 0, bytesReceived);
                     } else {
@@ -342,7 +342,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
                     var match = r.Match(errorMessage);
 
                     if (match.Groups.Count > 2) {
-                        errorMessage = match.Groups[1]?.Value?.Trim();
+                        errorMessage = match.Groups[1]?.Value?.Trim() ?? string.Empty;
                         int.TryParse(match.Groups[2]?.Value?.Trim(), out var errorCode);
 
                         throw new TheSkyXException(errorMessage, errorCode);
@@ -369,7 +369,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
 
             public bool SearchAborted { get; set; }
 
-            public string ErrorText { get; set; }
+            public string ErrorText { get; set; } = string.Empty;
 
             public double ImageScale { get; set; }
 
@@ -383,7 +383,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
 
             public bool IsImageMirrored { get; set; }
 
-            public string ImageFilePath { get; set; }
+            public string ImageFilePath { get; set; } = string.Empty;
 
             public int ImageStarCount { get; set; }
 

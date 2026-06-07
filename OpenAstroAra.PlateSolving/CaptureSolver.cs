@@ -43,7 +43,7 @@ namespace OpenAstroAra.PlateSolving {
 
         public IImageSolver ImageSolver { get; set; }
 
-        public async Task<PlateSolveResult> Solve(CaptureSequence seq, CaptureSolverParameter parameter, IProgress<PlateSolveProgress> solveProgress, IProgress<ApplicationStatus> progress, CancellationToken ct) {
+        public async Task<PlateSolveResult> Solve(CaptureSequence seq, CaptureSolverParameter parameter, IProgress<PlateSolveProgress>? solveProgress, IProgress<ApplicationStatus>? progress, CancellationToken ct) {
             var remainingAttempts = parameter.Attempts;
             PlateSolveResult plateSolveResult;
             do {

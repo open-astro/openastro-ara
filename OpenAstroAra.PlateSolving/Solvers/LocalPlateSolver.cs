@@ -119,7 +119,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
                     }
 
                     double ra = 0, dec = 0;
-                    if (wcsinfo.TryGetValue("ra_center", out string value)) {
+                    if (wcsinfo.TryGetValue("ra_center", out string? value)) {
                         ra = double.Parse(value, CultureInfo.InvariantCulture);
                     }
                     if (wcsinfo.TryGetValue("dec_center", out value)) {
@@ -147,7 +147,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
         }
 
         protected override string GetOutputPath(string imageFilePath) {
-            return Path.Combine(Path.GetDirectoryName(imageFilePath), Path.GetFileNameWithoutExtension(imageFilePath)) + ".wcs";
+            return Path.Combine(Path.GetDirectoryName(imageFilePath) ?? string.Empty, Path.GetFileNameWithoutExtension(imageFilePath)) + ".wcs";
         }
     }
 }

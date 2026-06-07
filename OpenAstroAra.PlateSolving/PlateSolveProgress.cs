@@ -15,8 +15,8 @@
 namespace OpenAstroAra.PlateSolving {
 
     public class PlateSolveProgress {
-        public byte[] Thumbnail { get; set; }
+        public byte[]? Thumbnail { get; set; }
 
-        public PlateSolveResult PlateSolveResult { get; set; }
+        public PlateSolveResult? PlateSolveResult { get; set; }
     }
 }

@@ -24,7 +24,7 @@ namespace OpenAstroAra.Equipment.Interfaces.Mediator {
 
     public interface IFilterWheelMediator : IDeviceMediator<object, IFilterWheelConsumer, FilterWheelInfo> {
 
-        Task<FilterInfo> ChangeFilter(FilterInfo inputFilter, CancellationToken token = new CancellationToken(), IProgress<ApplicationStatus> progress = null);
+        Task<FilterInfo> ChangeFilter(FilterInfo inputFilter, CancellationToken token = new CancellationToken(), IProgress<ApplicationStatus>? progress = null);
         event Func<object, FilterChangedEventArgs, Task> FilterChanged;
     }
 

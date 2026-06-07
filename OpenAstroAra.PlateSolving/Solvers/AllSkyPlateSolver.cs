@@ -102,7 +102,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
         }
 
         protected override string GetOutputPath(string imageFilePath) {
-            return Path.Combine(Path.GetDirectoryName(imageFilePath), Path.GetFileNameWithoutExtension(imageFilePath)) + ".txt";
+            return Path.Combine(Path.GetDirectoryName(imageFilePath) ?? string.Empty, Path.GetFileNameWithoutExtension(imageFilePath)) + ".txt";
         }
     }
 }

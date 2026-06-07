@@ -51,10 +51,10 @@ namespace OpenAstroAra.PlateSolving.Solvers {
             IImageData source,
             PlateSolveParameter parameter,
             PlateSolveImageProperties imageProperties,
-            IProgress<ApplicationStatus> progress,
+            IProgress<ApplicationStatus>? progress,
             CancellationToken cancelToken) {
             var result = new PlateSolveResult() { Success = false };
-            string imagePath = null, outputPath = null;
+            string? imagePath = null, outputPath = null;
             try {
                 // Update target coordinates
                 if (source.MetaData.Target.Coordinates == null || double.IsNaN(source.MetaData.Target.Coordinates.RA))
@@ -96,7 +96,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
                     MoveOrDeleteFile(result, outputPath, filePrefix, cancelToken);
                 }
 
-                foreach (var file in GetSideCarFilePaths(imagePath)) {
+                foreach (var file in GetSideCarFilePaths(imagePath ?? string.Empty)) {
                     MoveOrDeleteFile(result, file, filePrefix, cancelToken);
                 }
             }
@@ -143,7 +143,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
             return new List<string>();
         }
 
-        protected async Task StartCLI(string imageFilePath, string outputFilePath, PlateSolveParameter parameter, PlateSolveImageProperties imageProperties, IProgress<ApplicationStatus> progress, CancellationToken ct) {
+        protected async Task StartCLI(string imageFilePath, string outputFilePath, PlateSolveParameter parameter, PlateSolveImageProperties imageProperties, IProgress<ApplicationStatus>? progress, CancellationToken ct) {
             if (executableLocation != "cmd.exe" && !File.Exists(executableLocation)) {
                 throw new FileNotFoundException("Platesolver executable not found. Please point to the correct platesolver executable in platsolving options.", executableLocation);
             }
@@ -161,13 +161,13 @@ namespace OpenAstroAra.PlateSolving.Solvers {
             process.EnableRaisingEvents = true;
 
             process.OutputDataReceived += (object sender, System.Diagnostics.DataReceivedEventArgs e) => {
-                progress?.Report(new ApplicationStatus() { Status = e.Data });
-                Logger.Debug(e.Data);
+                progress?.Report(new ApplicationStatus() { Status = e.Data ?? string.Empty });
+                Logger.Debug(e.Data ?? string.Empty);
             };
 
             process.ErrorDataReceived += (object sender, System.Diagnostics.DataReceivedEventArgs e) => {
-                progress?.Report(new ApplicationStatus() { Status = e.Data });
-                Logger.Error(e.Data);
+                progress?.Report(new ApplicationStatus() { Status = e.Data ?? string.Empty });
+                Logger.Error(e.Data ?? string.Empty);
             };
             Logger.Debug($"Starting process '{executableLocation}' with args '{startInfo.Arguments}'");
             process.Start();

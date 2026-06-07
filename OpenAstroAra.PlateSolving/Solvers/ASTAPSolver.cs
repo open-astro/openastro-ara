@@ -183,12 +183,12 @@ namespace OpenAstroAra.PlateSolving.Solvers {
         }
 
         protected override string GetOutputPath(string imageFilePath) {
-            return Path.Combine(Path.GetDirectoryName(imageFilePath), Path.GetFileNameWithoutExtension(imageFilePath)) + ".ini";
+            return Path.Combine(Path.GetDirectoryName(imageFilePath) ?? string.Empty, Path.GetFileNameWithoutExtension(imageFilePath)) + ".ini";
         }
 
         protected override List<string> GetSideCarFilePaths(string imageFilePath) {
             return new List<string>() {
-                Path.Combine(Path.GetDirectoryName(imageFilePath), Path.GetFileNameWithoutExtension(imageFilePath)) + ".wcs"
+                Path.Combine(Path.GetDirectoryName(imageFilePath) ?? string.Empty, Path.GetFileNameWithoutExtension(imageFilePath)) + ".wcs"
             };
         }
     }

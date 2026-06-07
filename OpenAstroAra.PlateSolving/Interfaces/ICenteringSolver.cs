@@ -23,7 +23,7 @@ namespace OpenAstroAra.PlateSolving.Interfaces {
     public interface ICenteringSolver {
         ICaptureSolver CaptureSolver { get; set; }
 
-        Task<PlateSolveResult> Center(CaptureSequence seq, CenterSolveParameter parameter, IProgress<PlateSolveProgress> solveProgress, IProgress<ApplicationStatus> progress, CancellationToken ct);
-        Task<CenteringSolveResult> CenterWithMeasurements(CaptureSequence seq, CenterSolveParameter parameter, IProgress<PlateSolveProgress> solveProgress, IProgress<ApplicationStatus> progress, CancellationToken ct);
+        Task<PlateSolveResult> Center(CaptureSequence seq, CenterSolveParameter parameter, IProgress<PlateSolveProgress>? solveProgress, IProgress<ApplicationStatus>? progress, CancellationToken ct);
+        Task<CenteringSolveResult?> CenterWithMeasurements(CaptureSequence seq, CenterSolveParameter parameter, IProgress<PlateSolveProgress>? solveProgress, IProgress<ApplicationStatus>? progress, CancellationToken ct);
     }
 }

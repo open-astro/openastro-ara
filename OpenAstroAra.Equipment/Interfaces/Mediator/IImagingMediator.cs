@@ -28,14 +28,14 @@ namespace OpenAstroAra.Equipment.Interfaces.Mediator {
         Task<IExposureData> CaptureImage(
             CaptureSequence sequence,
             CancellationToken token,
-            IProgress<ApplicationStatus> progress,
+            IProgress<ApplicationStatus>? progress,
             string targetName = "");
 
         Task<IRenderedImage> CaptureAndPrepareImage(
             CaptureSequence sequence,
             PrepareImageParameters parameters,
             CancellationToken token,
-            IProgress<ApplicationStatus> progress);
+            IProgress<ApplicationStatus>? progress);
 
         Task<IRenderedImage> PrepareImage(
             IImageData imageData,

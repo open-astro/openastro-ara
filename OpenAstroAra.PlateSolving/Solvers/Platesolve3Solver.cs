@@ -84,7 +84,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
             PlateSolveResult result = new PlateSolveResult() { Success = false };
             if (File.Exists(outputFilePath)) {
                 using (var s = new StreamReader(outputFilePath)) {
-                    string line;
+                    string? line;
                     int linenr = 0;
                     while ((line = s.ReadLine()) != null) {
                         if (linenr == 0 && line.ToLower() != "true") {
@@ -128,7 +128,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
         }
 
         protected override string GetOutputPath(string imageFilePath) {
-            return Path.Combine(Path.GetDirectoryName(imageFilePath), Path.GetFileNameWithoutExtension(imageFilePath)) + "_PS3.txt";
+            return Path.Combine(Path.GetDirectoryName(imageFilePath) ?? string.Empty, Path.GetFileNameWithoutExtension(imageFilePath)) + "_PS3.txt";
         }
     }
 }
