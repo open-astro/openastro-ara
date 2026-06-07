@@ -147,11 +147,11 @@ namespace OpenAstroAra.Image.ImageData {
 
                 var fileName = imagePatterns.GetImageFileString(pattern);
                 var extension = GetFileExtensionsRegex().Match(file).Value;
-                var targetPath = Path.GetDirectoryName(file);
+                var targetPath = Path.GetDirectoryName(file) ?? string.Empty;
                 var newFileName = CoreUtil.GetUniqueFilePath(Path.Combine(targetPath, $"{fileName}{extension}"));
 
                 var fi = new FileInfo(newFileName);
-                if (!fi.Directory.Exists) {
+                if (fi.Directory != null && !fi.Directory.Exists) {
                     fi.Directory.Create();
                 }
 
@@ -361,7 +361,7 @@ namespace OpenAstroAra.Image.ImageData {
 
                 // Create a folder in case this pattern was set up to be a folder
                 var fi = new FileInfo(actualPath);
-                if (!fi.Directory.Exists) {
+                if (fi.Directory != null && !fi.Directory.Exists) {
                     fi.Directory.Create();
                 }
 
@@ -410,8 +410,11 @@ namespace OpenAstroAra.Image.ImageData {
         }
 
         private string SaveRAW(string path) {
-            Directory.CreateDirectory(Path.GetDirectoryName(path));
+            Directory.CreateDirectory(Path.GetDirectoryName(path) ?? string.Empty);
             IImageArray data = Data;
+            if (data.RAWData == null) {
+                throw new InvalidOperationException("Image has no RAW data to save.");
+            }
             string uniquePath = CoreUtil.GetUniqueFilePath(path + "." + data.RAWType);
             File.WriteAllBytes(uniquePath, data.RAWData);
             return uniquePath;
@@ -442,7 +445,7 @@ namespace OpenAstroAra.Image.ImageData {
             string extension = ".fits";
 
             if (fileSaveInfo.FITSUseLegacyWriter) {
-                Directory.CreateDirectory(Path.GetDirectoryName(fileSaveInfo.FilePath));
+                Directory.CreateDirectory(Path.GetDirectoryName(fileSaveInfo.FilePath) ?? string.Empty);
                 var uniquePath = CoreUtil.GetUniqueFilePath(fileSaveInfo.FilePath + fileSaveInfo.GetExtension(extension));
                 FITS f = new FITS(
                     Data.FlatArray,
@@ -463,13 +466,13 @@ namespace OpenAstroAra.Image.ImageData {
 
                 // CFitsio treats paranthesis for special logic and are thus not allowed
                 fileSaveInfo.FilePath = fileSaveInfo.FilePath.Replace("(", "_").Replace(")", "_").Replace("[", "_").Replace("]", "_");
-                Directory.CreateDirectory(Path.GetDirectoryName(fileSaveInfo.FilePath));
+                Directory.CreateDirectory(Path.GetDirectoryName(fileSaveInfo.FilePath) ?? string.Empty);
 
                 var uniquePath = CoreUtil.GetUniqueFilePath(fileSaveInfo.FilePath + fileSaveInfo.GetExtension(extension), "{0}_{1}");
 
                 var compression = GetFITSCompression(fileSaveInfo.FITSCompressionType);
 
-                CFitsioFITS f = null;
+                CFitsioFITS? f = null;
                 try {
                     if (Data.FlatArrayInt != null) {
                         f = new CFitsioFITS(uniquePath, Data.FlatArrayInt, Properties.Width, Properties.Height, compression);
@@ -500,7 +503,7 @@ namespace OpenAstroAra.Image.ImageData {
                 img.AddAttachedImage(Data.FlatArray, fileSaveInfo);
             }
 
-            Directory.CreateDirectory(Path.GetDirectoryName(fileSaveInfo.FilePath));
+            Directory.CreateDirectory(Path.GetDirectoryName(fileSaveInfo.FilePath) ?? string.Empty);
             string uniquePath = CoreUtil.GetUniqueFilePath(fileSaveInfo.FilePath + fileSaveInfo.GetExtension(".xisf"));
 
             using (FileStream fs = new FileStream(uniquePath, FileMode.Create)) {

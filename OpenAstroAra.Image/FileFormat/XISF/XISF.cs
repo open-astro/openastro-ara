@@ -42,7 +42,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
 
         public XISFHeader Header { get; private set; }
 
-        public XISFData Data { get; private set; }
+        public XISFData? Data { get; private set; }
 
         // XISF0100
         private static readonly byte[] xisfSignature = new byte[] { 0x58, 0x49, 0x53, 0x46, 0x30, 0x31, 0x30, 0x30 };
@@ -84,6 +84,8 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                      */
                     XElement xml = XElement.Parse(xmlString);
                     var header = new XISFHeader(xml);
+                    var imageElement = header.Image
+                        ?? throw new InvalidDataException(Loc.Instance["LblXisfInvalidFile"]);
 
                     var metaData = new ImageMetaData();
                     try {
@@ -99,7 +101,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                     int height = 0;
 
                     try {
-                        string[] geometry = header.Image.Attribute("geometry").Value.Split(':');
+                        string[] geometry = RequiredAttribute(imageElement, "geometry").Split(':');
                         width = int.Parse(geometry[0]);
                         height = int.Parse(geometry[1]);
                     } catch (Exception ex) {
@@ -114,7 +116,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                      */
                     string sampleFormat = "UInt16";
                     try {
-                        sampleFormat = header.Image.Attribute("sampleFormat").Value.ToString();
+                        sampleFormat = RequiredAttribute(imageElement, "sampleFormat");
                     } catch (InvalidDataException ex) {
                         Logger.Error($"XISF: Could not read image data: {ex}");
                         throw;
@@ -127,12 +129,12 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                      * Determine if the data block is compressed and if a checksum is provided for it
                      */
                     XISFCompressionInfo compressionInfo = new XISFCompressionInfo();
-                    string[] compression = null;
+                    string[]? compression = null;
 
                     try {
-                        if (header.Image.Attribute("compression") != null) {
+                        if (imageElement.Attribute("compression") != null) {
                             // [compression codec]:[uncompressed size]:[sizeof shuffled typedef]
-                            compression = header.Image.Attribute("compression").Value.ToLower().Split(':');
+                            compression = RequiredAttribute(imageElement, "compression").ToLower().Split(':');
 
                             if (!string.IsNullOrEmpty(compression[0])) {
                                 compressionInfo = GetCompressionType(compression);
@@ -141,8 +143,8 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                             Logger.Debug("XISF: Compressed data block was not encountered");
                         }
                     } catch (InvalidDataException) {
-                        Logger.Error($"XISF: Unknown compression codec encountered: {compression[0]}");
-                        throw new InvalidDataException(string.Format(Loc.Instance["LblXisfUnsupportedCompression"], compression[0]));
+                        Logger.Error($"XISF: Unknown compression codec encountered: {compression?[0]}");
+                        throw new InvalidDataException(string.Format(Loc.Instance["LblXisfUnsupportedCompression"], compression?[0]));
                     }
 
                     if (compressionInfo.CompressionType != XISFCompressionTypeEnum.NONE) {
@@ -159,12 +161,12 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                      */
                     XISFChecksumTypeEnum cksumType = XISFChecksumTypeEnum.NONE;
                     string cksumHash = string.Empty;
-                    string[] cksum = null;
+                    string[]? cksum = null;
 
                     try {
-                        if (header.Image.Attribute("checksum") != null) {
+                        if (imageElement.Attribute("checksum") != null) {
                             // [hash type]:[hash string]
-                            cksum = header.Image.Attribute("checksum").Value.ToLower().Split(':');
+                            cksum = RequiredAttribute(imageElement, "checksum").ToLower().Split(':');
 
                             if (!string.IsNullOrEmpty(cksum[0])) {
                                 cksumType = GetChecksumType(cksum[0]);
@@ -174,8 +176,8 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                             Logger.Debug("XISF: Checksummed data block was not encountered");
                         }
                     } catch (InvalidDataException) {
-                        Logger.Error($"XISF: Unknown checksum type: {cksum[0]}");
-                        throw new InvalidDataException(string.Format(Loc.Instance["LblXisfUnsupportedChecksum"], cksum[0]));
+                        Logger.Error($"XISF: Unknown checksum type: {cksum?[0]}");
+                        throw new InvalidDataException(string.Format(Loc.Instance["LblXisfUnsupportedChecksum"], cksum?[0]));
                     }
 
                     if (cksumType != XISFChecksumTypeEnum.NONE) {
@@ -189,8 +191,8 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                      */
                     BaseImageData imageData;
 
-                    if (header.Image.Attribute("location").Value.StartsWith("attachment")) {
-                        string[] location = header.Image.Attribute("location").Value.Split(':');
+                    if (RequiredAttribute(imageElement, "location").StartsWith("attachment")) {
+                        string[] location = RequiredAttribute(imageElement, "location").Split(':');
                         int start = int.Parse(location[1]);
                         int size = int.Parse(location[2]);
 
@@ -223,7 +225,8 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
 
                         imageData = imageDataFactory.CreateBaseImageData(img, width, height, 16, isBayered, metaData);
                     } else {
-                        string base64Img = header.Image.Element("Data").Value;
+                        string base64Img = (imageElement.Element("Data")
+                            ?? throw new InvalidDataException("XISF: image data block has no Data element")).Value;
                         byte[] encodedImg = Convert.FromBase64String(base64Img);
 
                         var converter = GetConverter(sampleFormat);
@@ -410,8 +413,14 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
             }
         }
 
+        // Reads a required XISF attribute, throwing a clear InvalidDataException if it is
+        // absent (the surrounding parse treats a missing attribute as a malformed file).
+        private static string RequiredAttribute(XElement element, string name) =>
+            element.Attribute(name)?.Value
+            ?? throw new InvalidDataException($"XISF: required attribute '{name}' is missing");
+
         private static byte[] UncompressData(byte[] raw, XISFCompressionInfo compressionInfo) {
-            byte[] outArray = null;
+            byte[] outArray = raw;
 
             if (compressionInfo.CompressionType != XISFCompressionTypeEnum.NONE) {
                 outArray = new byte[compressionInfo.UncompressedSize];
@@ -534,7 +543,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
             // XISF header XML document
             Header.Save(s);
 
-            var location = Header.Image.Attribute("location");
+            var location = Header.Image?.Attribute("location");
             if (location == null) {
                 throw new InvalidDataException("Header Image is missing location information");
             }

@@ -33,7 +33,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
     public class XISFHeader {
         public XDocument Content { get; private set; }
         public XElement MetaData { get; private set; }
-        public XElement Image { get; private set; }
+        public XElement? Image { get; private set; }
         public uint Size { get; private set; }
 
         private XElement Xisf;
@@ -69,18 +69,20 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
         /// </summary>
         /// <param name="header"></param>
         public XISFHeader(XElement header) : this() {
-            MetaData = header.Element(xmlns + "Metadata");
-            if (MetaData == null) {
-                MetaData = header.Elements().FirstOrDefault(x => x.Name?.LocalName == "Metadata");
+            // Keep the empty Metadata element created by this() if the source has none.
+            var parsedMetaData = header.Element(xmlns + "Metadata")
+                ?? header.Elements().FirstOrDefault(x => x.Name?.LocalName == "Metadata");
+            if (parsedMetaData != null) {
+                MetaData = parsedMetaData;
             }
 
-            Image = header.Element(xmlns + "Image");
-            if (Image == null) {
-                Image = header.Elements().FirstOrDefault(x => x.Name?.LocalName == "Image");
-            }
+            Image = header.Element(xmlns + "Image")
+                ?? header.Elements().FirstOrDefault(x => x.Name?.LocalName == "Image");
 
             Xisf.Add(MetaData);
-            Xisf.Add(Image);
+            if (Image != null) {
+                Xisf.Add(Image);
+            }
         }
 
         public int ByteCount {
@@ -333,7 +335,8 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
         /// <returns>True if successful, false if invalid input or no info found for given key</returns>
         private bool TryGetImageProperty(string[] property, out string value) {
             value = string.Empty;
-            if (property?.Length < 2) { return false; }
+            if (property == null || property.Length < 2) { return false; }
+            if (Image is null) { return false; }
 
             string id = property[0];
             string type = property[1];
@@ -344,10 +347,11 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
             if (type == "String") {
                 value = elem.Value;
             } else {
-                if (elem.Attribute("value") == null) {
+                var attr = elem.Attribute("value");
+                if (attr == null) {
                     return false;
                 }
-                value = elem.Attribute("value").Value;
+                value = attr.Value;
             }
 
             return true;
@@ -361,13 +365,14 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
         /// <returns>True if successful, false if invalid input or no info found for given key</returns>
         private bool TryGetFITSProperty(string key, out string value) {
             value = string.Empty;
+            if (Image is null) { return false; }
             var elements = Image.Elements(xmlns + "FITSKeyword");
             if (!elements.Any()) { return false; }
 
             var elem = elements.FirstOrDefault(el => el.Attribute("name")?.Value == key);
             if (elem == null) { return false; }
 
-            value = elem.Attribute("value").Value;
+            value = elem.Attribute("value")?.Value ?? string.Empty;
 
             if (value.StartsWith("'")) {
                 value = value.Trim();
@@ -379,6 +384,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
 
         private List<IGenericMetaDataHeader> GetAllFITSKeywords() {
             var l = new List<IGenericMetaDataHeader>();
+            if (Image is null) { return l; }
             var elements = Image.Elements(xmlns + "FITSKeyword");
             if (!elements.Any()) { return l; }
 
@@ -388,7 +394,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                 var key = elem.Attribute("name")?.Value;
                 if (key == null) { continue; }
 
-                var value = elem.Attribute("value").Value;
+                var value = elem.Attribute("value")?.Value ?? string.Empty;
                 var comment = elem.Attribute("comment")?.Value ?? string.Empty;
 
 
@@ -811,7 +817,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
         }
 
         private void AddProperty(XElement elem, string[] property, string value, string comment = "") {
-            if (property?.Length < 2 || elem == null) {
+            if (property == null || property.Length < 2 || elem == null) {
                 return;
             }
             string id = property[0];
