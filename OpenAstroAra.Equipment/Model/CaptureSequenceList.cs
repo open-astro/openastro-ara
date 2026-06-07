@@ -39,6 +39,7 @@ namespace OpenAstroAra.Equipment.Model {
             Coordinates = new Coordinates(0, 0, Epoch.J2000, Coordinates.RAType.Hours);
         }
 
+        [NonSerialized]
         private AsyncObservableCollection<CaptureSequence> _items = new AsyncObservableCollection<CaptureSequence>();
 
         [XmlElement(nameof(CaptureSequence))]
@@ -420,6 +421,7 @@ namespace OpenAstroAra.Equipment.Model {
             }
         }
 
+        [NonSerialized]
         private DeepSkyObject _dso;
 
         [XmlIgnore]

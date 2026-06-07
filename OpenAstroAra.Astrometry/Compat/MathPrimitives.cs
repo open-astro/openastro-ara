@@ -37,6 +37,10 @@ namespace OpenAstroAra.Astrometry {
         public static Point operator +(Point a, Vector v) => new(a.X + v.X, a.Y + v.Y);
         public static Point operator -(Point a, Vector v) => new(a.X - v.X, a.Y - v.Y);
         public override string ToString() => $"({X}, {Y})";
+
+        public static Vector Subtract(Point left, Point right) {
+            throw new NotImplementedException();
+        }
     }
 
     public readonly struct Vector : IEquatable<Vector> {
@@ -53,6 +57,10 @@ namespace OpenAstroAra.Astrometry {
         public static Vector operator -(Vector a, Vector b) => new(a.X - b.X, a.Y - b.Y);
         public static Vector operator *(Vector v, double s) => new(v.X * s, v.Y * s);
         public static Vector operator /(Vector v, double s) => new(v.X / s, v.Y / s);
+
+        public static Vector Add(Vector left, Vector right) {
+            throw new NotImplementedException();
+        }
     }
 
     public readonly struct Vector3D : IEquatable<Vector3D> {
@@ -72,5 +80,9 @@ namespace OpenAstroAra.Astrometry {
         public override int GetHashCode() => HashCode.Combine(X, Y, Z);
         public static bool operator ==(Vector3D a, Vector3D b) => a.Equals(b);
         public static bool operator !=(Vector3D a, Vector3D b) => !a.Equals(b);
+
+        public static Vector3D Add(Vector3D left, Vector3D right) {
+            throw new NotImplementedException();
+        }
     }
 }

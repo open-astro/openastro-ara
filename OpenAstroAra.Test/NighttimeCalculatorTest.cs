@@ -30,7 +30,7 @@ namespace OpenAstroAra.Test {
             var date = new DateTime(2020, 5, 4, 14, 0, 0);
             var referenceDate = NighttimeCalculator.GetReferenceDate(date);
             var expectedDate = new DateTime(date.Year, date.Month, date.Day, 12, 0, 0);
-            ClassicAssert.AreEqual(expectedDate, referenceDate);
+            Assert.That(referenceDate, Is.EqualTo(expectedDate));
         }
 
         [Test]
@@ -39,7 +39,7 @@ namespace OpenAstroAra.Test {
             var referenceDate = NighttimeCalculator.GetReferenceDate(date);
             var dayBefore = date.AddDays(-1);
             var expectedDate = new DateTime(dayBefore.Year, dayBefore.Month, dayBefore.Day, 12, 0, 0);
-            ClassicAssert.AreEqual(expectedDate, referenceDate);
+            Assert.That(referenceDate, Is.EqualTo(expectedDate));
         }
 
         [Test]
@@ -48,7 +48,7 @@ namespace OpenAstroAra.Test {
             var referenceDate = NighttimeCalculator.GetReferenceDate(date);
             var dayBefore = date.AddDays(-1);
             var expectedDate = new DateTime(dayBefore.Year, dayBefore.Month, dayBefore.Day, 12, 0, 0);
-            ClassicAssert.AreEqual(expectedDate, referenceDate);
+            Assert.That(referenceDate, Is.EqualTo(expectedDate));
         }
 
         [Test]
@@ -57,7 +57,7 @@ namespace OpenAstroAra.Test {
             var referenceDate = NighttimeCalculator.GetReferenceDate(date);
             var dayBefore = date.AddDays(-1);
             var expectedDate = new DateTime(date.Year, date.Month, date.Day, 12, 0, 0);
-            ClassicAssert.AreEqual(expectedDate, referenceDate);
+            Assert.That(referenceDate, Is.EqualTo(expectedDate));
         }
 
         [Test]
@@ -65,7 +65,7 @@ namespace OpenAstroAra.Test {
             var date = new DateTime(2020, 5, 4, 12, 1, 0);
             var referenceDate = NighttimeCalculator.GetReferenceDate(date);
             var expectedDate = new DateTime(date.Year, date.Month, date.Day, 12, 0, 0);
-            ClassicAssert.AreEqual(expectedDate, referenceDate);
+            Assert.That(referenceDate, Is.EqualTo(expectedDate));
         }
     }
 }

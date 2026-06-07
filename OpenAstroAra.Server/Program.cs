@@ -38,6 +38,10 @@ namespace OpenAstroAra.Server;
 /// (Phase 6), sequencer (Phase 7), images (Phase 8), and WebSocket stream (Phase 9) bring up the
 /// rest.
 /// </summary>
+// CA1052: Program is referenced as a generic type argument (ILogger<Program>,
+// and by WebApplicationFactory<Program> in tests), so it cannot be static even
+// though all its members are.
+[System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1052:Static holder types should be Static or NotInheritable", Justification = "Used as a generic type argument by the ASP.NET host and test harness.")]
 public class Program {
 
     public static void Main(string[] args) {

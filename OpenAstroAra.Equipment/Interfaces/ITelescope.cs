@@ -30,7 +30,7 @@ namespace OpenAstroAra.Equipment.Interfaces {
         Stopped
     }
 
-    public struct TrackingRate {
+    public struct TrackingRate : IEquatable<TrackingRate> {
         public static TrackingRate STOPPED = new TrackingRate() { TrackingMode = TrackingMode.Stopped };
         public TrackingMode TrackingMode;
         public double? CustomRightAscensionRate;
@@ -53,6 +53,10 @@ namespace OpenAstroAra.Equipment.Interfaces {
 
         public static bool operator !=(TrackingRate left, TrackingRate right) {
             return !(left == right);
+        }
+
+        public bool Equals(TrackingRate other) {
+            throw new NotImplementedException();
         }
     }
 

@@ -17,7 +17,7 @@ using System.Collections.Generic;
 
 namespace OpenAstroAra.Equipment.Equipment.MyGPS.PegasusAstro.UnityApi {
 
-    public class ServerConnectedDevices {
+    public static class ServerConnectedDevices {
 
         public class Device {
 

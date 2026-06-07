@@ -178,5 +178,9 @@ namespace OpenAstroAra.Astrometry {
         public static Angle operator /(double a, Angle b) {
             return Angle.ByRadians(a / b.Radians);
         }
+
+        public static Angle Negate(Angle item) {
+            throw new NotImplementedException();
+        }
     }
 }

@@ -5,7 +5,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 
 namespace OpenAstroAra.Image.FileFormat.FITS {
-    public class CfitsioNative {
+    public static class CfitsioNative {
 
         public class cfitsioException : Exception {
             public string Op { get; private set; }
@@ -13,6 +13,9 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
             public cfitsioException(string op, int statusCode) : base($"{op} failed with {statusCode} = {fits_get_errstatus(statusCode)}") {
                 this.Op = op;
                 this.StatusCode = statusCode;
+            }
+
+            public cfitsioException() {
             }
         }
 
@@ -24,9 +27,6 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
         #region CONSTANTS
         // max length of a filename
         private const int FLEN_FILENAME = 1025;
-
-        // length of a FITS header card
-        private const int FLEN_CARD = 81;
 
         // max length of a keyword (HIERARCH convention)
         private const int FLEN_KEYWORD = 75;

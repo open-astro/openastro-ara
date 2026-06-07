@@ -17,7 +17,7 @@ using System;
 
 namespace OpenAstroAra.Equipment.Equipment.MyGPS.PegasusAstro.UnityApi {
 
-    public class DriverUranusReport {
+    public static class DriverUranusReport {
 
         public class AbsolutePressure {
 

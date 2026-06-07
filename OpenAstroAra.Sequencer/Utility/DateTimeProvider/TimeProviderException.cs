@@ -11,5 +11,8 @@ namespace OpenAstroAra.Sequencer.Utility.DateTimeProvider {
         }
 
         public string LocalizedMessage { get; }
+
+        public TimeProviderException() {
+        }
     }
 }

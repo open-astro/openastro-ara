@@ -31,10 +31,10 @@ namespace OpenAstroAra.Sequencer.SequenceItem {
     [JsonObject(MemberSerialization.OptIn)]
     public abstract class SequenceItem : SequenceHasChanged, ISequenceItem {
 
-        public SequenceItem() {
+        protected SequenceItem() {
         }
 
-        public SequenceItem(SequenceItem cloneMe) {
+        protected SequenceItem(SequenceItem cloneMe) {
             CopyMetaData(cloneMe);
         }
 

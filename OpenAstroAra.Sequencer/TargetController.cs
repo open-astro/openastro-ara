@@ -300,8 +300,6 @@ namespace OpenAstroAra.Sequencer {
             }
         }
 
-        private static readonly DateTime TimeOrigin = new DateTime(1899, 12, 31, 0, 0, 0, DateTimeKind.Utc);
-
         public IDeepSkyObjectContainer Container { get; }
 
         private IProfileService profileService;

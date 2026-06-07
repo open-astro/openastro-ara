@@ -141,6 +141,7 @@ namespace OpenAstroAra.Profile {
             RaisePropertyChanged(nameof(SelectedPluggableBehaviorsLookup));
         }
 
+        [NonSerialized]
         private AsyncObservableCollection<KeyValuePair<string, string>> selectedPluggableBehaviors;
 
         [DataMember]

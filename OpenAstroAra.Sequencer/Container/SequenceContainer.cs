@@ -47,7 +47,7 @@ namespace OpenAstroAra.Sequencer.Container {
         [JsonProperty]
         public IExecutionStrategy Strategy { get; }
 
-        public SequenceContainer(IExecutionStrategy strategy) {
+        protected SequenceContainer(IExecutionStrategy strategy) {
             this.Strategy = strategy;
         }
 

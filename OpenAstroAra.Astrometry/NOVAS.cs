@@ -295,6 +295,22 @@ namespace OpenAstroAra.Astrometry {
             /// radial velocity (km/s)
             /// </summary>
             public double RadialVelocity;
+
+            public override bool Equals(object obj) {
+                throw new NotImplementedException();
+            }
+
+            public override int GetHashCode() {
+                throw new NotImplementedException();
+            }
+
+            public static bool operator ==(CatalogueEntry left, CatalogueEntry right) {
+                return left.Equals(right);
+            }
+
+            public static bool operator !=(CatalogueEntry left, CatalogueEntry right) {
+                return !(left == right);
+            }
         }
 
         /// <summary>
@@ -428,7 +444,7 @@ namespace OpenAstroAra.Astrometry {
 
         #region "NOVAS helper enums"
 
-        public enum ObjectType : short {
+        public enum ObjectType  {
             MajorPlanetSunOrMoon = 0,
             MinorPlanet = 1,
             ObjectLocatedOutsideSolarSystem = 2
@@ -448,14 +464,14 @@ namespace OpenAstroAra.Astrometry {
             Moon = 11
         }
 
-        public enum CoordinateSystem : short {
+        public enum CoordinateSystem  {
             GCRS = 0,
             EquinoxOfDate = 1,
             CIOOfDate = 2,
             Astrometric = 3
         }
 
-        public enum ObserverLocation : short {
+        public enum ObserverLocation  {
             EarthGeoCenter = 0,
             EarthSurface = 1,
             SpaceNearEarth = 2
@@ -466,12 +482,12 @@ namespace OpenAstroAra.Astrometry {
             GreenwichApparentSiderealTime = 1
         }
 
-        public enum Method : short {
+        public enum Method  {
             CIOBased = 0,
             EquinoxBased = 1
         }
 
-        public enum Accuracy : short {
+        public enum Accuracy  {
             Full = 0,
             Reduced = 1
         }
@@ -482,7 +498,7 @@ namespace OpenAstroAra.Astrometry {
             LocationRefraction = 2
         }
 
-        public enum SolarSystemOrigin : short {
+        public enum SolarSystemOrigin  {
             Barycenter = 0,
             SolarCenterOfMass = 1
         }

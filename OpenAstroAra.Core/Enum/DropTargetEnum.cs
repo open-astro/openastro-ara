@@ -13,7 +13,7 @@
 #endregion "copyright"
 
 namespace OpenAstroAra.Core.Enum {
-
+    [System.Flags]
     public enum DropTargetEnum {
         Top = 0b00000001,
         Bottom = 0b00000010,

@@ -27,7 +27,7 @@ using System.Linq;
 
 namespace OpenAstroAra.Sequencer.Utility {
 
-    public class ItemUtility {
+    public static class ItemUtility {
 
         public static ContextCoordinates RetrieveContextCoordinates(ISequenceContainer parent) {
             if (parent != null) {

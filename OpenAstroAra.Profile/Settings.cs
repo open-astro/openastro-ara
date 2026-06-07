@@ -23,7 +23,7 @@ namespace OpenAstroAra.Profile {
     [DataContract]
     public abstract class Settings : SerializableINPC, ISettings {
 
-        public Settings() {
+        protected Settings() {
             SetDefaultValues();
         }
 

@@ -33,10 +33,10 @@ namespace OpenAstroAra.Sequencer.Conditions {
     [JsonObject(MemberSerialization.OptIn)]
     public abstract class SequenceCondition : SequenceHasChanged, ISequenceCondition {
 
-        public SequenceCondition() {
+        protected SequenceCondition() {
         }
 
-        public SequenceCondition(SequenceCondition cloneMe) {
+        protected SequenceCondition(SequenceCondition cloneMe) {
             CopyMetaData(cloneMe);
         }
 

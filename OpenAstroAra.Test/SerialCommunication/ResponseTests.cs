@@ -45,8 +45,11 @@ namespace OpenAstroAra.Test.SerialCommunication {
         }
     }
 
-    [TestFixture]
-    internal class ResponseTests {
+    // Abstract base fixture (NUnit1034): the culture-specific fixtures below
+    // derive from it to run the parsing tests under pinned cultures. Keeping it
+    // concrete made it also run under the test runner's ambient culture, which
+    // is non-deterministic across machines.
+    internal abstract class ResponseTests {
         private TestResponse _sut;
 
         [SetUp]

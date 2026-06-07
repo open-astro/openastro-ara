@@ -15,7 +15,7 @@ using System.Net;
 using System.Net.Sockets;
 
 namespace OpenAstroAra.Core.Utility {
-    public class DnsHelper {
+    public static class DnsHelper {
         /// <summary>
         /// Returns an IPHostEntry object for the specified host name. If the host name is an IP address, the IPHostEntry object will contain only that IP address.
         /// This is a more robust version of Dns.GetHostEntry that avoids some issues specifically around loopback IP addresses.

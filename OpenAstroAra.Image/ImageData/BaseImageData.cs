@@ -261,7 +261,7 @@ namespace OpenAstroAra.Image.ImageData {
                 p.Set(ImagePatternKeys.FocuserTemp, metadata.Focuser.Temperature);
             }
 
-            if (metadata.Camera.Binning == string.Empty) {
+            if (string.IsNullOrEmpty(metadata.Camera.Binning)) {
                 p.Set(ImagePatternKeys.Binning, "1x1");
             } else {
                 p.Set(ImagePatternKeys.Binning, metadata.Camera.Binning);

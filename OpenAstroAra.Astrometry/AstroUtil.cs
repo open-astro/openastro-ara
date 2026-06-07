@@ -26,7 +26,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 namespace OpenAstroAra.Astrometry {
 
-    public class AstroUtil {
+    public static class AstroUtil {
 
         private const double DegreeToRadiansFactor = Math.PI / 180d;
         private const double RadiansToDegreeFactor = 180d / Math.PI;

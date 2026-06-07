@@ -15,7 +15,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
 
         private IList<string> issues = new List<string>();
 
-        public WaitForAltitudeBase(IProfileService profileService, bool useCustomHorizon) {
+        protected WaitForAltitudeBase(IProfileService profileService, bool useCustomHorizon) {
             ProfileService = profileService;
             Data = new WaitLoopData(profileService, useCustomHorizon, CalculateExpectedTime, GetType().Name);
         }

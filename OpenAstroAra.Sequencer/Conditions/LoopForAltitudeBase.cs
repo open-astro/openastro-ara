@@ -20,7 +20,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
 
         private IList<string> issues = new List<string>();
 
-        public LoopForAltitudeBase(IProfileService profileService, bool useCustomHorizon) {
+        protected LoopForAltitudeBase(IProfileService profileService, bool useCustomHorizon) {
             ProfileService = profileService;
             Data = new WaitLoopData(profileService, useCustomHorizon, CalculateExpectedTime, GetType().Name);
             ConditionWatchdog = new ConditionWatchdog(Interrupt, TimeSpan.FromSeconds(5));

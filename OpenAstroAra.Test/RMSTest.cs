@@ -32,10 +32,10 @@ namespace OpenAstroAra.Test {
         public void RMS_DefaultConstructorTest() {
             RMS rms = new RMS();
 
-            ClassicAssert.AreEqual(1, rms.Scale);
-            ClassicAssert.AreEqual(0, rms.RA);
-            ClassicAssert.AreEqual(0, rms.Dec);
-            ClassicAssert.AreEqual(0, rms.Total);
+            Assert.That(rms.Scale, Is.EqualTo(1));
+            Assert.That(rms.RA, Is.EqualTo(0));
+            Assert.That(rms.Dec, Is.EqualTo(0));
+            Assert.That(rms.Total, Is.EqualTo(0));
         }
 
         [Test]
@@ -44,9 +44,9 @@ namespace OpenAstroAra.Test {
 
             rms.AddDataPoint(10, 10);
 
-            ClassicAssert.AreEqual(0, rms.RA);
-            ClassicAssert.AreEqual(0, rms.Dec);
-            ClassicAssert.AreEqual(0, rms.Total);
+            Assert.That(rms.RA, Is.EqualTo(0));
+            Assert.That(rms.Dec, Is.EqualTo(0));
+            Assert.That(rms.Total, Is.EqualTo(0));
         }
 
         [Test]
@@ -58,10 +58,10 @@ namespace OpenAstroAra.Test {
             rms.AddDataPoint(25, 1296);
             rms.AddDataPoint(625, 36);
 
-            ClassicAssert.AreEqual(300, rms.RA);
-            ClassicAssert.AreEqual(630, rms.Dec);
+            Assert.That(rms.RA, Is.EqualTo(300));
+            Assert.That(rms.Dec, Is.EqualTo(630));
             var total = Math.Sqrt((Math.Pow(300, 2) + Math.Pow(630, 2)));
-            ClassicAssert.AreEqual(total, rms.Total);
+            Assert.That(rms.Total, Is.EqualTo(total));
         }
 
         [Test]
@@ -73,10 +73,10 @@ namespace OpenAstroAra.Test {
             rms.AddDataPoint(-25, -36);
             rms.AddDataPoint(-625, -1296);
 
-            ClassicAssert.AreEqual(300, rms.RA);
-            ClassicAssert.AreEqual(630, rms.Dec);
+            Assert.That(rms.RA, Is.EqualTo(300));
+            Assert.That(rms.Dec, Is.EqualTo(630));
             var total = Math.Sqrt((Math.Pow(300, 2) + Math.Pow(630, 2)));
-            ClassicAssert.AreEqual(total, rms.Total);
+            Assert.That(rms.Total, Is.EqualTo(total));
         }
 
         [Test]
@@ -91,10 +91,10 @@ namespace OpenAstroAra.Test {
             var scale = 1.59;
             rms.SetScale(scale);
 
-            ClassicAssert.AreEqual(300, rms.RA);
-            ClassicAssert.AreEqual(630, rms.Dec);
+            Assert.That(rms.RA, Is.EqualTo(300));
+            Assert.That(rms.Dec, Is.EqualTo(630));
             var total = Math.Sqrt((Math.Pow(300, 2) + Math.Pow(630, 2)));
-            ClassicAssert.AreEqual(total, rms.Total);
+            Assert.That(rms.Total, Is.EqualTo(total));
         }
 
         [Test]
@@ -111,10 +111,10 @@ namespace OpenAstroAra.Test {
 
             rms.Clear();
 
-            ClassicAssert.AreEqual(scale, rms.Scale);
-            ClassicAssert.AreEqual(0, rms.RA);
-            ClassicAssert.AreEqual(0, rms.Dec);
-            ClassicAssert.AreEqual(0, rms.Total);
+            Assert.That(rms.Scale, Is.EqualTo(scale));
+            Assert.That(rms.RA, Is.EqualTo(0));
+            Assert.That(rms.Dec, Is.EqualTo(0));
+            Assert.That(rms.Total, Is.EqualTo(0));
         }
 
         [Test]
@@ -132,10 +132,10 @@ namespace OpenAstroAra.Test {
             rms.Clear();
             rms.AddDataPoint(-25, -36);
 
-            ClassicAssert.AreEqual(scale, rms.Scale);
-            ClassicAssert.AreEqual(0, rms.RA);
-            ClassicAssert.AreEqual(0, rms.Dec);
-            ClassicAssert.AreEqual(0, rms.Total);
+            Assert.That(rms.Scale, Is.EqualTo(scale));
+            Assert.That(rms.RA, Is.EqualTo(0));
+            Assert.That(rms.Dec, Is.EqualTo(0));
+            Assert.That(rms.Total, Is.EqualTo(0));
         }
     }
 }

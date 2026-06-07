@@ -122,6 +122,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
+        [NonSerialized]
         private ObservableDictionary<FlatDeviceFilterSettingsKey, FlatDeviceFilterSettingsValue> filterSettings;
 
         [DataMember]
@@ -136,6 +137,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
+        [NonSerialized]
         private ObserveAllCollection<TrainedFlatExposureSetting> trainedFlatExposureSettings;
         [DataMember]
         public ObserveAllCollection<TrainedFlatExposureSetting> TrainedFlatExposureSettings {

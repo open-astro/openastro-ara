@@ -144,6 +144,9 @@ public sealed class FitsException : Exception {
         var length = nullTerminator >= 0 ? nullTerminator : buffer.Length;
         return System.Text.Encoding.ASCII.GetString(buffer, 0, length);
     }
+
+    public FitsException() {
+    }
 }
 
 /// <summary>

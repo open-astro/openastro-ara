@@ -418,6 +418,9 @@ namespace OpenAstroAra.PlateSolving.Solvers {
 
             protected TheSkyXException(SerializationInfo info, StreamingContext context) : base(info, context) {
             }
+
+            public TheSkyXException() {
+            }
         }
     }
 }

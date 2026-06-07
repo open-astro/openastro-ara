@@ -111,6 +111,7 @@ namespace OpenAstroAra.Profile {
             RaisePropertyChanged(nameof(FilterWheelFilters));
         }
 
+        [NonSerialized]
         private ObserveAllCollection<FilterInfo> filterWheelFilters;
 
         [DataMember]

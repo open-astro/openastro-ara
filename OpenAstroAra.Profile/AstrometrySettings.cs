@@ -103,6 +103,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
+        [NonSerialized]
         private CustomHorizon horizon;
 
         public CustomHorizon Horizon {

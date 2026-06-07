@@ -83,5 +83,9 @@ namespace OpenAstroAra.Astrometry {
         public override string ToString() {
             return $"{{{nameof(X)}={X.ToString()}, {nameof(Y)}={Y.ToString()}, {nameof(Z)}={Z.ToString()}}}";
         }
+
+        public static RectangularCoordinates Add(RectangularCoordinates left, RectangularCoordinates right) {
+            throw new NotImplementedException();
+        }
     }
 }

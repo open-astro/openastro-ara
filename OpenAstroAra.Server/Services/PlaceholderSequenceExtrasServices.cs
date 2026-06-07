@@ -35,7 +35,6 @@ public sealed class PlaceholderSequenceTemplateService : ISequenceTemplateServic
     private readonly ISequenceService _sequences;
     private readonly string? _templatesDir;
     private readonly ILogger<PlaceholderSequenceTemplateService>? _logger;
-    private static readonly JsonDocument _emptyBody = JsonDocument.Parse("{}");
 
     public PlaceholderSequenceTemplateService(ISequenceService sequences) {
         _sequences = sequences;

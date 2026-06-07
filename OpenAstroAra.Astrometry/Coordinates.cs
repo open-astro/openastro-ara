@@ -584,6 +584,10 @@ namespace OpenAstroAra.Astrometry {
                 this.Epoch,
                 this.creationDate,
                 this.DateTime);
+
+        public static Separation Subtract(Coordinates left, Coordinates right) {
+            throw new NotImplementedException();
+        }
     }
 
     /// <summary>

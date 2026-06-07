@@ -34,11 +34,11 @@ namespace OpenAstroAra.Sequencer.Trigger {
     [JsonObject(MemberSerialization.OptIn)]
     public abstract class SequenceTrigger : SequenceHasChanged, ISequenceTrigger {
 
-        public SequenceTrigger() {
+        protected SequenceTrigger() {
             TriggerRunner = new SequentialContainer();
         }
 
-        public SequenceTrigger(SequenceTrigger cloneMe) : this() {
+        protected SequenceTrigger(SequenceTrigger cloneMe) : this() {
             CopyMetaData(cloneMe);
         }
 
