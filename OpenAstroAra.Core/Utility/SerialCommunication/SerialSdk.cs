@@ -14,6 +14,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.IO.Ports;
 using System.Threading;
@@ -21,7 +22,7 @@ using System.Threading.Tasks;
 
 namespace OpenAstroAra.Core.Utility.SerialCommunication {
 
-    public abstract class SerialSdk : ISerialSdk {
+    public abstract class SerialSdk : ISerialSdk, IDisposable {
         protected virtual string LogName => "Generic Serial Sdk";
 
         private readonly ResponseCache _cache = new ResponseCache();
@@ -44,26 +45,35 @@ namespace OpenAstroAra.Core.Utility.SerialCommunication {
                 ssSerial.Wait();
                 if (string.IsNullOrEmpty(portName)) return false;
                 if (!clients.Contains(client)) { clients.Add(client); }
-                if (SerialPort != null && SerialPort.PortName.Equals(portName)) {
+                if (SerialPort != null && SerialPort.PortName.Equals(portName, StringComparison.Ordinal)) {
                     return true;
                 }
                 SerialPort = SerialPortProvider.GetSerialPort(portName, baudRate, parity, dataBits, stopBits, handShake, dtrEnable, newLine, readTimeout, writeTimeout);
                 SerialPort?.Open();
-            } catch (Exception ex) {
-                Logger.Error(ex);
-                Notification.Notification.ShowError(string.Format(Locale.Loc.Instance["LblSerialPortCannotOpen"], SerialPort?.PortName, ex.GetType().Name));
-
-                clients.Remove(client);
-                SerialPort = null;
+            } catch (IOException ex) {
+                HandleOpenFailure(ex, client);
+            } catch (UnauthorizedAccessException ex) {
+                HandleOpenFailure(ex, client);
+            } catch (ArgumentException ex) {
+                HandleOpenFailure(ex, client);
+            } catch (InvalidOperationException ex) {
+                HandleOpenFailure(ex, client);
             } finally {
                 ssSerial.Release();
             }
             return SerialPort != null;
+
+            void HandleOpenFailure(Exception ex, object failedClient) {
+                Logger.Error(ex);
+                Notification.Notification.ShowError(string.Format(CultureInfo.CurrentCulture, Locale.Loc.Instance["LblSerialPortCannotOpen"], SerialPort?.PortName, ex.GetType().Name));
+                clients.Remove(failedClient);
+                SerialPort = null;
+            }
         }
 
         public Task<TResult?> SendCommand<TResult>(ISerialCommand? command) where TResult : Response, new() {
             return Task.Run(() => {
-                if (command == null) throw new ArgumentNullException(nameof(command));
+                ArgumentNullException.ThrowIfNull(command);
                 ssSerial.Wait();
                 TResult response;
                 if (_cache.HasValidResponse(command.GetType(), typeof(TResult))) {
@@ -104,7 +114,7 @@ namespace OpenAstroAra.Core.Utility.SerialCommunication {
 
         private void CleanupInBuffer() {
             try {
-                Logger.Error($"Cleaning up {SerialPort?.BytesToRead.ToString()} from read buffer.");
+                Logger.Error($"Cleaning up {SerialPort?.BytesToRead.ToString(CultureInfo.InvariantCulture)} from read buffer.");
                 SerialPort?.DiscardInBuffer();
             } catch (Exception ex) {
                 Logger.Error($"{LogName}: Port is in an invalid state. {ex}");
@@ -158,6 +168,17 @@ namespace OpenAstroAra.Core.Utility.SerialCommunication {
                 SerialPort = null;
             } finally {
                 ssSerial.Release();
+            }
+        }
+
+        public void Dispose() {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        protected virtual void Dispose(bool disposing) {
+            if (disposing) {
+                ssSerial.Dispose();
             }
         }
     }

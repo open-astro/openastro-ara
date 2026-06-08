@@ -9,7 +9,7 @@ namespace OpenAstroAra.Core.Utility {
     /// <summary>
     ///     Based on https://referencesource.microsoft.com/#PresentationFramework/src/Framework/MS/Internal/Annotations/ObservableDictionary.cs
     /// </summary>
-    public class ObservableDictionary<TKey, TValue> : IDictionary<TKey, TValue>, INotifyPropertyChanged where TKey : notnull {
+    public sealed class ObservableDictionary<TKey, TValue> : IDictionary<TKey, TValue>, INotifyPropertyChanged where TKey : notnull {
         //------------------------------------------------------
         //
         //  Constructors
@@ -45,7 +45,7 @@ namespace OpenAstroAra.Core.Utility {
         /// <exception cref="ArgumentException">a value for key is already present in the locator part</exception>
         public void Add(TKey key, TValue val) {
             if (key == null) {
-                throw new ArgumentNullException("key");
+                throw new ArgumentNullException(nameof(key));
             }
             _nameValues.Add(key, val);
             FireDictionaryChanged();
@@ -115,7 +115,7 @@ namespace OpenAstroAra.Core.Utility {
         /// <exception cref="ArgumentNullException">key is null</exception>
         public bool TryGetValue(TKey key, [System.Diagnostics.CodeAnalysis.MaybeNullWhen(false)] out TValue value) {
             if (key == null)
-                throw new ArgumentNullException("key");
+                throw new ArgumentNullException(nameof(key));
 
             return _nameValues.TryGetValue(key, out value);
         }
@@ -157,10 +157,9 @@ namespace OpenAstroAra.Core.Utility {
         /// <exception cref="ArgumentNullException">target is null</exception>
         /// <exception cref="ArgumentOutOfRangeException">startIndex is less than zero or greater than the lenght of target</exception>
         void ICollection<KeyValuePair<TKey, TValue>>.CopyTo(KeyValuePair<TKey, TValue>[] target, int startIndex) {
-            if (target == null)
-                throw new ArgumentNullException("target");
+            ArgumentNullException.ThrowIfNull(target);
             if (startIndex < 0 || startIndex > target.Length)
-                throw new ArgumentOutOfRangeException("startIndex");
+                throw new ArgumentOutOfRangeException(nameof(startIndex));
 
             ((ICollection<KeyValuePair<TKey, TValue>>)_nameValues).CopyTo(target, startIndex);
         }

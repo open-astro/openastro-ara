@@ -50,6 +50,11 @@ namespace OpenAstroAra.Test.SerialCommunication {
             _sut = new TestSdk { SerialPort = _mockSerialPort.Object };
         }
 
+        [TearDown]
+        public void Cleanup() {
+            _sut?.Dispose();
+        }
+
         [Test]
         public void TestInitializeSerialPort() {
             _sut.SerialPort = null;
@@ -114,7 +119,7 @@ namespace OpenAstroAra.Test.SerialCommunication {
                     It.IsAny<int>(), It.IsAny<Parity>(), It.IsAny<int>(),
                     It.IsAny<StopBits>(), It.IsAny<Handshake>(), It.IsAny<bool>(),
                     It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>()))
-                .Throws(new Exception());
+                .Throws(new System.IO.IOException());
 
             var result = _sut.InitializeSerialPort("COM3", this);
 

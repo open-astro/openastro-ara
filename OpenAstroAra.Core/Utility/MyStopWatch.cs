@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -14,6 +14,7 @@
 
 using System;
 using System.Diagnostics;
+using System.Globalization;
 using System.Runtime.CompilerServices;
 
 namespace OpenAstroAra.Core.Utility {
@@ -35,11 +36,11 @@ namespace OpenAstroAra.Core.Utility {
         public TimeSpan Elapsed => _stopWatch.Elapsed;
 
         private void Log() {
-            string message = string.Format("Start: {0}; Stopped: {1}; Elapsed: {2}", _startTime.ToString("dd.MM.yyyy hh:mm:ss.fff"), _stopTime.ToString("dd.MM.yyyy hh:mm:ss.fff"), _stopWatch.Elapsed);
+            string message = string.Format(CultureInfo.InvariantCulture, "Start: {0}; Stopped: {1}; Elapsed: {2}", _startTime.ToString("dd.MM.yyyy hh:mm:ss.fff", CultureInfo.InvariantCulture), _stopTime.ToString("dd.MM.yyyy hh:mm:ss.fff", CultureInfo.InvariantCulture), _stopWatch.Elapsed);
             Logger.Trace(message, _memberName, _filePath);
         }
 
-        void IDisposable.Dispose() {
+        public void Dispose() {
             this._stopWatch.Stop();
             this._stopTime = DateTime.UtcNow;
             Log();
