@@ -22,6 +22,7 @@ using OpenAstroAra.Sequencer.SequenceItem;
 using OpenAstroAra.Sequencer.SequenceItem.Utility;
 using OpenAstroAra.Sequencer.Utility;
 using System;
+using System.Collections.Generic;
 using System.ComponentModel.Composition;
 using System.Linq;
 using System.Runtime.Serialization;
@@ -105,8 +106,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
             }
         }
 
-        public ComparisonOperator[] ComparisonOperators => Enum.GetValues(typeof(ComparisonOperator))
-            .Cast<ComparisonOperator>()
+        public static IReadOnlyList<ComparisonOperator> ComparisonOperators => Enum.GetValues<ComparisonOperator>()
             .Where(p => p != ComparisonOperator.EQUALS)
             .Where(p => p != ComparisonOperator.NotEqual)
             .ToArray();

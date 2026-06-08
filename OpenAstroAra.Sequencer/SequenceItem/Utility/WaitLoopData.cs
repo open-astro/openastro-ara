@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -106,7 +107,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
                 if (targetAltitude != value) {
                     targetAltitude = value;
                     // While "thinking" we show this. 
-                    if (!ExpectedTime.EndsWith("\u231B")) {
+                    if (!ExpectedTime.EndsWith('\u231B')) {
                         ExpectedTime = ExpectedTime + "\u231B";
                     }
                     RaisePropertyChanged();
@@ -114,8 +115,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
             }
         }
 
-        public ComparisonOperator[] ComparisonOperators => Enum.GetValues(typeof(ComparisonOperator))
-            .Cast<ComparisonOperator>()
+        public static IReadOnlyList<ComparisonOperator> ComparisonOperators => Enum.GetValues<ComparisonOperator>()
             .Where(p => p != ComparisonOperator.GreaterThanOrEqual)
             .Where(p => p != ComparisonOperator.LessThanOrEqual)
             .Where(p => p != ComparisonOperator.EQUALS)
@@ -173,7 +173,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
             get => expectedDateTime;
             set {
                 expectedDateTime = value;
-                ExpectedTime = value.ToString("t");
+                ExpectedTime = value.ToString("t", CultureInfo.CurrentCulture);
             }
         }
 
