@@ -134,7 +134,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
                     DeviceInfo infoAfterConnect = (DeviceInfo)GetInfo!.Invoke(mediator, null)!;
                     var success = !infoAfterConnect.Connected;
                     if (!success) {
-                        errors.Add(new Exception($"Failed to disconnect from {device}"));
+                        errors.Add(new SequenceEntityFailedException($"Failed to disconnect from {device}"));
                     }
                 } else {
                     Logger.Info($"{device} is already disconnected");

@@ -178,10 +178,10 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
                     DeviceInfo infoAfterConnect = (DeviceInfo)GetInfo!.Invoke(mediator, null)!;
                     success = success && infoAfterConnect.Connected;
                     if (!success) {
-                        throw new Exception($"Failed to connect to {SelectedDevice}");
+                        throw new SequenceEntityFailedException($"Failed to connect to {SelectedDevice}");
                     }
                 } else {
-                    throw new Exception($"Failed to connect to {SelectedDevice} as it was not found");
+                    throw new SequenceEntityFailedException($"Failed to connect to {SelectedDevice} as it was not found");
                 }
             } else {
                 Logger.Info($"{SelectedDevice} is already connected");

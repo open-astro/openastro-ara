@@ -59,7 +59,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Dome {
 
         public override async Task Execute(IProgress<ApplicationStatus> progress, CancellationToken token) {
             if (!await domeMediator.FindHome(token)) {
-                throw new Exception(Loc.Instance["LblDomeCannotFindHome"]);
+                throw new SequenceEntityFailedException(Loc.Instance["LblDomeCannotFindHome"]);
             }
         }
 

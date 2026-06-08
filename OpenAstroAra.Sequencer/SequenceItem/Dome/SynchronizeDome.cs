@@ -66,7 +66,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Dome {
         public override async Task Execute(IProgress<ApplicationStatus> progress, CancellationToken token) {
             if (Validate()) {
                 if (!await domeFollower.TriggerTelescopeSync()) {
-                    throw new Exception("Synchronize dome operation didn't complete successfully");
+                    throw new SequenceEntityFailedException("Synchronize dome operation didn't complete successfully");
                 }
             } else {
                 throw new SequenceItemSkippedException(string.Join(",", Issues));
