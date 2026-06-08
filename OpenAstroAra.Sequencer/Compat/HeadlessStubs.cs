@@ -23,12 +23,17 @@
 // the original WPF/MvvmLight call shape, so legacy source compiles as-is.
 
 using System;
+using System.Diagnostics.CodeAnalysis;
 
 // net10.0 provides System.Windows.Input.ICommand via System.ObjectModel, so the
 // former local stub interface was removed (it triggered CS0436 type conflicts).
 // RelayCommand/RelayCommand<T> below now implement the framework ICommand.
 
 namespace System.Windows.Data {
+    [SuppressMessage("Design", "CA1010:Generic interface should also be provided",
+        Justification = "Headless compat shim that reproduces WPF's exact System.Windows.Data.ICollectionView shape (non-generic IEnumerable) so legacy NINA sequencer source compiles unchanged. Adding IEnumerable<T> would diverge from the mirrored framework API.")]
+    [SuppressMessage("Naming", "CA1710:Identifiers should have correct suffix",
+        Justification = "Name intentionally mirrors WPF's System.Windows.Data.ICollectionView so legacy source references resolve; renaming would defeat the compat shim. CA1710 sanctions suppression for established/mirrored names.")]
     public interface ICollectionView : System.Collections.IEnumerable {
         bool MoveCurrentTo(object? item);
         object? CurrentItem { get; }
@@ -42,6 +47,8 @@ namespace System.Windows.Data {
     // TemplateController / TargetController / SequencerFactory used it as a
     // sorted/grouped wrapper around an ObservableCollection. In headless we
     // just expose the underlying source; sorting/grouping is client-side.
+    [SuppressMessage("Design", "CA1010:Generic interface should also be provided",
+        Justification = "Headless compat shim mirroring WPF's CollectionViewSource; it implements the non-generic ICollectionView shim above by design so legacy sequencer source compiles unchanged.")]
     public class CollectionViewSource : ICollectionView {
         public System.Collections.IEnumerable? Source { get; set; }
         public System.Collections.IList GroupDescriptions { get; } = new System.Collections.Generic.List<object>();
@@ -89,6 +96,8 @@ namespace GalaSoft.MvvmLight.Command {
         public bool CanExecute(object? parameter) => _canExecute is null || _canExecute();
         public void Execute(object? parameter) => _execute();
         public event EventHandler? CanExecuteChanged;
+        [SuppressMessage("Design", "CA1030:Use events where appropriate",
+            Justification = "Mirrors GalaSoft.MvvmLight.Command.RelayCommand's public API: RaiseCanExecuteChanged is the established method that raises the CanExecuteChanged event for ICommand re-evaluation. Renaming would break the call shape this compat shim exists to preserve.")]
         public void RaiseCanExecuteChanged() => CanExecuteChanged?.Invoke(this, EventArgs.Empty);
     }
 
@@ -102,6 +111,8 @@ namespace GalaSoft.MvvmLight.Command {
         public bool CanExecute(object? parameter) => _canExecute is null || _canExecute((T?)parameter);
         public void Execute(object? parameter) => _execute((T?)parameter);
         public event EventHandler? CanExecuteChanged;
+        [SuppressMessage("Design", "CA1030:Use events where appropriate",
+            Justification = "Mirrors GalaSoft.MvvmLight.Command.RelayCommand's public API: RaiseCanExecuteChanged is the established method that raises the CanExecuteChanged event for ICommand re-evaluation. Renaming would break the call shape this compat shim exists to preserve.")]
         public void RaiseCanExecuteChanged() => CanExecuteChanged?.Invoke(this, EventArgs.Empty);
     }
 }
