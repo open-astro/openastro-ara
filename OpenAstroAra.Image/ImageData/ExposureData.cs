@@ -27,7 +27,7 @@ using System.Threading.Tasks;
 namespace OpenAstroAra.Image.ImageData {
 
     public abstract class BaseExposureData : IExposureData {
-        protected readonly IImageDataFactory imageDataFactory;
+        private protected readonly IImageDataFactory imageDataFactory;
 
         public int BitDepth { get; private set; }
         public ImageMetaData MetaData { get; private set; }
@@ -286,10 +286,10 @@ namespace OpenAstroAra.Image.ImageData {
     }
 
     public class ExposureDataFactory : IExposureDataFactory {
-        protected readonly IImageDataFactory imageDataFactory;
-        protected readonly IProfileService profileService;
-        protected readonly IPluggableBehaviorSelector<IStarDetection> starDetectionSelector;
-        protected readonly IPluggableBehaviorSelector<IStarAnnotator> starAnnotatorSelector;
+        private protected readonly IImageDataFactory imageDataFactory;
+        private protected readonly IProfileService profileService;
+        private protected readonly IPluggableBehaviorSelector<IStarDetection> starDetectionSelector;
+        private protected readonly IPluggableBehaviorSelector<IStarAnnotator> starAnnotatorSelector;
 
         public ExposureDataFactory(IImageDataFactory imageDataFactory, IProfileService profileService, IPluggableBehaviorSelector<IStarDetection> starDetectionSelector, IPluggableBehaviorSelector<IStarAnnotator> starAnnotatorSelector) {
             this.imageDataFactory = imageDataFactory;

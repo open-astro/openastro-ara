@@ -32,8 +32,8 @@ namespace OpenAstroAra.Image.ImageData {
         public TargetParameter Target { get; set; } = new TargetParameter();
         public ObserverParameter Observer { get; set; } = new ObserverParameter();
         public WeatherDataParameter WeatherData { get; set; } = new WeatherDataParameter();
-        public WorldCoordinateSystem? WorldCoordinateSystem;
-        public SequenceParameter Sequence = new SequenceParameter();
+        public WorldCoordinateSystem? WorldCoordinateSystem { get; set; }
+        public SequenceParameter Sequence { get; set; } = new SequenceParameter();
         public List<IGenericMetaDataHeader> GenericHeaders { get; set; } = new List<IGenericMetaDataHeader>();
 
         /// <summary>
@@ -176,7 +176,7 @@ namespace OpenAstroAra.Image.ImageData {
         public double SetPoint { get; set; } = double.NaN;
         public short ReadoutModeIndex { get; set; }
         public string ReadoutModeName { get; set; } = string.Empty;
-        public BayerPattern BayerPattern = BayerPattern.Auto;
+        public BayerPattern BayerPattern { get; set; } = BayerPattern.Auto;
         public SensorType SensorType { get; set; } = SensorType.Monochrome;
         public int BayerOffsetX { get; set; }
         public int BayerOffsetY { get; set; }

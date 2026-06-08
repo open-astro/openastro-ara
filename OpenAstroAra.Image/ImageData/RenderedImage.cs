@@ -25,9 +25,9 @@ using System.Threading.Tasks;
 namespace OpenAstroAra.Image.ImageData {
 
     public class RenderedImage : BaseINPC, IRenderedImage {
-        protected readonly IProfileService profileService;
-        protected readonly IStarDetection starDetection;
-        protected readonly IStarAnnotator starAnnotator;
+        private protected readonly IProfileService profileService;
+        private protected readonly IStarDetection starDetection;
+        private protected readonly IStarAnnotator starAnnotator;
 
         public IImageData RawImageData { get; private set; }
 

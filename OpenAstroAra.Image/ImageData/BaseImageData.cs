@@ -34,9 +34,9 @@ using System.Threading.Tasks;
 namespace OpenAstroAra.Image.ImageData {
 
     public partial class BaseImageData : IImageData {
-        protected readonly IProfileService profileService;
-        protected readonly IStarDetection starDetection;
-        protected readonly IStarAnnotator starAnnotator;
+        private protected readonly IProfileService profileService;
+        private protected readonly IStarDetection starDetection;
+        private protected readonly IStarAnnotator starAnnotator;
 
         public BaseImageData(ushort[] input, int width, int height, int bitDepth, bool isBayered, ImageMetaData metaData, IProfileService profileService, IStarDetection starDetection, IStarAnnotator starAnnotator)
             : this(
@@ -568,9 +568,9 @@ namespace OpenAstroAra.Image.ImageData {
     }
 
     public class ImageDataFactory : IImageDataFactory {
-        protected readonly IProfileService profileService;
-        protected readonly IPluggableBehaviorSelector<IStarDetection> starDetectionSelector;
-        protected readonly IPluggableBehaviorSelector<IStarAnnotator> starAnnotatorSelector;
+        private protected readonly IProfileService profileService;
+        private protected readonly IPluggableBehaviorSelector<IStarDetection> starDetectionSelector;
+        private protected readonly IPluggableBehaviorSelector<IStarAnnotator> starAnnotatorSelector;
 
         public ImageDataFactory(IProfileService profileService, IPluggableBehaviorSelector<IStarDetection> starDetectionSelector, IPluggableBehaviorSelector<IStarAnnotator> starAnnotatorSelector) {
             this.profileService = profileService;
