@@ -36,7 +36,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGPS {
     /// </summary>
     public partial class NMEAGps() : BaseINPC, IGnss, IDisposable {
         private string portName = string.Empty;
-        private int baudRate = 0;
+        private int baudRate;
         private System.Timers.Timer? fixTimer;
         private SerialPortDevice? currentDevice;
         private const int sentenceWait = 4;
@@ -262,10 +262,10 @@ namespace OpenAstroAra.Equipment.Equipment.MyGPS {
             }
         }
 
-        internal class GpsResponse {
-            internal bool HasFix { get; set; } = false;
+        internal sealed class GpsResponse {
+            internal bool HasFix { get; set; }
             internal Gga.FixQuality FixQuality { get; set; } = Gga.FixQuality.Invalid;
-            internal Location? Location { get; set; } = null;
+            internal Location? Location { get; set; }
         }
 
         [GeneratedRegex(@"^[$!]G")]

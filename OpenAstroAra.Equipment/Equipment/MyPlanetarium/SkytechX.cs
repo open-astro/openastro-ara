@@ -25,7 +25,7 @@ using System.Threading.Tasks;
 
 namespace OpenAstroAra.Equipment.Equipment.MyPlanetarium {
 
-    internal class SkytechX : IPlanetarium {
+    internal sealed class SkytechX : IPlanetarium {
         private string address = string.Empty;
         private int port;
 

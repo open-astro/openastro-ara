@@ -571,7 +571,7 @@ namespace OpenAstroAra.Equipment.Model {
             }
         }
 
-        private bool _autoFocusAfterTemperatureChange = false;
+        private bool _autoFocusAfterTemperatureChange;
 
         [XmlAttribute(nameof(AutoFocusAfterTemperatureChange))]
         public bool AutoFocusAfterTemperatureChange {
@@ -593,7 +593,7 @@ namespace OpenAstroAra.Equipment.Model {
             }
         }
 
-        private bool _autoFocusAfterHFRChange = false;
+        private bool _autoFocusAfterHFRChange;
 
         [XmlAttribute(nameof(AutoFocusAfterHFRChange))]
         public bool AutoFocusAfterHFRChange {

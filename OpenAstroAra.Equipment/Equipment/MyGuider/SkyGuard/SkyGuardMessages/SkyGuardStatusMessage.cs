@@ -4,7 +4,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.SkyGuard.SkyGuardMessages {
     /// <summary>
     /// Inclure l'url de la doc SkyGuard
     /// </summary>
-    class SkyGuardStatusMessage {
+    sealed class SkyGuardStatusMessage {
         [JsonProperty(PropertyName = "status")]
         public string Status { get; set; } = string.Empty;
 

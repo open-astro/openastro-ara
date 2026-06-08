@@ -24,7 +24,7 @@ using System.Threading.Tasks;
 
 namespace OpenAstroAra.Equipment.Equipment.MyPlanetarium {
 
-    internal class C2A : IPlanetarium {
+    internal sealed class C2A : IPlanetarium {
         private string address = string.Empty;
         private int port;
 

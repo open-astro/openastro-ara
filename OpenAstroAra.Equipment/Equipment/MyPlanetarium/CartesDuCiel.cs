@@ -27,7 +27,7 @@ using System.Threading.Tasks;
 
 namespace OpenAstroAra.Equipment.Equipment.MyPlanetarium {
 
-    internal class CartesDuCiel : IPlanetarium {
+    internal sealed class CartesDuCiel : IPlanetarium {
         private string address = string.Empty;
         private int port;
 

@@ -161,7 +161,7 @@ namespace OpenAstroAra.Equipment.Model {
             }
         }
 
-        private bool _enableSubSample = false;
+        private bool _enableSubSample;
 
         [XmlIgnore]
         public bool EnableSubSample {

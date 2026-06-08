@@ -77,7 +77,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider {
             return arcsecPerSecond;
         }
 
-        private bool guiding = false;
+        private bool guiding;
 
         private bool _connected;
 
@@ -103,7 +103,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider {
             }
         }
 
-        private double _directGuideDuration = 0.0;
+        private double _directGuideDuration;
 
         public double DirectGuideDuration {
             get => _directGuideDuration;
@@ -115,7 +115,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider {
             }
         }
 
-        private double _westEastGuideRate = 0.0;
+        private double _westEastGuideRate;
 
         public double WestEastGuideRate {
             get => _westEastGuideRate;
@@ -127,7 +127,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider {
             }
         }
 
-        private double _northSouthGuideRate = 0.0;
+        private double _northSouthGuideRate;
 
         public double NorthSouthGuideRate {
             get => _northSouthGuideRate;
@@ -217,8 +217,8 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider {
         }
 
         private readonly Random random = new Random();
-        private double previousWestEastOffsetPixels = 0.0;
-        private double previousNorthSouthOffsetPixels = 0.0;
+        private double previousWestEastOffsetPixels;
+        private double previousNorthSouthOffsetPixels;
 
         public event EventHandler<IGuideStep> GuideEvent { add { } remove { } }
 

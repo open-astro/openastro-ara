@@ -7,7 +7,7 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace OpenAstroAra.Equipment.Utility {
-    internal class FilterManager {
+    internal sealed class FilterManager {
         public FilterManager() { }
 
         public ObserveAllCollection<FilterInfo> SyncFiltersWithPositions(ObserveAllCollection<FilterInfo> filtersList, int wheelPositions) {

@@ -471,7 +471,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyCamera {
         }
 
 
-        private bool _liveViewEnabled = false;
+        private bool _liveViewEnabled;
         public bool LiveViewEnabled {
             get => _liveViewEnabled;
             set {
@@ -504,7 +504,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyCamera {
             }
         }
 
-        private short _readoutModeForNormalImages = 0;
+        private short _readoutModeForNormalImages;
         public short ReadoutModeForNormalImages {
             get => _readoutModeForNormalImages;
             set {
@@ -518,7 +518,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyCamera {
             }
         }
 
-        private short _readoutModeForSnapImages = 0;
+        private short _readoutModeForSnapImages;
         public short ReadoutModeForSnapImages {
             get => _readoutModeForSnapImages;
             set {
@@ -550,8 +550,8 @@ namespace OpenAstroAra.Equipment.Equipment.MyCamera {
         public bool HasBattery => false;
         public int BatteryLevel => -1;
         public double ElectronsPerADU => double.NaN;
-        public short BayerOffsetX { get; } = 0;
-        public short BayerOffsetY { get; } = 0;
+        public short BayerOffsetX { get; }
+        public short BayerOffsetY { get; }
 
         public IList<int> Gains => new List<int>();
 

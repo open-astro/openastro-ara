@@ -421,7 +421,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyCamera {
             }
         }
 
-        private short bayerOffsetX = 0;
+        private short bayerOffsetX;
 
         public short BayerOffsetX {
             get => bayerOffsetX;
@@ -433,7 +433,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyCamera {
             }
         }
 
-        private short bayerOffsetY = 0;
+        private short bayerOffsetY;
 
         public short BayerOffsetY {
             get => bayerOffsetY;
@@ -455,7 +455,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyCamera {
             }
         }
 
-        private double exposureMax = 0;
+        private double exposureMax;
 
         public double ExposureMax {
             get => exposureMax;
@@ -467,7 +467,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyCamera {
             }
         }
 
-        private double exposureMin = 0;
+        private double exposureMin;
 
         public double ExposureMin {
             get => exposureMin;
@@ -479,7 +479,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyCamera {
             }
         }
 
-        private bool liveViewEnabled = false;
+        private bool liveViewEnabled;
 
         public bool LiveViewEnabled {
             get => liveViewEnabled;
@@ -491,7 +491,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyCamera {
             }
         }
 
-        private bool canShowLiveView = false;
+        private bool canShowLiveView;
 
         public bool CanShowLiveView {
             get => canShowLiveView;
