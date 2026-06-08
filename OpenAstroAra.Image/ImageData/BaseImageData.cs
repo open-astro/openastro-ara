@@ -171,7 +171,7 @@ namespace OpenAstroAra.Image.ImageData {
         [GeneratedRegex(@"(?:(?:\.\w+)?\.\w+$)")]
         private static partial Regex GetFileExtensionsRegex();
 
-        private string GetSensorTempFromExifTool(string file) {
+        private static string GetSensorTempFromExifTool(string file) {
             string tempString = string.Empty;
             try {
                 string EXIFTOOLLOCATION = Path.Combine(CoreUtil.APPLICATIONDIRECTORY, "Utility", "ExifTool", "exiftool.exe");
@@ -353,7 +353,7 @@ namespace OpenAstroAra.Image.ImageData {
             return actualPath;
         }
 
-        private string ExtractDSLRTemperatureAndMoveFile(string actualPath) {
+        private static string ExtractDSLRTemperatureAndMoveFile(string actualPath) {
             var oldPath = actualPath;
             try {
                 string sensorTemp = GetSensorTempFromExifTool(actualPath);

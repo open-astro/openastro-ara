@@ -34,7 +34,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
         /// <summary>
         /// Uncompressed array size in bytes
         /// </summary>
-        public uint Size { get; } = 0;
+        public uint Size { get; }
 
         /// <summary>
         /// Array compression algorithm
@@ -49,7 +49,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
         /// <summary>
         /// Compressed array size in bytes. -1 for an uncompressed array
         /// </summary>
-        public uint CompressedSize { get; } = 0;
+        public uint CompressedSize { get; }
 
         /// <summary>
         /// Perform byte shuffling on the byte array prior to compression
@@ -59,7 +59,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
         /// <summary>
         /// Length in bytes of a data item for the shuffling algorithm
         /// </summary>
-        public int ShuffleItemSize { get; private set; } = 0;
+        public int ShuffleItemSize { get; private set; }
 
         /// <summary>
         /// XISF block checksum algorithm

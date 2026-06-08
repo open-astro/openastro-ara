@@ -51,7 +51,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
         /// <summary>
         /// The header xml + padding will consist of a muliple of bytes from this size
         /// </summary>
-        public int PaddedBlockSize => 1024;
+        public static int PaddedBlockSize => 1024;
 
         public static async Task<IImageData> Load(Uri filePath, bool isBayered, IImageDataFactory imageDataFactory, CancellationToken ct) {
             return await Task.Run(() => {
@@ -291,11 +291,11 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
             }
         }
 
-        private class XISFCompressionInfo {
+        private sealed class XISFCompressionInfo {
             public XISFCompressionType CompressionType { get; set; } = XISFCompressionType.NONE;
-            public bool IsShuffled { get; set; } = false;
-            public int UncompressedSize { get; set; } = 0;
-            public int ItemSize { get; set; } = 0;
+            public bool IsShuffled { get; set; }
+            public int UncompressedSize { get; set; }
+            public int ItemSize { get; set; }
         }
 
         private static XISFCompressionInfo GetCompressionType(string[] compression) {

@@ -25,9 +25,9 @@ namespace OpenAstroAra.Image.FileFormat {
         public TIFFCompressionType TIFFCompressionType { get; set; } = TIFFCompressionType.NONE;
         public XISFCompressionType XISFCompressionType { get; set; } = XISFCompressionType.NONE;
         public XISFChecksumType XISFChecksumType { get; set; } = XISFChecksumType.NONE;
-        public bool XISFByteShuffling { get; set; } = false;
+        public bool XISFByteShuffling { get; set; }
         public FITSCompressionType FITSCompressionType { get; set; } = FITSCompressionType.NONE;
-        public bool FITSAddFzExtension { get; set; } = false;
+        public bool FITSAddFzExtension { get; set; }
         public bool FITSUseLegacyWriter { get; set; } = true;
 
         public FileSaveInfo(IProfileService? profileService = null) {

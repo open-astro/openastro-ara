@@ -161,7 +161,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
             if (_headerCards.TryGetValue("BAYERPAT", out card)) {
                 // FITS Bayer Patterns seem to include single quotes and extra spaces
                 var originalValue = card.OriginalValue.Trim('\'').Trim();
-                metaData.Camera.SensorType = metaData.StringToSensorType(originalValue);
+                metaData.Camera.SensorType = ImageMetaData.StringToSensorType(originalValue);
             }
 
             if (_headerCards.TryGetValue("XBAYROFF", out card)) {
@@ -465,7 +465,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
             return l;
         }
 
-        private double ParseDouble(string value) {
+        private static double ParseDouble(string value) {
             if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var dbl)) {
                 return dbl;
             } else {
@@ -473,7 +473,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
             }
         }
 
-        private int ParseInt(string value) {
+        private static int ParseInt(string value) {
             if (value.EndsWith(".0", StringComparison.Ordinal)) {
                 value = value.Replace(".0", "", StringComparison.Ordinal);
             }
@@ -484,7 +484,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
             }
         }
 
-        private PierSide ParsePierSide(string value) {
+        private static PierSide ParsePierSide(string value) {
             var strVal = value.Trim();
 
             if (strVal.StartsWith("west", true, CultureInfo.InvariantCulture)) {

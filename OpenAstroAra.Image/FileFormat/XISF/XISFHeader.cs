@@ -156,7 +156,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
             }
 
             if (TryGetFITSProperty("BAYERPAT", out value)) {
-                metaData.Camera.SensorType = metaData.StringToSensorType(value);
+                metaData.Camera.SensorType = ImageMetaData.StringToSensorType(value);
             }
 
             if (TryGetFITSProperty("XBAYEROFF", out value)) {
@@ -808,11 +808,11 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
             AddImageFITSKeywordInternal(name, FloatToFitsString(value), comment);
         }
 
-        private string DoubleToFitsString(double value) {
+        private static string DoubleToFitsString(double value) {
             return value.ToString("0.0##############", CultureInfo.InvariantCulture);
         }
 
-        private string FloatToFitsString(float value) {
+        private static string FloatToFitsString(float value) {
             return value.ToString("0.0##############", CultureInfo.InvariantCulture);
         }
 
@@ -842,7 +842,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
             elem.Add(xelem);
         }
 
-        private PierSide ParsePierSide(string value) {
+        private static PierSide ParsePierSide(string value) {
             var strVal = value.Trim();
 
             if (strVal.StartsWith("west", true, CultureInfo.InvariantCulture)) {

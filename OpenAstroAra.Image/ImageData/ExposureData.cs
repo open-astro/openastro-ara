@@ -54,6 +54,8 @@ namespace OpenAstroAra.Image.ImageData {
         }
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1814:Prefer jagged arrays over multidimensional",
+        Justification = "These process the camera's native rectangular 2D pixel buffer (width x height) as delivered by the ASCOM/SDK drivers; a rectangular multidimensional array is the correct, contiguous representation for image data and a jagged array would regress both layout and interop.")]
     public class Flipped2DExposureData : BaseExposureData {
         private readonly Array flatArray;
         public bool IsBayered { get; private set; }

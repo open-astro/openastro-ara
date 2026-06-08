@@ -32,7 +32,7 @@ namespace OpenAstroAra.Image.ImageData {
         public TargetParameter Target { get; set; } = new TargetParameter();
         public ObserverParameter Observer { get; set; } = new ObserverParameter();
         public WeatherDataParameter WeatherData { get; set; } = new WeatherDataParameter();
-        public WorldCoordinateSystem? WorldCoordinateSystem = null;
+        public WorldCoordinateSystem? WorldCoordinateSystem;
         public SequenceParameter Sequence = new SequenceParameter();
         public List<IGenericMetaDataHeader> GenericHeaders { get; set; } = new List<IGenericMetaDataHeader>();
 
@@ -59,7 +59,7 @@ namespace OpenAstroAra.Image.ImageData {
             Observer.Site = profile.AstrometrySettings.Site;
         }
 
-        public SensorType StringToSensorType(string pattern) {
+        public static SensorType StringToSensorType(string pattern) {
             return Enum.TryParse(pattern, out SensorType sensor) ? sensor : SensorType.Monochrome;
         }
     }
@@ -151,7 +151,7 @@ namespace OpenAstroAra.Image.ImageData {
         public string ImageType { get; set; } = string.Empty;
         public string Binning { get; set; } = string.Empty;
         public double ExposureTime { get; set; } = double.NaN;
-        public RMS? RecordedRMS { get; set; } = null;
+        public RMS? RecordedRMS { get; set; }
 
         public void SetExposureTimes(DateTime startTime, DateTime endTime) {
             if (startTime == DateTime.MinValue || startTime == DateTime.MaxValue) { return; }
@@ -174,12 +174,12 @@ namespace OpenAstroAra.Image.ImageData {
         public int Offset { get; set; } = -1;
         public double ElectronsPerADU { get; set; } = double.NaN;
         public double SetPoint { get; set; } = double.NaN;
-        public short ReadoutModeIndex { get; set; } = 0;
+        public short ReadoutModeIndex { get; set; }
         public string ReadoutModeName { get; set; } = string.Empty;
         public BayerPattern BayerPattern = BayerPattern.Auto;
         public SensorType SensorType { get; set; } = SensorType.Monochrome;
-        public int BayerOffsetX { get; set; } = 0;
-        public int BayerOffsetY { get; set; } = 0;
+        public int BayerOffsetX { get; set; }
+        public int BayerOffsetY { get; set; }
         public int USBLimit { get; set; } = -1;
     }
 
@@ -192,7 +192,7 @@ namespace OpenAstroAra.Image.ImageData {
         public double Airmass { get; set; } = double.NaN;
         public PierSide SideOfPier { get; set; } = PierSide.pierUnknown;
 
-        private Coordinates? coordinates = null;
+        private Coordinates? coordinates;
 
         public Coordinates? Coordinates {
             get => coordinates;
@@ -207,7 +207,7 @@ namespace OpenAstroAra.Image.ImageData {
 
     public class FocuserParameter {
         public string Name { get; set; } = string.Empty;
-        public int? Position { get; set; } = null;
+        public int? Position { get; set; }
         public double StepSize { get; set; } = double.NaN;
         public double Temperature { get; set; } = double.NaN;
     }
@@ -229,7 +229,7 @@ namespace OpenAstroAra.Image.ImageData {
         [Obsolete("Use PositionAngle instead")]
         public double Rotation { get => AstroUtil.EuclidianModulus(360 - PositionAngle, 360); set => PositionAngle = AstroUtil.EuclidianModulus(360 - value, 360); }
         public double PositionAngle { get; set; } = double.NaN;
-        private Coordinates? coordinates = null;
+        private Coordinates? coordinates;
 
         public Coordinates? Coordinates {
             get => coordinates;
