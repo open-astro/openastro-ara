@@ -18,10 +18,15 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Logging;
 using OpenAstroAra.Server.Contracts.WsEvents;
 using OpenAstroAra.Server.Services;
+using System;
+using System.IO;
 using System.Net.WebSockets;
 using System.Text.Json;
 
 namespace OpenAstroAra.Server.Endpoints;
+
+/// <summary>Catalog payload returned by GET /api/v1/ws/catalog.</summary>
+public sealed record WsCatalogResponse(IReadOnlyList<string> Events);
 
 /// <summary>
 /// §60.9 WebSocket endpoint. <c>GET /api/v1/ws</c> accepts the protocol
@@ -37,10 +42,7 @@ namespace OpenAstroAra.Server.Endpoints;
 /// <c>/api/v1/ws/catalog</c> stays the read-only event-catalog endpoint
 /// per §60.9.4 — independent of the upgrade path.
 /// </summary>
-public static class WebSocketEndpoints {
-
-    /// <summary>Catalog payload returned by GET /api/v1/ws/catalog.</summary>
-    public sealed record WsCatalogResponse(IReadOnlyList<string> Events);
+public static partial class WebSocketEndpoints {
 
     /// <summary>
     /// Current §60.9 WS protocol version. Bumped only on breaking changes
@@ -152,12 +154,12 @@ public static class WebSocketEndpoints {
                 // Expected on shutdown.
             } catch (WebSocketException) {
                 // Expected on abrupt client disconnect.
-            } catch (Exception ex) {
-                logger.LogDebug(ex, "WS receive loop closed unexpectedly");
+            } catch (Exception ex) when (ex is InvalidOperationException or IOException or ObjectDisposedException) {
+                LogReceiveLoopClosed(logger, ex);
             }
             // Whatever caused the receive loop to exit (close frame, disconnect,
             // shutdown), tear down the send loop too.
-            try { cts.Cancel(); } catch { /* CTS already disposed */ }
+            try { await cts.CancelAsync(); } catch (ObjectDisposedException) { /* CTS already disposed */ }
         }, ct);
 
         try {
@@ -178,9 +180,9 @@ public static class WebSocketEndpoints {
         } catch (OperationCanceledException) {
             // Expected on shutdown or client close.
         } catch (WebSocketException ex) {
-            logger.LogDebug(ex, "WS send loop ended on socket error");
-        } catch (Exception ex) {
-            logger.LogError(ex, "WS send loop failed");
+            LogSendLoopSocketError(logger, ex);
+        } catch (Exception ex) when (ex is InvalidOperationException or IOException or ObjectDisposedException or JsonException) {
+            LogSendLoopFailed(logger, ex);
         }
 
         // Best-effort close — if the socket is already gone the framework
@@ -189,13 +191,13 @@ public static class WebSocketEndpoints {
             try {
                 await socket.CloseAsync(
                     WebSocketCloseStatus.NormalClosure, "server closing", CancellationToken.None);
-            } catch (Exception ex) {
-                logger.LogDebug(ex, "WS close failed");
+            } catch (Exception ex) when (ex is WebSocketException or InvalidOperationException or ObjectDisposedException) {
+                LogCloseFailed(logger, ex);
             }
         }
 
-        try { cts.Cancel(); } catch { /* CTS already disposed */ }
-        try { await receiveTask; } catch { /* swallowed; loop already logs */ }
+        try { await cts.CancelAsync(); } catch (ObjectDisposedException) { /* CTS already disposed */ }
+        try { await receiveTask; } catch (Exception ex) when (ex is OperationCanceledException or WebSocketException or ObjectDisposedException) { /* swallowed; loop already logs */ }
     }
 
     /// <summary>
@@ -225,7 +227,7 @@ public static class WebSocketEndpoints {
                 if (result.MessageType == WebSocketMessageType.Close) {
                     return 0;
                 }
-                ms.Write(buffer, 0, result.Count);
+                await ms.WriteAsync(buffer.AsMemory(0, result.Count), resumeCts.Token);
                 if (ms.Length > 16 * 1024) {
                     // Resume request is small; anything larger isn't one.
                     return 0;
@@ -235,7 +237,7 @@ public static class WebSocketEndpoints {
             // Resume window elapsed — fresh subscription, no replay.
             return 0;
         } catch (WebSocketException ex) {
-            logger.LogDebug(ex, "WS resume receive failed");
+            LogResumeReceiveFailed(logger, ex);
             return 0;
         }
 
@@ -322,4 +324,22 @@ public static class WebSocketEndpoints {
         await socket.SendAsync(json, WebSocketMessageType.Text, endOfMessage: true, ct);
     }
 
+    #region LoggerMessage delegates (CA1848)
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "WS receive loop closed unexpectedly")]
+    private static partial void LogReceiveLoopClosed(ILogger logger, Exception ex);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "WS send loop ended on socket error")]
+    private static partial void LogSendLoopSocketError(ILogger logger, Exception ex);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "WS send loop failed")]
+    private static partial void LogSendLoopFailed(ILogger logger, Exception ex);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "WS close failed")]
+    private static partial void LogCloseFailed(ILogger logger, Exception ex);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "WS resume receive failed")]
+    private static partial void LogResumeReceiveFailed(ILogger logger, Exception ex);
+
+    #endregion
 }
