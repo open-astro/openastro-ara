@@ -171,6 +171,7 @@ namespace OpenAstroAra.Image.ImageData {
         [GeneratedRegex(@"(?:(?:\.\w+)?\.\w+$)")]
         private static partial Regex GetFileExtensionsRegex();
 
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Globalization", "CA1308:Normalize strings to uppercase", Justification = "Lowercasing ASCII file-format tokens (XISF codec/checksum names, file extensions, EXIF tags) to match lowercase identifiers; not a security decision.")]
         private static string GetSensorTempFromExifTool(string file) {
             string tempString = string.Empty;
             try {
@@ -526,6 +527,7 @@ namespace OpenAstroAra.Image.ImageData {
         /// <param name="rawConverter">Which type of raw converter to use, when image is in RAW format</param>
         /// <param name="ct">Token to cancel operation</param>
         /// <returns></returns>
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Globalization", "CA1308:Normalize strings to uppercase", Justification = "Lowercasing ASCII file-format tokens (XISF codec/checksum names, file extensions, EXIF tags) to match lowercase identifiers; not a security decision.")]
         public static Task<IImageData> FromFile(string path, int bitDepth, bool isBayered, object? rawConverter, IImageDataFactory imageDataFactory, CancellationToken ct = default) {
             return Task.Run(async () => {
                 if (!File.Exists(path)) {

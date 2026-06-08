@@ -48,3 +48,19 @@ using System.Runtime.InteropServices;
 [assembly: SuppressMessage("Performance", "CA1819:Properties should not return arrays", Justification = "Raw serialized XISF data block; direct array access/Buffer.BlockCopy/interop required.", Scope = "type", Target = "~T:OpenAstroAra.Image.FileFormat.XISF.XISFData")]
 [assembly: SuppressMessage("Performance", "CA1819:Properties should not return arrays", Justification = "Raw serialized FITS data block; direct array access/Buffer.BlockCopy/interop required.", Scope = "type", Target = "~T:OpenAstroAra.Image.FileFormat.FITS.FITSData")]
 [assembly: SuppressMessage("Performance", "CA1819:Properties should not return arrays", Justification = "Raw image pixel buffer; direct array access/Buffer.BlockCopy/interop required.", Scope = "type", Target = "~T:OpenAstroAra.Image.ImageData.ImageArrayInt")]
+
+// CA1707 — the FITS BITPIX_* constants mirror the FITS standard's BITPIX keyword value names
+// (BITPIX_BYTE=8, BITPIX_SHORT=16, …); the underscore names match the documented FITS convention.
+[assembly: SuppressMessage("Naming", "CA1707:Identifiers should not contain underscores",
+    Justification = "BITPIX_* mirror the FITS standard BITPIX keyword value names.",
+    Scope = "type", Target = "~T:OpenAstroAra.Image.FileFormat.FITS.FITS")]
+
+// CA1724 — FITS and XISF are the established public types of their same-named file-format
+// namespaces; renaming either the type or the namespace is a breaking change with no benefit.
+[assembly: SuppressMessage("Naming", "CA1724:Type names should not match namespaces",
+    Justification = "FITS is the established public file-format type of the OpenAstroAra.Image.FileFormat.FITS namespace.",
+    Scope = "type", Target = "~T:OpenAstroAra.Image.FileFormat.FITS.FITS")]
+[assembly: SuppressMessage("Naming", "CA1724:Type names should not match namespaces",
+    Justification = "XISF is the established public file-format type of the OpenAstroAra.Image.FileFormat.XISF namespace.",
+    Scope = "type", Target = "~T:OpenAstroAra.Image.FileFormat.XISF.XISF")]
+
