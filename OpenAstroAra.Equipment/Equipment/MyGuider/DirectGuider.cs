@@ -72,7 +72,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider {
         private static double ToNormalizedGuideRate(double arcsecPerSecond) {
             if (double.IsNaN(arcsecPerSecond) || arcsecPerSecond <= 0) {
                 // Default guiding rate is 0.5x sidereal
-                return AstroUtil.SIDEREAL_RATE_ARCSECONDS_PER_SECOND / 2.0;
+                return AstroUtil.SiderealRateArcsecondsPerSecond / 2.0;
             }
             return arcsecPerSecond;
         }

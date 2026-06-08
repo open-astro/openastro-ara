@@ -22,6 +22,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 namespace OpenAstroAra.Astrometry {
@@ -33,7 +34,7 @@ namespace OpenAstroAra.Astrometry {
         private const double RadianstoHourFactor = 12d / Math.PI;
         private const double DaysToSecondsFactor = 60d * 60d * 24d;
         private const double SecondsToDaysFactor = 1.0 / (60d * 60d * 24d);
-        public const double SIDEREAL_RATE_ARCSECONDS_PER_SECOND = 15.041;
+        public const double SiderealRateArcsecondsPerSecond = 15.041;
         private const double ArcSecPerPixConversionFactor = RadiansToDegreeFactor * 60d * 60d / 1000d;
 
         public const string HMSPattern = @"(([0-9]{1,2})([h|:| ]|[?]{2}|[h|r]{2})\s*([0-9]{1,2})([m|'|′|:| ]|[?]{2})?\s*([0-9]{1,2}(?:\.[0-9]+){0,1})?([s|""|″|:| ]|[?]{2})?\s*)";
@@ -152,9 +153,9 @@ namespace OpenAstroAra.Astrometry {
             return deltaT;
         }
 
-        private static double DeltaUTToday = 0.0;
-        private static double DeltaUTYesterday = 0.0;
-        private static double DeltaUTTomorrow = 0.0;
+        private static double DeltaUTToday;
+        private static double DeltaUTYesterday;
+        private static double DeltaUTTomorrow;
         private static ConcurrentDictionary<DateTime, double> DeltaUTCache = new ConcurrentDictionary<DateTime, double>();
         private static DateTime DeltaUTReference;
 
@@ -203,7 +204,7 @@ namespace OpenAstroAra.Astrometry {
             db = db ?? new DatabaseInteraction();
             try {
                 deltaUT = AsyncContext.Run(() => db.GetUT1_UTC(utcDate, default));
-            } catch (Exception ex) {
+            } catch (Exception ex) when (ex is OperationCanceledException or InvalidOperationException or IOException) {
                 Logger.Error(ex);
             }
 
@@ -219,12 +220,9 @@ namespace OpenAstroAra.Astrometry {
                 DeltaUTTomorrow = deltaUT;
             }
 
-            try {
-                if (!DeltaUTCache.ContainsKey(utcDate.Date)) {
-                    DeltaUTCache.AddOrUpdate(utcDate.Date, deltaUT, (a, b) => b);
-                }
-            } catch (Exception) { }
-
+            if (!DeltaUTCache.ContainsKey(utcDate.Date)) {
+                DeltaUTCache.AddOrUpdate(utcDate.Date, deltaUT, (a, b) => b);
+            }
 
             return deltaUT;
         }
@@ -434,7 +432,7 @@ namespace OpenAstroAra.Astrometry {
             if (arcmin == 0) { arcmin = 0; }
             if (degree == 0) { degree = 0; }
 
-            return string.Format(pattern, degree, arcmin, arcsec);
+            return string.Format(CultureInfo.InvariantCulture, pattern, degree, arcmin, arcsec);
         }
 
         /// <summary>
@@ -444,9 +442,9 @@ namespace OpenAstroAra.Astrometry {
         /// <returns></returns>
         public static string DegreesToFitsDMS(double deg) {
             if (deg >= 0) {
-                return String.Concat("+", DegreesToDMS(deg).Replace("°", "").Replace("'", "").Replace("\"", ""));
+                return String.Concat("+", DegreesToDMS(deg).Replace("°", "", StringComparison.Ordinal).Replace("'", "", StringComparison.Ordinal).Replace("\"", "", StringComparison.Ordinal));
             } else {
-                return DegreesToDMS(deg).Replace("°", "").Replace("'", "").Replace("\"", "");
+                return DegreesToDMS(deg).Replace("°", "", StringComparison.Ordinal).Replace("'", "", StringComparison.Ordinal).Replace("\"", "", StringComparison.Ordinal);
             }
         }
 
@@ -497,12 +495,12 @@ namespace OpenAstroAra.Astrometry {
             dms = dms.Trim();
 
             double signFactor = 1d;
-            if (dms.Contains('-')) {
+            if (dms.Contains('-', StringComparison.Ordinal)) {
                 signFactor = -1d;
             }
 
             var pattern = "[0-9\\.]+";
-            if (dms.Contains(",")) {
+            if (dms.Contains(',', StringComparison.Ordinal)) {
                 pattern = "[0-9\\,]+";
             }
             var regex = new Regex(pattern);
