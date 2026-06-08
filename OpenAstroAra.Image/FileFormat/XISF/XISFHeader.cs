@@ -367,7 +367,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
             value = string.Empty;
             if (Image is null) { return false; }
             var elements = Image.Elements(xmlns + "FITSKeyword").ToList();
-            if (!elements.Any()) { return false; }
+            if (elements.Count == 0) { return false; }
 
             var elem = elements.FirstOrDefault(el => el.Attribute("name")?.Value == key);
             if (elem == null) { return false; }
@@ -386,7 +386,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
             var l = new List<IGenericMetaDataHeader>();
             if (Image is null) { return l; }
             var elements = Image.Elements(xmlns + "FITSKeyword").ToList();
-            if (!elements.Any()) { return l; }
+            if (elements.Count == 0) { return l; }
 
             foreach (var elem in elements) {
                 if (elem == null) { continue; }

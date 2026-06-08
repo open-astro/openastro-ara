@@ -54,6 +54,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
         public static int PaddedBlockSize => 1024;
 
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Globalization", "CA1308:Normalize strings to uppercase", Justification = "Lowercasing ASCII file-format tokens (XISF codec/checksum names, file extensions, EXIF tags) to match lowercase identifiers; not a security decision.")]
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "XISF metadata-extraction boundary: extracting metadata from arbitrary XISF XML may throw various parse/format exceptions; the failure is logged and load continues with default metadata.")]
         public static async Task<IImageData> Load(Uri filePath, bool isBayered, IImageDataFactory imageDataFactory, CancellationToken ct) {
             return await Task.Run(() => {
                 using (FileStream fs = new FileStream(filePath.LocalPath, FileMode.Open, FileAccess.Read)) {

@@ -107,7 +107,7 @@ namespace OpenAstroAra.Image.ImageData {
                         var saveTask = SaveToDiskAsync(fileSaveInfo, Guid.NewGuid().ToString(), cancelToken, false);
                         await Task.WhenAny(cancelTaskSource.Task, saveTask);
                         cancelToken.ThrowIfCancellationRequested();
-                        actualPath = saveTask.Result;
+                        actualPath = await saveTask;
                     }
 
                     Logger.Debug($"Saved temporary image at {actualPath}");
@@ -172,13 +172,14 @@ namespace OpenAstroAra.Image.ImageData {
         private static partial Regex GetFileExtensionsRegex();
 
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Globalization", "CA1308:Normalize strings to uppercase", Justification = "Lowercasing ASCII file-format tokens (XISF codec/checksum names, file extensions, EXIF tags) to match lowercase identifiers; not a security decision.")]
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "External-tool boundary: invoking exiftool may fail for any reason (tool missing, bad output, IO); on any failure the sensor temperature is simply left unset.")]
         private static string GetSensorTempFromExifTool(string file) {
             string tempString = string.Empty;
             try {
                 string EXIFTOOLLOCATION = Path.Combine(CoreUtil.APPLICATIONDIRECTORY, "Utility", "ExifTool", "exiftool.exe");
                 var sb = new StringBuilder();
 
-                System.Diagnostics.Process process = new System.Diagnostics.Process();
+                using System.Diagnostics.Process process = new System.Diagnostics.Process();
                 System.Diagnostics.ProcessStartInfo startInfo = new System.Diagnostics.ProcessStartInfo();
                 startInfo.WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden;
                 startInfo.FileName = EXIFTOOLLOCATION;
@@ -354,6 +355,7 @@ namespace OpenAstroAra.Image.ImageData {
             return actualPath;
         }
 
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Best-effort DSLR-temperature extraction + file move: any failure is logged and the original path is returned, so a metadata/IO hiccup cannot fail the save.")]
         private static string ExtractDSLRTemperatureAndMoveFile(string actualPath) {
             var oldPath = actualPath;
             try {

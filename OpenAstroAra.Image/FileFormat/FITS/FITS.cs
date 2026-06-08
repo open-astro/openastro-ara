@@ -45,7 +45,8 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
         }
 
         [SecurityCritical]
-        private static IImageData LoadInternal(Uri filePath, bool isBayered, IImageDataFactory imageDataFactory, CancellationToken ct) {
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "FITS file-load boundary: opening/decoding an arbitrary FITS file via cfitsio may surface any native/IO/parse exception; failures are logged and surfaced so one bad file cannot crash the loader.")]
+        private static BaseImageData LoadInternal(Uri filePath, bool isBayered, IImageDataFactory imageDataFactory, CancellationToken ct) {
             IntPtr fitsPtr = IntPtr.Zero;
             IntPtr buffer = IntPtr.Zero;
             try {
@@ -62,7 +63,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
 
                 try {
                     _ = CfitsioNative.fits_read_key_long(fitsPtr, "NAXIS1");
-                } catch {
+                } catch (CfitsioException) {
                     // When NAXIS1 does not exist, try at the last HDU - e.g. when the image is tile compressed
                     _ = CfitsioNative.fits_get_num_hdus(fitsPtr, out int hdunum, out status);
                     CfitsioNative.CheckStatus("fits_get_num_hdus", status);
@@ -174,7 +175,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
                 if (buffer != IntPtr.Zero) {
                     Marshal.FreeHGlobal(buffer);
                 }
-                throw new Exception($"Unable to load FITS file from {filePath.LocalPath}");
+                throw new InvalidOperationException($"Unable to load FITS file from {filePath.LocalPath}");
             } finally {
                 if (fitsPtr != IntPtr.Zero) {
                     _ = CfitsioNative.fits_close_file(fitsPtr, out var status);

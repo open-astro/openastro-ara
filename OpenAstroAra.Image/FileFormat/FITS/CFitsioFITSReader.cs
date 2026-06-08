@@ -20,7 +20,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
 
             try {
                 _ = CfitsioNative.fits_read_key_long(filePtr, "NAXIS1");
-            } catch {
+            } catch (CfitsioException) {
                 // When NAXIS1 does not exist, try at the last HDU - e.g. when the image is tile compressed
                 _ = CfitsioNative.fits_get_num_hdus(filePtr, out int hdunum, out status);
                 CfitsioNative.CheckStatus("fits_get_num_hdus", status);
@@ -185,6 +185,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
             throw new ArgumentException("Invalid cfitsio data type " + T.Name);
         }
 
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "FITS metadata-translation boundary: a malformed or partial header keyword may throw various cfitsio/parse exceptions; each is caught so a single bad card cannot abort building the metadata snapshot.")]
         internal ImageMetaData TranslateToMetaData() {
             //Translate CFITSio into N.I.N.A. FITSHeader
             FITSHeader header = new FITSHeader(Width, Height);
@@ -250,7 +251,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
                     try {
                         File.Delete(tempFile);
                         tempFile = null; // Clear reference after deletion
-                    } catch (Exception ex) {
+                    } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
                         // Log the exception or handle it as needed
                         Logger.Error($"Failed to delete temp file", ex);
                     }
