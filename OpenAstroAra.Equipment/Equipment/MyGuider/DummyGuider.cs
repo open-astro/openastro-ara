@@ -25,7 +25,6 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
-#pragma warning disable 1998
 
 namespace OpenAstroAra.Equipment.Equipment.MyGuider {
 
@@ -66,36 +65,36 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider {
 
         public string DriverVersion => "1.0";
 
-        public async Task<bool> Connect(CancellationToken token) {
+        public Task<bool> Connect(CancellationToken token) {
             profileService.ActiveProfile.GuiderSettings.GuiderName = Id;
 
             Connected = false;
 
-            return Connected;
+            return Task.FromResult(Connected);
         }
 
-        public async Task<bool> AutoSelectGuideStar() {
-            return true;
+        public Task<bool> AutoSelectGuideStar() {
+            return Task.FromResult(true);
         }
 
         public void Disconnect() {
             Connected = false;
         }
 
-        public static async Task<bool> Pause(bool pause, CancellationToken ct) {
-            return true;
+        public static Task<bool> Pause(bool pause, CancellationToken ct) {
+            return Task.FromResult(true);
         }
 
-        public async Task<bool> StartGuiding(bool forceCalibration, IProgress<ApplicationStatus> progress, CancellationToken ct) {
-            return true;
+        public Task<bool> StartGuiding(bool forceCalibration, IProgress<ApplicationStatus> progress, CancellationToken ct) {
+            return Task.FromResult(true);
         }
 
-        public async Task<bool> StopGuiding(CancellationToken ct) {
-            return true;
+        public Task<bool> StopGuiding(CancellationToken ct) {
+            return Task.FromResult(true);
         }
 
-        public async Task<bool> Dither(IProgress<ApplicationStatus> progress, CancellationToken ct) {
-            return true;
+        public Task<bool> Dither(IProgress<ApplicationStatus> progress, CancellationToken ct) {
+            return Task.FromResult(true);
         }
 
         public bool CanClearCalibration => true;
@@ -106,8 +105,8 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider {
 
         public SiderealShiftTrackingRate ShiftRate => SiderealShiftTrackingRate.Disabled;
 
-        public async Task<bool> ClearCalibration(CancellationToken ct) {
-            return true;
+        public Task<bool> ClearCalibration(CancellationToken ct) {
+            return Task.FromResult(true);
         }
 
         public void SetupDialog() {

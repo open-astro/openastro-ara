@@ -35,19 +35,32 @@ using System.Runtime.InteropServices;
     Scope = "type",
     Target = "~T:OpenAstroAra.Image.FileFormat.FITS.CfitsioNative.COMPRESSION")]
 
-// CA1819 — the image pixel/data buffers (FlatArray, FlatArrayInt, RAWData, the LRGB planes,
-// the rendered-image data and the XISF/FITS serialized blocks) are raw contiguous arrays that
-// are indexed directly and passed to Buffer.BlockCopy, native interop and the data converters.
+// CA1819 — the image pixel/data buffers (FlatArray/FlatArrayInt/RAWData, the LRGB planes, the
+// rendered-image bytes and the XISF/FITS serialized blocks) are raw contiguous arrays that are
+// indexed directly and passed to Buffer.BlockCopy, native interop and the data converters.
 // Exposing them as IReadOnlyList<T> would regress performance and break that interop, so CA1819's
 // collection alternative is inappropriate for these performance-critical image buffers.
-[assembly: SuppressMessage("Performance", "CA1819:Properties should not return arrays", Justification = "Raw image pixel buffer; direct array access/Buffer.BlockCopy/interop required.", Scope = "type", Target = "~T:OpenAstroAra.Image.Interfaces.IImageArray")]
-[assembly: SuppressMessage("Performance", "CA1819:Properties should not return arrays", Justification = "Raw image pixel buffer; direct array access/Buffer.BlockCopy/interop required.", Scope = "type", Target = "~T:OpenAstroAra.Image.ImageData.ImageArray")]
-[assembly: SuppressMessage("Performance", "CA1819:Properties should not return arrays", Justification = "Raw image pixel planes; direct array access/Buffer.BlockCopy/interop required.", Scope = "type", Target = "~T:OpenAstroAra.Image.ImageData.LRGBArrays")]
-[assembly: SuppressMessage("Performance", "CA1819:Properties should not return arrays", Justification = "Raw rendered-image data buffer; direct array access/interop required.", Scope = "type", Target = "~T:OpenAstroAra.Image.ImageData.RenderedImage")]
-[assembly: SuppressMessage("Performance", "CA1819:Properties should not return arrays", Justification = "Raw rendered-image data buffer; direct array access/interop required.", Scope = "type", Target = "~T:OpenAstroAra.Image.Interfaces.IRenderedImage")]
-[assembly: SuppressMessage("Performance", "CA1819:Properties should not return arrays", Justification = "Raw serialized XISF data block; direct array access/Buffer.BlockCopy/interop required.", Scope = "type", Target = "~T:OpenAstroAra.Image.FileFormat.XISF.XISFData")]
-[assembly: SuppressMessage("Performance", "CA1819:Properties should not return arrays", Justification = "Raw serialized FITS data block; direct array access/Buffer.BlockCopy/interop required.", Scope = "type", Target = "~T:OpenAstroAra.Image.FileFormat.FITS.FITSData")]
-[assembly: SuppressMessage("Performance", "CA1819:Properties should not return arrays", Justification = "Raw image pixel buffer; direct array access/Buffer.BlockCopy/interop required.", Scope = "type", Target = "~T:OpenAstroAra.Image.ImageData.ImageArrayInt")]
+// Scoped to the SPECIFIC properties (not the whole type) so any future non-buffer array property
+// added to these types is still flagged.
+[assembly: SuppressMessage("Performance", "CA1819:Properties should not return arrays", Justification = "Raw image pixel buffer; direct array access/Buffer.BlockCopy/interop required.", Scope = "member", Target = "~P:OpenAstroAra.Image.Interfaces.IImageArray.FlatArray")]
+[assembly: SuppressMessage("Performance", "CA1819:Properties should not return arrays", Justification = "Raw image pixel buffer; direct array access/Buffer.BlockCopy/interop required.", Scope = "member", Target = "~P:OpenAstroAra.Image.Interfaces.IImageArray.FlatArrayInt")]
+[assembly: SuppressMessage("Performance", "CA1819:Properties should not return arrays", Justification = "Raw image pixel buffer; direct array access/Buffer.BlockCopy/interop required.", Scope = "member", Target = "~P:OpenAstroAra.Image.Interfaces.IImageArray.RAWData")]
+[assembly: SuppressMessage("Performance", "CA1819:Properties should not return arrays", Justification = "Raw image pixel buffer; direct array access/Buffer.BlockCopy/interop required.", Scope = "member", Target = "~P:OpenAstroAra.Image.ImageData.ImageArray.FlatArray")]
+[assembly: SuppressMessage("Performance", "CA1819:Properties should not return arrays", Justification = "Raw image pixel buffer; direct array access/Buffer.BlockCopy/interop required.", Scope = "member", Target = "~P:OpenAstroAra.Image.ImageData.ImageArray.FlatArrayInt")]
+[assembly: SuppressMessage("Performance", "CA1819:Properties should not return arrays", Justification = "Raw image pixel buffer; direct array access/Buffer.BlockCopy/interop required.", Scope = "member", Target = "~P:OpenAstroAra.Image.ImageData.ImageArray.RAWData")]
+[assembly: SuppressMessage("Performance", "CA1819:Properties should not return arrays", Justification = "Raw image pixel buffer; direct array access/Buffer.BlockCopy/interop required.", Scope = "member", Target = "~P:OpenAstroAra.Image.ImageData.ImageArrayInt.FlatArray")]
+[assembly: SuppressMessage("Performance", "CA1819:Properties should not return arrays", Justification = "Raw image pixel buffer; direct array access/Buffer.BlockCopy/interop required.", Scope = "member", Target = "~P:OpenAstroAra.Image.ImageData.ImageArrayInt.FlatArrayInt")]
+[assembly: SuppressMessage("Performance", "CA1819:Properties should not return arrays", Justification = "Raw image pixel buffer; direct array access/Buffer.BlockCopy/interop required.", Scope = "member", Target = "~P:OpenAstroAra.Image.ImageData.ImageArrayInt.RAWData")]
+[assembly: SuppressMessage("Performance", "CA1819:Properties should not return arrays", Justification = "Raw image pixel plane; direct array access/Buffer.BlockCopy/interop required.", Scope = "member", Target = "~P:OpenAstroAra.Image.ImageData.LRGBArrays.Lum")]
+[assembly: SuppressMessage("Performance", "CA1819:Properties should not return arrays", Justification = "Raw image pixel plane; direct array access/Buffer.BlockCopy/interop required.", Scope = "member", Target = "~P:OpenAstroAra.Image.ImageData.LRGBArrays.Red")]
+[assembly: SuppressMessage("Performance", "CA1819:Properties should not return arrays", Justification = "Raw image pixel plane; direct array access/Buffer.BlockCopy/interop required.", Scope = "member", Target = "~P:OpenAstroAra.Image.ImageData.LRGBArrays.Green")]
+[assembly: SuppressMessage("Performance", "CA1819:Properties should not return arrays", Justification = "Raw image pixel plane; direct array access/Buffer.BlockCopy/interop required.", Scope = "member", Target = "~P:OpenAstroAra.Image.ImageData.LRGBArrays.Blue")]
+[assembly: SuppressMessage("Performance", "CA1819:Properties should not return arrays", Justification = "Raw rendered-image byte buffer; direct array access/interop required.", Scope = "member", Target = "~P:OpenAstroAra.Image.ImageData.RenderedImage.Image")]
+[assembly: SuppressMessage("Performance", "CA1819:Properties should not return arrays", Justification = "Raw rendered-image byte buffer; direct array access/interop required.", Scope = "member", Target = "~P:OpenAstroAra.Image.ImageData.RenderedImage.OriginalImage")]
+[assembly: SuppressMessage("Performance", "CA1819:Properties should not return arrays", Justification = "Raw rendered-image byte buffer; direct array access/interop required.", Scope = "member", Target = "~P:OpenAstroAra.Image.Interfaces.IRenderedImage.Image")]
+[assembly: SuppressMessage("Performance", "CA1819:Properties should not return arrays", Justification = "Raw rendered-image byte buffer; direct array access/interop required.", Scope = "member", Target = "~P:OpenAstroAra.Image.Interfaces.IRenderedImage.OriginalImage")]
+[assembly: SuppressMessage("Performance", "CA1819:Properties should not return arrays", Justification = "Raw serialized XISF data block; direct array access/Buffer.BlockCopy/interop required.", Scope = "member", Target = "~P:OpenAstroAra.Image.FileFormat.XISF.XISFData.Data")]
+[assembly: SuppressMessage("Performance", "CA1819:Properties should not return arrays", Justification = "Raw serialized FITS data block; direct array access/Buffer.BlockCopy/interop required.", Scope = "member", Target = "~P:OpenAstroAra.Image.FileFormat.FITS.FITSData.Data")]
 
 // CA1707 — the FITS BITPIX_* constants mirror the FITS standard's BITPIX keyword value names
 // (BITPIX_BYTE=8, BITPIX_SHORT=16, …); the underscore names match the documented FITS convention.

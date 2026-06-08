@@ -15,7 +15,6 @@
 using OpenAstroAra.Core.Interfaces;
 using System.Runtime.Serialization;
 
-#pragma warning disable 1998
 
 namespace OpenAstroAra.Core.Model {
 
