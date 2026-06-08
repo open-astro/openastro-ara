@@ -97,7 +97,7 @@ public sealed record ExposureRequestDto(
 
 public sealed record ExposureResponseDto(
     string FrameId,
-    string PreviewUrl,
+    Uri PreviewUrl,
     double ExposureSec,
     string CapturedAt);
 
@@ -114,7 +114,7 @@ public sealed record TelescopeCapabilitiesDto(
     bool CanSlew, bool CanSync, bool CanPark, bool CanUnpark,
     bool CanSetTracking, bool CanPulseGuide,
     bool CanFindHome,
-    string[] SupportedSiderealRates);
+    IReadOnlyList<string> SupportedSiderealRates);
 
 public sealed record TelescopeStateDto(
     string State,    // "idle" | "slewing" | "tracking" | "parked" | "unparking" | "error"
@@ -160,7 +160,7 @@ public sealed record FilterWheelDto(
     string Name,
     EquipmentConnectionState State,
     FilterWheelStateDto Runtime,
-    FilterSlotDto[] Slots);
+    IReadOnlyList<FilterSlotDto> Slots);
 
 public sealed record FilterSlotDto(int Position, string Name, int FocusOffset);
 
@@ -198,7 +198,7 @@ public sealed record SwitchDto(
     string DeviceId,
     string Name,
     EquipmentConnectionState State,
-    SwitchPortDto[] Ports);
+    IReadOnlyList<SwitchPortDto> Ports);
 
 public sealed record SwitchPortDto(int Id, string Name, double Value, double Min, double Max, bool CanWrite);
 
@@ -277,7 +277,7 @@ public sealed record PolarAlignStateDto(
 
 public sealed record PolarAlignFrameDto(
     string FrameId,
-    string PreviewUrl,
+    Uri PreviewUrl,
     double? SolvedRaHours,
     double? SolvedDecDeg,
     string CapturedAt);

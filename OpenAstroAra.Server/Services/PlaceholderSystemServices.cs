@@ -35,7 +35,7 @@ public sealed class PlaceholderDataManagerService : IDataManagerService {
             Version: "v2024.10",
             IsInstalled: true,
             InstalledUtc: new DateTimeOffset(2026, 5, 1, 12, 0, 0, TimeSpan.Zero),
-            SourceUrl: "https://data.openastro.net/tycho-2/2024.10.tar.gz"),
+            SourceUrl: new Uri("https://data.openastro.net/tycho-2/2024.10.tar.gz")),
         new DataPackageDto(
             Id: "horizon-default",
             Name: "Default 20° horizon profile",
@@ -55,7 +55,7 @@ public sealed class PlaceholderDataManagerService : IDataManagerService {
             Version: "v2022",
             IsInstalled: false,
             InstalledUtc: null,
-            SourceUrl: "https://data.openastro.net/gaia-edr3-bright/2022.tar.gz"),
+            SourceUrl: new Uri("https://data.openastro.net/gaia-edr3-bright/2022.tar.gz")),
     };
 
     public Task<IReadOnlyList<DataPackageDto>> ListPackagesAsync(CancellationToken ct) =>
@@ -104,7 +104,7 @@ public sealed class PlaceholderProfileShareService : IProfileShareService {
             ProfileName: "Sample profile",
             Manifest: _emptyManifest.RootElement.Clone(),
             PayloadBytes: 4_096,
-            DownloadUrl: $"/api/v1/profiles/share/{profileId}/payload"));
+            DownloadUrl: new Uri($"/api/v1/profiles/share/{profileId}/payload", UriKind.Relative)));
 
     public Task<ProfileShareImportPreviewDto> ImportPreviewAsync(JsonElement manifest, CancellationToken ct) =>
         Task.FromResult(new ProfileShareImportPreviewDto(

@@ -58,7 +58,7 @@ public sealed class PlaceholderCameraService : ICameraService {
         var frameId = Guid.NewGuid();
         return Task.FromResult(new ExposureResponseDto(
             FrameId: frameId.ToString(),
-            PreviewUrl: $"/api/v1/frames/{frameId}/preview",
+            PreviewUrl: new Uri($"/api/v1/frames/{frameId}/preview", UriKind.Relative),
             ExposureSec: 1.0,
             CapturedAt: DateTimeOffset.UtcNow.ToString("O")));
     }

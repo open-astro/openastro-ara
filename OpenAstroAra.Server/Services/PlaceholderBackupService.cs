@@ -40,7 +40,7 @@ public sealed class PlaceholderBackupService : IBackupService {
         CreatedUtc: new DateTimeOffset(2026, 5, 30, 0, 0, 0, TimeSpan.Zero),
         SizeBytes: 12_345_678,
         Sha256: "placeholder-sha256-7777777777777777777777777777777777777777777777777777777777777777",
-        DownloadUrl: "/api/v1/backup/snapshot/77777777-7777-7777-7777-777777777771/download",
+        DownloadUrl: new Uri("/api/v1/backup/snapshot/77777777-7777-7777-7777-777777777771/download", UriKind.Relative),
         IncludedAreas: new[] { "profiles", "sequences" });
 
     public Task<OperationAcceptedDto> CreateZipAsync(string? idempotencyKey, CancellationToken ct) =>
