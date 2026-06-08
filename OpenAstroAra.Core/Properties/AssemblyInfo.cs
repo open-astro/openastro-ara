@@ -13,12 +13,17 @@
 #endregion "copyright"
 
 using System.Reflection;
+using System.Resources;
 using System.Runtime.InteropServices;
 
 [assembly: AssemblyTitle("OpenAstro Ara Core Library")]
 [assembly: AssemblyDescription("Core types shared across the OpenAstro Ara server + library projects.")]
 [assembly: AssemblyConfiguration("")]
 [assembly: ComVisible(false)]
+
+// The Locale resources are authored in English; declaring the neutral language
+// lets the resource manager skip the satellite-assembly probe for en cultures (CA1824).
+[assembly: NeutralResourcesLanguage("en")]
 
 // Version information for an assembly consists of the following four values:
 //

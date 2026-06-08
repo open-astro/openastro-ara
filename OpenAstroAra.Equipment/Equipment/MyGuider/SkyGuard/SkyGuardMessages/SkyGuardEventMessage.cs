@@ -42,8 +42,8 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.SkyGuard.SkyGuardMessages {
     [DataContract]
     public class SkyGuardEvent : BaseINPC, IGuideEvent {
 
-        [DataMember]
-        public string Event { get; set; } = string.Empty;
+        [DataMember(Name = "Event")]
+        public string EventName { get; set; } = string.Empty;
 
         [DataMember]
         public string TimeStamp { get; set; } = string.Empty;

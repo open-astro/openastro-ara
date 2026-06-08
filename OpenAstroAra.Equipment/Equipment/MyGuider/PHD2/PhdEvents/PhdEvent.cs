@@ -22,9 +22,9 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.PhdEvents {
     [DataContract]
     public class PhdEvent : BaseINPC, IGuideEvent {
 
-        [DataMember]
-        [JsonProperty]
-        public string Event { get; set; } = string.Empty;
+        [DataMember(Name = "Event")]
+        [JsonProperty("Event")]
+        public string EventName { get; set; } = string.Empty;
 
         [DataMember]
         [JsonProperty]
