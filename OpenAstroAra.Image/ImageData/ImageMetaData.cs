@@ -34,7 +34,7 @@ namespace OpenAstroAra.Image.ImageData {
         public WeatherDataParameter WeatherData { get; set; } = new WeatherDataParameter();
         public WorldCoordinateSystem? WorldCoordinateSystem { get; set; }
         public SequenceParameter Sequence { get; set; } = new SequenceParameter();
-        public List<IGenericMetaDataHeader> GenericHeaders { get; set; } = new List<IGenericMetaDataHeader>();
+        public IReadOnlyList<IGenericMetaDataHeader> GenericHeaders { get; set; } = new List<IGenericMetaDataHeader>();
 
         /// <summary>
         /// Fill relevant info from a Profile

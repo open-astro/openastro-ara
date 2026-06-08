@@ -47,7 +47,7 @@ namespace OpenAstroAra.Image.ImageAnalysis {
         public int DetectedStars { get; set; }
         public double AverageHFR { get; set; }
         public double HFRStdDev { get; set; }
-        public List<DetectedStar> StarList { get; set; } = new();
+        public IReadOnlyList<DetectedStar> StarList { get; set; } = new List<DetectedStar>();
     }
 
     public class DetectedStar {

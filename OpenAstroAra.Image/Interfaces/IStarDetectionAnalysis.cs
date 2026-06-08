@@ -22,6 +22,6 @@ namespace OpenAstroAra.Image.Interfaces {
         double HFR { get; set; }
         double HFRStDev { get; set; }
         int DetectedStars { get; set; }
-        List<DetectedStar> StarList { get; set; }
+        IReadOnlyList<DetectedStar> StarList { get; set; }
     }
 }
