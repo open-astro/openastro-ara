@@ -34,12 +34,12 @@ namespace OpenAstroAra.Astrometry {
         /// <summary>
         /// Julian Date at J2000 - 2000/01/01 12:00 UTC
         /// </summary>
-        public static readonly double J2000_jd = 2451545.0;
+        public static readonly double J2000JulianDate = 2451545.0;
 
         /// <summary>
         /// J2000 epoch date
         /// </summary>
-        public static DateTime J2000 = new DateTime(2000, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+        public static readonly DateTime J2000 = new DateTime(2000, 1, 1, 12, 0, 0, DateTimeKind.Utc);
 
         /// <summary>
         /// Transform ICRS star data, epoch J2000.0, to CIRS.
@@ -944,45 +944,59 @@ namespace OpenAstroAra.Astrometry {
 
         #region "External DLL calls"
 
+        [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
         [DllImport(DLLNAME, EntryPoint = "iauAtci13", CallingConvention = CallingConvention.Cdecl)]
         private static extern void SOFA_Atci13(double rc, double dc, double pr, double pd, double px, double rv, double date1, double date2, ref double ri, ref double di, ref double eo);
 
+        [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
         [DllImport(DLLNAME, EntryPoint = "iauAtic13", CallingConvention = CallingConvention.Cdecl)]
         private static extern void SOFA_Atic13(double ri, double di, double date1, double date2, ref double rc, ref double dc, ref double eo);
 
+        [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
         [DllImport(DLLNAME, EntryPoint = "iauAnp", CallingConvention = CallingConvention.Cdecl)]
         private static extern double SOFA_Anp(double a);
 
+        [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
         [DllImport(DLLNAME, EntryPoint = "iauEo06a", CallingConvention = CallingConvention.Cdecl)]
         private static extern double SOFA_Eo06a(double date1, double date2);
 
-        [DllImport(DLLNAME, EntryPoint = "iauDtf2d", CallingConvention = CallingConvention.Cdecl)]
+        [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
+        [DllImport(DLLNAME, EntryPoint = "iauDtf2d", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi, BestFitMapping = false, ThrowOnUnmappableChar = true)]
         private static extern short SOFA_Dtf2d(string scale, int iy, int im, int id, int ihr, int imn, double sec, ref double d1, ref double d2);
 
+        [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
         [DllImport(DLLNAME, EntryPoint = "iauUtctai", CallingConvention = CallingConvention.Cdecl)]
         private static extern short SOFA_Utctai(double utc1, double utc2, ref double tai1, ref double tai2);
 
+        [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
         [DllImport(DLLNAME, EntryPoint = "iauTaitt", CallingConvention = CallingConvention.Cdecl)]
         private static extern short SOFA_Taitt(double tai1, double tai2, ref double tt1, ref double tt2);
 
+        [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
         [DllImport(DLLNAME, EntryPoint = "iauAe2hd", CallingConvention = CallingConvention.Cdecl)]
         private static extern short SOFA_Ae2hd(double az, double el, double phi, ref double ha, ref double dec);
 
+        [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
         [DllImport(DLLNAME, EntryPoint = "iauHd2ae", CallingConvention = CallingConvention.Cdecl)]
         private static extern short SOFA_Hd2ae(double ha, double dec, double phi, ref double az, ref double el);
 
+        [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
         [DllImport(DLLNAME, EntryPoint = "iauAtco13", CallingConvention = CallingConvention.Cdecl)]
         private static extern short SOFA_Atco13(double rc, double dc, double pr, double pd, double px, double rv, double utc1, double utc2, double dut1, double elong, double phi, double hm, double xp, double yp, double phpa, double tc, double rh, double wl, ref double aob, ref double zob, ref double hob, ref double dob, ref double rob, ref double eo);
 
-        [DllImport(DLLNAME, EntryPoint = "iauAtoc13", CallingConvention = CallingConvention.Cdecl)]
+        [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
+        [DllImport(DLLNAME, EntryPoint = "iauAtoc13", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi, BestFitMapping = false, ThrowOnUnmappableChar = true)]
         private static extern short SOFA_Atoc13(string type, double ob1, double ob2, double utc1, double utc2, double dut1, double elong, double phi, double hm, double xp, double yp, double phpa, double tc, double rh, double wl, ref double rc, ref double dc);
 
+        [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
         [DllImport(DLLNAME, EntryPoint = "iauSeps", CallingConvention = CallingConvention.Cdecl)]
         private static extern double SOFA_Seps(double al, double ap, double bl, double bp);
 
+        [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
         [DllImport(DLLNAME, EntryPoint = "iauObl80", CallingConvention = CallingConvention.Cdecl)]
-        public static extern double SOFA_iauObl80(double date1, double date2);
+        private static extern double SOFA_iauObl80(double date1, double date2);
 
+        [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
         [DllImport(DLLNAME, EntryPoint = "iauRefco", CallingConvention = CallingConvention.Cdecl)]
         private static extern void SOFA_iauRefco(double phpa, double tc, double rh, double wl, ref double refa, ref double refb);
 

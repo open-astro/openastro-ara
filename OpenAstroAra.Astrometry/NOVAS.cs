@@ -67,7 +67,7 @@ namespace OpenAstroAra.Astrometry {
         }
 
         public static DateTime JulianToDateTime(double jdtt) {
-            return SOFA.J2000 + TimeSpan.FromDays(jdtt - SOFA.J2000_jd);
+            return SOFA.J2000 + TimeSpan.FromDays(jdtt - SOFA.J2000JulianDate);
         }
 
         public static double CalDate(double jtd, ref short year, ref short month, ref short day, ref double hour) {
