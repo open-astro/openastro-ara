@@ -209,7 +209,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
         }
 
         private bool timeDeterminedSuccessfully;
-        private string failureReason;
+        private string failureReason = string.Empty;
         private DateTime lastReferenceDate;
         private void UpdateTime() {
             try {

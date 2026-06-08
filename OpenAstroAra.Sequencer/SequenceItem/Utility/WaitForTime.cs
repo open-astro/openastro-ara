@@ -162,7 +162,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
         private TimeOnly rolloverTime;
 
         private bool timeDeterminedSuccessfully;
-        private string failureReason;
+        private string failureReason = string.Empty;
         private DateTime lastReferenceDate;
         private void UpdateTime() {
             try {

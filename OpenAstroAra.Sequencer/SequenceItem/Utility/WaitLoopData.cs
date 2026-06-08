@@ -18,8 +18,8 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
         private double targetAltitude;
         private double offset;
         private double currentAltitude;
-        private string risingSettingDisplay;
-        private string expectedTime;
+        private string risingSettingDisplay = string.Empty;
+        private string expectedTime = string.Empty;
         private string approximate = "";
         private DateTime expectedDateTime = DateTime.Now;
         private Action calculateExpectedTime;
@@ -93,7 +93,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
         }
 
         public bool UseCustomHorizon { get; private set; }
-        public string Name { get; private set; }
+        public string Name { get; private set; } = string.Empty;
         public double Latitude { get; private set; }
         public double Longitude { get; private set; }
         public double Elevation { get; private set; }

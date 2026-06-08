@@ -36,7 +36,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
     [JsonObject(MemberSerialization.OptIn)]
     public class WaitForAltitude : WaitForAltitudeBase, IValidatable {
         private bool hasDsoParent;
-        private string aboveOrBelow;
+        private string aboveOrBelow = string.Empty;
 
         [ImportingConstructor]
         public WaitForAltitude(IProfileService profileService) : base(profileService, useCustomHorizon: false) {

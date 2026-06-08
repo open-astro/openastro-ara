@@ -68,7 +68,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
             }
         }
 
-        private string script;
+        private string script = string.Empty;
 
         [JsonProperty]
         public string Script {

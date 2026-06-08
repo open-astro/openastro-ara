@@ -40,7 +40,7 @@ namespace OpenAstroAra.Sequencer {
         private readonly IProfileService profileService;
         private readonly string defaultTemplatePath;
         private FileSystemWatcher sequenceTemplateFolderWatcher;
-        private string userTemplatePath;
+        private string userTemplatePath = string.Empty;
         public const string DefaultTemplatesGroup = "LblTemplate_DefaultTemplates";
         private const string UserTemplatesGroup = "LblTemplate_UserTemplates";
         public const string TemplateFileExtension = ".template.json";

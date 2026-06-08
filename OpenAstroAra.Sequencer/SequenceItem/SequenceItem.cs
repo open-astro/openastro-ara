@@ -47,14 +47,14 @@ namespace OpenAstroAra.Sequencer.SequenceItem {
             ErrorBehavior = cloneMe.ErrorBehavior;
         }
 
-        private string name;
+        private string name = string.Empty;
         private bool showMenu;
         private SequenceEntityStatus status = SequenceEntityStatus.CREATED;
         public ICommand AddCloneToParentCommand => new GalaSoft.MvvmLight.Command.RelayCommand<object>((o) => { AddCloneToParent(); ShowMenu = false; });
-        public string Category { get; set; }
-        public string Description { get; set; }
+        public string Category { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
         public virtual ICommand DetachCommand => new GalaSoft.MvvmLight.Command.RelayCommand(Detach);
-        public string Icon { get; set; }
+        public string Icon { get; set; } = string.Empty;
         public ICommand MoveDownCommand => new GalaSoft.MvvmLight.Command.RelayCommand(MoveDown);
         public ICommand MoveUpCommand => new GalaSoft.MvvmLight.Command.RelayCommand(MoveUp);
         public ICommand DisableEnableCommand => new GalaSoft.MvvmLight.Command.RelayCommand(() => {

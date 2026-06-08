@@ -56,13 +56,13 @@ namespace OpenAstroAra.Sequencer.Trigger {
             this.TriggerRunner?.Triggers.Clear();
         }
 
-        public string Name { get; set; }
+        public string Name { get; set; } = string.Empty;
 
         public virtual bool AllowMultiplePerSet => false;
 
-        public string Description { get; set; }
-        public string Icon { get; set; }
-        public string Category { get; set; }
+        public string Description { get; set; } = string.Empty;
+        public string Icon { get; set; } = string.Empty;
+        public string Category { get; set; } = string.Empty;
 
         private bool showMenu;
 

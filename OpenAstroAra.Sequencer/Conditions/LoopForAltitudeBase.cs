@@ -50,7 +50,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
             }
         }
 
-        public string InterruptReason { get; set; }
+        public string InterruptReason { get; set; } = string.Empty;
 
         public IList<string> Issues {
             get => issues;

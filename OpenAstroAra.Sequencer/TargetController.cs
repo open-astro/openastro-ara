@@ -39,7 +39,7 @@ namespace OpenAstroAra.Sequencer {
     public partial class TargetController : BaseINPC {
         private readonly SequenceJsonConverter sequenceJsonConverter;
         private readonly IProfileService profileService;
-        private string targetPath;
+        private string targetPath = string.Empty;
         private FileSystemWatcher sequenceTargetsFolderWatcher;
         public const string TargetsFileExtension = ".json";
 

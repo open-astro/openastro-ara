@@ -39,7 +39,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
         }
 
         [JsonProperty]
-        public string Text { get; set; }
+        public string Text { get; set; } = string.Empty;
 
         public override Task Execute(IProgress<ApplicationStatus> progress, CancellationToken token) {
             return Task.CompletedTask;

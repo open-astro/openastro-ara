@@ -113,7 +113,7 @@ namespace OpenAstroAra.Sequencer.Container {
             };
         }
 
-        private string sequenceTitle;
+        private string sequenceTitle = string.Empty;
 
         public string SequenceTitle {
             get => string.IsNullOrEmpty(sequenceTitle) ? Name : sequenceTitle;
