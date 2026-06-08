@@ -556,7 +556,7 @@ namespace OpenAstroAra.Astrometry {
             return Regex.IsMatch(value, pattern);
         }
 
-        public static NOVAS.SkyPosition GetMoonPosition(DateTime date, double jd, ObserverInfo oberverInfo) {
+        public static SkyPosition GetMoonPosition(DateTime date, double jd, ObserverInfo oberverInfo) {
             var deltaT = DeltaT(date);
 
             var onSurface = new NOVAS.OnSurface() {
@@ -579,7 +579,7 @@ namespace OpenAstroAra.Astrometry {
                 Type = (short)NOVAS.ObjectType.MajorPlanetSunOrMoon
             };
 
-            var skyPosition = new NOVAS.SkyPosition();
+            var skyPosition = new SkyPosition();
 
             var jdTt = jd + SecondsToDays(deltaT);
             _ = NOVAS.Place(jdTt, celestialObject, obs, deltaT, NOVAS.CoordinateSystem.EquinoxOfDate, NOVAS.Accuracy.Full, ref skyPosition);
@@ -587,7 +587,7 @@ namespace OpenAstroAra.Astrometry {
             return skyPosition;
         }
 
-        public static NOVAS.SkyPosition GetSunPosition(DateTime date, double jd, ObserverInfo oberverInfo) {
+        public static SkyPosition GetSunPosition(DateTime date, double jd, ObserverInfo oberverInfo) {
             var deltaT = DeltaT(date);
 
             var onSurface = new NOVAS.OnSurface() {
@@ -610,7 +610,7 @@ namespace OpenAstroAra.Astrometry {
                 Type = (short)NOVAS.ObjectType.MajorPlanetSunOrMoon
             };
 
-            var skyPosition = new NOVAS.SkyPosition();
+            var skyPosition = new SkyPosition();
 
             var jdTt = jd + SecondsToDays(deltaT);
             _ = NOVAS.Place(jdTt, celestialObject, obs, deltaT, NOVAS.CoordinateSystem.EquinoxOfDate, NOVAS.Accuracy.Full, ref skyPosition);
@@ -618,9 +618,9 @@ namespace OpenAstroAra.Astrometry {
             return skyPosition;
         }
 
-        public static Tuple<NOVAS.SkyPosition, NOVAS.SkyPosition> GetMoonAndSunPosition(DateTime date, double jd, ObserverInfo? observerInfo = null) {
+        public static Tuple<SkyPosition, SkyPosition> GetMoonAndSunPosition(DateTime date, double jd, ObserverInfo? observerInfo = null) {
             if (observerInfo == null) { observerInfo = new ObserverInfo(); }
-            return new Tuple<NOVAS.SkyPosition, NOVAS.SkyPosition>(GetMoonPosition(date, jd, observerInfo), GetSunPosition(date, jd, observerInfo));
+            return new Tuple<SkyPosition, SkyPosition>(GetMoonPosition(date, jd, observerInfo), GetSunPosition(date, jd, observerInfo));
         }
 
         [Obsolete("Use function with OpenAstroAra.Astrometry.ObserverInfo parameter")]

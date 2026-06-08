@@ -36,7 +36,7 @@ namespace OpenAstroAra.Astrometry.Body {
 
         public abstract double Radius { get; }
         protected abstract string Name { get; }
-        protected abstract NOVAS.Body BodyNumber { get; }
+        private protected abstract NOVAS.Body BodyNumber { get; }
 
         public Task Calculate() {
             return Task.Run(() => {
@@ -61,7 +61,7 @@ namespace OpenAstroAra.Astrometry.Body {
                     Type = (short)NOVAS.ObjectType.MajorPlanetSunOrMoon
                 };
 
-                var objPosition = new NOVAS.SkyPosition();
+                var objPosition = new SkyPosition();
 
                 NOVAS.Place(jd, obj, observer, deltaT, NOVAS.CoordinateSystem.EquinoxOfDate, NOVAS.Accuracy.Full, ref objPosition);
                 this.Distance = AstroUtil.AUToKilometer(objPosition.Dis);

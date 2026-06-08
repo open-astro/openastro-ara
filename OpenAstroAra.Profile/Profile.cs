@@ -56,7 +56,7 @@ namespace OpenAstroAra.Profile {
     [KnownType(typeof(AlpacaSettings))]
     [KnownType(typeof(ImageHistorySettings))]
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Naming", "CA1724:Type names should not match namespaces",
-        Justification = "Conflict is with the legacy ASP.NET System.Web.Profile namespace, which is not referenced by this headless .NET application. Profile is the central domain entity; renaming would harm clarity.")]
+        Justification = "Per the Microsoft CA1724 guidance for shipping libraries: Profile is the central, widely-referenced domain entity of this community-facing library, and the only conflict is the legacy ASP.NET System.Web.Profile namespace, which this headless .NET application does not reference. Renaming would be a breaking change with no real consumer benefit.")]
     public sealed class Profile : SerializableINPC, IProfile {
 
         /// <summary>

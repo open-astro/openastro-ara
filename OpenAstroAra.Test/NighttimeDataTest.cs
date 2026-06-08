@@ -65,13 +65,13 @@ namespace OpenAstroAra.Test {
             if (twilightRiseAndSet == null) {
                 return new List<OxyPlot.DataPoint>();
             }
-            var twilightSet = twilightRiseAndSet.Set!.Value > twilightRiseAndSet.Rise!.Value ? twilightRiseAndSet.Set.Value.AddDays(-1) : twilightRiseAndSet.Set.Value;
+            var twilightSet = twilightRiseAndSet.SetTime!.Value > twilightRiseAndSet.Rise!.Value ? twilightRiseAndSet.SetTime.Value.AddDays(-1) : twilightRiseAndSet.SetTime.Value;
             if (sunRiseAndSet == null) {
                 return new List<OxyPlot.DataPoint>() {
                     new OxyPlot.DataPoint(Axis.ToDouble(twilightSet), 90),
                     new OxyPlot.DataPoint(Axis.ToDouble(twilightRiseAndSet.Rise), 90) };
             }
-            var sunRiseSet = sunRiseAndSet.Set!.Value > sunRiseAndSet.Rise!.Value ? sunRiseAndSet.Set.Value.AddDays(-1) : sunRiseAndSet.Set.Value;
+            var sunRiseSet = sunRiseAndSet.SetTime!.Value > sunRiseAndSet.Rise!.Value ? sunRiseAndSet.SetTime.Value.AddDays(-1) : sunRiseAndSet.SetTime.Value;
             return new List<OxyPlot.DataPoint>() {
                 new OxyPlot.DataPoint(Axis.ToDouble(twilightSet), 90),
                 new OxyPlot.DataPoint(Axis.ToDouble(sunRiseSet), 90),
@@ -85,7 +85,7 @@ namespace OpenAstroAra.Test {
             if (twilightRiseAndSet == null) {
                 return new List<OxyPlot.DataPoint>();
             }
-            var twilightSet = twilightRiseAndSet.Set!.Value > twilightRiseAndSet.Rise!.Value ? twilightRiseAndSet.Set.Value.AddDays(-1) : twilightRiseAndSet.Set.Value;
+            var twilightSet = twilightRiseAndSet.SetTime!.Value > twilightRiseAndSet.Rise!.Value ? twilightRiseAndSet.SetTime.Value.AddDays(-1) : twilightRiseAndSet.SetTime.Value;
             return new List<OxyPlot.DataPoint>() {
                 new OxyPlot.DataPoint(Axis.ToDouble(twilightRiseAndSet.Rise), 90),
                 new OxyPlot.DataPoint(Axis.ToDouble(twilightSet), 90) };

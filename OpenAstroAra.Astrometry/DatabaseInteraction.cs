@@ -42,7 +42,7 @@ namespace OpenAstroAra.Astrometry {
         }
 
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822:Mark members as static",
-            Justification = "Instance method by design: a stub today, but slated to read from the per-instance daemon DB connection when the IERS earth-rotation table is restored (Phase 15+).")]
+            Justification = "Per the Microsoft CA1822 guidance, suppressed because marking this externally-visible member static would be a breaking API change; it is also instance-by-design (a stub that will read from the per-instance daemon DB connection when the IERS table is restored).")]
         public Task<double> GetUt1Utc(DateTime date, CancellationToken token) {
             if (token.IsCancellationRequested) {
                 return Task.FromCanceled<double>(token);

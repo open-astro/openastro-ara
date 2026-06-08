@@ -14,6 +14,7 @@
 
 using OpenAstroAra.Core.Utility;
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Runtime.InteropServices;
 
@@ -58,7 +59,7 @@ namespace OpenAstroAra.Astrometry {
             return EphemClose();
         }
 
-        public static short SiderealTime(double jdHigh, double jdLow, double deltaT, GstType gstType, Method method, Accuracy accuracy, ref double gst) {
+        internal static short SiderealTime(double jdHigh, double jdLow, double deltaT, GstType gstType, Method method, Accuracy accuracy, ref double gst) {
             return NOVAS_SiderealTime(jdHigh, jdLow, deltaT, gstType, method, accuracy, ref gst);
         }
 
@@ -81,7 +82,7 @@ namespace OpenAstroAra.Astrometry {
         /// <param name="refractionOption"></param>
         /// <param name="zdObs"></param>
         /// <returns></returns>
-        public static double Refract(ref OnSurface location, RefractionOption refractionOption, double zdObs) {
+        internal static double Refract(ref OnSurface location, RefractionOption refractionOption, double zdObs) {
             return NOVAS_Refract(ref location, refractionOption, zdObs);
         }
 
@@ -97,7 +98,7 @@ namespace OpenAstroAra.Astrometry {
         /// <param name="accuracy"></param>
         /// <param name="position"></param>
         /// <returns></returns>
-        public static short Place(double jdTt, CelestialObject celestialObject, Observer observer, double deltaT, CoordinateSystem coordinateSystem, Accuracy accuracy, ref SkyPosition position) {
+        internal static short Place(double jdTt, CelestialObject celestialObject, Observer observer, double deltaT, CoordinateSystem coordinateSystem, Accuracy accuracy, ref SkyPosition position) {
             lock (lockObj) {
                 var err = NOVAS_Place(jdTt, ref celestialObject, ref observer, deltaT, (short)coordinateSystem, (short)accuracy, ref position);
                 return err;
@@ -111,7 +112,7 @@ namespace OpenAstroAra.Astrometry {
         /// <param name="body">Solar system body</param>
         /// <param name="accuracy">Requested level of accuracy. Full by default</param>
         /// <returns>Apparent equatorial coordinates from an earth-based geocentric observer</returns>
-        public static Coordinates PlanetApparentCoordinates(double jdTt, Body body, Accuracy accuracy = Accuracy.Full) {
+        internal static Coordinates PlanetApparentCoordinates(double jdTt, Body body, Accuracy accuracy = Accuracy.Full) {
             var result = NOVAS_make_object(ObjectType.MajorPlanetSunOrMoon, (short)body, body.ToString(), dummy_star.Value, out var celestialObject);
             if (result != 0) {
                 throw new InvalidOperationException($"Failed MakeObject for {body}. Result={result}");
@@ -133,7 +134,7 @@ namespace OpenAstroAra.Astrometry {
         /// <param name="body">Solar system body</param>
         /// <param name="origin">Origin reference</param>
         /// <returns>Rectangular position and velocity vectors</returns>
-        public static RectangularPV BodyPositionAndVelocity(double jdtt, Body body, SolarSystemOrigin origin) {
+        internal static RectangularPV BodyPositionAndVelocity(double jdtt, Body body, SolarSystemOrigin origin) {
             var jd = new double[] { jdtt, 0 };
             var position = new double[3];
             var velocity = new double[3];
@@ -261,12 +262,10 @@ namespace OpenAstroAra.Astrometry {
         #region "NOVAS Structs"
 
         // These are P/Invoke marshaling structs that mirror the NOVAS C 3.1 ABI byte-for-byte.
-        // They are data containers passed to/from native code, never compared or used as keys,
-        // and are deliberately nested under the NOVAS module type. CA1815 (override Equals/==),
-        // CA1066 (implement IEquatable) and CA1034 (do not nest) are the documented interop
-        // exceptions for exactly this case — implementing managed value-semantics or hoisting
-        // them to the namespace would not make the binding more correct.
-#pragma warning disable CA1815, CA1066, CA1034
+        // They are internal (not part of the public API) so the design rules for externally
+        // visible types (CA1034 nested, CA1815/CA1066 value-equality, CA1051 public fields) do
+        // not apply — the only one that crosses the assembly boundary, SkyPosition, is a
+        // top-level public type below.
 
         private const int SIZE_OF_OBJ_NAME = 51;
         private const int SIZE_OF_CAT_NAME = 4;
@@ -278,7 +277,7 @@ namespace OpenAstroAra.Astrometry {
         /// the appropriate units
         /// </summary>
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
-        public struct CatalogueEntry {
+        internal struct CatalogueEntry {
 
             [MarshalAsAttribute(UnmanagedType.ByValTStr, SizeConst = SIZE_OF_OBJ_NAME)]
             public string StarName;
@@ -322,7 +321,7 @@ namespace OpenAstroAra.Astrometry {
         /// Represents "object".
         /// </summary>
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
-        public struct CelestialObject {
+        internal struct CelestialObject {
 
             /// <summary>
             /// = type of object
@@ -359,7 +358,7 @@ namespace OpenAstroAra.Astrometry {
         /// be used otherwise
         /// </summary>
         [StructLayout(LayoutKind.Sequential)]
-        public struct OnSurface {
+        internal struct OnSurface {
             public double Latitude;
             public double Longitude;
             public double Height;
@@ -372,7 +371,7 @@ namespace OpenAstroAra.Astrometry {
         /// Both vectors with respect to true equator and equinox of date
         /// </summary>
         [StructLayout(LayoutKind.Sequential)]
-        public struct InSpace {
+        internal struct InSpace {
 
             /// <summary>
             /// geocentric position vector (x, y, z), components in km
@@ -391,7 +390,7 @@ namespace OpenAstroAra.Astrometry {
         /// Represents "observer". It is a general container for information specifying the location of the observer
         /// </summary>
         [StructLayout(LayoutKind.Sequential)]
-        public struct Observer {
+        internal struct Observer {
 
             /// <summary>
             /// integer code specifying location of observer
@@ -412,58 +411,22 @@ namespace OpenAstroAra.Astrometry {
             public InSpace NearEarth;
         }
 
-        /// <summary>
-        /// Represents sky_pos. Contains data specifying a celestial object’s place on the sky, specifically the output from function place
-        /// </summary>
-        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
-        public struct SkyPosition {
-
-            /// <summary>
-            /// unit vector toward object (dimensionless)
-            /// </summary>
-            [MarshalAsAttribute(UnmanagedType.ByValArray, SizeConst = 3, ArraySubType = UnmanagedType.R8)]
-            public double[] RHat;
-
-            /// <summary>
-            /// apparent, topocentric, or astrometric right ascension(hours)
-            /// </summary>
-            public double RA;
-
-            /// <summary>
-            /// apparent, topocentric, or astrometric declination(degrees)
-            /// </summary>
-            public double Dec;
-
-            /// <summary>
-            /// true (geometric, Euclidian) distance to solar system body or 0.0 for star(AU)
-            /// </summary>
-            public double Dis;
-
-            /// <summary>
-            /// radial velocity (km/s)
-            /// </summary>
-            public double RV;
-        }
-
-#pragma warning restore CA1815, CA1066, CA1034
-
         #endregion "NOVAS Structs"
 
         #region "NOVAS helper enums"
 
         // These enums mirror the NOVAS C ABI: Body/GstType are deliberately backed by short to
-        // match the native parameter width, and Body has no natural zero member (planet numbering
-        // starts at Mercury = 1). CA1028 (Int32 storage), CA1008 (zero value) and CA1724 (the
-        // Body type-name vs namespace) are interop/false-positive cases here.
-#pragma warning disable CA1028, CA1008, CA1724
+        // match the native parameter width. They are internal, so the externally-visible-only
+        // design rules (CA1028 Int32 storage, CA1008 zero value, CA1724 name vs namespace) do
+        // not apply.
 
-        public enum ObjectType  {
+        internal enum ObjectType  {
             MajorPlanetSunOrMoon = 0,
             MinorPlanet = 1,
             ObjectLocatedOutsideSolarSystem = 2
         }
 
-        public enum Body : short {
+        internal enum Body : short {
             Mercury = 1,
             Venus = 2,
             Earth = 3,
@@ -477,47 +440,91 @@ namespace OpenAstroAra.Astrometry {
             Moon = 11
         }
 
-        public enum CoordinateSystem  {
+        internal enum CoordinateSystem  {
             GCRS = 0,
             EquinoxOfDate = 1,
             CIOOfDate = 2,
             Astrometric = 3
         }
 
-        public enum ObserverLocation  {
+        internal enum ObserverLocation  {
             EarthGeoCenter = 0,
             EarthSurface = 1,
             SpaceNearEarth = 2
         }
 
-        public enum GstType : short {
+        internal enum GstType : short {
             GreenwichMeanSiderealTime = 0,
             GreenwichApparentSiderealTime = 1
         }
 
-        public enum Method  {
+        internal enum Method  {
             CIOBased = 0,
             EquinoxBased = 1
         }
 
-        public enum Accuracy  {
+        internal enum Accuracy  {
             Full = 0,
             Reduced = 1
         }
 
-        public enum RefractionOption : int {
+        internal enum RefractionOption : int {
             NoRefraction = 0,
             StandardRefraction = 1,
             LocationRefraction = 2
         }
 
-        public enum SolarSystemOrigin  {
+        internal enum SolarSystemOrigin  {
             Barycenter = 0,
             SolarCenterOfMass = 1
         }
 
-#pragma warning restore CA1028, CA1008, CA1724
 
         #endregion "NOVAS helper enums"
+    }
+
+    /// <summary>
+    /// Represents sky_pos. Contains data specifying a celestial object's place on the sky,
+    /// specifically the output from the NOVAS <c>place</c> function. This is the one NOVAS
+    /// marshaling struct that crosses the assembly boundary (returned by AstroUtil), so it is
+    /// public and top-level. It is a P/Invoke marshaling type that mirrors the native ABI:
+    /// the marshaler requires direct field access (CA1051), and instances are never compared
+    /// (CA1815/CA1066), so those externally-visible-type design rules are suppressed per the
+    /// Microsoft guidance for each.
+    /// </summary>
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
+    [SuppressMessage("Design", "CA1051:Do not declare visible instance fields",
+        Justification = "P/Invoke marshaling struct: the native marshaler requires direct [MarshalAs] field access, so the fields cannot be properties.")]
+    [SuppressMessage("Performance", "CA1815:Override equals and operator equals on value types",
+        Justification = "Marshaling container that is never compared for equality or used as a key.")]
+    [SuppressMessage("Design", "CA1066:Implement IEquatable when overriding Equals",
+        Justification = "Instances are never compared; the IEquatable design/performance benefit is not critical for this marshaling container.")]
+    public struct SkyPosition {
+
+        /// <summary>
+        /// unit vector toward object (dimensionless)
+        /// </summary>
+        [MarshalAsAttribute(UnmanagedType.ByValArray, SizeConst = 3, ArraySubType = UnmanagedType.R8)]
+        public double[] RHat;
+
+        /// <summary>
+        /// apparent, topocentric, or astrometric right ascension(hours)
+        /// </summary>
+        public double RA;
+
+        /// <summary>
+        /// apparent, topocentric, or astrometric declination(degrees)
+        /// </summary>
+        public double Dec;
+
+        /// <summary>
+        /// true (geometric, Euclidian) distance to solar system body or 0.0 for star(AU)
+        /// </summary>
+        public double Dis;
+
+        /// <summary>
+        /// radial velocity (km/s)
+        /// </summary>
+        public double RV;
     }
 }

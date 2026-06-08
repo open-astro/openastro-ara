@@ -86,16 +86,12 @@ namespace OpenAstroAra.Astrometry {
             }
         }
 
-        [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822:Mark members as static",
-            Justification = "Instance property is part of the MoonInfo model exposed to clients; must stay instance-level for serialization.")]
-        public AstroUtil.MoonPhase Phase => AstroUtil.GetMoonPhase(DateTime.Now, new ObserverInfo());
+        public static AstroUtil.MoonPhase Phase => AstroUtil.GetMoonPhase(DateTime.Now, new ObserverInfo());
 
         // Phase 0.5p2 net10.0 conversion: WPF Color shade for the moon-icon
         // tinting is client-side concern (Flutter renders the chart). Returning
         // an ARGB hex string preserves the wire format.
-        [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822:Mark members as static",
-            Justification = "Instance property is part of the MoonInfo model exposed to clients; must stay instance-level for serialization.")]
-        public string Color {
+        public static string Color {
             get {
                 double angle = Math.Abs(AstroUtil.GetMoonPositionAngle(DateTime.Now, new ObserverInfo()));
                 byte gray = (byte)(angle * 255 / 180);
@@ -127,7 +123,7 @@ namespace OpenAstroAra.Astrometry {
         }
 
         private void CalculateSeparation(DateTime time) {
-            NOVAS.SkyPosition pos = AstroUtil.GetMoonPosition(time, AstroUtil.GetJulianDate(time), _observer);
+            SkyPosition pos = AstroUtil.GetMoonPosition(time, AstroUtil.GetJulianDate(time), _observer);
             var moonRaRadians = AstroUtil.ToRadians(AstroUtil.HoursToDegrees(pos.RA));
             var moonDecRadians = AstroUtil.ToRadians(pos.Dec);
 

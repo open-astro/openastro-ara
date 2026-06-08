@@ -86,12 +86,18 @@ namespace OpenAstroAra.Astrometry {
         /// <summary>
         /// Backwards compatibility property that will migrate to position angle
         /// </summary>
-        [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1044:Properties should not be write only",
-            Justification = "Deserialization-only back-compat shim: maps the legacy JSON 'Rotation' field onto PositionAngle. Adding a getter would re-emit the deprecated field on serialization.")]
+        // Back-compat shim: maps the legacy JSON 'Rotation' field onto PositionAngle on
+        // deserialization. ShouldSerializeDeprecatedRotation() keeps it from being re-emitted
+        // when writing, so the deprecated field is read-only on the wire.
         [JsonProperty(propertyName: "Rotation")]
         public double DeprecatedRotation {
+            get => 360 - PositionAngle;
             set => PositionAngle = 360 - value;
         }
+
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822:Mark members as static",
+            Justification = "Json.NET only invokes the ShouldSerialize{Member} convention on instance methods; making this static would silently re-enable serialization of the deprecated field (a behavioral breaking change).")]
+        public bool ShouldSerializeDeprecatedRotation() => false;
 
         private double positionAngle;
         [JsonProperty]

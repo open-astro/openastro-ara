@@ -35,9 +35,8 @@ namespace OpenAstroAra.Astrometry.RiseAndSet {
         public double Elevation { get; private set; }
         public virtual DateTime? Rise { get; private set; }
 
-        [System.Diagnostics.CodeAnalysis.SuppressMessage("Naming", "CA1716:Identifiers should not match keywords",
-            Justification = "Rise/Set are the standard astronomical domain terms for a body's rise and set times; this is a C#-only headless solution with no VB consumers, and renaming the public Set property would ripple across 20+ call sites for a cross-language concern that does not apply here.")]
-        public virtual DateTime? Set { get; private set; }
+        // Renamed from 'Set' (a reserved keyword in VB) per CA1716.
+        public virtual DateTime? SetTime { get; private set; }
 
         protected abstract double AdjustAltitude(BasicBody body);
 
@@ -149,22 +148,22 @@ namespace OpenAstroAra.Astrometry.RiseAndSet {
                             this.Rise = offsetDate.AddHours(zeroPoint1);
                         } else {
                             // set
-                            this.Set = offsetDate.AddHours(zeroPoint1);
+                            this.SetTime = offsetDate.AddHours(zeroPoint1);
                         }
                     } else if (events == 2) {
                         if (gradient > 0) {
                             // rise and set
                             this.Rise = offsetDate.AddHours(zeroPoint1);
-                            this.Set = offsetDate.AddHours(zeroPoint2);
+                            this.SetTime = offsetDate.AddHours(zeroPoint2);
                         } else {
                             // set and rise
                             this.Rise = offsetDate.AddHours(zeroPoint2);
-                            this.Set = offsetDate.AddHours(zeroPoint1);
+                            this.SetTime = offsetDate.AddHours(zeroPoint1);
                         }
                     }
                     offset += 2;
                     //Repeat until rise and set events are found, or after a whole day
-                } while (!((this.Rise != null && this.Set != null) || offset > 24));
+                } while (!((this.Rise != null && this.SetTime != null) || offset > 24));
 
                 return true;
             });

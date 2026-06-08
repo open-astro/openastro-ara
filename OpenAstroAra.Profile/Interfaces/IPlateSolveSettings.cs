@@ -14,14 +14,12 @@
 
 using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Core.Model.Equipment;
-using System.Diagnostics.CodeAnalysis;
+using System;
 
 namespace OpenAstroAra.Profile.Interfaces {
 
     public interface IPlateSolveSettings : ISettings {
-        [SuppressMessage("Design", "CA1056:URI-like properties should not be strings",
-            Justification = "DataContract-persisted, user-editable free-text endpoint; the value is normalized as a string on input and round-tripped to XML, so System.Uri would break the text-editing semantics.")]
-        string AstrometryURL { get; set; }
+        Uri? AstrometryURL { get; set; }
         string AstrometryAPIKey { get; set; }
         BlindSolver BlindSolverType { get; set; }
         string CygwinLocation { get; set; }

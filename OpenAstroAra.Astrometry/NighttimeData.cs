@@ -57,9 +57,9 @@ namespace OpenAstroAra.Astrometry {
         public Ticker Ticker { get; }
 
         private static ImmutableList<DataPoint> CalculateTwilightDuration(RiseAndSetEvent? twilightRiseAndSet, RiseAndSetEvent? sunRiseAndSet) {
-            if (twilightRiseAndSet != null && twilightRiseAndSet.Rise.HasValue && twilightRiseAndSet.Set.HasValue) {
+            if (twilightRiseAndSet != null && twilightRiseAndSet.Rise.HasValue && twilightRiseAndSet.SetTime.HasValue) {
                 var twilightRise = twilightRiseAndSet.Rise;
-                var twilightSet = twilightRiseAndSet.Set;
+                var twilightSet = twilightRiseAndSet.SetTime;
                 if (twilightSet.Value > twilightRise.Value) {
                     twilightSet = twilightSet?.AddDays(-1);
                 }
@@ -67,7 +67,7 @@ namespace OpenAstroAra.Astrometry {
                 dataPointsBuilder.Add(new DataPoint(Axis.ToDouble(twilightSet), 90));
                 if (sunRiseAndSet != null) {
                     var rise = sunRiseAndSet.Rise;
-                    var set = sunRiseAndSet.Set;
+                    var set = sunRiseAndSet.SetTime;
                     if (rise.HasValue && set.HasValue) {
                         if (set.Value > rise.Value) {
                             set = set?.AddDays(-1);
@@ -85,9 +85,9 @@ namespace OpenAstroAra.Astrometry {
         }
 
         private static ImmutableList<DataPoint> CalculateNauticalTwilightDuration(RiseAndSetEvent? nauticalTwilightRiseAndSet, RiseAndSetEvent? sunRiseAndSet) {
-            if (nauticalTwilightRiseAndSet != null && nauticalTwilightRiseAndSet.Rise.HasValue && nauticalTwilightRiseAndSet.Set.HasValue) {
+            if (nauticalTwilightRiseAndSet != null && nauticalTwilightRiseAndSet.Rise.HasValue && nauticalTwilightRiseAndSet.SetTime.HasValue) {
                 var nauticalTwilightRise = nauticalTwilightRiseAndSet.Rise;
-                var nauticalTwilightSet = nauticalTwilightRiseAndSet.Set;
+                var nauticalTwilightSet = nauticalTwilightRiseAndSet.SetTime;
                 if (nauticalTwilightSet.Value > nauticalTwilightRise.Value) {
                     nauticalTwilightSet = nauticalTwilightSet?.AddDays(-1);
                 }
@@ -95,7 +95,7 @@ namespace OpenAstroAra.Astrometry {
                 dataPointsBuilder.Add(new DataPoint(Axis.ToDouble(nauticalTwilightSet), 90));
                 if (sunRiseAndSet != null) {
                     var rise = sunRiseAndSet.Rise;
-                    var set = sunRiseAndSet.Set;
+                    var set = sunRiseAndSet.SetTime;
                     if (rise.HasValue && set.HasValue) {
                         if (set.Value > rise.Value) {
                             set = set?.AddDays(-1);
@@ -113,9 +113,9 @@ namespace OpenAstroAra.Astrometry {
         }
 
         private static ImmutableList<DataPoint> CalculateNightDuration(RiseAndSetEvent? twilightRiseAndSet) {
-            if (twilightRiseAndSet != null && twilightRiseAndSet.Rise.HasValue && twilightRiseAndSet.Set.HasValue) {
+            if (twilightRiseAndSet != null && twilightRiseAndSet.Rise.HasValue && twilightRiseAndSet.SetTime.HasValue) {
                 var rise = twilightRiseAndSet.Rise;
-                var set = twilightRiseAndSet.Set;
+                var set = twilightRiseAndSet.SetTime;
                 if (set.Value > rise.Value) {
                     set = set?.AddDays(-1);
                 }

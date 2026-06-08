@@ -114,7 +114,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
         private DateTime CalculateExpectedDateTime(DateTime time) {
             var customRiseAndSet = new MoonCustomRiseAndSet(NighttimeCalculator.GetReferenceDate(time), Data.Observer.Latitude, Data.Observer.Longitude, Data.Observer.Elevation, GetDataOffset());
             AsyncContext.Run(customRiseAndSet.Calculate);
-            return (Data.Comparator == ComparisonOperator.GreaterThan ? customRiseAndSet.Set : customRiseAndSet?.Rise) ?? DateTime.MaxValue;
+            return (Data.Comparator == ComparisonOperator.GreaterThan ? customRiseAndSet.SetTime : customRiseAndSet?.Rise) ?? DateTime.MaxValue;
         }
 
         public override string ToString() {

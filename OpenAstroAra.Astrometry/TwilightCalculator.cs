@@ -28,7 +28,7 @@ namespace OpenAstroAra.Astrometry {
             var nightRise = AstroUtil.GetNightTimes(dateTime, latitude, longitude, elevation).Rise;
             var sunRiseAndSet = AstroUtil.GetSunRiseAndSet(dateTime, latitude, longitude, elevation);
             if (nightRise == null) {
-                return sunRiseAndSet.Rise - sunRiseAndSet.Set ?? TimeSpan.Zero;
+                return sunRiseAndSet.Rise - sunRiseAndSet.SetTime ?? TimeSpan.Zero;
             }
 
             return sunRiseAndSet.Rise - nightRise ?? TimeSpan.Zero;

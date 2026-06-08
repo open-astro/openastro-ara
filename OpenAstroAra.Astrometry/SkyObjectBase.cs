@@ -226,22 +226,13 @@ namespace OpenAstroAra.Astrometry {
 
         private readonly Func<SkyObjectBase, Task<byte[]>>? imageFactory;
 
-        [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1819:Properties should not return arrays",
-            Justification = "Image is a raw binary image payload; byte[] is the natural representation and is what consumers (encoders/serializers) expect.")]
-        public byte[]? Image {
-            get {
-                if (_image == null) {
-                    if (imageFactory != null) {
-                        _ = Task.Run(async () => {
-                            _image = await Task.Run(() => imageFactory(this));
-                            // .Freeze() was the WPF BitmapSource thread-affinity
-                            // release; byte[] is immutable so nothing to do.
-                            RaisePropertyChanged(nameof(Image));
-                        });
-                    }
-                }
-                return _image;
+        // CA1819: a byte[] payload is exposed as a method rather than a property.
+        // Lazily loads the image bytes from the factory on first request.
+        public async Task<byte[]?> GetImageAsync() {
+            if (_image == null && imageFactory != null) {
+                _image = await imageFactory(this);
             }
+            return _image;
         }
     }
 }

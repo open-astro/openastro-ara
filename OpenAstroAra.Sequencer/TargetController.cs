@@ -277,7 +277,7 @@ namespace OpenAstroAra.Sequencer {
                     Thread.Sleep(100);
                 }
 
-                var sunSet = Container.NighttimeData.SunRiseAndSet?.Set;
+                var sunSet = Container.NighttimeData.SunRiseAndSet?.SetTime;
                 var sunRise = Container.NighttimeData.SunRiseAndSet?.Rise;
 
                 if (sunSet.HasValue && sunRise.HasValue) {

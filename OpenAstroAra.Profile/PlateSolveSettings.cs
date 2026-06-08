@@ -17,7 +17,6 @@ using OpenAstroAra.Core.Model.Equipment;
 using OpenAstroAra.Profile.Interfaces;
 using System;
 using System.Configuration;
-using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Runtime.Serialization;
 using System.Text.RegularExpressions;
@@ -38,7 +37,7 @@ namespace OpenAstroAra.Profile {
             plateSolverType = PlateSolver.ASTAP;
             blindSolverType = BlindSolver.ASTAP;
             blindFailoverEnabled = true;
-            astrometryURL = "http://nova.astrometry.net";
+            astrometryURL = new Uri("http://nova.astrometry.net");
             astrometryAPIKey = string.Empty;
             cygwinLocation = string.Empty;
             searchRadius = 30;
@@ -103,19 +102,14 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string astrometryURL = string.Empty;
+        private Uri? astrometryURL;
 
-        [SuppressMessage("Design", "CA1056:URI-like properties should not be strings",
-            Justification = "DataContract-persisted, user-editable free-text endpoint; the value is normalized as a string on input and round-tripped to XML, so System.Uri would break the text-editing semantics.")]
         [DataMember]
-        public string AstrometryURL {
+        public Uri? AstrometryURL {
             get => astrometryURL;
             set {
-                // Clear out any whitespace characters in the URL
-                string url = Whitespace().Replace(value, string.Empty);
-
-                if (astrometryURL != url) {
-                    astrometryURL = url;
+                if (astrometryURL != value) {
+                    astrometryURL = value;
                     RaisePropertyChanged();
                 }
             }

@@ -86,7 +86,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
             // The MoonRiseAndSet already models refraction and moon disk size
             var customRiseAndSet = new MoonCustomRiseAndSet(NighttimeCalculator.GetReferenceDate(time), Data.Observer.Latitude, Data.Observer.Longitude, Data.Observer.Elevation, GetDataOffset());
             AsyncContext.Run(customRiseAndSet.Calculate);
-            return (Data.Comparator == ComparisonOperator.GreaterThan || Data.Comparator == ComparisonOperator.GreaterThanOrEqual ? customRiseAndSet.Rise : customRiseAndSet.Set) ?? DateTime.MaxValue;
+            return (Data.Comparator == ComparisonOperator.GreaterThan || Data.Comparator == ComparisonOperator.GreaterThanOrEqual ? customRiseAndSet.Rise : customRiseAndSet.SetTime) ?? DateTime.MaxValue;
         }
     }
 }

@@ -3,7 +3,6 @@ using OxyPlot;
 using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
-using System.Diagnostics.CodeAnalysis;
 namespace OpenAstroAra.Astrometry.Interfaces {
     public interface IDeepSkyObject : INotifyPropertyChanged {
         string Id { get; set; }
@@ -30,9 +29,7 @@ namespace OpenAstroAra.Astrometry.Interfaces {
         Collection<string> AlsoKnownAs { get; }
         bool DoesTransitSouth { get; }
 
-        [SuppressMessage("Performance", "CA1819:Properties should not return arrays",
-            Justification = "Image is a raw binary image payload; byte[] is the natural representation and is what consumers (encoders/serializers) expect.")]
-        byte[]? Image { get; }
+        System.Threading.Tasks.Task<byte[]?> GetImageAsync();
 
         void SetDateAndPosition(DateTime start, double latitude, double longitude);
         void SetCustomHorizon(CustomHorizon customHorizon);

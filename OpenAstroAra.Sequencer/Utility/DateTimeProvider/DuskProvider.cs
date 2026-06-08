@@ -37,7 +37,7 @@ namespace OpenAstroAra.Sequencer.Utility.DateTimeProvider {
         public ICustomDateTime DateTime { get; set; } = new SystemDateTime();
 
         public DateTime GetDateTime(ISequenceEntity context) {
-            var night = nighttimeCalculator.Calculate().TwilightRiseAndSet?.Set;
+            var night = nighttimeCalculator.Calculate().TwilightRiseAndSet?.SetTime;
             if (!night.HasValue) {
                 throw new TimeProviderException("No astronomical dusk", Loc.Instance["Lbl_TimeProvider_NoAstronomicalDusk"]);
             }

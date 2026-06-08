@@ -37,7 +37,7 @@ namespace OpenAstroAra.Astrometry.RiseAndSet {
         }
 
         public override DateTime? Rise => rise;
-        public override DateTime? Set => set;
+        public override DateTime? SetTime => set;
 
         protected override double AdjustAltitude(BasicBody body) {
             return 0;
