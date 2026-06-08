@@ -105,7 +105,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyPlanetarium {
 
                 string[] response = reply.Split('|');
 
-                if (response[1].Equals("No error. Error = 0.")) {
+                if (response[1].Equals("No error. Error = 0.", StringComparison.Ordinal)) {
                     // put the RA, Dec, and elevation into an array
                     coords = response[0].Split(',');
 
@@ -165,7 +165,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyPlanetarium {
 
                 string[] response = reply.Split('|');
 
-                if (response[1].Equals("No error. Error = 0.")) {
+                if (response[1].Equals("No error. Error = 0.", StringComparison.Ordinal)) {
                     if (double.TryParse(response[0], CultureInfo.InvariantCulture, out rotationAngle)) {
                     }
                 }
@@ -209,7 +209,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyPlanetarium {
 
             string[] response = reply.Split('|');
 
-            if (response[1].Equals("No error. Error = 0.")) {
+            if (response[1].Equals("No error. Error = 0.", StringComparison.Ordinal)) {
                 // put the RA, Dec, and object name into an array
                 raDecName = response[0].Split(',');
             } else {
@@ -243,7 +243,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyPlanetarium {
 
             string[] response = reply.Split('|');
 
-            if (response[1].Equals("No error. Error = 0.")) {
+            if (response[1].Equals("No error. Error = 0.", StringComparison.Ordinal)) {
                 // put the RA, Dec, and object name into an array
                 string[] raDec = response[0].Split(',');
                 raDecName[0] = raDec[0];

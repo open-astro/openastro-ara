@@ -59,7 +59,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyPlanetarium {
                  */
                 string[] info = response.Split(' ');
 
-                if (!(info[0].Equals("?") || string.IsNullOrEmpty(info[2]))) {
+                if (!(info[0].Equals("?", StringComparison.Ordinal) || string.IsNullOrEmpty(info[2]))) {
                     Coordinates newCoordinates = new Coordinates(AstroUtil.RadianToHour(double.Parse(info[0].Replace(',', '.'), System.Globalization.CultureInfo.InvariantCulture)),
                                                          AstroUtil.ToDegree(double.Parse(info[1].Replace(',', '.'), System.Globalization.CultureInfo.InvariantCulture)),
                                                          Epoch.J2000, Coordinates.RAType.Hours);
@@ -97,7 +97,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyPlanetarium {
                  */
                 var info = response.Split(' ');
 
-                if (!(info[0].Equals("?") || string.IsNullOrEmpty(info[1]))) {
+                if (!(info[0].Equals("?", StringComparison.Ordinal) || string.IsNullOrEmpty(info[1]))) {
                     /*
                      * East is negative and West is positive in HNSKY.
                      * We must flip longitude's sign here.
