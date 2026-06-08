@@ -62,21 +62,21 @@ namespace OpenAstroAra.Core.Utility.TcpRaw {
                         bool waitDone = false;
 
                         while (!waitDone) {
-                            length = await stream.ReadAsync(buffer, 0, buffer.Length, token);
+                            length = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length), token);
                             response = Encoding.ASCII.GetString(buffer, 0, length);
                             Logger.Trace($"TcpRaw: Received message: {ToLiteral(response)}");
 
-                            if (response.Equals(WaitFor)) { waitDone = true; }
+                            if (response.Equals(WaitFor, StringComparison.Ordinal)) { waitDone = true; }
                         }
                     }
 
                     // Send command
                     Logger.Trace($"TcpRaw: Sending command: {ToLiteral(Command)}");
                     var data = Encoding.ASCII.GetBytes($"{Command}");
-                    await stream.WriteAsync(data, 0, data.Length, token);
+                    await stream.WriteAsync(data.AsMemory(0, data.Length), token);
 
                     // Read response
-                    length = await stream.ReadAsync(buffer, 0, buffer.Length, token);
+                    length = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length), token);
                     response = Encoding.ASCII.GetString(buffer, 0, length);
 
 
@@ -91,7 +91,7 @@ namespace OpenAstroAra.Core.Utility.TcpRaw {
         }
 
         private static string ToLiteral(string str) {
-            str = str.Replace("\r", @"\r").Replace("\n", @"\n").Replace("\t", @"\t");
+            str = str.Replace("\r", @"\r", StringComparison.Ordinal).Replace("\n", @"\n", StringComparison.Ordinal).Replace("\t", @"\t", StringComparison.Ordinal);
 
             return str;
         }
