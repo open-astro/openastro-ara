@@ -101,24 +101,24 @@ namespace OpenAstroAra.Core.Utility {
             return source.PadLeft(padLeft, paddingChar).PadRight(length, paddingChar);
         }
 
-        public static void SetLogLevel(LogLevelEnum logLevel) {
+        public static void SetLogLevel(LogLevel logLevel) {
             levelSwitch.MinimumLevel = logLevel switch {
-                LogLevelEnum.TRACE => LogEventLevel.Verbose,
-                LogLevelEnum.DEBUG => LogEventLevel.Debug,
-                LogLevelEnum.INFO => LogEventLevel.Information,
-                LogLevelEnum.WARNING => LogEventLevel.Warning,
-                LogLevelEnum.ERROR => LogEventLevel.Error,
+                LogLevel.TRACE => LogEventLevel.Verbose,
+                LogLevel.DEBUG => LogEventLevel.Debug,
+                LogLevel.INFO => LogEventLevel.Information,
+                LogLevel.WARNING => LogEventLevel.Warning,
+                LogLevel.ERROR => LogEventLevel.Error,
                 _ => LogEventLevel.Information,
             };
         }
 
-        public static bool IsEnabled(LogLevelEnum level) {
+        public static bool IsEnabled(LogLevel level) {
             var serilogLevel = level switch {
-                LogLevelEnum.TRACE => LogEventLevel.Verbose,
-                LogLevelEnum.DEBUG => LogEventLevel.Debug,
-                LogLevelEnum.INFO => LogEventLevel.Information,
-                LogLevelEnum.WARNING => LogEventLevel.Warning,
-                LogLevelEnum.ERROR => LogEventLevel.Error,
+                LogLevel.TRACE => LogEventLevel.Verbose,
+                LogLevel.DEBUG => LogEventLevel.Debug,
+                LogLevel.INFO => LogEventLevel.Information,
+                LogLevel.WARNING => LogEventLevel.Warning,
+                LogLevel.ERROR => LogEventLevel.Error,
                 _ => LogEventLevel.Information,
             };
 
@@ -208,11 +208,11 @@ namespace OpenAstroAra.Core.Utility {
 
         private sealed class LegacyLogLevelMappingEnricher : ILogEventEnricher {
             private static readonly string LEGACYLOGLEVELPROPERTY = "LegacyLogLevel";
-            private static readonly string TRACE = LogLevelEnum.TRACE.ToString();
-            private static readonly string DEBUG = LogLevelEnum.DEBUG.ToString();
-            private static readonly string INFO = LogLevelEnum.INFO.ToString();
-            private static readonly string WARNING = LogLevelEnum.WARNING.ToString();
-            private static readonly string ERROR = LogLevelEnum.ERROR.ToString();
+            private static readonly string TRACE = LogLevel.TRACE.ToString();
+            private static readonly string DEBUG = LogLevel.DEBUG.ToString();
+            private static readonly string INFO = LogLevel.INFO.ToString();
+            private static readonly string WARNING = LogLevel.WARNING.ToString();
+            private static readonly string ERROR = LogLevel.ERROR.ToString();
             private static readonly string FATAL = "FATAL";
             private static readonly string UNKNOWN = "UNKNOWN";
 

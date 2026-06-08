@@ -168,7 +168,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
                 AddHeader("READOUTM", metaData.Camera.ReadoutModeName, "Sensor readout mode");
             }
 
-            if (metaData.Camera.SensorType != SensorType.Monochrome && metaData.Camera.BayerPattern != BayerPatternEnum.None) {
+            if (metaData.Camera.SensorType != SensorType.Monochrome && metaData.Camera.BayerPattern != BayerPattern.None) {
                 AddHeader("BAYERPAT", metaData.Camera.SensorType.ToString().ToUpper(), "Sensor Bayer pattern");
                 AddHeader("XBAYROFF", metaData.Camera.BayerOffsetX, "Bayer pattern X axis offset");
                 AddHeader("YBAYROFF", metaData.Camera.BayerOffsetY, "Bayer pattern Y axis offset");

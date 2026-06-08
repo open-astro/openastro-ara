@@ -38,8 +38,8 @@ namespace OpenAstroAra.Profile {
             debayeredHFR = true;
             unlinkedStretch = true;
             annotateUnlimitedStars = false;
-            starSensitivity = StarSensitivityEnum.High;
-            noiseReduction = NoiseReductionEnum.None;
+            starSensitivity = StarSensitivity.High;
+            noiseReduction = NoiseReduction.None;
             detectStars = true;
             autoStretch = true;
         }
@@ -169,10 +169,10 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private StarSensitivityEnum starSensitivity;
+        private StarSensitivity starSensitivity;
 
         [DataMember]
-        public StarSensitivityEnum StarSensitivity {
+        public StarSensitivity StarSensitivity {
             get => starSensitivity;
             set {
                 if (starSensitivity != value) {
@@ -182,10 +182,10 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private NoiseReductionEnum noiseReduction;
+        private NoiseReduction noiseReduction;
 
         [DataMember]
-        public NoiseReductionEnum NoiseReduction {
+        public NoiseReduction NoiseReduction {
             get => noiseReduction;
             set {
                 if (noiseReduction != value) {

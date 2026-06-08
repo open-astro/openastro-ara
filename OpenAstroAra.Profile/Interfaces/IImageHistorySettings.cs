@@ -17,7 +17,7 @@ using OpenAstroAra.Core.Enum;
 namespace OpenAstroAra.Profile.Interfaces {
 
     public interface IImageHistorySettings : ISettings {
-        ImageHistoryEnum ImageHistoryLeftSelected { get; set; }
-        ImageHistoryEnum ImageHistoryRightSelected { get; set; }
+        ImageHistory ImageHistoryLeftSelected { get; set; }
+        ImageHistory ImageHistoryRightSelected { get; set; }
     }
 }

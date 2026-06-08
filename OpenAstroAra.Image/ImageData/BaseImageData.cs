@@ -386,19 +386,19 @@ namespace OpenAstroAra.Image.ImageData {
                 fileSaveInfo.FilePath = Path.Combine(fileSaveInfo.FilePath, fileName);
 
                 if (!forceFileType && Data.RAWData != null) {
-                    fileSaveInfo.FileType = FileTypeEnum.RAW;
+                    fileSaveInfo.FileType = FileType.RAW;
                     path = SaveRAW(fileSaveInfo.FilePath);
                 } else {
                     switch (fileSaveInfo.FileType) {
-                        case FileTypeEnum.FITS:
+                        case FileType.FITS:
                             path = SaveFits(fileSaveInfo);
                             break;
 
-                        case FileTypeEnum.XISF:
+                        case FileType.XISF:
                             path = SaveXisf(fileSaveInfo);
                             break;
 
-                        case FileTypeEnum.TIFF:
+                        case FileType.TIFF:
                         default:
                             path = SaveTiff(fileSaveInfo);
                             break;
@@ -429,14 +429,14 @@ namespace OpenAstroAra.Image.ImageData {
             throw new NotImplementedException("SaveTiff pending OpenCvSharp4 wiring.");
         }
 
-        private static CfitsioNative.COMPRESSION GetFITSCompression(FITSCompressionTypeEnum fITSCompressionTypeEnum) {
+        private static CfitsioNative.COMPRESSION GetFITSCompression(FITSCompressionType fITSCompressionTypeEnum) {
             return fITSCompressionTypeEnum switch {
-                FITSCompressionTypeEnum.NONE => CfitsioNative.COMPRESSION.NOCOMPRESS,
-                FITSCompressionTypeEnum.RICE => CfitsioNative.COMPRESSION.RICE_1,
-                FITSCompressionTypeEnum.PLIO => CfitsioNative.COMPRESSION.PLIO_1,
-                FITSCompressionTypeEnum.HCOMPRESS => CfitsioNative.COMPRESSION.HCOMPRESS_1,
-                FITSCompressionTypeEnum.GZIP1 => CfitsioNative.COMPRESSION.GZIP_1,
-                FITSCompressionTypeEnum.GZIP2 => CfitsioNative.COMPRESSION.GZIP_2,
+                FITSCompressionType.NONE => CfitsioNative.COMPRESSION.NOCOMPRESS,
+                FITSCompressionType.RICE => CfitsioNative.COMPRESSION.RICE_1,
+                FITSCompressionType.PLIO => CfitsioNative.COMPRESSION.PLIO_1,
+                FITSCompressionType.HCOMPRESS => CfitsioNative.COMPRESSION.HCOMPRESS_1,
+                FITSCompressionType.GZIP1 => CfitsioNative.COMPRESSION.GZIP_1,
+                FITSCompressionType.GZIP2 => CfitsioNative.COMPRESSION.GZIP_2,
                 _ => CfitsioNative.COMPRESSION.NOCOMPRESS,
             };
         }
@@ -460,7 +460,7 @@ namespace OpenAstroAra.Image.ImageData {
                 }
                 return uniquePath;
             } else {
-                if (fileSaveInfo.FITSAddFzExtension && fileSaveInfo.FITSCompressionType != FITSCompressionTypeEnum.NONE) {
+                if (fileSaveInfo.FITSAddFzExtension && fileSaveInfo.FITSCompressionType != FITSCompressionType.NONE) {
                     extension += ".fz";
                 }
 
@@ -586,7 +586,7 @@ namespace OpenAstroAra.Image.ImageData {
             return new BaseImageData(imageArray, width, height, bitDepth, isBayered, metaData, this.profileService, this.starDetectionSelector.GetBehavior(), this.starAnnotatorSelector.GetBehavior());
         }
 
-        public Task<IImageData> CreateFromFile(string path, int bitDepth, bool isBayered, RawConverterEnum rawConverter, CancellationToken ct = default) {
+        public Task<IImageData> CreateFromFile(string path, int bitDepth, bool isBayered, RawConverter rawConverter, CancellationToken ct = default) {
             // RawConverterFactory deleted in the net10.0 conversion; the
             // rawConverter param is ignored until libraw replaces DCRaw per
             // playbook §line-2105.

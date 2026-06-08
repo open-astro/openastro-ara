@@ -18,7 +18,7 @@ using System.ComponentModel;
 namespace OpenAstroAra.Core.Enum {
 
     [TypeConverter(typeof(EnumDescriptionTypeConverter))]
-    public enum AFCurveFittingEnum {
+    public enum AFCurveFitting {
 
         [Description("LblTrendLines")]
         TRENDLINES,

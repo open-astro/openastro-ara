@@ -18,7 +18,7 @@ using System.ComponentModel;
 namespace OpenAstroAra.Core.Enum {
 
     [TypeConverter(typeof(EnumDescriptionTypeConverter))]
-    public enum XISFCompressionTypeEnum {
+    public enum XISFCompressionType {
 
         [Description("LblNone")]
         NONE = 0,
@@ -34,7 +34,7 @@ namespace OpenAstroAra.Core.Enum {
     }
 
     [TypeConverter(typeof(EnumDescriptionTypeConverter))]
-    public enum XISFChecksumTypeEnum {
+    public enum XISFChecksumType {
 
         [Description("LblNone")]
         NONE = 0,

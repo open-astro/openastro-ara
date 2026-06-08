@@ -304,7 +304,7 @@ namespace OpenAstroAra.Image.ImageData {
             return new Flipped2DExposureData(flipped2DArray, bitDepth, isBayered, metaData, imageDataFactory, profileService.ActiveProfile.CameraSettings.ASCOMCreate32BitData);
         }
 
-        public RAWExposureData CreateRAWExposureData(RawConverterEnum converter, byte[] rawBytes, string rawType, int bitDepth, ImageMetaData metaData) =>
+        public RAWExposureData CreateRAWExposureData(RawConverter converter, byte[] rawBytes, string rawType, int bitDepth, ImageMetaData metaData) =>
             // RawConverterFactory deleted (DCRaw + FreeImage WPF dependencies);
             // RAW decoding lands with libraw integration per playbook §line-2105.
             throw new NotImplementedException("CreateRAWExposureData pending libraw integration.");

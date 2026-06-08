@@ -52,16 +52,16 @@ namespace OpenAstroAra.PlateSolving {
         /// <param name="plateSolveSettings"></param>
         /// <param name="solver"> Plate Solver that should be used</param>
         /// <returns></returns>
-        private static IPlateSolver GetPlateSolver(IPlateSolveSettings plateSolveSettings, PlateSolverEnum solver) {
+        private static IPlateSolver GetPlateSolver(IPlateSolveSettings plateSolveSettings, PlateSolver solver) {
             // AstrometryNet (cloud astrometry.net) solver removed per playbook
             // §18.I "just ASTAP impl per §18.I" — ARA ships local solvers only.
             return solver switch {
-                PlateSolverEnum.LOCAL => new LocalPlateSolver(plateSolveSettings.CygwinLocation),
-                PlateSolverEnum.PLATESOLVE2 => new Platesolve2Solver(plateSolveSettings.PS2Location),
-                PlateSolverEnum.PLATESOLVE3 => new Platesolve3Solver(plateSolveSettings.PS3Location),
-                PlateSolverEnum.ASPS => new AllSkyPlateSolver(plateSolveSettings.AspsLocation),
-                PlateSolverEnum.TSXImageLink => new TheSkyXImageLinkSolver(plateSolveSettings.TheSkyXHost, plateSolveSettings.TheSkyXPort),
-                PlateSolverEnum.PINPONT => new Dc3PinPointSolver(plateSolveSettings),
+                PlateSolver.LOCAL => new LocalPlateSolver(plateSolveSettings.CygwinLocation),
+                PlateSolver.PLATESOLVE2 => new Platesolve2Solver(plateSolveSettings.PS2Location),
+                PlateSolver.PLATESOLVE3 => new Platesolve3Solver(plateSolveSettings.PS3Location),
+                PlateSolver.ASPS => new AllSkyPlateSolver(plateSolveSettings.AspsLocation),
+                PlateSolver.TSXImageLink => new TheSkyXImageLinkSolver(plateSolveSettings.TheSkyXHost, plateSolveSettings.TheSkyXPort),
+                PlateSolver.PINPONT => new Dc3PinPointSolver(plateSolveSettings),
                 _ => new ASTAPSolver(plateSolveSettings.ASTAPLocation),
             };
         }
@@ -72,12 +72,12 @@ namespace OpenAstroAra.PlateSolving {
 
         public static IPlateSolver GetBlindSolver(IPlateSolveSettings plateSolveSettings) {
             var type = plateSolveSettings.BlindSolverType switch {
-                BlindSolverEnum.AstrometryNet => PlateSolverEnum.AstrometryNet,
-                BlindSolverEnum.LOCAL => PlateSolverEnum.LOCAL,
-                BlindSolverEnum.PLATESOLVE3 => PlateSolverEnum.PLATESOLVE3,
-                BlindSolverEnum.ASPS => PlateSolverEnum.ASPS,
-                BlindSolverEnum.PINPOINT => PlateSolverEnum.PINPONT,
-                _ => PlateSolverEnum.ASTAP
+                BlindSolver.AstrometryNet => PlateSolver.AstrometryNet,
+                BlindSolver.LOCAL => PlateSolver.LOCAL,
+                BlindSolver.PLATESOLVE3 => PlateSolver.PLATESOLVE3,
+                BlindSolver.ASPS => PlateSolver.ASPS,
+                BlindSolver.PINPOINT => PlateSolver.PINPONT,
+                _ => PlateSolver.ASTAP
             };
 
             return GetPlateSolver(plateSolveSettings, type);

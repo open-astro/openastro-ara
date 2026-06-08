@@ -19,7 +19,7 @@ using System.ComponentModel;
 namespace OpenAstroAra.Core.Enum {
 
     [TypeConverter(typeof(EnumDescriptionTypeConverter))]
-    public enum FileTypeEnum {
+    public enum FileType {
 
         [Description("LblTiff")]
         TIFF,

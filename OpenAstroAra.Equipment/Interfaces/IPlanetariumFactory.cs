@@ -20,6 +20,6 @@ namespace OpenAstroAra.Equipment.Interfaces {
 
         IPlanetarium? GetPlanetarium();
 
-        IPlanetarium? GetPlanetarium(PlanetariumEnum planetarium);
+        IPlanetarium? GetPlanetarium(Planetarium planetarium);
     }
 }

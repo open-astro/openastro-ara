@@ -26,7 +26,7 @@ namespace OpenAstroAra.Profile {
     [Serializable()]
     [DataContract]
     public partial class PlateSolveSettings : Settings, IPlateSolveSettings {
-        private PlateSolverEnum plateSolverType = PlateSolverEnum.ASTAP;
+        private PlateSolver plateSolverType = PlateSolver.ASTAP;
 
         [OnDeserializing]
         public void OnDeserializing(StreamingContext context) {
@@ -34,8 +34,8 @@ namespace OpenAstroAra.Profile {
         }
 
         protected override void SetDefaultValues() {
-            plateSolverType = PlateSolverEnum.ASTAP;
-            blindSolverType = BlindSolverEnum.ASTAP;
+            plateSolverType = PlateSolver.ASTAP;
+            blindSolverType = BlindSolver.ASTAP;
             blindFailoverEnabled = true;
             astrometryURL = "http://nova.astrometry.net";
             astrometryAPIKey = string.Empty;
@@ -70,7 +70,7 @@ namespace OpenAstroAra.Profile {
             _theSkyXHost = "localhost";
             _theSkyXPort = 3040;
 
-            pinPointCatalogType = Dc3PoinPointCatalogEnum.ppGSCACT;
+            pinPointCatalogType = Dc3PoinPointCatalog.ppGSCACT;
             pinPointCatalogRoot = Environment.ExpandEnvironmentVariables(@"%SYSTEMDRIVE%\GSC11\");
             pinPointMaxMagnitude = 20;
             pinPointExpansion = 40;
@@ -79,7 +79,7 @@ namespace OpenAstroAra.Profile {
         }
 
         [DataMember]
-        public PlateSolverEnum PlateSolverType {
+        public PlateSolver PlateSolverType {
             get => plateSolverType;
             set {
                 if (plateSolverType != value) {
@@ -89,10 +89,10 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private BlindSolverEnum blindSolverType;
+        private BlindSolver blindSolverType;
 
         [DataMember]
-        public BlindSolverEnum BlindSolverType {
+        public BlindSolver BlindSolverType {
             get => blindSolverType;
             set {
                 if (blindSolverType != value) {
@@ -423,10 +423,10 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private Dc3PoinPointCatalogEnum pinPointCatalogType;
+        private Dc3PoinPointCatalog pinPointCatalogType;
 
         [DataMember]
-        public Dc3PoinPointCatalogEnum PinPointCatalogType {
+        public Dc3PoinPointCatalog PinPointCatalogType {
             get => pinPointCatalogType;
             set {
                 if (pinPointCatalogType != value) {

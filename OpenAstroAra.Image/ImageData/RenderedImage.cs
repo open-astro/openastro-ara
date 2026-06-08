@@ -78,8 +78,8 @@ namespace OpenAstroAra.Image.ImageData {
 
         public Task<IRenderedImage> DetectStars(
                 bool annotateImage,
-                StarSensitivityEnum sensitivity,
-                NoiseReductionEnum noiseReduction,
+                StarSensitivity sensitivity,
+                NoiseReduction noiseReduction,
                 CancellationToken cancelToken = default,
                 IProgress<ApplicationStatus>? progress = default(Progress<ApplicationStatus>)) =>
             throw new NotImplementedException("DetectStars pending OpenCvSharp4 wiring.");

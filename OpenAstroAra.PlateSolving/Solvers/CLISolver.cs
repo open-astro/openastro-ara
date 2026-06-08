@@ -127,7 +127,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
             FileSaveInfo fileSaveInfo = new FileSaveInfo {
                 FilePath = WORKING_DIRECTORY,
                 FilePattern = Path.GetRandomFileName(),
-                FileType = FileTypeEnum.FITS
+                FileType = FileType.FITS
             };
 
             return await source.SaveToDisk(fileSaveInfo, cancelToken, forceFileType: true);

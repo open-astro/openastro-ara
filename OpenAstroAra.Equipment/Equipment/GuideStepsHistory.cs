@@ -24,7 +24,7 @@ namespace OpenAstroAra.Equipment.Equipment {
 
     public class GuideStepsHistory : BaseINPC {
 
-        public GuideStepsHistory(int historySize, GuiderScaleEnum scale, double maxY) {
+        public GuideStepsHistory(int historySize, GuiderScale scale, double maxY) {
             overallGuideSteps = new LinkedList<HistoryStep>();
             selectedGuideSteps = new LinkedList<HistoryStep>();
             RMS = new RMS();
@@ -122,7 +122,7 @@ namespace OpenAstroAra.Equipment.Equipment {
                     for (int i = startIndex; i < overallGuideSteps.Count; i++) {
                         var p = overallGuideSteps.ElementAt(i);
                         RMS.AddDataPoint(p.RADistanceRaw, p.DECDistanceRaw);
-                        if (Scale == GuiderScaleEnum.ARCSECONDS) {
+                        if (Scale == GuiderScale.ARCSECONDS) {
                             p = p.AdjustPixelScale(PixelScale);
                         } else {
                             p = p.AdjustPixelScale(1);
@@ -153,9 +153,9 @@ namespace OpenAstroAra.Equipment.Equipment {
             }
         }
 
-        private GuiderScaleEnum scale;
+        private GuiderScale scale;
 
-        public GuiderScaleEnum Scale {
+        public GuiderScale Scale {
             get => scale;
             set {
                 scale = value;
@@ -177,7 +177,7 @@ namespace OpenAstroAra.Equipment.Equipment {
 
         public void AddGuideStep(IGuideStep step) {
             lock (lockObj) {
-                var historyStep = HistoryStep.FromGuideStep(step, Scale == GuiderScaleEnum.PIXELS ? 1 : PixelScale);
+                var historyStep = HistoryStep.FromGuideStep(step, Scale == GuiderScale.PIXELS ? 1 : PixelScale);
                 overallGuideSteps.AddLast(historyStep);
 
                 if (selectedGuideSteps.Count == HistorySize) {

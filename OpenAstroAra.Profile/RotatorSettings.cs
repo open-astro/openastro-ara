@@ -32,7 +32,7 @@ namespace OpenAstroAra.Profile {
             id = "No_Device";
             lastDeviceName = string.Empty;
             reverse2 = false;
-            rangeType = RotatorRangeTypeEnum.FULL;
+            rangeType = RotatorRangeType.FULL;
             rangeStartMechanicalPosition = 0.0f;
         }
 
@@ -86,10 +86,10 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private RotatorRangeTypeEnum rangeType;
+        private RotatorRangeType rangeType;
 
         [DataMember]
-        public RotatorRangeTypeEnum RangeType {
+        public RotatorRangeType RangeType {
             get => rangeType;
             set {
                 if (rangeType != value) {

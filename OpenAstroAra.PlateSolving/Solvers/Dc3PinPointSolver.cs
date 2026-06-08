@@ -30,7 +30,7 @@ using System.Threading.Tasks;
 namespace OpenAstroAra.PlateSolving.Solvers {
 
     internal sealed class Dc3PinPointSolver : BaseSolver {
-        private readonly Dc3PoinPointCatalogEnum catalogType;
+        private readonly Dc3PoinPointCatalog catalogType;
         private readonly string catalogRootDir;
         private readonly double maxMagnitude;
         private readonly double expansion;
@@ -66,7 +66,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
                 FileSaveInfo fileSaveInfo = new() {
                     FilePath = WORKING_DIRECTORY,
                     FilePattern = Path.GetRandomFileName(),
-                    FileType = FileTypeEnum.FITS
+                    FileType = FileType.FITS
                 };
 
                 filePath = await source.SaveToDisk(fileSaveInfo, ct, forceFileType: true);

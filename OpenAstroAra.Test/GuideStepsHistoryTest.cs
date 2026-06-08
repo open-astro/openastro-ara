@@ -34,11 +34,11 @@ namespace OpenAstroAra.Test {
         [Test]
         public void GuideStepsHistory_ConstructorTest() {
             var historySize = 100;
-            GuideStepsHistory gsh = new GuideStepsHistory(historySize, GuiderScaleEnum.PIXELS, 4);
+            GuideStepsHistory gsh = new GuideStepsHistory(historySize, GuiderScale.PIXELS, 4);
 
             Assert.That(gsh.HistorySize, Is.EqualTo(historySize));
             Assert.That(gsh.PixelScale, Is.EqualTo(1));
-            Assert.That(gsh.Scale, Is.EqualTo(GuiderScaleEnum.PIXELS));
+            Assert.That(gsh.Scale, Is.EqualTo(GuiderScale.PIXELS));
             Assert.That(gsh.GuideSteps.Count(), Is.EqualTo(0));
             Assert.That(gsh.RMS.Scale, Is.EqualTo(1));
             Assert.That(gsh.RMS.RA, Is.EqualTo(0));
@@ -49,7 +49,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public void GuideStepsHistory_AddPHDDataPointsTest() {
             var historySize = 100;
-            GuideStepsHistory gsh = new GuideStepsHistory(historySize, GuiderScaleEnum.PIXELS, 4);
+            GuideStepsHistory gsh = new GuideStepsHistory(historySize, GuiderScale.PIXELS, 4);
 
             IGuideStep step1 = new PhdEventGuideStep() {
                 RADistanceRaw = -25,
@@ -87,7 +87,7 @@ namespace OpenAstroAra.Test {
             var historySize = 100;
             var scale = 1.59;
 
-            GuideStepsHistory gsh = new GuideStepsHistory(historySize, GuiderScaleEnum.ARCSECONDS, 4);
+            GuideStepsHistory gsh = new GuideStepsHistory(historySize, GuiderScale.ARCSECONDS, 4);
             gsh.PixelScale = scale;
 
             IGuideStep step1 = new PhdEventGuideStep() {
@@ -126,7 +126,7 @@ namespace OpenAstroAra.Test {
             var historySize = 100;
             var scale = 1.59;
 
-            GuideStepsHistory gsh = new GuideStepsHistory(historySize, GuiderScaleEnum.ARCSECONDS, 4);
+            GuideStepsHistory gsh = new GuideStepsHistory(historySize, GuiderScale.ARCSECONDS, 4);
             gsh.PixelScale = scale;
 
             IGuideStep step1 = new PhdEventGuideStep() {
@@ -167,7 +167,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public void GuideStepsHistory_HistorySize_AddMoreThanSizeTest() {
             var historySize = 5;
-            GuideStepsHistory gsh = new GuideStepsHistory(historySize, GuiderScaleEnum.PIXELS, 4);
+            GuideStepsHistory gsh = new GuideStepsHistory(historySize, GuiderScale.PIXELS, 4);
 
             IGuideStep step1 = new PhdEventGuideStep() {
                 RADistanceRaw = -1,
@@ -221,7 +221,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public void GuideStepsHistory_HistorySize_ResizeTest() {
             var historySize = 5;
-            GuideStepsHistory gsh = new GuideStepsHistory(historySize, GuiderScaleEnum.PIXELS, 4);
+            GuideStepsHistory gsh = new GuideStepsHistory(historySize, GuiderScale.PIXELS, 4);
 
             IGuideStep step1 = new PhdEventGuideStep() {
                 RADistanceRaw = -1,
@@ -279,7 +279,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public void GuideStepsHistory_MaxDurationY_CalculateTest() {
             var historySize = 100;
-            GuideStepsHistory gsh = new GuideStepsHistory(historySize, GuiderScaleEnum.PIXELS, 4);
+            GuideStepsHistory gsh = new GuideStepsHistory(historySize, GuiderScale.PIXELS, 4);
 
             IGuideStep step1 = new PhdEventGuideStep() {
                 RADuration = -1,
@@ -325,7 +325,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public void GuideStepsHistory_MaxDurationY_CalculateWhenMoreThanHistoryTest() {
             var historySize = 3;
-            GuideStepsHistory gsh = new GuideStepsHistory(historySize, GuiderScaleEnum.PIXELS, 4);
+            GuideStepsHistory gsh = new GuideStepsHistory(historySize, GuiderScale.PIXELS, 4);
 
             IGuideStep step1 = new PhdEventGuideStep() {
                 RADuration = -10,
@@ -371,7 +371,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public void GuideStepsHistory_MaxDurationY_CalculateWhenResizedTest() {
             var historySize = 3;
-            GuideStepsHistory gsh = new GuideStepsHistory(historySize, GuiderScaleEnum.PIXELS, 4);
+            GuideStepsHistory gsh = new GuideStepsHistory(historySize, GuiderScale.PIXELS, 4);
 
             IGuideStep step1 = new PhdEventGuideStep() {
                 RADuration = -100,

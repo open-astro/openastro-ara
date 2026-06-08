@@ -56,9 +56,9 @@ namespace OpenAstroAra.Equipment.Utility {
                 data.Camera.SensorType = info.SensorType;
 
                 if (data.Camera.SensorType != SensorType.Monochrome) {
-                    if (data.Camera.BayerPattern == BayerPatternEnum.None) { // Treat it like a monochrome camera (for mono-bin modes on OSCs)
+                    if (data.Camera.BayerPattern == BayerPattern.None) { // Treat it like a monochrome camera (for mono-bin modes on OSCs)
                         data.Camera.SensorType = SensorType.Monochrome;
-                    } else if (data.Camera.BayerPattern == BayerPatternEnum.Auto) { // Take the sensor type from the camera driver
+                    } else if (data.Camera.BayerPattern == BayerPattern.Auto) { // Take the sensor type from the camera driver
                         data.Camera.SensorType = info.SensorType;
                         data.Camera.BayerOffsetX = info.BayerOffsetX;
                         data.Camera.BayerOffsetY = info.BayerOffsetY;
@@ -93,9 +93,9 @@ namespace OpenAstroAra.Equipment.Utility {
                 data.Camera.SensorType = info.SensorType;
 
                 if (data.Camera.SensorType != SensorType.Monochrome) {
-                    if (data.Camera.BayerPattern == BayerPatternEnum.None) { // Treat it like a monochrome camera (for mono-bin modes on OSCs)
+                    if (data.Camera.BayerPattern == BayerPattern.None) { // Treat it like a monochrome camera (for mono-bin modes on OSCs)
                         data.Camera.SensorType = SensorType.Monochrome;
-                    } else if (data.Camera.BayerPattern == BayerPatternEnum.Auto) { // Take the sensor type from the camera driver
+                    } else if (data.Camera.BayerPattern == BayerPattern.Auto) { // Take the sensor type from the camera driver
                         data.Camera.SensorType = info.SensorType;
                         data.Camera.BayerOffsetX = info.BayerOffsetX;
                         data.Camera.BayerOffsetY = info.BayerOffsetY;

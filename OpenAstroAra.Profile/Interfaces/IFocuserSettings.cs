@@ -33,9 +33,9 @@ namespace OpenAstroAra.Profile.Interfaces {
         int BacklashIn { get; set; }
         int BacklashOut { get; set; }
         short AutoFocusBinning { get; set; }
-        AFCurveFittingEnum AutoFocusCurveFitting { get; set; }
-        AFMethodEnum AutoFocusMethod { get; set; }
-        ContrastDetectionMethodEnum ContrastDetectionMethod { get; set; }
+        AFCurveFitting AutoFocusCurveFitting { get; set; }
+        AFMethod AutoFocusMethod { get; set; }
+        ContrastDetectionMethod ContrastDetectionMethod { get; set; }
         BacklashCompensationModel BacklashCompensationModel { get; set; }
         int AutoFocusTimeoutSeconds { get; set; }
         double RSquaredThreshold { get; set; }

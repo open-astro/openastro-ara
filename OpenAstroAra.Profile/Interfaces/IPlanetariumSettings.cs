@@ -30,6 +30,6 @@ namespace OpenAstroAra.Profile.Interfaces {
         int C2APort { get; set; }
         string SkytechXHost { get; set; }
         int SkytechXPort { get; set; }
-        PlanetariumEnum PreferredPlanetarium { get; set; }
+        Planetarium PreferredPlanetarium { get; set; }
     }
 }

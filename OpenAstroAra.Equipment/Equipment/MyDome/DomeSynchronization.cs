@@ -82,7 +82,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyDome {
 
             var origin = new Vector4(0, 0, 0, 1);
             Matrix4x4 scopeOriginTranslation;
-            if (domeSettings.MountType == MountTypeEnum.EQUATORIAL) {
+            if (domeSettings.MountType == MountType.EQUATORIAL) {
                 scopeOriginTranslation = CalculateGEM(scopeCoordinates, localSiderealTime, siteLatitude, sideOfPier);
             } else {
                 scopeOriginTranslation = CalculateForkOnWedge(scopeCoordinates, localSiderealTime, siteLatitude);

@@ -18,7 +18,7 @@ using System.ComponentModel;
 namespace OpenAstroAra.Core.Enum {
 
     [TypeConverter(typeof(EnumDescriptionTypeConverter))]
-    public enum PlanetariumEnum {
+    public enum Planetarium {
 
         [Description("LblCdC")]
         CDC,

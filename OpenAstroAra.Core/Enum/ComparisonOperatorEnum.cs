@@ -18,7 +18,7 @@ using System.ComponentModel;
 namespace OpenAstroAra.Core.Enum {
 
     [TypeConverter(typeof(EnumDescriptionTypeConverter))]
-    public enum ComparisonOperatorEnum {
+    public enum ComparisonOperator {
 
         [Description("LblComparatorEquals")]
         EQUALS,

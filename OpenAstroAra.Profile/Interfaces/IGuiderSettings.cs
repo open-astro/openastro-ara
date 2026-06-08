@@ -21,7 +21,7 @@ namespace OpenAstroAra.Profile.Interfaces {
         string LastDeviceName { get; set; }
         double DitherPixels { get; set; }
         bool DitherRAOnly { get; set; }
-        GuiderScaleEnum PHD2GuiderScale { get; set; }
+        GuiderScale PHD2GuiderScale { get; set; }
         double MaxY { get; set; }
         int PHD2HistorySize { get; set; }
         int PHD2ServerPort { get; set; }

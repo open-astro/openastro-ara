@@ -29,16 +29,16 @@ namespace OpenAstroAra.Profile {
         }
 
         protected override void SetDefaultValues() {
-            gnssSource = GnssSourceEnum.NmeaSerial;
+            gnssSource = GnssSource.NmeaSerial;
 
             gpsdHost = string.Empty;
             gpsdPort = 2947;
         }
 
-        private GnssSourceEnum gnssSource;
+        private GnssSource gnssSource;
 
         [DataMember]
-        public GnssSourceEnum GnssSource {
+        public GnssSource GnssSource {
             get => gnssSource;
             set {
                 if (gnssSource != value) {

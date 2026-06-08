@@ -137,26 +137,26 @@ namespace OpenAstroAra.Sequencer.Container {
                 }
                 var target = parameters.Target as ISequenceItem;
 
-                if (parameters.Position == DropTargetEnum.Center && item.Parent != this) {
+                if (parameters.Position == DropTarget.Center && item.Parent != this) {
                     InsertIntoSequenceBlocks(Items.Count, item);
                 }
 
                 var targetContainer = parameters.Target == this ? Parent : this;
 
-                if ((parameters.Position == DropTargetEnum.Bottom || parameters.Position == DropTargetEnum.Top)
+                if ((parameters.Position == DropTarget.Bottom || parameters.Position == DropTarget.Top)
                     && targetContainer is IDropContainer drop) {
                     var newIndex = targetContainer.Items.IndexOf((targetContainer == Parent ? this : target)!);
                     var oldIndex = targetContainer.Items.IndexOf(item);
 
                     if (oldIndex == -1) {
-                        if (parameters.Position == DropTargetEnum.Top) {
+                        if (parameters.Position == DropTarget.Top) {
                             drop.InsertIntoSequenceBlocks(newIndex, item);
                         } else {
                             drop.InsertIntoSequenceBlocks(newIndex + 1, item);
                         }
                     } else {
-                        if (parameters.Position == DropTargetEnum.Top && newIndex > oldIndex) newIndex--;
-                        if (parameters.Position == DropTargetEnum.Bottom && newIndex < oldIndex) newIndex++;
+                        if (parameters.Position == DropTarget.Top && newIndex > oldIndex) newIndex--;
+                        if (parameters.Position == DropTarget.Bottom && newIndex < oldIndex) newIndex++;
                         drop.MoveWithinIntoSequenceBlocks(oldIndex, newIndex);
                     }
                 }

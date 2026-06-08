@@ -50,7 +50,7 @@ namespace OpenAstroAra.Profile {
 
         protected override void SetDefaultValues() {
             language = new CultureInfo("en-GB");
-            logLevel = LogLevelEnum.INFO;
+            logLevel = LogLevel.INFO;
             devicePollingInterval = 2;
             skyAtlasImageRepository = string.Empty;
             skySurveyCacheDirectory = Path.Combine(CoreUtil.APPLICATIONTEMPPATH, "FramingAssistantCache");
@@ -80,10 +80,10 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private LogLevelEnum logLevel;
+        private LogLevel logLevel;
 
         [DataMember]
-        public LogLevelEnum LogLevel {
+        public LogLevel LogLevel {
             get => logLevel;
             set {
                 if (logLevel != value) {

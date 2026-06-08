@@ -304,10 +304,10 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private MountTypeEnum mountType = MountTypeEnum.EQUATORIAL;
+        private MountType mountType = MountType.EQUATORIAL;
 
         [DataMember]
-        public MountTypeEnum MountType {
+        public MountType MountType {
             get => mountType;
             set {
                 if (mountType != value) {

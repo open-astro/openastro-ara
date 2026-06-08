@@ -18,7 +18,7 @@ namespace OpenAstroAra.Sequencer.DragDrop {
 
     public class DropIntoParameters {
 
-        public DropIntoParameters(IDroppable source, IDroppable? target, DropTargetEnum? position) {
+        public DropIntoParameters(IDroppable source, IDroppable? target, DropTarget? position) {
             Source = source;
             Target = target;
             Position = position;
@@ -32,7 +32,7 @@ namespace OpenAstroAra.Sequencer.DragDrop {
 
         public IDroppable Source { get; }
         public IDroppable? Target { get; set; }
-        public DropTargetEnum? Position { get; set; }
+        public DropTarget? Position { get; set; }
 
         public bool Duplicate { get; set; } = false;
     }

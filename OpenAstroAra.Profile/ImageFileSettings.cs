@@ -35,12 +35,12 @@ namespace OpenAstroAra.Profile {
             filePatternDARK = "";
             filePatternBIAS = "";
             filePatternFLAT = "";
-            fileType = FileTypeEnum.FITS;
-            tiffCompressionType = TIFFCompressionTypeEnum.NONE;
-            xisfCompressionType = XISFCompressionTypeEnum.NONE;
-            xisfChecksumType = XISFChecksumTypeEnum.SHA256;
+            fileType = FileType.FITS;
+            tiffCompressionType = TIFFCompressionType.NONE;
+            xisfCompressionType = XISFCompressionType.NONE;
+            xisfChecksumType = XISFChecksumType.SHA256;
             xisfByteShuffling = false;
-            fitsCompressionType = FITSCompressionTypeEnum.NONE;
+            fitsCompressionType = FITSCompressionType.NONE;
             fitsAddFzExtension = true;
             fitsUseLegacyWriter = true;
         }
@@ -110,10 +110,10 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private FileTypeEnum fileType;
+        private FileType fileType;
 
         [DataMember]
-        public FileTypeEnum FileType {
+        public FileType FileType {
             get {
                 /*
                  * The TIFFLzw and TIFFZip file types are obsoleted and
@@ -123,14 +123,14 @@ namespace OpenAstroAra.Profile {
                  */
 #pragma warning disable CS0612 // Type or member is obsolete
                 switch (fileType) {
-                    case FileTypeEnum.TIFFLzw:
-                        FileType = FileTypeEnum.TIFF;
-                        TIFFCompressionType = TIFFCompressionTypeEnum.LZW;
+                    case FileType.TIFFLzw:
+                        FileType = FileType.TIFF;
+                        TIFFCompressionType = TIFFCompressionType.LZW;
                         break;
 
-                    case FileTypeEnum.TIFFZip:
-                        FileType = FileTypeEnum.TIFF;
-                        TIFFCompressionType = TIFFCompressionTypeEnum.ZIP;
+                    case FileType.TIFFZip:
+                        FileType = FileType.TIFF;
+                        TIFFCompressionType = TIFFCompressionType.ZIP;
                         break;
                 }
 #pragma warning restore CS0612 // Type or member is obsolete
@@ -145,10 +145,10 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private TIFFCompressionTypeEnum tiffCompressionType;
+        private TIFFCompressionType tiffCompressionType;
 
         [DataMember]
-        public TIFFCompressionTypeEnum TIFFCompressionType {
+        public TIFFCompressionType TIFFCompressionType {
             get => tiffCompressionType;
             set {
                 if (tiffCompressionType != value) {
@@ -158,10 +158,10 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private XISFCompressionTypeEnum xisfCompressionType;
+        private XISFCompressionType xisfCompressionType;
 
         [DataMember]
-        public XISFCompressionTypeEnum XISFCompressionType {
+        public XISFCompressionType XISFCompressionType {
             get => xisfCompressionType;
             set {
                 if (xisfCompressionType != value) {
@@ -171,10 +171,10 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private XISFChecksumTypeEnum xisfChecksumType;
+        private XISFChecksumType xisfChecksumType;
 
         [DataMember]
-        public XISFChecksumTypeEnum XISFChecksumType {
+        public XISFChecksumType XISFChecksumType {
             get => xisfChecksumType;
             set {
                 if (xisfChecksumType != value) {
@@ -197,10 +197,10 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private FITSCompressionTypeEnum fitsCompressionType;
+        private FITSCompressionType fitsCompressionType;
 
         [DataMember]
-        public FITSCompressionTypeEnum FITSCompressionType {
+        public FITSCompressionType FITSCompressionType {
             get => fitsCompressionType;
             set {
                 if (fitsCompressionType != value) {

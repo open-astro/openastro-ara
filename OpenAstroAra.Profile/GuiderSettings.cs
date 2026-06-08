@@ -38,7 +38,7 @@ namespace OpenAstroAra.Profile {
             pHD2ServerPort = 4400;
             pHD2InstanceNumber = 1;
             pHD2LargeHistorySize = 100;
-            pHD2GuiderScale = GuiderScaleEnum.PIXELS;
+            pHD2GuiderScale = GuiderScale.PIXELS;
             phd2ROIPct = 100;
             settlePixels = 1.5;
             settleTimeout = 40;
@@ -196,10 +196,10 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private GuiderScaleEnum pHD2GuiderScale;
+        private GuiderScale pHD2GuiderScale;
 
         [DataMember]
-        public GuiderScaleEnum PHD2GuiderScale {
+        public GuiderScale PHD2GuiderScale {
             get => pHD2GuiderScale;
             set {
                 if (pHD2GuiderScale != value) {

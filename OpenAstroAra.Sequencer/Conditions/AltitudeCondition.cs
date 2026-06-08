@@ -36,7 +36,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
         [ImportingConstructor]
         public AltitudeCondition(IProfileService profileService) : base(profileService, useCustomHorizon: false) {
             Data.Offset = 30;
-            Data.Comparator = Core.Enum.ComparisonOperatorEnum.LessThan;
+            Data.Comparator = Core.Enum.ComparisonOperator.LessThan;
         }
         private AltitudeCondition(AltitudeCondition cloneMe) : this(cloneMe.ProfileService) {
             CopyMetaData(cloneMe);

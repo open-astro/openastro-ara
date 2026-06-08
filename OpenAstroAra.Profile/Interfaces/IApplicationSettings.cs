@@ -24,7 +24,7 @@ namespace OpenAstroAra.Profile.Interfaces {
         string Culture { get; set; }
         double DevicePollingInterval { get; set; }
         CultureInfo Language { get; set; }
-        LogLevelEnum LogLevel { get; set; }
+        LogLevel LogLevel { get; set; }
         [Obsolete]
         string SkyAtlasImageRepository { get; set; }
         string SkySurveyCacheDirectory { get; set; }

@@ -65,14 +65,14 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
         #region Obsolete Migration Properties
 
         [JsonProperty(propertyName: "Comparator")]
-        private ComparisonOperatorEnum DeprecatedComparator {
+        private ComparisonOperator DeprecatedComparator {
             set {
                 switch (value) {
-                    case ComparisonOperatorEnum.GreaterThanOrEqual:
-                        value = ComparisonOperatorEnum.GreaterThan;
+                    case ComparisonOperator.GreaterThanOrEqual:
+                        value = ComparisonOperator.GreaterThan;
                         break;
-                    case ComparisonOperatorEnum.LessThanOrEqual:
-                        value = ComparisonOperatorEnum.LessThan;
+                    case ComparisonOperator.LessThanOrEqual:
+                        value = ComparisonOperator.LessThan;
                         break;
                 }
                 Data.Comparator = value;
@@ -80,7 +80,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
         }
         [Obsolete]
         [JsonIgnore]
-        public ComparisonOperatorEnum Comparator { get; set; }
+        public ComparisonOperator Comparator { get; set; }
 
         [JsonProperty(propertyName: "UserMoonAltitude")]
         private double DeprecatedUserMoonAltitude { set => Data.Offset = value; }

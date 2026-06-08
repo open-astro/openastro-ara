@@ -50,7 +50,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
 
         private DateTimeOffset lastCalculation = DateTimeOffset.MinValue;
         private double lastCalculationOffset = double.NaN;
-        private ComparisonOperatorEnum lastCalculationComparator = ComparisonOperatorEnum.EQUALS;
+        private ComparisonOperator lastCalculationComparator = ComparisonOperator.EQUALS;
 
         public override void CalculateExpectedTime() {
             Data.CurrentAltitude = AstroUtil.GetMoonAltitude(DateTime.Now, Data.Observer);
@@ -86,7 +86,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
             // The MoonRiseAndSet already models refraction and moon disk size
             var customRiseAndSet = new MoonCustomRiseAndSet(NighttimeCalculator.GetReferenceDate(time), Data.Observer.Latitude, Data.Observer.Longitude, Data.Observer.Elevation, GetDataOffset());
             AsyncContext.Run(customRiseAndSet.Calculate);
-            return (Data.Comparator == ComparisonOperatorEnum.GreaterThan || Data.Comparator == ComparisonOperatorEnum.GreaterThanOrEqual ? customRiseAndSet.Rise : customRiseAndSet.Set) ?? DateTime.MaxValue;
+            return (Data.Comparator == ComparisonOperator.GreaterThan || Data.Comparator == ComparisonOperator.GreaterThanOrEqual ? customRiseAndSet.Rise : customRiseAndSet.Set) ?? DateTime.MaxValue;
         }
     }
 }

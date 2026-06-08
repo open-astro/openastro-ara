@@ -37,7 +37,7 @@ namespace OpenAstroAra.Profile.Interfaces {
         bool RefuseUnparkWithoutShutterOpen { get; set; }
         bool RefuseUnsafeShutterOpenSansSafetyDevice { get; set; }
         bool ParkDomeBeforeShutterMove { get; set; }
-        MountTypeEnum MountType { get; set; }
+        MountType MountType { get; set; }
         double DecOffsetHorizontal_mm { get; set; }
         int SettleTimeSeconds { get; set; }
     }

@@ -66,8 +66,8 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
                 }
 
                 aboveOrBelow = value;
-                if (aboveOrBelow == ">") Data.Comparator = ComparisonOperatorEnum.GreaterThan;
-                else Data.Comparator = ComparisonOperatorEnum.LessThanOrEqual;
+                if (aboveOrBelow == ">") Data.Comparator = ComparisonOperator.GreaterThan;
+                else Data.Comparator = ComparisonOperator.LessThanOrEqual;
                 CalculateExpectedTime();
                 RaisePropertyChanged();
             }

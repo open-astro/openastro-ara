@@ -72,7 +72,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
 
         private bool MustWait() {
             switch (Data.Comparator) {
-                case ComparisonOperatorEnum.GreaterThan:
+                case ComparisonOperator.GreaterThan:
                     return Data.CurrentAltitude > GetDataOffset();
 
                 default:
@@ -82,7 +82,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
 
         private DateTimeOffset lastCalculation = DateTimeOffset.MinValue;
         private double lastCalculationOffset = double.NaN;
-        private ComparisonOperatorEnum lastCalculationComparator = ComparisonOperatorEnum.EQUALS;
+        private ComparisonOperator lastCalculationComparator = ComparisonOperator.EQUALS;
 
         public override void CalculateExpectedTime() {
             // Refraction correction is omitted here. The altitude would otherwise jump when going below the horizon, as refraction modeling breaks down below the horizon.
@@ -114,7 +114,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
         private DateTime CalculateExpectedDateTime(DateTime time) {
             var customRiseAndSet = new SunCustomRiseAndSet(NighttimeCalculator.GetReferenceDate(time), Data.Observer.Latitude, Data.Observer.Longitude, Data.Observer.Elevation, GetDataOffset());
             AsyncContext.Run(customRiseAndSet.Calculate);
-            return (Data.Comparator == ComparisonOperatorEnum.GreaterThan ? customRiseAndSet.Set : customRiseAndSet?.Rise) ?? DateTime.MaxValue;
+            return (Data.Comparator == ComparisonOperator.GreaterThan ? customRiseAndSet.Set : customRiseAndSet?.Rise) ?? DateTime.MaxValue;
         }
 
         public override string ToString() {

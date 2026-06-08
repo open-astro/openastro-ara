@@ -18,7 +18,7 @@ using System.ComponentModel;
 namespace OpenAstroAra.Core.Enum {
 
     [TypeConverter(typeof(EnumDescriptionTypeConverter))]
-    public enum SendCommandTypeEnum {
+    public enum SendCommandType {
 
         [Description("LblString")]
         STRING,

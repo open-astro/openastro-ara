@@ -33,11 +33,11 @@ namespace OpenAstroAra.Profile {
             id = "No_Device";
             lastDeviceName = "";
             pixelSize = 3.8;
-            bulbMode = CameraBulbModeEnum.NATIVE;
+            bulbMode = CameraBulbMode.NATIVE;
             serialPort = "COM1";
             bitDepth = 16;
-            bayerPattern = BayerPatternEnum.Auto;
-            rawConverter = RawConverterEnum.FREEIMAGE;
+            bayerPattern = BayerPattern.Auto;
+            rawConverter = RawConverter.FREEIMAGE;
             minFlatExposureTime = 0.2;
             maxFlatExposureTime = 20;
             fileCameraFolder = string.Empty;
@@ -119,10 +119,10 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private BayerPatternEnum bayerPattern;
+        private BayerPattern bayerPattern;
 
         [DataMember]
-        public BayerPatternEnum BayerPattern {
+        public BayerPattern BayerPattern {
             get => bayerPattern;
             set {
                 if (bayerPattern != value) {
@@ -132,10 +132,10 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private CameraBulbModeEnum bulbMode;
+        private CameraBulbMode bulbMode;
 
         [DataMember]
-        public CameraBulbModeEnum BulbMode {
+        public CameraBulbMode BulbMode {
             get => bulbMode;
             set {
                 if (bulbMode != value) {
@@ -171,10 +171,10 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private RawConverterEnum rawConverter;
+        private RawConverter rawConverter;
 
         [DataMember]
-        public RawConverterEnum RawConverter {
+        public RawConverter RawConverter {
             get => rawConverter;
             set {
                 if (rawConverter != value) {

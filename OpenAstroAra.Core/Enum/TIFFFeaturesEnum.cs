@@ -18,7 +18,7 @@ using System.ComponentModel;
 namespace OpenAstroAra.Core.Enum {
 
     [TypeConverter(typeof(EnumDescriptionTypeConverter))]
-    public enum TIFFCompressionTypeEnum {
+    public enum TIFFCompressionType {
 
         [Description("LblNone")]
         NONE = 0,

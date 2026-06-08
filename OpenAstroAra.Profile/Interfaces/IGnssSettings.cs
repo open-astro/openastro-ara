@@ -17,7 +17,7 @@ using OpenAstroAra.Core.Enum;
 namespace OpenAstroAra.Profile.Interfaces {
 
     public interface IGnssSettings : ISettings {
-        GnssSourceEnum GnssSource { get; set; }
+        GnssSource GnssSource { get; set; }
 
         string GpsdHost { get; set; }
         ushort GpsdPort { get; set; }

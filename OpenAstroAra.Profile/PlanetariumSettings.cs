@@ -42,7 +42,7 @@ namespace OpenAstroAra.Profile {
             c2aHost = "localhost";
             skytechxPort = 2055;
             skytechxHost = "localhost";
-            preferredPlanetarium = PlanetariumEnum.CDC;
+            preferredPlanetarium = Planetarium.CDC;
         }
 
         private string stellariumHost = string.Empty;
@@ -214,10 +214,10 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private PlanetariumEnum preferredPlanetarium;
+        private Planetarium preferredPlanetarium;
 
         [DataMember]
-        public PlanetariumEnum PreferredPlanetarium {
+        public Planetarium PreferredPlanetarium {
             get => preferredPlanetarium;
             set {
                 if (preferredPlanetarium != value) {

@@ -18,7 +18,7 @@ using System.ComponentModel;
 namespace OpenAstroAra.Core.Enum {
 
     [TypeConverter(typeof(EnumDescriptionTypeConverter))]
-    public enum BayerPatternEnum {
+    public enum BayerPattern {
 
         [Description("LblNone")]
         None = -1,

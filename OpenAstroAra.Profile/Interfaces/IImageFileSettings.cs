@@ -22,12 +22,12 @@ namespace OpenAstroAra.Profile.Interfaces {
         string FilePatternDARK { get; set; }
         string FilePatternBIAS { get; set; }
         string FilePatternFLAT { get; set; }
-        FileTypeEnum FileType { get; set; }
-        TIFFCompressionTypeEnum TIFFCompressionType { get; set; }
-        XISFCompressionTypeEnum XISFCompressionType { get; set; }
-        XISFChecksumTypeEnum XISFChecksumType { get; set; }
+        FileType FileType { get; set; }
+        TIFFCompressionType TIFFCompressionType { get; set; }
+        XISFCompressionType XISFCompressionType { get; set; }
+        XISFChecksumType XISFChecksumType { get; set; }
         bool XISFByteShuffling { get; set; }
-        FITSCompressionTypeEnum FITSCompressionType { get; set; }
+        FITSCompressionType FITSCompressionType { get; set; }
         bool FITSAddFzExtension { get; set; }
         bool FITSUseLegacyWriter { get; set; }
         string GetFilePattern(string imageType);

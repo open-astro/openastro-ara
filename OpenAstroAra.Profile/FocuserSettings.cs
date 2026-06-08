@@ -37,7 +37,7 @@ namespace OpenAstroAra.Profile {
             autoFocusExposureTime = 4;
             autoFocusDisableGuiding = false;
             focuserSettleTime = 0;
-            autoFocusMethod = AFMethodEnum.STARHFR;
+            autoFocusMethod = AFMethod.STARHFR;
             autoFocusTotalNumberOfAttempts = 1;
             autoFocusNumberOfFramesPerPoint = 1;
             autoFocusInnerCropRatio = 1;
@@ -46,8 +46,8 @@ namespace OpenAstroAra.Profile {
             backlashIn = 0;
             backlashOut = 0;
             autoFocusBinning = 1;
-            autoFocusCurveFitting = AFCurveFittingEnum.HYPERBOLIC;
-            contrastDetectionMethod = ContrastDetectionMethodEnum.Statistics;
+            autoFocusCurveFitting = AFCurveFitting.HYPERBOLIC;
+            contrastDetectionMethod = ContrastDetectionMethod.Statistics;
             backlashCompensationModel = BacklashCompensationModel.OVERSHOOT;
             autoFocusTimeoutSeconds = 600;
             rSquaredThreshold = 0.7;
@@ -133,10 +133,10 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private AFMethodEnum autoFocusMethod;
+        private AFMethod autoFocusMethod;
 
         [DataMember]
-        public AFMethodEnum AutoFocusMethod {
+        public AFMethod AutoFocusMethod {
             get => autoFocusMethod;
             set {
                 if (autoFocusMethod != value) {
@@ -146,10 +146,10 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private ContrastDetectionMethodEnum contrastDetectionMethod;
+        private ContrastDetectionMethod contrastDetectionMethod;
 
         [DataMember]
-        public ContrastDetectionMethodEnum ContrastDetectionMethod {
+        public ContrastDetectionMethod ContrastDetectionMethod {
             get => contrastDetectionMethod;
             set {
                 if (contrastDetectionMethod != value) {
@@ -302,10 +302,10 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private AFCurveFittingEnum autoFocusCurveFitting;
+        private AFCurveFitting autoFocusCurveFitting;
 
         [DataMember]
-        public AFCurveFittingEnum AutoFocusCurveFitting {
+        public AFCurveFitting AutoFocusCurveFitting {
             get => autoFocusCurveFitting;
             set {
                 if (autoFocusCurveFitting != value) {

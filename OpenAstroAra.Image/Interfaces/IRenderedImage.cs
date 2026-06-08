@@ -35,8 +35,8 @@ namespace OpenAstroAra.Image.Interfaces {
 
         Task<IRenderedImage> DetectStars(
             bool annotateImage,
-            StarSensitivityEnum sensitivity,
-            NoiseReductionEnum noiseReduction,
+            StarSensitivity sensitivity,
+            NoiseReduction noiseReduction,
             CancellationToken cancelToken = default,
             IProgress<ApplicationStatus>? progress = default(Progress<ApplicationStatus>));
 

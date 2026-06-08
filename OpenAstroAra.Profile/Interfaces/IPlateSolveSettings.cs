@@ -20,13 +20,13 @@ namespace OpenAstroAra.Profile.Interfaces {
     public interface IPlateSolveSettings : ISettings {
         string AstrometryURL { get; set; }
         string AstrometryAPIKey { get; set; }
-        BlindSolverEnum BlindSolverType { get; set; }
+        BlindSolver BlindSolverType { get; set; }
         string CygwinLocation { get; set; }
         double ExposureTime { get; set; }
         int Gain { get; set; }
         short Binning { get; set; }
         FilterInfo? Filter { get; set; }
-        PlateSolverEnum PlateSolverType { get; set; }
+        PlateSolver PlateSolverType { get; set; }
         string PS2Location { get; set; }
         string PS3Location { get; set; }
         int Regions { get; set; }
@@ -46,7 +46,7 @@ namespace OpenAstroAra.Profile.Interfaces {
         string TheSkyXHost { get; set; }
         int TheSkyXPort { get; set; }
 
-        Dc3PoinPointCatalogEnum PinPointCatalogType { get; set; }
+        Dc3PoinPointCatalog PinPointCatalogType { get; set; }
         string PinPointCatalogRoot { get; set; }
         double PinPointMaxMagnitude { get; set; }
         double PinPointExpansion { get; set; }

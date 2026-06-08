@@ -18,7 +18,7 @@ using System.ComponentModel;
 namespace OpenAstroAra.Core.Enum {
 
     [TypeConverter(typeof(EnumDescriptionTypeConverter))]
-    public enum Dc3PoinPointCatalogEnum {
+    public enum Dc3PoinPointCatalog {
 
         [Description("LblPinPointCatGscact")]
         ppGSCACT = 3,

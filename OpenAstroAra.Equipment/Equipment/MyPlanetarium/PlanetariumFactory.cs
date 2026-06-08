@@ -32,21 +32,21 @@ namespace OpenAstroAra.Equipment.Equipment.MyPlanetarium {
         /// <param name="profileService"></param>
         /// <param name="planetarium"></param>
         /// <returns></returns>
-        public IPlanetarium? GetPlanetarium(PlanetariumEnum planetarium) {
+        public IPlanetarium? GetPlanetarium(Planetarium planetarium) {
             switch (planetarium) {
-                case PlanetariumEnum.CDC:
+                case Planetarium.CDC:
                     return new CartesDuCiel(profileService);
 
-                case PlanetariumEnum.THESKYX:
+                case Planetarium.THESKYX:
                     return new TheSkyX(profileService);
 
-                case PlanetariumEnum.HNSKY:
+                case Planetarium.HNSKY:
                     return new HNSKY(profileService);
 
-                case PlanetariumEnum.C2A:
+                case Planetarium.C2A:
                     return new C2A(profileService);
 
-                case PlanetariumEnum.SKYTECHX:
+                case Planetarium.SKYTECHX:
                     return new SkytechX(profileService);
 
                 default:

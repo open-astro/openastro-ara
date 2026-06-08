@@ -43,7 +43,7 @@ namespace OpenAstroAra.Image.ImageData {
         public void FromProfile(IProfile profile) {
             Camera.PixelSize = profile.CameraSettings.PixelSize;
 
-            if (Camera.BayerPattern != BayerPatternEnum.None) {
+            if (Camera.BayerPattern != BayerPattern.None) {
                 Camera.BayerPattern = profile.CameraSettings.BayerPattern;
             }
 
@@ -176,7 +176,7 @@ namespace OpenAstroAra.Image.ImageData {
         public double SetPoint { get; set; } = double.NaN;
         public short ReadoutModeIndex { get; set; } = 0;
         public string ReadoutModeName { get; set; } = string.Empty;
-        public BayerPatternEnum BayerPattern = BayerPatternEnum.Auto;
+        public BayerPattern BayerPattern = BayerPattern.Auto;
         public SensorType SensorType { get; set; } = SensorType.Monochrome;
         public int BayerOffsetX { get; set; } = 0;
         public int BayerOffsetY { get; set; } = 0;

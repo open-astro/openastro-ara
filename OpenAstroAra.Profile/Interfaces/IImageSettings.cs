@@ -24,8 +24,8 @@ namespace OpenAstroAra.Profile.Interfaces {
         bool AnnotateUnlimitedStars { get; set; }
         double AutoStretchFactor { get; set; }
         double BlackClipping { get; set; }
-        StarSensitivityEnum StarSensitivity { get; set; }
-        NoiseReductionEnum NoiseReduction { get; set; }
+        StarSensitivity StarSensitivity { get; set; }
+        NoiseReduction NoiseReduction { get; set; }
         bool DetectStars { get; set; }
         bool AutoStretch { get; set; }
     }

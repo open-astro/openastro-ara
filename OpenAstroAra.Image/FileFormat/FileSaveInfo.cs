@@ -21,12 +21,12 @@ namespace OpenAstroAra.Image.FileFormat {
         public string FilePath { get; set; } = string.Empty;
         public string FilePattern { get; set; } = string.Empty;
         public string ForceExtension { get; set; } = string.Empty;
-        public FileTypeEnum FileType { get; set; } = FileTypeEnum.FITS;
-        public TIFFCompressionTypeEnum TIFFCompressionType { get; set; } = TIFFCompressionTypeEnum.NONE;
-        public XISFCompressionTypeEnum XISFCompressionType { get; set; } = XISFCompressionTypeEnum.NONE;
-        public XISFChecksumTypeEnum XISFChecksumType { get; set; } = XISFChecksumTypeEnum.NONE;
+        public FileType FileType { get; set; } = FileType.FITS;
+        public TIFFCompressionType TIFFCompressionType { get; set; } = TIFFCompressionType.NONE;
+        public XISFCompressionType XISFCompressionType { get; set; } = XISFCompressionType.NONE;
+        public XISFChecksumType XISFChecksumType { get; set; } = XISFChecksumType.NONE;
         public bool XISFByteShuffling { get; set; } = false;
-        public FITSCompressionTypeEnum FITSCompressionType { get; set; } = FITSCompressionTypeEnum.NONE;
+        public FITSCompressionType FITSCompressionType { get; set; } = FITSCompressionType.NONE;
         public bool FITSAddFzExtension { get; set; } = false;
         public bool FITSUseLegacyWriter { get; set; } = true;
 

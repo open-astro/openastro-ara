@@ -24,7 +24,7 @@ using System.Threading.Tasks;
 namespace OpenAstroAra.Core.Enum {
 
     [TypeConverter(typeof(EnumDescriptionTypeConverter))]
-    public enum RotatorRangeTypeEnum {
+    public enum RotatorRangeType {
 
         [TooltipDescription("LblRotatorRangeFull", "LblRotatorRangeFullTooltip")]
         FULL,

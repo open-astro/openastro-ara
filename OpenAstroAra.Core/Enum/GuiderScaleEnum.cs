@@ -18,7 +18,7 @@ using System.ComponentModel;
 namespace OpenAstroAra.Core.Enum {
 
     [TypeConverter(typeof(EnumDescriptionTypeConverter))]
-    public enum GuiderScaleEnum {
+    public enum GuiderScale {
 
         [Description("LblPixels")]
         PIXELS,

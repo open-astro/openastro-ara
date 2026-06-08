@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 
 namespace OpenAstroAra.Core.Enum {
     [TypeConverter(typeof(EnumDescriptionTypeConverter))]
-    public enum FITSCompressionTypeEnum {
+    public enum FITSCompressionType {
 
         [Description("LblNone")]
         NONE = 0,

@@ -14,7 +14,7 @@
 
 namespace OpenAstroAra.Core.Enum {
     [System.Flags]
-    public enum DropTargetEnum {
+    public enum DropTarget {
         Top = 0b00000001,
         Bottom = 0b00000010,
         Center = 0b00000100,

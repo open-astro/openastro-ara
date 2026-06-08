@@ -23,7 +23,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
         private string approximate = "";
         private DateTime expectedDateTime = DateTime.Now;
         private Action calculateExpectedTime;
-        private ComparisonOperatorEnum comparator;
+        private ComparisonOperator comparator;
         private IProfileService profileService;
 
         public WaitLoopData(IProfileService profileService, bool useCustomHorizon, Action calculateExpectedTime, string name) {
@@ -76,11 +76,11 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
         }
 
         [JsonProperty]
-        public ComparisonOperatorEnum Comparator {
+        public ComparisonOperator Comparator {
             get {
                 // Backward compatibility
-                if (comparator == ComparisonOperatorEnum.EQUALS || comparator == ComparisonOperatorEnum.NotEqual) {
-                    comparator = ComparisonOperatorEnum.GreaterThan;
+                if (comparator == ComparisonOperator.EQUALS || comparator == ComparisonOperator.NotEqual) {
+                    comparator = ComparisonOperator.GreaterThan;
                 }
                 return comparator;
             }
@@ -114,12 +114,12 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
             }
         }
 
-        public ComparisonOperatorEnum[] ComparisonOperators => Enum.GetValues(typeof(ComparisonOperatorEnum))
-            .Cast<ComparisonOperatorEnum>()
-            .Where(p => p != ComparisonOperatorEnum.GreaterThanOrEqual)
-            .Where(p => p != ComparisonOperatorEnum.LessThanOrEqual)
-            .Where(p => p != ComparisonOperatorEnum.EQUALS)
-            .Where(p => p != ComparisonOperatorEnum.NotEqual)
+        public ComparisonOperator[] ComparisonOperators => Enum.GetValues(typeof(ComparisonOperator))
+            .Cast<ComparisonOperator>()
+            .Where(p => p != ComparisonOperator.GreaterThanOrEqual)
+            .Where(p => p != ComparisonOperator.LessThanOrEqual)
+            .Where(p => p != ComparisonOperator.EQUALS)
+            .Where(p => p != ComparisonOperator.NotEqual)
             .ToArray();
 
 

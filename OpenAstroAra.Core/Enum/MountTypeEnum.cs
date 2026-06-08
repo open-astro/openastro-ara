@@ -23,7 +23,7 @@ using System.Threading.Tasks;
 namespace OpenAstroAra.Core.Enum {
 
     [TypeConverter(typeof(EnumDescriptionTypeConverter))]
-    public enum MountTypeEnum {
+    public enum MountType {
 
         [Description("LblEquatorial")]
         EQUATORIAL,

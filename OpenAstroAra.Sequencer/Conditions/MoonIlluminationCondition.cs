@@ -39,12 +39,12 @@ namespace OpenAstroAra.Sequencer.Conditions {
     public class MoonIlluminationCondition : SequenceCondition {
         private double userMoonIllumination;
         private double currentMoonIllumination;
-        private ComparisonOperatorEnum comparator;
+        private ComparisonOperator comparator;
 
         [ImportingConstructor]
         public MoonIlluminationCondition() {
             UserMoonIllumination = 0d;
-            Comparator = ComparisonOperatorEnum.GreaterThan;
+            Comparator = ComparisonOperator.GreaterThan;
 
             CalculateCurrentMoonState();
             ConditionWatchdog = new ConditionWatchdog(InterruptWhenMoonOutsideOfBounds, TimeSpan.FromSeconds(5));
@@ -89,7 +89,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
         }
 
         [JsonProperty]
-        public ComparisonOperatorEnum Comparator {
+        public ComparisonOperator Comparator {
             get => comparator;
             set {
                 comparator = value;
@@ -105,10 +105,10 @@ namespace OpenAstroAra.Sequencer.Conditions {
             }
         }
 
-        public ComparisonOperatorEnum[] ComparisonOperators => Enum.GetValues(typeof(ComparisonOperatorEnum))
-            .Cast<ComparisonOperatorEnum>()
-            .Where(p => p != ComparisonOperatorEnum.EQUALS)
-            .Where(p => p != ComparisonOperatorEnum.NotEqual)
+        public ComparisonOperator[] ComparisonOperators => Enum.GetValues(typeof(ComparisonOperator))
+            .Cast<ComparisonOperator>()
+            .Where(p => p != ComparisonOperator.EQUALS)
+            .Where(p => p != ComparisonOperator.NotEqual)
             .ToArray();
 
         public override void AfterParentChanged() {
@@ -124,19 +124,19 @@ namespace OpenAstroAra.Sequencer.Conditions {
             var check = true;
             // See if the moon's illumination is outside of the user's wishes
             switch (Comparator) {
-                case ComparisonOperatorEnum.LessThan:
+                case ComparisonOperator.LessThan:
                     if (CurrentMoonIllumination < UserMoonIllumination) { check = false; }
                     break;
 
-                case ComparisonOperatorEnum.LessThanOrEqual:
+                case ComparisonOperator.LessThanOrEqual:
                     if (CurrentMoonIllumination <= UserMoonIllumination) { check = false; }
                     break;
 
-                case ComparisonOperatorEnum.GreaterThan:
+                case ComparisonOperator.GreaterThan:
                     if (CurrentMoonIllumination > UserMoonIllumination) { check = false; }
                     break;
 
-                case ComparisonOperatorEnum.GreaterThanOrEqual:
+                case ComparisonOperator.GreaterThanOrEqual:
                     if (CurrentMoonIllumination >= UserMoonIllumination) { check = false; }
                     break;
             }
