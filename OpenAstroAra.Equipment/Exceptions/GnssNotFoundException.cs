@@ -27,9 +27,5 @@ namespace OpenAstroAra.Equipment.Exceptions {
         }
 
         public GnssNotFoundException(string message, Exception innerException) : base(message, innerException) {
-        }
-
-        protected GnssNotFoundException(SerializationInfo info, StreamingContext context) : base(info, context) {
-        }
-    }
+        }    }
 }

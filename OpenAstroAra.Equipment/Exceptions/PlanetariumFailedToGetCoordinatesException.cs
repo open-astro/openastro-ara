@@ -27,9 +27,5 @@ namespace OpenAstroAra.Equipment.Exceptions {
         }
 
         public PlanetariumFailedToGetCoordinatesException(string message, Exception innerException) : base(message, innerException) {
-        }
-
-        protected PlanetariumFailedToGetCoordinatesException(SerializationInfo info, StreamingContext context) : base(info, context) {
-        }
-    }
+        }    }
 }

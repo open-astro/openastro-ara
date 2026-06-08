@@ -27,9 +27,5 @@ namespace OpenAstroAra.Equipment.Exceptions {
         }
 
         public GnssNoFixException(string message, Exception innerException) : base(message, innerException) {
-        }
-
-        protected GnssNoFixException(SerializationInfo info, StreamingContext context) : base(info, context) {
-        }
-    }
+        }    }
 }

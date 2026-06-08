@@ -27,9 +27,5 @@ namespace OpenAstroAra.Equipment.Exceptions {
         }
 
         public CameraConnectionLostException(string message, Exception innerException) : base(message, innerException) {
-        }
-
-        protected CameraConnectionLostException(SerializationInfo info, StreamingContext context) : base(info, context) {
-        }
-    }
+        }    }
 }

@@ -27,9 +27,5 @@ namespace OpenAstroAra.Equipment.Exceptions {
         }
 
         public PlanetariumFailedToConnectException(string message, Exception innerException) : base(message, innerException) {
-        }
-
-        protected PlanetariumFailedToConnectException(SerializationInfo info, StreamingContext context) : base(info, context) {
-        }
-    }
+        }    }
 }

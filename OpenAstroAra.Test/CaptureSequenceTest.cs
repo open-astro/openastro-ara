@@ -132,7 +132,7 @@ namespace OpenAstroAra.Test {
             Assert.That(l.Coordinates.Dec, Is.EqualTo(expected).Within(0.000001), "Coordinates failed");
             Assert.That(l.DecDegrees, Is.EqualTo(decDegrees).Within(0.000001), "Degrees failed");
             Assert.That(l.DecMinutes, Is.EqualTo(Math.Abs(decMinutes)).Within(0.000001), "Minutes failed");
-            ClassicAssert.AreEqual(Math.Abs(decSeconds), l.DecSeconds, 0.000001, "Seconds failed");
+            Assert.That(l.DecSeconds, Is.EqualTo(Math.Abs(decSeconds)).Within(0.000001), "Seconds failed");
         }
     }
 

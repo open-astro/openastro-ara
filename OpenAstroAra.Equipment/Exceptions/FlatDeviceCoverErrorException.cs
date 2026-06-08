@@ -27,9 +27,5 @@ namespace OpenAstroAra.Equipment.Exceptions {
         }
 
         public FlatDeviceCoverErrorException(string message, Exception innerException) : base(message, innerException) {
-        }
-
-        protected FlatDeviceCoverErrorException(SerializationInfo info, StreamingContext context) : base(info, context) {
-        }
-    }
+        }    }
 }

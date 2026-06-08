@@ -26,11 +26,7 @@ namespace OpenAstroAra.Core.Utility.SerialCommunication {
         }
 
         public SerialPortClosedException(string message, Exception innerException) : base(message, innerException) {
-        }
-
-        protected SerialPortClosedException(System.Runtime.Serialization.SerializationInfo serializationInfo, System.Runtime.Serialization.StreamingContext streamingContext) : base(serializationInfo, streamingContext) {
-        }
-    }
+        }    }
 
     [Serializable]
     public class InvalidDeviceResponseException : Exception {
@@ -42,9 +38,5 @@ namespace OpenAstroAra.Core.Utility.SerialCommunication {
         }
 
         public InvalidDeviceResponseException(string message, Exception innerException) : base(message, innerException) {
-        }
-
-        protected InvalidDeviceResponseException(System.Runtime.Serialization.SerializationInfo serializationInfo, System.Runtime.Serialization.StreamingContext streamingContext) : base(serializationInfo, streamingContext) {
-        }
-    }
+        }    }
 }
