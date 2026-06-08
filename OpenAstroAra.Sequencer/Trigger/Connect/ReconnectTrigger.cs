@@ -136,7 +136,7 @@ namespace OpenAstroAra.Sequencer.Trigger.Connect {
 
         public override async Task Execute(ISequenceContainer context, IProgress<ApplicationStatus> progress, CancellationToken token) {
             await TriggerRunner.Run(progress, token);
-            if (ConnectEquipmentInstruction.Status == Core.Enum.SequenceEntityStatus.FAILED) {
+            if (ConnectEquipmentInstruction.Status == Core.Enums.SequenceEntityStatus.FAILED) {
                 throw new Exception($"Failed to connect to {ConnectEquipmentInstruction.SelectedDevice}");
             }
         }

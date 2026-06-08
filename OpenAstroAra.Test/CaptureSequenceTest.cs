@@ -12,7 +12,7 @@
 using NUnit.Framework;
 using NUnit.Framework.Legacy;
 using OpenAstroAra.Astrometry;
-using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Core.Model.Equipment;
 using OpenAstroAra.Equipment.Equipment.MyCamera;
 using OpenAstroAra.Equipment.Equipment.MyFilterWheel;

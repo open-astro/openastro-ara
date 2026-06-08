@@ -16,7 +16,7 @@ using OpenAstroAra.Core.Utility;
 using System;
 using System.ComponentModel;
 
-namespace OpenAstroAra.Core.Enum {
+namespace OpenAstroAra.Core.Enums {
 
     [TypeConverter(typeof(EnumDescriptionTypeConverter))]
     public enum FileType {
@@ -30,10 +30,10 @@ namespace OpenAstroAra.Core.Enum {
         [Description("LblXisf")]
         XISF,
 
-        [Obsolete]
+        [Obsolete("Compressed TIFF variants are no longer written; use TIFF or XISF.")]
         TIFFZip,
 
-        [Obsolete]
+        [Obsolete("Compressed TIFF variants are no longer written; use TIFF or XISF.")]
         TIFFLzw,
 
         RAW

@@ -13,7 +13,7 @@
 #endregion "copyright"
 
 using OpenAstroAra.Astrometry;
-using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Enums;
 using System;
 using System.Collections.Generic;
 using System.Threading;

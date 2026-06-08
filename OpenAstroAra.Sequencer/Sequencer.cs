@@ -168,7 +168,7 @@ namespace OpenAstroAra.Sequencer {
 
             if (container is IConditionable conditionable) {
                 foreach (var condition in conditionable.GetConditionsSnapshot()) {
-                    if (condition.Status != Core.Enum.SequenceEntityStatus.DISABLED && condition is IValidatable v) {
+                    if (condition.Status != Core.Enums.SequenceEntityStatus.DISABLED && condition is IValidatable v) {
                         v.Validate();
                         issues.AddRange(v.Issues);
                     }
@@ -177,7 +177,7 @@ namespace OpenAstroAra.Sequencer {
 
             if (container is ITriggerable triggerable) {
                 foreach (var trigger in triggerable.GetTriggersSnapshot()) {
-                    if (trigger.Status != Core.Enum.SequenceEntityStatus.DISABLED && trigger is IValidatable v) {
+                    if (trigger.Status != Core.Enums.SequenceEntityStatus.DISABLED && trigger is IValidatable v) {
                         v.Validate();
                         issues.AddRange(v.Issues);
                     }
@@ -185,12 +185,12 @@ namespace OpenAstroAra.Sequencer {
             }
 
             foreach (var item in container.GetItemsSnapshot()) {
-                if (item.Status != Core.Enum.SequenceEntityStatus.DISABLED && item is IValidatable v) {
+                if (item.Status != Core.Enums.SequenceEntityStatus.DISABLED && item is IValidatable v) {
                     v.Validate();
                     issues.AddRange(v.Issues);
                 }
 
-                if (item is ISequenceContainer childContainer && !(item is IImmutableContainer) && item.Status != Core.Enum.SequenceEntityStatus.DISABLED) {
+                if (item is ISequenceContainer childContainer && !(item is IImmutableContainer) && item.Status != Core.Enums.SequenceEntityStatus.DISABLED) {
                     // The immutablecontainer is excluded as it will itself validate the things of its children
                     issues.AddRange(Validate(childContainer));
                 }

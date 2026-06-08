@@ -14,7 +14,7 @@
 
 using Newtonsoft.Json;
 using OpenAstroAra.Astrometry;
-using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Equipment.Equipment.MyGuider.SkyGuard.SkyGuardMessages;
 using OpenAstroAra.Profile.Interfaces;

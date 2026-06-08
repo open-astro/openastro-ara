@@ -12,7 +12,7 @@
 using FluentAssertions;
 using NUnit.Framework;
 using NUnit.Framework.Legacy;
-using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Core.Interfaces;
 using OpenAstroAra.Equipment.Equipment;
 using OpenAstroAra.Equipment.Equipment.MyGuider;

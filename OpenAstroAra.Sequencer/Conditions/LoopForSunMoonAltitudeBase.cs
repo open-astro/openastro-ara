@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
     using Newtonsoft.Json;
     using OpenAstroAra.Astrometry;
-    using OpenAstroAra.Core.Enum;
+    using OpenAstroAra.Core.Enums;
     using OpenAstroAra.Core.Locale;
     using OpenAstroAra.Core.Model;
     using OpenAstroAra.Core.Utility;

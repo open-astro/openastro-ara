@@ -1,4 +1,4 @@
-using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Enums;
 using System;
 using System.Collections.Generic;
 using System.Linq;

@@ -15,10 +15,12 @@
 using OpenAstroAra.Core.Utility;
 using System.ComponentModel;
 
-namespace OpenAstroAra.Core.Enum {
+namespace OpenAstroAra.Core.Enums {
 
     [TypeConverter(typeof(EnumDescriptionTypeConverter))]
     public enum Dc3PoinPointCatalog {
+
+        None = 0,
 
         [Description("LblPinPointCatGscact")]
         ppGSCACT = 3,

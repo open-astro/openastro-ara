@@ -14,7 +14,7 @@
 
 using Ionic.Zlib;
 using K4os.Compression.LZ4;
-using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Core.Locale;
 using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Core.Utility.Notification;

@@ -77,7 +77,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
 
         public override void ResetProgress() {
             CompletedIterations = 0;
-            Status = Core.Enum.SequenceEntityStatus.CREATED;
+            Status = Core.Enums.SequenceEntityStatus.CREATED;
         }
 
         public override void SequenceBlockFinished() {

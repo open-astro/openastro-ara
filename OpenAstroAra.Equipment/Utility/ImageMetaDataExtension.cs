@@ -12,7 +12,7 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Equipment.Equipment.MyCamera;
 using OpenAstroAra.Equipment.Equipment.MyFilterWheel;
 using OpenAstroAra.Equipment.Equipment.MyFocuser;

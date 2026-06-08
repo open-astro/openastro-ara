@@ -14,7 +14,7 @@
 
 using Accord.Statistics.Distributions.Univariate;
 using OpenAstroAra.Astrometry;
-using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Core.Interfaces;
 using OpenAstroAra.Core.Locale;
 using OpenAstroAra.Core.Model;

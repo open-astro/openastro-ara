@@ -14,7 +14,7 @@
 
 using Accord.Math;
 using OpenAstroAra.Astrometry;
-using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Core.Locale;
 using OpenAstroAra.Core.Utility.Notification;
 using OpenAstroAra.Equipment.Interfaces;

@@ -13,7 +13,7 @@
 #endregion "copyright"
 
 using OpenAstroAra.Astrometry;
-using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Core.Locale;
 using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Sequencer.Container;
@@ -343,7 +343,7 @@ namespace OpenAstroAra.Sequencer.Utility {
             double dec = coord.Dec;
             var altaz = coord.Transform(Angle.ByDegree(latitude), Angle.ByDegree(longitude), elevation, time);
             double currentAltitude = altaz.Altitude.Degree;
-            bool isRising = altaz.AltitudeSite == Core.Enum.AltitudeSite.EAST;
+            bool isRising = altaz.AltitudeSite == Core.Enums.AltitudeSite.EAST;
 
             // Determine when the star is in the south (meridian)
             double gmst0 = Rev(180.0 + 356.0470 + 282.9404 + (0.9856002585 + 4.70935E-5) * ReferenceDays(longitude));

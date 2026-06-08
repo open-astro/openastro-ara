@@ -17,7 +17,7 @@ using System.ComponentModel;
 using System.Globalization;
 using System.Reflection;
 
-namespace OpenAstroAra.Core.Enum {
+namespace OpenAstroAra.Core.Enums {
 
     /// <summary>
     /// TypeConverter that maps an enum value to the string in its

@@ -16,7 +16,7 @@ using Newtonsoft.Json;
 using Nito.AsyncEx;
 using OpenAstroAra.Astrometry;
 using OpenAstroAra.Astrometry.RiseAndSet;
-using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Core.Locale;
 using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Sequencer.SequenceItem.Utility;

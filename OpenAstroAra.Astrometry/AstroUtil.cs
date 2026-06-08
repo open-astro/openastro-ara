@@ -14,7 +14,7 @@
 
 using Nito.AsyncEx;
 using OpenAstroAra.Astrometry.RiseAndSet;
-using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Profile;
 using System;
