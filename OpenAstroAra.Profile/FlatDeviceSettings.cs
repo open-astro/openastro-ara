@@ -132,9 +132,9 @@ namespace OpenAstroAra.Profile {
         }
 
         [NonSerialized]
-#pragma warning disable CS0612 // obsolete key/value types retained for migration
+#pragma warning disable CS0612, CS0618 // obsolete key/value types retained for migration
         private ObservableDictionary<FlatDeviceFilterSettingsKey, FlatDeviceFilterSettingsValue> filterSettings = new();
-#pragma warning restore CS0612
+#pragma warning restore CS0612, CS0618
 
         [DataMember]
         [Obsolete("Superseded by TrainedFlatExposureSettings")]

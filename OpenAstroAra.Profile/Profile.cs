@@ -224,10 +224,7 @@ namespace OpenAstroAra.Profile {
         }
 
         [IgnoreDataMember]
-        public string Location {
-            get => Path.Combine(CoreUtil.APPLICATIONTEMPPATH, "Profiles", $"{Id}.profile");
-            protected set { }
-        }
+        public string Location => Path.Combine(CoreUtil.APPLICATIONTEMPPATH, "Profiles", $"{Id}.profile");
 
         [DataMember]
         public IApplicationSettings ApplicationSettings { get; set; }
