@@ -92,7 +92,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
         }
 
 
-        private object GetMediator() {
+        private object? GetMediator() {
             switch (SelectedDevice) {
                 case "Camera": return cameraMediator;
                 case "Filter Wheel": return fwMediator;
@@ -140,14 +140,14 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
 
             var type = mediator.GetType();
             var GetInfo = type.GetMethod("GetInfo");
-            DeviceInfo info = (DeviceInfo)GetInfo.Invoke(mediator, null);
+            DeviceInfo info = (DeviceInfo)GetInfo!.Invoke(mediator, null)!;
 
 
             if (info.Connected) {
                 var Disconnect = type.GetMethod("Disconnect");
-                await (Task)Disconnect.Invoke(mediator, null);
+                await (Task)Disconnect!.Invoke(mediator, null)!;
 
-                DeviceInfo infoAfterConnect = (DeviceInfo)GetInfo.Invoke(mediator, null);
+                DeviceInfo infoAfterConnect = (DeviceInfo)GetInfo!.Invoke(mediator, null)!;
                 var success = !infoAfterConnect.Connected;
                 if (!success) {
                     throw new Exception($"Failed to disconnect to {SelectedDevice}");

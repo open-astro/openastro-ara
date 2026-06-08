@@ -315,7 +315,7 @@ namespace OpenAstroAra.Sequencer {
         public void AfterParentChanged() {
         }
 
-        public void AttachNewParent(ISequenceContainer newParent) {
+        public void AttachNewParent(ISequenceContainer? newParent) {
         }
 
         public void Detach() {

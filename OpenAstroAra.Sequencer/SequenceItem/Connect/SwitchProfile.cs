@@ -150,14 +150,14 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
 
                 var type = mediator.GetType();
                 var GetInfo = type.GetMethod("GetInfo");
-                DeviceInfo info = (DeviceInfo)GetInfo.Invoke(mediator, null);
+                DeviceInfo info = (DeviceInfo)GetInfo!.Invoke(mediator, null)!;
 
 
                 if (info.Connected) {
                     var Disconnect = type.GetMethod("Disconnect");
-                    await (Task)Disconnect.Invoke(mediator, null);
+                    await (Task)Disconnect!.Invoke(mediator, null)!;
 
-                    DeviceInfo infoAfterConnect = (DeviceInfo)GetInfo.Invoke(mediator, null);
+                    DeviceInfo infoAfterConnect = (DeviceInfo)GetInfo!.Invoke(mediator, null)!;
                     var success = !infoAfterConnect.Connected;
                     if (!success) {
                         errors.Add(new Exception($"Failed to disconnect to {device}"));
@@ -189,13 +189,13 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
                             var type = mediator.GetType();
                             var GetInfo = type.GetMethod("GetInfo");
                             var Rescan = type.GetMethod("Rescan");
-                            var devices = await (Task<IList<string>>)Rescan.Invoke(mediator, null);
+                            var devices = await (Task<IList<string>>)Rescan!.Invoke(mediator, null)!;
 
                             if (devices.Contains(profileId)) {
                                 var Connect = type.GetMethod("Connect");
-                                var success = await (Task<bool>)Connect.Invoke(mediator, null);
+                                var success = await (Task<bool>)Connect!.Invoke(mediator, null)!;
 
-                                DeviceInfo infoAfterConnect = (DeviceInfo)GetInfo.Invoke(mediator, null);
+                                DeviceInfo infoAfterConnect = (DeviceInfo)GetInfo!.Invoke(mediator, null)!;
                                 success = success && infoAfterConnect.Connected;
                                 if (!success) {
                                     errors.Add(new Exception($"Failed to connect to {device}"));
@@ -217,7 +217,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
 
             var type = mediator.GetType();
             var GetInfo = type.GetMethod("GetInfo");
-            DeviceInfo info = (DeviceInfo)GetInfo.Invoke(mediator, null);
+            DeviceInfo info = (DeviceInfo)GetInfo!.Invoke(mediator, null)!;
             return info.Connected;
         }
 

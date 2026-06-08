@@ -34,7 +34,7 @@ namespace OpenAstroAra.Sequencer.Trigger {
         /// <param name="previousItem">The previous instruction that was executed</param>
         /// <param name="nextItem">The next instruction that will be executed next</param>
         /// <returns></returns>
-        bool ShouldTrigger(ISequenceItem previousItem, ISequenceItem nextItem);
+        bool ShouldTrigger(ISequenceItem? previousItem, ISequenceItem? nextItem);
 
         /// <summary>
         /// After each Sequence Item is executed this method will be called to determine if the trigger should be executed
@@ -42,7 +42,7 @@ namespace OpenAstroAra.Sequencer.Trigger {
         /// <param name="previousItem">The previous instruction that was executed</param>
         /// <param name="nextItem">The next instruction that will be executed next</param>
         /// <returns></returns>
-        bool ShouldTriggerAfter(ISequenceItem previousItem, ISequenceItem nextItem);
+        bool ShouldTriggerAfter(ISequenceItem? previousItem, ISequenceItem? nextItem);
 
         /// <summary>
         /// Runs the actual trigger logic

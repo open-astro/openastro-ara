@@ -130,7 +130,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem {
             //Hook for behavior when parent changes
         }
 
-        public void AttachNewParent(ISequenceContainer newParent) {
+        public void AttachNewParent(ISequenceContainer? newParent) {
             Parent = newParent;
 
             AfterParentChanged();

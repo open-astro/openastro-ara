@@ -123,14 +123,14 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
 
                 var type = mediator.GetType();
                 var GetInfo = type.GetMethod("GetInfo");
-                DeviceInfo info = (DeviceInfo)GetInfo.Invoke(mediator, null);
+                DeviceInfo info = (DeviceInfo)GetInfo!.Invoke(mediator, null)!;
 
 
                 if (info.Connected) {
                     var Disconnect = type.GetMethod("Disconnect");
-                    await (Task)Disconnect.Invoke(mediator, null);
+                    await (Task)Disconnect!.Invoke(mediator, null)!;
 
-                    DeviceInfo infoAfterConnect = (DeviceInfo)GetInfo.Invoke(mediator, null);
+                    DeviceInfo infoAfterConnect = (DeviceInfo)GetInfo!.Invoke(mediator, null)!;
                     var success = !infoAfterConnect.Connected;
                     if (!success) {
                         errors.Add(new Exception($"Failed to disconnect from {device}"));

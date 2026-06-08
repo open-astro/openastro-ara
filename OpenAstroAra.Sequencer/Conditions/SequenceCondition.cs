@@ -96,13 +96,13 @@ namespace OpenAstroAra.Sequencer.Conditions {
         public virtual void AfterParentChanged() {
         }
 
-        public void AttachNewParent(ISequenceContainer newParent) {
+        public void AttachNewParent(ISequenceContainer? newParent) {
             Parent = newParent;
 
             AfterParentChanged();
         }
 
-        public bool RunCheck(ISequenceItem previousItem, ISequenceItem nextItem) {
+        public bool RunCheck(ISequenceItem? previousItem, ISequenceItem? nextItem) {
             if (this.Status == SequenceEntityStatus.DISABLED) { return false; }
 
             var root = ItemUtility.GetRootContainer(this.Parent);

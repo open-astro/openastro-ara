@@ -96,7 +96,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
             }
         }
 
-        private object GetMediator() {
+        private object? GetMediator() {
             switch (SelectedDevice) {
                 case "Camera": return cameraMediator;
                 case "Filter Wheel": return fwMediator;
@@ -114,7 +114,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
             }
         }
 
-        public string GetProfileId() {
+        public string? GetProfileId() {
             switch (SelectedDevice) {
                 case "Camera": return profileService.ActiveProfile.CameraSettings.Id;
                 case "Filter Wheel": return profileService.ActiveProfile.FilterWheelSettings.Id;
@@ -164,17 +164,18 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
             if (!IsConnected()) {
                 var profileId = GetProfileId();
                 var mediator = GetMediator();
+                if (mediator == null) { return; }
 
                 var type = mediator.GetType();
                 var GetInfo = type.GetMethod("GetInfo");
                 var Rescan = type.GetMethod("Rescan");
-                var devices = await (Task<IList<string>>)Rescan.Invoke(mediator, null);
+                var devices = await (Task<IList<string>>)Rescan!.Invoke(mediator, null)!;
 
                 if (devices.Contains(profileId)) {
                     var Connect = type.GetMethod("Connect");
-                    var success = await (Task<bool>)Connect.Invoke(mediator, null);
+                    var success = await (Task<bool>)Connect!.Invoke(mediator, null)!;
 
-                    DeviceInfo infoAfterConnect = (DeviceInfo)GetInfo.Invoke(mediator, null);
+                    DeviceInfo infoAfterConnect = (DeviceInfo)GetInfo!.Invoke(mediator, null)!;
                     success = success && infoAfterConnect.Connected;
                     if (!success) {
                         throw new Exception($"Failed to connect to {SelectedDevice}");
@@ -189,10 +190,11 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
 
         public bool IsConnected() {
             var mediator = GetMediator();
+            if (mediator == null) { return false; }
 
             var type = mediator.GetType();
             var GetInfo = type.GetMethod("GetInfo");
-            DeviceInfo info = (DeviceInfo)GetInfo.Invoke(mediator, null);
+            DeviceInfo info = (DeviceInfo)GetInfo!.Invoke(mediator, null)!;
             return info.Connected;
         }
 

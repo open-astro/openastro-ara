@@ -24,7 +24,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
 
         bool Remove(ISequenceCondition condition);
 
-        bool CheckConditions(ISequenceItem previousItem, ISequenceItem nextItem);
+        bool CheckConditions(ISequenceItem? previousItem, ISequenceItem? nextItem);
 
         void ResetConditions();
 

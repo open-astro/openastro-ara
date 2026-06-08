@@ -20,7 +20,7 @@ namespace OpenAstroAra.Sequencer.DragDrop {
     public interface IDroppable {
         ISequenceContainer Parent { get; }
 
-        void AttachNewParent(ISequenceContainer newParent);
+        void AttachNewParent(ISequenceContainer? newParent);
 
         void AfterParentChanged();
 

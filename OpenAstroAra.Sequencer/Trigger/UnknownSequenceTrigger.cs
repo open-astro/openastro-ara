@@ -52,7 +52,7 @@ namespace OpenAstroAra.Sequencer.Trigger {
             throw new SequenceItemSkippedException($"Unknown trigger will be skipped - ${Name}");
         }
 
-        public override bool ShouldTrigger(ISequenceItem previousItem, ISequenceItem nextItem) {
+        public override bool ShouldTrigger(ISequenceItem? previousItem, ISequenceItem? nextItem) {
             return false;
         }
 

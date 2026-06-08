@@ -30,7 +30,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
         /// <param name="previousItem">The previous instruction that was executed</param>
         /// <param name="nextItem">The next item that is scheduled to be processed</param>
         /// <returns></returns>
-        bool RunCheck(ISequenceItem previousItem, ISequenceItem nextItem);
+        bool RunCheck(ISequenceItem? previousItem, ISequenceItem? nextItem);
 
         /// <summary>
         /// Resets the progress of the condition. For example when nested in a container that restarts itself the condition needs to be reset

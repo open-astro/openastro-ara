@@ -148,15 +148,15 @@ namespace OpenAstroAra.Sequencer.Trigger {
         public virtual void AfterParentChanged() {
         }
 
-        public void AttachNewParent(ISequenceContainer newParent) {
+        public void AttachNewParent(ISequenceContainer? newParent) {
             Parent = newParent;
 
             AfterParentChanged();
         }
 
-        public abstract bool ShouldTrigger(ISequenceItem previousItem, ISequenceItem nextItem);
+        public abstract bool ShouldTrigger(ISequenceItem? previousItem, ISequenceItem? nextItem);
 
-        public virtual bool ShouldTriggerAfter(ISequenceItem previousItem, ISequenceItem nextItem) {
+        public virtual bool ShouldTriggerAfter(ISequenceItem? previousItem, ISequenceItem? nextItem) {
             return false;
         }
 

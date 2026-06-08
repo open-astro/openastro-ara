@@ -128,7 +128,7 @@ namespace OpenAstroAra.Sequencer.Trigger.Connect {
             return $"Category: {Category}, Item: {nameof(ReconnectTrigger)}, Selected device: {connectEquipmentInstruction.SelectedDevice}, Selected device id: {connectEquipmentInstruction.GetProfileId()}";
         }
 
-        public override bool ShouldTrigger(ISequenceItem previousItem, ISequenceItem nextItem) {
+        public override bool ShouldTrigger(ISequenceItem? previousItem, ISequenceItem? nextItem) {
             var isConnected = connectEquipmentInstruction.IsConnected();
             Logger.Debug($"The {connectEquipmentInstruction.SelectedDevice} is ${(isConnected ? "connected" : "not connected. Trigger should fire.")}");
             return !isConnected;
