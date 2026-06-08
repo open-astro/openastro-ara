@@ -18,6 +18,7 @@ using OpenAstroAra.Core.Locale;
 using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Core.Utility.Notification;
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
@@ -48,6 +49,8 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.MetaGuide {
         public MetaGuideListener() {
         }
 
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "UDP message-processing boundary: each datagram is parsed and dispatched to arbitrary subscriber event handlers; any handler or malformed-message fault is logged so one bad packet cannot tear down the long-running listen loop. CA1031 sanctions general catches at such recover-and-continue boundaries.")]
         private void ProcessMessage(string[] splitMessage) {
             try {
                 if (splitMessage[0] == "OPENSCI" && splitMessage[1] == "ASTRO" && splitMessage[3] == "MG") {
@@ -170,7 +173,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.MetaGuide {
                     throw;
                 } finally {
                     socket?.Close();
-                    try { consumerTokenSource?.Cancel(); } catch { }
+                    try { consumerTokenSource?.Cancel(); } catch (ObjectDisposedException) { }
                     consumerTask?.WaitWithoutException(new CancellationTokenSource(METAGUIDE_QUEUE_TIMEOUT_MS).Token);
                     this.OnDisconnected?.Invoke(this, System.EventArgs.Empty);
                 }

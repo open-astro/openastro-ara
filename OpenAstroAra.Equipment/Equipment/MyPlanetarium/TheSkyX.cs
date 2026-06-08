@@ -19,6 +19,7 @@ using OpenAstroAra.Equipment.Exceptions;
 using OpenAstroAra.Equipment.Interfaces;
 using OpenAstroAra.Profile.Interfaces;
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
@@ -128,6 +129,8 @@ namespace OpenAstroAra.Equipment.Equipment.MyPlanetarium {
             }
         }
 
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "Planetarium-query boundary: querying TheSkyX over a socket and parsing its reply may fail in many ways (socket/IO faults, malformed reply, parse errors). On any failure the method returns a double.NaN sentinel rather than propagating, so a transient planetarium issue does not abort the caller. CA1031 sanctions general catches at such recover-with-sentinel boundaries.")]
         public async Task<double> GetRotationAngle() {
             try {
                 double rotationAngle = double.NaN;

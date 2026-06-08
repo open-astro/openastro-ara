@@ -21,6 +21,7 @@ using OpenAstroAra.Equipment.Exceptions;
 using OpenAstroAra.Equipment.Interfaces;
 using OpenAstroAra.Profile.Interfaces;
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Collections.Generic;
 using System.IO;
@@ -157,6 +158,8 @@ namespace OpenAstroAra.Equipment.Equipment.MyGPS {
         /// <summary>
         /// this finds a suitable comport, connects and listens for GPS sentences
         /// </summary>
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "Serial-port scan boundary: the loop probes every COM port and baud rate for an NMEA GNSS device. Expected faults (timeout, non-NMEA data, access denied, IO, cancellation) are handled specifically; the trailing general catch logs any other per-port failure and continues scanning so one bad port cannot abort discovery. CA1031 sanctions general catches at such recover-and-continue boundaries.")]
         private async Task<System.IO.Ports.SerialPort?> FindPort(CancellationToken token) {
             string[] allPorts = GetComPorts();
             int[,] portRates = new int[allPorts.Length, 7];

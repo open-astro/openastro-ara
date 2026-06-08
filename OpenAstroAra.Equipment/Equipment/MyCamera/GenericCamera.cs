@@ -9,12 +9,15 @@ using OpenAstroAra.Image.Interfaces;
 using OpenAstroAra.Profile.Interfaces;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace OpenAstroAra.Equipment.Equipment.MyCamera {
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Native camera-SDK interaction boundary: GenericCamera wraps an arbitrary IGenericCameraSDK whose Connect/Disconnect/Stop/Abort/GetExposure calls may throw any SDK/native exception type. These catches log or swallow at the SDK boundary so a driver fault cannot crash the camera lifecycle (failed download leaves data null; stop/abort are best-effort). CA1031 sanctions general catches at such recover-and-continue boundaries.")]
     public class GenericCamera : BaseINPC, ICamera {
         private IGenericCameraSDK sdk;
         protected IProfileService profileService;
