@@ -36,7 +36,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGPS {
     /// NMEA GPS Class detects comport based NMEA GPS Devices
     /// Flow : construct -> Autodiscover [detect, Connect, listens to messages]
     /// </summary>
-    public partial class NMEAGps() : BaseINPC, IGnss, IDisposable {
+    public sealed partial class NMEAGps() : BaseINPC, IGnss, IDisposable {
         private string portName = string.Empty;
         private int baudRate;
         private System.Timers.Timer? fixTimer;
@@ -100,6 +100,8 @@ namespace OpenAstroAra.Equipment.Equipment.MyGPS {
             gotGPSFix?.TrySetResult(gpsResponse);
         }
 
+        [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
+            Justification = "Ownership of the SerialPort is transferred to the SerialPortDevice, which is stored in currentDevice and disposed in Disconnect()/Dispose(). Disposing the SerialPort here would close the port the device still uses.")]
         public async Task<Location> GetLocation(CancellationToken token) {
             if (!await AutoDiscover(token)) {
                 throw new GnssNotFoundException($"{Name} was not found on any accessible COM port");
@@ -145,14 +147,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGPS {
         }
 
         private static string[] GetComPorts() {
-            var ports = System.IO.Ports.SerialPort.GetPortNames().OrderBy(s => s);
-            string[] ret = new string[ports.Count()];
-            int i = 0;
-
-            foreach (var cportName in ports)
-                ret[i++] = cportName;
-
-            return ret;
+            return System.IO.Ports.SerialPort.GetPortNames().OrderBy(s => s).ToArray();
         }
 
         /// <summary>
@@ -162,13 +157,14 @@ namespace OpenAstroAra.Equipment.Equipment.MyGPS {
             Justification = "Serial-port scan boundary: the loop probes every COM port and baud rate for an NMEA GNSS device. Expected faults (timeout, non-NMEA data, access denied, IO, cancellation) are handled specifically; the trailing general catch logs any other per-port failure and continues scanning so one bad port cannot abort discovery. CA1031 sanctions general catches at such recover-and-continue boundaries.")]
         private async Task<System.IO.Ports.SerialPort?> FindPort(CancellationToken token) {
             string[] allPorts = GetComPorts();
-            int[,] portRates = new int[allPorts.Length, 7];
+            int[][] portRates = new int[allPorts.Length][];
 
             Logger.Info($"Searching for {Name} on {string.Join(", ", allPorts)}");
 
             // set port / baud test precedence
             for (int pnum = 0; pnum < allPorts.Length; pnum++) {
                 List<int> baudRatesToTest = new(baudRates);
+                portRates[pnum] = new int[7];
 
                 string cportName = allPorts[pnum];
                 using var port = new System.IO.Ports.SerialPort(cportName);
@@ -178,7 +174,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGPS {
                 baudRatesToTest.Insert(0, defaultRate);
 
                 for (int bnum = 0; bnum < baudRatesToTest.Count; bnum++)
-                    portRates[pnum, bnum] = baudRatesToTest[bnum];
+                    portRates[pnum][bnum] = baudRatesToTest[bnum];
             }
 
             // use computed precedences to test the ports
@@ -186,7 +182,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGPS {
                 for (var pnum = 0; pnum < allPorts.Length; pnum++) {
                     token.ThrowIfCancellationRequested();
                     string cportName = allPorts[pnum];
-                    int baud = portRates[pnum, bnum];
+                    int baud = portRates[pnum][bnum];
 
                     Logger.Debug($"Testing port {cportName} at {baud} baud");
 
@@ -247,6 +243,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGPS {
 
         public void Dispose() {
             if (connected) Disconnect();
+            GC.SuppressFinalize(this);
         }
 
         /// <summary>

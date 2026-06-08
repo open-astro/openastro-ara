@@ -32,7 +32,7 @@ using System.Threading.Tasks;
 
 namespace OpenAstroAra.Equipment.Equipment.MyGuider {
 
-    public class DirectGuider : BaseINPC, IGuider, ITelescopeConsumer {
+    public sealed class DirectGuider : BaseINPC, IGuider, ITelescopeConsumer {
         private readonly IProfileService profileService;
         private readonly ITelescopeMediator telescopeMediator;
 
@@ -322,6 +322,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider {
 
         public void Dispose() {
             this.telescopeMediator.RemoveConsumer(this);
+            GC.SuppressFinalize(this);
         }
 
         public void SetupDialog() {
