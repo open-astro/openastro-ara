@@ -53,7 +53,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Focuser {
 
         private IFocuserMediator focuserMediator;
 
-        private int relativePosition = 0;
+        private int relativePosition;
 
         [JsonProperty]
         public int RelativePosition {

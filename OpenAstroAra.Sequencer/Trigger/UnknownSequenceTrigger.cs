@@ -26,7 +26,7 @@ using System.Threading.Tasks;
 
 namespace OpenAstroAra.Sequencer.Trigger {
 
-    internal class UnknownSequenceTrigger : SequenceTrigger, IValidatable {
+    internal sealed class UnknownSequenceTrigger : SequenceTrigger, IValidatable {
 
         public UnknownSequenceTrigger() {
         }

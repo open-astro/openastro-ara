@@ -34,6 +34,6 @@ namespace OpenAstroAra.Sequencer.DragDrop {
         public IDroppable? Target { get; set; }
         public DropTarget? Position { get; set; }
 
-        public bool Duplicate { get; set; } = false;
+        public bool Duplicate { get; set; }
     }
 }

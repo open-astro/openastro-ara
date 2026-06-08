@@ -50,7 +50,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Camera {
 
         private ICameraMediator cameraMediator;
 
-        private bool onOff = false;
+        private bool onOff;
 
         [JsonProperty]
         public bool OnOff {

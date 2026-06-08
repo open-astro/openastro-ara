@@ -54,7 +54,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Camera {
 
         private ICameraMediator cameraMediator;
 
-        private double temperature = 0;
+        private double temperature;
 
         [JsonProperty]
         public double Temperature {

@@ -23,7 +23,7 @@ using System.Threading.Tasks;
 
 namespace OpenAstroAra.Sequencer.Conditions {
 
-    internal class UnknownSequenceCondition : SequenceCondition, IValidatable {
+    internal sealed class UnknownSequenceCondition : SequenceCondition, IValidatable {
 
         public UnknownSequenceCondition() {
         }

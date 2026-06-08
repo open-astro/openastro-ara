@@ -79,7 +79,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Focuser {
             }
         }
 
-        private double intercept = 0;
+        private double intercept;
 
         [JsonProperty]
         public double Intercept {

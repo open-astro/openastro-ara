@@ -52,7 +52,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Rotator {
 
         private IRotatorMediator rotatorMediator;
 
-        private float mechanicalPosition = 0;
+        private float mechanicalPosition;
 
         [JsonProperty]
         public float MechanicalPosition {
