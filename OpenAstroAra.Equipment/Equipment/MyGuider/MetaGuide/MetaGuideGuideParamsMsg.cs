@@ -14,6 +14,7 @@
 
 using OpenAstroAra.Core.Utility;
 using System;
+using System.Globalization;
 
 namespace OpenAstroAra.Equipment.Equipment.MyGuider.MetaGuide {
 
@@ -28,15 +29,15 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.MetaGuide {
             }
             try {
                 return new MetaGuideGuideParamsMsg() {
-                    RARate = double.Parse(args[5]),
-                    DECRate = double.Parse(args[6]),
-                    RAAggressiveness = double.Parse(args[7]),
-                    DECAggressiveness = double.Parse(args[8]),
-                    MinMove = double.Parse(args[9]),
-                    MaxMove = double.Parse(args[10]),
-                    DecRev = double.Parse(args[11]),
-                    NorthSouthRev = int.Parse(args[12]),
-                    EastWestRev = int.Parse(args[13])
+                    RARate = double.Parse(args[5], CultureInfo.InvariantCulture),
+                    DECRate = double.Parse(args[6], CultureInfo.InvariantCulture),
+                    RAAggressiveness = double.Parse(args[7], CultureInfo.InvariantCulture),
+                    DECAggressiveness = double.Parse(args[8], CultureInfo.InvariantCulture),
+                    MinMove = double.Parse(args[9], CultureInfo.InvariantCulture),
+                    MaxMove = double.Parse(args[10], CultureInfo.InvariantCulture),
+                    DecRev = double.Parse(args[11], CultureInfo.InvariantCulture),
+                    NorthSouthRev = int.Parse(args[12], CultureInfo.InvariantCulture),
+                    EastWestRev = int.Parse(args[13], CultureInfo.InvariantCulture)
                 };
             } catch (Exception ex) {
                 Logger.Error(ex);

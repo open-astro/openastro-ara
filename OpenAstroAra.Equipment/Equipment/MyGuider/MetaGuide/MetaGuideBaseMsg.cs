@@ -13,6 +13,7 @@
 #endregion "copyright"
 
 using System;
+using System.Globalization;
 using System.Reflection;
 using System.Text;
 
@@ -25,7 +26,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.MetaGuide {
             PropertyInfo[] propertyInfoList = objType.GetProperties();
             StringBuilder result = new StringBuilder();
             foreach (PropertyInfo propertyInfo in propertyInfoList) {
-                result.AppendFormat("{0}={1} ", propertyInfo.Name, propertyInfo.GetValue(this));
+                result.AppendFormat(CultureInfo.InvariantCulture, "{0}={1} ", propertyInfo.Name, propertyInfo.GetValue(this));
             }
 
             return result.ToString();

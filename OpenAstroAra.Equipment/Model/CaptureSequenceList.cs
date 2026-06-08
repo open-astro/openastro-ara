@@ -136,7 +136,7 @@ namespace OpenAstroAra.Equipment.Model {
                     if (filter == null) {
                         filter = filters.Where((f) => f.Position == s.FilterType.Position).FirstOrDefault();
                         if (filter == null) {
-                            Notifier.ShowWarning(string.Format(Loc.Instance["LblFilterNotFoundForPosition"], (s.FilterType.Position + 1)));
+                            Notifier.ShowWarning(string.Format(CultureInfo.CurrentCulture, Loc.Instance["LblFilterNotFoundForPosition"], (s.FilterType.Position + 1)));
                         }
                     }
                     s.FilterType = filter;

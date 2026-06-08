@@ -18,6 +18,7 @@ using OpenAstroAra.Core.Locale;
 using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Core.Utility.Notification;
 using System;
+using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -120,7 +121,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.MetaGuide {
                 }
             } catch (Exception ex) {
                 Logger.Error(ex);
-                Notifier.ShowError(String.Format(Loc.Instance["LblMetaGuideListenerError"], ex.Message));
+                Notifier.ShowError(String.Format(CultureInfo.CurrentCulture, Loc.Instance["LblMetaGuideListenerError"], ex.Message));
             }
         }
 

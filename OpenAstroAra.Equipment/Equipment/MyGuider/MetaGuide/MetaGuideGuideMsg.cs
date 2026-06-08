@@ -14,6 +14,7 @@
 
 using OpenAstroAra.Core.Utility;
 using System;
+using System.Globalization;
 
 namespace OpenAstroAra.Equipment.Equipment.MyGuider.MetaGuide {
 
@@ -28,11 +29,11 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.MetaGuide {
             }
             try {
                 return new MetaGuideGuideMsg() {
-                    SystemTimeInSeconds = double.Parse(args[5]),
-                    SecondsSinceStart = double.Parse(args[6]),
-                    WestPulse = int.Parse(args[7]),
-                    NorthPulse = int.Parse(args[8]),
-                    CalibrationState = (CalibrationState)int.Parse(args[9])
+                    SystemTimeInSeconds = double.Parse(args[5], CultureInfo.InvariantCulture),
+                    SecondsSinceStart = double.Parse(args[6], CultureInfo.InvariantCulture),
+                    WestPulse = int.Parse(args[7], CultureInfo.InvariantCulture),
+                    NorthPulse = int.Parse(args[8], CultureInfo.InvariantCulture),
+                    CalibrationState = (CalibrationState)int.Parse(args[9], CultureInfo.InvariantCulture)
                 };
             } catch (Exception ex) {
                 Logger.Error(ex);

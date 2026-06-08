@@ -15,6 +15,7 @@
 using OpenAstroAra.Core.Model.Equipment;
 using OpenAstroAra.Core.Utility;
 using System;
+using System.Globalization;
 using System.Xml;
 using System.Xml.Serialization;
 
@@ -43,7 +44,7 @@ namespace OpenAstroAra.Equipment.Model {
         }
 
         public override string ToString() {
-            return TotalExposureCount.ToString() + "x" + ExposureTime.ToString() + " " + ImageType;
+            return TotalExposureCount.ToString(CultureInfo.InvariantCulture) + "x" + ExposureTime.ToString(CultureInfo.InvariantCulture) + " " + ImageType;
         }
 
         public CaptureSequence(double exposureTime, string imageType, FilterInfo? filterType, BinningMode binning, int exposureCount) {

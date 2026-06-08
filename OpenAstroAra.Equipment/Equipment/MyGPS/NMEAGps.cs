@@ -21,6 +21,7 @@ using OpenAstroAra.Equipment.Exceptions;
 using OpenAstroAra.Equipment.Interfaces;
 using OpenAstroAra.Profile.Interfaces;
 using System;
+using System.Globalization;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -55,7 +56,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGPS {
 
         private void OnFixTimedEvent(object? source, System.Timers.ElapsedEventArgs e) {
             Disconnect();
-            throw new GnssNoFixException(string.Format(Loc.Instance["LblGnssGgaMissingError"], sentenceWait));
+            throw new GnssNoFixException(string.Format(CultureInfo.CurrentCulture, Loc.Instance["LblGnssGgaMissingError"], sentenceWait));
         }
 
         private bool connected;
@@ -123,7 +124,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGPS {
             if (gpsResponse.HasFix) {
                 return gpsResponse.Location!;
             } else {
-                throw new GnssNoFixException(string.Format(Loc.Instance["LblGnssGgaQualityError"], gpsResponse.FixQuality));
+                throw new GnssNoFixException(string.Format(CultureInfo.CurrentCulture, Loc.Instance["LblGnssGgaQualityError"], gpsResponse.FixQuality));
             }
         }
 

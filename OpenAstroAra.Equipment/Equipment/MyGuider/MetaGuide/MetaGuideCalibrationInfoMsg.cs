@@ -14,6 +14,7 @@
 
 using OpenAstroAra.Core.Utility;
 using System;
+using System.Globalization;
 
 namespace OpenAstroAra.Equipment.Equipment.MyGuider.MetaGuide {
 
@@ -28,12 +29,12 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.MetaGuide {
             }
             try {
                 return new MetaGuideCalibrationInfoMsg() {
-                    WestAngle = double.Parse(args[5]),
-                    Parity = int.Parse(args[6]),
-                    WestX = double.Parse(args[7]),
-                    WestY = double.Parse(args[8]),
-                    NorthX = double.Parse(args[9]),
-                    NorthY = double.Parse(args[10])
+                    WestAngle = double.Parse(args[5], CultureInfo.InvariantCulture),
+                    Parity = int.Parse(args[6], CultureInfo.InvariantCulture),
+                    WestX = double.Parse(args[7], CultureInfo.InvariantCulture),
+                    WestY = double.Parse(args[8], CultureInfo.InvariantCulture),
+                    NorthX = double.Parse(args[9], CultureInfo.InvariantCulture),
+                    NorthY = double.Parse(args[10], CultureInfo.InvariantCulture)
                 };
             } catch (Exception ex) {
                 Logger.Error(ex);
