@@ -34,7 +34,7 @@ namespace OpenAstroAra.Sequencer.Utility.DateTimeProvider {
         }
 
         public string Name { get; } = Loc.Instance["LblNauticalDawn"];
-        public ICustomDateTime DateTime { get; set; } = new SystemDateTime();
+        public ICustomDateTime CustomDateTime { get; set; } = new SystemDateTime();
 
         public DateTime GetDateTime(ISequenceEntity context) {
             var night = nighttimeCalculator.Calculate().NauticalTwilightRiseAndSet?.Rise;
