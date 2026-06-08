@@ -41,7 +41,7 @@ namespace OpenAstroAra.Core.Utility.ExternalCommand {
                 string executableLocation = GetComandFromString(sequenceCompleteCommand);
                 string args = GetArgumentsFromString(sequenceCompleteCommand);
 
-                Process process = new Process();
+                using var process = new Process();
                 process.StartInfo.FileName = executableLocation;
                 process.StartInfo.UseShellExecute = true;
                 process.StartInfo.RedirectStandardOutput = false;
@@ -75,7 +75,11 @@ namespace OpenAstroAra.Core.Utility.ExternalCommand {
                 process.ErrorDataReceived -= errorDataReceivedCallback;
 
                 return process.ExitCode == 0;
-            } catch (Exception e) {
+            } catch (System.ComponentModel.Win32Exception e) {
+                Logger.Error($"Error running command {sequenceCompleteCommand}:", e);
+            } catch (InvalidOperationException e) {
+                Logger.Error($"Error running command {sequenceCompleteCommand}:", e);
+            } catch (IOException e) {
                 Logger.Error($"Error running command {sequenceCompleteCommand}:", e);
             } finally {
                 StatusUpdate(src, "");
@@ -95,7 +99,8 @@ namespace OpenAstroAra.Core.Utility.ExternalCommand {
                 string cmd = GetComandFromString(commandLine);
                 FileInfo fi = new FileInfo(cmd);
                 return fi.Exists;
-            } catch (Exception e) { Logger.Trace(e.Message); }
+            } catch (ArgumentException e) { Logger.Trace(e.Message); }
+            catch (NotSupportedException e) { Logger.Trace(e.Message); }
             return false;
         }
 

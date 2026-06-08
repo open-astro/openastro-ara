@@ -21,7 +21,7 @@ namespace OpenAstroAra.Core.Utility.SerialCommunication {
         private string _deviceResponse = string.Empty;
 
         public string DeviceResponse {
-            protected get => _deviceResponse;
+            get => _deviceResponse;
             set {
                 _deviceResponse = value;
                 ParseResponse(value);

@@ -144,8 +144,8 @@ namespace OpenAstroAra.Core.Utility {
                     var excess = path.Length - MaxPathLength + 1; // +1 for the trailing "_" sentinel
                     var truncatedTargetLen = Math.Max(1, targetName!.Length - excess);
                     if (truncatedTargetLen < targetName.Length) {
-                        var truncated = targetName.Substring(0, truncatedTargetLen) + "_";
-                        var result = path.Substring(0, idx) + truncated + path.Substring(idx + targetName.Length);
+                        var truncated = string.Concat(targetName.AsSpan(0, truncatedTargetLen), "_");
+                        var result = string.Concat(path.AsSpan(0, idx), truncated, path.AsSpan(idx + targetName.Length));
                         if (result.Length <= MaxPathLength) return (result, true);
                         // Fallthrough — even truncated target wasn't enough; trim from the start of
                         // the path as last resort.

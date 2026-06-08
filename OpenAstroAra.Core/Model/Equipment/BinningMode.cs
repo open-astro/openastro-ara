@@ -84,15 +84,12 @@ namespace OpenAstroAra.Core.Model.Equipment {
         public static bool TryParse(string s, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out BinningMode? mode) {
             mode = null;
             if (string.IsNullOrEmpty(s)) return false;
-            try {
-                if (!short.TryParse(s.Split(SEPARATOR)[0], out var x)) return false;
-                if (!short.TryParse(s.Split(SEPARATOR)[1], out var y)) return false;
-                mode = new BinningMode(x, y);
-                return true;
-            } catch (Exception ex) {
-                Logger.Error($"Could not parse binning mode from {s}. {ex}");
-            }
-            return false;
+            var parts = s.Split(SEPARATOR);
+            if (parts.Length < 2) return false;
+            if (!short.TryParse(parts[0], out var x)) return false;
+            if (!short.TryParse(parts[1], out var y)) return false;
+            mode = new BinningMode(x, y);
+            return true;
         }
     }
 }

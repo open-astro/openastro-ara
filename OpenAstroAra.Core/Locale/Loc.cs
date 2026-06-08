@@ -34,7 +34,7 @@ namespace OpenAstroAra.Core.Locale {
             using (MyStopWatch.Measure()) {
                 try {
                     _activeCulture = new CultureInfo(culture);
-                } catch (Exception ex) {
+                } catch (CultureNotFoundException ex) {
                     Logger.Error(ex);
                 }
                 RaiseAllPropertiesChanged();

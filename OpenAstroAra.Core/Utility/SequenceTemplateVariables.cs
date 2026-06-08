@@ -112,7 +112,7 @@ namespace OpenAstroAra.Core.Utility {
                     case '\b': sb.Append("\\b"); break;
                     case '\f': sb.Append("\\f"); break;
                     default:
-                        if (ch < 0x20) sb.Append($"\\u{(int)ch:X4}");
+                        if (ch < 0x20) sb.Append(System.Globalization.CultureInfo.InvariantCulture, $"\\u{(int)ch:X4}");
                         else sb.Append(ch);
                         break;
                 }

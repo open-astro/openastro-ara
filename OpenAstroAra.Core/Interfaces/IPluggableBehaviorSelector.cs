@@ -28,7 +28,7 @@ namespace OpenAstroAra.Core.Interfaces {
 
         T GetBehavior();
 
-        AsyncObservableCollection<T> Behaviors { get; set; }
+        AsyncObservableCollection<T> Behaviors { get; }
 
         T SelectedBehavior { get; set; }
 

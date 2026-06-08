@@ -29,9 +29,12 @@ namespace OpenAstroAra.Core.Utility.Extensions {
                 var stopwatch = Stopwatch.StartNew();
                 try {
                     await f(sender, e);
-                } catch (Exception ex) {
+                }
+#pragma warning disable CA1031 // event fan-out: each subscriber handler can throw any exception; log and continue so one failing handler doesn't stop the others
+                catch (Exception ex) {
                     Logger.Error(ex);
                 }
+#pragma warning restore CA1031
                 stopwatch.Stop();
 
                 if (stopwatch.ElapsedMilliseconds > 1000) {

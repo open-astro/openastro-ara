@@ -31,7 +31,7 @@ namespace OpenAstroAra.Core.Utility.SerialCommunication {
         private ISerialPortProvider? _provider;
 
         public ISerialPortProvider SerialPortProvider {
-            protected get => _provider ?? (_provider = new SerialPortProvider());
+            get => _provider ?? (_provider = new SerialPortProvider());
             set => _provider = value;
         }
 

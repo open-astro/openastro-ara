@@ -22,7 +22,7 @@ namespace OpenAstroAra.Core.Utility.SerialCommunication {
         Task<TResult?> SendCommand<TResult>(ISerialCommand? command) where TResult : Response, new();
 
         ISerialPort? SerialPort { get; set; }
-        ISerialPortProvider SerialPortProvider { set; }
+        ISerialPortProvider SerialPortProvider { get; set; }
 
         bool InitializeSerialPort(string? portName, object client, int baudRate = 9600, Parity parity = Parity.None, int dataBits = 8,
             StopBits stopBits = StopBits.One, Handshake handShake = Handshake.None, bool dtrEnable = false,
