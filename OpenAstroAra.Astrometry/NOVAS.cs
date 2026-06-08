@@ -296,7 +296,7 @@ namespace OpenAstroAra.Astrometry {
             /// </summary>
             public double RadialVelocity;
 
-            public override bool Equals(object obj) {
+            public override bool Equals(object? obj) {
                 throw new NotImplementedException();
             }
 

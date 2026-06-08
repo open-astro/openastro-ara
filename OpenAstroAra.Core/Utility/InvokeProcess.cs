@@ -117,7 +117,8 @@ namespace OpenAstroAra.Core.Utility {
                 return;
             }
             // We couldn't create the process, so raise an exception with the details.
-            throw Marshal.GetExceptionForHR(Marshal.GetHRForLastWin32Error());
+            throw Marshal.GetExceptionForHR(Marshal.GetHRForLastWin32Error())
+                ?? new InvalidOperationException("Failed to create process and no Win32 error was available.");
         }
     }
 }

@@ -78,8 +78,6 @@ namespace OpenAstroAra.Profile {
             badPixelCorrectionThreshold = 60;
 
             zwoAsiMonoBinMode = false;
-
-            ascomCreate32BitData = false;
         }
 
         private string id = string.Empty;
@@ -697,17 +695,12 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private bool ascomCreate32BitData;
-
         [DataMember]
         public bool ASCOMCreate32BitData {
-            get => false; //ascomCreate32BitData;
-            set {
-                //if(ascomCreate32BitData != value) {
-                //    ascomCreate32BitData = value;
-                //    RaisePropertyChanged();
-                //}
-            }
+            // Retained as a serialization no-op for profile back-compat; the
+            // ASCOM 32-bit data path was removed, so this is always false.
+            get => false;
+            set { }
         }
 
         #region GenericCamera

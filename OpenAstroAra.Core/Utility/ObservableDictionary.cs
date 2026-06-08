@@ -9,7 +9,7 @@ namespace OpenAstroAra.Core.Utility {
     /// <summary>
     ///     Based on https://referencesource.microsoft.com/#PresentationFramework/src/Framework/MS/Internal/Annotations/ObservableDictionary.cs
     /// </summary>
-    public class ObservableDictionary<TKey, TValue> : IDictionary<TKey, TValue>, INotifyPropertyChanged {
+    public class ObservableDictionary<TKey, TValue> : IDictionary<TKey, TValue>, INotifyPropertyChanged where TKey : notnull {
         //------------------------------------------------------
         //
         //  Constructors
@@ -198,6 +198,11 @@ namespace OpenAstroAra.Core.Utility {
         /// </summary>
         /// <param name="key">key</param>
         /// <returns>the value stored in this locator part for key</returns>
+        // This dictionary intentionally returns default(TValue) for a missing key
+        // rather than throwing KeyNotFoundException (legacy NINA behavior relied on
+        // by callers), so the getter is nullable and deviates from IDictionary's
+        // non-null indexer contract — CS8766 is expected.
+#pragma warning disable CS8766
         public TValue? this[TKey key] {
             get {
                 if (key == null) {
@@ -207,6 +212,7 @@ namespace OpenAstroAra.Core.Utility {
                 _nameValues.TryGetValue(key, out var value);
                 return value;
             }
+#pragma warning restore CS8766
             set {
                 if (key == null) {
                     throw new ArgumentNullException("key");

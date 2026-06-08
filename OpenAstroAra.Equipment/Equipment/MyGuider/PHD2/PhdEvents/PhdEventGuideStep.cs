@@ -49,9 +49,6 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.PhdEvents {
         [DataMember]
         [JsonProperty]
         private double decDistanceRaw;
-        [DataMember]
-        [JsonProperty]
-        private double decDistanceDisplay;
 
         [DataMember]
         [JsonProperty]

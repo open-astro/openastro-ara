@@ -101,7 +101,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Switch {
             get => selectedSwitch;
             set {
                 selectedSwitch = value;
-                SwitchIndex = (short)(WritableSwitches?.IndexOf(selectedSwitch) ?? -1);
+                SwitchIndex = (short)(selectedSwitch != null ? (WritableSwitches?.IndexOf(selectedSwitch) ?? -1) : -1);
                 RaisePropertyChanged();
             }
         }

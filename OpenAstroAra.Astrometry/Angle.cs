@@ -105,7 +105,7 @@ namespace OpenAstroAra.Astrometry {
                 || ((180 - diffDegrees) - toleranceDegrees) <= EQUALS_EPSILON;
         }
 
-        public override bool Equals(object obj) {
+        public override bool Equals(object? obj) {
             return obj is Angle angle &&
                    Degree == angle.Degree &&
                    ArcMinutes == angle.ArcMinutes &&

@@ -85,14 +85,14 @@ namespace OpenAstroAra.Astrometry {
             }
         }
 
-        public AstroUtil.MoonPhase Phase => AstroUtil.GetMoonPhase(DateTime.Now);
+        public AstroUtil.MoonPhase Phase => AstroUtil.GetMoonPhase(DateTime.Now, new ObserverInfo());
 
         // Phase 0.5p2 net10.0 conversion: WPF Color shade for the moon-icon
         // tinting is client-side concern (Flutter renders the chart). Returning
         // an ARGB hex string preserves the wire format.
         public string Color {
             get {
-                double angle = Math.Abs(AstroUtil.GetMoonPositionAngle(DateTime.Now));
+                double angle = Math.Abs(AstroUtil.GetMoonPositionAngle(DateTime.Now, new ObserverInfo()));
                 byte gray = (byte)(angle * 255 / 180);
                 byte alpha = (byte)(255 - gray);
                 return $"#{alpha:X2}{gray:X2}{gray:X2}{gray:X2}";

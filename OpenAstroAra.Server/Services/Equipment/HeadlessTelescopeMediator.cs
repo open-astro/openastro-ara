@@ -1,3 +1,9 @@
+// Headless server stub: the device-event members in this file satisfy the
+// equipment mediator interfaces but are never raised server-side (the Flutter
+// client drives state over REST/WS), so CS0067 "event is never used" is
+// expected here and intentionally suppressed for the whole file.
+#pragma warning disable CS0067
+
 #region "copyright"
 
 /*

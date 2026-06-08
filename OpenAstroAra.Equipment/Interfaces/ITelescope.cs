@@ -36,7 +36,7 @@ namespace OpenAstroAra.Equipment.Interfaces {
         public double? CustomRightAscensionRate;
         public double? CustomDeclinationRate;
 
-        public override bool Equals(object obj) {
+        public override bool Equals(object? obj) {
             return obj is TrackingRate rate &&
                    TrackingMode == rate.TrackingMode &&
                    CustomRightAscensionRate == rate.CustomRightAscensionRate &&

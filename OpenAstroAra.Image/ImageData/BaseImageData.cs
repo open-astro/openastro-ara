@@ -116,7 +116,7 @@ namespace OpenAstroAra.Image.ImageData {
                 throw;
             } catch (AggregateException ae) {
                 Logger.Error(ae);
-                throw ae.InnerException;
+                throw ae.InnerException ?? ae;
             } catch (Exception ex) {
                 Logger.Error(ex);
                 throw;

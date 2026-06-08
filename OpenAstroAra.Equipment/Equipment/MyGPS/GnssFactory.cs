@@ -29,7 +29,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGPS {
             // PegausAstroUranusMeteo + PrimaLuceLabEagle drivers are
             // vendor-specific impls dropped per Phase 2 Alpaca-only collapse.
             return gnss switch {
-                GnssSourceEnum.NmeaSerial => new NMEAGps(profileService),
+                GnssSourceEnum.NmeaSerial => new NMEAGps(),
                 GnssSourceEnum.Gpsd => new Gpsd(profileService),
                 _ => null,
             };

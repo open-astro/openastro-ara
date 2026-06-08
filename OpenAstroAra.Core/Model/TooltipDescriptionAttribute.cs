@@ -31,7 +31,7 @@ namespace OpenAstroAra.Core.Model {
 
         public string TooltipLabel => TooltipLabelValue;
 
-        protected string TooltipLabelValue { get; set; }
+        private string TooltipLabelValue { get; set; }
         public string DescriptionLabel { get; }
     }
 }

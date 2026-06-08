@@ -128,7 +128,7 @@ internal static partial class CFitsIO {
 /// error string from <c>ffgerr</c>.
 /// </summary>
 public sealed class FitsException : Exception {
-    public string Operation { get; }
+    public string Operation { get; } = string.Empty;
     public int StatusCode { get; }
 
     public FitsException(string operation, int statusCode)

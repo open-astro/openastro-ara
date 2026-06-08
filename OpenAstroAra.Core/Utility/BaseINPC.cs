@@ -55,9 +55,15 @@ namespace OpenAstroAra.Core.Utility {
         }
     }
 
+    /// <remarks>
+    /// Migration base for legacy model/settings types that require the
+    /// <see cref="System.SerializableAttribute"/> / XML/DataContract serialization
+    /// shape, which is incompatible with the CommunityToolkit ObservableObject.
+    /// New types should derive from <see cref="BaseINPC"/>/ObservableObject instead;
+    /// this exists only so previously-serialized profiles/models keep deserializing.
+    /// </remarks>
     [System.Serializable()]
     [DataContract]
-    [Obsolete($"This class is used for migration purposes when serialization attribute is required, which is not compatible with ObservableObject")]
     public abstract class SerializableINPC : INotifyPropertyChanged {
 
         protected void RaisePropertyChanged([CallerMemberName] string? propertyName = null) {

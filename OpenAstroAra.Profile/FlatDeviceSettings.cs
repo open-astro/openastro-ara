@@ -27,7 +27,12 @@ namespace OpenAstroAra.Profile {
     public class FlatDeviceSettings : Settings, IFlatDeviceSettings {
 
         public FlatDeviceSettings() {
+            // FilterSettings + its key/value types are obsolete (superseded by
+            // TrainedFlatExposureSettings) but kept here so legacy profiles still
+            // deserialize and migrate; obsolete-usage warnings are expected.
+#pragma warning disable CS0612, CS0618
             FilterSettings = new ObservableDictionary<FlatDeviceFilterSettingsKey, FlatDeviceFilterSettingsValue>();
+#pragma warning restore CS0612, CS0618
             TrainedFlatExposureSettings = new ObserveAllCollection<TrainedFlatExposureSetting>();
         }
 
@@ -41,6 +46,9 @@ namespace OpenAstroAra.Profile {
             if (TrainedFlatExposureSettings == null) {
                 TrainedFlatExposureSettings = new ObserveAllCollection<TrainedFlatExposureSetting>();
             }
+            // Reads the obsolete FilterSettings dictionary to migrate pre-2.0
+            // profiles into TrainedFlatExposureSettings; obsolete-usage expected.
+#pragma warning disable CS0612, CS0618
             if (FilterSettings == null) {
                 FilterSettings =
                     new ObservableDictionary<FlatDeviceFilterSettingsKey, FlatDeviceFilterSettingsValue>();
@@ -54,6 +62,7 @@ namespace OpenAstroAra.Profile {
                     AddTrainedFlatExposureSetting(setting.Key.Position, setting.Key.Binning, setting.Key.Gain, -1, setting.Value.AbsoluteBrightness, setting.Value.Time);
                 }
             }
+#pragma warning restore CS0612, CS0618
         }
 
         protected override void SetDefaultValues() {
@@ -123,7 +132,9 @@ namespace OpenAstroAra.Profile {
         }
 
         [NonSerialized]
+#pragma warning disable CS0612 // obsolete key/value types retained for migration
         private ObservableDictionary<FlatDeviceFilterSettingsKey, FlatDeviceFilterSettingsValue> filterSettings = new();
+#pragma warning restore CS0612
 
         [DataMember]
         [Obsolete("Superseded by TrainedFlatExposureSettings")]

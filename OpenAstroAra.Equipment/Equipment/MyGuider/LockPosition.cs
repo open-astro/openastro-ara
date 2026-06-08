@@ -38,7 +38,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider {
             return !Equals(lhs, rhs);
         }
 
-        public override bool Equals(object obj) {
+        public override bool Equals(object? obj) {
             return obj is LockPosition pos && pos.X == X && pos.Y == Y;
         }
 

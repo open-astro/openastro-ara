@@ -138,7 +138,11 @@ namespace OpenAstroAra.Astrometry {
             set {
                 rotationRotationPositionAngle = value;
                 RaisePropertyChanged();
+                // Rotation is a retained obsolete alias of RotationPositionAngle;
+                // still notify it so legacy bindings update.
+#pragma warning disable CS0618
                 RaisePropertyChanged(nameof(Rotation));
+#pragma warning restore CS0618
             }
         }
 
