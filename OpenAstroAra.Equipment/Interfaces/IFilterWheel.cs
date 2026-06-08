@@ -16,11 +16,13 @@ using OpenAstroAra.Core.Model.Equipment;
 using OpenAstroAra.Core.Utility;
 using System.Collections;
 
+using System.Collections.Generic;
+
 namespace OpenAstroAra.Equipment.Interfaces {
 
     public interface IFilterWheel : IDevice {
-        int[] FocusOffsets { get; }
-        string[] Names { get; }
+        IReadOnlyList<int> FocusOffsets { get; }
+        IReadOnlyList<string> Names { get; }
         short Position { get; set; }
         AsyncObservableCollection<FilterInfo> Filters { get; }
     }

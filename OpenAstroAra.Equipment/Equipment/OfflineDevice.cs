@@ -186,9 +186,9 @@ namespace OpenAstroAra.Equipment.Equipment {
 
         public bool Slewing => throw new InvalidOperationException("Device is offline.");
 
-        public int[] FocusOffsets => throw new InvalidOperationException("Device is offline.");
+        public IReadOnlyList<int> FocusOffsets => throw new InvalidOperationException("Device is offline.");
 
-        public string[] Names => throw new InvalidOperationException("Device is offline.");
+        public IReadOnlyList<string> Names => throw new InvalidOperationException("Device is offline.");
 
         public short Position { get => throw new InvalidOperationException("Device is offline."); set => throw new InvalidOperationException("Device is offline."); }
 

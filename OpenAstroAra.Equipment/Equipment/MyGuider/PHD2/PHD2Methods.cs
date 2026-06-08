@@ -14,6 +14,7 @@
 
 using Newtonsoft.Json;
 using System;
+using System.Collections.Generic;
 
 namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
 
@@ -45,7 +46,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         public bool Recalibrate { get; set; }
 
         [JsonProperty(PropertyName = "roi")]
-        public int[]? Roi { get; set; }
+        public IReadOnlyList<int>? Roi { get; set; }
     }
 
     public class Phd2Dither : Phd2Method<Phd2DitherParameter> {
@@ -87,7 +88,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
     public class Phd2FindStarParameter {
 
         [JsonProperty(PropertyName = "roi")]
-        public int[]? Roi { get; set; }
+        public IReadOnlyList<int>? Roi { get; set; }
     }
 
     public class Phd2Loop : Phd2Method {
@@ -237,7 +238,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
     public class Phd2SetLockShiftParamsParameter {
 
         [JsonProperty(PropertyName = "rate")]
-        public double[]? Rate { get; set; }
+        public IReadOnlyList<double>? Rate { get; set; }
 
         [JsonProperty(PropertyName = "units")]
         public string Units { get; set; } = string.Empty;
@@ -256,7 +257,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         public int Exposure { get; set; }
 
         [JsonProperty(PropertyName = "subframe")]
-        public int[]? Subframe { get; set; }
+        public IReadOnlyList<int>? Subframe { get; set; }
     }
 
     public class Phd2FlipCalibration : Phd2Method {
@@ -290,14 +291,14 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
     }
 
     public class GetCameraFrameSizeResponse : PhdMethodResponse {
-        public int[]? result { get; set; }
+        public IReadOnlyList<int>? result { get; set; }
     }
 
     public class PhdImageResult {
         public int frame { get; set; }
         public int width { get; set; }
         public int height { get; set; }
-        public double[]? star_pos { get; set; }
+        public IReadOnlyList<double>? star_pos { get; set; }
         public string? pixels { get; set; }
     }
 
@@ -311,11 +312,11 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
     }
 
     public class GetProfilesResponse : PhdMethodResponse {
-        public Phd2ProfileResponse[]? result { get; set; }
+        public IReadOnlyList<Phd2ProfileResponse>? result { get; set; }
     }
 
     public class GetLockPositionResponse : PhdMethodResponse {
-        public float[]? result { get; set; }
+        public IReadOnlyList<float>? result { get; set; }
     }
 
     public class GetLockShiftParamsResponse : PhdMethodResponse {
@@ -332,7 +333,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         public bool Enabled { get; set; }
 
         [JsonProperty(PropertyName = "rate")]
-        public float[]? Rate { get; set; }
+        public IReadOnlyList<float>? Rate { get; set; }
 
         [JsonProperty(PropertyName = "units")]
         public string Units { get; set; } = string.Empty;
