@@ -23,7 +23,7 @@ namespace OpenAstroAra.Sequencer.Interfaces {
     public interface IConditionWatchdog {
         TimeSpan Delay { get; set; }
         Func<Task> WatchDogOperation { get; }
-        Task WatchdogTask { get; }
+        Task? WatchdogTask { get; }
 
         Task Start();
 

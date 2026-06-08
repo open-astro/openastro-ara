@@ -90,7 +90,7 @@ namespace OpenAstroAra.Sequencer.Container {
             }
         }
 
-        public event Func<object, SequenceEntityFailureEventArgs, Task> FailureEvent;
+        public event Func<object, SequenceEntityFailureEventArgs, Task>? FailureEvent;
 
         public async Task RaiseFailureEvent(ISequenceEntity sender, Exception ex) {
             try {
@@ -101,7 +101,7 @@ namespace OpenAstroAra.Sequencer.Container {
         }
 
         public override ICommand DropIntoCommand => new GalaSoft.MvvmLight.Command.RelayCommand<object>((o) => {
-            (Items[1] as TargetAreaContainer).DropIntoCommand.Execute(o);
+            (Items[1] as TargetAreaContainer)?.DropIntoCommand.Execute(o);
         });
 
         public override object Clone() {

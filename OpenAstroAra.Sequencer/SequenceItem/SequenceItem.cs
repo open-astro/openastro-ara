@@ -76,7 +76,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem {
         }
 
         [JsonProperty]
-        public ISequenceContainer Parent { get; private set; }
+        public ISequenceContainer? Parent { get; private set; }
 
         private InstructionErrorBehavior errorBehavior = InstructionErrorBehavior.ContinueOnError;
 
@@ -172,15 +172,15 @@ namespace OpenAstroAra.Sequencer.SequenceItem {
             this.Parent?.ResetProgressCascaded();
         }
 
-        private CancellationTokenSource localCts;
+        private CancellationTokenSource? localCts;
 
-        private void RunErrorBehavior(ISequenceRootContainer root) {
+        private void RunErrorBehavior(ISequenceRootContainer? root) {
             var attemptWord = Attempts != 1 ? "attempts" : "attempt";
             Status = SequenceEntityStatus.FAILED;
             switch (ErrorBehavior) {
                 case InstructionErrorBehavior.AbortOnError:
                     Logger.Error($"Instruction {Name} failed after {Attempts} {attemptWord}. Error behavior is set to {ErrorBehavior}. Aborting Sequence!");
-                    _ = root.Interrupt();
+                    _ = root?.Interrupt();
                     break;
 
                 case InstructionErrorBehavior.SkipInstructionSetOnError:
@@ -190,7 +190,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem {
 
                 case InstructionErrorBehavior.SkipToSequenceEndInstructions:
                     Logger.Error($"Instruction {Name} failed after {Attempts} {attemptWord}. Error behavior is set to {ErrorBehavior}. Skipping to end of sequence instructions.");
-                    _ = SkipToEndOfSequence(root);
+                    if (root != null) { _ = SkipToEndOfSequence(root); }
                     break;
 
                 default:
@@ -208,8 +208,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem {
 
                     try {
                         Logger.Info($"Starting {this}");
-                        if (this is IValidatable && !(this is ISequenceContainer)) {
-                            var validatable = this as IValidatable;
+                        if (this is IValidatable validatable && !(this is ISequenceContainer)) {
                             if (!validatable.Validate()) {
                                 RunErrorBehavior(root);
                                 throw new SequenceEntityFailedValidationException(string.Join(", ", validatable.Issues));
@@ -308,11 +307,11 @@ namespace OpenAstroAra.Sequencer.SequenceItem {
         private async Task<bool> SkipToEndOfSequence(ISequenceRootContainer root) {
             var startContainer = root.Items[0] as ISequenceContainer;
             var targetContainer = root.Items[1] as ISequenceContainer;
-            if (startContainer.Status == SequenceEntityStatus.RUNNING) {
+            if (startContainer?.Status == SequenceEntityStatus.RUNNING) {
                 await startContainer.Interrupt();
                 await Task.Delay(100);
             }
-            if (targetContainer.Status == SequenceEntityStatus.RUNNING) {
+            if (targetContainer?.Status == SequenceEntityStatus.RUNNING) {
                 await targetContainer.Interrupt();
             }
             return true;

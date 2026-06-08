@@ -103,7 +103,7 @@ namespace OpenAstroAra.Sequencer.Container {
                 if (source == null) { return; }
                 //var target = parameters.Target as ISequenceItem;
 
-                if (source?.Parent != null && !parameters.Duplicate) {
+                if (source.Parent != null && !parameters.Duplicate) {
                     item = source;
                 } else {
                     item = (ISequenceCondition)source.Clone();

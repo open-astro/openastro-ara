@@ -75,7 +75,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
             return $"Condition: {nameof(AltitudeCondition)}, Altitude >= {Data.TargetAltitude}";
         }
 
-        public override bool Check(ISequenceItem previousItem, ISequenceItem nextItem) {
+        public override bool Check(ISequenceItem? previousItem, ISequenceItem? nextItem) {
             if (HasDsoParent) {
                 var coordinates = RetrieveContextCoordinates(this.Parent)?.Coordinates;
                 if (coordinates != null) {

@@ -72,9 +72,9 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
 
         [JsonProperty]
         public string Script {
-            get => script?.Trim();
+            get => script.Trim();
             set {
-                script = value?.Trim();
+                script = value?.Trim() ?? string.Empty;
                 RaisePropertyChanged();
             }
         }

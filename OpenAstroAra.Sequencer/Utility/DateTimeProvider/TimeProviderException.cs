@@ -10,9 +10,15 @@ namespace OpenAstroAra.Sequencer.Utility.DateTimeProvider {
             LocalizedMessage = localizedMessage;
         }
 
-        public string LocalizedMessage { get; }
+        public string LocalizedMessage { get; } = string.Empty;
 
         public TimeProviderException() {
+        }
+
+        public TimeProviderException(string message) : base(message) {
+        }
+
+        public TimeProviderException(string message, Exception innerException) : base(message, innerException) {
         }
     }
 }

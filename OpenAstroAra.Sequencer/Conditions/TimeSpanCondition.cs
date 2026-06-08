@@ -133,7 +133,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
         private DateTime? startTime;
         private TimeSpan? previousRemainingTime;
 
-        public override bool Check(ISequenceItem previousItem, ISequenceItem nextItem) {
+        public override bool Check(ISequenceItem? previousItem, ISequenceItem? nextItem) {
             var nextItemDuration = nextItem?.GetEstimatedDuration() ?? TimeSpan.Zero;
             var hasTimeRemaining = (RemainingTime - nextItemDuration) > TimeSpan.Zero;
             if (!hasTimeRemaining && nextItemDuration > TimeSpan.Zero) {

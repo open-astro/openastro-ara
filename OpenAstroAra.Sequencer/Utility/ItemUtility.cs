@@ -29,7 +29,7 @@ namespace OpenAstroAra.Sequencer.Utility {
 
     public static class ItemUtility {
 
-        public static ContextCoordinates RetrieveContextCoordinates(ISequenceContainer parent) {
+        public static ContextCoordinates? RetrieveContextCoordinates(ISequenceContainer? parent) {
             if (parent != null) {
                 var container = parent as IDeepSkyObjectContainer;
                 if (container != null && container.Target != null && container.Target.InputCoordinates != null && container.Target.DeepSkyObject != null) {
@@ -45,11 +45,11 @@ namespace OpenAstroAra.Sequencer.Utility {
             }
         }
 
-        public static bool IsInRootContainer(ISequenceContainer parent) {
+        public static bool IsInRootContainer(ISequenceContainer? parent) {
             return GetRootContainer(parent) != null;
         }
 
-        public static ISequenceRootContainer GetRootContainer(ISequenceContainer parent) {
+        public static ISequenceRootContainer? GetRootContainer(ISequenceContainer? parent) {
             if (parent != null) {
                 if (parent is ISequenceRootContainer rootContainer) {
                     return rootContainer;
@@ -65,7 +65,7 @@ namespace OpenAstroAra.Sequencer.Utility {
         /// </summary>
         /// <param name="context">current context instruction set</param>
         /// <returns></returns>
-        public static DateTime GetMeridianFlipTime(ISequenceContainer context) {
+        public static DateTime GetMeridianFlipTime(ISequenceContainer? context) {
             if (context == null) { return DateTime.MinValue; }
 
             if (context is ITriggerable triggerable) {

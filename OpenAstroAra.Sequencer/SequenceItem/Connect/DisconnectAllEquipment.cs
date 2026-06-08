@@ -73,7 +73,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
         public List<string> Devices { get; }
 
 
-        private object GetMediator(string device) {
+        private object? GetMediator(string device) {
             switch (device) {
                 case "Camera": return cameraMediator;
                 case "Filter Wheel": return fwMediator;
@@ -120,6 +120,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
 
             foreach (var device in Devices) {
                 var mediator = GetMediator(device);
+                if (mediator == null) { continue; }
 
                 var type = mediator.GetType();
                 var GetInfo = type.GetMethod("GetInfo");

@@ -171,7 +171,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
                 var Rescan = type.GetMethod("Rescan");
                 var devices = await (Task<IList<string>>)Rescan!.Invoke(mediator, null)!;
 
-                if (devices.Contains(profileId)) {
+                if (profileId != null && devices.Contains(profileId)) {
                     var Connect = type.GetMethod("Connect");
                     var success = await (Task<bool>)Connect!.Invoke(mediator, null)!;
 

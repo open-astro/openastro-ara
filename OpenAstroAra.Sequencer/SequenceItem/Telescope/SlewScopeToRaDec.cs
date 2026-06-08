@@ -53,7 +53,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Telescope {
 
         public override object Clone() {
             return new SlewScopeToRaDec(this) {
-                Coordinates = Coordinates?.Clone()
+                Coordinates = Coordinates.Clone()
             };
         }
 

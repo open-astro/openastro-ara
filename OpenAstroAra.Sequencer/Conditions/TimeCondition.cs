@@ -42,15 +42,15 @@ namespace OpenAstroAra.Sequencer.Conditions {
         private int minutes;
         private int minutesOffset;
         private int seconds;
-        private IDateTimeProvider selectedProvider;
+        private IDateTimeProvider? selectedProvider;
 
         [ImportingConstructor]
         public TimeCondition(IList<IDateTimeProvider> dateTimeProviders) : this(dateTimeProviders, dateTimeProviders?.FirstOrDefault()) {
         }
 
-        public TimeCondition(IList<IDateTimeProvider> dateTimeProviders, IDateTimeProvider selectedProvider) {
+        public TimeCondition(IList<IDateTimeProvider> dateTimeProviders, IDateTimeProvider? selectedProvider) {
             DateTime = new SystemDateTime();
-            this.DateTimeProviders = dateTimeProviders;
+            this.dateTimeProviders = dateTimeProviders;
             this.SelectedProvider = selectedProvider;
             ConditionWatchdog = new ConditionWatchdog(InterruptWhenTimeIsUp, TimeSpan.FromSeconds(1));
         }
@@ -170,7 +170,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
         }
 
         [JsonProperty]
-        public IDateTimeProvider SelectedProvider {
+        public IDateTimeProvider? SelectedProvider {
             get => selectedProvider;
             set {
                 selectedProvider = value;
@@ -189,7 +189,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
             var now = DateTime.Now;
             var then = new DateTime(now.Year, now.Month, now.Day, Hours, Minutes, Seconds);
 
-            RolloverTime = SelectedProvider.GetRolloverTime(this);
+            RolloverTime = SelectedProvider?.GetRolloverTime(this) ?? RolloverTime;
             var timeOnlyNow = TimeOnly.FromDateTime(now);
             var timeOnlyThen = TimeOnly.FromDateTime(then);
 
@@ -215,7 +215,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
             try {
                 lastReferenceDate = NighttimeCalculator.GetReferenceDate(DateTime.Now);
                 if (HasFixedTimeProvider) {
-                    var t = SelectedProvider.GetDateTime(this) + TimeSpan.FromMinutes(MinutesOffset);
+                    var t = selectedProvider!.GetDateTime(this) + TimeSpan.FromMinutes(MinutesOffset);
                     Hours = t.Hour;
                     Minutes = t.Minute;
                     Seconds = t.Second;
@@ -234,7 +234,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
             RunWatchdogIfInsideSequenceRoot();
         }
 
-        public override bool Check(ISequenceItem previousItem, ISequenceItem nextItem) {
+        public override bool Check(ISequenceItem? previousItem, ISequenceItem? nextItem) {
             var nextItemDuration = nextItem?.GetEstimatedDuration() ?? TimeSpan.Zero;
             var remainingTime = CalculateRemainingTime();
 

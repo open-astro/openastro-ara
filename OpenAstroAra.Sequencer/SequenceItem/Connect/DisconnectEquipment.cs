@@ -137,6 +137,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
 
         public override async Task Execute(IProgress<ApplicationStatus> progress, CancellationToken token) {
             var mediator = GetMediator();
+            if (mediator == null) { return; }
 
             var type = mediator.GetType();
             var GetInfo = type.GetMethod("GetInfo");

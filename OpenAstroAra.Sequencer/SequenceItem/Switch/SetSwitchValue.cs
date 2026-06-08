@@ -44,7 +44,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Switch {
         public SetSwitchValue(ISwitchMediator switchMediator) {
             this.switchMediator = switchMediator;
 
-            WritableSwitches = new ReadOnlyCollection<IWritableSwitch>(CreateDummyList());
+            writableSwitches = new ReadOnlyCollection<IWritableSwitch>(CreateDummyList());
             SelectedSwitch = WritableSwitches.First();
         }
 
@@ -94,10 +94,10 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Switch {
             }
         }
 
-        private IWritableSwitch selectedSwitch;
+        private IWritableSwitch? selectedSwitch;
 
         [JsonIgnore]
-        public IWritableSwitch SelectedSwitch {
+        public IWritableSwitch? SelectedSwitch {
             get => selectedSwitch;
             set {
                 selectedSwitch = value;
@@ -143,7 +143,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Switch {
                     if (WritableSwitches.Count > 0) {
                         //When switch gets connected the dummy list will be changed to the real list
                         if (WritableSwitches.FirstOrDefault() is DummySwitch) {
-                            WritableSwitches = info.WritableSwitches;
+                            WritableSwitches = info.WritableSwitches ?? new ReadOnlyCollection<IWritableSwitch>(CreateDummyList());
 
                             if (switchIndex >= 0 && WritableSwitches.Count > switchIndex) {
                                 SelectedSwitch = WritableSwitches[switchIndex];

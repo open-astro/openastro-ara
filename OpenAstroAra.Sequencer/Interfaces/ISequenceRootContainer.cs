@@ -34,6 +34,6 @@ namespace OpenAstroAra.Sequencer.Container {
         string SequenceTitle { get; set; }
 
         Task RaiseFailureEvent(ISequenceEntity sender, Exception ex);
-        event Func<object, SequenceEntityFailureEventArgs, Task> FailureEvent;
+        event Func<object, SequenceEntityFailureEventArgs, Task>? FailureEvent;
     }
 }

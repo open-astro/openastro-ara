@@ -67,7 +67,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
             }
         }
 
-        public override bool Check(ISequenceItem previousItem, ISequenceItem nextItem) {
+        public override bool Check(ISequenceItem? previousItem, ISequenceItem? nextItem) {
             var check = CompletedIterations < Iterations;
             if (!check && IsActive()) {
                 Logger.Info($"{nameof(LoopCondition)} finished. Iterations: {CompletedIterations} / {Iterations}");

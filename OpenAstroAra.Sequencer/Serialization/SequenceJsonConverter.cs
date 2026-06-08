@@ -54,7 +54,7 @@ namespace OpenAstroAra.Sequencer.Serialization {
                 Converters = converters
             });
 
-            return container;
+            return container ?? throw new InvalidOperationException("Failed to deserialize sequence container");
         }
     }
 }

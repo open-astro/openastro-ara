@@ -65,7 +65,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
         }
 
         [JsonProperty]
-        public ISequenceContainer Parent { get; set; }
+        public ISequenceContainer? Parent { get; set; }
 
         public ICommand ResetProgressCommand => new GalaSoft.MvvmLight.Command.RelayCommand<object>((o) => { ResetProgress(); ShowMenu = false; });
 
@@ -79,7 +79,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
             }
         }
 
-        public IConditionWatchdog ConditionWatchdog { get; set; }
+        public IConditionWatchdog? ConditionWatchdog { get; set; }
 
         protected void RunWatchdogIfInsideSequenceRoot() {
             if (ConditionWatchdog != null) {
@@ -108,8 +108,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
             var root = ItemUtility.GetRootContainer(this.Parent);
 
             try {
-                if (this is IValidatable && !(this is ISequenceContainer)) {
-                    var validatable = this as IValidatable;
+                if (this is IValidatable validatable && !(this is ISequenceContainer)) {
                     if (!validatable.Validate()) {
                         throw new SequenceEntityFailedValidationException(string.Join(", ", validatable.Issues));
                     }
@@ -137,7 +136,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
             }
         }
 
-        public abstract bool Check(ISequenceItem previousItem, ISequenceItem nextItem);
+        public abstract bool Check(ISequenceItem? previousItem, ISequenceItem? nextItem);
 
         public abstract object Clone();
 
@@ -165,9 +164,9 @@ namespace OpenAstroAra.Sequencer.Conditions {
 
         public ICommand DetachCommand => new GalaSoft.MvvmLight.Command.RelayCommand<object>((o) => Detach());
 
-        public ICommand MoveUpCommand => null;
+        public ICommand? MoveUpCommand => null;
 
-        public ICommand MoveDownCommand => null;
+        public ICommand? MoveDownCommand => null;
         public ICommand DisableEnableCommand => new GalaSoft.MvvmLight.Command.RelayCommand(() => {
             if (Status != SequenceEntityStatus.DISABLED) {
                 Status = SequenceEntityStatus.DISABLED;
@@ -195,7 +194,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
         /// </summary>
         /// <returns></returns>
         protected bool IsActive() {
-            return ItemUtility.IsInRootContainer(Parent) && Parent.Status == SequenceEntityStatus.RUNNING && Status != SequenceEntityStatus.DISABLED;
+            return ItemUtility.IsInRootContainer(Parent) && Parent?.Status == SequenceEntityStatus.RUNNING && Status != SequenceEntityStatus.DISABLED;
         }
     }
 }

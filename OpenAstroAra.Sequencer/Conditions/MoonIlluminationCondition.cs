@@ -120,7 +120,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
                 $"CurrentMoonIllumination: {CurrentMoonIllumination}%, Comparator: {Comparator}, UserMoonIllumination: {UserMoonIllumination}%";
         }
 
-        public override bool Check(ISequenceItem previousItem, ISequenceItem nextItem) {
+        public override bool Check(ISequenceItem? previousItem, ISequenceItem? nextItem) {
             var check = true;
             // See if the moon's illumination is outside of the user's wishes
             switch (Comparator) {
@@ -151,7 +151,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
         private void CalculateCurrentMoonState() {
             var now = DateTime.UtcNow;
 
-            CurrentMoonIllumination = AstroUtil.GetMoonIllumination(now) * 100;
+            CurrentMoonIllumination = AstroUtil.GetMoonIllumination(now, new ObserverInfo()) * 100;
         }
     }
 }

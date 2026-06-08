@@ -26,11 +26,11 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
             Data.Offset = 0d;
         }
 
-        public override bool Check(ISequenceItem previousItem, ISequenceItem nextItem) {
+        public override bool Check(ISequenceItem? previousItem, ISequenceItem? nextItem) {
             return Check(previousItem, nextItem, false);
         }
 
-        public bool Check(ISequenceItem previousItem, ISequenceItem nextItem, bool test) {
+        public bool Check(ISequenceItem? previousItem, ISequenceItem? nextItem, bool test) {
             if (!test) CalculateExpectedTime();
 
             var check = true;

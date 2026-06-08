@@ -40,7 +40,7 @@ namespace OpenAstroAra.Sequencer {
         private readonly SequenceJsonConverter sequenceJsonConverter;
         private readonly IProfileService profileService;
         private string targetPath = string.Empty;
-        private FileSystemWatcher sequenceTargetsFolderWatcher;
+        private FileSystemWatcher? sequenceTargetsFolderWatcher;
         public const string TargetsFileExtension = ".json";
 
         public IList<TargetSequenceContainer> Targets { get; }
@@ -51,7 +51,7 @@ namespace OpenAstroAra.Sequencer {
         public ICollectionView TargetsMenuView => targetsMenuView.View;
 
         private string viewFilter = string.Empty;
-        private ISequenceSettings activeSequenceSettings;
+        private ISequenceSettings activeSequenceSettings = null!;
 
         public string ViewFilter {
             get => viewFilter;
@@ -126,21 +126,21 @@ namespace OpenAstroAra.Sequencer {
 
 
         private bool ApplyViewFilter(object obj) {
-            return (obj as TargetSequenceContainer).Name.IndexOf(ViewFilter, StringComparison.OrdinalIgnoreCase) >= 0;
+            return obj is TargetSequenceContainer target && target.Name.IndexOf(ViewFilter, StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
-        private async void SequenceTargetsFolderWatcher_Changed(object sender, FileSystemEventArgs e) {
+        private async void SequenceTargetsFolderWatcher_Changed(object? sender, FileSystemEventArgs e) {
             try {
-                sequenceTargetsFolderWatcher.EnableRaisingEvents = false;
+                sequenceTargetsFolderWatcher!.EnableRaisingEvents = false;
                 await LoadTargets();
             } finally {
-                sequenceTargetsFolderWatcher.EnableRaisingEvents = true;
+                sequenceTargetsFolderWatcher!.EnableRaisingEvents = true;
             }
         }
 
-        private async void SequenceSettings_SequencerTargetsFolderChanged(object sender, System.EventArgs e) {
+        private async void SequenceSettings_SequencerTargetsFolderChanged(object? sender, System.EventArgs e) {
             if ((e as PropertyChangedEventArgs)?.PropertyName == nameof(profileService.ActiveProfile.SequenceSettings.SequencerTargetsFolder)) {
-                sequenceTargetsFolderWatcher.Path = profileService.ActiveProfile.SequenceSettings.SequencerTargetsFolder;
+                sequenceTargetsFolderWatcher!.Path = profileService.ActiveProfile.SequenceSettings.SequencerTargetsFolder;
                 try {
                     sequenceTargetsFolderWatcher.EnableRaisingEvents = false;
                     await LoadTargets();
@@ -150,15 +150,15 @@ namespace OpenAstroAra.Sequencer {
             }
         }
 
-        private async void ProfileService_ProfileChanged(object sender, System.EventArgs e) {
+        private async void ProfileService_ProfileChanged(object? sender, System.EventArgs e) {
             activeSequenceSettings.PropertyChanged -= SequenceSettings_SequencerTargetsFolderChanged;
             activeSequenceSettings = profileService.ActiveProfile.SequenceSettings;
             activeSequenceSettings.PropertyChanged += SequenceSettings_SequencerTargetsFolderChanged;
             try {
-                sequenceTargetsFolderWatcher.EnableRaisingEvents = false;
+                sequenceTargetsFolderWatcher!.EnableRaisingEvents = false;
                 await LoadTargets();
             } finally {
-                sequenceTargetsFolderWatcher.EnableRaisingEvents = true;
+                sequenceTargetsFolderWatcher!.EnableRaisingEvents = true;
             }
         }
 
@@ -206,7 +206,7 @@ namespace OpenAstroAra.Sequencer {
                                 var target = new TargetSequenceContainer(profileService, dsoContainer);
                                 var fileInfo = new FileInfo(file);
                                 container.Name = fileInfo.Name.Replace(TargetsFileExtension, "");
-                                var parts = fileInfo.Directory.FullName.Split(new char[] { Path.DirectorySeparatorChar }, System.StringSplitOptions.RemoveEmptyEntries);
+                                var parts = (fileInfo.Directory?.FullName ?? string.Empty).Split(new char[] { Path.DirectorySeparatorChar }, System.StringSplitOptions.RemoveEmptyEntries);
                                 target.SubGroups = parts.Except(rootParts).ToArray();
 
                                 Targets.Add(target);
@@ -304,13 +304,13 @@ namespace OpenAstroAra.Sequencer {
 
         private IProfileService profileService;
 
-        public ISequenceContainer Parent => null;
+        public ISequenceContainer? Parent => null;
 
-        public ICommand DetachCommand => null;
+        public ICommand? DetachCommand => null;
 
-        public ICommand MoveUpCommand => null;
+        public ICommand? MoveUpCommand => null;
 
-        public ICommand MoveDownCommand => null;
+        public ICommand? MoveDownCommand => null;
 
         public void AfterParentChanged() {
         }

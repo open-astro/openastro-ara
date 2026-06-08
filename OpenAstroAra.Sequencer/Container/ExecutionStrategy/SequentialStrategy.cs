@@ -35,8 +35,8 @@ namespace OpenAstroAra.Sequencer.Container.ExecutionStrategy {
         }
 
         public async Task Execute(ISequenceContainer context, IProgress<ApplicationStatus> progress, CancellationToken token) {
-            ISequenceItem previous = null;
-            ISequenceItem next = null;
+            ISequenceItem? previous = null;
+            ISequenceItem? next = null;
             bool canContinue = true;
             var root = ItemUtility.GetRootContainer(context);
 
@@ -62,8 +62,8 @@ namespace OpenAstroAra.Sequencer.Container.ExecutionStrategy {
 
                     if (CanContinue(context, previous, next)) {
                         foreach (var item in context.GetItemsSnapshot()) {
-                            if (item is ISequenceContainer) {
-                                (item as ISequenceContainer).ResetAll();
+                            if (item is ISequenceContainer sequenceContainer) {
+                                sequenceContainer.ResetAll();
                             } else {
                                 item.ResetProgress();
                             }
@@ -118,7 +118,7 @@ namespace OpenAstroAra.Sequencer.Container.ExecutionStrategy {
             }
         }
 
-        private (ISequenceItem, bool) GetNextItem(ISequenceContainer context, ISequenceItem previous) {
+        private (ISequenceItem?, bool) GetNextItem(ISequenceContainer context, ISequenceItem? previous) {
             var items = context.GetItemsSnapshot();
             var next = items.FirstOrDefault(x => x.Status == SequenceEntityStatus.CREATED);
 
@@ -130,7 +130,7 @@ namespace OpenAstroAra.Sequencer.Container.ExecutionStrategy {
             return (next, canContinue);
         }
 
-        private async Task RunTriggers(ISequenceContainer container, ISequenceItem previousItem, ISequenceItem nextItem, IProgress<ApplicationStatus> progress, CancellationToken token) {
+        private async Task RunTriggers(ISequenceContainer container, ISequenceItem? previousItem, ISequenceItem? nextItem, IProgress<ApplicationStatus> progress, CancellationToken token) {
             var triggerable = container as ITriggerable;
             if (triggerable != null) {
                 await triggerable.RunTriggers(previousItem, nextItem, progress, token);
@@ -141,7 +141,7 @@ namespace OpenAstroAra.Sequencer.Container.ExecutionStrategy {
             }
         }
 
-        private async Task RunTriggersAfter(ISequenceContainer container, ISequenceItem previousItem, ISequenceItem nextItem, IProgress<ApplicationStatus> progress, CancellationToken token) {
+        private async Task RunTriggersAfter(ISequenceContainer container, ISequenceItem? previousItem, ISequenceItem? nextItem, IProgress<ApplicationStatus> progress, CancellationToken token) {
             var triggerable = container as ITriggerable;
             if (triggerable != null) {
                 await triggerable.RunTriggersAfter(previousItem, nextItem, progress, token);
@@ -193,11 +193,11 @@ namespace OpenAstroAra.Sequencer.Container.ExecutionStrategy {
             }
         }
 
-        private bool CanContinue(ISequenceContainer container, ISequenceItem previousItem, ISequenceItem nextItem) {
+        private bool CanContinue(ISequenceContainer container, ISequenceItem? previousItem, ISequenceItem? nextItem) {
             var conditionable = container as IConditionable;
             var canContinue = false;
             var conditions = conditionable?.GetConditionsSnapshot()?.Where(x => x.Status != SequenceEntityStatus.DISABLED).ToList();
-            if (conditions != null && conditions.Count > 0) {
+            if (conditionable != null && conditions != null && conditions.Count > 0) {
                 canContinue = conditionable.CheckConditions(previousItem, nextItem);
             } else {
                 canContinue = container.Iterations < 1;

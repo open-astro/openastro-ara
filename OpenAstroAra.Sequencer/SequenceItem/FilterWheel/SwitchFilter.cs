@@ -69,7 +69,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.FilterWheel {
             }
         }
 
-        private void ProfileService_ProfileChanged(object sender, EventArgs e) {
+        private void ProfileService_ProfileChanged(object? sender, EventArgs e) {
             MatchFilter();
         }
 
@@ -96,10 +96,10 @@ namespace OpenAstroAra.Sequencer.SequenceItem.FilterWheel {
             }
         }
 
-        private FilterInfo filter;
+        private FilterInfo? filter;
 
         [JsonProperty]
-        public FilterInfo Filter {
+        public FilterInfo? Filter {
             get => filter;
             set {
                 filter = value;

@@ -39,7 +39,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
 
         public IList<string> Issues => new List<string>() { Loc.Instance["LblUnknownInstructionValidation"] };
 
-        public override bool Check(ISequenceItem previousItem, ISequenceItem nextItem) {
+        public override bool Check(ISequenceItem? previousItem, ISequenceItem? nextItem) {
             return false;
         }
 

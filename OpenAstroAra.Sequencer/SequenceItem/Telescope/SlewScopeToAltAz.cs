@@ -50,7 +50,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Telescope {
             profileService.LocationChanged += ProfileService_LocationChanged;
         }
 
-        private void ProfileService_LocationChanged(object sender, EventArgs e) {
+        private void ProfileService_LocationChanged(object? sender, EventArgs e) {
             Coordinates?.SetPosition(Angle.ByDegree(profileService.ActiveProfile.AstrometrySettings.Latitude), Angle.ByDegree(profileService.ActiveProfile.AstrometrySettings.Longitude), profileService.ActiveProfile.AstrometrySettings.Elevation);
         }
 
@@ -60,7 +60,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Telescope {
 
         public override object Clone() {
             return new SlewScopeToAltAz(this) {
-                Coordinates = Coordinates?.Clone()
+                Coordinates = Coordinates.Clone()
             };
         }
 
@@ -87,7 +87,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Telescope {
                 throw new SequenceEntityFailedException(Loc.Instance["LblTelescopeParkedWarning"]);
             }
             var stoppedGuiding = await guiderMediator.StopGuiding(token);
-            await telescopeMediator.SlewToCoordinatesAsync(Coordinates.Coordinates, token);
+            await telescopeMediator.SlewToTopocentricCoordinates(Coordinates.Coordinates, token);
             if (stoppedGuiding) {
                 await guiderMediator.StartGuiding(false, progress, token);
             }

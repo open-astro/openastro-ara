@@ -86,7 +86,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
 
         [Obsolete]
         [JsonIgnore]
-        public InputCoordinates Coordinates { get; set; }
+        public InputCoordinates? Coordinates { get; set; }
         #endregion
     }
 }

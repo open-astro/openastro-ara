@@ -97,7 +97,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
         public double Latitude { get; private set; }
         public double Longitude { get; private set; }
         public double Elevation { get; private set; }
-        public CustomHorizon Horizon { get; set; }
+        public CustomHorizon? Horizon { get; set; }
         public ObserverInfo Observer { get; private set; }
 
         public double TargetAltitude {

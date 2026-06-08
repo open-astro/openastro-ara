@@ -89,7 +89,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
             return true;
         }
 
-        public override bool Check(ISequenceItem previousItem, ISequenceItem nextItem) {
+        public override bool Check(ISequenceItem? previousItem, ISequenceItem? nextItem) {
             var info = safetyMonitorMediator.GetInfo();
             IsSafe = info.Connected && info.IsSafe;
             if (!IsSafe && IsActive()) {
@@ -143,7 +143,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
         public LoopWhileUnsafe(ISafetyMonitorMediator safetyMonitorMediator) : base(safetyMonitorMediator) {
         }
 
-        public override bool Check(ISequenceItem previousItem, ISequenceItem nextItem) {
+        public override bool Check(ISequenceItem? previousItem, ISequenceItem? nextItem) {
             var info = safetyMonitorMediator.GetInfo();
             IsSafe = info.Connected && info.IsSafe;
             if (IsSafe && IsActive()) {

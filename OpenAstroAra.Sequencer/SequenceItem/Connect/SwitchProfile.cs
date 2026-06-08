@@ -90,7 +90,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
         public List<string> Devices { get; }
 
 
-        private object GetMediator(string device) {
+        private object? GetMediator(string device) {
             switch (device) {
                 case "Camera": return cameraMediator;
                 case "Filter Wheel": return fwMediator;
@@ -147,6 +147,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
             foreach (var device in Devices) {
                 token.ThrowIfCancellationRequested();
                 var mediator = GetMediator(device);
+                if (mediator == null) { continue; }
 
                 var type = mediator.GetType();
                 var GetInfo = type.GetMethod("GetInfo");
@@ -185,13 +186,14 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
                         var profileId = GetProfileId(device);
                         if (!(profileId == "No_Device" || profileId == "No_Guider")) {
                             var mediator = GetMediator(device);
+                            if (mediator == null) { continue; }
 
                             var type = mediator.GetType();
                             var GetInfo = type.GetMethod("GetInfo");
                             var Rescan = type.GetMethod("Rescan");
                             var devices = await (Task<IList<string>>)Rescan!.Invoke(mediator, null)!;
 
-                            if (devices.Contains(profileId)) {
+                            if (profileId != null && devices.Contains(profileId)) {
                                 var Connect = type.GetMethod("Connect");
                                 var success = await (Task<bool>)Connect!.Invoke(mediator, null)!;
 
@@ -214,6 +216,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
 
         public bool IsConnected(string device) {
             var mediator = GetMediator(device);
+            if (mediator == null) { return false; }
 
             var type = mediator.GetType();
             var GetInfo = type.GetMethod("GetInfo");
@@ -221,7 +224,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
             return info.Connected;
         }
 
-        public string GetProfileId(string device) {
+        public string? GetProfileId(string device) {
             switch (device) {
                 case "Camera": return profileService.ActiveProfile.CameraSettings.Id;
                 case "Filter Wheel": return profileService.ActiveProfile.FilterWheelSettings.Id;

@@ -86,7 +86,7 @@ namespace OpenAstroAra.Sequencer.Trigger {
         });
 
         [JsonProperty]
-        public ISequenceContainer Parent { get; set; }
+        public ISequenceContainer? Parent { get; set; }
 
         [JsonProperty]
         public SequentialContainer TriggerRunner { get; protected set; }
@@ -113,8 +113,7 @@ namespace OpenAstroAra.Sequencer.Trigger {
                 Logger.Info($"Starting {this}");
                 this.TriggerRunner.ResetAll();
 
-                if (this is IValidatable && !(this is ISequenceContainer)) {
-                    var validatable = this as IValidatable;
+                if (this is IValidatable validatable && !(this is ISequenceContainer)) {
                     if (!validatable.Validate()) {
                         throw new SequenceEntityFailedValidationException(string.Join(", ", validatable.Issues));
                     }
@@ -184,9 +183,9 @@ namespace OpenAstroAra.Sequencer.Trigger {
 
         public ICommand DetachCommand => new GalaSoft.MvvmLight.Command.RelayCommand<object>((o) => Detach());
 
-        public ICommand MoveUpCommand => null;
+        public ICommand? MoveUpCommand => null;
 
-        public ICommand MoveDownCommand => null;
+        public ICommand? MoveDownCommand => null;
 
         public void Detach() {
             Parent?.Remove(this);

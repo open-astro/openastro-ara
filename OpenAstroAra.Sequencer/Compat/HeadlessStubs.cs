@@ -24,13 +24,9 @@
 
 using System;
 
-namespace System.Windows.Input {
-    public interface ICommand {
-        bool CanExecute(object? parameter);
-        void Execute(object? parameter);
-        event EventHandler? CanExecuteChanged;
-    }
-}
+// net10.0 provides System.Windows.Input.ICommand via System.ObjectModel, so the
+// former local stub interface was removed (it triggered CS0436 type conflicts).
+// RelayCommand/RelayCommand<T> below now implement the framework ICommand.
 
 namespace System.Windows.Data {
     public interface ICollectionView : System.Collections.IEnumerable {
