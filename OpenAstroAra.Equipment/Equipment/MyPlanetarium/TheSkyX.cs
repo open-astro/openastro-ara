@@ -31,6 +31,72 @@ namespace OpenAstroAra.Equipment.Equipment.MyPlanetarium {
         private int port;
         private bool useSelectedObject;
 
+        private static readonly string[] GetSiteScript = {
+            @"/* Java Script */",
+            @"/* Socket Start Packet */",
+            @"var Out = """";",
+            @"var Lat = 0;",
+            @"var Long = 0;",
+            @"var Elevation = 0;",
+            @"sky6StarChart.DocumentProperty(0);",
+            @"Lat = sky6StarChart.DocPropOut;",
+            @"sky6StarChart.DocumentProperty(1);",
+            @"Long = sky6StarChart.DocPropOut;",
+            @"sky6StarChart.DocumentProperty(3);",
+            @"Elevation = sky6StarChart.DocPropOut;",
+            @"Out = String(Lat) + "","" + String(Long) + "","" + String(Elevation);",
+            @"/* Socket End Packet */"
+        };
+
+        private static readonly string[] GetRotationAngleScript = {
+            @"/* Java Script */",
+            @"/* Socket Start Packet */",
+            @"var angle = NaN;",
+            @"var fov = sky6MyFOVs;",
+            @"for (var i = 0; i < fov.Count; i++) {",
+            @"fov.Name(i);",
+            @"var name = fov.OutString;",
+            @"fov.Property(name, 0, 0);",
+            @"var isVisible = fov.OutVar;",
+            @"fov.Property(name, 0, 2);",
+            @"var refFrame = fov.OutVar;",
+            @"if (isVisible == 1 && refFrame == 0) {",
+            @"fov.Property(name, 0, 1);",
+            @"angle = fov.OutVar;",
+            @"break; } }",
+            @"Out = String(angle);",
+            @"/* Socket End Packet */"
+        };
+
+        private static readonly string[] GetSelectedObjectScript = {
+            @"/* Java Script */",
+            @"/* Socket Start Packet */",
+            @"var Out = """";",
+            @"var Target56 = 0;",
+            @"var Target57 = 0;",
+            @"var Name0 = """";",
+            @"sky6ObjectInformation.Property(56);",
+            @"Target56 = sky6ObjectInformation.ObjInfoPropOut;",
+            @"sky6ObjectInformation.Property(57);",
+            @"Target57 = sky6ObjectInformation.ObjInfoPropOut;",
+            @"sky6ObjectInformation.Property(0);",
+            @"Name0 = sky6ObjectInformation.ObjInfoPropOut;",
+            @"Out = String(Target56) + "","" + String(Target57) + "","" + String(Name0);",
+            @"/* Socket End Packet */"
+        };
+
+        private static readonly string[] GetSkyChartCenterScript = {
+            @"/* Java Script */",
+            @"/* Socket Start Packet */",
+            @"var Out = """";",
+            @"var chartRA = 0;",
+            @"var chartDec = 0;",
+            @"chartRA = sky6StarChart.RightAscension;",
+            @"chartDec = sky6StarChart.Declination;",
+            @"Out = String(chartRA) + "","" + String(chartDec);",
+            @"/* Socket End Packet */"
+        };
+
         public TheSkyX(IProfileService profileService) {
             this.address = profileService.ActiveProfile.PlanetariumSettings.TSXHost;
             this.port = profileService.ActiveProfile.PlanetariumSettings.TSXPort;
@@ -84,22 +150,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyPlanetarium {
                  * Get the location (latitude, longitude, elevation) that is currently set
                  * in TSX. Elevation is in meters.
                  */
-                var script = string.Join("\r\n", new string[] {
-                    @"/* Java Script */",
-                    @"/* Socket Start Packet */",
-                    @"var Out = """";",
-                    @"var Lat = 0;",
-                    @"var Long = 0;",
-                    @"var Elevation = 0;",
-                    @"sky6StarChart.DocumentProperty(0);",
-                    @"Lat = sky6StarChart.DocPropOut;",
-                    @"sky6StarChart.DocumentProperty(1);",
-                    @"Long = sky6StarChart.DocPropOut;",
-                    @"sky6StarChart.DocumentProperty(3);",
-                    @"Elevation = sky6StarChart.DocPropOut;",
-                    @"Out = String(Lat) + "","" + String(Long) + "","" + String(Elevation);",
-                    @"/* Socket End Packet */"
-                });
+                var script = string.Join("\r\n", GetSiteScript);
 
                 var query = new BasicQuery(address, port, script);
                 string reply = await query.SendQuery(token);
@@ -143,25 +194,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyPlanetarium {
                  * is both visible and uses the screen center its reference. If we find such a FOVI,
                  * we get its rotation angle.
                  */
-                var script = string.Join("\r\n", new string[] {
-                    @"/* Java Script */",
-                    @"/* Socket Start Packet */",
-                    @"var angle = NaN;",
-                    @"var fov = sky6MyFOVs;",
-                    @"for (var i = 0; i < fov.Count; i++) {",
-                    @"fov.Name(i);",
-                    @"var name = fov.OutString;",
-                    @"fov.Property(name, 0, 0);",
-                    @"var isVisible = fov.OutVar;",
-                    @"fov.Property(name, 0, 2);",
-                    @"var refFrame = fov.OutVar;",
-                    @"if (isVisible == 1 && refFrame == 0) {",
-                    @"fov.Property(name, 0, 1);",
-                    @"angle = fov.OutVar;",
-                    @"break; } }",
-                    @"Out = String(angle);",
-                    @"/* Socket End Packet */"
-                });
+                var script = string.Join("\r\n", GetRotationAngleScript);
 
                 var query = new BasicQuery(address, port, script);
                 string reply = await query.SendQuery();
@@ -190,22 +223,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyPlanetarium {
              * Special thanks to Kenneth Sturrock for providing examples and advice on
              * how to accomplish this with TSX.
              */
-            var script = string.Join("\r\n", new string[] {
-                @"/* Java Script */",
-                @"/* Socket Start Packet */",
-                @"var Out = """";",
-                @"var Target56 = 0;",
-                @"var Target57 = 0;",
-                @"var Name0 = """";",
-                @"sky6ObjectInformation.Property(56);",
-                @"Target56 = sky6ObjectInformation.ObjInfoPropOut;",
-                @"sky6ObjectInformation.Property(57);",
-                @"Target57 = sky6ObjectInformation.ObjInfoPropOut;",
-                @"sky6ObjectInformation.Property(0);",
-                @"Name0 = sky6ObjectInformation.ObjInfoPropOut;",
-                @"Out = String(Target56) + "","" + String(Target57) + "","" + String(Name0);",
-                @"/* Socket End Packet */"
-            });
+            var script = string.Join("\r\n", GetSelectedObjectScript);
 
             var query = new BasicQuery(address, port, script);
             string reply = await query.SendQuery();
@@ -229,17 +247,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyPlanetarium {
              * Get J2000 coordinates of the center of the TSX star chart.
              * There is no way to get an object name, so we set that to an empty string.
              */
-            var script = string.Join("\r\n", new string[] {
-                @"/* Java Script */",
-                @"/* Socket Start Packet */",
-                @"var Out = """";",
-                @"var chartRA = 0;",
-                @"var chartDec = 0;",
-                @"chartRA = sky6StarChart.RightAscension;",
-                @"chartDec = sky6StarChart.Declination;",
-                @"Out = String(chartRA) + "","" + String(chartDec);",
-                @"/* Socket End Packet */"
-            });
+            var script = string.Join("\r\n", GetSkyChartCenterScript);
 
             var query = new BasicQuery(address, port, script);
             string reply = await query.SendQuery();
