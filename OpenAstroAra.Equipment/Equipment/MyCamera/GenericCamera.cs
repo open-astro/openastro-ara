@@ -224,7 +224,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyCamera {
         public async Task WaitUntilExposureIsReady(CancellationToken token) {
             using (token.Register(() => AbortExposure())) {
                 while (!sdk.IsExposureReady()) {
-                    await CoreUtil.Wait(TimeSpan.FromMilliseconds(10), token);
+                    await CoreUtil.Wait(TimeSpan.FromMilliseconds(10), token: token);
                 }
                 lastExposureEndTime = DateTime.UtcNow;
             }

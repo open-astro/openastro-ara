@@ -18,6 +18,7 @@ using System;
 using System.Collections.Generic;
 using System.Configuration;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Reflection;
 using System.Runtime.CompilerServices;
@@ -27,12 +28,12 @@ using System.Threading.Tasks;
 namespace OpenAstroAra.Core.Utility {
 
     public static class CoreUtil {
-        public static char[] PATHSEPARATORS = new char[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar };
-        public static string APPLICATIONDIRECTORY = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? string.Empty;
-        public static string APPLICATIONTEMPPATH = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "NINA");
-        public static DateTime ApplicationStartDate = DateTime.Now;
-        public static DateTime UnixEpoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-        public static long UnixEpochTicks = UnixEpoch.Ticks;
+        public static readonly char[] PATHSEPARATORS = new char[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar };
+        public static readonly string APPLICATIONDIRECTORY = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? string.Empty;
+        public static readonly string APPLICATIONTEMPPATH = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "NINA");
+        public static readonly DateTime ApplicationStartDate = DateTime.Now;
+        public static readonly DateTime UnixEpoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        public static readonly long UnixEpochTicks = UnixEpoch.Ticks;
 
         public static string Version {
             get {
@@ -74,7 +75,7 @@ namespace OpenAstroAra.Core.Utility {
         public static string Title => "N.I.N.A. - Nighttime Imaging 'N' Astronomy";
 
         public static string UserAgent => $"N.I.N.A./{Version} ({Environment.OSVersion}; {(Environment.Is64BitOperatingSystem ? "Win64" : "Win32")}; {(Environment.Is64BitProcess ? "x64" : "x86")})";
-        public static bool DebugMode { get; set; } = false;
+        public static bool DebugMode { get; set; }
 
         public static string GetUniqueFilePath(string fullPath) {
             return GetUniqueFilePath(fullPath, "{0}({1})");
@@ -84,7 +85,7 @@ namespace OpenAstroAra.Core.Utility {
 
             string fileNameOnly = Path.GetFileNameWithoutExtension(fullPath);
             string extension = Path.GetExtension(fullPath);
-            if (extension.ToLower() == ".fz") {
+            if (extension.Equals(".fz", StringComparison.OrdinalIgnoreCase)) {
                 // special handling for ".fits.fz" extension
                 extension = ".fits" + extension;
                 fileNameOnly = Path.GetFileNameWithoutExtension(fileNameOnly);
@@ -94,7 +95,7 @@ namespace OpenAstroAra.Core.Utility {
             string newFullPath = fullPath;
 
             while (File.Exists(newFullPath)) {
-                string tempFileName = string.Format(format, fileNameOnly, count++);
+                string tempFileName = string.Format(CultureInfo.InvariantCulture, format, fileNameOnly, count++);
                 newFullPath = Path.Combine(path, tempFileName + extension);
             }
             return newFullPath;
@@ -132,11 +133,11 @@ namespace OpenAstroAra.Core.Utility {
             return DateTime.UtcNow.Subtract(now);
         }
 
-        public static Task<TimeSpan> Wait(TimeSpan t, CancellationToken token = new CancellationToken(), IProgress<ApplicationStatus>? progress = default, string status = "") {
-            return Wait(t, false, token, progress, status);
+        public static Task<TimeSpan> Wait(TimeSpan t, IProgress<ApplicationStatus>? progress = default, string status = "", CancellationToken token = default) {
+            return Wait(t, false, progress, status, token);
         }
 
-        public static async Task<TimeSpan> Wait(TimeSpan t, bool progressCountDown, CancellationToken token = new CancellationToken(), IProgress<ApplicationStatus>? progress = default, string status = "") {
+        public static async Task<TimeSpan> Wait(TimeSpan t, bool progressCountDown, IProgress<ApplicationStatus>? progress = default, string status = "", CancellationToken token = default) {
             status = string.IsNullOrWhiteSpace(status) ? OpenAstroAra.Core.Locale.Loc.Instance["LblWaiting"] : status;
 
             var elapsed = new TimeSpan(0);
@@ -170,7 +171,7 @@ namespace OpenAstroAra.Core.Utility {
                         }
                     }
 
-                    progress?.Report(
+                    progress.Report(
                         new ApplicationStatus {
                             MaxProgress = 1,
                             Progress = elapsed.TotalSeconds / t.TotalSeconds,
@@ -190,12 +191,16 @@ namespace OpenAstroAra.Core.Utility {
                     if (fi.LastWriteTime < DateTime.Now.Add(deleteFromNow)) {
                         try {
                             fi.Delete();
-                        } catch (Exception ex) {
+                        } catch (IOException ex) {
+                            Logger.Error(ex);
+                        } catch (UnauthorizedAccessException ex) {
                             Logger.Error(ex);
                         }
                     }
                 }
-            } catch (Exception ex) {
+            } catch (IOException ex) {
+                Logger.Error(ex);
+            } catch (UnauthorizedAccessException ex) {
                 Logger.Error(ex);
             }
         }
@@ -215,7 +220,7 @@ namespace OpenAstroAra.Core.Utility {
             long max = (long)Math.Pow(scale, orders.Length - 1);
             foreach (string order in orders) {
                 if (bytes > max) {
-                    return string.Format("{0:D2.##} {1}", decimal.Divide(bytes, max), order);
+                    return string.Format(CultureInfo.InvariantCulture, "{0:D2.##} {1}", decimal.Divide(bytes, max), order);
                 }
 
                 max /= scale;
@@ -239,7 +244,7 @@ namespace OpenAstroAra.Core.Utility {
         /// <returns></returns>
         public static string ReplaceAllInvalidFilenameChars(string str) {
             // Replace forward and back slash with a hyphen
-            str = str.Replace(@"\", "-").Replace(@"/", "-");
+            str = str.Replace(@"\", "-", StringComparison.Ordinal).Replace(@"/", "-", StringComparison.Ordinal);
 
             // Replace any invalid path characters with an underscore (OS or filesystem dependent)
             str = ReplaceInvalidFilenameChars(str);
@@ -285,7 +290,7 @@ namespace OpenAstroAra.Core.Utility {
         public static void SaveSettings(ApplicationSettingsBase settings, [CallerMemberName] string memberName = "") {
             try {
                 settings.Save();
-            } catch (Exception ex) {
+            } catch (ConfigurationErrorsException ex) {
                 Logger.Error($"Settings failed to save from {memberName}", ex);
                 settings.Reload();
             }
@@ -311,7 +316,9 @@ namespace OpenAstroAra.Core.Utility {
                 try {
                     Logger.Info($"Copy file from {fi} to {destinationFile}");
                     fi.CopyTo(destinationFile, true);
-                } catch (Exception ex) {
+                } catch (IOException ex) {
+                    Logger.Error($"Failed to copy file {fi} to {destinationFile}.", ex);
+                } catch (UnauthorizedAccessException ex) {
                     Logger.Error($"Failed to copy file {fi} to {destinationFile}.", ex);
                 }
 
@@ -323,22 +330,6 @@ namespace OpenAstroAra.Core.Utility {
                 DirectoryInfo nextTargetSubDir =
                     target.CreateSubdirectory(diSourceSubDir.Name);
                 CopyDirectory(diSourceSubDir, nextTargetSubDir, maxDepth);
-            }
-        }
-        public static IList<T> DeserializeList<T>(string collection) {
-            try {
-                return JsonConvert.DeserializeObject<IList<T>>(collection, new JsonSerializerSettings() { TypeNameHandling = TypeNameHandling.Auto }) ?? new List<T>();
-            } catch (Exception) {
-                return new List<T>();
-            }
-
-        }
-
-        public static string SerializeList<T>(IList<T> l) {
-            try {
-                return JsonConvert.SerializeObject(l, new JsonSerializerSettings() { TypeNameHandling = TypeNameHandling.Auto }) ?? "";
-            } catch (Exception) {
-                return "";
             }
         }
     }

@@ -58,7 +58,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
         }
 
         public override Task Execute(IProgress<ApplicationStatus> progress, CancellationToken token) {
-            return OpenAstroAra.Core.Utility.CoreUtil.Wait(GetEstimatedDuration(), true, token, progress, "");
+            return OpenAstroAra.Core.Utility.CoreUtil.Wait(GetEstimatedDuration(), true, progress, "", token);
         }
 
         public override TimeSpan GetEstimatedDuration() {

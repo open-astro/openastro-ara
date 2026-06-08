@@ -235,7 +235,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem {
                                                 await Task.Delay(TimeSpan.FromSeconds(1), checkToken);
                                             }
                                             await Task.Delay(10, checkToken);
-                                            await CoreUtil.Wait(checkTimeout, checkToken, progress, Loc.Instance["Lbl_SequenceItem_WaitingForCancellation"]);
+                                            await CoreUtil.Wait(checkTimeout, progress, Loc.Instance["Lbl_SequenceItem_WaitingForCancellation"], checkToken);
                                         } catch { }
 
                                     });

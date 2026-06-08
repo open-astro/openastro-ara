@@ -22,6 +22,7 @@ namespace OpenAstroAra.Core.Utility {
 
     public abstract class BaseINPC : ObservableObject {
 
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1030:Use events where appropriate", Justification = "Standard INotifyPropertyChanged raise helper for the existing PropertyChanged event; it is not itself a candidate to become an event.")]
         protected void RaisePropertyChanged([CallerMemberName] string? propertyName = null) {
             OnPropertyChanged(new PropertyChangedEventArgs(propertyName));
         }
@@ -30,26 +31,27 @@ namespace OpenAstroAra.Core.Utility {
             RaisePropertyChanged("IsChanged");
         }
 
-        protected void Items_CollectionChanged(object? sender,
+        protected void ItemsCollectionChanged(object? sender,
                System.Collections.Specialized.NotifyCollectionChangedEventArgs e) {
             if (e.OldItems != null) {
                 foreach (INotifyPropertyChanged item in e.OldItems) {
                     item.PropertyChanged -= new
-                                           PropertyChangedEventHandler(Item_PropertyChanged);
+                                           PropertyChangedEventHandler(ItemPropertyChanged);
                 }
             }
             if (e.NewItems != null) {
                 foreach (INotifyPropertyChanged item in e.NewItems) {
                     item.PropertyChanged +=
-                                       new PropertyChangedEventHandler(Item_PropertyChanged);
+                                       new PropertyChangedEventHandler(ItemPropertyChanged);
                 }
             }
         }
 
-        protected void Item_PropertyChanged(object? sender, PropertyChangedEventArgs e) {
+        protected void ItemPropertyChanged(object? sender, PropertyChangedEventArgs e) {
             RaisePropertyChanged("IsChanged");
         }
 
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1030:Use events where appropriate", Justification = "Raises the existing PropertyChanged event for all properties (null name); not a candidate to become an event.")]
         protected void RaiseAllPropertiesChanged() {
             OnPropertyChanged(new PropertyChangedEventArgs(null));
         }
@@ -66,6 +68,7 @@ namespace OpenAstroAra.Core.Utility {
     [DataContract]
     public abstract class SerializableINPC : INotifyPropertyChanged {
 
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1030:Use events where appropriate", Justification = "Standard INotifyPropertyChanged raise helper for the existing PropertyChanged event; it is not itself a candidate to become an event.")]
         protected void RaisePropertyChanged([CallerMemberName] string? propertyName = null) {
             var handler = PropertyChanged;
             handler?.Invoke(this, new PropertyChangedEventArgs(propertyName));
@@ -78,26 +81,27 @@ namespace OpenAstroAra.Core.Utility {
             RaisePropertyChanged("IsChanged");
         }
 
-        protected void Items_CollectionChanged(object? sender,
+        protected void ItemsCollectionChanged(object? sender,
                System.Collections.Specialized.NotifyCollectionChangedEventArgs e) {
             if (e.OldItems != null) {
                 foreach (INotifyPropertyChanged item in e.OldItems) {
                     item.PropertyChanged -= new
-                                           PropertyChangedEventHandler(Item_PropertyChanged);
+                                           PropertyChangedEventHandler(ItemPropertyChanged);
                 }
             }
             if (e.NewItems != null) {
                 foreach (INotifyPropertyChanged item in e.NewItems) {
                     item.PropertyChanged +=
-                                       new PropertyChangedEventHandler(Item_PropertyChanged);
+                                       new PropertyChangedEventHandler(ItemPropertyChanged);
                 }
             }
         }
 
-        protected void Item_PropertyChanged(object? sender, PropertyChangedEventArgs e) {
+        protected void ItemPropertyChanged(object? sender, PropertyChangedEventArgs e) {
             RaisePropertyChanged("IsChanged");
         }
 
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1030:Use events where appropriate", Justification = "Raises the existing PropertyChanged event for all properties (null name); not a candidate to become an event.")]
         protected void RaiseAllPropertiesChanged() {
             var handler = PropertyChanged;
             handler?.Invoke(this, new PropertyChangedEventArgs(null));

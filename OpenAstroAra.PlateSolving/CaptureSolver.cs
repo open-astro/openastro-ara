@@ -80,7 +80,7 @@ namespace OpenAstroAra.PlateSolving {
                     await filterChangeTask;
 
                     if (!plateSolveResult.Success && remainingAttempts > 0) {
-                        await CoreUtil.Wait(parameter.ReattemptDelay, true, ct, progress, "");
+                        await CoreUtil.Wait(parameter.ReattemptDelay, true, progress, "", ct);
                     }
                 }
             } while (!plateSolveResult.Success && remainingAttempts > 0);

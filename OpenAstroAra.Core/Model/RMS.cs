@@ -14,18 +14,19 @@
 
 using OpenAstroAra.Core.Utility;
 using System;
+using System.Globalization;
 
 namespace OpenAstroAra.Core.Model {
 
     public class RMS : BaseINPC {
         private int datapoints;
-        private double meanRA = 0, meanDec = 0;
-        private double m2RA = 0, m2Dec = 0; // Variance accumulator
+        private double meanRA, meanDec;
+        private double m2RA, m2Dec; // Variance accumulator
         private double ra;
         private double dec;
         private double total;
-        private double peakRA = 0;
-        private double peakDec = 0;
+        private double peakRA;
+        private double peakDec;
 
         public double RA {
             get => ra;
@@ -57,13 +58,13 @@ namespace OpenAstroAra.Core.Model {
             }
         }
 
-        public string RAText => string.Format(Locale.Loc.Instance["LblPHD2RARMS"], RA.ToString("0.00"), (RA * Scale).ToString("0.00"));
+        public string RAText => string.Format(CultureInfo.CurrentCulture, Locale.Loc.Instance["LblPHD2RARMS"], RA.ToString("0.00", CultureInfo.CurrentCulture), (RA * Scale).ToString("0.00", CultureInfo.CurrentCulture));
 
-        public string DecText => string.Format(Locale.Loc.Instance["LblPHD2DecRMS"], Dec.ToString("0.00"), (Dec * Scale).ToString("0.00"));
+        public string DecText => string.Format(CultureInfo.CurrentCulture, Locale.Loc.Instance["LblPHD2DecRMS"], Dec.ToString("0.00", CultureInfo.CurrentCulture), (Dec * Scale).ToString("0.00", CultureInfo.CurrentCulture));
 
-        public string TotalText => string.Format(Locale.Loc.Instance["LblPHD2TotalRMS"], Total.ToString("0.00"), (Total * Scale).ToString("0.00"));
-        public string PeakRAText => string.Format(Locale.Loc.Instance["LblPHD2PeakRA"], PeakRA.ToString("0.00"), (PeakRA * Scale).ToString("0.00"));
-        public string PeakDecText => string.Format(Locale.Loc.Instance["LblPHD2PeakDec"], PeakDec.ToString("0.00"), (PeakDec * Scale).ToString("0.00"));
+        public string TotalText => string.Format(CultureInfo.CurrentCulture, Locale.Loc.Instance["LblPHD2TotalRMS"], Total.ToString("0.00", CultureInfo.CurrentCulture), (Total * Scale).ToString("0.00", CultureInfo.CurrentCulture));
+        public string PeakRAText => string.Format(CultureInfo.CurrentCulture, Locale.Loc.Instance["LblPHD2PeakRA"], PeakRA.ToString("0.00", CultureInfo.CurrentCulture), (PeakRA * Scale).ToString("0.00", CultureInfo.CurrentCulture));
+        public string PeakDecText => string.Format(CultureInfo.CurrentCulture, Locale.Loc.Instance["LblPHD2PeakDec"], PeakDec.ToString("0.00", CultureInfo.CurrentCulture), (PeakDec * Scale).ToString("0.00", CultureInfo.CurrentCulture));
 
         public double Scale { get; private set; } = 1;
 

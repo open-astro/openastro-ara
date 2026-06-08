@@ -28,16 +28,13 @@ using System.Text;
 namespace OpenAstroAra.Core.Utility {
 
     public static class Logger {
-        private static LoggingLevelSwitch levelSwitch;
+        private static readonly LoggingLevelSwitch levelSwitch = new LoggingLevelSwitch { MinimumLevel = LogEventLevel.Information };
 
         static Logger() {
-            var logDate = DateTime.Now.ToString("yyyyMMdd-HHmmss");
+            var logDate = DateTime.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
             var logDir = Path.Combine(CoreUtil.APPLICATIONTEMPPATH, "Logs");
             var processId = Environment.ProcessId;
             var logFilePath = Path.Combine(logDir, $"{logDate}-{CoreUtil.Version}.{processId}-.log");
-
-            levelSwitch = new LoggingLevelSwitch();
-            levelSwitch.MinimumLevel = LogEventLevel.Information;
 
             if (!Directory.Exists(logDir)) {
                 Directory.CreateDirectory(logDir);
@@ -49,10 +46,12 @@ namespace OpenAstroAra.Core.Utility {
                 .MinimumLevel.ControlledBy(levelSwitch)
                 .Enrich.With<LegacyLogLevelMappingEnricher>()
                 .WriteTo.Console(
+                    formatProvider: CultureInfo.InvariantCulture,
                     outputTemplate: "{Timestamp:yyyy-MM-ddTHH:mm:ss.ffff}|{LegacyLogLevel}|{Message:lj}{NewLine}{Exception}")
                 .WriteTo.File(logFilePath,
                     rollOnFileSizeLimit: true,
                     rollingInterval: RollingInterval.Month,
+                    formatProvider: CultureInfo.InvariantCulture,
                     outputTemplate: "{Timestamp:yyyy-MM-ddTHH:mm:ss.ffff}|{LegacyLogLevel}|{Message:lj}{NewLine}{Exception}",
                     shared: false,
                     buffered: false,
@@ -67,7 +66,7 @@ namespace OpenAstroAra.Core.Utility {
             var sb = new StringBuilder();
             sb.AppendLine(PadBoth("", 70, '-'));
             sb.AppendLine(PadBoth(CoreUtil.Title, 70, '-'));
-            sb.AppendLine(PadBoth(string.Format("Version {0}", CoreUtil.Version), 70, '-'));
+            sb.AppendLine(PadBoth(string.Format(CultureInfo.InvariantCulture, "Version {0}", CoreUtil.Version), 70, '-'));
             sb.AppendLine(PadBoth(DateTime.Now.ToString("s"), 70, '-'));
             sb.AppendLine(PadBoth("", 70, '-'));
             try {
@@ -76,14 +75,14 @@ namespace OpenAstroAra.Core.Utility {
                 sb.AppendLine(PadBoth("Process Architecture {0}", 70, '-', RuntimeInformation.ProcessArchitecture.ToString()));
                 sb.AppendLine(PadBoth("{0}", 70, '-', RuntimeInformation.FrameworkDescription));
                 sb.AppendLine(PadBoth("", 70, '-'));
-                sb.AppendLine(PadBoth("Processor Count {0}", 70, '-', Environment.ProcessorCount.ToString()));
-            } catch {
+                sb.AppendLine(PadBoth("Processor Count {0}", 70, '-', Environment.ProcessorCount.ToString(CultureInfo.InvariantCulture)));
+            } catch (PlatformNotSupportedException) {
                 sb.AppendLine(PadBoth("Unable to determine OS information", 70, '-'));
             }
 
             try {
-                sb.AppendLine(PadBoth("Total Physical Memory {0} GB", 70, '-', Math.Round(GetTotalPhysicalMemory() / 1024d / 1024d / 1024d, 2).ToString()));
-            } catch {
+                sb.AppendLine(PadBoth("Total Physical Memory {0} GB", 70, '-', Math.Round(GetTotalPhysicalMemory() / 1024d / 1024d / 1024d, 2).ToString(CultureInfo.InvariantCulture)));
+            } catch (InvalidOperationException) {
                 sb.AppendLine(PadBoth("Unable to determine Physical Memory", 70, '-'));
             }
 
@@ -96,7 +95,7 @@ namespace OpenAstroAra.Core.Utility {
             GC.GetGCMemoryInfo().TotalAvailableMemoryBytes;
 
         private static string PadBoth(string msg, int length, char paddingChar, params string[] msgParams) {
-            var source = string.Format(msg, msgParams);
+            var source = string.Format(CultureInfo.InvariantCulture, msg, msgParams);
             int spaces = length - source.Length;
             int padLeft = spaces / 2 + source.Length;
             return source.PadLeft(padLeft, paddingChar).PadRight(length, paddingChar);
@@ -185,7 +184,7 @@ namespace OpenAstroAra.Core.Utility {
             Log.Verbose(MessageTemplate, Path.GetFileName(sourceFilePath), memberName, lineNumber, message);
         }
 
-        private class HeaderWriter : FileLifecycleHooks {
+        private sealed class HeaderWriter : FileLifecycleHooks {
 
             // Factory method to generate the file header
             private readonly Func<string> headerFactory;
@@ -207,7 +206,7 @@ namespace OpenAstroAra.Core.Utility {
             }
         }
 
-        private class LegacyLogLevelMappingEnricher : ILogEventEnricher {
+        private sealed class LegacyLogLevelMappingEnricher : ILogEventEnricher {
             private static readonly string LEGACYLOGLEVELPROPERTY = "LegacyLogLevel";
             private static readonly string TRACE = LogLevelEnum.TRACE.ToString();
             private static readonly string DEBUG = LogLevelEnum.DEBUG.ToString();
