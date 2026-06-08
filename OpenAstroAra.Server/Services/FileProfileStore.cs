@@ -13,7 +13,10 @@
 #endregion "copyright"
 
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using OpenAstroAra.Server.Contracts;
+using System;
+using System.IO;
 using System.Text.Json;
 
 namespace OpenAstroAra.Server.Services;
@@ -41,12 +44,12 @@ namespace OpenAstroAra.Server.Services;
 /// Multi-profile + §42 import/export lands in v0.1.0 per the §55.1
 /// roadmap; this class is the foundation that both reuse.
 /// </summary>
-public sealed class FileProfileStore : IProfileStore {
+public sealed partial class FileProfileStore : IProfileStore {
     private readonly object _lock = new();
     private readonly string _profileDir;
     private readonly string _profilePath;
     private readonly string _tempPath;
-    private readonly ILogger<FileProfileStore>? _logger;
+    private readonly ILogger<FileProfileStore> _logger;
     // Pretty-printed variant of the AOT-safe context for on-disk
     // readability. Reading uses the default (non-indented) instance.
     private static readonly AraJsonSerializerContext _indentedContext =
@@ -60,7 +63,7 @@ public sealed class FileProfileStore : IProfileStore {
         _profileDir = profileDir;
         _profilePath = Path.Combine(profileDir, "profile.json");
         _tempPath = _profilePath + ".tmp";
-        _logger = logger;
+        _logger = logger ?? NullLogger<FileProfileStore>.Instance;
 
         _snapshot = LoadOrDefaults();
     }
@@ -114,10 +117,10 @@ public sealed class FileProfileStore : IProfileStore {
             var json = JsonSerializer.Serialize(snapshot, _indentedContext.ProfileSnapshotDto);
             File.WriteAllText(_tempPath, json);
             File.Move(_tempPath, _profilePath, overwrite: true);
-        } catch (Exception ex) {
+        } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) {
             // Best-effort persistence. In-memory state still updated;
             // the user's next save attempt will retry.
-            _logger?.LogWarning(ex, "Failed to persist profile to {Path}", _profilePath);
+            LogPersistFailed(ex, _profilePath);
         }
     }
 
@@ -129,8 +132,8 @@ public sealed class FileProfileStore : IProfileStore {
             try {
                 Directory.CreateDirectory(_profileDir);
                 Persist(defaults);
-            } catch (Exception ex) {
-                _logger?.LogWarning(ex, "Could not write initial profile to {Path}", _profilePath);
+            } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+                LogInitialWriteFailed(ex, _profilePath);
             }
             return defaults;
         }
@@ -138,12 +141,12 @@ public sealed class FileProfileStore : IProfileStore {
             var json = File.ReadAllText(_profilePath);
             var loaded = JsonSerializer.Deserialize(json, AraJsonSerializerContext.Default.ProfileSnapshotDto);
             if (loaded is null) {
-                _logger?.LogWarning("Profile file {Path} deserialized to null — using defaults", _profilePath);
+                LogDeserializedNull(_profilePath);
                 return defaults;
             }
             return loaded;
-        } catch (Exception ex) {
-            _logger?.LogWarning(ex, "Profile file {Path} could not be parsed — using defaults", _profilePath);
+        } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) {
+            LogParseFailed(ex, _profilePath);
             return defaults;
         }
     }
@@ -210,4 +213,20 @@ public sealed class FileProfileStore : IProfileStore {
             AsinhDefaultBeta: 3.0,
             LinearClipPercentilesLow: 0.005,
             LinearClipPercentilesHigh: 0.995));
+
+    #region LoggerMessage delegates (CA1848)
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to persist profile to {Path}")]
+    private partial void LogPersistFailed(Exception ex, string path);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Could not write initial profile to {Path}")]
+    private partial void LogInitialWriteFailed(Exception ex, string path);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Profile file {Path} deserialized to null — using defaults")]
+    private partial void LogDeserializedNull(string path);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Profile file {Path} could not be parsed — using defaults")]
+    private partial void LogParseFailed(Exception ex, string path);
+
+    #endregion
 }
