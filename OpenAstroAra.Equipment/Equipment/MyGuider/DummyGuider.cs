@@ -82,7 +82,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider {
             Connected = false;
         }
 
-        public async Task<bool> Pause(bool pause, CancellationToken ct) {
+        public static async Task<bool> Pause(bool pause, CancellationToken ct) {
             return true;
         }
 

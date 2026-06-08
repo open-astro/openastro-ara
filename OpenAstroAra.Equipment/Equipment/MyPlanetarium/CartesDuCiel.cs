@@ -144,7 +144,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyPlanetarium {
             return Task.FromResult(double.NaN);
         }
 
-        private bool Match(string input, string pattern, out string result) {
+        private static bool Match(string input, string pattern, out string result) {
             result = string.Empty;
             var regex = new Regex(pattern);
             var match = regex.Match(input);

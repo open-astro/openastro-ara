@@ -125,7 +125,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.MetaGuide {
                     }
                 } catch (OperationCanceledException) {
                 }
-            });
+            }, cancellationToken);
         }
 
         public async Task RunListener(
@@ -173,7 +173,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.MetaGuide {
                     throw;
                 } finally {
                     socket?.Close();
-                    try { consumerTokenSource?.Cancel(); } catch (ObjectDisposedException) { }
+                    try { if (consumerTokenSource != null) { await consumerTokenSource.CancelAsync(); } } catch (ObjectDisposedException) { }
                     consumerTask?.WaitWithoutException(new CancellationTokenSource(METAGUIDE_QUEUE_TIMEOUT_MS).Token);
                     this.OnDisconnected?.Invoke(this, System.EventArgs.Empty);
                 }

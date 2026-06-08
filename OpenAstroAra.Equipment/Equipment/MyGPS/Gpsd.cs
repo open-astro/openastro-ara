@@ -53,7 +53,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGPS {
                 throw new GnssInvalidHostException(ex.Message);
             }
 
-            var schema = await NJsonSchema.JsonSchema.FromJsonAsync(TpvMessage.Schema);
+            var schema = await NJsonSchema.JsonSchema.FromJsonAsync(TpvMessage.Schema, token);
             var location = new Location();
 
             try {
@@ -111,7 +111,9 @@ namespace OpenAstroAra.Equipment.Equipment.MyGPS {
             return location;
         }
 
-        internal class TpvMessage {
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1812:Avoid uninstantiated internal classes",
+            Justification = "Instantiated by Newtonsoft.Json (JsonConvert.DeserializeObject<TpvMessage>) when parsing gpsd TPV lines; the analyzer cannot see the reflection-based construction.")]
+        internal sealed class TpvMessage {
             public static string Schema => @"{
                   '$schema': 'http://json-schema.org/draft-04/schema#',
                   'type': 'object',

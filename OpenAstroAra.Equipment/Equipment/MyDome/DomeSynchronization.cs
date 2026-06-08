@@ -100,7 +100,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyDome {
             var domeRadius = domeSettings.DomeRadiusMm;
             if (Vector4.Dot(scopeApertureOrigin, scopeApertureOrigin) > (domeRadius * domeRadius)) {
                 Notifier.ShowError(Loc.Instance["LblDomeRadiusMisconfigured"]);
-                throw new Exception(Loc.Instance["LblDomeRadiusMisconfigured"]);
+                throw new InvalidOperationException(Loc.Instance["LblDomeRadiusMisconfigured"]);
             }
 
             var underRoot = (dotProduct * dotProduct) - Vector4.Dot(scopeApertureOrigin, scopeApertureOrigin) + (domeRadius * domeRadius);
