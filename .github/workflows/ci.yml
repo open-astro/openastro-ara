@@ -77,6 +77,47 @@ jobs:
       # When `actionlint` style checks are wanted (e.g., shellcheck inside
       # `run:` blocks), re-add via `rhysd/actionlint` at Phase 14.
 
+  # Whole-solution analyzer gate. Directory.Build.props turns on the full CAxxxx
+  # catalog (AnalysisMode=All), Nullable, and TreatWarningsAsErrors for every
+  # project, so this single Release build of the .sln fails on ANY new analyzer
+  # (CA/CS/SYSLIB/NUnit) warning anywhere in the tree — keeping the 2026-06
+  # zero-warning sweep from regressing. server-build only compiles Server+Fits, so
+  # without this job a warning in Sequencer/Equipment/Image/etc. would slip through.
+  analyzer-gate:
+    name: Analyzer gate (full solution, warnings = errors)
+    runs-on: ubuntu-latest
+    needs: sanity
+    steps:
+      - name: Checkout (no LFS)
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v4.x — pinned per zizmor + CodeRabbit security finding on PR #12
+        with:
+          lfs: false
+          persist-credentials: false
+
+      - name: Setup .NET 10 SDK
+        uses: actions/setup-dotnet@9a946fdbd5fb07b82b2f5a4466058b876ab72bb2  # v4.x pinned per zizmor pattern
+        with:
+          dotnet-version: '10.0.x'
+
+      # The Image/Fits tests resolve CFITSIO at runtime; the build itself does not
+      # need it, but the test step below does.
+      - name: Install CFITSIO (Linux)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libcfitsio-dev
+
+      - name: dotnet restore (solution)
+        run: dotnet restore OpenAstroAra.sln
+
+      # TreatWarningsAsErrors=true (Directory.Build.props) makes this fail on any
+      # CA/CS/SYSLIB/NUnit warning. NU1701/NU5104 NuGet restore notices are exempted
+      # there via WarningsNotAsErrors, so they stay visible without breaking the build.
+      - name: dotnet build (solution, Release) — warnings are errors
+        run: dotnet build OpenAstroAra.sln -c Release --no-restore
+
+      - name: dotnet test (solution, Release)
+        run: dotnet test OpenAstroAra.sln -c Release --no-build --verbosity normal
+
   server-build:
     name: Server (build + cross-publish + Docker)
     runs-on: ubuntu-latest
