@@ -156,13 +156,11 @@ namespace OpenAstroAra.Core.Model {
         }
 
         public bool Set(string key, int value) {
-            return this.Set(key, string.Format("{0:0}", value));
+            return this.Set(key, string.Format(CultureInfo.InvariantCulture, "{0:0}", value));
         }
 
         public bool Add(ImagePattern pattern) {
-            if (!patterns.ContainsKey(pattern.Key)) {
-                patterns.Add(pattern.Key, pattern);
-            }
+            patterns.TryAdd(pattern.Key, pattern);
             return false;
         }
 
@@ -181,9 +179,9 @@ namespace OpenAstroAra.Core.Model {
             string s = filePatternMacro;
             foreach (ImagePattern p in patterns.Values) {
                 if (p.Key == ImagePatternKeys.ImageType && !string.IsNullOrWhiteSpace(imageType)) {
-                    s = s.Replace(p.Key, imageType);
+                    s = s.Replace(p.Key, imageType, StringComparison.Ordinal);
                 } else {
-                    s = s.Replace(p.Key, p.Value);
+                    s = s.Replace(p.Key, p.Value, StringComparison.Ordinal);
                 }
             }
             var path = s.Split(Utility.CoreUtil.PATHSEPARATORS, StringSplitOptions.RemoveEmptyEntries);
@@ -226,7 +224,7 @@ namespace OpenAstroAra.Core.Model {
             p.Set(ImagePatternKeys.PeakDecArcSec, 1.44);
             p.Set(ImagePatternKeys.FocuserPosition, 12542);
             p.Set(ImagePatternKeys.FocuserTemp, "3.94");
-            p.Set(ImagePatternKeys.ApplicationStartDate, Utility.CoreUtil.ApplicationStartDate.ToString("yyyy-MM-dd"));
+            p.Set(ImagePatternKeys.ApplicationStartDate, Utility.CoreUtil.ApplicationStartDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
             p.Set(ImagePatternKeys.HFR, 3.25);
             p.Set(ImagePatternKeys.SQM, 21.83);
             p.Set(ImagePatternKeys.ReadoutMode, "42 MHz");

@@ -101,7 +101,7 @@ namespace OpenAstroAra.Core.Utility.ExternalCommand {
 
         public static string GetComandFromString(string commandLine) {
             //if you enclose the command (with spaces) in quotes, then you must remove them
-            return @"" + ParseArguments(commandLine)[0].Replace("\"", "").Trim();
+            return @"" + ParseArguments(commandLine)[0].Replace("\"", "", StringComparison.Ordinal).Trim();
         }
 
         public static string GetArgumentsFromString(string commandLine) {

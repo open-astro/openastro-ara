@@ -90,14 +90,16 @@ namespace OpenAstroAra.Core.Model {
         /// </example>
         /// <param name="filePath">The file pointing to the horizon file</param>
         /// <returns>An instance of CustomHorizon</returns>
-        public static CustomHorizon FromReader_Standard(TextReader sr) {
+        private static readonly char[] HorizonColumnSeparators = { '\t', ' ', ',', ';' };
+
+        public static CustomHorizon FromReaderStandard(TextReader sr) {
             var horizonMap = new SortedDictionary<double, double>();
 
             string? line;
             while ((line = sr.ReadLine()?.Trim()) != null) {
                 // Lines starting with # are comments
-                if (!line.StartsWith("#") && !string.IsNullOrEmpty(line)) {
-                    var columns = line.Split(new char[] { '\t', ' ', ',', ';' }, StringSplitOptions.RemoveEmptyEntries);
+                if (!line.StartsWith('#') && !string.IsNullOrEmpty(line)) {
+                    var columns = line.Split(HorizonColumnSeparators, StringSplitOptions.RemoveEmptyEntries);
                     if (columns.Length == 2) {
                         if (double.TryParse(columns[0], NumberStyles.Any, CultureInfo.InvariantCulture, out var azimuth)) {
                             if (double.TryParse(columns[1], NumberStyles.Any, CultureInfo.InvariantCulture, out var altitude)) {
@@ -118,7 +120,7 @@ namespace OpenAstroAra.Core.Model {
             return new CustomHorizon(horizonMap);
         }
 
-        public static CustomHorizon FromReader_MW4(StreamReader sr) {
+        public static CustomHorizon FromReaderMW4(StreamReader sr) {
             var horizonMap = new SortedDictionary<double, double>();
 
             using (JsonTextReader jsonReader = new JsonTextReader(sr)) {
@@ -169,9 +171,9 @@ namespace OpenAstroAra.Core.Model {
                 using (var fs = File.OpenRead(filePath)) {
                     using (var sr = new StreamReader(fs)) {
                         if (fi.Extension == ".hpts") {
-                            return FromReader_MW4(sr);
+                            return FromReaderMW4(sr);
                         } else {
-                            return FromReader_Standard(sr);
+                            return FromReaderStandard(sr);
                         }
                     }
                 }

@@ -56,7 +56,7 @@ namespace OpenAstroAra.Core.Utility {
                 SetDllDirectory(System.IO.Path.GetDirectoryName(dllPath) ?? string.Empty);
 
                 if (LoadLibrary(dllPath) == IntPtr.Zero) {
-                    var error = Marshal.GetLastWin32Error().ToString();
+                    var error = Marshal.GetLastWin32Error().ToString(System.Globalization.CultureInfo.InvariantCulture);
                     var message = $"DllLoader failed to load library {dllPath} due to error code {error}";
                     Logger.Error(message);
                 }
