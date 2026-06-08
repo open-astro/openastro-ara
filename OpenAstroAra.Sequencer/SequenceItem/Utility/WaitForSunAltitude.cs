@@ -24,6 +24,7 @@ using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Sequencer.Validations;
 using System;
 using System.ComponentModel.Composition;
+using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -57,7 +58,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
 
                 if (MustWait()) {
                     progress.Report(new ApplicationStatus() {
-                        Status = string.Format(Loc.Instance["Lbl_SequenceItem_Utility_WaitForSunAltitude_Progress"],
+                        Status = string.Format(CultureInfo.CurrentCulture, Loc.Instance["Lbl_SequenceItem_Utility_WaitForSunAltitude_Progress"],
                             Data.CurrentAltitude,
                             AttributeHelper.GetDescription(Data.Comparator),
                             Data.TargetAltitude)
@@ -114,7 +115,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
         private DateTime CalculateExpectedDateTime(DateTime time) {
             var customRiseAndSet = new SunCustomRiseAndSet(NighttimeCalculator.GetReferenceDate(time), Data.Observer.Latitude, Data.Observer.Longitude, Data.Observer.Elevation, GetDataOffset());
             AsyncContext.Run(customRiseAndSet.Calculate);
-            return (Data.Comparator == ComparisonOperator.GreaterThan ? customRiseAndSet.SetTime : customRiseAndSet?.Rise) ?? DateTime.MaxValue;
+            return (Data.Comparator == ComparisonOperator.GreaterThan ? customRiseAndSet.SetTime : customRiseAndSet.Rise) ?? DateTime.MaxValue;
         }
 
         public override string ToString() {

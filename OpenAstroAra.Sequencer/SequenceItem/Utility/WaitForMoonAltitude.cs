@@ -24,6 +24,7 @@ using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Sequencer.Validations;
 using System;
 using System.ComponentModel.Composition;
+using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -40,7 +41,6 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
         [ImportingConstructor]
         public WaitForMoonAltitude(IProfileService profileService) : base(profileService, useCustomHorizon: false) {
             Data.Offset = 0d;
-            Name = Name;
         }
 
         private WaitForMoonAltitude(WaitForMoonAltitude cloneMe) : this(cloneMe.ProfileService) {
@@ -59,7 +59,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
 
                 if (MustWait()) {
                     progress.Report(new ApplicationStatus() {
-                        Status = string.Format(Loc.Instance["Lbl_SequenceItem_Utility_WaitForMoonAltitude_Progress"],
+                        Status = string.Format(CultureInfo.CurrentCulture, Loc.Instance["Lbl_SequenceItem_Utility_WaitForMoonAltitude_Progress"],
                         Math.Round(Data.CurrentAltitude, 2),
                         AttributeHelper.GetDescription(Data.Comparator),
                         Math.Round(Data.TargetAltitude, 2))
@@ -114,7 +114,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
         private DateTime CalculateExpectedDateTime(DateTime time) {
             var customRiseAndSet = new MoonCustomRiseAndSet(NighttimeCalculator.GetReferenceDate(time), Data.Observer.Latitude, Data.Observer.Longitude, Data.Observer.Elevation, GetDataOffset());
             AsyncContext.Run(customRiseAndSet.Calculate);
-            return (Data.Comparator == ComparisonOperator.GreaterThan ? customRiseAndSet.SetTime : customRiseAndSet?.Rise) ?? DateTime.MaxValue;
+            return (Data.Comparator == ComparisonOperator.GreaterThan ? customRiseAndSet.SetTime : customRiseAndSet.Rise) ?? DateTime.MaxValue;
         }
 
         public override string ToString() {
