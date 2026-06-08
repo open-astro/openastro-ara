@@ -22,6 +22,8 @@ using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.Utility;
 using OpenAstroAra.Sequencer.Validations;
 using System;
+using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Input;
@@ -29,6 +31,8 @@ using System.Windows.Input;
 namespace OpenAstroAra.Sequencer.SequenceItem {
 
     [JsonObject(MemberSerialization.OptIn)]
+    [SuppressMessage("Naming", "CA1724:Type names should not match namespaces",
+        Justification = "SequenceItem is the established public base type of the inherited OpenAstroAra.Sequencer.SequenceItem namespace (NINA-derived API). Renaming either the type or the namespace would break the serialized sequence format and every derived instruction. CA1724 documents that suppression is safe for shipping libraries.")]
     public abstract class SequenceItem : SequenceHasChanged, ISequenceItem {
 
         protected SequenceItem() {
@@ -199,6 +203,8 @@ namespace OpenAstroAra.Sequencer.SequenceItem {
             }
         }
 
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "Per-attempt instruction execution boundary: an instruction's Execute() may throw any exception type. All must be captured here to log, raise the failure event, and drive the retry loop / configured InstructionErrorBehavior. CA1031 documents that catching general exceptions is acceptable at such top-level/boundary handlers that log and recover.")]
         public async Task Run(IProgress<ApplicationStatus> progress, CancellationToken token) {
             using (localCts = CancellationTokenSource.CreateLinkedTokenSource(token)) {
                 if (Status == SequenceEntityStatus.CREATED) {
@@ -236,14 +242,14 @@ namespace OpenAstroAra.Sequencer.SequenceItem {
                                             }
                                             await Task.Delay(10, checkToken);
                                             await CoreUtil.Wait(checkTimeout, progress, Loc.Instance["Lbl_SequenceItem_WaitingForCancellation"], checkToken);
-                                        } catch { }
+                                        } catch (OperationCanceledException) { }
 
-                                    });
+                                    }, checkToken);
                                     var executionTask = this.Execute(progress, localToken);
                                     var completedTask = await Task.WhenAny(checkTask, executionTask);
                                     if (completedTask == checkTask) {
                                         Logger.Error($"Execution for {this} did not finish after being cancelled for over {checkTimeout.Minutes} minutes! Continuing...");
-                                        Notifier.ShowError(string.Format(Loc.Instance["Lbl_SequenceItem_SkippingAfterFailedCancellation"], this, checkTimeout.Minutes));
+                                        Notifier.ShowError(string.Format(CultureInfo.CurrentCulture, Loc.Instance["Lbl_SequenceItem_SkippingAfterFailedCancellation"], this, checkTimeout.Minutes));
                                         root?.RaiseFailureEvent(this, new SequenceEntityFailedException($"Execution for {this} did not finish after being cancelled for over {checkTimeout.Minutes} minutes!"));
                                     } else {
                                         // Ensure any exceptions from main task are observed
@@ -261,13 +267,16 @@ namespace OpenAstroAra.Sequencer.SequenceItem {
                             } catch (OperationCanceledException) {
                                 throw;
                             } catch (Exception ex) {
+                                // Per-attempt instruction execution boundary: an Execute() implementation
+                                // may throw any exception. It is logged and surfaced via RaiseFailureEvent,
+                                // then the retry loop / configured InstructionErrorBehavior takes over.
                                 Logger.Error($"{this} - ", ex);
                                 success = false;
                                 root?.RaiseFailureEvent(this, ex);
                             } finally {
                                 try {
-                                    checkTokenSource.Cancel();
-                                } catch { }
+                                    await checkTokenSource.CancelAsync();
+                                } catch (ObjectDisposedException) { }
                             }
                         }
 
@@ -297,14 +306,14 @@ namespace OpenAstroAra.Sequencer.SequenceItem {
                     } finally {
                         progress?.Report(new ApplicationStatus());
                         if (root != null && !(this is ISequenceContainer)) {
-                            root?.RemoveRunningItem(this);
+                            root.RemoveRunningItem(this);
                         }
                     }
                 }
             }
         }
 
-        private async Task<bool> SkipToEndOfSequence(ISequenceRootContainer root) {
+        private static async Task<bool> SkipToEndOfSequence(ISequenceRootContainer root) {
             var startContainer = root.Items[0] as ISequenceContainer;
             var targetContainer = root.Items[1] as ISequenceContainer;
             if (startContainer?.Status == SequenceEntityStatus.RUNNING) {
@@ -322,7 +331,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem {
                 this.Status = SequenceEntityStatus.SKIPPED;
                 try {
                     localCts?.Cancel();
-                } catch { }
+                } catch (ObjectDisposedException) { }
             }
         }
 
