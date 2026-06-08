@@ -31,10 +31,10 @@ namespace OpenAstroAra.Core.Enum {
         XISF,
 
         [Obsolete]
-        TIFF_ZIP,
+        TIFFZip,
 
         [Obsolete]
-        TIFF_LZW,
+        TIFFLzw,
 
         RAW
     }

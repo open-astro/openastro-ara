@@ -305,7 +305,7 @@ namespace OpenAstroAra.Sequencer.Utility {
             }
 
             switch (data.Comparator) {
-                case ComparisonOperatorEnum.GREATER_THAN:
+                case ComparisonOperatorEnum.GreaterThan:
                     if ((until && data.CurrentAltitude > targetAltitude) || (!until && data.CurrentAltitude <= targetAltitude)) {
                         data.TargetAltitude = targetAltitude;
                         data.ExpectedTime = Loc.Instance["LblNow"];

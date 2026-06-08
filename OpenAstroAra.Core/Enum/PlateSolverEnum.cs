@@ -21,7 +21,7 @@ namespace OpenAstroAra.Core.Enum {
     public enum PlateSolverEnum {
 
         [Description("LblAstrometryNet")]
-        ASTROMETRY_NET,
+        AstrometryNet,
 
         [Description("LblLocalPlatesolver")]
         LOCAL,
@@ -39,7 +39,7 @@ namespace OpenAstroAra.Core.Enum {
         ASTAP,
 
         [Description("LblTSXImageLink")]
-        TSX_IMAGELINK,
+        TSXImageLink,
 
         [Description("LblPinPoint")]
         PINPONT

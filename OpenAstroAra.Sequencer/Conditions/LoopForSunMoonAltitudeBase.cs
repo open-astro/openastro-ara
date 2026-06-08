@@ -36,8 +36,8 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
             var check = true;
             switch (Data.Comparator) {
 
-                case ComparisonOperatorEnum.GREATER_THAN:
-                case ComparisonOperatorEnum.GREATER_THAN_OR_EQUAL:
+                case ComparisonOperatorEnum.GreaterThan:
+                case ComparisonOperatorEnum.GreaterThanOrEqual:
                     if (Data.CurrentAltitude > GetDataOffset()) { check = false; }
                     break;
 

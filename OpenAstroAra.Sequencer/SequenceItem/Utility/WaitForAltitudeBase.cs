@@ -41,11 +41,11 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
         private ComparisonOperatorEnum DeprecatedComparator {
             set {
                 switch (value) {
-                    case ComparisonOperatorEnum.GREATER_THAN_OR_EQUAL:
-                        value = ComparisonOperatorEnum.GREATER_THAN;
+                    case ComparisonOperatorEnum.GreaterThanOrEqual:
+                        value = ComparisonOperatorEnum.GreaterThan;
                         break;
-                    case ComparisonOperatorEnum.LESS_THAN_OR_EQUAL:
-                        value = ComparisonOperatorEnum.LESS_THAN;
+                    case ComparisonOperatorEnum.LessThanOrEqual:
+                        value = ComparisonOperatorEnum.LessThan;
                         break;
                 }
                 Data.Comparator = value;

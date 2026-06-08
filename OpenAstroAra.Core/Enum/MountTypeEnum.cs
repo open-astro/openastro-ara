@@ -29,6 +29,6 @@ namespace OpenAstroAra.Core.Enum {
         EQUATORIAL,
 
         [Description("LblForkOnWedge")]
-        FORK_ON_WEDGE,
+        ForkOnWedge,
     }
 }

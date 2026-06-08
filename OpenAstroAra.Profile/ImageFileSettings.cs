@@ -116,19 +116,19 @@ namespace OpenAstroAra.Profile {
         public FileTypeEnum FileType {
             get {
                 /*
-                 * The TIFF_LZW and TIFF_ZIP file types are obsoleted and
+                 * The TIFFLzw and TIFFZip file types are obsoleted and
                  * the compression options are specified separately now. This block
                  * will catch any old profiles that have old file types set and
                  * correct them to adhere to the new scheme.
                  */
 #pragma warning disable CS0612 // Type or member is obsolete
                 switch (fileType) {
-                    case FileTypeEnum.TIFF_LZW:
+                    case FileTypeEnum.TIFFLzw:
                         FileType = FileTypeEnum.TIFF;
                         TIFFCompressionType = TIFFCompressionTypeEnum.LZW;
                         break;
 
-                    case FileTypeEnum.TIFF_ZIP:
+                    case FileTypeEnum.TIFFZip:
                         FileType = FileTypeEnum.TIFF;
                         TIFFCompressionType = TIFFCompressionTypeEnum.ZIP;
                         break;

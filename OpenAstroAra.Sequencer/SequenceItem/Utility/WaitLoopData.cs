@@ -79,8 +79,8 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
         public ComparisonOperatorEnum Comparator {
             get {
                 // Backward compatibility
-                if (comparator == ComparisonOperatorEnum.EQUALS || comparator == ComparisonOperatorEnum.NOT_EQUAL) {
-                    comparator = ComparisonOperatorEnum.GREATER_THAN;
+                if (comparator == ComparisonOperatorEnum.EQUALS || comparator == ComparisonOperatorEnum.NotEqual) {
+                    comparator = ComparisonOperatorEnum.GreaterThan;
                 }
                 return comparator;
             }
@@ -116,10 +116,10 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
 
         public ComparisonOperatorEnum[] ComparisonOperators => Enum.GetValues(typeof(ComparisonOperatorEnum))
             .Cast<ComparisonOperatorEnum>()
-            .Where(p => p != ComparisonOperatorEnum.GREATER_THAN_OR_EQUAL)
-            .Where(p => p != ComparisonOperatorEnum.LESS_THAN_OR_EQUAL)
+            .Where(p => p != ComparisonOperatorEnum.GreaterThanOrEqual)
+            .Where(p => p != ComparisonOperatorEnum.LessThanOrEqual)
             .Where(p => p != ComparisonOperatorEnum.EQUALS)
-            .Where(p => p != ComparisonOperatorEnum.NOT_EQUAL)
+            .Where(p => p != ComparisonOperatorEnum.NotEqual)
             .ToArray();
 
 

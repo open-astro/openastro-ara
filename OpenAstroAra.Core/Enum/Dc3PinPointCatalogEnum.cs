@@ -27,13 +27,13 @@ namespace OpenAstroAra.Core.Enum {
         ppTycho2 = 4,
 
         [Description("LblPinPointCatUsnoA")]
-        ppUSNO_A = 5,
+        ppUSNOA = 5,
 
         [Description("LblPinPointCatUcac2")]
         ppUCAC2 = 6,
 
         [Description("LblPinPointCatUsnoB")]
-        ppUSNO_B = 7,
+        ppUSNOB = 7,
 
         [Description("LblPinPointCatUcac3")]
         ppUCAC3 = 10,

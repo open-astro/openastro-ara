@@ -44,7 +44,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
         [ImportingConstructor]
         public MoonIlluminationCondition() {
             UserMoonIllumination = 0d;
-            Comparator = ComparisonOperatorEnum.GREATER_THAN;
+            Comparator = ComparisonOperatorEnum.GreaterThan;
 
             CalculateCurrentMoonState();
             ConditionWatchdog = new ConditionWatchdog(InterruptWhenMoonOutsideOfBounds, TimeSpan.FromSeconds(5));
@@ -108,7 +108,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
         public ComparisonOperatorEnum[] ComparisonOperators => Enum.GetValues(typeof(ComparisonOperatorEnum))
             .Cast<ComparisonOperatorEnum>()
             .Where(p => p != ComparisonOperatorEnum.EQUALS)
-            .Where(p => p != ComparisonOperatorEnum.NOT_EQUAL)
+            .Where(p => p != ComparisonOperatorEnum.NotEqual)
             .ToArray();
 
         public override void AfterParentChanged() {
@@ -124,19 +124,19 @@ namespace OpenAstroAra.Sequencer.Conditions {
             var check = true;
             // See if the moon's illumination is outside of the user's wishes
             switch (Comparator) {
-                case ComparisonOperatorEnum.LESS_THAN:
+                case ComparisonOperatorEnum.LessThan:
                     if (CurrentMoonIllumination < UserMoonIllumination) { check = false; }
                     break;
 
-                case ComparisonOperatorEnum.LESS_THAN_OR_EQUAL:
+                case ComparisonOperatorEnum.LessThanOrEqual:
                     if (CurrentMoonIllumination <= UserMoonIllumination) { check = false; }
                     break;
 
-                case ComparisonOperatorEnum.GREATER_THAN:
+                case ComparisonOperatorEnum.GreaterThan:
                     if (CurrentMoonIllumination > UserMoonIllumination) { check = false; }
                     break;
 
-                case ComparisonOperatorEnum.GREATER_THAN_OR_EQUAL:
+                case ComparisonOperatorEnum.GreaterThanOrEqual:
                     if (CurrentMoonIllumination >= UserMoonIllumination) { check = false; }
                     break;
             }

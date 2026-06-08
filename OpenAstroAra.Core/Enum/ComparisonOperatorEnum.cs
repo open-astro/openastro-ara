@@ -24,18 +24,18 @@ namespace OpenAstroAra.Core.Enum {
         EQUALS,
 
         [Description("LblCompatatorLessThan")]
-        LESS_THAN,
+        LessThan,
 
         [Description("LblComparatorLessThanOrEqual")]
-        LESS_THAN_OR_EQUAL,
+        LessThanOrEqual,
 
         [Description("LblComparatorGreaterThan")]
-        GREATER_THAN,
+        GreaterThan,
 
         [Description("LblComparatorGreaterThanOrEqual")]
-        GREATER_THAN_OR_EQUAL,
+        GreaterThanOrEqual,
 
         [Description("LblComparatorNotEqual")]
-        NOT_EQUAL
+        NotEqual
     }
 }

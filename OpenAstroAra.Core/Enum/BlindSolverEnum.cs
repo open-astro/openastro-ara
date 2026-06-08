@@ -21,7 +21,7 @@ namespace OpenAstroAra.Core.Enum {
     public enum BlindSolverEnum {
 
         [Description("LblAstrometryNet")]
-        ASTROMETRY_NET,
+        AstrometryNet,
 
         [Description("LblLocalPlatesolver")]
         LOCAL,

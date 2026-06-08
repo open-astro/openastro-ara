@@ -72,7 +72,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
 
         private bool MustWait() {
             switch (Data.Comparator) {
-                case ComparisonOperatorEnum.GREATER_THAN:
+                case ComparisonOperatorEnum.GreaterThan:
                     return Data.CurrentAltitude > GetDataOffset();
 
                 default:
@@ -114,7 +114,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
         private DateTime CalculateExpectedDateTime(DateTime time) {
             var customRiseAndSet = new SunCustomRiseAndSet(NighttimeCalculator.GetReferenceDate(time), Data.Observer.Latitude, Data.Observer.Longitude, Data.Observer.Elevation, GetDataOffset());
             AsyncContext.Run(customRiseAndSet.Calculate);
-            return (Data.Comparator == ComparisonOperatorEnum.GREATER_THAN ? customRiseAndSet.Set : customRiseAndSet?.Rise) ?? DateTime.MaxValue;
+            return (Data.Comparator == ComparisonOperatorEnum.GreaterThan ? customRiseAndSet.Set : customRiseAndSet?.Rise) ?? DateTime.MaxValue;
         }
 
         public override string ToString() {

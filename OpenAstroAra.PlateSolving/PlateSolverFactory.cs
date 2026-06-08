@@ -53,14 +53,14 @@ namespace OpenAstroAra.PlateSolving {
         /// <param name="solver"> Plate Solver that should be used</param>
         /// <returns></returns>
         private static IPlateSolver GetPlateSolver(IPlateSolveSettings plateSolveSettings, PlateSolverEnum solver) {
-            // ASTROMETRY_NET (cloud astrometry.net) solver removed per playbook
+            // AstrometryNet (cloud astrometry.net) solver removed per playbook
             // §18.I "just ASTAP impl per §18.I" — ARA ships local solvers only.
             return solver switch {
                 PlateSolverEnum.LOCAL => new LocalPlateSolver(plateSolveSettings.CygwinLocation),
                 PlateSolverEnum.PLATESOLVE2 => new Platesolve2Solver(plateSolveSettings.PS2Location),
                 PlateSolverEnum.PLATESOLVE3 => new Platesolve3Solver(plateSolveSettings.PS3Location),
                 PlateSolverEnum.ASPS => new AllSkyPlateSolver(plateSolveSettings.AspsLocation),
-                PlateSolverEnum.TSX_IMAGELINK => new TheSkyXImageLinkSolver(plateSolveSettings.TheSkyXHost, plateSolveSettings.TheSkyXPort),
+                PlateSolverEnum.TSXImageLink => new TheSkyXImageLinkSolver(plateSolveSettings.TheSkyXHost, plateSolveSettings.TheSkyXPort),
                 PlateSolverEnum.PINPONT => new Dc3PinPointSolver(plateSolveSettings),
                 _ => new ASTAPSolver(plateSolveSettings.ASTAPLocation),
             };
@@ -72,7 +72,7 @@ namespace OpenAstroAra.PlateSolving {
 
         public static IPlateSolver GetBlindSolver(IPlateSolveSettings plateSolveSettings) {
             var type = plateSolveSettings.BlindSolverType switch {
-                BlindSolverEnum.ASTROMETRY_NET => PlateSolverEnum.ASTROMETRY_NET,
+                BlindSolverEnum.AstrometryNet => PlateSolverEnum.AstrometryNet,
                 BlindSolverEnum.LOCAL => PlateSolverEnum.LOCAL,
                 BlindSolverEnum.PLATESOLVE3 => PlateSolverEnum.PLATESOLVE3,
                 BlindSolverEnum.ASPS => PlateSolverEnum.ASPS,
