@@ -18,7 +18,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.MetaGuide {
 
     [Flags]
     public enum CalibrationState {
-        Unknown = 0,
+        None = 0,
         WestPierSide = 1,
         Rotate180OnFlip = 2,
         NorthSouthReverseOnFlip = 4,

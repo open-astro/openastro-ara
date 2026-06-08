@@ -277,6 +277,8 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider {
         /// </summary>
         /// <returns>Parameters for two guide pulses, one in N/S direction and one in E/W direction</returns>
 
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "CA5394:Do not use insecure randomness",
+            Justification = "Used only to pick a random dither direction/offset for guiding; this is non-security numerical jitter, not a cryptographic or security-sensitive value.")]
         private GuidePulses SelectDitherPulse(double ditherPixels) {
             double ditherAngle = random.NextDouble() * Math.PI;
             double cosAngle = Math.Cos(ditherAngle);

@@ -56,7 +56,9 @@ namespace OpenAstroAra.Equipment.Interfaces {
         }
 
         public bool Equals(TrackingRate other) {
-            throw new NotImplementedException();
+            return TrackingMode == other.TrackingMode &&
+                   CustomRightAscensionRate == other.CustomRightAscensionRate &&
+                   CustomDeclinationRate == other.CustomDeclinationRate;
         }
     }
 

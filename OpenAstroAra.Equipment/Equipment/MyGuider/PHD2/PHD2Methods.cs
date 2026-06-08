@@ -298,7 +298,8 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         public int frame { get; set; }
         public int width { get; set; }
         public int height { get; set; }
-        public IReadOnlyList<double>? star_pos { get; set; }
+        [JsonProperty(PropertyName = "star_pos")]
+        public IReadOnlyList<double>? StarPos { get; set; }
         public string? pixels { get; set; }
     }
 

@@ -110,7 +110,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyPlanetarium {
 
                     return loc;
                 } else {
-                    throw new PlanetariumFailedToGetCoordinates();
+                    throw new PlanetariumFailedToGetCoordinatesException();
                 }
             } catch (OperationCanceledException) {
                 throw;

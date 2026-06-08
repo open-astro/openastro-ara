@@ -61,7 +61,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyPlanetarium {
                 }
 
                 if (raDecName == null) {
-                    throw new PlanetariumFailedToGetCoordinates();
+                    throw new PlanetariumFailedToGetCoordinatesException();
                 }
 
                 var newCoordinates = new Coordinates(double.Parse(raDecName[0], System.Globalization.CultureInfo.InvariantCulture),
@@ -118,7 +118,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyPlanetarium {
                     loc.Longitude = double.Parse(coords[1], System.Globalization.CultureInfo.InvariantCulture) * -1;
                     loc.Elevation = double.Parse(coords[2], System.Globalization.CultureInfo.InvariantCulture);
                 } else {
-                    throw new PlanetariumFailedToGetCoordinates();
+                    throw new PlanetariumFailedToGetCoordinatesException();
                 }
                 return loc;
             } catch (OperationCanceledException) {
@@ -216,7 +216,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyPlanetarium {
                 // put the RA, Dec, and object name into an array
                 raDecName = response[0].Split(',');
             } else {
-                throw new PlanetariumFailedToGetCoordinates();
+                throw new PlanetariumFailedToGetCoordinatesException();
             }
 
             return raDecName;
@@ -253,7 +253,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyPlanetarium {
                 raDecName[1] = raDec[1];
                 raDecName[2] = string.Empty;
             } else {
-                throw new PlanetariumFailedToGetCoordinates();
+                throw new PlanetariumFailedToGetCoordinatesException();
             }
 
             return raDecName;

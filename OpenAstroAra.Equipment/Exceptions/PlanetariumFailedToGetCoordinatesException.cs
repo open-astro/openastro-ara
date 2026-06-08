@@ -18,18 +18,18 @@ using System.Runtime.Serialization;
 namespace OpenAstroAra.Equipment.Exceptions {
 
     [Serializable]
-    public class PlanetariumFailedToGetCoordinates : Exception {
+    public class PlanetariumFailedToGetCoordinatesException : Exception {
 
-        public PlanetariumFailedToGetCoordinates() {
+        public PlanetariumFailedToGetCoordinatesException() {
         }
 
-        public PlanetariumFailedToGetCoordinates(string message) : base(message) {
+        public PlanetariumFailedToGetCoordinatesException(string message) : base(message) {
         }
 
-        public PlanetariumFailedToGetCoordinates(string message, Exception innerException) : base(message, innerException) {
+        public PlanetariumFailedToGetCoordinatesException(string message, Exception innerException) : base(message, innerException) {
         }
 
-        protected PlanetariumFailedToGetCoordinates(SerializationInfo info, StreamingContext context) : base(info, context) {
+        protected PlanetariumFailedToGetCoordinatesException(SerializationInfo info, StreamingContext context) : base(info, context) {
         }
     }
 }

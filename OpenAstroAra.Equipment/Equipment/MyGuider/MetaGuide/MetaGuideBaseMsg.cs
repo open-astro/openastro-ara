@@ -19,6 +19,8 @@ using System.Text;
 
 namespace OpenAstroAra.Equipment.Equipment.MyGuider.MetaGuide {
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Naming", "CA1710:Identifiers should have correct suffix",
+        Justification = "MetaGuideBaseMsg is the established base of the MetaGuide*Msg message hierarchy; it derives from EventArgs only so the listener's events can use EventHandler<TMsg>. The '...Msg' suffix is the meaningful, consistent name across all six message types; renaming the hierarchy to '...EventArgs' adds no clarity.")]
     public class MetaGuideBaseMsg : System.EventArgs {
 
         public override String ToString() {

@@ -10,7 +10,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.SkyGuard.SkyGuardMessages {
     /// <summary>
     /// https://www.innovationsforesight.com/software/help/SKG/SkySurveyorHTML/SKSS_GuidingCorrelationCompleted.html
     /// </summary>
-    public class Data {
+    public class SkyGuardData {
         public double? GuidingErrorX { get; set; }
         public double? GuidingErrorY { get; set; }
         public double GuidingCorrectionX { get; set; }
@@ -32,7 +32,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.SkyGuard.SkyGuardMessages {
         public string Event { get; set; } = string.Empty;
 
         [JsonProperty(PropertyName = "data")]
-        public Data? Data { get; set; }
+        public SkyGuardData? Data { get; set; }
 
         [JsonProperty(PropertyName = "message")]
         public object? Message { get; set; }

@@ -58,7 +58,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyPlanetarium {
 
                     return new DeepSkyObject(info[2], newCoordinates, string.Empty, null);
                 } else {
-                    throw new PlanetariumFailedToGetCoordinates();
+                    throw new PlanetariumFailedToGetCoordinatesException();
                 }
             } catch (Exception ex) {
                 Logger.Error(ex);
@@ -88,7 +88,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyPlanetarium {
                         Elevation = 0
                     };
                 } else {
-                    throw new PlanetariumFailedToGetCoordinates();
+                    throw new PlanetariumFailedToGetCoordinatesException();
                 }
             } catch (OperationCanceledException) {
                 throw;

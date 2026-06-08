@@ -18,18 +18,18 @@ using System.Runtime.Serialization;
 namespace OpenAstroAra.Equipment.Exceptions {
 
     [Serializable]
-    public class PlanetariumFailedToConnect : Exception {
+    public class PlanetariumFailedToConnectException : Exception {
 
-        public PlanetariumFailedToConnect() {
+        public PlanetariumFailedToConnectException() {
         }
 
-        public PlanetariumFailedToConnect(string message) : base(message) {
+        public PlanetariumFailedToConnectException(string message) : base(message) {
         }
 
-        public PlanetariumFailedToConnect(string message, Exception innerException) : base(message, innerException) {
+        public PlanetariumFailedToConnectException(string message, Exception innerException) : base(message, innerException) {
         }
 
-        protected PlanetariumFailedToConnect(SerializationInfo info, StreamingContext context) : base(info, context) {
+        protected PlanetariumFailedToConnectException(SerializationInfo info, StreamingContext context) : base(info, context) {
         }
     }
 }

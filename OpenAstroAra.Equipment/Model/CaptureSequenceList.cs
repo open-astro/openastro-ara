@@ -395,8 +395,13 @@ namespace OpenAstroAra.Equipment.Model {
 
         [XmlAttribute(attributeName: "Rotation")]
         public double DeprecatedRotation {
+            get => 360 - PositionAngle;
             set => PositionAngle = 360 - value;
         }
+
+        // Legacy "Rotation" attribute is read-only migration input; never written back
+        // (PositionAngle is the current serialized form).
+        public bool ShouldSerializeDeprecatedRotation() => false;
 
         private void RaiseCoordinatesChanged() {
             RaisePropertyChanged(nameof(PositionAngle));
