@@ -33,6 +33,7 @@ using OpenAstroAra.Sequencer.Trigger;
 using OpenAstroAra.Sequencer.Validations;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Text;
 using System.Threading;
@@ -40,6 +41,8 @@ using System.Threading.Tasks;
 
 namespace OpenAstroAra.Sequencer {
 
+    [SuppressMessage("Naming", "CA1724:Type names should not match namespaces",
+        Justification = "Sequencer is the established public root type of the OpenAstroAra.Sequencer namespace (NINA-derived API). Renaming either the type or the namespace is a breaking change with no functional benefit. CA1724 documents that suppression is safe for shipping libraries.")]
     public class Sequencer : BaseINPC, ISequencer {
 
         public Sequencer(
@@ -48,7 +51,7 @@ namespace OpenAstroAra.Sequencer {
             MainContainer = sequenceRootContainer;
         }
         // This is a hack to utilize the TreeView control. The Items will just point at the single item in the sequencer which is the root node in the tree
-        public List<ISequenceRootContainer> Items => new List<ISequenceRootContainer> { MainContainer };
+        public IReadOnlyList<ISequenceRootContainer> Items => new List<ISequenceRootContainer> { MainContainer };
 
         private ISequenceRootContainer mainContainer = null!;  // set via MainContainer in the constructor
 
@@ -69,7 +72,7 @@ namespace OpenAstroAra.Sequencer {
         }
 
 
-        public Task Start(IProgress<ApplicationStatus> progress, CancellationToken token, bool skipIssuePrompt) {
+        public Task Start(IProgress<ApplicationStatus> progress, bool skipIssuePrompt, CancellationToken token) {
             return Task.Run(async () => {
                 if (!skipIssuePrompt && !PromptForIssues()) {
                     return false;
@@ -88,13 +91,13 @@ namespace OpenAstroAra.Sequencer {
         }
 
         public Task Start(IProgress<ApplicationStatus> progress, CancellationToken token) {
-            return Start(progress, token, false);
+            return Start(progress, false, token);
         }
 
         private bool PromptForIssues() {
-            var issues = Validate(MainContainer).Distinct();
+            var issues = Validate(MainContainer).Distinct().ToList();
 
-            if (issues.Any()) {
+            if (issues.Count > 0) {
                 var builder = new StringBuilder();
                 builder.AppendLine(Loc.Instance["LblPreSequenceChecklist"]).AppendLine();
 
@@ -115,7 +118,7 @@ namespace OpenAstroAra.Sequencer {
             return true;
         }
 
-        private void Initialize(ISequenceContainer context) {
+        private static void Initialize(ISequenceContainer context) {
             if (context != null) {
                 var conditionable = context as IConditionable;
                 if (conditionable != null) {
@@ -139,7 +142,7 @@ namespace OpenAstroAra.Sequencer {
             }
         }
 
-        private void Teardown(ISequenceContainer context) {
+        private static void Teardown(ISequenceContainer context) {
             if (context != null) {
                 var conditionable = context as IConditionable;
                 if (conditionable != null) {
@@ -163,7 +166,7 @@ namespace OpenAstroAra.Sequencer {
             }
         }
 
-        private IList<string> Validate(ISequenceContainer container) {
+        private static List<string> Validate(ISequenceContainer container) {
             List<string> issues = new List<string>();
 
             if (container is IConditionable conditionable) {
