@@ -179,8 +179,29 @@ namespace OpenAstroAra.Astrometry {
             return Angle.ByRadians(a / b.Radians);
         }
 
-        public static Angle Negate(Angle item) {
-            throw new NotImplementedException();
-        }
+        // Friendly-named alternates for the operators above (CA2225).
+        public static Angle Negate(Angle item) => -item;
+
+        public static Angle Add(Angle left, Angle right) => left + right;
+
+        public static Angle Add(double left, Angle right) => left + right;
+
+        public static Angle Add(Angle left, double right) => left + right;
+
+        public static Angle Subtract(Angle left, Angle right) => left - right;
+
+        public static Angle Subtract(double left, Angle right) => left - right;
+
+        public static Angle Subtract(Angle left, double right) => left - right;
+
+        public static Angle Multiply(Angle left, Angle right) => left * right;
+
+        public static Angle Multiply(double left, Angle right) => left * right;
+
+        public static Angle Divide(Angle left, Angle right) => left / right;
+
+        public static Angle Divide(Angle left, double right) => left / right;
+
+        public static Angle Divide(double left, Angle right) => left / right;
     }
 }

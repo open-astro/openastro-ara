@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 
 namespace OpenAstroAra.Astrometry {
     /// <summary>
@@ -81,11 +82,16 @@ namespace OpenAstroAra.Astrometry {
         }
 
         public override string ToString() {
-            return $"{{{nameof(X)}={X.ToString()}, {nameof(Y)}={Y.ToString()}, {nameof(Z)}={Z.ToString()}}}";
+            return $"{{{nameof(X)}={X.ToString(CultureInfo.InvariantCulture)}, {nameof(Y)}={Y.ToString(CultureInfo.InvariantCulture)}, {nameof(Z)}={Z.ToString(CultureInfo.InvariantCulture)}}}";
         }
 
-        public static RectangularCoordinates Add(RectangularCoordinates left, RectangularCoordinates right) {
-            throw new NotImplementedException();
-        }
+        // Friendly-named alternates for the operators above (CA2225).
+        public static RectangularCoordinates Add(RectangularCoordinates left, RectangularCoordinates right) => left + right;
+
+        public static RectangularCoordinates Subtract(RectangularCoordinates left, RectangularCoordinates right) => left - right;
+
+        public static RectangularCoordinates Multiply(RectangularCoordinates left, double right) => left * right;
+
+        public static RectangularCoordinates Divide(RectangularCoordinates left, double right) => left / right;
     }
 }

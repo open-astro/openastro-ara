@@ -22,7 +22,7 @@ namespace OpenAstroAra.Astrometry {
 
     [JsonObject(MemberSerialization.OptIn)]
     public class InputTopocentricCoordinates : BaseINPC {
-        private bool deserializing = false;
+        private bool deserializing;
         [OnDeserializing]
         public void OnDeserializing(StreamingContext context) {
             deserializing = true;
