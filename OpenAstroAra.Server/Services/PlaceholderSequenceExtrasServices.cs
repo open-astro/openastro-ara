@@ -13,7 +13,10 @@
 #endregion "copyright"
 
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using OpenAstroAra.Server.Contracts;
+using System;
+using System.IO;
 using System.Text.Json;
 
 namespace OpenAstroAra.Server.Services;
@@ -31,10 +34,10 @@ namespace OpenAstroAra.Server.Services;
 /// <see cref="ISequenceService"/> so the new sequence shows up in the
 /// list immediately.
 /// </summary>
-public sealed class PlaceholderSequenceTemplateService : ISequenceTemplateService {
+public sealed partial class PlaceholderSequenceTemplateService : ISequenceTemplateService {
     private readonly ISequenceService _sequences;
     private readonly string? _templatesDir;
-    private readonly ILogger<PlaceholderSequenceTemplateService>? _logger;
+    private readonly ILogger<PlaceholderSequenceTemplateService> _logger = NullLogger<PlaceholderSequenceTemplateService>.Instance;
 
     public PlaceholderSequenceTemplateService(ISequenceService sequences) {
         _sequences = sequences;
@@ -46,7 +49,7 @@ public sealed class PlaceholderSequenceTemplateService : ISequenceTemplateServic
             ILogger<PlaceholderSequenceTemplateService>? logger = null) {
         _sequences = sequences;
         _templatesDir = Path.Combine(profileDir, "sequences", FileSequenceService.TemplatesDirName);
-        _logger = logger;
+        _logger = logger ?? NullLogger<PlaceholderSequenceTemplateService>.Instance;
     }
 
     private static JsonElement TemplateBody(string targetTokenName, string filterSet, int framesPerFilter, int integrationMinutes) {
@@ -106,8 +109,8 @@ public sealed class PlaceholderSequenceTemplateService : ISequenceTemplateServic
             try {
                 var json = File.ReadAllText(path);
                 dto = JsonSerializer.Deserialize(json, AraJsonSerializerContext.Default.SequenceTemplateDto);
-            } catch (Exception ex) {
-                _logger?.LogWarning(ex, "Skipping invalid sequence template at {Path}", path);
+            } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) {
+                LogInvalidTemplate(ex, path);
             }
             if (dto is not null) yield return dto;
         }
@@ -185,6 +188,9 @@ public sealed class PlaceholderSequenceTemplateService : ISequenceTemplateServic
         if (_templatesDir is null) return false;
         return LoadDiskTemplates().Any(t => t.Name == templateName);
     }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Skipping invalid sequence template at {Path}")]
+    private partial void LogInvalidTemplate(Exception ex, string path);
 }
 
 /// <summary>
@@ -200,10 +206,10 @@ public sealed class PlaceholderSequenceTemplateService : ISequenceTemplateServic
 /// All three need real device state + the full §38.1 schema knowledge,
 /// so they arrive once the §38 orchestrator is wired.
 /// </summary>
-public sealed class PlaceholderSequenceImportService : ISequenceImportService {
+public sealed partial class PlaceholderSequenceImportService : ISequenceImportService {
     private readonly ISequenceService _sequences;
     private readonly string? _importedDir;
-    private readonly ILogger<PlaceholderSequenceImportService>? _logger;
+    private readonly ILogger<PlaceholderSequenceImportService> _logger = NullLogger<PlaceholderSequenceImportService>.Instance;
 
     public PlaceholderSequenceImportService(ISequenceService sequences) {
         _sequences = sequences;
@@ -215,7 +221,7 @@ public sealed class PlaceholderSequenceImportService : ISequenceImportService {
             ILogger<PlaceholderSequenceImportService>? logger = null) {
         _sequences = sequences;
         _importedDir = Path.Combine(profileDir, "sequences", FileSequenceService.ImportedDirName);
-        _logger = logger;
+        _logger = logger ?? NullLogger<PlaceholderSequenceImportService>.Instance;
     }
 
     public async Task<SequenceImportResultDto> ImportAsync(SequenceImportRequestDto request, CancellationToken ct) {
@@ -281,10 +287,13 @@ public sealed class PlaceholderSequenceImportService : ISequenceImportService {
             var filename = $"{safeName}-{DateTime.UtcNow:HHmmss}.json";
             var path = Path.Combine(bucketDir, filename);
             File.WriteAllText(path, original.GetRawText());
-        } catch (Exception ex) {
-            _logger?.LogWarning(ex, "Failed to persist NINA import original for '{Name}'", name);
+        } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+            LogPersistImportFailed(ex, name);
         }
     }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to persist NINA import original for '{Name}'")]
+    private partial void LogPersistImportFailed(Exception ex, string name);
 }
 
 /// <summary>

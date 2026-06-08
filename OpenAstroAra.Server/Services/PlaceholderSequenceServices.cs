@@ -13,6 +13,8 @@
 #endregion "copyright"
 
 using OpenAstroAra.Server.Contracts;
+using System;
+using System.IO;
 using System.Text.Json;
 
 namespace OpenAstroAra.Server.Services;
@@ -90,7 +92,7 @@ public sealed class PlaceholderSequencerService : ISequencerService {
         // exists from start-of-run, not just after the first instruction
         // completes. The §28.2 reconciler can spot interrupted runs.
         _checkpoint?.Write(run.ToDto(id));
-        _ = Task.Run(() => RunWorkerAsync(id, run));
+        _ = Task.Run(() => RunWorkerAsync(id, run), CancellationToken.None);
         return PlaceholderEquipmentHelpers.Accepted("sequencer.start", idempotencyKey);
     }
 
@@ -110,20 +112,20 @@ public sealed class PlaceholderSequencerService : ISequencerService {
         return Task.FromResult(PlaceholderEquipmentHelpers.Accepted("sequencer.resume", idempotencyKey));
     }
 
-    public Task<OperationAcceptedDto> AbortAsync(Guid id, string? idempotencyKey, CancellationToken ct) {
+    public async Task<OperationAcceptedDto> AbortAsync(Guid id, string? idempotencyKey, CancellationToken ct) {
         if (_runs.TryGetValue(id, out var run)) {
             run.State = SequenceRunState.Aborting;
-            run.Cts.Cancel();
+            await run.Cts.CancelAsync();
         }
-        return Task.FromResult(PlaceholderEquipmentHelpers.Accepted("sequencer.abort", idempotencyKey));
+        return PlaceholderEquipmentHelpers.Accepted("sequencer.abort", idempotencyKey);
     }
 
-    public Task<OperationAcceptedDto> StopAsync(Guid id, string? idempotencyKey, CancellationToken ct) {
+    public async Task<OperationAcceptedDto> StopAsync(Guid id, string? idempotencyKey, CancellationToken ct) {
         if (_runs.TryGetValue(id, out var run)) {
             run.State = SequenceRunState.Stopped;
-            run.Cts.Cancel();
+            await run.Cts.CancelAsync();
         }
-        return Task.FromResult(PlaceholderEquipmentHelpers.Accepted("sequencer.stop", idempotencyKey));
+        return PlaceholderEquipmentHelpers.Accepted("sequencer.stop", idempotencyKey);
     }
 
     private async Task RunWorkerAsync(Guid sequenceId, RunState run) {
@@ -133,7 +135,7 @@ public sealed class PlaceholderSequencerService : ISequencerService {
             for (var i = 0; i < run.InstructionCount; i++) {
                 if (run.Cts.IsCancellationRequested) break;
                 while (run.State == SequenceRunState.Paused && !run.Cts.IsCancellationRequested) {
-                    await Task.Delay(100, run.Cts.Token).ContinueWith(_ => { });
+                    try { await Task.Delay(100, run.Cts.Token); } catch (OperationCanceledException) { break; }
                 }
                 if (run.Cts.IsCancellationRequested) break;
 
@@ -164,7 +166,7 @@ public sealed class PlaceholderSequencerService : ISequencerService {
                 run.CompletedUtc = DateTimeOffset.UtcNow;
                 await EmitAsync("sequence.complete", sequenceId, run);
             }
-        } catch (Exception) {
+        } catch (Exception ex) when (ex is IOException or InvalidOperationException or ObjectDisposedException or JsonException) {
             run.State = SequenceRunState.Failed;
             await EmitAsync("sequence.failed", sequenceId, run);
         } finally {
@@ -183,7 +185,7 @@ public sealed class PlaceholderSequencerService : ISequencerService {
                 """;
             using var doc = System.Text.Json.JsonDocument.Parse(json);
             await _ws.PublishAsync(eventType, doc.RootElement.Clone(), CancellationToken.None);
-        } catch {
+        } catch (Exception ex) when (ex is JsonException or IOException or InvalidOperationException or ObjectDisposedException) {
             // WS best-effort.
         }
     }
