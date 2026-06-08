@@ -158,7 +158,7 @@ namespace OpenAstroAra.Equipment.Model {
             }
         }
 
-        public static List<CaptureSequenceList>? LoadSequenceSet(Stream stream, ICollection<FilterInfo> filters, double latitude, double longitude) {
+        public static IReadOnlyList<CaptureSequenceList>? LoadSequenceSet(Stream stream, ICollection<FilterInfo> filters, double latitude, double longitude) {
             List<CaptureSequenceList>? c = null;
             try {
                 XmlSerializer xmlSerializer = new XmlSerializer(typeof(List<CaptureSequenceList>));

@@ -52,7 +52,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGPS.PegasusAstro.UnityApi {
             public string Message { get; set; } = string.Empty;
 
             [JsonProperty("data")]
-            public List<Device>? Devices { get; set; }
+            public IReadOnlyList<Device>? Devices { get; set; }
         }
     }
 }
