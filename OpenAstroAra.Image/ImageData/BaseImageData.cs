@@ -55,9 +55,12 @@ namespace OpenAstroAra.Image.ImageData {
             Data = imageArray;
             MetaData = metaData;
             Properties = new ImageProperties(width: width, height: height, bitDepth: bitDepth, isBayered: isBayered, gain: metaData.Camera.Gain, offset: metaData.Camera.Offset);
-            // StarDetectionAnalysis populated when OpenCvSharp4-backed
-            // IStarDetection lands per playbook §line-2105.
-            StarDetectionAnalysis = null!;
+            // StarDetectionAnalysis gets a real result once the OpenCvSharp4-backed
+            // IStarDetection lands (playbook §line-2105). Until then use a default
+            // instance whose sentinels (HFR = NaN, DetectedStars = -1) make
+            // GetImagePatterns() take the correct "no star data" branch — assigning
+            // null! here would NRE on any FinalizeSave() before detection runs.
+            StarDetectionAnalysis = new StarDetectionAnalysis();
             Statistics = new Nito.AsyncEx.AsyncLazy<IImageStatistics>(async () => await Task.Run(() => ImageStatistics.Create(this)));
             this.profileService = profileService;
             this.starDetection = starDetection;
