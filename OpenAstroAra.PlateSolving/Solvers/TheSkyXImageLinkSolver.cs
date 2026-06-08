@@ -127,7 +127,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
                 progress?.Report(new ApplicationStatus() { Status = ex.Message });
                 if (!parameter.DisableNotifications) {
                     Logger.Error(ex.Message);
-                    Notification.ShowError(ex.Message);
+                    Notifier.ShowError(ex.Message);
                 }
             }
         }

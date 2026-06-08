@@ -81,7 +81,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
                         Logger.Error($"Failed to initialize PinPoint. It or its 64bit component does not appear to be installed.");
 
                         if (!parameter.DisableNotifications) {
-                            Notification.ShowError(Loc.Instance["LblPinPointNotInstalled"]);
+                            Notifier.ShowError(Loc.Instance["LblPinPointNotInstalled"]);
                         }
 
                         throw new InvalidComObjectException();
@@ -89,7 +89,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
                         Logger.Error($"Failed to initialize PinPoint: {ex.GetType().Name}: {ex.Message}");
 
                         if (!parameter.DisableNotifications) {
-                            Notification.ShowError(Loc.Instance["LblPinPointFailedInitialize"]);
+                            Notifier.ShowError(Loc.Instance["LblPinPointFailedInitialize"]);
                         }
 
                         throw new InvalidComObjectException();
@@ -144,7 +144,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
             } catch (InvalidComObjectException) {
                 return plateSolveResult;
             } catch (COMException ex) {
-                Notification.ShowExternalError(ex.Message, Loc.Instance["LblPinPointErrorMessage"]);
+                Notifier.ShowExternalError(ex.Message, Loc.Instance["LblPinPointErrorMessage"]);
                 Logger.Error($"PinPoint failed to solve: {ex.GetType().Name}: {ex.Message}");
                 return plateSolveResult;
             } finally {

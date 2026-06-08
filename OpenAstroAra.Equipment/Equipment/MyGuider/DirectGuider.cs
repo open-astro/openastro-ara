@@ -52,7 +52,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider {
         public void UpdateDeviceInfo(TelescopeInfo telescopeInfo) {
             this.telescopeInfo = telescopeInfo;
             if (Connected && !this.telescopeInfo.Connected) {
-                Notification.ShowWarning(Loc.Instance["LblMountDitherMountDisconnect"]);
+                Notifier.ShowWarning(Loc.Instance["LblMountDitherMountDisconnect"]);
                 Logger.Warning("Telescope is disconnected. Direct Guide will disconnect. Dither will not occur.");
                 Disconnect();
             } else {
@@ -164,7 +164,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider {
             if (telescopeInfo.Connected) {
                 Connected = true;
             } else {
-                Notification.ShowWarning(Loc.Instance["LblMountDitherConnectionFail"]);
+                Notifier.ShowWarning(Loc.Instance["LblMountDitherConnectionFail"]);
                 Connected = false;
             }
 

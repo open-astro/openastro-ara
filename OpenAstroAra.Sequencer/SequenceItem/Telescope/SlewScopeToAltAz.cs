@@ -83,7 +83,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Telescope {
 
         public override async Task Execute(IProgress<ApplicationStatus> progress, CancellationToken token) {
             if (telescopeMediator.GetInfo().AtPark) {
-                Notification.ShowError(Loc.Instance["LblTelescopeParkedWarning"]);
+                Notifier.ShowError(Loc.Instance["LblTelescopeParkedWarning"]);
                 throw new SequenceEntityFailedException(Loc.Instance["LblTelescopeParkedWarning"]);
             }
             var stoppedGuiding = await guiderMediator.StopGuiding(token);

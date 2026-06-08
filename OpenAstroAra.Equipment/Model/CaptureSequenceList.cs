@@ -91,7 +91,7 @@ namespace OpenAstroAra.Equipment.Model {
                 }
             } catch (Exception ex) {
                 Logger.Error(ex);
-                Notification.ShowError(ex.Message);
+                Notifier.ShowError(ex.Message);
             }
         }
 
@@ -102,7 +102,7 @@ namespace OpenAstroAra.Equipment.Model {
                 }
             } catch (Exception ex) {
                 Logger.Error(ex);
-                Notification.ShowError(ex.Message);
+                Notifier.ShowError(ex.Message);
                 return null;
             }
         }
@@ -123,7 +123,7 @@ namespace OpenAstroAra.Equipment.Model {
                 AdjustSequenceToMatchCurrentProfile(filters, latitude, longitude, l);
             } catch (Exception ex) {
                 Logger.Error(ex);
-                Notification.ShowError(Loc.Instance["LblLoadSequenceFailed"] + Environment.NewLine + ex.Message);
+                Notifier.ShowError(Loc.Instance["LblLoadSequenceFailed"] + Environment.NewLine + ex.Message);
             }
             return l;
         }
@@ -136,7 +136,7 @@ namespace OpenAstroAra.Equipment.Model {
                     if (filter == null) {
                         filter = filters.Where((f) => f.Position == s.FilterType.Position).FirstOrDefault();
                         if (filter == null) {
-                            Notification.ShowWarning(string.Format(Loc.Instance["LblFilterNotFoundForPosition"], (s.FilterType.Position + 1)));
+                            Notifier.ShowWarning(string.Format(Loc.Instance["LblFilterNotFoundForPosition"], (s.FilterType.Position + 1)));
                         }
                     }
                     s.FilterType = filter;
@@ -154,7 +154,7 @@ namespace OpenAstroAra.Equipment.Model {
                 }
             } catch (Exception ex) {
                 Logger.Error(ex);
-                Notification.ShowError(ex.Message);
+                Notifier.ShowError(ex.Message);
             }
         }
 
@@ -177,7 +177,7 @@ namespace OpenAstroAra.Equipment.Model {
                 }
             } catch (Exception ex) {
                 Logger.Error(ex);
-                Notification.ShowError(Loc.Instance["LblLoadSequenceSetFailed"] + Environment.NewLine + ex.Message);
+                Notifier.ShowError(Loc.Instance["LblLoadSequenceSetFailed"] + Environment.NewLine + ex.Message);
             }
             return c;
         }

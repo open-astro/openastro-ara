@@ -65,7 +65,7 @@ namespace OpenAstroAra.Core.Utility.SerialCommunication {
 
             void HandleOpenFailure(Exception ex, object failedClient) {
                 Logger.Error(ex);
-                Notification.Notification.ShowError(string.Format(CultureInfo.CurrentCulture, Locale.Loc.Instance["LblSerialPortCannotOpen"], SerialPort?.PortName, ex.GetType().Name));
+                Notification.Notifier.ShowError(string.Format(CultureInfo.CurrentCulture, Locale.Loc.Instance["LblSerialPortCannotOpen"], SerialPort?.PortName, ex.GetType().Name));
                 clients.Remove(failedClient);
                 SerialPort = null;
             }

@@ -120,7 +120,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.MetaGuide {
                 }
             } catch (Exception ex) {
                 Logger.Error(ex);
-                Notification.ShowError(String.Format(Loc.Instance["LblMetaGuideListenerError"], ex.Message));
+                Notifier.ShowError(String.Format(Loc.Instance["LblMetaGuideListenerError"], ex.Message));
             }
         }
 
@@ -179,7 +179,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.MetaGuide {
                     }
                 } catch (Exception ex) {
                     Logger.Error(ex);
-                    Notification.ShowError(ex.Message);
+                    Notifier.ShowError(ex.Message);
                     throw;
                 } finally {
                     socket?.Close();

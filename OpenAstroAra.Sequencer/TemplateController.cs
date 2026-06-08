@@ -202,7 +202,7 @@ namespace OpenAstroAra.Sequencer {
                     });
                 } catch (Exception ex) {
                     Logger.Error(ex);
-                    Notification.ShowError(Loc.Instance["Lbl_SequenceTemplateController_LoadUserTemplatesFailed"]);
+                    Notifier.ShowError(Loc.Instance["Lbl_SequenceTemplateController_LoadUserTemplatesFailed"]);
                 } finally {
                     TemplatesLoading = false;
                 }
@@ -227,7 +227,7 @@ namespace OpenAstroAra.Sequencer {
                 File.WriteAllText(Path.Combine(path, GetTemplateFileName(sequenceContainer)), jsonContainer);
             } catch (Exception ex) {
                 Logger.Error(ex);
-                Notification.ShowError(Loc.Instance["Lbl_SequenceTemplateController_AddNewTemplateFailed"]);
+                Notifier.ShowError(Loc.Instance["Lbl_SequenceTemplateController_AddNewTemplateFailed"]);
             }
         }
 
@@ -237,7 +237,7 @@ namespace OpenAstroAra.Sequencer {
                 File.Delete(Path.Combine(userTemplatePath, Path.Combine(sequenceContainer.SubGroups), GetTemplateFileName(sequenceContainer.Container)));
             } catch (Exception ex) {
                 Logger.Error(ex);
-                Notification.ShowError(Loc.Instance["Lbl_SequenceTemplateController_DeleteTemplateFailed"]);
+                Notifier.ShowError(Loc.Instance["Lbl_SequenceTemplateController_DeleteTemplateFailed"]);
             }
         }
 

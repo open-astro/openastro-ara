@@ -207,7 +207,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                         if (cksumType != XISFChecksumTypeEnum.NONE) {
                             if (!VerifyChecksum(raw, cksumType, cksumHash)) {
                                 // Only emit a warning to the user about a bad checksum for now
-                                Notification.ShowWarning(Loc.Instance["LblXisfBadChecksum"]);
+                                Notifier.ShowWarning(Loc.Instance["LblXisfBadChecksum"]);
                             }
                         }
 

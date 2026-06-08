@@ -173,7 +173,7 @@ namespace OpenAstroAra.Sequencer {
                 File.WriteAllText(Path.Combine(path, OpenAstroAra.Core.Utility.CoreUtil.ReplaceAllInvalidFilenameChars(deepSkyObjectContainer.Name) + ".json"), jsonContainer);
             } catch (Exception ex) {
                 Logger.Error(ex);
-                Notification.ShowError(Loc.Instance["Lbl_SequenceTargetController_AddNewTargetFailed"]);
+                Notifier.ShowError(Loc.Instance["Lbl_SequenceTargetController_AddNewTargetFailed"]);
             }
         }
 
@@ -219,7 +219,7 @@ namespace OpenAstroAra.Sequencer {
                     await RefreshFilters();
                 } catch (Exception ex) {
                     Logger.Error(ex);
-                    Notification.ShowError(Loc.Instance["Lbl_SequenceTargetController_LoadUserTargetFailed"]);
+                    Notifier.ShowError(Loc.Instance["Lbl_SequenceTargetController_LoadUserTargetFailed"]);
                 } finally {
                     TargetsLoading = false;
                 }
@@ -246,7 +246,7 @@ namespace OpenAstroAra.Sequencer {
                 }
             } catch (Exception ex) {
                 Logger.Error(ex);
-                Notification.ShowError(Loc.Instance["Lbl_SequenceTargetController_DeleteTargetFailed"]);
+                Notifier.ShowError(Loc.Instance["Lbl_SequenceTargetController_DeleteTargetFailed"]);
             }
         }
     }

@@ -251,7 +251,7 @@ namespace OpenAstroAra.Profile {
                 ActiveProfile.AstrometrySettings.HorizonFilePath = string.Empty;
                 ActiveProfile.AstrometrySettings.Horizon = null;
                 Logger.Error(ex);
-                Notification.ShowError(Loc.Instance["LblFailedToLoadCustomHorizon"] + ex.Message);
+                Notifier.ShowError(Loc.Instance["LblFailedToLoadCustomHorizon"] + ex.Message);
             }
 
             var eventHandler = HorizonChanged;

@@ -51,7 +51,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
             if (!File.Exists(outputFilePath)) {
                 Logger.Error("ASTAP - Plate solve failed. No output file found.");
                 if (!parameter.DisableNotifications) {
-                    Notification.ShowError(Loc.Instance["LblASTAPNoOutputFile"]);
+                    Notifier.ShowError(Loc.Instance["LblASTAPNoOutputFile"]);
                 }
                 return result;
             }
@@ -67,7 +67,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
                 dict.TryGetValue("ERROR", out var error);
                 Logger.Error($"ASTAP - Plate solve failed.{Environment.NewLine}{warning}{Environment.NewLine}{error}");
                 if (!parameter.DisableNotifications) {
-                    Notification.ShowError(String.Format(CultureInfo.CurrentCulture, Loc.Instance["LblASTAPSolveFailed"], warning, error));
+                    Notifier.ShowError(String.Format(CultureInfo.CurrentCulture, Loc.Instance["LblASTAPSolveFailed"], warning, error));
                 }
                 return result;
             }
@@ -75,7 +75,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
             if (!string.IsNullOrWhiteSpace(warning)) {
                 Logger.Warning($"ASTAP - {warning}");
                 if (!parameter.DisableNotifications) {
-                    Notification.ShowExternalWarning($"{warning}", Loc.Instance["LblASTAPWarning"]);
+                    Notifier.ShowExternalWarning($"{warning}", Loc.Instance["LblASTAPWarning"]);
                 }
             }
 
