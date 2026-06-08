@@ -40,27 +40,27 @@ namespace OpenAstroAra.Sequencer.Serialization {
 
         public override bool CanWrite => false;
 
-        public override object ReadJson(JsonReader reader,
+        public override object? ReadJson(JsonReader reader,
                                         Type objectType,
-                                         object existingValue,
+                                         object? existingValue,
                                          JsonSerializer serializer) {
             if (reader.TokenType == JsonToken.Null) return null;
 
             // Load JObject from stream
             JObject jObject = JObject.Load(reader);
-            T target = default(T);
+            T? target = default(T);
             try {
 
                 if (jObject != null) {
                     if (jObject["$ref"] != null) {
-                        string id = (jObject["$ref"] as JValue).Value as string;
-                        target = (T)serializer.ReferenceResolver.ResolveReference(serializer, id);
+                        string? id = (jObject["$ref"] as JValue)?.Value as string;
+                        target = (T)serializer.ReferenceResolver!.ResolveReference(serializer, id!);
                     } else {
                         // Create target object based on JObject
                         target = Create(objectType, jObject);
 
                         // Populate the object properties
-                        serializer.Populate(jObject.CreateReader(), target);
+                        serializer.Populate(jObject.CreateReader(), target!);
                     }
                 }
             } catch (Exception ex) {
@@ -87,7 +87,7 @@ namespace OpenAstroAra.Sequencer.Serialization {
             throw new NotImplementedException();
         }
 
-        protected Type GetType(string typeString) {
+        protected Type? GetType(string typeString) {
             var t = Type.GetType(typeString);
             if (t != null) return t;
 

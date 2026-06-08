@@ -28,24 +28,24 @@ namespace OpenAstroAra.Sequencer.Serialization {
 
         public override ISequenceContainer Create(Type objectType, JObject jObject) {
             if (jObject.TryGetValue("$type", out var token)) {
-                var t = GetType(jObject.GetValue("$type").ToString());
+                var t = GetType(token.ToString());
                 if (t == null) {
-                    return new UnknownSequenceContainer(token?.ToString());
+                    return new UnknownSequenceContainer(token?.ToString() ?? string.Empty);
                 }
                 try {
-                    var method = factory.GetType().GetMethod(nameof(factory.GetContainer)).MakeGenericMethod(new Type[] { t });
+                    var method = factory.GetType().GetMethod(nameof(factory.GetContainer))!.MakeGenericMethod(new Type[] { t });
                     var obj = method.Invoke(factory, null);
                     if (obj == null) {
                         Logger.Error($"Encountered unknown sequence container: {token?.ToString()}");
-                        return new UnknownSequenceContainer(token?.ToString());
+                        return new UnknownSequenceContainer(token?.ToString() ?? string.Empty);
                     }
                     return (ISequenceContainer)obj;
                 } catch (Exception e) {
                     Logger.Error($"Encountered unknown sequence container: {token?.ToString()}", e);
-                    return new UnknownSequenceContainer(token?.ToString());
+                    return new UnknownSequenceContainer(token?.ToString() ?? string.Empty);
                 }
             } else {
-                return new UnknownSequenceContainer(token?.ToString());
+                return new UnknownSequenceContainer(token?.ToString() ?? string.Empty);
             }
         }
     }

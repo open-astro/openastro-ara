@@ -43,25 +43,25 @@ namespace OpenAstroAra.Sequencer.Serialization {
             }
 
             if (jObject.TryGetValue("$type", out var token)) {
-                token = PluginMergeMigration(token?.ToString());
-                var t = GetType(token?.ToString());
+                token = PluginMergeMigration(token?.ToString() ?? string.Empty);
+                var t = GetType(token?.ToString() ?? string.Empty);
                 if (t == null) {
-                    return new UnknownSequenceItem(token?.ToString());
+                    return new UnknownSequenceItem(token?.ToString() ?? string.Empty);
                 }
                 try {
-                    var method = factory.GetType().GetMethod(nameof(factory.GetItem)).MakeGenericMethod(new Type[] { t });
+                    var method = factory.GetType().GetMethod(nameof(factory.GetItem))!.MakeGenericMethod(new Type[] { t });
                     var obj = method.Invoke(factory, null);
                     if (obj == null) {
                         Logger.Error($"Encountered unknown sequence item: {token?.ToString()}");
-                        return new UnknownSequenceItem(token?.ToString());
+                        return new UnknownSequenceItem(token?.ToString() ?? string.Empty);
                     }
                     return (ISequenceItem)obj;
                 } catch (Exception e) {
                     Logger.Error($"Encountered unknown sequence item: {token?.ToString()}", e);
-                    return new UnknownSequenceItem(token?.ToString());
+                    return new UnknownSequenceItem(token?.ToString() ?? string.Empty);
                 }
             } else {
-                return new UnknownSequenceItem(token?.ToString());
+                return new UnknownSequenceItem(token?.ToString() ?? string.Empty);
             }
         }
 
