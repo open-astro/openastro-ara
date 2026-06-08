@@ -26,3 +26,12 @@ using System.Diagnostics.CodeAnalysis;
     Justification = "GuideEvent carries the polymorphic IGuideStep interface payload, which cannot derive from System.EventArgs; the EventHandler<TEventArgs> fix is inapplicable.",
     Scope = "type",
     Target = "~T:OpenAstroAra.Equipment.Interfaces.IGuider")]
+
+// CA1030 — the mediator interfaces' Raise* methods (e.g. RaiseMeridianFlipping/Flipped) are the
+// asynchronous raise mechanism for the corresponding Func<object,TArgs,Task> events declared
+// alongside them; they return Task so the caller can await all subscribers. A plain event cannot
+// express that, so these awaitable raise methods are the intended event-based design.
+[assembly: SuppressMessage("Design", "CA1030:Use events where appropriate",
+    Justification = "Raise* methods are the awaitable raise mechanism for the Func<...,Task> events declared next to them; a plain event cannot await subscribers.",
+    Scope = "namespaceanddescendants",
+    Target = "~N:OpenAstroAra.Equipment.Interfaces.Mediator")]
