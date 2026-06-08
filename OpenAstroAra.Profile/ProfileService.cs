@@ -411,15 +411,15 @@ namespace OpenAstroAra.Profile {
 
         #region Migration
 
-        private void MigrateModularizedSolutionNamespaceChange() {
+        private static void MigrateModularizedSolutionNamespaceChange() {
             foreach (var profileFile in Directory.GetFiles(PROFILEFOLDER)) {
                 try {
                     var profile = File.ReadAllText(profileFile);
-                    if (profile.Contains("http://schemas.datacontract.org/2004/07/NINA.Utility")) {
+                    if (profile.Contains("http://schemas.datacontract.org/2004/07/NINA.Utility", StringComparison.Ordinal)) {
                         Logger.Info($"Migrating profile {profileFile}");
-                        profile = profile.Replace("http://schemas.datacontract.org/2004/07/NINA.Model.MyFilterWheel", "http://schemas.datacontract.org/2004/07/OpenAstroAra.Core.Model.Equipment")
-                             .Replace("http://schemas.datacontract.org/2004/07/NINA.Model.MyCamera", "http://schemas.datacontract.org/2004/07/OpenAstroAra.Core.Model.Equipment")
-                             .Replace("http://schemas.datacontract.org/2004/07/NINA.Utility", "http://schemas.datacontract.org/2004/07/OpenAstroAra.Core.Utility.ColorSchema");
+                        profile = profile.Replace("http://schemas.datacontract.org/2004/07/NINA.Model.MyFilterWheel", "http://schemas.datacontract.org/2004/07/OpenAstroAra.Core.Model.Equipment", StringComparison.Ordinal)
+                             .Replace("http://schemas.datacontract.org/2004/07/NINA.Model.MyCamera", "http://schemas.datacontract.org/2004/07/OpenAstroAra.Core.Model.Equipment", StringComparison.Ordinal)
+                             .Replace("http://schemas.datacontract.org/2004/07/NINA.Utility", "http://schemas.datacontract.org/2004/07/OpenAstroAra.Core.Utility.ColorSchema", StringComparison.Ordinal);
 
                         var backupfolder = PROFILEFOLDER + "_old";
                         if (!Directory.Exists(backupfolder)) {

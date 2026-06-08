@@ -893,7 +893,7 @@ namespace OpenAstroAra.Profile {
         }
 
         public void SetValueEnum<T>(string name, T value) where T : struct, Enum {
-            profileService.ActiveProfile.PluginSettings.SetValue(pluginGuid, name, Enum.GetName(typeof(T), value) ?? string.Empty);
+            profileService.ActiveProfile.PluginSettings.SetValue(pluginGuid, name, Enum.GetName<T>(value) ?? string.Empty);
         }
     }
 }

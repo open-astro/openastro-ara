@@ -21,7 +21,7 @@ namespace OpenAstroAra.Profile {
 
     [Serializable()]
     [DataContract]
-    internal class RotatorSettings : Settings, IRotatorSettings {
+    internal sealed class RotatorSettings : Settings, IRotatorSettings {
 
         [OnDeserializing]
         public void OnDeserializing(StreamingContext context) {
