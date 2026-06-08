@@ -23,12 +23,14 @@ namespace OpenAstroAra.Core.Utility {
 
         [System.Runtime.Versioning.SupportedOSPlatform("windows")]
         [DllImport("kernel32", CharSet = CharSet.Unicode, SetLastError = true)]
-        private static extern IntPtr LoadLibrary(string librayName);
+        [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+        private static extern IntPtr LoadLibrary([MarshalAs(UnmanagedType.LPWStr)] string librayName);
 
         [System.Runtime.Versioning.SupportedOSPlatform("windows")]
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
         [return: MarshalAs(UnmanagedType.Bool)]
-        private static extern bool SetDllDirectory(string lpPathName);
+        private static extern bool SetDllDirectory([MarshalAs(UnmanagedType.LPWStr)] string lpPathName);
 
         private static object lockobj = new object();
 

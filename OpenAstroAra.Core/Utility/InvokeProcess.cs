@@ -82,25 +82,28 @@ namespace OpenAstroAra.Core.Utility {
             internal SafeLocalMemHandle(IntPtr existingHandle, bool ownsHandle) : base(ownsHandle) {
                 SetHandle(existingHandle);
             }
-            [DllImport("advapi32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-            internal static extern bool ConvertStringSecurityDescriptorToSecurityDescriptor(string stringSecurityDescriptor,
+            [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true, BestFitMapping = false)]
+            [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+            internal static extern bool ConvertStringSecurityDescriptorToSecurityDescriptor([MarshalAs(UnmanagedType.LPWStr)] string stringSecurityDescriptor,
                 int stringSDRevision, out SafeLocalMemHandle pSecurityDescriptor, IntPtr securityDescriptorSize);
             [DllImport("kernel32.dll")]
+            [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
             private static extern IntPtr LocalFree(IntPtr hMem);
             protected override bool ReleaseHandle() {
                 return (LocalFree(handle) == IntPtr.Zero);
             }
         }
-        [DllImport("Kernel32", CharSet = CharSet.Auto, SetLastError = true, BestFitMapping = false)]
+        [DllImport("Kernel32", CharSet = CharSet.Unicode, SetLastError = true, BestFitMapping = false)]
+        [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
         internal static extern bool CreateProcess(
-             [MarshalAs(UnmanagedType.LPTStr)] string? applicationName,
-             StringBuilder commandLine,
+             [MarshalAs(UnmanagedType.LPWStr)] string? applicationName,
+             [MarshalAs(UnmanagedType.LPWStr)] StringBuilder commandLine,
              SecurityAttributes processAttributes,
              SecurityAttributes threadAttributes,
              bool inheritHandles,
              int creationFlags,
              IntPtr environment,
-             [MarshalAs(UnmanagedType.LPTStr)] string? currentDirectory,
+             [MarshalAs(UnmanagedType.LPWStr)] string? currentDirectory,
              StartupInfo startupInfo,
              ProcessInformation processInformation
         );
