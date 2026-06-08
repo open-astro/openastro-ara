@@ -121,7 +121,7 @@ namespace OpenAstroAra.Profile {
                  * will catch any old profiles that have old file types set and
                  * correct them to adhere to the new scheme.
                  */
-#pragma warning disable CS0612 // Type or member is obsolete
+#pragma warning disable CS0612, CS0618 // intentionally reads the obsolete TIFFLzw/TIFFZip file types to migrate old profiles
                 switch (fileType) {
                     case FileType.TIFFLzw:
                         FileType = FileType.TIFF;
@@ -133,7 +133,7 @@ namespace OpenAstroAra.Profile {
                         TIFFCompressionType = TIFFCompressionType.ZIP;
                         break;
                 }
-#pragma warning restore CS0612 // Type or member is obsolete
+#pragma warning restore CS0612, CS0618 // Type or member is obsolete
 
                 return fileType;
             }

@@ -97,7 +97,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyDome {
             // Calculate the distance along the unit vector, originating from the scope aperture origin, to where the line
             // intersects the sphere
             var dotProduct = Vector4.Dot(scopeDirection, scopeApertureOrigin);
-            var domeRadius = domeSettings.DomeRadius_mm;
+            var domeRadius = domeSettings.DomeRadiusMm;
             if (Vector4.Dot(scopeApertureOrigin, scopeApertureOrigin) > (domeRadius * domeRadius)) {
                 Notifier.ShowError(Loc.Instance["LblDomeRadiusMisconfigured"]);
                 throw new Exception(Loc.Instance["LblDomeRadiusMisconfigured"]);
@@ -133,9 +133,9 @@ namespace OpenAstroAra.Equipment.Equipment.MyDome {
             var latitudeFactor = (siteLatitude.Radians >= 0) ? 1.0 : -1.0;
             var mountOffset = Matrix4x4.CreateTranslation(
                 new Vector3(
-                    (float)(domeSettings.ScopePositionNorthSouth_mm * latitudeFactor),
-                    -(float)(domeSettings.ScopePositionEastWest_mm * latitudeFactor),
-                    (float)domeSettings.ScopePositionUpDown_mm));
+                    (float)(domeSettings.ScopePositionNorthSouthMm * latitudeFactor),
+                    -(float)(domeSettings.ScopePositionEastWestMm * latitudeFactor),
+                    (float)domeSettings.ScopePositionUpDownMm));
             // At either pole (90 degrees) we need to rotate counter-clockwise around the Y-axis.
             var latitudeRotationRadians = -Math.Abs(siteLatitude.Radians);
 
@@ -152,14 +152,14 @@ namespace OpenAstroAra.Equipment.Equipment.MyDome {
             var raOffsetAdjustment = Matrix4x4.CreateTranslation(
                 new Vector3(
                     0.0f,
-                    -(float)domeSettings.DecOffsetHorizontal_mm,
+                    -(float)domeSettings.DecOffsetHorizontalMm,
                     0.0f));
             // lateral axis is used for side by side saddles
             var decOffsetAdjustment = Matrix4x4.CreateTranslation(
                 new Vector3(
                     0.0f,
                     0.0f,
-                    (float)domeSettings.LateralAxis_mm));
+                    (float)domeSettings.LateralAxisMm));
 
             return mountOffset * latitudeAdjustment * raRotationAdjustment * raOffsetAdjustment * decRotationAdjustment * decOffsetAdjustment;
         }
@@ -181,9 +181,9 @@ namespace OpenAstroAra.Equipment.Equipment.MyDome {
             // facing the pole
             var mountOffset = Matrix4x4.CreateTranslation(
                 new Vector3(
-                    (float)(domeSettings.ScopePositionNorthSouth_mm * latitudeFactor),
-                    -(float)(domeSettings.ScopePositionEastWest_mm * latitudeFactor),
-                    (float)domeSettings.ScopePositionUpDown_mm));
+                    (float)(domeSettings.ScopePositionNorthSouthMm * latitudeFactor),
+                    -(float)(domeSettings.ScopePositionEastWestMm * latitudeFactor),
+                    (float)domeSettings.ScopePositionUpDownMm));
             // At either pole (90 degrees) we need to rotate counter-clockwise around the Y-axis.
             var latitudeRotationRadians = -Math.Abs(siteLatitude.Radians);
 
@@ -202,8 +202,8 @@ namespace OpenAstroAra.Equipment.Equipment.MyDome {
             var gemAdjustment = Matrix4x4.CreateTranslation(
                 new Vector3(
                     0.0f,
-                    -(float)domeSettings.LateralAxis_mm,
-                    (float)domeSettings.GemAxis_mm));
+                    -(float)domeSettings.LateralAxisMm,
+                    (float)domeSettings.GemAxisMm));
 
             return mountOffset * latitudeAdjustment * raRotationAdjustment * decRotationAdjustment * gemAdjustment;
         }

@@ -31,12 +31,12 @@ namespace OpenAstroAra.Profile {
         protected override void SetDefaultValues() {
             Id = "No_Device";
             LastDeviceName = "";
-            ScopePositionEastWest_mm = 0.0;
-            ScopePositionNorthSouth_mm = 0.0;
-            ScopePositionUpDown_mm = 0.0;
-            DomeRadius_mm = 0.0;
-            GemAxis_mm = 0.0;
-            AzimuthTolerance_degrees = 2.0;
+            ScopePositionEastWestMm = 0.0;
+            ScopePositionNorthSouthMm = 0.0;
+            ScopePositionUpDownMm = 0.0;
+            DomeRadiusMm = 0.0;
+            GemAxisMm = 0.0;
+            AzimuthToleranceDegrees = 2.0;
             FindHomeBeforePark = false;
             DomeSyncTimeoutSeconds = 120;
             SettleTimeSeconds = 1;
@@ -70,10 +70,10 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private double scopePositionEastWest_mm = 0.0;
+        private double scopePositionEastWest_mm;
 
-        [DataMember]
-        public double ScopePositionEastWest_mm {
+        [DataMember(Name = "ScopePositionEastWest_mm")]
+        public double ScopePositionEastWestMm {
             get => scopePositionEastWest_mm;
             set {
                 if (scopePositionEastWest_mm != value) {
@@ -83,10 +83,10 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private double scopePositionNorthSouth_mm = 0.0;
+        private double scopePositionNorthSouth_mm;
 
-        [DataMember]
-        public double ScopePositionNorthSouth_mm {
+        [DataMember(Name = "ScopePositionNorthSouth_mm")]
+        public double ScopePositionNorthSouthMm {
             get => scopePositionNorthSouth_mm;
             set {
                 if (scopePositionNorthSouth_mm != value) {
@@ -96,10 +96,10 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private double scopePositionUpDown_mm = 0.0;
+        private double scopePositionUpDown_mm;
 
-        [DataMember]
-        public double ScopePositionUpDown_mm {
+        [DataMember(Name = "ScopePositionUpDown_mm")]
+        public double ScopePositionUpDownMm {
             get => scopePositionUpDown_mm;
             set {
                 if (scopePositionUpDown_mm != value) {
@@ -109,10 +109,10 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private double domeRadius_mm = 0.0;
+        private double domeRadius_mm;
 
-        [DataMember]
-        public double DomeRadius_mm {
+        [DataMember(Name = "DomeRadius_mm")]
+        public double DomeRadiusMm {
             get => domeRadius_mm;
             set {
                 if (domeRadius_mm != value) {
@@ -122,10 +122,10 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private double gemAxis_mm = 0.0;
+        private double gemAxis_mm;
 
-        [DataMember]
-        public double GemAxis_mm {
+        [DataMember(Name = "GemAxis_mm")]
+        public double GemAxisMm {
             get => gemAxis_mm;
             set {
                 if (gemAxis_mm != value) {
@@ -135,10 +135,10 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private double lateralAxis_mm = 0.0;
+        private double lateralAxis_mm;
 
-        [DataMember]
-        public double LateralAxis_mm {
+        [DataMember(Name = "LateralAxis_mm")]
+        public double LateralAxisMm {
             get => lateralAxis_mm;
             set {
                 if (lateralAxis_mm != value) {
@@ -150,8 +150,8 @@ namespace OpenAstroAra.Profile {
 
         private double azimuthTolerance_degrees = 2.0;
 
-        [DataMember]
-        public double AzimuthTolerance_degrees {
+        [DataMember(Name = "AzimuthTolerance_degrees")]
+        public double AzimuthToleranceDegrees {
             get => azimuthTolerance_degrees;
             set {
                 if (azimuthTolerance_degrees != value) {
@@ -161,7 +161,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private bool findHomeBeforePark = false;
+        private bool findHomeBeforePark;
 
         [DataMember]
         public bool FindHomeBeforePark {
@@ -187,7 +187,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private bool synchronizeDuringMountSlew = false;
+        private bool synchronizeDuringMountSlew;
 
         [DataMember]
         public bool SynchronizeDuringMountSlew {
@@ -200,7 +200,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private bool syncSlewDomeWhenMountSlews = false;
+        private bool syncSlewDomeWhenMountSlews;
 
         [DataMember]
         public bool SyncSlewDomeWhenMountSlews {
@@ -226,7 +226,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private bool closeOnUnsafe = false;
+        private bool closeOnUnsafe;
 
         [DataMember]
         public bool CloseOnUnsafe {
@@ -239,7 +239,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private bool parkMountBeforeShutterMove = false;
+        private bool parkMountBeforeShutterMove;
 
         [DataMember]
         public bool ParkMountBeforeShutterMove {
@@ -252,7 +252,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private bool refuseUnsafeShutterMove = false;
+        private bool refuseUnsafeShutterMove;
 
         [DataMember]
         public bool RefuseUnsafeShutterMove {
@@ -265,7 +265,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private bool refuseUnsafeShutterOpenSansSafetyDevice = false;
+        private bool refuseUnsafeShutterOpenSansSafetyDevice;
 
         [DataMember]
         public bool RefuseUnsafeShutterOpenSansSafetyDevice {
@@ -278,7 +278,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private bool refuseUnparkWithoutShutterOpen = false;
+        private bool refuseUnparkWithoutShutterOpen;
 
         [DataMember]
         public bool RefuseUnparkWithoutShutterOpen {
@@ -291,7 +291,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private bool parkDomeBeforeShutterMove = false;
+        private bool parkDomeBeforeShutterMove;
 
         [DataMember]
         public bool ParkDomeBeforeShutterMove {
@@ -317,10 +317,10 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private double decOffsetHorizontal_mm = 0.0;
+        private double decOffsetHorizontal_mm;
 
-        [DataMember]
-        public double DecOffsetHorizontal_mm {
+        [DataMember(Name = "DecOffsetHorizontal_mm")]
+        public double DecOffsetHorizontalMm {
             get => decOffsetHorizontal_mm;
             set {
                 if (decOffsetHorizontal_mm != value) {
@@ -330,7 +330,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private int settleTimeSeconds = 0;
+        private int settleTimeSeconds;
 
         [DataMember]
         public int SettleTimeSeconds {
