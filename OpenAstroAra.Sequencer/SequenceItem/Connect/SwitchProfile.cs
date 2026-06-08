@@ -87,7 +87,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
         [property: JsonProperty]
         private bool reconnect;
 
-        public List<string> Devices { get; }
+        public IReadOnlyList<string> Devices { get; }
 
 
         private object? GetMediator(string device) {

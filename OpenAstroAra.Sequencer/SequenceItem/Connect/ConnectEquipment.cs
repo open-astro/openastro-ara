@@ -83,7 +83,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
             SelectedDevice = "Camera";
         }
 
-        public List<string> Devices { get; }
+        public IReadOnlyList<string> Devices { get; }
         private string selectedDevice = string.Empty;
 
         [JsonProperty]

@@ -74,7 +74,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
             };
         }
 
-        public List<string> Devices { get; }
+        public IReadOnlyList<string> Devices { get; }
 
         private object? GetMediator(string device) {
             switch (device) {
