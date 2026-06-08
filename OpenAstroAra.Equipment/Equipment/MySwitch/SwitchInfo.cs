@@ -24,12 +24,6 @@ namespace OpenAstroAra.Equipment.Equipment.MySwitch {
 
         private IList<string> supportedActions = new List<string>();
 
-        public IList<string> SupportedActions {
-            get => supportedActions;
-            set {
-                supportedActions = value;
-                RaisePropertyChanged();
-            }
-        }
+        public IList<string> SupportedActions => supportedActions;
     }
 }

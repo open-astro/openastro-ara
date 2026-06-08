@@ -43,13 +43,7 @@ namespace OpenAstroAra.Equipment.Model {
         private AsyncObservableCollection<CaptureSequence> _items = new AsyncObservableCollection<CaptureSequence>();
 
         [XmlElement(nameof(CaptureSequence))]
-        public AsyncObservableCollection<CaptureSequence> Items {
-            get => _items;
-            set {
-                _items = value;
-                RaisePropertyChanged();
-            }
-        }
+        public AsyncObservableCollection<CaptureSequence> Items => _items;
 
         public IEnumerator<CaptureSequence> GetEnumerator() {
             return Items.GetEnumerator();

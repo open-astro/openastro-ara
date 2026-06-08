@@ -55,15 +55,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider {
 
         private IList<string> supportedActions = new List<string>();
 
-        public IList<string> SupportedActions {
-            get => supportedActions;
-            set {
-                if (supportedActions != value) {
-                    supportedActions = value;
-                    RaisePropertyChanged();
-                }
-            }
-        }
+        public IList<string> SupportedActions => supportedActions;
 
         private RMSError? rmsError;
         /// <summary>

@@ -235,13 +235,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyCamera {
 
         private IList<int> gains = new List<int>();
 
-        public IList<int> Gains {
-            get => gains;
-            set {
-                gains = value;
-                RaisePropertyChanged();
-            }
-        }
+        public IList<int> Gains => gains;
 
         private bool coolerOn;
 
@@ -447,13 +441,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyCamera {
 
         private AsyncObservableCollection<BinningMode> binningModes = new AsyncObservableCollection<BinningMode>();
 
-        public AsyncObservableCollection<BinningMode> BinningModes {
-            get => binningModes;
-            set {
-                binningModes = value;
-                RaisePropertyChanged();
-            }
-        }
+        public AsyncObservableCollection<BinningMode> BinningModes => binningModes;
 
         private double exposureMax;
 
@@ -505,13 +493,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyCamera {
 
         private IList<string> supportedActions = new List<string>();
 
-        public IList<string> SupportedActions {
-            get => supportedActions;
-            set {
-                supportedActions = value;
-                RaisePropertyChanged();
-            }
-        }
+        public IList<string> SupportedActions => supportedActions;
         private bool canSetUSBLimit;
 
         public bool CanSetUSBLimit {

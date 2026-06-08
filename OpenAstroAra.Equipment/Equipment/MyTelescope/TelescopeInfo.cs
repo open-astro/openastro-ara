@@ -264,15 +264,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyTelescope {
 
         private IList<TrackingMode> trackingModes = new List<TrackingMode>();
 
-        public IList<TrackingMode> TrackingModes {
-            get => trackingModes;
-            set {
-                if (trackingModes != value) {
-                    trackingModes = value;
-                    RaisePropertyChanged();
-                }
-            }
-        }
+        public IList<TrackingMode> TrackingModes => trackingModes;
 
         private bool atHome;
 
@@ -480,39 +472,15 @@ namespace OpenAstroAra.Equipment.Equipment.MyTelescope {
 
         private IList<(double, double)> primaryAxisRates = new List<(double, double)>();
 
-        public IList<(double, double)> PrimaryAxisRates {
-            get => primaryAxisRates;
-            set {
-                if (primaryAxisRates != value) {
-                    primaryAxisRates = value;
-                    RaisePropertyChanged();
-                }
-            }
-        }
+        public IList<(double, double)> PrimaryAxisRates => primaryAxisRates;
 
         private IList<(double, double)> secondaryAxisRates = new List<(double, double)>();
 
-        public IList<(double, double)> SecondaryAxisRates {
-            get => secondaryAxisRates;
-            set {
-                if (secondaryAxisRates != value) {
-                    secondaryAxisRates = value;
-                    RaisePropertyChanged();
-                }
-            }
-        }
+        public IList<(double, double)> SecondaryAxisRates => secondaryAxisRates;
 
         private IList<string> supportedActions = new List<string>();
 
-        public IList<string> SupportedActions {
-            get => supportedActions;
-            set {
-                if (supportedActions != value) {
-                    supportedActions = value;
-                    RaisePropertyChanged();
-                }
-            }
-        }
+        public IList<string> SupportedActions => supportedActions;
 
         private AlignmentMode alignmentMode;
 
