@@ -223,14 +223,14 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                         sha512.Dispose();
                         break;
 
-                    case XISFChecksumTypeEnum.SHA3_256:
+                    case XISFChecksumTypeEnum.Sha3256:
                         SHA3_256 sha3_256 = SHA3_256.Create();
                         Checksum = GetStringFromHash(sha3_256.ComputeHash(outArray));
                         ChecksumName = "sha3-256";
                         sha3_256.Dispose();
                         break;
 
-                    case XISFChecksumTypeEnum.SHA3_512:
+                    case XISFChecksumTypeEnum.Sha3512:
                         SHA3_512 sha3_512 = SHA3_512.Create();
                         Checksum = GetStringFromHash(sha3_512.ComputeHash(outArray));
                         ChecksumName = "sha3-512";

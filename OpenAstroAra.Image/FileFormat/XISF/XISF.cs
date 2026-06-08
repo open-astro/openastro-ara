@@ -356,10 +356,10 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                     return XISFChecksumTypeEnum.SHA512;
 
                 case "sha3-256":
-                    return XISFChecksumTypeEnum.SHA3_256;
+                    return XISFChecksumTypeEnum.Sha3256;
 
                 case "sha3-512":
-                    return XISFChecksumTypeEnum.SHA3_512;
+                    return XISFChecksumTypeEnum.Sha3512;
 
                 default:
                     throw new InvalidDataException();
@@ -389,13 +389,13 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                         sha512.Dispose();
                         break;
 
-                    case XISFChecksumTypeEnum.SHA3_256:
+                    case XISFChecksumTypeEnum.Sha3256:
                         SHA3_256 sha3_256 = SHA3_256.Create();
                         computedCksum = GetStringFromHash(sha3_256.ComputeHash(raw));
                         sha3_256.Dispose();
                         break;
 
-                    case XISFChecksumTypeEnum.SHA3_512:
+                    case XISFChecksumTypeEnum.Sha3512:
                         SHA3_512 sha3_512 = SHA3_512.Create();
                         computedCksum = GetStringFromHash(sha3_512.ComputeHash(raw));
                         sha3_512.Dispose();

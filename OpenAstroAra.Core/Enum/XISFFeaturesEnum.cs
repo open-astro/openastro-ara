@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -49,9 +49,9 @@ namespace OpenAstroAra.Core.Enum {
         SHA512,
 
         [Description("LblChecksumSHA3_256")]
-        SHA3_256,
+        Sha3256,
 
         [Description("LblChecksumSHA3_512")]
-        SHA3_512
+        Sha3512
     }
 }
