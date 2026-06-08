@@ -18,7 +18,7 @@ using System.Timers;
 
 namespace OpenAstroAra.Core.Utility {
 
-    public class Ticker : BaseINPC {
+    public sealed class Ticker : BaseINPC, IDisposable {
 
         public Ticker(TimeSpan interval) {
             _timer = new Timer();
@@ -27,10 +27,16 @@ namespace OpenAstroAra.Core.Utility {
             _timer.Start();
         }
 
-        private Timer _timer;
+        private readonly Timer _timer;
 
+        // These are intentionally instance properties: the timer raises
+        // PropertyChanged for them so bound consumers re-read the current time.
+        // A static member could not participate in this instance change-notification,
+        // so CA1822 ("mark static") does not apply.
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822:Mark members as static", Justification = "INotifyPropertyChanged change-notified property; must be an instance member to drive bindings via this Ticker's PropertyChanged.")]
         public DateTime Now => DateTime.Now;
 
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822:Mark members as static", Justification = "INotifyPropertyChanged change-notified property; must be an instance member to drive bindings via this Ticker's PropertyChanged.")]
         public double OxyNow => DateTimeAxis.ToDouble(DateTime.Now);
 
         private void Timer_Elapsed(object? sender, ElapsedEventArgs e) {
@@ -40,6 +46,10 @@ namespace OpenAstroAra.Core.Utility {
 
         public void Stop() {
             _timer.Stop();
+        }
+
+        public void Dispose() {
+            _timer.Dispose();
         }
     }
 }
