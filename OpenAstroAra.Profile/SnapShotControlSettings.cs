@@ -87,8 +87,8 @@ namespace OpenAstroAra.Profile {
 
         private bool loop;
 
-        [DataMember]
-        public bool Loop {
+        [DataMember(Name = "Loop")]
+        public bool LoopExposures {
             get => loop;
             set {
                 if (loop != value) {

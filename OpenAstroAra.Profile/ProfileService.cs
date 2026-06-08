@@ -27,9 +27,9 @@ using System.Threading;
 namespace OpenAstroAra.Profile {
 
     public class ProfileService : BaseINPC, IProfileService {
-        private static object lockobj = new object();
+        private static readonly object lockobj = new object();
 
-        public static string PROFILEFOLDER = Path.Combine(CoreUtil.APPLICATIONTEMPPATH, "Profiles");
+        public static readonly string PROFILEFOLDER = Path.Combine(CoreUtil.APPLICATIONTEMPPATH, "Profiles");
 
         public ProfileService() {
             saveTimer = new System.Timers.Timer();
@@ -261,7 +261,7 @@ namespace OpenAstroAra.Profile {
         }
 
         public event EventHandler? LocationChanged;
-        public event EventHandler? BeforeProfileChanging;
+        public event EventHandler? ProfileChanging;
 
         public event EventHandler? ProfileChanged;
 
@@ -320,17 +320,13 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        public bool SelectProfile(ProfileMeta info) {
+        public bool SelectProfile(ProfileMeta profileInfo) {
             lock (lockobj) {
                 using (MyStopWatch.Measure()) {
                     try {
-                        var eventHandlerBeforeProfileChanging = BeforeProfileChanging;
-                        if (eventHandlerBeforeProfileChanging != null) {
-                            eventHandlerBeforeProfileChanging.Invoke(this, new EventArgs());
-
-                        }
+                        ProfileChanging?.Invoke(this, EventArgs.Empty);
                         var old = activeProfile;
-                        var p = Profile.Load(info.Location);
+                        var p = Profile.Load(profileInfo.Location);
 
                         UnregisterChangedEventHandlers();
                         if (ActiveProfile != null) {
@@ -339,7 +335,7 @@ namespace OpenAstroAra.Profile {
                         }
 
                         ActiveProfile = p;
-                        info.IsActive = true;
+                        profileInfo.IsActive = true;
 
                         System.Threading.Thread.CurrentThread.CurrentUICulture = ActiveProfile.ApplicationSettings.Language;
                         Loc.Instance.ReloadLocale(ActiveProfile.ApplicationSettings.Culture);
@@ -398,12 +394,12 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        public bool RemoveProfile(ProfileMeta info) {
+        public bool RemoveProfile(ProfileMeta profileInfo) {
             lock (lockobj) {
-                if (!Profile.Remove(info)) {
+                if (!Profile.Remove(profileInfo)) {
                     return false;
                 } else {
-                    Profiles.Remove(info);
+                    Profiles.Remove(profileInfo);
                     return true;
                 }
             }

@@ -108,7 +108,7 @@ namespace OpenAstroAra.Profile {
 
         private string skyAtlasImageRepository = string.Empty;
 
-        [Obsolete]
+        [Obsolete("Sky Atlas offline image repository is no longer used in the headless build; retained for profile deserialization only.")]
         [DataMember]
         public string SkyAtlasImageRepository {
             get => skyAtlasImageRepository;

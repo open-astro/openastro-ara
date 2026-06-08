@@ -334,7 +334,7 @@ namespace OpenAstroAra.Profile {
 
     [Serializable]
     [DataContract]
-    [Obsolete]
+    [Obsolete("Legacy flat-device key retained only to deserialize old profiles; superseded by TrainedFlatExposureSettings.")]
     public class FlatDeviceFilterSettingsKey {
 
         [DataMember(IsRequired = false, EmitDefaultValue = false)]
@@ -387,10 +387,10 @@ namespace OpenAstroAra.Profile {
 
     [Serializable]
     [DataContract]
-    [Obsolete]
+    [Obsolete("Legacy flat-device value retained only to deserialize old profiles; superseded by TrainedFlatExposureSettings.")]
     public class FlatDeviceFilterSettingsValue {
 
-        [Obsolete]
+        [Obsolete("Legacy relative brightness; superseded by AbsoluteBrightness.")]
         [DataMember]
         public double Brightness { get; set; } = double.NaN;
 

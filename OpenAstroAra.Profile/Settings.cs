@@ -15,6 +15,7 @@
 using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Profile.Interfaces;
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.Serialization;
 
 namespace OpenAstroAra.Profile {
@@ -23,6 +24,8 @@ namespace OpenAstroAra.Profile {
     [DataContract]
     public abstract class Settings : SerializableINPC, ISettings {
 
+        [SuppressMessage("Usage", "CA2214:Do not call overridable methods in constructors",
+            Justification = "Intentional settings-defaults pattern: each concrete settings type overrides SetDefaultValues to initialize only its own DataMember fields to defaults before deserialization populates them. Derived constructors are empty, so there is no partially-constructed-state hazard.")]
         protected Settings() {
             SetDefaultValues();
         }

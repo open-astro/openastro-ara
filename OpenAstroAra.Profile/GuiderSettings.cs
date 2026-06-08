@@ -146,8 +146,8 @@ namespace OpenAstroAra.Profile {
 
         private string pHD2ServerUrl = string.Empty;
 
-        [DataMember]
-        public string PHD2ServerUrl {
+        [DataMember(Name = "PHD2ServerUrl")]
+        public string PHD2ServerHost {
             get => pHD2ServerUrl;
             set {
                 if (pHD2ServerUrl != value) {
@@ -421,8 +421,8 @@ namespace OpenAstroAra.Profile {
         /// <summary>
         /// Property allowing to set the endpoint URL for SkyGuard software
         /// </summary>
-        [DataMember]
-        public string SkyGuardServerUrl {
+        [DataMember(Name = "SkyGuardServerUrl")]
+        public string SkyGuardServerHost {
             get => skyGuardServerUrl;
             set {
                 if (skyGuardServerUrl != value) {

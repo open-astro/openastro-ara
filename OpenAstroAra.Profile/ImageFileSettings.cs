@@ -235,7 +235,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        public string GetFilePattern(string imageType) {
+        public string ResolveFilePatternForImageType(string imageType) {
             var pattern = FilePattern;
 
             if (imageType == "DARK" && !string.IsNullOrWhiteSpace(FilePatternDARK)) {

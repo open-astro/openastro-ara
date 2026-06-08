@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -23,7 +23,7 @@ namespace OpenAstroAra.Profile.Interfaces {
         AsyncObservableCollection<ProfileMeta> Profiles { get; }
         IProfile ActiveProfile { get; }
 
-        bool Clone(ProfileMeta profileInfos);
+        bool Clone(ProfileMeta profileInfo);
 
         void Add();
 
@@ -50,7 +50,7 @@ namespace OpenAstroAra.Profile.Interfaces {
 
         event EventHandler LocationChanged;
 
-        event EventHandler BeforeProfileChanging;
+        event EventHandler ProfileChanging;
 
         event EventHandler ProfileChanged;
 

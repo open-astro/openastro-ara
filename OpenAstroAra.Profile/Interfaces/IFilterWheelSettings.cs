@@ -18,7 +18,9 @@ using OpenAstroAra.Core.Utility;
 namespace OpenAstroAra.Profile.Interfaces {
 
     public interface IFilterWheelSettings : ISettings {
-        ObserveAllCollection<FilterInfo> FilterWheelFilters { get; set; }
+        // CA2227: get-only at the interface; the concrete settings type keeps a
+        // setter for DataContract deserialization. Callers mutate via Add/Remove.
+        ObserveAllCollection<FilterInfo> FilterWheelFilters { get; }
         string Id { get; set; }
         string LastDeviceName { get; set; }
         bool DisableGuidingOnFilterChange { get; set; }

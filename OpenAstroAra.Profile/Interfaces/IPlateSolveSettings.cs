@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -14,10 +14,13 @@
 
 using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Core.Model.Equipment;
+using System.Diagnostics.CodeAnalysis;
 
 namespace OpenAstroAra.Profile.Interfaces {
 
     public interface IPlateSolveSettings : ISettings {
+        [SuppressMessage("Design", "CA1056:URI-like properties should not be strings",
+            Justification = "DataContract-persisted, user-editable free-text endpoint; the value is normalized as a string on input and round-tripped to XML, so System.Uri would break the text-editing semantics.")]
         string AstrometryURL { get; set; }
         string AstrometryAPIKey { get; set; }
         BlindSolver BlindSolverType { get; set; }

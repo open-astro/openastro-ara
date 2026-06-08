@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -25,7 +25,9 @@ namespace OpenAstroAra.Profile.Interfaces {
         string Name { get; set; }
         string PortName { get; set; }
         int SettleTime { get; set; }
-        ObserveAllCollection<TrainedFlatExposureSetting> TrainedFlatExposureSettings { get; set; }
+        // CA2227: get-only at the interface; the concrete settings type keeps a
+        // setter for DataContract deserialization. Callers mutate via Add/Remove.
+        ObserveAllCollection<TrainedFlatExposureSetting> TrainedFlatExposureSettings { get; }
         bool RemoveFlatExposureSetting(TrainedFlatExposureSetting setting);
         TrainedFlatExposureSetting? GetTrainedFlatExposureSetting(short? filterPosition, BinningMode binning, int gain, int offset);
         void AddEmptyTrainedExposureSetting();
