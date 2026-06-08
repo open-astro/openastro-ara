@@ -5,19 +5,26 @@ using System.Runtime.InteropServices;
 using System.Text;
 
 namespace OpenAstroAra.Image.FileFormat.FITS {
-    public static class CfitsioNative {
 
-        public class cfitsioException : Exception {
-            public string? Op { get; private set; }
-            public int StatusCode { get; private set; }
-            public cfitsioException(string op, int statusCode) : base($"{op} failed with {statusCode} = {fits_get_errstatus(statusCode)}") {
-                this.Op = op;
-                this.StatusCode = statusCode;
-            }
-
-            public cfitsioException() {
-            }
+    public sealed class CfitsioException : Exception {
+        public string? Op { get; private set; }
+        public int StatusCode { get; private set; }
+        public CfitsioException(string op, int statusCode) : base($"{op} failed with {statusCode} = {CfitsioNative.fits_get_errstatus(statusCode)}") {
+            this.Op = op;
+            this.StatusCode = statusCode;
         }
+
+        public CfitsioException() {
+        }
+
+        public CfitsioException(string message) : base(message) {
+        }
+
+        public CfitsioException(string message, Exception innerException) : base(message, innerException) {
+        }
+    }
+
+    public static class CfitsioNative {
 
         private const string DLLNAME = "cfitsionative.dll";
         static CfitsioNative() {
@@ -48,6 +55,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
         }
 
         public enum BITPIX : int {
+            None = 0,
             BYTE_IMG = 8,
             SHORT_IMG = 16,
             USHORT_IMG = 20,
@@ -59,6 +67,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
         }
 
         public enum DATATYPE : int {
+            None = 0,
             TBIT = 1,
             TBYTE = 11,
             TSBYTE = 12,
@@ -79,6 +88,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
         }
 
         public enum COMPRESSION : int {
+            None = 0,
             RICE_1 = 11,
             GZIP_1 = 21,
             GZIP_2 = 22,
@@ -97,7 +107,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
 
         public static void CheckStatus(string op, int statusCode) {
             if (statusCode != 0) {
-                throw new cfitsioException(op, statusCode);
+                throw new CfitsioException(op, statusCode);
             }
         }
 
@@ -108,48 +118,48 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
         }
 
         // int CFITS_API ffomem(itsfile **fptr, const char* name, int mode, void** buffptr, size_t *buffsize, size_t deltasize, void* (* mem_realloc) (void* p, size_t newsize), int* status);
-        [DllImport(DLLNAME, EntryPoint = "ffomem", CallingConvention = CallingConvention.Cdecl)]
-        public static extern int fits_open_memory(out IntPtr fptr, string filename, IOMODE iomode, ref IntPtr buffer, ref UIntPtr size, ref UIntPtr deltaSize, IntPtr fnMemRealloc, out int status);
+        [DllImport(DLLNAME, EntryPoint = "ffomem", CallingConvention = CallingConvention.Cdecl, BestFitMapping = false, ThrowOnUnmappableChar = true)]
+        internal static extern int fits_open_memory(out IntPtr fptr, string filename, IOMODE iomode, ref IntPtr buffer, ref UIntPtr size, ref UIntPtr deltaSize, IntPtr fnMemRealloc, out int status);
 
         // int CFITS_API ffopen(fitsfile **fptr, const char *filename, int iomode, int *status);
-        [DllImport(DLLNAME, EntryPoint = "ffopen", CallingConvention = CallingConvention.Cdecl)]
-        public static extern int fits_open_file(out IntPtr fptr, string filename, IOMODE iomode, out int status);
+        [DllImport(DLLNAME, EntryPoint = "ffopen", CallingConvention = CallingConvention.Cdecl, BestFitMapping = false, ThrowOnUnmappableChar = true)]
+        internal static extern int fits_open_file(out IntPtr fptr, string filename, IOMODE iomode, out int status);
 
         // int CFITS_API ffghsp(fitsfile *fptr, int *nexist, int *nmore, int *status);
-        [DllImport(DLLNAME, EntryPoint = "ffghsp", CallingConvention = CallingConvention.Cdecl)]
-        public static extern int fits_get_hdrspace(IntPtr fptr, out int nexist, out int nmore, out int status);
+        [DllImport(DLLNAME, EntryPoint = "ffghsp", CallingConvention = CallingConvention.Cdecl, BestFitMapping = false, ThrowOnUnmappableChar = true)]
+        internal static extern int fits_get_hdrspace(IntPtr fptr, out int nexist, out int nmore, out int status);
 
         // int CFITS_API ffgrec(fitsfile *fptr, int nrec,      char *card, int *status);
-        [DllImport(DLLNAME, CharSet = CharSet.Ansi, EntryPoint = "ffgrec", CallingConvention = CallingConvention.Cdecl)]
-        public static extern int fits_read_record(
+        [DllImport(DLLNAME, CharSet = CharSet.Ansi, EntryPoint = "ffgrec", CallingConvention = CallingConvention.Cdecl, BestFitMapping = false, ThrowOnUnmappableChar = true)]
+        internal static extern int fits_read_record(
             IntPtr fptr,
             int nrec,
             [Out] StringBuilder card,
             out int status);
 
         // int CFITS_API ffclos(fitsfile *fptr, int *status);
-        [DllImport(DLLNAME, EntryPoint = "ffclos", CallingConvention = CallingConvention.Cdecl)]
-        public static extern int fits_close_file(IntPtr fptr, out int status);
+        [DllImport(DLLNAME, EntryPoint = "ffclos", CallingConvention = CallingConvention.Cdecl, BestFitMapping = false, ThrowOnUnmappableChar = true)]
+        internal static extern int fits_close_file(IntPtr fptr, out int status);
 
         // int CFITS_API ffgidt(fitsfile *fptr, int *imgtype, int *status);
-        [DllImport(DLLNAME, EntryPoint = "ffgidt", CallingConvention = CallingConvention.Cdecl)]
-        public static extern int fits_get_img_type(IntPtr fptr, out BITPIX imgtype, out int status);
+        [DllImport(DLLNAME, EntryPoint = "ffgidt", CallingConvention = CallingConvention.Cdecl, BestFitMapping = false, ThrowOnUnmappableChar = true)]
+        internal static extern int fits_get_img_type(IntPtr fptr, out BITPIX imgtype, out int status);
 
         // int CFITS_API ffgidm(fitsfile *fptr, int *naxis,  int *status);
-        [DllImport(DLLNAME, EntryPoint = "ffgidm", CallingConvention = CallingConvention.Cdecl)]
-        public static extern int fits_get_img_dim(IntPtr fptr, out int naxis, out int status);
+        [DllImport(DLLNAME, EntryPoint = "ffgidm", CallingConvention = CallingConvention.Cdecl, BestFitMapping = false, ThrowOnUnmappableChar = true)]
+        internal static extern int fits_get_img_dim(IntPtr fptr, out int naxis, out int status);
 
         // int CFITS_API ffgisz(fitsfile *fptr, int nlen, long *naxes, int *status);
-        [DllImport(DLLNAME, EntryPoint = "ffgisz", CallingConvention = CallingConvention.Cdecl)]
-        public static extern int fits_get_img_size(IntPtr fptr, out int nlen, out int[] naxes, out int status);
+        [DllImport(DLLNAME, EntryPoint = "ffgisz", CallingConvention = CallingConvention.Cdecl, BestFitMapping = false, ThrowOnUnmappableChar = true)]
+        internal static extern int fits_get_img_size(IntPtr fptr, out int nlen, out int[] naxes, out int status);
 
         // int CFITS_API ffpcks(fitsfile *fptr, int *status);
-        [DllImport(DLLNAME, EntryPoint = "ffpcks", CallingConvention = CallingConvention.Cdecl)]
-        public static extern int fits_write_chksum(IntPtr fptr, out int status);
+        [DllImport(DLLNAME, EntryPoint = "ffpcks", CallingConvention = CallingConvention.Cdecl, BestFitMapping = false, ThrowOnUnmappableChar = true)]
+        internal static extern int fits_write_chksum(IntPtr fptr, out int status);
 
         // int CFITS_API ffgpxv(fitsfile *fptr, int  datatype, long *firstpix, LONGLONG nelem, void* nulval, void* array, int* anynul, int* status);
-        [DllImport(DLLNAME, EntryPoint = "ffgpxv", CallingConvention = CallingConvention.Cdecl)]
-        public static extern int fits_read_pix(
+        [DllImport(DLLNAME, EntryPoint = "ffgpxv", CallingConvention = CallingConvention.Cdecl, BestFitMapping = false, ThrowOnUnmappableChar = true)]
+        internal static extern int fits_read_pix(
             IntPtr fptr,
             DATATYPE datatype,
             int[] firstpix,
@@ -161,7 +171,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
 
         // fits_read_key_long      ffgkyj
         // int CFITS_API ffgkyj(fitsfile *fptr, const char *keyname, long *value, char *comm, int *status);
-        [DllImport(DLLNAME, CharSet = CharSet.Ansi, EntryPoint = "ffgkyj", CallingConvention = CallingConvention.Cdecl)]
+        [DllImport(DLLNAME, CharSet = CharSet.Ansi, EntryPoint = "ffgkyj", CallingConvention = CallingConvention.Cdecl, BestFitMapping = false, ThrowOnUnmappableChar = true)]
         private static extern int _fits_read_key_long(
             IntPtr fptr,
             [MarshalAs(UnmanagedType.LPStr, SizeConst = FLEN_KEYWORD)] string keyname,
@@ -169,12 +179,12 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
             [MarshalAs(UnmanagedType.LPStr, SizeConst = FLEN_COMMENT)] StringBuilder? comm,
             out int status);
         public static long fits_read_key_long(IntPtr fptr, string keyname) {
-            _fits_read_key_long(fptr, keyname, out var value, null, out var status);
+            _ = _fits_read_key_long(fptr, keyname, out var value, null, out var status);
             CheckStatus("fits_read_key_long", status);
             return value;
         }
         // fits_read_key_double      ffgkye
-        [DllImport(DLLNAME, CharSet = CharSet.Ansi, EntryPoint = "ffgkyd", CallingConvention = CallingConvention.Cdecl)]
+        [DllImport(DLLNAME, CharSet = CharSet.Ansi, EntryPoint = "ffgkyd", CallingConvention = CallingConvention.Cdecl, BestFitMapping = false, ThrowOnUnmappableChar = true)]
         private static extern int _fits_read_key_double(
             IntPtr fptr,
             [MarshalAs(UnmanagedType.LPStr, SizeConst = FLEN_KEYWORD)] string keyname,
@@ -183,13 +193,13 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
             out int status);
 
         public static double fits_read_key_double(IntPtr fptr, string keyname) {
-            _fits_read_key_double(fptr, keyname, out var value, null, out var status);
+            _ = _fits_read_key_double(fptr, keyname, out var value, null, out var status);
             CheckStatus("fits_read_key_long", status);
             return value;
         }
 
         // fits_read_key_double      ffgkye
-        [DllImport(DLLNAME, CharSet = CharSet.Ansi, EntryPoint = "ffgkye", CallingConvention = CallingConvention.Cdecl)]
+        [DllImport(DLLNAME, CharSet = CharSet.Ansi, EntryPoint = "ffgkye", CallingConvention = CallingConvention.Cdecl, BestFitMapping = false, ThrowOnUnmappableChar = true)]
         private static extern int _fits_read_key_float(
             IntPtr fptr,
             [MarshalAs(UnmanagedType.LPStr, SizeConst = FLEN_KEYWORD)] string keyname,
@@ -198,13 +208,13 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
             out int status);
 
         public static float fits_read_key_float(IntPtr fptr, string keyname) {
-            _fits_read_key_float(fptr, keyname, out var value, null, out var status);
+            _ = _fits_read_key_float(fptr, keyname, out var value, null, out var status);
             CheckStatus("fits_read_key_long", status);
             return value;
         }
 
         // fits_read_key_lng      ffgkyj
-        [DllImport(DLLNAME, CharSet = CharSet.Ansi, EntryPoint = "ffgkyj", CallingConvention = CallingConvention.Cdecl)]
+        [DllImport(DLLNAME, CharSet = CharSet.Ansi, EntryPoint = "ffgkyj", CallingConvention = CallingConvention.Cdecl, BestFitMapping = false, ThrowOnUnmappableChar = true)]
         private static extern int _fits_read_key_lng(
             IntPtr fptr,
             [MarshalAs(UnmanagedType.LPStr, SizeConst = FLEN_KEYWORD)] string keyname,
@@ -213,13 +223,13 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
             out int status);
 
         public static long fits_read_key_lng(IntPtr fptr, string keyname) {
-            _fits_read_key_lng(fptr, keyname, out var value, null, out var status);
+            _ = _fits_read_key_lng(fptr, keyname, out var value, null, out var status);
             CheckStatus("fits_read_key_long", status);
             return value;
         }
 
         // void CFITS_API ffgerr(int status, char *errtext);
-        [DllImport(DLLNAME, CharSet = CharSet.Ansi, EntryPoint = "ffgerr", CallingConvention = CallingConvention.Cdecl)]
+        [DllImport(DLLNAME, CharSet = CharSet.Ansi, EntryPoint = "ffgerr", CallingConvention = CallingConvention.Cdecl, BestFitMapping = false, ThrowOnUnmappableChar = true)]
         private static extern void _fits_get_errstatus(
             int status,
             [MarshalAs(UnmanagedType.LPStr, SizeConst = FLEN_ERRMSG)] StringBuilder errtext);
@@ -396,7 +406,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
         }
 
         // int CFITS_API ffgkys(fitsfile *fptr, const char *keyname, char *value, char *comm, int *status);
-        [DllImport(DLLNAME, CharSet = CharSet.Ansi, EntryPoint = "ffgkys", CallingConvention = CallingConvention.Cdecl)]
+        [DllImport(DLLNAME, CharSet = CharSet.Ansi, EntryPoint = "ffgkys", CallingConvention = CallingConvention.Cdecl, BestFitMapping = false, ThrowOnUnmappableChar = true)]
         private static extern void _fits_read_key_str(
             IntPtr fptr,
             [MarshalAs(UnmanagedType.LPStr, SizeConst = FLEN_KEYWORD)] string keyname,
@@ -405,7 +415,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
             out int status);
 
         // int CFITS_API ffgkyn(fitsfile *fptr, int nkey, char *keyname, char *keyval, char *comm, int* status);
-        [DllImport(DLLNAME, CharSet = CharSet.Ansi, EntryPoint = "ffgkyn", CallingConvention = CallingConvention.Cdecl)]
+        [DllImport(DLLNAME, CharSet = CharSet.Ansi, EntryPoint = "ffgkyn", CallingConvention = CallingConvention.Cdecl, BestFitMapping = false, ThrowOnUnmappableChar = true)]
         private static extern int _fits_read_keyn(
             IntPtr fptr,
             int nkey,
@@ -418,7 +428,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
             var valuesb = new StringBuilder(FLEN_VALUE);
             var commsb = new StringBuilder(FLEN_COMMENT);
 
-            _fits_read_keyn(fptr, nkey, keynamesb, valuesb, commsb, out var status);
+            _ = _fits_read_keyn(fptr, nkey, keynamesb, valuesb, commsb, out var status);
             CheckStatus("fits_read_keyn", status);
             keyname = keynamesb.ToString();
             value = valuesb.ToString();
@@ -426,8 +436,8 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
         }
 
         // ffpkys(fitsfile *fptr, const char *keyname, const char *value, const char *comm,int *status);
-        [DllImport(DLLNAME, CharSet = CharSet.Ansi, EntryPoint = "ffpkys", CallingConvention = CallingConvention.Cdecl)]
-        public static extern int fits_write_key_str(
+        [DllImport(DLLNAME, CharSet = CharSet.Ansi, EntryPoint = "ffpkys", CallingConvention = CallingConvention.Cdecl, BestFitMapping = false, ThrowOnUnmappableChar = true)]
+        internal static extern int fits_write_key_str(
             IntPtr fptr,
             [MarshalAs(UnmanagedType.LPStr, SizeConst = FLEN_KEYWORD)] string keyname,
             [MarshalAs(UnmanagedType.LPStr, SizeConst = FLEN_VALUE)] string value,
@@ -435,81 +445,81 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
             out int status);
 
         // int CFITS_API ffcrim(fitsfile *fptr, int bitpix, int naxis, long *naxes, int *status);
-        [DllImport(DLLNAME, EntryPoint = "ffcrim", CallingConvention = CallingConvention.Cdecl)]
-        public static extern int fits_create_img(IntPtr fptr, BITPIX bitpix, int naxis, int[] naxes, out int status);
+        [DllImport(DLLNAME, EntryPoint = "ffcrim", CallingConvention = CallingConvention.Cdecl, BestFitMapping = false, ThrowOnUnmappableChar = true)]
+        internal static extern int fits_create_img(IntPtr fptr, BITPIX bitpix, int naxis, int[] naxes, out int status);
 
         // int CFITS_API ffinit(  fitsfile **fptr, const char *filename, int *status);
-        [DllImport(DLLNAME, CharSet = CharSet.Ansi, EntryPoint = "ffinit", CallingConvention = CallingConvention.Cdecl)]
-        public static extern int fits_create_file(
+        [DllImport(DLLNAME, CharSet = CharSet.Ansi, EntryPoint = "ffinit", CallingConvention = CallingConvention.Cdecl, BestFitMapping = false, ThrowOnUnmappableChar = true)]
+        internal static extern int fits_create_file(
             out IntPtr fptr,
             [MarshalAs(UnmanagedType.LPStr, SizeConst = FLEN_FILENAME)] string filename,
             out int status);
 
-        [DllImport(DLLNAME, EntryPoint = "ffppr", CallingConvention = CallingConvention.Cdecl)]
-        public static extern int fits_write_img(IntPtr fptr, DATATYPE datatype, long fpixel, long nelements, ushort[] array, out int status);
-        [DllImport(DLLNAME, EntryPoint = "ffppr", CallingConvention = CallingConvention.Cdecl)]
-        public static extern int fits_write_img_int(IntPtr fptr, DATATYPE datatype, long fpixel, long nelements, int[] array, out int status);
-        [DllImport(DLLNAME, EntryPoint = "ffppr", CallingConvention = CallingConvention.Cdecl)]
-        public static extern int fits_write_img_uint(IntPtr fptr, DATATYPE datatype, long fpixel, long nelements, uint[] array, out int status);
-        [DllImport(DLLNAME, EntryPoint = "ffppr", CallingConvention = CallingConvention.Cdecl)]
-        public static extern int fits_write_img_float(IntPtr fptr, DATATYPE datatype, long fpixel, long nelements, float[] array, out int status);
-        [DllImport(DLLNAME, EntryPoint = "ffppr", CallingConvention = CallingConvention.Cdecl)]
-        public static extern int fits_write_img_double(IntPtr fptr, DATATYPE datatype, long fpixel, long nelements, double[] array, out int status);
+        [DllImport(DLLNAME, EntryPoint = "ffppr", CallingConvention = CallingConvention.Cdecl, BestFitMapping = false, ThrowOnUnmappableChar = true)]
+        internal static extern int fits_write_img(IntPtr fptr, DATATYPE datatype, long fpixel, long nelements, ushort[] array, out int status);
+        [DllImport(DLLNAME, EntryPoint = "ffppr", CallingConvention = CallingConvention.Cdecl, BestFitMapping = false, ThrowOnUnmappableChar = true)]
+        internal static extern int fits_write_img_int(IntPtr fptr, DATATYPE datatype, long fpixel, long nelements, int[] array, out int status);
+        [DllImport(DLLNAME, EntryPoint = "ffppr", CallingConvention = CallingConvention.Cdecl, BestFitMapping = false, ThrowOnUnmappableChar = true)]
+        internal static extern int fits_write_img_uint(IntPtr fptr, DATATYPE datatype, long fpixel, long nelements, uint[] array, out int status);
+        [DllImport(DLLNAME, EntryPoint = "ffppr", CallingConvention = CallingConvention.Cdecl, BestFitMapping = false, ThrowOnUnmappableChar = true)]
+        internal static extern int fits_write_img_float(IntPtr fptr, DATATYPE datatype, long fpixel, long nelements, float[] array, out int status);
+        [DllImport(DLLNAME, EntryPoint = "ffppr", CallingConvention = CallingConvention.Cdecl, BestFitMapping = false, ThrowOnUnmappableChar = true)]
+        internal static extern int fits_write_img_double(IntPtr fptr, DATATYPE datatype, long fpixel, long nelements, double[] array, out int status);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        public delegate IntPtr MemReallocDelegate(IntPtr ptr, IntPtr newSize);
+        public delegate IntPtr MemRealloc(IntPtr ptr, IntPtr newSize);
 
-        [DllImport(DLLNAME, EntryPoint = "ffimem", CallingConvention = CallingConvention.Cdecl)]
-        public static extern int fits_create_memfile(out IntPtr fptr, ref IntPtr memptr, ref IntPtr memsize, IntPtr deltasize, MemReallocDelegate memRealloc, out int status);
+        [DllImport(DLLNAME, EntryPoint = "ffimem", CallingConvention = CallingConvention.Cdecl, BestFitMapping = false, ThrowOnUnmappableChar = true)]
+        internal static extern int fits_create_memfile(out IntPtr fptr, ref IntPtr memptr, ref IntPtr memsize, IntPtr deltasize, MemRealloc memRealloc, out int status);
 
-        public static IntPtr ReallocateMemory(IntPtr ptr, IntPtr newSize) {
+        public static IntPtr ReallocateMemory(IntPtr address, IntPtr newSize) {
             // Reallocate the block of memory to the new size
-            return Marshal.ReAllocHGlobal(ptr, newSize);
+            return Marshal.ReAllocHGlobal(address, newSize);
         }
 
         public static int fits_update_key_dbl(IntPtr fptr, string keyname, ref double value, string comment, out int status) {
             return fits_update_key(fptr, DATATYPE.TDOUBLE, keyname, ref value, comment, out status);
         }
 
-        [DllImport(DLLNAME, EntryPoint = "ffuky", CallingConvention = CallingConvention.Cdecl)]
-        public static extern int fits_update_key(IntPtr fptr, DATATYPE datatype, string keyname, ref double value, string comment, out int status);
+        [DllImport(DLLNAME, EntryPoint = "ffuky", CallingConvention = CallingConvention.Cdecl, BestFitMapping = false, ThrowOnUnmappableChar = true)]
+        internal static extern int fits_update_key(IntPtr fptr, DATATYPE datatype, string keyname, ref double value, string comment, out int status);
 
-        [DllImport(DLLNAME, EntryPoint = "ffukyj", CallingConvention = CallingConvention.Cdecl)]
-        public static extern int fits_update_key_lng(IntPtr fptr, string keyname, long value, string comment, out int status);
+        [DllImport(DLLNAME, EntryPoint = "ffukyj", CallingConvention = CallingConvention.Cdecl, BestFitMapping = false, ThrowOnUnmappableChar = true)]
+        internal static extern int fits_update_key_lng(IntPtr fptr, string keyname, long value, string comment, out int status);
 
-        [DllImport(DLLNAME, EntryPoint = "ffukys", CallingConvention = CallingConvention.Cdecl)]
-        public static extern int fits_update_key_str(IntPtr fptr, string keyname, string value, string comment, out int status);
+        [DllImport(DLLNAME, EntryPoint = "ffukys", CallingConvention = CallingConvention.Cdecl, BestFitMapping = false, ThrowOnUnmappableChar = true)]
+        internal static extern int fits_update_key_str(IntPtr fptr, string keyname, string value, string comment, out int status);
 
-        [DllImport(DLLNAME, EntryPoint = "ffukyl", CallingConvention = CallingConvention.Cdecl)]
-        public static extern int fits_update_key_log(IntPtr fptr, string keyname, int value, string comment, out int status);
+        [DllImport(DLLNAME, EntryPoint = "ffukyl", CallingConvention = CallingConvention.Cdecl, BestFitMapping = false, ThrowOnUnmappableChar = true)]
+        internal static extern int fits_update_key_log(IntPtr fptr, string keyname, int value, string comment, out int status);
 
-        //[DllImport(DLLNAME, EntryPoint = "ffukyd", CallingConvention = CallingConvention.Cdecl)]
+        //[DllImport(DLLNAME, EntryPoint = "ffukyd", CallingConvention = CallingConvention.Cdecl, BestFitMapping = false, ThrowOnUnmappableChar = true)]
         //public static extern int fits_update_key_dbl(IntPtr fptr, string keyname, double value, int decimals, string comment, out int status);
 
-        [DllImport(DLLNAME, CallingConvention = CallingConvention.Cdecl)]
-        public static extern int fits_set_compression_type(IntPtr fptr, COMPRESSION compress_type, out int status);
+        [DllImport(DLLNAME, CallingConvention = CallingConvention.Cdecl, BestFitMapping = false, ThrowOnUnmappableChar = true)]
+        internal static extern int fits_set_compression_type(IntPtr fptr, COMPRESSION compress_type, out int status);
 
-        [DllImport(DLLNAME, CallingConvention = CallingConvention.Cdecl)]
-        public static extern int fits_is_compressed_image(IntPtr fptr, out int status);
+        [DllImport(DLLNAME, CallingConvention = CallingConvention.Cdecl, BestFitMapping = false, ThrowOnUnmappableChar = true)]
+        internal static extern int fits_is_compressed_image(IntPtr fptr, out int status);
 
-        [DllImport(DLLNAME, CallingConvention = CallingConvention.Cdecl)]
-        public static extern int fits_get_compression_type(IntPtr fptr, out COMPRESSION compress_type, out int status);
-        [DllImport(DLLNAME, CallingConvention = CallingConvention.Cdecl)]
-        public static extern int fits_img_decompress(IntPtr fptr, IntPtr outfptr, out int status);
-        [DllImport(DLLNAME, CallingConvention = CallingConvention.Cdecl)]
-        public static extern int fits_img_decompress_header(IntPtr fptr, IntPtr outfptr, out int status);
-        [DllImport(DLLNAME, CallingConvention = CallingConvention.Cdecl)]
-        public static extern int fits_uncompress_table(IntPtr fptr, out IntPtr outfptr, out int status);
+        [DllImport(DLLNAME, CallingConvention = CallingConvention.Cdecl, BestFitMapping = false, ThrowOnUnmappableChar = true)]
+        internal static extern int fits_get_compression_type(IntPtr fptr, out COMPRESSION compress_type, out int status);
+        [DllImport(DLLNAME, CallingConvention = CallingConvention.Cdecl, BestFitMapping = false, ThrowOnUnmappableChar = true)]
+        internal static extern int fits_img_decompress(IntPtr fptr, IntPtr outfptr, out int status);
+        [DllImport(DLLNAME, CallingConvention = CallingConvention.Cdecl, BestFitMapping = false, ThrowOnUnmappableChar = true)]
+        internal static extern int fits_img_decompress_header(IntPtr fptr, IntPtr outfptr, out int status);
+        [DllImport(DLLNAME, CallingConvention = CallingConvention.Cdecl, BestFitMapping = false, ThrowOnUnmappableChar = true)]
+        internal static extern int fits_uncompress_table(IntPtr fptr, out IntPtr outfptr, out int status);
 
-        [DllImport(DLLNAME, EntryPoint = "ffthdu", CallingConvention = CallingConvention.Cdecl)]
-        public static extern int fits_get_num_hdus(IntPtr fptr, out int hdunum, out int status);
+        [DllImport(DLLNAME, EntryPoint = "ffthdu", CallingConvention = CallingConvention.Cdecl, BestFitMapping = false, ThrowOnUnmappableChar = true)]
+        internal static extern int fits_get_num_hdus(IntPtr fptr, out int hdunum, out int status);
 
-        [DllImport(DLLNAME, EntryPoint = "ffghdt", CallingConvention = CallingConvention.Cdecl)]
-        public static extern int fits_get_hdu_type(IntPtr fptr, out int hdutype, out int status);
+        [DllImport(DLLNAME, EntryPoint = "ffghdt", CallingConvention = CallingConvention.Cdecl, BestFitMapping = false, ThrowOnUnmappableChar = true)]
+        internal static extern int fits_get_hdu_type(IntPtr fptr, out int hdutype, out int status);
 
-        [DllImport(DLLNAME, EntryPoint = "ffmahd", CallingConvention = CallingConvention.Cdecl)]
-        public static extern int fits_movabs_hdu(IntPtr fptr, int movenr, out int hdutype, out int status);
-        [DllImport(DLLNAME, CallingConvention = CallingConvention.Cdecl)]
-        public static extern int fits_is_reentrant();
+        [DllImport(DLLNAME, EntryPoint = "ffmahd", CallingConvention = CallingConvention.Cdecl, BestFitMapping = false, ThrowOnUnmappableChar = true)]
+        internal static extern int fits_movabs_hdu(IntPtr fptr, int movenr, out int hdutype, out int status);
+        [DllImport(DLLNAME, CallingConvention = CallingConvention.Cdecl, BestFitMapping = false, ThrowOnUnmappableChar = true)]
+        internal static extern int fits_is_reentrant();
     }
 }
