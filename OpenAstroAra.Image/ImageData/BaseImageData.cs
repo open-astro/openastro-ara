@@ -84,8 +84,8 @@ namespace OpenAstroAra.Image.ImageData {
             throw new NotImplementedException("RenderBitmapSource pending OpenCvSharp4 wiring.");
         }
 
-        public void SetImageStatistics(IImageStatistics imageStatistics) {
-            Statistics = new Nito.AsyncEx.AsyncLazy<IImageStatistics>(() => Task.FromResult(imageStatistics));
+        public void SetImageStatistics(IImageStatistics statistics) {
+            Statistics = new Nito.AsyncEx.AsyncLazy<IImageStatistics>(() => Task.FromResult(statistics));
         }
 
         #region "Save"
@@ -95,7 +95,7 @@ namespace OpenAstroAra.Image.ImageData {
         ///  Saves file to application temp path
         /// </summary>
         /// <param name="fileType"></param>
-        /// <param name="token"></param>
+        /// <param name="cancelToken"></param>
         /// <returns></returns>
         public async Task<string> PrepareSave(FileSaveInfo fileSaveInfo, CancellationToken cancelToken = default) {
             var actualPath = string.Empty;
@@ -323,7 +323,7 @@ namespace OpenAstroAra.Image.ImageData {
         }
 
 
-        public async Task<string> SaveToDisk(FileSaveInfo fileSaveInfo, CancellationToken token, bool forceFileType, IList<ImagePattern> customPatterns) {
+        public async Task<string> SaveToDisk(FileSaveInfo fileSaveInfo, bool forceFileType, IList<ImagePattern> customPatterns, CancellationToken cancelToken) {
             if (customPatterns == null) { customPatterns = new List<ImagePattern>(); }
             var pattern = fileSaveInfo.FilePattern;
             string actualPath = string.Empty;
@@ -339,7 +339,7 @@ namespace OpenAstroAra.Image.ImageData {
                 }
                 var fileName = imagePatterns.GetImageFileString(pattern);
 
-                actualPath = await SaveToDiskAsync(fileSaveInfo, fileName, token, forceFileType);
+                actualPath = await SaveToDiskAsync(fileSaveInfo, fileName, cancelToken, forceFileType);
 
                 if (pattern.Contains("$$DSLR_SENSORTEMP$$", StringComparison.Ordinal) && double.IsNaN(MetaData.Camera.Temperature) && !string.IsNullOrEmpty(Data.RAWType)) {
                     // Extract the temperature from the EXIF info for DSLRs
@@ -379,8 +379,8 @@ namespace OpenAstroAra.Image.ImageData {
         }
 
 
-        public Task<string> SaveToDisk(FileSaveInfo fileSaveInfo, CancellationToken token, bool forceFileType = false) {
-            return SaveToDisk(fileSaveInfo, token, forceFileType, new List<ImagePattern>());
+        public Task<string> SaveToDisk(FileSaveInfo fileSaveInfo, bool forceFileType = false, CancellationToken cancelToken = default) {
+            return SaveToDisk(fileSaveInfo, forceFileType, new List<ImagePattern>(), cancelToken);
         }
 
         private Task<string> SaveToDiskAsync(FileSaveInfo fileSaveInfo, string fileName, CancellationToken cancelToken, bool forceFileType = false) {

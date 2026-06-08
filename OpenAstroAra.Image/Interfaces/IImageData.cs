@@ -41,8 +41,8 @@ namespace OpenAstroAra.Image.Interfaces {
 
         ImagePatterns GetImagePatterns();
 
-        Task<string> SaveToDisk(FileSaveInfo fileSaveInfo, CancellationToken cancelToken = default, bool forceFileType = false);
-        Task<string> SaveToDisk(FileSaveInfo fileSaveInfo, CancellationToken token, bool forceFileType, IList<ImagePattern> customPatterns);
+        Task<string> SaveToDisk(FileSaveInfo fileSaveInfo, bool forceFileType = false, CancellationToken cancelToken = default);
+        Task<string> SaveToDisk(FileSaveInfo fileSaveInfo, bool forceFileType, IList<ImagePattern> customPatterns, CancellationToken cancelToken);
 
         [Obsolete("Legacy two-step save API; use SaveToDisk instead.")]
         Task<string> PrepareSave(FileSaveInfo fileSaveInfo, CancellationToken cancelToken = default);

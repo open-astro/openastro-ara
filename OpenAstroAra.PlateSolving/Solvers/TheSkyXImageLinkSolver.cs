@@ -160,7 +160,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
                 FileType = FileType.FITS
             };
 
-            return await source.SaveToDisk(fileSaveInfo, cancelToken, forceFileType: true);
+            return await source.SaveToDisk(fileSaveInfo, forceFileType: true, cancelToken: cancelToken);
         }
 
     }

@@ -69,7 +69,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
                     FileType = FileType.FITS
                 };
 
-                filePath = await source.SaveToDisk(fileSaveInfo, ct, forceFileType: true);
+                filePath = await source.SaveToDisk(fileSaveInfo, forceFileType: true, cancelToken: ct);
 
                 await Task.Run(() => {
 
