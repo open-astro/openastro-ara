@@ -14,7 +14,7 @@
 
 namespace OpenAstroAra.Image.FileFormat.XISF {
 
-    public static class XISFImageProperty {
+    internal static class XISFImageProperty {
 
         public static class Observer {
             public static readonly string Namespace = "Observer:";
