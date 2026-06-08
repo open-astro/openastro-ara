@@ -25,7 +25,7 @@ namespace OpenAstroAra.Equipment.Interfaces {
         bool IsSynchronized { get; }
         bool IsFollowing { get; }
 
-        Task Stop();
+        Task StopAsync();
 
         Task Start();
 

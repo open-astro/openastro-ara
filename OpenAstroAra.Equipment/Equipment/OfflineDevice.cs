@@ -491,10 +491,6 @@ namespace OpenAstroAra.Equipment.Equipment {
             throw new InvalidOperationException("Device is offline.");
         }
 
-        public void Setpark() {
-            throw new InvalidOperationException("Device is offline.");
-        }
-
         public Task<bool> SlewToCoordinates(Coordinates coordinates, CancellationToken token) {
             throw new InvalidOperationException("Device is offline.");
         }

@@ -70,7 +70,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyCamera {
             CanSetTemperature = sdk.HasTemperatureControl();
             HasDewHeater = sdk.HasDewHeater();
 
-            ReadoutModes = sdk.GetReadoutModes();
+            ReadoutModes = sdk.GetReadoutModes().ToList();
         }
 
         private bool supportBitScaling;

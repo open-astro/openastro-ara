@@ -64,7 +64,7 @@ namespace OpenAstroAra.PlateSolving {
             FilterInfo? oldFilter = null;
             if (seq.FilterType != null) {
                 oldFilter = filterWheelMediator.GetInfo()?.SelectedFilter;
-                await filterWheelMediator.ChangeFilter(seq.FilterType, ct, progress);
+                await filterWheelMediator.ChangeFilter(seq.FilterType, progress, ct);
             }
 
             try {
@@ -168,7 +168,7 @@ namespace OpenAstroAra.PlateSolving {
                     // Set an absurdly high timeout, but at least make sure that this cannot go on forever. The existing token may have been cancelled already, so we need
                     // to use a new one
                     using var timeoutCts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
-                    await filterWheelMediator.ChangeFilter(oldFilter, timeoutCts.Token, progress);
+                    await filterWheelMediator.ChangeFilter(oldFilter, progress, timeoutCts.Token);
                 }
             }
         }

@@ -124,7 +124,7 @@ namespace OpenAstroAra.Equipment.Interfaces {
 
         Task Park(CancellationToken token);
 
-        void Setpark();
+        void SetPark();
 
         Task<bool> SlewToCoordinates(Coordinates coordinates, CancellationToken token);
 

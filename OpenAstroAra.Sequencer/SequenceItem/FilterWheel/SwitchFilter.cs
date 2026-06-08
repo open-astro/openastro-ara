@@ -113,7 +113,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.FilterWheel {
         public override Task Execute(IProgress<ApplicationStatus> progress, CancellationToken token) {
             return Filter == null
                 ? throw new SequenceItemSkippedException("Skipping SwitchFilter - No Filter was selected")
-                : filterWheelMediator.ChangeFilter(Filter, token, progress);
+                : filterWheelMediator.ChangeFilter(Filter, progress, token);
         }
 
         public bool Validate() {

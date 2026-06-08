@@ -85,7 +85,7 @@ namespace OpenAstroAra.Equipment.Interfaces {
         void StartVideoCapture(double exposureTime, int width, int height);
         void StopVideoCapture();
         Task<ushort[]> GetVideoCapture(double exposureTime, int width, int height, CancellationToken ct);
-        List<string> GetReadoutModes();
+        IReadOnlyList<string> GetReadoutModes();
         int GetReadoutMode();
         void SetReadoutMode(int modeIndex);
         bool HasAdjustableFan();
