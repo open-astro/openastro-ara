@@ -35,12 +35,12 @@ namespace OpenAstroAra.Sequencer {
         IList<IDateTimeProvider> DateTimeProviders { get; }
         string ViewFilter { get; set; }
 
-        T GetCondition<T>() where T : ISequenceCondition;
+        T? GetCondition<T>() where T : ISequenceCondition;
 
-        T GetContainer<T>() where T : ISequenceContainer;
+        T? GetContainer<T>() where T : ISequenceContainer;
 
-        T GetItem<T>() where T : ISequenceItem;
+        T? GetItem<T>() where T : ISequenceItem;
 
-        T GetTrigger<T>() where T : ISequenceTrigger;
+        T? GetTrigger<T>() where T : ISequenceTrigger;
     }
 }

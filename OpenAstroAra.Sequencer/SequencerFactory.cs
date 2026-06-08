@@ -82,17 +82,17 @@ namespace OpenAstroAra.Sequencer {
             InstructionsView.GroupDescriptions.Add(new PropertyGroupDescription("Entity.Category"));
             InstructionsView.SortDescriptions.Add(new SortDescription("Entity.Category", ListSortDirection.Ascending));
             InstructionsView.SortDescriptions.Add(new SortDescription("Entity.Name", ListSortDirection.Ascending));
-            InstructionsView.Filter += new Predicate<object>((object o) => (o as SidebarEntity).Enabled);
+            InstructionsView.Filter += new Predicate<object>((object o) => ((SidebarEntity)o).Enabled);
 
             ConditionsView = CollectionViewSource.GetDefaultView(sidebarConditions);
             ConditionsView.SortDescriptions.Add(new SortDescription("Entity.Category", ListSortDirection.Ascending));
             ConditionsView.SortDescriptions.Add(new SortDescription("Entity.Name", ListSortDirection.Ascending));
-            ConditionsView.Filter += new Predicate<object>((object o) => (o as SidebarEntity).Enabled);
+            ConditionsView.Filter += new Predicate<object>((object o) => ((SidebarEntity)o).Enabled);
 
             TriggersView = CollectionViewSource.GetDefaultView(sidebarTriggers);
             TriggersView.SortDescriptions.Add(new SortDescription("Entity.Category", ListSortDirection.Ascending));
             TriggersView.SortDescriptions.Add(new SortDescription("Entity.Name", ListSortDirection.Ascending));
-            TriggersView.Filter += new Predicate<object>((object o) => (o as SidebarEntity).Enabled);
+            TriggersView.Filter += new Predicate<object>((object o) => ((SidebarEntity)o).Enabled);
 
             SettingsMode = false;
 
@@ -101,13 +101,13 @@ namespace OpenAstroAra.Sequencer {
             profileService.ProfileChanged += ProfileService_ProfileChanged;
         }
 
-        private void ProfileService_ProfileChanged(object sender, EventArgs e) {
+        private void ProfileService_ProfileChanged(object? sender, EventArgs e) {
             ViewFilter = string.Empty;
             SettingsMode = false;
         }
 
         private bool ApplyViewFilter(object obj) {
-            var sidebarEntity = obj as SidebarEntity;
+            var sidebarEntity = obj as SidebarEntity; if (sidebarEntity == null) { return false; }
 
             var filterByName = sidebarEntity.Entity.Name.IndexOf(ViewFilter, StringComparison.OrdinalIgnoreCase) >= 0;
             var filterByEnabled = SettingsMode ? true : sidebarEntity.Enabled;
@@ -141,20 +141,20 @@ namespace OpenAstroAra.Sequencer {
         public ICollectionView ConditionsView { get; }
         public ICollectionView TriggersView { get; }
 
-        public T GetContainer<T>() where T : ISequenceContainer {
-            return (T)(Container.FirstOrDefault(x => x.GetType() == typeof(T))?.Clone() ?? default(T));
+        public T? GetContainer<T>() where T : ISequenceContainer {
+            return (T?)Container.FirstOrDefault(x => x.GetType() == typeof(T))?.Clone();
         }
 
-        public T GetItem<T>() where T : ISequenceItem {
-            return (T)(Items.FirstOrDefault(x => x.GetType() == typeof(T))?.Clone() ?? default(T));
+        public T? GetItem<T>() where T : ISequenceItem {
+            return (T?)Items.FirstOrDefault(x => x.GetType() == typeof(T))?.Clone();
         }
 
-        public T GetCondition<T>() where T : ISequenceCondition {
-            return (T)(Conditions.FirstOrDefault(x => x.GetType() == typeof(T))?.Clone() ?? default(T));
+        public T? GetCondition<T>() where T : ISequenceCondition {
+            return (T?)Conditions.FirstOrDefault(x => x.GetType() == typeof(T))?.Clone();
         }
 
-        public T GetTrigger<T>() where T : ISequenceTrigger {
-            return (T)(Triggers.FirstOrDefault(x => x.GetType() == typeof(T))?.Clone() ?? default(T));
+        public T? GetTrigger<T>() where T : ISequenceTrigger {
+            return (T?)Triggers.FirstOrDefault(x => x.GetType() == typeof(T))?.Clone();
         }
     }
 
@@ -165,9 +165,9 @@ namespace OpenAstroAra.Sequencer {
         }
 
         public bool Enabled {
-            get => entityOptions.GetValueBoolean(this.Entity.GetType().FullName, true);
+            get => entityOptions.GetValueBoolean(this.Entity.GetType().FullName ?? string.Empty, true);
             set {
-                entityOptions.SetValueBoolean(this.Entity.GetType().FullName, value);
+                entityOptions.SetValueBoolean(this.Entity.GetType().FullName ?? string.Empty, value);
                 RaisePropertyChanged();
             }
         }

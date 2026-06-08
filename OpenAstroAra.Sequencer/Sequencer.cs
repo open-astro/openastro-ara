@@ -50,7 +50,7 @@ namespace OpenAstroAra.Sequencer {
         // This is a hack to utilize the TreeView control. The Items will just point at the single item in the sequencer which is the root node in the tree
         public List<ISequenceRootContainer> Items => new List<ISequenceRootContainer> { MainContainer };
 
-        private ISequenceRootContainer mainContainer;
+        private ISequenceRootContainer mainContainer = null!;  // set via MainContainer in the constructor
 
         public ISequenceRootContainer MainContainer {
             get => mainContainer;
@@ -132,8 +132,7 @@ namespace OpenAstroAra.Sequencer {
 
                 foreach (var item in context.GetItemsSnapshot()) {
                     item.Initialize();
-                    if (item is ISequenceContainer) {
-                        var container = item as ISequenceContainer;
+                    if (item is ISequenceContainer container) {
                         Initialize(container);
                     }
                 }
@@ -157,8 +156,7 @@ namespace OpenAstroAra.Sequencer {
 
                 foreach (var item in context.GetItemsSnapshot()) {
                     item.Teardown();
-                    if (item is ISequenceContainer) {
-                        var container = item as ISequenceContainer;
+                    if (item is ISequenceContainer container) {
                         Teardown(container);
                     }
                 }
@@ -170,8 +168,7 @@ namespace OpenAstroAra.Sequencer {
 
             if (container is IConditionable conditionable) {
                 foreach (var condition in conditionable.GetConditionsSnapshot()) {
-                    if (condition.Status != Core.Enum.SequenceEntityStatus.DISABLED && condition is IValidatable) {
-                        var v = condition as IValidatable;
+                    if (condition.Status != Core.Enum.SequenceEntityStatus.DISABLED && condition is IValidatable v) {
                         v.Validate();
                         issues.AddRange(v.Issues);
                     }
@@ -180,8 +177,7 @@ namespace OpenAstroAra.Sequencer {
 
             if (container is ITriggerable triggerable) {
                 foreach (var trigger in triggerable.GetTriggersSnapshot()) {
-                    if (trigger.Status != Core.Enum.SequenceEntityStatus.DISABLED && trigger is IValidatable) {
-                        var v = trigger as IValidatable;
+                    if (trigger.Status != Core.Enum.SequenceEntityStatus.DISABLED && trigger is IValidatable v) {
                         v.Validate();
                         issues.AddRange(v.Issues);
                     }
@@ -189,15 +185,14 @@ namespace OpenAstroAra.Sequencer {
             }
 
             foreach (var item in container.GetItemsSnapshot()) {
-                if (item.Status != Core.Enum.SequenceEntityStatus.DISABLED && item is IValidatable) {
-                    var v = item as IValidatable;
+                if (item.Status != Core.Enum.SequenceEntityStatus.DISABLED && item is IValidatable v) {
                     v.Validate();
                     issues.AddRange(v.Issues);
                 }
 
-                if (item is ISequenceContainer && !(item is IImmutableContainer) && item.Status != Core.Enum.SequenceEntityStatus.DISABLED) {
+                if (item is ISequenceContainer childContainer && !(item is IImmutableContainer) && item.Status != Core.Enum.SequenceEntityStatus.DISABLED) {
                     // The immutablecontainer is excluded as it will itself validate the things of its children
-                    issues.AddRange(Validate(item as ISequenceContainer));
+                    issues.AddRange(Validate(childContainer));
                 }
             }
             return issues;
