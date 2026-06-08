@@ -32,7 +32,7 @@ namespace OpenAstroAra.Equipment.Interfaces.Mediator {
 
         Task<bool> SlewToCoordinatesAsync(Coordinates coords, CancellationToken token);
 
-        [Obsolete]
+        [Obsolete("Use SlewToTopocentricCoordinates instead.")]
         Task<bool> SlewToCoordinatesAsync(TopocentricCoordinates coords, CancellationToken token);
 
         Task<bool> SlewToTopocentricCoordinates(TopocentricCoordinates coords, CancellationToken token);
@@ -61,11 +61,11 @@ namespace OpenAstroAra.Equipment.Interfaces.Mediator {
 
         PierSide DestinationSideOfPier(Coordinates coordinates);
 
-        event Func<object, BeforeMeridianFlipEventArgs, Task> BeforeMeridianFlip;
-        Task RaiseBeforeMeridianFlip(BeforeMeridianFlipEventArgs e);
+        event Func<object, BeforeMeridianFlipEventArgs, Task> MeridianFlipping;
+        Task RaiseMeridianFlipping(BeforeMeridianFlipEventArgs e);
 
-        event Func<object, AfterMeridianFlipEventArgs, Task> AfterMeridianFlip;
-        Task RaiseAfterMeridianFlip(AfterMeridianFlipEventArgs e);
+        event Func<object, AfterMeridianFlipEventArgs, Task> MeridianFlipped;
+        Task RaiseMeridianFlipped(AfterMeridianFlipEventArgs e);
 
         event Func<object, EventArgs, Task> Parked;
         event Func<object, EventArgs, Task> Homed;

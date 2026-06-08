@@ -72,7 +72,7 @@ public sealed class HeadlessTelescopeMediator : ITelescopeMediator {
     public Task<bool> SlewToCoordinatesAsync(Coordinates coords, CancellationToken token) =>
         Task.FromResult(false);
 
-    [Obsolete]
+    [Obsolete("Use SlewToTopocentricCoordinates instead.")]
     public Task<bool> SlewToCoordinatesAsync(TopocentricCoordinates coords, CancellationToken token) =>
         Task.FromResult(false);
 
@@ -105,11 +105,11 @@ public sealed class HeadlessTelescopeMediator : ITelescopeMediator {
 
     public PierSide DestinationSideOfPier(Coordinates coordinates) => PierSide.pierUnknown;
 
-    public event Func<object, BeforeMeridianFlipEventArgs, Task>? BeforeMeridianFlip;
-    public Task RaiseBeforeMeridianFlip(BeforeMeridianFlipEventArgs e) => Task.CompletedTask;
+    public event Func<object, BeforeMeridianFlipEventArgs, Task>? MeridianFlipping;
+    public Task RaiseMeridianFlipping(BeforeMeridianFlipEventArgs e) => Task.CompletedTask;
 
-    public event Func<object, AfterMeridianFlipEventArgs, Task>? AfterMeridianFlip;
-    public Task RaiseAfterMeridianFlip(AfterMeridianFlipEventArgs e) => Task.CompletedTask;
+    public event Func<object, AfterMeridianFlipEventArgs, Task>? MeridianFlipped;
+    public Task RaiseMeridianFlipped(AfterMeridianFlipEventArgs e) => Task.CompletedTask;
 
     public event Func<object, EventArgs, Task>? Parked;
     public event Func<object, EventArgs, Task>? Homed;
