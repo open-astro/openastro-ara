@@ -18,6 +18,7 @@ using OpenAstroAra.Core.Model;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Sequencer.Validations;
 using System;
+using System.Globalization;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel.Composition;
@@ -77,7 +78,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Camera {
             if (!info.Connected) {
                 i.Add(Loc.Instance["LblCameraNotConnected"]);
             } else if (Mode < 0 || Mode >= info.ReadoutModes.Count()) {
-                i.Add(String.Format(Loc.Instance["Lbl_SequenceItem_Validation_InvalidReadoutMode"], info.ReadoutModes.Count() - 1));
+                i.Add(String.Format(CultureInfo.CurrentCulture, Loc.Instance["Lbl_SequenceItem_Validation_InvalidReadoutMode"], info.ReadoutModes.Count() - 1));
             }
 
             Issues = i;

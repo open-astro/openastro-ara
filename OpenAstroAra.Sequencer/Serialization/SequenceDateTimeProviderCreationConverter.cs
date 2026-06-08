@@ -30,7 +30,7 @@ namespace OpenAstroAra.Sequencer.Serialization {
         }
 
         public override IDateTimeProvider Create(Type objectType, JObject jObject) {
-            var t = GetType(jObject.GetValue("$type")?.ToString() ?? string.Empty);
+            var t = GetType(jObject.GetValue("$type", StringComparison.Ordinal)?.ToString() ?? string.Empty);
             return this.dateTimeProviders.FirstOrDefault(x => x.GetType() == t)!;
         }
     }

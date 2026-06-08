@@ -110,13 +110,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
 
         public ICustomDateTime DateTime { get; set; }
 
-        public IList<IDateTimeProvider> DateTimeProviders {
-            get => dateTimeProviders;
-            set {
-                dateTimeProviders = value;
-                RaisePropertyChanged();
-            }
-        }
+        public IList<IDateTimeProvider> DateTimeProviders => dateTimeProviders;
 
         public bool HasFixedTimeProvider => selectedProvider != null && !(selectedProvider is Utility.DateTimeProvider.TimeProvider);
 

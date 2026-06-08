@@ -20,6 +20,7 @@ using OpenAstroAra.Core.Utility.ExternalCommand;
 using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Sequencer.Validations;
 using System;
+using System.Globalization;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel.Composition;
@@ -92,7 +93,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
             var i = new List<string>();
             var sequenceCompleteCommand = Script;
             if (!string.IsNullOrWhiteSpace(sequenceCompleteCommand) && !ExternalCommandExecutor.CommandExists(sequenceCompleteCommand)) {
-                i.Add(string.Format(Loc.Instance["LblExternalCommandNotFound"], ExternalCommandExecutor.GetComandFromString(sequenceCompleteCommand)));
+                i.Add(string.Format(CultureInfo.CurrentCulture, Loc.Instance["LblExternalCommandNotFound"], ExternalCommandExecutor.GetComandFromString(sequenceCompleteCommand)));
             }
             Issues = i;
             return i.Count == 0;

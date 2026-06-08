@@ -99,13 +99,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
             return i.Count == 0;
         }
 
-        public IList<IDateTimeProvider> DateTimeProviders {
-            get => dateTimeProviders;
-            set {
-                dateTimeProviders = value;
-                RaisePropertyChanged();
-            }
-        }
+        public IList<IDateTimeProvider> DateTimeProviders => dateTimeProviders;
 
         public bool HasFixedTimeProvider => selectedProvider != null && !(selectedProvider is OpenAstroAra.Sequencer.Utility.DateTimeProvider.TimeProvider);
 

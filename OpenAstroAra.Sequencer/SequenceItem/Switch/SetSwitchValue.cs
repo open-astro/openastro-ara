@@ -21,6 +21,7 @@ using OpenAstroAra.Equipment.Interfaces;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Sequencer.Validations;
 using System;
+using System.Globalization;
 using System.Diagnostics.CodeAnalysis;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -121,7 +122,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Switch {
             return switchMediator.SetSwitchValue(switchIndex, Value, progress, token);
         }
 
-        private IList<IWritableSwitch> CreateDummyList() {
+        private static List<IWritableSwitch> CreateDummyList() {
             var dummySwitches = new List<IWritableSwitch>();
             for (short i = 0; i < 20; i++) {
                 dummySwitches.Add(new DummySwitch((short)(i + 1)));
@@ -169,10 +170,10 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Switch {
                 var s = SelectedSwitch;
 
                 if (s == null) {
-                    i.Add(string.Format(Loc.Instance["Lbl_SequenceItem_Validation_NoSwitchSelected"]));
+                    i.Add(Loc.Instance["Lbl_SequenceItem_Validation_NoSwitchSelected"]);
                 } else {
                     if (Value < s.Minimum || Value > s.Maximum)
-                        i.Add(string.Format(Loc.Instance["Lbl_SequenceItem_Validation_InvalidSwitchValue"], s.Minimum, s.Maximum, s.StepSize));
+                        i.Add(string.Format(CultureInfo.CurrentCulture, Loc.Instance["Lbl_SequenceItem_Validation_InvalidSwitchValue"], s.Minimum, s.Maximum, s.StepSize));
                 }
 
                 Issues = i;

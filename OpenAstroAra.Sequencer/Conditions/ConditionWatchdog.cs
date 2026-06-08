@@ -21,7 +21,7 @@ using System.Threading.Tasks;
 
 namespace OpenAstroAra.Sequencer.Conditions {
 
-    public class ConditionWatchdog : IConditionWatchdog, IDisposable {
+    public sealed class ConditionWatchdog : IConditionWatchdog, IDisposable {
         private CancellationTokenSource? watchdogCTS;
         private Task? watchdogTask;
         private readonly object lockObj = new object();

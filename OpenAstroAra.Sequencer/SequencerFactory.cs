@@ -109,7 +109,7 @@ namespace OpenAstroAra.Sequencer {
         private bool ApplyViewFilter(object obj) {
             var sidebarEntity = obj as SidebarEntity; if (sidebarEntity == null) { return false; }
 
-            var filterByName = sidebarEntity.Entity.Name.IndexOf(ViewFilter, StringComparison.OrdinalIgnoreCase) >= 0;
+            var filterByName = sidebarEntity.Entity.Name.Contains(ViewFilter, StringComparison.OrdinalIgnoreCase);
             var filterByEnabled = SettingsMode ? true : sidebarEntity.Enabled;
             return filterByEnabled && filterByName;
         }

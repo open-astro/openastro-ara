@@ -56,7 +56,7 @@ namespace OpenAstroAra.Sequencer.Container {
         // §38 sequence endpoints which call the corresponding domain method
         // directly.
 
-        private void ClearContainer(ISequenceContainer container) {
+        private static void ClearContainer(ISequenceContainer container) {
             foreach (var item in container.GetItemsSnapshot()) {
                 item.Detach();
             }
