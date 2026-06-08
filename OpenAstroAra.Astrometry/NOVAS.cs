@@ -30,12 +30,12 @@ namespace OpenAstroAra.Astrometry {
         private static readonly Lazy<NOVAS.CatalogueEntry> dummy_star = new Lazy<NOVAS.CatalogueEntry>(() => {
             var result = NOVAS_make_cat_entry("DUMMY", "xxx", 0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, out var output);
             if (result != 0) {
-                throw new Exception($"Failed to create dummy star cat entry. Result={result}");
+                throw new InvalidOperationException($"Failed to create dummy star cat entry. Result={result}");
             }
             return output;
         });
 
-        public static string EphemerisLocation = Path.Combine(System.AppDomain.CurrentDomain.BaseDirectory, "External", "JPLEPH");
+        public static readonly string EphemerisLocation = Path.Combine(System.AppDomain.CurrentDomain.BaseDirectory, "External", "JPLEPH");
 
         static NOVAS() {
             DllLoader.LoadDll(Path.Combine("NOVAS", DLLNAME));
@@ -111,18 +111,18 @@ namespace OpenAstroAra.Astrometry {
         /// <param name="body">Solar system body</param>
         /// <param name="accuracy">Requested level of accuracy. Full by default</param>
         /// <returns>Apparent equatorial coordinates from an earth-based geocentric observer</returns>
-        public static Coordinates PlanetApparentCoordinates(double jd_tt, Body body, Accuracy accuracy = Accuracy.Full) {
+        public static Coordinates PlanetApparentCoordinates(double jdTt, Body body, Accuracy accuracy = Accuracy.Full) {
             var result = NOVAS_make_object(ObjectType.MajorPlanetSunOrMoon, (short)body, body.ToString(), dummy_star.Value, out var celestialObject);
             if (result != 0) {
-                throw new Exception($"Failed MakeObject for {body}. Result={result}");
+                throw new InvalidOperationException($"Failed MakeObject for {body}. Result={result}");
             }
 
-            result = NOVAS_app_planet(jd_tt, celestialObject, accuracy, out var ra, out var dec, out var _);
+            result = NOVAS_app_planet(jdTt, celestialObject, accuracy, out var ra, out var dec, out var _);
             if (result != 0) {
-                throw new Exception($"Failed AppPlanet for {body}. Result={result}");
+                throw new InvalidOperationException($"Failed AppPlanet for {body}. Result={result}");
             }
 
-            var referenceDateTime = JulianToDateTime(jd_tt);
+            var referenceDateTime = JulianToDateTime(jdTt);
             return new Coordinates(Angle.ByHours(ra), Angle.ByDegree(dec), Epoch.JNOW, referenceDateTime);
         }
 
@@ -139,7 +139,7 @@ namespace OpenAstroAra.Astrometry {
             var velocity = new double[3];
             var result = NOVAS_solarsystem_hp(jd, body, origin, position, velocity);
             if (result != 0) {
-                throw new Exception($"SolarSystemBodyPV failed for {body} with origin {origin}. Result={result}");
+                throw new InvalidOperationException($"SolarSystemBodyPV failed for {body} with origin {origin}. Result={result}");
             }
 
             return new RectangularPV(
@@ -161,7 +161,7 @@ namespace OpenAstroAra.Astrometry {
             var vel = new double[3];
             var result = NOVAS_geo_posvel(jdtt, deltaT, NOVAS.Accuracy.Full, observer, pos, vel);
             if (result != 0) {
-                throw new Exception($"NOVAS geo_posvel failed. Result={result}");
+                throw new InvalidOperationException($"NOVAS geo_posvel failed. Result={result}");
             }
             return new RectangularPV(
                 new RectangularCoordinates(pos[0], pos[1], pos[2]),
@@ -174,30 +174,39 @@ namespace OpenAstroAra.Astrometry {
 
         #region "External DLL calls"
 
+        [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
         [DllImport(DLLNAME, EntryPoint = "cal_date", CallingConvention = CallingConvention.Cdecl)]
         private static extern double NOVAS_CalDate(double tjd, ref short year, ref short month, ref short day, ref double hour);
 
+        [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
         [DllImport(DLLNAME, EntryPoint = "julian_date", CallingConvention = CallingConvention.Cdecl)]
         private static extern double NOVAS_JulianDate(short year, short month, short day, double hour);
 
+        [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
         [DllImport(DLLNAME, EntryPoint = "sidereal_time", CallingConvention = CallingConvention.Cdecl)]
         private static extern short NOVAS_SiderealTime(double jdHigh, double jdLow, double detlaT, GstType gstType, Method method, Accuracy accuracy, ref double gst);
 
+        [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
         [DllImport(DLLNAME, EntryPoint = "place", CallingConvention = CallingConvention.Cdecl)]
         private static extern short NOVAS_Place(double jdTt, ref CelestialObject celObject, ref Observer observer, double deltaT, short coordinateSystem, short accuracy, ref SkyPosition position);
 
-        [DllImport(DLLNAME, EntryPoint = "set_racio_file", CallingConvention = CallingConvention.Cdecl)]
+        [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
+        [DllImport(DLLNAME, EntryPoint = "set_racio_file", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi, BestFitMapping = false, ThrowOnUnmappableChar = true)]
         private static extern void SetRACIOFile([MarshalAs(UnmanagedType.LPStr)] string Name);
 
-        [DllImport(DLLNAME, EntryPoint = "ephem_open", CallingConvention = CallingConvention.Cdecl)]
+        [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
+        [DllImport(DLLNAME, EntryPoint = "ephem_open", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi, BestFitMapping = false, ThrowOnUnmappableChar = true)]
         private static extern short EphemOpen([MarshalAs(UnmanagedType.LPStr)] string Ephem_Name, ref double JD_Begin, ref double JD_End, ref short DENumber);
 
+        [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
         [DllImport(DLLNAME, EntryPoint = "ephem_close", CallingConvention = CallingConvention.Cdecl)]
         private static extern short EphemClose();
 
+        [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
         [DllImport(DLLNAME, EntryPoint = "refract", CallingConvention = CallingConvention.Cdecl)]
         private static extern double NOVAS_Refract(ref OnSurface location, RefractionOption refractionOption, double zdObs);
 
+        [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
         [DllImport(DLLNAME, EntryPoint = "solarsystem_hp", CallingConvention = CallingConvention.Cdecl)]
         private static extern short NOVAS_solarsystem_hp(
             [In][MarshalAs(UnmanagedType.LPArray, SizeConst = 2)] double[] tjd,
@@ -206,7 +215,8 @@ namespace OpenAstroAra.Astrometry {
             [In, Out][MarshalAs(UnmanagedType.LPArray, SizeConst = 3)] double[] position,
             [In, Out][MarshalAs(UnmanagedType.LPArray, SizeConst = 3)] double[] velocity);
 
-        [DllImport(DLLNAME, EntryPoint = "make_cat_entry", CallingConvention = CallingConvention.Cdecl)]
+        [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
+        [DllImport(DLLNAME, EntryPoint = "make_cat_entry", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi, BestFitMapping = false, ThrowOnUnmappableChar = true)]
         private static extern short NOVAS_make_cat_entry(
             [MarshalAs(UnmanagedType.LPTStr, SizeConst = SIZE_OF_OBJ_NAME)] string star_name,
             [MarshalAs(UnmanagedType.LPTStr, SizeConst = SIZE_OF_CAT_NAME)] string catalog,
@@ -219,7 +229,8 @@ namespace OpenAstroAra.Astrometry {
             double rad_vel,
             [Out] out CatalogueEntry star);
 
-        [DllImport(DLLNAME, EntryPoint = "make_object", CallingConvention = CallingConvention.Cdecl)]
+        [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
+        [DllImport(DLLNAME, EntryPoint = "make_object", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi, BestFitMapping = false, ThrowOnUnmappableChar = true)]
         private static extern short NOVAS_make_object(
             ObjectType type,
             short number,
@@ -227,6 +238,7 @@ namespace OpenAstroAra.Astrometry {
             CatalogueEntry star_data,
             [Out] out CelestialObject cel_obj);
 
+        [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
         [DllImport(DLLNAME, EntryPoint = "app_planet", CallingConvention = CallingConvention.Cdecl)]
         private static extern short NOVAS_app_planet(
             double jd_tt,
@@ -236,8 +248,9 @@ namespace OpenAstroAra.Astrometry {
             [Out] out double dec,
             [Out] out double dis);
 
+        [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
         [DllImport(DLLNAME, EntryPoint = "geo_posvel", CallingConvention = CallingConvention.Cdecl)]
-        public static extern short NOVAS_geo_posvel(
+        private static extern short NOVAS_geo_posvel(
             double jdtt, double deltaT, NOVAS.Accuracy accuracy, NOVAS.Observer observer,
             [In, Out][MarshalAs(UnmanagedType.LPArray, SizeConst = 3)] double[] pos,
             [In, Out][MarshalAs(UnmanagedType.LPArray, SizeConst = 3)] double[] vel);
@@ -246,6 +259,14 @@ namespace OpenAstroAra.Astrometry {
         #endregion "External DLL calls"
 
         #region "NOVAS Structs"
+
+        // These are P/Invoke marshaling structs that mirror the NOVAS C 3.1 ABI byte-for-byte.
+        // They are data containers passed to/from native code, never compared or used as keys,
+        // and are deliberately nested under the NOVAS module type. CA1815 (override Equals/==),
+        // CA1066 (implement IEquatable) and CA1034 (do not nest) are the documented interop
+        // exceptions for exactly this case — implementing managed value-semantics or hoisting
+        // them to the namespace would not make the binding more correct.
+#pragma warning disable CA1815, CA1066, CA1034
 
         private const int SIZE_OF_OBJ_NAME = 51;
         private const int SIZE_OF_CAT_NAME = 4;
@@ -295,22 +316,6 @@ namespace OpenAstroAra.Astrometry {
             /// radial velocity (km/s)
             /// </summary>
             public double RadialVelocity;
-
-            public override bool Equals(object? obj) {
-                throw new NotImplementedException();
-            }
-
-            public override int GetHashCode() {
-                throw new NotImplementedException();
-            }
-
-            public static bool operator ==(CatalogueEntry left, CatalogueEntry right) {
-                return left.Equals(right);
-            }
-
-            public static bool operator !=(CatalogueEntry left, CatalogueEntry right) {
-                return !(left == right);
-            }
         }
 
         /// <summary>
@@ -440,9 +445,17 @@ namespace OpenAstroAra.Astrometry {
             public double RV;
         }
 
+#pragma warning restore CA1815, CA1066, CA1034
+
         #endregion "NOVAS Structs"
 
         #region "NOVAS helper enums"
+
+        // These enums mirror the NOVAS C ABI: Body/GstType are deliberately backed by short to
+        // match the native parameter width, and Body has no natural zero member (planet numbering
+        // starts at Mercury = 1). CA1028 (Int32 storage), CA1008 (zero value) and CA1724 (the
+        // Body type-name vs namespace) are interop/false-positive cases here.
+#pragma warning disable CA1028, CA1008, CA1724
 
         public enum ObjectType  {
             MajorPlanetSunOrMoon = 0,
@@ -502,6 +515,8 @@ namespace OpenAstroAra.Astrometry {
             Barycenter = 0,
             SolarCenterOfMass = 1
         }
+
+#pragma warning restore CA1028, CA1008, CA1724
 
         #endregion "NOVAS helper enums"
     }
