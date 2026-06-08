@@ -24,15 +24,15 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.PhdEvents {
 
         [DataMember]
         [JsonProperty]
-        public string Event { get; set; }
+        public string Event { get; set; } = string.Empty;
 
         [DataMember]
         [JsonProperty]
-        public string TimeStamp { get; set; }
+        public string TimeStamp { get; set; } = string.Empty;
 
         [DataMember]
         [JsonProperty]
-        public string Host { get; set; }
+        public string Host { get; set; } = string.Empty;
 
         [DataMember]
         [JsonProperty]

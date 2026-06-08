@@ -25,7 +25,7 @@ using System.Threading.Tasks;
 namespace OpenAstroAra.Equipment.Equipment.MyPlanetarium {
 
     internal class HNSKY : IPlanetarium {
-        private string address;
+        private string address = string.Empty;
         private int port;
 
         public HNSKY(IProfileService profileService) {

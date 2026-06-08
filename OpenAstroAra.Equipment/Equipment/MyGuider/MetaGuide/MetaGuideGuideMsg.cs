@@ -22,7 +22,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.MetaGuide {
         private MetaGuideGuideMsg() {
         }
 
-        public static MetaGuideGuideMsg Create(string[] args) {
+        public static MetaGuideGuideMsg? Create(string[] args) {
             if (args.Length < 10) {
                 return null;
             }

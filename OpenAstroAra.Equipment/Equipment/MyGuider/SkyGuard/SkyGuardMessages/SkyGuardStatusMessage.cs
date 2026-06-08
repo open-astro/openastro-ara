@@ -6,12 +6,12 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.SkyGuard.SkyGuardMessages {
     /// </summary>
     class SkyGuardStatusMessage {
         [JsonProperty(PropertyName = "status")]
-        public string Status { get; set; }
+        public string Status { get; set; } = string.Empty;
 
         [JsonProperty(PropertyName = "data")]
-        public string Data { get; set; }
+        public string Data { get; set; } = string.Empty;
 
         [JsonProperty(PropertyName = "message")]
-        public object Message { get; set; }
+        public object? Message { get; set; }
     }
 }

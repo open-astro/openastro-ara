@@ -35,12 +35,12 @@ namespace OpenAstroAra.Equipment.Equipment.MyGPS {
     /// Flow : construct -> Autodiscover [detect, Connect, listens to messages]
     /// </summary>
     public partial class NMEAGps(IProfileService profileService) : BaseINPC, IGnss, IDisposable {
-        private string portName;
+        private string portName = string.Empty;
         private int baudRate = 0;
-        private System.Timers.Timer fixTimer;
-        private SerialPortDevice currentDevice;
+        private System.Timers.Timer? fixTimer;
+        private SerialPortDevice? currentDevice;
         private const int sentenceWait = 4;
-        private TaskCompletionSource<GpsResponse> gotGPSFix;
+        private TaskCompletionSource<GpsResponse>? gotGPSFix;
 
         private static readonly int[] baudRates = [4800, 2400, 9600, 19200, 38400, 57600, 115200];
 
@@ -53,7 +53,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGPS {
             portName = string.Empty;
         }
 
-        private void OnFixTimedEvent(object source, System.Timers.ElapsedEventArgs e) {
+        private void OnFixTimedEvent(object? source, System.Timers.ElapsedEventArgs e) {
             Disconnect();
             throw new GnssNoFixException(string.Format(Loc.Instance["LblGnssGgaMissingError"], sentenceWait));
         }
@@ -72,7 +72,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGPS {
         ///Checks GPS messages, transfers location to the options view
         ///if a fix is obtained
         /// </summary>
-        private void Device_MessageReceived(object sender, NmeaMessageReceivedEventArgs args) {
+        private void Device_MessageReceived(object? sender, NmeaMessageReceivedEventArgs args) {
             var message = args.Message;
             var gpsResponse = new GpsResponse();
 
@@ -95,7 +95,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGPS {
                         $"Quality: {((Gga)message).Quality}, HDOP: {((Gga)message).Hdop}, Talker ID: {((Gga)message).TalkerId}");
 
             Disconnect();
-            gotGPSFix.TrySetResult(gpsResponse);
+            gotGPSFix?.TrySetResult(gpsResponse);
         }
 
         public async Task<Location> GetLocation(CancellationToken token) {
@@ -121,20 +121,19 @@ namespace OpenAstroAra.Equipment.Equipment.MyGPS {
             }
 
             if (gpsResponse.HasFix) {
-                return gpsResponse.Location;
+                return gpsResponse.Location!;
             } else {
                 throw new GnssNoFixException(string.Format(Loc.Instance["LblGnssGgaQualityError"], gpsResponse.FixQuality));
             }
         }
 
         public void Disconnect() {
-            if (currentDevice.IsOpen) currentDevice.CloseAsync();
+            if (currentDevice != null && currentDevice.IsOpen) currentDevice.CloseAsync();
 
             try {
-                currentDevice.MessageReceived -= Device_MessageReceived; // unsubscribe to avoid multiple messages
-                fixTimer.Enabled = false;
-                fixTimer.Dispose();
-                currentDevice.Dispose();
+                if (currentDevice != null) { currentDevice.MessageReceived -= Device_MessageReceived; } // unsubscribe to avoid multiple messages
+                if (fixTimer != null) { fixTimer.Enabled = false; fixTimer.Dispose(); }
+                currentDevice?.Dispose();
             } catch (Exception ex) {
                 Logger.Error(ex.Message);
                 throw;
@@ -157,7 +156,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGPS {
         /// <summary>
         /// this finds a suitable comport, connects and listens for GPS sentences
         /// </summary>
-        private async Task<System.IO.Ports.SerialPort> FindPort(CancellationToken token) {
+        private async Task<System.IO.Ports.SerialPort?> FindPort(CancellationToken token) {
             string[] allPorts = GetComPorts();
             int[,] portRates = new int[allPorts.Length, 7];
 
@@ -250,7 +249,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGPS {
         /// discovers the first GPS device connected to a serial port
         /// </summary>
         private async Task<bool> AutoDiscover(CancellationToken token) {
-            using System.IO.Ports.SerialPort port = await FindPort(token);
+            using System.IO.Ports.SerialPort? port = await FindPort(token);
 
             if (port != null) { //we found a port with a GPS
                 portName = port.PortName;
@@ -266,7 +265,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGPS {
         internal class GpsResponse {
             internal bool HasFix { get; set; } = false;
             internal Gga.FixQuality FixQuality { get; set; } = Gga.FixQuality.Invalid;
-            internal Location Location { get; set; } = null;
+            internal Location? Location { get; set; } = null;
         }
 
         [GeneratedRegex(@"^[$!]G")]

@@ -66,7 +66,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyFocuser {
             set { tempCompAvailable = value; RaisePropertyChanged(); }
         }
 
-        private IList<string> supportedActions;
+        private IList<string> supportedActions = new List<string>();
 
         public IList<string> SupportedActions {
             get => supportedActions;

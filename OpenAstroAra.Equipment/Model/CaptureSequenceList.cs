@@ -95,7 +95,7 @@ namespace OpenAstroAra.Equipment.Model {
             }
         }
 
-        public static CaptureSequenceList Load(string fileName, ICollection<FilterInfo> filters, double latitude, double longitude) {
+        public static CaptureSequenceList? Load(string fileName, ICollection<FilterInfo> filters, double latitude, double longitude) {
             try {
                 using (var s = new FileStream(fileName, FileMode.Open)) {
                     return Load(s, fileName, filters, latitude, longitude);
@@ -107,13 +107,13 @@ namespace OpenAstroAra.Equipment.Model {
             }
         }
 
-        public static CaptureSequenceList Load(Stream stream, string fileName, ICollection<FilterInfo> filters, double latitude, double longitude) {
-            CaptureSequenceList l = null;
+        public static CaptureSequenceList? Load(Stream stream, string fileName, ICollection<FilterInfo> filters, double latitude, double longitude) {
+            CaptureSequenceList? l = null;
             try {
                 XmlSerializer xmlSerializer = new XmlSerializer(typeof(CaptureSequenceList));
                 xmlSerializer.UnknownAttribute += XmlSerializer_UnknownAttribute;
 
-                l = (CaptureSequenceList)xmlSerializer.Deserialize(stream);
+                l = (CaptureSequenceList)xmlSerializer.Deserialize(stream)!;
                 foreach (var s in l.Items) {
                     // Migration of values prior to 3.0
                     if (s.ImageType == "DARKFLAT") {
@@ -158,13 +158,13 @@ namespace OpenAstroAra.Equipment.Model {
             }
         }
 
-        public static List<CaptureSequenceList> LoadSequenceSet(Stream stream, ICollection<FilterInfo> filters, double latitude, double longitude) {
-            List<CaptureSequenceList> c = null;
+        public static List<CaptureSequenceList>? LoadSequenceSet(Stream stream, ICollection<FilterInfo> filters, double latitude, double longitude) {
+            List<CaptureSequenceList>? c = null;
             try {
                 XmlSerializer xmlSerializer = new XmlSerializer(typeof(List<CaptureSequenceList>));
                 xmlSerializer.UnknownAttribute += XmlSerializer_UnknownAttribute;
 
-                c = (List<CaptureSequenceList>)xmlSerializer.Deserialize(stream);
+                c = (List<CaptureSequenceList>)xmlSerializer.Deserialize(stream)!;
 
                 foreach (var l in c) {
                     foreach (var s in l.Items) {
@@ -182,9 +182,9 @@ namespace OpenAstroAra.Equipment.Model {
             return c;
         }
 
-        private static void XmlSerializer_UnknownAttribute(object sender, XmlAttributeEventArgs e) {
-            var list = (CaptureSequenceList)e.ObjectBeingDeserialized;
-            if (e.Attr.Name == "Rotation") {
+        private static void XmlSerializer_UnknownAttribute(object? sender, XmlAttributeEventArgs e) {
+            var list = (CaptureSequenceList)e.ObjectBeingDeserialized!;
+            if (e.Attr!.Name == "Rotation") {
                 list.DeprecatedRotation = double.Parse(e.Attr.Value, CultureInfo.InvariantCulture);
             }
         }
@@ -200,7 +200,7 @@ namespace OpenAstroAra.Equipment.Model {
             this.DSO = dso;
         }
 
-        private string _targetName;
+        private string _targetName = string.Empty;
 
         [XmlAttribute(nameof(TargetName))]
         public string TargetName {
@@ -222,15 +222,15 @@ namespace OpenAstroAra.Equipment.Model {
             }
         }
 
-        public CaptureSequence GetNextSequenceItem(CaptureSequence currentItem) {
+        public CaptureSequence? GetNextSequenceItem(CaptureSequence currentItem) {
             if (Items.Count == 0) { return null; }
 
-            CaptureSequence seq = currentItem;
+            CaptureSequence? seq = currentItem;
 
             if (Mode == SequenceMode.STANDARD) {
                 if (seq?.ProgressExposureCount == seq?.TotalExposureCount) {
                     //No exposures remaining. Get next Sequence
-                    var idx = Items.IndexOf(seq) + 1;
+                    var idx = Items.IndexOf(seq!) + 1;
                     seq = Items.Skip(idx).Where(i => i.Enabled).FirstOrDefault();
                     if (seq != null) {
                         return GetNextSequenceItem(seq);
@@ -248,7 +248,7 @@ namespace OpenAstroAra.Equipment.Model {
                     seq = Items.First(i => i.Enabled);
                 } else {
                     do {
-                        var idx = (Items.IndexOf(seq) + 1) % Items.Count;
+                        var idx = (Items.IndexOf(seq!) + 1) % Items.Count;
                         seq = Items[idx];
                     } while (!seq.Enabled);
                 }
@@ -261,7 +261,7 @@ namespace OpenAstroAra.Equipment.Model {
             return seq;
         }
 
-        private Coordinates _coordinates;
+        private Coordinates _coordinates = null!;
 
         [XmlElement(nameof(Coordinates))]
         public Coordinates Coordinates {
@@ -415,14 +415,14 @@ namespace OpenAstroAra.Equipment.Model {
                 RaisePropertyChanged(nameof(DecMinutes));
                 RaisePropertyChanged(nameof(DecSeconds));
                 DSO.Name = this.TargetName;
-                DSO.Coordinates = Coordinates;
+                DSO.Coordinates = Coordinates!;
                 DSO.RotationPositionAngle = PositionAngle;
                 NegativeDec = DSO?.Coordinates?.Dec < 0;
             }
         }
 
         [NonSerialized]
-        private DeepSkyObject _dso;
+        private DeepSkyObject _dso = null!;
 
         [XmlIgnore]
         public DeepSkyObject DSO {

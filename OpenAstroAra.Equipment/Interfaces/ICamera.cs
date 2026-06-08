@@ -93,11 +93,11 @@ namespace OpenAstroAra.Equipment.Interfaces {
 
         void AbortExposure();
 
-        Task<IExposureData> DownloadExposure(CancellationToken token);
+        Task<IExposureData?> DownloadExposure(CancellationToken token);
 
         void StartLiveView(CaptureSequence sequence);
 
-        Task<IExposureData> DownloadLiveView(CancellationToken token);
+        Task<IExposureData?> DownloadLiveView(CancellationToken token);
 
         void StopLiveView();
 

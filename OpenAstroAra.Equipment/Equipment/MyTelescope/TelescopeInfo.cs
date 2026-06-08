@@ -93,7 +93,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyTelescope {
             }
         }
 
-        private string rightAscensionString;
+        private string rightAscensionString = string.Empty;
 
         public string RightAscensionString {
             get => rightAscensionString;
@@ -105,7 +105,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyTelescope {
             }
         }
 
-        private string declinationString;
+        private string declinationString = string.Empty;
 
         public string DeclinationString {
             get => declinationString;
@@ -117,7 +117,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyTelescope {
             }
         }
 
-        private Coordinates coordinates;
+        private Coordinates coordinates = null!;
 
         public Coordinates Coordinates {
             get => coordinates;
@@ -201,7 +201,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyTelescope {
             }
         }
 
-        private string siderealTimeString;
+        private string siderealTimeString = string.Empty;
 
         public string SiderealTimeString {
             get => siderealTimeString;
@@ -213,7 +213,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyTelescope {
             }
         }
 
-        private string hoursToMeridianString;
+        private string hoursToMeridianString = string.Empty;
 
         public string HoursToMeridianString {
             get => hoursToMeridianString;
@@ -262,7 +262,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyTelescope {
             }
         }
 
-        private IList<TrackingMode> trackingModes;
+        private IList<TrackingMode> trackingModes = new List<TrackingMode>();
 
         public IList<TrackingMode> TrackingModes {
             get => trackingModes;
@@ -382,7 +382,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyTelescope {
             }
         }
 
-        private string timeToMeridianFlipString;
+        private string timeToMeridianFlipString = string.Empty;
 
         public string TimeToMeridianFlipString {
             get => timeToMeridianFlipString;
@@ -394,7 +394,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyTelescope {
             }
         }
 
-        private Coordinates targetCoordinates;
+        private Coordinates targetCoordinates = null!;
 
         public Coordinates TargetCoordinates {
             get => targetCoordinates;
@@ -478,7 +478,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyTelescope {
             }
         }
 
-        private IList<(double, double)> primaryAxisRates;
+        private IList<(double, double)> primaryAxisRates = new List<(double, double)>();
 
         public IList<(double, double)> PrimaryAxisRates {
             get => primaryAxisRates;
@@ -490,7 +490,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyTelescope {
             }
         }
 
-        private IList<(double, double)> secondaryAxisRates;
+        private IList<(double, double)> secondaryAxisRates = new List<(double, double)>();
 
         public IList<(double, double)> SecondaryAxisRates {
             get => secondaryAxisRates;
@@ -502,7 +502,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyTelescope {
             }
         }
 
-        private IList<string> supportedActions;
+        private IList<string> supportedActions = new List<string>();
 
         public IList<string> SupportedActions {
             get => supportedActions;

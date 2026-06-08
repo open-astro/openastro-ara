@@ -18,7 +18,7 @@ using OpenAstroAra.Equipment.Interfaces;
 namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.PhdEvents {
 
     public class PhdEventAppState : PhdEvent, IGuiderAppState {
-        private string state;
+        private string state = string.Empty;
 
         [JsonProperty]
         public string State {

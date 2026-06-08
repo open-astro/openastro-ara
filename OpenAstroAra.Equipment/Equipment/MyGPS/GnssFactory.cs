@@ -25,7 +25,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGPS {
             this.profileService = profileService;
         }
 
-        public IGnss GetGnssSource(GnssSourceEnum gnss) {
+        public IGnss? GetGnssSource(GnssSourceEnum gnss) {
             // PegausAstroUranusMeteo + PrimaLuceLabEagle drivers are
             // vendor-specific impls dropped per Phase 2 Alpaca-only collapse.
             return gnss switch {
@@ -36,7 +36,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGPS {
         }
 
 
-        public IGnss GetGnssSource() {
+        public IGnss? GetGnssSource() {
             return GetGnssSource(profileService.ActiveProfile.GnssSettings.GnssSource);
         }
     }

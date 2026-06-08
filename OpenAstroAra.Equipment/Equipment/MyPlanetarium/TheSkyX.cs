@@ -26,7 +26,7 @@ using System.Threading.Tasks;
 namespace OpenAstroAra.Equipment.Equipment.MyPlanetarium {
 
     internal class TheSkyX : IPlanetarium {
-        private string address;
+        private string address = string.Empty;
         private int port;
         private bool useSelectedObject;
 
@@ -46,7 +46,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyPlanetarium {
         /// <returns></returns>
         public async Task<DeepSkyObject> GetTarget() {
             try {
-                string[] raDecName = null;
+                string[]? raDecName = null;
 
                 if (useSelectedObject) {
                     raDecName = await GetSelectedObject();

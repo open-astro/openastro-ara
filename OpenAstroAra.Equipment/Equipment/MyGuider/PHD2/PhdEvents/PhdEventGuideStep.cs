@@ -32,7 +32,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.PhdEvents {
 
         [DataMember]
         [JsonProperty]
-        private string mount;
+        private string mount = string.Empty;
 
         [DataMember]
         [JsonProperty]
@@ -75,7 +75,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.PhdEvents {
 
         [DataMember]
         [JsonProperty]
-        private string rADirection;
+        private string rADirection = string.Empty;
 
         [DataMember]
         [JsonProperty]
@@ -83,7 +83,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.PhdEvents {
 
         [DataMember]
         [JsonProperty]
-        private string decDirection;
+        private string decDirection = string.Empty;
 
         [DataMember]
         [JsonProperty]

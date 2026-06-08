@@ -327,7 +327,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyCamera {
             set { if (temperatureSetPoint != value) { temperatureSetPoint = value; RaisePropertyChanged(); } }
         }
 
-        private IEnumerable<string> readoutModes;
+        private IEnumerable<string> readoutModes = Array.Empty<string>();
 
         public IEnumerable<string> ReadoutModes {
             get => readoutModes;
@@ -503,7 +503,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyCamera {
             }
         }
 
-        private IList<string> supportedActions;
+        private IList<string> supportedActions = new List<string>();
 
         public IList<string> SupportedActions {
             get => supportedActions;

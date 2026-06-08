@@ -109,7 +109,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyCamera {
             }
         }
 
-        public AsyncObservableCollection<BinningMode> BinningModes { get; private set; }
+        public AsyncObservableCollection<BinningMode> BinningModes { get; private set; } = new AsyncObservableCollection<BinningMode>();
 
         public short MaxBinX { get; private set; }
 
@@ -243,8 +243,8 @@ namespace OpenAstroAra.Equipment.Equipment.MyCamera {
             } catch (Exception) { }
         }
 
-        public async Task<IExposureData> DownloadExposure(CancellationToken token) {
-            ushort[] data = null;
+        public async Task<IExposureData?> DownloadExposure(CancellationToken token) {
+            ushort[]? data = null;
             using (var downloadCts = CancellationTokenSource.CreateLinkedTokenSource(token)) {
                 try {
                     downloadCts.CancelAfter(TimeSpan.FromSeconds(Math.Max(60, profileService.ActiveProfile.CameraSettings.Timeout)));
@@ -440,8 +440,8 @@ namespace OpenAstroAra.Equipment.Equipment.MyCamera {
             sdk.StartVideoCapture(sequence.ExposureTime, width, height);
         }
 
-        public Task<IExposureData> DownloadLiveView(CancellationToken token) {
-            return Task.Run<IExposureData>(async () => {
+        public Task<IExposureData?> DownloadLiveView(CancellationToken token) {
+            return Task.Run<IExposureData?>(async () => {
                 try {
                     var lastLiveViewExposureStart = DateTime.UtcNow;
                     var data = await sdk.GetVideoCapture(exposureTaskTime, exposureTaskWidth, exposureTaskHeight, token);

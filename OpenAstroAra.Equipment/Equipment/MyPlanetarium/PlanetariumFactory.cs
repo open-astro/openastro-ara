@@ -32,7 +32,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyPlanetarium {
         /// <param name="profileService"></param>
         /// <param name="planetarium"></param>
         /// <returns></returns>
-        public IPlanetarium GetPlanetarium(PlanetariumEnum planetarium) {
+        public IPlanetarium? GetPlanetarium(PlanetariumEnum planetarium) {
             switch (planetarium) {
                 case PlanetariumEnum.CDC:
                     return new CartesDuCiel(profileService);
@@ -58,7 +58,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyPlanetarium {
         /// returns the default planetarium
         /// </summary>
         /// <returns></returns>
-        public IPlanetarium GetPlanetarium() {
+        public IPlanetarium? GetPlanetarium() {
             return GetPlanetarium(profileService.ActiveProfile.PlanetariumSettings.PreferredPlanetarium);
         }
     }

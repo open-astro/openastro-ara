@@ -60,7 +60,7 @@ namespace OpenAstroAra.Equipment.Interfaces.Mediator {
     }
 
     public class ImagePreparedEventArgs : EventArgs {
-        public IRenderedImage RenderedImage { get; set; }
-        public PrepareImageParameters Parameters { get; set; }
+        public IRenderedImage? RenderedImage { get; set; }
+        public PrepareImageParameters? Parameters { get; set; }
     }
 }

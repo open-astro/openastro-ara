@@ -37,7 +37,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyCamera {
             this.Camera.PropertyChanged += Camera_PropertyChanged;
         }
 
-        private void Camera_PropertyChanged(object sender, PropertyChangedEventArgs e) {
+        private void Camera_PropertyChanged(object? sender, PropertyChangedEventArgs e) {
             RaisePropertyChanged(e.PropertyName);
         }
 
@@ -319,11 +319,11 @@ namespace OpenAstroAra.Equipment.Equipment.MyCamera {
             this.Camera.Disconnect();
         }
 
-        public Task<IExposureData> DownloadExposure(CancellationToken token) {
+        public Task<IExposureData?> DownloadExposure(CancellationToken token) {
             return this.Camera.DownloadExposure(token);
         }
 
-        public Task<IExposureData> DownloadLiveView(CancellationToken token) {
+        public Task<IExposureData?> DownloadLiveView(CancellationToken token) {
             return this.Camera.DownloadLiveView(token);
         }
 

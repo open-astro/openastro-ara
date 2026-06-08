@@ -19,10 +19,10 @@ using System.Collections.ObjectModel;
 namespace OpenAstroAra.Equipment.Equipment.MySwitch {
 
     public class SwitchInfo : DeviceInfo {
-        public ReadOnlyCollection<IWritableSwitch> WritableSwitches { get; set; }
-        public ReadOnlyCollection<ISwitch> ReadonlySwitches { get; set; }
+        public ReadOnlyCollection<IWritableSwitch>? WritableSwitches { get; set; }
+        public ReadOnlyCollection<ISwitch>? ReadonlySwitches { get; set; }
 
-        private IList<string> supportedActions;
+        private IList<string> supportedActions = new List<string>();
 
         public IList<string> SupportedActions {
             get => supportedActions;

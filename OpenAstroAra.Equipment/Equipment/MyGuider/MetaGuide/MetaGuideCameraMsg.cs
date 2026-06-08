@@ -22,7 +22,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.MetaGuide {
         private MetaGuideCameraMsg() {
         }
 
-        public static MetaGuideCameraMsg Create(string[] args) {
+        public static MetaGuideCameraMsg? Create(string[] args) {
             if (args.Length < 11) {
                 return null;
             }

@@ -22,37 +22,37 @@ namespace OpenAstroAra.Equipment.Equipment.MyGPS.PegasusAstro.UnityApi {
         public class Device {
 
             [JsonProperty("uniqueKey")]
-            public string UniqueKey { get; set; }
+            public string UniqueKey { get; set; } = string.Empty;
 
             [JsonProperty("name")]
-            public string Name { get; set; }
+            public string Name { get; set; } = string.Empty;
 
             [JsonProperty("fullName")]
-            public string FullName { get; set; }
+            public string FullName { get; set; } = string.Empty;
 
             [JsonProperty("deviceID")]
-            public string DeviceID { get; set; }
+            public string DeviceID { get; set; } = string.Empty;
 
             [JsonProperty("firmware")]
-            public string Firmware { get; set; }
+            public string Firmware { get; set; } = string.Empty;
 
             [JsonProperty("revision")]
-            public string Revision { get; set; }
+            public string Revision { get; set; } = string.Empty;
         }
 
         public class Response {
 
             [JsonProperty("status")]
-            public string Status { get; set; }
+            public string Status { get; set; } = string.Empty;
 
             [JsonProperty("code")]
             public int? Code { get; set; }
 
             [JsonProperty("message")]
-            public string Message { get; set; }
+            public string Message { get; set; } = string.Empty;
 
             [JsonProperty("data")]
-            public List<Device> Devices { get; set; }
+            public List<Device>? Devices { get; set; }
         }
     }
 }

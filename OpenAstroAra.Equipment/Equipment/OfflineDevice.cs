@@ -15,7 +15,7 @@ using System.Threading.Tasks;
 
 namespace OpenAstroAra.Equipment.Equipment {
     public class OfflineDevice : IDevice, ICamera, IDome, IFilterWheel, IFlatDevice, IFocuser, IRotator, ISafetyMonitor, ISwitch, ITelescope, IWeatherData {
-        private string originalName;
+        private string originalName = string.Empty;
 
         public OfflineDevice(string id, string name) {
             originalName = name;
@@ -31,9 +31,9 @@ namespace OpenAstroAra.Equipment.Equipment {
 
         public string Category { get; } = "OFFLINE";
 
-        public string Id { get; private set; }
+        public string Id { get; private set; } = string.Empty;
 
-        public string Name { get; private set; }
+        public string Name { get; private set; } = string.Empty;
         public string DisplayName => Name;
 
         public bool Connected => false;
@@ -44,7 +44,7 @@ namespace OpenAstroAra.Equipment.Equipment {
 
         public string DriverVersion => string.Empty;
 
-        public event PropertyChangedEventHandler PropertyChanged { add { } remove { } }
+        public event PropertyChangedEventHandler? PropertyChanged { add { } remove { } }
 
         public async Task<bool> Connect(CancellationToken token) {
             throw new Exception($"Unable to connect to device '{originalName}' (ID: {Id}). Make sure it's plugged in, turned on, and set up correctly.");
@@ -383,7 +383,7 @@ namespace OpenAstroAra.Equipment.Equipment {
             throw new NotImplementedException();
         }
 
-        public Task<IExposureData> DownloadExposure(CancellationToken token) {
+        public Task<IExposureData?> DownloadExposure(CancellationToken token) {
             throw new NotImplementedException();
         }
 
@@ -391,7 +391,7 @@ namespace OpenAstroAra.Equipment.Equipment {
             throw new NotImplementedException();
         }
 
-        public Task<IExposureData> DownloadLiveView(CancellationToken token) {
+        public Task<IExposureData?> DownloadLiveView(CancellationToken token) {
             throw new NotImplementedException();
         }
 

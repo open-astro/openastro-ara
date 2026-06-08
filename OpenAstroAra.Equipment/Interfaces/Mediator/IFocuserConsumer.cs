@@ -27,7 +27,7 @@ namespace OpenAstroAra.Equipment.Interfaces.Mediator {
             Timestamp = timestamp;
         }
 
-        public string Filter { get; set; }
+        public string Filter { get; set; } = string.Empty;
 
         public DateTime Timestamp { get; set; }
 

@@ -80,7 +80,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGPS {
 
                     var tpv = JsonConvert.DeserializeObject<TpvMessage>(line);
 
-                    if (tpv.Class.Equals("TPV")) {
+                    if (tpv?.Class.Equals("TPV") == true) {
                         Logger.Debug(tpv.ToString());
 
                         if (tpv.Mode == 3) {

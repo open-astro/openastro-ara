@@ -25,7 +25,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGPS.PegasusAstro.UnityApi {
             public double HPa { get; set; }
 
             [JsonProperty("messageType")]
-            public string MessageType { get; set; }
+            public string MessageType { get; set; } = string.Empty;
         }
 
         public class Altitude {
@@ -34,7 +34,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGPS.PegasusAstro.UnityApi {
             public double Meters { get; set; }
 
             [JsonProperty("messageType")]
-            public string MessageType { get; set; }
+            public string MessageType { get; set; } = string.Empty;
         }
 
         public class BarometricAltitude {
@@ -43,7 +43,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGPS.PegasusAstro.UnityApi {
             public double Meters { get; set; }
 
             [JsonProperty("messageType")]
-            public string MessageType { get; set; }
+            public string MessageType { get; set; } = string.Empty;
         }
 
         public class CloudCoverage {
@@ -52,19 +52,19 @@ namespace OpenAstroAra.Equipment.Equipment.MyGPS.PegasusAstro.UnityApi {
             public double Percentage { get; set; }
 
             [JsonProperty("messageType")]
-            public string MessageType { get; set; }
+            public string MessageType { get; set; } = string.Empty;
         }
 
         public class Data {
 
             [JsonProperty("uniqueKey")]
-            public string UniqueKey { get; set; }
+            public string UniqueKey { get; set; } = string.Empty;
 
             [JsonProperty("name")]
-            public string Name { get; set; }
+            public string Name { get; set; } = string.Empty;
 
             [JsonProperty("message")]
-            public Message Message { get; set; }
+            public Message? Message { get; set; }
         }
 
         public class Dd {
@@ -73,16 +73,16 @@ namespace OpenAstroAra.Equipment.Equipment.MyGPS.PegasusAstro.UnityApi {
             public double DecimalDegree { get; set; }
 
             [JsonProperty("messageType")]
-            public string MessageType { get; set; }
+            public string MessageType { get; set; } = string.Empty;
         }
 
         public class DewPoint {
 
             [JsonProperty("temperature")]
-            public double Temperature { get; set; }
+            public double? Temperature { get; set; }
 
             [JsonProperty("messageType")]
-            public string MessageType { get; set; }
+            public string MessageType { get; set; } = string.Empty;
         }
 
         public class Dms {
@@ -97,10 +97,10 @@ namespace OpenAstroAra.Equipment.Equipment.MyGPS.PegasusAstro.UnityApi {
             public double Second { get; set; }
 
             [JsonProperty("standardFormat")]
-            public string StandardFormat { get; set; }
+            public string StandardFormat { get; set; } = string.Empty;
 
             [JsonProperty("messageType")]
-            public string MessageType { get; set; }
+            public string MessageType { get; set; } = string.Empty;
         }
 
         public class Illuminance {
@@ -109,70 +109,70 @@ namespace OpenAstroAra.Equipment.Equipment.MyGPS.PegasusAstro.UnityApi {
             public double Lux { get; set; }
 
             [JsonProperty("messageType")]
-            public string MessageType { get; set; }
+            public string MessageType { get; set; } = string.Empty;
         }
 
         public class Latitude {
 
             [JsonProperty("dms")]
-            public Dms Dms { get; set; }
+            public Dms? Dms { get; set; }
 
             [JsonProperty("dd")]
-            public Dd Dd { get; set; }
+            public Dd? Dd { get; set; }
 
             [JsonProperty("messageType")]
-            public string MessageType { get; set; }
+            public string MessageType { get; set; } = string.Empty;
         }
 
         public class Longitude {
 
             [JsonProperty("dms")]
-            public Dms Dms { get; set; }
+            public Dms? Dms { get; set; }
 
             [JsonProperty("dd")]
-            public Dd Dd { get; set; }
+            public Dd? Dd { get; set; }
 
             [JsonProperty("messageType")]
-            public string MessageType { get; set; }
+            public string MessageType { get; set; } = string.Empty;
         }
 
         public class Message {
 
             [JsonProperty("temperature")]
-            public AmbientTemperature Temperature { get; set; }
+            public AmbientTemperature? Temperature { get; set; }
 
             [JsonProperty("relativeHumidity")]
-            public RelativeHumidity RelativeHumidity { get; set; }
+            public RelativeHumidity? RelativeHumidity { get; set; }
 
             [JsonProperty("dewPoint")]
-            public DewPoint DewPoint { get; set; }
+            public DewPoint? DewPoint { get; set; }
 
             [JsonProperty("absolutePressure")]
-            public AbsolutePressure AbsolutePressure { get; set; }
+            public AbsolutePressure? AbsolutePressure { get; set; }
 
             [JsonProperty("relativePressure")]
-            public RelativePressure RelativePressure { get; set; }
+            public RelativePressure? RelativePressure { get; set; }
 
             [JsonProperty("barometricAltitude")]
-            public BarometricAltitude BarometricAltitude { get; set; }
+            public BarometricAltitude? BarometricAltitude { get; set; }
 
             [JsonProperty("skyQuality")]
-            public SkyQuality SkyQuality { get; set; }
+            public SkyQuality? SkyQuality { get; set; }
 
             [JsonProperty("nelm")]
-            public Nelm Nelm { get; set; }
+            public Nelm? Nelm { get; set; }
 
             [JsonProperty("illuminance")]
-            public Illuminance Illuminance { get; set; }
+            public Illuminance? Illuminance { get; set; }
 
             [JsonProperty("temperatureDifference")]
-            public TemperatureDifference TemperatureDifference { get; set; }
+            public TemperatureDifference? TemperatureDifference { get; set; }
 
             [JsonProperty("cloudCoverage")]
-            public CloudCoverage CloudCoverage { get; set; }
+            public CloudCoverage? CloudCoverage { get; set; }
 
             [JsonProperty("skyTemperature")]
-            public SkyTemperature SkyTemperature { get; set; }
+            public SkyTemperature? SkyTemperature { get; set; }
 
             [JsonProperty("isGpsFixed")]
             public bool IsGpsFixed { get; set; }
@@ -181,19 +181,19 @@ namespace OpenAstroAra.Equipment.Equipment.MyGPS.PegasusAstro.UnityApi {
             public DateTime DateTime { get; set; }
 
             [JsonProperty("latitude")]
-            public Latitude Latitude { get; set; }
+            public Latitude? Latitude { get; set; }
 
             [JsonProperty("longitude")]
-            public Longitude Longitude { get; set; }
+            public Longitude? Longitude { get; set; }
 
             [JsonProperty("totalSatellites")]
             public int TotalSatellites { get; set; }
 
             [JsonProperty("altitude")]
-            public Altitude Altitude { get; set; }
+            public Altitude? Altitude { get; set; }
 
             [JsonProperty("messageType")]
-            public string MessageType { get; set; }
+            public string MessageType { get; set; } = string.Empty;
         }
 
         public class Nelm {
@@ -202,7 +202,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGPS.PegasusAstro.UnityApi {
             public double VMag { get; set; }
 
             [JsonProperty("messageType")]
-            public string MessageType { get; set; }
+            public string MessageType { get; set; } = string.Empty;
         }
 
         public class RelativeHumidity {
@@ -211,7 +211,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGPS.PegasusAstro.UnityApi {
             public double Percentage { get; set; }
 
             [JsonProperty("messageType")]
-            public string MessageType { get; set; }
+            public string MessageType { get; set; } = string.Empty;
         }
 
         public class RelativePressure {
@@ -220,22 +220,22 @@ namespace OpenAstroAra.Equipment.Equipment.MyGPS.PegasusAstro.UnityApi {
             public double HPa { get; set; }
 
             [JsonProperty("messageType")]
-            public string MessageType { get; set; }
+            public string MessageType { get; set; } = string.Empty;
         }
 
         public class Report {
 
             [JsonProperty("status")]
-            public string Status { get; set; }
+            public string Status { get; set; } = string.Empty;
 
             [JsonProperty("code")]
             public int Code { get; set; }
 
             [JsonProperty("message")]
-            public string Message { get; set; }
+            public string? Message { get; set; } = string.Empty;
 
             [JsonProperty("data")]
-            public Data Data { get; set; }
+            public Data? Data { get; set; }
         }
 
         public class SkyQuality {
@@ -244,34 +244,34 @@ namespace OpenAstroAra.Equipment.Equipment.MyGPS.PegasusAstro.UnityApi {
             public double Mpsas { get; set; }
 
             [JsonProperty("messageType")]
-            public string MessageType { get; set; }
+            public string MessageType { get; set; } = string.Empty;
         }
 
         public class SkyTemperature {
 
             [JsonProperty("temperature")]
-            public double Temperature { get; set; }
+            public double? Temperature { get; set; }
 
             [JsonProperty("messageType")]
-            public string MessageType { get; set; }
+            public string MessageType { get; set; } = string.Empty;
         }
 
         public class AmbientTemperature {
 
             [JsonProperty("temperature")]
-            public double Temperature { get; set; }
+            public double? Temperature { get; set; }
 
             [JsonProperty("messageType")]
-            public string MessageType { get; set; }
+            public string MessageType { get; set; } = string.Empty;
         }
 
         public class TemperatureDifference {
 
             [JsonProperty("temperature")]
-            public double Temperature { get; set; }
+            public double? Temperature { get; set; }
 
             [JsonProperty("messageType")]
-            public string MessageType { get; set; }
+            public string MessageType { get; set; } = string.Empty;
         }
     }
 }

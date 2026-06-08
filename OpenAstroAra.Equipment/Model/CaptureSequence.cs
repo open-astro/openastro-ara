@@ -46,7 +46,7 @@ namespace OpenAstroAra.Equipment.Model {
             return TotalExposureCount.ToString() + "x" + ExposureTime.ToString() + " " + ImageType;
         }
 
-        public CaptureSequence(double exposureTime, string imageType, FilterInfo filterType, BinningMode binning, int exposureCount) {
+        public CaptureSequence(double exposureTime, string imageType, FilterInfo? filterType, BinningMode binning, int exposureCount) {
             ExposureTime = exposureTime;
             ImageType = imageType;
             FilterType = filterType;
@@ -80,9 +80,9 @@ namespace OpenAstroAra.Equipment.Model {
         }
 
         private double _exposureTime;
-        private string _imageType;
-        private FilterInfo _filterType;
-        private BinningMode _binning;
+        private string _imageType = string.Empty;
+        private FilterInfo? _filterType;
+        private BinningMode? _binning;
         private int _progressExposureCount;
 
         [XmlElement(nameof(Enabled))]
@@ -115,7 +115,7 @@ namespace OpenAstroAra.Equipment.Model {
         }
 
         [XmlElement(nameof(FilterType))]
-        public FilterInfo FilterType {
+        public FilterInfo? FilterType {
             get => _filterType;
 
             set {
@@ -174,9 +174,9 @@ namespace OpenAstroAra.Equipment.Model {
 
         [XmlIgnore]
         [NonSerialized]
-        private ObservableRectangle subSampleRectangle;
+        private ObservableRectangle? subSampleRectangle;
 
-        public ObservableRectangle SubSambleRectangle {
+        public ObservableRectangle? SubSambleRectangle {
             get => subSampleRectangle;
             set {
                 subSampleRectangle = value;

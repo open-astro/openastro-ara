@@ -19,6 +19,6 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.PhdEvents {
     public class PhdEventCalibrationFailed : PhdEvent {
 
         [JsonProperty]
-        public string Reason { get; set; }
+        public string Reason { get; set; } = string.Empty;
     }
 }

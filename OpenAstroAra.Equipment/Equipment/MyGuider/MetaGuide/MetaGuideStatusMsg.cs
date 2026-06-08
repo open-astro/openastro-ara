@@ -23,7 +23,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.MetaGuide {
         private MetaGuideStatusMsg() {
         }
 
-        public static MetaGuideStatusMsg Create(string[] args) {
+        public static MetaGuideStatusMsg? Create(string[] args) {
             if (args.Length < 28) {
                 return null;
             }
@@ -81,6 +81,6 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.MetaGuide {
         public double PixelSize { get; private set; }
         public double ArcSecPerPixel { get; private set; }
         public bool Guiding { get; private set; }
-        public Version MetaGuideVersion { get; private set; }
+        public Version? MetaGuideVersion { get; private set; }
     }
 }

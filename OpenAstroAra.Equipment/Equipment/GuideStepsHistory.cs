@@ -37,7 +37,7 @@ namespace OpenAstroAra.Equipment.Equipment {
 
         private readonly object lockObj = new object();
 
-        private RMS rMS;
+        private RMS rMS = null!;
 
         public RMS RMS {
             get => rMS;

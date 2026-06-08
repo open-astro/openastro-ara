@@ -42,19 +42,19 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.MetaGuide {
 
     public class MetaGuideListener {
 
-        public event OnCameraDelegate OnCamera;
+        public event OnCameraDelegate? OnCamera;
 
-        public event OnStatusDelegate OnStatus;
+        public event OnStatusDelegate? OnStatus;
 
-        public event OnGuideDelegate OnGuide;
+        public event OnGuideDelegate? OnGuide;
 
-        public event OnGuideParamsDelegate OnGuideParams;
+        public event OnGuideParamsDelegate? OnGuideParams;
 
-        public event OnCalibrationInfoDelegate OnCalibrationInfo;
+        public event OnCalibrationInfoDelegate? OnCalibrationInfo;
 
-        public event OnMountDelegate OnMount;
+        public event OnMountDelegate? OnMount;
 
-        public event OnDisconnectedDelegate OnDisconnected;
+        public event OnDisconnectedDelegate? OnDisconnected;
 
         private const int METAGUIDE_QUEUE_TIMEOUT_MS = 5000;
 
@@ -143,8 +143,8 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.MetaGuide {
             int port,
             CancellationToken ct) {
             await Task.Run(async () => {
-                Task consumerTask = null;
-                Socket socket = null;
+                Task? consumerTask = null;
+                Socket? socket = null;
                 var consumerTokenSource = new CancellationTokenSource();
 
                 try {

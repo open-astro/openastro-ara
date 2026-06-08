@@ -22,7 +22,7 @@ using System.Threading.Tasks;
 namespace OpenAstroAra.Equipment.Interfaces {
     public interface IGnssFactory {
 
-        IGnss GetGnssSource();
-        IGnss GetGnssSource(GnssSourceEnum gnss);
+        IGnss? GetGnssSource();
+        IGnss? GetGnssSource(GnssSourceEnum gnss);
     }
 }

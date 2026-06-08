@@ -13,10 +13,10 @@ using System.Threading.Tasks;
 namespace OpenAstroAra.Astrometry {
     public abstract class SkyObjectBase : BaseINPC, IDeepSkyObject {
         [Obsolete]
-        protected SkyObjectBase(string id, string imageRepository, CustomHorizon customHorizon) : this(id, null as Func<SkyObjectBase, Task<byte[]>>, customHorizon) {
+        protected SkyObjectBase(string id, string imageRepository, CustomHorizon? customHorizon) : this(id, null as Func<SkyObjectBase, Task<byte[]>>, customHorizon) {
         }
 
-        protected SkyObjectBase(string id, Func<SkyObjectBase, Task<byte[]>>? imageFactory, CustomHorizon customHorizon) {
+        protected SkyObjectBase(string id, Func<SkyObjectBase, Task<byte[]>>? imageFactory, CustomHorizon? customHorizon) {
             Id = id;
             Name = id;
             this.customHorizon = customHorizon;
@@ -209,7 +209,7 @@ namespace OpenAstroAra.Astrometry {
             this._altitudes = null;
         }
 
-        public void SetCustomHorizon(CustomHorizon customHorizon) {
+        public void SetCustomHorizon(CustomHorizon? customHorizon) {
             this.customHorizon = customHorizon;
             this.UpdateHorizonAndTransit();
         }
@@ -227,7 +227,7 @@ namespace OpenAstroAra.Astrometry {
         }
 
         private byte[]? _image;
-        protected CustomHorizon customHorizon;
+        protected CustomHorizon? customHorizon;
 
         private readonly Func<SkyObjectBase, Task<byte[]>>? imageFactory;
 

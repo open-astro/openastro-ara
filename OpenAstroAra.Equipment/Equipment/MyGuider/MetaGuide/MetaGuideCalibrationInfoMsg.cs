@@ -22,7 +22,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.MetaGuide {
         private MetaGuideCalibrationInfoMsg() {
         }
 
-        public static MetaGuideCalibrationInfoMsg Create(string[] args) {
+        public static MetaGuideCalibrationInfoMsg? Create(string[] args) {
             if (args.Length < 11) {
                 return null;
             }

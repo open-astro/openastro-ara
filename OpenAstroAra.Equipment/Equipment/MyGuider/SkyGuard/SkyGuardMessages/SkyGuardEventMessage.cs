@@ -17,7 +17,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.SkyGuard.SkyGuardMessages {
         public bool GuidingNoCorrectionX { get; set; }
         public double GuidingCorrectionY { get; set; }
         public bool GuidingNoCorrectionY { get; set; }
-        public string Units { get; set; }
+        public string Units { get; set; } = string.Empty;
 
     }
 
@@ -26,16 +26,16 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.SkyGuard.SkyGuardMessages {
     /// </summary>
     public class SkyGuardEventMessage {
         [JsonProperty(PropertyName = "status")]
-        public string Status { get; set; }
+        public string Status { get; set; } = string.Empty;
 
         [JsonProperty(PropertyName = "event")]
-        public string Event { get; set; }
+        public string Event { get; set; } = string.Empty;
 
         [JsonProperty(PropertyName = "data")]
-        public Data Data { get; set; }
+        public Data? Data { get; set; }
 
         [JsonProperty(PropertyName = "message")]
-        public object Message { get; set; }
+        public object? Message { get; set; }
 
     }
 
@@ -43,13 +43,13 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.SkyGuard.SkyGuardMessages {
     public class SkyGuardEvent : BaseINPC, IGuideEvent {
 
         [DataMember]
-        public string Event { get; set; }
+        public string Event { get; set; } = string.Empty;
 
         [DataMember]
-        public string TimeStamp { get; set; }
+        public string TimeStamp { get; set; } = string.Empty;
 
         [DataMember]
-        public string Host { get; set; }
+        public string Host { get; set; } = string.Empty;
 
         [DataMember]
         public int Inst { get; set; }
@@ -62,7 +62,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.SkyGuard.SkyGuardMessages {
     public class SkyGuardEventGuideStep : SkyGuardEvent, IGuideStep {
 
         [DataMember]
-        private string status;
+        private string status = string.Empty;
 
         [DataMember]
         private double frame;
@@ -83,7 +83,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.SkyGuard.SkyGuardMessages {
         private double dECDuration;
 
         [DataMember]
-        private string units;
+        private string units = string.Empty;
 
         public SkyGuardEventGuideStep() {
         }
@@ -147,7 +147,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.SkyGuard.SkyGuardMessages {
         }
 
         public class SkyGuardEventAppState : SkyGuardEventMessage, IGuiderAppState {
-            private string state;
+            private string state = string.Empty;
 
             public string State {
                 get => state;
@@ -156,9 +156,9 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.SkyGuard.SkyGuardMessages {
             }
         }
 
-        private SkyGuardEventAppState _appState;
+        private SkyGuardEventAppState? _appState;
 
-        public SkyGuardEventAppState AppState {
+        public SkyGuardEventAppState? AppState {
             get => _appState;
             set {
                 _appState = value;

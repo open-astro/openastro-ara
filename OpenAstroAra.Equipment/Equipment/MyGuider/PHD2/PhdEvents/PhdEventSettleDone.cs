@@ -22,6 +22,6 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.PhdEvents {
         public int Status { get; set; }
 
         [JsonProperty]
-        public string Error { get; set; }
+        public string Error { get; set; } = string.Empty;
     }
 }
