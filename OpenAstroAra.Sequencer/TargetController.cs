@@ -36,7 +36,7 @@ using System.Windows.Input;
 
 namespace OpenAstroAra.Sequencer {
 
-    public partial class TargetController : BaseINPC {
+    public sealed partial class TargetController : BaseINPC, IDisposable {
         private readonly SequenceJsonConverter sequenceJsonConverter;
         private readonly IProfileService profileService;
         private string targetPath = string.Empty;
@@ -109,7 +109,15 @@ namespace OpenAstroAra.Sequencer {
                 profileService.ProfileChanged += ProfileService_ProfileChanged;
                 activeSequenceSettings = profileService.ActiveProfile.SequenceSettings;
                 activeSequenceSettings.PropertyChanged += SequenceSettings_SequencerTargetsFolderChanged;
-            });
+            }, TaskScheduler.Default);
+        }
+
+        public void Dispose() {
+            profileService.ProfileChanged -= ProfileService_ProfileChanged;
+            if (activeSequenceSettings != null) {
+                activeSequenceSettings.PropertyChanged -= SequenceSettings_SequencerTargetsFolderChanged;
+            }
+            sequenceTargetsFolderWatcher?.Dispose();
         }
 
         [RelayCommand]
@@ -126,7 +134,7 @@ namespace OpenAstroAra.Sequencer {
 
 
         private bool ApplyViewFilter(object obj) {
-            return obj is TargetSequenceContainer target && target.Name.IndexOf(ViewFilter, StringComparison.OrdinalIgnoreCase) >= 0;
+            return obj is TargetSequenceContainer target && target.Name.Contains(ViewFilter, StringComparison.OrdinalIgnoreCase);
         }
 
         private async void SequenceTargetsFolderWatcher_Changed(object? sender, FileSystemEventArgs e) {
@@ -168,10 +176,10 @@ namespace OpenAstroAra.Sequencer {
 
                 var jsonContainer = sequenceJsonConverter.Serialize(deepSkyObjectContainer);
 
-                var path = existingTarget == null ? targetPath : Path.Combine(targetPath, Path.Combine(existingTarget.SubGroups));
+                var path = existingTarget == null ? targetPath : Path.Combine(targetPath, Path.Combine(existingTarget.SubGroups.ToArray()));
 
                 File.WriteAllText(Path.Combine(path, OpenAstroAra.Core.Utility.CoreUtil.ReplaceAllInvalidFilenameChars(deepSkyObjectContainer.Name) + ".json"), jsonContainer);
-            } catch (Exception ex) {
+            } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException or ArgumentException or Newtonsoft.Json.JsonException) {
                 Logger.Error(ex);
                 Notifier.ShowError(Loc.Instance["Lbl_SequenceTargetController_AddNewTargetFailed"]);
             }
@@ -199,25 +207,25 @@ namespace OpenAstroAra.Sequencer {
                     TargetsLoadingTotalCount = files.Length;
                     foreach (var file in files) {
                         try {
-                            var container = sequenceJsonConverter.Deserialize(File.ReadAllText(file));
+                            var container = sequenceJsonConverter.Deserialize(await File.ReadAllTextAsync(file));
 
                             var dsoContainer = container as IDeepSkyObjectContainer;
                             if (dsoContainer != null) {
                                 var target = new TargetSequenceContainer(profileService, dsoContainer);
                                 var fileInfo = new FileInfo(file);
-                                container.Name = fileInfo.Name.Replace(TargetsFileExtension, "");
+                                container.Name = fileInfo.Name.Replace(TargetsFileExtension, "", StringComparison.Ordinal);
                                 var parts = (fileInfo.Directory?.FullName ?? string.Empty).Split(new char[] { Path.DirectorySeparatorChar }, System.StringSplitOptions.RemoveEmptyEntries);
                                 target.SubGroups = parts.Except(rootParts).ToArray();
 
                                 Targets.Add(target);
                             }
-                        } catch (Exception ex) {
+                        } catch (Exception ex) when (ex is Newtonsoft.Json.JsonException or IOException or ArgumentException or InvalidOperationException) {
                             Logger.Error($"Invalid target JSON {file}", ex);
                         }
                         TargetsLoadingProgress++;
                     }
                     await RefreshFilters();
-                } catch (Exception ex) {
+                } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException or ArgumentException or Newtonsoft.Json.JsonException) {
                     Logger.Error(ex);
                     Notifier.ShowError(Loc.Instance["Lbl_SequenceTargetController_LoadUserTargetFailed"]);
                 } finally {
@@ -230,7 +238,7 @@ namespace OpenAstroAra.Sequencer {
             await Task.Run(() => {
                 try {
                     TargetsView.Refresh(); TargetsMenuView.Refresh();
-                } catch (Exception ex) {
+                } catch (Exception ex) when (ex is InvalidOperationException or NotSupportedException) {
                     Logger.Error(ex);
                 }
             });
@@ -240,11 +248,11 @@ namespace OpenAstroAra.Sequencer {
             try {
                 if (targetSequenceContainer == null) return;
 
-                var file = Path.Combine(targetPath, Path.Combine(targetSequenceContainer.SubGroups), CoreUtil.ReplaceAllInvalidFilenameChars(targetSequenceContainer.Name) + ".json");
+                var file = Path.Combine(targetPath, Path.Combine(targetSequenceContainer.SubGroups.ToArray()), CoreUtil.ReplaceAllInvalidFilenameChars(targetSequenceContainer.Name) + ".json");
                 if (File.Exists(file)) {
                     File.Delete(file);
                 }
-            } catch (Exception ex) {
+            } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException or ArgumentException) {
                 Logger.Error(ex);
                 Notifier.ShowError(Loc.Instance["Lbl_SequenceTargetController_DeleteTargetFailed"]);
             }
@@ -255,12 +263,12 @@ namespace OpenAstroAra.Sequencer {
 
         public TargetSequenceContainer(IProfileService profileService, IDeepSkyObjectContainer container) {
             Container = container;
-            SubGroups = new string[0];
+            SubGroups = Array.Empty<string>();
             this.profileService = profileService;
         }
 
-        public string Grouping => (SubGroups.Length > 0 ? $"{string.Join(" › ", SubGroups)}" : "Base");
-        public string[] SubGroups { get; set; }
+        public string Grouping => (SubGroups.Count > 0 ? $"{string.Join(" › ", SubGroups)}" : "Base");
+        public IReadOnlyList<string> SubGroups { get; set; }
 
         public string Name => Container.Name;
 
