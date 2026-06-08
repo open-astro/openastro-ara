@@ -31,7 +31,7 @@ namespace OpenAstroAra.Equipment.Interfaces {
     }
 
     public struct TrackingRate : IEquatable<TrackingRate> {
-        public static TrackingRate STOPPED = new TrackingRate() { TrackingMode = TrackingMode.Stopped };
+        public static readonly TrackingRate STOPPED = new TrackingRate() { TrackingMode = TrackingMode.Stopped };
         public TrackingMode TrackingMode;
         public double? CustomRightAscensionRate;
         public double? CustomDeclinationRate;

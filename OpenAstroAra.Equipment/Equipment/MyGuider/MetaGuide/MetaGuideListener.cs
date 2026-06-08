@@ -169,7 +169,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.MetaGuide {
                     while (!ct.IsCancellationRequested) {
                         var bytesReceived = socket.ReceiveFrom(receiveBytes, ref remoteEndpoint);
                         var rawMessage = Encoding.UTF8.GetString(receiveBytes, 0, bytesReceived);
-                        var splitMessage = rawMessage.Split(new char[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+                        var splitMessage = rawMessage.Split(' ', StringSplitOptions.RemoveEmptyEntries);
 
                         var timeoutTokenSource = new CancellationTokenSource(TimeSpan.FromMilliseconds(METAGUIDE_QUEUE_TIMEOUT_MS));
                         var timeoutOrCancelledTokenSource = CancellationTokenSource.CreateLinkedTokenSource(ct, timeoutTokenSource.Token);
