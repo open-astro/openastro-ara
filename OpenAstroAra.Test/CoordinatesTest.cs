@@ -427,7 +427,8 @@ namespace OpenAstroAra.Test {
             using (var stream = new MemoryStream(byteArray)) {
                 XmlSerializer xmlSerializer = new XmlSerializer(typeof(Coordinates));
 
-                var sut = (Coordinates)xmlSerializer.Deserialize(stream)!;
+                using var xmlReader = System.Xml.XmlReader.Create(stream, new System.Xml.XmlReaderSettings { DtdProcessing = System.Xml.DtdProcessing.Prohibit, XmlResolver = null });
+                var sut = (Coordinates)xmlSerializer.Deserialize(xmlReader)!;
 
                 sut.DateTime.Should().NotBeNull();
                 sut.RA.Should().Be(12);

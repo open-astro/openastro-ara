@@ -57,7 +57,7 @@ namespace OpenAstroAra.Test.ProfileTest {
             var success = sut.TryGetTypeOfField(id, "SomeKey", out var type);
 
             success.Should().BeTrue();
-            type.Should().Be(typeof(double));
+            type.Should().Be<double>();
         }
 
         [Test]

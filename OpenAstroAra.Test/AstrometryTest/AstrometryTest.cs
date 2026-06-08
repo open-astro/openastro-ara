@@ -21,7 +21,7 @@ namespace OpenAstroAra.Test.AstrometryTest {
     [Platform("Win")]
 
     [TestFixture]
-    public class AstrometryTest {
+    public class AstrometryTests {
         private const double DEWPOINT_TOLERANCE = 0.5;
         private static double ANGLE_TOLERANCE = 0.0000000000001;
         private static double MODULUS_TOLERANCE = 0.0001;

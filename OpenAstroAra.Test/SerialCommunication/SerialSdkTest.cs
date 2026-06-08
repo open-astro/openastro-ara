@@ -22,10 +22,10 @@ using System.Threading.Tasks;
 
 namespace OpenAstroAra.Test.SerialCommunication {
 
-    internal class TestSdk : SerialSdk {
+    internal sealed class TestSdk : SerialSdk {
     }
 
-    internal class TestCacheableResponse : Response {
+    internal sealed class TestCacheableResponse : Response {
         public override int Ttl => 500;
     }
 
@@ -137,7 +137,7 @@ namespace OpenAstroAra.Test.SerialCommunication {
 
             var result = await _sut.SendCommand<TestResponse>(_mockCommand.Object);
 
-            Assert.That(result, Is.TypeOf(typeof(TestResponse)));
+            Assert.That(result, Is.TypeOf<TestResponse>());
             Assert.That(result.CheckDeviceResponse(DEVICE_RESPONSE), Is.True);
             _mockSerialPort.Verify(m => m.Write(It.IsAny<string>()), Times.Once);
         }
@@ -177,7 +177,7 @@ namespace OpenAstroAra.Test.SerialCommunication {
 
             var result = await _sut.SendCommand<TestResponse>(_mockCommand.Object);
 
-            Assert.That(result, Is.TypeOf(typeof(TestResponse)));
+            Assert.That(result, Is.TypeOf<TestResponse>());
             _mockSerialPort.Verify(m => m.Write(It.IsAny<string>()), Times.Once);
         }
 
@@ -189,7 +189,7 @@ namespace OpenAstroAra.Test.SerialCommunication {
 
             var result = await _sut.SendCommand<TestResponse>(_mockCommand.Object);
 
-            Assert.That(result, Is.TypeOf(typeof(TestResponse)));
+            Assert.That(result, Is.TypeOf<TestResponse>());
             _mockSerialPort.Verify(m => m.Write(It.IsAny<string>()), Times.Once);
             _mockSerialPort.Verify(m => m.ReadLine(), Times.Exactly(2));
         }
@@ -206,7 +206,7 @@ namespace OpenAstroAra.Test.SerialCommunication {
         [Test]
         public void TestSendCommandTimeoutOnReadNonRecoverableExceptionDuringCleanup() {
             _mockSerialPort.Setup(m => m.ReadLine()).Throws(new TimeoutException());
-            _mockSerialPort.Setup(m => m.BytesToRead).Throws(new Exception());
+            _mockSerialPort.Setup(m => m.BytesToRead).Throws(new InvalidOperationException());
 
             Assert.That(async () => await _sut.SendCommand<TestResponse>(_mockCommand.Object), Throws.TypeOf<SerialPortClosedException>());
 

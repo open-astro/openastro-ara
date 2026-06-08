@@ -35,7 +35,7 @@ namespace OpenAstroAra.Test.ProfileTest {
             mockProfileService.SetupGet(ps => ps.ActiveProfile.PluginSettings).Returns(pluginSettings);
         }
 
-        private IPluginOptionsAccessor GetSUT() {
+        private PluginOptionsAccessor GetSUT() {
             return new PluginOptionsAccessor(mockProfileService.Object, pluginGuid);
         }
 

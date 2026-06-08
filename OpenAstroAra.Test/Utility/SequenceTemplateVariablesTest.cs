@@ -21,6 +21,8 @@ namespace OpenAstroAra.Test.Utility {
     [TestFixture]
     public class SequenceTemplateVariablesTest {
 
+        private static readonly string[] ExpectedUnknownTokens = { "integration_minutes" };
+
         [Test]
         public void Substitute_replaces_known_tokens() {
             var input = "Slew to {{target_name}} at RA {{target_ra}} Dec {{target_dec}}.";
@@ -40,7 +42,7 @@ namespace OpenAstroAra.Test.Utility {
             var values = new Dictionary<string, string> { ["target_name"] = "NGC7000" };
             var (result, unknown) = SequenceTemplateVariables.Substitute(input, values);
             Assert.That(result, Is.EqualTo("NGC7000 for {{integration_minutes}} min"));
-            Assert.That(unknown, Is.EquivalentTo(new[] { "integration_minutes" }));
+            Assert.That(unknown, Is.EquivalentTo(ExpectedUnknownTokens));
         }
 
         [Test]

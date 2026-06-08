@@ -58,11 +58,10 @@ namespace OpenAstroAra.Test {
             illumination = 100.0;
         }
 
-        public NighttimeData GetData() {
-            return new NighttimeData(date, referenceDate, moonPhase, illumination, twilightRiseAndSet, nauticalTwilightRiseAndSet, sunRiseAndSet, moonRiseAndSet, civilTwilightRiseAndSet);
-        }
+        public NighttimeData Data =>
+            new NighttimeData(date, referenceDate, moonPhase, illumination, twilightRiseAndSet, nauticalTwilightRiseAndSet, sunRiseAndSet, moonRiseAndSet, civilTwilightRiseAndSet);
 
-        public List<OxyPlot.DataPoint> GetExpectedTwilightDuration() {
+        public IReadOnlyList<OxyPlot.DataPoint> GetExpectedTwilightDuration() {
             if (twilightRiseAndSet == null) {
                 return new List<OxyPlot.DataPoint>();
             }
@@ -82,7 +81,7 @@ namespace OpenAstroAra.Test {
                 new OxyPlot.DataPoint(Axis.ToDouble(twilightRiseAndSet.Rise), 90) };
         }
 
-        public List<OxyPlot.DataPoint> GetExpectedNightDuration() {
+        public IReadOnlyList<OxyPlot.DataPoint> GetExpectedNightDuration() {
             if (twilightRiseAndSet == null) {
                 return new List<OxyPlot.DataPoint>();
             }
@@ -94,7 +93,7 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public void AllSetTest() {
-            var data = GetData();
+            var data = Data;
             Assert.That(data.MoonPhase, Is.EqualTo(moonPhase));
             Assert.That(data.Illumination, Is.EqualTo(illumination));
             Assert.That(data.Date, Is.EqualTo(date));
@@ -109,21 +108,21 @@ namespace OpenAstroAra.Test {
         [Test]
         public void MoonPhaseChangedTest() {
             moonPhase = MoonPhase.LastQuarter;
-            var data = GetData();
+            var data = Data;
             Assert.That(data.MoonPhase, Is.EqualTo(moonPhase));
         }
 
         [Test]
         public void IlluminationChangedTest() {
             illumination = null;
-            var data = GetData();
+            var data = Data;
             ClassicAssert.IsFalse(data.Illumination.HasValue);
         }
 
         [Test]
         public void TwilightNotSetTest() {
             twilightRiseAndSet = null;
-            var data = GetData();
+            var data = Data;
             Assert.That(data.NightDuration.ToImmutableList(), Is.EqualTo(GetExpectedNightDuration()).AsCollection);
             Assert.That(data.TwilightDuration.ToImmutableList(), Is.EqualTo(GetExpectedTwilightDuration()).AsCollection);
         }
@@ -131,7 +130,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public void SunriseNotSetTest() {
             sunRiseAndSet = null;
-            var data = GetData();
+            var data = Data;
             Assert.That(data.NightDuration.ToImmutableList(), Is.EqualTo(GetExpectedNightDuration()).AsCollection);
             Assert.That(data.TwilightDuration.ToImmutableList(), Is.EqualTo(GetExpectedTwilightDuration()).AsCollection);
         }
@@ -140,7 +139,7 @@ namespace OpenAstroAra.Test {
         public void TwilightAndSunriseNotSetTest() {
             twilightRiseAndSet = null;
             sunRiseAndSet = null;
-            var data = GetData();
+            var data = Data;
             Assert.That(data.NightDuration.ToImmutableList(), Is.EqualTo(GetExpectedNightDuration()).AsCollection);
             Assert.That(data.TwilightDuration.ToImmutableList(), Is.EqualTo(GetExpectedTwilightDuration()).AsCollection);
         }

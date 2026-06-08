@@ -47,7 +47,7 @@ namespace OpenAstroAra.Test {
 
         [TearDown]
         public void TearDown() {
-            try { Directory.Delete(_profileDir, recursive: true); } catch { }
+            try { Directory.Delete(_profileDir, recursive: true); } catch (System.IO.IOException) { } catch (System.UnauthorizedAccessException) { }
         }
 
         private static DiagnosticEventDto Sample(Guid id, DiagnosticHealth sev, string eventType) {

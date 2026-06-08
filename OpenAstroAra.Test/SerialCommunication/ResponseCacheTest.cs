@@ -19,16 +19,16 @@ using OpenAstroAra.Core.Utility.SerialCommunication;
 namespace OpenAstroAra.Test.SerialCommunication {
 
     [TestFixture]
-    internal class ResponseCacheTest {
+    internal sealed class ResponseCacheTest {
 
         internal class CachableResponse : Response {
             public override int Ttl => 500;
         }
 
-        internal class CachableSubclassResponse : CachableResponse {
+        internal sealed class CachableSubclassResponse : CachableResponse {
         }
 
-        internal class NonCachableResponse : Response {
+        internal sealed class NonCachableResponse : Response {
             public override int Ttl => 0;
         }
 

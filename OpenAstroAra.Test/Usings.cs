@@ -2,6 +2,10 @@ global using NUnit.Framework;
 using OpenAstroAra.Core.Utility;
 using System.IO;
 
+namespace OpenAstroAra.Test;
+
+// SetUpFixture in the root test namespace -> applies to every test under
+// OpenAstroAra.Test.* (CA1050: types must live in a namespace).
 [SetUpFixture]
 public class Init {
     [OneTimeSetUp]

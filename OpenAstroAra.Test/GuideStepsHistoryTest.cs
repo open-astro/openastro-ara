@@ -51,22 +51,22 @@ namespace OpenAstroAra.Test {
             var historySize = 100;
             GuideStepsHistory gsh = new GuideStepsHistory(historySize, GuiderScale.PIXELS, 4);
 
-            IGuideStep step1 = new PhdEventGuideStep() {
+            PhdEventGuideStep step1 = new PhdEventGuideStep() {
                 RADistanceRaw = -25,
                 DECDistanceRaw = -36
             };
 
-            IGuideStep step2 = new PhdEventGuideStep() {
+            PhdEventGuideStep step2 = new PhdEventGuideStep() {
                 RADistanceRaw = -625,
                 DECDistanceRaw = -1296
             };
 
-            IGuideStep step3 = new PhdEventGuideStep() {
+            PhdEventGuideStep step3 = new PhdEventGuideStep() {
                 RADistanceRaw = -25,
                 DECDistanceRaw = -36
             };
 
-            IGuideStep step4 = new PhdEventGuideStep() {
+            PhdEventGuideStep step4 = new PhdEventGuideStep() {
                 RADistanceRaw = -625,
                 DECDistanceRaw = -1296
             };
@@ -90,22 +90,22 @@ namespace OpenAstroAra.Test {
             GuideStepsHistory gsh = new GuideStepsHistory(historySize, GuiderScale.ARCSECONDS, 4);
             gsh.PixelScale = scale;
 
-            IGuideStep step1 = new PhdEventGuideStep() {
+            PhdEventGuideStep step1 = new PhdEventGuideStep() {
                 RADistanceRaw = -25,
                 DECDistanceRaw = -36
             };
 
-            IGuideStep step2 = new PhdEventGuideStep() {
+            PhdEventGuideStep step2 = new PhdEventGuideStep() {
                 RADistanceRaw = -625,
                 DECDistanceRaw = -1296
             };
 
-            IGuideStep step3 = new PhdEventGuideStep() {
+            PhdEventGuideStep step3 = new PhdEventGuideStep() {
                 RADistanceRaw = -25,
                 DECDistanceRaw = -36
             };
 
-            IGuideStep step4 = new PhdEventGuideStep() {
+            PhdEventGuideStep step4 = new PhdEventGuideStep() {
                 RADistanceRaw = -625,
                 DECDistanceRaw = -1296
             };
@@ -129,22 +129,22 @@ namespace OpenAstroAra.Test {
             GuideStepsHistory gsh = new GuideStepsHistory(historySize, GuiderScale.ARCSECONDS, 4);
             gsh.PixelScale = scale;
 
-            IGuideStep step1 = new PhdEventGuideStep() {
+            PhdEventGuideStep step1 = new PhdEventGuideStep() {
                 RADistanceRaw = -25,
                 DECDistanceRaw = -36
             };
 
-            IGuideStep step2 = new PhdEventGuideStep() {
+            PhdEventGuideStep step2 = new PhdEventGuideStep() {
                 RADistanceRaw = -625,
                 DECDistanceRaw = -1296
             };
 
-            IGuideStep step3 = new PhdEventGuideStep() {
+            PhdEventGuideStep step3 = new PhdEventGuideStep() {
                 RADistanceRaw = -25,
                 DECDistanceRaw = -36
             };
 
-            IGuideStep step4 = new PhdEventGuideStep() {
+            PhdEventGuideStep step4 = new PhdEventGuideStep() {
                 RADistanceRaw = -625,
                 DECDistanceRaw = -1296
             };
@@ -162,39 +162,37 @@ namespace OpenAstroAra.Test {
             Assert.That(gsh.RMS.Total, Is.EqualTo(0));
         }
 
-        public static List<IGuideStep> steps = new List<IGuideStep>();
-
         [Test]
         public void GuideStepsHistory_HistorySize_AddMoreThanSizeTest() {
             var historySize = 5;
             GuideStepsHistory gsh = new GuideStepsHistory(historySize, GuiderScale.PIXELS, 4);
 
-            IGuideStep step1 = new PhdEventGuideStep() {
+            PhdEventGuideStep step1 = new PhdEventGuideStep() {
                 RADistanceRaw = -1,
                 DECDistanceRaw = -1
             };
 
-            IGuideStep step2 = new PhdEventGuideStep() {
+            PhdEventGuideStep step2 = new PhdEventGuideStep() {
                 RADistanceRaw = -2,
                 DECDistanceRaw = -2
             };
 
-            IGuideStep step3 = new PhdEventGuideStep() {
+            PhdEventGuideStep step3 = new PhdEventGuideStep() {
                 RADistanceRaw = -3,
                 DECDistanceRaw = -3
             };
 
-            IGuideStep step4 = new PhdEventGuideStep() {
+            PhdEventGuideStep step4 = new PhdEventGuideStep() {
                 RADistanceRaw = -4,
                 DECDistanceRaw = -4
             };
 
-            IGuideStep step5 = new PhdEventGuideStep() {
+            PhdEventGuideStep step5 = new PhdEventGuideStep() {
                 RADistanceRaw = -5,
                 DECDistanceRaw = -5
             };
 
-            IGuideStep step6 = new PhdEventGuideStep() {
+            PhdEventGuideStep step6 = new PhdEventGuideStep() {
                 RADistanceRaw = -6,
                 DECDistanceRaw = -6
             };
@@ -223,32 +221,32 @@ namespace OpenAstroAra.Test {
             var historySize = 5;
             GuideStepsHistory gsh = new GuideStepsHistory(historySize, GuiderScale.PIXELS, 4);
 
-            IGuideStep step1 = new PhdEventGuideStep() {
+            PhdEventGuideStep step1 = new PhdEventGuideStep() {
                 RADistanceRaw = -1,
                 DECDistanceRaw = -1
             };
 
-            IGuideStep step2 = new PhdEventGuideStep() {
+            PhdEventGuideStep step2 = new PhdEventGuideStep() {
                 RADistanceRaw = -2,
                 DECDistanceRaw = -2
             };
 
-            IGuideStep step3 = new PhdEventGuideStep() {
+            PhdEventGuideStep step3 = new PhdEventGuideStep() {
                 RADistanceRaw = -3,
                 DECDistanceRaw = -3
             };
 
-            IGuideStep step4 = new PhdEventGuideStep() {
+            PhdEventGuideStep step4 = new PhdEventGuideStep() {
                 RADistanceRaw = -4,
                 DECDistanceRaw = -4
             };
 
-            IGuideStep step5 = new PhdEventGuideStep() {
+            PhdEventGuideStep step5 = new PhdEventGuideStep() {
                 RADistanceRaw = -5,
                 DECDistanceRaw = -5
             };
 
-            IGuideStep step6 = new PhdEventGuideStep() {
+            PhdEventGuideStep step6 = new PhdEventGuideStep() {
                 RADistanceRaw = -6,
                 DECDistanceRaw = -6
             };
@@ -281,32 +279,32 @@ namespace OpenAstroAra.Test {
             var historySize = 100;
             GuideStepsHistory gsh = new GuideStepsHistory(historySize, GuiderScale.PIXELS, 4);
 
-            IGuideStep step1 = new PhdEventGuideStep() {
+            PhdEventGuideStep step1 = new PhdEventGuideStep() {
                 RADuration = -1,
                 DECDuration = -1
             };
 
-            IGuideStep step2 = new PhdEventGuideStep() {
+            PhdEventGuideStep step2 = new PhdEventGuideStep() {
                 RADuration = -2,
                 DECDuration = -2
             };
 
-            IGuideStep step3 = new PhdEventGuideStep() {
+            PhdEventGuideStep step3 = new PhdEventGuideStep() {
                 RADuration = -3,
                 DECDuration = -3
             };
 
-            IGuideStep step4 = new PhdEventGuideStep() {
+            PhdEventGuideStep step4 = new PhdEventGuideStep() {
                 RADuration = -4,
                 DECDuration = -4
             };
 
-            IGuideStep step5 = new PhdEventGuideStep() {
+            PhdEventGuideStep step5 = new PhdEventGuideStep() {
                 RADuration = -5,
                 DECDuration = -5
             };
 
-            IGuideStep step6 = new PhdEventGuideStep() {
+            PhdEventGuideStep step6 = new PhdEventGuideStep() {
                 RADuration = -6,
                 DECDuration = -6
             };
@@ -327,32 +325,32 @@ namespace OpenAstroAra.Test {
             var historySize = 3;
             GuideStepsHistory gsh = new GuideStepsHistory(historySize, GuiderScale.PIXELS, 4);
 
-            IGuideStep step1 = new PhdEventGuideStep() {
+            PhdEventGuideStep step1 = new PhdEventGuideStep() {
                 RADuration = -10,
                 DECDuration = -10
             };
 
-            IGuideStep step2 = new PhdEventGuideStep() {
+            PhdEventGuideStep step2 = new PhdEventGuideStep() {
                 RADuration = -20,
                 DECDuration = -20
             };
 
-            IGuideStep step3 = new PhdEventGuideStep() {
+            PhdEventGuideStep step3 = new PhdEventGuideStep() {
                 RADuration = -3,
                 DECDuration = -3
             };
 
-            IGuideStep step4 = new PhdEventGuideStep() {
+            PhdEventGuideStep step4 = new PhdEventGuideStep() {
                 RADuration = -4,
                 DECDuration = -4
             };
 
-            IGuideStep step5 = new PhdEventGuideStep() {
+            PhdEventGuideStep step5 = new PhdEventGuideStep() {
                 RADuration = -5,
                 DECDuration = -5
             };
 
-            IGuideStep step6 = new PhdEventGuideStep() {
+            PhdEventGuideStep step6 = new PhdEventGuideStep() {
                 RADuration = -6,
                 DECDuration = -6
             };
@@ -373,32 +371,32 @@ namespace OpenAstroAra.Test {
             var historySize = 3;
             GuideStepsHistory gsh = new GuideStepsHistory(historySize, GuiderScale.PIXELS, 4);
 
-            IGuideStep step1 = new PhdEventGuideStep() {
+            PhdEventGuideStep step1 = new PhdEventGuideStep() {
                 RADuration = -100,
                 DECDuration = -100
             };
 
-            IGuideStep step2 = new PhdEventGuideStep() {
+            PhdEventGuideStep step2 = new PhdEventGuideStep() {
                 RADuration = -20,
                 DECDuration = -20
             };
 
-            IGuideStep step3 = new PhdEventGuideStep() {
+            PhdEventGuideStep step3 = new PhdEventGuideStep() {
                 RADuration = -3,
                 DECDuration = -3
             };
 
-            IGuideStep step4 = new PhdEventGuideStep() {
+            PhdEventGuideStep step4 = new PhdEventGuideStep() {
                 RADuration = -4,
                 DECDuration = -4
             };
 
-            IGuideStep step5 = new PhdEventGuideStep() {
+            PhdEventGuideStep step5 = new PhdEventGuideStep() {
                 RADuration = -5,
                 DECDuration = -5
             };
 
-            IGuideStep step6 = new PhdEventGuideStep() {
+            PhdEventGuideStep step6 = new PhdEventGuideStep() {
                 RADuration = -6,
                 DECDuration = -6
             };
