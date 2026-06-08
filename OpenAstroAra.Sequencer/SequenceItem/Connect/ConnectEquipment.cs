@@ -114,7 +114,8 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
             }
         }
 
-        public string? GetProfileId() {
+        public string? ProfileId {
+            get {
             switch (SelectedDevice) {
                 case "Camera": return profileService.ActiveProfile.CameraSettings.Id;
                 case "Filter Wheel": return profileService.ActiveProfile.FilterWheelSettings.Id;
@@ -129,6 +130,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
                 case "Dome": return profileService.ActiveProfile.DomeSettings.Id;
                 case "Safety Monitor": return profileService.ActiveProfile.SafetyMonitorSettings.Id;
                 default: return null;
+            }
             }
         }
 
@@ -162,7 +164,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
 
 
             if (!IsConnected()) {
-                var profileId = GetProfileId();
+                var profileId = ProfileId;
                 var mediator = GetMediator();
                 if (mediator == null) { return; }
 
@@ -201,7 +203,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
         public bool Validate() {
             var i = new List<string>();
 
-            var profileId = GetProfileId();
+            var profileId = ProfileId;
             if (profileId == "No_Device" || profileId == "No_Guider") {
                 i.Add($"There is no device id stored in the profile for the {SelectedDevice}. Make sure to manually connect a {SelectedDevice} once, so that a device id for a {SelectedDevice} is stored in the profile.");
             }
@@ -211,7 +213,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
         }
 
         public override string ToString() {
-            return $"Category: {Category}, Item: {nameof(ConnectEquipment)}, Selected device: {SelectedDevice}, Selected device id: {GetProfileId()}";
+            return $"Category: {Category}, Item: {nameof(ConnectEquipment)}, Selected device: {SelectedDevice}, Selected device id: {ProfileId}";
         }
     }
 }

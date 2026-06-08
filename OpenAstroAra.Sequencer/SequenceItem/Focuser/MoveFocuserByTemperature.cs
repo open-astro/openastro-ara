@@ -34,7 +34,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Focuser {
     [ExportMetadata("Category", "Lbl_SequenceCategory_Focuser")]
     [Export(typeof(ISequenceItem))]
     [JsonObject(MemberSerialization.OptIn)]
-    public class MoveFocuserByTemperature : SequenceItem, IValidatable, IFocuserConsumer {
+    public sealed class MoveFocuserByTemperature : SequenceItem, IValidatable, IFocuserConsumer {
 
         [ImportingConstructor]
         public MoveFocuserByTemperature(IFocuserMediator focuserMediator) {
@@ -141,6 +141,8 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Focuser {
         }
 
         public void Dispose() {
+            // No unmanaged or owned-disposable state; the focuser mediator is not owned here.
+            GC.SuppressFinalize(this);
         }
 
         public void UpdateEndAutoFocusRun(AutoFocusInfo info) {

@@ -125,7 +125,7 @@ namespace OpenAstroAra.Sequencer.Trigger.Connect {
         }
 
         public override string ToString() {
-            return $"Category: {Category}, Item: {nameof(ReconnectTrigger)}, Selected device: {connectEquipmentInstruction.SelectedDevice}, Selected device id: {connectEquipmentInstruction.GetProfileId()}";
+            return $"Category: {Category}, Item: {nameof(ReconnectTrigger)}, Selected device: {connectEquipmentInstruction.SelectedDevice}, Selected device id: {connectEquipmentInstruction.ProfileId}";
         }
 
         public override bool ShouldTrigger(ISequenceItem? previousItem, ISequenceItem? nextItem) {
