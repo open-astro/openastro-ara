@@ -450,13 +450,13 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
                 var key = elem.Key;
                 if (key == null) { continue; }
 
-                if (elem.Value.Value.StartsWith("'")) {
+                if (elem.Value.Value.StartsWith("'", StringComparison.Ordinal)) {
                     var value = elem.Value.OriginalValue.Trim();
                     l.Add(new StringMetaDataHeader(key, value, elem.Value.Comment ?? string.Empty));
                 } else if (elem.Value.OriginalValue == "T" || elem.Value.OriginalValue == "F") {
                     var value = elem.Value.OriginalValue.Trim() == "T" ? true : false;
                     l.Add(new BoolMetaDataHeader(key, value, elem.Value.Comment ?? string.Empty));
-                } else if (elem.Value.OriginalValue.Contains(".") && double.TryParse(elem.Value.OriginalValue, CultureInfo.InvariantCulture, out var number)) {
+                } else if (elem.Value.OriginalValue.Contains(".", StringComparison.Ordinal) && double.TryParse(elem.Value.OriginalValue, CultureInfo.InvariantCulture, out var number)) {
                     l.Add(new DoubleMetaDataHeader(key, number, elem.Value.Comment ?? string.Empty));
                 } else if (int.TryParse(elem.Value.OriginalValue, out var integer)) {
                     l.Add(new IntMetaDataHeader(key, integer, elem.Value.Comment ?? string.Empty));
@@ -474,8 +474,8 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
         }
 
         private int ParseInt(string value) {
-            if (value.EndsWith(".0")) {
-                value = value.Replace(".0", "");
+            if (value.EndsWith(".0", StringComparison.Ordinal)) {
+                value = value.Replace(".0", "", StringComparison.Ordinal);
             }
             if (int.TryParse(value, out var intVal)) {
                 return intVal;
@@ -574,7 +574,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
             }
 
             if (metaData.Camera.SensorType != SensorType.Monochrome && metaData.Camera.BayerPattern != BayerPattern.None) {
-                Add("BAYERPAT", metaData.Camera.SensorType.ToString().ToUpper(), "Sensor Bayer pattern");
+                Add("BAYERPAT", metaData.Camera.SensorType.ToString().ToUpperInvariant(), "Sensor Bayer pattern");
                 Add("XBAYROFF", metaData.Camera.BayerOffsetX, "Bayer pattern X axis offset");
                 Add("YBAYROFF", metaData.Camera.BayerOffsetY, "Bayer pattern Y axis offset");
             }
@@ -770,7 +770,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
             Add("ROWORDER", "TOP-DOWN", "FITS Image Orientation");
 
             Add("EQUINOX", 2000.0d, "Equinox of celestial coordinate system");
-            Add("SWCREATE", string.Format("N.I.N.A. {0} ({1})", CoreUtil.Version, DllLoader.IsX86() ? "x86" : "x64"), "Software that created this file");
+            Add("SWCREATE", string.Format(CultureInfo.InvariantCulture, "N.I.N.A. {0} ({1})", CoreUtil.Version, DllLoader.IsX86() ? "x86" : "x64"), "Software that created this file");
 
             foreach (var elem in metaData.GenericHeaders) {
                 switch (elem) {

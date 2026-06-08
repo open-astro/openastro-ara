@@ -17,6 +17,7 @@ using K4os.Compression.LZ4;
 using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Core.Utility;
 using System;
+using System.Globalization;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
@@ -193,7 +194,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
 
             if (CompressionType != XISFCompressionType.NONE) {
                 double percentChanged = (1 - ((double)outArray.Length / (double)byteArray.Length)) * 100;
-                Logger.Debug($"XISF: {CompressionType} compressed {byteArray.Length} bytes to {outArray.Length} bytes ({percentChanged.ToString("#.##")}%)");
+                Logger.Debug($"XISF: {CompressionType} compressed {byteArray.Length} bytes to {outArray.Length} bytes ({percentChanged.ToString("#.##", CultureInfo.InvariantCulture)}%)");
             }
 
             /*
@@ -251,7 +252,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
         private static string GetStringFromHash(byte[] hash) {
             StringBuilder result = new StringBuilder();
             for (int i = 0; i < hash.Length; i++) {
-                result.Append(hash[i].ToString("x2"));
+                result.Append(hash[i].ToString("x2", CultureInfo.InvariantCulture));
             }
             return result.ToString();
         }

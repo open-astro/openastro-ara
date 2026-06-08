@@ -24,6 +24,7 @@ using OpenAstroAra.Image.ImageData;
 using OpenAstroAra.Image.Interfaces;
 using OpenAstroAra.Profile.Interfaces;
 using System;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
@@ -102,8 +103,8 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
 
                     try {
                         string[] geometry = RequiredAttribute(imageElement, "geometry").Split(':');
-                        width = int.Parse(geometry[0]);
-                        height = int.Parse(geometry[1]);
+                        width = int.Parse(geometry[0], CultureInfo.InvariantCulture);
+                        height = int.Parse(geometry[1], CultureInfo.InvariantCulture);
                     } catch (Exception ex) {
                         Logger.Error($"XISF: Could not find image geometry: {ex}");
                         throw new InvalidDataException(Loc.Instance["LblXisfInvalidGeometry"]);
@@ -134,7 +135,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                     try {
                         if (imageElement.Attribute("compression") != null) {
                             // [compression codec]:[uncompressed size]:[sizeof shuffled typedef]
-                            compression = RequiredAttribute(imageElement, "compression").ToLower().Split(':');
+                            compression = RequiredAttribute(imageElement, "compression").ToLowerInvariant().Split(':');
 
                             if (!string.IsNullOrEmpty(compression[0])) {
                                 compressionInfo = GetCompressionType(compression);
@@ -144,11 +145,11 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                         }
                     } catch (InvalidDataException) {
                         Logger.Error($"XISF: Unknown compression codec encountered: {compression?[0]}");
-                        throw new InvalidDataException(string.Format(Loc.Instance["LblXisfUnsupportedCompression"], compression?[0]));
+                        throw new InvalidDataException(string.Format(CultureInfo.CurrentCulture, Loc.Instance["LblXisfUnsupportedCompression"], compression?[0]));
                     }
 
                     if (compressionInfo.CompressionType != XISFCompressionType.NONE) {
-                        Logger.Debug(string.Format("XISF: CompressionType: {0}, UncompressedSize: {1}, IsShuffled: {2}, ItemSize: {3}",
+                        Logger.Debug(string.Format(CultureInfo.InvariantCulture, "XISF: CompressionType: {0}, UncompressedSize: {1}, IsShuffled: {2}, ItemSize: {3}",
                             compressionInfo.CompressionType,
                             compressionInfo.UncompressedSize,
                             compressionInfo.IsShuffled,
@@ -166,7 +167,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                     try {
                         if (imageElement.Attribute("checksum") != null) {
                             // [hash type]:[hash string]
-                            cksum = RequiredAttribute(imageElement, "checksum").ToLower().Split(':');
+                            cksum = RequiredAttribute(imageElement, "checksum").ToLowerInvariant().Split(':');
 
                             if (!string.IsNullOrEmpty(cksum[0])) {
                                 cksumType = GetChecksumType(cksum[0]);
@@ -177,7 +178,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                         }
                     } catch (InvalidDataException) {
                         Logger.Error($"XISF: Unknown checksum type: {cksum?[0]}");
-                        throw new InvalidDataException(string.Format(Loc.Instance["LblXisfUnsupportedChecksum"], cksum?[0]));
+                        throw new InvalidDataException(string.Format(CultureInfo.CurrentCulture, Loc.Instance["LblXisfUnsupportedChecksum"], cksum?[0]));
                     }
 
                     if (cksumType != XISFChecksumType.NONE) {
@@ -191,10 +192,10 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                      */
                     BaseImageData imageData;
 
-                    if (RequiredAttribute(imageElement, "location").StartsWith("attachment")) {
+                    if (RequiredAttribute(imageElement, "location").StartsWith("attachment", StringComparison.Ordinal)) {
                         string[] location = RequiredAttribute(imageElement, "location").Split(':');
-                        int start = int.Parse(location[1]);
-                        int size = int.Parse(location[2]);
+                        int start = int.Parse(location[1], CultureInfo.InvariantCulture);
+                        int size = int.Parse(location[2], CultureInfo.InvariantCulture);
 
                         Logger.Debug($"XISF: Data block type: attachment, Data block start: {start}, Data block size: {size}");
 
@@ -260,7 +261,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                 case "Float64":
                     return new Float64Converter();
 
-                default: throw new InvalidDataException(string.Format(Loc.Instance["LblXisfUnsupportedFormat"], sampleFormat));
+                default: throw new InvalidDataException(string.Format(CultureInfo.CurrentCulture, Loc.Instance["LblXisfUnsupportedFormat"], sampleFormat));
             }
         }
 
@@ -286,7 +287,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                     var l = (((long)rawData[(offset * 8) + 7] << 56) | ((long)rawData[(offset * 8) + 6] << 48) | ((long)rawData[(offset * 8) + 5] << 40) | ((long)rawData[(offset * 8) + 4] << 32) | ((long)rawData[(offset * 8) + 3] << 24) | ((long)rawData[(offset * 8) + 2] << 16) | ((long)rawData[(offset * 8) + 1] << 8) | ((long)rawData[offset * 8]));
                     return (ushort)((*(double*)&l) * ushort.MaxValue);
 
-                default: throw new InvalidDataException(string.Format(Loc.Instance["LblXisfUnsupportedFormat"], sampleFormat));
+                default: throw new InvalidDataException(string.Format(CultureInfo.CurrentCulture, Loc.Instance["LblXisfUnsupportedFormat"], sampleFormat));
             }
         }
 
@@ -301,7 +302,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
             string codec = compression[0];
 
             XISFCompressionInfo info = new XISFCompressionInfo();
-            info.UncompressedSize = int.Parse(compression[1]);
+            info.UncompressedSize = int.Parse(compression[1], CultureInfo.InvariantCulture);
 
             switch (codec) {
                 case "lz4":
@@ -310,7 +311,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
 
                 case "lz4+sh":
                     info.CompressionType = XISFCompressionType.LZ4;
-                    info.ItemSize = int.Parse(compression[2]);
+                    info.ItemSize = int.Parse(compression[2], CultureInfo.InvariantCulture);
                     info.IsShuffled = true;
                     break;
 
@@ -320,7 +321,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
 
                 case "lz4hc+sh":
                     info.CompressionType = XISFCompressionType.LZ4HC;
-                    info.ItemSize = int.Parse(compression[2]);
+                    info.ItemSize = int.Parse(compression[2], CultureInfo.InvariantCulture);
                     info.IsShuffled = true;
                     break;
 
@@ -330,7 +331,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
 
                 case "zlib+sh":
                     info.CompressionType = XISFCompressionType.ZLIB;
-                    info.ItemSize = int.Parse(compression[2]);
+                    info.ItemSize = int.Parse(compression[2], CultureInfo.InvariantCulture);
                     info.IsShuffled = true;
                     break;
 
@@ -405,7 +406,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                         return false;
                 }
             }
-            if (computedCksum.Equals(providedCksum)) {
+            if (computedCksum.Equals(providedCksum, StringComparison.Ordinal)) {
                 return true;
             } else {
                 Logger.Error($"XISF: Invalid data block checksum! Expected: {providedCksum} Got: {computedCksum}");
@@ -450,7 +451,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
         private static string GetStringFromHash(byte[] hash) {
             StringBuilder result = new StringBuilder();
             for (int i = 0; i < hash.Length; i++) {
-                result.Append(hash[i].ToString("x2"));
+                result.Append(hash[i].ToString("x2", CultureInfo.InvariantCulture));
             }
             return result.ToString();
         }
@@ -549,7 +550,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
             }
 
             // Pad space between the header and data blocks null bytes
-            var remainingBlockPadding = long.Parse(location.Value.Split(':')[1]) - s.Position;
+            var remainingBlockPadding = long.Parse(location.Value.Split(':')[1], CultureInfo.InvariantCulture) - s.Position;
 
             for (int i = 0; i < remainingBlockPadding; i++) {
                 s.WriteByte(0x0);

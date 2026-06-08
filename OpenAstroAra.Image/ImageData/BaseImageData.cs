@@ -135,9 +135,9 @@ namespace OpenAstroAra.Image.ImageData {
         /// <returns></returns>        
         public string FinalizeSave(string file, string pattern, IList<ImagePattern> customPatterns) {
             try {
-                if (pattern.Contains(ImagePatternKeys.SensorTemp) && double.IsNaN(MetaData.Camera.Temperature) && !string.IsNullOrEmpty(Data.RAWType)) {
+                if (pattern.Contains(ImagePatternKeys.SensorTemp, StringComparison.Ordinal) && double.IsNaN(MetaData.Camera.Temperature) && !string.IsNullOrEmpty(Data.RAWType)) {
                     string sensorTemp = GetSensorTempFromExifTool(file);
-                    pattern = pattern.Replace(ImagePatternKeys.SensorTemp, sensorTemp);
+                    pattern = pattern.Replace(ImagePatternKeys.SensorTemp, sensorTemp, StringComparison.Ordinal);
                 }
 
                 var imagePatterns = GetImagePatterns();
@@ -207,8 +207,8 @@ namespace OpenAstroAra.Image.ImageData {
                 Logger.Trace(sb.ToString());
 
                 // remove whitespace and format
-                tempString = sb.ToString().Replace(" ", "");
-                tempString = tempString.Substring(tempString.IndexOf(':') + 1).ToLower().Trim();
+                tempString = sb.ToString().Replace(" ", "", StringComparison.Ordinal);
+                tempString = tempString.Substring(tempString.IndexOf(':', StringComparison.Ordinal) + 1).ToLowerInvariant().Trim();
 
                 if (!Regex.IsMatch(tempString, "^[0-9]{1,4}[cCfFkK]$")) {
                     Logger.Error($"Value returned by EXIF Tool is no valid temperature: {tempString}");
@@ -226,21 +226,21 @@ namespace OpenAstroAra.Image.ImageData {
             var metadata = MetaData;
             p.Set(ImagePatternKeys.Filter, metadata.FilterWheel.Filter);
             p.Set(ImagePatternKeys.ExposureTime, metadata.Image.ExposureTime);
-            p.Set(ImagePatternKeys.ApplicationStartDate, CoreUtil.ApplicationStartDate.ToString("yyyy-MM-dd"));
-            p.Set(ImagePatternKeys.Date, metadata.Image.ExposureStart.ToLocalTime().ToString("yyyy-MM-dd"));
+            p.Set(ImagePatternKeys.ApplicationStartDate, CoreUtil.ApplicationStartDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+            p.Set(ImagePatternKeys.Date, metadata.Image.ExposureStart.ToLocalTime().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
 
             // ExposureStart is initialized to DateTime.MinValue, and we cannot subtract time from that. Only evaluate
             // the $$DATEMINUS12$$ pattern if the time is at least 12 hours on from DateTime.MinValue.
             if (metadata.Image.ExposureStart > DateTime.MinValue.AddHours(12)) {
-                p.Set(ImagePatternKeys.DateMinus12, metadata.Image.ExposureStart.ToLocalTime().AddHours(-12).ToString("yyyy-MM-dd"));
+                p.Set(ImagePatternKeys.DateMinus12, metadata.Image.ExposureStart.ToLocalTime().AddHours(-12).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
             }
 
-            p.Set(ImagePatternKeys.DateUtc, metadata.Image.ExposureStart.ToUniversalTime().ToString("yyyy-MM-dd"));
-            p.Set(ImagePatternKeys.Time, metadata.Image.ExposureStart.ToLocalTime().ToString("HH-mm-ss"));
-            p.Set(ImagePatternKeys.TimeUtc, metadata.Image.ExposureStart.ToUniversalTime().ToString("HH-mm-ss"));
-            p.Set(ImagePatternKeys.DateTime, metadata.Image.ExposureStart.ToLocalTime().ToString("yyyy-MM-dd_HH-mm-ss"));
+            p.Set(ImagePatternKeys.DateUtc, metadata.Image.ExposureStart.ToUniversalTime().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+            p.Set(ImagePatternKeys.Time, metadata.Image.ExposureStart.ToLocalTime().ToString("HH-mm-ss", CultureInfo.InvariantCulture));
+            p.Set(ImagePatternKeys.TimeUtc, metadata.Image.ExposureStart.ToUniversalTime().ToString("HH-mm-ss", CultureInfo.InvariantCulture));
+            p.Set(ImagePatternKeys.DateTime, metadata.Image.ExposureStart.ToLocalTime().ToString("yyyy-MM-dd_HH-mm-ss", CultureInfo.InvariantCulture));
             p.Set(ImagePatternKeys.MJD, metadata.Image.ExposureStart.ToMJD(), precision: 8);
-            p.Set(ImagePatternKeys.FrameNr, metadata.Image.ExposureNumber.ToString("0000"));
+            p.Set(ImagePatternKeys.FrameNr, metadata.Image.ExposureNumber.ToString("0000", CultureInfo.InvariantCulture));
             p.Set(ImagePatternKeys.ImageType, metadata.Image.ImageType);
             p.Set(ImagePatternKeys.TargetName, metadata.Target.Name);
 
@@ -326,9 +326,9 @@ namespace OpenAstroAra.Image.ImageData {
             var pattern = fileSaveInfo.FilePattern;
             string actualPath = string.Empty;
             try {
-                if (pattern.Contains(ImagePatternKeys.SensorTemp) && double.IsNaN(MetaData.Camera.Temperature) && !string.IsNullOrEmpty(Data.RAWType)) {
+                if (pattern.Contains(ImagePatternKeys.SensorTemp, StringComparison.Ordinal) && double.IsNaN(MetaData.Camera.Temperature) && !string.IsNullOrEmpty(Data.RAWType)) {
                     // For DSLRs we need to retrieve the temperature after the file is written. Hence we replace the pattern with this special placeholder
-                    pattern = pattern.Replace(ImagePatternKeys.SensorTemp, "$$DSLR_SENSORTEMP$$");
+                    pattern = pattern.Replace(ImagePatternKeys.SensorTemp, "$$DSLR_SENSORTEMP$$", StringComparison.Ordinal);
                 }
 
                 var imagePatterns = GetImagePatterns();
@@ -339,7 +339,7 @@ namespace OpenAstroAra.Image.ImageData {
 
                 actualPath = await SaveToDiskAsync(fileSaveInfo, fileName, token, forceFileType);
 
-                if (pattern.Contains("$$DSLR_SENSORTEMP$$") && double.IsNaN(MetaData.Camera.Temperature) && !string.IsNullOrEmpty(Data.RAWType)) {
+                if (pattern.Contains("$$DSLR_SENSORTEMP$$", StringComparison.Ordinal) && double.IsNaN(MetaData.Camera.Temperature) && !string.IsNullOrEmpty(Data.RAWType)) {
                     // Extract the temperature from the EXIF info for DSLRs
                     actualPath = ExtractDSLRTemperatureAndMoveFile(actualPath);
                 }
@@ -357,7 +357,7 @@ namespace OpenAstroAra.Image.ImageData {
             var oldPath = actualPath;
             try {
                 string sensorTemp = GetSensorTempFromExifTool(actualPath);
-                actualPath = actualPath.Replace("$$DSLR_SENSORTEMP$$", sensorTemp.ToString(CultureInfo.InvariantCulture));
+                actualPath = actualPath.Replace("$$DSLR_SENSORTEMP$$", sensorTemp.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal);
 
                 // Create a folder in case this pattern was set up to be a folder
                 var fi = new FileInfo(actualPath);
@@ -465,7 +465,7 @@ namespace OpenAstroAra.Image.ImageData {
                 }
 
                 // CFitsio treats paranthesis for special logic and are thus not allowed
-                fileSaveInfo.FilePath = fileSaveInfo.FilePath.Replace("(", "_").Replace(")", "_").Replace("[", "_").Replace("]", "_");
+                fileSaveInfo.FilePath = fileSaveInfo.FilePath.Replace("(", "_", StringComparison.Ordinal).Replace(")", "_", StringComparison.Ordinal).Replace("[", "_", StringComparison.Ordinal).Replace("]", "_", StringComparison.Ordinal);
                 Directory.CreateDirectory(Path.GetDirectoryName(fileSaveInfo.FilePath) ?? string.Empty);
 
                 var uniquePath = CoreUtil.GetUniqueFilePath(fileSaveInfo.FilePath + fileSaveInfo.GetExtension(extension), "{0}_{1}");
@@ -531,7 +531,7 @@ namespace OpenAstroAra.Image.ImageData {
                 if (!File.Exists(path)) {
                     throw new FileNotFoundException();
                 }
-                switch (Path.GetExtension(path).ToLower()) {
+                switch (Path.GetExtension(path).ToLowerInvariant()) {
                     case ".xisf":
                         return await XISF.Load(new Uri(path), isBayered, imageDataFactory, ct);
 

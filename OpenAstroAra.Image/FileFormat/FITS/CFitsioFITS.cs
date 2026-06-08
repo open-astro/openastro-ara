@@ -169,7 +169,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
             }
 
             if (metaData.Camera.SensorType != SensorType.Monochrome && metaData.Camera.BayerPattern != BayerPattern.None) {
-                AddHeader("BAYERPAT", metaData.Camera.SensorType.ToString().ToUpper(), "Sensor Bayer pattern");
+                AddHeader("BAYERPAT", metaData.Camera.SensorType.ToString().ToUpperInvariant(), "Sensor Bayer pattern");
                 AddHeader("XBAYROFF", metaData.Camera.BayerOffsetX, "Bayer pattern X axis offset");
                 AddHeader("YBAYROFF", metaData.Camera.BayerOffsetY, "Bayer pattern Y axis offset");
             }
@@ -365,7 +365,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
             AddHeader("ROWORDER", "TOP-DOWN", "FITS Image Orientation");
 
             AddHeader("EQUINOX", 2000.0d, "Equinox of celestial coordinate system");
-            AddHeader("SWCREATE", string.Format("N.I.N.A. {0} ({1})", CoreUtil.Version, DllLoader.IsX86() ? "x86" : "x64"), "Software that created this file");
+            AddHeader("SWCREATE", string.Format(CultureInfo.InvariantCulture, "N.I.N.A. {0} ({1})", CoreUtil.Version, DllLoader.IsX86() ? "x86" : "x64"), "Software that created this file");
 
             var reserved = new string[] { "SIMPLE", "BITPIX", "NAXIS", "NAXIS1", "NAXIS2", "BZERO", "EXTEND" };
             foreach (var elem in metaData.GenericHeaders) {

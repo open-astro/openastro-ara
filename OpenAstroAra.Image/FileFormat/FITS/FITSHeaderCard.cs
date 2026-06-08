@@ -30,7 +30,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
              * FITS Standard 4.0, Section 4.2.1:
              * A single quote is represented within a string as two successive single quotes
              */
-            value = value.Replace(@"'", @"''");
+            value = value.Replace(@"'", @"''", StringComparison.Ordinal);
 
             // Header total is 80 - Keyword = 8, Keyword Separator = 2, String Quotes = 2,
             var totalLength = 68;
@@ -103,9 +103,9 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
             get {
                 if (string.IsNullOrWhiteSpace(Value)) {
                     return string.Empty;
-                } else if (Value.StartsWith("'")) {
+                } else if (Value.StartsWith("'", StringComparison.Ordinal)) {
                     var trimmedValue = Value.Trim();
-                    return trimmedValue.Remove(trimmedValue.Length - 1, 1).Remove(0, 1).Replace(@"''", @"'");
+                    return trimmedValue.Remove(trimmedValue.Length - 1, 1).Remove(0, 1).Replace(@"''", @"'", StringComparison.Ordinal);
                 } else {
                     return Value;
                 }
@@ -113,7 +113,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
         }
 
         public string GetHeaderString() {
-            var encodedKeyword = Key.ToUpper().PadRight(8);
+            var encodedKeyword = Key.ToUpperInvariant().PadRight(8);
             var encodedValue = Value.PadLeft(20);
 
             var header = $"{encodedKeyword}= {encodedValue}";

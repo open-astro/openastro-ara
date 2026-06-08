@@ -128,19 +128,19 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
             for (int headerIdx = 1; headerIdx <= numKeywords; ++headerIdx) {
                 CfitsioNative.fits_read_keyn(filePtr, headerIdx, out var keyName, out var keyValue, out var keyComment);
 
-                if (string.IsNullOrEmpty(keyValue) || keyName.Equals("COMMENT") || keyName.Equals("HISTORY")) {
+                if (string.IsNullOrEmpty(keyValue) || keyName.Equals("COMMENT", StringComparison.Ordinal) || keyName.Equals("HISTORY", StringComparison.Ordinal)) {
                     continue;
                 }
 
-                if (keyValue.Equals("T")) {
+                if (keyValue.Equals("T", StringComparison.Ordinal)) {
                     header.Add(keyName, true, keyComment);
-                } else if (keyValue.Equals("F")) {
+                } else if (keyValue.Equals("F", StringComparison.Ordinal)) {
                     header.Add(keyName, false, keyComment);
-                } else if (keyValue.StartsWith("'")) {
+                } else if (keyValue.StartsWith("'", StringComparison.Ordinal)) {
                     // Treat as a string
-                    keyValue = $"{keyValue.TrimStart('\'').TrimEnd('\'', ' ').Replace(@"''", @"'")}";
+                    keyValue = $"{keyValue.TrimStart('\'').TrimEnd('\'', ' ').Replace(@"''", @"'", StringComparison.Ordinal)}";
                     header.Add(keyName, keyValue, keyComment);
-                } else if (keyValue.Contains(".")) {
+                } else if (keyValue.Contains(".", StringComparison.Ordinal)) {
                     if (double.TryParse(keyValue, NumberStyles.Float, CultureInfo.InvariantCulture, out var value)) {
                         header.Add(keyName, value, keyComment);
                     }
@@ -149,7 +149,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
                         header.Add(keyName, value, keyComment);
                     } else {
                         // Treat as a string
-                        keyValue = $"{keyValue.TrimStart('\'').TrimEnd('\'', ' ').Replace(@"''", @"'")}";
+                        keyValue = $"{keyValue.TrimStart('\'').TrimEnd('\'', ' ').Replace(@"''", @"'", StringComparison.Ordinal)}";
                         header.Add(keyName, keyValue, keyComment);
                     }
                 }
@@ -193,19 +193,19 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
             for (int headerIdx = 1; headerIdx <= numKeywords; ++headerIdx) {
                 CfitsioNative.fits_read_keyn(filePtr, headerIdx, out var keyName, out var keyValue, out var keyComment);
 
-                if (string.IsNullOrEmpty(keyValue) || keyName.Equals("COMMENT") || keyName.Equals("HISTORY")) {
+                if (string.IsNullOrEmpty(keyValue) || keyName.Equals("COMMENT", StringComparison.Ordinal) || keyName.Equals("HISTORY", StringComparison.Ordinal)) {
                     continue;
                 }
 
-                if (keyValue.Equals("T")) {
+                if (keyValue.Equals("T", StringComparison.Ordinal)) {
                     header.Add(keyName, true, keyComment);
-                } else if (keyValue.Equals("F")) {
+                } else if (keyValue.Equals("F", StringComparison.Ordinal)) {
                     header.Add(keyName, false, keyComment);
-                } else if (keyValue.StartsWith("'")) {
+                } else if (keyValue.StartsWith("'", StringComparison.Ordinal)) {
                     // Treat as a string
-                    keyValue = $"{keyValue.TrimStart('\'').TrimEnd('\'', ' ').Replace(@"''", @"'")}";
+                    keyValue = $"{keyValue.TrimStart('\'').TrimEnd('\'', ' ').Replace(@"''", @"'", StringComparison.Ordinal)}";
                     header.Add(keyName, keyValue, keyComment);
-                } else if (keyValue.Contains(".")) {
+                } else if (keyValue.Contains(".", StringComparison.Ordinal)) {
                     if (double.TryParse(keyValue, NumberStyles.Float, CultureInfo.InvariantCulture, out var value)) {
                         header.Add(keyName, value, keyComment);
                     }
@@ -214,7 +214,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
                         header.Add(keyName, value, keyComment);
                     } else {
                         // Treat as a string
-                        keyValue = $"{keyValue.TrimStart('\'').TrimEnd('\'', ' ').Replace(@"''", @"'")}";
+                        keyValue = $"{keyValue.TrimStart('\'').TrimEnd('\'', ' ').Replace(@"''", @"'", StringComparison.Ordinal)}";
                         header.Add(keyName, keyValue, keyComment);
                     }
                 }
