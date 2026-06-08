@@ -19,7 +19,7 @@ using System.Text;
 
 namespace OpenAstroAra.Equipment.Equipment.MyGuider.MetaGuide {
 
-    public class MetaGuideBaseMsg {
+    public class MetaGuideBaseMsg : System.EventArgs {
 
         public override String ToString() {
             Type objType = this.GetType();

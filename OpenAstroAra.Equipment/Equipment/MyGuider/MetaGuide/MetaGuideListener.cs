@@ -27,35 +27,21 @@ using System.Threading.Tasks;
 
 namespace OpenAstroAra.Equipment.Equipment.MyGuider.MetaGuide {
 
-    public delegate void OnCameraDelegate(MetaGuideCameraMsg msg);
-
-    public delegate void OnStatusDelegate(MetaGuideStatusMsg msg);
-
-    public delegate void OnGuideDelegate(MetaGuideGuideMsg msg);
-
-    public delegate void OnGuideParamsDelegate(MetaGuideGuideParamsMsg msg);
-
-    public delegate void OnCalibrationInfoDelegate(MetaGuideCalibrationInfoMsg msg);
-
-    public delegate void OnMountDelegate(MetaGuideMountMsg msg);
-
-    public delegate void OnDisconnectedDelegate();
-
     public class MetaGuideListener {
 
-        public event OnCameraDelegate? OnCamera;
+        public event EventHandler<MetaGuideCameraMsg>? OnCamera;
 
-        public event OnStatusDelegate? OnStatus;
+        public event EventHandler<MetaGuideStatusMsg>? OnStatus;
 
-        public event OnGuideDelegate? OnGuide;
+        public event EventHandler<MetaGuideGuideMsg>? OnGuide;
 
-        public event OnGuideParamsDelegate? OnGuideParams;
+        public event EventHandler<MetaGuideGuideParamsMsg>? OnGuideParams;
 
-        public event OnCalibrationInfoDelegate? OnCalibrationInfo;
+        public event EventHandler<MetaGuideCalibrationInfoMsg>? OnCalibrationInfo;
 
-        public event OnMountDelegate? OnMount;
+        public event EventHandler<MetaGuideMountMsg>? OnMount;
 
-        public event OnDisconnectedDelegate? OnDisconnected;
+        public event EventHandler? OnDisconnected;
 
         private const int METAGUIDE_QUEUE_TIMEOUT_MS = 5000;
 
@@ -70,7 +56,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.MetaGuide {
                         case "CAMERA": {
                                 var parsedMessage = MetaGuideCameraMsg.Create(splitMessage);
                                 if (parsedMessage != null) {
-                                    this.OnCamera?.Invoke(parsedMessage);
+                                    this.OnCamera?.Invoke(this, parsedMessage);
                                 }
                             }
                             break;
@@ -78,7 +64,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.MetaGuide {
                         case "STATUS": {
                                 var parsedMessage = MetaGuideStatusMsg.Create(splitMessage);
                                 if (parsedMessage != null) {
-                                    this.OnStatus?.Invoke(parsedMessage);
+                                    this.OnStatus?.Invoke(this, parsedMessage);
                                 }
                             }
                             break;
@@ -86,7 +72,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.MetaGuide {
                         case "GUIDE": {
                                 var parsedMessage = MetaGuideGuideMsg.Create(splitMessage);
                                 if (parsedMessage != null) {
-                                    this.OnGuide?.Invoke(parsedMessage);
+                                    this.OnGuide?.Invoke(this, parsedMessage);
                                 }
                             }
                             break;
@@ -94,7 +80,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.MetaGuide {
                         case "GUIDEPARMS": {
                                 var parsedMessage = MetaGuideGuideParamsMsg.Create(splitMessage);
                                 if (parsedMessage != null) {
-                                    this.OnGuideParams?.Invoke(parsedMessage);
+                                    this.OnGuideParams?.Invoke(this, parsedMessage);
                                 }
                             }
                             break;
@@ -102,7 +88,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.MetaGuide {
                         case "CALINFO": {
                                 var parsedMessage = MetaGuideCalibrationInfoMsg.Create(splitMessage);
                                 if (parsedMessage != null) {
-                                    this.OnCalibrationInfo?.Invoke(parsedMessage);
+                                    this.OnCalibrationInfo?.Invoke(this, parsedMessage);
                                 }
                             }
                             break;
@@ -110,7 +96,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.MetaGuide {
                         case "MOUNTNAME": {
                                 var parsedMessage = MetaGuideMountMsg.Create(splitMessage);
                                 if (parsedMessage != null) {
-                                    this.OnMount?.Invoke(parsedMessage);
+                                    this.OnMount?.Invoke(this, parsedMessage);
                                 }
                             }
                             break;
@@ -186,7 +172,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.MetaGuide {
                     socket?.Close();
                     try { consumerTokenSource?.Cancel(); } catch { }
                     consumerTask?.WaitWithoutException(new CancellationTokenSource(METAGUIDE_QUEUE_TIMEOUT_MS).Token);
-                    this.OnDisconnected?.Invoke();
+                    this.OnDisconnected?.Invoke(this, System.EventArgs.Empty);
                 }
             }, ct);
         }

@@ -79,7 +79,7 @@ public sealed class HeadlessGuiderMediator : IGuiderMediator {
     public Task<bool> StopShifting(CancellationToken ct) => Task.FromResult(false);
     public LockPosition GetLockPosition() => new LockPosition(0f, 0f);
 
-    public event Func<object, EventArgs, Task>? AfterDither;
+    public event Func<object, EventArgs, Task>? Dithered;
     public event EventHandler<IGuideStep>? GuideEvent;
     public event Func<object, EventArgs, Task>? GuidingStarted;
     public event Func<object, EventArgs, Task>? GuidingStopped;

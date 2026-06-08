@@ -47,7 +47,7 @@ namespace OpenAstroAra.Equipment.Interfaces.Mediator {
 
         LockPosition GetLockPosition();
 
-        event Func<object, EventArgs, Task> AfterDither;
+        event Func<object, EventArgs, Task> Dithered;
 
         event EventHandler<IGuideStep> GuideEvent;
         event Func<object, EventArgs, Task> GuidingStarted;

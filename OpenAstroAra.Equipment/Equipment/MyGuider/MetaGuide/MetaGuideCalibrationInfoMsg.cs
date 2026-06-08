@@ -18,7 +18,7 @@ using System.Globalization;
 
 namespace OpenAstroAra.Equipment.Equipment.MyGuider.MetaGuide {
 
-    public class MetaGuideCalibrationInfoMsg {
+    public class MetaGuideCalibrationInfoMsg : MetaGuideBaseMsg {
 
         private MetaGuideCalibrationInfoMsg() {
         }
