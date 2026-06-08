@@ -54,6 +54,8 @@ namespace OpenAstroAra.Astrometry {
             }
 
         }
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "System.Timers.Timer silently swallows any exception that escapes an Elapsed handler (.NET 5+), so this background daily-refresh handler MUST catch everything to guarantee the error is logged. Narrowing the catch would let an unexpected exception vanish with no trace. CA1031 sanctions general catches at such log-and-continue boundaries.")]
         private void OnTimedEvent(object? source, ElapsedEventArgs e) {
             lock (DeepSkyObjects) {
                 try {
@@ -88,7 +90,7 @@ namespace OpenAstroAra.Astrometry {
                         Logger.Debug($"{nameof(DeepSkyObjectDailyRefresher)} -- Updated: {updated}; Pruned: {(count - DeepSkyObjects.Count)} / {count}");
 
                     }
-                } catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or IndexOutOfRangeException) {
+                } catch (Exception ex) {
                     Logger.Error(ex);
                 }
             }
