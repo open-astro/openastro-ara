@@ -103,7 +103,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
             return result;
         }
 
-        private void MoveOrDeleteFile(PlateSolveResult result, string file, string movedFilePrefix, CancellationToken cancelToken) {
+        private static void MoveOrDeleteFile(PlateSolveResult result, string file, string movedFilePrefix, CancellationToken cancelToken) {
             try {
                 if (!result.Success && !cancelToken.IsCancellationRequested) {
                     if (File.Exists(file)) {
@@ -116,12 +116,14 @@ namespace OpenAstroAra.PlateSolving.Solvers {
                 } else {
                     File.Delete(file);
                 }
-            } catch (Exception ex) {
+            } catch (IOException ex) {
+                Logger.Error(ex);
+            } catch (UnauthorizedAccessException ex) {
                 Logger.Error(ex);
             }
         }
 
-        protected async Task<string> PrepareAndSaveImage(IImageData source, CancellationToken cancelToken) {
+        protected static async Task<string> PrepareAndSaveImage(IImageData source, CancellationToken cancelToken) {
             FileSaveInfo fileSaveInfo = new FileSaveInfo {
                 FilePath = WORKING_DIRECTORY,
                 FilePattern = Path.GetRandomFileName(),
@@ -148,7 +150,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
                 throw new FileNotFoundException("Platesolver executable not found. Please point to the correct platesolver executable in platsolving options.", executableLocation);
             }
 
-            System.Diagnostics.Process process = new System.Diagnostics.Process();
+            using var process = new System.Diagnostics.Process();
             System.Diagnostics.ProcessStartInfo startInfo = new System.Diagnostics.ProcessStartInfo();
 
             startInfo.WindowStyle = System.Diagnostics.ProcessWindowStyle.Normal;

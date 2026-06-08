@@ -29,7 +29,7 @@ using System.Threading.Tasks;
 
 namespace OpenAstroAra.PlateSolving.Solvers {
 
-    internal class Dc3PinPointSolver : BaseSolver {
+    internal sealed class Dc3PinPointSolver : BaseSolver {
         private readonly Dc3PoinPointCatalogEnum catalogType;
         private readonly string catalogRootDir;
         private readonly double maxMagnitude;
@@ -76,8 +76,8 @@ namespace OpenAstroAra.PlateSolving.Solvers {
                     // Instantiate a new PinPoint object via its COM interface
                     try {
                         Type? PinPointType = Type.GetTypeFromProgID("PinPoint.Plate");
-                        pinPoint = Activator.CreateInstance(PinPointType ?? throw new ArgumentNullException(nameof(PinPointType)))!;
-                    } catch (ArgumentNullException) {
+                        pinPoint = Activator.CreateInstance(PinPointType ?? throw new InvalidOperationException("PinPoint.Plate COM component is not registered."))!;
+                    } catch (InvalidOperationException) {
                         Logger.Error($"Failed to initialize PinPoint. It or its 64bit component does not appear to be installed.");
 
                         if (!parameter.DisableNotifications) {
@@ -143,7 +143,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
                 }
             } catch (InvalidComObjectException) {
                 return plateSolveResult;
-            } catch (Exception ex) {
+            } catch (COMException ex) {
                 Notification.ShowExternalError(ex.Message, Loc.Instance["LblPinPointErrorMessage"]);
                 Logger.Error($"PinPoint failed to solve: {ex.GetType().Name}: {ex.Message}");
                 return plateSolveResult;
@@ -172,9 +172,9 @@ namespace OpenAstroAra.PlateSolving.Solvers {
 
             try {
                 Type? PinPointType = Type.GetTypeFromProgID("PinPoint.Plate");
-                dynamic pinPoint = Activator.CreateInstance(PinPointType ?? throw new ArgumentNullException(nameof(PinPointType)))!;
+                dynamic pinPoint = Activator.CreateInstance(PinPointType ?? throw new InvalidOperationException("PinPoint.Plate COM component is not registered."))!;
                 Marshal.ReleaseComObject(pinPoint);
-            } catch (ArgumentNullException) {
+            } catch (InvalidOperationException) {
             }
         }
     }

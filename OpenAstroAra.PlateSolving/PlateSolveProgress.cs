@@ -12,10 +12,12 @@
 
 #endregion "copyright"
 
+using System.Collections.Generic;
+
 namespace OpenAstroAra.PlateSolving {
 
     public class PlateSolveProgress {
-        public byte[]? Thumbnail { get; set; }
+        public IReadOnlyList<byte>? Thumbnail { get; set; }
 
         public PlateSolveResult? PlateSolveResult { get; set; }
     }

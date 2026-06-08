@@ -25,14 +25,17 @@ using System.Linq;
 
 namespace OpenAstroAra.PlateSolving.Solvers {
 
-    internal class ASTAPSolver : CLISolver {
+    internal sealed class ASTAPSolver : CLISolver {
 
-        public class ASTAPValidationFailedException : Exception {
+        public sealed class ASTAPValidationFailedException : Exception {
 
             internal ASTAPValidationFailedException(string reason) : base($"ASTAP validation failed: {reason}") {
             }
 
             public ASTAPValidationFailedException() {
+            }
+
+            public ASTAPValidationFailedException(string message, Exception innerException) : base(message, innerException) {
             }
         }
 
@@ -55,7 +58,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
 
             var dict = File.ReadLines(outputFilePath)
                 .Where(line => !string.IsNullOrWhiteSpace(line))
-                .Select(line => line.Split(new char[] { '=' }, 2, 0))
+                .Select(line => line.Split('=', 2, StringSplitOptions.None))
                 .ToDictionary(parts => parts[0], parts => parts[1]);
 
             dict.TryGetValue("WARNING", out var warning);
@@ -64,7 +67,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
                 dict.TryGetValue("ERROR", out var error);
                 Logger.Error($"ASTAP - Plate solve failed.{Environment.NewLine}{warning}{Environment.NewLine}{error}");
                 if (!parameter.DisableNotifications) {
-                    Notification.ShowError(String.Format(Loc.Instance["LblASTAPSolveFailed"], warning, error));
+                    Notification.ShowError(String.Format(CultureInfo.CurrentCulture, Loc.Instance["LblASTAPSolveFailed"], warning, error));
                 }
                 return result;
             }

@@ -37,7 +37,7 @@ using System.Threading;
 using System.Threading.Tasks;
 
 namespace OpenAstroAra.PlateSolving.Solvers {
-    internal class TheSkyXImageLinkSolver : BaseSolver {
+    internal sealed class TheSkyXImageLinkSolver : BaseSolver {
 
         private string _tsxHost;
         private int _tsxPort;
@@ -64,7 +64,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
 
                     // Execute the TSX script
                     progress?.Report(new ApplicationStatus() { Status = "Solving image with TheSkyX Imagelink..." });
-                    imageLink.Execute(imagePath.Replace(@"\", "/"), imageScale: imageProperties.ArcSecPerPixel, isUnknownScale: true);
+                    imageLink.Execute(imagePath.Replace(@"\", "/", StringComparison.Ordinal), imageScale: imageProperties.ArcSecPerPixel, isUnknownScale: true);
 
                     // Get the results of the last ImageLInk
                     progress?.Report(new ApplicationStatus() { Status = $"Retrieving results for requested image..." });
@@ -106,22 +106,34 @@ namespace OpenAstroAra.PlateSolving.Solvers {
                 }
             } catch (OperationCanceledException) {
                 result.Success = false;
-            } catch (Exception ex) {
-                result.Success = false;
+            } catch (SocketException ex) {
+                ReportSolveFailure(ex);
+            } catch (IOException ex) {
+                ReportSolveFailure(ex);
+            } catch (InvalidDataException ex) {
+                ReportSolveFailure(ex);
+            } catch (FormatException ex) {
+                ReportSolveFailure(ex);
+            } catch (JsonException ex) {
+                ReportSolveFailure(ex);
+            } catch (ImageLink.TheSkyXException ex) {
+                ReportSolveFailure(ex);
+            }
 
-                //var errorMessage = $"Error plate solving with TheSkyX Imagelink. {ex.Message}";
+            return result;
+
+            void ReportSolveFailure(Exception ex) {
+                result.Success = false;
                 progress?.Report(new ApplicationStatus() { Status = ex.Message });
                 if (!parameter.DisableNotifications) {
                     Logger.Error(ex.Message);
                     Notification.ShowError(ex.Message);
                 }
             }
-
-            return result;
         }
 
 
-        private void MoveOrDeleteFile(PlateSolveResult result, string file, string movedFilePrefix, CancellationToken cancelToken) {
+        private static void MoveOrDeleteFile(PlateSolveResult result, string file, string movedFilePrefix, CancellationToken cancelToken) {
             try {
                 if (!result.Success && !cancelToken.IsCancellationRequested) {
                     if (File.Exists(file)) {
@@ -134,12 +146,14 @@ namespace OpenAstroAra.PlateSolving.Solvers {
                 } else {
                     File.Delete(file);
                 }
-            } catch (Exception ex) {
+            } catch (IOException ex) {
+                Logger.Error(ex);
+            } catch (UnauthorizedAccessException ex) {
                 Logger.Error(ex);
             }
         }
 
-        protected async Task<string> PrepareAndSaveImage(IImageData source, CancellationToken cancelToken) {
+        private static async Task<string> PrepareAndSaveImage(IImageData source, CancellationToken cancelToken) {
             FileSaveInfo fileSaveInfo = new FileSaveInfo {
                 FilePath = WORKING_DIRECTORY,
                 FilePattern = Path.GetRandomFileName(),
@@ -152,6 +166,8 @@ namespace OpenAstroAra.PlateSolving.Solvers {
     }
 
     internal sealed class ImageLink {
+        private static readonly JsonSerializerOptions CaseInsensitiveJsonOptions = new() { PropertyNameCaseInsensitive = true };
+
         internal ImageLink(EndPoint endpoint) {
             this.EndPoint = endpoint;
         }
@@ -162,10 +178,10 @@ namespace OpenAstroAra.PlateSolving.Solvers {
 
         public void Execute(string pathToFITS, double imageScale = 2.00, bool isUnknownScale = true) {
             var script = new StringBuilder();
-            script.AppendLine($"ImageLink.scale = {imageScale};");
-            script.AppendLine($"ImageLink.unknownScale = {(isUnknownScale ? 1 : 0)};");
+            script.AppendLine(CultureInfo.InvariantCulture, $"ImageLink.scale = {imageScale};");
+            script.AppendLine(CultureInfo.InvariantCulture, $"ImageLink.unknownScale = {(isUnknownScale ? 1 : 0)};");
 
-            script.AppendLine($"ImageLink.pathToFITS = '{pathToFITS?.Trim()}';");
+            script.AppendLine(CultureInfo.InvariantCulture, $"ImageLink.pathToFITS = '{pathToFITS?.Trim()}';");
             script.AppendLine("ImageLink.execute();");
 
             this.SendToTheSkyX(script.ToString(), out var errorMessage);
@@ -214,7 +230,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
                     throw new InvalidDataException("No response received.");
                 }
 
-                int.TryParse(model, out var result);
+                _ = int.TryParse(model, out var result);
                 return result == 1;
             }
             set {
@@ -230,7 +246,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
                     throw new InvalidDataException("No response received.");
                 }
 
-                int.TryParse(model, out var result);
+                _ = int.TryParse(model, out var result);
                 return result == 1;
             }
         }
@@ -243,7 +259,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
                     throw new InvalidDataException("No response received.");
                 }
 
-                int.TryParse(model, out var result);
+                _ = int.TryParse(model, out var result);
                 return result;
             }
         }
@@ -276,7 +292,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
 
             var result = this.SendToTheSkyX(sb.ToString(), 2048, out var errorMessage);
 
-            var model = JsonSerializer.Deserialize<ImageLinkResults>(result, new JsonSerializerOptions() { PropertyNameCaseInsensitive = true });
+            var model = JsonSerializer.Deserialize<ImageLinkResults>(result, CaseInsensitiveJsonOptions);
             return model;
         }
 
@@ -317,7 +333,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
                 }
             }
 
-            if (resultText.StartsWith("{\"lst\":") == false) {
+            if (resultText.StartsWith("{\"lst\":", StringComparison.Ordinal) == false) {
                 Console.WriteLine(resultText);
             }
 
@@ -331,8 +347,8 @@ namespace OpenAstroAra.PlateSolving.Solvers {
 
                 // The errorMessage that TSX appends seems to be meaningless.  If the script errors out, it does not use that, but returns the error string and then sets the statusMessage to "No Error".  
                 // Kinda stupid.  We will work around that below when we find issues.
-                if (resultText.StartsWith("TypeError: ") || errorMessage.StartsWith("TypeError: ")) {
-                    if (resultText.StartsWith("TypeError: ")) {
+                if (resultText.StartsWith("TypeError: ", StringComparison.Ordinal) || errorMessage.StartsWith("TypeError: ", StringComparison.Ordinal)) {
+                    if (resultText.StartsWith("TypeError: ", StringComparison.Ordinal)) {
                         errorMessage = resultText;
                     }
 
@@ -343,11 +359,11 @@ namespace OpenAstroAra.PlateSolving.Solvers {
 
                     if (match.Groups.Count > 2) {
                         errorMessage = match.Groups[1]?.Value?.Trim() ?? string.Empty;
-                        int.TryParse(match.Groups[2]?.Value?.Trim(), out var errorCode);
+                        _ = int.TryParse(match.Groups[2]?.Value?.Trim(), out var errorCode);
 
                         throw new TheSkyXException(errorMessage, errorCode);
                     }
-                } else if (resultText.StartsWith("ParseError")) {
+                } else if (resultText.StartsWith("ParseError", StringComparison.Ordinal)) {
                     errorMessage = resultText;
                     resultText = string.Empty;
                 }
@@ -362,6 +378,9 @@ namespace OpenAstroAra.PlateSolving.Solvers {
         }
 
 
+        [System.Diagnostics.CodeAnalysis.SuppressMessage(
+            "Performance", "CA1812:Avoid uninstantiated internal classes",
+            Justification = "Instantiated by System.Text.Json deserialization in GetLastImageLinkResults; the analyzer cannot see reflection-based construction.")]
         public sealed class ImageLinkResults {
             public int ErrorCode { get; set; }
 
@@ -400,8 +419,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
             public int CatalogStarCount { get; set; }
         }
 
-        [Serializable]
-        public class TheSkyXException : Exception {
+        public sealed class TheSkyXException : Exception {
             public TheSkyXException(string message) : base(message) {
             }
 
@@ -414,9 +432,6 @@ namespace OpenAstroAra.PlateSolving.Solvers {
             } = -1;
 
             public TheSkyXException(string message, Exception innerException) : base(message, innerException) {
-            }
-
-            protected TheSkyXException(SerializationInfo info, StreamingContext context) : base(info, context) {
             }
 
             public TheSkyXException() {

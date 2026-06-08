@@ -21,7 +21,7 @@ using System.IO;
 
 namespace OpenAstroAra.PlateSolving.Solvers {
 
-    internal class Platesolve3Solver : CLISolver {
+    internal sealed class Platesolve3Solver : CLISolver {
 
         public Platesolve3Solver(string executableLocation)
             : base(executableLocation) {
@@ -87,7 +87,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
                     string? line;
                     int linenr = 0;
                     while ((line = s.ReadLine()) != null) {
-                        if (linenr == 0 && line.ToLower() != "true") {
+                        if (linenr == 0 && !line.Equals("true", StringComparison.OrdinalIgnoreCase)) {
                             // If platesolving succeeds it will start with a line containing True
                             return result;
                         }

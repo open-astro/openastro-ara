@@ -56,7 +56,7 @@ namespace OpenAstroAra.PlateSolving {
         }
 
         public async Task<PlateSolveResult> Center(CaptureSequence seq, CenterSolveParameter parameter, IProgress<PlateSolveProgress>? solveProgress, IProgress<ApplicationStatus>? progress, CancellationToken ct) {
-            if (parameter == null) { throw new ArgumentNullException(nameof(parameter)); }
+            ArgumentNullException.ThrowIfNull(parameter);
             if (parameter.Coordinates == null) { throw new ArgumentException(nameof(CenterSolveParameter.Coordinates)); }
             if (parameter.Threshold <= 0) { throw new ArgumentException(nameof(CenterSolveParameter.Threshold)); }
 
@@ -167,7 +167,7 @@ namespace OpenAstroAra.PlateSolving {
 
                     // Set an absurdly high timeout, but at least make sure that this cannot go on forever. The existing token may have been cancelled already, so we need
                     // to use a new one
-                    var timeoutCts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+                    using var timeoutCts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
                     await filterWheelMediator.ChangeFilter(oldFilter, timeoutCts.Token, progress);
                 }
             }
@@ -175,8 +175,8 @@ namespace OpenAstroAra.PlateSolving {
     }
 
     public class CenteringSolveResult : PlateSolveResult {
-        private List<CenteringMeasurement> attempts;
-        public CenteringSolveResult(PlateSolveResult result, CaptureSequence captureSequence, DateTimeOffset startTime, DateTimeOffset endTime, List<CenteringMeasurement> attempts) : base(result.SolveTime) {
+        private readonly IReadOnlyList<CenteringMeasurement> attempts;
+        public CenteringSolveResult(PlateSolveResult result, CaptureSequence captureSequence, DateTimeOffset startTime, DateTimeOffset endTime, IReadOnlyList<CenteringMeasurement> attempts) : base(result.SolveTime) {
             this.Coordinates = result.Coordinates;
             this.Flipped = result.Flipped;
             this.Pixscale = result.Pixscale;
@@ -191,7 +191,7 @@ namespace OpenAstroAra.PlateSolving {
             this.attempts = attempts;
         }
 
-        public IReadOnlyCollection<CenteringMeasurement> Attempts { get => attempts.AsReadOnly(); }
+        public IReadOnlyCollection<CenteringMeasurement> Attempts { get => attempts; }
         public CaptureSequence CaptureSequence { get; set; }
         public DateTimeOffset StartTime { get; }
         public DateTimeOffset EndTime { get; set; }

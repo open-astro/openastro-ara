@@ -20,7 +20,7 @@ using System.IO;
 
 namespace OpenAstroAra.PlateSolving.Solvers {
 
-    internal class Platesolve2Solver : CLISolver {
+    internal sealed class Platesolve2Solver : CLISolver {
 
         public Platesolve2Solver(string executableLocation)
             : base(executableLocation) {
@@ -43,7 +43,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
                     AstroUtil.ToRadians(coordinates.Dec).ToString(CultureInfo.InvariantCulture),
                     AstroUtil.ToRadians(imageProperties.FoVW).ToString(CultureInfo.InvariantCulture),
                     AstroUtil.ToRadians(imageProperties.FoVH).ToString(CultureInfo.InvariantCulture),
-                    parameter.Regions.ToString(),
+                    parameter.Regions.ToString(CultureInfo.InvariantCulture),
                     imageFilePath,
                     "0"
             };
@@ -74,7 +74,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
                                 if (resultArr.Length == 5) {
                                     /* workaround for when decimal separator is comma instead of point.
                                      won't work when result contains even numbers tho... */
-                                    status = int.Parse(resultArr[4]);
+                                    status = int.Parse(resultArr[4], CultureInfo.InvariantCulture);
                                     if (status != 1) {
                                         /* error */
                                         result.Success = false;
@@ -84,7 +84,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
                                     ra = double.Parse(resultArr[0] + "." + resultArr[1], CultureInfo.InvariantCulture);
                                     dec = double.Parse(resultArr[2] + "." + resultArr[3], CultureInfo.InvariantCulture);
                                 } else {
-                                    status = int.Parse(resultArr[2]);
+                                    status = int.Parse(resultArr[2], CultureInfo.InvariantCulture);
                                     if (status != 1) {
                                         /* error */
                                         result.Success = false;

@@ -69,11 +69,7 @@ namespace OpenAstroAra.PlateSolving {
 
                     ct.ThrowIfCancellationRequested();
 
-                    if (renderedImage != null) {
-                        plateSolveResult = await ImageSolver.Solve(renderedImage.RawImageData, parameter, progress, ct);
-                    } else {
-                        plateSolveResult = new PlateSolveResult() { Success = false };
-                    }
+                    plateSolveResult = await ImageSolver.Solve(renderedImage.RawImageData, parameter, progress, ct);
 
                     solveProgress?.Report(
                         new PlateSolveProgress {

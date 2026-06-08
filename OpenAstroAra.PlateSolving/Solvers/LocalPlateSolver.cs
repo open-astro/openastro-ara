@@ -21,7 +21,7 @@ using System.IO;
 
 namespace OpenAstroAra.PlateSolving.Solvers {
 
-    internal class LocalPlateSolver : CLISolver {
+    internal sealed class LocalPlateSolver : CLISolver {
         private string bashLocation;
 
         public LocalPlateSolver(string cygwinRoot)
@@ -51,8 +51,8 @@ namespace OpenAstroAra.PlateSolving.Solvers {
             var lowArcSecPerPix = imageProperties.ArcSecPerPixel - 0.2;
             var highArcSecPerPix = imageProperties.ArcSecPerPixel + 0.2;
             options.Add("--scale-units arcsecperpix");
-            options.Add(string.Format("-L {0}", lowArcSecPerPix.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)));
-            options.Add(string.Format("-H {0}", highArcSecPerPix.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)));
+            options.Add(string.Format(CultureInfo.InvariantCulture, "-L {0}", lowArcSecPerPix.ToString("0.00", CultureInfo.InvariantCulture)));
+            options.Add(string.Format(CultureInfo.InvariantCulture, "-H {0}", highArcSecPerPix.ToString("0.00", CultureInfo.InvariantCulture)));
 
             if (parameter.SearchRadius > 0 && parameter.Coordinates != null) {
                 options.Add($"--ra {parameter.Coordinates.RADegrees.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)}");
@@ -60,7 +60,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
                 options.Add($"--radius {parameter.SearchRadius.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)}");
             }
 
-            return string.Format("/C \"\"{0}\" --login -c '/usr/bin/solve-field {1} \"{2}\"'\"", bashLocation, string.Join(" ", options), imageFilePath.Replace("\\", "/"));
+            return string.Format(CultureInfo.InvariantCulture, "/C \"\"{0}\" --login -c '/usr/bin/solve-field {1} \"{2}\"'\"", bashLocation, string.Join(" ", options), imageFilePath.Replace("\\", "/", StringComparison.Ordinal));
         }
 
         protected override PlateSolveResult ReadResult(string outputFilePath, PlateSolveParameter parameter, PlateSolveImageProperties imageProperties) {
@@ -72,7 +72,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
                 startInfo.UseShellExecute = false;
                 startInfo.RedirectStandardOutput = true;
                 startInfo.CreateNoWindow = true;
-                startInfo.Arguments = string.Format("/C \"\"{0}\" --login -c 'wcsinfo \"{1}\"'\"", bashLocation, outputFilePath.Replace("\\", "/"));
+                startInfo.Arguments = string.Format(CultureInfo.InvariantCulture, "/C \"\"{0}\" --login -c 'wcsinfo \"{1}\"'\"", bashLocation, outputFilePath.Replace("\\", "/", StringComparison.Ordinal));
                 using (var process = new System.Diagnostics.Process()) {
                     process.StartInfo = startInfo;
                     process.Start();

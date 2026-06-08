@@ -22,7 +22,7 @@ using System.Text;
 
 namespace OpenAstroAra.PlateSolving.Solvers {
 
-    internal class AllSkyPlateSolver : CLISolver {
+    internal sealed class AllSkyPlateSolver : CLISolver {
 
         public AllSkyPlateSolver(string executableLocation)
             : base(executableLocation) {
@@ -71,7 +71,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
             PlateSolveImageProperties imageProperties) {
             var args = new List<string>();
 
-            var imageFilePathArg = imageFilePath.Replace("\\", "/");
+            var imageFilePathArg = imageFilePath.Replace("\\", "/", StringComparison.Ordinal);
             //FileName
             args.Add($"\"{imageFilePathArg}\"");
 

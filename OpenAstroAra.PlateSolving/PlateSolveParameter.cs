@@ -33,7 +33,7 @@ namespace OpenAstroAra.PlateSolving {
         public int DownSampleFactor { get; set; }
         public int MaxObjects { get; set; }
 
-        public bool DisableNotifications { get; set; } = false;
+        public bool DisableNotifications { get; set; }
 
         public bool BlindFailoverEnabled { get; set; } = true;
 
