@@ -35,7 +35,7 @@ using System.Windows.Input;
 
 namespace OpenAstroAra.Sequencer {
 
-    public partial class TemplateController : BaseINPC {
+    public sealed partial class TemplateController : BaseINPC, IDisposable {
         private readonly SequenceJsonConverter sequenceJsonConverter;
         private readonly IProfileService profileService;
         private readonly string defaultTemplatePath;
@@ -87,11 +87,11 @@ namespace OpenAstroAra.Sequencer {
                         var container = sequenceJsonConverter.Deserialize(File.ReadAllText(file)) as ISequenceContainer;
                         if (container is ISequenceRootContainer) continue;
                         Templates.Add(new TemplatedSequenceContainer(profileService, DefaultTemplatesGroup, container));
-                    } catch (Exception ex) {
+                    } catch (Exception ex) when (ex is Newtonsoft.Json.JsonException or IOException or UnauthorizedAccessException or InvalidCastException) {
                         Logger.Error("Invalid template JSON", ex);
                     }
                 }
-            } catch (Exception ex) {
+            } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
                 Logger.Error("Error occurred while loading default templates", ex);
             }
 
@@ -114,11 +114,11 @@ namespace OpenAstroAra.Sequencer {
                 profileService.ProfileChanged += ProfileService_ProfileChanged;
                 activeSequenceSettings = profileService.ActiveProfile.SequenceSettings;
                 activeSequenceSettings.PropertyChanged += SequenceSettings_SequencerTemplatesFolderChanged;
-            });
+            }, TaskScheduler.Default);
         }
 
         private bool ApplyViewFilter(object obj) {
-            return obj is TemplatedSequenceContainer template && template.Container.Name.IndexOf(ViewFilter, StringComparison.OrdinalIgnoreCase) >= 0;
+            return obj is TemplatedSequenceContainer template && template.Container.Name.Contains(ViewFilter, StringComparison.OrdinalIgnoreCase);
         }
 
         private async void SequenceTemplateFolderWatcher_Changed(object? sender, FileSystemEventArgs e) {
@@ -178,15 +178,15 @@ namespace OpenAstroAra.Sequencer {
 
                     foreach (var file in files) {
                         try {
-                            var container = sequenceJsonConverter.Deserialize(File.ReadAllText(file));
+                            var container = sequenceJsonConverter.Deserialize(await File.ReadAllTextAsync(file));
                             if (container is ISequenceRootContainer) continue;
                             var template = new TemplatedSequenceContainer(profileService, UserTemplatesGroup, container);
                             var fileInfo = new FileInfo(file);
-                            container.Name = fileInfo.Name.Replace(TemplateFileExtension, "");
+                            container.Name = fileInfo.Name.Replace(TemplateFileExtension, "", StringComparison.Ordinal);
                             var parts = (fileInfo.Directory?.FullName ?? string.Empty).Split(new char[] { Path.DirectorySeparatorChar }, System.StringSplitOptions.RemoveEmptyEntries);
                             template.SubGroups = parts.Except(rootParts).ToArray();
                             Templates.Add(template);
-                        } catch (Exception ex) {
+                        } catch (Exception ex) when (ex is Newtonsoft.Json.JsonException or IOException or UnauthorizedAccessException or InvalidCastException) {
                             Logger.Error("Invalid template JSON", ex);
                         }
                         TemplatesLoadingProgress++;
@@ -196,11 +196,11 @@ namespace OpenAstroAra.Sequencer {
                         try {
                             TemplatesView.Refresh();
                             TemplatesMenuView.Refresh();
-                        } catch (Exception ex) {
+                        } catch (InvalidOperationException ex) {
                             Logger.Error(ex);
                         }
                     });
-                } catch (Exception ex) {
+                } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or Newtonsoft.Json.JsonException or InvalidOperationException) {
                     Logger.Error(ex);
                     Notifier.ShowError(Loc.Instance["Lbl_SequenceTemplateController_LoadUserTemplatesFailed"]);
                 } finally {
@@ -221,11 +221,11 @@ namespace OpenAstroAra.Sequencer {
                     dso.Target = dso.Target;
                 }
 
-                var path = existingTemplate == null ? userTemplatePath : Path.Combine(userTemplatePath, Path.Combine(existingTemplate.SubGroups));
+                var path = existingTemplate == null ? userTemplatePath : Path.Combine(userTemplatePath, Path.Combine(existingTemplate.SubGroups.ToArray()));
 
                 var jsonContainer = sequenceJsonConverter.Serialize(sequenceContainer);
                 File.WriteAllText(Path.Combine(path, GetTemplateFileName(sequenceContainer)), jsonContainer);
-            } catch (Exception ex) {
+            } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or Newtonsoft.Json.JsonException) {
                 Logger.Error(ex);
                 Notifier.ShowError(Loc.Instance["Lbl_SequenceTemplateController_AddNewTemplateFailed"]);
             }
@@ -234,15 +234,20 @@ namespace OpenAstroAra.Sequencer {
         public void DeleteUserTemplate(TemplatedSequenceContainer sequenceContainer) {
             try {
                 if (sequenceContainer == null) return;
-                File.Delete(Path.Combine(userTemplatePath, Path.Combine(sequenceContainer.SubGroups), GetTemplateFileName(sequenceContainer.Container)));
-            } catch (Exception ex) {
+                File.Delete(Path.Combine(userTemplatePath, Path.Combine(sequenceContainer.SubGroups.ToArray()), GetTemplateFileName(sequenceContainer.Container)));
+            } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
                 Logger.Error(ex);
                 Notifier.ShowError(Loc.Instance["Lbl_SequenceTemplateController_DeleteTemplateFailed"]);
             }
         }
 
-        private string GetTemplateFileName(ISequenceContainer container) {
+        private static string GetTemplateFileName(ISequenceContainer container) {
             return OpenAstroAra.Core.Utility.CoreUtil.ReplaceAllInvalidFilenameChars(container.Name) + TemplateFileExtension;
+        }
+
+        public void Dispose() {
+            sequenceTemplateFolderWatcher?.Dispose();
+            GC.SuppressFinalize(this);
         }
     }
 
@@ -251,14 +256,14 @@ namespace OpenAstroAra.Sequencer {
         public TemplatedSequenceContainer(IProfileService profileService, string group, ISequenceContainer container) {
             Group = group;
             Container = container;
-            SubGroups = new string[0];
+            SubGroups = Array.Empty<string>();
             this.profileService = profileService;
         }
 
-        public string GroupTranslated => Loc.Instance[Group] + " › " + (SubGroups.Length > 0 ? $"{string.Join(" › ", SubGroups)}" : "Base");
+        public string GroupTranslated => Loc.Instance[Group] + " › " + (SubGroups.Count > 0 ? $"{string.Join(" › ", SubGroups)}" : "Base");
 
         public string Group { get; }
-        public string[] SubGroups { get; set; }
+        public IReadOnlyList<string> SubGroups { get; set; }
 
         private IProfileService profileService;
 
