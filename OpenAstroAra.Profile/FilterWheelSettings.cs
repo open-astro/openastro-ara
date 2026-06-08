@@ -23,7 +23,11 @@ namespace OpenAstroAra.Profile {
 
     [Serializable()]
     [DataContract]
-    public class FilterWheelSettings : Settings, IFilterWheelSettings {
+    public sealed class FilterWheelSettings : Settings, IFilterWheelSettings {
+
+        public FilterWheelSettings() {
+            SetDefaultValues();
+        }
 
         [OnDeserializing]
         public void OnDeserializing(StreamingContext context) {

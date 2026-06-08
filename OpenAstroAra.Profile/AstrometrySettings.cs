@@ -23,7 +23,11 @@ namespace OpenAstroAra.Profile {
 
     [Serializable()]
     [DataContract]
-    public class AstrometrySettings : Settings, IAstrometrySettings {
+    public sealed class AstrometrySettings : Settings, IAstrometrySettings {
+
+        public AstrometrySettings() {
+            SetDefaultValues();
+        }
 
         [OnDeserializing]
         public void OnDeserializing(StreamingContext context) {

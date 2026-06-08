@@ -88,14 +88,15 @@ namespace OpenAstroAra.Profile.Interfaces {
 namespace OpenAstroAra.Profile {
     [Serializable()]
     [DataContract]
-    public partial class PluginSettings : Settings, IPluginSettings {
+    public sealed partial class PluginSettings : Settings, IPluginSettings {
         public PluginSettings() {
-            pluginStorage = new Dictionary<Guid, IDictionary<string, object>>();
+            SetDefaultValues();
         }
 
         [DataMember]
         private Dictionary<Guid, IDictionary<string, object>> pluginStorage { get; set; }
 
+        [System.Diagnostics.CodeAnalysis.MemberNotNull(nameof(pluginStorage))]
         protected override void SetDefaultValues() {
             pluginStorage = new Dictionary<Guid, IDictionary<string, object>>();
         }

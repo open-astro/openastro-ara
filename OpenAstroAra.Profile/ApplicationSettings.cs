@@ -27,7 +27,11 @@ namespace OpenAstroAra.Profile {
 
     [Serializable()]
     [DataContract]
-    public class ApplicationSettings : Settings, IApplicationSettings {
+    public sealed class ApplicationSettings : Settings, IApplicationSettings {
+
+        public ApplicationSettings() {
+            SetDefaultValues();
+        }
 
         [OnDeserializing]
         public void OnDeserializing(StreamingContext context) {

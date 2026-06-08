@@ -23,6 +23,10 @@ namespace OpenAstroAra.Profile {
     [DataContract]
     internal sealed class RotatorSettings : Settings, IRotatorSettings {
 
+        public RotatorSettings() {
+            SetDefaultValues();
+        }
+
         [OnDeserializing]
         public void OnDeserializing(StreamingContext context) {
             SetDefaultValues();

@@ -22,7 +22,11 @@ namespace OpenAstroAra.Profile {
 
     [Serializable()]
     [DataContract]
-    public class ImageFileSettings : Settings, IImageFileSettings {
+    public sealed class ImageFileSettings : Settings, IImageFileSettings {
+
+        public ImageFileSettings() {
+            SetDefaultValues();
+        }
 
         [OnDeserializing]
         public void OnDeserializing(StreamingContext context) {

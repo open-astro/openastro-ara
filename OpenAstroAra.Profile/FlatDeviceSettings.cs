@@ -24,9 +24,10 @@ namespace OpenAstroAra.Profile {
 
     [Serializable]
     [DataContract]
-    public class FlatDeviceSettings : Settings, IFlatDeviceSettings {
+    public sealed class FlatDeviceSettings : Settings, IFlatDeviceSettings {
 
         public FlatDeviceSettings() {
+            SetDefaultValues();
             // FilterSettings + its key/value types are obsolete (superseded by
             // TrainedFlatExposureSettings) but kept here so legacy profiles still
             // deserialize and migrate; obsolete-usage warnings are expected.

@@ -20,7 +20,11 @@ namespace OpenAstroAra.Profile {
 
     [Serializable()]
     [DataContract]
-    public class WeatherDataSettings : Settings, IWeatherDataSettings {
+    public sealed class WeatherDataSettings : Settings, IWeatherDataSettings {
+
+        public WeatherDataSettings() {
+            SetDefaultValues();
+        }
 
         [OnDeserializing]
         public void OnDeserializing(StreamingContext context) {

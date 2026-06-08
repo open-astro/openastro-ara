@@ -21,7 +21,11 @@ namespace OpenAstroAra.Profile {
 
     [Serializable()]
     [DataContract]
-    public class FramingAssistantSettings : Settings, IFramingAssistantSettings {
+    public sealed class FramingAssistantSettings : Settings, IFramingAssistantSettings {
+
+        public FramingAssistantSettings() {
+            SetDefaultValues();
+        }
 
         [OnDeserializing]
         public void OnDeserializing(StreamingContext context) {

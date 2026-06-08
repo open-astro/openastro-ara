@@ -21,7 +21,11 @@ namespace OpenAstroAra.Profile {
 
     [Serializable()]
     [DataContract]
-    public class DomeSettings : Settings, IDomeSettings {
+    public sealed class DomeSettings : Settings, IDomeSettings {
+
+        public DomeSettings() {
+            SetDefaultValues();
+        }
 
         [OnDeserializing]
         public void OnDeserializing(StreamingContext context) {

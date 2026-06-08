@@ -21,7 +21,7 @@ namespace OpenAstroAra.Profile {
 
     [Serializable()]
     [DataContract]
-    public class SequenceSettings : Settings, ISequenceSettings {
+    public sealed class SequenceSettings : Settings, ISequenceSettings {
 
         public SequenceSettings() {
             SetDefaultValues();

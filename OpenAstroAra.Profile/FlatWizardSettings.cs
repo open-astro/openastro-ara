@@ -22,7 +22,11 @@ namespace OpenAstroAra.Profile {
 
     [Serializable()]
     [DataContract]
-    public class FlatWizardSettings : Settings, IFlatWizardSettings {
+    public sealed class FlatWizardSettings : Settings, IFlatWizardSettings {
+
+        public FlatWizardSettings() {
+            SetDefaultValues();
+        }
 
         [OnDeserializing]
         public void OnDeserializing(StreamingContext context) {

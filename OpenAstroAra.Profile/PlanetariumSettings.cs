@@ -21,7 +21,11 @@ namespace OpenAstroAra.Profile {
 
     [Serializable()]
     [DataContract]
-    public class PlanetariumSettings : Settings, IPlanetariumSettings {
+    public sealed class PlanetariumSettings : Settings, IPlanetariumSettings {
+
+        public PlanetariumSettings() {
+            SetDefaultValues();
+        }
 
         [OnDeserializing]
         public void OnDeserializing(StreamingContext context) {

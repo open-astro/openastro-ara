@@ -22,7 +22,11 @@ namespace OpenAstroAra.Profile {
 
     [Serializable()]
     [DataContract]
-    public class CameraSettings : Settings, ICameraSettings {
+    public sealed class CameraSettings : Settings, ICameraSettings {
+
+        public CameraSettings() {
+            SetDefaultValues();
+        }
 
         [OnDeserializing]
         public void OnDeserializing(StreamingContext context) {

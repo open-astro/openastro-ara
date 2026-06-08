@@ -21,7 +21,11 @@ namespace OpenAstroAra.Profile {
 
     [Serializable()]
     [DataContract]
-    public class FocuserSettings : Settings, IFocuserSettings {
+    public sealed class FocuserSettings : Settings, IFocuserSettings {
+
+        public FocuserSettings() {
+            SetDefaultValues();
+        }
 
         [OnDeserializing]
         public void OnDeserializing(StreamingContext context) {

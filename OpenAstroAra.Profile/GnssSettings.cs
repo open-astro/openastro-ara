@@ -21,7 +21,11 @@ namespace OpenAstroAra.Profile {
 
     [Serializable()]
     [DataContract]
-    public class GnssSettings : Settings, IGnssSettings {
+    public sealed class GnssSettings : Settings, IGnssSettings {
+
+        public GnssSettings() {
+            SetDefaultValues();
+        }
 
         [OnDeserializing]
         public void OnDeserializing(StreamingContext context) {

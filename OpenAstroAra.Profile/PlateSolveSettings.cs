@@ -25,7 +25,11 @@ namespace OpenAstroAra.Profile {
 
     [Serializable()]
     [DataContract]
-    public partial class PlateSolveSettings : Settings, IPlateSolveSettings {
+    public sealed partial class PlateSolveSettings : Settings, IPlateSolveSettings {
+
+        public PlateSolveSettings() {
+            SetDefaultValues();
+        }
         private PlateSolver plateSolverType = PlateSolver.ASTAP;
 
         [OnDeserializing]

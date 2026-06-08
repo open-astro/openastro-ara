@@ -20,7 +20,11 @@ namespace OpenAstroAra.Profile {
 
     [Serializable()]
     [DataContract]
-    public class MeridianFlipSettings : Settings, IMeridianFlipSettings {
+    public sealed class MeridianFlipSettings : Settings, IMeridianFlipSettings {
+
+        public MeridianFlipSettings() {
+            SetDefaultValues();
+        }
 
         [OnDeserializing]
         public void OnDeserializing(StreamingContext context) {

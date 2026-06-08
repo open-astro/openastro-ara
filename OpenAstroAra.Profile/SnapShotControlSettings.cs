@@ -18,7 +18,11 @@ using System.Runtime.Serialization;
 
 namespace OpenAstroAra.Profile {
 
-    public class SnapShotControlSettings : Settings, ISnapShotControlSettings {
+    public sealed class SnapShotControlSettings : Settings, ISnapShotControlSettings {
+
+        public SnapShotControlSettings() {
+            SetDefaultValues();
+        }
 
         [OnDeserializing]
         public void OnDeserializing(StreamingContext context) {

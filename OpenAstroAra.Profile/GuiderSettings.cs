@@ -22,7 +22,11 @@ namespace OpenAstroAra.Profile {
 
     [Serializable()]
     [DataContract]
-    public class GuiderSettings : Settings, IGuiderSettings {
+    public sealed class GuiderSettings : Settings, IGuiderSettings {
+
+        public GuiderSettings() {
+            SetDefaultValues();
+        }
 
         [OnDeserializing]
         public void OnDeserializing(StreamingContext context) {

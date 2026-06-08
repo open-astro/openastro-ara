@@ -22,6 +22,10 @@ namespace OpenAstroAra.Profile {
     [DataContract]
     internal sealed class SafetyMonitorSettings : Settings, ISafetyMonitorSettings {
 
+        public SafetyMonitorSettings() {
+            SetDefaultValues();
+        }
+
         [OnDeserializing]
         public void OnDeserializing(StreamingContext context) {
             SetDefaultValues();

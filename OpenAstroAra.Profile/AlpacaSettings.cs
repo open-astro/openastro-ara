@@ -9,7 +9,11 @@ using System.Threading.Tasks;
 namespace OpenAstroAra.Profile {
     [Serializable()]
     [DataContract]
-    public class AlpacaSettings : Settings, IAlpacaSettings {
+    public sealed class AlpacaSettings : Settings, IAlpacaSettings {
+
+        public AlpacaSettings() {
+            SetDefaultValues();
+        }
         [OnDeserializing]
         public void OnDeserializing(StreamingContext context) {
             SetDefaultValues();
