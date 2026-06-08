@@ -78,7 +78,7 @@ namespace OpenAstroAra.Sequencer.Container {
             }
         }
 
-        public int Iterations { get; set; } = 0;
+        public int Iterations { get; set; }
 
         public IList<string> Issues { get; protected set; } = new ObservableCollection<string>();
 
@@ -218,7 +218,7 @@ namespace OpenAstroAra.Sequencer.Container {
                     if (validatable != null) {
                         try {
                             validatable.Validate();
-                        } catch (Exception ex) {
+                        } catch (Exception ex) when (ex is InvalidOperationException or ArgumentException) {
                             Logger.Error(ex);
                         }
                     }
@@ -230,7 +230,7 @@ namespace OpenAstroAra.Sequencer.Container {
                     if (validatable != null) {
                         try {
                             validatable.Validate();
-                        } catch (Exception ex) {
+                        } catch (Exception ex) when (ex is InvalidOperationException or ArgumentException) {
                             Logger.Error(ex);
                         }
                     }
@@ -242,7 +242,7 @@ namespace OpenAstroAra.Sequencer.Container {
                     if (validatable != null) {
                         try {
                             validatable.Validate();
-                        } catch (Exception ex) {
+                        } catch (Exception ex) when (ex is InvalidOperationException or ArgumentException) {
                             Logger.Error(ex);
                         }
                     }
@@ -283,11 +283,11 @@ namespace OpenAstroAra.Sequencer.Container {
                         }
                     }
                 }
-            });
+            }, token);
             return executionTask;
         }
 
-        public ISequenceRootContainer? GetRootContainer(ISequenceContainer container) {
+        public static ISequenceRootContainer? GetRootContainer(ISequenceContainer container) {
             if (container.Parent == null) {
                 if (!(container is ISequenceRootContainer)) {
                     return null;
@@ -521,7 +521,7 @@ namespace OpenAstroAra.Sequencer.Container {
                         var context = nextItem?.Parent ?? previousItem?.Parent ?? this;
                         await trigger.Run(context, progress, token);
                     }
-                } catch (Exception ex) {
+                } catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or OperationCanceledException or System.IO.IOException) {
                     Logger.Error(ex);
                 }
             }
@@ -539,7 +539,7 @@ namespace OpenAstroAra.Sequencer.Container {
                         var context = nextItem?.Parent ?? previousItem?.Parent ?? this;
                         await trigger.Run(context, progress, token);
                     }
-                } catch (Exception ex) {
+                } catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or OperationCanceledException or System.IO.IOException) {
                     Logger.Error(ex);
                 }
             }
@@ -553,7 +553,7 @@ namespace OpenAstroAra.Sequencer.Container {
                     if (validatable != null) {
                         try {
                             valid = validatable.Validate() && valid;
-                        } catch (Exception ex) {
+                        } catch (Exception ex) when (ex is InvalidOperationException or ArgumentException) {
                             Logger.Error(ex);
                             valid = false;
                         }
@@ -564,7 +564,7 @@ namespace OpenAstroAra.Sequencer.Container {
                     if (validatable != null) {
                         try {
                             valid = validatable.Validate() && valid;
-                        } catch (Exception ex) {
+                        } catch (Exception ex) when (ex is InvalidOperationException or ArgumentException) {
                             Logger.Error(ex);
                             valid = false;
                         }
@@ -575,7 +575,7 @@ namespace OpenAstroAra.Sequencer.Container {
                     if (validatable != null) {
                         try {
                             valid = validatable.Validate() && valid;
-                        } catch (Exception ex) {
+                        } catch (Exception ex) when (ex is InvalidOperationException or ArgumentException) {
                             Logger.Error(ex);
                             valid = false;
                         }
@@ -614,8 +614,8 @@ namespace OpenAstroAra.Sequencer.Container {
         public virtual async Task Interrupt() {
             if (localCTS != null) {
                 try {
-                    localCTS?.Cancel();
-                } catch { }
+                    await localCTS.CancelAsync();
+                } catch (ObjectDisposedException) { }
 
                 if (executionTask != null) {
                     await executionTask;

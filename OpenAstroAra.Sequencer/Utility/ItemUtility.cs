@@ -104,7 +104,7 @@ namespace OpenAstroAra.Sequencer.Utility {
             return false;
         }
 
-        public static List<IDeepSkyObjectContainer> LookForTargetsDownwards(ISequenceContainer container) {
+        public static IReadOnlyList<IDeepSkyObjectContainer> LookForTargetsDownwards(ISequenceContainer container) {
             var objects = new List<IDeepSkyObjectContainer>();
 
             var children = (IList<ISequenceItem>)container.GetItemsSnapshot();
@@ -123,7 +123,7 @@ namespace OpenAstroAra.Sequencer.Utility {
             return objects;
         }
 
-        public class RiseSetMeridian {
+        internal sealed class RiseSetMeridian {
             public DateTime Rise;
             public DateTime Set;
             public DateTime Meridian;
@@ -139,7 +139,7 @@ namespace OpenAstroAra.Sequencer.Utility {
             }
 
             public override string ToString() {
-                return $"Altitude: {Math.Round(CurrentAltitude, 2)}, Rise: {Rise.ToString("t")}, Set: {Set.ToString("t")}, Meridian: {Meridian.ToString("t")}";
+                return $"Altitude: {Math.Round(CurrentAltitude, 2)}, Rise: {Rise.ToString("t", System.Globalization.CultureInfo.InvariantCulture)}, Set: {Set.ToString("t", System.Globalization.CultureInfo.InvariantCulture)}, Meridian: {Meridian.ToString("t", System.Globalization.CultureInfo.InvariantCulture)}";
             }
         }
 
@@ -169,7 +169,7 @@ namespace OpenAstroAra.Sequencer.Utility {
         private const int NEAR_TIME = 10;  // How close before we get an exact time
         private const int NEAR_TIME_HORIZON = 60;
 
-        public static void Iterate(WaitLoopData data, RiseSetMeridian rsm, bool greater, bool sense, int allowance, Func<DateTime, ObserverInfo, double> getCurrentAltitude) {
+        internal static void Iterate(WaitLoopData data, RiseSetMeridian rsm, bool greater, bool sense, int allowance, Func<DateTime, ObserverInfo, double> getCurrentAltitude) {
             // We'll iterate (not too much) to get a better time
             data.SetApproximate(true);
 
@@ -256,7 +256,7 @@ namespace OpenAstroAra.Sequencer.Utility {
             data.TargetAltitude = data.Offset;
         }
 
-        [Obsolete]
+        [Obsolete("Use the overload without the unused offset parameter.")]
         public static void CalculateExpectedTimeCommon(WaitLoopData data, double offset, bool until, int allowance, Func<DateTime, ObserverInfo, double> getCurrentAltitude) {
             CalculateExpectedTimeCommon(data, until, allowance, getCurrentAltitude);
         }
@@ -325,19 +325,19 @@ namespace OpenAstroAra.Sequencer.Utility {
         }
 
         [Obsolete("Use CalculateTimeAtAltitude with elevation provided")]
-        public static RiseSetMeridian CalculateTimeAtAltitude(Coordinates coord, double latitude, double longitude, double targetAltitude) {
+        internal static RiseSetMeridian CalculateTimeAtAltitude(Coordinates coord, double latitude, double longitude, double targetAltitude) {
             return CalculateTimeAtAltitude(coord, latitude, longitude, 0, targetAltitude, DateTime.Now);
         }
         [Obsolete("Use CalculateTimeAtAltitude with elevation provided")]
-        public static RiseSetMeridian CalculateTimeAtAltitude(Coordinates coord, double latitude, double longitude, double targetAltitude, DateTime time) {
+        internal static RiseSetMeridian CalculateTimeAtAltitude(Coordinates coord, double latitude, double longitude, double targetAltitude, DateTime time) {
             return CalculateTimeAtAltitude(coord, latitude, longitude, 0, targetAltitude, time);
         }
 
-        public static RiseSetMeridian CalculateTimeAtAltitude(Coordinates coord, double latitude, double longitude, double elevation, double targetAltitude) {
+        internal static RiseSetMeridian CalculateTimeAtAltitude(Coordinates coord, double latitude, double longitude, double elevation, double targetAltitude) {
             return CalculateTimeAtAltitude(coord, latitude, longitude, elevation, targetAltitude, DateTime.Now);
         }
 
-        public static RiseSetMeridian CalculateTimeAtAltitude(Coordinates coord, double latitude, double longitude, double elevation, double targetAltitude, DateTime time) {
+        internal static RiseSetMeridian CalculateTimeAtAltitude(Coordinates coord, double latitude, double longitude, double elevation, double targetAltitude, DateTime time) {
             int tzoHours = new DateTimeOffset(time).Offset.Hours;
             double ra = coord.RADegrees;
             double dec = coord.Dec;
@@ -375,14 +375,14 @@ namespace OpenAstroAra.Sequencer.Utility {
             return new RiseSetMeridian(risingTime, settingTime, meridianTime, currentAltitude, isRising);
         }
 
-        [Obsolete]
+        [Obsolete("Use AstroUtil.GetSunPosition instead.")]
         public static Coordinates CalculateSunRADec(ObserverInfo observer) {
             double jd = AstroUtil.GetJulianDate(DateTime.Now);
             SkyPosition skyPos = AstroUtil.GetSunPosition(DateTime.Now, jd, observer);
             return new Coordinates(skyPos.RA, skyPos.Dec, Epoch.JNOW, Coordinates.RAType.Hours);
         }
 
-        [Obsolete]
+        [Obsolete("Use AstroUtil.GetMoonPosition instead.")]
         public static Coordinates CalculateMoonRADec(ObserverInfo observer) {
             double jd = AstroUtil.GetJulianDate(DateTime.Now);
             SkyPosition skyPos = AstroUtil.GetMoonPosition(DateTime.Now, jd, observer);
