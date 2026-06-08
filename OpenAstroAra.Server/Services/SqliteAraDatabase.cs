@@ -14,15 +14,16 @@
 
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace OpenAstroAra.Server.Services;
 
 /// <summary>
 /// §28 SQLite catalog backed by <c>${profileDir}/openastroara.db</c>.
 /// </summary>
-public sealed class SqliteAraDatabase : IAraDatabase {
+public sealed partial class SqliteAraDatabase : IAraDatabase {
     private readonly string _connectionString;
-    private readonly ILogger<SqliteAraDatabase>? _logger;
+    private readonly ILogger<SqliteAraDatabase> _logger;
 
     public SqliteAraDatabase(string profileDir, ILogger<SqliteAraDatabase>? logger) {
         Directory.CreateDirectory(profileDir);
@@ -36,7 +37,7 @@ public sealed class SqliteAraDatabase : IAraDatabase {
             Cache = SqliteCacheMode.Shared,
             ForeignKeys = true,
         }.ToString();
-        _logger = logger;
+        _logger = logger ?? NullLogger<SqliteAraDatabase>.Instance;
     }
 
     public string DatabasePath { get; }
@@ -164,12 +165,17 @@ public sealed class SqliteAraDatabase : IAraDatabase {
         await ExecAsync(conn, "CREATE INDEX IF NOT EXISTS idx_diag_detected_utc ON diagnostic_events(detected_utc);", ct);
         await ExecAsync(conn, "CREATE INDEX IF NOT EXISTS idx_diag_open ON diagnostic_events(cleared_utc) WHERE cleared_utc IS NULL;", ct);
 
-        _logger?.LogInformation("SQLite catalog initialized at {Path}", DatabasePath);
+        LogCatalogInitialized(DatabasePath);
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "Per the Microsoft CA2100 guidance: every caller passes a compile-time-constant DDL/PRAGMA string literal; no user input is incorporated into the command text.")]
     private static async Task ExecAsync(SqliteConnection conn, string sql, CancellationToken ct) {
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = sql;
         await cmd.ExecuteNonQueryAsync(ct);
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "SQLite catalog initialized at {Path}")]
+    private partial void LogCatalogInitialized(string path);
 }
