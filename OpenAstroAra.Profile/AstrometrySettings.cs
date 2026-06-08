@@ -16,6 +16,7 @@ using OpenAstroAra.Core.Model;
 using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Profile.Interfaces;
 using System;
+using System.IO;
 using System.Runtime.Serialization;
 
 namespace OpenAstroAra.Profile {
@@ -35,7 +36,7 @@ namespace OpenAstroAra.Profile {
                 if (!string.IsNullOrWhiteSpace(HorizonFilePath)) {
                     Horizon = CustomHorizon.FromFilePath(HorizonFilePath);
                 }
-            } catch (Exception e) {
+            } catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException or Newtonsoft.Json.JsonException) {
                 Logger.Error($"Failed to parse custom horizon file {HorizonFilePath}", e);
                 HorizonFilePath = "";
             }

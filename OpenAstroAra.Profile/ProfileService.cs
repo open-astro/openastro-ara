@@ -23,10 +23,11 @@ using System.IO;
 using System.Linq;
 using System.Runtime.Serialization;
 using System.Threading;
+using System.Xml;
 
 namespace OpenAstroAra.Profile {
 
-    public class ProfileService : BaseINPC, IProfileService {
+    public sealed class ProfileService : BaseINPC, IProfileService, IDisposable {
         private static readonly object lockobj = new object();
 
         public static readonly string PROFILEFOLDER = Path.Combine(CoreUtil.APPLICATIONTEMPPATH, "Profiles");
@@ -155,7 +156,7 @@ namespace OpenAstroAra.Profile {
                 using (MyStopWatch.Measure()) {
                     try {
                         ActiveProfile.Save();
-                    } catch (Exception ex) {
+                    } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or SerializationException or XmlException) {
                         Logger.Error(ex);
                     }
                 }
@@ -247,7 +248,7 @@ namespace OpenAstroAra.Profile {
                     ActiveProfile.AstrometrySettings.HorizonFilePath = string.Empty;
                     ActiveProfile.AstrometrySettings.Horizon = null;
                 }
-            } catch (Exception ex) {
+            } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or Newtonsoft.Json.JsonException) {
                 ActiveProfile.AstrometrySettings.HorizonFilePath = string.Empty;
                 ActiveProfile.AstrometrySettings.Horizon = null;
                 Logger.Error(ex);
@@ -288,7 +289,7 @@ namespace OpenAstroAra.Profile {
                             var p = Profile.Load(profileInfo.Location);
                             clone = Profile.Clone(p);
                             p.Dispose();
-                        } catch (Exception) {
+                        } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or SerializationException or XmlException) {
                             //Profile is in use
                             return false;
                         }
@@ -354,7 +355,7 @@ namespace OpenAstroAra.Profile {
                             eventHandlerLocation.Invoke(this, EventArgs.Empty);
                         }
                         RegisterChangedEventHandlers();
-                    } catch (Exception ex) {
+                    } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or SerializationException or XmlException or CultureNotFoundException) {
                         Logger.Error(ex);
                         return false;
                     }
@@ -368,9 +369,18 @@ namespace OpenAstroAra.Profile {
                 if (ActiveProfile != null) {
                     try {
                         ActiveProfile.Dispose();
-                    } catch (Exception) { }
+                    } catch (Exception ex) when (ex is IOException or ObjectDisposedException) { }
                 }
             }
+        }
+
+        public void Dispose() {
+            profileFileWatcher?.Dispose();
+            saveTimer.Dispose();
+            lock (lockobj) {
+                activeProfile?.Dispose();
+            }
+            GC.SuppressFinalize(this);
         }
 
         private ProfileMeta AddDefaultProfile(string name) {
@@ -427,7 +437,7 @@ namespace OpenAstroAra.Profile {
                         if (!File.Exists(backupDestination)) {
                             try {
                                 File.Move(profileFile, backupDestination);
-                            } catch (Exception ex) {
+                            } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
                                 Logger.Error(ex);
                             }
                         }
@@ -435,7 +445,7 @@ namespace OpenAstroAra.Profile {
                         // Save adjusted profile
                         File.WriteAllText(profileFile, profile);
                     }
-                } catch (Exception ex) {
+                } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
                     Logger.Error($"Failed to migrate profile {profileFile} due to ", ex);
                 }
             }

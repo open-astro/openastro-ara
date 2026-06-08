@@ -94,7 +94,7 @@ namespace OpenAstroAra.Profile {
         }
 
         [DataMember]
-        private IDictionary<Guid, IDictionary<string, object>> pluginStorage { get; set; }
+        private Dictionary<Guid, IDictionary<string, object>> pluginStorage { get; set; }
 
         protected override void SetDefaultValues() {
             pluginStorage = new Dictionary<Guid, IDictionary<string, object>>();

@@ -55,7 +55,9 @@ namespace OpenAstroAra.Profile {
     [KnownType(typeof(DockPanelSettings))]
     [KnownType(typeof(AlpacaSettings))]
     [KnownType(typeof(ImageHistorySettings))]
-    public class Profile : SerializableINPC, IProfile {
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Naming", "CA1724:Type names should not match namespaces",
+        Justification = "Conflict is with the legacy ASP.NET System.Web.Profile namespace, which is not referenced by this headless .NET application. Profile is the central domain entity; renaming would harm clarity.")]
+    public sealed class Profile : SerializableINPC, IProfile {
 
         /// <summary>
         /// Exclusive locked filestream to read and write the profile
@@ -371,7 +373,7 @@ namespace OpenAstroAra.Profile {
                             Logger.Info($"Restoring profile from journal {journal}");
                             File.Move(journal, path, true);
                             return LoadProfile(path);
-                        } catch (Exception journalEx) {
+                        } catch (Exception journalEx) when (journalEx is IOException or UnauthorizedAccessException or SerializationException or XmlException) {
                             Logger.Error("Profile restore from journal failed", journalEx);
                         }
                     }
@@ -382,7 +384,7 @@ namespace OpenAstroAra.Profile {
                             Logger.Info($"Restoring profile from backup {backup}");
                             File.Copy(backup, path, true);
                             return LoadProfile(path);
-                        } catch (Exception backupEx) {
+                        } catch (Exception backupEx) when (backupEx is IOException or UnauthorizedAccessException or SerializationException or XmlException) {
                             Logger.Error("Profile restore from backup failed", backupEx);
                         }
                     }
@@ -437,12 +439,12 @@ namespace OpenAstroAra.Profile {
 
                     // re-open file for lock
                     fs = new FileStream(Location, FileMode.Open, FileAccess.ReadWrite, FileShare.Read);
-                } catch (Exception ex) {
+                } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or SerializationException or XmlException) {
                     Logger.Error(ex);
 
                     // On failure delete the journal
                     if (File.Exists(journal)) {
-                        try { File.Delete(journal); } catch { }
+                        try { File.Delete(journal); } catch (Exception delEx) when (delEx is IOException or UnauthorizedAccessException) { }
                     }
 
                     // Re-open the file lock in case of failure
@@ -456,6 +458,7 @@ namespace OpenAstroAra.Profile {
 
         public void Dispose() {
             fs?.Dispose();
+            GC.SuppressFinalize(this);
         }
 
         /// <summary>
@@ -488,7 +491,7 @@ namespace OpenAstroAra.Profile {
 
                 try {
                     return LoadProfileMeta(path);
-                } catch (Exception ex) {
+                } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or SerializationException or XmlException) {
                     Logger.Error($"Profile failed to load at {path} ", ex);
 
                     // Try to restore profile from journal file first
@@ -497,7 +500,7 @@ namespace OpenAstroAra.Profile {
                             Logger.Info($"Restoring profile from journal {journal}");
                             File.Move(journal, path, true);
                             return LoadProfileMeta(path);
-                        } catch (Exception journalEx) {
+                        } catch (Exception journalEx) when (journalEx is IOException or UnauthorizedAccessException or SerializationException or XmlException) {
                             Logger.Error("Profile restore from journal failed", journalEx);
                         }
                     }
@@ -508,7 +511,7 @@ namespace OpenAstroAra.Profile {
                             Logger.Info($"Restoring profile from backup {backup}");
                             File.Copy(backup, path, true);
                             return LoadProfileMeta(path);
-                        } catch (Exception backupEx) {
+                        } catch (Exception backupEx) when (backupEx is IOException or UnauthorizedAccessException or SerializationException or XmlException) {
                             Logger.Error("Profile restore from backup failed", backupEx);
                         }
                     }
@@ -526,7 +529,7 @@ namespace OpenAstroAra.Profile {
             using (MyStopWatch.Measure()) {
                 try {
                     File.Delete(info.Location);
-                } catch (Exception ex) {
+                } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
                     Logger.Debug(ex.Message + Environment.NewLine + ex.StackTrace);
                     return false;
                 }
