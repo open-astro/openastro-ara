@@ -58,7 +58,7 @@ namespace OpenAstroAra.PlateSolving {
                 } else {
                     Task filterChangeTask = Task.CompletedTask;
                     if (oldFilter != null) {
-                        filterChangeTask = filterWheelMediator.ChangeFilter(oldFilter);
+                        filterChangeTask = filterWheelMediator.ChangeFilter(oldFilter, token: ct);
                     }
 
                     solveProgress?.Report(
