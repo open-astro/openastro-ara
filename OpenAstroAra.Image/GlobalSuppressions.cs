@@ -64,3 +64,5 @@ using System.Runtime.InteropServices;
     Justification = "XISF is the established public file-format type of the OpenAstroAra.Image.FileFormat.XISF namespace.",
     Scope = "type", Target = "~T:OpenAstroAra.Image.FileFormat.XISF.XISF")]
 
+
+[assembly: System.Diagnostics.CodeAnalysis.SuppressMessage("Naming", "CA1720:Identifiers should not contain type names", Justification = "XISFSampleFormat members (UInt16/UInt32/Float32/...) mirror the XISF spec sampleFormat attribute values; the names match the file-format identifiers.", Scope = "type", Target = "~T:OpenAstroAra.Image.FileFormat.XISF.XISFSampleFormat")]

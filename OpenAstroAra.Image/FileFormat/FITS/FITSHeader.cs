@@ -448,7 +448,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
                 if (elem.Key == null) { continue; }
 
                 var key = elem.Key;
-                if (key == null) { continue; }
+
 
                 if (elem.Value.Value.StartsWith('\'')) {
                     var value = elem.Value.OriginalValue.Trim();
@@ -456,7 +456,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
                 } else if (elem.Value.OriginalValue == "T" || elem.Value.OriginalValue == "F") {
                     var value = elem.Value.OriginalValue.Trim() == "T" ? true : false;
                     l.Add(new BoolMetaDataHeader(key, value, elem.Value.Comment ?? string.Empty));
-                } else if (elem.Value.OriginalValue.Contains('.') && double.TryParse(elem.Value.OriginalValue, CultureInfo.InvariantCulture, out var number)) {
+                } else if (elem.Value.OriginalValue.Contains('.', StringComparison.Ordinal) && double.TryParse(elem.Value.OriginalValue, CultureInfo.InvariantCulture, out var number)) {
                     l.Add(new DoubleMetaDataHeader(key, number, elem.Value.Comment ?? string.Empty));
                 } else if (int.TryParse(elem.Value.OriginalValue, out var integer)) {
                     l.Add(new IntMetaDataHeader(key, integer, elem.Value.Comment ?? string.Empty));

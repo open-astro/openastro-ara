@@ -48,7 +48,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
                 value = value.Substring(0, valueMaxLength);
             }
 
-            if (comment == null) { comment = string.Empty; }
+
             var commentLength = Math.Min(47, Math.Max(0, totalLength - value.Length - commentSeparatorLenght));
             if (comment?.Length > commentLength) {
                 comment = comment.Substring(0, commentLength);

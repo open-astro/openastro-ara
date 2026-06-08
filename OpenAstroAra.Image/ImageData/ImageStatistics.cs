@@ -21,7 +21,7 @@ using System.Linq;
 namespace OpenAstroAra.Image.ImageData {
 
     public class ImageStatistics : BaseINPC, IImageStatistics {
-        public static ImageStatistics EmptyImageStatistics = new ImageStatistics();
+        public static readonly ImageStatistics EmptyImageStatistics = new ImageStatistics();
 
         public const int HISTOGRAMRESOLUTION = 100;
 

@@ -140,7 +140,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
                         keyValue = $"{keyValue.TrimStart('\'').TrimEnd('\'', ' ').Replace(@"''", @"'", StringComparison.Ordinal)}";
                         header.Add(keyName, keyValue, keyComment);
 
-                    } else if (keyValue.Contains('.')) {
+                    } else if (keyValue.Contains('.', StringComparison.Ordinal)) {
                         if (double.TryParse(keyValue, NumberStyles.Float, CultureInfo.InvariantCulture, out var value)) {
                             header.Add(keyName, value, keyComment);
                         }

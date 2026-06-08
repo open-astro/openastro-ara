@@ -44,9 +44,9 @@ namespace OpenAstroAra.Image.Interfaces {
         Task<string> SaveToDisk(FileSaveInfo fileSaveInfo, CancellationToken cancelToken = default, bool forceFileType = false);
         Task<string> SaveToDisk(FileSaveInfo fileSaveInfo, CancellationToken token, bool forceFileType, IList<ImagePattern> customPatterns);
 
-        [Obsolete]
+        [Obsolete("Legacy two-step save API; use SaveToDisk instead.")]
         Task<string> PrepareSave(FileSaveInfo fileSaveInfo, CancellationToken cancelToken = default);
-        [Obsolete]
+        [Obsolete("Legacy two-step save API; use SaveToDisk instead.")]
         string FinalizeSave(string file, string pattern, IList<ImagePattern> customPatterns);
     }
 

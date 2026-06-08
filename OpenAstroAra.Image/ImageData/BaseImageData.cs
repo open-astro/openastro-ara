@@ -90,7 +90,7 @@ namespace OpenAstroAra.Image.ImageData {
 
         #region "Save"
 
-        [Obsolete]
+        [Obsolete("Legacy two-step save API; use SaveToDisk instead.")]
         /// <summary>
         ///  Saves file to application temp path
         /// </summary>
@@ -125,7 +125,7 @@ namespace OpenAstroAra.Image.ImageData {
             return actualPath;
         }
 
-        [Obsolete]
+        [Obsolete("Legacy two-step save API; use SaveToDisk instead.")]
         /// <summary>
         /// Renames and moves file to destination according to pattern
         /// </summary>

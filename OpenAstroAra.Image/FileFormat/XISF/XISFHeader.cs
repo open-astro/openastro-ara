@@ -366,7 +366,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
         private bool TryGetFITSProperty(string key, out string value) {
             value = string.Empty;
             if (Image is null) { return false; }
-            var elements = Image.Elements(xmlns + "FITSKeyword");
+            var elements = Image.Elements(xmlns + "FITSKeyword").ToList();
             if (!elements.Any()) { return false; }
 
             var elem = elements.FirstOrDefault(el => el.Attribute("name")?.Value == key);
@@ -385,7 +385,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
         private List<IGenericMetaDataHeader> GetAllFITSKeywords() {
             var l = new List<IGenericMetaDataHeader>();
             if (Image is null) { return l; }
-            var elements = Image.Elements(xmlns + "FITSKeyword");
+            var elements = Image.Elements(xmlns + "FITSKeyword").ToList();
             if (!elements.Any()) { return l; }
 
             foreach (var elem in elements) {
@@ -405,7 +405,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                 } else if (value == "T" || value == "F") {
                     var boolean = value.Trim() == "T" ? true : false;
                     l.Add(new BoolMetaDataHeader(key, boolean, comment));
-                } else if (value.Contains('.') && double.TryParse(value, CultureInfo.InvariantCulture, out var number)) {
+                } else if (value.Contains('.', StringComparison.Ordinal) && double.TryParse(value, CultureInfo.InvariantCulture, out var number)) {
                     l.Add(new DoubleMetaDataHeader(key, number, comment));
                 } else if (int.TryParse(value, out var integer)) {
                     l.Add(new IntMetaDataHeader(key, integer, comment));
