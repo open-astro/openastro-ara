@@ -13,7 +13,6 @@
 #endregion "copyright"
 
 using OpenAstroAra.Core.Enums;
-using OpenAstroAra.Equipment.Equipment.MyGPS.PegasusAstro;
 using OpenAstroAra.Equipment.Interfaces;
 using OpenAstroAra.Profile.Interfaces;
 
