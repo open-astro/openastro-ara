@@ -35,6 +35,19 @@ namespace OpenAstroAra.Core.Utility {
     /// Pure functions; no I/O. Token substitution itself is the caller's job —
     /// pass in the already-substituted filename and this normalizes it.
     /// </summary>
+    /// <summary>
+    /// Default placeholder strings for tokens that resolve to no value.
+    /// English ASCII for forever-stable filenames (not localized). Per playbook §38.6.1 table.
+    /// </summary>
+    public static class EmptyTokenPlaceholders {
+        public const string SensorTemp = "noTemp";
+        public const string Filter = "noFilter";
+        public const string Gain = "noGain";
+        public const string Offset = "noOffset";
+        public const string Binning = "1x1";
+        public const string TargetName = "unnamed";
+    }
+
     public static class FilenameTemplateSanitizer {
 
         /// <summary>
@@ -48,20 +61,6 @@ namespace OpenAstroAra.Core.Utility {
         /// Windows 260 limit with margin for share-mount prefixes.
         /// </summary>
         public const int MaxPathLength = 200;
-
-        /// <summary>
-        /// Default placeholder strings for tokens that resolve to no value.
-        /// English ASCII for forever-stable filenames (not localized).
-        /// Per playbook §38.6.1 table.
-        /// </summary>
-        public static class EmptyTokenPlaceholders {
-            public const string SensorTemp = "noTemp";
-            public const string Filter = "noFilter";
-            public const string Gain = "noGain";
-            public const string Offset = "noOffset";
-            public const string Binning = "1x1";
-            public const string TargetName = "unnamed";
-        }
 
         /// <summary>
         /// Sanitize a single filename component (no path separators) — replace

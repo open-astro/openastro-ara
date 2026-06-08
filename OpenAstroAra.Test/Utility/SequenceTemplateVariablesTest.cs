@@ -121,14 +121,14 @@ namespace OpenAstroAra.Test.Utility {
 
         [Test]
         public void TokenNames_All_contains_canonical_set() {
-            Assert.That(SequenceTemplateVariables.TokenNames.All, Has.Count.EqualTo(7));
-            Assert.That(SequenceTemplateVariables.TokenNames.All, Does.Contain("target_name"));
-            Assert.That(SequenceTemplateVariables.TokenNames.All, Does.Contain("target_ra"));
-            Assert.That(SequenceTemplateVariables.TokenNames.All, Does.Contain("target_dec"));
-            Assert.That(SequenceTemplateVariables.TokenNames.All, Does.Contain("target_rotation"));
-            Assert.That(SequenceTemplateVariables.TokenNames.All, Does.Contain("integration_minutes"));
-            Assert.That(SequenceTemplateVariables.TokenNames.All, Does.Contain("frames_per_filter"));
-            Assert.That(SequenceTemplateVariables.TokenNames.All, Does.Contain("filter_set"));
+            Assert.That(TokenNames.All, Has.Count.EqualTo(7));
+            Assert.That(TokenNames.All, Does.Contain("target_name"));
+            Assert.That(TokenNames.All, Does.Contain("target_ra"));
+            Assert.That(TokenNames.All, Does.Contain("target_dec"));
+            Assert.That(TokenNames.All, Does.Contain("target_rotation"));
+            Assert.That(TokenNames.All, Does.Contain("integration_minutes"));
+            Assert.That(TokenNames.All, Does.Contain("frames_per_filter"));
+            Assert.That(TokenNames.All, Does.Contain("filter_set"));
         }
     }
 }

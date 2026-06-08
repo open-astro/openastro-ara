@@ -32,6 +32,12 @@ namespace OpenAstroAra.Core.Utility {
     ///     overwrite each other.</item>
     /// </list>
     /// </summary>
+    /// <summary>Result of <see cref="FilenameTemplateValidator.Validate"/>.</summary>
+    public sealed record ValidationResult(
+        bool Valid,
+        string? Code,
+        IReadOnlyList<string> UnknownTokens);
+
     public static class FilenameTemplateValidator {
 
         public const string CodeUnknownToken = "unknown_template_token";
@@ -43,11 +49,6 @@ namespace OpenAstroAra.Core.Utility {
         /// </summary>
         private static readonly Regex TokenPattern =
             new(@"\$\$([A-Z][A-Z0-9_]*)\$\$", RegexOptions.Compiled);
-
-        public sealed record ValidationResult(
-            bool Valid,
-            string? Code,
-            IReadOnlyList<string> UnknownTokens);
 
         /// <summary>
         /// Run §38.6.1 validation. Returns Valid=true when the template
