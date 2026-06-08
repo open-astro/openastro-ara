@@ -16,68 +16,68 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
         private nint filePtr;
 
         private CFitsioFITS(string filePath, COMPRESSION compression) {
-            CfitsioNative.fits_create_file(out var ptr, filePath, out var status);
+            _ = CfitsioNative.fits_create_file(out var ptr, filePath, out var status);
             CheckStatus("fits_create_file", status);
             this.filePtr = ptr;
 
             if (compression != COMPRESSION.NOCOMPRESS) {
-                CfitsioNative.fits_set_compression_type(ptr, compression, out status);
+                _ = CfitsioNative.fits_set_compression_type(ptr, compression, out status);
                 CheckStatus("fits_set_compression_type", status);
             }
         }
 
         public CFitsioFITS(string filePath, ushort[] data, int width, int height, COMPRESSION compression = COMPRESSION.NOCOMPRESS) : this(filePath, compression) {
-            CfitsioNative.fits_create_img(filePtr, CfitsioNative.BITPIX.USHORT_IMG, 2, new int[] { width, height }, out var status);
+            _ = CfitsioNative.fits_create_img(filePtr, CfitsioNative.BITPIX.USHORT_IMG, 2, new int[] { width, height }, out var status);
             CheckStatus("fits_create_img", status);
-            CfitsioNative.fits_write_img(filePtr, CfitsioNative.DATATYPE.TUSHORT, 1, width * height, data, out status);
+            _ = CfitsioNative.fits_write_img(filePtr, CfitsioNative.DATATYPE.TUSHORT, 1, width * height, data, out status);
             CheckStatus("fits_write_img", status);
         }
 
         public CFitsioFITS(string filePath, uint[] data, int width, int height, COMPRESSION compression = COMPRESSION.NOCOMPRESS) : this(filePath, compression) {
-            CfitsioNative.fits_create_img(filePtr, CfitsioNative.BITPIX.ULONG_IMG, 2, new int[] { width, height }, out var status);
+            _ = CfitsioNative.fits_create_img(filePtr, CfitsioNative.BITPIX.ULONG_IMG, 2, new int[] { width, height }, out var status);
             CheckStatus("fits_create_img", status);
-            CfitsioNative.fits_write_img_uint(filePtr, CfitsioNative.DATATYPE.TUINT, 1, width * height, data, out status);
+            _ = CfitsioNative.fits_write_img_uint(filePtr, CfitsioNative.DATATYPE.TUINT, 1, width * height, data, out status);
             CheckStatus("fits_write_img", status);
         }
 
         public CFitsioFITS(string filePath, int[] data, int width, int height, COMPRESSION compression = COMPRESSION.NOCOMPRESS) : this(filePath, compression) {
-            CfitsioNative.fits_create_img(filePtr, CfitsioNative.BITPIX.LONG_IMG, 2, new int[] { width, height }, out var status);
+            _ = CfitsioNative.fits_create_img(filePtr, CfitsioNative.BITPIX.LONG_IMG, 2, new int[] { width, height }, out var status);
             CheckStatus("fits_create_img", status);
-            CfitsioNative.fits_write_img_int(filePtr, CfitsioNative.DATATYPE.TINT, 1, width * height, data, out status);
+            _ = CfitsioNative.fits_write_img_int(filePtr, CfitsioNative.DATATYPE.TINT, 1, width * height, data, out status);
             CheckStatus("fits_write_img", status);
         }
 
         public CFitsioFITS(string filePath, float[] data, int width, int height, COMPRESSION compression = COMPRESSION.NOCOMPRESS) : this(filePath, compression) {
-            CfitsioNative.fits_create_img(filePtr, CfitsioNative.BITPIX.FLOAT_IMG, 2, new int[] { width, height }, out var status);
+            _ = CfitsioNative.fits_create_img(filePtr, CfitsioNative.BITPIX.FLOAT_IMG, 2, new int[] { width, height }, out var status);
             CheckStatus("fits_create_img", status);
-            CfitsioNative.fits_write_img_float(filePtr, CfitsioNative.DATATYPE.TDOUBLE, 1, width * height, data, out status);
+            _ = CfitsioNative.fits_write_img_float(filePtr, CfitsioNative.DATATYPE.TDOUBLE, 1, width * height, data, out status);
             CheckStatus("fits_write_img", status);
         }
 
         public CFitsioFITS(string filePath, double[] data, int width, int height, COMPRESSION compression = COMPRESSION.NOCOMPRESS) : this(filePath, compression) {
-            CfitsioNative.fits_create_img(filePtr, CfitsioNative.BITPIX.DOUBLE_IMG, 2, new int[] { width, height }, out var status);
+            _ = CfitsioNative.fits_create_img(filePtr, CfitsioNative.BITPIX.DOUBLE_IMG, 2, new int[] { width, height }, out var status);
             CheckStatus("fits_create_img", status);
-            CfitsioNative.fits_write_img_double(filePtr, CfitsioNative.DATATYPE.TDOUBLE, 1, width * height, data, out status);
+            _ = CfitsioNative.fits_write_img_double(filePtr, CfitsioNative.DATATYPE.TDOUBLE, 1, width * height, data, out status);
             CheckStatus("fits_write_img", status);
         }
 
         public void AddHeader(string keyword, string value, string comment) {
-            CfitsioNative.fits_update_key_str(filePtr, keyword, value, comment, out var status);
+            _ = CfitsioNative.fits_update_key_str(filePtr, keyword, value, comment, out var status);
             LogErrorStatus("fits_update_key_str", status);
         }
 
         public void AddHeader(string keyword, int value, string comment) {
-            CfitsioNative.fits_update_key_lng(filePtr, keyword, value, comment, out var status);
+            _ = CfitsioNative.fits_update_key_lng(filePtr, keyword, value, comment, out var status);
             LogErrorStatus("fits_update_key_lng", status);
         }
 
         public void AddHeader(string keyword, double value, string comment) {
-            CfitsioNative.fits_update_key_dbl(filePtr, keyword, ref value, comment, out var status);
+            _ = CfitsioNative.fits_update_key_dbl(filePtr, keyword, ref value, comment, out var status);
             LogErrorStatus("fits_update_key_dbl", status);
         }
 
         public void AddHeader(string keyword, bool value, string comment) {
-            CfitsioNative.fits_update_key_log(filePtr, keyword, value ? 1 : 0, comment, out var status);
+            _ = CfitsioNative.fits_update_key_log(filePtr, keyword, value ? 1 : 0, comment, out var status);
             LogErrorStatus("fits_update_key_log", status);
         }
 
@@ -88,10 +88,10 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
         public void Close() {
             int status;
 
-            CfitsioNative.fits_write_chksum(filePtr, out status);
+            _ = CfitsioNative.fits_write_chksum(filePtr, out status);
             LogErrorStatus("fits_write_chksum", status);
 
-            CfitsioNative.fits_close_file(filePtr, out status);
+            _ = CfitsioNative.fits_close_file(filePtr, out status);
             CheckStatus("fits_close_file", status);
         }
 

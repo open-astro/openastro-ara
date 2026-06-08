@@ -15,17 +15,17 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
         private string? tempFile;
 
         public CFitsioFITSReader(string filePath) {
-            CfitsioNative.fits_open_file(out filePtr, filePath, CfitsioNative.IOMODE.READONLY, out var status);
+            _ = CfitsioNative.fits_open_file(out filePtr, filePath, CfitsioNative.IOMODE.READONLY, out var status);
             CfitsioNative.CheckStatus("fits_open_file", status);
 
             try {
-                CfitsioNative.fits_read_key_long(filePtr, "NAXIS1");
+                _ = CfitsioNative.fits_read_key_long(filePtr, "NAXIS1");
             } catch {
                 // When NAXIS1 does not exist, try at the last HDU - e.g. when the image is tile compressed
-                CfitsioNative.fits_get_num_hdus(filePtr, out int hdunum, out status);
+                _ = CfitsioNative.fits_get_num_hdus(filePtr, out int hdunum, out status);
                 CfitsioNative.CheckStatus("fits_get_num_hdus", status);
                 if (hdunum > 1) {
-                    CfitsioNative.fits_movabs_hdu(filePtr, hdunum, out var hdutypenow, out status);
+                    _ = CfitsioNative.fits_movabs_hdu(filePtr, hdunum, out var hdutypenow, out status);
                     CfitsioNative.CheckStatus("fits_movabs_hdu", status);
                 }
             }
@@ -35,21 +35,21 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
             if (compressionFlag > 0) {
                 // When the image is compresse, we decompress it into a temporary file
                 tempFile = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName() + ".fits");
-                CfitsioNative.fits_create_file(out var ptr, tempFile, out status);
+                _ = CfitsioNative.fits_create_file(out var ptr, tempFile, out status);
                 CfitsioNative.CheckStatus("fits_create_file", status);
 
-                CfitsioNative.fits_img_decompress(filePtr, ptr, out status);
+                _ = CfitsioNative.fits_img_decompress(filePtr, ptr, out status);
                 CfitsioNative.CheckStatus("fits_img_decompress", status);
 
                 // Free resources for current file
                 if (filePtr != IntPtr.Zero) {
-                    CfitsioNative.fits_close_file(filePtr, out status);
+                    _ = CfitsioNative.fits_close_file(filePtr, out status);
                     CfitsioNative.CheckStatus("fits_close_file", status);
-                    CfitsioNative.fits_close_file(ptr, out status);
+                    _ = CfitsioNative.fits_close_file(ptr, out status);
                     CfitsioNative.CheckStatus("fits_close_file", status);
                 }
 
-                CfitsioNative.fits_open_file(out filePtr, tempFile, CfitsioNative.IOMODE.READONLY, out status);
+                _ = CfitsioNative.fits_open_file(out filePtr, tempFile, CfitsioNative.IOMODE.READONLY, out status);
                 CfitsioNative.CheckStatus("fits_open_file", status);
             }
 
@@ -123,7 +123,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
 
         public FITSHeader ReadHeader() {
             FITSHeader header = new FITSHeader(Width, Height);
-            CfitsioNative.fits_get_hdrspace(filePtr, out var numKeywords, out var numMoreKeywords, out var status);
+            _ = CfitsioNative.fits_get_hdrspace(filePtr, out var numKeywords, out var numMoreKeywords, out var status);
             CfitsioNative.CheckStatus("fits_get_hdrspace", status);
             for (int headerIdx = 1; headerIdx <= numKeywords; ++headerIdx) {
                 CfitsioNative.fits_read_keyn(filePtr, headerIdx, out var keyName, out var keyValue, out var keyComment);
@@ -188,7 +188,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
         internal ImageMetaData TranslateToMetaData() {
             //Translate CFITSio into N.I.N.A. FITSHeader
             FITSHeader header = new FITSHeader(Width, Height);
-            CfitsioNative.fits_get_hdrspace(filePtr, out var numKeywords, out var numMoreKeywords, out var status);
+            _ = CfitsioNative.fits_get_hdrspace(filePtr, out var numKeywords, out var numMoreKeywords, out var status);
             CfitsioNative.CheckStatus("fits_get_hdrspace", status);
             for (int headerIdx = 1; headerIdx <= numKeywords; ++headerIdx) {
                 CfitsioNative.fits_read_keyn(filePtr, headerIdx, out var keyName, out var keyValue, out var keyComment);
@@ -242,7 +242,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
                 }
 
                 if (filePtr != IntPtr.Zero) {
-                    CfitsioNative.fits_close_file(filePtr, out var status);
+                    _ = CfitsioNative.fits_close_file(filePtr, out var status);
                     filePtr = IntPtr.Zero;
                 }
 
