@@ -27,7 +27,16 @@ public class FitsImageTests {
     // passes-through; xunit 2.x lacks Assert.Skip so no skipped marker.
     private static readonly bool CfitsioAvailable = CheckCfitsio();
     private static bool CheckCfitsio() {
-        try { FitsLibraryProbe.EnsureLoadable(); return true; } catch { return false; }
+        try {
+            FitsLibraryProbe.EnsureLoadable();
+            return true;
+        } catch (DllNotFoundException) {
+            return false;          // native libcfitsio not installed
+        } catch (BadImageFormatException) {
+            return false;          // present but wrong architecture
+        } catch (EntryPointNotFoundException) {
+            return false;          // present but missing the probed symbol
+        }
     }
 
     [Fact]
@@ -52,6 +61,7 @@ public class FitsImageTests {
                 fits.SetHeader("CCD-TEMP", -10.5, "CCD temperature (C)");
                 fits.SetHeader("INSTRUME", "Test Camera", "Camera model");
                 fits.WriteImageData(input);
+                fits.Complete();
             }
             // After Dispose, the .tmp file must be gone and the real file present
             // — this is the §28.7 atomic-write guarantee.
@@ -88,8 +98,9 @@ public class FitsImageTests {
             var input = new float[w * h];
             for (var i = 0; i < input.Length; i++) input[i] = i * 0.5f - 3.14f;
 
-            using (var fits = FitsImage.Create(path, w, h, FitsBitDepth.Float)) {
+            using (var fits = FitsImage.Create(path, w, h, FitsBitDepth.Real32)) {
                 fits.WriteImageData(input);
+                fits.Complete();
             }
 
             using (var fits = FitsImage.Open(path)) {
@@ -111,7 +122,7 @@ public class FitsImageTests {
             // 4×4 = 16 pixels; pass 10
             var ex = Assert.Throws<ArgumentException>(() =>
                 fits.WriteImageData(new ushort[10]));
-            Assert.Contains("doesn't match", ex.Message);
+            Assert.Contains("doesn't match", ex.Message, StringComparison.Ordinal);
         } finally {
             if (File.Exists(path)) File.Delete(path);
             if (File.Exists(path + ".tmp")) File.Delete(path + ".tmp");
@@ -129,6 +140,7 @@ public class FitsImageTests {
             File.WriteAllBytes(path + ".tmp", new byte[] { 0xff, 0xfe, 0xfd });
             using (var fits = FitsImage.Create(path, 4, 4, FitsBitDepth.UnsignedShort)) {
                 fits.WriteImageData(new ushort[16]);
+                fits.Complete();
             }
             Assert.True(File.Exists(path));
         } finally {

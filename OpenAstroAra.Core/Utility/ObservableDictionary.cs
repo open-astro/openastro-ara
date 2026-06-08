@@ -198,28 +198,28 @@ namespace OpenAstroAra.Core.Utility {
         /// </summary>
         /// <param name="key">key</param>
         /// <returns>the value stored in this locator part for key</returns>
-        // This dictionary intentionally returns default(TValue) for a missing key
-        // rather than throwing KeyNotFoundException (legacy NINA behavior relied on
-        // by callers), so the getter is nullable and deviates from IDictionary's
-        // non-null indexer contract — CS8766 is expected.
-#pragma warning disable CS8766
+        // The public indexer is deliberately lenient: it returns default(TValue)
+        // for a missing key instead of throwing (legacy NINA behavior relied on by
+        // callers). The strict IDictionary contract (throw KeyNotFoundException on a
+        // missing key, non-null return) is honored by the explicit interface indexer
+        // below, so consumers that go through IDictionary<TKey,TValue> get the
+        // standard semantics.
         public TValue? this[TKey key] {
             get {
                 if (key == null) {
-                    throw new ArgumentNullException("key");
+                    throw new ArgumentNullException(nameof(key));
                 }
 
                 _nameValues.TryGetValue(key, out var value);
                 return value;
             }
-#pragma warning restore CS8766
             set {
                 if (key == null) {
-                    throw new ArgumentNullException("key");
+                    throw new ArgumentNullException(nameof(key));
                 }
 
                 if (value == null) {
-                    throw new ArgumentNullException("value");
+                    throw new ArgumentNullException(nameof(value));
                 }
 
                 _nameValues.TryGetValue(key, out var oldValue);
@@ -231,6 +231,22 @@ namespace OpenAstroAra.Core.Utility {
                     FireDictionaryChanged();
                 }
             }
+        }
+
+        /// <summary>
+        /// Strict <see cref="IDictionary{TKey,TValue}"/> indexer: throws
+        /// <see cref="KeyNotFoundException"/> for a missing key, matching the BCL
+        /// contract. The lenient default-returning behavior remains available via
+        /// the public indexer.
+        /// </summary>
+        TValue IDictionary<TKey, TValue>.this[TKey key] {
+            get {
+                if (key == null) {
+                    throw new ArgumentNullException(nameof(key));
+                }
+                return _nameValues[key];
+            }
+            set => this[key] = value;
         }
 
         /// <summary>
