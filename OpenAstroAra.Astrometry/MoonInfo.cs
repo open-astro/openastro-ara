@@ -3,6 +3,7 @@ using OxyPlot;
 using OxyPlot.Axes;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -32,7 +33,7 @@ namespace OpenAstroAra.Astrometry {
         }
 
         private List<DataPoint>? datapoints;
-        public List<DataPoint>? DataPoints => datapoints;
+        public IReadOnlyList<DataPoint>? DataPoints => datapoints;
 
         private static Dictionary<DateTime, List<DataPoint>> Points = new Dictionary<DateTime, List<DataPoint>>();
 
@@ -58,7 +59,7 @@ namespace OpenAstroAra.Astrometry {
             get => _separation;
             set {
                 _separation = value;
-                SeparationText = Math.Round(Separation, 0).ToString().PadLeft(3, '0') + "°";
+                SeparationText = Math.Round(Separation, 0).ToString(CultureInfo.InvariantCulture).PadLeft(3, '0') + "°";
                 RaisePropertyChanged();
             }
         }
@@ -85,11 +86,15 @@ namespace OpenAstroAra.Astrometry {
             }
         }
 
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822:Mark members as static",
+            Justification = "Instance property is part of the MoonInfo model exposed to clients; must stay instance-level for serialization.")]
         public AstroUtil.MoonPhase Phase => AstroUtil.GetMoonPhase(DateTime.Now, new ObserverInfo());
 
         // Phase 0.5p2 net10.0 conversion: WPF Color shade for the moon-icon
         // tinting is client-side concern (Flutter renders the chart). Returning
         // an ARGB hex string preserves the wire format.
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822:Mark members as static",
+            Justification = "Instance property is part of the MoonInfo model exposed to clients; must stay instance-level for serialization.")]
         public string Color {
             get {
                 double angle = Math.Abs(AstroUtil.GetMoonPositionAngle(DateTime.Now, new ObserverInfo()));
@@ -117,7 +122,7 @@ namespace OpenAstroAra.Astrometry {
 
                 datapoints = Points[_referenceDate];
                 MaxAltitude = datapoints.OrderByDescending((x) => x.Y).FirstOrDefault();
-                RaisePropertyChanged("DataPoints");
+                RaisePropertyChanged(nameof(DataPoints));
             }
         }
 

@@ -23,7 +23,7 @@ using System.Threading.Tasks;
 using System.Timers;
 namespace OpenAstroAra.Astrometry {
 
-    class DeepSkyObjectDailyRefresher {
+    internal sealed class DeepSkyObjectDailyRefresher : IDisposable {
         private static readonly DeepSkyObjectDailyRefresher instance = new DeepSkyObjectDailyRefresher();
 
         private DeepSkyObjectDailyRefresher() {
@@ -36,8 +36,12 @@ namespace OpenAstroAra.Astrometry {
         public static DeepSkyObjectDailyRefresher Instance => instance;
 
 
-        private List<WeakReference<DeepSkyObject>> DeepSkyObjects = new List<WeakReference<DeepSkyObject>>();
-        private Timer? ReferenceDateTimer;
+        private readonly List<WeakReference<DeepSkyObject>> DeepSkyObjects = new List<WeakReference<DeepSkyObject>>();
+        private readonly Timer? ReferenceDateTimer;
+
+        public void Dispose() {
+            ReferenceDateTimer?.Dispose();
+        }
         private DateTime LastReferenceDate = NighttimeCalculator.GetReferenceDate(DateTime.Now);
 
         /// <summary>
@@ -84,7 +88,7 @@ namespace OpenAstroAra.Astrometry {
                         Logger.Debug($"{nameof(DeepSkyObjectDailyRefresher)} -- Updated: {updated}; Pruned: {(count - DeepSkyObjects.Count)} / {count}");
 
                     }
-                } catch (Exception ex) {
+                } catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or IndexOutOfRangeException) {
                     Logger.Error(ex);
                 }
             }
@@ -105,8 +109,6 @@ namespace OpenAstroAra.Astrometry {
             Moon = new MoonInfo(_coordinates);
             DeepSkyObjectDailyRefresher.Instance.Register(this);
         }
-
-        public DateTime ReferenceDate { get => _referenceDate; set => _referenceDate = value; }
 
         public MoonInfo Moon { get; private set; }
 
@@ -154,26 +156,26 @@ namespace OpenAstroAra.Astrometry {
                 return;
             }
 
-            var start = _referenceDate;
+            var start = ReferenceDate;
 
             // Do this every time in case reference date has changed
-            Moon.SetReferenceDateAndObserver(_referenceDate, new ObserverInfo { Latitude = _latitude, Longitude = _longitude });
+            Moon.SetReferenceDateAndObserver(ReferenceDate, new ObserverInfo { Latitude = Latitude, Longitude = Longitude });
 
             Altitudes.Clear();
             Horizon.Clear();
 
-            var siderealTime = AstroUtil.GetLocalSiderealTime(start, _longitude);
+            var siderealTime = AstroUtil.GetLocalSiderealTime(start, Longitude);
             var hourAngle = AstroUtil.GetHourAngle(siderealTime, Coordinates.RA);
 
             for (double angle = hourAngle; angle < hourAngle + 24; angle += 0.1) {
                 var degAngle = AstroUtil.HoursToDegrees(angle);
-                var altitude = AstroUtil.GetAltitude(degAngle, _latitude, Coordinates.Dec);
-                var azimuth = AstroUtil.GetAzimuth(degAngle, altitude, _latitude, Coordinates.Dec);
+                var altitude = AstroUtil.GetAltitude(degAngle, Latitude, Coordinates.Dec);
+                var azimuth = AstroUtil.GetAzimuth(degAngle, altitude, Latitude, Coordinates.Dec);
 
                 Altitudes.Add(new DataPoint(DateTimeAxis.ToDouble(start), altitude));
 
-                if (customHorizon != null) {
-                    var horizonAltitude = customHorizon.GetAltitude(azimuth);
+                if (CustomHorizon != null) {
+                    var horizonAltitude = CustomHorizon.GetAltitude(azimuth);
                     Horizon.Add(new DataPoint(DateTimeAxis.ToDouble(start), horizonAltitude));
                 }
 
@@ -182,7 +184,7 @@ namespace OpenAstroAra.Astrometry {
 
             MaxAltitude = Altitudes.OrderByDescending((x) => x.Y).FirstOrDefault();
 
-            CalculateTransit(_latitude);
+            CalculateTransit(Latitude);
         }
 
         private void CalculateTransit(double latitude) {

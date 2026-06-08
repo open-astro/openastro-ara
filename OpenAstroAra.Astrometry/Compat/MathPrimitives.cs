@@ -38,9 +38,12 @@ namespace OpenAstroAra.Astrometry {
         public static Point operator -(Point a, Vector v) => new(a.X - v.X, a.Y - v.Y);
         public override string ToString() => $"({X}, {Y})";
 
-        public static Vector Subtract(Point left, Point right) {
-            throw new NotImplementedException();
-        }
+        // Friendly-named alternates for the operators above (CA2225).
+        public static Vector Subtract(Point left, Point right) => left - right;
+
+        public static Point Add(Point left, Vector right) => left + right;
+
+        public static Point Subtract(Point left, Vector right) => left - right;
     }
 
     public readonly struct Vector : IEquatable<Vector> {
@@ -58,9 +61,14 @@ namespace OpenAstroAra.Astrometry {
         public static Vector operator *(Vector v, double s) => new(v.X * s, v.Y * s);
         public static Vector operator /(Vector v, double s) => new(v.X / s, v.Y / s);
 
-        public static Vector Add(Vector left, Vector right) {
-            throw new NotImplementedException();
-        }
+        // Friendly-named alternates for the operators above (CA2225).
+        public static Vector Add(Vector left, Vector right) => left + right;
+
+        public static Vector Subtract(Vector left, Vector right) => left - right;
+
+        public static Vector Multiply(Vector left, double right) => left * right;
+
+        public static Vector Divide(Vector left, double right) => left / right;
     }
 
     public readonly struct Vector3D : IEquatable<Vector3D> {
@@ -81,8 +89,11 @@ namespace OpenAstroAra.Astrometry {
         public static bool operator ==(Vector3D a, Vector3D b) => a.Equals(b);
         public static bool operator !=(Vector3D a, Vector3D b) => !a.Equals(b);
 
-        public static Vector3D Add(Vector3D left, Vector3D right) {
-            throw new NotImplementedException();
-        }
+        // Friendly-named alternates for the operators above (CA2225).
+        public static Vector3D Add(Vector3D left, Vector3D right) => left + right;
+
+        public static Vector3D Subtract(Vector3D left, Vector3D right) => left - right;
+
+        public static Vector3D Multiply(Vector3D left, double right) => left * right;
     }
 }
