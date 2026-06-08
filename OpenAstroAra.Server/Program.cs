@@ -415,7 +415,7 @@ public class Program {
         var reconcilerResult = app.Services
             .GetRequiredService<SequenceStartupReconciler>()
             .Reconcile();
-        if (reconcilerResult.Outcome != SequenceStartupReconciler.Outcome.Clean) {
+        if (reconcilerResult.Outcome != SequenceReconcileOutcome.Clean) {
             var startupLogger = app.Services.GetRequiredService<ILogger<Program>>();
             startupLogger.LogWarning(
                 "Startup reconciliation: {Outcome} (previous sequence: {SeqId})",
@@ -427,7 +427,7 @@ public class Program {
             } catch (Exception ex) {
                 startupLogger.LogWarning(ex, "Failed to emit §46 reconciliation notification");
             }
-            if (reconcilerResult.Outcome == SequenceStartupReconciler.Outcome.Corrupt) {
+            if (reconcilerResult.Outcome == SequenceReconcileOutcome.Corrupt) {
                 try {
                     var (evt, rec, autoCorr) =
                         StartupNotificationFactory.DiagnosticForCorruptResult(reconcilerResult);

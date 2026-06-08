@@ -20,7 +20,7 @@ namespace OpenAstroAra.Server.Services;
 /// Builds the §46 notification DTOs emitted at daemon startup. Keeps the
 /// copy + severity decisions out of Program.cs so they're unit-testable
 /// without spinning the whole web host. The reconciler returns a structural
-/// <see cref="SequenceStartupReconciler.Result"/>; the factory translates
+/// <see cref="SequenceReconcileResult"/>; the factory translates
 /// that into user-visible inbox text.
 /// </summary>
 public static class StartupNotificationFactory {
@@ -29,12 +29,12 @@ public static class StartupNotificationFactory {
     /// Build the §46 notification for a non-Clean reconciler outcome.
     /// Interrupted → Warning (sequence was running, user should know).
     /// Corrupt → Critical (checkpoint file was damaged, possible data loss).
-    /// Caller should not invoke this with <see cref="SequenceStartupReconciler.Outcome.Clean"/>.
+    /// Caller should not invoke this with <see cref="SequenceReconcileOutcome.Clean"/>.
     /// </summary>
-    public static NotificationDto ForReconcilerResult(SequenceStartupReconciler.Result result) {
+    public static NotificationDto ForReconcilerResult(SequenceReconcileResult result) {
         var now = DateTimeOffset.UtcNow;
         return result.Outcome switch {
-            SequenceStartupReconciler.Outcome.Interrupted => new NotificationDto(
+            SequenceReconcileOutcome.Interrupted => new NotificationDto(
                 Id: Guid.NewGuid(),
                 PostedUtc: now,
                 Severity: NotificationSeverity.Warning,
@@ -47,7 +47,7 @@ public static class StartupNotificationFactory {
                 Payload: null,
                 RelatedEntityType: result.PreviousState is not null ? "sequence" : null,
                 RelatedEntityId: result.PreviousState?.SequenceId.ToString()),
-            SequenceStartupReconciler.Outcome.Corrupt => new NotificationDto(
+            SequenceReconcileOutcome.Corrupt => new NotificationDto(
                 Id: Guid.NewGuid(),
                 PostedUtc: now,
                 Severity: NotificationSeverity.Critical,
@@ -75,8 +75,8 @@ public static class StartupNotificationFactory {
     /// no user action is required to clear it).
     /// </summary>
     public static (DiagnosticEventDto Event, string? RecommendedAction, bool? AutoCorrectible)
-            DiagnosticForCorruptResult(SequenceStartupReconciler.Result result) {
-        if (result.Outcome != SequenceStartupReconciler.Outcome.Corrupt) {
+            DiagnosticForCorruptResult(SequenceReconcileResult result) {
+        if (result.Outcome != SequenceReconcileOutcome.Corrupt) {
             throw new ArgumentException(
                 $"DiagnosticForCorruptResult only handles Corrupt; got {result.Outcome}",
                 nameof(result));

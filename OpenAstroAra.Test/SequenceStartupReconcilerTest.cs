@@ -54,7 +54,7 @@ namespace OpenAstroAra.Test {
             var chk = new ActiveSequenceCheckpoint(_profileDir);
             var sut = new SequenceStartupReconciler(chk);
             var result = sut.Reconcile();
-            Assert.That(result.Outcome, Is.EqualTo(SequenceStartupReconciler.Outcome.Clean));
+            Assert.That(result.Outcome, Is.EqualTo(SequenceReconcileOutcome.Clean));
             Assert.That(result.PreviousState, Is.Null);
             Assert.That(result.QuarantinedPath, Is.Null);
         }
@@ -69,7 +69,7 @@ namespace OpenAstroAra.Test {
             var sut = new SequenceStartupReconciler(chk);
             var result = sut.Reconcile();
 
-            Assert.That(result.Outcome, Is.EqualTo(SequenceStartupReconciler.Outcome.Interrupted));
+            Assert.That(result.Outcome, Is.EqualTo(SequenceReconcileOutcome.Interrupted));
             Assert.That(result.PreviousState, Is.Not.Null);
             Assert.That(result.PreviousState!.SequenceId, Is.EqualTo(prev.SequenceId));
             // File cleared so next startup is Clean.
@@ -84,7 +84,7 @@ namespace OpenAstroAra.Test {
             var sut = new SequenceStartupReconciler(chk);
             var result = sut.Reconcile();
 
-            Assert.That(result.Outcome, Is.EqualTo(SequenceStartupReconciler.Outcome.Corrupt));
+            Assert.That(result.Outcome, Is.EqualTo(SequenceReconcileOutcome.Corrupt));
             Assert.That(result.QuarantinedPath, Is.Not.Null);
             Assert.That(File.Exists(result.QuarantinedPath!), Is.True);
             // Quarantined name matches the §28.1 pattern.
@@ -97,8 +97,8 @@ namespace OpenAstroAra.Test {
         public void Reconcile_is_idempotent_on_clean_state() {
             var chk = new ActiveSequenceCheckpoint(_profileDir);
             var sut = new SequenceStartupReconciler(chk);
-            Assert.That(sut.Reconcile().Outcome, Is.EqualTo(SequenceStartupReconciler.Outcome.Clean));
-            Assert.That(sut.Reconcile().Outcome, Is.EqualTo(SequenceStartupReconciler.Outcome.Clean));
+            Assert.That(sut.Reconcile().Outcome, Is.EqualTo(SequenceReconcileOutcome.Clean));
+            Assert.That(sut.Reconcile().Outcome, Is.EqualTo(SequenceReconcileOutcome.Clean));
         }
 
         [Test]

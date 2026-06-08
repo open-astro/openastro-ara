@@ -13,9 +13,28 @@
 #endregion "copyright"
 
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using OpenAstroAra.Server.Contracts;
+using System;
+using System.IO;
 
 namespace OpenAstroAra.Server.Services;
+
+/// <summary>Result of a §28.2 startup reconciliation pass.</summary>
+public enum SequenceReconcileOutcome {
+    /// <summary>No checkpoint file existed — clean shutdown.</summary>
+    Clean,
+    /// <summary>Checkpoint found + parsed; daemon crashed mid-sequence.</summary>
+    Interrupted,
+    /// <summary>Checkpoint found but JSON malformed — quarantined per §28.1.</summary>
+    Corrupt,
+}
+
+/// <summary>Outcome details from <see cref="SequenceStartupReconciler.Reconcile"/>.</summary>
+public sealed record SequenceReconcileResult(
+    SequenceReconcileOutcome Outcome,
+    SequenceRunStateDto? PreviousState,
+    string? QuarantinedPath);
 
 /// <summary>
 /// §28.2 daemon-startup reconciler. Inspects
@@ -37,49 +56,33 @@ namespace OpenAstroAra.Server.Services;
 /// service stays a pure file-IO helper testable without the
 /// INotificationService injection chain.
 /// </summary>
-public sealed class SequenceStartupReconciler {
-
-    public enum Outcome {
-        /// <summary>No checkpoint file existed — clean shutdown.</summary>
-        Clean,
-        /// <summary>Checkpoint found + parsed; daemon crashed mid-sequence.</summary>
-        Interrupted,
-        /// <summary>Checkpoint found but JSON malformed — quarantined per §28.1.</summary>
-        Corrupt,
-    }
-
-    public sealed record Result(
-        Outcome Outcome,
-        SequenceRunStateDto? PreviousState,
-        string? QuarantinedPath);
+public sealed partial class SequenceStartupReconciler {
 
     private readonly ActiveSequenceCheckpoint _checkpoint;
-    private readonly ILogger<SequenceStartupReconciler>? _logger;
+    private readonly ILogger<SequenceStartupReconciler> _logger;
 
     public SequenceStartupReconciler(ActiveSequenceCheckpoint checkpoint, ILogger<SequenceStartupReconciler>? logger = null) {
         _checkpoint = checkpoint;
-        _logger = logger;
+        _logger = logger ?? NullLogger<SequenceStartupReconciler>.Instance;
     }
 
     /// <summary>
     /// Run the §28.2 reconciliation once. Idempotent: subsequent calls on
     /// a clean state return <see cref="Outcome.Clean"/>.
     /// </summary>
-    public Result Reconcile() {
+    public SequenceReconcileResult Reconcile() {
         if (!_checkpoint.Exists()) {
-            return new Result(Outcome.Clean, PreviousState: null, QuarantinedPath: null);
+            return new SequenceReconcileResult(SequenceReconcileOutcome.Clean, PreviousState: null, QuarantinedPath: null);
         }
 
         var previous = _checkpoint.TryRead();
         if (previous is not null) {
-            _logger?.LogWarning(
-                "CHECKPOINT_INTERRUPTED: previous sequence {SeqId} was {State} with frame {Frame}/{Total} at startup",
-                previous.SequenceId, previous.State, previous.FramesCompleted, previous.FramesTotal);
+            LogCheckpointInterrupted(previous.SequenceId, previous.State, previous.FramesCompleted, previous.FramesTotal);
             // Clear the file — §28.2 policy is no auto-resume, the user
             // explicitly re-starts via REST. Keeping the file would
             // re-trigger on every subsequent startup.
             _checkpoint.Clear();
-            return new Result(Outcome.Interrupted, previous, QuarantinedPath: null);
+            return new SequenceReconcileResult(SequenceReconcileOutcome.Interrupted, previous, QuarantinedPath: null);
         }
 
         // File exists but failed to parse — §28.1 corruption quarantine.
@@ -87,19 +90,24 @@ public sealed class SequenceStartupReconciler {
         var quarantinePath = $"{_checkpoint.FilePath}.corrupt.{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
         try {
             File.Move(_checkpoint.FilePath, quarantinePath);
-            _logger?.LogError(
-                "CHECKPOINT_CORRUPT: active sequence checkpoint failed to parse; quarantined to {QuarantinePath}",
-                quarantinePath);
-        } catch (Exception ex) {
-            _logger?.LogError(ex,
-                "CHECKPOINT_CORRUPT: failed to quarantine unreadable checkpoint at {Path}",
-                _checkpoint.FilePath);
+            LogCheckpointQuarantined(quarantinePath);
+        } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+            LogQuarantineFailed(ex, _checkpoint.FilePath);
             // Last-resort: just delete it so startup proceeds. Diagnostics
             // lost but the alternative is the file blocking every future
             // startup.
-            try { File.Delete(_checkpoint.FilePath); } catch { }
-            return new Result(Outcome.Corrupt, PreviousState: null, QuarantinedPath: null);
+            try { File.Delete(_checkpoint.FilePath); } catch (Exception delEx) when (delEx is IOException or UnauthorizedAccessException) { }
+            return new SequenceReconcileResult(SequenceReconcileOutcome.Corrupt, PreviousState: null, QuarantinedPath: null);
         }
-        return new Result(Outcome.Corrupt, PreviousState: null, QuarantinedPath: quarantinePath);
+        return new SequenceReconcileResult(SequenceReconcileOutcome.Corrupt, PreviousState: null, QuarantinedPath: quarantinePath);
     }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "CHECKPOINT_INTERRUPTED: previous sequence {SeqId} was {State} with frame {Frame}/{Total} at startup")]
+    private partial void LogCheckpointInterrupted(Guid seqId, SequenceRunState state, int frame, int total);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "CHECKPOINT_CORRUPT: active sequence checkpoint failed to parse; quarantined to {QuarantinePath}")]
+    private partial void LogCheckpointQuarantined(string quarantinePath);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "CHECKPOINT_CORRUPT: failed to quarantine unreadable checkpoint at {Path}")]
+    private partial void LogQuarantineFailed(Exception ex, string path);
 }

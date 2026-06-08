@@ -37,8 +37,8 @@ namespace OpenAstroAra.Test {
         [Test]
         public void ForReconcilerResult_Interrupted_with_state_yields_Warning_and_RelatedEntity() {
             var seqId = Guid.NewGuid();
-            var result = new SequenceStartupReconciler.Result(
-                SequenceStartupReconciler.Outcome.Interrupted,
+            var result = new SequenceReconcileResult(
+                SequenceReconcileOutcome.Interrupted,
                 PreviousState: SampleState(seqId),
                 QuarantinedPath: null);
 
@@ -59,8 +59,8 @@ namespace OpenAstroAra.Test {
         public void ForReconcilerResult_Interrupted_without_state_omits_RelatedEntity() {
             // Defensive path — should not happen in practice, but the factory
             // shouldn't crash if PreviousState is null on an Interrupted outcome.
-            var result = new SequenceStartupReconciler.Result(
-                SequenceStartupReconciler.Outcome.Interrupted,
+            var result = new SequenceReconcileResult(
+                SequenceReconcileOutcome.Interrupted,
                 PreviousState: null,
                 QuarantinedPath: null);
 
@@ -75,8 +75,8 @@ namespace OpenAstroAra.Test {
         [Test]
         public void ForReconcilerResult_Corrupt_with_quarantine_yields_Critical_and_path_in_message() {
             var path = "/profile/sequences/active/current.json.corrupt.1717000000";
-            var result = new SequenceStartupReconciler.Result(
-                SequenceStartupReconciler.Outcome.Corrupt,
+            var result = new SequenceReconcileResult(
+                SequenceReconcileOutcome.Corrupt,
                 PreviousState: null,
                 QuarantinedPath: path);
 
@@ -92,8 +92,8 @@ namespace OpenAstroAra.Test {
         public void ForReconcilerResult_Corrupt_without_quarantine_path_still_critical() {
             // Hit when File.Move + fallback File.Delete both run (reconciler
             // last-resort path). No path to surface, but still a critical alert.
-            var result = new SequenceStartupReconciler.Result(
-                SequenceStartupReconciler.Outcome.Corrupt,
+            var result = new SequenceReconcileResult(
+                SequenceReconcileOutcome.Corrupt,
                 PreviousState: null,
                 QuarantinedPath: null);
 
@@ -105,16 +105,16 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public void ForReconcilerResult_Clean_throws() {
-            var result = new SequenceStartupReconciler.Result(
-                SequenceStartupReconciler.Outcome.Clean, null, null);
+            var result = new SequenceReconcileResult(
+                SequenceReconcileOutcome.Clean, null, null);
             Assert.Throws<ArgumentException>(
                 () => StartupNotificationFactory.ForReconcilerResult(result));
         }
 
         [Test]
         public void ForReconcilerResult_assigns_new_id_each_call() {
-            var result = new SequenceStartupReconciler.Result(
-                SequenceStartupReconciler.Outcome.Interrupted, SampleState(), null);
+            var result = new SequenceReconcileResult(
+                SequenceReconcileOutcome.Interrupted, SampleState(), null);
             var a = StartupNotificationFactory.ForReconcilerResult(result);
             var b = StartupNotificationFactory.ForReconcilerResult(result);
             Assert.That(a.Id, Is.Not.EqualTo(b.Id));
@@ -126,8 +126,8 @@ namespace OpenAstroAra.Test {
         [Test]
         public void DiagnosticForCorruptResult_with_quarantine_yields_Red_auto_cleared_event() {
             var path = "/profile/sequences/active/current.json.corrupt.1717999000";
-            var result = new SequenceStartupReconciler.Result(
-                SequenceStartupReconciler.Outcome.Corrupt,
+            var result = new SequenceReconcileResult(
+                SequenceReconcileOutcome.Corrupt,
                 PreviousState: null,
                 QuarantinedPath: path);
 
@@ -148,8 +148,8 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public void DiagnosticForCorruptResult_without_quarantine_uses_delete_fallback_copy() {
-            var result = new SequenceStartupReconciler.Result(
-                SequenceStartupReconciler.Outcome.Corrupt,
+            var result = new SequenceReconcileResult(
+                SequenceReconcileOutcome.Corrupt,
                 PreviousState: null,
                 QuarantinedPath: null);
 
@@ -163,10 +163,10 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public void DiagnosticForCorruptResult_rejects_non_Corrupt_outcomes() {
-            var clean = new SequenceStartupReconciler.Result(
-                SequenceStartupReconciler.Outcome.Clean, null, null);
-            var interrupted = new SequenceStartupReconciler.Result(
-                SequenceStartupReconciler.Outcome.Interrupted, SampleState(), null);
+            var clean = new SequenceReconcileResult(
+                SequenceReconcileOutcome.Clean, null, null);
+            var interrupted = new SequenceReconcileResult(
+                SequenceReconcileOutcome.Interrupted, SampleState(), null);
 
             Assert.Throws<ArgumentException>(
                 () => StartupNotificationFactory.DiagnosticForCorruptResult(clean));

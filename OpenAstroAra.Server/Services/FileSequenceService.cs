@@ -13,7 +13,10 @@
 #endregion "copyright"
 
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using OpenAstroAra.Server.Contracts;
+using System;
+using System.IO;
 using System.Text.Json;
 
 namespace OpenAstroAra.Server.Services;
@@ -33,9 +36,9 @@ namespace OpenAstroAra.Server.Services;
 /// <c>templates/</c>, <c>active/</c>) so future sub-PRs that need them have
 /// a stable layout without each one re-implementing the same mkdir step.
 /// </summary>
-public sealed class FileSequenceService : ISequenceService {
+public sealed partial class FileSequenceService : ISequenceService {
     private readonly string _libraryDir;
-    private readonly ILogger<FileSequenceService>? _logger;
+    private readonly ILogger<FileSequenceService> _logger;
     private readonly ISequencerService? _sequencer;
     private readonly object _writeLock = new();
     private static readonly AraJsonSerializerContext _indentedContext =
@@ -57,7 +60,7 @@ public sealed class FileSequenceService : ISequenceService {
         var sequencesRoot = Path.Combine(profileDir, "sequences");
         _libraryDir = Path.Combine(sequencesRoot, LibraryDirName);
         _sequencer = sequencer;
-        _logger = logger;
+        _logger = logger ?? NullLogger<FileSequenceService>.Instance;
 
         // §38.2 scaffold: create all four subdirs on startup. Library is the
         // only one this service writes; the others are scaffolded here so the
@@ -65,8 +68,8 @@ public sealed class FileSequenceService : ISequenceService {
         // their existence without each one duplicating the mkdir + log path.
         foreach (var dirName in new[] { LibraryDirName, ImportedDirName, TemplatesDirName, ActiveDirName }) {
             var path = Path.Combine(sequencesRoot, dirName);
-            try { Directory.CreateDirectory(path); } catch (Exception ex) {
-                _logger?.LogWarning(ex, "Failed to create sequences subdir {Path}", path);
+            try { Directory.CreateDirectory(path); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+                LogCreateSubdirFailed(ex, path);
             }
         }
     }
@@ -149,8 +152,8 @@ public sealed class FileSequenceService : ISequenceService {
         try {
             File.Delete(path);
             return Task.FromResult(true);
-        } catch (Exception ex) {
-            _logger?.LogWarning(ex, "Failed to delete sequence {Id} at {Path}", id, path);
+        } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+            LogDeleteFailed(ex, id, path);
             return Task.FromResult(false);
         }
     }
@@ -182,8 +185,8 @@ public sealed class FileSequenceService : ISequenceService {
         try {
             var json = File.ReadAllText(path);
             return JsonSerializer.Deserialize(json, AraJsonSerializerContext.Default.SequenceDto);
-        } catch (Exception ex) {
-            _logger?.LogWarning(ex, "Failed to load sequence from {Path}", path);
+        } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) {
+            LogLoadFailed(ex, path);
             return null;
         }
     }
@@ -198,9 +201,21 @@ public sealed class FileSequenceService : ISequenceService {
                 File.WriteAllText(tempPath, json);
                 File.Move(tempPath, path, overwrite: true);
             } catch (Exception ex) {
-                _logger?.LogWarning(ex, "Failed to write sequence {Id}", dto.Id);
+                LogWriteFailed(ex, dto.Id);
                 throw;
             }
         }
     }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to create sequences subdir {Path}")]
+    private partial void LogCreateSubdirFailed(Exception ex, string path);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to delete sequence {Id} at {Path}")]
+    private partial void LogDeleteFailed(Exception ex, Guid id, string path);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to load sequence from {Path}")]
+    private partial void LogLoadFailed(Exception ex, string path);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to write sequence {Id}")]
+    private partial void LogWriteFailed(Exception ex, Guid id);
 }
