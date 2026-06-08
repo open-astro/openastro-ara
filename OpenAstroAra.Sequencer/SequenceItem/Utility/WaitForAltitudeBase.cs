@@ -27,7 +27,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
 
         public IList<string> Issues {
             get => issues;
-            set {
+            private protected set {
                 issues = value;
                 RaisePropertyChanged();
             }
@@ -36,6 +36,11 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
         public abstract void CalculateExpectedTime();
 
         #region Obsolete Migration Properties
+
+        // The following write-only setters exist solely to migrate legacy JSON sequences whose
+        // values used to live directly on this item before they moved onto WaitLoopData (Data).
+        // The JSON property names below are a serialization wire-contract for those old sequences
+        // and must remain stable regardless of any C# symbol names.
 
         [JsonProperty(propertyName: "Comparator")]
         private ComparisonOperator DeprecatedComparator {
@@ -51,42 +56,21 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
                 Data.Comparator = value;
             }
         }
-        [Obsolete]
-        [JsonIgnore]
-        public ComparisonOperator Comparator { get; set; }
 
         [JsonProperty(propertyName: "UserMoonAltitude")]
         private double DeprecatedUserMoonAltitude { set => Data.Offset = value; }
-        [Obsolete]
-        [JsonIgnore]
-        public double UserMoonAltitude { get; set; }
 
         [JsonProperty(propertyName: "UserSunAltitude")]
         private double DeprecatedUserSunAltitude { set => Data.Offset = value; }
-        [Obsolete]
-        [JsonIgnore]
-        public double UserSunAltitude { get; set; }
 
         [JsonProperty(propertyName: "AltitudeOffset")]
         private double DeprecatedAltitudeOffset { set => Data.Offset = value; }
 
-        [Obsolete]
-        [JsonIgnore]
-        public double AltitudeOffset { get; set; }
-
         [JsonProperty(propertyName: "Altitude")]
         private double DeprecatedAltitude { set => Data.Offset = value; }
 
-        [Obsolete]
-        [JsonIgnore]
-        public double Altitude { get; set; }
-
         [JsonProperty(propertyName: "Coordinates")]
         private InputCoordinates DeprecatedCoordinates { set => Data.Coordinates = value; }
-
-        [Obsolete]
-        [JsonIgnore]
-        public InputCoordinates? Coordinates { get; set; }
         #endregion
     }
 }

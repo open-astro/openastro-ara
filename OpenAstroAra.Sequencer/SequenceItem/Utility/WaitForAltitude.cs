@@ -22,6 +22,7 @@ using OpenAstroAra.Sequencer.Validations;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.Composition;
+using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
 using static OpenAstroAra.Sequencer.Utility.ItemUtility;
@@ -78,7 +79,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
                 var coordinates = Data.Coordinates.Coordinates;
                 var altaz = coordinates.Transform(Angle.ByDegree(Data.Latitude), Angle.ByDegree(Data.Longitude), Data.Elevation);
                 progress?.Report(new ApplicationStatus() {
-                    Status = string.Format(Loc.Instance["Lbl_SequenceItem_Utility_WaitForAltitude_Progress"], Math.Round(altaz.Altitude.Degree, 2), Data.TargetAltitude)
+                    Status = string.Format(CultureInfo.CurrentCulture, Loc.Instance["Lbl_SequenceItem_Utility_WaitForAltitude_Progress"], Math.Round(altaz.Altitude.Degree, 2), Data.TargetAltitude)
                 });
 
                 if (aboveOrBelow == ">" && altaz.Altitude.Degree >= Data.Offset) {
