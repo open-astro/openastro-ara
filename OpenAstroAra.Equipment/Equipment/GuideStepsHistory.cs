@@ -214,7 +214,9 @@ namespace OpenAstroAra.Equipment.Equipment {
             }
         }
 
-        public class HistoryStep {
+    }
+
+    public class HistoryStep {
             private static int idProvider = 1;
             public int Id { get; private set; }
             public double IdOffsetLeft => Id - 0.15;
@@ -271,5 +273,4 @@ namespace OpenAstroAra.Equipment.Equipment {
                 idProvider = 0;
             }
         }
-    }
 }

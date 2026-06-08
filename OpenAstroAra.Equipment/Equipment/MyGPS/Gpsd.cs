@@ -111,7 +111,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGPS {
             return location;
         }
 
-        public class TpvMessage {
+        internal class TpvMessage {
             public static string Schema => @"{
                   '$schema': 'http://json-schema.org/draft-04/schema#',
                   'type': 'object',

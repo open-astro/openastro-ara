@@ -146,16 +146,6 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.SkyGuard.SkyGuardMessages {
             set => dECDuration = value;
         }
 
-        public class SkyGuardEventAppState : SkyGuardEventMessage, IGuiderAppState {
-            private string state = string.Empty;
-
-            public string State {
-                get => state;
-
-                set => state = value;
-            }
-        }
-
         private SkyGuardEventAppState? _appState;
 
         public SkyGuardEventAppState? AppState {
@@ -178,6 +168,16 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.SkyGuard.SkyGuardMessages {
 
         public IGuideStep Clone() {
             return (SkyGuardEventGuideStep)this.MemberwiseClone();
+        }
+    }
+
+    public class SkyGuardEventAppState : SkyGuardEventMessage, IGuiderAppState {
+        private string state = string.Empty;
+
+        public string State {
+            get => state;
+
+            set => state = value;
         }
     }
 }

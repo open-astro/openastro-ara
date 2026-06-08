@@ -201,7 +201,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyCamera {
         }
 
         public void StartExposure(CaptureSequence sequence) {
-            var isSnap = sequence.ImageType == CaptureSequence.ImageTypes.SNAPSHOT;
+            var isSnap = sequence.ImageType == ImageTypes.SNAPSHOT;
             var readoutMode = isSnap ? ReadoutModeForSnapImages : ReadoutModeForNormalImages;
             ReadoutMode = readoutMode;
 

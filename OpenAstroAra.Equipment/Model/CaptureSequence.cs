@@ -23,15 +23,15 @@ namespace OpenAstroAra.Equipment.Model {
 
     [Serializable()]
     [XmlRoot(ElementName = "CaptureSequence")]
-    public class CaptureSequence : BaseINPC {
+    public static class ImageTypes {
+        public const string LIGHT = "LIGHT";
+        public const string FLAT = "FLAT";
+        public const string DARK = "DARK";
+        public const string BIAS = "BIAS";
+        public const string SNAPSHOT = "SNAPSHOT";
+    }
 
-        public static class ImageTypes {
-            public const string LIGHT = "LIGHT";
-            public const string FLAT = "FLAT";
-            public const string DARK = "DARK";
-            public const string BIAS = "BIAS";
-            public const string SNAPSHOT = "SNAPSHOT";
-        }
+    public class CaptureSequence : BaseINPC {
 
         public CaptureSequence() {
             ExposureTime = 1;

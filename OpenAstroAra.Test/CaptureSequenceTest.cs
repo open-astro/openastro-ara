@@ -154,7 +154,7 @@ namespace OpenAstroAra.Test {
             Assert.That(seq.ExposureTime, Is.EqualTo(1), "ExposureTime value not as expected");
             Assert.That(seq.FilterType, Is.EqualTo(null), "FilterType value not as expected");
             Assert.That(seq.Gain, Is.EqualTo(-1), "Gain value not as expected");
-            Assert.That(seq.ImageType, Is.EqualTo(CaptureSequence.ImageTypes.LIGHT), "ImageType value not as expected");
+            Assert.That(seq.ImageType, Is.EqualTo(ImageTypes.LIGHT), "ImageType value not as expected");
             Assert.That(seq.ProgressExposureCount, Is.EqualTo(0), "ProgressExposureCount value not as expected");
             Assert.That(seq.TotalExposureCount, Is.EqualTo(1), "TotalExposureCount value not as expected");
             Assert.That(seq.Enabled, Is.EqualTo(true), "Enabled value not as expected");
@@ -164,7 +164,7 @@ namespace OpenAstroAra.Test {
         public void Constructor_ValueTest() {
             //Arrange
             var exposureTime = 5;
-            var imageType = CaptureSequence.ImageTypes.BIAS;
+            var imageType = ImageTypes.BIAS;
             var filter = new FilterInfo("Red", 1234, 3);
             var binning = new BinningMode(2, 3);
             var exposureCount = 20;
@@ -190,7 +190,7 @@ namespace OpenAstroAra.Test {
         public void ReduceExposureCount_ProgressReflectedCorrectly() {
             //Arrange
             var exposureTime = 5;
-            var imageType = CaptureSequence.ImageTypes.BIAS;
+            var imageType = ImageTypes.BIAS;
             var filter = new FilterInfo("Red", 1234, 3);
             var binning = new BinningMode(2, 3);
             var exposureCount = 20;

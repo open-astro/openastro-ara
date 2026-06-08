@@ -117,7 +117,7 @@ namespace OpenAstroAra.Equipment.Model {
                 foreach (var s in l.Items) {
                     // Migration of values prior to 3.0
                     if (s.ImageType == "DARKFLAT") {
-                        s.ImageType = CaptureSequence.ImageTypes.DARK;
+                        s.ImageType = ImageTypes.DARK;
                     }
                 }
                 AdjustSequenceToMatchCurrentProfile(filters, latitude, longitude, l);
@@ -170,7 +170,7 @@ namespace OpenAstroAra.Equipment.Model {
                     foreach (var s in l.Items) {
                         // Migration of values prior to 3.0
                         if (s.ImageType == "DARKFLAT") {
-                            s.ImageType = CaptureSequence.ImageTypes.DARK;
+                            s.ImageType = ImageTypes.DARK;
                         }
                     }
                     AdjustSequenceToMatchCurrentProfile(filters, latitude, longitude, l);
