@@ -40,16 +40,17 @@ namespace OpenAstroAra.Server.Services;
 ///     <c>OpenAstroAra.Sequencer</c> equivalent.</item>
 /// </list>
 /// </summary>
+/// <summary>Instruction/target counts produced by <see cref="SequenceBodyInspector.Inspect"/>.</summary>
+public sealed record SequenceBodyStats(int InstructionCount, int TargetCount);
+
 public static class SequenceBodyInspector {
 
-    public sealed record Stats(int InstructionCount, int TargetCount);
-
-    public static Stats Inspect(JsonElement body) {
-        if (body.ValueKind != JsonValueKind.Object) return new Stats(0, 0);
+    public static SequenceBodyStats Inspect(JsonElement body) {
+        if (body.ValueKind != JsonValueKind.Object) return new SequenceBodyStats(0, 0);
         var instructions = 0;
         var targets = 0;
         Walk(body, ref instructions, ref targets);
-        return new Stats(instructions, targets);
+        return new SequenceBodyStats(instructions, targets);
     }
 
     private static void Walk(JsonElement node, ref int instructions, ref int targets) {

@@ -143,7 +143,7 @@ public sealed record SequenceShareDto(
     string ShareFormat,
     System.Text.Json.JsonElement Manifest,
     long PayloadBytes,
-    string DownloadUrl);
+    Uri DownloadUrl);
 
 /// <summary>POST /api/v1/sequences/{id}/auto-flats-decision body per §48.</summary>
 public sealed record AutoFlatsDecisionRequestDto(

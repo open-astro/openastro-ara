@@ -216,21 +216,21 @@ public sealed partial class SqliteDiagnosticsService : IDiagnosticsService {
     }
 
     public async Task CreateEventAsync(
-            DiagnosticEventDto @event,
+            DiagnosticEventDto diagnosticEvent,
             string? recommendedAction,
             bool? autoCorrectible,
             CancellationToken ct) {
         await using var conn = _db.OpenConnection();
         await InsertEventAsync(
             conn,
-            id: @event.Id,
-            eventType: @event.EventType,
-            severity: @event.Severity,
-            description: @event.Description,
-            detectedUtc: @event.DetectedUtc,
-            clearedUtc: @event.ClearedUtc,
-            autoActionTaken: @event.AutoActionTaken,
-            autoActionDescription: @event.AutoActionDescription,
+            id: diagnosticEvent.Id,
+            eventType: diagnosticEvent.EventType,
+            severity: diagnosticEvent.Severity,
+            description: diagnosticEvent.Description,
+            detectedUtc: diagnosticEvent.DetectedUtc,
+            clearedUtc: diagnosticEvent.ClearedUtc,
+            autoActionTaken: diagnosticEvent.AutoActionTaken,
+            autoActionDescription: diagnosticEvent.AutoActionDescription,
             recommendedAction: recommendedAction,
             autoCorrectible: autoCorrectible,
             ct: ct);

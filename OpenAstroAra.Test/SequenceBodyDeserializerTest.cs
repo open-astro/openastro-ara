@@ -46,7 +46,7 @@ namespace OpenAstroAra.Test {
             factory.SetupGet(f => f.Items).Returns(new List<ISequenceItem>());
             factory.SetupGet(f => f.Conditions).Returns(new List<ISequenceCondition>());
             factory.SetupGet(f => f.Triggers).Returns(new List<ISequenceTrigger>());
-            factory.SetupGet(f => f.Container).Returns(new List<ISequenceContainer>());
+            factory.SetupGet(f => f.Containers).Returns(new List<ISequenceContainer>());
             factory.SetupGet(f => f.DateTimeProviders).Returns(new List<IDateTimeProvider>());
             return new SequenceBodyDeserializer(factory.Object, logger: null);
         }

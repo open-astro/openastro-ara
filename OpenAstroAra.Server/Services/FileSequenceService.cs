@@ -176,7 +176,7 @@ public sealed partial class FileSequenceService : ISequenceService {
             ShareFormat: "openastroara.v1",
             Manifest: existing.Body,
             PayloadBytes: manifestBytes,
-            DownloadUrl: $"/api/v1/sequences/{existing.Id}/share/payload"));
+            DownloadUrl: new Uri($"/api/v1/sequences/{existing.Id}/share/payload", UriKind.Relative)));
     }
 
     private string PathFor(Guid id) => Path.Combine(_libraryDir, $"{id:D}.json");

@@ -32,7 +32,7 @@ public static class JobsEndpoints {
 
         jobs.MapGet("/{id:guid}",
                 (Guid id, IBatchJobService svc) => {
-                    var state = svc.Get(id);
+                    var state = svc.GetJob(id);
                     return state is null ? Results.NotFound() : Results.Ok(state);
                 })
             .Produces<BatchJobDto>(StatusCodes.Status200OK)
@@ -41,7 +41,7 @@ public static class JobsEndpoints {
 
         jobs.MapDelete("/{id:guid}",
                 (Guid id, IBatchJobService svc) => {
-                    if (svc.Get(id) is null) return Results.NotFound();
+                    if (svc.GetJob(id) is null) return Results.NotFound();
                     svc.TryCancel(id);
                     return Results.NoContent();
                 })

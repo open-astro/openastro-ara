@@ -37,7 +37,7 @@ namespace OpenAstroAra.Sequencer {
         public IList<ISequenceItem> Items { get; private set; }
         public IList<ISequenceCondition> Conditions { get; private set; }
         public IList<ISequenceTrigger> Triggers { get; private set; }
-        public IList<ISequenceContainer> Container { get; private set; }
+        public IList<ISequenceContainer> Containers { get; private set; }
         public IList<IDateTimeProvider> DateTimeProviders { get; private set; }
 
         public SequencerFactory(
@@ -52,7 +52,7 @@ namespace OpenAstroAra.Sequencer {
             Items = new ObservableCollection<ISequenceItem>(items);
             Conditions = new ObservableCollection<ISequenceCondition>(conditions);
             Triggers = new ObservableCollection<ISequenceTrigger>(triggers);
-            Container = new ObservableCollection<ISequenceContainer>(container);
+            Containers = new ObservableCollection<ISequenceContainer>(container);
 
             var enitityOptions = new PluginOptionsAccessor(profileService, Guid.Parse("E7C2BE8E-479B-4DBA-A0B0-D513B77F9A54"));
             var allEntities = new List<SidebarEntity>();
@@ -142,7 +142,7 @@ namespace OpenAstroAra.Sequencer {
         public ICollectionView TriggersView { get; }
 
         public T? GetContainer<T>() where T : ISequenceContainer {
-            return (T?)Container.FirstOrDefault(x => x.GetType() == typeof(T))?.Clone();
+            return (T?)Containers.FirstOrDefault(x => x.GetType() == typeof(T))?.Clone();
         }
 
         public T? GetItem<T>() where T : ISequenceItem {

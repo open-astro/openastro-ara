@@ -48,7 +48,7 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
 
     public IList<ISequenceItem> Items { get; }
     public IList<ISequenceCondition> Conditions { get; }
-    public IList<ISequenceContainer> Container { get; }
+    public IList<ISequenceContainer> Containers { get; }
     public IList<ISequenceTrigger> Triggers { get; }
     public IList<IDateTimeProvider> DateTimeProviders { get; }
 
@@ -72,7 +72,7 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
             IList<IDateTimeProvider>? dateTimeProviders = null) {
         Items = items ?? new List<ISequenceItem>();
         Conditions = conditions ?? new List<ISequenceCondition>();
-        Container = container ?? new List<ISequenceContainer>();
+        Containers = container ?? new List<ISequenceContainer>();
         Triggers = triggers ?? new List<ISequenceTrigger>();
         DateTimeProviders = dateTimeProviders ?? new List<IDateTimeProvider>();
 
@@ -90,7 +90,7 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
     // to UnknownSequenceContainer / UnknownSequenceItem.
 
     public T GetContainer<T>() where T : ISequenceContainer =>
-        (T)(Container.FirstOrDefault(x => x.GetType() == typeof(T))?.Clone() ?? default(T)!);
+        (T)(Containers.FirstOrDefault(x => x.GetType() == typeof(T))?.Clone() ?? default(T)!);
 
     public T GetItem<T>() where T : ISequenceItem =>
         (T)(Items.FirstOrDefault(x => x.GetType() == typeof(T))?.Clone() ?? default(T)!);

@@ -37,7 +37,7 @@ namespace OpenAstroAra.Test {
             var factory = new HeadlessSequencerFactory();
             Assert.That(factory.Items, Is.Empty);
             Assert.That(factory.Conditions, Is.Empty);
-            Assert.That(factory.Container, Is.Empty);
+            Assert.That(factory.Containers, Is.Empty);
             Assert.That(factory.Triggers, Is.Empty);
             Assert.That(factory.DateTimeProviders, Is.Empty);
         }
@@ -71,8 +71,8 @@ namespace OpenAstroAra.Test {
         [Test]
         public void WithDefaults_registers_the_three_structural_containers() {
             var factory = HeadlessSequencerFactory.WithDefaults();
-            Assert.That(factory.Container, Has.Count.EqualTo(3));
-            var typeNames = factory.Container.Select(c => c.GetType().Name).ToList();
+            Assert.That(factory.Containers, Has.Count.EqualTo(3));
+            var typeNames = factory.Containers.Select(c => c.GetType().Name).ToList();
             Assert.That(typeNames, Does.Contain("SequenceRootContainer"));
             Assert.That(typeNames, Does.Contain("SequentialContainer"));
             Assert.That(typeNames, Does.Contain("ParallelContainer"));

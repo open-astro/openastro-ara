@@ -89,7 +89,7 @@ public sealed partial class InMemoryBatchJobService : IBatchJobService {
         return Snapshot(state);
     }
 
-    public BatchJobDto? Get(Guid jobId) =>
+    public BatchJobDto? GetJob(Guid jobId) =>
         _jobs.TryGetValue(jobId, out var state) ? Snapshot(state) : null;
 
     public bool TryCancel(Guid jobId) {

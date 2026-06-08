@@ -80,7 +80,7 @@ public interface IDiagnosticsService {
     /// for the columns absent from the read DTO.
     /// </summary>
     Task CreateEventAsync(
-        DiagnosticEventDto @event,
+        DiagnosticEventDto diagnosticEvent,
         string? recommendedAction,
         bool? autoCorrectible,
         CancellationToken ct);

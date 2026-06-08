@@ -25,7 +25,7 @@ namespace OpenAstroAra.Sequencer {
 
     public interface ISequencerFactory {
         IList<ISequenceCondition> Conditions { get; }
-        IList<ISequenceContainer> Container { get; }
+        IList<ISequenceContainer> Containers { get; }
         IList<ISequenceItem> Items { get; }
         ICollectionView ItemsView { get; }
         ICollectionView InstructionsView { get; }

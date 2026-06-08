@@ -63,7 +63,7 @@ public sealed class PlaceholderCameraService : ICameraService {
             CapturedAt: DateTimeOffset.UtcNow.ToString("O")));
     }
     public Task AbortExposureAsync(CancellationToken ct) => Task.CompletedTask;
-    public Task SetCoolerAsync(bool on, double? targetTemperatureC, CancellationToken ct) => Task.CompletedTask;
+    public Task SetCoolerAsync(bool enabled, double? targetTemperatureC, CancellationToken ct) => Task.CompletedTask;
 }
 
 public sealed class PlaceholderTelescopeService : ITelescopeService {
