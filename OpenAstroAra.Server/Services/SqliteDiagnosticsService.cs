@@ -14,6 +14,7 @@
 
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using OpenAstroAra.Server.Contracts;
 
 namespace OpenAstroAra.Server.Services;
@@ -30,7 +31,7 @@ namespace OpenAstroAra.Server.Services;
 /// §38 sequence orchestrator is online. This service is the storage
 /// + query API; the writer-side wires in alongside the orchestrator.
 /// </summary>
-public sealed class SqliteDiagnosticsService : IDiagnosticsService {
+public sealed partial class SqliteDiagnosticsService : IDiagnosticsService {
     private const string ModeKey = "diagnostics_mode";
 
     private static readonly Guid SampleIssueId =
@@ -42,11 +43,11 @@ public sealed class SqliteDiagnosticsService : IDiagnosticsService {
     };
 
     private readonly IAraDatabase _db;
-    private readonly ILogger<SqliteDiagnosticsService>? _logger;
+    private readonly ILogger<SqliteDiagnosticsService> _logger;
 
     public SqliteDiagnosticsService(IAraDatabase db, ILogger<SqliteDiagnosticsService>? logger) {
         _db = db;
-        _logger = logger;
+        _logger = logger ?? NullLogger<SqliteDiagnosticsService>.Instance;
     }
 
     /// <summary>
@@ -104,7 +105,7 @@ public sealed class SqliteDiagnosticsService : IDiagnosticsService {
             autoCorrectible: null,
             ct: ct);
 
-        _logger?.LogInformation("Seeded sample diagnostic events");
+        LogSeededEvents();
     }
 
     public async Task<DiagnosticsStateDto> GetStateAsync(CancellationToken ct) {
@@ -132,8 +133,8 @@ public sealed class SqliteDiagnosticsService : IDiagnosticsService {
                     Severity: severity,
                     Description: reader.GetString(3),
                     DetectedUtc: DateTimeOffset.Parse(reader.GetString(4)),
-                    RecommendedAction: reader.IsDBNull(5) ? null : reader.GetString(5),
-                    AutoCorrectible: !reader.IsDBNull(6) && reader.GetInt32(6) != 0));
+                    RecommendedAction: await reader.IsDBNullAsync(5, ct) ? null : reader.GetString(5),
+                    AutoCorrectible: !await reader.IsDBNullAsync(6, ct) && reader.GetInt32(6) != 0));
             }
         }
 
@@ -194,9 +195,9 @@ public sealed class SqliteDiagnosticsService : IDiagnosticsService {
                 Severity: Enum.Parse<DiagnosticHealth>(reader.GetString(2), ignoreCase: true),
                 Description: reader.GetString(3),
                 DetectedUtc: DateTimeOffset.Parse(reader.GetString(4)),
-                ClearedUtc: reader.IsDBNull(5) ? null : DateTimeOffset.Parse(reader.GetString(5)),
+                ClearedUtc: await reader.IsDBNullAsync(5, ct) ? null : DateTimeOffset.Parse(reader.GetString(5)),
                 AutoActionTaken: reader.GetInt32(6) != 0,
-                AutoActionDescription: reader.IsDBNull(7) ? null : reader.GetString(7)));
+                AutoActionDescription: await reader.IsDBNullAsync(7, ct) ? null : reader.GetString(7)));
         }
         var hasMore = await reader.ReadAsync(ct);
         var nextCursor = hasMore ? (offset + pageSize).ToString() : null;
@@ -265,4 +266,7 @@ public sealed class SqliteDiagnosticsService : IDiagnosticsService {
             autoCorrectible.HasValue ? (object)(autoCorrectible.Value ? 1 : 0) : DBNull.Value);
         await cmd.ExecuteNonQueryAsync(ct);
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Seeded sample diagnostic events")]
+    private partial void LogSeededEvents();
 }
