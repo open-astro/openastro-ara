@@ -89,7 +89,7 @@ namespace OpenAstroAra.Equipment.Model {
                 using (StreamWriter writer = new StreamWriter(path)) {
                     xmlSerializer.Serialize(writer, this);
                 }
-            } catch (Exception ex) {
+            } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException or XmlException or InvalidOperationException) {
                 Logger.Error(ex);
                 Notifier.ShowError(ex.Message);
             }
@@ -100,7 +100,7 @@ namespace OpenAstroAra.Equipment.Model {
                 using (var s = new FileStream(fileName, FileMode.Open)) {
                     return Load(s, fileName, filters, latitude, longitude);
                 }
-            } catch (Exception ex) {
+            } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException or XmlException or InvalidOperationException) {
                 Logger.Error(ex);
                 Notifier.ShowError(ex.Message);
                 return null;
@@ -121,7 +121,7 @@ namespace OpenAstroAra.Equipment.Model {
                     }
                 }
                 AdjustSequenceToMatchCurrentProfile(filters, latitude, longitude, l);
-            } catch (Exception ex) {
+            } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException or XmlException or InvalidOperationException) {
                 Logger.Error(ex);
                 Notifier.ShowError(Loc.Instance["LblLoadSequenceFailed"] + Environment.NewLine + ex.Message);
             }
@@ -152,7 +152,7 @@ namespace OpenAstroAra.Equipment.Model {
                 using (StreamWriter writer = new StreamWriter(path)) {
                     xmlSerializer.Serialize(writer, sequenceSet);
                 }
-            } catch (Exception ex) {
+            } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException or XmlException or InvalidOperationException) {
                 Logger.Error(ex);
                 Notifier.ShowError(ex.Message);
             }
@@ -175,7 +175,7 @@ namespace OpenAstroAra.Equipment.Model {
                     }
                     AdjustSequenceToMatchCurrentProfile(filters, latitude, longitude, l);
                 }
-            } catch (Exception ex) {
+            } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException or XmlException or InvalidOperationException) {
                 Logger.Error(ex);
                 Notifier.ShowError(Loc.Instance["LblLoadSequenceSetFailed"] + Environment.NewLine + ex.Message);
             }

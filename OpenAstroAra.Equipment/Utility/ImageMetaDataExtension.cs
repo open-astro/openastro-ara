@@ -23,12 +23,15 @@ using OpenAstroAra.Equipment.Interfaces;
 using OpenAstroAra.Image.ImageData;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
 namespace OpenAstroAra.Equipment.Utility {
 
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort metadata population: each catch guards a single copy of a device-info field into ImageMetaData and substitutes a sentinel (NaN / -1) when the source getter throws (e.g. a value unavailable on the current driver, or an offline device). Capturing every field independently keeps one unreadable value from aborting the whole metadata snapshot. CA1031 sanctions general catches at such recover-and-continue boundaries.")]
     public static class ImageMetaDataExtension {
 
         public static void FromCamera(this ImageMetaData data, ICamera info) {

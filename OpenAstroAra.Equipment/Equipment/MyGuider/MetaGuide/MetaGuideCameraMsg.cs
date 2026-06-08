@@ -36,7 +36,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.MetaGuide {
                     MinGain = int.Parse(args[9], CultureInfo.InvariantCulture),
                     MaxGain = int.Parse(args[10], CultureInfo.InvariantCulture)
                 };
-            } catch (Exception ex) {
+            } catch (Exception ex) when (ex is FormatException or OverflowException) {
                 Logger.Error(ex);
                 return null;
             }

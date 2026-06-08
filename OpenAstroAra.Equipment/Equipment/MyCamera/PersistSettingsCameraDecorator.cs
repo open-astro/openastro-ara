@@ -22,11 +22,14 @@ using OpenAstroAra.Profile.Interfaces;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace OpenAstroAra.Equipment.Equipment.MyCamera {
 
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Persisted-setting restore boundary: every catch in this decorator wraps a single write to the underlying camera driver while re-applying a value saved in the profile. A driver/SDK/ASCOM property set can throw any exception type; the failure is logged and the offending persisted value cleared so that one rejected setting cannot fail camera initialization. CA1031 sanctions general catches at such recover-and-continue boundaries.")]
     public class PersistSettingsCameraDecorator : BaseINPC, ICamera {
         public ICamera Camera { get; }
         private readonly IProfileService profileService;

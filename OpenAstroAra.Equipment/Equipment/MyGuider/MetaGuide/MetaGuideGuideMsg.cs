@@ -35,7 +35,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.MetaGuide {
                     NorthPulse = int.Parse(args[8], CultureInfo.InvariantCulture),
                     CalibrationState = (CalibrationState)int.Parse(args[9], CultureInfo.InvariantCulture)
                 };
-            } catch (Exception ex) {
+            } catch (Exception ex) when (ex is FormatException or OverflowException) {
                 Logger.Error(ex);
                 return null;
             }

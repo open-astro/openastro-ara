@@ -53,7 +53,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.MetaGuide {
                     Guiding = int.Parse(args[26], CultureInfo.InvariantCulture.NumberFormat) > 0,
                     MetaGuideVersion = Version.Parse(args[27])
                 };
-            } catch (Exception ex) {
+            } catch (Exception ex) when (ex is FormatException or OverflowException) {
                 Logger.Error(ex);
                 return null;
             }

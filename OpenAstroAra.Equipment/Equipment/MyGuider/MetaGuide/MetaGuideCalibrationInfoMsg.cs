@@ -36,7 +36,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.MetaGuide {
                     NorthX = double.Parse(args[9], CultureInfo.InvariantCulture),
                     NorthY = double.Parse(args[10], CultureInfo.InvariantCulture)
                 };
-            } catch (Exception ex) {
+            } catch (Exception ex) when (ex is FormatException or OverflowException) {
                 Logger.Error(ex);
                 return null;
             }

@@ -39,7 +39,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.MetaGuide {
                     NorthSouthRev = int.Parse(args[12], CultureInfo.InvariantCulture),
                     EastWestRev = int.Parse(args[13], CultureInfo.InvariantCulture)
                 };
-            } catch (Exception ex) {
+            } catch (Exception ex) when (ex is FormatException or OverflowException) {
                 Logger.Error(ex);
                 return null;
             }

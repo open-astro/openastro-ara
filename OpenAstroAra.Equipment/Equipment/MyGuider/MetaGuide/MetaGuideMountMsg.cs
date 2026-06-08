@@ -30,7 +30,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.MetaGuide {
                 return new MetaGuideMountMsg() {
                     MountName = args[5]
                 };
-            } catch (Exception ex) {
+            } catch (Exception ex) when (ex is FormatException or OverflowException) {
                 Logger.Error(ex);
                 return null;
             }
