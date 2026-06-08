@@ -108,14 +108,14 @@ namespace OpenAstroAra.Equipment.Equipment.MyCamera {
             set { if (canGetGain != value) { canGetGain = value; RaisePropertyChanged(); } }
         }
 
-        public int offsetMin;
+        private int offsetMin;
 
         public int OffsetMin {
             get => offsetMin;
             set { if (offsetMin != value) { offsetMin = value; RaisePropertyChanged(); } }
         }
 
-        public int offsetMax;
+        private int offsetMax;
 
         public int OffsetMax {
             get => offsetMax;

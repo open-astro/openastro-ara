@@ -276,54 +276,54 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
     }
 
     public class PhdMethodResponse {
-        public string? jsonrpc;
-        public PhdError? error;
-        public string? id;
+        public string? jsonrpc { get; set; }
+        public PhdError? error { get; set; }
+        public string? id { get; set; }
     }
 
     public class GenericPhdMethodResponse : PhdMethodResponse {
-        public object? result;
+        public object? result { get; set; }
     }
 
     public class BooleanPhdMethodResponse : PhdMethodResponse {
-        public bool? result;
+        public bool? result { get; set; }
     }
 
     public class GetCameraFrameSizeResponse : PhdMethodResponse {
-        public int[]? result;
+        public int[]? result { get; set; }
     }
 
     public class PhdImageResult {
-        public int frame;
-        public int width;
-        public int height;
-        public double[]? star_pos;
-        public string? pixels;
+        public int frame { get; set; }
+        public int width { get; set; }
+        public int height { get; set; }
+        public double[]? star_pos { get; set; }
+        public string? pixels { get; set; }
     }
 
     public class Phd2ProfileResponse {
-        public int? id;
+        public int? id { get; set; }
         public string name { get; set; } = string.Empty;
     }
 
     public class GetProfileResponse : PhdMethodResponse {
-        public Phd2ProfileResponse? result;
+        public Phd2ProfileResponse? result { get; set; }
     }
 
     public class GetProfilesResponse : PhdMethodResponse {
-        public Phd2ProfileResponse[]? result;
+        public Phd2ProfileResponse[]? result { get; set; }
     }
 
     public class GetLockPositionResponse : PhdMethodResponse {
-        public float[]? result;
+        public float[]? result { get; set; }
     }
 
     public class GetLockShiftParamsResponse : PhdMethodResponse {
-        public LockShiftParams? result;
+        public LockShiftParams? result { get; set; }
     }
 
     public class GetExposureResponse : PhdMethodResponse {
-        public int? result;
+        public int? result { get; set; }
     }
 
     public class LockShiftParams {
@@ -342,7 +342,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
     }
 
     public class PhdError {
-        public int code;
-        public string? message;
+        public int code { get; set; }
+        public string? message { get; set; }
     }
 }

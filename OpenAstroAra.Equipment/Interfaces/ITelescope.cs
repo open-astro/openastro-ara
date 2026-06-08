@@ -32,9 +32,9 @@ namespace OpenAstroAra.Equipment.Interfaces {
 
     public struct TrackingRate : IEquatable<TrackingRate> {
         public static readonly TrackingRate STOPPED = new TrackingRate() { TrackingMode = TrackingMode.Stopped };
-        public TrackingMode TrackingMode;
-        public double? CustomRightAscensionRate;
-        public double? CustomDeclinationRate;
+        public TrackingMode TrackingMode { get; set; }
+        public double? CustomRightAscensionRate { get; set; }
+        public double? CustomDeclinationRate { get; set; }
 
         public override bool Equals(object? obj) {
             return obj is TrackingRate rate &&

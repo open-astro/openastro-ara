@@ -20,7 +20,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyCamera {
         Justification = "Native camera-SDK interaction boundary: GenericCamera wraps an arbitrary IGenericCameraSDK whose Connect/Disconnect/Stop/Abort/GetExposure calls may throw any SDK/native exception type. These catches log or swallow at the SDK boundary so a driver fault cannot crash the camera lifecycle (failed download leaves data null; stop/abort are best-effort). CA1031 sanctions general catches at such recover-and-continue boundaries.")]
     public class GenericCamera : BaseINPC, ICamera {
         private IGenericCameraSDK sdk;
-        protected IProfileService profileService;
+        private protected IProfileService profileService;
         private readonly IExposureDataFactory exposureDataFactory;
 
         public GenericCamera(string id, string name, string category, string driverVersion, bool supportBitScaling, IGenericCameraSDK sdk, IProfileService profileService, IExposureDataFactory exposureDataFactory) {
