@@ -24,7 +24,7 @@ namespace OpenAstroAra.Astrometry {
 
     [JsonObject(MemberSerialization.OptIn)]
     public class InputTarget : BaseINPC {
-        private bool deserializing = false;
+        private bool deserializing;
         [OnDeserializing]
         public void OnDeserializing(StreamingContext context) {
             deserializing = true;
@@ -86,12 +86,14 @@ namespace OpenAstroAra.Astrometry {
         /// <summary>
         /// Backwards compatibility property that will migrate to position angle
         /// </summary>
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1044:Properties should not be write only",
+            Justification = "Deserialization-only back-compat shim: maps the legacy JSON 'Rotation' field onto PositionAngle. Adding a getter would re-emit the deprecated field on serialization.")]
         [JsonProperty(propertyName: "Rotation")]
         public double DeprecatedRotation {
             set => PositionAngle = 360 - value;
         }
 
-        private double positionAngle = 0;
+        private double positionAngle;
         [JsonProperty]
         public double PositionAngle {
             get => positionAngle;

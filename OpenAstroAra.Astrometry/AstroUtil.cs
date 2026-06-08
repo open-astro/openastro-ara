@@ -203,7 +203,7 @@ namespace OpenAstroAra.Astrometry {
 
             db = db ?? new DatabaseInteraction();
             try {
-                deltaUT = AsyncContext.Run(() => db.GetUT1_UTC(utcDate, default));
+                deltaUT = AsyncContext.Run(() => db.GetUt1Utc(utcDate, default));
             } catch (Exception ex) when (ex is OperationCanceledException or InvalidOperationException or IOException) {
                 Logger.Error(ex);
             }

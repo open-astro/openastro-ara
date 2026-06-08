@@ -13,12 +13,12 @@
 #endregion "copyright"
 
 using OpenAstroAra.Astrometry;
-using System.Collections.Generic;
+using System.Collections.ObjectModel;
 
 namespace OpenAstroAra.Astrometry {
 
     public class ConstellationBoundary {
         public string Name { get; set; } = string.Empty;
-        public List<Coordinates> Boundaries { get; set; } = new List<Coordinates>();
+        public Collection<Coordinates> Boundaries { get; } = new Collection<Coordinates>();
     }
 }

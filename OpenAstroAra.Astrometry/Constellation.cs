@@ -14,7 +14,7 @@
 
 using OpenAstroAra.Core.Locale;
 using System;
-using System.Collections.Generic;
+using System.Collections.ObjectModel;
 
 namespace OpenAstroAra.Astrometry {
 
@@ -23,7 +23,7 @@ namespace OpenAstroAra.Astrometry {
         public Constellation(string id) {
             Id = id;
             Name = Loc.Instance["LblConstellation_" + id];
-            StarConnections = new List<Tuple<Star, Star>>();
+            StarConnections = new Collection<Tuple<Star, Star>>();
         }
 
         public string Id { get; }
@@ -32,8 +32,8 @@ namespace OpenAstroAra.Astrometry {
 
         public string Name { get; private set; }
 
-        public List<Star> Stars { get; set; } = new List<Star>();
+        public Collection<Star> Stars { get; } = new Collection<Star>();
 
-        public List<Tuple<Star, Star>> StarConnections { get; private set; }
+        public Collection<Tuple<Star, Star>> StarConnections { get; }
     }
 }

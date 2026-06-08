@@ -34,11 +34,14 @@ namespace OpenAstroAra.Astrometry.RiseAndSet {
         public double Longitude { get; private set; }
         public double Elevation { get; private set; }
         public virtual DateTime? Rise { get; private set; }
+
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Naming", "CA1716:Identifiers should not match keywords",
+            Justification = "Rise/Set are the standard astronomical domain terms for a body's rise and set times; this is a C#-only headless solution with no VB consumers, and renaming the public Set property would ripple across 20+ call sites for a cross-language concern that does not apply here.")]
         public virtual DateTime? Set { get; private set; }
 
         protected abstract double AdjustAltitude(BasicBody body);
 
-        protected abstract BasicBody GetBody(DateTime date);
+        protected abstract BasicBody GetBody(DateTime dateTime);
 
         /// <summary>
         /// Calculates rise and set time
