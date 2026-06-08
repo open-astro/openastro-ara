@@ -22,7 +22,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
         /* Extended ascii encoding*/
         private static Encoding ascii = Encoding.GetEncoding("iso-8859-1");
 
-        public FITSHeaderCard(string key, string value, string? comment) {
+        public FITSHeaderCard(string key, string? value, string? comment) {
             this.Key = key;
             if (value == null) { value = string.Empty; }
 

@@ -53,7 +53,7 @@ namespace OpenAstroAra.Test.AstrometryTest {
 
             var json = JsonConvert.SerializeObject(coordinates);
 
-            var sut = JsonConvert.DeserializeObject<InputCoordinates>(json);
+            var sut = JsonConvert.DeserializeObject<InputCoordinates>(json)!;
 
             sut.RAHours.Should().Be(raHours);
             sut.RAMinutes.Should().Be(raMinutes);

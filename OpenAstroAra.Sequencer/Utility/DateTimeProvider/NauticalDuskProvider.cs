@@ -37,14 +37,14 @@ namespace OpenAstroAra.Sequencer.Utility.DateTimeProvider {
         public ICustomDateTime DateTime { get; set; } = new SystemDateTime();
 
         public DateTime GetDateTime(ISequenceEntity context) {
-            var night = nighttimeCalculator.Calculate().NauticalTwilightRiseAndSet.Set;
+            var night = nighttimeCalculator.Calculate().NauticalTwilightRiseAndSet?.Set;
             if (!night.HasValue) {
                 throw new TimeProviderException("No nautical dusk", Loc.Instance["Lbl_TimeProvider_NoNauticalDusk"]);
             }
             return night.Value;
         }
         public TimeOnly GetRolloverTime(ISequenceEntity context) {
-            var dawn = nighttimeCalculator.Calculate().SunRiseAndSet.Rise;
+            var dawn = nighttimeCalculator.Calculate().SunRiseAndSet?.Rise;
             if (!dawn.HasValue) {
                 return new TimeOnly(12, 0, 0);
             }

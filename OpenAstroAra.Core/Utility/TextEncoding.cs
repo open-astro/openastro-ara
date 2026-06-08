@@ -20,7 +20,7 @@ namespace OpenAstroAra.Core.Utility {
 
     public static class TextEncoding {
 
-        public static string UnicodeToAscii(string input) {
+        public static string UnicodeToAscii(string? input) {
             if (string.IsNullOrWhiteSpace(input)) { return ""; }
             Encoding ascii = Encoding.ASCII;
             Encoding unicode = Encoding.Unicode;
@@ -33,7 +33,7 @@ namespace OpenAstroAra.Core.Utility {
             return new string(asciiChars);
         }
 
-        public static string GreekToLatinAbbreviation(string input) {
+        public static string GreekToLatinAbbreviation(string? input) {
             if (string.IsNullOrWhiteSpace(input)) { return ""; }
 
             foreach (DictionaryEntry greekchar in GreekToAbbreviationMap) {

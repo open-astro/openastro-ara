@@ -40,7 +40,7 @@ namespace OpenAstroAra.Sequencer.Utility.DateTimeProvider {
         }
 
         public TimeOnly GetRolloverTime(ISequenceEntity context) {
-            var dawn = nighttimeCalculator.Calculate().SunRiseAndSet.Rise;
+            var dawn = nighttimeCalculator.Calculate().SunRiseAndSet?.Rise;
             if (!dawn.HasValue) {
                 return new TimeOnly(12, 0, 0);
             }

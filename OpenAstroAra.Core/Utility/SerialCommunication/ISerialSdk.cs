@@ -19,12 +19,12 @@ namespace OpenAstroAra.Core.Utility.SerialCommunication {
 
     public interface ISerialSdk {
 
-        Task<TResult?> SendCommand<TResult>(ISerialCommand command) where TResult : Response, new();
+        Task<TResult?> SendCommand<TResult>(ISerialCommand? command) where TResult : Response, new();
 
         ISerialPort? SerialPort { get; set; }
         ISerialPortProvider SerialPortProvider { set; }
 
-        bool InitializeSerialPort(string portName, object client, int baudRate = 9600, Parity parity = Parity.None, int dataBits = 8,
+        bool InitializeSerialPort(string? portName, object client, int baudRate = 9600, Parity parity = Parity.None, int dataBits = 8,
             StopBits stopBits = StopBits.One, Handshake handShake = Handshake.None, bool dtrEnable = false,
             string newLine = "\n", int readTimeout = 500, int writeTimeout = 500);
 

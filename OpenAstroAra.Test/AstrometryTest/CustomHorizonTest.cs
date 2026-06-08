@@ -36,8 +36,8 @@ namespace OpenAstroAra.Test.AstrometryTest {
             var customHorizon = CustomHorizon.FromFilePath(testFile);
 
             customHorizon.Should().NotBeNull();
-            ((double[])typeof(CustomHorizon).GetField("azimuths", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(customHorizon)).Length.Should().Be(expectedEntries);
-            ((double[])typeof(CustomHorizon).GetField("altitudes", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(customHorizon)).Length.Should().Be(expectedEntries);
+            ((double[])typeof(CustomHorizon).GetField("azimuths", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(customHorizon)!).Length.Should().Be(expectedEntries);
+            ((double[])typeof(CustomHorizon).GetField("altitudes", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(customHorizon)!).Length.Should().Be(expectedEntries);
 
         }
 

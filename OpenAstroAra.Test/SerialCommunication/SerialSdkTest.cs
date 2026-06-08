@@ -236,7 +236,7 @@ namespace OpenAstroAra.Test.SerialCommunication {
             _mockSerialPort.Setup(m => m.ReadLine()).Returns(DEVICE_RESPONSE2);
             var result2 = await _sut.SendCommand<TestResponse>(_mockCommand.Object);
 
-            Assert.That(result1.Equals(result2), Is.False);
+            Assert.That(result1!.Equals(result2), Is.False);
         }
 
         [Test]
@@ -247,7 +247,7 @@ namespace OpenAstroAra.Test.SerialCommunication {
             _mockSerialPort.Setup(m => m.ReadLine()).Returns(DEVICE_RESPONSE2);
             var result2 = await _sut.SendCommand<TestCacheableResponse>(_mockCommand.Object);
 
-            Assert.That(result1.Equals(result2), Is.True);
+            Assert.That(result1!.Equals(result2), Is.True);
         }
 
         [Test]

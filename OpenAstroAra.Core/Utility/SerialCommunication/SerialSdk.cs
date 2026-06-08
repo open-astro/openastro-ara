@@ -37,7 +37,7 @@ namespace OpenAstroAra.Core.Utility.SerialCommunication {
         private readonly List<object> clients = new List<object>();
         private readonly SemaphoreSlim ssSerial = new SemaphoreSlim(1, 1);
 
-        public virtual bool InitializeSerialPort(string portName, object client, int baudRate = 9600, Parity parity = Parity.None, int dataBits = 8,
+        public virtual bool InitializeSerialPort(string? portName, object client, int baudRate = 9600, Parity parity = Parity.None, int dataBits = 8,
             StopBits stopBits = StopBits.One, Handshake handShake = Handshake.None, bool dtrEnable = false,
             string newLine = "\n", int readTimeout = 500, int writeTimeout = 500) {
             try {
@@ -61,7 +61,7 @@ namespace OpenAstroAra.Core.Utility.SerialCommunication {
             return SerialPort != null;
         }
 
-        public Task<TResult?> SendCommand<TResult>(ISerialCommand command) where TResult : Response, new() {
+        public Task<TResult?> SendCommand<TResult>(ISerialCommand? command) where TResult : Response, new() {
             return Task.Run(() => {
                 if (command == null) throw new ArgumentNullException(nameof(command));
                 ssSerial.Wait();

@@ -29,11 +29,11 @@ namespace OpenAstroAra.Astrometry {
             DateTime referenceDate,
             AstroUtil.MoonPhase moonPhase,
             double? moonIllumination,
-            RiseAndSetEvent twilightRiseAndSet,
-            RiseAndSetEvent nauticalTwilightRiseAndSet,
-            RiseAndSetEvent sunRiseAndSet,
-            RiseAndSetEvent moonRiseAndSet,
-            RiseAndSetEvent civilTwilightRiseAndSet) {
+            RiseAndSetEvent? twilightRiseAndSet,
+            RiseAndSetEvent? nauticalTwilightRiseAndSet,
+            RiseAndSetEvent? sunRiseAndSet,
+            RiseAndSetEvent? moonRiseAndSet,
+            RiseAndSetEvent? civilTwilightRiseAndSet) {
             this.Date = date;
             this.ReferenceDate = referenceDate;
             this.MoonPhase = moonPhase;
@@ -56,7 +56,7 @@ namespace OpenAstroAra.Astrometry {
 
         public Ticker Ticker { get; }
 
-        private static IList<DataPoint> CalculateTwilightDuration(RiseAndSetEvent twilightRiseAndSet, RiseAndSetEvent sunRiseAndSet) {
+        private static IList<DataPoint> CalculateTwilightDuration(RiseAndSetEvent? twilightRiseAndSet, RiseAndSetEvent? sunRiseAndSet) {
             if (twilightRiseAndSet != null && twilightRiseAndSet.Rise.HasValue && twilightRiseAndSet.Set.HasValue) {
                 var twilightRise = twilightRiseAndSet.Rise;
                 var twilightSet = twilightRiseAndSet.Set;
@@ -84,7 +84,7 @@ namespace OpenAstroAra.Astrometry {
             return ImmutableList.Create<DataPoint>();
         }
 
-        private static IList<DataPoint> CalculateNauticalTwilightDuration(RiseAndSetEvent nauticalTwilightRiseAndSet, RiseAndSetEvent sunRiseAndSet) {
+        private static IList<DataPoint> CalculateNauticalTwilightDuration(RiseAndSetEvent? nauticalTwilightRiseAndSet, RiseAndSetEvent? sunRiseAndSet) {
             if (nauticalTwilightRiseAndSet != null && nauticalTwilightRiseAndSet.Rise.HasValue && nauticalTwilightRiseAndSet.Set.HasValue) {
                 var nauticalTwilightRise = nauticalTwilightRiseAndSet.Rise;
                 var nauticalTwilightSet = nauticalTwilightRiseAndSet.Set;
@@ -112,7 +112,7 @@ namespace OpenAstroAra.Astrometry {
             return ImmutableList.Create<DataPoint>();
         }
 
-        private static IList<DataPoint> CalculateNightDuration(RiseAndSetEvent twilightRiseAndSet) {
+        private static IList<DataPoint> CalculateNightDuration(RiseAndSetEvent? twilightRiseAndSet) {
             if (twilightRiseAndSet != null && twilightRiseAndSet.Rise.HasValue && twilightRiseAndSet.Set.HasValue) {
                 var rise = twilightRiseAndSet.Rise;
                 var set = twilightRiseAndSet.Set;
@@ -131,11 +131,11 @@ namespace OpenAstroAra.Astrometry {
         public DateTime ReferenceDate { get; set; }
         public AstroUtil.MoonPhase MoonPhase { get; set; }
         public double? Illumination { get; set; }
-        public RiseAndSetEvent TwilightRiseAndSet { get; set; }
-        public RiseAndSetEvent NauticalTwilightRiseAndSet { get; set; }
-        public RiseAndSetEvent CivilTwilightRiseAndSet { get; set; }
-        public RiseAndSetEvent SunRiseAndSet { get; set; }
-        public RiseAndSetEvent MoonRiseAndSet { get; set; }
+        public RiseAndSetEvent? TwilightRiseAndSet { get; set; }
+        public RiseAndSetEvent? NauticalTwilightRiseAndSet { get; set; }
+        public RiseAndSetEvent? CivilTwilightRiseAndSet { get; set; }
+        public RiseAndSetEvent? SunRiseAndSet { get; set; }
+        public RiseAndSetEvent? MoonRiseAndSet { get; set; }
         public List<DataPoint> ReferenceDateSpan { get; set; }
         public AsyncObservableCollection<DataPoint> TwilightDuration { get; set; }
         public AsyncObservableCollection<DataPoint> NauticalTwilightDuration { get; set; }

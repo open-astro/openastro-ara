@@ -37,7 +37,7 @@ namespace OpenAstroAra.Sequencer.Utility.DateTimeProvider {
         public ICustomDateTime DateTime { get; set; } = new SystemDateTime();
 
         public DateTime GetDateTime(ISequenceEntity context) {
-            var night = nighttimeCalculator.Calculate().SunRiseAndSet.Rise;
+            var night = nighttimeCalculator.Calculate().SunRiseAndSet?.Rise;
             if (!night.HasValue) {
                 throw new TimeProviderException("Sun does not rise", Loc.Instance["Lbl_TimeProvider_NoSunrise"]);
             }
@@ -45,7 +45,7 @@ namespace OpenAstroAra.Sequencer.Utility.DateTimeProvider {
         }
 
         public TimeOnly GetRolloverTime(ISequenceEntity context) {
-            var dusk = nighttimeCalculator.Calculate().SunRiseAndSet.Set;
+            var dusk = nighttimeCalculator.Calculate().SunRiseAndSet?.Set;
             if (!dusk.HasValue) {
                 return new TimeOnly(12, 0, 0);
             }
