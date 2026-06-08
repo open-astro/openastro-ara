@@ -36,7 +36,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
     [ExportMetadata("Category", "Lbl_SequenceCategory_Condition")]
     [Export(typeof(ISequenceCondition))]
     public class SafetyMonitorCondition : SequenceCondition, IValidatable {
-        protected ISafetyMonitorMediator safetyMonitorMediator;
+        private protected readonly ISafetyMonitorMediator safetyMonitorMediator;
 
         [ImportingConstructor]
         public SafetyMonitorCondition(ISafetyMonitorMediator safetyMonitorMediator) {
@@ -109,7 +109,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
         }
 
         public override void SequenceBlockTeardown() {
-            try { ConditionWatchdog?.Cancel(); } catch { }
+            ConditionWatchdog?.Cancel();
         }
 
         public override void SequenceBlockInitialize() {

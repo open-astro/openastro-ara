@@ -15,12 +15,13 @@
 using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Sequencer.Interfaces;
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace OpenAstroAra.Sequencer.Conditions {
 
-    public class ConditionWatchdog : IConditionWatchdog {
+    public class ConditionWatchdog : IConditionWatchdog, IDisposable {
         private CancellationTokenSource? watchdogCTS;
         private Task? watchdogTask;
         private readonly object lockObj = new object();
@@ -41,6 +42,8 @@ namespace OpenAstroAra.Sequencer.Conditions {
             }
         }
 
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "Background watchdog boundary: WatchDogOperation is an arbitrary Func<Task> whose failures must be logged without killing the long-running watchdog loop. Cancellation is handled separately above; all other exceptions are logged and the loop continues. CA1031 sanctions general catches at such keep-alive background boundaries.")]
         public Task Start() {
             lock (lockObj) {
                 if (watchdogTask == null) {
@@ -67,11 +70,23 @@ namespace OpenAstroAra.Sequencer.Conditions {
             lock (lockObj) {
                 try {
                     watchdogCTS?.Cancel();
-                } catch { }
+                } catch (ObjectDisposedException) { }
 
                 watchdogCTS = null;
                 watchdogTask = null;
             }
+        }
+
+        public void Dispose() {
+            lock (lockObj) {
+                try {
+                    watchdogCTS?.Cancel();
+                } catch (ObjectDisposedException) { }
+                watchdogCTS?.Dispose();
+                watchdogCTS = null;
+                watchdogTask = null;
+            }
+            GC.SuppressFinalize(this);
         }
     }
 }

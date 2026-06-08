@@ -21,6 +21,7 @@ using OpenAstroAra.Sequencer.SequenceItem;
 using OpenAstroAra.Sequencer.Utility;
 using OpenAstroAra.Sequencer.Validations;
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.Serialization;
@@ -103,6 +104,8 @@ namespace OpenAstroAra.Sequencer.Trigger {
 
         //public abstract string Description { get; }
 
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "Trigger execution boundary: a trigger's Validate()/Execute() may throw any exception type. All are logged, mark the trigger FAILED, and surface via RaiseFailureEvent so one trigger cannot crash the run loop. CA1031 sanctions general catches at such recover-and-report boundaries.")]
         public async Task Run(ISequenceContainer context, IProgress<ApplicationStatus> progress, CancellationToken token) {
             if (this.Status == SequenceEntityStatus.DISABLED) { return; }
 

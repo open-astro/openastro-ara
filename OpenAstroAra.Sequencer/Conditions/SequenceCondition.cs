@@ -23,6 +23,7 @@ using OpenAstroAra.Sequencer.Utility;
 using OpenAstroAra.Sequencer.Validations;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -86,7 +87,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
                 if (ItemUtility.IsInRootContainer(Parent)) {
                     ConditionWatchdog.Start();
                 } else {
-                    try { ConditionWatchdog?.Cancel(); } catch { }
+                    ConditionWatchdog.Cancel();
                 }
             }
         }
@@ -102,6 +103,8 @@ namespace OpenAstroAra.Sequencer.Conditions {
             AfterParentChanged();
         }
 
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "Condition-check execution boundary: a Check()/Validate() implementation may throw any exception type. All are logged, mark the condition FAILED, and surface via RaiseFailureEvent so one condition cannot crash the run loop. CA1031 sanctions general catches at such recover-and-report boundaries.")]
         public bool RunCheck(ISequenceItem? previousItem, ISequenceItem? nextItem) {
             if (this.Status == SequenceEntityStatus.DISABLED) { return false; }
 

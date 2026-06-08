@@ -21,6 +21,7 @@ using OpenAstroAra.Equipment.Interfaces;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Sequencer.Validations;
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel.Composition;
@@ -128,6 +129,8 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Switch {
             return dummySwitches;
         }
 
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "Validation boundary: querying switch-hub state may throw any exception; the failure is logged and reported through Issues as a generic validation error so a transient equipment fault cannot crash validation. CA1031 sanctions general catches at such recover-and-report boundaries.")]
         public bool Validate() {
             try {
                 var i = new List<string>();

@@ -36,8 +36,8 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Guider {
     [Export(typeof(ISequenceItem))]
     [JsonObject(MemberSerialization.OptIn)]
     public class Dither : SequenceItem, IValidatable {
-        protected IGuiderMediator guiderMediator;
-        protected IProfileService profileService;
+        private readonly IGuiderMediator guiderMediator;
+        private readonly IProfileService profileService;
 
         [ImportingConstructor]
         public Dither(IGuiderMediator guiderMediator, IProfileService profileService) {

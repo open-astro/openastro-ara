@@ -22,6 +22,7 @@ using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Sequencer.Validations;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Collections.ObjectModel;
 using System.ComponentModel.Composition;
 using System.Linq;
@@ -57,6 +58,8 @@ namespace OpenAstroAra.Sequencer.SequenceItem.FilterWheel {
             profileService.ProfileChanged += ProfileService_ProfileChanged;
         }
 
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "Profile-changed event boundary: re-resolving the selected filter against the freshly-loaded profile may transiently fault while the profile is being swapped. The failure is logged and ignored so a profile change cannot crash; the filter is simply left unresolved. CA1031 sanctions general catches at such event-driven defensive boundaries.")]
         private void MatchFilter() {
             try {
                 var idx = this.Filter?.Position ?? -1;

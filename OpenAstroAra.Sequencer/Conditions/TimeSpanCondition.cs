@@ -160,7 +160,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
             if (RemainingTime > TimeSpan.Zero) {
                 previousRemainingTime = RemainingTime;
             }
-            try { ConditionWatchdog?.Cancel(); } catch { }
+            ConditionWatchdog?.Cancel();
         }
 
         public override void ResetProgress() {

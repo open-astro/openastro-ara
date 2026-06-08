@@ -23,6 +23,7 @@ using OpenAstroAra.Sequencer.Utility;
 using OpenAstroAra.Sequencer.Utility.DateTimeProvider;
 using OpenAstroAra.Sequencer.Validations;
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Collections.Generic;
 using System.ComponentModel.Composition;
 using System.Linq;
@@ -211,6 +212,8 @@ namespace OpenAstroAra.Sequencer.Conditions {
         private bool timeDeterminedSuccessfully;
         private string failureReason = string.Empty;
         private DateTime lastReferenceDate;
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "Time-determination boundary: the selected IDateTimeProvider and nighttime calculation may throw a provider-specific TimeProviderException or any other exception; the failure reason is captured and surfaced through Validate() rather than aborting. CA1031 sanctions general catches at such recover-and-report boundaries.")]
         private void UpdateTime() {
             try {
                 lastReferenceDate = NighttimeCalculator.GetReferenceDate(DateTime.Now);

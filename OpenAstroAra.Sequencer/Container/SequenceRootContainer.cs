@@ -22,6 +22,7 @@ using OpenAstroAra.Sequencer.SequenceItem;
 using OpenAstroAra.Sequencer.Trigger;
 using OpenAstroAra.Sequencer.Utility;
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Collections.Generic;
 using System.ComponentModel.Composition;
 using System.Linq;
@@ -92,6 +93,8 @@ namespace OpenAstroAra.Sequencer.Container {
 
         public event Func<object, SequenceEntityFailureEventArgs, Task>? FailureEvent;
 
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "Event-dispatch boundary: FailureEvent subscribers are arbitrary callbacks that may throw; their exceptions are logged so one faulty subscriber cannot break failure reporting for the run. CA1031 sanctions general catches at such event-raising boundaries.")]
         public async Task RaiseFailureEvent(ISequenceEntity sender, Exception ex) {
             try {
                 await (FailureEvent?.InvokeAsync(sender, new SequenceEntityFailureEventArgs(sender, ex)) ?? Task.CompletedTask);

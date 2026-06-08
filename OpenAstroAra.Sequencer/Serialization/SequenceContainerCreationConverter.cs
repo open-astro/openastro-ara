@@ -16,6 +16,7 @@ using Newtonsoft.Json.Linq;
 using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Sequencer.Container;
 using System;
+using System.Diagnostics.CodeAnalysis;
 
 namespace OpenAstroAra.Sequencer.Serialization {
 
@@ -26,6 +27,8 @@ namespace OpenAstroAra.Sequencer.Serialization {
             this.factory = factory;
         }
 
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "Factory-instantiation recovery boundary: a reflective GetContainer<T> invoke may surface any exception (TargetInvocationException, argument/cast/type-load faults from arbitrary container constructors). All are logged and replaced with an UnknownSequenceContainer placeholder so one bad entity cannot fail the whole sequence load. CA1031 sanctions general catches at such recover-and-continue boundaries.")]
         public override ISequenceContainer Create(Type objectType, JObject jObject) {
             if (jObject.TryGetValue("$type", out var token)) {
                 var t = GetType(token.ToString());
