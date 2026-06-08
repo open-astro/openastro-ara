@@ -135,12 +135,12 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
                         header.Add(keyName, true, keyComment);
                     } else if (keyValue.Equals("F", StringComparison.Ordinal)) {
                         header.Add(keyName, false, keyComment);
-                    } else if (keyValue.StartsWith("'", StringComparison.Ordinal)) {
+                    } else if (keyValue.StartsWith('\'')) {
                         // Treat as a string
                         keyValue = $"{keyValue.TrimStart('\'').TrimEnd('\'', ' ').Replace(@"''", @"'", StringComparison.Ordinal)}";
                         header.Add(keyName, keyValue, keyComment);
 
-                    } else if (keyValue.Contains(".", StringComparison.Ordinal)) {
+                    } else if (keyValue.Contains('.')) {
                         if (double.TryParse(keyValue, NumberStyles.Float, CultureInfo.InvariantCulture, out var value)) {
                             header.Add(keyName, value, keyComment);
                         }

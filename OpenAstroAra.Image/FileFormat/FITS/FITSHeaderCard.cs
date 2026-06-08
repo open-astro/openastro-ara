@@ -103,7 +103,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
             get {
                 if (string.IsNullOrWhiteSpace(Value)) {
                     return string.Empty;
-                } else if (Value.StartsWith("'", StringComparison.Ordinal)) {
+                } else if (Value.StartsWith('\'')) {
                     var trimmedValue = Value.Trim();
                     return trimmedValue.Remove(trimmedValue.Length - 1, 1).Remove(0, 1).Replace(@"''", @"'", StringComparison.Ordinal);
                 } else {

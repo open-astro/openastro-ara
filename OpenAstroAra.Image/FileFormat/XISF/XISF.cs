@@ -367,39 +367,30 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
             }
         }
 
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "CA5350:Do not use weak cryptographic algorithms", Justification = "SHA-1 is one of the integrity checksum algorithms defined by the XISF file-format specification; the algorithm is selected by the file being read/written for data-integrity verification, not for any security decision.")]
         private static bool VerifyChecksum(byte[] raw, XISFChecksumType cksumType, string providedCksum) {
             string computedCksum;
 
             using (MyStopWatch.Measure($"XISF Checksum = {cksumType}")) {
                 switch (cksumType) {
                     case XISFChecksumType.SHA1:
-                        SHA1 sha1 = SHA1.Create();
-                        computedCksum = GetStringFromHash(sha1.ComputeHash(raw));
-                        sha1.Dispose();
+                        computedCksum = GetStringFromHash(SHA1.HashData(raw));
                         break;
 
                     case XISFChecksumType.SHA256:
-                        SHA256 sha256 = SHA256.Create();
-                        computedCksum = GetStringFromHash(sha256.ComputeHash(raw));
-                        sha256.Dispose();
+                        computedCksum = GetStringFromHash(SHA256.HashData(raw));
                         break;
 
                     case XISFChecksumType.SHA512:
-                        SHA512 sha512 = SHA512.Create();
-                        computedCksum = GetStringFromHash(sha512.ComputeHash(raw));
-                        sha512.Dispose();
+                        computedCksum = GetStringFromHash(SHA512.HashData(raw));
                         break;
 
                     case XISFChecksumType.Sha3256:
-                        SHA3_256 sha3_256 = SHA3_256.Create();
-                        computedCksum = GetStringFromHash(sha3_256.ComputeHash(raw));
-                        sha3_256.Dispose();
+                        computedCksum = GetStringFromHash(SHA3_256.HashData(raw));
                         break;
 
                     case XISFChecksumType.Sha3512:
-                        SHA3_512 sha3_512 = SHA3_512.Create();
-                        computedCksum = GetStringFromHash(sha3_512.ComputeHash(raw));
-                        sha3_512.Dispose();
+                        computedCksum = GetStringFromHash(SHA3_512.HashData(raw));
                         break;
 
                     default:

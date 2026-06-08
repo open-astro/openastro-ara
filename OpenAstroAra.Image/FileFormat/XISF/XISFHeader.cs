@@ -374,7 +374,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
 
             value = elem.Attribute("value")?.Value ?? string.Empty;
 
-            if (value.StartsWith("'", StringComparison.Ordinal)) {
+            if (value.StartsWith('\'')) {
                 value = value.Trim();
                 value = value.Remove(value.Length - 1, 1).Remove(0, 1).Replace(@"''", @"'", StringComparison.Ordinal);
             }
@@ -398,14 +398,14 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                 var comment = elem.Attribute("comment")?.Value ?? string.Empty;
 
 
-                if (value.StartsWith("'", StringComparison.Ordinal)) {
+                if (value.StartsWith('\'')) {
                     value = value.Trim();
                     value = value.Remove(value.Length - 1, 1).Remove(0, 1).Replace(@"''", @"'", StringComparison.Ordinal);
                     l.Add(new StringMetaDataHeader(key, value, comment));
                 } else if (value == "T" || value == "F") {
                     var boolean = value.Trim() == "T" ? true : false;
                     l.Add(new BoolMetaDataHeader(key, boolean, comment));
-                } else if (value.Contains(".", StringComparison.Ordinal) && double.TryParse(value, CultureInfo.InvariantCulture, out var number)) {
+                } else if (value.Contains('.') && double.TryParse(value, CultureInfo.InvariantCulture, out var number)) {
                     l.Add(new DoubleMetaDataHeader(key, number, comment));
                 } else if (int.TryParse(value, out var integer)) {
                     l.Add(new IntMetaDataHeader(key, integer, comment));
