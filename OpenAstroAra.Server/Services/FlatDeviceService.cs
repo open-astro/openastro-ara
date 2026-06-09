@@ -131,11 +131,17 @@ public sealed partial class FlatDeviceService : IFlatDeviceService, IDisposable 
         Justification = "Background apply boundary: the blocking ASCOM OpenCover/CloseCover/CalibratorOn/Off can throw arbitrary driver/HTTP exceptions, and a concurrent Disconnect/Dispose can dispose the captured client mid-apply; any escape must be contained and logged, never fault the fire-and-forget task or the daemon. CA1031's log-and-recover boundary applies.")]
     private void ApplyInBackground(AlpacaCoverCalibrator client, FlatPanelRequestDto req, int? maxBrightness) {
         try {
+            var changingLight = req.LightOn is not null || req.Brightness is not null;
             if (req.OpenCover is bool open) {
                 if (open) {
                     client.OpenCover();
                 } else {
                     client.CloseCover();
+                }
+                // If the same request also changes the light, wait for the cover to stop moving
+                // first: some panels reject a calibrator change while the cover is in motion.
+                if (changingLight) {
+                    WaitForCoverSettle(client);
                 }
             }
             if (req.LightOn is bool lit) {
@@ -217,6 +223,11 @@ public sealed partial class FlatDeviceService : IFlatDeviceService, IDisposable 
         try { brightness = c.Brightness; } catch (Exception) { brightness = 0; }
 
         var coverOpen = cover == CoverStatus.Open;
+        // Only Ready counts as "on": CalibratorStatus.NotReady (the calibrator is warming up /
+        // changing) is treated as not-on and is transient — the next 2s poll resolves to Ready
+        // (light_on) or Off. The FlatDeviceStateDto.State contract is a fixed token set
+        // (cover_*/light_on/error) with no "warming" value, so a distinct warming label is deferred
+        // to the FlatDevice mediator work, where the DTO can be extended deliberately.
         var lightOn = cal == CalibratorStatus.Ready;
         var state =
             cover == CoverStatus.Moving ? "cover_moving"
@@ -225,6 +236,18 @@ public sealed partial class FlatDeviceService : IFlatDeviceService, IDisposable 
             : coverOpen ? "cover_open"
             : "cover_closed";
         return new FlatDeviceStateDto(state, coverOpen, lightOn, lightOn ? brightness : 0);
+    }
+
+    // Bounded best-effort wait (~6s) for the cover to stop moving before a subsequent light op.
+    // Runs on the fire-and-forget apply thread; a CoverState read that throws propagates to
+    // ApplyInBackground's catch.
+    private static void WaitForCoverSettle(AlpacaCoverCalibrator c) {
+        for (var i = 0; i < 30; i++) {
+            if (c.CoverState != CoverStatus.Moving) {
+                return;
+            }
+            Thread.Sleep(200);
+        }
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
