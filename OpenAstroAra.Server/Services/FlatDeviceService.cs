@@ -153,8 +153,14 @@ public sealed partial class FlatDeviceService : IFlatDeviceService, IDisposable 
                     client.CalibratorOff();
                 }
             } else if (req.Brightness is int b) {
-                // Brightness alone changes the level (CalibratorOn at the new level implies on).
-                client.CalibratorOn(b);
+                // Brightness alone changes the level; CalibratorOn implies on. ASCOM CalibratorOn
+                // wants [1, MaxBrightness], so brightness 0 means "off" -> CalibratorOff (never
+                // CalibratorOn(0)).
+                if (b > 0) {
+                    client.CalibratorOn(b);
+                } else {
+                    client.CalibratorOff();
+                }
             }
             RefreshCacheOnce();
         } catch (Exception ex) {
