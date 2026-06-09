@@ -62,16 +62,16 @@ public sealed partial class SafetyMonitorService : ISafetyMonitorService, IDispo
 
     public async Task<SafetyMonitorDto?> GetAsync(CancellationToken ct) {
         AlpacaSafetyMonitor? client;
-        DiscoveredDeviceDto? device;
+        bool hasDevice;
         EquipmentConnectionState state;
         lock (_gate) {
             // All public operations throw after Dispose() (uniform with Connect/Disconnect).
             ObjectDisposedException.ThrowIf(_disposed, this);
             client = _client;
-            device = _device;
+            hasDevice = _device is not null;
             state = _state;
         }
-        if (device is null) {
+        if (!hasDevice) {
             // No device has ever been selected — GET maps this to 404 at the endpoint.
             return null;
         }
@@ -85,24 +85,28 @@ public sealed partial class SafetyMonitorService : ISafetyMonitorService, IDispo
             // it from clobbering the new state — the concurrent dispose-while-reading is by design.
             safe = await Task.Run(() => ReadIsSafe(client), ct).ConfigureAwait(false);
         }
+        DiscoveredDeviceDto device;
         string transition;
         lock (_gate) {
-            // Single snapshot so the reported State and its transition timestamp are mutually
-            // consistent — ReadIsSafe (or a concurrent connect/disconnect) may have changed
-            // state while we were off-thread reading IsSafe.
+            // One consistent final snapshot of device + state + timestamp, so a concurrent
+            // ConnectAsync(deviceB) between the reads can't yield a DTO that mixes deviceA's
+            // identity with deviceB's state. _device is monotonic non-null once set (never
+            // cleared), so the null-forgive is sound given hasDevice above.
+            device = _device!;
             state = _state;
             transition = _lastTransition.ToString("O", CultureInfo.InvariantCulture);
-        }
-        // Don't report safe=true alongside a non-Connected state: a disconnect racing the
-        // off-thread IsSafe read could otherwise emit safe=true with state=Disconnected.
-        if (state != EquipmentConnectionState.Connected) {
-            safe = false;
+            // safe is only meaningful if the client we read is still the live, Connected one —
+            // otherwise a racing disconnect/reconnect could pair a stale safe with a new state.
+            if (state != EquipmentConnectionState.Connected || !ReferenceEquals(_client, client)) {
+                safe = false;
+            }
         }
         return new SafetyMonitorDto(device.UniqueId, device.Name, state, safe, transition);
     }
 
     public Task<OperationAcceptedDto> ConnectAsync(ConnectRequestDto request, string? idempotencyKey, CancellationToken ct) {
         ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(request.Device); // guard a null Device from a malformed body
         var device = request.Device;
         long generation;
         lock (_gate) {
@@ -265,9 +269,13 @@ public sealed partial class SafetyMonitorService : ISafetyMonitorService, IDispo
             client = _client;
             _client = null;
         }
-        if (client is not null) {
-            SafeDisconnectDispose(client); // synchronous on dispose so teardown completes before exit
-        }
+        // Dispose the client directly rather than via SafeDisconnectDispose: the courtesy
+        // "Connected = false" is a blocking HTTP call (up to the ASCOM ~3s
+        // establishConnectionTimeout) that would hang container shutdown if the device is
+        // unreachable. client.Dispose() releases the HttpClient resources without network I/O;
+        // the device times out its own side of the connection.
+        client?.Dispose();
+        GC.SuppressFinalize(this);
     }
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "SafetyMonitor IsSafe read failed; marking connection Error")]
