@@ -74,9 +74,10 @@ esac
 [ -f "$bin" ] || { echo "expected binary not found after extract: $bin" >&2; exit 1; }
 chmod +x "$bin"
 rm -f "$tmp"
-# Clear stale markers from a previous pin so an upgrade doesn't leave
-# .ok-<oldtag>-<artifact> clutter behind. Reached only on an actual (re)download —
-# the idempotent no-op path exits earlier, above.
-rm -f "$dest"/.ok-*
+# Clear the previous-pin marker for THIS artifact so an upgrade doesn't leave a
+# stale .ok-<oldtag>-<artifact> behind. Scoped to the current artifact (any tag),
+# so a re-download on a multi-platform dev box can't invalidate another platform's
+# marker. Reached only on an actual (re)download — the idempotent no-op exits above.
+rm -f "$dest"/.ok-*-"$artifact"
 touch "$ok_marker"
 echo "$bin"

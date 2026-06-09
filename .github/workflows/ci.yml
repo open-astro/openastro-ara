@@ -85,7 +85,7 @@ jobs:
   alpaca-sim-smoke:
     name: Alpaca simulator harness (smoke)
     runs-on: ubuntu-latest
-    timeout-minutes: 10  # bound the job if a runner/OmniSim hang outlives the 90s poll
+    timeout-minutes: 10  # backstop if a runner/OmniSim hang outlives the ~270s poll window
     permissions:
       contents: read  # only needs to check out + download a public release artifact
     steps:
