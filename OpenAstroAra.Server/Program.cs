@@ -168,7 +168,9 @@ public partial class Program {
         // §14e — fourth real device service: live focuser (position/temp) + Move. REST-only;
         // the IFocuserMediator unification (MoveFocuser/autofocus instructions) is a follow-up.
         builder.Services.AddSingleton<IFocuserService, FocuserService>();
-        builder.Services.AddSingleton<IFilterWheelService, PlaceholderFilterWheelService>();
+        // §14e — sixth real device service: live filter wheel (slots + current position) + change
+        // slot. REST-only; the IFilterWheelMediator unification (SwitchFilter) is a follow-up.
+        builder.Services.AddSingleton<IFilterWheelService, FilterWheelService>();
         // §14e — fifth real device service: live rotator (mechanical/sky angle) + Move. REST-only;
         // the IRotatorMediator unification is a follow-up.
         builder.Services.AddSingleton<IRotatorService, RotatorService>();
