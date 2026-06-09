@@ -137,7 +137,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         // is transient — the worker's finally clears it; no permanent leak.)
         ClaimCheckpoint(run);
         WriteCheckpointIfOwner(run, id);
-        _ = Task.Run(() => RunWorkerAsync(id, run, root), CancellationToken.None);
+        run.Worker = Task.Run(() => RunWorkerAsync(id, run, root), CancellationToken.None);
         return PlaceholderEquipmentHelpers.Accepted("sequencer.start", idempotencyKey);
     }
 
@@ -168,6 +168,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
     Task IHostedService.StartAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
     async Task IHostedService.StopAsync(CancellationToken cancellationToken) {
+        var workers = new System.Collections.Generic.List<Task>();
         foreach (var run in _runs.Values) {
             if (IsTerminal(run.State)) continue;
             run.State = SequenceRunState.Stopped;
@@ -176,6 +177,18 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             } catch (ObjectDisposedException) {
                 // Worker reached terminal + disposed concurrently — already ending.
             }
+            if (run.Worker is { } w) workers.Add(w);
+        }
+        if (workers.Count == 0) return;
+        try {
+            // Let the cancelled workers run their finally (checkpoint clear + CTS
+            // dispose) so a clean stop leaves no leftover checkpoint — but never
+            // past the host's shutdown deadline; the §28.2 reconciler is the
+            // safety net for anything that doesn't finish in time. RunWorkerAsync
+            // never throws (it catches everything), so WhenAll only completes.
+            await Task.WhenAll(workers).WaitAsync(cancellationToken);
+        } catch (OperationCanceledException) {
+            // Host shutdown deadline hit — leave the rest to the §28.2 reconciler.
         }
     }
 
@@ -250,7 +263,12 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         var toRemove = count - MaxRetainedRuns;
         foreach (var kv in terminal) {
             if (toRemove-- <= 0) break;
-            if (_runs.TryRemove(kv.Key, out var removed)) removed.Dispose();
+            // Value-matching removal: only evict if this exact RunState is still
+            // stored, so a same-id restart between the snapshot and here can't
+            // delete the new live run.
+            if (_runs.TryRemove(new System.Collections.Generic.KeyValuePair<Guid, RunState>(kv.Key, kv.Value))) {
+                kv.Value.Dispose();
+            }
         }
     }
 
@@ -318,8 +336,11 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                 run.State = SequenceRunState.Stopped;
                 await EmitAsync("sequence.stopped", sequenceId, run);
             } else {
-                run.State = SequenceRunState.Completed;
+                // Set CompletedUtc (under the lock) before the volatile State
+                // write, so a reader that observes Completed always also sees
+                // CompletedUtc populated — never a Completed/null transient.
                 run.MarkCompleted();
+                run.State = SequenceRunState.Completed;
                 await EmitAsync("sequence.complete", sequenceId, run);
             }
         } catch (OperationCanceledException) {
@@ -393,6 +414,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         public DateTimeOffset StartedUtc { get; } = DateTimeOffset.UtcNow;
         public DateTimeOffset? CompletedUtc { get; private set; }
         public CancellationTokenSource Cts { get; } = new();
+        public Task? Worker { get; set; }   // the RunWorkerAsync task, so shutdown can await teardown
 
         public void SetDescription(string? description) {
             if (string.IsNullOrEmpty(description)) return;
