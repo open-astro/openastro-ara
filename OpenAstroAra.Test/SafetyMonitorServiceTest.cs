@@ -13,6 +13,7 @@
 #endregion "copyright"
 
 using NUnit.Framework;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
 using System;
@@ -102,6 +103,27 @@ namespace OpenAstroAra.Test {
             svc.Dispose();
             Assert.ThrowsAsync<ObjectDisposedException>(
                 () => svc.GetAsync(CancellationToken.None));
+        }
+
+        // The same singleton also serves the Sequencer's ISafetyMonitorMediator (§8.1); GetInfo()
+        // is the member WaitUntilSafe polls.
+        [Test]
+        public void GetInfo_before_connect_reports_disconnected() {
+            using var svc = new SafetyMonitorService();
+            var info = ((ISafetyMonitorMediator)svc).GetInfo();
+            Assert.That(info.Connected, Is.False);
+            Assert.That(info.IsSafe, Is.False);
+        }
+
+        [Test]
+        public void GetInfo_after_Dispose_reports_disconnected_without_throwing() {
+            var svc = new SafetyMonitorService();
+            svc.Dispose();
+            // Unlike the REST methods, GetInfo must NOT throw after Dispose — a running sequence
+            // may poll during shutdown; it reports "not connected" instead.
+            var info = ((ISafetyMonitorMediator)svc).GetInfo();
+            Assert.That(info.Connected, Is.False);
+            Assert.That(info.IsSafe, Is.False);
         }
 
         // Polls up to ~15s for the connection to leave Connecting (HTTP connect-refused on a
