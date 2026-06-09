@@ -51,7 +51,9 @@ public sealed class HeadlessFocuserMediator : IFocuserMediator {
     public string SendCommandString(string command, bool raw = true) => string.Empty;
     public bool SendCommandBool(string command, bool raw = true) => false;
     public void SendCommandBlind(string command, bool raw = true) { }
-    public IDevice GetDevice() => null!;
+    public IDevice GetDevice() =>
+        throw new NotSupportedException(
+            "Headless focuser stub has no backing IDevice; real Alpaca-backed wiring swaps in at the DI registration point once §14e Alpaca simulator pinning lands.");
 
     public event Func<object, EventArgs, Task>? Connected;
     public event Func<object, EventArgs, Task>? Disconnected;

@@ -27,7 +27,11 @@ namespace OpenAstroAra.Astrometry {
 
         public double OriginalX { get; }
         public double OriginalY { get; }
-        public Coordinates OriginalCoordinates { get; set; } = null!;  // assigned after construction
+        // Nullable: this public property is assigned after construction by the framing
+        // flow, so consumers may legitimately read it before it has been set. Modeling it
+        // as Coordinates? makes that "not yet set" state explicit in the type system rather
+        // than papering over it with null! (which would surface as a surprise NRE).
+        public Coordinates? OriginalCoordinates { get; set; }
 
         private int id;
 

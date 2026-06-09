@@ -62,7 +62,9 @@ public sealed class HeadlessSafetyMonitorMediator : ISafetyMonitorMediator {
     public string SendCommandString(string command, bool raw = true) => string.Empty;
     public bool SendCommandBool(string command, bool raw = true) => false;
     public void SendCommandBlind(string command, bool raw = true) { }
-    public IDevice GetDevice() => null!;
+    public IDevice GetDevice() =>
+        throw new NotSupportedException(
+            "Headless safety-monitor stub has no backing IDevice; real Alpaca-backed wiring swaps in at the DI registration point once §14e Alpaca simulator pinning lands.");
 
     // Events — IDeviceMediator's Connected/Disconnected + ISafetyMonitorMediator's
     // IsSafeChanged. Declared but never fired in the headless stub; subscribers
