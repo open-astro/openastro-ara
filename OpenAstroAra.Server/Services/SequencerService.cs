@@ -326,7 +326,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
 
     // Flatten the container tree to its ordered leaf instructions (containers are
     // themselves ISequenceItems; only non-containers are real instructions).
-    private static List<ISequenceItem> CollectLeaves(ISequenceItem root) {
+    internal static List<ISequenceItem> CollectLeaves(ISequenceItem root) {
         var leaves = new List<ISequenceItem>();
         void Walk(ISequenceItem item) {
             if (item is ISequenceContainer c) {
@@ -341,17 +341,21 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         return leaves;
     }
 
-    private static int CountTerminalLeaves(List<ISequenceItem> leaves) {
+    internal static int CountTerminalLeaves(List<ISequenceItem> leaves) {
         var n = 0;
         foreach (var leaf in leaves) {
-            if (leaf.Status is SequenceEntityStatus.FINISHED or SequenceEntityStatus.FAILED or SequenceEntityStatus.SKIPPED) {
+            // DISABLED is "done" too: SequentialStrategy only runs CREATED items, so
+            // a disabled leaf never executes and stays DISABLED — counting it keeps
+            // frames_completed consistent with frames_total on a successful run.
+            if (leaf.Status is SequenceEntityStatus.FINISHED or SequenceEntityStatus.FAILED
+                            or SequenceEntityStatus.SKIPPED or SequenceEntityStatus.DISABLED) {
                 n++;
             }
         }
         return n;
     }
 
-    private static int? RunningLeafIndex(List<ISequenceItem> leaves) {
+    internal static int? RunningLeafIndex(List<ISequenceItem> leaves) {
         for (var i = 0; i < leaves.Count; i++) {
             if (leaves[i].Status == SequenceEntityStatus.RUNNING) {
                 return i;
@@ -511,7 +515,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         public void UpdateProgress(int total, int completed, int? runningIndex) {
             lock (_gate) {
                 InstructionCount = total;
-                FramesCompleted = completed < 0 ? 0 : (completed > total ? total : completed);
+                FramesCompleted = Math.Min(completed, total); // CountTerminalLeaves is >= 0
                 CurrentInstructionIndex = runningIndex;
             }
         }
