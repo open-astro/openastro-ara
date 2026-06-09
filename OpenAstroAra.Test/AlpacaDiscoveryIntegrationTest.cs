@@ -98,6 +98,12 @@ namespace OpenAstroAra.Test {
                 }
                 await TestContext.Progress.WriteLineAsync(
                     $"discovery attempt {attempt}/{MaxDiscoveryAttempts} for {type} found nothing; retrying").ConfigureAwait(false);
+                // Small explicit spacing between attempts. The ASCOM library's ~2s
+                // discoveryDuration normally provides this, but don't rely on that
+                // internal sleep in case it ever short-circuits on a "no responders" path.
+                if (attempt < MaxDiscoveryAttempts) {
+                    await Task.Delay(TimeSpan.FromMilliseconds(500)).ConfigureAwait(false);
+                }
             }
             return null;
         }

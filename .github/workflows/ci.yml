@@ -85,6 +85,7 @@ jobs:
   alpaca-sim-smoke:
     name: Alpaca simulator harness (smoke)
     runs-on: ubuntu-latest
+    needs: sanity  # don't burn a runner + sim download if design-doc/workflow sanity already failed
     timeout-minutes: 10  # backstop if a runner/OmniSim hang outlives the ~270s poll window
     permissions:
       contents: read  # only needs to check out + download a public release artifact
@@ -168,6 +169,7 @@ jobs:
   alpaca-sim-integration:
     name: Alpaca discovery integration test
     runs-on: ubuntu-latest
+    needs: sanity  # don't burn a runner + sim download if design-doc/workflow sanity already failed
     timeout-minutes: 15
     permissions:
       contents: read  # checkout + download a public release artifact; no write scope
@@ -190,6 +192,9 @@ jobs:
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', 'Directory.Build.props', 'global.json') }}
           restore-keys: |
             ${{ runner.os }}-nuget-
+
+      - name: dotnet restore (test project)
+        run: dotnet restore OpenAstroAra.Test/OpenAstroAra.Test.csproj
 
       - name: Download + verify pinned Alpaca simulators
         run: |
@@ -218,7 +223,7 @@ jobs:
             echo "--- simulator log ---"; cat /tmp/alpaca-sim.log || true
             exit 1
           fi
-          dotnet test OpenAstroAra.Test/OpenAstroAra.Test.csproj -c Release \
+          dotnet test OpenAstroAra.Test/OpenAstroAra.Test.csproj -c Release --no-restore \
             --filter "TestCategory=Integration" --verbosity normal
 
   # Whole-solution analyzer gate. Directory.Build.props turns on the full CAxxxx
