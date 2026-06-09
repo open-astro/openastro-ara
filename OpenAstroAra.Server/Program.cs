@@ -164,7 +164,10 @@ public partial class Program {
         // Actions return 202 OperationAccepted. Real ASCOM Alpaca drivers
         // land per-device in the real-infra phase + Phase 14.
         builder.Services.AddSingleton<ICameraService, PlaceholderCameraService>();
-        builder.Services.AddSingleton<ITelescopeService, PlaceholderTelescopeService>();
+        // §14e — ninth real device service: live mount (RA/Dec + tracking/parked/home) + slew/sync,
+        // park/unpark, set-tracking, abort-slew. REST-only; the ITelescopeMediator unification is a
+        // follow-up.
+        builder.Services.AddSingleton<ITelescopeService, TelescopeService>();
         // §14e — fourth real device service: live focuser (position/temp) + Move. REST-only;
         // the IFocuserMediator unification (MoveFocuser/autofocus instructions) is a follow-up.
         builder.Services.AddSingleton<IFocuserService, FocuserService>();
