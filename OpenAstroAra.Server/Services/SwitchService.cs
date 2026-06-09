@@ -113,6 +113,13 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
 
     public async Task SetValueAsync(SwitchValueRequestDto request, CancellationToken ct) {
         ArgumentNullException.ThrowIfNull(request);
+        // ASCOM addresses switches by a short id; validate before the narrowing cast so an
+        // out-of-range PortId fails loudly instead of silently wrapping to a different port
+        // (e.g. (short)32768 == -32768). The device itself validates the upper bound vs MaxSwitch.
+        if (request.PortId is < 0 or > short.MaxValue) {
+            throw new ArgumentOutOfRangeException(nameof(request), request.PortId,
+                "PortId is out of range for an ASCOM Switch (0..32767).");
+        }
         AlpacaSwitch? client;
         lock (_gate) {
             ObjectDisposedException.ThrowIf(_disposed, this);

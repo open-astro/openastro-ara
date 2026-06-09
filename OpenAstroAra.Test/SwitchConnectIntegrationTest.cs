@@ -62,6 +62,12 @@ namespace OpenAstroAra.Test {
             Assert.That(connected!.State, Is.EqualTo(EquipmentConnectionState.Connected));
             Assert.That(connected.Ports, Is.Not.Empty, "the simulated Switch should expose ports");
 
+            // Idempotency (§60.5): a repeat connect to the same connected device is a no-op accept.
+            await svc.ConnectAsync(new ConnectRequestDto(device!), idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+            var stillConnected = await svc.GetAsync(CancellationToken.None).ConfigureAwait(false);
+            Assert.That(stillConnected!.State, Is.EqualTo(EquipmentConnectionState.Connected),
+                "a repeat connect to the same connected device must stay Connected");
+
             // Find a writable port and flip it between its min and max, then confirm the read-back.
             var writable = connected.Ports.FirstOrDefault(p => p.CanWrite && p.Max > p.Min);
             if (writable is not null) {

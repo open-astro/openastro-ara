@@ -73,6 +73,16 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void SetValueAsync_with_out_of_range_PortId_throws_ArgumentOutOfRange() {
+            using var svc = new SwitchService();
+            // PortId > short.MaxValue would silently wrap on the (short) cast — must throw instead.
+            Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+                () => svc.SetValueAsync(new SwitchValueRequestDto(40000, 1.0), CancellationToken.None));
+            Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+                () => svc.SetValueAsync(new SwitchValueRequestDto(-1, 1.0), CancellationToken.None));
+        }
+
+        [Test]
         public void ConnectAsync_after_Dispose_throws_ObjectDisposedException() {
             var svc = new SwitchService();
             svc.Dispose();
