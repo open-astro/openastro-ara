@@ -74,6 +74,14 @@ namespace OpenAstroAra.Test {
             // Safe is whatever the sim is configured to report; we only assert the live read
             // produced a DTO without faulting (it did, since State is Connected not Error).
 
+            // §32.4 — the same singleton serves the Sequencer's mediator GetInfo() from the cache
+            // the background loop maintains. While Connected it must report Connected with the
+            // device identity (IsSafe is whatever the sim reports).
+            var info = ((OpenAstroAra.Equipment.Interfaces.Mediator.ISafetyMonitorMediator)svc).GetInfo();
+            Assert.That(info.Connected, Is.True, "mediator GetInfo() should report Connected while connected");
+            Assert.That(info.DeviceId, Is.EqualTo(connected.DeviceId),
+                "mediator GetInfo() and REST GetAsync() must agree on the device identity");
+
             // Idempotency (§60.5): connecting again to the same device while Connected is a no-op
             // accept — it must not tear the connection down or bounce it through Connecting.
             await svc.ConnectAsync(new ConnectRequestDto(device!), idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
