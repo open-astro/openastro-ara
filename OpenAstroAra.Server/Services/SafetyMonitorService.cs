@@ -238,7 +238,17 @@ public sealed partial class SafetyMonitorService : ISafetyMonitorService, IDispo
         } catch (Exception ex) {
             LogTeardownIgnored(ex);
         }
-        client.Dispose();
+        DisposeQuietly(client);
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort teardown: ASCOM/COM-backed clients have been known to throw from Dispose(); the throw must be swallowed (and logged) rather than escape into a fire-and-forget Task.Run as an unobserved exception. CA1031's log-and-recover boundary applies.")]
+    private void DisposeQuietly(AlpacaSafetyMonitor client) {
+        try {
+            client.Dispose();
+        } catch (Exception ex) {
+            LogTeardownIgnored(ex);
+        }
     }
 
     // Caller holds _gate; offloads the blocking disconnect/dispose so we never do I/O under the
@@ -276,12 +286,14 @@ public sealed partial class SafetyMonitorService : ISafetyMonitorService, IDispo
             client = _client;
             _client = null;
         }
-        // Dispose the client directly rather than via SafeDisconnectDispose: the courtesy
-        // "Connected = false" is a blocking HTTP call (up to the ASCOM ~3s
+        // Dispose the client directly (guarded) rather than via SafeDisconnectDispose: the
+        // courtesy "Connected = false" is a blocking HTTP call (up to the ASCOM ~3s
         // establishConnectionTimeout) that would hang container shutdown if the device is
-        // unreachable. client.Dispose() releases the HttpClient resources without network I/O;
-        // the device times out its own side of the connection.
-        client?.Dispose();
+        // unreachable. DisposeQuietly releases the HttpClient resources without network I/O and
+        // swallows any Dispose() throw so it can't escape IDisposable.Dispose() at shutdown.
+        if (client is not null) {
+            DisposeQuietly(client);
+        }
         GC.SuppressFinalize(this);
     }
 

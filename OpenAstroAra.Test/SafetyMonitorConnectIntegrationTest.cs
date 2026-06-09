@@ -74,6 +74,14 @@ namespace OpenAstroAra.Test {
             // Safe is whatever the sim is configured to report; we only assert the live read
             // produced a DTO without faulting (it did, since State is Connected not Error).
 
+            // Idempotency (§60.5): connecting again to the same device while Connected is a no-op
+            // accept — it must not tear the connection down or bounce it through Connecting.
+            await svc.ConnectAsync(new ConnectRequestDto(device!), idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+            var stillConnected = await svc.GetAsync(CancellationToken.None).ConfigureAwait(false);
+            Assert.That(stillConnected, Is.Not.Null);
+            Assert.That(stillConnected!.State, Is.EqualTo(EquipmentConnectionState.Connected),
+                "a repeat connect to the same connected device must stay Connected (idempotent no-op)");
+
             await svc.DisconnectAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
 
             var disconnected = await PollUntilAsync(svc, s => s == EquipmentConnectionState.Disconnected).ConfigureAwait(false);
