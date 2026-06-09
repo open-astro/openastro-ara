@@ -123,12 +123,17 @@ public sealed partial class FocuserService : IFocuserService, IDisposable {
         }
         // Validate the target against known capabilities when available; the device validates the
         // bound itself otherwise (ASCOM Move throws InvalidValue out of range).
-        var min = caps?.MinPosition ?? 0;
-        // Only enforce the upper bound when we have a real (non-zero) max; otherwise let the device
-        // validate it. (ReadCapabilities never caches a zero max now, but keep this defensive.)
-        if (request.TargetPosition < min || (caps is not null && caps.MaxPosition > 0 && request.TargetPosition > caps.MaxPosition)) {
+        // Validate against capabilities only once they're loaded; until then (the first ~2s after
+        // connect) the device validates the bound. This avoids rejecting a valid negative offset on
+        // a relative focuser before caps load (a min=0 fallback would otherwise reject it). The
+        // upper bound is also skipped when MaxPosition is 0 (unknown). MinPosition is 0 for absolute
+        // focusers, -MaxStep for relative.
+        if (caps is not null
+            && (request.TargetPosition < caps.MinPosition
+                || (caps.MaxPosition > 0 && request.TargetPosition > caps.MaxPosition))) {
             throw new ArgumentOutOfRangeException(nameof(request), request.TargetPosition,
-                $"TargetPosition is out of range ({min}..{caps?.MaxPosition.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "?"}).");
+                string.Create(System.Globalization.CultureInfo.InvariantCulture,
+                    $"TargetPosition is out of range ({caps.MinPosition}..{caps.MaxPosition})."));
         }
         // 202 contract: the move runs in the background; GetAsync reports State="moving" until the
         // device settles (the refresh cache picks up IsMoving / Position).
