@@ -20,6 +20,8 @@ namespace OpenAstroAra.Test.Utility {
     [TestFixture]
     public class FilenameTemplateValidatorTest {
 
+        private static readonly string[] ExpectedUnknownTokens = { "$$BAD1$$", "$$BAD2$$" };
+
         [Test]
         public void Validate_accepts_template_with_FRAMENR() {
             // Per §38.6.1, $$FRAMENR$$ satisfies the uniqueness requirement.
@@ -54,7 +56,7 @@ namespace OpenAstroAra.Test.Utility {
                 "$$FRAMENR$$_$$BAD1$$_$$BAD2$$");
             Assert.That(result.Valid, Is.False);
             Assert.That(result.Code, Is.EqualTo(FilenameTemplateValidator.CodeUnknownToken));
-            Assert.That(result.UnknownTokens, Is.EquivalentTo(new[] { "$$BAD1$$", "$$BAD2$$" }));
+            Assert.That(result.UnknownTokens, Is.EquivalentTo(ExpectedUnknownTokens));
         }
 
         [Test]

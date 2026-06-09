@@ -6,13 +6,13 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © Andrew Kirillov, 2005-2009
+// Copyright ï¿½ Andrew Kirillov, 2005-2009
 // andrew.kirillov@aforgenet.com
 //
-// Copyright © Joan Charmant, 2008
+// Copyright ï¿½ Joan Charmant, 2008
 // joan.charmant@gmail.com
 //
-// Copyright © César Souza, 2009-2017
+// Copyright ï¿½ Cï¿½sar Souza, 2009-2017
 // cesarsouza at gmail.com
 //
 //    This library is free software; you can redistribute it and/or
@@ -30,8 +30,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging
-{
+namespace Accord.Imaging {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -97,8 +96,7 @@ namespace Accord.Imaging
     /// <img src="..\images\imaging\ebm_result.png" width="217" height="192" />
     /// </remarks>
     /// 
-    public class ExhaustiveBlockMatching : IBlockMatching
-    {
+    public class ExhaustiveBlockMatching : IBlockMatching {
         // block size to search for
         private int blockSize = 16;
         // search radius (maximum shift from base position, in all 4 directions) 
@@ -116,8 +114,7 @@ namespace Accord.Imaging
         /// <para>Default value is set to <b>12</b>.</para>
         /// </remarks>
         /// 
-        public int SearchRadius
-        {
+        public int SearchRadius {
             get { return searchRadius; }
             set { searchRadius = value; }
         }
@@ -135,8 +132,7 @@ namespace Accord.Imaging
         /// <para>Default value is set to <b>16</b>.</para>
         /// </remarks>
         /// 
-        public int BlockSize
-        {
+        public int BlockSize {
             get { return blockSize; }
             set { blockSize = value; }
         }
@@ -154,8 +150,7 @@ namespace Accord.Imaging
         /// <para>Default value is set to <b>0.9</b>.</para>
         /// </remarks>
         /// 
-        public float SimilarityThreshold
-        {
+        public float SimilarityThreshold {
             get { return similarityThreshold; }
             set { similarityThreshold = Math.Min(1, Math.Max(0, value)); }
         }
@@ -172,8 +167,7 @@ namespace Accord.Imaging
         /// <param name="blockSize">Block size to search for.</param>
         /// <param name="searchRadius">Search radius.</param>
         /// 
-        public ExhaustiveBlockMatching(int blockSize, int searchRadius)
-        {
+        public ExhaustiveBlockMatching(int blockSize, int searchRadius) {
             this.blockSize = blockSize;
             this.searchRadius = searchRadius;
         }
@@ -193,8 +187,7 @@ namespace Accord.Imaging
         /// <exception cref="ArgumentException">Source images can be grayscale (8 bpp indexed) or color (24 bpp) image only.</exception>
         /// <exception cref="InvalidImagePropertiesException">Source and search images must have same pixel format.</exception>
         /// 
-        public List<BlockMatch> ProcessImage(Bitmap sourceImage, List<IntPoint> coordinates, Bitmap searchImage)
-        {
+        public List<BlockMatch> ProcessImage(Bitmap sourceImage, List<IntPoint> coordinates, Bitmap searchImage) {
             // lock source image
             BitmapData sourceImageData = sourceImage.LockBits(
                 new Rectangle(0, 0, sourceImage.Width, sourceImage.Height),
@@ -206,14 +199,11 @@ namespace Accord.Imaging
 
             List<BlockMatch> matchings;
 
-            try
-            {
+            try {
                 // process the image
                 matchings = ProcessImage(new UnmanagedImage(sourceImageData),
                     coordinates, new UnmanagedImage(searchImageData));
-            }
-            finally
-            {
+            } finally {
                 // unlock image
                 sourceImage.UnlockBits(sourceImageData);
                 searchImage.UnlockBits(searchImageData);
@@ -237,8 +227,7 @@ namespace Accord.Imaging
         /// <exception cref="UnsupportedImageFormatException">Source images can be grayscale (8 bpp indexed) or color (24 bpp) image only.</exception>
         /// <exception cref="ArgumentException">Source and search images must have same pixel format.</exception>
         /// 
-        public List<BlockMatch> ProcessImage(BitmapData sourceImageData, List<IntPoint> coordinates, BitmapData searchImageData)
-        {
+        public List<BlockMatch> ProcessImage(BitmapData sourceImageData, List<IntPoint> coordinates, BitmapData searchImageData) {
             return ProcessImage(new UnmanagedImage(sourceImageData), coordinates, new UnmanagedImage(searchImageData));
         }
 
@@ -257,8 +246,7 @@ namespace Accord.Imaging
         /// <exception cref="UnsupportedImageFormatException">Source images can be grayscale (8 bpp indexed) or color (24 bpp) image only.</exception>
         /// <exception cref="ArgumentException">Source and search images must have same pixel format.</exception>
         /// 
-        public List<BlockMatch> ProcessImage(UnmanagedImage sourceImage, List<IntPoint> coordinates, UnmanagedImage searchImage)
-        {
+        public List<BlockMatch> ProcessImage(UnmanagedImage sourceImage, List<IntPoint> coordinates, UnmanagedImage searchImage) {
             // source images sizes must match.
             if ((sourceImage.Width != searchImage.Width) || (sourceImage.Height != searchImage.Height))
                 throw new InvalidImagePropertiesException("Source and search images sizes must match");
@@ -295,14 +283,12 @@ namespace Accord.Imaging
             int threshold = (int)(similarityThreshold * maxDiff);
 
             // do the job
-            unsafe
-            {
+            unsafe {
                 byte* ptrSource = (byte*)sourceImage.ImageData.ToPointer();
                 byte* ptrSearch = (byte*)searchImage.ImageData.ToPointer();
 
                 // for each point fed
-                for (int iPoint = 0; iPoint < pointsCount; iPoint++)
-                {
+                for (int iPoint = 0; iPoint < pointsCount; iPoint++) {
                     int refPointX = coordinates[iPoint].X;
                     int refPointY = coordinates[iPoint].Y;
 
@@ -310,8 +296,7 @@ namespace Accord.Imaging
                     if (
                         ((refPointX - blockRadius < 0) || (refPointX + blockRadius >= width)) ||
                         ((refPointY - blockRadius < 0) || (refPointY + blockRadius >= height))
-                        )
-                    {
+                        ) {
                         // skip point
                         continue;
                     }
@@ -328,23 +313,19 @@ namespace Accord.Imaging
                     int minError = int.MaxValue;
 
                     // for each search window's row
-                    for (int searchWindowRow = 0; searchWindowRow < searchWindowSize; searchWindowRow++)
-                    {
-                        if ((searchStartY + searchWindowRow < 0) || (searchStartY + searchWindowRow + blockSize >= height))
-                        {
+                    for (int searchWindowRow = 0; searchWindowRow < searchWindowSize; searchWindowRow++) {
+                        if ((searchStartY + searchWindowRow < 0) || (searchStartY + searchWindowRow + blockSize >= height)) {
                             // skip row
                             continue;
                         }
 
                         // for each search window's column
-                        for (int searchWindowCol = 0; searchWindowCol < searchWindowSize; searchWindowCol++)
-                        {
+                        for (int searchWindowCol = 0; searchWindowCol < searchWindowSize; searchWindowCol++) {
                             // tested block location in search image
                             int blockSearchX = searchStartX + searchWindowCol;
                             int blockSearchY = searchStartY + searchWindowRow;
 
-                            if ((blockSearchX < 0) || (blockSearchX + blockSize >= width))
-                            {
+                            if ((blockSearchX < 0) || (blockSearchX + blockSize >= width)) {
                                 // skip column
                                 continue;
                             }
@@ -355,17 +336,12 @@ namespace Accord.Imaging
 
                             // navigate this block, accumulating the error
                             int error = 0;
-                            for (int blockRow = 0; blockRow < blockSize; blockRow++)
-                            {
-                                for (int blockCol = 0; blockCol < blockLineSize; blockCol++, ptrSourceBlock++, ptrSearchBlock++)
-                                {
+                            for (int blockRow = 0; blockRow < blockSize; blockRow++) {
+                                for (int blockCol = 0; blockCol < blockLineSize; blockCol++, ptrSourceBlock++, ptrSearchBlock++) {
                                     int diff = *ptrSourceBlock - *ptrSearchBlock;
-                                    if (diff > 0)
-                                    {
+                                    if (diff > 0) {
                                         error += diff;
-                                    }
-                                    else
-                                    {
+                                    } else {
                                         error -= diff;
                                     }
                                 }
@@ -376,8 +352,7 @@ namespace Accord.Imaging
                             }
 
                             // check if the sum of error is mimimal
-                            if (error < minError)
-                            {
+                            if (error < minError) {
                                 minError = error;
 
                                 // keep best match so far
@@ -390,8 +365,7 @@ namespace Accord.Imaging
                     // calculate blocks' similarity and compare it with threshold
                     int blockSimilarity = maxDiff - minError;
 
-                    if (blockSimilarity >= threshold)
-                    {
+                    if (blockSimilarity >= threshold) {
                         matchingsList.Add(new BlockMatch(
                             new IntPoint(refPointX, refPointY), new IntPoint(bestMatchX, bestMatchY),
                             (float)blockSimilarity / maxDiff));
@@ -406,10 +380,8 @@ namespace Accord.Imaging
         }
 
         // Sorter of found matchings
-        private class MatchingsSorter : System.Collections.Generic.IComparer<BlockMatch>
-        {
-            public int Compare(BlockMatch x, BlockMatch y)
-            {
+        private class MatchingsSorter : System.Collections.Generic.IComparer<BlockMatch> {
+            public int Compare(BlockMatch x, BlockMatch y) {
                 float diff = y.Similarity - x.Similarity;
 
                 return (diff > 0) ? 1 : (diff < 0) ? -1 : 0;

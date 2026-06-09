@@ -12,7 +12,7 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Profile.Interfaces;
 using System;
 using System.Runtime.Serialization;
@@ -21,7 +21,11 @@ namespace OpenAstroAra.Profile {
 
     [Serializable()]
     [DataContract]
-    public class TelescopeSettings : Settings, ITelescopeSettings {
+    public sealed class TelescopeSettings : Settings, ITelescopeSettings {
+
+        public TelescopeSettings() {
+            SetDefaultValues();
+        }
 
         [OnDeserializing]
         public void OnDeserializing(StreamingContext context) {
@@ -43,7 +47,7 @@ namespace OpenAstroAra.Profile {
             telescopeLocationSyncDirection = TelescopeLocationSyncDirection.PROMPT;
         }
 
-        private string id;
+        private string id = string.Empty;
 
         [DataMember]
         public string Id {
@@ -56,7 +60,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string lastDeviceName;
+        private string lastDeviceName = string.Empty;
 
         [DataMember]
         public string LastDeviceName {
@@ -69,7 +73,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string name;
+        private string name = string.Empty;
 
         [DataMember]
         public string Name {
@@ -82,7 +86,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string mountName;
+        private string mountName = string.Empty;
 
         [DataMember]
         public string MountName {
@@ -121,7 +125,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string snapPortStart;
+        private string snapPortStart = string.Empty;
 
         [DataMember]
         public string SnapPortStart {
@@ -134,7 +138,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string snapPortStop;
+        private string snapPortStop = string.Empty;
 
         [DataMember]
         public string SnapPortStop {
@@ -204,10 +208,10 @@ namespace OpenAstroAra.Profile {
         public TelescopeLocationSyncDirection TelescopeLocationSyncDirection {
             get => telescopeLocationSyncDirection;
             set {
-                if(telescopeLocationSyncDirection != value) {
+                if (telescopeLocationSyncDirection != value) {
                     telescopeLocationSyncDirection = value;
                     RaisePropertyChanged();
-                }                
+                }
             }
         }
 
@@ -216,7 +220,7 @@ namespace OpenAstroAra.Profile {
         public bool TimeSync {
             get => timeSync;
             set {
-                if(timeSync != value) {
+                if (timeSync != value) {
                     timeSync = value;
                     RaisePropertyChanged();
                 }

@@ -2,18 +2,17 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © AForge.NET, 2007-2012
+// Copyright ï¿½ AForge.NET, 2007-2012
 // contacts@aforgenet.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
+    using Accord;
+    using AForge;
     using System;
     using System.Collections.Generic;
     using System.Drawing;
     using System.Drawing.Imaging;
-    using AForge;
-    using Accord;
 
     /// <summary>
     /// Brightness adjusting in RGB color space.
@@ -48,8 +47,7 @@ namespace Accord.Imaging.Filters
     /// 
     /// <seealso cref="LevelsLinear"/>
     /// 
-    public class BrightnessCorrection : BaseInPlacePartialFilter
-    {
+    public class BrightnessCorrection : BaseInPlacePartialFilter {
         private LevelsLinear baseFilter = new LevelsLinear();
         private int adjustValue;
 
@@ -60,22 +58,17 @@ namespace Accord.Imaging.Filters
         /// <remarks>Default value is set to <b>10</b>, which corresponds to increasing
         /// RGB values of each pixel by 10.</remarks>
         ///
-        public int AdjustValue
-        {
+        public int AdjustValue {
             get { return adjustValue; }
-            set
-            {
+            set {
                 adjustValue = Math.Max(-255, Math.Min(255, value));
 
-                if (adjustValue > 0)
-                {
+                if (adjustValue > 0) {
                     baseFilter.InRed = baseFilter.InGreen = baseFilter.InBlue = baseFilter.InGray =
                         new IntRange(0, 255 - adjustValue);
                     baseFilter.OutRed = baseFilter.OutGreen = baseFilter.OutBlue = baseFilter.OutGray =
                         new IntRange(adjustValue, 255);
-                }
-                else
-                {
+                } else {
                     baseFilter.InRed = baseFilter.InGreen = baseFilter.InBlue = baseFilter.InGray =
                         new IntRange(-adjustValue, 255);
                     baseFilter.OutRed = baseFilter.OutGreen = baseFilter.OutBlue = baseFilter.OutGray =
@@ -91,8 +84,7 @@ namespace Accord.Imaging.Filters
         /// <remarks><para>See <see cref="IFilterInformation.FormatTranslations"/>
         /// documentation for additional information.</para></remarks>
         ///
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return baseFilter.FormatTranslations; }
         }
 
@@ -100,8 +92,7 @@ namespace Accord.Imaging.Filters
         /// Initializes a new instance of the <see cref="BrightnessCorrection"/> class.
         /// </summary>
         /// 
-        public BrightnessCorrection()
-        {
+        public BrightnessCorrection() {
             AdjustValue = 10;
         }
 
@@ -111,8 +102,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <param name="adjustValue">Brightness <see cref="AdjustValue">adjust value</see>.</param>
         /// 
-        public BrightnessCorrection(int adjustValue)
-        {
+        public BrightnessCorrection(int adjustValue) {
             AdjustValue = adjustValue;
         }
 
@@ -123,8 +113,7 @@ namespace Accord.Imaging.Filters
         /// <param name="image">Source image data.</param>
         /// <param name="rect">Image rectangle for processing by the filter.</param>
         ///
-        protected override unsafe void ProcessFilter(UnmanagedImage image, Rectangle rect)
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage image, Rectangle rect) {
             baseFilter.ApplyInPlace(image, rect);
         }
     }

@@ -12,20 +12,20 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Enums;
 
 namespace OpenAstroAra.Profile.Interfaces {
 
     public interface IDomeSettings : ISettings {
         string Id { get; set; }
         string LastDeviceName { get; set; }
-        double ScopePositionEastWest_mm { get; set; }
-        double ScopePositionNorthSouth_mm { get; set; }
-        double ScopePositionUpDown_mm { get; set; }
-        double DomeRadius_mm { get; set; }
-        double GemAxis_mm { get; set; }
-        double LateralAxis_mm { get; set; }
-        double AzimuthTolerance_degrees { get; set; }
+        double ScopePositionEastWestMm { get; set; }
+        double ScopePositionNorthSouthMm { get; set; }
+        double ScopePositionUpDownMm { get; set; }
+        double DomeRadiusMm { get; set; }
+        double GemAxisMm { get; set; }
+        double LateralAxisMm { get; set; }
+        double AzimuthToleranceDegrees { get; set; }
         bool FindHomeBeforePark { get; set; }
         int DomeSyncTimeoutSeconds { get; set; }
         bool SynchronizeDuringMountSlew { get; set; }
@@ -37,8 +37,8 @@ namespace OpenAstroAra.Profile.Interfaces {
         bool RefuseUnparkWithoutShutterOpen { get; set; }
         bool RefuseUnsafeShutterOpenSansSafetyDevice { get; set; }
         bool ParkDomeBeforeShutterMove { get; set; }
-        MountTypeEnum MountType { get; set; }
-        double DecOffsetHorizontal_mm { get; set; }
+        MountType MountType { get; set; }
+        double DecOffsetHorizontalMm { get; set; }
         int SettleTimeSeconds { get; set; }
     }
 }

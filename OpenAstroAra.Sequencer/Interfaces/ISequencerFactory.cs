@@ -16,16 +16,16 @@ using OpenAstroAra.Sequencer.Conditions;
 using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.SequenceItem;
 using OpenAstroAra.Sequencer.Trigger;
-using System.Windows.Data;
 using OpenAstroAra.Sequencer.Utility.DateTimeProvider;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Windows.Data;
 namespace OpenAstroAra.Sequencer {
 
     public interface ISequencerFactory {
         IList<ISequenceCondition> Conditions { get; }
-        IList<ISequenceContainer> Container { get; }
+        IList<ISequenceContainer> Containers { get; }
         IList<ISequenceItem> Items { get; }
         ICollectionView ItemsView { get; }
         ICollectionView InstructionsView { get; }
@@ -35,12 +35,12 @@ namespace OpenAstroAra.Sequencer {
         IList<IDateTimeProvider> DateTimeProviders { get; }
         string ViewFilter { get; set; }
 
-        T GetCondition<T>() where T : ISequenceCondition;
+        T? GetCondition<T>() where T : ISequenceCondition;
 
-        T GetContainer<T>() where T : ISequenceContainer;
+        T? GetContainer<T>() where T : ISequenceContainer;
 
-        T GetItem<T>() where T : ISequenceItem;
+        T? GetItem<T>() where T : ISequenceItem;
 
-        T GetTrigger<T>() where T : ISequenceTrigger;
+        T? GetTrigger<T>() where T : ISequenceTrigger;
     }
 }

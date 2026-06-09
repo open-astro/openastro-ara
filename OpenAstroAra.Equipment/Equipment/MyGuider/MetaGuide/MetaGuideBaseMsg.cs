@@ -13,19 +13,22 @@
 #endregion "copyright"
 
 using System;
+using System.Globalization;
 using System.Reflection;
 using System.Text;
 
 namespace OpenAstroAra.Equipment.Equipment.MyGuider.MetaGuide {
 
-    public class MetaGuideBaseMsg {
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Naming", "CA1710:Identifiers should have correct suffix",
+        Justification = "MetaGuideBaseMsg is the established base of the MetaGuide*Msg message hierarchy; it derives from EventArgs only so the listener's events can use EventHandler<TMsg>. The '...Msg' suffix is the meaningful, consistent name across all six message types; renaming the hierarchy to '...EventArgs' adds no clarity.")]
+    public class MetaGuideBaseMsg : System.EventArgs {
 
         public override String ToString() {
             Type objType = this.GetType();
             PropertyInfo[] propertyInfoList = objType.GetProperties();
             StringBuilder result = new StringBuilder();
             foreach (PropertyInfo propertyInfo in propertyInfoList) {
-                result.AppendFormat("{0}={1} ", propertyInfo.Name, propertyInfo.GetValue(this));
+                result.AppendFormat(CultureInfo.InvariantCulture, "{0}={1} ", propertyInfo.Name, propertyInfo.GetValue(this));
             }
 
             return result.ToString();

@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -12,11 +12,12 @@
 
 #endregion "copyright"
 
+using System;
 using System.IO.Ports;
 
 namespace OpenAstroAra.Core.Utility.SerialCommunication {
 
-    public sealed class SerialPortWrapper : ISerialPort {
+    public sealed class SerialPortWrapper : ISerialPort, IDisposable {
         private readonly SerialPort _serialPort;
 
         public SerialPortWrapper() {
@@ -45,5 +46,7 @@ namespace OpenAstroAra.Core.Utility.SerialCommunication {
         public string ReadLine() => _serialPort.ReadLine();
 
         public void Write(string value) => _serialPort.Write(value);
+
+        public void Dispose() => _serialPort.Dispose();
     }
 }

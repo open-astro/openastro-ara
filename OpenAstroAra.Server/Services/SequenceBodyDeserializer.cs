@@ -12,11 +12,13 @@
 
 #endregion "copyright"
 
-using System.Text.Json;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using OpenAstroAra.Sequencer;
 using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.Serialization;
+using System;
+using System.Text.Json;
 
 namespace OpenAstroAra.Server.Services;
 
@@ -39,14 +41,14 @@ namespace OpenAstroAra.Server.Services;
 /// can't resolve. The §38.5 validator + the §38.4 import flow flag
 /// these to the user as "lossy translation" warnings.
 /// </summary>
-public sealed class SequenceBodyDeserializer {
+public sealed partial class SequenceBodyDeserializer {
 
     private readonly SequenceJsonConverter _converter;
-    private readonly ILogger<SequenceBodyDeserializer>? _logger;
+    private readonly ILogger<SequenceBodyDeserializer> _logger;
 
     public SequenceBodyDeserializer(ISequencerFactory factory, ILogger<SequenceBodyDeserializer>? logger = null) {
         _converter = new SequenceJsonConverter(factory);
-        _logger = logger;
+        _logger = logger ?? NullLogger<SequenceBodyDeserializer>.Instance;
     }
 
     /// <summary>
@@ -74,16 +76,23 @@ public sealed class SequenceBodyDeserializer {
             container = _converter.Deserialize(rawJson);
             return container is not null;
         } catch (Newtonsoft.Json.JsonException ex) {
-            _logger?.LogWarning(ex, "Sequence body failed to deserialize as NINA $type tree");
+            LogMalformedBody(ex);
             error = $"Malformed sequence JSON: {ex.Message}";
             return false;
-        } catch (Exception ex) {
-            // Unexpected — but don't let the daemon crash on a bad body.
-            // The §38.5 validator catches most of these before persist,
-            // but historical files might pre-date current validation.
-            _logger?.LogError(ex, "Unexpected error deserializing sequence body");
+        } catch (Exception ex) when (ex is InvalidOperationException or ArgumentException
+                                      or NotSupportedException or FormatException or OverflowException) {
+            // Reflection/factory errors building the $type tree — don't let the
+            // daemon crash on a bad body. The §38.5 validator catches most of
+            // these before persist, but historical files might pre-date it.
+            LogUnexpectedBodyError(ex);
             error = $"Unexpected error: {ex.GetType().Name}: {ex.Message}";
             return false;
         }
     }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Sequence body failed to deserialize as NINA $type tree")]
+    private partial void LogMalformedBody(Exception ex);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Unexpected error deserializing sequence body")]
+    private partial void LogUnexpectedBodyError(Exception ex);
 }

@@ -13,8 +13,8 @@
 #endregion "copyright"
 
 using Newtonsoft.Json;
-using OpenAstroAra.Sequencer.SequenceItem;
 using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Sequencer.SequenceItem;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.Composition;
@@ -67,9 +67,9 @@ namespace OpenAstroAra.Sequencer.Conditions {
             }
         }
 
-        public override bool Check(ISequenceItem previousItem, ISequenceItem nextItem) {
+        public override bool Check(ISequenceItem? previousItem, ISequenceItem? nextItem) {
             var check = CompletedIterations < Iterations;
-            if(!check && IsActive()) {
+            if (!check && IsActive()) {
                 Logger.Info($"{nameof(LoopCondition)} finished. Iterations: {CompletedIterations} / {Iterations}");
             }
             return check;
@@ -77,7 +77,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
 
         public override void ResetProgress() {
             CompletedIterations = 0;
-            Status = Core.Enum.SequenceEntityStatus.CREATED;
+            Status = Core.Enums.SequenceEntityStatus.CREATED;
         }
 
         public override void SequenceBlockFinished() {

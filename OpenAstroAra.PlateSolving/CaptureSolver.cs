@@ -12,6 +12,12 @@
 
 #endregion "copyright"
 
+using OpenAstroAra.Core.Locale;
+using OpenAstroAra.Core.Model;
+using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Equipment.Model;
+using OpenAstroAra.PlateSolving.Interfaces;
 using OpenAstroAra.Profile.Interfaces;
 using System;
 using System.Collections.Generic;
@@ -19,12 +25,6 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using OpenAstroAra.Equipment.Interfaces.Mediator;
-using OpenAstroAra.Core.Model;
-using OpenAstroAra.Core.Utility;
-using OpenAstroAra.Equipment.Model;
-using OpenAstroAra.PlateSolving.Interfaces;
-using OpenAstroAra.Core.Locale;
 
 namespace OpenAstroAra.PlateSolving {
 
@@ -43,7 +43,7 @@ namespace OpenAstroAra.PlateSolving {
 
         public IImageSolver ImageSolver { get; set; }
 
-        public async Task<PlateSolveResult> Solve(CaptureSequence seq, CaptureSolverParameter parameter, IProgress<PlateSolveProgress> solveProgress, IProgress<ApplicationStatus> progress, CancellationToken ct) {
+        public async Task<PlateSolveResult> Solve(CaptureSequence seq, CaptureSolverParameter parameter, IProgress<PlateSolveProgress>? solveProgress, IProgress<ApplicationStatus>? progress, CancellationToken ct) {
             var remainingAttempts = parameter.Attempts;
             PlateSolveResult plateSolveResult;
             do {
@@ -58,7 +58,7 @@ namespace OpenAstroAra.PlateSolving {
                 } else {
                     Task filterChangeTask = Task.CompletedTask;
                     if (oldFilter != null) {
-                        filterChangeTask = filterWheelMediator.ChangeFilter(oldFilter);
+                        filterChangeTask = filterWheelMediator.ChangeFilter(oldFilter, token: ct);
                     }
 
                     solveProgress?.Report(
@@ -69,11 +69,7 @@ namespace OpenAstroAra.PlateSolving {
 
                     ct.ThrowIfCancellationRequested();
 
-                    if (renderedImage != null) {
-                        plateSolveResult = await ImageSolver.Solve(renderedImage.RawImageData, parameter, progress, ct);
-                    } else {
-                        plateSolveResult = new PlateSolveResult() { Success = false };
-                    }
+                    plateSolveResult = await ImageSolver.Solve(renderedImage.RawImageData, parameter, progress, ct);
 
                     solveProgress?.Report(
                         new PlateSolveProgress {
@@ -84,7 +80,7 @@ namespace OpenAstroAra.PlateSolving {
                     await filterChangeTask;
 
                     if (!plateSolveResult.Success && remainingAttempts > 0) {
-                        await CoreUtil.Wait(parameter.ReattemptDelay, true, ct, progress, "");
+                        await CoreUtil.Wait(parameter.ReattemptDelay, true, progress, "", ct);
                     }
                 }
             } while (!plateSolveResult.Success && remainingAttempts > 0);

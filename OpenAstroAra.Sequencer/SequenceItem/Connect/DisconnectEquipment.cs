@@ -20,7 +20,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
     [ExportMetadata("Category", "Lbl_SequenceCategory_Connect")]
     [Export(typeof(ISequenceItem))]
     [JsonObject(MemberSerialization.OptIn)]
-    class DisconnectEquipment : SequenceItem, IValidatable {
+    sealed class DisconnectEquipment : SequenceItem, IValidatable {
         private ICameraMediator cameraMediator;
         private IFilterWheelMediator fwMediator;
         private IFocuserMediator focuserMediator;
@@ -80,7 +80,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
         }
 
         public List<string> Devices { get; }
-        private string selectedDevice;
+        private string selectedDevice = string.Empty;
 
         [JsonProperty]
         public string SelectedDevice {
@@ -92,7 +92,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
         }
 
 
-        private object GetMediator() {
+        private object? GetMediator() {
             switch (SelectedDevice) {
                 case "Camera": return cameraMediator;
                 case "Filter Wheel": return fwMediator;
@@ -137,20 +137,21 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
 
         public override async Task Execute(IProgress<ApplicationStatus> progress, CancellationToken token) {
             var mediator = GetMediator();
+            if (mediator == null) { return; }
 
             var type = mediator.GetType();
             var GetInfo = type.GetMethod("GetInfo");
-            DeviceInfo info = (DeviceInfo)GetInfo.Invoke(mediator, null);
+            DeviceInfo info = (DeviceInfo)GetInfo!.Invoke(mediator, null)!;
 
 
             if (info.Connected) {
                 var Disconnect = type.GetMethod("Disconnect");
-                await (Task)Disconnect.Invoke(mediator, null);
+                await (Task)Disconnect!.Invoke(mediator, null)!;
 
-                DeviceInfo infoAfterConnect = (DeviceInfo)GetInfo.Invoke(mediator, null);
+                DeviceInfo infoAfterConnect = (DeviceInfo)GetInfo!.Invoke(mediator, null)!;
                 var success = !infoAfterConnect.Connected;
                 if (!success) {
-                    throw new Exception($"Failed to disconnect to {SelectedDevice}");
+                    throw new SequenceEntityFailedException($"Failed to disconnect to {SelectedDevice}");
                 }
             } else {
                 Logger.Info($"{SelectedDevice} is already disconnected");

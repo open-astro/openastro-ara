@@ -12,18 +12,18 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Image.Interfaces;
-using OpenAstroAra.Profile.Interfaces;
+using OpenAstroAra.Core.Locale;
+using OpenAstroAra.Core.Model;
 using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Image.Interfaces;
+using OpenAstroAra.PlateSolving.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using OpenAstroAra.Core.Model;
-using OpenAstroAra.Core.Locale;
-using OpenAstroAra.PlateSolving.Interfaces;
 
 namespace OpenAstroAra.PlateSolving {
 
@@ -34,7 +34,7 @@ namespace OpenAstroAra.PlateSolving {
             this.blindSolver = blindSolver;
         }
 
-        public async Task<PlateSolveResult> Solve(IImageData source, PlateSolveParameter parameter, IProgress<ApplicationStatus> progress, CancellationToken ct) {
+        public async Task<PlateSolveResult> Solve(IImageData source, PlateSolveParameter parameter, IProgress<ApplicationStatus>? progress, CancellationToken ct) {
             ValidatePrerequisites(parameter);
             var solver = GetSolver(parameter);
 
@@ -64,7 +64,6 @@ namespace OpenAstroAra.PlateSolving {
             return result;
         }
 
-        protected IProfileService profileService;
         private IPlateSolver plateSolver;
         private IPlateSolver blindSolver;
 
@@ -79,16 +78,14 @@ namespace OpenAstroAra.PlateSolving {
         /// <summary>
         /// Validates general prerequisites that need to be set up to use the plate solvers
         /// </summary>
-        protected void ValidatePrerequisites(PlateSolveParameter parameter) {
-            if (parameter == null) {
-                throw new ArgumentNullException(nameof(PlateSolveParameter));
-            }
+        protected static void ValidatePrerequisites(PlateSolveParameter parameter) {
+            ArgumentNullException.ThrowIfNull(parameter);
 
             double focalLength = parameter.FocalLength;
 
             // Check to make sure user has supplied the telescope's effective focal length (in mm)
             if (double.IsNaN(focalLength) || focalLength <= 0) {
-                throw new Exception(Loc.Instance["LblPlateSolveNoFocalLength"]);
+                throw new InvalidOperationException(Loc.Instance["LblPlateSolveNoFocalLength"]);
             }
         }
     }

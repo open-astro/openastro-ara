@@ -21,6 +21,8 @@ namespace OpenAstroAra.Test.Utility {
     [TestFixture]
     public class SequenceTemplateVariablesTest {
 
+        private static readonly string[] ExpectedUnknownTokens = { "integration_minutes" };
+
         [Test]
         public void Substitute_replaces_known_tokens() {
             var input = "Slew to {{target_name}} at RA {{target_ra}} Dec {{target_dec}}.";
@@ -40,7 +42,7 @@ namespace OpenAstroAra.Test.Utility {
             var values = new Dictionary<string, string> { ["target_name"] = "NGC7000" };
             var (result, unknown) = SequenceTemplateVariables.Substitute(input, values);
             Assert.That(result, Is.EqualTo("NGC7000 for {{integration_minutes}} min"));
-            Assert.That(unknown, Is.EquivalentTo(new[] { "integration_minutes" }));
+            Assert.That(unknown, Is.EquivalentTo(ExpectedUnknownTokens));
         }
 
         [Test]
@@ -121,14 +123,14 @@ namespace OpenAstroAra.Test.Utility {
 
         [Test]
         public void TokenNames_All_contains_canonical_set() {
-            Assert.That(SequenceTemplateVariables.TokenNames.All, Has.Count.EqualTo(7));
-            Assert.That(SequenceTemplateVariables.TokenNames.All, Does.Contain("target_name"));
-            Assert.That(SequenceTemplateVariables.TokenNames.All, Does.Contain("target_ra"));
-            Assert.That(SequenceTemplateVariables.TokenNames.All, Does.Contain("target_dec"));
-            Assert.That(SequenceTemplateVariables.TokenNames.All, Does.Contain("target_rotation"));
-            Assert.That(SequenceTemplateVariables.TokenNames.All, Does.Contain("integration_minutes"));
-            Assert.That(SequenceTemplateVariables.TokenNames.All, Does.Contain("frames_per_filter"));
-            Assert.That(SequenceTemplateVariables.TokenNames.All, Does.Contain("filter_set"));
+            Assert.That(TokenNames.All, Has.Count.EqualTo(7));
+            Assert.That(TokenNames.All, Does.Contain("target_name"));
+            Assert.That(TokenNames.All, Does.Contain("target_ra"));
+            Assert.That(TokenNames.All, Does.Contain("target_dec"));
+            Assert.That(TokenNames.All, Does.Contain("target_rotation"));
+            Assert.That(TokenNames.All, Does.Contain("integration_minutes"));
+            Assert.That(TokenNames.All, Does.Contain("frames_per_filter"));
+            Assert.That(TokenNames.All, Does.Contain("filter_set"));
         }
     }
 }

@@ -14,6 +14,7 @@
 
 using OpenAstroAra.Core.Utility;
 using System;
+using System.Globalization;
 
 namespace OpenAstroAra.Equipment.Equipment.MyGuider.MetaGuide {
 
@@ -22,20 +23,20 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.MetaGuide {
         private MetaGuideCameraMsg() {
         }
 
-        public static MetaGuideCameraMsg Create(string[] args) {
+        public static MetaGuideCameraMsg? Create(string[] args) {
             if (args.Length < 11) {
                 return null;
             }
             try {
                 return new MetaGuideCameraMsg() {
-                    Exposure = int.Parse(args[5]),
-                    Gain = int.Parse(args[6]),
-                    MinExposure = int.Parse(args[7]),
-                    MaxExposure = int.Parse(args[8]),
-                    MinGain = int.Parse(args[9]),
-                    MaxGain = int.Parse(args[10])
+                    Exposure = int.Parse(args[5], CultureInfo.InvariantCulture),
+                    Gain = int.Parse(args[6], CultureInfo.InvariantCulture),
+                    MinExposure = int.Parse(args[7], CultureInfo.InvariantCulture),
+                    MaxExposure = int.Parse(args[8], CultureInfo.InvariantCulture),
+                    MinGain = int.Parse(args[9], CultureInfo.InvariantCulture),
+                    MaxGain = int.Parse(args[10], CultureInfo.InvariantCulture)
                 };
-            } catch (Exception ex) {
+            } catch (Exception ex) when (ex is FormatException or OverflowException) {
                 Logger.Error(ex);
                 return null;
             }

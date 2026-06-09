@@ -13,11 +13,14 @@
 #endregion "copyright"
 
 using Newtonsoft.Json;
-using OpenAstroAra.Core.Model;
-using OpenAstroAra.Sequencer.Container;
-using OpenAstroAra.Sequencer.Validations;
 using OpenAstroAra.Astrometry;
+using OpenAstroAra.Core.Locale;
+using OpenAstroAra.Core.Model;
+using OpenAstroAra.Core.Utility.Notification;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Sequencer.Container;
+using OpenAstroAra.Sequencer.Utility;
+using OpenAstroAra.Sequencer.Validations;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -26,9 +29,6 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using OpenAstroAra.Core.Locale;
-using OpenAstroAra.Core.Utility.Notification;
-using OpenAstroAra.Sequencer.Utility;
 
 namespace OpenAstroAra.Sequencer.SequenceItem.Telescope {
 
@@ -53,7 +53,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Telescope {
 
         public override object Clone() {
             return new SlewScopeToRaDec(this) {
-                Coordinates = Coordinates?.Clone()
+                Coordinates = Coordinates.Clone()
             };
         }
 
@@ -85,8 +85,8 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Telescope {
         }
 
         public override async Task Execute(IProgress<ApplicationStatus> progress, CancellationToken token) {
-            if(telescopeMediator.GetInfo().AtPark) {
-                Notification.ShowError(Loc.Instance["LblTelescopeParkedWarning"]);
+            if (telescopeMediator.GetInfo().AtPark) {
+                Notifier.ShowError(Loc.Instance["LblTelescopeParkedWarning"]);
                 throw new SequenceEntityFailedException(Loc.Instance["LblTelescopeParkedWarning"]);
             }
 
@@ -120,7 +120,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Telescope {
             var info = telescopeMediator.GetInfo();
             if (!info.Connected) {
                 i.Add(Loc.Instance["LblTelescopeNotConnected"]);
-            } 
+            }
             Issues = i;
             return i.Count == 0;
         }

@@ -15,7 +15,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using Newtonsoft.Json;
 using OpenAstroAra.Astrometry;
-using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Core.Locale;
 using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Sequencer.SequenceItem;
@@ -23,6 +23,7 @@ using OpenAstroAra.Sequencer.Utility;
 using OpenAstroAra.Sequencer.Utility.DateTimeProvider;
 using OpenAstroAra.Sequencer.Validations;
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Collections.Generic;
 using System.ComponentModel.Composition;
 using System.Linq;
@@ -42,15 +43,15 @@ namespace OpenAstroAra.Sequencer.Conditions {
         private int minutes;
         private int minutesOffset;
         private int seconds;
-        private IDateTimeProvider selectedProvider;
+        private IDateTimeProvider? selectedProvider;
 
         [ImportingConstructor]
         public TimeCondition(IList<IDateTimeProvider> dateTimeProviders) : this(dateTimeProviders, dateTimeProviders?.FirstOrDefault()) {
         }
 
-        public TimeCondition(IList<IDateTimeProvider> dateTimeProviders, IDateTimeProvider selectedProvider) {
+        public TimeCondition(IList<IDateTimeProvider> dateTimeProviders, IDateTimeProvider? selectedProvider) {
             DateTime = new SystemDateTime();
-            this.DateTimeProviders = dateTimeProviders;
+            this.dateTimeProviders = dateTimeProviders;
             this.SelectedProvider = selectedProvider;
             ConditionWatchdog = new ConditionWatchdog(InterruptWhenTimeIsUp, TimeSpan.FromSeconds(1));
         }
@@ -93,9 +94,9 @@ namespace OpenAstroAra.Sequencer.Conditions {
 
         public bool Validate() {
             var i = new List<string>();
-            if(HasFixedTimeProvider) {
+            if (HasFixedTimeProvider) {
                 var referenceDate = NighttimeCalculator.GetReferenceDate(DateTime.Now);
-                if(lastReferenceDate != referenceDate) {                    
+                if (lastReferenceDate != referenceDate) {
                     UpdateTime();
                 }
             }
@@ -109,13 +110,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
 
         public ICustomDateTime DateTime { get; set; }
 
-        public IList<IDateTimeProvider> DateTimeProviders {
-            get => dateTimeProviders;
-            set {
-                dateTimeProviders = value;
-                RaisePropertyChanged();
-            }
-        }
+        public IList<IDateTimeProvider> DateTimeProviders => dateTimeProviders;
 
         public bool HasFixedTimeProvider => selectedProvider != null && !(selectedProvider is Utility.DateTimeProvider.TimeProvider);
 
@@ -170,7 +165,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
         }
 
         [JsonProperty]
-        public IDateTimeProvider SelectedProvider {
+        public IDateTimeProvider? SelectedProvider {
             get => selectedProvider;
             set {
                 selectedProvider = value;
@@ -189,7 +184,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
             var now = DateTime.Now;
             var then = new DateTime(now.Year, now.Month, now.Day, Hours, Minutes, Seconds);
 
-            RolloverTime = SelectedProvider.GetRolloverTime(this);
+            RolloverTime = SelectedProvider?.GetRolloverTime(this) ?? RolloverTime;
             var timeOnlyNow = TimeOnly.FromDateTime(now);
             var timeOnlyThen = TimeOnly.FromDateTime(then);
 
@@ -209,13 +204,15 @@ namespace OpenAstroAra.Sequencer.Conditions {
         }
 
         private bool timeDeterminedSuccessfully;
-        private string failureReason;
+        private string failureReason = string.Empty;
         private DateTime lastReferenceDate;
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "Time-determination boundary: the selected IDateTimeProvider and nighttime calculation may throw a provider-specific TimeProviderException or any other exception; the failure reason is captured and surfaced through Validate() rather than aborting. CA1031 sanctions general catches at such recover-and-report boundaries.")]
         private void UpdateTime() {
             try {
                 lastReferenceDate = NighttimeCalculator.GetReferenceDate(DateTime.Now);
                 if (HasFixedTimeProvider) {
-                    var t = SelectedProvider.GetDateTime(this) + TimeSpan.FromMinutes(MinutesOffset);
+                    var t = selectedProvider!.GetDateTime(this) + TimeSpan.FromMinutes(MinutesOffset);
                     Hours = t.Hour;
                     Minutes = t.Minute;
                     Seconds = t.Second;
@@ -234,7 +231,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
             RunWatchdogIfInsideSequenceRoot();
         }
 
-        public override bool Check(ISequenceItem previousItem, ISequenceItem nextItem) {
+        public override bool Check(ISequenceItem? previousItem, ISequenceItem? nextItem) {
             var nextItemDuration = nextItem?.GetEstimatedDuration() ?? TimeSpan.Zero;
             var remainingTime = CalculateRemainingTime();
 
@@ -242,9 +239,9 @@ namespace OpenAstroAra.Sequencer.Conditions {
             if (lastCutOffTime >= remainingTime) {
                 hasTimeRemaining = false;
             }
-            
+
             if (!hasTimeRemaining && nextItemDuration > TimeSpan.Zero) {
-                if(nextItem != null) {
+                if (nextItem != null) {
                     Logger.Info($"No more time remaining. Remaining: {remainingTime - DateTime.Now}, Next Item {nextItem.Name ?? ""}, Next Item Estimated Duration {nextItemDuration}, Next Item Attempts: {nextItem.Attempts}");
                     // There is no time remaining due to the next instruction taking longer - mark the stop time so that all following checks are marked as finished until we exceed the set time
                     lastCutOffTime = (new DateTime(DateTime.Now.Year, DateTime.Now.Month, DateTime.Now.Day, Hours, Minutes, Seconds)).AddSeconds(10);

@@ -13,23 +13,19 @@
 #endregion "copyright"
 
 using System;
-using System.Runtime.Serialization;
 
 namespace OpenAstroAra.Equipment.Exceptions {
 
     [Serializable]
-    public class PlanetariumFailedToConnect : Exception {
+    public class PlanetariumFailedToGetCoordinatesException : Exception {
 
-        public PlanetariumFailedToConnect() {
+        public PlanetariumFailedToGetCoordinatesException() {
         }
 
-        public PlanetariumFailedToConnect(string message) : base(message) {
+        public PlanetariumFailedToGetCoordinatesException(string message) : base(message) {
         }
 
-        public PlanetariumFailedToConnect(string message, Exception innerException) : base(message, innerException) {
-        }
-
-        protected PlanetariumFailedToConnect(SerializationInfo info, StreamingContext context) : base(info, context) {
+        public PlanetariumFailedToGetCoordinatesException(string message, Exception innerException) : base(message, innerException) {
         }
     }
 }

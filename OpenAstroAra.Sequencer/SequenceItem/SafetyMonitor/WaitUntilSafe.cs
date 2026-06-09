@@ -93,7 +93,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.SafetyMonitor {
             IsSafe = info.Connected && info.IsSafe;
             while (!IsSafe) {
                 progress?.Report(new ApplicationStatus() { Status = Loc.Instance["Lbl_SequenceItem_SafetyMonitor_WaitUntilSafe_Waiting"] });
-                await CoreUtil.Wait(WaitInterval, token, default);
+                await CoreUtil.Wait(WaitInterval, token: token);
 
                 info = safetyMonitorMediator.GetInfo();
                 IsSafe = info.Connected && info.IsSafe;

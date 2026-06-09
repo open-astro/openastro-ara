@@ -6,8 +6,7 @@
 // contacts@aforgenet.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -43,8 +42,7 @@ namespace Accord.Imaging.Filters
     /// 
     /// <seealso cref="TransformToPolar"/>
     /// 
-    public class TransformFromPolar : BaseTransformationFilter
-    {
+    public class TransformFromPolar : BaseTransformationFilter {
         private const double Pi2 = Math.PI * 2;
         private const double PiHalf = Math.PI / 2;
 
@@ -65,8 +63,7 @@ namespace Accord.Imaging.Filters
         /// <para>Default value is set to <b>1</b>.</para>
         /// </remarks>
         /// 
-        public double CirlceDepth
-        {
+        public double CirlceDepth {
             get { return circleDepth; }
             set { circleDepth = Math.Max(0, Math.Min(1, value)); }
         }
@@ -85,8 +82,7 @@ namespace Accord.Imaging.Filters
         /// <para>Default value is set to <b>0</b>.</para>
         /// </remarks>
         /// 
-        public double OffsetAngle
-        {
+        public double OffsetAngle {
             get { return offsetAngle; }
             set { offsetAngle = Math.Max(-360, Math.Min(360, value)); }
         }
@@ -104,8 +100,7 @@ namespace Accord.Imaging.Filters
         /// <para>Default value is set to <see langword="false"/>.</para>
         /// </remarks>
         ///
-        public bool MapBackwards
-        {
+        public bool MapBackwards {
             get { return mapBackwards; }
             set { mapBackwards = value; }
         }
@@ -123,8 +118,7 @@ namespace Accord.Imaging.Filters
         /// <para>Default value is set to <see langword="true"/>.</para>
         /// </remarks>
         /// 
-        public bool MapFromTop
-        {
+        public bool MapFromTop {
             get { return mapFromTop; }
             set { mapFromTop = value; }
         }
@@ -145,11 +139,9 @@ namespace Accord.Imaging.Filters
         /// <para>Default value is set to <b>200 x 200</b>.</para>
         /// </remarks>
         /// 
-        public Size NewSize
-        {
+        public Size NewSize {
             get { return newSize; }
-            set
-            {
+            set {
                 newSize = new Size(
                     Math.Max(1, Math.Min(10000, value.Width)),
                     Math.Max(1, Math.Min(10000, value.Height)));
@@ -167,8 +159,7 @@ namespace Accord.Imaging.Filters
         /// <para>Default value is set to <see langword="true"/>.</para>
         /// </remarks>
         /// 
-        public bool UseOriginalImageSize
-        {
+        public bool UseOriginalImageSize {
             get { return useOriginalImageSize; }
             set { useOriginalImageSize = value; }
         }
@@ -183,8 +174,7 @@ namespace Accord.Imaging.Filters
         /// <remarks><para>See <see cref="IFilterInformation.FormatTranslations"/>
         /// documentation for additional information.</para></remarks>
         /// 
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -192,8 +182,7 @@ namespace Accord.Imaging.Filters
         /// Initializes a new instance of the <see cref="TransformFromPolar"/> class.
         /// </summary>
         /// 
-        public TransformFromPolar()
-        {
+        public TransformFromPolar() {
             formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
             formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format24bppRgb;
             formatTranslations[PixelFormat.Format32bppRgb] = PixelFormat.Format32bppRgb;
@@ -209,8 +198,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <returns>New image size - size of the destination image.</returns>
         /// 
-        protected override System.Drawing.Size CalculateNewImageSize(UnmanagedImage sourceData)
-        {
+        protected override System.Drawing.Size CalculateNewImageSize(UnmanagedImage sourceData) {
             return (useOriginalImageSize) ? new Size(sourceData.Width, sourceData.Height) : newSize;
         }
 
@@ -221,8 +209,7 @@ namespace Accord.Imaging.Filters
         /// <param name="sourceData">Source image data.</param>
         /// <param name="destinationData">Destination image data.</param>
         /// 
-        protected override unsafe void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData)
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData) {
             int pixelSize = Bitmap.GetPixelFormatSize(destinationData.PixelFormat) / 8;
 
             // get source image size
@@ -270,8 +257,7 @@ namespace Accord.Imaging.Filters
             double[] angleSin = new double[newWidth];
             double[] maxDistance = new double[newWidth];
 
-            for (int x = 0; x < newWidth; x++)
-            {
+            for (int x = 0; x < newWidth; x++) {
                 double angle = -Pi2 * x / newWidth + offsetAngleR;
 
                 angleCos[x] = Math.Cos(angle);
@@ -280,8 +266,7 @@ namespace Accord.Imaging.Filters
                 // calculate minimum angle between X axis and the
                 // line with the above calculated angle
                 double oxAngle = ((angle > 0) ? angle : -angle) % Math.PI;
-                if (oxAngle > PiHalf)
-                {
+                if (oxAngle > PiHalf) {
                     oxAngle = Math.PI - oxAngle;
                 }
 
@@ -289,17 +274,14 @@ namespace Accord.Imaging.Filters
                 maxDistance[x] = circleDisform * ((oxAngle > diagonalAngle) ? (cy / Math.Sin(oxAngle)) : (cx / Math.Cos(oxAngle)));
             }
 
-            for (int y = 0; y < newHeight; y++)
-            {
+            for (int y = 0; y < newHeight; y++) {
                 double yPart = (double)y / newHeightM1;
 
-                if (!mapFromTop)
-                {
+                if (!mapFromTop) {
                     yPart = 1 - yPart;
                 }
 
-                for (int x = 0; x < newWidth; x++)
-                {
+                for (int x = 0; x < newWidth; x++) {
                     // calculate maximum allowed distance within wich we need to map Y axis of the destination image
                     double maxAllowedDistance = radius + maxDistance[x];
 
@@ -331,8 +313,7 @@ namespace Accord.Imaging.Filters
                     p4 += sx2 * pixelSize;
 
                     // interpolate using 4 points
-                    for (int i = 0; i < pixelSize; i++, dst++, p1++, p2++, p3++, p4++)
-                    {
+                    for (int i = 0; i < pixelSize; i++, dst++, p1++, p2++, p3++, p4++) {
                         *dst = (byte)(
                             dy2 * (dx2 * (*p1) + dx1 * (*p2)) +
                             dy1 * (dx2 * (*p3) + dx1 * (*p4)));

@@ -27,9 +27,9 @@ namespace OpenAstroAra.Core.Utility.TcpRaw {
 
         public string Command { get; set; }
 
-        public string WaitFor { get; set; }
+        public string? WaitFor { get; set; }
 
-        public BasicQuery(string address, int port, string command, string waitFor = null) {
+        public BasicQuery(string address, int port, string command, string? waitFor = null) {
             Address = address;
             Port = port;
             Command = command;
@@ -44,7 +44,7 @@ namespace OpenAstroAra.Core.Utility.TcpRaw {
                 try {
                     Logger.Trace($"TcpRaw: Connecting to {Address}:{Port}");
                     await client.ConnectAsync(Address, Port, token);
-                } catch(OperationCanceledException) {
+                } catch (OperationCanceledException) {
                     throw;
                 } catch (Exception ex) {
                     Logger.Error($"TcpRaw: Error connecting to {Address}:{Port}: {ex}");
@@ -62,21 +62,21 @@ namespace OpenAstroAra.Core.Utility.TcpRaw {
                         bool waitDone = false;
 
                         while (!waitDone) {
-                            length = await stream.ReadAsync(buffer, 0, buffer.Length, token);
+                            length = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length), token);
                             response = Encoding.ASCII.GetString(buffer, 0, length);
                             Logger.Trace($"TcpRaw: Received message: {ToLiteral(response)}");
 
-                            if (response.Equals(WaitFor)) { waitDone = true; }
+                            if (response.Equals(WaitFor, StringComparison.Ordinal)) { waitDone = true; }
                         }
                     }
 
                     // Send command
                     Logger.Trace($"TcpRaw: Sending command: {ToLiteral(Command)}");
                     var data = Encoding.ASCII.GetBytes($"{Command}");
-                    await stream.WriteAsync(data, 0, data.Length, token);
+                    await stream.WriteAsync(data.AsMemory(0, data.Length), token);
 
                     // Read response
-                    length = await stream.ReadAsync(buffer, 0, buffer.Length, token);
+                    length = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length), token);
                     response = Encoding.ASCII.GetString(buffer, 0, length);
 
 
@@ -91,7 +91,7 @@ namespace OpenAstroAra.Core.Utility.TcpRaw {
         }
 
         private static string ToLiteral(string str) {
-            str = str.Replace("\r", @"\r").Replace("\n", @"\n").Replace("\t", @"\t");
+            str = str.Replace("\r", @"\r", StringComparison.Ordinal).Replace("\n", @"\n", StringComparison.Ordinal).Replace("\t", @"\t", StringComparison.Ordinal);
 
             return str;
         }

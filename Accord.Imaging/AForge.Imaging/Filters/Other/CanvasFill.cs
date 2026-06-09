@@ -2,12 +2,11 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © Andrew Kirillov, 2007-2009
+// Copyright ï¿½ Andrew Kirillov, 2007-2009
 // andrew.kirillov@aforgenet.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -34,8 +33,7 @@ namespace Accord.Imaging.Filters
     /// 
     /// <seealso cref="CanvasCrop"/>
     /// 
-    public class CanvasFill : BaseInPlaceFilter
-    {
+    public class CanvasFill : BaseInPlaceFilter {
         // RGB fill color
         private byte fillRed = 255;
         private byte fillGreen = 255;
@@ -55,8 +53,7 @@ namespace Accord.Imaging.Filters
         /// <remarks><para>See <see cref="IFilterInformation.FormatTranslations"/>
         /// documentation for additional information.</para></remarks>
         /// 
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -69,11 +66,9 @@ namespace Accord.Imaging.Filters
         /// 
         /// <para>Default value is set to white - RGB(255, 255, 255).</para></remarks>
         /// 
-        public Color FillColorRGB
-        {
+        public Color FillColorRGB {
             get { return Color.FromArgb(fillRed, fillGreen, fillBlue); }
-            set
-            {
+            set {
                 fillRed = value.R;
                 fillGreen = value.G;
                 fillBlue = value.B;
@@ -88,8 +83,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <para>Default value is set to white - 255.</para></remarks>
         /// 
-        public byte FillColorGray
-        {
+        public byte FillColorGray {
             get { return fillGray; }
             set { fillGray = value; }
         }
@@ -100,15 +94,13 @@ namespace Accord.Imaging.Filters
         /// 
         /// <remarks>Pixels inside of the specified region will be filled with specified color.</remarks>
         /// 
-        public Rectangle Region
-        {
+        public Rectangle Region {
             get { return region; }
             set { region = value; }
         }
 
         // Private constructor to do common initialization
-        private CanvasFill()
-        {
+        private CanvasFill() {
             formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
             formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format24bppRgb;
             formatTranslations[PixelFormat.Format32bppArgb] = PixelFormat.Format32bppArgb;
@@ -122,8 +114,7 @@ namespace Accord.Imaging.Filters
         /// <param name="region">Region to fill.</param>
         /// 
         public CanvasFill(Rectangle region)
-            : this()
-        {
+            : this() {
             this.region = region;
         }
 
@@ -135,8 +126,7 @@ namespace Accord.Imaging.Filters
         /// <param name="fillColorRGB">RGB color to use for filling areas inside of specified region in color images.</param>
         /// 
         public CanvasFill(Rectangle region, Color fillColorRGB)
-            : this()
-        {
+            : this() {
             this.region = region;
             this.fillRed = fillColorRGB.R;
             this.fillGreen = fillColorRGB.G;
@@ -151,8 +141,7 @@ namespace Accord.Imaging.Filters
         /// <param name="fillColorGray">Gray color to use for filling areas inside of specified region in grayscale images.</param>
         /// 
         public CanvasFill(Rectangle region, byte fillColorGray)
-            : this()
-        {
+            : this() {
             this.region = region;
             this.fillGray = fillColorGray;
         }
@@ -166,8 +155,7 @@ namespace Accord.Imaging.Filters
         /// <param name="fillColorGray">Gray color to use for filling areas inside of specified region in grayscale images.</param>
         /// 
         public CanvasFill(Rectangle region, Color fillColorRGB, byte fillColorGray)
-            : this()
-        {
+            : this() {
             this.region = region;
             this.fillRed = fillColorRGB.R;
             this.fillGreen = fillColorRGB.G;
@@ -181,8 +169,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <param name="image">Source image data.</param>
         ///
-        protected override unsafe void ProcessFilter(UnmanagedImage image)
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage image) {
             int pixelSize = Image.GetPixelFormatSize(image.PixelFormat) / 8;
 
             // get image width and height
@@ -210,26 +197,20 @@ namespace Accord.Imaging.Filters
             // do the job
             byte* ptr = (byte*)image.ImageData.ToPointer() + startY * stride + startX * pixelSize;
 
-            if (image.PixelFormat == PixelFormat.Format8bppIndexed)
-            {
+            if (image.PixelFormat == PixelFormat.Format8bppIndexed) {
                 // grayscale image
                 int fillWidth = stopX - startX;
 
-                for (int y = startY; y < stopY; y++)
-                {
+                for (int y = startY; y < stopY; y++) {
                     Accord.SystemTools.SetUnmanagedMemory(ptr, fillGray, fillWidth);
                     ptr += stride;
                 }
-            }
-            else
-            {
+            } else {
                 // color image
                 int offset = stride - (stopX - startX) * pixelSize;
 
-                for (int y = startY; y < stopY; y++)
-                {
-                    for (int x = startX; x < stopX; x++, ptr += pixelSize)
-                    {
+                for (int y = startY; y < stopY; y++) {
+                    for (int x = startX; x < stopX; x++, ptr += pixelSize) {
                         ptr[RGB.R] = fillRed;
                         ptr[RGB.G] = fillGreen;
                         ptr[RGB.B] = fillBlue;

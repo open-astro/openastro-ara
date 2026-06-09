@@ -13,12 +13,14 @@
 #endregion "copyright"
 
 using Newtonsoft.Json;
-using System.Windows.Input;
+using OpenAstroAra.Core.Locale;
 using OpenAstroAra.Core.Model;
+using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Core.Utility.ExternalCommand;
 using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Sequencer.Validations;
-using OpenAstroAra.Core.Utility;
 using System;
+using System.Globalization;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel.Composition;
@@ -26,8 +28,7 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using OpenAstroAra.Core.Utility.ExternalCommand;
-using OpenAstroAra.Core.Locale;
+using System.Windows.Input;
 
 namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
 
@@ -68,13 +69,13 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
             }
         }
 
-        private string script;
+        private string script = string.Empty;
 
         [JsonProperty]
         public string Script {
-            get => script?.Trim();
+            get => script.Trim();
             set {
-                script = value?.Trim();
+                script = value?.Trim() ?? string.Empty;
                 RaisePropertyChanged();
             }
         }
@@ -92,7 +93,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
             var i = new List<string>();
             var sequenceCompleteCommand = Script;
             if (!string.IsNullOrWhiteSpace(sequenceCompleteCommand) && !ExternalCommandExecutor.CommandExists(sequenceCompleteCommand)) {
-                i.Add(string.Format(Loc.Instance["LblExternalCommandNotFound"], ExternalCommandExecutor.GetComandFromString(sequenceCompleteCommand)));
+                i.Add(string.Format(CultureInfo.CurrentCulture, Loc.Instance["LblExternalCommandNotFound"], ExternalCommandExecutor.GetComandFromString(sequenceCompleteCommand)));
             }
             Issues = i;
             return i.Count == 0;

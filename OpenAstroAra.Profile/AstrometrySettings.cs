@@ -16,13 +16,18 @@ using OpenAstroAra.Core.Model;
 using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Profile.Interfaces;
 using System;
+using System.IO;
 using System.Runtime.Serialization;
 
 namespace OpenAstroAra.Profile {
 
     [Serializable()]
     [DataContract]
-    public class AstrometrySettings : Settings, IAstrometrySettings {
+    public sealed class AstrometrySettings : Settings, IAstrometrySettings {
+
+        public AstrometrySettings() {
+            SetDefaultValues();
+        }
 
         [OnDeserializing]
         public void OnDeserializing(StreamingContext context) {
@@ -35,7 +40,7 @@ namespace OpenAstroAra.Profile {
                 if (!string.IsNullOrWhiteSpace(HorizonFilePath)) {
                     Horizon = CustomHorizon.FromFilePath(HorizonFilePath);
                 }
-            } catch (Exception e) {
+            } catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException or Newtonsoft.Json.JsonException) {
                 Logger.Error($"Failed to parse custom horizon file {HorizonFilePath}", e);
                 HorizonFilePath = "";
             }
@@ -90,7 +95,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string horizonFilePath;
+        private string horizonFilePath = string.Empty;
 
         [DataMember]
         public string HorizonFilePath {
@@ -103,9 +108,10 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private CustomHorizon horizon;
+        [NonSerialized]
+        private CustomHorizon? horizon;
 
-        public CustomHorizon Horizon {
+        public CustomHorizon? Horizon {
             get => horizon;
             set {
                 horizon = value;
@@ -113,7 +119,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string observer;
+        private string observer = string.Empty;
 
         [DataMember]
         public string Observer {
@@ -126,7 +132,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string observatory;
+        private string observatory = string.Empty;
 
         [DataMember]
         public string Observatory {
@@ -139,7 +145,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string site;
+        private string site = string.Empty;
 
         [DataMember]
         public string Site {

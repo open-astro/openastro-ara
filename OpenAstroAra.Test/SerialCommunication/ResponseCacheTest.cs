@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -13,22 +13,22 @@
 #endregion "copyright"
 
 using Moq;
-using OpenAstroAra.Core.Utility.SerialCommunication;
 using NUnit.Framework;
+using OpenAstroAra.Core.Utility.SerialCommunication;
 
 namespace OpenAstroAra.Test.SerialCommunication {
 
     [TestFixture]
-    internal class ResponseCacheTest {
+    internal sealed class ResponseCacheTest {
 
         internal class CachableResponse : Response {
             public override int Ttl => 500;
         }
 
-        internal class CachableSubclassResponse : CachableResponse {
+        internal sealed class CachableSubclassResponse : CachableResponse {
         }
 
-        internal class NonCachableResponse : Response {
+        internal sealed class NonCachableResponse : Response {
             public override int Ttl => 0;
         }
 

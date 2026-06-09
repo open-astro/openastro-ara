@@ -20,10 +20,9 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging.Converters
-{
-    using System.Runtime.CompilerServices;
+namespace Accord.Imaging.Converters {
     using System.Drawing;
+    using System.Runtime.CompilerServices;
 
     /// <summary>
     ///  Contains classes and methods to convert between different image representations, 
@@ -46,7 +45,6 @@ namespace Accord.Imaging.Converters
     /// </remarks>
     ///   
     [CompilerGenerated]
-    class NamespaceDoc
-    {
+    class NamespaceDoc {
     }
 }

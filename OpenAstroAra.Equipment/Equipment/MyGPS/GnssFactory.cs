@@ -12,8 +12,7 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Core.Enum;
-using OpenAstroAra.Equipment.Equipment.MyGPS.PegasusAstro;
+using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Equipment.Interfaces;
 using OpenAstroAra.Profile.Interfaces;
 
@@ -25,18 +24,18 @@ namespace OpenAstroAra.Equipment.Equipment.MyGPS {
             this.profileService = profileService;
         }
 
-        public IGnss GetGnssSource(GnssSourceEnum gnss) {
+        public IGnss? GetGnssSource(GnssSource gnss) {
             // PegausAstroUranusMeteo + PrimaLuceLabEagle drivers are
             // vendor-specific impls dropped per Phase 2 Alpaca-only collapse.
             return gnss switch {
-                GnssSourceEnum.NmeaSerial => new NMEAGps(profileService),
-                GnssSourceEnum.Gpsd => new Gpsd(profileService),
+                GnssSource.NmeaSerial => new NMEAGps(),
+                GnssSource.Gpsd => new Gpsd(profileService),
                 _ => null,
             };
         }
 
 
-        public IGnss GetGnssSource() {
+        public IGnss? GetGnssSource() {
             return GetGnssSource(profileService.ActiveProfile.GnssSettings.GnssSource);
         }
     }

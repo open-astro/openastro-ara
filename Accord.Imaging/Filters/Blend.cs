@@ -20,15 +20,14 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
+    using Accord.Imaging;
+    using Accord.Math;
     using System;
     using System.Collections.Generic;
     using System.Drawing;
     using System.Drawing.Imaging;
-    using Accord.Imaging;
     using Matrix = Accord.Math.Matrix;
-    using Accord.Math;
 
     /// <summary>
     ///   Linear Gradient Blending filter.
@@ -101,8 +100,7 @@ namespace Accord.Imaging.Filters
     /// <img src="..\images\panorama-3.png" /> 
     /// </example>
     /// 
-    public class Blend : BaseTransformationFilter
-    {
+    public class Blend : BaseTransformationFilter {
 
         private MatrixH homography;
         private Bitmap overlayImage;
@@ -119,8 +117,7 @@ namespace Accord.Imaging.Filters
         ///   Format translations dictionary.
         /// </summary>
         /// 
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -129,8 +126,7 @@ namespace Accord.Imaging.Filters
         ///   the filter to the overlay image specified at filter creation.
         /// </summary>
         /// 
-        public MatrixH Homography
-        {
+        public MatrixH Homography {
             get { return homography; }
             set { homography = value; }
         }
@@ -144,8 +140,7 @@ namespace Accord.Imaging.Filters
         ///   to 24bpp. The alpha channel will be used internally by the filter.
         /// </remarks>
         /// 
-        public Color FillColor
-        {
+        public Color FillColor {
             get { return fillColor; }
             set { fillColor = value; }
         }
@@ -157,8 +152,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <value><c>true</c> to create a gradient; otherwise, <c>false</c>. Default is true.</value>
         /// 
-        public bool Gradient
-        {
+        public bool Gradient {
             get { return gradient; }
             set { gradient = value; }
         }
@@ -171,8 +165,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <value><c>true</c> to blend only the alpha channel; otherwise, <c>false</c>. Default is false.</value>
         /// 
-        public bool AlphaOnly
-        {
+        public bool AlphaOnly {
             get { return alphaOnly; }
             set { alphaOnly = value; }
         }
@@ -203,8 +196,7 @@ namespace Accord.Imaging.Filters
         /// <param name="homography">The homography matrix mapping a second image to the overlay image.</param>
         /// <param name="overlayImage">The overlay image (also called the anchor).</param>
         /// 
-        public Blend(MatrixH homography, Bitmap overlayImage)
-        {
+        public Blend(MatrixH homography, Bitmap overlayImage) {
             this.homography = homography;
             this.overlayImage = overlayImage;
             formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format32bppArgb;
@@ -216,8 +208,7 @@ namespace Accord.Imaging.Filters
         ///   Computes the new image size.
         /// </summary>
         /// 
-        protected override Size CalculateNewImageSize(UnmanagedImage sourceData)
-        {
+        protected override Size CalculateNewImageSize(UnmanagedImage sourceData) {
             // Calculate source size
             float w = sourceData.Width;
             float h = sourceData.Height;
@@ -276,8 +267,7 @@ namespace Accord.Imaging.Filters
         ///   Process the image filter.
         /// </summary>
         /// 
-        protected override void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData)
-        {
+        protected override void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData) {
 
             // Locks the overlay image
             BitmapData overlayData = overlayImage.LockBits(
@@ -332,8 +322,7 @@ namespace Accord.Imaging.Filters
 
 
             // do the job
-            unsafe
-            {
+            unsafe {
                 byte* org = (byte*)overlayData.Scan0.ToPointer();
                 byte* src = (byte*)sourceData.ImageData.ToPointer();
                 byte* dst = (byte*)destinationData.ImageData.ToPointer();
@@ -350,46 +339,36 @@ namespace Accord.Imaging.Filters
 
 
                 // Copy the overlay image
-                for (int y = 0; y < newHeight; y++)
-                {
-                    for (int x = 0; x < newWidth; x++, dst += 4)
-                    {
+                for (int y = 0; y < newHeight; y++) {
+                    for (int x = 0; x < newWidth; x++, dst += 4) {
                         ox = (int)(x + offset.X);
                         oy = (int)(y + offset.Y);
 
                         // validate source pixel's coordinates
-                        if ((ox < 0) || (oy < 0) || (ox >= overlayData.Width) || (oy >= overlayData.Height))
-                        {
+                        if ((ox < 0) || (oy < 0) || (ox >= overlayData.Width) || (oy >= overlayData.Height)) {
                             // fill destination image with filler
                             dst[0] = fillB;
                             dst[1] = fillG;
                             dst[2] = fillR;
                             dst[3] = fillA;
-                        }
-                        else
-                        {
+                        } else {
                             int c = oy * overlayData.Stride + ox * orgPixelSize;
 
                             // fill destination image with pixel from original image
 
-                            if (orgPixelSize == 3)
-                            {
+                            if (orgPixelSize == 3) {
                                 // 24 bpp
                                 dst[0] = org[c + 0];
                                 dst[1] = org[c + 1];
                                 dst[2] = org[c + 2];
                                 dst[3] = (byte)255;
-                            }
-                            else if (orgPixelSize == 4)
-                            {
+                            } else if (orgPixelSize == 4) {
                                 // 32 bpp
                                 dst[0] = org[c + 0];
                                 dst[1] = org[c + 1];
                                 dst[2] = org[c + 2];
                                 dst[3] = org[c + 3];
-                            }
-                            else
-                            {
+                            } else {
                                 // 8 bpp
                                 dst[0] = org[c];
                                 dst[1] = org[c];
@@ -406,10 +385,8 @@ namespace Accord.Imaging.Filters
                 dst = (byte*)destinationData.ImageData.ToPointer();
 
                 // Project and blend the second image
-                for (int y = 0; y < newHeight; y++)
-                {
-                    for (int x = 0; x < newWidth; x++, dst += 4)
-                    {
+                for (int y = 0; y < newHeight; y++) {
+                    for (int x = 0; x < newWidth; x++, dst += 4) {
                         cx = x + offset.X;
                         cy = y + offset.Y;
 
@@ -423,21 +400,16 @@ namespace Accord.Imaging.Filters
                         oy = (int)(hy);
 
                         // validate source pixel's coordinates
-                        if ((ox >= 0) && (oy >= 0) && (ox < width) && (oy < height))
-                        {
+                        if ((ox >= 0) && (oy >= 0) && (ox < width) && (oy < height)) {
                             int c = oy * srcStride + ox * srcPixelSize;
 
                             // fill destination image with pixel from source image
-                            if (srcPixelSize == 4 && src[c + 3] == 0)
-                            {
+                            if (srcPixelSize == 4 && src[c + 3] == 0) {
                                 // source pixel is fully transparent, nothing to copy
-                            }
-                            else if (dst[3] > 0)
-                            {
+                            } else if (dst[3] > 0) {
                                 float f1 = 0.5f, f2 = 0.5f;
 
-                                if (Gradient)
-                                {
+                                if (Gradient) {
                                     // there is a pixel from the other image here, blend
                                     float d1 = distance(x, y, center1.X, center1.Y);
                                     float d2 = distance(x, y, center2.X, center2.Y);
@@ -448,80 +420,60 @@ namespace Accord.Imaging.Filters
                                     f2 = (1f - f1);
                                 }
 
-                                if (!AlphaOnly)
-                                {
-                                    if (srcPixelSize == 3)
-                                    {
+                                if (!AlphaOnly) {
+                                    if (srcPixelSize == 3) {
                                         // 24 bpp
                                         dst[0] = (byte)(src[c + 0] * f2 + dst[0] * f1);
                                         dst[1] = (byte)(src[c + 1] * f2 + dst[1] * f1);
                                         dst[2] = (byte)(src[c + 2] * f2 + dst[2] * f1);
                                         dst[3] = (byte)255;
-                                    }
-                                    else if (srcPixelSize == 4)
-                                    {
+                                    } else if (srcPixelSize == 4) {
                                         // 32 bpp
                                         dst[0] = (byte)(src[c + 0] * f2 + dst[0] * f1);
                                         dst[1] = (byte)(src[c + 1] * f2 + dst[1] * f1);
                                         dst[2] = (byte)(src[c + 2] * f2 + dst[2] * f1);
                                         dst[3] = (byte)(src[c + 3] * f2 + dst[3] * f1);
-                                    }
-                                    else
-                                    {
+                                    } else {
                                         // 8 bpp
                                         dst[0] = (byte)(src[c] * f2 + dst[0] * f1);
                                         dst[1] = (byte)(src[c] * f2 + dst[1] * f1);
                                         dst[2] = (byte)(src[c] * f2 + dst[2] * f1);
                                         dst[3] = (byte)255;
                                     }
-                                }
-                                else
-                                {
-                                    if (srcPixelSize == 3)
-                                    {
+                                } else {
+                                    if (srcPixelSize == 3) {
                                         // 24 bpp
                                         dst[0] = (byte)(src[c + 0]);
                                         dst[1] = (byte)(src[c + 1]);
                                         dst[2] = (byte)(src[c + 2]);
-                                    }
-                                    else if (srcPixelSize == 4)
-                                    {
+                                    } else if (srcPixelSize == 4) {
                                         // 32 bpp
                                         dst[0] = (byte)(src[c + 0]);
                                         dst[1] = (byte)(src[c + 1]);
                                         dst[2] = (byte)(src[c + 2]);
-                                    }
-                                    else
-                                    {
+                                    } else {
                                         // 8 bpp
                                         dst[0] = (byte)(src[c]);
                                         dst[1] = (byte)(src[c]);
                                         dst[2] = (byte)(src[c]);
                                     }
                                 }
-                            }
-                            else
-                            {
+                            } else {
                                 // just copy the source into the destination image
 
-                                if (srcPixelSize == 3)
-                                {
+                                if (srcPixelSize == 3) {
                                     // 24bpp
                                     dst[0] = src[c + 0];
                                     dst[1] = src[c + 1];
                                     dst[2] = src[c + 2];
                                     dst[3] = (byte)255;
-                                }
-                                else if (srcPixelSize == 4)
-                                {
+                                } else if (srcPixelSize == 4) {
                                     // 32bpp
                                     dst[0] = src[c + 0];
                                     dst[1] = src[c + 1];
                                     dst[2] = src[c + 2];
                                     dst[3] = src[c + 3];
-                                }
-                                else
-                                {
+                                } else {
                                     // 8bpp
                                     dst[0] = src[c];
                                     dst[1] = src[c];
@@ -542,8 +494,7 @@ namespace Accord.Imaging.Filters
         /// <summary>
         ///   Computes a distance metric used to compute the blending mask
         /// </summary>
-        private static float distance(float x1, float y1, float x2, float y2)
-        {
+        private static float distance(float x1, float y1, float x2, float y2) {
             // Euclidean distance
             float u = (x1 - x2);
             float v = (y1 - y2);

@@ -22,10 +22,9 @@ PUBLISH_DIR="${1:?usage: build-deb.sh <publish-dir> <version> [<output-dir>]}"
 VERSION="${2:?usage: build-deb.sh <publish-dir> <version> [<output-dir>]}"
 OUTPUT_DIR="${3:-./dist}"
 
-# Resolve repo root from this script's location (works whether invoked
-# from repo root or from CI's checked-out workdir).
+# Resolve this script's directory (works whether invoked from repo root or
+# from CI's checked-out workdir).
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 SOURCE_TREE="$SCRIPT_DIR/debian"
 
 # Validate inputs.

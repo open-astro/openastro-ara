@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -24,12 +24,12 @@ namespace OpenAstroAra.Core.Utility.SerialCommunication {
             _cache = new Dictionary<(Type, Type), (Response, DateTime)>();
         }
 
-        public bool HasValidResponse(Type commandType, Type responseType) {
+        public bool HasValidResponse(Type? commandType, Type? responseType) {
             if (commandType == null || responseType == null) return false;
             return _cache.ContainsKey((commandType, responseType)) && _cache[(commandType, responseType)].expires >= DateTime.UtcNow;
         }
 
-        public void Add(ISerialCommand command, Response response) {
+        public void Add(ISerialCommand? command, Response? response) {
             if (command == null || response == null || response.Ttl == 0) return;
             if (_cache.ContainsKey((command.GetType(), response.GetType()))) {
                 _cache[(command.GetType(), response.GetType())] = (response, DateTime.UtcNow.AddMilliseconds(response.Ttl));
@@ -38,8 +38,9 @@ namespace OpenAstroAra.Core.Utility.SerialCommunication {
             }
         }
 
-        public Response Get(Type commandType, Type responseType) {
-            return HasValidResponse(commandType, responseType) ? _cache[(commandType, responseType)].response : null;
+        public Response? Get(Type? commandType, Type? responseType) {
+            // HasValidResponse returns false for null types, so they are non-null here.
+            return HasValidResponse(commandType, responseType) ? _cache[(commandType!, responseType!)].response : null;
         }
 
         public void Clear() {

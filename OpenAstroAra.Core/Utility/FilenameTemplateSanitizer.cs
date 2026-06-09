@@ -35,6 +35,19 @@ namespace OpenAstroAra.Core.Utility {
     /// Pure functions; no I/O. Token substitution itself is the caller's job —
     /// pass in the already-substituted filename and this normalizes it.
     /// </summary>
+    /// <summary>
+    /// Default placeholder strings for tokens that resolve to no value.
+    /// English ASCII for forever-stable filenames (not localized). Per playbook §38.6.1 table.
+    /// </summary>
+    public static class EmptyTokenPlaceholders {
+        public const string SensorTemp = "noTemp";
+        public const string Filter = "noFilter";
+        public const string Gain = "noGain";
+        public const string Offset = "noOffset";
+        public const string Binning = "1x1";
+        public const string TargetName = "unnamed";
+    }
+
     public static class FilenameTemplateSanitizer {
 
         /// <summary>
@@ -48,20 +61,6 @@ namespace OpenAstroAra.Core.Utility {
         /// Windows 260 limit with margin for share-mount prefixes.
         /// </summary>
         public const int MaxPathLength = 200;
-
-        /// <summary>
-        /// Default placeholder strings for tokens that resolve to no value.
-        /// English ASCII for forever-stable filenames (not localized).
-        /// Per playbook §38.6.1 table.
-        /// </summary>
-        public static class EmptyTokenPlaceholders {
-            public const string SensorTemp = "noTemp";
-            public const string Filter = "noFilter";
-            public const string Gain = "noGain";
-            public const string Offset = "noOffset";
-            public const string Binning = "1x1";
-            public const string TargetName = "unnamed";
-        }
 
         /// <summary>
         /// Sanitize a single filename component (no path separators) — replace
@@ -144,8 +143,8 @@ namespace OpenAstroAra.Core.Utility {
                     var excess = path.Length - MaxPathLength + 1; // +1 for the trailing "_" sentinel
                     var truncatedTargetLen = Math.Max(1, targetName!.Length - excess);
                     if (truncatedTargetLen < targetName.Length) {
-                        var truncated = targetName.Substring(0, truncatedTargetLen) + "_";
-                        var result = path.Substring(0, idx) + truncated + path.Substring(idx + targetName.Length);
+                        var truncated = string.Concat(targetName.AsSpan(0, truncatedTargetLen), "_");
+                        var result = string.Concat(path.AsSpan(0, idx), truncated, path.AsSpan(idx + targetName.Length));
                         if (result.Length <= MaxPathLength) return (result, true);
                         // Fallthrough — even truncated target wasn't enough; trim from the start of
                         // the path as last resort.

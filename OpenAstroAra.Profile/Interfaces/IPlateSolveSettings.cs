@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -12,21 +12,22 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Core.Model.Equipment;
+using System;
 
 namespace OpenAstroAra.Profile.Interfaces {
 
     public interface IPlateSolveSettings : ISettings {
-        string AstrometryURL { get; set; }
+        Uri? AstrometryURL { get; set; }
         string AstrometryAPIKey { get; set; }
-        BlindSolverEnum BlindSolverType { get; set; }
+        BlindSolver BlindSolverType { get; set; }
         string CygwinLocation { get; set; }
         double ExposureTime { get; set; }
         int Gain { get; set; }
         short Binning { get; set; }
-        FilterInfo Filter { get; set; }
-        PlateSolverEnum PlateSolverType { get; set; }
+        FilterInfo? Filter { get; set; }
+        PlateSolver PlateSolverType { get; set; }
         string PS2Location { get; set; }
         string PS3Location { get; set; }
         int Regions { get; set; }
@@ -46,7 +47,7 @@ namespace OpenAstroAra.Profile.Interfaces {
         string TheSkyXHost { get; set; }
         int TheSkyXPort { get; set; }
 
-        Dc3PoinPointCatalogEnum PinPointCatalogType { get; set; }
+        Dc3PoinPointCatalog PinPointCatalogType { get; set; }
         string PinPointCatalogRoot { get; set; }
         double PinPointMaxMagnitude { get; set; }
         double PinPointExpansion { get; set; }

@@ -21,15 +21,17 @@ using System.Threading.Tasks;
 
 namespace OpenAstroAra.Core.Model {
 
-    public class TooltipDescriptionAttribute : DescriptionAttribute {
+    public sealed class TooltipDescriptionAttribute : DescriptionAttribute {
 
         public TooltipDescriptionAttribute(string descriptionLabel, string tooltipLabel)
             : base(descriptionLabel) {
+            this.DescriptionLabel = descriptionLabel;
             this.TooltipLabelValue = tooltipLabel;
         }
 
-        public virtual string TooltipLabel => TooltipLabelValue;
+        public string TooltipLabel => TooltipLabelValue;
 
-        protected string TooltipLabelValue { get; set; }
+        private string TooltipLabelValue { get; set; }
+        public string DescriptionLabel { get; }
     }
 }

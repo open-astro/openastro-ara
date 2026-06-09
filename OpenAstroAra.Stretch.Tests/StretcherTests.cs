@@ -81,7 +81,7 @@ public class StretcherTests {
         var ex = Assert.Throws<ArgumentException>(() =>
             Stretcher.Apply(StretchAlgorithm.Manual, new ushort[] { 0, 1 },
                 new StretchParams(Blackpoint: 0.8, Midpoint: 0.5, Whitepoint: 0.2)));
-        Assert.Contains("whitepoint > blackpoint", ex.Message);
+        Assert.Contains("whitepoint > blackpoint", ex.Message, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -33,14 +33,14 @@ namespace OpenAstroAra.Sequencer.Utility.DateTimeProvider {
         }
 
         public string Name { get; } = Loc.Instance["LblTime"];
-        public ICustomDateTime DateTime { get; set; } = new SystemDateTime();
+        public ICustomDateTime CustomDateTime { get; set; } = new SystemDateTime();
 
         public DateTime GetDateTime(ISequenceEntity context) {
-            return DateTime.Now;
+            return CustomDateTime.Now;
         }
 
         public TimeOnly GetRolloverTime(ISequenceEntity context) {
-            var dawn = nighttimeCalculator.Calculate().SunRiseAndSet.Rise;
+            var dawn = nighttimeCalculator.Calculate().SunRiseAndSet?.Rise;
             if (!dawn.HasValue) {
                 return new TimeOnly(12, 0, 0);
             }

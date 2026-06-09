@@ -12,7 +12,7 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Profile.Interfaces;
 using System;
@@ -23,7 +23,11 @@ namespace OpenAstroAra.Profile {
 
     [Serializable()]
     [DataContract]
-    public class ImageSettings : Settings, IImageSettings {
+    public sealed class ImageSettings : Settings, IImageSettings {
+
+        public ImageSettings() {
+            SetDefaultValues();
+        }
 
         [OnDeserializing]
         public void OnDeserializing(StreamingContext context) {
@@ -38,8 +42,8 @@ namespace OpenAstroAra.Profile {
             debayeredHFR = true;
             unlinkedStretch = true;
             annotateUnlimitedStars = false;
-            starSensitivity = StarSensitivityEnum.High;
-            noiseReduction = NoiseReductionEnum.None;
+            starSensitivity = StarSensitivity.High;
+            noiseReduction = NoiseReduction.None;
             detectStars = true;
             autoStretch = true;
         }
@@ -169,10 +173,10 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private StarSensitivityEnum starSensitivity;
+        private StarSensitivity starSensitivity;
 
         [DataMember]
-        public StarSensitivityEnum StarSensitivity {
+        public StarSensitivity StarSensitivity {
             get => starSensitivity;
             set {
                 if (starSensitivity != value) {
@@ -182,10 +186,10 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private NoiseReductionEnum noiseReduction;
+        private NoiseReduction noiseReduction;
 
         [DataMember]
-        public NoiseReductionEnum NoiseReduction {
+        public NoiseReduction NoiseReduction {
             get => noiseReduction;
             set {
                 if (noiseReduction != value) {
@@ -195,7 +199,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string sharpCapSensorAnalysisFolder;
+        private string sharpCapSensorAnalysisFolder = string.Empty;
 
         [DataMember]
         public string SharpCapSensorAnalysisFolder {

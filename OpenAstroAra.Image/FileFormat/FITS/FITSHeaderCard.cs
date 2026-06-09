@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -22,15 +22,15 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
         /* Extended ascii encoding*/
         private static Encoding ascii = Encoding.GetEncoding("iso-8859-1");
 
-        public FITSHeaderCard(string key, string value, string comment) {
+        public FITSHeaderCard(string key, string? value, string? comment) {
             this.Key = key;
             if (value == null) { value = string.Empty; }
-            
+
             /*
              * FITS Standard 4.0, Section 4.2.1:
              * A single quote is represented within a string as two successive single quotes
              */
-            value = value.Replace(@"'", @"''");
+            value = value.Replace(@"'", @"''", StringComparison.Ordinal);
 
             // Header total is 80 - Keyword = 8, Keyword Separator = 2, String Quotes = 2,
             var totalLength = 68;
@@ -48,18 +48,18 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
                 value = value.Substring(0, valueMaxLength);
             }
 
-            if (comment == null) { comment = string.Empty; }
+
             var commentLength = Math.Min(47, Math.Max(0, totalLength - value.Length - commentSeparatorLenght));
             if (comment?.Length > commentLength) {
                 comment = comment.Substring(0, commentLength);
             }
 
-            
+
             this.Value = $"'{value}'".PadRight(totalLength - commentLength - commentSeparatorLenght + 2);
             this.Comment = comment;
         }
 
-        public FITSHeaderCard(string key, bool value, string comment) {
+        public FITSHeaderCard(string key, bool value, string? comment) {
             this.Key = key;
             this.Value = value ? "T" : "F";
             if (comment?.Length > 45) {
@@ -68,7 +68,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
             this.Comment = comment;
         }
 
-        public FITSHeaderCard(string key, double value, string comment) {
+        public FITSHeaderCard(string key, double value, string? comment) {
             this.Key = key;
             this.Value = (value.ToString("0.0##############", CultureInfo.InvariantCulture));
             if (comment?.Length > 45) {
@@ -77,7 +77,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
             this.Comment = comment;
         }
 
-        public FITSHeaderCard(string key, DateTime value, string comment) {
+        public FITSHeaderCard(string key, DateTime value, string? comment) {
             this.Key = key;
             this.Value = @"'" + value.ToString("yyyy-MM-ddTHH:mm:ss.fffffff", CultureInfo.InvariantCulture) + @"'";
             if (comment?.Length > 40) {
@@ -86,7 +86,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
             this.Comment = comment;
         }
 
-        public FITSHeaderCard(string key, int value, string comment) {
+        public FITSHeaderCard(string key, int value, string? comment) {
             this.Key = key;
             this.Value = value.ToString(CultureInfo.InvariantCulture);
             if (comment?.Length > 45) {
@@ -97,15 +97,15 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
 
         public string Key { get; }
         public string Value { get; }
-        public string Comment { get; }
+        public string? Comment { get; }
 
         public string OriginalValue {
             get {
                 if (string.IsNullOrWhiteSpace(Value)) {
                     return string.Empty;
-                } else if (Value.StartsWith("'")) {
+                } else if (Value.StartsWith('\'')) {
                     var trimmedValue = Value.Trim();
-                    return trimmedValue.Remove(trimmedValue.Length - 1, 1).Remove(0, 1).Replace(@"''", @"'");
+                    return trimmedValue.Remove(trimmedValue.Length - 1, 1).Remove(0, 1).Replace(@"''", @"'", StringComparison.Ordinal);
                 } else {
                     return Value;
                 }
@@ -113,14 +113,14 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
         }
 
         public string GetHeaderString() {
-            var encodedKeyword = Key.ToUpper().PadRight(8);
+            var encodedKeyword = Key.ToUpperInvariant().PadRight(8);
             var encodedValue = Value.PadLeft(20);
 
             var header = $"{encodedKeyword}= {encodedValue}";
             if (!string.IsNullOrWhiteSpace(Comment)) {
                 header += " / ";
             }
-            var encodedComment = Comment.PadRight(80 - header.Length);
+            var encodedComment = (Comment ?? string.Empty).PadRight(80 - header.Length);
             header += encodedComment;
             return header;
         }

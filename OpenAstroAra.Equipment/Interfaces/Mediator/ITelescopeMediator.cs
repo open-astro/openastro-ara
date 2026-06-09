@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -12,13 +12,13 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Core.Enum;
-using OpenAstroAra.Equipment.Equipment.MyTelescope;
 using OpenAstroAra.Astrometry;
+using OpenAstroAra.Core.Enums;
+using OpenAstroAra.Core.Model;
+using OpenAstroAra.Equipment.Equipment.MyTelescope;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using OpenAstroAra.Core.Model;
 
 namespace OpenAstroAra.Equipment.Interfaces.Mediator {
 
@@ -32,7 +32,7 @@ namespace OpenAstroAra.Equipment.Interfaces.Mediator {
 
         Task<bool> SlewToCoordinatesAsync(Coordinates coords, CancellationToken token);
 
-        [Obsolete]
+        [Obsolete("Use SlewToTopocentricCoordinates instead.")]
         Task<bool> SlewToCoordinatesAsync(TopocentricCoordinates coords, CancellationToken token);
 
         Task<bool> SlewToTopocentricCoordinates(TopocentricCoordinates coords, CancellationToken token);
@@ -61,11 +61,11 @@ namespace OpenAstroAra.Equipment.Interfaces.Mediator {
 
         PierSide DestinationSideOfPier(Coordinates coordinates);
 
-        event Func<object, BeforeMeridianFlipEventArgs, Task> BeforeMeridianFlip;
-        Task RaiseBeforeMeridianFlip(BeforeMeridianFlipEventArgs e);
+        event Func<object, BeforeMeridianFlipEventArgs, Task> MeridianFlipping;
+        Task RaiseMeridianFlipping(BeforeMeridianFlipEventArgs e);
 
-        event Func<object, AfterMeridianFlipEventArgs, Task> AfterMeridianFlip;
-        Task RaiseAfterMeridianFlip(AfterMeridianFlipEventArgs e);
+        event Func<object, AfterMeridianFlipEventArgs, Task> MeridianFlipped;
+        Task RaiseMeridianFlipped(AfterMeridianFlipEventArgs e);
 
         event Func<object, EventArgs, Task> Parked;
         event Func<object, EventArgs, Task> Homed;

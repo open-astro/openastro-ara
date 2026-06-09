@@ -12,7 +12,7 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Core.Model.Equipment;
 using OpenAstroAra.Core.Utility;
 using System;
@@ -108,14 +108,14 @@ namespace OpenAstroAra.Equipment.Equipment.MyCamera {
             set { if (canGetGain != value) { canGetGain = value; RaisePropertyChanged(); } }
         }
 
-        public int offsetMin;
+        private int offsetMin;
 
         public int OffsetMin {
             get => offsetMin;
             set { if (offsetMin != value) { offsetMin = value; RaisePropertyChanged(); } }
         }
 
-        public int offsetMax;
+        private int offsetMax;
 
         public int OffsetMax {
             get => offsetMax;
@@ -235,13 +235,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyCamera {
 
         private IList<int> gains = new List<int>();
 
-        public IList<int> Gains {
-            get => gains;
-            set {
-                gains = value;
-                RaisePropertyChanged();
-            }
-        }
+        public IList<int> Gains => gains;
 
         private bool coolerOn;
 
@@ -327,7 +321,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyCamera {
             set { if (temperatureSetPoint != value) { temperatureSetPoint = value; RaisePropertyChanged(); } }
         }
 
-        private IEnumerable<string> readoutModes;
+        private IEnumerable<string> readoutModes = Array.Empty<string>();
 
         public IEnumerable<string> ReadoutModes {
             get => readoutModes;
@@ -421,7 +415,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyCamera {
             }
         }
 
-        private short bayerOffsetX = 0;
+        private short bayerOffsetX;
 
         public short BayerOffsetX {
             get => bayerOffsetX;
@@ -433,7 +427,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyCamera {
             }
         }
 
-        private short bayerOffsetY = 0;
+        private short bayerOffsetY;
 
         public short BayerOffsetY {
             get => bayerOffsetY;
@@ -447,15 +441,9 @@ namespace OpenAstroAra.Equipment.Equipment.MyCamera {
 
         private AsyncObservableCollection<BinningMode> binningModes = new AsyncObservableCollection<BinningMode>();
 
-        public AsyncObservableCollection<BinningMode> BinningModes {
-            get => binningModes;
-            set {
-                binningModes = value;
-                RaisePropertyChanged();
-            }
-        }
+        public AsyncObservableCollection<BinningMode> BinningModes => binningModes;
 
-        private double exposureMax = 0;
+        private double exposureMax;
 
         public double ExposureMax {
             get => exposureMax;
@@ -467,7 +455,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyCamera {
             }
         }
 
-        private double exposureMin = 0;
+        private double exposureMin;
 
         public double ExposureMin {
             get => exposureMin;
@@ -479,7 +467,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyCamera {
             }
         }
 
-        private bool liveViewEnabled = false;
+        private bool liveViewEnabled;
 
         public bool LiveViewEnabled {
             get => liveViewEnabled;
@@ -491,7 +479,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyCamera {
             }
         }
 
-        private bool canShowLiveView = false;
+        private bool canShowLiveView;
 
         public bool CanShowLiveView {
             get => canShowLiveView;
@@ -503,15 +491,9 @@ namespace OpenAstroAra.Equipment.Equipment.MyCamera {
             }
         }
 
-        private IList<string> supportedActions;
+        private IList<string> supportedActions = new List<string>();
 
-        public IList<string> SupportedActions {
-            get => supportedActions;
-            set {
-                supportedActions = value;
-                RaisePropertyChanged();
-            }
-        }
+        public IList<string> SupportedActions => supportedActions;
         private bool canSetUSBLimit;
 
         public bool CanSetUSBLimit {

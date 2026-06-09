@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -15,6 +15,7 @@
 using OpenAstroAra.Core.Model.Equipment;
 using OpenAstroAra.Core.Utility;
 using System;
+using System.Globalization;
 using System.Xml;
 using System.Xml.Serialization;
 
@@ -22,15 +23,15 @@ namespace OpenAstroAra.Equipment.Model {
 
     [Serializable()]
     [XmlRoot(ElementName = "CaptureSequence")]
-    public class CaptureSequence : BaseINPC {
+    public static class ImageTypes {
+        public const string LIGHT = "LIGHT";
+        public const string FLAT = "FLAT";
+        public const string DARK = "DARK";
+        public const string BIAS = "BIAS";
+        public const string SNAPSHOT = "SNAPSHOT";
+    }
 
-        public static class ImageTypes {
-            public const string LIGHT = "LIGHT";
-            public const string FLAT = "FLAT";
-            public const string DARK = "DARK";
-            public const string BIAS = "BIAS";
-            public const string SNAPSHOT = "SNAPSHOT";
-        }
+    public class CaptureSequence : BaseINPC {
 
         public CaptureSequence() {
             ExposureTime = 1;
@@ -43,10 +44,10 @@ namespace OpenAstroAra.Equipment.Model {
         }
 
         public override string ToString() {
-            return TotalExposureCount.ToString() + "x" + ExposureTime.ToString() + " " + ImageType;
+            return TotalExposureCount.ToString(CultureInfo.InvariantCulture) + "x" + ExposureTime.ToString(CultureInfo.InvariantCulture) + " " + ImageType;
         }
 
-        public CaptureSequence(double exposureTime, string imageType, FilterInfo filterType, BinningMode binning, int exposureCount) {
+        public CaptureSequence(double exposureTime, string imageType, FilterInfo? filterType, BinningMode binning, int exposureCount) {
             ExposureTime = exposureTime;
             ImageType = imageType;
             FilterType = filterType;
@@ -80,9 +81,9 @@ namespace OpenAstroAra.Equipment.Model {
         }
 
         private double _exposureTime;
-        private string _imageType;
-        private FilterInfo _filterType;
-        private BinningMode _binning;
+        private string _imageType = string.Empty;
+        private FilterInfo? _filterType;
+        private BinningMode? _binning;
         private int _progressExposureCount;
 
         [XmlElement(nameof(Enabled))]
@@ -115,7 +116,7 @@ namespace OpenAstroAra.Equipment.Model {
         }
 
         [XmlElement(nameof(FilterType))]
-        public FilterInfo FilterType {
+        public FilterInfo? FilterType {
             get => _filterType;
 
             set {
@@ -161,7 +162,7 @@ namespace OpenAstroAra.Equipment.Model {
             }
         }
 
-        private bool _enableSubSample = false;
+        private bool _enableSubSample;
 
         [XmlIgnore]
         public bool EnableSubSample {
@@ -173,9 +174,10 @@ namespace OpenAstroAra.Equipment.Model {
         }
 
         [XmlIgnore]
-        private ObservableRectangle subSampleRectangle;
+        [NonSerialized]
+        private ObservableRectangle? subSampleRectangle;
 
-        public ObservableRectangle SubSambleRectangle {
+        public ObservableRectangle? SubSambleRectangle {
             get => subSampleRectangle;
             set {
                 subSampleRectangle = value;

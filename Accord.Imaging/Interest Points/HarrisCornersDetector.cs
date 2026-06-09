@@ -20,24 +20,22 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging
-{
+namespace Accord.Imaging {
+    using Accord.Compat;
+    using Accord.Imaging;
+    using Accord.Imaging.Filters;
+    using Accord.Math;
+    using AForge;
     using System;
     using System.Collections.Generic;
     using System.Drawing;
     using System.Drawing.Imaging;
-    using Accord.Math;
-    using AForge;
-    using Accord.Imaging;
-    using Accord.Imaging.Filters;
-    using Accord.Compat;
 
     /// <summary>
     ///   Corners measures to be used in <see cref="HarrisCornersDetector"/>.
     /// </summary>
     /// 
-    public enum HarrisCornerMeasure
-    {
+    public enum HarrisCornerMeasure {
         /// <summary>
         ///   Original Harris' measure. Requires the setting of
         ///   a parameter k (default is 0.04), which may be a
@@ -96,8 +94,7 @@ namespace Accord.Imaging
     /// <seealso cref="SusanCornersDetector"/>
     ///
     [Serializable]
-    public class HarrisCornersDetector : BaseCornersDetector
-    {
+    public class HarrisCornersDetector : BaseCornersDetector {
         // Harris parameters
         private HarrisCornerMeasure measure = HarrisCornerMeasure.Harris;
         private float k = 0.04f;
@@ -116,8 +113,7 @@ namespace Accord.Imaging
         ///   Gets or sets the measure to use when detecting corners.
         /// </summary>
         /// 
-        public HarrisCornerMeasure Measure
-        {
+        public HarrisCornerMeasure Measure {
             get { return measure; }
             set { measure = value; }
         }
@@ -126,8 +122,7 @@ namespace Accord.Imaging
         ///   Harris parameter k. Default value is 0.04.
         /// </summary>
         /// 
-        public float K
-        {
+        public float K {
             get { return k; }
             set { k = value; }
         }
@@ -136,8 +131,7 @@ namespace Accord.Imaging
         ///   Harris threshold. Default value is 20000.
         /// </summary>
         /// 
-        public float Threshold
-        {
+        public float Threshold {
             get { return threshold; }
             set { threshold = value; }
         }
@@ -146,13 +140,10 @@ namespace Accord.Imaging
         ///   Gaussian smoothing sigma. Default value is 1.2.
         /// </summary>
         /// 
-        public double Sigma
-        {
+        public double Sigma {
             get { return sigma; }
-            set
-            {
-                if (sigma != value)
-                {
+            set {
+                if (sigma != value) {
                     sigma = value;
                     createGaussian();
                 }
@@ -163,8 +154,7 @@ namespace Accord.Imaging
         ///   Non-maximum suppression window radius. Default value is 3.
         /// </summary>
         /// 
-        public int Suppression
-        {
+        public int Suppression {
             get { return r; }
             set { r = value; }
         }
@@ -175,78 +165,68 @@ namespace Accord.Imaging
         /// <summary>
         ///   Initializes a new instance of the <see cref="HarrisCornersDetector"/> class.
         /// </summary>
-        public HarrisCornersDetector()
-        {
+        public HarrisCornersDetector() {
             initialize(HarrisCornerMeasure.Harris, k, threshold, sigma, r, size);
         }
 
         /// <summary>
         ///   Initializes a new instance of the <see cref="HarrisCornersDetector"/> class.
         /// </summary>
-        public HarrisCornersDetector(float k)
-        {
+        public HarrisCornersDetector(float k) {
             initialize(HarrisCornerMeasure.Harris, k, threshold, sigma, r, size);
         }
 
         /// <summary>
         ///   Initializes a new instance of the <see cref="HarrisCornersDetector"/> class.
         /// </summary>
-        public HarrisCornersDetector(float k, float threshold)
-        {
+        public HarrisCornersDetector(float k, float threshold) {
             initialize(HarrisCornerMeasure.Harris, k, threshold, sigma, r, size);
         }
 
         /// <summary>
         ///   Initializes a new instance of the <see cref="HarrisCornersDetector"/> class.
         /// </summary>
-        public HarrisCornersDetector(float k, float threshold, double sigma)
-        {
+        public HarrisCornersDetector(float k, float threshold, double sigma) {
             initialize(HarrisCornerMeasure.Harris, k, threshold, sigma, r, size);
         }
 
         /// <summary>
         ///   Initializes a new instance of the <see cref="HarrisCornersDetector"/> class.
         /// </summary>
-        public HarrisCornersDetector(float k, float threshold, double sigma, int suppression)
-        {
+        public HarrisCornersDetector(float k, float threshold, double sigma, int suppression) {
             initialize(HarrisCornerMeasure.Harris, k, threshold, sigma, suppression, size);
         }
 
         /// <summary>
         ///   Initializes a new instance of the <see cref="HarrisCornersDetector"/> class.
         /// </summary>
-        public HarrisCornersDetector(HarrisCornerMeasure measure, float threshold, double sigma, int suppression)
-        {
+        public HarrisCornersDetector(HarrisCornerMeasure measure, float threshold, double sigma, int suppression) {
             initialize(measure, k, threshold, sigma, suppression, size);
         }
 
         /// <summary>
         ///   Initializes a new instance of the <see cref="HarrisCornersDetector"/> class.
         /// </summary>
-        public HarrisCornersDetector(HarrisCornerMeasure measure, float threshold, double sigma)
-        {
+        public HarrisCornersDetector(HarrisCornerMeasure measure, float threshold, double sigma) {
             initialize(measure, k, threshold, sigma, r, size);
         }
 
         /// <summary>
         ///   Initializes a new instance of the <see cref="HarrisCornersDetector"/> class.
         /// </summary>
-        public HarrisCornersDetector(HarrisCornerMeasure measure, float threshold)
-        {
+        public HarrisCornersDetector(HarrisCornerMeasure measure, float threshold) {
             initialize(measure, k, threshold, sigma, r, size);
         }
 
         /// <summary>
         ///   Initializes a new instance of the <see cref="HarrisCornersDetector"/> class.
         /// </summary>
-        public HarrisCornersDetector(HarrisCornerMeasure measure)
-        {
+        public HarrisCornersDetector(HarrisCornerMeasure measure) {
             initialize(measure, k, threshold, sigma, r, size);
         }
 
         private void initialize(HarrisCornerMeasure measure, float k,
-            float threshold, double sigma, int suppression, int size)
-        {
+            float threshold, double sigma, int suppression, int size) {
             this.measure = measure;
             this.threshold = threshold;
             this.k = k;
@@ -265,8 +245,7 @@ namespace Accord.Imaging
             });
         }
 
-        private void createGaussian()
-        {
+        private void createGaussian() {
             double[] aforgeKernel = Normal.Kernel(sigma * sigma, size);
             this.kernel = Array.ConvertAll<double, float>(aforgeKernel, Convert.ToSingle);
         }
@@ -277,17 +256,13 @@ namespace Accord.Imaging
         /// actual corners detection, transforming the input image into a list of points.
         /// </summary>
         /// 
-        protected override List<IntPoint> InnerProcess(UnmanagedImage image)
-        {
+        protected override List<IntPoint> InnerProcess(UnmanagedImage image) {
             // make sure we have grayscale image
             UnmanagedImage grayImage = null;
 
-            if (image.PixelFormat == PixelFormat.Format8bppIndexed)
-            {
+            if (image.PixelFormat == PixelFormat.Format8bppIndexed) {
                 grayImage = image;
-            }
-            else
-            {
+            } else {
                 // create temporary grayscale image
                 grayImage = Grayscale.CommonAlgorithms.BT709.Apply(image);
             }
@@ -305,10 +280,8 @@ namespace Accord.Imaging
             float[,] diffy = new float[height, width];
             float[,] diffxy = new float[height, width];
 
-            unsafe
-            {
-                fixed (float* pdx = diffx, pdy = diffy, pdxy = diffxy)
-                {
+            unsafe {
+                fixed (float* pdx = diffx, pdy = diffy, pdxy = diffxy) {
                     // Begin skipping first line
                     byte* src = (byte*)grayImage.ImageData.ToPointer() + stride;
                     float* dx = pdx + width;
@@ -316,14 +289,12 @@ namespace Accord.Imaging
                     float* dxy = pdxy + width;
 
                     // for each line
-                    for (int y = 1; y < height - 1; y++)
-                    {
+                    for (int y = 1; y < height - 1; y++) {
                         // skip first column
                         dx++; dy++; dxy++; src++;
 
                         // for each inner pixel in line (skipping first and last)
-                        for (int x = 1; x < width - 1; x++, src++, dx++, dy++, dxy++)
-                        {
+                        for (int x = 1; x < width - 1; x++, src++, dx++, dy++, dxy++) {
                             // Retrieve the pixel neighborhood
                             byte a11 = src[+stride + 1], a12 = src[+1], a13 = src[-stride + 1];
                             byte a21 = src[+stride + 0], /*  a22    */  a23 = src[-stride + 0];
@@ -354,8 +325,7 @@ namespace Accord.Imaging
 
 
             // 2. Smooth the diff images
-            if (sigma > 0.0)
-            {
+            if (sigma > 0.0) {
                 float[,] temp = new float[height, width];
 
                 // Convolve with Gaussian kernel
@@ -368,37 +338,29 @@ namespace Accord.Imaging
             // 3. Compute Harris Corner Response Map
             float[,] map = new float[height, width];
 
-            unsafe
-            {
-                fixed (float* pdx = diffx, pdy = diffy, pdxy = diffxy, pmap = map)
-                {
+            unsafe {
+                fixed (float* pdx = diffx, pdy = diffy, pdxy = diffxy, pmap = map) {
                     float* dx = pdx;
                     float* dy = pdy;
                     float* dxy = pdxy;
                     float* H = pmap;
                     float M, A, B, C;
 
-                    for (int y = 0; y < height; y++)
-                    {
-                        for (int x = 0; x < width; x++, dx++, dy++, dxy++, H++)
-                        {
+                    for (int y = 0; y < height; y++) {
+                        for (int x = 0; x < width; x++, dx++, dy++, dxy++, H++) {
                             A = *dx;
                             B = *dy;
                             C = *dxy;
 
-                            if (measure == HarrisCornerMeasure.Harris)
-                            {
+                            if (measure == HarrisCornerMeasure.Harris) {
                                 // Original Harris corner measure
                                 M = (A * B - C * C) - (k * ((A + B) * (A + B)));
-                            }
-                            else
-                            {
+                            } else {
                                 // Harris-Noble corner measure
                                 M = (A * B - C * C) / (A + B + Constants.SingleEpsilon);
                             }
 
-                            if (M > threshold)
-                            {
+                            if (M > threshold) {
                                 *H = M; // insert value in the map
                             }
                         }
@@ -411,21 +373,16 @@ namespace Accord.Imaging
             List<IntPoint> cornersList = new List<IntPoint>();
 
             // for each row
-            for (int y = r, maxY = height - r; y < maxY; y++)
-            {
+            for (int y = r, maxY = height - r; y < maxY; y++) {
                 // for each pixel
-                for (int x = r, maxX = width - r; x < maxX; x++)
-                {
+                for (int x = r, maxX = width - r; x < maxX; x++) {
                     float currentValue = map[y, x];
 
                     // for each windows' row
-                    for (int i = -r; (currentValue != 0) && (i <= r); i++)
-                    {
+                    for (int i = -r; (currentValue != 0) && (i <= r); i++) {
                         // for each windows' pixel
-                        for (int j = -r; j <= r; j++)
-                        {
-                            if (map[y + i, x + j] > currentValue)
-                            {
+                        for (int j = -r; j <= r; j++) {
+                            if (map[y + i, x + j] > currentValue) {
                                 currentValue = 0;
                                 break;
                             }
@@ -433,8 +390,7 @@ namespace Accord.Imaging
                     }
 
                     // check if this point is really interesting
-                    if (currentValue != 0)
-                    {
+                    if (currentValue != 0) {
                         cornersList.Add(new IntPoint(x, y));
                     }
                 }
@@ -448,23 +404,18 @@ namespace Accord.Imaging
         ///   Convolution with decomposed 1D kernel.
         /// </summary>
         /// 
-        private static void convolve(float[,] image, float[,] temp, float[] kernel)
-        {
+        private static void convolve(float[,] image, float[,] temp, float[] kernel) {
             int width = image.GetLength(1);
             int height = image.GetLength(0);
             int radius = kernel.Length / 2;
 
-            unsafe
-            {
-                fixed (float* ptrImage = image, ptrTemp = temp)
-                {
+            unsafe {
+                fixed (float* ptrImage = image, ptrTemp = temp) {
                     float* src = ptrImage + radius;
                     float* tmp = ptrTemp + radius;
 
-                    for (int y = 0; y < height; y++)
-                    {
-                        for (int x = radius; x < width - radius; x++, src++, tmp++)
-                        {
+                    for (int y = 0; y < height; y++) {
+                        for (int x = radius; x < width - radius; x++, src++, tmp++) {
                             float v = 0;
                             for (int k = 0; k < kernel.Length; k++)
                                 v += src[k - radius] * kernel[k];
@@ -475,10 +426,8 @@ namespace Accord.Imaging
                     }
 
 
-                    for (int x = 0; x < width; x++)
-                    {
-                        for (int y = radius; y < height - radius; y++)
-                        {
+                    for (int x = 0; x < width; x++) {
+                        for (int y = radius; y < height - radius; y++) {
                             src = ptrImage + y * width + x;
                             tmp = ptrTemp + y * width + x;
 
@@ -496,8 +445,7 @@ namespace Accord.Imaging
         /// Creates a new object that is a copy of the current instance.
         /// </summary>
         /// 
-        protected override object Clone(ISet<PixelFormat> supportedFormats)
-        {
+        protected override object Clone(ISet<PixelFormat> supportedFormats) {
             var clone = new HarrisCornersDetector();
             clone.SupportedFormats = supportedFormats;
             clone.initialize(measure, k, threshold, sigma, r, size);

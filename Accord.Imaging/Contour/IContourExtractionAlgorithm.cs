@@ -20,20 +20,18 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging
-{
+namespace Accord.Imaging {
+    using Accord.Imaging;
+    using AForge;
     using System.Collections.Generic;
     using System.Drawing;
     using System.Drawing.Imaging;
-    using AForge;
-    using Accord.Imaging;
 
     /// <summary>
     ///   Common interface for contour extraction algorithm.
     /// </summary>
     /// 
-    public interface IContourExtractionAlgorithm
-    {
+    public interface IContourExtractionAlgorithm {
 
         /// <summary>
         ///   Extracts the contour from a single object in a grayscale image.

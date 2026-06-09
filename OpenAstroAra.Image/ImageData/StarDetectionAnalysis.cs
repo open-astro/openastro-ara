@@ -23,7 +23,7 @@ namespace OpenAstroAra.Image.ImageData {
         private double _hfr = double.NaN;
         private double _hfrStDev = double.NaN;
         private int _detectedStars = -1;
-        private List<DetectedStar> _starList = new List<DetectedStar>();
+        private IReadOnlyList<DetectedStar> _starList = new List<DetectedStar>();
 
         public double HFR {
             get => this._hfr;
@@ -49,7 +49,7 @@ namespace OpenAstroAra.Image.ImageData {
             }
         }
 
-        public List<DetectedStar> StarList {
+        public IReadOnlyList<DetectedStar> StarList {
             get => this._starList;
             set {
                 this._starList = value;

@@ -18,6 +18,7 @@ using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.Trigger;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -41,6 +42,10 @@ namespace OpenAstroAra.Sequencer.Serialization {
             };
         }
 
+        [SuppressMessage("Performance", "CA1822:Mark members as static",
+            Justification = "Serialize is part of the public SequenceJsonConverter instance API, paired with the instance Deserialize and resolved via DI; all call sites invoke it on an instance. Converting only Serialize to static would be a breaking change and leave an inconsistent half-static converter. CA1822 sanctions suppression where marking static is a breaking change.")]
+        [SuppressMessage("Security", "CA2326:Do not use TypeNameHandling values other than None",
+            Justification = "TypeNameHandling.All is required to emit the polymorphic $type metadata the sequence file format depends on, and is used here on the serialization path only. Deserialization (Deserialize) never sets TypeNameHandling; it resolves types through controlled custom JsonCreationConverters with an explicit namespace remap, so no untrusted type is instantiated from the $type token. Sequence JSON is read from the user's own local profile folder. CA2326 documents that serialization-only use is safe.")]
         public string Serialize(ISequenceContainer container) {
             var json = JsonConvert.SerializeObject(container, Formatting.Indented, new JsonSerializerSettings {
                 TypeNameHandling = TypeNameHandling.All,
@@ -54,7 +59,7 @@ namespace OpenAstroAra.Sequencer.Serialization {
                 Converters = converters
             });
 
-            return container;
+            return container ?? throw new InvalidOperationException("Failed to deserialize sequence container");
         }
     }
 }

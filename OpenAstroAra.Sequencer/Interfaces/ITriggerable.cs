@@ -30,8 +30,8 @@ namespace OpenAstroAra.Sequencer.Trigger {
 
         bool Remove(ISequenceTrigger trigger);
 
-        Task RunTriggers(ISequenceItem previousItem, ISequenceItem nextItem, IProgress<ApplicationStatus> progress, CancellationToken token);
+        Task RunTriggers(ISequenceItem? previousItem, ISequenceItem? nextItem, IProgress<ApplicationStatus> progress, CancellationToken token);
 
-        Task RunTriggersAfter(ISequenceItem previousItem, ISequenceItem nextItem, IProgress<ApplicationStatus> progress, CancellationToken token);
+        Task RunTriggersAfter(ISequenceItem? previousItem, ISequenceItem? nextItem, IProgress<ApplicationStatus> progress, CancellationToken token);
     }
 }

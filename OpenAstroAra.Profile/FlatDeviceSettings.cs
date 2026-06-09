@@ -24,10 +24,16 @@ namespace OpenAstroAra.Profile {
 
     [Serializable]
     [DataContract]
-    public class FlatDeviceSettings : Settings, IFlatDeviceSettings {
+    public sealed class FlatDeviceSettings : Settings, IFlatDeviceSettings {
 
         public FlatDeviceSettings() {
+            SetDefaultValues();
+            // FilterSettings + its key/value types are obsolete (superseded by
+            // TrainedFlatExposureSettings) but kept here so legacy profiles still
+            // deserialize and migrate; obsolete-usage warnings are expected.
+#pragma warning disable CS0612, CS0618
             FilterSettings = new ObservableDictionary<FlatDeviceFilterSettingsKey, FlatDeviceFilterSettingsValue>();
+#pragma warning restore CS0612, CS0618
             TrainedFlatExposureSettings = new ObserveAllCollection<TrainedFlatExposureSetting>();
         }
 
@@ -41,6 +47,9 @@ namespace OpenAstroAra.Profile {
             if (TrainedFlatExposureSettings == null) {
                 TrainedFlatExposureSettings = new ObserveAllCollection<TrainedFlatExposureSetting>();
             }
+            // Reads the obsolete FilterSettings dictionary to migrate pre-2.0
+            // profiles into TrainedFlatExposureSettings; obsolete-usage expected.
+#pragma warning disable CS0612, CS0618
             if (FilterSettings == null) {
                 FilterSettings =
                     new ObservableDictionary<FlatDeviceFilterSettingsKey, FlatDeviceFilterSettingsValue>();
@@ -54,6 +63,7 @@ namespace OpenAstroAra.Profile {
                     AddTrainedFlatExposureSetting(setting.Key.Position, setting.Key.Binning, setting.Key.Gain, -1, setting.Value.AbsoluteBrightness, setting.Value.Time);
                 }
             }
+#pragma warning restore CS0612, CS0618
         }
 
         protected override void SetDefaultValues() {
@@ -61,7 +71,7 @@ namespace OpenAstroAra.Profile {
             lastDeviceName = string.Empty;
         }
 
-        private string id;
+        private string id = string.Empty;
 
         [DataMember]
         public string Id {
@@ -73,7 +83,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string lastDeviceName;
+        private string lastDeviceName = string.Empty;
 
         [DataMember]
         public string LastDeviceName {
@@ -86,7 +96,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string name;
+        private string name = string.Empty;
 
         [DataMember]
         public string Name {
@@ -98,7 +108,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string portName;
+        private string portName = string.Empty;
 
         [DataMember]
         public string PortName {
@@ -122,7 +132,10 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private ObservableDictionary<FlatDeviceFilterSettingsKey, FlatDeviceFilterSettingsValue> filterSettings;
+        [NonSerialized]
+#pragma warning disable CS0612, CS0618 // obsolete key/value types retained for migration
+        private ObservableDictionary<FlatDeviceFilterSettingsKey, FlatDeviceFilterSettingsValue> filterSettings = new();
+#pragma warning restore CS0612, CS0618
 
         [DataMember]
         [Obsolete("Superseded by TrainedFlatExposureSettings")]
@@ -136,7 +149,8 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private ObserveAllCollection<TrainedFlatExposureSetting> trainedFlatExposureSettings;
+        [NonSerialized]
+        private ObserveAllCollection<TrainedFlatExposureSetting> trainedFlatExposureSettings = new();
         [DataMember]
         public ObserveAllCollection<TrainedFlatExposureSetting> TrainedFlatExposureSettings {
             get => trainedFlatExposureSettings;
@@ -152,16 +166,16 @@ namespace OpenAstroAra.Profile {
                 RaisePropertyChanged();
             }
         }
-        private void TrainedFlatExposureSettings_CollectionChanged(object sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e) {
+        private void TrainedFlatExposureSettings_CollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e) {
             RaisePropertyChanged(nameof(TrainedFlatExposureSettings));
         }
 
         public void AddEmptyTrainedExposureSetting() {
-            TrainedFlatExposureSettings.Add(new TrainedFlatExposureSetting(-1, new BinningMode(1,1), -1, -1, -1, -1));
+            TrainedFlatExposureSettings.Add(new TrainedFlatExposureSetting(-1, new BinningMode(1, 1), -1, -1, -1, -1));
         }
 
         public void AddTrainedFlatExposureSetting(short? filterPosition, BinningMode binning, int gain, int offset, int brightness, double exposureTime) {
-            var existingSetting = GetTrainedFlatExposureSetting(filterPosition, binning, gain, offset);           
+            var existingSetting = GetTrainedFlatExposureSetting(filterPosition, binning, gain, offset);
 
             if (existingSetting == null) {
                 var filter = filterPosition ?? -1;
@@ -175,16 +189,16 @@ namespace OpenAstroAra.Profile {
 
         public bool RemoveFlatExposureSetting(TrainedFlatExposureSetting setting) {
             var remove = TrainedFlatExposureSettings.Remove(setting);
-            if(remove) {
+            if (remove) {
                 RaisePropertyChanged(nameof(TrainedFlatExposureSettings));
             }
             return remove;
         }
 
-        public TrainedFlatExposureSetting GetTrainedFlatExposureSetting(short? filterPosition, BinningMode binning, int gain, int offset) {
+        public TrainedFlatExposureSetting? GetTrainedFlatExposureSetting(short? filterPosition, BinningMode binning, int gain, int offset) {
             var filter = filterPosition ?? -1;
             if (binning == null) { binning = new BinningMode(1, 1); }
-            TrainedFlatExposureSetting setting = TrainedFlatExposureSettings.FirstOrDefault(
+            TrainedFlatExposureSetting? setting = TrainedFlatExposureSettings.FirstOrDefault(
                 x => x.Filter == filter
                 && x.Binning.X == binning.X
                 && x.Binning.Y == binning.Y
@@ -259,7 +273,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private BinningMode binning;
+        private BinningMode binning = new BinningMode(1, 1);
         [DataMember]
         public BinningMode Binning {
             get => binning;
@@ -297,7 +311,7 @@ namespace OpenAstroAra.Profile {
         public int Brightness {
             get => brightness;
             set {
-                if(value < 0) { value = 0; }
+                if (value < 0) { value = 0; }
                 if (brightness == value) return;
                 brightness = value;
                 RaisePropertyChanged();
@@ -321,11 +335,11 @@ namespace OpenAstroAra.Profile {
 
     [Serializable]
     [DataContract]
-    [Obsolete]
+    [Obsolete("Legacy flat-device key retained only to deserialize old profiles; superseded by TrainedFlatExposureSettings.")]
     public class FlatDeviceFilterSettingsKey {
 
         [DataMember(IsRequired = false, EmitDefaultValue = false)]
-        public string FilterName { get; set; }
+        public string FilterName { get; set; } = string.Empty;
 
         [DataMember]
         public short? Position { get; set; }
@@ -342,7 +356,7 @@ namespace OpenAstroAra.Profile {
             Gain = gain;
         }
 
-        public override bool Equals(object obj) {
+        public override bool Equals(object? obj) {
             if (obj == null || this.GetType() != obj.GetType()) {
                 return false;
             }
@@ -374,10 +388,10 @@ namespace OpenAstroAra.Profile {
 
     [Serializable]
     [DataContract]
-    [Obsolete]
+    [Obsolete("Legacy flat-device value retained only to deserialize old profiles; superseded by TrainedFlatExposureSettings.")]
     public class FlatDeviceFilterSettingsValue {
 
-        [Obsolete]
+        [Obsolete("Legacy relative brightness; superseded by AbsoluteBrightness.")]
         [DataMember]
         public double Brightness { get; set; } = double.NaN;
 

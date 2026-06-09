@@ -13,8 +13,8 @@
 #endregion "copyright"
 
 using Newtonsoft.Json;
-using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Astrometry;
+using OpenAstroAra.Core.Utility;
 using System;
 using System.Runtime.Serialization;
 
@@ -22,7 +22,7 @@ namespace OpenAstroAra.Astrometry {
 
     [JsonObject(MemberSerialization.OptIn)]
     public class InputTopocentricCoordinates : BaseINPC {
-        private bool deserializing = false;
+        private bool deserializing;
         [OnDeserializing]
         public void OnDeserializing(StreamingContext context) {
             deserializing = true;
@@ -59,7 +59,7 @@ namespace OpenAstroAra.Astrometry {
             Coordinates = new TopocentricCoordinates(Coordinates.Azimuth, Coordinates.Altitude, latitude, longitude, elevation);
         }
 
-        private TopocentricCoordinates coordinates;
+        private TopocentricCoordinates coordinates = null!;  // set via Coordinates in every constructor
 
         public TopocentricCoordinates Coordinates {
             get => coordinates;

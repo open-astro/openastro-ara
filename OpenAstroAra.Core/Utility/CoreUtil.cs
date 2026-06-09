@@ -18,6 +18,7 @@ using System;
 using System.Collections.Generic;
 using System.Configuration;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Reflection;
 using System.Runtime.CompilerServices;
@@ -27,18 +28,18 @@ using System.Threading.Tasks;
 namespace OpenAstroAra.Core.Utility {
 
     public static class CoreUtil {
-        public static char[] PATHSEPARATORS = new char[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar };
-        public static string APPLICATIONDIRECTORY = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
-        public static string APPLICATIONTEMPPATH = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "NINA");
-        public static DateTime ApplicationStartDate = DateTime.Now;
-        public static DateTime UnixEpoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-        public static long UnixEpochTicks = UnixEpoch.Ticks;
+        public static readonly char[] PATHSEPARATORS = new char[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar };
+        public static readonly string APPLICATIONDIRECTORY = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? string.Empty;
+        public static readonly string APPLICATIONTEMPPATH = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "NINA");
+        public static readonly DateTime ApplicationStartDate = DateTime.Now;
+        public static readonly DateTime UnixEpoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        public static readonly long UnixEpochTicks = UnixEpoch.Ticks;
 
         public static string Version {
             get {
                 System.Reflection.Assembly assembly = System.Reflection.Assembly.GetExecutingAssembly();
                 FileVersionInfo fvi = FileVersionInfo.GetVersionInfo(assembly.Location);
-                string version = fvi.FileVersion;
+                string version = fvi.FileVersion ?? string.Empty;
                 return version;
             }
         }
@@ -74,7 +75,7 @@ namespace OpenAstroAra.Core.Utility {
         public static string Title => "N.I.N.A. - Nighttime Imaging 'N' Astronomy";
 
         public static string UserAgent => $"N.I.N.A./{Version} ({Environment.OSVersion}; {(Environment.Is64BitOperatingSystem ? "Win64" : "Win32")}; {(Environment.Is64BitProcess ? "x64" : "x86")})";
-        public static bool DebugMode { get; set; } = false;
+        public static bool DebugMode { get; set; }
 
         public static string GetUniqueFilePath(string fullPath) {
             return GetUniqueFilePath(fullPath, "{0}({1})");
@@ -84,17 +85,17 @@ namespace OpenAstroAra.Core.Utility {
 
             string fileNameOnly = Path.GetFileNameWithoutExtension(fullPath);
             string extension = Path.GetExtension(fullPath);
-            if (extension.ToLower() == ".fz") {
+            if (extension.Equals(".fz", StringComparison.OrdinalIgnoreCase)) {
                 // special handling for ".fits.fz" extension
                 extension = ".fits" + extension;
                 fileNameOnly = Path.GetFileNameWithoutExtension(fileNameOnly);
             }
 
-            string path = Path.GetDirectoryName(fullPath);
+            string path = Path.GetDirectoryName(fullPath) ?? string.Empty;
             string newFullPath = fullPath;
 
             while (File.Exists(newFullPath)) {
-                string tempFileName = string.Format(format, fileNameOnly, count++);
+                string tempFileName = string.Format(CultureInfo.InvariantCulture, format, fileNameOnly, count++);
                 newFullPath = Path.Combine(path, tempFileName + extension);
             }
             return newFullPath;
@@ -106,10 +107,10 @@ namespace OpenAstroAra.Core.Utility {
         /// <param name="unixTimeStamp">Milliseconds after 1970</param>
         /// <returns>DateTime</returns>
         public static DateTime UnixTimeStampToDateTime(long unixTimeStamp) {
-        // Unix timestamp is seconds past epoch
-        System.DateTime dtDateTime = new DateTime(1970, 1, 1, 0, 0, 0, 0, System.DateTimeKind.Utc);
-        dtDateTime = dtDateTime.AddSeconds(unixTimeStamp).ToLocalTime();
-        return dtDateTime;
+            // Unix timestamp is seconds past epoch
+            System.DateTime dtDateTime = new DateTime(1970, 1, 1, 0, 0, 0, 0, System.DateTimeKind.Utc);
+            dtDateTime = dtDateTime.AddSeconds(unixTimeStamp).ToLocalTime();
+            return dtDateTime;
         }
 
         /// <summary>
@@ -129,14 +130,14 @@ namespace OpenAstroAra.Core.Utility {
         public static async Task<TimeSpan> Delay(TimeSpan span, CancellationToken token) {
             var now = DateTime.UtcNow;
             if (span.Ticks >= 0) await Task.Delay(span, token);
-            return DateTime.UtcNow.Subtract(now);        
+            return DateTime.UtcNow.Subtract(now);
         }
 
-        public static Task<TimeSpan> Wait(TimeSpan t, CancellationToken token = new CancellationToken(), IProgress<ApplicationStatus> progress = default, string status = "") {
-            return Wait(t, false, token, progress, status);
+        public static Task<TimeSpan> Wait(TimeSpan t, IProgress<ApplicationStatus>? progress = default, string status = "", CancellationToken token = default) {
+            return Wait(t, false, progress, status, token);
         }
 
-        public static async Task<TimeSpan> Wait(TimeSpan t, bool progressCountDown, CancellationToken token = new CancellationToken(), IProgress<ApplicationStatus> progress = default,  string status = "") {
+        public static async Task<TimeSpan> Wait(TimeSpan t, bool progressCountDown, IProgress<ApplicationStatus>? progress = default, string status = "", CancellationToken token = default) {
             status = string.IsNullOrWhiteSpace(status) ? OpenAstroAra.Core.Locale.Loc.Instance["LblWaiting"] : status;
 
             var elapsed = new TimeSpan(0);
@@ -145,10 +146,10 @@ namespace OpenAstroAra.Core.Utility {
                 elapsed += delta;
                 token.ThrowIfCancellationRequested();
 
-                if (progress != null) { 
+                if (progress != null) {
                     string progressStatus;
                     if (t.Hours > 0) {
-                        if(progressCountDown) {
+                        if (progressCountDown) {
                             var remaining = t - elapsed;
                             progressStatus = $"{status} {remaining.Hours:D2}:{remaining.Minutes:D2}:{remaining.Seconds:D2}";
                         } else {
@@ -170,7 +171,7 @@ namespace OpenAstroAra.Core.Utility {
                         }
                     }
 
-                    progress?.Report(
+                    progress.Report(
                         new ApplicationStatus {
                             MaxProgress = 1,
                             Progress = elapsed.TotalSeconds / t.TotalSeconds,
@@ -190,12 +191,16 @@ namespace OpenAstroAra.Core.Utility {
                     if (fi.LastWriteTime < DateTime.Now.Add(deleteFromNow)) {
                         try {
                             fi.Delete();
-                        } catch (Exception ex) {
+                        } catch (IOException ex) {
+                            Logger.Error(ex);
+                        } catch (UnauthorizedAccessException ex) {
                             Logger.Error(ex);
                         }
                     }
                 }
-            } catch (Exception ex) {
+            } catch (IOException ex) {
+                Logger.Error(ex);
+            } catch (UnauthorizedAccessException ex) {
                 Logger.Error(ex);
             }
         }
@@ -215,7 +220,7 @@ namespace OpenAstroAra.Core.Utility {
             long max = (long)Math.Pow(scale, orders.Length - 1);
             foreach (string order in orders) {
                 if (bytes > max) {
-                    return string.Format("{0:D2.##} {1}", decimal.Divide(bytes, max), order);
+                    return string.Format(CultureInfo.InvariantCulture, "{0:D2.##} {1}", decimal.Divide(bytes, max), order);
                 }
 
                 max /= scale;
@@ -239,7 +244,7 @@ namespace OpenAstroAra.Core.Utility {
         /// <returns></returns>
         public static string ReplaceAllInvalidFilenameChars(string str) {
             // Replace forward and back slash with a hyphen
-            str = str.Replace(@"\", "-").Replace(@"/", "-");
+            str = str.Replace(@"\", "-", StringComparison.Ordinal).Replace(@"/", "-", StringComparison.Ordinal);
 
             // Replace any invalid path characters with an underscore (OS or filesystem dependent)
             str = ReplaceInvalidFilenameChars(str);
@@ -285,13 +290,13 @@ namespace OpenAstroAra.Core.Utility {
         public static void SaveSettings(ApplicationSettingsBase settings, [CallerMemberName] string memberName = "") {
             try {
                 settings.Save();
-            } catch (Exception ex) {
+            } catch (ConfigurationErrorsException ex) {
                 Logger.Error($"Settings failed to save from {memberName}", ex);
                 settings.Reload();
             }
         }
 
-        public static void CopyDirectory(string source, string target) {            
+        public static void CopyDirectory(string source, string target) {
             var diSource = new DirectoryInfo(source);
             var diTarget = new DirectoryInfo(target);
 
@@ -311,10 +316,12 @@ namespace OpenAstroAra.Core.Utility {
                 try {
                     Logger.Info($"Copy file from {fi} to {destinationFile}");
                     fi.CopyTo(destinationFile, true);
-                } catch(Exception ex) {
+                } catch (IOException ex) {
+                    Logger.Error($"Failed to copy file {fi} to {destinationFile}.", ex);
+                } catch (UnauthorizedAccessException ex) {
                     Logger.Error($"Failed to copy file {fi} to {destinationFile}.", ex);
                 }
-                
+
             }
 
             // Copy each subdirectory using recursion.
@@ -323,22 +330,6 @@ namespace OpenAstroAra.Core.Utility {
                 DirectoryInfo nextTargetSubDir =
                     target.CreateSubdirectory(diSourceSubDir.Name);
                 CopyDirectory(diSourceSubDir, nextTargetSubDir, maxDepth);
-            }
-        }
-        public static IList<T> DeserializeList<T>(string collection) {
-            try {
-                return JsonConvert.DeserializeObject<IList<T>>(collection, new JsonSerializerSettings() { TypeNameHandling = TypeNameHandling.Auto }) ?? new List<T>();
-            } catch (Exception) {
-                return new List<T>();
-            }
-
-        }
-
-        public static string SerializeList<T>(IList<T> l) {
-            try {
-                return JsonConvert.SerializeObject(l, new JsonSerializerSettings() { TypeNameHandling = TypeNameHandling.Auto }) ?? "";
-            } catch (Exception) {
-                return "";
             }
         }
     }

@@ -20,15 +20,14 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
+    using Accord.Imaging;
+    using Accord.Imaging.Filters;
+    using Accord.Math;
+    using AForge;
     using System.Collections.Generic;
     using System.Drawing;
     using System.Drawing.Imaging;
-    using Accord.Math;
-    using AForge;
-    using Accord.Imaging;
-    using Accord.Imaging.Filters;
     using System.Linq;
 
     /// <summary>
@@ -63,8 +62,7 @@ namespace Accord.Imaging.Filters
     /// </para>
     /// </example>
     //
-    public class PointsMarker : BaseInPlaceFilter
-    {
+    public class PointsMarker : BaseInPlaceFilter {
         private int width = 3;
         private Color markerColor = Color.White;
         private IEnumerable<IntPoint> points;
@@ -75,8 +73,7 @@ namespace Accord.Imaging.Filters
         ///   Format translations dictionary.
         /// </summary>
         /// 
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -84,8 +81,7 @@ namespace Accord.Imaging.Filters
         ///   Color used to mark corners.
         /// </summary>
         /// 
-        public Color MarkerColor
-        {
+        public Color MarkerColor {
             get { return markerColor; }
             set { markerColor = value; }
         }
@@ -94,8 +90,7 @@ namespace Accord.Imaging.Filters
         ///   Gets or sets the set of points to mark.
         /// </summary>
         /// 
-        public IEnumerable<IntPoint> Points
-        {
+        public IEnumerable<IntPoint> Points {
             get { return points; }
             set { points = value; }
         }
@@ -105,8 +100,7 @@ namespace Accord.Imaging.Filters
         /// should be connected by line segments. Default is false.
         /// </summary>
         /// 
-        public bool Connect
-        {
+        public bool Connect {
             get { return connect; }
             set { connect = value; }
         }
@@ -115,8 +109,7 @@ namespace Accord.Imaging.Filters
         ///   Gets or sets the width of the points to be drawn.
         /// </summary>
         /// 
-        public int Width
-        {
+        public int Width {
             get { return width; }
             set { width = value; }
         }
@@ -126,8 +119,7 @@ namespace Accord.Imaging.Filters
         /// </summary>
         /// 
         public PointsMarker(IEnumerable<IFeaturePoint> points)
-            : this(points, Color.White, 3)
-        {
+            : this(points, Color.White, 3) {
         }
 
 
@@ -136,16 +128,14 @@ namespace Accord.Imaging.Filters
         /// </summary>
         /// 
         public PointsMarker(IEnumerable<IFeaturePoint> points, Color markerColor)
-            : this(points, markerColor, 3)
-        {
+            : this(points, markerColor, 3) {
         }
 
         /// <summary>
         ///   Initializes a new instance of the <see cref="PointsMarker"/> class.
         /// </summary>
         /// 
-        public PointsMarker(IEnumerable<IFeaturePoint> points, Color markerColor, int width)
-        {
+        public PointsMarker(IEnumerable<IFeaturePoint> points, Color markerColor, int width) {
             markerColor = init(points.Select(x => new IntPoint((int)x.X, (int)x.Y)), markerColor, width);
         }
 
@@ -154,8 +144,7 @@ namespace Accord.Imaging.Filters
         /// </summary>
         /// 
         public PointsMarker(IEnumerable<IntPoint> points)
-            : this(points, Color.White, 3)
-        {
+            : this(points, Color.White, 3) {
         }
 
 
@@ -164,21 +153,18 @@ namespace Accord.Imaging.Filters
         /// </summary>
         /// 
         public PointsMarker(IEnumerable<IntPoint> points, Color markerColor)
-            : this(points, markerColor, 3)
-        {
+            : this(points, markerColor, 3) {
         }
 
         /// <summary>
         ///   Initializes a new instance of the <see cref="PointsMarker"/> class.
         /// </summary>
         /// 
-        public PointsMarker(IEnumerable<IntPoint> points, Color markerColor, int width)
-        {
+        public PointsMarker(IEnumerable<IntPoint> points, Color markerColor, int width) {
             markerColor = init(points, markerColor, width);
         }
 
-        private Color init(IEnumerable<IntPoint> points, Color markerColor, int width)
-        {
+        private Color init(IEnumerable<IntPoint> points, Color markerColor, int width) {
             this.points = points;
             this.markerColor = markerColor;
             this.width = width;
@@ -194,16 +180,14 @@ namespace Accord.Imaging.Filters
         /// </summary>
         /// 
         public PointsMarker(Color markerColor)
-            : this((IEnumerable<IntPoint>)null, markerColor, 3)
-        {
+            : this((IEnumerable<IntPoint>)null, markerColor, 3) {
         }
 
         /// <summary>
         ///   Initializes a new instance of the <see cref="PointsMarker"/> class.
         /// </summary>
         /// 
-        public PointsMarker(Color markerColor, int width)
-        {
+        public PointsMarker(Color markerColor, int width) {
             this.markerColor = markerColor;
             this.width = width;
 
@@ -218,17 +202,12 @@ namespace Accord.Imaging.Filters
         /// 
         /// <param name="image">Source image data.</param>
         ///
-        protected override unsafe void ProcessFilter(UnmanagedImage image)
-        {
-            if (Connect)
-            {
+        protected override unsafe void ProcessFilter(UnmanagedImage image) {
+            if (Connect) {
                 Drawing.Polygon(image, points.ToList(), markerColor);
-            }
-            else
-            {
+            } else {
                 // mark all points
-                foreach (IntPoint p in points)
-                {
+                foreach (IntPoint p in points) {
                     Drawing.FillRectangle(image, new Rectangle(p.X - width / 2, p.Y - width / 2, width, width), markerColor);
                 }
             }

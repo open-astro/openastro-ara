@@ -13,20 +13,21 @@
 #endregion "copyright"
 
 using Newtonsoft.Json;
-using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Astrometry;
+using OpenAstroAra.Core.Enums;
+using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Equipment.Equipment.MyGuider.SkyGuard.SkyGuardMessages;
 using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Sequencer.SequenceItem;
-using OpenAstroAra.Core.Utility;
-using OpenAstroAra.Astrometry;
+using OpenAstroAra.Sequencer.SequenceItem.Utility;
+using OpenAstroAra.Sequencer.Utility;
 using System;
+using System.Collections.Generic;
 using System.ComponentModel.Composition;
 using System.Linq;
+using System.Runtime.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-using OpenAstroAra.Sequencer.Utility;
-using System.Runtime.Serialization;
-using OpenAstroAra.Equipment.Equipment.MyGuider.SkyGuard.SkyGuardMessages;
-using OpenAstroAra.Sequencer.SequenceItem.Utility;
 
 namespace OpenAstroAra.Sequencer.Conditions {
 
@@ -39,12 +40,12 @@ namespace OpenAstroAra.Sequencer.Conditions {
     public class MoonIlluminationCondition : SequenceCondition {
         private double userMoonIllumination;
         private double currentMoonIllumination;
-        private ComparisonOperatorEnum comparator;
+        private ComparisonOperator comparator;
 
         [ImportingConstructor]
         public MoonIlluminationCondition() {
             UserMoonIllumination = 0d;
-            Comparator = ComparisonOperatorEnum.GREATER_THAN;
+            Comparator = ComparisonOperator.GreaterThan;
 
             CalculateCurrentMoonState();
             ConditionWatchdog = new ConditionWatchdog(InterruptWhenMoonOutsideOfBounds, TimeSpan.FromSeconds(5));
@@ -89,7 +90,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
         }
 
         [JsonProperty]
-        public ComparisonOperatorEnum Comparator {
+        public ComparisonOperator Comparator {
             get => comparator;
             set {
                 comparator = value;
@@ -105,10 +106,9 @@ namespace OpenAstroAra.Sequencer.Conditions {
             }
         }
 
-        public ComparisonOperatorEnum[] ComparisonOperators => Enum.GetValues(typeof(ComparisonOperatorEnum))
-            .Cast<ComparisonOperatorEnum>()
-            .Where(p => p != ComparisonOperatorEnum.EQUALS)
-            .Where(p => p != ComparisonOperatorEnum.NOT_EQUAL)
+        public static IReadOnlyList<ComparisonOperator> ComparisonOperators => Enum.GetValues<ComparisonOperator>()
+            .Where(p => p != ComparisonOperator.EQUALS)
+            .Where(p => p != ComparisonOperator.NotEqual)
             .ToArray();
 
         public override void AfterParentChanged() {
@@ -117,26 +117,26 @@ namespace OpenAstroAra.Sequencer.Conditions {
 
         public override string ToString() {
             return $"Condition: {nameof(MoonIlluminationCondition)}, " +
-                $"CurrentMoonIllumination: { CurrentMoonIllumination}%, Comparator: {Comparator}, UserMoonIllumination: {UserMoonIllumination}%";
+                $"CurrentMoonIllumination: {CurrentMoonIllumination}%, Comparator: {Comparator}, UserMoonIllumination: {UserMoonIllumination}%";
         }
 
-        public override bool Check(ISequenceItem previousItem, ISequenceItem nextItem) {
+        public override bool Check(ISequenceItem? previousItem, ISequenceItem? nextItem) {
             var check = true;
             // See if the moon's illumination is outside of the user's wishes
             switch (Comparator) {
-                case ComparisonOperatorEnum.LESS_THAN:
+                case ComparisonOperator.LessThan:
                     if (CurrentMoonIllumination < UserMoonIllumination) { check = false; }
                     break;
 
-                case ComparisonOperatorEnum.LESS_THAN_OR_EQUAL:
+                case ComparisonOperator.LessThanOrEqual:
                     if (CurrentMoonIllumination <= UserMoonIllumination) { check = false; }
                     break;
 
-                case ComparisonOperatorEnum.GREATER_THAN:
+                case ComparisonOperator.GreaterThan:
                     if (CurrentMoonIllumination > UserMoonIllumination) { check = false; }
                     break;
 
-                case ComparisonOperatorEnum.GREATER_THAN_OR_EQUAL:
+                case ComparisonOperator.GreaterThanOrEqual:
                     if (CurrentMoonIllumination >= UserMoonIllumination) { check = false; }
                     break;
             }
@@ -151,7 +151,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
         private void CalculateCurrentMoonState() {
             var now = DateTime.UtcNow;
 
-            CurrentMoonIllumination = AstroUtil.GetMoonIllumination(now) * 100;
+            CurrentMoonIllumination = AstroUtil.GetMoonIllumination(now, new ObserverInfo()) * 100;
         }
     }
 }

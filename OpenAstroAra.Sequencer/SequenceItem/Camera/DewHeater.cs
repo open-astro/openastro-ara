@@ -13,15 +13,15 @@
 #endregion "copyright"
 
 using Newtonsoft.Json;
+using OpenAstroAra.Core.Locale;
 using OpenAstroAra.Core.Model;
-using OpenAstroAra.Sequencer.Validations;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Sequencer.Validations;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.Composition;
 using System.Threading;
 using System.Threading.Tasks;
-using OpenAstroAra.Core.Locale;
 
 namespace OpenAstroAra.Sequencer.SequenceItem.Camera {
 
@@ -50,7 +50,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Camera {
 
         private ICameraMediator cameraMediator;
 
-        private bool onOff = false;
+        private bool onOff;
 
         [JsonProperty]
         public bool OnOff {

@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -12,13 +12,13 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Core.Enum;
-using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Astrometry;
-using System;
-using System.Linq;
+using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Core.Model;
+using OpenAstroAra.Profile.Interfaces;
+using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace OpenAstroAra.Image.ImageData {
 
@@ -32,9 +32,9 @@ namespace OpenAstroAra.Image.ImageData {
         public TargetParameter Target { get; set; } = new TargetParameter();
         public ObserverParameter Observer { get; set; } = new ObserverParameter();
         public WeatherDataParameter WeatherData { get; set; } = new WeatherDataParameter();
-        public WorldCoordinateSystem WorldCoordinateSystem = null;
-        public SequenceParameter Sequence = new SequenceParameter();
-        public List<IGenericMetaDataHeader> GenericHeaders { get; set; } = new List<IGenericMetaDataHeader>();
+        public WorldCoordinateSystem? WorldCoordinateSystem { get; set; }
+        public SequenceParameter Sequence { get; set; } = new SequenceParameter();
+        public IReadOnlyList<IGenericMetaDataHeader> GenericHeaders { get; set; } = new List<IGenericMetaDataHeader>();
 
         /// <summary>
         /// Fill relevant info from a Profile
@@ -43,7 +43,7 @@ namespace OpenAstroAra.Image.ImageData {
         public void FromProfile(IProfile profile) {
             Camera.PixelSize = profile.CameraSettings.PixelSize;
 
-            if (Camera.BayerPattern != BayerPatternEnum.None) {
+            if (Camera.BayerPattern != BayerPattern.None) {
                 Camera.BayerPattern = profile.CameraSettings.BayerPattern;
             }
 
@@ -54,12 +54,12 @@ namespace OpenAstroAra.Image.ImageData {
             Observer.Latitude = profile.AstrometrySettings.Latitude;
             Observer.Longitude = profile.AstrometrySettings.Longitude;
             Observer.Elevation = profile.AstrometrySettings.Elevation;
-            Observer.Name= profile.AstrometrySettings.Observer;
+            Observer.Name = profile.AstrometrySettings.Observer;
             Observer.Observatory = profile.AstrometrySettings.Observatory;
             Observer.Site = profile.AstrometrySettings.Site;
         }
 
-        public SensorType StringToSensorType(string pattern) {
+        public static SensorType StringToSensorType(string pattern) {
             return Enum.TryParse(pattern, out SensorType sensor) ? sensor : SensorType.Monochrome;
         }
     }
@@ -151,13 +151,13 @@ namespace OpenAstroAra.Image.ImageData {
         public string ImageType { get; set; } = string.Empty;
         public string Binning { get; set; } = string.Empty;
         public double ExposureTime { get; set; } = double.NaN;
-        public RMS RecordedRMS { get; set; } = null;
+        public RMS? RecordedRMS { get; set; }
 
         public void SetExposureTimes(DateTime startTime, DateTime endTime) {
-            if (startTime == DateTime.MinValue ||  startTime == DateTime.MaxValue) { return; }
+            if (startTime == DateTime.MinValue || startTime == DateTime.MaxValue) { return; }
             ExposureStart = startTime;
             if (endTime == DateTime.MinValue || endTime == DateTime.MaxValue) { return; }
-            var midpointDateTime = startTime + TimeSpan.FromTicks((endTime - startTime).Ticks / 2);            
+            var midpointDateTime = startTime + TimeSpan.FromTicks((endTime - startTime).Ticks / 2);
             ExposureMidPoint = midpointDateTime;
         }
     }
@@ -174,12 +174,12 @@ namespace OpenAstroAra.Image.ImageData {
         public int Offset { get; set; } = -1;
         public double ElectronsPerADU { get; set; } = double.NaN;
         public double SetPoint { get; set; } = double.NaN;
-        public short ReadoutModeIndex { get; set; } = 0;
+        public short ReadoutModeIndex { get; set; }
         public string ReadoutModeName { get; set; } = string.Empty;
-        public BayerPatternEnum BayerPattern = BayerPatternEnum.Auto;
+        public BayerPattern BayerPattern { get; set; } = BayerPattern.Auto;
         public SensorType SensorType { get; set; } = SensorType.Monochrome;
-        public int BayerOffsetX { get; set; } = 0;
-        public int BayerOffsetY { get; set; } = 0;
+        public int BayerOffsetX { get; set; }
+        public int BayerOffsetY { get; set; }
         public int USBLimit { get; set; } = -1;
     }
 
@@ -192,9 +192,9 @@ namespace OpenAstroAra.Image.ImageData {
         public double Airmass { get; set; } = double.NaN;
         public PierSide SideOfPier { get; set; } = PierSide.pierUnknown;
 
-        private Coordinates coordinates = null;
+        private Coordinates? coordinates;
 
-        public Coordinates Coordinates {
+        public Coordinates? Coordinates {
             get => coordinates;
             set {
                 if (value != null) {
@@ -207,7 +207,7 @@ namespace OpenAstroAra.Image.ImageData {
 
     public class FocuserParameter {
         public string Name { get; set; } = string.Empty;
-        public int? Position { get; set; } = null;
+        public int? Position { get; set; }
         public double StepSize { get; set; } = double.NaN;
         public double Temperature { get; set; } = double.NaN;
     }
@@ -229,9 +229,9 @@ namespace OpenAstroAra.Image.ImageData {
         [Obsolete("Use PositionAngle instead")]
         public double Rotation { get => AstroUtil.EuclidianModulus(360 - PositionAngle, 360); set => PositionAngle = AstroUtil.EuclidianModulus(360 - value, 360); }
         public double PositionAngle { get; set; } = double.NaN;
-        private Coordinates coordinates = null;
+        private Coordinates? coordinates;
 
-        public Coordinates Coordinates {
+        public Coordinates? Coordinates {
             get => coordinates;
             set {
                 if (value != null) {

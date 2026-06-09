@@ -26,7 +26,7 @@ namespace OpenAstroAra.Astrometry {
     // rotation parameters etc.). Phase 0.5p deleted the underlying schema types per §56
     // NINA-DB-greenfield without porting the consumers. Daemon DB design (per §56) is
     // future work. For now this class preserves the two methods callers actually need:
-    //   - GetUT1_UTC: returns 0 (no IERS earth-rotation table available; SOFA topocentric
+    //   - GetUt1Utc: returns 0 (no IERS earth-rotation table available; SOFA topocentric
     //     transforms still work, just without sub-second UT1-UTC correction)
     //   - GetDisplayAlias: pure-CPU Levenshtein alias matcher; no DB needed, kept as-is
     // The other former methods (GetConstellations, GetObjectTypes, GetBrightStars,
@@ -41,14 +41,16 @@ namespace OpenAstroAra.Astrometry {
         public DatabaseInteraction(string connectionString) {
         }
 
-        public Task<double> GetUT1_UTC(DateTime date, CancellationToken token) {
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822:Mark members as static",
+            Justification = "Per the Microsoft CA1822 guidance, suppressed because marking this externally-visible member static would be a breaking API change; it is also instance-by-design (a stub that will read from the per-instance daemon DB connection when the IERS table is restored).")]
+        public Task<double> GetUt1Utc(DateTime date, CancellationToken token) {
             if (token.IsCancellationRequested) {
                 return Task.FromCanceled<double>(token);
             }
             return Task.FromResult(0d);
         }
 
-        public string GetDisplayAlias(string searchName, List<string> aliases) {
+        public static string GetDisplayAlias(string searchName, IReadOnlyList<string> aliases) {
             // No search by name, default to longest
             if (string.IsNullOrEmpty(searchName)) {
                 return aliases.Aggregate("", (max, cur) => max.Length > cur.Length ? max : cur);
@@ -65,8 +67,8 @@ namespace OpenAstroAra.Astrometry {
                 .ToList();
 
             // Do any of them start with what we're typing? If so, go with the longest
-            string result = cleanedAliases
-                .Where(alias => alias.cleanName.StartsWith(cleanedSearchName))
+            string? result = cleanedAliases
+                .Where(alias => alias.cleanName.StartsWith(cleanedSearchName, StringComparison.Ordinal))
                 .Select(alias => alias.name)
                 .FirstOrDefault();
 
@@ -79,11 +81,11 @@ namespace OpenAstroAra.Astrometry {
                 .OrderBy(alias => Fastenshtein.Levenshtein.Distance(cleanedSearchName, alias.cleanName))
                 .ThenByDescending(alias => alias.cleanName.Length)
                 .Select(alias => alias.name)
-                .FirstOrDefault();
+                .FirstOrDefault() ?? string.Empty;
         }
 
-        private string cleanForSearching(string token) {
-            return Regex.Replace(token, @"[^\w\-]*", "", RegexOptions.Multiline).ToUpper();
+        private static string cleanForSearching(string token) {
+            return Regex.Replace(token, @"[^\w\-]*", "", RegexOptions.Multiline).ToUpperInvariant();
         }
     }
 }

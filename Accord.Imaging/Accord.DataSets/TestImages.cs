@@ -20,8 +20,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.DataSets
-{
+namespace Accord.DataSets {
     using Accord;
     using Accord.Compat;
     using Accord.Imaging;
@@ -96,8 +95,7 @@ namespace Accord.DataSets
     /// <code source="Unit Tests\Accord.Tests.Imaging\HistogramsOfOrientedGradientsTest.cs" region="doc_apply" />
     /// </example>
     /// 
-    public class TestImages
-    {
+    public class TestImages {
         string path;
 
         static readonly string[] opencv = new[]
@@ -110,7 +108,7 @@ namespace Accord.DataSets
             "tree.avi"
         };
 
-        static readonly string[] imageNames = new []
+        static readonly string[] imageNames = new[]
         {
             "airplane.png",
             "arctichare.png",
@@ -162,8 +160,7 @@ namespace Accord.DataSets
             get { return (string[])imageNames.Clone(); }
         }
 #else
-        public IReadOnlyList<string> ImageNames
-        {
+        public IReadOnlyList<string> ImageNames {
             get { return imageNames; }
         }
 #endif
@@ -185,8 +182,7 @@ namespace Accord.DataSets
         /// <param name="path">The path where datasets will be stored. If null or empty, the dataset
         /// will be saved on a subfolder called "data" in the current working directory.</param>
         /// 
-        public TestImages(string path = null)
-        {
+        public TestImages(string path = null) {
             if (path == null)
                 path = "data";
             this.path = path;
@@ -200,8 +196,7 @@ namespace Accord.DataSets
         /// 
         /// <param name="name">The standard image name. For a list of all possible names, see <see cref="ImageNames"/>.</param>
         /// 
-        public Bitmap this[string name]
-        {
+        public Bitmap this[string name] {
             get { return GetImage(name); }
         }
 
@@ -211,10 +206,8 @@ namespace Accord.DataSets
         /// 
         /// <param name="name">The standard image name. For a list of all possible names, see <see cref="ImageNames"/>.</param>
         /// 
-        public Bitmap GetImage(string name)
-        {
-            if (!imageNames.Contains(name))
-            {
+        public Bitmap GetImage(string name) {
+            if (!imageNames.Contains(name)) {
                 throw new ArgumentOutOfRangeException("name", String.Format("The provided image '{0}' is not in the list of " +
                     "test images provided by this class. The list of supported image names can be found in the ImageNames " +
                     "property and in the Accord.DataSets.TestImages class documentation page.", name));
@@ -229,15 +222,12 @@ namespace Accord.DataSets
 #endif
                 Directory.CreateDirectory(this.path);
 
-            if (opencv.Contains(name))
-            {
+            if (opencv.Contains(name)) {
                 bmp = Accord.Imaging.Image.FromUrl("https://raw.githubusercontent.com/opencv/opencv/master/samples/data/" + name, path);
-            }
-            else
-            {
+            } else {
                 bmp = Accord.Imaging.Image.FromUrl("https://homepages.cae.wisc.edu/~ece533/images/" + name, path);
             }
-            
+
 
             if (CorrectIndexedPalettes && bmp.IsColor8bpp())
                 Accord.Imaging.Image.ConvertColor8bppToGrayscale8bpp(bmp);

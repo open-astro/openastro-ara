@@ -14,9 +14,9 @@
 
 using FluentAssertions;
 using Moq;
+using NUnit.Framework;
 using OpenAstroAra.Profile;
 using OpenAstroAra.Profile.Interfaces;
-using NUnit.Framework;
 using System;
 
 namespace OpenAstroAra.Test.ProfileTest {
@@ -35,7 +35,7 @@ namespace OpenAstroAra.Test.ProfileTest {
             mockProfileService.SetupGet(ps => ps.ActiveProfile.PluginSettings).Returns(pluginSettings);
         }
 
-        private IPluginOptionsAccessor GetSUT() {
+        private PluginOptionsAccessor GetSUT() {
             return new PluginOptionsAccessor(mockProfileService.Object, pluginGuid);
         }
 

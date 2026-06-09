@@ -19,9 +19,9 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.PhdEvents {
     public class PhdEventAlert : PhdEvent {
 
         [JsonProperty]
-        public string Msg { get; set; }
+        public string Msg { get; set; } = string.Empty;
 
         [JsonProperty]
-        public string Type { get; set; }
+        public string Type { get; set; } = string.Empty;
     }
 }

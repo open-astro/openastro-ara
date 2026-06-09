@@ -13,13 +13,16 @@
 #endregion "copyright"
 
 using Newtonsoft.Json;
-using System.Windows.Input;
+using OpenAstroAra.Core.Locale;
 using OpenAstroAra.Core.Model;
+using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Core.Utility.Extensions;
 using OpenAstroAra.Sequencer.Container.ExecutionStrategy;
 using OpenAstroAra.Sequencer.SequenceItem;
 using OpenAstroAra.Sequencer.Trigger;
-using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Sequencer.Utility;
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Collections.Generic;
 using System.ComponentModel.Composition;
 using System.Linq;
@@ -27,9 +30,7 @@ using System.Runtime.Serialization;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using OpenAstroAra.Core.Locale;
-using OpenAstroAra.Sequencer.Utility;
-using OpenAstroAra.Core.Utility.Extensions;
+using System.Windows.Input;
 
 namespace OpenAstroAra.Sequencer.Container {
 
@@ -55,7 +56,7 @@ namespace OpenAstroAra.Sequencer.Container {
         // §38 sequence endpoints which call the corresponding domain method
         // directly.
 
-        private void ClearContainer(ISequenceContainer container) {
+        private static void ClearContainer(ISequenceContainer container) {
             foreach (var item in container.GetItemsSnapshot()) {
                 item.Detach();
             }
@@ -90,18 +91,20 @@ namespace OpenAstroAra.Sequencer.Container {
             }
         }
 
-        public event Func<object, SequenceEntityFailureEventArgs, Task> FailureEvent;
+        public event Func<object, SequenceEntityFailureEventArgs, Task>? FailureEvent;
 
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "Event-dispatch boundary: FailureEvent subscribers are arbitrary callbacks that may throw; their exceptions are logged so one faulty subscriber cannot break failure reporting for the run. CA1031 sanctions general catches at such event-raising boundaries.")]
         public async Task RaiseFailureEvent(ISequenceEntity sender, Exception ex) {
-            try {                
+            try {
                 await (FailureEvent?.InvokeAsync(sender, new SequenceEntityFailureEventArgs(sender, ex)) ?? Task.CompletedTask);
-            } catch(Exception eventException) {
+            } catch (Exception eventException) {
                 Logger.Error(eventException);
             }
         }
 
         public override ICommand DropIntoCommand => new GalaSoft.MvvmLight.Command.RelayCommand<object>((o) => {
-            (Items[1] as TargetAreaContainer).DropIntoCommand.Execute(o);
+            (Items[1] as TargetAreaContainer)?.DropIntoCommand.Execute(o);
         });
 
         public override object Clone() {
@@ -113,7 +116,7 @@ namespace OpenAstroAra.Sequencer.Container {
             };
         }
 
-        private string sequenceTitle;
+        private string sequenceTitle = string.Empty;
 
         public string SequenceTitle {
             get => string.IsNullOrEmpty(sequenceTitle) ? Name : sequenceTitle;

@@ -6,8 +6,7 @@
 // contacts@aforgenet.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -40,10 +39,9 @@ namespace Accord.Imaging.Filters
     /// <img src="..\images\imaging\bradley_local_thresholding.png" width="320" height="240" />
     /// </remarks>
     /// 
-    public class BradleyLocalThresholding : BaseInPlaceFilter
-    {
+    public class BradleyLocalThresholding : BaseInPlaceFilter {
         // private format translation dictionary
-        private Dictionary<PixelFormat, PixelFormat> formatTranslations = new Dictionary<PixelFormat, PixelFormat>( );
+        private Dictionary<PixelFormat, PixelFormat> formatTranslations = new Dictionary<PixelFormat, PixelFormat>();
 
         private int windowSize = 41;
         private float pixelBrightnessDifferenceLimit = 0.15f;
@@ -60,10 +58,9 @@ namespace Accord.Imaging.Filters
         /// <para><note>The value should be odd.</note></para>
         /// </remarks>
         /// 
-        public int WindowSize
-        {
+        public int WindowSize {
             get { return windowSize; }
-            set { windowSize = Math.Max( 3, value | 1 ); }
+            set { windowSize = Math.Max(3, value | 1); }
         }
 
         /// <summary>
@@ -78,10 +75,9 @@ namespace Accord.Imaging.Filters
         /// <para>Default value is set to <b>0.15</b>.</para>
         /// </remarks>
         ///
-        public float PixelBrightnessDifferenceLimit
-        {
+        public float PixelBrightnessDifferenceLimit {
             get { return pixelBrightnessDifferenceLimit; }
-            set { pixelBrightnessDifferenceLimit = Math.Max( 0.0f, Math.Min( 1.0f, value ) ); }
+            set { pixelBrightnessDifferenceLimit = Math.Max(0.0f, Math.Min(1.0f, value)); }
         }
 
         /// <summary>
@@ -90,8 +86,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <remarks><para>See <see cref="IFilterInformation.FormatTranslations"/> for more information.</para></remarks>
         ///
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -99,8 +94,7 @@ namespace Accord.Imaging.Filters
         /// Initializes a new instance of the <see cref="BradleyLocalThresholding"/> class.
         /// </summary>
         /// 
-        public BradleyLocalThresholding( )
-        {
+        public BradleyLocalThresholding() {
             formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
         }
 
@@ -110,14 +104,13 @@ namespace Accord.Imaging.Filters
         /// 
         /// <param name="image">Source image data.</param>
         ///
-        protected override unsafe void ProcessFilter( UnmanagedImage image )
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage image) {
             // create integral image
-            IntegralImage im = IntegralImage.FromBitmap( image );
+            IntegralImage im = IntegralImage.FromBitmap(image);
 
-            int width    = image.Width;
-            int height   = image.Height;
-            int widthM1  = width - 1;
+            int width = image.Width;
+            int height = image.Height;
+            int widthM1 = width - 1;
             int heightM1 = height - 1;
 
             int offset = image.Stride - width;
@@ -125,31 +118,29 @@ namespace Accord.Imaging.Filters
 
             float avgBrightnessPart = 1.0f - pixelBrightnessDifferenceLimit;
 
-            byte* ptr = (byte*) image.ImageData.ToPointer( );
+            byte* ptr = (byte*)image.ImageData.ToPointer();
 
-            for ( int y = 0; y < height; y++ )
-            {
+            for (int y = 0; y < height; y++) {
                 // rectangle's Y coordinates
                 int y1 = y - radius;
                 int y2 = y + radius;
 
-                if ( y1 < 0 )
+                if (y1 < 0)
                     y1 = 0;
-                if ( y2 > heightM1 )
+                if (y2 > heightM1)
                     y2 = heightM1;
 
-                for ( int x = 0; x < width; x++, ptr++ )
-                {
+                for (int x = 0; x < width; x++, ptr++) {
                     // rectangle's X coordinates
                     int x1 = x - radius;
                     int x2 = x + radius;
 
-                    if ( x1 < 0 )
+                    if (x1 < 0)
                         x1 = 0;
-                    if ( x2 > widthM1 )
+                    if (x2 > widthM1)
                         x2 = widthM1;
 
-                    *ptr = (byte) ( ( *ptr < (int) ( im.GetRectangleMeanUnsafe( x1, y1, x2, y2 ) * avgBrightnessPart ) ) ? 0 : 255 );
+                    *ptr = (byte)((*ptr < (int)(im.GetRectangleMeanUnsafe(x1, y1, x2, y2) * avgBrightnessPart)) ? 0 : 255);
                 }
 
                 ptr += offset;

@@ -12,11 +12,12 @@
 
 #endregion "copyright"
 
-using System;
-using OpenAstroAra.Sequencer.Conditions;
 using Newtonsoft.Json.Linq;
 using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Sequencer.Conditions;
 using OpenAstroAra.Sequencer.Container;
+using System;
+using System.Diagnostics.CodeAnalysis;
 
 namespace OpenAstroAra.Sequencer.Serialization {
 
@@ -27,26 +28,28 @@ namespace OpenAstroAra.Sequencer.Serialization {
             this.factory = factory;
         }
 
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "Factory-instantiation recovery boundary: a reflective GetCondition<T> invoke may surface any exception (TargetInvocationException, argument/cast/type-load faults from arbitrary condition constructors). All are logged and replaced with an UnknownSequenceCondition placeholder so one bad entity cannot fail the whole sequence load. CA1031 sanctions general catches at such recover-and-continue boundaries.")]
         public override ISequenceCondition Create(Type objectType, JObject jObject) {
             if (jObject.TryGetValue("$type", out var token)) {
-                var t = GetType(jObject.GetValue("$type").ToString());
-                if(t == null) {
-                    return new UnknownSequenceCondition(token?.ToString());
+                var t = GetType(token.ToString());
+                if (t == null) {
+                    return new UnknownSequenceCondition(token?.ToString() ?? string.Empty);
                 }
                 try {
-                    var method = factory.GetType().GetMethod(nameof(factory.GetCondition)).MakeGenericMethod(new Type[] { t });
+                    var method = factory.GetType().GetMethod(nameof(factory.GetCondition))!.MakeGenericMethod(new Type[] { t });
                     var obj = method.Invoke(factory, null);
                     if (obj == null) {
                         Logger.Error($"Encountered unknown sequence condition: {token?.ToString()}");
-                        return new UnknownSequenceCondition(token?.ToString());
+                        return new UnknownSequenceCondition(token?.ToString() ?? string.Empty);
                     }
                     return (ISequenceCondition)obj;
                 } catch (Exception e) {
                     Logger.Error($"Encountered unknown sequence condition: {token?.ToString()}", e);
-                    return new UnknownSequenceCondition(token?.ToString());
+                    return new UnknownSequenceCondition(token?.ToString() ?? string.Empty);
                 }
             } else {
-                return new UnknownSequenceCondition(token?.ToString());
+                return new UnknownSequenceCondition(token?.ToString() ?? string.Empty);
             }
         }
     }

@@ -15,7 +15,7 @@
 namespace OpenAstroAra.Core.Interfaces {
 
     public interface IGuideEvent {
-        string Event { get; }
+        string EventName { get; }
         string TimeStamp { get; }
         string Host { get; }
         int Inst { get; }

@@ -2,16 +2,15 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © AForge.NET, 2005-2011
+// Copyright ï¿½ AForge.NET, 2005-2011
 // contacts@aforgenet.com
 //
 
-namespace Accord.Imaging.Filters
-{
-	/// <summary>
-	/// Mean filter.
-	/// </summary>
-	/// 
+namespace Accord.Imaging.Filters {
+    /// <summary>
+    /// Mean filter.
+    /// </summary>
+    /// 
     /// <remarks><para>The filter performs each pixel value's averaging with its 8 neighbors, which is 
     /// <see cref="Convolution">convolution filter</see> using the mean kernel:</para>
     /// 
@@ -47,17 +46,15 @@ namespace Accord.Imaging.Filters
     /// 
     /// <seealso cref="Convolution"/>
     /// 
-    public sealed class Mean : Convolution
-	{
-		/// <summary>
-		/// Initializes a new instance of the <see cref="Mean"/> class.
-		/// </summary>
-		public Mean( ) : base( new int[,] {
-										{ 1, 1, 1 },
-										{ 1, 1, 1 },
-										{ 1, 1, 1 } } )
-		{
+    public sealed class Mean : Convolution {
+        /// <summary>
+        /// Initializes a new instance of the <see cref="Mean"/> class.
+        /// </summary>
+        public Mean() : base(new int[,] {
+                                        { 1, 1, 1 },
+                                        { 1, 1, 1 },
+                                        { 1, 1, 1 } }) {
             base.ProcessAlpha = true;
-		}
-	}
+        }
+    }
 }

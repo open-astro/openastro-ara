@@ -1,12 +1,11 @@
 // AForge Image Processing Library
 // AForge.NET framework
 //
-// Copyright © Andrew Kirillov, 2005-2008
+// Copyright ï¿½ Andrew Kirillov, 2005-2008
 // andrew.kirillov@gmail.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Drawing;
     using System.Drawing.Imaging;
@@ -18,8 +17,7 @@ namespace Accord.Imaging.Filters
     /// <remarks>The abstract class is the base class for all filters,
     /// which implement rotating algorithms.</remarks>
     /// 
-    public abstract class BaseRotateFilter : BaseTransformationFilter
-    {
+    public abstract class BaseRotateFilter : BaseTransformationFilter {
         /// <summary>
         /// Rotation angle.
         /// </summary>
@@ -38,8 +36,7 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Rotation angle, [0, 360].
         /// </summary>
-        public double Angle
-        {
+        public double Angle {
             get { return angle; }
             set { angle = value % 360; }
         }
@@ -55,8 +52,7 @@ namespace Accord.Imaging.Filters
         /// of the image may be clipped because of rotation.</para>
         /// </remarks>
         /// 
-        public bool KeepSize
-        {
+        public bool KeepSize {
             get { return keepSize; }
             set { keepSize = value; }
         }
@@ -68,8 +64,7 @@ namespace Accord.Imaging.Filters
         /// <remarks><para>The fill color is used to fill areas of destination image,
         /// which don't have corresponsing pixels in source image.</para></remarks>
         /// 
-        public Color FillColor
-        {
+        public Color FillColor {
             get { return fillColor; }
             set { fillColor = value; }
         }
@@ -83,8 +78,7 @@ namespace Accord.Imaging.Filters
         /// <remarks><para>This constructor sets <see cref="KeepSize"/> property to <b>false</b>.
         /// </para></remarks>
         /// 
-        protected BaseRotateFilter(double angle)
-        {
+        protected BaseRotateFilter(double angle) {
             this.angle = angle;
         }
 
@@ -95,8 +89,7 @@ namespace Accord.Imaging.Filters
         /// <param name="angle">Rotation angle.</param>
         /// <param name="keepSize">Keep image size or not.</param>
         /// 
-        protected BaseRotateFilter(double angle, bool keepSize)
-        {
+        protected BaseRotateFilter(double angle, bool keepSize) {
             this.angle = angle;
             this.keepSize = keepSize;
         }
@@ -109,8 +102,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <returns>New image size - size of the destination image.</returns>
         /// 
-        protected override System.Drawing.Size CalculateNewImageSize(UnmanagedImage sourceData)
-        {
+        protected override System.Drawing.Size CalculateNewImageSize(UnmanagedImage sourceData) {
             // return same size if original image size should be kept
             if (keepSize)
                 return new Size(sourceData.Width, sourceData.Height);

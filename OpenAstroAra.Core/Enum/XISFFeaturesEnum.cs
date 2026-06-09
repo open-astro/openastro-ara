@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -15,10 +15,10 @@
 using OpenAstroAra.Core.Utility;
 using System.ComponentModel;
 
-namespace OpenAstroAra.Core.Enum {
+namespace OpenAstroAra.Core.Enums {
 
     [TypeConverter(typeof(EnumDescriptionTypeConverter))]
-    public enum XISFCompressionTypeEnum {
+    public enum XISFCompressionType {
 
         [Description("LblNone")]
         NONE = 0,
@@ -34,7 +34,7 @@ namespace OpenAstroAra.Core.Enum {
     }
 
     [TypeConverter(typeof(EnumDescriptionTypeConverter))]
-    public enum XISFChecksumTypeEnum {
+    public enum XISFChecksumType {
 
         [Description("LblNone")]
         NONE = 0,
@@ -49,9 +49,9 @@ namespace OpenAstroAra.Core.Enum {
         SHA512,
 
         [Description("LblChecksumSHA3_256")]
-        SHA3_256,
+        Sha3256,
 
         [Description("LblChecksumSHA3_512")]
-        SHA3_512
+        Sha3512
     }
 }

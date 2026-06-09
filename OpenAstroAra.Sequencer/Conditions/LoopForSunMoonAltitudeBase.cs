@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
     using Newtonsoft.Json;
     using OpenAstroAra.Astrometry;
-    using OpenAstroAra.Core.Enum;
+    using OpenAstroAra.Core.Enums;
     using OpenAstroAra.Core.Locale;
     using OpenAstroAra.Core.Model;
     using OpenAstroAra.Core.Utility;
@@ -22,22 +22,22 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
 
     public abstract class LoopForSunMoonAltitudeBase : LoopForAltitudeBase {
 
-        public LoopForSunMoonAltitudeBase(IProfileService profileService, bool useCustomHorizon) : base(profileService, useCustomHorizon) {
+        protected LoopForSunMoonAltitudeBase(IProfileService profileService, bool useCustomHorizon) : base(profileService, useCustomHorizon) {
             Data.Offset = 0d;
         }
 
-        public override bool Check(ISequenceItem previousItem, ISequenceItem nextItem) {
+        public override bool Check(ISequenceItem? previousItem, ISequenceItem? nextItem) {
             return Check(previousItem, nextItem, false);
         }
 
-        public bool Check(ISequenceItem previousItem, ISequenceItem nextItem, bool test) {
+        public bool Check(ISequenceItem? previousItem, ISequenceItem? nextItem, bool test) {
             if (!test) CalculateExpectedTime();
 
             var check = true;
             switch (Data.Comparator) {
 
-                case ComparisonOperatorEnum.GREATER_THAN:
-                case ComparisonOperatorEnum.GREATER_THAN_OR_EQUAL:
+                case ComparisonOperator.GreaterThan:
+                case ComparisonOperator.GreaterThanOrEqual:
                     if (Data.CurrentAltitude > GetDataOffset()) { check = false; }
                     break;
 
@@ -60,5 +60,3 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
         }
     }
 }
-
-

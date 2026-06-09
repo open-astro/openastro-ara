@@ -12,11 +12,11 @@
 
 #endregion "copyright"
 
+using Microsoft.Data.Sqlite;
+using OpenAstroAra.Server.Contracts;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
-using Microsoft.Data.Sqlite;
-using OpenAstroAra.Server.Contracts;
 
 namespace OpenAstroAra.Server.Services;
 
@@ -55,13 +55,13 @@ public sealed class SqliteStatsService : IStatsService {
         DateTimeOffset? first = null, last = null;
         await using (var reader = await overviewCmd.ExecuteReaderAsync(ct)) {
             if (await reader.ReadAsync(ct)) {
-                sessions = reader.IsDBNull(0) ? 0 : Convert.ToInt32(reader.GetValue(0));
-                frames = reader.IsDBNull(1) ? 0 : Convert.ToInt32(reader.GetValue(1));
-                lights = reader.IsDBNull(2) ? 0 : Convert.ToInt32(reader.GetValue(2));
-                hours = reader.IsDBNull(3) ? 0 : reader.GetDouble(3);
-                targets = reader.IsDBNull(4) ? 0 : Convert.ToInt32(reader.GetValue(4));
-                first = reader.IsDBNull(5) ? null : DateTimeOffset.Parse(reader.GetString(5));
-                last = reader.IsDBNull(6) ? null : DateTimeOffset.Parse(reader.GetString(6));
+                sessions = await reader.IsDBNullAsync(0, ct) ? 0 : Convert.ToInt32(reader.GetValue(0));
+                frames = await reader.IsDBNullAsync(1, ct) ? 0 : Convert.ToInt32(reader.GetValue(1));
+                lights = await reader.IsDBNullAsync(2, ct) ? 0 : Convert.ToInt32(reader.GetValue(2));
+                hours = await reader.IsDBNullAsync(3, ct) ? 0 : reader.GetDouble(3);
+                targets = await reader.IsDBNullAsync(4, ct) ? 0 : Convert.ToInt32(reader.GetValue(4));
+                first = await reader.IsDBNullAsync(5, ct) ? null : DateTimeOffset.Parse(reader.GetString(5));
+                last = await reader.IsDBNullAsync(6, ct) ? null : DateTimeOffset.Parse(reader.GetString(6));
             }
         }
 
@@ -250,8 +250,8 @@ public sealed class SqliteStatsService : IStatsService {
                 FrameId: Guid.Parse(reader.GetString(0)),
                 TargetName: reader.GetString(1),
                 CapturedUtc: DateTimeOffset.Parse(reader.GetString(2)),
-                CompositeScore: reader.IsDBNull(3) ? 0 : reader.GetDouble(3),
-                FilterName: reader.IsDBNull(4) ? null : reader.GetString(4)));
+                CompositeScore: await reader.IsDBNullAsync(3, ct) ? 0 : reader.GetDouble(3),
+                FilterName: await reader.IsDBNullAsync(4, ct) ? null : reader.GetString(4)));
         }
         return new StatsBestFramesDto(rows);
     }
@@ -279,7 +279,7 @@ public sealed class SqliteStatsService : IStatsService {
             var date = DateOnly.Parse(reader.GetString(0));
             var count = reader.GetInt32(1);
             var hours = reader.GetDouble(2);
-            var targetsCsv = reader.IsDBNull(3) ? "" : reader.GetString(3);
+            var targetsCsv = await reader.IsDBNullAsync(3, ct) ? "" : reader.GetString(3);
             var targets = string.IsNullOrEmpty(targetsCsv)
                 ? Array.Empty<string>()
                 : targetsCsv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
@@ -301,7 +301,7 @@ public sealed class SqliteStatsService : IStatsService {
             FROM frames ORDER BY captured_utc ASC;
             """;
         var ms = new MemoryStream();
-        var writer = new StreamWriter(ms, new UTF8Encoding(false), leaveOpen: true);
+        await using var writer = new StreamWriter(ms, new UTF8Encoding(false), leaveOpen: true);
         await writer.WriteLineAsync(
             "id,session_id,target_name,frame_type,filter_name,exposure_seconds,gain,captured_utc,hfr,star_count,eccentricity,guiding_rms_arcsec,snr_estimate,rating");
         await using var reader = await cmd.ExecuteReaderAsync(ct);
@@ -311,15 +311,15 @@ public sealed class SqliteStatsService : IStatsService {
                 reader.GetString(1),
                 CsvEscape(reader.GetString(2)),
                 reader.GetString(3),
-                CsvEscape(reader.IsDBNull(4) ? "" : reader.GetString(4)),
+                CsvEscape(await reader.IsDBNullAsync(4, ct) ? "" : reader.GetString(4)),
                 reader.GetInt32(5).ToString(CultureInfo.InvariantCulture),
                 reader.GetInt32(6).ToString(CultureInfo.InvariantCulture),
                 reader.GetString(7),
-                reader.IsDBNull(8) ? "" : reader.GetDouble(8).ToString("G", CultureInfo.InvariantCulture),
-                reader.IsDBNull(9) ? "" : reader.GetInt32(9).ToString(CultureInfo.InvariantCulture),
-                reader.IsDBNull(10) ? "" : reader.GetDouble(10).ToString("G", CultureInfo.InvariantCulture),
-                reader.IsDBNull(11) ? "" : reader.GetDouble(11).ToString("G", CultureInfo.InvariantCulture),
-                reader.IsDBNull(12) ? "" : reader.GetDouble(12).ToString("G", CultureInfo.InvariantCulture),
+                await reader.IsDBNullAsync(8, ct) ? "" : reader.GetDouble(8).ToString("G", CultureInfo.InvariantCulture),
+                await reader.IsDBNullAsync(9, ct) ? "" : reader.GetInt32(9).ToString(CultureInfo.InvariantCulture),
+                await reader.IsDBNullAsync(10, ct) ? "" : reader.GetDouble(10).ToString("G", CultureInfo.InvariantCulture),
+                await reader.IsDBNullAsync(11, ct) ? "" : reader.GetDouble(11).ToString("G", CultureInfo.InvariantCulture),
+                await reader.IsDBNullAsync(12, ct) ? "" : reader.GetDouble(12).ToString("G", CultureInfo.InvariantCulture),
                 reader.GetInt32(13).ToString(CultureInfo.InvariantCulture)));
         }
         await writer.FlushAsync(ct);
@@ -327,8 +327,11 @@ public sealed class SqliteStatsService : IStatsService {
         return (ms, $"openastroara-frames-{DateTime.UtcNow:yyyyMMdd-HHmmss}.csv");
     }
 
+    private static readonly System.Buffers.SearchValues<char> CsvSpecialChars =
+        System.Buffers.SearchValues.Create(",\"\n");
+
     private static string CsvEscape(string field) {
-        if (field.IndexOfAny(new[] { ',', '"', '\n' }) < 0) return field;
-        return "\"" + field.Replace("\"", "\"\"") + "\"";
+        if (field.AsSpan().IndexOfAny(CsvSpecialChars) < 0) return field;
+        return "\"" + field.Replace("\"", "\"\"", StringComparison.Ordinal) + "\"";
     }
 }

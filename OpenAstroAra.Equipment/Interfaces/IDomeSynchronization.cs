@@ -12,8 +12,8 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Core.Enum;
 using OpenAstroAra.Astrometry;
+using OpenAstroAra.Core.Enums;
 using System;
 
 namespace OpenAstroAra.Equipment.Interfaces {

@@ -20,7 +20,7 @@ using System.IO;
 
 namespace OpenAstroAra.PlateSolving.Solvers {
 
-    internal class Platesolve2Solver : CLISolver {
+    internal sealed class Platesolve2Solver : CLISolver {
 
         public Platesolve2Solver(string executableLocation)
             : base(executableLocation) {
@@ -36,12 +36,14 @@ namespace OpenAstroAra.PlateSolving.Solvers {
             string outputFilePath,
             PlateSolveParameter parameter,
             PlateSolveImageProperties imageProperties) {
+            var coordinates = parameter.Coordinates
+                ?? throw new ArgumentException("PlateSolve2 requires hint coordinates.", nameof(parameter));
             var args = new string[] {
-                    AstroUtil.ToRadians(parameter.Coordinates.RADegrees).ToString(CultureInfo.InvariantCulture),
-                    AstroUtil.ToRadians(parameter.Coordinates.Dec).ToString(CultureInfo.InvariantCulture),
+                    AstroUtil.ToRadians(coordinates.RADegrees).ToString(CultureInfo.InvariantCulture),
+                    AstroUtil.ToRadians(coordinates.Dec).ToString(CultureInfo.InvariantCulture),
                     AstroUtil.ToRadians(imageProperties.FoVW).ToString(CultureInfo.InvariantCulture),
                     AstroUtil.ToRadians(imageProperties.FoVH).ToString(CultureInfo.InvariantCulture),
-                    parameter.Regions.ToString(),
+                    parameter.Regions.ToString(CultureInfo.InvariantCulture),
                     imageFilePath,
                     "0"
             };
@@ -61,7 +63,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
             PlateSolveResult result = new PlateSolveResult() { Success = false };
             if (File.Exists(outputFilePath)) {
                 using (var s = new StreamReader(outputFilePath)) {
-                    string line;
+                    string? line;
                     int linenr = 0;
                     while ((line = s.ReadLine()) != null) {
                         string[] resultArr = line.Split(',');
@@ -72,7 +74,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
                                 if (resultArr.Length == 5) {
                                     /* workaround for when decimal separator is comma instead of point.
                                      won't work when result contains even numbers tho... */
-                                    status = int.Parse(resultArr[4]);
+                                    status = int.Parse(resultArr[4], CultureInfo.InvariantCulture);
                                     if (status != 1) {
                                         /* error */
                                         result.Success = false;
@@ -82,7 +84,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
                                     ra = double.Parse(resultArr[0] + "." + resultArr[1], CultureInfo.InvariantCulture);
                                     dec = double.Parse(resultArr[2] + "." + resultArr[3], CultureInfo.InvariantCulture);
                                 } else {
-                                    status = int.Parse(resultArr[2]);
+                                    status = int.Parse(resultArr[2], CultureInfo.InvariantCulture);
                                     if (status != 1) {
                                         /* error */
                                         result.Success = false;
@@ -107,7 +109,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
                                     result.PositionAngle = 360 - double.Parse(resultArr[2] + "." + resultArr[3], CultureInfo.InvariantCulture);
 
                                     result.Flipped = (double.Parse(resultArr[4] + "." + resultArr[5], CultureInfo.InvariantCulture) >= 0);
-                                    
+
                                 } else {
                                     result.Pixscale = double.Parse(resultArr[0], CultureInfo.InvariantCulture);
                                     result.PositionAngle = 360 - double.Parse(resultArr[1], CultureInfo.InvariantCulture);
@@ -134,7 +136,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
         }
 
         protected override string GetOutputPath(string imageFilePath) {
-            return Path.Combine(Path.GetDirectoryName(imageFilePath), Path.GetFileNameWithoutExtension(imageFilePath)) + ".apm";
+            return Path.Combine(Path.GetDirectoryName(imageFilePath) ?? string.Empty, Path.GetFileNameWithoutExtension(imageFilePath)) + ".apm";
         }
     }
 }

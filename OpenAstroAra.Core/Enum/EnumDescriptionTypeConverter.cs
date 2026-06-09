@@ -17,7 +17,7 @@ using System.ComponentModel;
 using System.Globalization;
 using System.Reflection;
 
-namespace OpenAstroAra.Core.Enum {
+namespace OpenAstroAra.Core.Enums {
 
     /// <summary>
     /// TypeConverter that maps an enum value to the string in its
@@ -30,7 +30,7 @@ namespace OpenAstroAra.Core.Enum {
 
         public EnumDescriptionTypeConverter(Type type) : base(type) { }
 
-        public override object ConvertTo(ITypeDescriptorContext context, CultureInfo culture, object value, Type destinationType) {
+        public override object? ConvertTo(ITypeDescriptorContext? context, CultureInfo? culture, object? value, Type destinationType) {
             if (destinationType == typeof(string) && value is System.Enum enumValue) {
                 var name = enumValue.ToString();
                 var field = enumValue.GetType().GetField(name);

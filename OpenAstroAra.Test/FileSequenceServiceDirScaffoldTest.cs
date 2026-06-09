@@ -32,7 +32,7 @@ namespace OpenAstroAra.Test {
 
         [TearDown]
         public void TearDown() {
-            try { Directory.Delete(_tempDir, recursive: true); } catch { /* best-effort */ }
+            try { Directory.Delete(_tempDir, recursive: true); } catch (System.IO.IOException) { } catch (System.UnauthorizedAccessException) { }
         }
 
         [Test]

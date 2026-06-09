@@ -41,27 +41,27 @@ namespace OpenAstroAra.Core.Utility {
     /// the substitutor walks the raw JSON text and replaces matches.
     /// Unknown tokens left intact for the caller to surface as warnings.
     /// </summary>
+    /// <summary>
+    /// Canonical token names recognized by <see cref="SequenceTemplateVariables"/>.
+    /// Caller may pass values for any subset; missing tokens are left as
+    /// <c>{{name}}</c> in the output so unresolved references surface during validation.
+    /// </summary>
+    public static class TokenNames {
+        public const string TargetName = "target_name";
+        public const string TargetRa = "target_ra";
+        public const string TargetDec = "target_dec";
+        public const string TargetRotation = "target_rotation";
+        public const string IntegrationMinutes = "integration_minutes";
+        public const string FramesPerFilter = "frames_per_filter";
+        public const string FilterSet = "filter_set";
+
+        public static readonly IReadOnlySet<string> All = new HashSet<string> {
+            TargetName, TargetRa, TargetDec, TargetRotation,
+            IntegrationMinutes, FramesPerFilter, FilterSet,
+        };
+    }
+
     public static class SequenceTemplateVariables {
-
-        /// <summary>
-        /// Canonical token names recognized by the substitutor. Caller may
-        /// pass values for any subset; missing tokens are left as <c>{{name}}</c>
-        /// in the output so unresolved references surface during validation.
-        /// </summary>
-        public static class TokenNames {
-            public const string TargetName = "target_name";
-            public const string TargetRa = "target_ra";
-            public const string TargetDec = "target_dec";
-            public const string TargetRotation = "target_rotation";
-            public const string IntegrationMinutes = "integration_minutes";
-            public const string FramesPerFilter = "frames_per_filter";
-            public const string FilterSet = "filter_set";
-
-            public static readonly IReadOnlySet<string> All = new HashSet<string> {
-                TargetName, TargetRa, TargetDec, TargetRotation,
-                IntegrationMinutes, FramesPerFilter, FilterSet,
-            };
-        }
 
         // {{token_name}} — letters/digits/underscores between the braces.
         // Whitespace around the token is permitted ({{ token_name }}) and
@@ -112,7 +112,7 @@ namespace OpenAstroAra.Core.Utility {
                     case '\b': sb.Append("\\b"); break;
                     case '\f': sb.Append("\\f"); break;
                     default:
-                        if (ch < 0x20) sb.Append($"\\u{(int)ch:X4}");
+                        if (ch < 0x20) sb.Append(System.Globalization.CultureInfo.InvariantCulture, $"\\u{(int)ch:X4}");
                         else sb.Append(ch);
                         break;
                 }

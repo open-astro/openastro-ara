@@ -6,9 +6,9 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace OpenAstroAra.Core.Enum {
+namespace OpenAstroAra.Core.Enums {
     [TypeConverter(typeof(EnumDescriptionTypeConverter))]
-    public enum FITSCompressionTypeEnum {
+    public enum FITSCompressionType {
 
         [Description("LblNone")]
         NONE = 0,

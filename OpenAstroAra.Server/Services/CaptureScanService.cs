@@ -13,6 +13,7 @@
 #endregion "copyright"
 
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using OpenAstroAra.Server.Contracts;
 
 namespace OpenAstroAra.Server.Services;
@@ -38,15 +39,15 @@ namespace OpenAstroAra.Server.Services;
 /// from the §38 sequence orchestrator + §72 FITS writes start populating
 /// the directory; from that point this scan auto-heals across crashes.
 /// </summary>
-public sealed class CaptureScanService {
+public sealed partial class CaptureScanService {
     private readonly IProfileStore _profile;
     private readonly IAraDatabase _db;
-    private readonly ILogger<CaptureScanService>? _logger;
+    private readonly ILogger<CaptureScanService> _logger;
 
     public CaptureScanService(IProfileStore profile, IAraDatabase db, ILogger<CaptureScanService>? logger) {
         _profile = profile;
         _db = db;
-        _logger = logger;
+        _logger = logger ?? NullLogger<CaptureScanService>.Instance;
     }
 
     /// <summary>
@@ -57,18 +58,18 @@ public sealed class CaptureScanService {
     public async Task RunAsync(CancellationToken ct) {
         var savePath = _profile.GetStorageSettings().SaveDirectory;
         if (string.IsNullOrEmpty(savePath)) {
-            _logger?.LogInformation("§28.8 scan skipped: save path empty");
+            LogScanSkippedEmptyPath();
             return;
         }
         if (!Directory.Exists(savePath)) {
             // Captures dir doesn't exist yet on fresh installs — that's
             // fine, we'll find it when the first capture writes. Don't
             // queue a critical notification for this case.
-            _logger?.LogDebug("§28.8 scan skipped: save path {Path} does not exist", savePath);
+            LogScanSkippedMissingPath(savePath);
             return;
         }
         if (!IsWritable(savePath)) {
-            _logger?.LogWarning("§28.8 scan: save path {Path} is not writable; storage.unavailable would queue here", savePath);
+            LogScanPathNotWritable(savePath);
             return;
         }
 
@@ -76,9 +77,7 @@ public sealed class CaptureScanService {
         var orphansRecovered = await RecoverOrphanFitsAsync(savePath, ct);
 
         if (tmpSwept > 0 || orphansRecovered > 0) {
-            _logger?.LogInformation(
-                "§28.8 scan complete — swept {TmpCount} stale .tmp file(s), recovered {Orphans} orphan FITS",
-                tmpSwept, orphansRecovered);
+            LogScanComplete(tmpSwept, orphansRecovered);
         }
     }
 
@@ -88,7 +87,7 @@ public sealed class CaptureScanService {
             File.WriteAllText(probe, "");
             File.Delete(probe);
             return true;
-        } catch {
+        } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException) {
             return false;
         }
     }
@@ -102,10 +101,10 @@ public sealed class CaptureScanService {
                 if (info.LastWriteTimeUtc < threshold) {
                     info.Delete();
                     swept++;
-                    _logger?.LogDebug("§28.8 swept stale temp: {Path}", tmp);
+                    LogSweptStaleTemp(tmp);
                 }
             } catch (IOException ex) {
-                _logger?.LogDebug(ex, "§28.8 could not delete stale temp {Path}", tmp);
+                LogCouldNotDeleteTemp(ex, tmp);
             }
         }
         return swept;
@@ -119,9 +118,9 @@ public sealed class CaptureScanService {
             try {
                 var inserted = await TryRecoverAsync(fitsPath, seenIds, ct);
                 if (inserted) recovered++;
-            } catch (Exception ex) {
+            } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or Microsoft.Data.Sqlite.SqliteException) {
                 // Single bad file shouldn't abort the whole scan.
-                _logger?.LogDebug(ex, "§28.8 could not recover {Path}", fitsPath);
+                LogCouldNotRecover(ex, fitsPath);
             }
         }
         return recovered;
@@ -158,7 +157,7 @@ public sealed class CaptureScanService {
             (width, height) = fits.GetDimensions();
             fileSize = new FileInfo(fitsPath).Length;
         } catch (OpenAstroAra.Fits.FitsException ex) {
-            _logger?.LogDebug(ex, "§28.8 skip non-FITS or corrupt: {Path}", fitsPath);
+            LogSkipCorruptFits(ex, fitsPath);
             return false;
         }
 
@@ -205,7 +204,7 @@ public sealed class CaptureScanService {
         insert.Parameters.AddWithValue("$filter", (object?)filter ?? DBNull.Value);
         insert.Parameters.AddWithValue("$exposure", exposureSec);
         insert.Parameters.AddWithValue("$gain", gain);
-        insert.Parameters.AddWithValue("$offset", (object?)offset ?? DBNull.Value);
+        insert.Parameters.AddWithValue("$offset", DbValue(offset));
         insert.Parameters.AddWithValue("$temp", temp);
         insert.Parameters.AddWithValue("$captured_utc", capturedUtc.ToString("O"));
         insert.Parameters.AddWithValue("$file_path", fitsPath);
@@ -213,13 +212,11 @@ public sealed class CaptureScanService {
         insert.Parameters.AddWithValue("$width", width);
         insert.Parameters.AddWithValue("$height", height);
         insert.Parameters.AddWithValue("$bit_depth", Math.Abs(bitDepth));
-        insert.Parameters.AddWithValue("$hfr", (object?)hfr ?? DBNull.Value);
-        insert.Parameters.AddWithValue("$stars", (object?)stars ?? DBNull.Value);
+        insert.Parameters.AddWithValue("$hfr", DbValue(hfr));
+        insert.Parameters.AddWithValue("$stars", DbValue(stars));
         await insert.ExecuteNonQueryAsync(ct);
 
-        _logger?.LogInformation(
-            "§28.8 recovered orphan FITS: {Path} (target={Target}, frame_type={FrameType}, exposure={Exposure}s)",
-            fitsPath, target, frameType, exposureSec);
+        LogRecoveredOrphan(fitsPath, target, frameType, exposureSec);
         return true;
     }
 
@@ -254,6 +251,12 @@ public sealed class CaptureScanService {
         }
     }
 
+    // Boxes a nullable value type for an ADO.NET parameter, mapping null to DBNull.
+    // (A direct '(object?)value ?? DBNull.Value' trips CA1508, which does not model
+    // Nullable<T> boxing returning null.)
+    private static object DbValue<T>(T? value) where T : struct =>
+        value.HasValue ? value.Value : DBNull.Value;
+
     private static string? LookupHeader(IReadOnlyDictionary<string, string> headers, string key) =>
         headers.TryGetValue(key, out var v) && !string.IsNullOrWhiteSpace(v) ? v : null;
 
@@ -285,4 +288,35 @@ public sealed class CaptureScanService {
             "DARK FLAT" => "darkflat",
             _ => "light",
         };
+
+    #region LoggerMessage delegates (CA1848)
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "§28.8 scan skipped: save path empty")]
+    private partial void LogScanSkippedEmptyPath();
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "§28.8 scan skipped: save path {Path} does not exist")]
+    private partial void LogScanSkippedMissingPath(string path);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "§28.8 scan: save path {Path} is not writable; storage.unavailable would queue here")]
+    private partial void LogScanPathNotWritable(string path);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "§28.8 scan complete — swept {TmpCount} stale .tmp file(s), recovered {Orphans} orphan FITS")]
+    private partial void LogScanComplete(int tmpCount, int orphans);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "§28.8 swept stale temp: {Path}")]
+    private partial void LogSweptStaleTemp(string path);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "§28.8 could not delete stale temp {Path}")]
+    private partial void LogCouldNotDeleteTemp(Exception ex, string path);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "§28.8 could not recover {Path}")]
+    private partial void LogCouldNotRecover(Exception ex, string path);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "§28.8 skip non-FITS or corrupt: {Path}")]
+    private partial void LogSkipCorruptFits(Exception ex, string path);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "§28.8 recovered orphan FITS: {Path} (target={Target}, frame_type={FrameType}, exposure={Exposure}s)")]
+    private partial void LogRecoveredOrphan(string path, string target, string frameType, int exposure);
+
+    #endregion
 }

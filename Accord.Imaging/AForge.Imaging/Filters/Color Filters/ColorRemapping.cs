@@ -1,17 +1,16 @@
 // AForge Image Processing Library
 // AForge.NET framework
 //
-// Copyright © Andrew Kirillov, 2005-2009
+// Copyright ï¿½ Andrew Kirillov, 2005-2009
 // andrew.kirillov@aforgenet.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
+    using AForge;
     using System;
     using System.Collections.Generic;
     using System.Drawing;
     using System.Drawing.Imaging;
-    using AForge;
 
     /// <summary>
     /// Color remapping.
@@ -45,8 +44,7 @@ namespace Accord.Imaging.Filters
     /// <img src="..\images\imaging\color_remapping.jpg" width="480" height="361" />
     /// </remarks>
     /// 
-    public class ColorRemapping : BaseInPlacePartialFilter
-    {
+    public class ColorRemapping : BaseInPlacePartialFilter {
         // color maps
         private byte[] redMap;
         private byte[] greenMap;
@@ -54,13 +52,12 @@ namespace Accord.Imaging.Filters
         private byte[] grayMap;
 
         // private format translation dictionary
-        private Dictionary<PixelFormat, PixelFormat> formatTranslations = new Dictionary<PixelFormat, PixelFormat>( );
+        private Dictionary<PixelFormat, PixelFormat> formatTranslations = new Dictionary<PixelFormat, PixelFormat>();
 
         /// <summary>
         /// Format translations dictionary.
         /// </summary>
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -73,14 +70,12 @@ namespace Accord.Imaging.Filters
         /// 
         /// <exception cref="ArgumentException">A map should be array with 256 value.</exception>
         /// 
-        public byte[] RedMap
-        {
+        public byte[] RedMap {
             get { return redMap; }
-            set
-            {
+            set {
                 // check the map
-                if ( ( value == null ) || ( value.Length != 256 ) )
-                    throw new ArgumentException( "A map should be array with 256 value." );
+                if ((value == null) || (value.Length != 256))
+                    throw new ArgumentException("A map should be array with 256 value.");
 
                 redMap = value;
             }
@@ -95,14 +90,12 @@ namespace Accord.Imaging.Filters
         /// 
         /// <exception cref="ArgumentException">A map should be array with 256 value.</exception>
         /// 
-        public byte[] GreenMap
-        {
+        public byte[] GreenMap {
             get { return greenMap; }
-            set
-            {
+            set {
                 // check the map
-                if ( ( value == null ) || ( value.Length != 256 ) )
-                    throw new ArgumentException( "A map should be array with 256 value." );
+                if ((value == null) || (value.Length != 256))
+                    throw new ArgumentException("A map should be array with 256 value.");
 
                 greenMap = value;
             }
@@ -117,14 +110,12 @@ namespace Accord.Imaging.Filters
         /// 
         /// <exception cref="ArgumentException">A map should be array with 256 value.</exception>
         /// 
-        public byte[] BlueMap
-        {
+        public byte[] BlueMap {
             get { return blueMap; }
-            set
-            {
+            set {
                 // check the map
-                if ( ( value == null ) || ( value.Length != 256 ) )
-                    throw new ArgumentException( "A map should be array with 256 value." );
+                if ((value == null) || (value.Length != 256))
+                    throw new ArgumentException("A map should be array with 256 value.");
 
                 blueMap = value;
             }
@@ -141,14 +132,12 @@ namespace Accord.Imaging.Filters
         /// 
         /// <exception cref="ArgumentException">A map should be array with 256 value.</exception>
         /// 
-        public byte[] GrayMap
-        {
+        public byte[] GrayMap {
             get { return grayMap; }
-            set
-            {
+            set {
                 // check the map
-                if ( ( value == null ) || ( value.Length != 256 ) )
-                    throw new ArgumentException( "A map should be array with 256 value." );
+                if ((value == null) || (value.Length != 256))
+                    throw new ArgumentException("A map should be array with 256 value.");
 
                 grayMap = value;
             }
@@ -161,23 +150,21 @@ namespace Accord.Imaging.Filters
         /// <remarks>Initializes the filter without any remapping. All
         /// pixel values are mapped to the same values.</remarks>
         /// 
-        public ColorRemapping( )
-        {
-            redMap      = new byte[256];
-            greenMap    = new byte[256];
-            blueMap     = new byte[256];
-            grayMap     = new byte[256];
+        public ColorRemapping() {
+            redMap = new byte[256];
+            greenMap = new byte[256];
+            blueMap = new byte[256];
+            grayMap = new byte[256];
 
             // fill the maps
-            for ( int i = 0; i < 256; i++ )
-            {
-                redMap[i] = greenMap[i] = blueMap[i] = grayMap[i] = (byte) i;
+            for (int i = 0; i < 256; i++) {
+                redMap[i] = greenMap[i] = blueMap[i] = grayMap[i] = (byte)i;
             }
 
             formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
-            formatTranslations[PixelFormat.Format24bppRgb]    = PixelFormat.Format24bppRgb;
-            formatTranslations[PixelFormat.Format32bppRgb]    = PixelFormat.Format32bppRgb;
-            formatTranslations[PixelFormat.Format32bppArgb]   = PixelFormat.Format32bppArgb;
+            formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format24bppRgb;
+            formatTranslations[PixelFormat.Format32bppRgb] = PixelFormat.Format32bppRgb;
+            formatTranslations[PixelFormat.Format32bppArgb] = PixelFormat.Format32bppArgb;
         }
 
         /// <summary>
@@ -188,11 +175,10 @@ namespace Accord.Imaging.Filters
         /// <param name="greenMap">Green map.</param>
         /// <param name="blueMap">Blue map.</param>
         /// 
-        public ColorRemapping( byte[] redMap, byte[] greenMap, byte[] blueMap ) : this( )
-        {
-            RedMap      = redMap;
-            GreenMap    = greenMap;
-            BlueMap     = blueMap;
+        public ColorRemapping(byte[] redMap, byte[] greenMap, byte[] blueMap) : this() {
+            RedMap = redMap;
+            GreenMap = greenMap;
+            BlueMap = blueMap;
         }
 
         /// <summary>
@@ -203,8 +189,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <remarks>This constructor is supposed for grayscale images.</remarks>
         /// 
-        public ColorRemapping( byte[] grayMap ) : this( )
-        {
+        public ColorRemapping(byte[] grayMap) : this() {
             GrayMap = grayMap;
         }
 
@@ -215,43 +200,35 @@ namespace Accord.Imaging.Filters
         /// <param name="image">Source image data.</param>
         /// <param name="rect">Image rectangle for processing by the filter.</param>
         ///
-        protected override unsafe void ProcessFilter( UnmanagedImage image, Rectangle rect )
-        {
-            int pixelSize = Image.GetPixelFormatSize( image.PixelFormat ) / 8;
+        protected override unsafe void ProcessFilter(UnmanagedImage image, Rectangle rect) {
+            int pixelSize = Image.GetPixelFormatSize(image.PixelFormat) / 8;
 
             // processing start and stop X,Y positions
-            int startX  = rect.Left;
-            int startY  = rect.Top;
-            int stopX   = startX + rect.Width;
-            int stopY   = startY + rect.Height;
-            int offset  = image.Stride - rect.Width * pixelSize;
+            int startX = rect.Left;
+            int startY = rect.Top;
+            int stopX = startX + rect.Width;
+            int stopY = startY + rect.Height;
+            int offset = image.Stride - rect.Width * pixelSize;
 
             // do the job
-            byte* ptr = (byte*) image.ImageData.ToPointer( );
+            byte* ptr = (byte*)image.ImageData.ToPointer();
 
             // allign pointer to the first pixel to process
-            ptr += ( startY * image.Stride + startX * pixelSize );
+            ptr += (startY * image.Stride + startX * pixelSize);
 
-            if ( image.PixelFormat == PixelFormat.Format8bppIndexed )
-            {
+            if (image.PixelFormat == PixelFormat.Format8bppIndexed) {
                 // grayscale image
-                for ( int y = startY; y < stopY; y++ )
-                {
-                    for ( int x = startX; x < stopX; x++, ptr++ )
-                    {
+                for (int y = startY; y < stopY; y++) {
+                    for (int x = startX; x < stopX; x++, ptr++) {
                         // gray
                         *ptr = grayMap[*ptr];
                     }
                     ptr += offset;
                 }
-            }
-            else
-            {
+            } else {
                 // RGB image
-                for ( int y = startY; y < stopY; y++ )
-                {
-                    for ( int x = startX; x < stopX; x++, ptr += pixelSize )
-                    {
+                for (int y = startY; y < stopY; y++) {
+                    for (int x = startX; x < stopX; x++, ptr += pixelSize) {
                         // red
                         ptr[RGB.R] = redMap[ptr[RGB.R]];
                         // green

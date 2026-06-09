@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -13,13 +13,13 @@
 #endregion "copyright"
 
 using OpenAstroAra.Core.Model;
+using OpenAstroAra.Core.Utility.Extensions;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
-using OpenAstroAra.Core.Utility.Extensions;
 
 namespace OpenAstroAra.Core.Utility.ExternalCommand {
 
@@ -41,7 +41,7 @@ namespace OpenAstroAra.Core.Utility.ExternalCommand {
                 string executableLocation = GetComandFromString(sequenceCompleteCommand);
                 string args = GetArgumentsFromString(sequenceCompleteCommand);
 
-                Process process = new Process();
+                using var process = new Process();
                 process.StartInfo.FileName = executableLocation;
                 process.StartInfo.UseShellExecute = true;
                 process.StartInfo.RedirectStandardOutput = false;
@@ -75,7 +75,11 @@ namespace OpenAstroAra.Core.Utility.ExternalCommand {
                 process.ErrorDataReceived -= errorDataReceivedCallback;
 
                 return process.ExitCode == 0;
-            } catch (Exception e) {
+            } catch (System.ComponentModel.Win32Exception e) {
+                Logger.Error($"Error running command {sequenceCompleteCommand}:", e);
+            } catch (InvalidOperationException e) {
+                Logger.Error($"Error running command {sequenceCompleteCommand}:", e);
+            } catch (IOException e) {
                 Logger.Error($"Error running command {sequenceCompleteCommand}:", e);
             } finally {
                 StatusUpdate(src, "");
@@ -95,13 +99,14 @@ namespace OpenAstroAra.Core.Utility.ExternalCommand {
                 string cmd = GetComandFromString(commandLine);
                 FileInfo fi = new FileInfo(cmd);
                 return fi.Exists;
-            } catch (Exception e) { Logger.Trace(e.Message); }
+            } catch (ArgumentException e) { Logger.Trace(e.Message); }
+            catch (NotSupportedException e) { Logger.Trace(e.Message); }
             return false;
         }
 
         public static string GetComandFromString(string commandLine) {
             //if you enclose the command (with spaces) in quotes, then you must remove them
-            return @"" + ParseArguments(commandLine)[0].Replace("\"", "").Trim();
+            return @"" + ParseArguments(commandLine)[0].Replace("\"", "", StringComparison.Ordinal).Trim();
         }
 
         public static string GetArgumentsFromString(string commandLine) {
@@ -109,7 +114,7 @@ namespace OpenAstroAra.Core.Utility.ExternalCommand {
             if (args.Length > 1) {
                 return string.Join(" ", new List<string>(args).GetRange(1, args.Length - 1).ToArray());
             }
-            return null;
+            return string.Empty;
         }
 
         public static string[] ParseArguments(string commandLine) {

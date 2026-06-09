@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
     using Newtonsoft.Json;
     using OpenAstroAra.Astrometry;
-    using OpenAstroAra.Core.Enum;
+    using OpenAstroAra.Core.Enums;
     using OpenAstroAra.Core.Utility;
     using OpenAstroAra.Profile.Interfaces;
     using OpenAstroAra.Sequencer.Conditions;
@@ -20,16 +20,16 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
 
         private IList<string> issues = new List<string>();
 
-        public LoopForAltitudeBase(IProfileService profileService, bool useCustomHorizon) {
+        protected LoopForAltitudeBase(IProfileService profileService, bool useCustomHorizon) {
             ProfileService = profileService;
             Data = new WaitLoopData(profileService, useCustomHorizon, CalculateExpectedTime, GetType().Name);
-            ConditionWatchdog = new ConditionWatchdog(Interrupt, TimeSpan.FromSeconds(5)); 
+            ConditionWatchdog = new ConditionWatchdog(Interrupt, TimeSpan.FromSeconds(5));
         }
 
-       [JsonProperty]
+        [JsonProperty]
         public WaitLoopData Data { get; set; }
         public IProfileService ProfileService { get; set; }
- 
+
         [OnDeserialized]
         public void OnDeserialized(StreamingContext context) {
             RunWatchdogIfInsideSequenceRoot();
@@ -50,11 +50,11 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
             }
         }
 
-        public string InterruptReason { get; set; }
+        public string InterruptReason { get; set; } = string.Empty;
 
         public IList<string> Issues {
             get => issues;
-            set {
+            private protected set {
                 issues = value;
                 RaisePropertyChanged();
             }
@@ -64,51 +64,37 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
 
         #region Obsolete Migration Properties
 
+        // The following write-only setters exist solely to migrate legacy JSON sequences whose
+        // values used to live directly on this condition before they moved onto WaitLoopData (Data).
+        // The JSON property names below are a serialization wire-contract for those old sequences
+        // and must remain stable regardless of any C# symbol names.
+
         [JsonProperty(propertyName: "Comparator")]
-        private ComparisonOperatorEnum DeprecatedComparator {
+        private ComparisonOperator DeprecatedComparator {
             set {
                 switch (value) {
-                    case ComparisonOperatorEnum.GREATER_THAN_OR_EQUAL:
-                        value = ComparisonOperatorEnum.GREATER_THAN;
+                    case ComparisonOperator.GreaterThanOrEqual:
+                        value = ComparisonOperator.GreaterThan;
                         break;
-                    case ComparisonOperatorEnum.LESS_THAN_OR_EQUAL:
-                        value = ComparisonOperatorEnum.LESS_THAN;
+                    case ComparisonOperator.LessThanOrEqual:
+                        value = ComparisonOperator.LessThan;
                         break;
                 }
                 Data.Comparator = value;
             }
         }
-        [Obsolete]
-        [JsonIgnore]
-        public ComparisonOperatorEnum Comparator { get; set; }
 
         [JsonProperty(propertyName: "UserMoonAltitude")]
         private double DeprecatedUserMoonAltitude { set => Data.Offset = value; }
-        [Obsolete]
-        [JsonIgnore]
-        public double UserMoonAltitude { get; set; }
 
         [JsonProperty(propertyName: "UserSunAltitude")]
         private double DeprecatedUserSunAltitude { set => Data.Offset = value; }
-        [Obsolete]
-        [JsonIgnore]
-        public double UserSunAltitude { get; set; }
 
         [JsonProperty(propertyName: "AltitudeOffset")]
         private double DeprecatedAltitudeOffset { set => Data.Offset = value; }
 
-        [Obsolete]
-        [JsonIgnore]
-        public double AltitudeOffset { get; set; }
-
         [JsonProperty(propertyName: "Coordinates")]
         private InputCoordinates DeprecatedCoordinates { set => Data.Coordinates = value; }
-
-        [Obsolete]
-        [JsonIgnore]
-        public InputCoordinates Coordinates { get; set; }
         #endregion
     }
 }
-
-

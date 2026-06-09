@@ -23,7 +23,7 @@ using System.Threading.Tasks;
 using System.Timers;
 namespace OpenAstroAra.Astrometry {
 
-    class DeepSkyObjectDailyRefresher {
+    internal sealed class DeepSkyObjectDailyRefresher : IDisposable {
         private static readonly DeepSkyObjectDailyRefresher instance = new DeepSkyObjectDailyRefresher();
 
         private DeepSkyObjectDailyRefresher() {
@@ -36,8 +36,12 @@ namespace OpenAstroAra.Astrometry {
         public static DeepSkyObjectDailyRefresher Instance => instance;
 
 
-        private List<WeakReference<DeepSkyObject>> DeepSkyObjects = new List<WeakReference<DeepSkyObject>>();
-        private Timer ReferenceDateTimer = null;
+        private readonly List<WeakReference<DeepSkyObject>> DeepSkyObjects = new List<WeakReference<DeepSkyObject>>();
+        private readonly Timer? ReferenceDateTimer;
+
+        public void Dispose() {
+            ReferenceDateTimer?.Dispose();
+        }
         private DateTime LastReferenceDate = NighttimeCalculator.GetReferenceDate(DateTime.Now);
 
         /// <summary>
@@ -50,7 +54,9 @@ namespace OpenAstroAra.Astrometry {
             }
 
         }
-        private void OnTimedEvent(object source, ElapsedEventArgs e) {
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "System.Timers.Timer silently swallows any exception that escapes an Elapsed handler (.NET 5+), so this background daily-refresh handler MUST catch everything to guarantee the error is logged. Narrowing the catch would let an unexpected exception vanish with no trace. CA1031 sanctions general catches at such log-and-continue boundaries.")]
+        private void OnTimedEvent(object? source, ElapsedEventArgs e) {
             lock (DeepSkyObjects) {
                 try {
 
@@ -63,7 +69,7 @@ namespace OpenAstroAra.Astrometry {
                     if (referenceDate != LastReferenceDate) {
                         foreach (WeakReference<DeepSkyObject> wr in DeepSkyObjects) {
                             // Ignore weak references that are no longer valid
-                            if (wr != null && wr.TryGetTarget(out DeepSkyObject target)) {
+                            if (wr != null && wr.TryGetTarget(out DeepSkyObject? target)) {
                                 // If the target's reference date is our previous date, it's updatable.  Otherwise, it could
                                 // be for future planning or historical something or other, in which case we do nothing
                                 if (target.ReferenceDate == LastReferenceDate) {
@@ -78,13 +84,13 @@ namespace OpenAstroAra.Astrometry {
                     }
 
                     // Prune the list of weak references
-                    DeepSkyObjects.RemoveAll(i => i == null || !i.TryGetTarget(out DeepSkyObject _));
+                    DeepSkyObjects.RemoveAll(i => i == null || !i.TryGetTarget(out DeepSkyObject? _));
 
                     if (updated != 0 || count != DeepSkyObjects.Count) {
                         Logger.Debug($"{nameof(DeepSkyObjectDailyRefresher)} -- Updated: {updated}; Pruned: {(count - DeepSkyObjects.Count)} / {count}");
 
                     }
-                } catch(Exception ex) {
+                } catch (Exception ex) {
                     Logger.Error(ex);
                 }
             }
@@ -92,21 +98,19 @@ namespace OpenAstroAra.Astrometry {
     }
 
     public class DeepSkyObject : SkyObjectBase {
-        public DeepSkyObject(string id, Coordinates coords,CustomHorizon customHorizon)
+        public DeepSkyObject(string id, Coordinates coords, CustomHorizon? customHorizon)
             : this(id, coords, null as Func<SkyObjectBase, Task<byte[]>>, customHorizon) {
         }
-        public DeepSkyObject(string id, Coordinates coords, string imageRepository, CustomHorizon customHorizon)
+        public DeepSkyObject(string id, Coordinates coords, string imageRepository, CustomHorizon? customHorizon)
             : this(id, coords, null as Func<SkyObjectBase, Task<byte[]>>, customHorizon) {
         }
 
-        public DeepSkyObject(string id, Coordinates coords, Func<SkyObjectBase, Task<byte[]>> imageFactory, CustomHorizon customHorizon)
+        public DeepSkyObject(string id, Coordinates coords, Func<SkyObjectBase, Task<byte[]>>? imageFactory, CustomHorizon? customHorizon)
             : base(id, imageFactory, customHorizon) {
             _coordinates = coords;
             Moon = new MoonInfo(_coordinates);
             DeepSkyObjectDailyRefresher.Instance.Register(this);
         }
-
-        public DateTime ReferenceDate { get => _referenceDate; set => _referenceDate = value; }
 
         public MoonInfo Moon { get; private set; }
 
@@ -154,26 +158,26 @@ namespace OpenAstroAra.Astrometry {
                 return;
             }
 
-            var start = _referenceDate;
+            var start = ReferenceDate;
 
             // Do this every time in case reference date has changed
-            Moon.SetReferenceDateAndObserver(_referenceDate, new ObserverInfo { Latitude = _latitude, Longitude = _longitude });
+            Moon.SetReferenceDateAndObserver(ReferenceDate, new ObserverInfo { Latitude = Latitude, Longitude = Longitude });
 
             Altitudes.Clear();
             Horizon.Clear();
 
-            var siderealTime = AstroUtil.GetLocalSiderealTime(start, _longitude);
+            var siderealTime = AstroUtil.GetLocalSiderealTime(start, Longitude);
             var hourAngle = AstroUtil.GetHourAngle(siderealTime, Coordinates.RA);
 
             for (double angle = hourAngle; angle < hourAngle + 24; angle += 0.1) {
                 var degAngle = AstroUtil.HoursToDegrees(angle);
-                var altitude = AstroUtil.GetAltitude(degAngle, _latitude, Coordinates.Dec);
-                var azimuth = AstroUtil.GetAzimuth(degAngle, altitude, _latitude, Coordinates.Dec);
+                var altitude = AstroUtil.GetAltitude(degAngle, Latitude, Coordinates.Dec);
+                var azimuth = AstroUtil.GetAzimuth(degAngle, altitude, Latitude, Coordinates.Dec);
 
                 Altitudes.Add(new DataPoint(DateTimeAxis.ToDouble(start), altitude));
 
-                if (customHorizon != null) {
-                    var horizonAltitude = customHorizon.GetAltitude(azimuth);
+                if (CustomHorizon != null) {
+                    var horizonAltitude = CustomHorizon.GetAltitude(azimuth);
                     Horizon.Add(new DataPoint(DateTimeAxis.ToDouble(start), horizonAltitude));
                 }
 
@@ -182,7 +186,7 @@ namespace OpenAstroAra.Astrometry {
 
             MaxAltitude = Altitudes.OrderByDescending((x) => x.Y).FirstOrDefault();
 
-            CalculateTransit(_latitude);
+            CalculateTransit(Latitude);
         }
 
         private void CalculateTransit(double latitude) {

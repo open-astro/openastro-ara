@@ -20,10 +20,9 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging
-{
-    using System.Drawing;
+namespace Accord.Imaging {
     using System;
+    using System.Drawing;
 
     /// <summary>
     ///   Represents an ordered pair of real x- and y-coordinates and scalar w that defines
@@ -53,8 +52,7 @@ namespace Accord.Imaging
     ///   </list></para>
     /// </remarks>
     /// 
-    public struct PointH
-    {
+    public struct PointH {
 
         private float px, py, pw;
 
@@ -62,8 +60,7 @@ namespace Accord.Imaging
         ///   The first coordinate.
         /// </summary>
         /// 
-        public float X
-        {
+        public float X {
             get { return px; }
             set { px = value; }
         }
@@ -72,8 +69,7 @@ namespace Accord.Imaging
         ///   The second coordinate.
         /// </summary>
         /// 
-        public float Y
-        {
+        public float Y {
             get { return py; }
             set { py = value; }
         }
@@ -82,8 +78,7 @@ namespace Accord.Imaging
         ///   The inverse scaling factor for X and Y.
         /// </summary>
         /// 
-        public float W
-        {
+        public float W {
             get { return pw; }
             set { pw = value; }
         }
@@ -92,8 +87,7 @@ namespace Accord.Imaging
         ///   Creates a new point.
         /// </summary>
         /// 
-        public PointH(float x, float y)
-        {
+        public PointH(float x, float y) {
             px = x;
             py = y;
             pw = 1;
@@ -103,8 +97,7 @@ namespace Accord.Imaging
         ///   Creates a new point.
         /// </summary>
         /// 
-        public PointH(double x, double y)
-        {
+        public PointH(double x, double y) {
             px = (float)x;
             py = (float)y;
             pw = 1;
@@ -114,8 +107,7 @@ namespace Accord.Imaging
         ///   Creates a new point.
         /// </summary>
         /// 
-        public PointH(float x, float y, float w)
-        {
+        public PointH(float x, float y, float w) {
             px = x;
             py = y;
             pw = w;
@@ -125,8 +117,7 @@ namespace Accord.Imaging
         ///   Creates a new point.
         /// </summary>
         /// 
-        public PointH(double x, double y, double w)
-        {
+        public PointH(double x, double y, double w) {
             px = (float)x;
             py = (float)y;
             pw = (float)w;
@@ -136,8 +127,7 @@ namespace Accord.Imaging
         ///   Transforms a point using a projection matrix.
         /// </summary>
         /// 
-        public void Transform(float[,] matrix)
-        {
+        public void Transform(float[,] matrix) {
             float x = matrix[0, 0] * px + matrix[0, 1] * py + matrix[0, 2] * pw;
             float y = matrix[1, 0] * px + matrix[1, 1] * py + matrix[1, 2] * pw;
             float w = matrix[2, 0] * px + matrix[2, 1] * py + matrix[2, 2] * pw;
@@ -151,8 +141,7 @@ namespace Accord.Imaging
         ///   Normalizes the point to have unit scale.
         /// </summary>
         /// 
-        public void Normalize()
-        {
+        public void Normalize() {
             px = px / pw;
             py = py / pw;
             pw = 1;
@@ -162,8 +151,7 @@ namespace Accord.Imaging
         ///   Gets whether this point is normalized (w = 1).
         /// </summary>
         /// 
-        public bool IsNormalized
-        {
+        public bool IsNormalized {
             get { return pw == 1f; }
         }
 
@@ -171,8 +159,7 @@ namespace Accord.Imaging
         ///   Gets whether this point is at infinity (w = 0).
         /// </summary>
         /// 
-        public bool IsAtInfinity
-        {
+        public bool IsAtInfinity {
             get { return pw == 0f; }
         }
 
@@ -180,8 +167,7 @@ namespace Accord.Imaging
         ///   Gets whether this point is at the origin.
         /// </summary>
         /// 
-        public bool IsEmpty
-        {
+        public bool IsEmpty {
             get { return px == 0 && py == 0; }
         }
 
@@ -189,8 +175,7 @@ namespace Accord.Imaging
         ///   Converts the point to a array representation.
         /// </summary>
         /// 
-        public double[] ToArray()
-        {
+        public double[] ToArray() {
             return new double[] { px, py, pw };
         }
 
@@ -198,8 +183,7 @@ namespace Accord.Imaging
         ///   Multiplication by scalar.
         /// </summary>
         /// 
-        public static PointH operator *(PointH point, float scalar)
-        {
+        public static PointH operator *(PointH point, float scalar) {
             return new PointH(scalar * point.X, scalar * point.Y, scalar * point.W);
         }
 
@@ -207,8 +191,7 @@ namespace Accord.Imaging
         ///   Multiplication by scalar.
         /// </summary>
         /// 
-        public static PointH operator *(float scalar, PointH point)
-        {
+        public static PointH operator *(float scalar, PointH point) {
             return point * scalar;
         }
 
@@ -216,8 +199,7 @@ namespace Accord.Imaging
         ///   Multiplies the point by a scalar.
         /// </summary>
         /// 
-        public PointH Multiply(float value)
-        {
+        public PointH Multiply(float value) {
             return this * value;
         }
 
@@ -225,8 +207,7 @@ namespace Accord.Imaging
         ///   Subtraction.
         /// </summary>
         /// 
-        public static PointH operator -(PointH left, PointH right)
-        {
+        public static PointH operator -(PointH left, PointH right) {
             return new PointH(left.X - right.X, left.Y - right.Y, left.W - right.W);
         }
 
@@ -234,8 +215,7 @@ namespace Accord.Imaging
         ///   Subtracts the values of two points.
         /// </summary>
         /// 
-        public PointH Subtract(PointH value)
-        {
+        public PointH Subtract(PointH value) {
             return this - value;
         }
 
@@ -243,8 +223,7 @@ namespace Accord.Imaging
         ///   Addition.
         /// </summary>
         /// 
-        public static PointH operator +(PointH left, PointH right)
-        {
+        public static PointH operator +(PointH left, PointH right) {
             return new PointH(left.X + right.X, left.Y + right.Y, left.W + right.W);
         }
 
@@ -252,8 +231,7 @@ namespace Accord.Imaging
         ///   Add the values of two points.
         /// </summary>
         /// 
-        public PointH Add(PointH value)
-        {
+        public PointH Add(PointH value) {
             return this + value;
         }
 
@@ -261,8 +239,7 @@ namespace Accord.Imaging
         ///   Equality.
         /// </summary>
         /// 
-        public static bool operator ==(PointH left, PointH right)
-        {
+        public static bool operator ==(PointH left, PointH right) {
             return (left.px / left.pw == right.px / right.pw && left.py / left.pw == right.py / right.pw);
         }
 
@@ -270,8 +247,7 @@ namespace Accord.Imaging
         ///   Inequality
         /// </summary>
         /// 
-        public static bool operator !=(PointH left, PointH right)
-        {
+        public static bool operator !=(PointH left, PointH right) {
             return (left.px / left.pw != right.px / right.pw
                 || left.py / left.pw != right.py / right.pw);
         }
@@ -280,8 +256,7 @@ namespace Accord.Imaging
         ///   PointF Conversion.
         /// </summary>
         /// 
-        public static implicit operator PointF(PointH point)
-        {
+        public static implicit operator PointF(PointH point) {
             return new PointF((float)(point.px / point.pw), (float)(point.py / point.pw));
         }
 
@@ -289,8 +264,7 @@ namespace Accord.Imaging
         ///   Converts to a Integer point by computing the ceiling of the point coordinates. 
         /// </summary>
         /// 
-        public static Point Ceiling(PointH point)
-        {
+        public static Point Ceiling(PointH point) {
             return new Point(
                 (int)System.Math.Ceiling(point.px / point.pw),
                 (int)System.Math.Ceiling(point.py / point.pw));
@@ -300,8 +274,7 @@ namespace Accord.Imaging
         ///   Converts to a Integer point by rounding the point coordinates. 
         /// </summary>
         /// 
-        public static Point Round(PointH point)
-        {
+        public static Point Round(PointH point) {
             return new Point(
                 (int)System.Math.Round(point.px / point.pw),
                 (int)System.Math.Round(point.py / point.pw));
@@ -311,8 +284,7 @@ namespace Accord.Imaging
         ///   Converts to a Integer point by truncating the point coordinates. 
         /// </summary>
         /// 
-        public static Point Truncate(PointH point)
-        {
+        public static Point Truncate(PointH point) {
             return new Point(
                 (int)System.Math.Truncate(point.px / point.pw),
                 (int)System.Math.Truncate(point.py / point.pw));
@@ -322,10 +294,8 @@ namespace Accord.Imaging
         ///   Compares two objects for equality.
         /// </summary>
         /// 
-        public override bool Equals(object obj)
-        {
-            if (obj is PointH)
-            {
+        public override bool Equals(object obj) {
+            if (obj is PointH) {
                 PointH p = (PointH)obj;
                 if (px / pw == p.px / p.pw &&
                     py / pw == p.py / p.pw)
@@ -339,8 +309,7 @@ namespace Accord.Imaging
         ///   Returns the hash code for this instance.
         /// </summary>
         /// 
-        public override int GetHashCode()
-        {
+        public override int GetHashCode() {
             return px.GetHashCode() ^ py.GetHashCode() ^ pw.GetHashCode();
         }
 

@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -12,20 +12,20 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Astrometry;
+using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Core.Utility.TcpRaw;
-using OpenAstroAra.Profile.Interfaces;
-using System.Threading.Tasks;
-using System;
 using OpenAstroAra.Equipment.Exceptions;
 using OpenAstroAra.Equipment.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
+using System;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace OpenAstroAra.Equipment.Equipment.MyPlanetarium {
 
-    internal class C2A : IPlanetarium {
-        private string address;
+    internal sealed class C2A : IPlanetarium {
+        private string address = string.Empty;
         private int port;
 
         public C2A(IProfileService profileService) {
@@ -58,7 +58,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyPlanetarium {
 
                     return new DeepSkyObject(info[2], newCoordinates, string.Empty, null);
                 } else {
-                    throw new PlanetariumFailedToGetCoordinates();
+                    throw new PlanetariumFailedToGetCoordinatesException();
                 }
             } catch (Exception ex) {
                 Logger.Error(ex);
@@ -88,9 +88,9 @@ namespace OpenAstroAra.Equipment.Equipment.MyPlanetarium {
                         Elevation = 0
                     };
                 } else {
-                    throw new PlanetariumFailedToGetCoordinates();
+                    throw new PlanetariumFailedToGetCoordinatesException();
                 }
-            } catch(OperationCanceledException) {
+            } catch (OperationCanceledException) {
                 throw;
             } catch (Exception ex) {
                 Logger.Error(ex);

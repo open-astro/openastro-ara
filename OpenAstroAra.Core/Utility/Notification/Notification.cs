@@ -25,7 +25,7 @@ namespace OpenAstroAra.Core.Utility.Notification {
     // silently dropped (the WPF toast UI was removed in Phase 0.5p). [CallerXxx]
     // attributes are propagated so Logger captures the *original* call site (e.g.
     // ProfileService.cs:256) rather than this stub.
-    public static class Notification {
+    public static class Notifier {
 
         public static void ShowInformation(string message) { }
 

@@ -44,7 +44,8 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
         }
 
         [SecurityCritical]
-        private static IImageData LoadInternal(Uri filePath, bool isBayered, IImageDataFactory imageDataFactory, CancellationToken ct) {
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "FITS file-load boundary: opening/decoding an arbitrary FITS file via cfitsio may surface any native/IO/parse exception; failures are logged and surfaced so one bad file cannot crash the loader.")]
+        private static BaseImageData LoadInternal(Uri filePath, bool isBayered, IImageDataFactory imageDataFactory, CancellationToken ct) {
             IntPtr fitsPtr = IntPtr.Zero;
             IntPtr buffer = IntPtr.Zero;
             try {
@@ -56,17 +57,17 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
                 UIntPtr size = new UIntPtr((uint)bytes.Length);
                 UIntPtr deltaSize = UIntPtr.Zero;
 
-                CfitsioNative.fits_open_memory(out fitsPtr, string.Empty, CfitsioNative.IOMODE.READONLY, ref buffer, ref size, ref deltaSize, IntPtr.Zero, out var status);
+                _ = CfitsioNative.fits_open_memory(out fitsPtr, string.Empty, CfitsioNative.IOMODE.READONLY, ref buffer, ref size, ref deltaSize, IntPtr.Zero, out var status);
                 CfitsioNative.CheckStatus("fits_open_memory", status);
 
                 try {
-                    CfitsioNative.fits_read_key_long(fitsPtr, "NAXIS1");
-                } catch {
+                    _ = CfitsioNative.fits_read_key_long(fitsPtr, "NAXIS1");
+                } catch (CfitsioException) {
                     // When NAXIS1 does not exist, try at the last HDU - e.g. when the image is tile compressed
-                    CfitsioNative.fits_get_num_hdus(fitsPtr, out int hdunum, out status);
+                    _ = CfitsioNative.fits_get_num_hdus(fitsPtr, out int hdunum, out status);
                     CfitsioNative.CheckStatus("fits_get_num_hdus", status);
                     if (hdunum > 1) {
-                        CfitsioNative.fits_movabs_hdu(fitsPtr, hdunum, out var hdutypenow, out status);
+                        _ = CfitsioNative.fits_movabs_hdu(fitsPtr, hdunum, out var hdutypenow, out status);
                         CfitsioNative.CheckStatus("fits_movabs_hdu", status);
                     }
                 }
@@ -77,17 +78,17 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
                 if (compressionFlag > 0) {
                     // When the image is compresse, we decompress it into a temporary file
                     var tempFile = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName() + ".fits");
-                    CfitsioNative.fits_create_file(out var ptr, tempFile, out status);
+                    _ = CfitsioNative.fits_create_file(out var ptr, tempFile, out status);
                     CfitsioNative.CheckStatus("fits_create_file", status);
 
-                    CfitsioNative.fits_img_decompress(fitsPtr, ptr, out status);
+                    _ = CfitsioNative.fits_img_decompress(fitsPtr, ptr, out status);
                     CfitsioNative.CheckStatus("fits_img_decompress", status);
 
                     // Free resources for current file
                     if (fitsPtr != IntPtr.Zero) {
-                        CfitsioNative.fits_close_file(fitsPtr, out status);
+                        _ = CfitsioNative.fits_close_file(fitsPtr, out status);
                         CfitsioNative.CheckStatus("fits_close_file", status);
-                        CfitsioNative.fits_close_file(ptr, out status);
+                        _ = CfitsioNative.fits_close_file(ptr, out status);
                         CfitsioNative.CheckStatus("fits_close_file", status);
                     }
                     if (buffer != IntPtr.Zero) {
@@ -104,7 +105,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
 
                     Marshal.Copy(bytes, 0, buffer, bytes.Length);
                     fitsPtr = IntPtr.Zero;
-                    CfitsioNative.fits_open_memory(out fitsPtr, string.Empty, CfitsioNative.IOMODE.READONLY, ref buffer, ref size, ref deltaSize, IntPtr.Zero, out status);
+                    _ = CfitsioNative.fits_open_memory(out fitsPtr, string.Empty, CfitsioNative.IOMODE.READONLY, ref buffer, ref size, ref deltaSize, IntPtr.Zero, out status);
                     CfitsioNative.CheckStatus("fits_open_memory", status);
                 }
 
@@ -121,25 +122,25 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
 
                 //Translate CFITSio into N.I.N.A. FITSHeader
                 FITSHeader header = new FITSHeader(width, height);
-                CfitsioNative.fits_get_hdrspace(fitsPtr, out var numKeywords, out var numMoreKeywords, out status);
+                _ = CfitsioNative.fits_get_hdrspace(fitsPtr, out var numKeywords, out var numMoreKeywords, out status);
                 CfitsioNative.CheckStatus("fits_get_hdrspace", status);
                 for (int headerIdx = 1; headerIdx <= numKeywords; ++headerIdx) {
                     CfitsioNative.fits_read_keyn(fitsPtr, headerIdx, out var keyName, out var keyValue, out var keyComment);
 
-                    if (string.IsNullOrEmpty(keyValue) || keyName.Equals("COMMENT") || keyName.Equals("HISTORY")) {
+                    if (string.IsNullOrEmpty(keyValue) || keyName.Equals("COMMENT", StringComparison.Ordinal) || keyName.Equals("HISTORY", StringComparison.Ordinal)) {
                         continue;
                     }
 
-                    if (keyValue.Equals("T")) {
+                    if (keyValue.Equals("T", StringComparison.Ordinal)) {
                         header.Add(keyName, true, keyComment);
-                    } else if (keyValue.Equals("F")) {
+                    } else if (keyValue.Equals("F", StringComparison.Ordinal)) {
                         header.Add(keyName, false, keyComment);
-                    } else if (keyValue.StartsWith("'")) {
+                    } else if (keyValue.StartsWith('\'')) {
                         // Treat as a string
-                        keyValue = $"{keyValue.TrimStart('\'').TrimEnd('\'', ' ').Replace(@"''", @"'")}";
+                        keyValue = $"{keyValue.TrimStart('\'').TrimEnd('\'', ' ').Replace(@"''", @"'", StringComparison.Ordinal)}";
                         header.Add(keyName, keyValue, keyComment);
 
-                    } else if (keyValue.Contains(".")) {
+                    } else if (keyValue.Contains('.', StringComparison.Ordinal)) {
                         if (double.TryParse(keyValue, NumberStyles.Float, CultureInfo.InvariantCulture, out var value)) {
                             header.Add(keyName, value, keyComment);
                         }
@@ -148,7 +149,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
                             header.Add(keyName, value, keyComment);
                         } else {
                             // Treat as a string
-                            keyValue = $"{keyValue.TrimStart('\'').TrimEnd('\'', ' ').Replace(@"''", @"'")}";
+                            keyValue = $"{keyValue.TrimStart('\'').TrimEnd('\'', ' ').Replace(@"''", @"'", StringComparison.Ordinal)}";
                             header.Add(keyName, keyValue, keyComment);
                         }
                     }
@@ -167,16 +168,16 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
                 // Finally blocks are not executed after corrupted state exception
                 if (fitsPtr != IntPtr.Zero) {
                     try {
-                        CfitsioNative.fits_close_file(fitsPtr, out var status);
+                        _ = CfitsioNative.fits_close_file(fitsPtr, out var status);
                     } catch (Exception) { }
                 }
                 if (buffer != IntPtr.Zero) {
                     Marshal.FreeHGlobal(buffer);
                 }
-                throw new Exception($"Unable to load FITS file from {filePath.LocalPath}");
+                throw new InvalidOperationException($"Unable to load FITS file from {filePath.LocalPath}");
             } finally {
                 if (fitsPtr != IntPtr.Zero) {
-                    CfitsioNative.fits_close_file(fitsPtr, out var status);
+                    _ = CfitsioNative.fits_close_file(fitsPtr, out var status);
                 }
                 if (buffer != IntPtr.Zero) {
                     Marshal.FreeHGlobal(buffer);

@@ -13,18 +13,18 @@
 #endregion "copyright"
 
 using Newtonsoft.Json;
-using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Astrometry;
-using System;
-using OpenAstroAra.Core.Model;
 using OpenAstroAra.Astrometry.Interfaces;
+using OpenAstroAra.Core.Model;
+using OpenAstroAra.Core.Utility;
+using System;
 using System.Runtime.Serialization;
 
 namespace OpenAstroAra.Astrometry {
 
     [JsonObject(MemberSerialization.OptIn)]
     public class InputTarget : BaseINPC {
-        private bool deserializing = false;
+        private bool deserializing;
         [OnDeserializing]
         public void OnDeserializing(StreamingContext context) {
             deserializing = true;
@@ -44,7 +44,7 @@ namespace OpenAstroAra.Astrometry {
             InputCoordinates = new InputCoordinates();
         }
 
-        private void InputCoordinates_OnCoordinatesChanged(object sender, EventArgs e) {
+        private void InputCoordinates_OnCoordinatesChanged(object? sender, EventArgs e) {
             RaiseCoordinatesChanged();
         }
 
@@ -59,7 +59,7 @@ namespace OpenAstroAra.Astrometry {
             }
         }
 
-        private IDeepSkyObject deepSkyObject;
+        private IDeepSkyObject deepSkyObject = null!;  // set via DeepSkyObject in the constructor
 
         public IDeepSkyObject DeepSkyObject {
             get => deepSkyObject;
@@ -69,7 +69,7 @@ namespace OpenAstroAra.Astrometry {
             }
         }
 
-        private string targetName;
+        private string targetName = string.Empty;
 
         [JsonProperty]
         public string TargetName {
@@ -86,12 +86,20 @@ namespace OpenAstroAra.Astrometry {
         /// <summary>
         /// Backwards compatibility property that will migrate to position angle
         /// </summary>
+        // Back-compat shim: maps the legacy JSON 'Rotation' field onto PositionAngle on
+        // deserialization. ShouldSerializeDeprecatedRotation() keeps it from being re-emitted
+        // when writing, so the deprecated field is read-only on the wire.
         [JsonProperty(propertyName: "Rotation")]
         public double DeprecatedRotation {
+            get => 360 - PositionAngle;
             set => PositionAngle = 360 - value;
         }
 
-        private double positionAngle = 0;
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822:Mark members as static",
+            Justification = "Json.NET only invokes the ShouldSerialize{Member} convention on instance methods; making this static would silently re-enable serialization of the deprecated field (a behavioral breaking change).")]
+        public bool ShouldSerializeDeprecatedRotation() => false;
+
+        private double positionAngle;
         [JsonProperty]
         public double PositionAngle {
             get => positionAngle;
@@ -104,7 +112,7 @@ namespace OpenAstroAra.Astrometry {
             }
         }
 
-        private InputCoordinates inputCoordinates;
+        private InputCoordinates inputCoordinates = null!;  // set via InputCoordinates in the constructor
         private Angle latitude;
         private Angle longitude;
 
@@ -133,19 +141,19 @@ namespace OpenAstroAra.Astrometry {
         }
 
         private void RaiseCoordinatesChanged() {
-            if(!deserializing) { 
+            if (!deserializing) {
                 RaisePropertyChanged(nameof(PositionAngle));
                 RaisePropertyChanged(nameof(InputCoordinates));
 
                 DeepSkyObject.Name = TargetName;
-                DeepSkyObject.Coordinates = InputCoordinates?.Coordinates;
+                DeepSkyObject.Coordinates = InputCoordinates.Coordinates;
                 DeepSkyObject.RotationPositionAngle = PositionAngle;
 
                 this.CoordinatesChanged?.Invoke(this, new EventArgs());
             }
         }
 
-        public event EventHandler CoordinatesChanged;
+        public event EventHandler? CoordinatesChanged;
 
         public override string ToString() {
             return $"{InputCoordinates}; Position Angle: {PositionAngle}";

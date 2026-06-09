@@ -12,7 +12,7 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Enums;
 using System;
 
 namespace OpenAstroAra.Profile.Interfaces {
@@ -26,7 +26,7 @@ namespace OpenAstroAra.Profile.Interfaces {
         /// As this was changed to follow the standard of counter clockwise orientation, the reverse setting is flipped for migration purposes
         /// </summary>
         bool Reverse2 { get; set; }
-        RotatorRangeTypeEnum RangeType { get; set; }
+        RotatorRangeType RangeType { get; set; }
         float RangeStartMechanicalPosition { get; set; }
     }
 }

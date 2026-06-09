@@ -79,7 +79,7 @@ public sealed record ReleaseNotesDto(
     DateTimeOffset ReleasedUtc,
     string MarkdownBody,
     IReadOnlyList<string> BreakingChanges,
-    string? UpgradeGuideUrl);
+    Uri? UpgradeGuideUrl);
 
 // ─── Log endpoints (§29.9, §10.9 row 3) ─────────────────────────────────────
 

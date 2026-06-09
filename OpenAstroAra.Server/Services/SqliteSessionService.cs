@@ -69,8 +69,8 @@ public sealed class SqliteSessionService : ISessionService {
                 rows.Add((
                     Guid.Parse(reader.GetString(0)),
                     DateTimeOffset.Parse(reader.GetString(1)),
-                    reader.IsDBNull(2) ? null : DateTimeOffset.Parse(reader.GetString(2)),
-                    reader.IsDBNull(3) ? null : reader.GetString(3),
+                    await reader.IsDBNullAsync(2, ct) ? null : DateTimeOffset.Parse(reader.GetString(2)),
+                    await reader.IsDBNullAsync(3, ct) ? null : reader.GetString(3),
                     reader.GetInt32(4)));
             }
             var hasMore = await reader.ReadAsync(ct);
@@ -92,8 +92,8 @@ public sealed class SqliteSessionService : ISessionService {
         if (!await reader.ReadAsync(ct)) return null;
         var sid = Guid.Parse(reader.GetString(0));
         var start = DateTimeOffset.Parse(reader.GetString(1));
-        var end = reader.IsDBNull(2) ? (DateTimeOffset?)null : DateTimeOffset.Parse(reader.GetString(2));
-        var profileId = reader.IsDBNull(3) ? null : reader.GetString(3);
+        var end = await reader.IsDBNullAsync(2, ct) ? (DateTimeOffset?)null : DateTimeOffset.Parse(reader.GetString(2));
+        var profileId = await reader.IsDBNullAsync(3, ct) ? null : reader.GetString(3);
         await reader.CloseAsync();
         return await BuildSessionDtoAsync(conn, sid, start, end, profileId, ct);
     }
@@ -140,7 +140,7 @@ public sealed class SqliteSessionService : ISessionService {
                             WhitePoint: request.WhitePoint,
                             MaxDimensionPx: null,
                             ApplyDebayer: false), jobCt);
-                    } catch (Exception) {
+                    } catch (Exception ex) when (ex is IOException or InvalidOperationException or ArgumentException or OpenAstroAra.Fits.FitsException) {
                         // Per-frame stretch failures don't abort the batch —
                         // user gets the rest. Future enhancement: per-frame
                         // failure list on the job DTO.
@@ -184,7 +184,7 @@ public sealed class SqliteSessionService : ISessionService {
                 """;
             using var doc = System.Text.Json.JsonDocument.Parse(json);
             await _ws.PublishAsync("session.restretch.progress", doc.RootElement.Clone(), ct);
-        } catch {
+        } catch (Exception ex) when (ex is System.Text.Json.JsonException or IOException or InvalidOperationException or ObjectDisposedException) {
             // WS publish best-effort — never let it abort the job.
         }
     }
@@ -207,7 +207,7 @@ public sealed class SqliteSessionService : ISessionService {
             }
             using var doc = System.Text.Json.JsonDocument.Parse(json);
             await _ws.PublishAsync(eventType, doc.RootElement.Clone(), CancellationToken.None);
-        } catch {
+        } catch (Exception ex) when (ex is System.Text.Json.JsonException or IOException or InvalidOperationException or ObjectDisposedException) {
             // Same as progress — never let WS issues abort the worker.
         }
     }
@@ -298,9 +298,9 @@ public sealed class SqliteSessionService : ISessionService {
         var calFrames = 0;
         await using (var reader = await cmd.ExecuteReaderAsync(ct)) {
             if (await reader.ReadAsync(ct)) {
-                totalFrames = reader.IsDBNull(0) ? 0 : Convert.ToInt32(reader.GetValue(0));
-                lightFrames = reader.IsDBNull(1) ? 0 : Convert.ToInt32(reader.GetValue(1));
-                calFrames = reader.IsDBNull(2) ? 0 : Convert.ToInt32(reader.GetValue(2));
+                totalFrames = await reader.IsDBNullAsync(0, ct) ? 0 : Convert.ToInt32(reader.GetValue(0));
+                lightFrames = await reader.IsDBNullAsync(1, ct) ? 0 : Convert.ToInt32(reader.GetValue(1));
+                calFrames = await reader.IsDBNullAsync(2, ct) ? 0 : Convert.ToInt32(reader.GetValue(2));
             }
         }
 

@@ -25,7 +25,7 @@ using System.Threading.Tasks;
 
 namespace OpenAstroAra.Sequencer.Container {
 
-    internal class UnknownSequenceContainer : SequentialContainer, IValidatable {
+    internal sealed class UnknownSequenceContainer : SequentialContainer, IValidatable {
 
         public UnknownSequenceContainer() : base() {
         }

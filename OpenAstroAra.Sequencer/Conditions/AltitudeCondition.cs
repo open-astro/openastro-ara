@@ -13,12 +13,12 @@
 #endregion "copyright"
 
 using Newtonsoft.Json;
+using OpenAstroAra.Astrometry;
 using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Sequencer.SequenceItem;
-using OpenAstroAra.Astrometry;
+using OpenAstroAra.Sequencer.SequenceItem.Utility;
 using System;
 using System.ComponentModel.Composition;
-using OpenAstroAra.Sequencer.SequenceItem.Utility;
 using static OpenAstroAra.Sequencer.Utility.ItemUtility;
 
 namespace OpenAstroAra.Sequencer.Conditions {
@@ -30,13 +30,13 @@ namespace OpenAstroAra.Sequencer.Conditions {
     [Export(typeof(ISequenceCondition))]
     [JsonObject(MemberSerialization.OptIn)]
     public class AltitudeCondition : LoopForAltitudeBase {
-        
+
         private bool hasDsoParent;
 
         [ImportingConstructor]
         public AltitudeCondition(IProfileService profileService) : base(profileService, useCustomHorizon: false) {
             Data.Offset = 30;
-            Data.Comparator = Core.Enum.ComparisonOperatorEnum.LESS_THAN;
+            Data.Comparator = Core.Enums.ComparisonOperator.LessThan;
         }
         private AltitudeCondition(AltitudeCondition cloneMe) : this(cloneMe.ProfileService) {
             CopyMetaData(cloneMe);
@@ -75,7 +75,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
             return $"Condition: {nameof(AltitudeCondition)}, Altitude >= {Data.TargetAltitude}";
         }
 
-        public override bool Check(ISequenceItem previousItem, ISequenceItem nextItem) {
+        public override bool Check(ISequenceItem? previousItem, ISequenceItem? nextItem) {
             if (HasDsoParent) {
                 var coordinates = RetrieveContextCoordinates(this.Parent)?.Coordinates;
                 if (coordinates != null) {

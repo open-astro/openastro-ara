@@ -1,12 +1,11 @@
 // AForge Image Processing Library
 // AForge.NET framework
 //
-// Copyright © Andrew Kirillov, 2005-2009
+// Copyright ï¿½ Andrew Kirillov, 2005-2009
 // andrew.kirillov@aforgenet.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -48,8 +47,7 @@ namespace Accord.Imaging.Filters
     /// 
     /// <seealso cref="ExtractChannel"/>
     /// 
-    public class ReplaceChannel : BaseInPlacePartialFilter
-    {
+    public class ReplaceChannel : BaseInPlacePartialFilter {
         private short channel = RGB.R;
         private Bitmap channelImage;
         private UnmanagedImage unmanagedChannelImage;
@@ -60,8 +58,7 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Format translations dictionary.
         /// </summary>
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -73,16 +70,13 @@ namespace Accord.Imaging.Filters
         /// 
         /// <exception cref="ArgumentException">Invalid channel is specified.</exception>
         /// 
-        public short Channel
-        {
+        public short Channel {
             get { return channel; }
-            set
-            {
+            set {
                 if (
                     (value != RGB.R) && (value != RGB.G) &&
                     (value != RGB.B) && (value != RGB.A)
-                    )
-                {
+                    ) {
                     throw new ArgumentException("Invalid channel is specified.");
                 }
                 channel = value;
@@ -100,13 +94,10 @@ namespace Accord.Imaging.Filters
         /// 
         /// <exception cref="InvalidImagePropertiesException">Channel image should be 8 bpp indexed or 16 bpp grayscale image.</exception>
         ///
-        public Bitmap ChannelImage
-        {
+        public Bitmap ChannelImage {
             get { return channelImage; }
-            set
-            {
-                if (value != null)
-                {
+            set {
+                if (value != null) {
                     // check for valid format
                     if ((value.PixelFormat != PixelFormat.Format8bppIndexed) &&
                          (value.PixelFormat != PixelFormat.Format16bppGrayScale))
@@ -129,13 +120,10 @@ namespace Accord.Imaging.Filters
         /// 
         /// <exception cref="InvalidImagePropertiesException">Channel image should be 8 bpp indexed or 16 bpp grayscale image.</exception>
         /// 
-        public UnmanagedImage UnmanagedChannelImage
-        {
+        public UnmanagedImage UnmanagedChannelImage {
             get { return unmanagedChannelImage; }
-            set
-            {
-                if (value != null)
-                {
+            set {
+                if (value != null) {
                     // check for valid format
                     if ((value.PixelFormat != PixelFormat.Format8bppIndexed) &&
                          (value.PixelFormat != PixelFormat.Format16bppGrayScale))
@@ -148,8 +136,7 @@ namespace Accord.Imaging.Filters
         }
 
         // private constructor
-        private ReplaceChannel()
-        {
+        private ReplaceChannel() {
             // initialize format translation dictionary
             formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format24bppRgb;
             formatTranslations[PixelFormat.Format32bppRgb] = PixelFormat.Format32bppRgb;
@@ -166,8 +153,7 @@ namespace Accord.Imaging.Filters
         /// <param name="channel">ARGB channel to replace.</param>
         /// 
         public ReplaceChannel(short channel)
-            : this()
-        {
+            : this() {
             this.Channel = channel;
         }
 
@@ -179,8 +165,7 @@ namespace Accord.Imaging.Filters
         /// <param name="channelImage">Channel image to use for replacement.</param>
         /// 
         public ReplaceChannel(short channel, Bitmap channelImage)
-            : this()
-        {
+            : this() {
             this.Channel = channel;
             this.ChannelImage = channelImage;
         }
@@ -193,8 +178,7 @@ namespace Accord.Imaging.Filters
         /// <param name="channelImage">Unmanaged channel image to use for replacement.</param>
         /// 
         public ReplaceChannel(short channel, UnmanagedImage channelImage)
-            : this()
-        {
+            : this() {
             this.Channel = channel;
             this.UnmanagedChannelImage = channelImage;
         }
@@ -214,8 +198,7 @@ namespace Accord.Imaging.Filters
         /// <exception cref="InvalidImagePropertiesException">Can not replace alpha channel of none ARGB image. The
         /// exception is throw, when alpha channel is requested to be replaced in RGB image.</exception>
         /// 
-        protected override unsafe void ProcessFilter(UnmanagedImage image, Rectangle rect)
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage image, Rectangle rect) {
             if ((channelImage == null) && (unmanagedChannelImage == null))
                 throw new InvalidOperationException("Channel image was not specified.");
 
@@ -240,8 +223,7 @@ namespace Accord.Imaging.Filters
             PixelFormat chFormat = PixelFormat.Format16bppGrayScale;
 
             // check channel's image type
-            if (channelImage != null)
-            {
+            if (channelImage != null) {
                 // check channel's image dimension
                 if ((width != channelImage.Width) || (height != channelImage.Height))
                     throw new InvalidImagePropertiesException("Channel image size does not match source image size.");
@@ -254,9 +236,7 @@ namespace Accord.Imaging.Filters
                 ch = (byte*)chData.Scan0.ToPointer();
                 chStride = chData.Stride;
                 chFormat = chData.PixelFormat;
-            }
-            else
-            {
+            } else {
                 // check channel's image dimension
                 if ((width != unmanagedChannelImage.Width) || (height != unmanagedChannelImage.Height))
                     throw new InvalidImagePropertiesException("Channel image size does not match source image size.");
@@ -266,8 +246,7 @@ namespace Accord.Imaging.Filters
                 chFormat = unmanagedChannelImage.PixelFormat;
             }
 
-            if (pixelSize <= 4)
-            {
+            if (pixelSize <= 4) {
                 // check channel image's format
                 if (chFormat != PixelFormat.Format8bppIndexed)
                     throw new InvalidImagePropertiesException("Channel image's format does not correspond to format of the source image.");
@@ -282,19 +261,15 @@ namespace Accord.Imaging.Filters
                 ch += (startY * chStride + startX);
 
                 // for each line
-                for (int y = startY; y < stopY; y++)
-                {
+                for (int y = startY; y < stopY; y++) {
                     // for each pixel
-                    for (int x = startX; x < stopX; x++, dst += pixelSize, ch++)
-                    {
+                    for (int x = startX; x < stopX; x++, dst += pixelSize, ch++) {
                         dst[channel] = *ch;
                     }
                     dst += offset;
                     ch += offsetCh;
                 }
-            }
-            else
-            {
+            } else {
                 // check channel image's format
                 if (chFormat != PixelFormat.Format16bppGrayScale)
                     throw new InvalidImagePropertiesException("Channel image's format does not correspond to format of the source image.");
@@ -310,21 +285,18 @@ namespace Accord.Imaging.Filters
                 pixelSize /= 2;
 
                 // for each line
-                for (int y = startY; y < stopY; y++)
-                {
+                for (int y = startY; y < stopY; y++) {
                     ushort* dst = (ushort*)(baseDst + y * stride);
                     ushort* chPtr = (ushort*)(ch + y * chStride);
 
                     // for each pixel
-                    for (int x = startX; x < stopX; x++, dst += pixelSize, chPtr++)
-                    {
+                    for (int x = startX; x < stopX; x++, dst += pixelSize, chPtr++) {
                         dst[channel] = *chPtr;
                     }
                 }
             }
 
-            if (chData != null)
-            {
+            if (chData != null) {
                 // unlock
                 channelImage.UnlockBits(chData);
             }

@@ -1,12 +1,11 @@
 // AForge Image Processing Library
 // AForge.NET framework
 //
-// Copyright © Andrew Kirillov, 2005-2008
+// Copyright ï¿½ Andrew Kirillov, 2005-2008
 // andrew.kirillov@gmail.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -34,28 +33,25 @@ namespace Accord.Imaging.Filters
     /// <img src="..\images\imaging\invert.jpg" width="480" height="361" />
     /// </remarks>
     ///
-    public sealed class Invert : BaseInPlacePartialFilter
-    {
+    public sealed class Invert : BaseInPlacePartialFilter {
         // private format translation dictionary
-        private Dictionary<PixelFormat, PixelFormat> formatTranslations = new Dictionary<PixelFormat, PixelFormat>( );
+        private Dictionary<PixelFormat, PixelFormat> formatTranslations = new Dictionary<PixelFormat, PixelFormat>();
 
         /// <summary>
         /// Format translations dictionary.
         /// </summary>
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
-        
+
         /// <summary>   
         /// Initializes a new instance of the <see cref="Invert"/> class.
         /// </summary>
-        public Invert( )
-        {
-            formatTranslations[PixelFormat.Format8bppIndexed]    = PixelFormat.Format8bppIndexed;
-            formatTranslations[PixelFormat.Format24bppRgb]       = PixelFormat.Format24bppRgb;
+        public Invert() {
+            formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
+            formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format24bppRgb;
             formatTranslations[PixelFormat.Format16bppGrayScale] = PixelFormat.Format16bppGrayScale;
-            formatTranslations[PixelFormat.Format48bppRgb]       = PixelFormat.Format48bppRgb;
+            formatTranslations[PixelFormat.Format48bppRgb] = PixelFormat.Format48bppRgb;
         }
 
         /// <summary>
@@ -65,55 +61,47 @@ namespace Accord.Imaging.Filters
         /// <param name="image">Source image data.</param>
         /// <param name="rect">Image rectangle for processing by the filter.</param>
         ///
-        protected override unsafe void ProcessFilter( UnmanagedImage image, Rectangle rect )
-        {
-            int pixelSize = ( ( image.PixelFormat == PixelFormat.Format8bppIndexed ) ||
-                              ( image.PixelFormat == PixelFormat.Format16bppGrayScale ) ) ? 1 : 3;
+        protected override unsafe void ProcessFilter(UnmanagedImage image, Rectangle rect) {
+            int pixelSize = ((image.PixelFormat == PixelFormat.Format8bppIndexed) ||
+                              (image.PixelFormat == PixelFormat.Format16bppGrayScale)) ? 1 : 3;
 
-            int startY  = rect.Top;
-            int stopY   = startY + rect.Height;
+            int startY = rect.Top;
+            int stopY = startY + rect.Height;
 
-            int startX  = rect.Left * pixelSize;
-            int stopX   = startX + rect.Width * pixelSize;
+            int startX = rect.Left * pixelSize;
+            int stopX = startX + rect.Width * pixelSize;
 
-            byte* basePtr = (byte*) image.ImageData.ToPointer( );
+            byte* basePtr = (byte*)image.ImageData.ToPointer();
 
             if (
-                ( image.PixelFormat == PixelFormat.Format8bppIndexed ) ||
-                ( image.PixelFormat == PixelFormat.Format24bppRgb ) )
-            {
-                int offset = image.Stride - ( stopX - startX );
+                (image.PixelFormat == PixelFormat.Format8bppIndexed) ||
+                (image.PixelFormat == PixelFormat.Format24bppRgb)) {
+                int offset = image.Stride - (stopX - startX);
 
                 // allign pointer to the first pixel to process
-                byte* ptr = basePtr + ( startY * image.Stride + rect.Left * pixelSize );
+                byte* ptr = basePtr + (startY * image.Stride + rect.Left * pixelSize);
 
                 // invert
-                for ( int y = startY; y < stopY; y++ )
-                {
-                    for ( int x = startX; x < stopX; x++, ptr++ )
-                    {
+                for (int y = startY; y < stopY; y++) {
+                    for (int x = startX; x < stopX; x++, ptr++) {
                         // ivert each pixel
-                        *ptr = (byte) ( 255 - *ptr );
+                        *ptr = (byte)(255 - *ptr);
                     }
                     ptr += offset;
                 }
-            }
-            else
-            {
+            } else {
                 int stride = image.Stride;
 
                 // allign pointer to the first pixel to process
-                basePtr += ( startY * image.Stride + rect.Left * pixelSize * 2 );
+                basePtr += (startY * image.Stride + rect.Left * pixelSize * 2);
 
                 // invert
-                for ( int y = startY; y < stopY; y++ )
-                {
-                    ushort* ptr = (ushort*) ( basePtr );
+                for (int y = startY; y < stopY; y++) {
+                    ushort* ptr = (ushort*)(basePtr);
 
-                    for ( int x = startX; x < stopX; x++, ptr++ )
-                    {
+                    for (int x = startX; x < stopX; x++, ptr++) {
                         // ivert each pixel
-                        *ptr = (ushort) ( 65535 - *ptr );
+                        *ptr = (ushort)(65535 - *ptr);
                     }
                     basePtr += stride;
                 }

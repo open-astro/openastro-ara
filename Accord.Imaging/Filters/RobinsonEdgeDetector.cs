@@ -23,12 +23,11 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging.Filters
-{
-    using System.Collections.Generic;
-    using System.Drawing.Imaging;
+namespace Accord.Imaging.Filters {
     using Accord.Imaging;
     using Accord.Imaging.Filters;
+    using System.Collections.Generic;
+    using System.Drawing.Imaging;
 
     /// <summary>
     ///   Robinson's Edge Detector
@@ -65,8 +64,7 @@ namespace Accord.Imaging.Filters
     /// <seealso cref="KirschEdgeDetector"/>
     /// <seealso cref="CompassConvolution"/>
     /// 
-    public class RobinsonEdgeDetector : BaseFilter
-    {
+    public class RobinsonEdgeDetector : BaseFilter {
 
         CompassConvolution convolution;
 
@@ -74,11 +72,10 @@ namespace Accord.Imaging.Filters
         ///   Initializes a new instance of the <see cref="RobinsonEdgeDetector"/> class.
         /// </summary>
         /// 
-        public RobinsonEdgeDetector()
-        {
-            int[][,] sequence = 
+        public RobinsonEdgeDetector() {
+            int[][,] sequence =
             {
-                North, Northwest, West, Southwest, South, Southeast, East, Northeast 
+                North, Northwest, West, Southwest, South, Southeast, East, Northeast
             };
 
             convolution = new CompassConvolution(sequence);
@@ -88,8 +85,7 @@ namespace Accord.Imaging.Filters
         ///   Format translations dictionary.
         /// </summary>
         /// 
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return convolution.FormatTranslations; }
         }
 
@@ -100,8 +96,7 @@ namespace Accord.Imaging.Filters
         /// <param name="sourceData">Source image data.</param>
         /// <param name="destinationData">Destination image data.</param>
         /// 
-        protected override void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData)
-        {
+        protected override void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData) {
             convolution.Apply(sourceData, destinationData);
         }
 
@@ -110,7 +105,7 @@ namespace Accord.Imaging.Filters
         ///   Gets the North direction Robinson kernel mask.
         /// </summary>
         /// 
-        public static readonly int[,] North = 
+        public static readonly int[,] North =
         {
             { -1,  0,  1 },
             { -2,  0,  2 },
@@ -121,7 +116,7 @@ namespace Accord.Imaging.Filters
         ///   Gets the Northwest direction Robinson kernel mask.
         /// </summary>
         /// 
-        public static readonly int[,] Northwest = 
+        public static readonly int[,] Northwest =
         {
             {  0,  1,  2 },
             { -1,  0,  1 },
@@ -132,7 +127,7 @@ namespace Accord.Imaging.Filters
         ///   Gets the West direction Robinson kernel mask.
         /// </summary>
         /// 
-        public static readonly int[,] West = 
+        public static readonly int[,] West =
         {
             {  1,  2,  1 },
             {  0,  0,  0 },
@@ -143,7 +138,7 @@ namespace Accord.Imaging.Filters
         ///   Gets the Southwest direction Robinson kernel mask.
         /// </summary>
         /// 
-        public static readonly int[,] Southwest = 
+        public static readonly int[,] Southwest =
         {
             {  2,  1,  0 },
             {  1,  0, -1 },
@@ -154,7 +149,7 @@ namespace Accord.Imaging.Filters
         ///   Gets the South direction Robinson kernel mask.
         /// </summary>
         /// 
-        public static readonly int[,] South = 
+        public static readonly int[,] South =
         {
             {  1,  0, -1 },
             {  2,  0, -2 },
@@ -165,7 +160,7 @@ namespace Accord.Imaging.Filters
         ///   Gets the Southeast direction Robinson kernel mask.
         /// </summary>
         /// 
-        public static readonly int[,] Southeast = 
+        public static readonly int[,] Southeast =
         {
             {  0, -1, -2 },
             {  1,  0, -1 },
@@ -176,7 +171,7 @@ namespace Accord.Imaging.Filters
         ///   Gets the East direction Robinson kernel mask.
         /// </summary>
         /// 
-        public static readonly int[,] East = 
+        public static readonly int[,] East =
         {
             { -1, -2, -1 },
             {  0,  0,  0 },
@@ -187,8 +182,8 @@ namespace Accord.Imaging.Filters
         ///   Gets the Northeast direction Robinson kernel mask.
         /// </summary>
         /// 
-        public static readonly int[,] Northeast = 
-        { 
+        public static readonly int[,] Northeast =
+        {
             { -2, -1,  0 },
             { -1,  0,  1 },
             {  0,  1,  2 }

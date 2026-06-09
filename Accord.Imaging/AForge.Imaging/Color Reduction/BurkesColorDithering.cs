@@ -2,12 +2,11 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © AForge.NET, 2005-2010
+// Copyright ï¿½ AForge.NET, 2005-2010
 // contacts@aforgenet.com
 //
 
-namespace Accord.Imaging.ColorReduction
-{
+namespace Accord.Imaging.ColorReduction {
     using System;
     using System.Drawing;
     using System.Drawing.Imaging;
@@ -56,17 +55,15 @@ namespace Accord.Imaging.ColorReduction
     /// <seealso cref="SierraColorDithering"/>
     /// <seealso cref="StuckiColorDithering"/>
     /// 
-    public sealed class BurkesColorDithering : ColorErrorDiffusionToAdjacentNeighbors
-    {
+    public sealed class BurkesColorDithering : ColorErrorDiffusionToAdjacentNeighbors {
         /// <summary>
         /// Initializes a new instance of the <see cref="BurkesColorDithering"/> class.
         /// </summary>
         /// 
-        public BurkesColorDithering( )
-            : base( new int[2][] {
+        public BurkesColorDithering()
+            : base(new int[2][] {
                 new int[2] { 8, 4 },
-                new int[5] { 2, 4, 8, 4, 2 } } )
-        {
+                new int[5] { 2, 4, 8, 4, 2 } }) {
         }
     }
 }

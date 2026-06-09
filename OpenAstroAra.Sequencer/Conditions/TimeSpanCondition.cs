@@ -13,16 +13,16 @@
 #endregion "copyright"
 
 using Newtonsoft.Json;
-using OpenAstroAra.Sequencer.SequenceItem;
+using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Sequencer.SequenceItem;
+using OpenAstroAra.Sequencer.Utility;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.Composition;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using OpenAstroAra.Sequencer.Utility;
-using OpenAstroAra.Core.Enum;
 
 namespace OpenAstroAra.Sequencer.Conditions {
 
@@ -133,7 +133,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
         private DateTime? startTime;
         private TimeSpan? previousRemainingTime;
 
-        public override bool Check(ISequenceItem previousItem, ISequenceItem nextItem) {
+        public override bool Check(ISequenceItem? previousItem, ISequenceItem? nextItem) {
             var nextItemDuration = nextItem?.GetEstimatedDuration() ?? TimeSpan.Zero;
             var hasTimeRemaining = (RemainingTime - nextItemDuration) > TimeSpan.Zero;
             if (!hasTimeRemaining && nextItemDuration > TimeSpan.Zero) {
@@ -160,7 +160,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
             if (RemainingTime > TimeSpan.Zero) {
                 previousRemainingTime = RemainingTime;
             }
-            try { ConditionWatchdog?.Cancel(); } catch { }
+            ConditionWatchdog?.Cancel();
         }
 
         public override void ResetProgress() {

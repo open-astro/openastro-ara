@@ -12,18 +12,18 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Core.Model.Equipment;
 
 namespace OpenAstroAra.Profile.Interfaces {
 
     public interface ICameraSettings : ISettings {
         double BitDepth { get; set; }
-        CameraBulbModeEnum BulbMode { get; set; }
+        CameraBulbMode BulbMode { get; set; }
         string Id { get; set; }
         string LastDeviceName { get; set; }
         double PixelSize { get; set; }
-        RawConverterEnum RawConverter { get; set; }
+        RawConverter RawConverter { get; set; }
         string SerialPort { get; set; }
         double MinFlatExposureTime { get; set; }
         double MaxFlatExposureTime { get; set; }
@@ -33,7 +33,7 @@ namespace OpenAstroAra.Profile.Interfaces {
         string FileCameraExtension { get; set; }
         bool FileCameraAlwaysListen { get; set; }
         int FileCameraDownloadDelay { get; set; }
-        BayerPatternEnum BayerPattern { get; set; }
+        BayerPattern BayerPattern { get; set; }
         bool FLIEnableFloodFlush { get; set; }
         bool FLIEnableSnapshotFloodFlush { get; set; }
         double FLIFloodDuration { get; set; }

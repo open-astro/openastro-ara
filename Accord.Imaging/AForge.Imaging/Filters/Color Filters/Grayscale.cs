@@ -2,12 +2,11 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © AForge.NET, 2005-2011
+// Copyright ï¿½ AForge.NET, 2005-2011
 // contacts@aforgenet.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -43,15 +42,13 @@ namespace Accord.Imaging.Filters
     /// <seealso cref="GrayscaleRMY"/>
     /// <seealso cref="GrayscaleY"/>
     ///
-    public class Grayscale : BaseFilter
-    {
+    public class Grayscale : BaseFilter {
         /// <summary>
         ///   Set of predefined common grayscaling algorithms, which have
         ///   already initialized grayscaling coefficients.
         /// </summary>
         /// 
-        public static class CommonAlgorithms
-        {
+        public static class CommonAlgorithms {
             /// <summary>
             ///   Grayscale image using BT709 algorithm.
             /// </summary>
@@ -147,8 +144,7 @@ namespace Accord.Imaging.Filters
         ///   Format translations dictionary.
         /// </summary>
         /// 
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -160,8 +156,7 @@ namespace Accord.Imaging.Filters
         /// <param name="cg">Green coefficient.</param>
         /// <param name="cb">Blue coefficient.</param>
         /// 
-        public Grayscale(double cr, double cg, double cb)
-        {
+        public Grayscale(double cr, double cg, double cb) {
             RedCoefficient = cr;
             GreenCoefficient = cg;
             BlueCoefficient = cb;
@@ -181,8 +176,7 @@ namespace Accord.Imaging.Filters
         /// <param name="sourceData">Source image data.</param>
         /// <param name="destinationData">Destination image data.</param>
         /// 
-        protected override unsafe void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData)
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData) {
             // get width and height
             int width = sourceData.Width;
             int height = sourceData.Height;
@@ -191,8 +185,7 @@ namespace Accord.Imaging.Filters
             if (
                 (srcPixelFormat == PixelFormat.Format24bppRgb) ||
                 (srcPixelFormat == PixelFormat.Format32bppRgb) ||
-                (srcPixelFormat == PixelFormat.Format32bppArgb))
-            {
+                (srcPixelFormat == PixelFormat.Format32bppArgb)) {
                 int pixelSize = (srcPixelFormat == PixelFormat.Format24bppRgb) ? 3 : 4;
                 int srcOffset = sourceData.Stride - width * pixelSize;
                 int dstOffset = destinationData.Stride - width;
@@ -202,8 +195,7 @@ namespace Accord.Imaging.Filters
                 int bc = (int)(0x10000 * BlueCoefficient);
 
                 // make sure sum of coefficients equals to 0x10000
-                while (rc + gc + bc < 0x10000)
-                {
+                while (rc + gc + bc < 0x10000) {
                     bc++;
                 }
 
@@ -212,11 +204,9 @@ namespace Accord.Imaging.Filters
                 byte* dst = (byte*)destinationData.ImageData.ToPointer();
 
                 // for each line
-                for (int y = 0; y < height; y++)
-                {
+                for (int y = 0; y < height; y++) {
                     // for each pixel
-                    for (int x = 0; x < width; x++, src += pixelSize, dst++)
-                    {
+                    for (int x = 0; x < width; x++, src += pixelSize, dst++) {
                         destinationData.CheckBounds(dst);
 
                         *dst = (byte)((rc * src[RGB.R] + gc * src[RGB.G] + bc * src[RGB.B]) >> 16);
@@ -224,9 +214,7 @@ namespace Accord.Imaging.Filters
                     src += srcOffset;
                     dst += dstOffset;
                 }
-            }
-            else
-            {
+            } else {
                 int pixelSize = (srcPixelFormat == PixelFormat.Format48bppRgb) ? 3 : 4;
                 byte* srcBase = (byte*)sourceData.ImageData.ToPointer();
                 byte* dstBase = (byte*)destinationData.ImageData.ToPointer();
@@ -234,14 +222,12 @@ namespace Accord.Imaging.Filters
                 int dstStride = destinationData.Stride;
 
                 // for each line
-                for (int y = 0; y < height; y++)
-                {
+                for (int y = 0; y < height; y++) {
                     ushort* src = (ushort*)(srcBase + y * srcStride);
                     ushort* dst = (ushort*)(dstBase + y * dstStride);
 
                     // for each pixel
-                    for (int x = 0; x < width; x++, src += pixelSize, dst++)
-                    {
+                    for (int x = 0; x < width; x++, src += pixelSize, dst++) {
                         *dst = (ushort)(RedCoefficient * src[RGB.R] + GreenCoefficient * src[RGB.G] + BlueCoefficient * src[RGB.B]);
                     }
                 }

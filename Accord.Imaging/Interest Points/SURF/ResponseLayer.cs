@@ -23,13 +23,12 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging
-{
+namespace Accord.Imaging {
+    using Accord.Imaging;
+    using Accord.Math;
     using System;
     using System.Collections;
     using System.Collections.Generic;
-    using Accord.Imaging;
-    using Accord.Math;
 
     /// <summary>
     ///   Response filter.
@@ -48,8 +47,7 @@ namespace Accord.Imaging
     /// </remarks>
     /// 
     [Serializable]
-    internal class ResponseLayerCollection : IEnumerable<ResponseLayer[]>
-    {
+    internal class ResponseLayerCollection : IEnumerable<ResponseLayer[]> {
         private int width;
         private int height;
         private int step;
@@ -72,8 +70,7 @@ namespace Accord.Imaging
         ///   the specified number of octaves and initial step.
         /// </summary>
         /// 
-        public ResponseLayerCollection(int width, int height, int octaves, int initial)
-        {
+        public ResponseLayerCollection(int width, int height, int octaves, int initial) {
             this.width = width;
             this.height = height;
             this.step = initial;
@@ -87,8 +84,7 @@ namespace Accord.Imaging
         ///   without recreating objects.
         /// </summary>
         /// 
-        public void Update(int width, int height, int initial)
-        {
+        public void Update(int width, int height, int initial) {
             this.width = width;
             this.height = height;
             this.step = initial;
@@ -103,14 +99,12 @@ namespace Accord.Imaging
         /// 
         /// <param name="integral">The integral image.</param>
         /// 
-        public void Compute(IntegralImage integral)
-        {
+        public void Compute(IntegralImage integral) {
             for (int i = 0; i < responses.Length; ++i)
                 responses[i].Compute(integral);
         }
 
-        private void initialize()
-        {
+        private void initialize() {
             List<ResponseLayer> list = new List<ResponseLayer>();
 
             // Get image attributes
@@ -118,34 +112,29 @@ namespace Accord.Imaging
             int h = height / step;
             int s = step;
 
-            if (octaves >= 1)
-            {
+            if (octaves >= 1) {
                 list.Add(new ResponseLayer(w, h, s, 9));
                 list.Add(new ResponseLayer(w, h, s, 15));
                 list.Add(new ResponseLayer(w, h, s, 21));
                 list.Add(new ResponseLayer(w, h, s, 27));
             }
 
-            if (octaves >= 2)
-            {
+            if (octaves >= 2) {
                 list.Add(new ResponseLayer(w / 2, h / 2, s * 2, 39));
                 list.Add(new ResponseLayer(w / 2, h / 2, s * 2, 51));
             }
 
-            if (octaves >= 3)
-            {
+            if (octaves >= 3) {
                 list.Add(new ResponseLayer(w / 4, h / 4, s * 4, 75));
                 list.Add(new ResponseLayer(w / 4, h / 4, s * 4, 99));
             }
 
-            if (octaves >= 4)
-            {
+            if (octaves >= 4) {
                 list.Add(new ResponseLayer(w / 8, h / 8, s * 8, 147));
                 list.Add(new ResponseLayer(w / 8, h / 8, s * 8, 195));
             }
 
-            if (octaves >= 5)
-            {
+            if (octaves >= 5) {
                 list.Add(new ResponseLayer(w / 16, h / 16, s * 16, 291));
                 list.Add(new ResponseLayer(w / 16, h / 16, s * 16, 387));
             }
@@ -153,42 +142,36 @@ namespace Accord.Imaging
             this.responses = list.ToArray();
         }
 
-        private void update()
-        {
+        private void update() {
             // Get image attributes
             int w = width / step;
             int h = height / step;
             int s = step;
 
             int i = 0;
-            if (octaves >= 1)
-            {
+            if (octaves >= 1) {
                 responses[i++].Update(w, h, s, 9);
                 responses[i++].Update(w, h, s, 15);
                 responses[i++].Update(w, h, s, 21);
                 responses[i++].Update(w, h, s, 27);
             }
 
-            if (octaves >= 2)
-            {
+            if (octaves >= 2) {
                 responses[i++].Update(w / 2, h / 2, s * 2, 39);
                 responses[i++].Update(w / 2, h / 2, s * 2, 51);
             }
 
-            if (octaves >= 3)
-            {
+            if (octaves >= 3) {
                 responses[i++].Update(w / 4, h / 4, s * 4, 75);
                 responses[i++].Update(w / 4, h / 4, s * 4, 99);
             }
 
-            if (octaves >= 4)
-            {
+            if (octaves >= 4) {
                 responses[i++].Update(w / 8, h / 8, s * 8, 147);
                 responses[i++].Update(w / 8, h / 8, s * 8, 195);
             }
 
-            if (octaves >= 5)
-            {
+            if (octaves >= 5) {
                 responses[i++].Update(w / 16, h / 16, s * 16, 291);
                 responses[i++].Update(w / 16, h / 16, s * 16, 387);
             }
@@ -203,15 +186,12 @@ namespace Accord.Imaging
         ///   A <see cref="T:System.Collections.Generic.IEnumerator`1"/> that can be used to iterate through the collection.
         /// </returns>
         /// 
-        public IEnumerator<ResponseLayer[]> GetEnumerator()
-        {
+        public IEnumerator<ResponseLayer[]> GetEnumerator() {
             ResponseLayer[] pyramid = new ResponseLayer[3];
 
-            for (int i = 0; i < octaves; i++)
-            {
+            for (int i = 0; i < octaves; i++) {
                 // for each set of response layers
-                for (int j = 0; j <= 1; j++)
-                {
+                for (int j = 0; j <= 1; j++) {
                     // Grab the three layers forming the pyramid
                     pyramid[0] = responses[map[i, j + 0]];
                     pyramid[1] = responses[map[i, j + 1]];
@@ -228,8 +208,7 @@ namespace Accord.Imaging
         ///   An <see cref="T:System.Collections.IEnumerator"/> object that can be used to iterate through the collection.
         /// </returns>
         /// 
-        IEnumerator IEnumerable.GetEnumerator()
-        {
+        IEnumerator IEnumerable.GetEnumerator() {
             return (IEnumerator)this.GetEnumerator();
         }
 
@@ -240,8 +219,7 @@ namespace Accord.Imaging
     /// </summary>
     /// 
     [Serializable]
-    internal class ResponseLayer
-    {
+    internal class ResponseLayer {
         /// <summary>
         ///   Gets the width of the filter.
         /// </summary>
@@ -283,8 +261,7 @@ namespace Accord.Imaging
         ///   Initializes a new instance of the <see cref="ResponseLayer"/> class.
         /// </summary>
         /// 
-        public ResponseLayer(int width, int height, int step, int filter)
-        {
+        public ResponseLayer(int width, int height, int step, int filter) {
             this.Width = width;
             this.Height = height;
             this.Step = step;
@@ -299,10 +276,8 @@ namespace Accord.Imaging
         ///   without recreating objects.
         /// </summary>
         /// 
-        public void Update(int width, int height, int step, int filter)
-        {
-            if (height > Height || width > Width)
-            {
+        public void Update(int width, int height, int step, int filter) {
+            if (height > Height || width > Width) {
                 this.Responses = Jagged.Zeros<float>(height, width);
                 this.Laplacian = Jagged.Zeros<int>(height, width);
             }
@@ -319,18 +294,15 @@ namespace Accord.Imaging
         /// 
         /// <param name="image">The integral image.</param>
         /// 
-        public void Compute(IntegralImage image)
-        {
+        public void Compute(IntegralImage image) {
             int b = (Size - 1) / 2 + 1;
             int c = Size / 3;
             int w = Size;
             float inv = 1f / (w * w);
             float Dxx, Dyy, Dxy;
 
-            for (int y = 0; y < Height; y++)
-            {
-                for (int x = 0; x < Width; x++)
-                {
+            for (int y = 0; y < Height; y++) {
+                for (int x = 0; x < Width; x++) {
                     // Get the image coordinates
                     int i = y * Step;
                     int j = x * Step;

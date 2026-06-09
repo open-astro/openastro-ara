@@ -5,6 +5,7 @@ using OxyPlot;
 using OxyPlot.Axes;
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
@@ -12,18 +13,18 @@ using System.Text;
 using System.Threading.Tasks;
 namespace OpenAstroAra.Astrometry {
     public abstract class SkyObjectBase : BaseINPC, IDeepSkyObject {
-        [Obsolete]
-        protected SkyObjectBase(string id, string imageRepository, CustomHorizon customHorizon) : this(id, null as Func<SkyObjectBase, Task<byte[]>>, customHorizon) {
+        [Obsolete("The imageRepository overload is retained for source compatibility; the headless build ignores imageRepository. Use the imageFactory overload.")]
+        protected SkyObjectBase(string id, string imageRepository, CustomHorizon? customHorizon) : this(id, null as Func<SkyObjectBase, Task<byte[]>>, customHorizon) {
         }
 
-        protected SkyObjectBase(string id, Func<SkyObjectBase, Task<byte[]>> imageFactory, CustomHorizon customHorizon) {
+        protected SkyObjectBase(string id, Func<SkyObjectBase, Task<byte[]>>? imageFactory, CustomHorizon? customHorizon) {
             Id = id;
             Name = id;
-            this.customHorizon = customHorizon;
+            this.CustomHorizon = customHorizon;
             this.imageFactory = imageFactory;
         }
 
-        private string id;
+        private string id = string.Empty;
 
         public string Id {
             get => id;
@@ -33,14 +34,14 @@ namespace OpenAstroAra.Astrometry {
             }
         }
 
-        private string _name;
+        private string _name = string.Empty;
 
         public string Name {
             get => _name;
             set {
                 _name = value;
                 RaisePropertyChanged();
-                RaisePropertyChanged("NameAsAscii");
+                RaisePropertyChanged(nameof(NameAsAscii));
             }
         }
 
@@ -51,7 +52,7 @@ namespace OpenAstroAra.Astrometry {
         public abstract SiderealShiftTrackingRate ShiftTrackingRate { get; }
         public abstract SiderealShiftTrackingRate ShiftTrackingRateAt(DateTime at);
 
-        private string _dSOType;
+        private string _dSOType = string.Empty;
 
         public string DSOType {
             get => _dSOType;
@@ -61,7 +62,7 @@ namespace OpenAstroAra.Astrometry {
             }
         }
 
-        private string _constellation;
+        private string _constellation = string.Empty;
 
         public string Constellation {
             get => _constellation;
@@ -81,7 +82,7 @@ namespace OpenAstroAra.Astrometry {
             }
         }
 
-        private Angle _positionAngle;
+        private Angle _positionAngle = Angle.Zero;
 
         public Angle PositionAngle {
             get => _positionAngle;
@@ -138,7 +139,11 @@ namespace OpenAstroAra.Astrometry {
             set {
                 rotationRotationPositionAngle = value;
                 RaisePropertyChanged();
+                // Rotation is a retained obsolete alias of RotationPositionAngle;
+                // still notify it so legacy bindings update.
+#pragma warning disable CS0618
                 RaisePropertyChanged(nameof(Rotation));
+#pragma warning restore CS0618
             }
         }
 
@@ -152,12 +157,12 @@ namespace OpenAstroAra.Astrometry {
             }
         }
 
-        private List<DataPoint> _altitudes;
+        private Collection<DataPoint>? _altitudes;
 
-        public List<DataPoint> Altitudes {
+        public Collection<DataPoint> Altitudes {
             get {
                 if (_altitudes == null) {
-                    _altitudes = new List<DataPoint>();
+                    _altitudes = new Collection<DataPoint>();
                     UpdateHorizonAndTransit();
                 }
                 return _altitudes;
@@ -168,12 +173,12 @@ namespace OpenAstroAra.Astrometry {
             }
         }
 
-        private List<DataPoint> _horizon;
+        private Collection<DataPoint>? _horizon;
 
-        public List<DataPoint> Horizon {
+        public Collection<DataPoint> Horizon {
             get {
                 if (_horizon == null) {
-                    _horizon = new List<DataPoint>();
+                    _horizon = new Collection<DataPoint>();
                 }
                 return _horizon;
             }
@@ -183,34 +188,24 @@ namespace OpenAstroAra.Astrometry {
             }
         }
 
-        private List<string> _alsoKnownAs;
+        private Collection<string>? _alsoKnownAs;
 
-        public List<string> AlsoKnownAs {
-            get {
-                if (_alsoKnownAs == null) {
-                    _alsoKnownAs = new List<string>();
-                }
-                return _alsoKnownAs;
-            }
-            set {
-                _alsoKnownAs = value;
-                RaisePropertyChanged();
-            }
-        }
+        public Collection<string> AlsoKnownAs => _alsoKnownAs ??= new Collection<string>();
 
-        protected DateTime _referenceDate = DateTime.UtcNow;
-        protected double _latitude;
-        protected double _longitude;
+        // CA1051: expose the shared inheritance state as properties rather than visible fields.
+        public DateTime ReferenceDate { get; set; } = DateTime.UtcNow;
+        protected double Latitude { get; set; }
+        protected double Longitude { get; set; }
 
         public void SetDateAndPosition(DateTime start, double latitude, double longitude) {
-            this._referenceDate = start;
-            this._latitude = latitude;
-            this._longitude = longitude;
+            this.ReferenceDate = start;
+            this.Latitude = latitude;
+            this.Longitude = longitude;
             this._altitudes = null;
         }
 
-        public void SetCustomHorizon(CustomHorizon customHorizon) {
-            this.customHorizon = customHorizon;
+        public void SetCustomHorizon(CustomHorizon? customHorizon) {
+            this.CustomHorizon = customHorizon;
             this.UpdateHorizonAndTransit();
         }
 
@@ -226,25 +221,18 @@ namespace OpenAstroAra.Astrometry {
             }
         }
 
-        private byte[] _image;
-        protected CustomHorizon customHorizon;
+        private byte[]? _image;
+        protected CustomHorizon? CustomHorizon { get; set; }
 
-        private Func<SkyObjectBase, Task<byte[]>> imageFactory;
+        private readonly Func<SkyObjectBase, Task<byte[]>>? imageFactory;
 
-        public byte[] Image {
-            get {
-                if (_image == null) {
-                    if(imageFactory != null) {
-                        _ = Task.Run(async () => {
-                            _image = await Task.Run(() => imageFactory(this));
-                            // .Freeze() was the WPF BitmapSource thread-affinity
-                            // release; byte[] is immutable so nothing to do.
-                            RaisePropertyChanged(nameof(Image));
-                        });
-                    }
-                }
-                return _image;
+        // CA1819: a byte[] payload is exposed as a method rather than a property.
+        // Lazily loads the image bytes from the factory on first request.
+        public async Task<byte[]?> GetImageAsync() {
+            if (_image == null && imageFactory != null) {
+                _image = await imageFactory(this);
             }
+            return _image;
         }
     }
 }

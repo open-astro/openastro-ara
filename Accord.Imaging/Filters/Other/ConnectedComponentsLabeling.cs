@@ -2,14 +2,14 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © Andrew Kirillov, 2005-2009
+// Copyright ï¿½ Andrew Kirillov, 2005-2009
 // andrew.kirillov@aforgenet.com
 //
 // Accord Imaging Library
 // The Accord.NET Framework
 // http://accord-framework.net
 //
-// Copyright © César Souza, 2009-2017
+// Copyright ï¿½ Cï¿½sar Souza, 2009-2017
 // cesarsouza at gmail.com
 //
 //    This library is free software; you can redistribute it and/or
@@ -27,8 +27,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -63,23 +62,22 @@ namespace Accord.Imaging.Filters
     /// <img src="..\images\imaging\labeling.jpg" width="320" height="240" />
     /// </remarks>
     /// 
-    public class ConnectedComponentsLabeling : BaseFilter
-    {
+    public class ConnectedComponentsLabeling : BaseFilter {
         // Color table for coloring objects
         private static Color[] colorTable = new Color[]
-		{
-			Color.Red,		Color.Green,	Color.Blue,			Color.Yellow,
-			Color.Violet,	Color.Brown,	Color.Olive,		Color.Cyan,
+        {
+            Color.Red,      Color.Green,    Color.Blue,         Color.Yellow,
+            Color.Violet,   Color.Brown,    Color.Olive,        Color.Cyan,
 
-			Color.Magenta,	Color.Gold,		Color.Indigo,		Color.Ivory,
-			Color.HotPink,	Color.DarkRed,	Color.DarkGreen,	Color.DarkBlue,
+            Color.Magenta,  Color.Gold,     Color.Indigo,       Color.Ivory,
+            Color.HotPink,  Color.DarkRed,  Color.DarkGreen,    Color.DarkBlue,
 
-			Color.DarkSeaGreen,	Color.Gray,	Color.DarkKhaki,	Color.DarkGray,
-			Color.LimeGreen, Color.Tomato,	Color.SteelBlue,	Color.SkyBlue,
+            Color.DarkSeaGreen, Color.Gray, Color.DarkKhaki,    Color.DarkGray,
+            Color.LimeGreen, Color.Tomato,  Color.SteelBlue,    Color.SkyBlue,
 
-			Color.Silver,	Color.Salmon,	Color.SaddleBrown,	Color.RosyBrown,
-            Color.PowderBlue, Color.Plum,	Color.PapayaWhip,	Color.Orange
-		};
+            Color.Silver,   Color.Salmon,   Color.SaddleBrown,  Color.RosyBrown,
+            Color.PowderBlue, Color.Plum,   Color.PapayaWhip,   Color.Orange
+        };
 
         // private format translation dictionary
         private Dictionary<PixelFormat, PixelFormat> formatTranslations = new Dictionary<PixelFormat, PixelFormat>();
@@ -87,8 +85,7 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Format translations dictionary.
         /// </summary>
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -104,8 +101,7 @@ namespace Accord.Imaging.Filters
         /// <para>Default value is set to <see cref="BlobCounter"/>.</para>
         /// </remarks>
         /// 
-        public BlobCounterBase BlobCounter
-        {
+        public BlobCounterBase BlobCounter {
             get { return blobCounter; }
             set { blobCounter = value; }
         }
@@ -113,8 +109,7 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Colors used to color the binary image.
         /// </summary>
-        public static Color[] ColorTable
-        {
+        public static Color[] ColorTable {
             get { return colorTable; }
             set { colorTable = value; }
         }
@@ -126,8 +121,7 @@ namespace Accord.Imaging.Filters
         /// <remarks><para>See documentation for <see cref="BlobCounterBase.FilterBlobs"/> property
         /// of <see cref="BlobCounterBase"/> class for more information.</para></remarks>
         /// 
-        public bool FilterBlobs
-        {
+        public bool FilterBlobs {
             get { return blobCounter.FilterBlobs; }
             set { blobCounter.FilterBlobs = value; }
         }
@@ -139,8 +133,7 @@ namespace Accord.Imaging.Filters
         /// <remarks><para>See documentation for <see cref="BlobCounterBase.CoupledSizeFiltering"/> property
         /// of <see cref="BlobCounterBase"/> class for more information.</para></remarks>
         /// 
-        public bool CoupledSizeFiltering
-        {
+        public bool CoupledSizeFiltering {
             get { return blobCounter.CoupledSizeFiltering; }
             set { blobCounter.CoupledSizeFiltering = value; }
         }
@@ -149,8 +142,7 @@ namespace Accord.Imaging.Filters
         /// Minimum allowed width of blob.
         /// </summary>
         /// 
-        public int MinWidth
-        {
+        public int MinWidth {
             get { return blobCounter.MinWidth; }
             set { blobCounter.MinWidth = value; }
         }
@@ -159,8 +151,7 @@ namespace Accord.Imaging.Filters
         /// Minimum allowed height of blob.
         /// </summary>
         /// 
-        public int MinHeight
-        {
+        public int MinHeight {
             get { return blobCounter.MinHeight; }
             set { blobCounter.MinHeight = value; }
         }
@@ -169,8 +160,7 @@ namespace Accord.Imaging.Filters
         /// Maximum allowed width of blob.
         /// </summary>
         /// 
-        public int MaxWidth
-        {
+        public int MaxWidth {
             get { return blobCounter.MaxWidth; }
             set { blobCounter.MaxWidth = value; }
         }
@@ -179,8 +169,7 @@ namespace Accord.Imaging.Filters
         /// Maximum allowed height of blob.
         /// </summary>
         /// 
-        public int MaxHeight
-        {
+        public int MaxHeight {
             get { return blobCounter.MaxHeight; }
             set { blobCounter.MaxHeight = value; }
         }
@@ -191,8 +180,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <remarks>The amount of objects found in the last processed image.</remarks>
         /// 
-        public int ObjectCount
-        {
+        public int ObjectCount {
             get { return blobCounter.ObjectsCount; }
         }
 
@@ -200,8 +188,7 @@ namespace Accord.Imaging.Filters
         /// Initializes a new instance of the <see cref="ConnectedComponentsLabeling"/> class.
         /// </summary>
         /// 
-        public ConnectedComponentsLabeling()
-        {
+        public ConnectedComponentsLabeling() {
             // initialize format translation dictionary
             formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format24bppRgb;
             formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format24bppRgb;
@@ -216,8 +203,7 @@ namespace Accord.Imaging.Filters
         /// <param name="sourceData">Source image data.</param>
         /// <param name="destinationData">Destination image data.</param>
         /// 
-        protected override unsafe void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData)
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData) {
             // process the image
             blobCounter.ProcessImage(sourceData);
 
@@ -235,13 +221,10 @@ namespace Accord.Imaging.Filters
             int p = 0;
 
             // for each row
-            for (int y = 0; y < height; y++)
-            {
+            for (int y = 0; y < height; y++) {
                 // for each pixel
-                for (int x = 0; x < width; x++, dst += 3, p++)
-                {
-                    if (labels[p] != 0)
-                    {
+                for (int x = 0; x < width; x++, dst += 3, p++) {
+                    if (labels[p] != 0) {
                         Color c = colorTable[(labels[p] - 1) % colorTable.Length];
 
                         dst[RGB.R] = c.R;

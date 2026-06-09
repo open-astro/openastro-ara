@@ -23,13 +23,12 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
+    using Accord.Imaging;
+    using Accord.Imaging.Filters;
     using System;
     using System.Collections.Generic;
     using System.Drawing.Imaging;
-    using Accord.Imaging;
-    using Accord.Imaging.Filters;
 
     /// <summary>
     ///   Kuwahara filter.
@@ -50,8 +49,7 @@ namespace Accord.Imaging.Filters
     /// </code>
     /// </example>
     /// 
-    public class Kuwahara : BaseInPlaceFilter
-    {
+    public class Kuwahara : BaseInPlaceFilter {
         private Dictionary<PixelFormat, PixelFormat> formatTranslations;
         private int kernelSize = 5;
         private int blockSize = 2;
@@ -61,13 +59,11 @@ namespace Accord.Imaging.Filters
         ///   should be odd and greater than or equal to five. Default is 5.
         /// </summary>
         /// 
-        public int Size
-        {
+        public int Size {
             get { return kernelSize; }
-            set
-            {
+            set {
                 if (value % 2 == 0 || value < 5)
-                    throw new ArgumentOutOfRangeException("value", 
+                    throw new ArgumentOutOfRangeException("value",
                         "Size must be odd and greater than or equal to 5.");
 
                 kernelSize = value;
@@ -86,8 +82,7 @@ namespace Accord.Imaging.Filters
         ///   where <c>k</c> is the kernel size.
         /// </value>
         /// 
-        public int BlockSize
-        {
+        public int BlockSize {
             get { return blockSize; }
         }
 
@@ -95,8 +90,7 @@ namespace Accord.Imaging.Filters
         ///   Format translations dictionary.
         /// </summary>
         /// 
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -104,8 +98,7 @@ namespace Accord.Imaging.Filters
         ///   Initializes a new instance of the <see cref="Kuwahara"/> class.
         /// </summary>
         /// 
-        public Kuwahara()
-        {
+        public Kuwahara() {
             formatTranslations = new Dictionary<PixelFormat, PixelFormat>();
             formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
         }
@@ -116,8 +109,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <param name="image">Source image data.</param>
         /// 
-        protected unsafe override void ProcessFilter(UnmanagedImage image)
-        {
+        protected unsafe override void ProcessFilter(UnmanagedImage image) {
             int width = image.Width;
             int height = image.Height;
 
@@ -134,10 +126,8 @@ namespace Accord.Imaging.Filters
             double[,] var = new double[blocksY, blocksX];
 
             byte* src = (byte*)image.ImageData.ToPointer();
-            for (int y = 0; y < height - b; y++)
-            {
-                for (int x = 0; x < width - b; x++, src++)
-                {
+            for (int y = 0; y < height - b; y++) {
+                for (int x = 0; x < width - b; x++, src++) {
                     mean[y, x] = UnsafeTools.Sum(src, b, b, stride) / count;
                     var[y, x] = UnsafeTools.Scatter(src, b, b, stride, mean[y, x]);
                 }
@@ -146,10 +136,8 @@ namespace Accord.Imaging.Filters
 
 
             src = (byte*)image.ImageData.ToPointer() + b * stride + b;
-            for (int y = b; y < height - b - 1; y++)
-            {
-                for (int x = b; x < width - b - 1; x++, src++)
-                {
+            for (int y = b; y < height - b - 1; y++) {
+                for (int x = b; x < width - b - 1; x++, src++) {
                     // variances
                     double va = var[y - b, x - b], vb = var[y - b, x + 1];
                     double vc = var[y + 1, x - b], vd = var[y + 1, x + 1];
@@ -170,25 +158,21 @@ namespace Accord.Imaging.Filters
 
         unsafe private static double min(
             double varA, double varB, double varC, double varD,
-            double meanA, double meanB, double meanC, double meanD)
-        {
+            double meanA, double meanB, double meanC, double meanD) {
             double varMin = varA;
             double mean = meanA;
 
-            if (varB < varMin)
-            {
+            if (varB < varMin) {
                 varMin = varB;
                 mean = meanB;
             }
 
-            if (varC < varMin)
-            {
+            if (varC < varMin) {
                 varMin = varC;
                 mean = meanC;
             }
 
-            if (varD < varMin)
-            {
+            if (varD < varMin) {
                 varMin = varD;
                 mean = meanD;
             }

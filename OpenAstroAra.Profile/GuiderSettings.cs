@@ -12,7 +12,7 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Profile.Interfaces;
 using System;
 using System.IO;
@@ -22,7 +22,11 @@ namespace OpenAstroAra.Profile {
 
     [Serializable()]
     [DataContract]
-    public class GuiderSettings : Settings, IGuiderSettings {
+    public sealed class GuiderSettings : Settings, IGuiderSettings {
+
+        public GuiderSettings() {
+            SetDefaultValues();
+        }
 
         [OnDeserializing]
         public void OnDeserializing(StreamingContext context) {
@@ -38,7 +42,7 @@ namespace OpenAstroAra.Profile {
             pHD2ServerPort = 4400;
             pHD2InstanceNumber = 1;
             pHD2LargeHistorySize = 100;
-            pHD2GuiderScale = GuiderScaleEnum.PIXELS;
+            pHD2GuiderScale = GuiderScale.PIXELS;
             phd2ROIPct = 100;
             settlePixels = 1.5;
             settleTimeout = 40;
@@ -79,7 +83,7 @@ namespace OpenAstroAra.Profile {
             guideChartShowCorrections = true;
         }
 
-        private string lastDeviceName;
+        private string lastDeviceName = string.Empty;
 
         [DataMember]
         public string LastDeviceName {
@@ -144,10 +148,10 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string pHD2ServerUrl;
+        private string pHD2ServerUrl = string.Empty;
 
-        [DataMember]
-        public string PHD2ServerUrl {
+        [DataMember(Name = "PHD2ServerUrl")]
+        public string PHD2ServerHost {
             get => pHD2ServerUrl;
             set {
                 if (pHD2ServerUrl != value) {
@@ -183,7 +187,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string phd2Path;
+        private string phd2Path = string.Empty;
 
         [DataMember]
         public string PHD2Path {
@@ -196,10 +200,10 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private GuiderScaleEnum pHD2GuiderScale;
+        private GuiderScale pHD2GuiderScale;
 
         [DataMember]
-        public GuiderScaleEnum PHD2GuiderScale {
+        public GuiderScale PHD2GuiderScale {
             get => pHD2GuiderScale;
             set {
                 if (pHD2GuiderScale != value) {
@@ -237,7 +241,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string guiderName;
+        private string guiderName = string.Empty;
 
         [DataMember]
         public string GuiderName {
@@ -298,7 +302,7 @@ namespace OpenAstroAra.Profile {
                     RaisePropertyChanged();
                 }
             }
-        
+
         }
 
         private int metaGuidePort;
@@ -406,9 +410,9 @@ namespace OpenAstroAra.Profile {
         }
 
         #region SkyGuard settings
-        string skyGuardServerUrl;
+        string skyGuardServerUrl = string.Empty;
         int skyGuardServerPort;
-        string skyGuardPath;
+        string skyGuardPath = string.Empty;
         int skyGuardCallbackPort;
         bool skyGuardTimeLapsChecked;
         double skyGuardValueMaxGuiding;
@@ -421,14 +425,11 @@ namespace OpenAstroAra.Profile {
         /// <summary>
         /// Property allowing to set the endpoint URL for SkyGuard software
         /// </summary>
-        [DataMember]
-        public string SkyGuardServerUrl
-        {
+        [DataMember(Name = "SkyGuardServerUrl")]
+        public string SkyGuardServerHost {
             get => skyGuardServerUrl;
-            set
-            {
-                if (skyGuardServerUrl != value)
-                {
+            set {
+                if (skyGuardServerUrl != value) {
                     skyGuardServerUrl = value;
                     RaisePropertyChanged();
                 }
@@ -439,13 +440,10 @@ namespace OpenAstroAra.Profile {
         /// Property to set endpoint URL port for SkyGuard software
         /// </summary>
         [DataMember]
-        public int SkyGuardServerPort
-        {
+        public int SkyGuardServerPort {
             get => skyGuardServerPort;
-            set
-            {
-                if (skyGuardServerPort != value)
-                {
+            set {
+                if (skyGuardServerPort != value) {
                     skyGuardServerPort = value;
                     RaisePropertyChanged();
                 }
@@ -456,13 +454,10 @@ namespace OpenAstroAra.Profile {
         /// Property allowing to set SkyGuard.exe file path
         /// </summary>
         [DataMember]
-        public string SkyGuardPath
-        {
+        public string SkyGuardPath {
             get => skyGuardPath;
-            set
-            {
-                if (skyGuardPath != value)
-                {
+            set {
+                if (skyGuardPath != value) {
                     skyGuardPath = value;
                     RaisePropertyChanged();
                 }
@@ -473,13 +468,10 @@ namespace OpenAstroAra.Profile {
         /// Property to set callback port
         /// </summary>
         [DataMember]
-        public int SkyGuardCallbackPort
-        {
+        public int SkyGuardCallbackPort {
             get => skyGuardCallbackPort;
-            set
-            {
-                if (skyGuardCallbackPort != value)
-                {
+            set {
+                if (skyGuardCallbackPort != value) {
                     skyGuardCallbackPort = value;
                     RaisePropertyChanged();
                 }
@@ -490,13 +482,10 @@ namespace OpenAstroAra.Profile {
         /// Property to set callback port
         /// </summary>
         [DataMember]
-        public bool SkyGuardTimeLapsChecked
-        {
+        public bool SkyGuardTimeLapsChecked {
             get => skyGuardTimeLapsChecked;
-            set
-            {
-                if (skyGuardTimeLapsChecked != value)
-                {
+            set {
+                if (skyGuardTimeLapsChecked != value) {
                     skyGuardTimeLapsChecked = value;
                     RaisePropertyChanged();
                 }
@@ -504,13 +493,10 @@ namespace OpenAstroAra.Profile {
         }
 
         [DataMember]
-        public double SkyGuardValueMaxGuiding
-        {
+        public double SkyGuardValueMaxGuiding {
             get => skyGuardValueMaxGuiding;
-            set
-            {
-                if (skyGuardValueMaxGuiding != value)
-                {
+            set {
+                if (skyGuardValueMaxGuiding != value) {
                     skyGuardValueMaxGuiding = value;
                     RaisePropertyChanged();
                 }
@@ -518,13 +504,10 @@ namespace OpenAstroAra.Profile {
         }
 
         [DataMember]
-        public double SkyGuardTimeLapsGuiding
-        {
+        public double SkyGuardTimeLapsGuiding {
             get => skyGuardTimeLapsGuiding;
-            set
-            {
-                if (skyGuardTimeLapsGuiding != value)
-                {
+            set {
+                if (skyGuardTimeLapsGuiding != value) {
                     skyGuardTimeLapsGuiding = value;
                     RaisePropertyChanged();
                 }
@@ -565,13 +548,10 @@ namespace OpenAstroAra.Profile {
         }
 
         [DataMember]
-        public double SkyGuardTimeOutGuiding
-        {
+        public double SkyGuardTimeOutGuiding {
             get => skyGuardTimeOutGuiding;
-            set
-            {
-                if (skyGuardTimeOutGuiding != value)
-                {
+            set {
+                if (skyGuardTimeOutGuiding != value) {
                     skyGuardTimeOutGuiding = value;
                     RaisePropertyChanged();
                 }
@@ -580,7 +560,7 @@ namespace OpenAstroAra.Profile {
         #endregion
 
 
-        private string guideChartRightAscensionColor;        
+        private string guideChartRightAscensionColor = string.Empty;
         [DataMember]
         public string GuideChartRightAscensionColor {
             get => guideChartRightAscensionColor;
@@ -592,7 +572,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string guideChartDeclinationColor;        
+        private string guideChartDeclinationColor = string.Empty;
         [DataMember]
         public string GuideChartDeclinationColor {
             get => guideChartDeclinationColor;

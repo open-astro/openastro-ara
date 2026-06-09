@@ -27,8 +27,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging
-{
+namespace Accord.Imaging {
     using System;
 
     /// <summary>
@@ -52,8 +51,7 @@ namespace Accord.Imaging
     /// <seealso cref="YCbCr"/>
     /// 
     [Serializable]
-    public struct HSL
-    {
+    public struct HSL {
         /// <summary>
         /// Hue component.
         /// </summary>
@@ -86,8 +84,7 @@ namespace Accord.Imaging
         /// <param name="saturation">Saturation component.</param>
         /// <param name="luminance">Luminance component.</param>
         /// 
-        public HSL(int hue, float saturation, float luminance)
-        {
+        public HSL(int hue, float saturation, float luminance) {
             this.Hue = hue;
             this.Saturation = saturation;
             this.Luminance = luminance;
@@ -103,8 +100,7 @@ namespace Accord.Imaging
         /// <remarks><para>See <a href="http://en.wikipedia.org/wiki/HSI_color_space#Conversion_from_RGB_to_HSL_or_HSV">HSL and HSV Wiki</a>
         /// for information about the algorithm to convert from RGB to HSL.</para></remarks>
         /// 
-        public static void FromRGB(RGB rgb, ref HSL hsl)
-        {
+        public static void FromRGB(RGB rgb, ref HSL hsl) {
             float r = (rgb.Red / 255.0f);
             float g = (rgb.Green / 255.0f);
             float b = (rgb.Blue / 255.0f);
@@ -116,30 +112,22 @@ namespace Accord.Imaging
             // get luminance value
             hsl.Luminance = (max + min) / 2;
 
-            if (delta == 0)
-            {
+            if (delta == 0) {
                 // gray color
                 hsl.Hue = 0;
                 hsl.Saturation = 0.0f;
-            }
-            else
-            {
+            } else {
                 // get saturation value
                 hsl.Saturation = (hsl.Luminance <= 0.5) ? (delta / (max + min)) : (delta / (2 - max - min));
 
                 // get hue value
                 float hue;
 
-                if (r == max)
-                {
+                if (r == max) {
                     hue = ((g - b) / 6) / delta;
-                }
-                else if (g == max)
-                {
+                } else if (g == max) {
                     hue = (1.0f / 3) + ((b - r) / 6) / delta;
-                }
-                else
-                {
+                } else {
                     hue = (2.0f / 3) + ((r - g) / 6) / delta;
                 }
 
@@ -161,8 +149,7 @@ namespace Accord.Imaging
         /// 
         /// <returns>Returns <see cref="HSL"/> instance, which represents converted color value.</returns>
         /// 
-        public static HSL FromRGB(RGB rgb)
-        {
+        public static HSL FromRGB(RGB rgb) {
             HSL hsl = new HSL();
             FromRGB(rgb, ref hsl);
             return hsl;
@@ -175,15 +162,11 @@ namespace Accord.Imaging
         /// <param name="hsl">Source color in <b>HSL</b> color space.</param>
         /// <param name="rgb">Destination color in <b>RGB</b> color space.</param>
         /// 
-        public static void ToRGB(HSL hsl, ref RGB rgb)
-        {
-            if (hsl.Saturation == 0)
-            {
+        public static void ToRGB(HSL hsl, ref RGB rgb) {
+            if (hsl.Saturation == 0) {
                 // gray values
                 rgb.Red = rgb.Green = rgb.Blue = (byte)(hsl.Luminance * 255);
-            }
-            else
-            {
+            } else {
                 float v1, v2;
                 float hue = (float)hsl.Hue / 360;
 
@@ -205,8 +188,7 @@ namespace Accord.Imaging
         /// 
         /// <returns>Returns <see cref="RGB"/> instance, which represents converted color value.</returns>
         /// 
-        public RGB ToRGB()
-        {
+        public RGB ToRGB() {
             RGB rgb = new RGB();
             ToRGB(this, ref rgb);
             return rgb;
@@ -217,8 +199,7 @@ namespace Accord.Imaging
         /// </summary>
         /// <param name="hsl">The HSL color.</param>
         /// <returns>The result of the conversion.</returns>
-        public static explicit operator RGB(HSL hsl)
-        {
+        public static explicit operator RGB(HSL hsl) {
             return hsl.ToRGB();
         }
 
@@ -227,15 +208,13 @@ namespace Accord.Imaging
         /// </summary>
         /// <param name="hsl">The HSL color.</param>
         /// <returns>The result of the conversion.</returns>
-        public static explicit operator YCbCr(HSL hsl)
-        {
+        public static explicit operator YCbCr(HSL hsl) {
             return YCbCr.FromRGB(hsl.ToRGB());
         }
 
         #region Private members
         // HSL to RGB helper routine
-        private static float Hue_2_RGB(float v1, float v2, float vH)
-        {
+        private static float Hue_2_RGB(float v1, float v2, float vH) {
             if (vH < 0)
                 vH += 1;
             if (vH > 1)

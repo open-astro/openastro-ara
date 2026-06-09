@@ -1,12 +1,11 @@
 // AForge Image Processing Library
 // AForge.NET framework
 //
-// Copyright © Andrew Kirillov, 2005-2009
+// Copyright ï¿½ Andrew Kirillov, 2005-2009
 // andrew.kirillov@aforgenet.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -42,18 +41,16 @@ namespace Accord.Imaging.Filters
     /// <img src="..\images\imaging\morph.png" width="320" height="240" />
     /// </remarks>
     /// 
-    public class Morph : BaseInPlaceFilter2
-    {
-        private double	sourcePercent = 0.50;
+    public class Morph : BaseInPlaceFilter2 {
+        private double sourcePercent = 0.50;
 
         // private format translation dictionary
-        private Dictionary<PixelFormat, PixelFormat> formatTranslations = new Dictionary<PixelFormat, PixelFormat>( );
+        private Dictionary<PixelFormat, PixelFormat> formatTranslations = new Dictionary<PixelFormat, PixelFormat>();
 
         /// <summary>
         /// Format translations dictionary.
         /// </summary>
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -64,19 +61,17 @@ namespace Accord.Imaging.Filters
         /// <remarks><para>The property specifies the percentage of source pixels' to take. The
         /// rest is taken from an overlay image.</para></remarks>
         /// 
-        public double SourcePercent
-        {
+        public double SourcePercent {
             get { return sourcePercent; }
-            set { sourcePercent = Math.Max( 0.0, Math.Min( 1.0, value ) ); }
+            set { sourcePercent = Math.Max(0.0, Math.Min(1.0, value)); }
         }
 
 
         /// <summary>
         /// Initializes a new instance of the <see cref="Morph"/> class.
         /// </summary>
-        public Morph( )
-        {
-            InitFormatTranslations( );
+        public Morph() {
+            InitFormatTranslations();
         }
 
         /// <summary>
@@ -85,10 +80,9 @@ namespace Accord.Imaging.Filters
         /// 
         /// <param name="overlayImage">Overlay image.</param>
         /// 
-        public Morph( Bitmap overlayImage )
-            : base( overlayImage )
-        {
-            InitFormatTranslations( );
+        public Morph(Bitmap overlayImage)
+            : base(overlayImage) {
+            InitFormatTranslations();
         }
 
         /// <summary>
@@ -97,17 +91,15 @@ namespace Accord.Imaging.Filters
         /// 
         /// <param name="unmanagedOverlayImage">Unmanaged overlay image.</param>
         /// 
-        public Morph( UnmanagedImage unmanagedOverlayImage )
-            : base( unmanagedOverlayImage )
-        {
-            InitFormatTranslations( );
+        public Morph(UnmanagedImage unmanagedOverlayImage)
+            : base(unmanagedOverlayImage) {
+            InitFormatTranslations();
         }
 
         // Initialize format translation dictionary
-        private void InitFormatTranslations( )
-        {
+        private void InitFormatTranslations() {
             formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
-            formatTranslations[PixelFormat.Format24bppRgb]    = PixelFormat.Format24bppRgb;
+            formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format24bppRgb;
         }
 
         /// <summary>
@@ -117,31 +109,28 @@ namespace Accord.Imaging.Filters
         /// <param name="image">Source image data.</param>
         /// <param name="overlay">Overlay image data.</param>
         ///
-        protected override unsafe void ProcessFilter( UnmanagedImage image, UnmanagedImage overlay )
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage image, UnmanagedImage overlay) {
             // get image dimension
-            int width  = image.Width;
+            int width = image.Width;
             int height = image.Height;
 
             // initialize other variables
-            int pixelSize = ( image.PixelFormat == PixelFormat.Format8bppIndexed ) ? 1 : 3;
-            int lineSize  = width * pixelSize;
-            int offset    = image.Stride - lineSize;
+            int pixelSize = (image.PixelFormat == PixelFormat.Format8bppIndexed) ? 1 : 3;
+            int lineSize = width * pixelSize;
+            int offset = image.Stride - lineSize;
             int ovrOffset = overlay.Stride - lineSize;
             // percentage of overlay image
             double q = 1.0 - sourcePercent;
 
             // do the job
-            byte * ptr = (byte*) image.ImageData.ToPointer( );
-            byte * ovr = (byte*) overlay.ImageData.ToPointer( );
+            byte* ptr = (byte*)image.ImageData.ToPointer();
+            byte* ovr = (byte*)overlay.ImageData.ToPointer();
 
             // for each line
-            for ( int y = 0; y < height; y++ )
-            {
+            for (int y = 0; y < height; y++) {
                 // for each pixel
-                for ( int x = 0; x < lineSize; x++, ptr++, ovr++ )
-                {
-                    *ptr = (byte) ( ( sourcePercent * ( *ptr ) ) + ( q * ( *ovr ) ) );
+                for (int x = 0; x < lineSize; x++, ptr++, ovr++) {
+                    *ptr = (byte)((sourcePercent * (*ptr)) + (q * (*ovr)));
                 }
                 ptr += offset;
                 ovr += ovrOffset;

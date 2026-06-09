@@ -2,12 +2,11 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © Andrew Kirillov, 2005-2009
+// Copyright ï¿½ Andrew Kirillov, 2005-2009
 // andrew.kirillov@aforgenet.com
 //
 
-namespace Accord.Imaging
-{
+namespace Accord.Imaging {
     using System;
     using System.Drawing;
 
@@ -17,8 +16,7 @@ namespace Accord.Imaging
     /// interface.
     /// </summary>
     /// 
-    public class BlockMatch
-    {
+    public class BlockMatch {
         private IntPoint sourcePoint;
         private IntPoint matchPoint;
         private float similarity;
@@ -26,24 +24,21 @@ namespace Accord.Imaging
         /// <summary>
         /// Reference point in source image.
         /// </summary>
-        public IntPoint SourcePoint
-        {
+        public IntPoint SourcePoint {
             get { return sourcePoint; }
         }
 
         /// <summary>
         /// Match point in search image (point of a found match).
         /// </summary>
-        public IntPoint MatchPoint
-        {
+        public IntPoint MatchPoint {
             get { return matchPoint; }
         }
 
         /// <summary>
         /// Similarity between blocks in source and search images, [0..1].
         /// </summary>
-        public float Similarity
-        {
+        public float Similarity {
             get { return similarity; }
         }
 
@@ -55,8 +50,7 @@ namespace Accord.Imaging
         /// <param name="matchPoint">Match point in search image (point of a found match).</param>
         /// <param name="similarity">Similarity between blocks in source and search images, [0..1].</param>
         /// 
-        public BlockMatch(IntPoint sourcePoint, IntPoint matchPoint, float similarity)
-        {
+        public BlockMatch(IntPoint sourcePoint, IntPoint matchPoint, float similarity) {
             this.sourcePoint = sourcePoint;
             this.matchPoint = matchPoint;
             this.similarity = similarity;

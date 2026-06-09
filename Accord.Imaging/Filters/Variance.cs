@@ -23,8 +23,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing.Imaging;
@@ -61,8 +60,7 @@ namespace Accord.Imaging.Filters
     /// 
     /// </example>
     /// 
-    public class Variance : BaseFilter
-    {
+    public class Variance : BaseFilter {
 
         private int radius = 2;
         private Dictionary<PixelFormat, PixelFormat> formatTranslations;
@@ -72,11 +70,9 @@ namespace Accord.Imaging.Filters
         ///   used to compute a pixel's local variance.
         /// </summary>
         /// 
-        public int Radius
-        {
+        public int Radius {
             get { return radius; }
-            set
-            {
+            set {
                 if (value < 1)
                     throw new ArgumentOutOfRangeException("value", "Radius must be higher than zero.");
                 radius = value;
@@ -87,8 +83,7 @@ namespace Accord.Imaging.Filters
         ///   Initializes a new instance of the <see cref="Variance"/> class.
         /// </summary>
         /// 
-        public Variance()
-        {
+        public Variance() {
             formatTranslations = new Dictionary<PixelFormat, PixelFormat>();
             formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
             formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format24bppRgb;
@@ -103,8 +98,7 @@ namespace Accord.Imaging.Filters
         /// <param name="radius">The radius neighborhood used to compute a pixel's local variance.</param>
         /// 
         public Variance(int radius)
-            : this()
-        {
+            : this() {
             if (radius < 1)
                 throw new ArgumentOutOfRangeException("radius", "Radius must be higher than zero.");
 
@@ -116,8 +110,7 @@ namespace Accord.Imaging.Filters
         ///   Format translations dictionary.
         /// </summary>
         /// 
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -129,8 +122,7 @@ namespace Accord.Imaging.Filters
         /// <param name="sourceData">Source image data.</param>
         /// <param name="destinationData">Destination image data.</param>
         /// 
-        protected override unsafe void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData)
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData) {
             int width = sourceData.Width;
             int height = sourceData.Height;
             int size = radius * 2;
@@ -148,35 +140,30 @@ namespace Accord.Imaging.Filters
 
 
             // do the processing job
-            if (destinationData.PixelFormat == PixelFormat.Format8bppIndexed)
-            {
+            if (destinationData.PixelFormat == PixelFormat.Format8bppIndexed) {
                 // for each line
-                for (int y = 0; y < height; y++)
-                {
+                for (int y = 0; y < height; y++) {
                     // for each pixel
-                    for (int x = 0; x < width; x++, src++, dst++)
-                    {
+                    for (int x = 0; x < width; x++, src++, dst++) {
                         long sum = 0;
                         int count = 0;
 
-                        for (int i = 0; i < radius; i++)
-                        {
+                        for (int i = 0; i < radius; i++) {
                             int ir = i - radius;
                             int t = y + ir;
 
-                            if (t < 0) 
+                            if (t < 0)
                                 continue;
-                            if (t >= height) 
+                            if (t >= height)
                                 break;
 
-                            for (int j = 0; j < size; j++)
-                            {
+                            for (int j = 0; j < size; j++) {
                                 int jr = j - radius;
                                 t = x + jr;
 
-                                if (t < 0) 
+                                if (t < 0)
                                     continue;
-                                if (t >= width) 
+                                if (t >= width)
                                     continue;
 
                                 sum += src[ir * srcStride + jr];
@@ -187,24 +174,22 @@ namespace Accord.Imaging.Filters
                         double mean = sum / (double)count;
                         double variance = 0;
 
-                        for (int i = 0; i < radius; i++)
-                        {
+                        for (int i = 0; i < radius; i++) {
                             int ir = i - radius;
                             int t = y + ir;
 
-                            if (t < 0) 
+                            if (t < 0)
                                 continue;
-                            if (t >= height) 
+                            if (t >= height)
                                 break;
 
-                            for (int j = 0; j < size; j++)
-                            {
+                            for (int j = 0; j < size; j++) {
                                 int jr = j - radius;
                                 t = x + jr;
 
                                 if (t < 0)
                                     continue;
-                                if (t >= width) 
+                                if (t >= width)
                                     continue;
 
                                 byte val = src[ir * srcStride + jr];
@@ -220,38 +205,32 @@ namespace Accord.Imaging.Filters
                     src += srcOffset;
                     dst += dstOffset;
                 }
-            }
-            else
-            {
+            } else {
                 // for each line
-                for (int y = 0; y < height; y++)
-                {
+                for (int y = 0; y < height; y++) {
                     // for each pixel
-                    for (int x = 0; x < width; x++, src += pixelSize, dst += pixelSize)
-                    {
+                    for (int x = 0; x < width; x++, src += pixelSize, dst += pixelSize) {
                         long sumR = 0;
                         long sumG = 0;
                         long sumB = 0;
                         int count = 0;
 
-                        for (int i = 0; i < size; i++)
-                        {
+                        for (int i = 0; i < size; i++) {
                             int ir = i - radius;
                             int t = y + ir;
 
-                            if (t < 0) 
+                            if (t < 0)
                                 continue;
-                            if (t >= height) 
+                            if (t >= height)
                                 break;
 
-                            for (int j = 0; j < size; j++)
-                            {
+                            for (int j = 0; j < size; j++) {
                                 int jr = j - radius;
                                 t = x + jr;
 
-                                if (t < 0) 
+                                if (t < 0)
                                     continue;
-                                if (t >= width) 
+                                if (t >= width)
                                     continue;
 
                                 byte* p = &src[ir * srcStride + jr * pixelSize];
@@ -272,25 +251,23 @@ namespace Accord.Imaging.Filters
                         double varG = 0;
                         double varB = 0;
 
-                        for (int i = 0; i < size; i++)
-                        {
+                        for (int i = 0; i < size; i++) {
                             int ir = i - radius;
                             int t = y + ir;
 
-                            if (t < 0) 
+                            if (t < 0)
                                 continue;
-                            if (t >= height) 
+                            if (t >= height)
                                 break;
 
                             // for each kernel column
-                            for (int j = 0; j < size; j++)
-                            {
+                            for (int j = 0; j < size; j++) {
                                 int jr = j - radius;
                                 t = x + jr;
 
-                                if (t < 0) 
+                                if (t < 0)
                                     continue;
-                                if (t >= width) 
+                                if (t >= width)
                                     continue;
 
                                 byte* p = &src[ir * srcStride + jr * pixelSize];

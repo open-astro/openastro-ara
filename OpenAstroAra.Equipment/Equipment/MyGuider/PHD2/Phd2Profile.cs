@@ -16,6 +16,6 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
 
     public class Phd2Profile {
         public int Id { get; set; }
-        public string Name { get; set; }
+        public string Name { get; set; } = string.Empty;
     }
 }

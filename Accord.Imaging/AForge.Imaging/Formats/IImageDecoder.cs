@@ -5,12 +5,11 @@
 // andrew.kirillov@gmail.com
 //
 
-namespace Accord.Imaging.Formats
-{
+namespace Accord.Imaging.Formats {
     using System;
-    using System.IO;
-    using System.Drawing;
     using System.ComponentModel;
+    using System.Drawing;
+    using System.IO;
 
     /// <summary>
     ///   Common interface for image decoders. Image decoders can read images stored
@@ -28,8 +27,7 @@ namespace Accord.Imaging.Formats
     /// <seealso cref="PNMCodec"/>
     /// <seealso cref="FITSCodec"/>
     /// 
-    public interface IImageDecoder
-    {
+    public interface IImageDecoder {
         /// <summary>
         /// Decode first frame of image from the specified stream.
         /// </summary>
@@ -108,8 +106,7 @@ namespace Accord.Imaging.Formats
     /// height, etc. Classes, which inherit from this, may define more properties describing certain
     /// image formats.</para></remarks>
     /// 
-    public class ImageInfo : ICloneable
-    {
+    public class ImageInfo : ICloneable {
         /// <summary>
         /// Image's width.
         /// </summary>
@@ -139,8 +136,7 @@ namespace Accord.Imaging.Formats
         /// Image's width.
         /// </summary>
         [Category("General")]
-        public int Width
-        {
+        public int Width {
             get { return width; }
             set { width = value; }
         }
@@ -149,8 +145,7 @@ namespace Accord.Imaging.Formats
         /// Image's height.
         /// </summary>
         [Category("General")]
-        public int Height
-        {
+        public int Height {
             get { return height; }
             set { height = value; }
         }
@@ -159,8 +154,7 @@ namespace Accord.Imaging.Formats
         /// Number of bits per image's pixel.
         /// </summary>
         [Category("General")]
-        public int BitsPerPixel
-        {
+        public int BitsPerPixel {
             get { return bitsPerPixel; }
             set { bitsPerPixel = value; }
         }
@@ -173,8 +167,7 @@ namespace Accord.Imaging.Formats
         /// The property specifies index of a particular frame.</para></remarks>
         /// 
         [Category("General")]
-        public int FrameIndex
-        {
+        public int FrameIndex {
             get { return frameIndex; }
             set { frameIndex = value; }
         }
@@ -187,8 +180,7 @@ namespace Accord.Imaging.Formats
         /// The property specifies total number of frames in image file.</para></remarks>
         /// 
         [Category("General")]
-        public int TotalFrames
-        {
+        public int TotalFrames {
             get { return totalFrames; }
             set { totalFrames = value; }
         }
@@ -209,8 +201,7 @@ namespace Accord.Imaging.Formats
         /// <param name="frameIndex">Frame's index.</param>
         /// <param name="totalFrames">Total frames in the image.</param>
         /// 
-        public ImageInfo(int width, int height, int bitsPerPixel, int frameIndex, int totalFrames)
-        {
+        public ImageInfo(int width, int height, int bitsPerPixel, int frameIndex, int totalFrames) {
             this.width = width;
             this.height = height;
             this.bitsPerPixel = bitsPerPixel;
@@ -224,8 +215,7 @@ namespace Accord.Imaging.Formats
         /// 
         /// <returns>A new object that is a copy of this instance.</returns>
         /// 
-        public virtual object Clone()
-        {
+        public virtual object Clone() {
             return new ImageInfo(width, height, bitsPerPixel, frameIndex, totalFrames);
         }
     }

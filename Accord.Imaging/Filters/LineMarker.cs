@@ -20,23 +20,21 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
+    using Accord.Imaging;
+    using Accord.Imaging.Filters;
+    using Accord.Math.Geometry;
+    using AForge;
+    using System;
     using System.Collections.Generic;
     using System.Drawing;
     using System.Drawing.Imaging;
-    using AForge;
-    using Accord.Imaging;
-    using Accord.Imaging.Filters;
-    using System;
-    using Accord.Math.Geometry;
 
     /// <summary>
     ///   Filter to mark (highlight) lines in a image.
     /// </summary>
     /// 
-    public class LineMarker : BaseInPlaceFilter
-    {
+    public class LineMarker : BaseInPlaceFilter {
         private int width = 3;
         private Color markerColor = Color.White;
         private Line line;
@@ -47,16 +45,14 @@ namespace Accord.Imaging.Filters
         ///   Format translations dictionary.
         /// </summary>
         /// 
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
         /// <summary>
         ///   Color used to mark corners.
         /// </summary>
-        public Color MarkerColor
-        {
+        public Color MarkerColor {
             get { return markerColor; }
             set { markerColor = value; }
         }
@@ -64,8 +60,7 @@ namespace Accord.Imaging.Filters
         /// <summary>
         ///   Gets or sets the set of points to mark.
         /// </summary>
-        public Line Line
-        {
+        public Line Line {
             get { return line; }
             set { line = value; }
         }
@@ -73,8 +68,7 @@ namespace Accord.Imaging.Filters
         /// <summary>
         ///   Gets or sets the width of the points to be drawn.
         /// </summary>
-        public int Width
-        {
+        public int Width {
             get { return width; }
             set { width = value; }
         }
@@ -84,8 +78,7 @@ namespace Accord.Imaging.Filters
         /// </summary>
         /// 
         public LineMarker(Line line)
-            : this(line, Color.White, 3)
-        {
+            : this(line, Color.White, 3) {
         }
 
 
@@ -94,16 +87,14 @@ namespace Accord.Imaging.Filters
         /// </summary>
         /// 
         public LineMarker(Line line, Color markerColor)
-            : this(line, markerColor, 3)
-        {
+            : this(line, markerColor, 3) {
         }
 
         /// <summary>
         ///   Initializes a new instance of the <see cref="LineMarker"/> class.
         /// </summary>
         /// 
-        public LineMarker(Line line, Color markerColor, int width)
-        {
+        public LineMarker(Line line, Color markerColor, int width) {
             this.line = line;
             this.markerColor = markerColor;
             this.width = width;
@@ -118,16 +109,14 @@ namespace Accord.Imaging.Filters
         /// </summary>
         /// 
         public LineMarker(Color markerColor)
-            : this(null, markerColor, 3)
-        {
+            : this(null, markerColor, 3) {
         }
 
         /// <summary>
         ///   Initializes a new instance of the <see cref="LineMarker"/> class.
         /// </summary>
         /// 
-        public LineMarker(Color markerColor, int width)
-        {
+        public LineMarker(Color markerColor, int width) {
             this.markerColor = markerColor;
             this.width = width;
 
@@ -142,8 +131,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <param name="image">Source image data.</param>
         ///
-        protected override unsafe void ProcessFilter(UnmanagedImage image)
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage image) {
             // get border point which is still in the line
 
             IntPoint a = new IntPoint(0, 0);
@@ -164,13 +152,11 @@ namespace Accord.Imaging.Filters
 
             IntPoint? p1 = null;
             IntPoint? p2 = null;
-            foreach (var p in points)
-            {
+            foreach (var p in points) {
                 if (p == null)
                     continue;
 
-                if (p1 == null)
-                {
+                if (p1 == null) {
                     p1 = p.Value.Round();
                     continue;
                 }

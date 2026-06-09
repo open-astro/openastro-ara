@@ -2,11 +2,11 @@
 // The Accord.NET Framework
 // http://accord-framework.net
 //
-// Copyright © Hashem Zawary, 2016
+// Copyright ï¿½ Hashem Zawary, 2016
 // hashemzawary@gmail.com
 // https://www.linkedin.com/in/hashem-zavvari-53b01457
 //
-// Copyright © César Souza, 2009-2017
+// Copyright ï¿½ Cï¿½sar Souza, 2009-2017
 // cesarsouza at gmail.com
 //
 //    This library is free software; you can redistribute it and/or
@@ -24,8 +24,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System.Collections.Generic;
     using System.Drawing;
     using System.Drawing.Imaging;
@@ -62,24 +61,21 @@ namespace Accord.Imaging.Filters
     /// <seealso cref="Difference"/>
     /// <seealso cref="Divide"/>
     /// 
-    public sealed class Multiply : BaseInPlaceFilter2
-    {
+    public sealed class Multiply : BaseInPlaceFilter2 {
         // private format translation dictionary
         private readonly Dictionary<PixelFormat, PixelFormat> _formatTranslations = new Dictionary<PixelFormat, PixelFormat>();
 
         /// <summary>
         /// Format translations dictionary.
         /// </summary>
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return _formatTranslations; }
         }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="Multiply"/> class.
         /// </summary>
-        public Multiply()
-        {
+        public Multiply() {
             InitFormatTranslations();
         }
 
@@ -90,8 +86,7 @@ namespace Accord.Imaging.Filters
         /// <param name="overlayImage">Overlay image</param>
         /// 
         public Multiply(Bitmap overlayImage)
-            : base(overlayImage)
-        {
+            : base(overlayImage) {
             InitFormatTranslations();
         }
 
@@ -102,14 +97,12 @@ namespace Accord.Imaging.Filters
         /// <param name="unmanagedOverlayImage">Unmanaged overlay image.</param>
         /// 
         public Multiply(UnmanagedImage unmanagedOverlayImage)
-            : base(unmanagedOverlayImage)
-        {
+            : base(unmanagedOverlayImage) {
             InitFormatTranslations();
         }
 
         // Initialize format translation dictionary
-        private void InitFormatTranslations()
-        {
+        private void InitFormatTranslations() {
             _formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
             _formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format24bppRgb;
             _formatTranslations[PixelFormat.Format32bppRgb] = PixelFormat.Format32bppRgb;
@@ -126,8 +119,7 @@ namespace Accord.Imaging.Filters
         /// <param name="image">Source image data.</param>
         /// <param name="overlay">Overlay image data.</param>
         ///
-        protected override unsafe void ProcessFilter(UnmanagedImage image, UnmanagedImage overlay)
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage image, UnmanagedImage overlay) {
             PixelFormat pixelFormat = image.PixelFormat;
             int width = image.Width;
             int height = image.Height;
@@ -135,8 +127,7 @@ namespace Accord.Imaging.Filters
             if ((pixelFormat == PixelFormat.Format8bppIndexed) ||
                 (pixelFormat == PixelFormat.Format24bppRgb) ||
                 (pixelFormat == PixelFormat.Format32bppRgb) ||
-                (pixelFormat == PixelFormat.Format32bppArgb))
-            {
+                (pixelFormat == PixelFormat.Format32bppArgb)) {
 
                 // initialize other variables
                 var pixelSize = (pixelFormat == PixelFormat.Format8bppIndexed) ? 1 :
@@ -151,17 +142,14 @@ namespace Accord.Imaging.Filters
                 var ovr = (byte*)overlay.ImageData.ToPointer();
 
                 // for each line
-                for (var y = 0; y < height; y++)
-                {
+                for (var y = 0; y < height; y++) {
                     // for each pixel
                     for (var x = 0; x < lineSize; x++, ptr++, ovr++)
                         *ptr = (byte)((*ptr * *ovr) / 255);
                     ptr += srcOffset;
                     ovr += ovrOffset;
                 }
-            }
-            else
-            {
+            } else {
                 // initialize other variables
                 int pixelSize = (pixelFormat == PixelFormat.Format16bppGrayScale) ? 1 :
                     (pixelFormat == PixelFormat.Format48bppRgb) ? 3 : 4;
@@ -175,8 +163,7 @@ namespace Accord.Imaging.Filters
                 var baseOvr = (byte*)overlay.ImageData.ToPointer();
 
                 // for each line
-                for (var y = 0; y < height; y++)
-                {
+                for (var y = 0; y < height; y++) {
                     var ptr = (ushort*)(basePtr + y * srcStride);
                     var ovr = (ushort*)(baseOvr + y * ovrStride);
 

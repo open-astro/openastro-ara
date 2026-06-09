@@ -12,39 +12,39 @@
 
 #endregion "copyright"
 
+using CommunityToolkit.Mvvm.ComponentModel;
+using OpenAstroAra.Astrometry;
+using OpenAstroAra.Core.Locale;
 using OpenAstroAra.Core.Model;
-using System.Windows.Data;
-using System.Windows.Input;
+using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Core.Utility.Notification;
 using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.DragDrop;
 using OpenAstroAra.Sequencer.SequenceItem;
 using OpenAstroAra.Sequencer.Serialization;
-using OpenAstroAra.Core.Utility;
-using OpenAstroAra.Astrometry;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
 using System.Linq;
-using OpenAstroAra.Core.Utility.Notification;
-using OpenAstroAra.Core.Locale;
 using System.Threading.Tasks;
-using CommunityToolkit.Mvvm.ComponentModel;
+using System.Windows.Data;
+using System.Windows.Input;
 
 namespace OpenAstroAra.Sequencer {
 
-    public partial class TemplateController : BaseINPC {
+    public sealed partial class TemplateController : BaseINPC, IDisposable {
         private readonly SequenceJsonConverter sequenceJsonConverter;
         private readonly IProfileService profileService;
         private readonly string defaultTemplatePath;
-        private FileSystemWatcher sequenceTemplateFolderWatcher;
-        private string userTemplatePath;
+        private FileSystemWatcher? sequenceTemplateFolderWatcher;
+        private string userTemplatePath = string.Empty;
         public const string DefaultTemplatesGroup = "LblTemplate_DefaultTemplates";
         private const string UserTemplatesGroup = "LblTemplate_UserTemplates";
         public const string TemplateFileExtension = ".template.json";
-        private ISequenceSettings activeSequenceSettings;
+        private ISequenceSettings activeSequenceSettings = null!;
 
         public IList<TemplatedSequenceContainer> UserTemplates => Templates.Where(t => t.Group == UserTemplatesGroup).ToList();
 
@@ -87,11 +87,11 @@ namespace OpenAstroAra.Sequencer {
                         var container = sequenceJsonConverter.Deserialize(File.ReadAllText(file)) as ISequenceContainer;
                         if (container is ISequenceRootContainer) continue;
                         Templates.Add(new TemplatedSequenceContainer(profileService, DefaultTemplatesGroup, container));
-                    } catch (Exception ex) {
+                    } catch (Exception ex) when (ex is Newtonsoft.Json.JsonException or IOException or UnauthorizedAccessException or InvalidCastException) {
                         Logger.Error("Invalid template JSON", ex);
                     }
                 }
-            } catch (Exception ex) {
+            } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
                 Logger.Error("Error occurred while loading default templates", ex);
             }
 
@@ -114,27 +114,27 @@ namespace OpenAstroAra.Sequencer {
                 profileService.ProfileChanged += ProfileService_ProfileChanged;
                 activeSequenceSettings = profileService.ActiveProfile.SequenceSettings;
                 activeSequenceSettings.PropertyChanged += SequenceSettings_SequencerTemplatesFolderChanged;
-            });
+            }, TaskScheduler.Default);
         }
 
         private bool ApplyViewFilter(object obj) {
-            return (obj as TemplatedSequenceContainer).Container.Name.IndexOf(ViewFilter, StringComparison.OrdinalIgnoreCase) >= 0;
+            return obj is TemplatedSequenceContainer template && template.Container.Name.Contains(ViewFilter, StringComparison.OrdinalIgnoreCase);
         }
 
-        private async void SequenceTemplateFolderWatcher_Changed(object sender, FileSystemEventArgs e) {
+        private async void SequenceTemplateFolderWatcher_Changed(object? sender, FileSystemEventArgs e) {
             try {
-                sequenceTemplateFolderWatcher.EnableRaisingEvents = false;
+                sequenceTemplateFolderWatcher!.EnableRaisingEvents = false;
                 await LoadUserTemplates();
             } finally {
-                sequenceTemplateFolderWatcher.EnableRaisingEvents = true;
+                sequenceTemplateFolderWatcher!.EnableRaisingEvents = true;
             }
         }
 
-        private async void SequenceSettings_SequencerTemplatesFolderChanged(object sender, System.EventArgs e) {
+        private async void SequenceSettings_SequencerTemplatesFolderChanged(object? sender, System.EventArgs e) {
             if ((e as PropertyChangedEventArgs)?.PropertyName == nameof(profileService.ActiveProfile.SequenceSettings.SequencerTemplatesFolder)) {
                 if (!Directory.Exists(profileService.ActiveProfile.SequenceSettings.SequencerTemplatesFolder)) { return; }
 
-                sequenceTemplateFolderWatcher.Path = profileService.ActiveProfile.SequenceSettings.SequencerTemplatesFolder;
+                sequenceTemplateFolderWatcher!.Path = profileService.ActiveProfile.SequenceSettings.SequencerTemplatesFolder;
                 try {
                     sequenceTemplateFolderWatcher.EnableRaisingEvents = false;
                     await LoadUserTemplates();
@@ -144,18 +144,20 @@ namespace OpenAstroAra.Sequencer {
             }
         }
 
-        private async void ProfileService_ProfileChanged(object sender, System.EventArgs e) {
+        private async void ProfileService_ProfileChanged(object? sender, System.EventArgs e) {
             activeSequenceSettings.PropertyChanged -= SequenceSettings_SequencerTemplatesFolderChanged;
             activeSequenceSettings = profileService.ActiveProfile.SequenceSettings;
             activeSequenceSettings.PropertyChanged += SequenceSettings_SequencerTemplatesFolderChanged;
             try {
-                sequenceTemplateFolderWatcher.EnableRaisingEvents = false;
+                sequenceTemplateFolderWatcher!.EnableRaisingEvents = false;
                 await LoadUserTemplates();
             } finally {
-                sequenceTemplateFolderWatcher.EnableRaisingEvents = true;
+                sequenceTemplateFolderWatcher!.EnableRaisingEvents = true;
             }
         }
 
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "Template-load boundary awaited by async void event handlers (FileSystemWatcher Changed / ProfileChanged). An exception that escaped this catch would propagate out of an async void method and become an unhandled, process-fatal exception, so it MUST catch everything, log, and surface via the UI. CA1031 sanctions general catches at such log-and-recover boundaries.")]
         private Task LoadUserTemplates() {
             return Task.Run(async () => {
                 try {
@@ -178,15 +180,15 @@ namespace OpenAstroAra.Sequencer {
 
                     foreach (var file in files) {
                         try {
-                            var container = sequenceJsonConverter.Deserialize(File.ReadAllText(file));
+                            var container = sequenceJsonConverter.Deserialize(await File.ReadAllTextAsync(file));
                             if (container is ISequenceRootContainer) continue;
                             var template = new TemplatedSequenceContainer(profileService, UserTemplatesGroup, container);
                             var fileInfo = new FileInfo(file);
-                            container.Name = fileInfo.Name.Replace(TemplateFileExtension, "");
-                            var parts = fileInfo.Directory.FullName.Split(new char[] { Path.DirectorySeparatorChar }, System.StringSplitOptions.RemoveEmptyEntries);
+                            container.Name = fileInfo.Name.Replace(TemplateFileExtension, "", StringComparison.Ordinal);
+                            var parts = (fileInfo.Directory?.FullName ?? string.Empty).Split(new char[] { Path.DirectorySeparatorChar }, System.StringSplitOptions.RemoveEmptyEntries);
                             template.SubGroups = parts.Except(rootParts).ToArray();
                             Templates.Add(template);
-                        } catch (Exception ex) {
+                        } catch (Exception ex) when (ex is Newtonsoft.Json.JsonException or IOException or UnauthorizedAccessException or InvalidCastException) {
                             Logger.Error("Invalid template JSON", ex);
                         }
                         TemplatesLoadingProgress++;
@@ -196,13 +198,13 @@ namespace OpenAstroAra.Sequencer {
                         try {
                             TemplatesView.Refresh();
                             TemplatesMenuView.Refresh();
-                        } catch (Exception ex) {
+                        } catch (InvalidOperationException ex) {
                             Logger.Error(ex);
                         }
                     });
                 } catch (Exception ex) {
                     Logger.Error(ex);
-                    Notification.ShowError(Loc.Instance["Lbl_SequenceTemplateController_LoadUserTemplatesFailed"]);
+                    Notifier.ShowError(Loc.Instance["Lbl_SequenceTemplateController_LoadUserTemplatesFailed"]);
                 } finally {
                     TemplatesLoading = false;
                 }
@@ -213,36 +215,41 @@ namespace OpenAstroAra.Sequencer {
             try {
                 var existingTemplate = UserTemplates.FirstOrDefault(t => t.Container.Name == sequenceContainer.Name);
 
-                if (sequenceContainer is IDeepSkyObjectContainer) {
-                    var dso = (sequenceContainer as IDeepSkyObjectContainer);
+                if (sequenceContainer is IDeepSkyObjectContainer dsoContainer) {
+                    var dso = dsoContainer;
                     dso.Target.TargetName = string.Empty;
                     dso.Target.InputCoordinates.Coordinates = new Coordinates(Angle.Zero, Angle.Zero, Epoch.J2000);
                     dso.Target.PositionAngle = 0;
                     dso.Target = dso.Target;
                 }
 
-                var path = existingTemplate == null ? userTemplatePath : Path.Combine(userTemplatePath, Path.Combine(existingTemplate.SubGroups));
+                var path = existingTemplate == null ? userTemplatePath : Path.Combine(userTemplatePath, Path.Combine(existingTemplate.SubGroups.ToArray()));
 
                 var jsonContainer = sequenceJsonConverter.Serialize(sequenceContainer);
                 File.WriteAllText(Path.Combine(path, GetTemplateFileName(sequenceContainer)), jsonContainer);
-            } catch (Exception ex) {
+            } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or Newtonsoft.Json.JsonException) {
                 Logger.Error(ex);
-                Notification.ShowError(Loc.Instance["Lbl_SequenceTemplateController_AddNewTemplateFailed"]);
+                Notifier.ShowError(Loc.Instance["Lbl_SequenceTemplateController_AddNewTemplateFailed"]);
             }
         }
 
         public void DeleteUserTemplate(TemplatedSequenceContainer sequenceContainer) {
             try {
                 if (sequenceContainer == null) return;
-                File.Delete(Path.Combine(userTemplatePath, Path.Combine(sequenceContainer.SubGroups), GetTemplateFileName(sequenceContainer.Container)));
-            } catch (Exception ex) {
+                File.Delete(Path.Combine(userTemplatePath, Path.Combine(sequenceContainer.SubGroups.ToArray()), GetTemplateFileName(sequenceContainer.Container)));
+            } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
                 Logger.Error(ex);
-                Notification.ShowError(Loc.Instance["Lbl_SequenceTemplateController_DeleteTemplateFailed"]);
+                Notifier.ShowError(Loc.Instance["Lbl_SequenceTemplateController_DeleteTemplateFailed"]);
             }
         }
 
-        private string GetTemplateFileName(ISequenceContainer container) {
+        private static string GetTemplateFileName(ISequenceContainer container) {
             return OpenAstroAra.Core.Utility.CoreUtil.ReplaceAllInvalidFilenameChars(container.Name) + TemplateFileExtension;
+        }
+
+        public void Dispose() {
+            sequenceTemplateFolderWatcher?.Dispose();
+            GC.SuppressFinalize(this);
         }
     }
 
@@ -251,31 +258,31 @@ namespace OpenAstroAra.Sequencer {
         public TemplatedSequenceContainer(IProfileService profileService, string group, ISequenceContainer container) {
             Group = group;
             Container = container;
-            SubGroups = new string[0];
+            SubGroups = Array.Empty<string>();
             this.profileService = profileService;
         }
 
-        public string GroupTranslated => Loc.Instance[Group] + " › " + (SubGroups.Length > 0 ? $"{string.Join(" › ", SubGroups)}" : "Base");
+        public string GroupTranslated => Loc.Instance[Group] + " › " + (SubGroups.Count > 0 ? $"{string.Join(" › ", SubGroups)}" : "Base");
 
         public string Group { get; }
-        public string[] SubGroups { get; set; }
+        public IReadOnlyList<string> SubGroups { get; set; }
 
         private IProfileService profileService;
 
         public ISequenceContainer Container { get; }
 
-        public ISequenceContainer Parent => null;
+        public ISequenceContainer? Parent => null;
 
-        public ICommand DetachCommand => null;
+        public ICommand? DetachCommand => null;
 
-        public ICommand MoveUpCommand => null;
+        public ICommand? MoveUpCommand => null;
 
-        public ICommand MoveDownCommand => null;
+        public ICommand? MoveDownCommand => null;
 
         public void AfterParentChanged() {
         }
 
-        public void AttachNewParent(ISequenceContainer newParent) {
+        public void AttachNewParent(ISequenceContainer? newParent) {
         }
 
         public void Detach() {

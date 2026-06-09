@@ -12,10 +12,10 @@
 
 #endregion "copyright"
 
-using System;
-using System.Runtime.Serialization;
 using Newtonsoft.Json;
 using OpenAstroAra.Core.Interfaces;
+using System;
+using System.Runtime.Serialization;
 
 namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.PhdEvents {
 
@@ -32,7 +32,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.PhdEvents {
 
         [DataMember]
         [JsonProperty]
-        private string mount;
+        private string mount = string.Empty;
 
         [DataMember]
         [JsonProperty]
@@ -49,14 +49,6 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.PhdEvents {
         [DataMember]
         [JsonProperty]
         private double decDistanceRaw;
-
-        [DataMember]
-        [JsonProperty]
-        private double raDistanceDisplay;
-
-        [DataMember]
-        [JsonProperty]
-        private double decDistanceDisplay;
 
         [DataMember]
         [JsonProperty]
@@ -80,7 +72,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.PhdEvents {
 
         [DataMember]
         [JsonProperty]
-        private string rADirection;
+        private string rADirection = string.Empty;
 
         [DataMember]
         [JsonProperty]
@@ -88,7 +80,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.PhdEvents {
 
         [DataMember]
         [JsonProperty]
-        private string decDirection;
+        private string decDirection = string.Empty;
 
         [DataMember]
         [JsonProperty]

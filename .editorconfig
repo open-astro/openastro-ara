@@ -12,7 +12,10 @@ indent_style = space
 tab_width = 4
 
 # New line preferences
-end_of_line = crlf
+# LF: matches .gitattributes (`*.cs text` normalizes to LF) and the actual
+# file bytes. The inherited NINA value was `crlf`, which made `dotnet format`
+# try to rewrite every line to CRLF — changes git would immediately undo.
+end_of_line = lf
 insert_final_newline = false
 
 #### .NET Coding Conventions ####
@@ -220,7 +223,7 @@ dotnet_style_prefer_compound_assignment = true:suggestion
 dotnet_style_operator_placement_when_wrapping = beginning_of_line
 tab_width = 4
 indent_size = 4
-end_of_line = crlf
+end_of_line = lf
 dotnet_style_prefer_simplified_interpolation = true:suggestion
 
 # so far only windows is supported - so this warning can be ignored
@@ -237,3 +240,43 @@ dotnet_diagnostic.CA1853.severity = error
 dotnet_diagnostic.CA1854.severity = suggestion
 dotnet_diagnostic.CA1839.severity = error
 dotnet_diagnostic.CA1840.severity = error
+
+# ============================================================================
+# Curated analyzer suppressions (2026-06 compliance sweep).
+#
+# These are the ONLY rules disabled wholesale. Every other analyzer warning is
+# treated as must-fix (the codebase is driven to zero, then TreatWarningsAsErrors
+# is enabled). Each suppression below is a no-op or pure-style rule that does
+# not affect correctness, security, reliability, or performance. To re-enable
+# any of them, delete its line and fix the resulting warnings.
+# ----------------------------------------------------------------------------
+
+# CA2007: Do not directly await a Task without calling ConfigureAwait.
+# ASP.NET Core has NO SynchronizationContext, so ConfigureAwait(false) is a
+# literal no-op here (it only matters for WPF/WinForms/.NET-Framework-ASP.NET).
+# Microsoft's own ASP.NET Core code does not use it. Adding it to every await
+# site would be thousands of behavior-neutral diffs.
+dotnet_diagnostic.CA2007.severity = none
+
+# CA1515: Consider making public types internal.
+# This is an application, not a shipped library — there is no external API
+# surface to shrink, and forcing internal breaks DI, JSON (de)serialization,
+# and cross-assembly test access. Pure encapsulation opinion, no behavior change.
+dotnet_diagnostic.CA1515.severity = none
+
+# CA1062: Validate arguments of public methods (null checks).
+# Superseded by nullable reference types (enabled solution-wide): the compiler's
+# null-flow analysis documents and enforces nullability at every boundary, which
+# is strictly stronger than a runtime ArgumentNullException guard.
+dotnet_diagnostic.CA1062.severity = none
+
+# ============================================================================
+# Test-project-only relaxations.
+# ============================================================================
+[{OpenAstroAra.Test,OpenAstroAra.Fits.Tests,OpenAstroAra.Stretch.Tests}/**.cs]
+
+# CA1707: Identifiers should not contain underscores.
+# Test methods use the industry-standard Method_State_Expected naming
+# convention; underscores there aid readability. Production code still honors
+# CA1707 (this relaxation is scoped to the test projects only).
+dotnet_diagnostic.CA1707.severity = none

@@ -9,20 +9,20 @@
     file, You can obtain one at http://mozilla.org/MPL/2.0/.
 */
 #endregion "copyright"
+using FluentAssertions;
+using NUnit.Framework;
+using NUnit.Framework.Legacy;
+using OpenAstroAra.Core.Enums;
+using OpenAstroAra.Core.Interfaces;
+using OpenAstroAra.Equipment.Equipment;
 using OpenAstroAra.Equipment.Equipment.MyGuider;
 using OpenAstroAra.Equipment.Equipment.MyGuider.PHD2;
-using OpenAstroAra.Core.Enum;
-using NUnit.Framework;
+using OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.PhdEvents;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using OpenAstroAra.Core.Interfaces;
-using OpenAstroAra.Equipment.Equipment;
-using OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.PhdEvents;
-using FluentAssertions;
-using NUnit.Framework.Legacy;
 
 namespace OpenAstroAra.Test {
 
@@ -34,39 +34,39 @@ namespace OpenAstroAra.Test {
         [Test]
         public void GuideStepsHistory_ConstructorTest() {
             var historySize = 100;
-            GuideStepsHistory gsh = new GuideStepsHistory(historySize, GuiderScaleEnum.PIXELS, 4);
+            GuideStepsHistory gsh = new GuideStepsHistory(historySize, GuiderScale.PIXELS, 4);
 
-            ClassicAssert.AreEqual(historySize, gsh.HistorySize);
-            ClassicAssert.AreEqual(1, gsh.PixelScale);
-            ClassicAssert.AreEqual(GuiderScaleEnum.PIXELS, gsh.Scale);
-            ClassicAssert.AreEqual(0, gsh.GuideSteps.Count());
-            ClassicAssert.AreEqual(1, gsh.RMS.Scale);
-            ClassicAssert.AreEqual(0, gsh.RMS.RA);
-            ClassicAssert.AreEqual(0, gsh.RMS.Dec);
-            ClassicAssert.AreEqual(0, gsh.RMS.Total);
+            Assert.That(gsh.HistorySize, Is.EqualTo(historySize));
+            Assert.That(gsh.PixelScale, Is.EqualTo(1));
+            Assert.That(gsh.Scale, Is.EqualTo(GuiderScale.PIXELS));
+            Assert.That(gsh.GuideSteps.Count(), Is.EqualTo(0));
+            Assert.That(gsh.RMS.Scale, Is.EqualTo(1));
+            Assert.That(gsh.RMS.RA, Is.EqualTo(0));
+            Assert.That(gsh.RMS.Dec, Is.EqualTo(0));
+            Assert.That(gsh.RMS.Total, Is.EqualTo(0));
         }
 
         [Test]
         public void GuideStepsHistory_AddPHDDataPointsTest() {
             var historySize = 100;
-            GuideStepsHistory gsh = new GuideStepsHistory(historySize, GuiderScaleEnum.PIXELS, 4);
+            GuideStepsHistory gsh = new GuideStepsHistory(historySize, GuiderScale.PIXELS, 4);
 
-            IGuideStep step1 = new PhdEventGuideStep() {
+            PhdEventGuideStep step1 = new PhdEventGuideStep() {
                 RADistanceRaw = -25,
                 DECDistanceRaw = -36
             };
 
-            IGuideStep step2 = new PhdEventGuideStep() {
+            PhdEventGuideStep step2 = new PhdEventGuideStep() {
                 RADistanceRaw = -625,
                 DECDistanceRaw = -1296
             };
 
-            IGuideStep step3 = new PhdEventGuideStep() {
+            PhdEventGuideStep step3 = new PhdEventGuideStep() {
                 RADistanceRaw = -25,
                 DECDistanceRaw = -36
             };
 
-            IGuideStep step4 = new PhdEventGuideStep() {
+            PhdEventGuideStep step4 = new PhdEventGuideStep() {
                 RADistanceRaw = -625,
                 DECDistanceRaw = -1296
             };
@@ -76,10 +76,10 @@ namespace OpenAstroAra.Test {
             gsh.AddGuideStep(step3);
             gsh.AddGuideStep(step4);
 
-            ClassicAssert.AreEqual(300, gsh.RMS.RA);
-            ClassicAssert.AreEqual(630, gsh.RMS.Dec);
+            Assert.That(gsh.RMS.RA, Is.EqualTo(300));
+            Assert.That(gsh.RMS.Dec, Is.EqualTo(630));
             var total = Math.Sqrt((Math.Pow(300, 2) + Math.Pow(630, 2)));
-            ClassicAssert.AreEqual(total, gsh.RMS.Total);
+            Assert.That(gsh.RMS.Total, Is.EqualTo(total));
         }
 
         [Test]
@@ -87,25 +87,25 @@ namespace OpenAstroAra.Test {
             var historySize = 100;
             var scale = 1.59;
 
-            GuideStepsHistory gsh = new GuideStepsHistory(historySize, GuiderScaleEnum.ARCSECONDS, 4);
+            GuideStepsHistory gsh = new GuideStepsHistory(historySize, GuiderScale.ARCSECONDS, 4);
             gsh.PixelScale = scale;
 
-            IGuideStep step1 = new PhdEventGuideStep() {
+            PhdEventGuideStep step1 = new PhdEventGuideStep() {
                 RADistanceRaw = -25,
                 DECDistanceRaw = -36
             };
 
-            IGuideStep step2 = new PhdEventGuideStep() {
+            PhdEventGuideStep step2 = new PhdEventGuideStep() {
                 RADistanceRaw = -625,
                 DECDistanceRaw = -1296
             };
 
-            IGuideStep step3 = new PhdEventGuideStep() {
+            PhdEventGuideStep step3 = new PhdEventGuideStep() {
                 RADistanceRaw = -25,
                 DECDistanceRaw = -36
             };
 
-            IGuideStep step4 = new PhdEventGuideStep() {
+            PhdEventGuideStep step4 = new PhdEventGuideStep() {
                 RADistanceRaw = -625,
                 DECDistanceRaw = -1296
             };
@@ -115,10 +115,10 @@ namespace OpenAstroAra.Test {
             gsh.AddGuideStep(step3);
             gsh.AddGuideStep(step4);
 
-            ClassicAssert.AreEqual(300, gsh.RMS.RA);
-            ClassicAssert.AreEqual(630, gsh.RMS.Dec);
+            Assert.That(gsh.RMS.RA, Is.EqualTo(300));
+            Assert.That(gsh.RMS.Dec, Is.EqualTo(630));
             var total = Math.Sqrt((Math.Pow(300, 2) + Math.Pow(630, 2)));
-            ClassicAssert.AreEqual(total, gsh.RMS.Total);
+            Assert.That(gsh.RMS.Total, Is.EqualTo(total));
         }
 
         [Test]
@@ -126,25 +126,25 @@ namespace OpenAstroAra.Test {
             var historySize = 100;
             var scale = 1.59;
 
-            GuideStepsHistory gsh = new GuideStepsHistory(historySize, GuiderScaleEnum.ARCSECONDS, 4);
+            GuideStepsHistory gsh = new GuideStepsHistory(historySize, GuiderScale.ARCSECONDS, 4);
             gsh.PixelScale = scale;
 
-            IGuideStep step1 = new PhdEventGuideStep() {
+            PhdEventGuideStep step1 = new PhdEventGuideStep() {
                 RADistanceRaw = -25,
                 DECDistanceRaw = -36
             };
 
-            IGuideStep step2 = new PhdEventGuideStep() {
+            PhdEventGuideStep step2 = new PhdEventGuideStep() {
                 RADistanceRaw = -625,
                 DECDistanceRaw = -1296
             };
 
-            IGuideStep step3 = new PhdEventGuideStep() {
+            PhdEventGuideStep step3 = new PhdEventGuideStep() {
                 RADistanceRaw = -25,
                 DECDistanceRaw = -36
             };
 
-            IGuideStep step4 = new PhdEventGuideStep() {
+            PhdEventGuideStep step4 = new PhdEventGuideStep() {
                 RADistanceRaw = -625,
                 DECDistanceRaw = -1296
             };
@@ -156,45 +156,43 @@ namespace OpenAstroAra.Test {
 
             gsh.Clear();
 
-            ClassicAssert.AreEqual(0, gsh.GuideSteps.Count());
-            ClassicAssert.AreEqual(0, gsh.RMS.RA);
-            ClassicAssert.AreEqual(0, gsh.RMS.Dec);
-            ClassicAssert.AreEqual(0, gsh.RMS.Total);
+            Assert.That(gsh.GuideSteps.Count(), Is.EqualTo(0));
+            Assert.That(gsh.RMS.RA, Is.EqualTo(0));
+            Assert.That(gsh.RMS.Dec, Is.EqualTo(0));
+            Assert.That(gsh.RMS.Total, Is.EqualTo(0));
         }
-
-        public static List<IGuideStep> steps = new List<IGuideStep>();
 
         [Test]
         public void GuideStepsHistory_HistorySize_AddMoreThanSizeTest() {
             var historySize = 5;
-            GuideStepsHistory gsh = new GuideStepsHistory(historySize, GuiderScaleEnum.PIXELS, 4);
+            GuideStepsHistory gsh = new GuideStepsHistory(historySize, GuiderScale.PIXELS, 4);
 
-            IGuideStep step1 = new PhdEventGuideStep() {
+            PhdEventGuideStep step1 = new PhdEventGuideStep() {
                 RADistanceRaw = -1,
                 DECDistanceRaw = -1
             };
 
-            IGuideStep step2 = new PhdEventGuideStep() {
+            PhdEventGuideStep step2 = new PhdEventGuideStep() {
                 RADistanceRaw = -2,
                 DECDistanceRaw = -2
             };
 
-            IGuideStep step3 = new PhdEventGuideStep() {
+            PhdEventGuideStep step3 = new PhdEventGuideStep() {
                 RADistanceRaw = -3,
                 DECDistanceRaw = -3
             };
 
-            IGuideStep step4 = new PhdEventGuideStep() {
+            PhdEventGuideStep step4 = new PhdEventGuideStep() {
                 RADistanceRaw = -4,
                 DECDistanceRaw = -4
             };
 
-            IGuideStep step5 = new PhdEventGuideStep() {
+            PhdEventGuideStep step5 = new PhdEventGuideStep() {
                 RADistanceRaw = -5,
                 DECDistanceRaw = -5
             };
 
-            IGuideStep step6 = new PhdEventGuideStep() {
+            PhdEventGuideStep step6 = new PhdEventGuideStep() {
                 RADistanceRaw = -6,
                 DECDistanceRaw = -6
             };
@@ -206,49 +204,49 @@ namespace OpenAstroAra.Test {
             gsh.AddGuideStep(step5);
             gsh.AddGuideStep(step6);
 
-            ClassicAssert.AreEqual(step2.RADistanceRaw, gsh.GuideSteps.ElementAt(0).RADistanceRaw);
-            ClassicAssert.AreEqual(step3.RADistanceRaw, gsh.GuideSteps.ElementAt(1).RADistanceRaw);
-            ClassicAssert.AreEqual(step4.RADistanceRaw, gsh.GuideSteps.ElementAt(2).RADistanceRaw);
-            ClassicAssert.AreEqual(step5.RADistanceRaw, gsh.GuideSteps.ElementAt(3).RADistanceRaw);
-            ClassicAssert.AreEqual(step6.RADistanceRaw, gsh.GuideSteps.ElementAt(4).RADistanceRaw);
-            ClassicAssert.AreEqual(step2.DECDistanceRaw, gsh.GuideSteps.ElementAt(0).DECDistanceRaw);
-            ClassicAssert.AreEqual(step3.DECDistanceRaw, gsh.GuideSteps.ElementAt(1).DECDistanceRaw);
-            ClassicAssert.AreEqual(step4.DECDistanceRaw, gsh.GuideSteps.ElementAt(2).DECDistanceRaw);
-            ClassicAssert.AreEqual(step5.DECDistanceRaw, gsh.GuideSteps.ElementAt(3).DECDistanceRaw);
-            ClassicAssert.AreEqual(step6.DECDistanceRaw, gsh.GuideSteps.ElementAt(4).DECDistanceRaw);
+            Assert.That(gsh.GuideSteps.ElementAt(0).RADistanceRaw, Is.EqualTo(step2.RADistanceRaw));
+            Assert.That(gsh.GuideSteps.ElementAt(1).RADistanceRaw, Is.EqualTo(step3.RADistanceRaw));
+            Assert.That(gsh.GuideSteps.ElementAt(2).RADistanceRaw, Is.EqualTo(step4.RADistanceRaw));
+            Assert.That(gsh.GuideSteps.ElementAt(3).RADistanceRaw, Is.EqualTo(step5.RADistanceRaw));
+            Assert.That(gsh.GuideSteps.ElementAt(4).RADistanceRaw, Is.EqualTo(step6.RADistanceRaw));
+            Assert.That(gsh.GuideSteps.ElementAt(0).DECDistanceRaw, Is.EqualTo(step2.DECDistanceRaw));
+            Assert.That(gsh.GuideSteps.ElementAt(1).DECDistanceRaw, Is.EqualTo(step3.DECDistanceRaw));
+            Assert.That(gsh.GuideSteps.ElementAt(2).DECDistanceRaw, Is.EqualTo(step4.DECDistanceRaw));
+            Assert.That(gsh.GuideSteps.ElementAt(3).DECDistanceRaw, Is.EqualTo(step5.DECDistanceRaw));
+            Assert.That(gsh.GuideSteps.ElementAt(4).DECDistanceRaw, Is.EqualTo(step6.DECDistanceRaw));
         }
 
         [Test]
         public void GuideStepsHistory_HistorySize_ResizeTest() {
             var historySize = 5;
-            GuideStepsHistory gsh = new GuideStepsHistory(historySize, GuiderScaleEnum.PIXELS, 4);
+            GuideStepsHistory gsh = new GuideStepsHistory(historySize, GuiderScale.PIXELS, 4);
 
-            IGuideStep step1 = new PhdEventGuideStep() {
+            PhdEventGuideStep step1 = new PhdEventGuideStep() {
                 RADistanceRaw = -1,
                 DECDistanceRaw = -1
             };
 
-            IGuideStep step2 = new PhdEventGuideStep() {
+            PhdEventGuideStep step2 = new PhdEventGuideStep() {
                 RADistanceRaw = -2,
                 DECDistanceRaw = -2
             };
 
-            IGuideStep step3 = new PhdEventGuideStep() {
+            PhdEventGuideStep step3 = new PhdEventGuideStep() {
                 RADistanceRaw = -3,
                 DECDistanceRaw = -3
             };
 
-            IGuideStep step4 = new PhdEventGuideStep() {
+            PhdEventGuideStep step4 = new PhdEventGuideStep() {
                 RADistanceRaw = -4,
                 DECDistanceRaw = -4
             };
 
-            IGuideStep step5 = new PhdEventGuideStep() {
+            PhdEventGuideStep step5 = new PhdEventGuideStep() {
                 RADistanceRaw = -5,
                 DECDistanceRaw = -5
             };
 
-            IGuideStep step6 = new PhdEventGuideStep() {
+            PhdEventGuideStep step6 = new PhdEventGuideStep() {
                 RADistanceRaw = -6,
                 DECDistanceRaw = -6
             };
@@ -262,51 +260,51 @@ namespace OpenAstroAra.Test {
 
             gsh.HistorySize = 10;
 
-            ClassicAssert.AreEqual(step1.RADistanceRaw, gsh.GuideSteps.ElementAt(0).RADistanceRaw);
-            ClassicAssert.AreEqual(step2.RADistanceRaw, gsh.GuideSteps.ElementAt(1).RADistanceRaw);
-            ClassicAssert.AreEqual(step3.RADistanceRaw, gsh.GuideSteps.ElementAt(2).RADistanceRaw);
-            ClassicAssert.AreEqual(step4.RADistanceRaw, gsh.GuideSteps.ElementAt(3).RADistanceRaw);
-            ClassicAssert.AreEqual(step5.RADistanceRaw, gsh.GuideSteps.ElementAt(4).RADistanceRaw);
-            ClassicAssert.AreEqual(step6.RADistanceRaw, gsh.GuideSteps.ElementAt(5).RADistanceRaw);
-            ClassicAssert.AreEqual(step1.DECDistanceRaw, gsh.GuideSteps.ElementAt(0).DECDistanceRaw);
-            ClassicAssert.AreEqual(step2.DECDistanceRaw, gsh.GuideSteps.ElementAt(1).DECDistanceRaw);
-            ClassicAssert.AreEqual(step3.DECDistanceRaw, gsh.GuideSteps.ElementAt(2).DECDistanceRaw);
-            ClassicAssert.AreEqual(step4.DECDistanceRaw, gsh.GuideSteps.ElementAt(3).DECDistanceRaw);
-            ClassicAssert.AreEqual(step5.DECDistanceRaw, gsh.GuideSteps.ElementAt(4).DECDistanceRaw);
-            ClassicAssert.AreEqual(step6.DECDistanceRaw, gsh.GuideSteps.ElementAt(5).DECDistanceRaw);
+            Assert.That(gsh.GuideSteps.ElementAt(0).RADistanceRaw, Is.EqualTo(step1.RADistanceRaw));
+            Assert.That(gsh.GuideSteps.ElementAt(1).RADistanceRaw, Is.EqualTo(step2.RADistanceRaw));
+            Assert.That(gsh.GuideSteps.ElementAt(2).RADistanceRaw, Is.EqualTo(step3.RADistanceRaw));
+            Assert.That(gsh.GuideSteps.ElementAt(3).RADistanceRaw, Is.EqualTo(step4.RADistanceRaw));
+            Assert.That(gsh.GuideSteps.ElementAt(4).RADistanceRaw, Is.EqualTo(step5.RADistanceRaw));
+            Assert.That(gsh.GuideSteps.ElementAt(5).RADistanceRaw, Is.EqualTo(step6.RADistanceRaw));
+            Assert.That(gsh.GuideSteps.ElementAt(0).DECDistanceRaw, Is.EqualTo(step1.DECDistanceRaw));
+            Assert.That(gsh.GuideSteps.ElementAt(1).DECDistanceRaw, Is.EqualTo(step2.DECDistanceRaw));
+            Assert.That(gsh.GuideSteps.ElementAt(2).DECDistanceRaw, Is.EqualTo(step3.DECDistanceRaw));
+            Assert.That(gsh.GuideSteps.ElementAt(3).DECDistanceRaw, Is.EqualTo(step4.DECDistanceRaw));
+            Assert.That(gsh.GuideSteps.ElementAt(4).DECDistanceRaw, Is.EqualTo(step5.DECDistanceRaw));
+            Assert.That(gsh.GuideSteps.ElementAt(5).DECDistanceRaw, Is.EqualTo(step6.DECDistanceRaw));
         }
 
         [Test]
         public void GuideStepsHistory_MaxDurationY_CalculateTest() {
             var historySize = 100;
-            GuideStepsHistory gsh = new GuideStepsHistory(historySize, GuiderScaleEnum.PIXELS, 4);
+            GuideStepsHistory gsh = new GuideStepsHistory(historySize, GuiderScale.PIXELS, 4);
 
-            IGuideStep step1 = new PhdEventGuideStep() {
+            PhdEventGuideStep step1 = new PhdEventGuideStep() {
                 RADuration = -1,
                 DECDuration = -1
             };
 
-            IGuideStep step2 = new PhdEventGuideStep() {
+            PhdEventGuideStep step2 = new PhdEventGuideStep() {
                 RADuration = -2,
                 DECDuration = -2
             };
 
-            IGuideStep step3 = new PhdEventGuideStep() {
+            PhdEventGuideStep step3 = new PhdEventGuideStep() {
                 RADuration = -3,
                 DECDuration = -3
             };
 
-            IGuideStep step4 = new PhdEventGuideStep() {
+            PhdEventGuideStep step4 = new PhdEventGuideStep() {
                 RADuration = -4,
                 DECDuration = -4
             };
 
-            IGuideStep step5 = new PhdEventGuideStep() {
+            PhdEventGuideStep step5 = new PhdEventGuideStep() {
                 RADuration = -5,
                 DECDuration = -5
             };
 
-            IGuideStep step6 = new PhdEventGuideStep() {
+            PhdEventGuideStep step6 = new PhdEventGuideStep() {
                 RADuration = -6,
                 DECDuration = -6
             };
@@ -318,41 +316,41 @@ namespace OpenAstroAra.Test {
             gsh.AddGuideStep(step5);
             gsh.AddGuideStep(step6);
 
-            ClassicAssert.AreEqual(6, gsh.MaxDurationY);
-            ClassicAssert.AreEqual(-6, gsh.MinDurationY);
+            Assert.That(gsh.MaxDurationY, Is.EqualTo(6));
+            Assert.That(gsh.MinDurationY, Is.EqualTo(-6));
         }
 
         [Test]
         public void GuideStepsHistory_MaxDurationY_CalculateWhenMoreThanHistoryTest() {
             var historySize = 3;
-            GuideStepsHistory gsh = new GuideStepsHistory(historySize, GuiderScaleEnum.PIXELS, 4);
+            GuideStepsHistory gsh = new GuideStepsHistory(historySize, GuiderScale.PIXELS, 4);
 
-            IGuideStep step1 = new PhdEventGuideStep() {
+            PhdEventGuideStep step1 = new PhdEventGuideStep() {
                 RADuration = -10,
                 DECDuration = -10
             };
 
-            IGuideStep step2 = new PhdEventGuideStep() {
+            PhdEventGuideStep step2 = new PhdEventGuideStep() {
                 RADuration = -20,
                 DECDuration = -20
             };
 
-            IGuideStep step3 = new PhdEventGuideStep() {
+            PhdEventGuideStep step3 = new PhdEventGuideStep() {
                 RADuration = -3,
                 DECDuration = -3
             };
 
-            IGuideStep step4 = new PhdEventGuideStep() {
+            PhdEventGuideStep step4 = new PhdEventGuideStep() {
                 RADuration = -4,
                 DECDuration = -4
             };
 
-            IGuideStep step5 = new PhdEventGuideStep() {
+            PhdEventGuideStep step5 = new PhdEventGuideStep() {
                 RADuration = -5,
                 DECDuration = -5
             };
 
-            IGuideStep step6 = new PhdEventGuideStep() {
+            PhdEventGuideStep step6 = new PhdEventGuideStep() {
                 RADuration = -6,
                 DECDuration = -6
             };
@@ -364,41 +362,41 @@ namespace OpenAstroAra.Test {
             gsh.AddGuideStep(step5);
             gsh.AddGuideStep(step6);
 
-            ClassicAssert.AreEqual(6, gsh.MaxDurationY);
-            ClassicAssert.AreEqual(-6, gsh.MinDurationY);
+            Assert.That(gsh.MaxDurationY, Is.EqualTo(6));
+            Assert.That(gsh.MinDurationY, Is.EqualTo(-6));
         }
 
         [Test]
         public void GuideStepsHistory_MaxDurationY_CalculateWhenResizedTest() {
             var historySize = 3;
-            GuideStepsHistory gsh = new GuideStepsHistory(historySize, GuiderScaleEnum.PIXELS, 4);
+            GuideStepsHistory gsh = new GuideStepsHistory(historySize, GuiderScale.PIXELS, 4);
 
-            IGuideStep step1 = new PhdEventGuideStep() {
+            PhdEventGuideStep step1 = new PhdEventGuideStep() {
                 RADuration = -100,
                 DECDuration = -100
             };
 
-            IGuideStep step2 = new PhdEventGuideStep() {
+            PhdEventGuideStep step2 = new PhdEventGuideStep() {
                 RADuration = -20,
                 DECDuration = -20
             };
 
-            IGuideStep step3 = new PhdEventGuideStep() {
+            PhdEventGuideStep step3 = new PhdEventGuideStep() {
                 RADuration = -3,
                 DECDuration = -3
             };
 
-            IGuideStep step4 = new PhdEventGuideStep() {
+            PhdEventGuideStep step4 = new PhdEventGuideStep() {
                 RADuration = -4,
                 DECDuration = -4
             };
 
-            IGuideStep step5 = new PhdEventGuideStep() {
+            PhdEventGuideStep step5 = new PhdEventGuideStep() {
                 RADuration = -5,
                 DECDuration = -5
             };
 
-            IGuideStep step6 = new PhdEventGuideStep() {
+            PhdEventGuideStep step6 = new PhdEventGuideStep() {
                 RADuration = -6,
                 DECDuration = -6
             };
@@ -412,8 +410,8 @@ namespace OpenAstroAra.Test {
 
             gsh.HistorySize = 100;
 
-            ClassicAssert.AreEqual(100, gsh.MaxDurationY);
-            ClassicAssert.AreEqual(-100, gsh.MinDurationY);
+            Assert.That(gsh.MaxDurationY, Is.EqualTo(100));
+            Assert.That(gsh.MinDurationY, Is.EqualTo(-100));
         }
     }
 }

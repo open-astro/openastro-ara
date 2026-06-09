@@ -12,8 +12,12 @@
 
 #endregion "copyright"
 
+using System.Diagnostics.CodeAnalysis;
+
 namespace OpenAstroAra.Sequencer.Container {
 
+    [SuppressMessage("Design", "CA1040:Avoid empty interfaces",
+        Justification = "Marker interface: IImmutableContainer identifies containers that validate their own children (used via 'is IImmutableContainer' type-identity checks, e.g. in Sequencer.Validate). CA1040 documents that suppression is appropriate for marker interfaces.")]
     public interface IImmutableContainer {
     }
 }

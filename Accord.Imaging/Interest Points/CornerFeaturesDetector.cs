@@ -20,16 +20,15 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging
-{
+namespace Accord.Imaging {
+    using Accord.Compat;
+    using Accord.Imaging;
+    using AForge;
+    using System;
     using System.Collections.Generic;
     using System.Drawing;
     using System.Drawing.Imaging;
-    using AForge;
-    using Accord.Imaging;
-    using System;
     using System.Linq;
-    using Accord.Compat;
 
     /// <summary>
     ///   Feature detector based on corners.
@@ -47,8 +46,7 @@ namespace Accord.Imaging
     /// </example>
     /// 
     [Serializable]
-    public class CornerFeaturesDetector : BaseSparseFeatureExtractor<CornerFeaturePoint>
-    {
+    public class CornerFeaturesDetector : BaseSparseFeatureExtractor<CornerFeaturePoint> {
 
         /// <summary>
         ///   Gets the corners detector used to generate features.
@@ -63,8 +61,7 @@ namespace Accord.Imaging
         /// 
         /// <param name="detector">A corners detector.</param>
         /// 
-        public CornerFeaturesDetector(ICornersDetector detector)
-        {
+        public CornerFeaturesDetector(ICornersDetector detector) {
             this.Detector = detector;
             this.SupportedFormats.UnionWith(detector.SupportedFormats);
         }
@@ -74,8 +71,7 @@ namespace Accord.Imaging
         /// actual corners detection, transforming the input image into a list of points.
         /// </summary>
         /// 
-        protected override IEnumerable<CornerFeaturePoint> InnerTransform(UnmanagedImage input)
-        {
+        protected override IEnumerable<CornerFeaturePoint> InnerTransform(UnmanagedImage input) {
             return Detector.ProcessImage(input).Select(x => new CornerFeaturePoint(x)).ToList();
         }
 
@@ -83,10 +79,8 @@ namespace Accord.Imaging
         /// Creates a new object that is a copy of the current instance.
         /// </summary>
         /// 
-        protected override object Clone(ISet<PixelFormat> supportedFormats)
-        {
-            return new CornerFeaturesDetector((ICornersDetector)this.Detector.Clone())
-            {
+        protected override object Clone(ISet<PixelFormat> supportedFormats) {
+            return new CornerFeaturesDetector((ICornersDetector)this.Detector.Clone()) {
                 SupportedFormats = supportedFormats
             };
         }
@@ -98,10 +92,8 @@ namespace Accord.Imaging
         /// <param name="disposing"><c>true</c> to release both managed and unmanaged
         ///   resources; <c>false</c> to release only unmanaged resources.</param>
         /// 
-        protected override void Dispose(bool disposing)
-        {
-            if (disposing)
-            {
+        protected override void Dispose(bool disposing) {
+            if (disposing) {
                 var d = Detector as IDisposable;
                 if (d != null)
                     d.Dispose();

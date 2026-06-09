@@ -13,32 +13,33 @@
 #endregion "copyright"
 
 using Newtonsoft.Json;
-using System.Windows.Input;
-using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Core.Model;
+using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.SequenceItem;
+using OpenAstroAra.Sequencer.Utility;
 using OpenAstroAra.Sequencer.Validations;
-using OpenAstroAra.Core.Utility;
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.Serialization;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using OpenAstroAra.Sequencer.Utility;
+using System.Windows.Input;
 
 namespace OpenAstroAra.Sequencer.Trigger {
 
     [JsonObject(MemberSerialization.OptIn)]
     public abstract class SequenceTrigger : SequenceHasChanged, ISequenceTrigger {
 
-        public SequenceTrigger() {
+        protected SequenceTrigger() {
             TriggerRunner = new SequentialContainer();
         }
 
-        public SequenceTrigger(SequenceTrigger cloneMe) : this() {
+        protected SequenceTrigger(SequenceTrigger cloneMe) : this() {
             CopyMetaData(cloneMe);
         }
 
@@ -56,13 +57,13 @@ namespace OpenAstroAra.Sequencer.Trigger {
             this.TriggerRunner?.Triggers.Clear();
         }
 
-        public string Name { get; set; }
+        public string Name { get; set; } = string.Empty;
 
         public virtual bool AllowMultiplePerSet => false;
 
-        public string Description { get; set; }
-        public string Icon { get; set; }
-        public string Category { get; set; }
+        public string Description { get; set; } = string.Empty;
+        public string Icon { get; set; } = string.Empty;
+        public string Category { get; set; } = string.Empty;
 
         private bool showMenu;
 
@@ -86,7 +87,7 @@ namespace OpenAstroAra.Sequencer.Trigger {
         });
 
         [JsonProperty]
-        public ISequenceContainer Parent { get; set; }
+        public ISequenceContainer? Parent { get; set; }
 
         [JsonProperty]
         public SequentialContainer TriggerRunner { get; protected set; }
@@ -103,6 +104,8 @@ namespace OpenAstroAra.Sequencer.Trigger {
 
         //public abstract string Description { get; }
 
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "Trigger execution boundary: a trigger's Validate()/Execute() may throw any exception type. All are logged, mark the trigger FAILED, and surface via RaiseFailureEvent so one trigger cannot crash the run loop. CA1031 sanctions general catches at such recover-and-report boundaries.")]
         public async Task Run(ISequenceContainer context, IProgress<ApplicationStatus> progress, CancellationToken token) {
             if (this.Status == SequenceEntityStatus.DISABLED) { return; }
 
@@ -113,8 +116,7 @@ namespace OpenAstroAra.Sequencer.Trigger {
                 Logger.Info($"Starting {this}");
                 this.TriggerRunner.ResetAll();
 
-                if (this is IValidatable && !(this is ISequenceContainer)) {
-                    var validatable = this as IValidatable;
+                if (this is IValidatable validatable && !(this is ISequenceContainer)) {
                     if (!validatable.Validate()) {
                         throw new SequenceEntityFailedValidationException(string.Join(", ", validatable.Issues));
                     }
@@ -148,15 +150,15 @@ namespace OpenAstroAra.Sequencer.Trigger {
         public virtual void AfterParentChanged() {
         }
 
-        public void AttachNewParent(ISequenceContainer newParent) {
+        public void AttachNewParent(ISequenceContainer? newParent) {
             Parent = newParent;
 
             AfterParentChanged();
         }
 
-        public abstract bool ShouldTrigger(ISequenceItem previousItem, ISequenceItem nextItem);
+        public abstract bool ShouldTrigger(ISequenceItem? previousItem, ISequenceItem? nextItem);
 
-        public virtual bool ShouldTriggerAfter(ISequenceItem previousItem, ISequenceItem nextItem) {
+        public virtual bool ShouldTriggerAfter(ISequenceItem? previousItem, ISequenceItem? nextItem) {
             return false;
         }
 
@@ -184,9 +186,9 @@ namespace OpenAstroAra.Sequencer.Trigger {
 
         public ICommand DetachCommand => new GalaSoft.MvvmLight.Command.RelayCommand<object>((o) => Detach());
 
-        public ICommand MoveUpCommand => null;
+        public ICommand? MoveUpCommand => null;
 
-        public ICommand MoveDownCommand => null;
+        public ICommand? MoveDownCommand => null;
 
         public void Detach() {
             Parent?.Remove(this);

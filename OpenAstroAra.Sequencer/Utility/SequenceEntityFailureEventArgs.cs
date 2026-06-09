@@ -5,7 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace OpenAstroAra.Sequencer.Utility {
-    public class SequenceEntityFailureEventArgs {
+    public class SequenceEntityFailureEventArgs : EventArgs {
         public SequenceEntityFailureEventArgs(ISequenceEntity entity, Exception ex) {
             this.Entity = entity;
             this.Exception = ex;

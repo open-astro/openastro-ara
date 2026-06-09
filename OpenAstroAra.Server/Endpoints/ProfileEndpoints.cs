@@ -43,9 +43,9 @@ public static class ProfileEndpoints {
             .WithSummary("Get the active profile's imaging defaults.");
 
         profile.MapPut("/imaging-defaults", (ImagingDefaultsDto body, IProfileStore store) => {
-                store.PutImagingDefaults(body);
-                return Results.Ok(body);
-            })
+            store.PutImagingDefaults(body);
+            return Results.Ok(body);
+        })
             .Accepts<ImagingDefaultsDto>("application/json")
             .Produces<ImagingDefaultsDto>(StatusCodes.Status200OK)
             .WithName("PutImagingDefaults")
@@ -58,9 +58,9 @@ public static class ProfileEndpoints {
             .WithSummary("Get the active profile's storage settings.");
 
         profile.MapPut("/storage", (StorageSettingsDto body, IProfileStore store) => {
-                store.PutStorageSettings(body);
-                return Results.Ok(body);
-            })
+            store.PutStorageSettings(body);
+            return Results.Ok(body);
+        })
             .Accepts<StorageSettingsDto>("application/json")
             .Produces<StorageSettingsDto>(StatusCodes.Status200OK)
             .WithName("PutStorageSettings")
@@ -73,9 +73,9 @@ public static class ProfileEndpoints {
             .WithSummary("Get the active profile's notifications settings.");
 
         profile.MapPut("/notifications", (NotificationsSettingsDto body, IProfileStore store) => {
-                store.PutNotificationsSettings(body);
-                return Results.Ok(body);
-            })
+            store.PutNotificationsSettings(body);
+            return Results.Ok(body);
+        })
             .Accepts<NotificationsSettingsDto>("application/json")
             .Produces<NotificationsSettingsDto>(StatusCodes.Status200OK)
             .WithName("PutNotificationsSettings")
@@ -88,9 +88,9 @@ public static class ProfileEndpoints {
             .WithSummary("Get the active profile's site preferences.");
 
         profile.MapPut("/site", (SiteSettingsDto body, IProfileStore store) => {
-                store.PutSiteSettings(body);
-                return Results.Ok(body);
-            })
+            store.PutSiteSettings(body);
+            return Results.Ok(body);
+        })
             .Accepts<SiteSettingsDto>("application/json")
             .Produces<SiteSettingsDto>(StatusCodes.Status200OK)
             .WithName("PutSiteSettings")
@@ -103,9 +103,9 @@ public static class ProfileEndpoints {
             .WithSummary("Get the active profile's filenames settings.");
 
         profile.MapPut("/filenames", (FilenamesSettingsDto body, IProfileStore store) => {
-                store.PutFilenamesSettings(body);
-                return Results.Ok(body);
-            })
+            store.PutFilenamesSettings(body);
+            return Results.Ok(body);
+        })
             .Accepts<FilenamesSettingsDto>("application/json")
             .Produces<FilenamesSettingsDto>(StatusCodes.Status200OK)
             .WithName("PutFilenamesSettings")
@@ -118,9 +118,9 @@ public static class ProfileEndpoints {
             .WithSummary("Get the active profile's safety policies.");
 
         profile.MapPut("/safety", (SafetyPoliciesDto body, IProfileStore store) => {
-                store.PutSafetyPolicies(body);
-                return Results.Ok(body);
-            })
+            store.PutSafetyPolicies(body);
+            return Results.Ok(body);
+        })
             .Accepts<SafetyPoliciesDto>("application/json")
             .Produces<SafetyPoliciesDto>(StatusCodes.Status200OK)
             .WithName("PutSafetyPolicies")
@@ -133,9 +133,9 @@ public static class ProfileEndpoints {
             .WithSummary("Get the active profile's autofocus settings.");
 
         profile.MapPut("/autofocus", (AutofocusSettingsDto body, IProfileStore store) => {
-                store.PutAutofocusSettings(body);
-                return Results.Ok(body);
-            })
+            store.PutAutofocusSettings(body);
+            return Results.Ok(body);
+        })
             .Accepts<AutofocusSettingsDto>("application/json")
             .Produces<AutofocusSettingsDto>(StatusCodes.Status200OK)
             .WithName("PutAutofocusSettings")
@@ -148,9 +148,9 @@ public static class ProfileEndpoints {
             .WithSummary("Get the active profile's plate-solve settings.");
 
         profile.MapPut("/plate-solve", (PlateSolveSettingsDto body, IProfileStore store) => {
-                store.PutPlateSolveSettings(body);
-                return Results.Ok(body);
-            })
+            store.PutPlateSolveSettings(body);
+            return Results.Ok(body);
+        })
             .Accepts<PlateSolveSettingsDto>("application/json")
             .Produces<PlateSolveSettingsDto>(StatusCodes.Status200OK)
             .WithName("PutPlateSolveSettings")
@@ -163,9 +163,9 @@ public static class ProfileEndpoints {
             .WithSummary("Get the active profile's diagnostics mode.");
 
         profile.MapPut("/diagnostics-mode", (DiagnosticsModeDto body, IProfileStore store) => {
-                store.PutDiagnosticsMode(body);
-                return Results.Ok(body);
-            })
+            store.PutDiagnosticsMode(body);
+            return Results.Ok(body);
+        })
             .Accepts<DiagnosticsModeDto>("application/json")
             .Produces<DiagnosticsModeDto>(StatusCodes.Status200OK)
             .WithName("PutDiagnosticsMode")
@@ -178,9 +178,9 @@ public static class ProfileEndpoints {
             .WithSummary("Get the active profile's PHD2 settings.");
 
         profile.MapPut("/phd2", (Phd2SettingsDto body, IProfileStore store) => {
-                store.PutPhd2Settings(body);
-                return Results.Ok(body);
-            })
+            store.PutPhd2Settings(body);
+            return Results.Ok(body);
+        })
             .Accepts<Phd2SettingsDto>("application/json")
             .Produces<Phd2SettingsDto>(StatusCodes.Status200OK)
             .WithName("PutPhd2Settings")
@@ -193,9 +193,9 @@ public static class ProfileEndpoints {
             .WithSummary("Get the active profile's equipment auto-connect bools.");
 
         profile.MapPut("/equipment-connection", (EquipmentConnectionDto body, IProfileStore store) => {
-                store.PutEquipmentConnection(body);
-                return Results.Ok(body);
-            })
+            store.PutEquipmentConnection(body);
+            return Results.Ok(body);
+        })
             .Accepts<EquipmentConnectionDto>("application/json")
             .Produces<EquipmentConnectionDto>(StatusCodes.Status200OK)
             .WithName("PutEquipmentConnection")
@@ -212,9 +212,9 @@ public static class ProfileEndpoints {
             .WithSummary("Get the active profile's stretch defaults (§65.2).");
 
         profile.MapPut("/stretch-defaults", (StretchDefaultsDto body, IProfileStore store) => {
-                store.PutStretchDefaults(body);
-                return Results.Ok(body);
-            })
+            store.PutStretchDefaults(body);
+            return Results.Ok(body);
+        })
             .Accepts<StretchDefaultsDto>("application/json")
             .Produces<StretchDefaultsDto>(StatusCodes.Status200OK)
             .WithName("PutStretchDefaults")

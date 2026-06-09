@@ -12,10 +12,11 @@
 
 #endregion "copyright"
 
-using System.Text.Json;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using OpenAstroAra.Server.Contracts;
+using System.Text.Json;
 
 namespace OpenAstroAra.Server.Services;
 
@@ -32,7 +33,7 @@ namespace OpenAstroAra.Server.Services;
 /// used so existing CI smoke gate probes + UI manual testing continue
 /// to find the sample session + sample frames.
 /// </summary>
-public sealed class SqliteFrameRepository : IFrameRepository {
+public sealed partial class SqliteFrameRepository : IFrameRepository {
     private static readonly Guid SampleSessionId =
         Guid.Parse("11111111-1111-1111-1111-111111111111");
 
@@ -57,13 +58,13 @@ public sealed class SqliteFrameRepository : IFrameRepository {
     private readonly IAraDatabase _db;
     private readonly IProfileStore _profile;
     private readonly IWsBroadcaster? _ws;
-    private readonly ILogger<SqliteFrameRepository>? _logger;
+    private readonly ILogger<SqliteFrameRepository> _logger;
 
     public SqliteFrameRepository(IAraDatabase db, IProfileStore profile, IWsBroadcaster? ws = null, ILogger<SqliteFrameRepository>? logger = null) {
         _db = db;
         _profile = profile;
         _ws = ws;
-        _logger = logger;
+        _logger = logger ?? NullLogger<SqliteFrameRepository>.Instance;
     }
 
     /// <summary>
@@ -128,7 +129,7 @@ public sealed class SqliteFrameRepository : IFrameRepository {
             GuidingRmsArcsec: 0.74, SnrEstimate: 45.2,
             QualityScore: qualityScore,
             Rating: 4,
-            Tags: new[] { "good-seeing" }),
+            Tags: SampleTags),
             ct);
 
         await InsertFrameAsync(conn, new FrameDto(
@@ -173,7 +174,7 @@ public sealed class SqliteFrameRepository : IFrameRepository {
             Tags: Array.Empty<string>()),
             ct);
 
-        _logger?.LogInformation("Seeded sample session + 3 sample frames into catalog");
+        LogSeededFrames();
     }
 
     private static async Task InsertFrameAsync(SqliteConnection conn, FrameDto f, CancellationToken ct) {
@@ -199,7 +200,7 @@ public sealed class SqliteFrameRepository : IFrameRepository {
         cmd.Parameters.AddWithValue("$filter_name", (object?)f.FilterName ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$exposure_seconds", f.ExposureSeconds);
         cmd.Parameters.AddWithValue("$gain", f.Gain);
-        cmd.Parameters.AddWithValue("$offset", (object?)f.Offset ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$offset", DbValue(f.Offset));
         cmd.Parameters.AddWithValue("$temperature_c", f.TemperatureC);
         cmd.Parameters.AddWithValue("$captured_utc", f.CapturedUtc.ToString("O"));
         cmd.Parameters.AddWithValue("$file_path", f.FilePath);
@@ -207,11 +208,11 @@ public sealed class SqliteFrameRepository : IFrameRepository {
         cmd.Parameters.AddWithValue("$width", f.Width);
         cmd.Parameters.AddWithValue("$height", f.Height);
         cmd.Parameters.AddWithValue("$bit_depth", f.BitDepth);
-        cmd.Parameters.AddWithValue("$hfr", (object?)f.Hfr ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("$star_count", (object?)f.StarCount ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("$eccentricity", (object?)f.Eccentricity ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("$guiding_rms_arcsec", (object?)f.GuidingRmsArcsec ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("$snr_estimate", (object?)f.SnrEstimate ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$hfr", DbValue(f.Hfr));
+        cmd.Parameters.AddWithValue("$star_count", DbValue(f.StarCount));
+        cmd.Parameters.AddWithValue("$eccentricity", DbValue(f.Eccentricity));
+        cmd.Parameters.AddWithValue("$guiding_rms_arcsec", DbValue(f.GuidingRmsArcsec));
+        cmd.Parameters.AddWithValue("$snr_estimate", DbValue(f.SnrEstimate));
         cmd.Parameters.AddWithValue("$quality_score_json", f.QualityScore is null
             ? DBNull.Value
             : JsonSerializer.Serialize(f.QualityScore, AraJsonSerializerContext.Default.QualityScoreBreakdownDto));
@@ -259,7 +260,7 @@ public sealed class SqliteFrameRepository : IFrameRepository {
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct) && items.Count < pageSize) {
             double? composite = null;
-            if (!reader.IsDBNull(9)) {
+            if (!await reader.IsDBNullAsync(9, ct)) {
                 try {
                     var qs = JsonSerializer.Deserialize(
                         reader.GetString(9), AraJsonSerializerContext.Default.QualityScoreBreakdownDto);
@@ -271,11 +272,11 @@ public sealed class SqliteFrameRepository : IFrameRepository {
                 SessionId: Guid.Parse(reader.GetString(1)),
                 TargetName: reader.GetString(2),
                 FrameType: ParseFrameType(reader.GetString(3)),
-                FilterName: reader.IsDBNull(4) ? null : reader.GetString(4),
+                FilterName: await reader.IsDBNullAsync(4, ct) ? null : reader.GetString(4),
                 ExposureSeconds: reader.GetInt32(5),
                 CapturedUtc: DateTimeOffset.Parse(reader.GetString(6)),
-                Hfr: reader.IsDBNull(7) ? null : reader.GetDouble(7),
-                StarCount: reader.IsDBNull(8) ? null : reader.GetInt32(8),
+                Hfr: await reader.IsDBNullAsync(7, ct) ? null : reader.GetDouble(7),
+                StarCount: await reader.IsDBNullAsync(8, ct) ? null : reader.GetInt32(8),
                 CompositeQualityScore: composite,
                 Rating: reader.GetInt32(10)));
         }
@@ -300,7 +301,7 @@ public sealed class SqliteFrameRepository : IFrameRepository {
         if (!await reader.ReadAsync(ct)) return null;
 
         QualityScoreBreakdownDto? quality = null;
-        if (!reader.IsDBNull(20)) {
+        if (!await reader.IsDBNullAsync(20, ct)) {
             try {
                 quality = JsonSerializer.Deserialize(
                     reader.GetString(20), AraJsonSerializerContext.Default.QualityScoreBreakdownDto);
@@ -318,10 +319,10 @@ public sealed class SqliteFrameRepository : IFrameRepository {
             SessionId: Guid.Parse(reader.GetString(1)),
             TargetName: reader.GetString(2),
             FrameType: ParseFrameType(reader.GetString(3)),
-            FilterName: reader.IsDBNull(4) ? null : reader.GetString(4),
+            FilterName: await reader.IsDBNullAsync(4, ct) ? null : reader.GetString(4),
             ExposureSeconds: reader.GetInt32(5),
             Gain: reader.GetInt32(6),
-            Offset: reader.IsDBNull(7) ? null : reader.GetInt32(7),
+            Offset: await reader.IsDBNullAsync(7, ct) ? null : reader.GetInt32(7),
             TemperatureC: reader.GetDouble(8),
             CapturedUtc: DateTimeOffset.Parse(reader.GetString(9)),
             FilePath: reader.GetString(10),
@@ -329,11 +330,11 @@ public sealed class SqliteFrameRepository : IFrameRepository {
             Width: reader.GetInt32(12),
             Height: reader.GetInt32(13),
             BitDepth: reader.GetInt32(14),
-            Hfr: reader.IsDBNull(15) ? null : reader.GetDouble(15),
-            StarCount: reader.IsDBNull(16) ? null : reader.GetInt32(16),
-            Eccentricity: reader.IsDBNull(17) ? null : reader.GetDouble(17),
-            GuidingRmsArcsec: reader.IsDBNull(18) ? null : reader.GetDouble(18),
-            SnrEstimate: reader.IsDBNull(19) ? null : reader.GetDouble(19),
+            Hfr: await reader.IsDBNullAsync(15, ct) ? null : reader.GetDouble(15),
+            StarCount: await reader.IsDBNullAsync(16, ct) ? null : reader.GetInt32(16),
+            Eccentricity: await reader.IsDBNullAsync(17, ct) ? null : reader.GetDouble(17),
+            GuidingRmsArcsec: await reader.IsDBNullAsync(18, ct) ? null : reader.GetDouble(18),
+            SnrEstimate: await reader.IsDBNullAsync(19, ct) ? null : reader.GetDouble(19),
             QualityScore: quality,
             Rating: reader.GetInt32(21),
             Tags: tags);
@@ -357,7 +358,7 @@ public sealed class SqliteFrameRepository : IFrameRepository {
         if (TryServeFromCache(cachePath) is byte[] cached) {
             // Touch atime so the LRU sweep keeps the most-recently-served
             // variants warm.
-            try { File.SetLastAccessTimeUtc(cachePath, DateTime.UtcNow); } catch { /* ignore */ }
+            try { File.SetLastAccessTimeUtc(cachePath, DateTime.UtcNow); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* ignore */ }
             return (cached, "image/jpeg");
         }
 
@@ -585,10 +586,9 @@ public sealed class SqliteFrameRepository : IFrameRepository {
         var pattern = $"{stem}.preview.*.jpg";
         try {
             foreach (var variant in Directory.EnumerateFiles(dir, pattern)) {
-                try { File.Delete(variant); } catch { /* skip locked */ }
+                try { File.Delete(variant); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* skip locked */ }
             }
-        } catch (DirectoryNotFoundException) { /* nothing to delete */ }
-          catch (UnauthorizedAccessException) { /* read-only mount */ }
+        } catch (DirectoryNotFoundException) { /* nothing to delete */ } catch (UnauthorizedAccessException) { /* read-only mount */ }
         return true;
     }
 
@@ -685,10 +685,9 @@ public sealed class SqliteFrameRepository : IFrameRepository {
                     stale.Delete();
                     EmitVariantEvictedAsync(fitsPath, stale.Name,
                         reason: aggressiveEviction ? "storage_pressure" : "lru_eviction");
-                } catch { /* ignore */ }
+                } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* ignore */ }
             }
-        } catch (DirectoryNotFoundException) { /* nothing to evict */ }
-          catch (UnauthorizedAccessException) { /* read-only mount; skip */ }
+        } catch (DirectoryNotFoundException) { /* nothing to evict */ } catch (UnauthorizedAccessException) { /* read-only mount; skip */ }
     }
 
     private static bool IsUnderStoragePressure(string dir) {
@@ -717,7 +716,7 @@ public sealed class SqliteFrameRepository : IFrameRepository {
                     """;
                 using var doc = System.Text.Json.JsonDocument.Parse(json);
                 await _ws.PublishAsync("frame.preview.variant.evicted", doc.RootElement.Clone(), CancellationToken.None);
-            } catch { /* swallow */ }
+            } catch (Exception ex) when (ex is System.Text.Json.JsonException or IOException or InvalidOperationException or ObjectDisposedException) { /* swallow */ }
         });
     }
 
@@ -756,4 +755,15 @@ public sealed class SqliteFrameRepository : IFrameRepository {
         "darkflat" => FrameType.DarkFlat,
         _ => Enum.TryParse<FrameType>(s, ignoreCase: true, out var ft) ? ft : FrameType.Light,
     };
+
+    private static readonly string[] SampleTags = { "good-seeing" };
+
+    // Boxes a nullable value type for an ADO.NET parameter, mapping null to DBNull.
+    // (A direct '(object?)value ?? DBNull.Value' trips CA1508, which does not model
+    // Nullable<T> boxing returning null.)
+    private static object DbValue<T>(T? value) where T : struct =>
+        value.HasValue ? value.Value : DBNull.Value;
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Seeded sample session + 3 sample frames into catalog")]
+    private partial void LogSeededFrames();
 }

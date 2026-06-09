@@ -2,14 +2,14 @@
 // The Accord.NET Framework
 // http://accord-framework.net
 //
-// Copyright © César Souza, 2009-2017
+// Copyright ï¿½ Cï¿½sar Souza, 2009-2017
 // cesarsouza at gmail.com
 //
 // AForge Image Processing Library
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © AForge.NET, 2005-2010
+// Copyright ï¿½ AForge.NET, 2005-2010
 // contacts@aforgenet.com
 //
 //    This library is free software; you can redistribute it and/or
@@ -27,8 +27,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -76,8 +75,7 @@ namespace Accord.Imaging.Filters
     /// <img src="..\images\imaging\hit-and-miss.png" width="320" height="240" />
     /// </remarks>
     /// 
-    public class HitAndMiss : BaseUsingCopyPartialFilter
-    {
+    public class HitAndMiss : BaseUsingCopyPartialFilter {
         /// <summary>
         /// Hit and Miss modes.
         /// </summary>
@@ -91,8 +89,7 @@ namespace Accord.Imaging.Filters
         /// </list>
         /// </para></remarks>
         /// 
-        public enum Modes
-        {
+        public enum Modes {
             /// <summary>
             /// Hit and miss mode.
             /// </summary>
@@ -122,8 +119,7 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Format translations dictionary.
         /// </summary>
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -136,8 +132,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <para>Default mode is set to <see cref="Modes.HitAndMiss"/>.</para></remarks>
         /// 
-        public Modes Mode
-        {
+        public Modes Mode {
             get { return mode; }
             set { mode = value; }
         }
@@ -153,8 +148,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <exception cref="ArgumentException">Invalid size of structuring element.</exception>
         /// 
-        public HitAndMiss(short[,] se)
-        {
+        public HitAndMiss(short[,] se) {
             int s = se.GetLength(0);
 
             // check structuring element size
@@ -176,8 +170,7 @@ namespace Accord.Imaging.Filters
         /// <param name="mode">Operation mode.</param>
         /// 
         public HitAndMiss(short[,] se, Modes mode)
-            : this(se)
-        {
+            : this(se) {
             this.mode = mode;
         }
 
@@ -189,8 +182,7 @@ namespace Accord.Imaging.Filters
         /// <param name="destinationData">Destination image data.</param>
         /// <param name="rect">Image rectangle for processing by the filter.</param>
         /// 
-        protected override unsafe void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData, Rectangle rect)
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData, Rectangle rect) {
             // processing start and stop X,Y positions
             int startX = rect.Left;
             int startY = rect.Top;
@@ -225,22 +217,18 @@ namespace Accord.Imaging.Filters
             dst += (startY * dstStride + startX);
 
             // for each line
-            for (int y = startY; y < stopY; y++)
-            {
+            for (int y = startY; y < stopY; y++) {
                 // for each pixel
-                for (int x = startX; x < stopX; x++, src++, dst++)
-                {
+                for (int x = startX; x < stopX; x++, src++, dst++) {
                     missValue[1] = missValue[2] = *src;
                     dstValue = 255;
 
                     // for each structuring element's row
-                    for (i = 0; i < size; i++)
-                    {
+                    for (i = 0; i < size; i++) {
                         ir = i - r;
 
                         // for each structuring element's column
-                        for (j = 0; j < size; j++)
-                        {
+                        for (j = 0; j < size; j++) {
                             jr = j - r;
 
                             // get structuring element's value
@@ -254,8 +242,7 @@ namespace Accord.Imaging.Filters
                             if (
                                 (y + ir < startY) || (y + ir >= stopY) ||
                                 (x + jr < startX) || (x + jr >= stopX)
-                                )
-                            {
+                                ) {
                                 // if it so, the result is zero,
                                 // because it was required pixel
                                 dstValue = 0;
@@ -268,8 +255,7 @@ namespace Accord.Imaging.Filters
                             if (
                                 ((sv != 0) || (v != 0)) &&
                                 ((sv != 1) || (v != 255))
-                                )
-                            {
+                                ) {
                                 // failed structuring element mutch
                                 dstValue = 0;
                                 break;

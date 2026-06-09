@@ -23,11 +23,10 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging
-{
+namespace Accord.Imaging {
     using System;
-    using System.Text;
     using System.Drawing;
+    using System.Text;
 
     /// <summary>
     ///   Fast Retina Keypoint (FREAK) point.
@@ -43,8 +42,7 @@ namespace Accord.Imaging
     /// <seealso cref="FastRetinaKeypointDetector"/>
     /// 
     [Serializable]
-    public class FastRetinaKeypoint : IFeaturePoint<byte[]>, IFeaturePoint<double[]>
-    {
+    public class FastRetinaKeypoint : IFeaturePoint<byte[]>, IFeaturePoint<double[]> {
 
         /// <summary>
         ///   Initializes a new instance of the <see cref="FastRetinaKeypoint"/> class.
@@ -53,8 +51,7 @@ namespace Accord.Imaging
         /// <param name="x">The x-coordinate of the point in the image.</param>
         /// <param name="y">The y-coordinate of the point in the image.</param>
         /// 
-        public FastRetinaKeypoint(double x, double y)
-        {
+        public FastRetinaKeypoint(double x, double y) {
             this.X = x;
             this.Y = y;
             this.Scale = 1;
@@ -101,8 +98,7 @@ namespace Accord.Imaging
         /// <returns>A string containing an hexadecimal
         /// value representing this point's descriptor.</returns>
         /// 
-        public string ToHex()
-        {
+        public string ToHex() {
             if (Descriptor == null)
                 return String.Empty;
 
@@ -120,14 +116,11 @@ namespace Accord.Imaging
         /// <returns>A string containing a binary value
         /// representing this point's descriptor.</returns>
         /// 
-        public string ToBinary()
-        {
+        public string ToBinary() {
             StringBuilder sb = new StringBuilder();
 
-            for (int i = 0; i < Descriptor.Length; i++)
-            {
-                for (int j = 0; j < 8; j++)
-                {
+            for (int i = 0; i < Descriptor.Length; i++) {
+                for (int j = 0; j < 8; j++) {
                     bool set = (Descriptor[i] & (1 << j)) != 0;
                     sb.Append(set ? "1" : "0");
                 }
@@ -143,8 +136,7 @@ namespace Accord.Imaging
         /// <returns>A string containing the base64 
         /// representation of the descriptor.</returns>
         /// 
-        public string ToBase64()
-        {
+        public string ToBase64() {
             if (Descriptor == null)
                 return String.Empty;
 
@@ -158,8 +150,7 @@ namespace Accord.Imaging
         ///   Converts the feature point to a <see cref="Accord.IntPoint"/>.
         /// </summary>
         /// 
-        public IntPoint ToIntPoint()
-        {
+        public IntPoint ToIntPoint() {
             return new IntPoint((int)X, (int)Y);
         }
 
@@ -171,8 +162,7 @@ namespace Accord.Imaging
         ///   The result of the conversion.
         /// </returns>
         /// 
-        public Point ToPoint()
-        {
+        public Point ToPoint() {
             return new Point((int)X, (int)Y);
         }
 
@@ -184,8 +174,7 @@ namespace Accord.Imaging
         ///   The result of the conversion.
         /// </returns>
         /// 
-        public PointF ToPointF()
-        {
+        public PointF ToPointF() {
             return new PointF((float)X, (float)Y);
         }
 
@@ -200,8 +189,7 @@ namespace Accord.Imaging
         ///   The result of the conversion.
         /// </returns>
         /// 
-        public static implicit operator Point(FastRetinaKeypoint point)
-        {
+        public static implicit operator Point(FastRetinaKeypoint point) {
             return point.ToPoint();
         }
 
@@ -216,8 +204,7 @@ namespace Accord.Imaging
         ///   The result of the conversion.
         /// </returns>
         /// 
-        public static implicit operator PointF(FastRetinaKeypoint point)
-        {
+        public static implicit operator PointF(FastRetinaKeypoint point) {
             return point.ToPointF();
         }
 
@@ -232,15 +219,12 @@ namespace Accord.Imaging
         ///   The result of the conversion.
         /// </returns>
         /// 
-        public static implicit operator Accord.IntPoint(FastRetinaKeypoint point)
-        {
+        public static implicit operator Accord.IntPoint(FastRetinaKeypoint point) {
             return point.ToIntPoint();
         }
 
-        double[] IFeatureDescriptor<double[]>.Descriptor
-        {
-            get
-            {
+        double[] IFeatureDescriptor<double[]>.Descriptor {
+            get {
                 double[] r = new double[Descriptor.Length];
                 for (int i = 0; i < Descriptor.Length; i++)
                     r[i] = Descriptor[i];

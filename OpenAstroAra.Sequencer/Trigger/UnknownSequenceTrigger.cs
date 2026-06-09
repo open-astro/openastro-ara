@@ -26,7 +26,7 @@ using System.Threading.Tasks;
 
 namespace OpenAstroAra.Sequencer.Trigger {
 
-    internal class UnknownSequenceTrigger : SequenceTrigger, IValidatable {
+    internal sealed class UnknownSequenceTrigger : SequenceTrigger, IValidatable {
 
         public UnknownSequenceTrigger() {
         }
@@ -52,7 +52,7 @@ namespace OpenAstroAra.Sequencer.Trigger {
             throw new SequenceItemSkippedException($"Unknown trigger will be skipped - ${Name}");
         }
 
-        public override bool ShouldTrigger(ISequenceItem previousItem, ISequenceItem nextItem) {
+        public override bool ShouldTrigger(ISequenceItem? previousItem, ISequenceItem? nextItem) {
             return false;
         }
 

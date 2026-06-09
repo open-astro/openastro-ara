@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -12,22 +12,26 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Astrometry;
+using OpenAstroAra.Core.Utility;
 
 namespace OpenAstroAra.Astrometry {
 
     public class FramingRectangle : ObservableRotatingRectangle {
 
         public FramingRectangle(double rotationOffset, double x, double y, double width, double height) : base(rotationOffset, x, y, width, height) {
-            
+
             this.OriginalX = x;
             this.OriginalY = y;
         }
 
         public double OriginalX { get; }
         public double OriginalY { get; }
-        public Coordinates OriginalCoordinates { get; set; }
+        // Nullable: this public property is assigned after construction by the framing
+        // flow, so consumers may legitimately read it before it has been set. Modeling it
+        // as Coordinates? makes that "not yet set" state explicit in the type system rather
+        // than papering over it with null! (which would surface as a surprise NRE).
+        public Coordinates? OriginalCoordinates { get; set; }
 
         private int id;
 
@@ -39,7 +43,7 @@ namespace OpenAstroAra.Astrometry {
             }
         }
 
-        private string name;
+        private string name = string.Empty;
         public string Name {
             get => name;
             set {
@@ -48,7 +52,7 @@ namespace OpenAstroAra.Astrometry {
             }
         }
 
-        private Coordinates coordinates;
+        private Coordinates coordinates = null!;  // assigned after construction
 
         public Coordinates Coordinates {
             get => coordinates;

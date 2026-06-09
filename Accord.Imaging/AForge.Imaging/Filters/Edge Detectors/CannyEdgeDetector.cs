@@ -1,15 +1,14 @@
 // AForge Image Processing Library
 // AForge.NET framework
 //
-// Copyright © Andrew Kirillov, 2005-2008
+// Copyright ï¿½ Andrew Kirillov, 2005-2008
 // andrew.kirillov@aforgenet.com
 //
 // Article by Bill Green was used as the reference
 // http://www.pages.drexel.edu/~weg22/can_tut.html
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -49,8 +48,7 @@ namespace Accord.Imaging.Filters
     /// <img src="..\images\imaging\canny_edges.png" width="320" height="240" />
     /// </remarks>
     /// 
-    public class CannyEdgeDetector : BaseUsingCopyPartialFilter
-    {
+    public class CannyEdgeDetector : BaseUsingCopyPartialFilter {
         private GaussianBlur gaussianFilter = new GaussianBlur();
         private byte lowThreshold = 20;
         private byte highThreshold = 100;
@@ -61,8 +59,7 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Format translations dictionary.
         /// </summary>
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -77,8 +74,7 @@ namespace Accord.Imaging.Filters
         /// <para>Default value is set to <b>20</b>.</para>
         /// </remarks>
         /// 
-        public byte LowThreshold
-        {
+        public byte LowThreshold {
             get { return lowThreshold; }
             set { lowThreshold = value; }
         }
@@ -94,8 +90,7 @@ namespace Accord.Imaging.Filters
         /// <para>Default value is set to <b>100</b>.</para>
         /// </remarks>
         /// 
-        public byte HighThreshold
-        {
+        public byte HighThreshold {
             get { return highThreshold; }
             set { highThreshold = value; }
         }
@@ -106,8 +101,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <remarks>Sigma value for <see cref="GaussianBlur.Sigma">Gaussian bluring</see>.</remarks>
         /// 
-        public double GaussianSigma
-        {
+        public double GaussianSigma {
             get { return gaussianFilter.Sigma; }
             set { gaussianFilter.Sigma = value; }
         }
@@ -118,8 +112,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <remarks>Size of <see cref="GaussianBlur.Size">Gaussian kernel</see>.</remarks>
         /// 
-        public int GaussianSize
-        {
+        public int GaussianSize {
             get { return gaussianFilter.Size; }
             set { gaussianFilter.Size = value; }
         }
@@ -128,8 +121,7 @@ namespace Accord.Imaging.Filters
         /// Initializes a new instance of the <see cref="CannyEdgeDetector"/> class.
         /// </summary>
         /// 
-        public CannyEdgeDetector()
-        {
+        public CannyEdgeDetector() {
             // initialize format translation dictionary
             formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
         }
@@ -142,8 +134,7 @@ namespace Accord.Imaging.Filters
         /// <param name="highThreshold">High threshold.</param>
         /// 
         public CannyEdgeDetector(byte lowThreshold, byte highThreshold)
-            : this()
-        {
+            : this() {
             this.lowThreshold = lowThreshold;
             this.highThreshold = highThreshold;
         }
@@ -157,8 +148,7 @@ namespace Accord.Imaging.Filters
         /// <param name="sigma">Gaussian sigma.</param>
         /// 
         public CannyEdgeDetector(byte lowThreshold, byte highThreshold, double sigma)
-            : this()
-        {
+            : this() {
             this.lowThreshold = lowThreshold;
             this.highThreshold = highThreshold;
             gaussianFilter.Sigma = sigma;
@@ -172,8 +162,7 @@ namespace Accord.Imaging.Filters
         /// <param name="destinationData">Destination image data.</param>
         /// <param name="rect">Image rectangle for processing by the filter.</param>
         /// 
-        protected override unsafe void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData, Rectangle rect)
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData, Rectangle rect) {
             // processing start and stop X,Y positions
             int startX = rect.Left + 1;
             int startY = rect.Top + 1;
@@ -213,11 +202,9 @@ namespace Accord.Imaging.Filters
             int p = 0;
 
             // for each line
-            for (int y = startY; y < stopY; y++)
-            {
+            for (int y = startY; y < stopY; y++) {
                 // for each pixel
-                for (int x = startX; x < stopX; x++, src++, p++)
-                {
+                for (int x = startX; x < stopX; x++, src++, p++) {
                     gx = src[-srcStride + 1] + src[srcStride + 1]
                        - src[-srcStride - 1] - src[srcStride - 1]
                        + 2 * (src[1] - src[-1]);
@@ -232,23 +219,18 @@ namespace Accord.Imaging.Filters
                         maxGradient = gradients[x, y];
 
                     // --- get orientation
-                    if (gx == 0)
-                    {
+                    if (gx == 0) {
                         // can not divide by zero
                         orientation = (gy == 0) ? 0 : 90;
-                    }
-                    else
-                    {
+                    } else {
                         double div = (double)gy / gx;
 
                         // handle angles of the 2nd and 4th quads
-                        if (div < 0)
-                        {
+                        if (div < 0) {
                             orientation = 180 - System.Math.Atan(-div) * toAngle;
                         }
                         // handle angles of the 1st and 3rd quads
-                        else
-                        {
+                        else {
                             orientation = System.Math.Atan(div) * toAngle;
                         }
 
@@ -278,14 +260,11 @@ namespace Accord.Imaging.Filters
             p = 0;
 
             // for each line
-            for (int y = startY; y < stopY; y++)
-            {
+            for (int y = startY; y < stopY; y++) {
                 // for each pixel
-                for (int x = startX; x < stopX; x++, dst++, p++)
-                {
+                for (int x = startX; x < stopX; x++, dst++, p++) {
                     // get two adjacent pixels
-                    switch (orients[p])
-                    {
+                    switch (orients[p]) {
                         case 0:
                             leftPixel = gradients[x - 1, y];
                             rightPixel = gradients[x + 1, y];
@@ -304,12 +283,9 @@ namespace Accord.Imaging.Filters
                             break;
                     }
                     // compare current pixels value with adjacent pixels
-                    if ((gradients[x, y] < leftPixel) || (gradients[x, y] < rightPixel))
-                    {
+                    if ((gradients[x, y] < leftPixel) || (gradients[x, y] < rightPixel)) {
                         *dst = 0;
-                    }
-                    else
-                    {
+                    } else {
                         *dst = (byte)(gradients[x, y] / maxGradient * 255);
                     }
                 }
@@ -322,20 +298,14 @@ namespace Accord.Imaging.Filters
             dst += dstStride * startY + startX;
 
             // for each line
-            for (int y = startY; y < stopY; y++)
-            {
+            for (int y = startY; y < stopY; y++) {
                 // for each pixel
-                for (int x = startX; x < stopX; x++, dst++)
-                {
-                    if (*dst < highThreshold)
-                    {
-                        if (*dst < lowThreshold)
-                        {
+                for (int x = startX; x < stopX; x++, dst++) {
+                    if (*dst < highThreshold) {
+                        if (*dst < lowThreshold) {
                             // non edge
                             *dst = 0;
-                        }
-                        else
-                        {
+                        } else {
                             // check 8 neighboring pixels
                             if ((dst[-1] < highThreshold) &&
                                 (dst[1] < highThreshold) &&
@@ -344,8 +314,7 @@ namespace Accord.Imaging.Filters
                                 (dst[-dstStride + 1] < highThreshold) &&
                                 (dst[dstStride - 1] < highThreshold) &&
                                 (dst[dstStride] < highThreshold) &&
-                                (dst[dstStride + 1] < highThreshold))
-                            {
+                                (dst[dstStride + 1] < highThreshold)) {
                                 *dst = 0;
                             }
                         }

@@ -2,12 +2,11 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © Andrew Kirillov, 2005-2009
+// Copyright ï¿½ Andrew Kirillov, 2005-2009
 // andrew.kirillov@aforgenet.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -48,8 +47,7 @@ namespace Accord.Imaging.Filters
     /// <img src="..\images\imaging\conservative_smoothing.png" width="480" height="361" />
     /// </remarks>
     /// 
-    public class ConservativeSmoothing : BaseUsingCopyPartialFilter
-    {
+    public class ConservativeSmoothing : BaseUsingCopyPartialFilter {
         private int size = 3;
 
         // private format translation dictionary
@@ -58,8 +56,7 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Format translations dictionary.
         /// </summary>
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -74,8 +71,7 @@ namespace Accord.Imaging.Filters
         /// <para><note>The value should be odd.</note></para>
         /// </remarks>
         /// 
-        public int KernelSize
-        {
+        public int KernelSize {
             get { return size; }
             set { size = Math.Max(3, Math.Min(25, value | 1)); }
         }
@@ -84,8 +80,7 @@ namespace Accord.Imaging.Filters
         /// Initializes a new instance of the <see cref="ConservativeSmoothing"/> class.
         /// </summary>
         /// 
-        public ConservativeSmoothing()
-        {
+        public ConservativeSmoothing() {
             formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
             formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format24bppRgb;
             formatTranslations[PixelFormat.Format32bppRgb] = PixelFormat.Format32bppRgb;
@@ -99,8 +94,7 @@ namespace Accord.Imaging.Filters
         /// <param name="size">Kernel size.</param>
         /// 
         public ConservativeSmoothing(int size)
-            : this()
-        {
+            : this() {
             KernelSize = size;
         }
 
@@ -112,8 +106,7 @@ namespace Accord.Imaging.Filters
         /// <param name="destinationData">Destination image data.</param>
         /// <param name="rect">Image rectangle for processing by the filter.</param>
         /// 
-        protected override unsafe void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData, Rectangle rect)
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData, Rectangle rect) {
             int pixelSize = Image.GetPixelFormatSize(sourceData.PixelFormat) / 8;
 
             // processing start and stop X,Y positions
@@ -142,22 +135,18 @@ namespace Accord.Imaging.Filters
             src += (startY * srcStride + startX * pixelSize);
             dst += (startY * dstStride + startX * pixelSize);
 
-            if (destinationData.PixelFormat == PixelFormat.Format8bppIndexed)
-            {
+            if (destinationData.PixelFormat == PixelFormat.Format8bppIndexed) {
                 // Grayscale image
 
                 // for each line
-                for (int y = startY; y < stopY; y++)
-                {
+                for (int y = startY; y < stopY; y++) {
                     // for each pixel
-                    for (int x = startX; x < stopX; x++, src++, dst++)
-                    {
+                    for (int x = startX; x < stopX; x++, src++, dst++) {
                         minG = 255;
                         maxG = 0;
 
                         // for each kernel row
-                        for (i = -radius; i <= radius; i++)
-                        {
+                        for (i = -radius; i <= radius; i++) {
                             t = y + i;
 
                             // skip row
@@ -168,16 +157,14 @@ namespace Accord.Imaging.Filters
                                 break;
 
                             // for each kernel column
-                            for (j = -radius; j <= radius; j++)
-                            {
+                            for (j = -radius; j <= radius; j++) {
                                 t = x + j;
 
                                 // skip column
                                 if (t < startX)
                                     continue;
 
-                                if ((i != j) && (t < stopX))
-                                {
+                                if ((i != j) && (t < stopX)) {
                                     // find MIN and MAX values
                                     v = src[i * srcStride + j];
 
@@ -195,23 +182,18 @@ namespace Accord.Imaging.Filters
                     src += srcOffset;
                     dst += dstOffset;
                 }
-            }
-            else
-            {
+            } else {
                 // RGB image
 
                 // for each line
-                for (int y = startY; y < stopY; y++)
-                {
+                for (int y = startY; y < stopY; y++) {
                     // for each pixel
-                    for (int x = startX; x < stopX; x++, src += pixelSize, dst += pixelSize)
-                    {
+                    for (int x = startX; x < stopX; x++, src += pixelSize, dst += pixelSize) {
                         minR = minG = minB = 255;
                         maxR = maxG = maxB = 0;
 
                         // for each kernel row
-                        for (i = -radius; i <= radius; i++)
-                        {
+                        for (i = -radius; i <= radius; i++) {
                             t = y + i;
 
                             // skip row
@@ -222,16 +204,14 @@ namespace Accord.Imaging.Filters
                                 break;
 
                             // for each kernel column
-                            for (j = -radius; j <= radius; j++)
-                            {
+                            for (j = -radius; j <= radius; j++) {
                                 t = x + j;
 
                                 // skip column
                                 if (t < startX)
                                     continue;
 
-                                if ((i != j) && (t < stopX))
-                                {
+                                if ((i != j) && (t < stopX)) {
                                     p = &src[i * srcStride + j * pixelSize];
 
                                     // find MIN and MAX values

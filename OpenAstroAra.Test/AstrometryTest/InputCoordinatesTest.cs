@@ -11,9 +11,9 @@
 #endregion "copyright"
 using FluentAssertions;
 using Newtonsoft.Json;
+using NUnit.Framework;
 using OpenAstroAra.Astrometry;
 using OpenAstroAra.Equipment.Model;
-using NUnit.Framework;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -53,7 +53,7 @@ namespace OpenAstroAra.Test.AstrometryTest {
 
             var json = JsonConvert.SerializeObject(coordinates);
 
-            var sut = JsonConvert.DeserializeObject<InputCoordinates>(json);
+            var sut = JsonConvert.DeserializeObject<InputCoordinates>(json)!;
 
             sut.RAHours.Should().Be(raHours);
             sut.RAMinutes.Should().Be(raMinutes);

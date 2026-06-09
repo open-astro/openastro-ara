@@ -55,7 +55,7 @@ namespace OpenAstroAra.Image.ImageData {
             this.IsBayered = isBayered;
         }
 
-        public override Task<IImageData> ToImageData(IProgress<ApplicationStatus> progress = default, CancellationToken cancelToken = default) {
+        public override Task<IImageData> ToImageData(IProgress<ApplicationStatus>? progress = default, CancellationToken cancelToken = default) {
             return Task.FromResult<IImageData>(
                 imageDataFactory.CreateBaseImageData(
                     imageArray: this.imageArray,

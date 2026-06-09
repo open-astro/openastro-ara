@@ -20,16 +20,16 @@ namespace OpenAstroAra.Astrometry {
     public class TwilightCalculator : ITwilightCalculator {
 
         [Obsolete("Use method with elevation parameter instead")]
-        public TimeSpan GetTwilightDuration(DateTime date, double latitude, double longitude) {
-            return GetTwilightDuration(date, latitude, longitude, 0.0);
+        public TimeSpan GetTwilightDuration(DateTime dateTime, double latitude, double longitude) {
+            return GetTwilightDuration(dateTime, latitude, longitude, 0.0);
         }
 
-        public TimeSpan GetTwilightDuration(DateTime date, double latitude, double longitude, double elevation) {
-            var nightRise = AstroUtil.GetNightTimes(date, latitude, longitude, elevation).Rise;
-            var sunRiseAndSet = AstroUtil.GetSunRiseAndSet(date, latitude, longitude, elevation);
+        public TimeSpan GetTwilightDuration(DateTime dateTime, double latitude, double longitude, double elevation) {
+            var nightRise = AstroUtil.GetNightTimes(dateTime, latitude, longitude, elevation).Rise;
+            var sunRiseAndSet = AstroUtil.GetSunRiseAndSet(dateTime, latitude, longitude, elevation);
             if (nightRise == null) {
-                return sunRiseAndSet.Rise - sunRiseAndSet.Set ?? TimeSpan.Zero;
-            }            
+                return sunRiseAndSet.Rise - sunRiseAndSet.SetTime ?? TimeSpan.Zero;
+            }
 
             return sunRiseAndSet.Rise - nightRise ?? TimeSpan.Zero;
         }

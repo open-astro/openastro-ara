@@ -12,27 +12,27 @@
 
 #endregion "copyright"
 
+using Newtonsoft.Json;
+using OpenAstroAra.Core.Interfaces;
 using OpenAstroAra.Core.Utility;
 using System.Runtime.Serialization;
-using OpenAstroAra.Core.Interfaces;
-using Newtonsoft.Json;
 
 namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.PhdEvents {
 
     [DataContract]
     public class PhdEvent : BaseINPC, IGuideEvent {
 
-        [DataMember]
-        [JsonProperty]
-        public string Event { get; set; }
+        [DataMember(Name = "Event")]
+        [JsonProperty("Event")]
+        public string EventName { get; set; } = string.Empty;
 
         [DataMember]
         [JsonProperty]
-        public string TimeStamp { get; set; }
+        public string TimeStamp { get; set; } = string.Empty;
 
         [DataMember]
         [JsonProperty]
-        public string Host { get; set; }
+        public string Host { get; set; } = string.Empty;
 
         [DataMember]
         [JsonProperty]

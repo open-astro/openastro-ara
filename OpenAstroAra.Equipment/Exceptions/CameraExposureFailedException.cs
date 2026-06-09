@@ -13,7 +13,6 @@
 #endregion "copyright"
 
 using System;
-using System.Runtime.Serialization;
 
 namespace OpenAstroAra.Equipment.Exceptions {
 
@@ -27,9 +26,6 @@ namespace OpenAstroAra.Equipment.Exceptions {
         }
 
         public CameraExposureFailedException(string message, Exception innerException) : base(message, innerException) {
-        }
-
-        protected CameraExposureFailedException(SerializationInfo info, StreamingContext context) : base(info, context) {
         }
     }
 }

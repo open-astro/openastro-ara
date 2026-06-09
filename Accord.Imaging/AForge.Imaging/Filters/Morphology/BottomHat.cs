@@ -1,12 +1,11 @@
 // AForge Image Processing Library
 // AForge.NET framework
 //
-// Copyright © Andrew Kirillov, 2005-2009
+// Copyright ï¿½ Andrew Kirillov, 2005-2009
 // andrew.kirillov@aforgenet.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -43,19 +42,17 @@ namespace Accord.Imaging.Filters
     /// 
     /// <seealso cref="TopHat"/>
     /// 
-    public class BottomHat : BaseInPlaceFilter
-    {
-        private Closing closing = new Closing( );
-        private Subtract subtract = new Subtract( );
+    public class BottomHat : BaseInPlaceFilter {
+        private Closing closing = new Closing();
+        private Subtract subtract = new Subtract();
 
         // private format translation dictionary
-        private Dictionary<PixelFormat, PixelFormat> formatTranslations = new Dictionary<PixelFormat, PixelFormat>( );
+        private Dictionary<PixelFormat, PixelFormat> formatTranslations = new Dictionary<PixelFormat, PixelFormat>();
 
         /// <summary>
         /// Format translations dictionary.
         /// </summary>
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -63,13 +60,12 @@ namespace Accord.Imaging.Filters
         /// Initializes a new instance of the <see cref="BottomHat"/> class.
         /// </summary>
         /// 
-        public BottomHat( )
-        {
+        public BottomHat() {
             // initialize format translation dictionary
-            formatTranslations[PixelFormat.Format8bppIndexed]    = PixelFormat.Format8bppIndexed;
-            formatTranslations[PixelFormat.Format24bppRgb]       = PixelFormat.Format24bppRgb;
+            formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
+            formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format24bppRgb;
             formatTranslations[PixelFormat.Format16bppGrayScale] = PixelFormat.Format16bppGrayScale;
-            formatTranslations[PixelFormat.Format48bppRgb]       = PixelFormat.Format48bppRgb;
+            formatTranslations[PixelFormat.Format48bppRgb] = PixelFormat.Format48bppRgb;
         }
 
         /// <summary>
@@ -78,9 +74,8 @@ namespace Accord.Imaging.Filters
         /// 
         /// <param name="se">Structuring element to pass to <see cref="Closing"/> operator.</param>
         /// 
-        public BottomHat( short[,] se ) : this( )
-        {
-            closing = new Closing( se );
+        public BottomHat(short[,] se) : this() {
+            closing = new Closing(se);
         }
 
         /// <summary>
@@ -89,17 +84,16 @@ namespace Accord.Imaging.Filters
         /// 
         /// <param name="image">Source image data.</param>
         ///
-        protected override unsafe void ProcessFilter( UnmanagedImage image )
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage image) {
             // copy source image
-            UnmanagedImage sourceImage = image.Clone( );
+            UnmanagedImage sourceImage = image.Clone();
             // perform closing on the source image
-            closing.ApplyInPlace( image );
+            closing.ApplyInPlace(image);
             // subtract source image from the closed image
             subtract.UnmanagedOverlayImage = sourceImage;
-            subtract.ApplyInPlace( image );
+            subtract.ApplyInPlace(image);
 
-            sourceImage.Dispose( );
+            sourceImage.Dispose();
         }
     }
 }

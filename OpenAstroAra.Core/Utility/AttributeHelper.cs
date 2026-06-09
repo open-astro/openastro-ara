@@ -20,11 +20,15 @@ namespace OpenAstroAra.Core.Utility {
     public static class AttributeHelper {
 
         public static string GetDescription<T>(this T value) {
-            FieldInfo fi = value?.GetType().GetField(value.ToString());
+            if (value == null) {
+                return string.Empty;
+            }
+
+            FieldInfo? fi = value.GetType().GetField(value.ToString() ?? string.Empty);
 
             if (fi != null) {
                 var attributes = (DescriptionAttribute[])fi.GetCustomAttributes(typeof(DescriptionAttribute), false);
-                var label = ((attributes.Length > 0) && (!string.IsNullOrEmpty(attributes[0].Description))) ? attributes[0].Description : value.ToString();
+                var label = ((attributes.Length > 0) && (!string.IsNullOrEmpty(attributes[0].Description))) ? attributes[0].Description : value.ToString() ?? string.Empty;
                 return Locale.Loc.Instance[label];
             }
 

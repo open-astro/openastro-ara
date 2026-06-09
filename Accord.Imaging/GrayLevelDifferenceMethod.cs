@@ -23,10 +23,9 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging
-{
-    using System;
+namespace Accord.Imaging {
     using Accord.Imaging;
+    using System;
 
     /// <summary>
     ///   Gray-Level Difference Method (GLDM).
@@ -37,8 +36,7 @@ namespace Accord.Imaging
     ///   values between adjacent pixels in an image.
     /// </remarks>
     /// 
-    public class GrayLevelDifferenceMethod
-    {
+    public class GrayLevelDifferenceMethod {
 
         private CooccurrenceDegree degree;
         private bool autoGray = true;
@@ -50,8 +48,7 @@ namespace Accord.Imaging
         ///   the maximum gray value will be assumed 255.
         /// </summary>
         /// 
-        public bool AutoGray
-        {
+        public bool AutoGray {
             get { return autoGray; }
             set { autoGray = value; }
         }
@@ -60,8 +57,7 @@ namespace Accord.Imaging
         ///   Gets or sets the direction at which the co-occurrence should be found.
         /// </summary>
         /// 
-        public CooccurrenceDegree Degree
-        {
+        public CooccurrenceDegree Degree {
             get { return degree; }
             set { degree = value; }
         }
@@ -73,8 +69,7 @@ namespace Accord.Imaging
         /// 
         /// <param name="degree">The direction at which the co-occurrence should be found.</param>
         /// 
-        public GrayLevelDifferenceMethod(CooccurrenceDegree degree)
-        {
+        public GrayLevelDifferenceMethod(CooccurrenceDegree degree) {
             this.degree = degree;
         }
 
@@ -86,8 +81,7 @@ namespace Accord.Imaging
         /// <param name="autoGray">Whether the maximum value of gray should be
         ///   automatically computed from the image. Default is true.</param>
         /// 
-        public GrayLevelDifferenceMethod(CooccurrenceDegree degree, bool autoGray)
-        {
+        public GrayLevelDifferenceMethod(CooccurrenceDegree degree, bool autoGray) {
             this.degree = degree;
             this.autoGray = autoGray;
         }
@@ -102,8 +96,7 @@ namespace Accord.Imaging
         /// <returns>An histogram containing co-occurrences 
         /// for every gray level in <paramref name="source"/>.</returns>
         /// 
-        public int[] Compute(UnmanagedImage source)
-        {
+        public int[] Compute(UnmanagedImage source) {
             int width = source.Width;
             int height = source.Height;
             int stride = source.Stride;
@@ -112,8 +105,7 @@ namespace Accord.Imaging
 
             int[] hist;
 
-            unsafe
-            {
+            unsafe {
                 byte* src = (byte*)source.ImageData.ToPointer();
 
                 if (autoGray)
@@ -122,13 +114,10 @@ namespace Accord.Imaging
 
                 hist = new int[maxGray + 1];
 
-                switch (degree)
-                {
+                switch (degree) {
                     case CooccurrenceDegree.Degree0:
-                        for (int y = 0; y < height; y++)
-                        {
-                            for (int x = 1; x < width; x++)
-                            {
+                        for (int y = 0; y < height; y++) {
+                            for (int x = 1; x < width; x++) {
                                 byte a = src[stride * y + (x - 1)];
                                 byte b = src[stride * y + x];
                                 int bin = Math.Abs(a - b);
@@ -138,10 +127,8 @@ namespace Accord.Imaging
                         break;
 
                     case CooccurrenceDegree.Degree45:
-                        for (int y = 1; y < height; y++)
-                        {
-                            for (int x = 0; x < width - 1; x++)
-                            {
+                        for (int y = 1; y < height; y++) {
+                            for (int x = 0; x < width - 1; x++) {
                                 byte a = src[stride * y + x];
                                 byte b = src[stride * (y - 1) + (x + 1)];
                                 int bin = Math.Abs(a - b);
@@ -151,10 +138,8 @@ namespace Accord.Imaging
                         break;
 
                     case CooccurrenceDegree.Degree90:
-                        for (int y = 1; y < height; y++)
-                        {
-                            for (int x = 0; x < width; x++)
-                            {
+                        for (int y = 1; y < height; y++) {
+                            for (int x = 0; x < width; x++) {
                                 byte a = src[stride * (y - 1) + x];
                                 byte b = src[stride * y + x];
                                 int bin = Math.Abs(a - b);
@@ -164,11 +149,9 @@ namespace Accord.Imaging
                         break;
 
                     case CooccurrenceDegree.Degree135:
-                        for (int y = 1; y < height; y++)
-                        {
+                        for (int y = 1; y < height; y++) {
                             int steps = width - 1;
-                            for (int x = 0; x < width - 1; x++)
-                            {
+                            for (int x = 0; x < width - 1; x++) {
                                 byte a = src[stride * y + (steps - x)];
                                 byte b = src[stride * (y - 1) + (steps - 1 - x)];
                                 int bin = Math.Abs(a - b);
@@ -182,11 +165,9 @@ namespace Accord.Imaging
             return hist;
         }
 
-        unsafe private static int max(int width, int height, int offset, byte* src)
-        {
+        unsafe private static int max(int width, int height, int offset, byte* src) {
             int maxGray = 0;
-            for (int y = 0; y < height; y++)
-            {
+            for (int y = 0; y < height; y++) {
                 for (int x = 0; x < width; x++, src++)
                     if (*src > maxGray) maxGray = *src;
                 src += offset;

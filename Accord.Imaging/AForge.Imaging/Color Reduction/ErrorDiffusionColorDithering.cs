@@ -2,12 +2,11 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © AForge.NET, 2005-2011
+// Copyright ï¿½ AForge.NET, 2005-2011
 // contacts@aforgenet.com
 //
 
-namespace Accord.Imaging.ColorReduction
-{
+namespace Accord.Imaging.ColorReduction {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -31,8 +30,7 @@ namespace Accord.Imaging.ColorReduction
     /// color tables with 16 colors or less; 8 bpp result for larger color tables.</para>
     /// </remarks>
     /// 
-    public abstract class ErrorDiffusionColorDithering
-    {
+    public abstract class ErrorDiffusionColorDithering {
         private bool useCaching = false;
 
         /// <summary>
@@ -89,11 +87,9 @@ namespace Accord.Imaging.ColorReduction
         /// 
         /// <exception cref="ArgumentException">Color table length must be in the [2, 256] range.</exception>
         /// 
-        public Color[] ColorTable
-        {
+        public Color[] ColorTable {
             get { return colorTable; }
-            set
-            {
+            set {
                 if ((colorTable.Length < 2) || (colorTable.Length > 256))
                     throw new ArgumentException("Color table length must be in the [2, 256] range.");
 
@@ -117,8 +113,7 @@ namespace Accord.Imaging.ColorReduction
         /// <para>Default value is set to <see langword="false"/>.</para>
         /// </remarks>
         /// 
-        public bool UseCaching
-        {
+        public bool UseCaching {
             get { return useCaching; }
             set { useCaching = value; }
         }
@@ -127,8 +122,7 @@ namespace Accord.Imaging.ColorReduction
         /// Initializes a new instance of the <see cref="ErrorDiffusionColorDithering"/> class.
         /// </summary>
         /// 
-        protected ErrorDiffusionColorDithering()
-        {
+        protected ErrorDiffusionColorDithering() {
         }
 
         /// <summary>
@@ -157,20 +151,16 @@ namespace Accord.Imaging.ColorReduction
         /// 
         /// <exception cref="UnsupportedImageFormatException">Unsupported pixel format of the source image. It must 24 or 32 bpp color image.</exception>
         /// 
-        public Bitmap Apply(Bitmap sourceImage)
-        {
+        public Bitmap Apply(Bitmap sourceImage) {
             BitmapData data = sourceImage.LockBits(new Rectangle(0, 0, sourceImage.Width, sourceImage.Height),
                 ImageLockMode.ReadOnly, sourceImage.PixelFormat);
 
             Bitmap result = null;
 
-            try
-            {
+            try {
                 result = Apply(new UnmanagedImage(data));
                 result.CopyResolutionFrom(sourceImage);
-            }
-            finally
-            {
+            } finally {
                 sourceImage.UnlockBits(data);
             }
 
@@ -188,13 +178,11 @@ namespace Accord.Imaging.ColorReduction
         /// 
         /// <exception cref="UnsupportedImageFormatException">Unsupported pixel format of the source image. It must 24 or 32 bpp color image.</exception>
         /// 
-        public Bitmap Apply(UnmanagedImage sourceImage)
-        {
+        public Bitmap Apply(UnmanagedImage sourceImage) {
             if ((sourceImage.PixelFormat != PixelFormat.Format24bppRgb) &&
                  (sourceImage.PixelFormat != PixelFormat.Format32bppRgb) &&
                  (sourceImage.PixelFormat != PixelFormat.Format32bppArgb) &&
-                 (sourceImage.PixelFormat != PixelFormat.Format32bppPArgb))
-            {
+                 (sourceImage.PixelFormat != PixelFormat.Format32bppPArgb)) {
                 throw new UnsupportedImageFormatException("Unsupported pixel format of the source image.");
             }
 
@@ -216,8 +204,7 @@ namespace Accord.Imaging.ColorReduction
                 PixelFormat.Format8bppIndexed : PixelFormat.Format4bppIndexed);
             // and init its palette
             ColorPalette cp = destImage.Palette;
-            for (int i = 0, n = colorTable.Length; i < n; i++)
-            {
+            for (int i = 0, n = colorTable.Length; i < n; i++) {
                 cp.Entries[i] = colorTable[i];
             }
             destImage.Palette = cp;
@@ -230,8 +217,7 @@ namespace Accord.Imaging.ColorReduction
             int r, g, b;
 
             // do the job
-            unsafe
-            {
+            unsafe {
                 byte* ptr = (byte*)source.ImageData.ToPointer();
                 byte* dstBase = (byte*)destData.Scan0.ToPointer();
                 byte colorIndex;
@@ -239,13 +225,11 @@ namespace Accord.Imaging.ColorReduction
                 bool is8bpp = (colorTable.Length > 16);
 
                 // for each line
-                for (y = 0; y < height; y++)
-                {
+                for (y = 0; y < height; y++) {
                     byte* dst = dstBase + y * destData.Stride;
 
                     // for each pixels
-                    for (x = 0; x < width; x++, ptr += pixelSize)
-                    {
+                    for (x = 0; x < width; x++, ptr += pixelSize) {
                         r = ptr[RGB.R];
                         g = ptr[RGB.G];
                         b = ptr[RGB.B];
@@ -257,19 +241,13 @@ namespace Accord.Imaging.ColorReduction
                         Diffuse(r - closestColor.R, g - closestColor.G, b - closestColor.B, ptr);
 
                         // write color index as pixel's value to destination image
-                        if (is8bpp)
-                        {
+                        if (is8bpp) {
                             *dst = colorIndex;
                             dst++;
-                        }
-                        else
-                        {
-                            if (x % 2 == 0)
-                            {
+                        } else {
+                            if (x % 2 == 0) {
                                 *dst |= (byte)(colorIndex << 4);
-                            }
-                            else
-                            {
+                            } else {
                                 *dst |= (colorIndex);
                                 dst++;
                             }
@@ -286,39 +264,32 @@ namespace Accord.Imaging.ColorReduction
         }
 
         [NonSerialized]
-        private Dictionary<Color, byte> cache = new Dictionary<Color, byte>( );
+        private Dictionary<Color, byte> cache = new Dictionary<Color, byte>();
 
         // Get closest color from palette to the specified color
-        private Color GetClosestColor(int red, int green, int blue, out byte colorIndex)
-        {
+        private Color GetClosestColor(int red, int green, int blue, out byte colorIndex) {
             Color color = Color.FromArgb(red, green, blue);
 
-            if ((useCaching) && (cache.ContainsKey(color)))
-            {
+            if ((useCaching) && (cache.ContainsKey(color))) {
                 colorIndex = cache[color];
-            }
-            else
-            {
+            } else {
                 colorIndex = 0;
                 int minError = int.MaxValue;
 
-                for (int i = 0, n = colorTable.Length; i < n; i++)
-                {
+                for (int i = 0, n = colorTable.Length; i < n; i++) {
                     int dr = red - colorTable[i].R;
                     int dg = green - colorTable[i].G;
                     int db = blue - colorTable[i].B;
 
                     int error = dr * dr + dg * dg + db * db;
 
-                    if (error < minError)
-                    {
+                    if (error < minError) {
                         minError = error;
                         colorIndex = (byte)i;
                     }
                 }
 
-                if (useCaching)
-                {
+                if (useCaching) {
                     cache.Add(color, colorIndex);
                 }
             }

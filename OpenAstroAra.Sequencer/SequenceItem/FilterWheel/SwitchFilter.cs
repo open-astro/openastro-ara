@@ -13,12 +13,16 @@
 #endregion "copyright"
 
 using Newtonsoft.Json;
+using OpenAstroAra.Core.Locale;
 using OpenAstroAra.Core.Model;
+using OpenAstroAra.Core.Model.Equipment;
+using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Sequencer.Validations;
-using OpenAstroAra.Equipment.Interfaces.Mediator;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Collections.ObjectModel;
 using System.ComponentModel.Composition;
 using System.Linq;
@@ -26,10 +30,7 @@ using System.Runtime.Serialization;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using OpenAstroAra.Core.Model.Equipment;
-using OpenAstroAra.Core.Locale;
 using System.Windows;
-using OpenAstroAra.Core.Utility;
 
 namespace OpenAstroAra.Sequencer.SequenceItem.FilterWheel {
 
@@ -57,6 +58,8 @@ namespace OpenAstroAra.Sequencer.SequenceItem.FilterWheel {
             profileService.ProfileChanged += ProfileService_ProfileChanged;
         }
 
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "Profile-changed event boundary: re-resolving the selected filter against the freshly-loaded profile may transiently fault while the profile is being swapped. The failure is logged and ignored so a profile change cannot crash; the filter is simply left unresolved. CA1031 sanctions general catches at such event-driven defensive boundaries.")]
         private void MatchFilter() {
             try {
                 var idx = this.Filter?.Position ?? -1;
@@ -69,7 +72,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.FilterWheel {
             }
         }
 
-        private void ProfileService_ProfileChanged(object sender, EventArgs e) {
+        private void ProfileService_ProfileChanged(object? sender, EventArgs e) {
             MatchFilter();
         }
 
@@ -96,10 +99,10 @@ namespace OpenAstroAra.Sequencer.SequenceItem.FilterWheel {
             }
         }
 
-        private FilterInfo filter;
+        private FilterInfo? filter;
 
         [JsonProperty]
-        public FilterInfo Filter {
+        public FilterInfo? Filter {
             get => filter;
             set {
                 filter = value;
@@ -110,7 +113,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.FilterWheel {
         public override Task Execute(IProgress<ApplicationStatus> progress, CancellationToken token) {
             return Filter == null
                 ? throw new SequenceItemSkippedException("Skipping SwitchFilter - No Filter was selected")
-                : filterWheelMediator.ChangeFilter(Filter, token, progress);
+                : filterWheelMediator.ChangeFilter(Filter, progress, token);
         }
 
         public bool Validate() {
@@ -122,7 +125,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.FilterWheel {
             return i.Count == 0;
         }
 
-        public override void AfterParentChanged() {            
+        public override void AfterParentChanged() {
             Validate();
         }
 

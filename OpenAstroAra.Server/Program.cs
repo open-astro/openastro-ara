@@ -18,12 +18,12 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Scalar.AspNetCore;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Endpoints;
 using OpenAstroAra.Server.Services;
+using Scalar.AspNetCore;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace OpenAstroAra.Server;
 
@@ -38,7 +38,11 @@ namespace OpenAstroAra.Server;
 /// (Phase 6), sequencer (Phase 7), images (Phase 8), and WebSocket stream (Phase 9) bring up the
 /// rest.
 /// </summary>
-public class Program {
+// CA1052: Program is referenced as a generic type argument (ILogger<Program>,
+// and by WebApplicationFactory<Program> in tests), so it cannot be static even
+// though all its members are.
+[System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1052:Static holder types should be Static or NotInheritable", Justification = "Used as a generic type argument by the ASP.NET host and test harness.")]
+public partial class Program {
 
     public static void Main(string[] args) {
         var builder = WebApplication.CreateSlimBuilder(args);
@@ -411,26 +415,23 @@ public class Program {
         var reconcilerResult = app.Services
             .GetRequiredService<SequenceStartupReconciler>()
             .Reconcile();
-        if (reconcilerResult.Outcome != SequenceStartupReconciler.Outcome.Clean) {
+        if (reconcilerResult.Outcome != SequenceReconcileOutcome.Clean) {
             var startupLogger = app.Services.GetRequiredService<ILogger<Program>>();
-            startupLogger.LogWarning(
-                "Startup reconciliation: {Outcome} (previous sequence: {SeqId})",
-                reconcilerResult.Outcome,
-                reconcilerResult.PreviousState?.SequenceId);
+            LogReconciliation(startupLogger, reconcilerResult.Outcome, reconcilerResult.PreviousState?.SequenceId);
             try {
                 var notif = StartupNotificationFactory.ForReconcilerResult(reconcilerResult);
                 notificationSvc.CreateAsync(notif, CancellationToken.None).GetAwaiter().GetResult();
-            } catch (Exception ex) {
-                startupLogger.LogWarning(ex, "Failed to emit §46 reconciliation notification");
+            } catch (Exception ex) when (ex is IOException or InvalidOperationException or Microsoft.Data.Sqlite.SqliteException or System.Text.Json.JsonException) {
+                LogNotificationEmitFailed(startupLogger, ex);
             }
-            if (reconcilerResult.Outcome == SequenceStartupReconciler.Outcome.Corrupt) {
+            if (reconcilerResult.Outcome == SequenceReconcileOutcome.Corrupt) {
                 try {
                     var (evt, rec, autoCorr) =
                         StartupNotificationFactory.DiagnosticForCorruptResult(reconcilerResult);
                     diagnosticsSvc.CreateEventAsync(evt, rec, autoCorr, CancellationToken.None)
                         .GetAwaiter().GetResult();
-                } catch (Exception ex) {
-                    startupLogger.LogWarning(ex, "Failed to emit §51 checkpoint-corrupt diagnostic");
+                } catch (Exception ex) when (ex is IOException or InvalidOperationException or Microsoft.Data.Sqlite.SqliteException or System.Text.Json.JsonException) {
+                    LogDiagnosticEmitFailed(startupLogger, ex);
                 }
             }
         }
@@ -445,9 +446,21 @@ public class Program {
             app.Services.GetService<ILogger<CaptureScanService>>());
         captureScan.RunAsync(CancellationToken.None).GetAwaiter().GetResult();
 
-        app.Logger.LogInformation("OpenAstroAra.Server listening on :{Port}", port);
+        LogListening(app.Logger, port);
         app.Run();
     }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Startup reconciliation: {Outcome} (previous sequence: {SeqId})")]
+    private static partial void LogReconciliation(ILogger logger, SequenceReconcileOutcome outcome, Guid? seqId);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to emit §46 reconciliation notification")]
+    private static partial void LogNotificationEmitFailed(ILogger logger, Exception ex);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to emit §51 checkpoint-corrupt diagnostic")]
+    private static partial void LogDiagnosticEmitFailed(ILogger logger, Exception ex);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "OpenAstroAra.Server listening on :{Port}")]
+    private static partial void LogListening(ILogger logger, int port);
 
     /// <summary>
     /// Resolve listen port. Order of precedence (per playbook §2.1):

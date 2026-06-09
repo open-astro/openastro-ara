@@ -19,7 +19,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
     [ExportMetadata("Category", "Lbl_SequenceCategory_Connect")]
     [Export(typeof(ISequenceItem))]
     [JsonObject(MemberSerialization.OptIn)]
-    class DisconnectAllEquipment : SequenceItem, IValidatable {
+    sealed class DisconnectAllEquipment : SequenceItem, IValidatable {
         private ICameraMediator cameraMediator;
         private IFilterWheelMediator fwMediator;
         private IFocuserMediator focuserMediator;
@@ -73,7 +73,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
         public List<string> Devices { get; }
 
 
-        private object GetMediator(string device) {
+        private object? GetMediator(string device) {
             switch (device) {
                 case "Camera": return cameraMediator;
                 case "Filter Wheel": return fwMediator;
@@ -120,20 +120,21 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
 
             foreach (var device in Devices) {
                 var mediator = GetMediator(device);
+                if (mediator == null) { continue; }
 
                 var type = mediator.GetType();
                 var GetInfo = type.GetMethod("GetInfo");
-                DeviceInfo info = (DeviceInfo)GetInfo.Invoke(mediator, null);
+                DeviceInfo info = (DeviceInfo)GetInfo!.Invoke(mediator, null)!;
 
 
                 if (info.Connected) {
                     var Disconnect = type.GetMethod("Disconnect");
-                    await (Task)Disconnect.Invoke(mediator, null);
+                    await (Task)Disconnect!.Invoke(mediator, null)!;
 
-                    DeviceInfo infoAfterConnect = (DeviceInfo)GetInfo.Invoke(mediator, null);
+                    DeviceInfo infoAfterConnect = (DeviceInfo)GetInfo!.Invoke(mediator, null)!;
                     var success = !infoAfterConnect.Connected;
                     if (!success) {
-                        errors.Add(new Exception($"Failed to disconnect from {device}"));
+                        errors.Add(new SequenceEntityFailedException($"Failed to disconnect from {device}"));
                     }
                 } else {
                     Logger.Info($"{device} is already disconnected");

@@ -12,18 +12,18 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Core.Enum;
-using OpenAstroAra.Image.Interfaces;
+using OpenAstroAra.Core.Enums;
+using OpenAstroAra.Core.Locale;
+using OpenAstroAra.Core.Model;
 using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Core.Utility.Extensions;
+using OpenAstroAra.Image.FileFormat;
+using OpenAstroAra.Image.Interfaces;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
-using OpenAstroAra.Image.FileFormat;
-using OpenAstroAra.Core.Model;
-using OpenAstroAra.Core.Locale;
-using System.Collections.Generic;
 
 namespace OpenAstroAra.PlateSolving.Solvers {
 
@@ -51,10 +51,10 @@ namespace OpenAstroAra.PlateSolving.Solvers {
             IImageData source,
             PlateSolveParameter parameter,
             PlateSolveImageProperties imageProperties,
-            IProgress<ApplicationStatus> progress,
+            IProgress<ApplicationStatus>? progress,
             CancellationToken cancelToken) {
             var result = new PlateSolveResult() { Success = false };
-            string imagePath = null, outputPath = null;
+            string? imagePath = null, outputPath = null;
             try {
                 // Update target coordinates
                 if (source.MetaData.Target.Coordinates == null || double.IsNaN(source.MetaData.Target.Coordinates.RA))
@@ -73,7 +73,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
 
                 //Extract solution coordinates
                 result = ReadResult(outputPath, parameter, imageProperties);
-            } catch(OperationCanceledException) {
+            } catch (OperationCanceledException) {
                 if (!cancelToken.IsCancellationRequested) {
                     Logger.Error("Platesolver timed out after 10 minutes");
                 }
@@ -81,10 +81,10 @@ namespace OpenAstroAra.PlateSolving.Solvers {
                 progress?.Report(new ApplicationStatus() { Status = string.Empty });
 
                 var filePrefix = FAILED_FILENAME;
-                if(!string.IsNullOrWhiteSpace(source?.MetaData?.Target?.Name)) {
+                if (!string.IsNullOrWhiteSpace(source?.MetaData?.Target?.Name)) {
                     filePrefix += $".{CoreUtil.ReplaceAllInvalidFilenameChars(source.MetaData.Target.Name)}";
                 }
-                if(parameter.Coordinates == null) {
+                if (parameter.Coordinates == null) {
                     filePrefix += ".blind";
                 }
 
@@ -96,39 +96,41 @@ namespace OpenAstroAra.PlateSolving.Solvers {
                     MoveOrDeleteFile(result, outputPath, filePrefix, cancelToken);
                 }
 
-                foreach (var file in GetSideCarFilePaths(imagePath)) {
+                foreach (var file in GetSideCarFilePaths(imagePath ?? string.Empty)) {
                     MoveOrDeleteFile(result, file, filePrefix, cancelToken);
                 }
             }
             return result;
         }
 
-        private void MoveOrDeleteFile(PlateSolveResult result, string file, string movedFilePrefix, CancellationToken cancelToken) {
+        private static void MoveOrDeleteFile(PlateSolveResult result, string file, string movedFilePrefix, CancellationToken cancelToken) {
             try {
                 if (!result.Success && !cancelToken.IsCancellationRequested) {
-                    if(File.Exists(file)) {
+                    if (File.Exists(file)) {
                         var destination = Path.Combine(FAILED_DIRECTORY, $"{movedFilePrefix}.{Path.GetExtension(file)}");
                         if (File.Exists(destination)) {
                             File.Delete(destination);
                         }
                         File.Move(file, destination);
-                    }                    
+                    }
                 } else {
                     File.Delete(file);
                 }
-            } catch (Exception ex) {
+            } catch (IOException ex) {
+                Logger.Error(ex);
+            } catch (UnauthorizedAccessException ex) {
                 Logger.Error(ex);
             }
         }
 
-        protected async Task<string> PrepareAndSaveImage(IImageData source, CancellationToken cancelToken) {
+        protected static async Task<string> PrepareAndSaveImage(IImageData source, CancellationToken cancelToken) {
             FileSaveInfo fileSaveInfo = new FileSaveInfo {
                 FilePath = WORKING_DIRECTORY,
                 FilePattern = Path.GetRandomFileName(),
-                FileType = FileTypeEnum.FITS
+                FileType = FileType.FITS
             };
 
-            return await source.SaveToDisk(fileSaveInfo, cancelToken, forceFileType: true);
+            return await source.SaveToDisk(fileSaveInfo, forceFileType: true, cancelToken: cancelToken);
         }
 
         protected abstract string GetOutputPath(string imageFilePath);
@@ -143,12 +145,12 @@ namespace OpenAstroAra.PlateSolving.Solvers {
             return new List<string>();
         }
 
-        protected async Task StartCLI(string imageFilePath, string outputFilePath, PlateSolveParameter parameter, PlateSolveImageProperties imageProperties, IProgress<ApplicationStatus> progress, CancellationToken ct) {
+        protected async Task StartCLI(string imageFilePath, string outputFilePath, PlateSolveParameter parameter, PlateSolveImageProperties imageProperties, IProgress<ApplicationStatus>? progress, CancellationToken ct) {
             if (executableLocation != "cmd.exe" && !File.Exists(executableLocation)) {
                 throw new FileNotFoundException("Platesolver executable not found. Please point to the correct platesolver executable in platsolving options.", executableLocation);
             }
 
-            System.Diagnostics.Process process = new System.Diagnostics.Process();
+            using var process = new System.Diagnostics.Process();
             System.Diagnostics.ProcessStartInfo startInfo = new System.Diagnostics.ProcessStartInfo();
 
             startInfo.WindowStyle = System.Diagnostics.ProcessWindowStyle.Normal;
@@ -161,13 +163,13 @@ namespace OpenAstroAra.PlateSolving.Solvers {
             process.EnableRaisingEvents = true;
 
             process.OutputDataReceived += (object sender, System.Diagnostics.DataReceivedEventArgs e) => {
-                progress?.Report(new ApplicationStatus() { Status = e.Data });
-                Logger.Debug(e.Data);
+                progress?.Report(new ApplicationStatus() { Status = e.Data ?? string.Empty });
+                Logger.Debug(e.Data ?? string.Empty);
             };
 
             process.ErrorDataReceived += (object sender, System.Diagnostics.DataReceivedEventArgs e) => {
-                progress?.Report(new ApplicationStatus() { Status = e.Data });
-                Logger.Error(e.Data);
+                progress?.Report(new ApplicationStatus() { Status = e.Data ?? string.Empty });
+                Logger.Error(e.Data ?? string.Empty);
             };
             Logger.Debug($"Starting process '{executableLocation}' with args '{startInfo.Arguments}'");
             process.Start();

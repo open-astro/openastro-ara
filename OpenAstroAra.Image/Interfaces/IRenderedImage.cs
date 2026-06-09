@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -12,7 +12,7 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Image.ImageAnalysis;
 using System;
@@ -35,10 +35,10 @@ namespace OpenAstroAra.Image.Interfaces {
 
         Task<IRenderedImage> DetectStars(
             bool annotateImage,
-            StarSensitivityEnum sensitivity,
-            NoiseReductionEnum noiseReduction,
-            CancellationToken cancelToken = default,
-            IProgress<ApplicationStatus> progress = default(Progress<ApplicationStatus>));
+            StarSensitivity sensitivity,
+            NoiseReduction noiseReduction,
+            IProgress<ApplicationStatus>? progress = default(Progress<ApplicationStatus>),
+            CancellationToken cancelToken = default);
 
         Task<byte[]> GetThumbnail();
         void UpdateAnalysis(StarDetectionParams p, StarDetectionResult result);

@@ -2,14 +2,14 @@
 // The Accord.NET Framework
 // http://accord-framework.net
 //
-// Copyright © César Souza, 2009-2017
+// Copyright ï¿½ Cï¿½sar Souza, 2009-2017
 // cesarsouza at gmail.com
 //
 // AForge Image Processing Library
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © Andrew Kirillov, 2005-2009
+// Copyright ï¿½ Andrew Kirillov, 2005-2009
 // andrew.kirillov@aforgenet.com
 //
 //    This library is free software; you can redistribute it and/or
@@ -27,13 +27,12 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging
-{
+namespace Accord.Imaging {
+    using Accord.Compat;
     using System;
+    using System.Collections.Generic;
     using System.Drawing;
     using System.Drawing.Imaging;
-    using System.Collections.Generic;
-    using Accord.Compat;
 
     /// <summary>
     /// Moravec corners detector.
@@ -64,8 +63,7 @@ namespace Accord.Imaging
     /// 
     /// <seealso cref="SusanCornersDetector"/>
     /// 
-    public class MoravecCornersDetector : BaseCornersDetector
-    {
+    public class MoravecCornersDetector : BaseCornersDetector {
         // window size
         private int windowSize = 3;
 
@@ -84,11 +82,9 @@ namespace Accord.Imaging
         /// 
         /// <exception cref="ArgumentException">Setting value is not odd.</exception>
         /// 
-        public int WindowSize
-        {
+        public int WindowSize {
             get { return windowSize; }
-            set
-            {
+            set {
                 // check if value is odd
                 if ((value & 1) == 0)
                     throw new ArgumentException("The value shoule be odd.");
@@ -108,8 +104,7 @@ namespace Accord.Imaging
         /// <para>Default value is set to <b>500</b>.</para>
         /// </remarks>
         /// 
-        public int Threshold
-        {
+        public int Threshold {
             get { return threshold; }
             set { threshold = value; }
         }
@@ -121,8 +116,7 @@ namespace Accord.Imaging
         /// Initializes a new instance of the <see cref="MoravecCornersDetector"/> class.
         /// </summary>
         /// 
-        public MoravecCornersDetector()
-        {
+        public MoravecCornersDetector() {
             base.SupportedFormats.UnionWith(new[]
             {
                 PixelFormat.Format8bppIndexed,
@@ -139,8 +133,7 @@ namespace Accord.Imaging
         /// <param name="threshold">Threshold value, which is used to filter out uninteresting points.</param>
         /// 
         public MoravecCornersDetector(int threshold) :
-            this(threshold, 3)
-        {
+            this(threshold, 3) {
         }
 
         /// <summary>
@@ -151,8 +144,7 @@ namespace Accord.Imaging
         /// <param name="windowSize">Window size used to determine if point is interesting.</param>
         /// 
         public MoravecCornersDetector(int threshold, int windowSize)
-            : this()
-        {
+            : this() {
             this.Threshold = threshold;
             this.WindowSize = windowSize;
         }
@@ -162,8 +154,7 @@ namespace Accord.Imaging
         /// actual corners detection, transforming the input image into a list of points.
         /// </summary>
         /// 
-        protected override List<IntPoint> InnerProcess(UnmanagedImage image)
-        {
+        protected override List<IntPoint> InnerProcess(UnmanagedImage image) {
             // get source image size
             int width = image.Width;
             int height = image.Height;
@@ -180,21 +171,17 @@ namespace Accord.Imaging
             int[,] moravecMap = new int[height, width];
 
             // do the job
-            unsafe
-            {
+            unsafe {
                 byte* ptr = (byte*)image.ImageData.ToPointer();
 
                 // for each row
-                for (int y = windowRadius, maxY = height - windowRadius; y < maxY; y++)
-                {
+                for (int y = windowRadius, maxY = height - windowRadius; y < maxY; y++) {
                     // for each pixel
-                    for (int x = windowRadius, maxX = width - windowRadius; x < maxX; x++)
-                    {
+                    for (int x = windowRadius, maxX = width - windowRadius; x < maxX; x++) {
                         int minSum = int.MaxValue;
 
                         // go through 8 possible shifting directions
-                        for (int k = 0; k < 8; k++)
-                        {
+                        for (int k = 0; k < 8; k++) {
                             // calculate center of shifted window
                             int sy = y + yDelta[k];
                             int sx = x + xDelta[k];
@@ -203,8 +190,7 @@ namespace Accord.Imaging
                             if (
                                 (sy < windowRadius) || (sy >= maxY) ||
                                 (sx < windowRadius) || (sx >= maxX)
-                            )
-                            {
+                            ) {
                                 // skip this shifted window
                                 continue;
                             }
@@ -215,11 +201,9 @@ namespace Accord.Imaging
                             byte* ptr2 = ptr + (sy - windowRadius) * stride + (sx - windowRadius) * pixelSize;
 
                             // for each windows' rows
-                            for (int i = 0; i < windowSize; i++)
-                            {
+                            for (int i = 0; i < windowSize; i++) {
                                 // for each windows' pixels
-                                for (int j = 0, maxJ = windowSize * pixelSize; j < maxJ; j++, ptr1++, ptr2++)
-                                {
+                                for (int j = 0, maxJ = windowSize * pixelSize; j < maxJ; j++, ptr1++, ptr2++) {
                                     image.CheckBounds(ptr1);
                                     image.CheckBounds(ptr2);
 
@@ -231,15 +215,13 @@ namespace Accord.Imaging
                             }
 
                             // check if the sum is mimimal
-                            if (sum < minSum)
-                            {
+                            if (sum < minSum) {
                                 minSum = sum;
                             }
                         }
 
                         // threshold the minimum sum
-                        if (minSum < threshold)
-                        {
+                        if (minSum < threshold) {
                             minSum = 0;
                         }
 
@@ -252,21 +234,16 @@ namespace Accord.Imaging
             List<IntPoint> cornersList = new List<IntPoint>();
 
             // for each row
-            for (int y = windowRadius, maxY = height - windowRadius; y < maxY; y++)
-            {
+            for (int y = windowRadius, maxY = height - windowRadius; y < maxY; y++) {
                 // for each pixel
-                for (int x = windowRadius, maxX = width - windowRadius; x < maxX; x++)
-                {
+                for (int x = windowRadius, maxX = width - windowRadius; x < maxX; x++) {
                     int currentValue = moravecMap[y, x];
 
                     // for each windows' rows
-                    for (int i = -windowRadius; (currentValue != 0) && (i <= windowRadius); i++)
-                    {
+                    for (int i = -windowRadius; (currentValue != 0) && (i <= windowRadius); i++) {
                         // for each windows' pixels
-                        for (int j = -windowRadius; j <= windowRadius; j++)
-                        {
-                            if (moravecMap[y + i, x + j] > currentValue)
-                            {
+                        for (int j = -windowRadius; j <= windowRadius; j++) {
+                            if (moravecMap[y + i, x + j] > currentValue) {
                                 currentValue = 0;
                                 break;
                             }
@@ -274,8 +251,7 @@ namespace Accord.Imaging
                     }
 
                     // check if this point is really interesting
-                    if (currentValue != 0)
-                    {
+                    if (currentValue != 0) {
                         cornersList.Add(new IntPoint(x, y));
                     }
                 }
@@ -288,10 +264,8 @@ namespace Accord.Imaging
         /// Creates a new object that is a copy of the current instance.
         /// </summary>
         /// 
-        protected override object Clone(ISet<PixelFormat> supportedFormats)
-        {
-            return new MoravecCornersDetector(threshold, windowSize)
-            {
+        protected override object Clone(ISet<PixelFormat> supportedFormats) {
+            return new MoravecCornersDetector(threshold, windowSize) {
                 SupportedFormats = supportedFormats
             };
         }

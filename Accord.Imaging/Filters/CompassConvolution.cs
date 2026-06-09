@@ -23,12 +23,11 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging.Filters
-{
-    using System.Collections.Generic;
-    using System.Drawing.Imaging;
+namespace Accord.Imaging.Filters {
     using Accord.Imaging;
     using Accord.Imaging.Filters;
+    using System.Collections.Generic;
+    using System.Drawing.Imaging;
 
     /// <summary>
     ///   Compass convolution filter.
@@ -37,19 +36,17 @@ namespace Accord.Imaging.Filters
     /// <seealso cref="RobinsonEdgeDetector"/>
     /// <seealso cref="KirschEdgeDetector"/>
     /// 
-    public class CompassConvolution : BaseFilter
-    {
+    public class CompassConvolution : BaseFilter {
         int[][,] masks;
 
         private Dictionary<PixelFormat, PixelFormat> formatTranslations;
-        
+
 
         /// <summary>
         ///   Initializes a new instance of the <see cref="CompassConvolution"/> class.
         /// </summary>
         /// 
-        public CompassConvolution(int[][,] masks)
-        {
+        public CompassConvolution(int[][,] masks) {
             this.masks = masks;
             formatTranslations = new Dictionary<PixelFormat, PixelFormat>();
             formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
@@ -65,8 +62,7 @@ namespace Accord.Imaging.Filters
         ///   Format translations dictionary.
         /// </summary>
         /// 
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -77,8 +73,7 @@ namespace Accord.Imaging.Filters
         /// <param name="sourceData">Source image data.</param>
         /// <param name="destinationData">Destination image data.</param>
         /// 
-        protected unsafe override void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData)
-        {
+        protected unsafe override void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData) {
             int width = sourceData.Width;
             int height = sourceData.Height;
             PixelFormat format = sourceData.PixelFormat;
@@ -104,18 +99,15 @@ namespace Accord.Imaging.Filters
             c.Apply(sourceData, destinationData);
 
             // others
-            for (int i = 1; i < masks.Length; i++)
-            {
+            for (int i = 1; i < masks.Length; i++) {
                 c.Kernel = masks[i];
                 c.Apply(sourceData, temp);
 
                 byte* src = srcStart;
                 byte* dst = dstStart;
 
-                for (int y = 0; y < height; y++)
-                {
-                    for (int x = 0; x < lineWidth; x++, src++, dst++)
-                    {
+                for (int y = 0; y < height; y++) {
+                    for (int x = 0; x < lineWidth; x++, src++, dst++) {
                         if (*src > *dst)
                             *dst = *src;
                     }

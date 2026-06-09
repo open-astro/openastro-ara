@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -12,19 +12,19 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Enums;
+using OpenAstroAra.Core.Interfaces;
+using OpenAstroAra.Core.Model;
 using OpenAstroAra.Core.Utility;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using OpenAstroAra.Core.Model;
-using OpenAstroAra.Core.Interfaces;
 
 namespace OpenAstroAra.Equipment.Equipment {
 
     public class GuideStepsHistory : BaseINPC {
 
-        public GuideStepsHistory(int historySize, GuiderScaleEnum scale, double maxY) {
+        public GuideStepsHistory(int historySize, GuiderScale scale, double maxY) {
             overallGuideSteps = new LinkedList<HistoryStep>();
             selectedGuideSteps = new LinkedList<HistoryStep>();
             RMS = new RMS();
@@ -37,7 +37,7 @@ namespace OpenAstroAra.Equipment.Equipment {
 
         private readonly object lockObj = new object();
 
-        private RMS rMS;
+        private RMS rMS = null!;
 
         public RMS RMS {
             get => rMS;
@@ -49,9 +49,9 @@ namespace OpenAstroAra.Equipment.Equipment {
 
         private ulong changeId;
         public ulong ChangeId {
-            get => changeId; 
+            get => changeId;
             private set {
-                changeId = value; 
+                changeId = value;
                 RaisePropertyChanged();
                 RaisePropertyChanged(nameof(GuideSteps));
             }
@@ -122,7 +122,7 @@ namespace OpenAstroAra.Equipment.Equipment {
                     for (int i = startIndex; i < overallGuideSteps.Count; i++) {
                         var p = overallGuideSteps.ElementAt(i);
                         RMS.AddDataPoint(p.RADistanceRaw, p.DECDistanceRaw);
-                        if (Scale == GuiderScaleEnum.ARCSECONDS) {
+                        if (Scale == GuiderScale.ARCSECONDS) {
                             p = p.AdjustPixelScale(PixelScale);
                         } else {
                             p = p.AdjustPixelScale(1);
@@ -153,9 +153,9 @@ namespace OpenAstroAra.Equipment.Equipment {
             }
         }
 
-        private GuiderScaleEnum scale;
+        private GuiderScale scale;
 
-        public GuiderScaleEnum Scale {
+        public GuiderScale Scale {
             get => scale;
             set {
                 scale = value;
@@ -177,7 +177,7 @@ namespace OpenAstroAra.Equipment.Equipment {
 
         public void AddGuideStep(IGuideStep step) {
             lock (lockObj) {
-                var historyStep = HistoryStep.FromGuideStep(step, Scale == GuiderScaleEnum.PIXELS ? 1 : PixelScale);
+                var historyStep = HistoryStep.FromGuideStep(step, Scale == GuiderScale.PIXELS ? 1 : PixelScale);
                 overallGuideSteps.AddLast(historyStep);
 
                 if (selectedGuideSteps.Count == HistorySize) {
@@ -214,7 +214,9 @@ namespace OpenAstroAra.Equipment.Equipment {
             }
         }
 
-        public class HistoryStep {
+    }
+
+    public class HistoryStep {
             private static int idProvider = 1;
             public int Id { get; private set; }
             public double IdOffsetLeft => Id - 0.15;
@@ -271,5 +273,4 @@ namespace OpenAstroAra.Equipment.Equipment {
                 idProvider = 0;
             }
         }
-    }
 }

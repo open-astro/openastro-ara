@@ -6,11 +6,10 @@
 // contacts@aforgenet.com
 //
 
-namespace Accord.Imaging.ColorReduction
-{
+namespace Accord.Imaging.ColorReduction {
+    using Accord.Imaging;
     using System;
     using System.Drawing;
-    using Accord.Imaging;
 
     /// <summary>
     /// Interface which is implemented by different color quantization algorithms.
@@ -24,8 +23,7 @@ namespace Accord.Imaging.ColorReduction
     /// about the algorithm.</para>
     /// </remarks>
     /// 
-    public interface IColorQuantizer
-    {
+    public interface IColorQuantizer {
         /// <summary>
         /// Process color by a color quantization algorithm.
         /// </summary>
@@ -36,7 +34,7 @@ namespace Accord.Imaging.ColorReduction
         /// this method may simply process the specified color or store it in internal list for
         /// later color palette calculation.</para></remarks>
         /// 
-        void AddColor( Color color );
+        void AddColor(Color color);
 
         /// <summary>
         /// Get palette of the specified size.
@@ -49,7 +47,7 @@ namespace Accord.Imaging.ColorReduction
         /// <remarks><para>The method must be called after continuously calling <see cref="AddColor"/> method and
         /// returns reduced color palette for colors accumulated/processed so far.</para></remarks>
         ///
-        Color[] GetPalette( int colorCount );
+        Color[] GetPalette(int colorCount);
 
         /// <summary>
         /// Clear internals of the algorithm, like accumulated color table, etc.
@@ -58,6 +56,6 @@ namespace Accord.Imaging.ColorReduction
         /// <remarks><para>The methods resets internal state of a color quantization algorithm returning
         /// it to initial state.</para></remarks>
         /// 
-        void Clear( );
+        void Clear();
     }
 }

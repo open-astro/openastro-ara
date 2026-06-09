@@ -21,7 +21,7 @@ namespace OpenAstroAra.Core.Model {
         private IntPtr dataPtr;
         private int width;
         private int height;
-        private int scaling = 0;
+        private int scaling;
 
         private int Size => width * height;
 

@@ -12,18 +12,22 @@
 
 #endregion "copyright"
 
+using OpenAstroAra.Core.Model.Equipment;
 using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Profile.Interfaces;
 using System;
 using System.Linq;
 using System.Runtime.Serialization;
-using OpenAstroAra.Core.Model.Equipment;
-using OpenAstroAra.Profile.Interfaces;
 
 namespace OpenAstroAra.Profile {
 
     [Serializable()]
     [DataContract]
-    public class FilterWheelSettings : Settings, IFilterWheelSettings {
+    public sealed class FilterWheelSettings : Settings, IFilterWheelSettings {
+
+        public FilterWheelSettings() {
+            SetDefaultValues();
+        }
 
         [OnDeserializing]
         public void OnDeserializing(StreamingContext context) {
@@ -55,7 +59,7 @@ namespace OpenAstroAra.Profile {
             unidirectional = false;
         }
 
-        private string id;
+        private string id = string.Empty;
 
         [DataMember]
         public string Id {
@@ -68,7 +72,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string lastDeviceName;
+        private string lastDeviceName = string.Empty;
 
         [DataMember]
         public string LastDeviceName {
@@ -87,7 +91,7 @@ namespace OpenAstroAra.Profile {
         public bool DisableGuidingOnFilterChange {
             get => disableGuidingOnFilterChange;
             set {
-                if(disableGuidingOnFilterChange != value) {
+                if (disableGuidingOnFilterChange != value) {
                     disableGuidingOnFilterChange = value;
                     RaisePropertyChanged();
                 }
@@ -107,11 +111,12 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private void FilterWheelFilters_CollectionChanged(object sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e) {
+        private void FilterWheelFilters_CollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e) {
             RaisePropertyChanged(nameof(FilterWheelFilters));
         }
 
-        private ObserveAllCollection<FilterInfo> filterWheelFilters;
+        [NonSerialized]
+        private ObserveAllCollection<FilterInfo> filterWheelFilters = new ObserveAllCollection<FilterInfo>();
 
         [DataMember]
         public ObserveAllCollection<FilterInfo> FilterWheelFilters {

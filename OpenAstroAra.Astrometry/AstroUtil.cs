@@ -12,28 +12,29 @@
 
 #endregion "copyright"
 
+using Nito.AsyncEx;
 using OpenAstroAra.Astrometry.RiseAndSet;
-using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Profile;
-using Nito.AsyncEx;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 namespace OpenAstroAra.Astrometry {
 
-    public class AstroUtil {
+    public static class AstroUtil {
 
         private const double DegreeToRadiansFactor = Math.PI / 180d;
         private const double RadiansToDegreeFactor = 180d / Math.PI;
         private const double RadianstoHourFactor = 12d / Math.PI;
         private const double DaysToSecondsFactor = 60d * 60d * 24d;
         private const double SecondsToDaysFactor = 1.0 / (60d * 60d * 24d);
-        public const double SIDEREAL_RATE_ARCSECONDS_PER_SECOND = 15.041;
+        public const double SiderealRateArcsecondsPerSecond = 15.041;
         private const double ArcSecPerPixConversionFactor = RadiansToDegreeFactor * 60d * 60d / 1000d;
 
         public const string HMSPattern = @"(([0-9]{1,2})([h|:| ]|[?]{2}|[h|r]{2})\s*([0-9]{1,2})([m|'|′|:| ]|[?]{2})?\s*([0-9]{1,2}(?:\.[0-9]+){0,1})?([s|""|″|:| ]|[?]{2})?\s*)";
@@ -140,7 +141,7 @@ namespace OpenAstroAra.Astrometry {
         /// </summary>
         /// <param name="date">Date to retrieve DeltaT for</param>
         /// <returns>DeltaT at given date</returns>
-        public static double DeltaT(DateTime date, DatabaseInteraction db = null) {
+        public static double DeltaT(DateTime date, DatabaseInteraction? db = null) {
             var utcDate = date.ToUniversalTime();
             double utc1 = 0, utc2 = 0, tai1 = 0, tai2 = 0;
             SOFA.Dtf2d("UTC", utcDate.Year, utcDate.Month, utcDate.Day, utcDate.Hour, utcDate.Minute, (double)utcDate.Second + (double)utcDate.Millisecond / 1000.0, ref utc1, ref utc2);
@@ -152,9 +153,9 @@ namespace OpenAstroAra.Astrometry {
             return deltaT;
         }
 
-        private static double DeltaUTToday = 0.0;
-        private static double DeltaUTYesterday = 0.0;
-        private static double DeltaUTTomorrow = 0.0;
+        private static double DeltaUTToday;
+        private static double DeltaUTYesterday;
+        private static double DeltaUTTomorrow;
         private static ConcurrentDictionary<DateTime, double> DeltaUTCache = new ConcurrentDictionary<DateTime, double>();
         private static DateTime DeltaUTReference;
 
@@ -164,7 +165,7 @@ namespace OpenAstroAra.Astrometry {
         /// <param name="date"></param>
         /// <returns>UT1 - UTC in seconds</returns>
         /// <remarks>https://www.iers.org/IERS/EN/DataProducts/EarthOrientationData/eop.html</remarks>
-        public static double DeltaUT(DateTime date, DatabaseInteraction db = null) {
+        public static double DeltaUT(DateTime date, DatabaseInteraction? db = null) {
             if (DeltaUTReference != DateTime.UtcNow.Date) {
                 // Clear the cache when a app is open longer than a day
                 DeltaUTReference = DateTime.UtcNow.Date;
@@ -195,15 +196,15 @@ namespace OpenAstroAra.Astrometry {
 
             var deltaUT = 0d;
             if (DeltaUTCache.TryGetValue(utcDate.Date, out deltaUT)) {
-                if(deltaUT != 0) {
+                if (deltaUT != 0) {
                     return deltaUT;
                 }
             }
 
             db = db ?? new DatabaseInteraction();
             try {
-                deltaUT = AsyncContext.Run(() => db.GetUT1_UTC(utcDate, default));
-            } catch (Exception ex) {
+                deltaUT = AsyncContext.Run(() => db.GetUt1Utc(utcDate, default));
+            } catch (Exception ex) when (ex is OperationCanceledException or InvalidOperationException or IOException) {
                 Logger.Error(ex);
             }
 
@@ -219,12 +220,9 @@ namespace OpenAstroAra.Astrometry {
                 DeltaUTTomorrow = deltaUT;
             }
 
-            try {
-                if (!DeltaUTCache.ContainsKey(utcDate.Date)) {
-                    DeltaUTCache.AddOrUpdate(utcDate.Date, deltaUT, (a, b) => b);
-                }                
-            } catch(Exception) { }
-            
+            if (!DeltaUTCache.ContainsKey(utcDate.Date)) {
+                DeltaUTCache.AddOrUpdate(utcDate.Date, deltaUT, (a, b) => b);
+            }
 
             return deltaUT;
         }
@@ -234,7 +232,7 @@ namespace OpenAstroAra.Astrometry {
         /// <param name="date">     </param>
         /// <param name="longitude"></param>
         /// <returns>Sidereal Time in hours</returns>
-        public static double GetLocalSiderealTime(DateTime date, double longitude, DatabaseInteraction db = null) {
+        public static double GetLocalSiderealTime(DateTime date, double longitude, DatabaseInteraction? db = null) {
             var jd = GetJulianDate(date);
 
             long jd_high = (long)jd;
@@ -430,11 +428,11 @@ namespace OpenAstroAra.Astrometry {
             }
 
             // Prevent "-0" when using ToString
-            if(arcsec == 0) { arcsec = 0; }
-            if(arcmin == 0) { arcmin = 0; }
-            if(degree == 0) { degree = 0; }
+            if (arcsec == 0) { arcsec = 0; }
+            if (arcmin == 0) { arcmin = 0; }
+            if (degree == 0) { degree = 0; }
 
-            return string.Format(pattern, degree, arcmin, arcsec);
+            return string.Format(CultureInfo.InvariantCulture, pattern, degree, arcmin, arcsec);
         }
 
         /// <summary>
@@ -444,9 +442,9 @@ namespace OpenAstroAra.Astrometry {
         /// <returns></returns>
         public static string DegreesToFitsDMS(double deg) {
             if (deg >= 0) {
-                return String.Concat("+", DegreesToDMS(deg).Replace("°", "").Replace("'", "").Replace("\"", ""));
+                return String.Concat("+", DegreesToDMS(deg).Replace("°", "", StringComparison.Ordinal).Replace("'", "", StringComparison.Ordinal).Replace("\"", "", StringComparison.Ordinal));
             } else {
-                return DegreesToDMS(deg).Replace("°", "").Replace("'", "").Replace("\"", "");
+                return DegreesToDMS(deg).Replace("°", "", StringComparison.Ordinal).Replace("'", "", StringComparison.Ordinal).Replace("\"", "", StringComparison.Ordinal);
             }
         }
 
@@ -497,12 +495,12 @@ namespace OpenAstroAra.Astrometry {
             dms = dms.Trim();
 
             double signFactor = 1d;
-            if (dms.Contains('-')) {
+            if (dms.Contains('-', StringComparison.Ordinal)) {
                 signFactor = -1d;
             }
 
             var pattern = "[0-9\\.]+";
-            if (dms.Contains(",")) {
+            if (dms.Contains(',', StringComparison.Ordinal)) {
                 pattern = "[0-9\\,]+";
             }
             var regex = new Regex(pattern);
@@ -558,7 +556,7 @@ namespace OpenAstroAra.Astrometry {
             return Regex.IsMatch(value, pattern);
         }
 
-        public static NOVAS.SkyPosition GetMoonPosition(DateTime date, double jd, ObserverInfo oberverInfo) {
+        public static SkyPosition GetMoonPosition(DateTime date, double jd, ObserverInfo oberverInfo) {
             var deltaT = DeltaT(date);
 
             var onSurface = new NOVAS.OnSurface() {
@@ -581,7 +579,7 @@ namespace OpenAstroAra.Astrometry {
                 Type = (short)NOVAS.ObjectType.MajorPlanetSunOrMoon
             };
 
-            var skyPosition = new NOVAS.SkyPosition();
+            var skyPosition = new SkyPosition();
 
             var jdTt = jd + SecondsToDays(deltaT);
             _ = NOVAS.Place(jdTt, celestialObject, obs, deltaT, NOVAS.CoordinateSystem.EquinoxOfDate, NOVAS.Accuracy.Full, ref skyPosition);
@@ -589,7 +587,7 @@ namespace OpenAstroAra.Astrometry {
             return skyPosition;
         }
 
-        public static NOVAS.SkyPosition GetSunPosition(DateTime date, double jd, ObserverInfo oberverInfo) {
+        public static SkyPosition GetSunPosition(DateTime date, double jd, ObserverInfo oberverInfo) {
             var deltaT = DeltaT(date);
 
             var onSurface = new NOVAS.OnSurface() {
@@ -612,7 +610,7 @@ namespace OpenAstroAra.Astrometry {
                 Type = (short)NOVAS.ObjectType.MajorPlanetSunOrMoon
             };
 
-            var skyPosition = new NOVAS.SkyPosition();
+            var skyPosition = new SkyPosition();
 
             var jdTt = jd + SecondsToDays(deltaT);
             _ = NOVAS.Place(jdTt, celestialObject, obs, deltaT, NOVAS.CoordinateSystem.EquinoxOfDate, NOVAS.Accuracy.Full, ref skyPosition);
@@ -620,9 +618,9 @@ namespace OpenAstroAra.Astrometry {
             return skyPosition;
         }
 
-        public static Tuple<NOVAS.SkyPosition, NOVAS.SkyPosition> GetMoonAndSunPosition(DateTime date, double jd, ObserverInfo observerInfo = null) {
+        public static Tuple<SkyPosition, SkyPosition> GetMoonAndSunPosition(DateTime date, double jd, ObserverInfo? observerInfo = null) {
             if (observerInfo == null) { observerInfo = new ObserverInfo(); }
-            return new Tuple<NOVAS.SkyPosition, NOVAS.SkyPosition>(GetMoonPosition(date, jd, observerInfo), GetSunPosition(date, jd, observerInfo));
+            return new Tuple<SkyPosition, SkyPosition>(GetMoonPosition(date, jd, observerInfo), GetSunPosition(date, jd, observerInfo));
         }
 
         [Obsolete("Use function with OpenAstroAra.Astrometry.ObserverInfo parameter")]
@@ -925,14 +923,14 @@ namespace OpenAstroAra.Astrometry {
         /// <param name="maxIterations">[Optional] Maximum Iterations - When exceeded NaN is returned</param>
         /// <returns></returns>
         public static double CalculateRefractedAltitude(double altitude, double pressurehPa, double tempCelcius, double relativeHumidity, double wavelength, double iterationIncrementInArcsec = 1, double maxIterations = 1000) {
-            if(altitude < 0) { throw new ArgumentException("Altitude must be greater than or equals 0"); }
+            if (altitude < 0) { throw new ArgumentException("Altitude must be greater than or equals 0"); }
 
             double refa = 0d;
             double refb = 0d;
             double Z = AstroUtil.ToRadians(90 - altitude);
 
             SOFA.RefractionConstants(pressurehPa, tempCelcius, relativeHumidity, wavelength, ref refa, ref refb);
-            
+
             var increment = AstroUtil.ToRadians(AstroUtil.ArcsecToDegree(iterationIncrementInArcsec));
             var roller = increment;
             var iterations = 0;
@@ -940,7 +938,7 @@ namespace OpenAstroAra.Astrometry {
                 double refractedZenithDistanceRadian = Z - roller;
                 // dZ = A tan Z + B tan^3 Z.  
                 var dZ2 = refa * Math.Tan(refractedZenithDistanceRadian) + refb * Math.Pow(Math.Tan(refractedZenithDistanceRadian), 3);
-                if(double.IsNaN(dZ2)) {
+                if (double.IsNaN(dZ2)) {
                     return double.NaN;
                 }
                 var originalZenithDistanceRadian = refractedZenithDistanceRadian + dZ2;

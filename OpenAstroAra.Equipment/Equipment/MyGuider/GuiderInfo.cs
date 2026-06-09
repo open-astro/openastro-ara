@@ -53,23 +53,15 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider {
             }
         }
 
-        private IList<string> supportedActions;
+        private IList<string> supportedActions = new List<string>();
 
-        public IList<string> SupportedActions {
-            get => supportedActions;
-            set {
-                if (supportedActions != value) {
-                    supportedActions = value;
-                    RaisePropertyChanged();
-                }
-            }
-        }
+        public IList<string> SupportedActions => supportedActions;
 
-        private RMSError rmsError;
+        private RMSError? rmsError;
         /// <summary>
         /// The RMS Error of all datapoints in the GuideStepHistory. The values depend on the value range selection for the guide charts
         /// </summary>
-        public RMSError RMSError {
+        public RMSError? RMSError {
             get => rmsError;
             set {
                 if (rmsError != value) {

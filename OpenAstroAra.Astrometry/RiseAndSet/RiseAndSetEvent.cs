@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -21,8 +21,8 @@ namespace OpenAstroAra.Astrometry.RiseAndSet {
     public abstract class RiseAndSetEvent {
 
         [Obsolete("Use method with elevation parameter instead")]
-        public RiseAndSetEvent(DateTime date, double latitude, double longitude) : this(date, latitude, longitude, elevation: 0) { }
-        public RiseAndSetEvent(DateTime date, double latitude, double longitude, double elevation) {
+        protected RiseAndSetEvent(DateTime date, double latitude, double longitude) : this(date, latitude, longitude, elevation: 0) { }
+        protected RiseAndSetEvent(DateTime date, double latitude, double longitude, double elevation) {
             this.Date = date;
             this.Latitude = latitude;
             this.Longitude = longitude;
@@ -34,11 +34,13 @@ namespace OpenAstroAra.Astrometry.RiseAndSet {
         public double Longitude { get; private set; }
         public double Elevation { get; private set; }
         public virtual DateTime? Rise { get; private set; }
-        public virtual DateTime? Set { get; private set; }
+
+        // Renamed from 'Set' (a reserved keyword in VB) per CA1716.
+        public virtual DateTime? SetTime { get; private set; }
 
         protected abstract double AdjustAltitude(BasicBody body);
 
-        protected abstract BasicBody GetBody(DateTime date);
+        protected abstract BasicBody GetBody(DateTime dateTime);
 
         /// <summary>
         /// Calculates rise and set time
@@ -146,22 +148,22 @@ namespace OpenAstroAra.Astrometry.RiseAndSet {
                             this.Rise = offsetDate.AddHours(zeroPoint1);
                         } else {
                             // set
-                            this.Set = offsetDate.AddHours(zeroPoint1);
+                            this.SetTime = offsetDate.AddHours(zeroPoint1);
                         }
                     } else if (events == 2) {
                         if (gradient > 0) {
                             // rise and set
                             this.Rise = offsetDate.AddHours(zeroPoint1);
-                            this.Set = offsetDate.AddHours(zeroPoint2);
+                            this.SetTime = offsetDate.AddHours(zeroPoint2);
                         } else {
                             // set and rise
                             this.Rise = offsetDate.AddHours(zeroPoint2);
-                            this.Set = offsetDate.AddHours(zeroPoint1);
+                            this.SetTime = offsetDate.AddHours(zeroPoint1);
                         }
                     }
                     offset += 2;
                     //Repeat until rise and set events are found, or after a whole day
-                } while (!((this.Rise != null && this.Set != null) || offset > 24));
+                } while (!((this.Rise != null && this.SetTime != null) || offset > 24));
 
                 return true;
             });

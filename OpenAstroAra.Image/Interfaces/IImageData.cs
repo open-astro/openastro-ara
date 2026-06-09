@@ -12,7 +12,7 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Image.FileFormat;
 using OpenAstroAra.Image.ImageData;
@@ -41,12 +41,12 @@ namespace OpenAstroAra.Image.Interfaces {
 
         ImagePatterns GetImagePatterns();
 
-        Task<string> SaveToDisk(FileSaveInfo fileSaveInfo, CancellationToken cancelToken = default, bool forceFileType = false);
-        Task<string> SaveToDisk(FileSaveInfo fileSaveInfo, CancellationToken token, bool forceFileType, IList<ImagePattern> customPatterns);
+        Task<string> SaveToDisk(FileSaveInfo fileSaveInfo, bool forceFileType = false, CancellationToken cancelToken = default);
+        Task<string> SaveToDisk(FileSaveInfo fileSaveInfo, bool forceFileType, IList<ImagePattern> customPatterns, CancellationToken cancelToken);
 
-        [Obsolete]
+        [Obsolete("Legacy two-step save API; use SaveToDisk instead.")]
         Task<string> PrepareSave(FileSaveInfo fileSaveInfo, CancellationToken cancelToken = default);
-        [Obsolete]
+        [Obsolete("Legacy two-step save API; use SaveToDisk instead.")]
         string FinalizeSave(string file, string pattern, IList<ImagePattern> customPatterns);
     }
 
@@ -56,6 +56,6 @@ namespace OpenAstroAra.Image.Interfaces {
 
         BaseImageData CreateBaseImageData(IImageArray imageArray, int width, int height, int bitDepth, bool isBayered, ImageMetaData metaData);
 
-        Task<IImageData> CreateFromFile(string path, int bitDepth, bool isBayered, RawConverterEnum rawConverter, CancellationToken ct = default);
+        Task<IImageData> CreateFromFile(string path, int bitDepth, bool isBayered, RawConverter rawConverter, CancellationToken ct = default);
     }
 }

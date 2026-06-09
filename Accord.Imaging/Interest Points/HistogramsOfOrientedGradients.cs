@@ -20,16 +20,15 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging
-{
+namespace Accord.Imaging {
+    using Accord.Compat;
+    using Accord.Imaging;
+    using Accord.Imaging.Filters;
+    using Accord.Math;
     using System;
     using System.Collections.Generic;
     using System.Drawing;
     using System.Drawing.Imaging;
-    using Accord.Math;
-    using Accord.Imaging;
-    using Accord.Imaging.Filters;
-    using Accord.Compat;
 
     /// <summary>
     ///   Histograms of Oriented Gradients (HOG) descriptor extractor.
@@ -59,8 +58,7 @@ namespace Accord.Imaging
     /// </example>
     /// 
     [Serializable]
-    public class HistogramsOfOrientedGradients : BaseFeatureExtractor<FeatureDescriptor>
-    {
+    public class HistogramsOfOrientedGradients : BaseFeatureExtractor<FeatureDescriptor> {
 
         int numberOfBins = 9;
         int cellSize = 6;  // size of the cell, in number of pixels
@@ -79,8 +77,7 @@ namespace Accord.Imaging
         ///   Gets the size of a cell, in pixels. Default is 6.
         /// </summary>
         /// 
-        public int CellSize
-        {
+        public int CellSize {
             get { return cellSize; }
             set { cellSize = value; }
         }
@@ -89,8 +86,7 @@ namespace Accord.Imaging
         ///   Gets the size of a block, in pixels. Default is 3.
         /// </summary>
         /// 
-        public int BlockSize
-        {
+        public int BlockSize {
             get { return blockSize; }
             set { blockSize = value; }
         }
@@ -99,11 +95,9 @@ namespace Accord.Imaging
         ///   Gets the number of histogram bins. Default is 9.
         /// </summary>
         /// 
-        public int NumberOfBins
-        {
+        public int NumberOfBins {
             get { return numberOfBins; }
-            set
-            {
+            set {
                 this.numberOfBins = value;
                 this.binWidth = (2.0 * System.Math.PI) / numberOfBins; // 0 to 360}
             }
@@ -114,8 +108,7 @@ namespace Accord.Imaging
         ///   computed as <c>(2.0 * System.Math.PI) / numberOfBins</c>.
         /// </summary>
         /// 
-        public double BinWidth
-        {
+        public double BinWidth {
             get { return this.binWidth; }
         }
 
@@ -144,8 +137,7 @@ namespace Accord.Imaging
         ///   histogram feature vectors. Default is true.
         /// </summary>
         /// 
-        public bool Normalize
-        {
+        public bool Normalize {
             get { return normalize; }
             set { normalize = value; }
         }
@@ -154,8 +146,7 @@ namespace Accord.Imaging
         ///   Initializes a new instance of the <see cref="HistogramsOfOrientedGradients"/> class.
         /// </summary>
         /// 
-        public HistogramsOfOrientedGradients()
-        {
+        public HistogramsOfOrientedGradients() {
             init(numberOfBins, blockSize, cellSize);
         }
 
@@ -167,13 +158,11 @@ namespace Accord.Imaging
         /// <param name="blockSize">The size of a block, measured in cells.</param>
         /// <param name="cellSize">The size of a cell, measured in pixels.</param>
         /// 
-        public HistogramsOfOrientedGradients(int numberOfBins = 9, int blockSize = 3, int cellSize = 6)
-        {
+        public HistogramsOfOrientedGradients(int numberOfBins = 9, int blockSize = 3, int cellSize = 6) {
             init(numberOfBins, blockSize, cellSize);
         }
 
-        private void init(int numberOfBins, int blockSize, int cellSize)
-        {
+        private void init(int numberOfBins, int blockSize, int cellSize) {
             this.NumberOfBins = numberOfBins;
             this.CellSize = cellSize;
             this.BlockSize = blockSize;
@@ -190,17 +179,13 @@ namespace Accord.Imaging
         ///   actual feature extraction, transforming the input image into a list of features.
         /// </summary>
         /// 
-        protected override IEnumerable<FeatureDescriptor> InnerTransform(UnmanagedImage image)
-        {
+        protected override IEnumerable<FeatureDescriptor> InnerTransform(UnmanagedImage image) {
             // make sure we have grayscale image
             UnmanagedImage grayImage = null;
 
-            if (image.PixelFormat == PixelFormat.Format8bppIndexed)
-            {
+            if (image.PixelFormat == PixelFormat.Format8bppIndexed) {
                 grayImage = image;
-            }
-            else
-            {
+            } else {
                 // create temporary grayscale image
                 grayImage = Grayscale.CommonAlgorithms.BT709.Apply(image);
             }
@@ -214,36 +199,29 @@ namespace Accord.Imaging
 
 
             // 1. Calculate partial differences
-            if (direction == null || height > direction.GetLength(0) || width > direction.GetLength(1))
-            {
+            if (direction == null || height > direction.GetLength(0) || width > direction.GetLength(1)) {
                 direction = new float[height, width];
                 magnitude = new float[height, width];
-            }
-            else
-            {
+            } else {
                 System.Diagnostics.Debug.Write(String.Format("Reusing storage for direction and magnitude. " +
                     "Need ({0}, {1}), have ({1}, {2})", height, width, direction.Rows(), direction.Columns()));
             }
 
 
-            unsafe
-            {
-                fixed (float* ptrDir = direction, ptrMag = magnitude)
-                {
+            unsafe {
+                fixed (float* ptrDir = direction, ptrMag = magnitude) {
                     // Begin skipping first line
                     byte* src = (byte*)grayImage.ImageData.ToPointer() + stride;
                     float* dir = ptrDir + width;
                     float* mag = ptrMag + width;
 
                     // for each line
-                    for (int y = 1; y < height - 1; y++)
-                    {
+                    for (int y = 1; y < height - 1; y++) {
                         // skip first column
                         dir++; mag++; src++;
 
                         // for each inner pixel in line (skipping first and last)
-                        for (int x = 1; x < width - 1; x++, src++, dir++, mag++)
-                        {
+                        for (int x = 1; x < width - 1; x++, src++, dir++, mag++) {
                             // Retrieve the pixel neighborhood
                             byte a11 = src[+stride + 1], a12 = src[+1], a13 = src[-stride + 1];
                             byte a21 = src[+stride + 0], /*  a22    */  a23 = src[-stride + 0];
@@ -276,24 +254,19 @@ namespace Accord.Imaging
             int cellCountX = (int)Math.Floor(width / (double)cellSize);
             int cellCountY = (int)Math.Floor(height / (double)cellSize);
 
-            if (histograms == null || cellCountX > histograms.GetLength(0) || cellCountY > histograms.GetLength(1))
-            {
+            if (histograms == null || cellCountX > histograms.GetLength(0) || cellCountY > histograms.GetLength(1)) {
                 this.histograms = new double[cellCountX, cellCountY][];
                 for (int i = 0; i < cellCountX; i++)
                     for (int j = 0; j < cellCountY; j++)
                         this.histograms[i, j] = new double[NumberOfBins];
-            }
-            else
-            {
+            } else {
                 System.Diagnostics.Debug.Write(String.Format("Reusing storage for histograms. " +
                     "Need ({0}, {1}), have ({1}, {2})", cellCountX, cellCountY, histograms.Rows(), histograms.Columns()));
             }
 
             // For each cell
-            for (int i = 0; i < cellCountX; i++)
-            {
-                for (int j = 0; j < cellCountY; j++)
-                {
+            for (int i = 0; i < cellCountX; i++) {
+                for (int j = 0; j < cellCountY; j++) {
                     // Compute the histogram
                     double[] histogram = this.histograms[i, j];
                     Array.Clear(histogram, 0, histogram.Length);
@@ -302,10 +275,8 @@ namespace Accord.Imaging
                     int startCellY = j * cellSize;
 
                     // for each pixel in the cell
-                    for (int x = 0; x < cellSize; x++)
-                    {
-                        for (int y = 0; y < cellSize; y++)
-                        {
+                    for (int x = 0; x < cellSize; x++) {
+                        for (int y = 0; y < cellSize; y++) {
                             double ang = direction[startCellY + y, startCellX + x];
                             double mag = magnitude[startCellY + y, startCellX + x];
 
@@ -324,10 +295,8 @@ namespace Accord.Imaging
 
             var blocks = new List<FeatureDescriptor>();
 
-            for (int i = 0; i < blocksCountX; i++)
-            {
-                for (int j = 0; j < blocksCountY; j++)
-                {
+            for (int i = 0; i < blocksCountX; i++) {
+                for (int j = 0; j < blocksCountY; j++) {
                     double[] block = new double[blockSize * blockSize * numberOfBins];
 
                     int startBlockX = i * blockSize;
@@ -335,10 +304,8 @@ namespace Accord.Imaging
                     int c = 0;
 
                     // for each cell in the block
-                    for (int x = 0; x < blockSize; x++)
-                    {
-                        for (int y = 0; y < blockSize; y++)
-                        {
+                    for (int x = 0; x < blockSize; x++) {
+                        for (int y = 0; y < blockSize; y++) {
                             double[] histogram = histograms[startBlockX + x, startBlockY + y];
 
                             // Copy all histograms to the block vector
@@ -363,8 +330,7 @@ namespace Accord.Imaging
         /// Creates a new object that is a copy of the current instance.
         /// </summary>
         /// 
-        protected override object Clone(ISet<PixelFormat> supportedFormats)
-        {
+        protected override object Clone(ISet<PixelFormat> supportedFormats) {
             var clone = new HistogramsOfOrientedGradients(numberOfBins, blockSize, cellSize);
             clone.SupportedFormats = supportedFormats;
             clone.epsilon = epsilon;

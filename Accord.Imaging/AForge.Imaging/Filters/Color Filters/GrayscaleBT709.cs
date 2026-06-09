@@ -1,12 +1,11 @@
 // AForge Image Processing Library
 // AForge.NET framework
 //
-// Copyright © Andrew Kirillov, 2005-2008
+// Copyright ï¿½ Andrew Kirillov, 2005-2008
 // andrew.kirillov@gmail.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Drawing;
     using System.Drawing.Imaging;
@@ -28,12 +27,11 @@ namespace Accord.Imaging.Filters
     /// <seealso cref="GrayscaleRMY"/>
     /// <seealso cref="GrayscaleY"/>
     ///
-    [Obsolete( "Use Grayscale.CommonAlgorithms.BT709 object instead" )]
-    public sealed class GrayscaleBT709 : Grayscale
-    {
+    [Obsolete("Use Grayscale.CommonAlgorithms.BT709 object instead")]
+    public sealed class GrayscaleBT709 : Grayscale {
         /// <summary>
         /// Initializes a new instance of the <see cref="GrayscaleBT709"/> class.
         /// </summary>
-        public GrayscaleBT709( ) : base( 0.2125, 0.7154, 0.0721 ) { }
+        public GrayscaleBT709() : base(0.2125, 0.7154, 0.0721) { }
     }
 }

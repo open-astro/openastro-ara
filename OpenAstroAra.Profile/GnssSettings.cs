@@ -12,7 +12,7 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Profile.Interfaces;
 using System;
 using System.Runtime.Serialization;
@@ -21,7 +21,11 @@ namespace OpenAstroAra.Profile {
 
     [Serializable()]
     [DataContract]
-    public class GnssSettings : Settings, IGnssSettings {
+    public sealed class GnssSettings : Settings, IGnssSettings {
+
+        public GnssSettings() {
+            SetDefaultValues();
+        }
 
         [OnDeserializing]
         public void OnDeserializing(StreamingContext context) {
@@ -29,16 +33,16 @@ namespace OpenAstroAra.Profile {
         }
 
         protected override void SetDefaultValues() {
-            gnssSource = GnssSourceEnum.NmeaSerial;
+            gnssSource = GnssSource.NmeaSerial;
 
             gpsdHost = string.Empty;
             gpsdPort = 2947;
         }
 
-        private GnssSourceEnum gnssSource;
+        private GnssSource gnssSource;
 
         [DataMember]
-        public GnssSourceEnum GnssSource {
+        public GnssSource GnssSource {
             get => gnssSource;
             set {
                 if (gnssSource != value) {
@@ -48,7 +52,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string gpsdHost;
+        private string gpsdHost = string.Empty;
 
         [DataMember]
         public string GpsdHost {

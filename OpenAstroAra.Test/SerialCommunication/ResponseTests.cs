@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -12,47 +12,45 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Core.Utility.SerialCommunication;
 using NUnit.Framework;
+using OpenAstroAra.Core.Utility.SerialCommunication;
+using System;
 
 namespace OpenAstroAra.Test.SerialCommunication {
 
-    internal class TestResponse : Response {
+    internal sealed class TestResponse : Response {
 
         public bool CheckDeviceResponse(string response) {
             if (DeviceResponse == null) return response == null;
-            return DeviceResponse.Equals(response);
+            return DeviceResponse.Equals(response, StringComparison.Ordinal);
         }
 
-        public bool GetBoolFromZeroOne(char response, out bool result) {
+        public static bool GetBoolFromZeroOne(char response, out bool result) {
             return TryParseBoolFromZeroOne(response, "test", out result);
         }
 
-        public bool GetDoubleFromResponse(string response, out double result) {
+        public static bool GetDoubleFromResponse(string response, out double result) {
             return TryParseDouble(response, "test", out result);
         }
 
-        public bool GetShortFromResponse(string response, out short result) {
+        public static bool GetShortFromResponse(string response, out short result) {
             return TryParseShort(response, "test", out result);
         }
 
-        public bool GetIntegerFromResponse(string response, out int result) {
+        public static bool GetIntegerFromResponse(string response, out int result) {
             return TryParseInteger(response, "test", out result);
         }
 
-        public bool GetLongFromResponse(string response, out long result) {
+        public static bool GetLongFromResponse(string response, out long result) {
             return TryParseLong(response, "test", out result);
         }
     }
 
-    [TestFixture]
-    internal class ResponseTests {
-        private TestResponse _sut;
-
-        [SetUp]
-        public void Init() {
-            _sut = new TestResponse();
-        }
+    // Abstract base fixture (NUnit1034): the culture-specific fixtures below
+    // derive from it to run the parsing tests under pinned cultures. Keeping it
+    // concrete made it also run under the test runner's ambient culture, which
+    // is non-deterministic across machines.
+    internal abstract class ResponseTests {
 
         [Test]
         [TestCase('0', true, false)]
@@ -60,7 +58,7 @@ namespace OpenAstroAra.Test.SerialCommunication {
         [TestCase('X', false, false)]
         [TestCase('\0', false, false)]
         public void TestBoolParsing(char response, bool valid, bool expectedResult) {
-            Assert.That(_sut.GetBoolFromZeroOne(response, out var result), Is.EqualTo(valid));
+            Assert.That(TestResponse.GetBoolFromZeroOne(response, out var result), Is.EqualTo(valid));
             Assert.That(result, Is.EqualTo(expectedResult));
         }
 
@@ -69,7 +67,7 @@ namespace OpenAstroAra.Test.SerialCommunication {
         [TestCase("", false, 0d)]
         [TestCase(null!, false, 0d)]
         public void TestDoubleParsing(string response, bool valid, double expectedResult) {
-            Assert.That(_sut.GetDoubleFromResponse(response, out var result), Is.EqualTo(valid));
+            Assert.That(TestResponse.GetDoubleFromResponse(response, out var result), Is.EqualTo(valid));
             Assert.That(result, Is.EqualTo(expectedResult));
         }
 
@@ -78,7 +76,7 @@ namespace OpenAstroAra.Test.SerialCommunication {
         [TestCase("", false, 0)]
         [TestCase(null!, false, 0)]
         public void TestShortParsing(string response, bool valid, short expectedResult) {
-            Assert.That(_sut.GetShortFromResponse(response, out var result), Is.EqualTo(valid));
+            Assert.That(TestResponse.GetShortFromResponse(response, out var result), Is.EqualTo(valid));
             Assert.That(result, Is.EqualTo(expectedResult));
         }
 
@@ -87,7 +85,7 @@ namespace OpenAstroAra.Test.SerialCommunication {
         [TestCase("", false, 0)]
         [TestCase(null!, false, 0)]
         public void TestIntegerParsing(string response, bool valid, int expectedResult) {
-            Assert.That(_sut.GetIntegerFromResponse(response, out var result), Is.EqualTo(valid));
+            Assert.That(TestResponse.GetIntegerFromResponse(response, out var result), Is.EqualTo(valid));
             Assert.That(result, Is.EqualTo(expectedResult));
         }
 
@@ -96,7 +94,7 @@ namespace OpenAstroAra.Test.SerialCommunication {
         [TestCase("", false, 0)]
         [TestCase(null!, false, 0)]
         public void TestLongParsing(string response, bool valid, long expectedResult) {
-            Assert.That(_sut.GetLongFromResponse(response, out var result), Is.EqualTo(valid));
+            Assert.That(TestResponse.GetLongFromResponse(response, out var result), Is.EqualTo(valid));
             Assert.That(result, Is.EqualTo(expectedResult));
         }
     }
@@ -104,84 +102,84 @@ namespace OpenAstroAra.Test.SerialCommunication {
     [TestFixture]
     [SetUICulture("da-DK")]
     [SetCulture("da-DK")]
-    internal class DaDKResponseTests : ResponseTests {
+    internal sealed class DaDKResponseTests : ResponseTests {
     }
 
     [TestFixture]
     [SetUICulture("de-DE")]
     [SetCulture("de-DE")]
-    internal class DeDeResponseTests : ResponseTests {
+    internal sealed class DeDeResponseTests : ResponseTests {
     }
 
     [TestFixture]
     [SetUICulture("en-GB")]
     [SetCulture("en-GB")]
-    internal class EnGbResponseTests : ResponseTests {
+    internal sealed class EnGbResponseTests : ResponseTests {
     }
 
     [TestFixture]
     [SetUICulture("en-US")]
     [SetCulture("en-US")]
-    internal class EnUsResponseTests : ResponseTests {
+    internal sealed class EnUsResponseTests : ResponseTests {
     }
 
     [TestFixture]
     [SetUICulture("es-ES")]
     [SetCulture("es-ES")]
-    internal class EsEsResponseTests : ResponseTests {
+    internal sealed class EsEsResponseTests : ResponseTests {
     }
 
     [TestFixture]
     [SetUICulture("fr-FR")]
     [SetCulture("fr-FR")]
-    internal class FrFrResponseTests : ResponseTests {
+    internal sealed class FrFrResponseTests : ResponseTests {
     }
 
     [TestFixture]
     [SetUICulture("it-IT")]
     [SetCulture("it-IT")]
-    internal class ItItResponseTests : ResponseTests {
+    internal sealed class ItItResponseTests : ResponseTests {
     }
 
     [TestFixture]
     [SetUICulture("ja-JP")]
     [SetCulture("ja-JP")]
-    internal class JaJpResponseTests : ResponseTests {
+    internal sealed class JaJpResponseTests : ResponseTests {
     }
 
     [TestFixture]
     [SetUICulture("nl-NL")]
     [SetCulture("nl-NL")]
-    internal class NlNlResponseTests : ResponseTests {
+    internal sealed class NlNlResponseTests : ResponseTests {
     }
 
     [TestFixture]
     [SetUICulture("pl-PL")]
     [SetCulture("pl-PL")]
-    internal class PlPlResponseTests : ResponseTests {
+    internal sealed class PlPlResponseTests : ResponseTests {
     }
 
     [TestFixture]
     [SetUICulture("ru-RU")]
     [SetCulture("ru-RU")]
-    internal class RuRuResponseTests : ResponseTests {
+    internal sealed class RuRuResponseTests : ResponseTests {
     }
 
     [TestFixture]
     [SetUICulture("zh-CN")]
     [SetCulture("zh-CN")]
-    internal class ZhCnResponseTests : ResponseTests {
+    internal sealed class ZhCnResponseTests : ResponseTests {
     }
 
     [TestFixture]
     [SetUICulture("zh-HK")]
     [SetCulture("zh-HK")]
-    internal class ZhHkResponseTests : ResponseTests {
+    internal sealed class ZhHkResponseTests : ResponseTests {
     }
 
     [TestFixture]
     [SetUICulture("zh-TW")]
     [SetCulture("zh-TW")]
-    internal class ZhTwResponseTests : ResponseTests {
+    internal sealed class ZhTwResponseTests : ResponseTests {
     }
 }

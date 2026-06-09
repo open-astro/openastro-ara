@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -13,7 +13,7 @@
 #endregion "copyright"
 
 using Newtonsoft.Json;
-using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Core.Utility;
 using System;
 using System.Runtime.Serialization;
@@ -38,7 +38,7 @@ namespace OpenAstroAra.Core.Model.Equipment {
         private int minAbsoluteFlatDeviceBrightness;
         private int gain;
         private int offset;
-        private BinningMode binning;
+        private BinningMode binning = new BinningMode(1, 1);
 
         [OnDeserializing]
         public void OnDeserializing(StreamingContext context) {
@@ -145,7 +145,7 @@ namespace OpenAstroAra.Core.Model.Equipment {
         public int Gain {
             get => gain;
             set {
-                if(value == gain) { return; }
+                if (value == gain) { return; }
                 gain = value;
                 RaisePropertyChanged();
             }

@@ -25,11 +25,17 @@ using System.Linq;
 
 namespace OpenAstroAra.PlateSolving.Solvers {
 
-    internal class ASTAPSolver : CLISolver {
+    internal sealed class ASTAPSolver : CLISolver {
 
-        internal class ASTAPValidationFailedException : Exception {
+        public sealed class ASTAPValidationFailedException : Exception {
 
             internal ASTAPValidationFailedException(string reason) : base($"ASTAP validation failed: {reason}") {
+            }
+
+            public ASTAPValidationFailedException() {
+            }
+
+            public ASTAPValidationFailedException(string message, Exception innerException) : base(message, innerException) {
             }
         }
 
@@ -45,14 +51,14 @@ namespace OpenAstroAra.PlateSolving.Solvers {
             if (!File.Exists(outputFilePath)) {
                 Logger.Error("ASTAP - Plate solve failed. No output file found.");
                 if (!parameter.DisableNotifications) {
-                    Notification.ShowError(Loc.Instance["LblASTAPNoOutputFile"]);
+                    Notifier.ShowError(Loc.Instance["LblASTAPNoOutputFile"]);
                 }
                 return result;
             }
 
             var dict = File.ReadLines(outputFilePath)
                 .Where(line => !string.IsNullOrWhiteSpace(line))
-                .Select(line => line.Split(new char[] { '=' }, 2, 0))
+                .Select(line => line.Split('=', 2, StringSplitOptions.None))
                 .ToDictionary(parts => parts[0], parts => parts[1]);
 
             dict.TryGetValue("WARNING", out var warning);
@@ -61,7 +67,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
                 dict.TryGetValue("ERROR", out var error);
                 Logger.Error($"ASTAP - Plate solve failed.{Environment.NewLine}{warning}{Environment.NewLine}{error}");
                 if (!parameter.DisableNotifications) {
-                    Notification.ShowError(String.Format(Loc.Instance["LblASTAPSolveFailed"], warning, error));
+                    Notifier.ShowError(String.Format(CultureInfo.CurrentCulture, Loc.Instance["LblASTAPSolveFailed"], warning, error));
                 }
                 return result;
             }
@@ -69,7 +75,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
             if (!string.IsNullOrWhiteSpace(warning)) {
                 Logger.Warning($"ASTAP - {warning}");
                 if (!parameter.DisableNotifications) {
-                    Notification.ShowExternalWarning($"{warning}", Loc.Instance["LblASTAPWarning"]);
+                    Notifier.ShowExternalWarning($"{warning}", Loc.Instance["LblASTAPWarning"]);
                 }
             }
 
@@ -104,9 +110,9 @@ namespace OpenAstroAra.PlateSolving.Solvers {
 
                 result.Pixscale = AstroUtil.DegreeToArcsec(Math.Sqrt(Math.Pow(cr1y, 2) + Math.Pow(cr2y, 2)));
             }
-            if(!double.IsNaN(result.Pixscale)) {
+            if (!double.IsNaN(result.Pixscale)) {
                 result.Radius = AstroUtil.ArcsecToDegree(Math.Sqrt(Math.Pow(imageProperties.ImageWidth * result.Pixscale, 2) + Math.Pow(imageProperties.ImageHeight * result.Pixscale, 2)) / 2d);
-            }            
+            }
             result.PositionAngle = 360 - (wcs.Rotation - 180);
             result.Flipped = !wcs.Flipped;
 
@@ -180,12 +186,12 @@ namespace OpenAstroAra.PlateSolving.Solvers {
         }
 
         protected override string GetOutputPath(string imageFilePath) {
-            return Path.Combine(Path.GetDirectoryName(imageFilePath), Path.GetFileNameWithoutExtension(imageFilePath)) + ".ini";
+            return Path.Combine(Path.GetDirectoryName(imageFilePath) ?? string.Empty, Path.GetFileNameWithoutExtension(imageFilePath)) + ".ini";
         }
 
         protected override List<string> GetSideCarFilePaths(string imageFilePath) {
             return new List<string>() {
-                Path.Combine(Path.GetDirectoryName(imageFilePath), Path.GetFileNameWithoutExtension(imageFilePath)) + ".wcs"
+                Path.Combine(Path.GetDirectoryName(imageFilePath) ?? string.Empty, Path.GetFileNameWithoutExtension(imageFilePath)) + ".wcs"
             };
         }
     }

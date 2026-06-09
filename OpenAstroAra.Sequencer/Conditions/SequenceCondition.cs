@@ -13,30 +13,31 @@
 #endregion "copyright"
 
 using Newtonsoft.Json;
-using System.Windows.Input;
-using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Core.Model;
-using OpenAstroAra.Sequencer.Container;
-using OpenAstroAra.Sequencer.SequenceItem;
-using OpenAstroAra.Sequencer.Validations;
 using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Sequencer.Container;
+using OpenAstroAra.Sequencer.Interfaces;
+using OpenAstroAra.Sequencer.SequenceItem;
+using OpenAstroAra.Sequencer.Utility;
+using OpenAstroAra.Sequencer.Validations;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using OpenAstroAra.Sequencer.Interfaces;
-using OpenAstroAra.Sequencer.Utility;
+using System.Windows.Input;
 
 namespace OpenAstroAra.Sequencer.Conditions {
 
     [JsonObject(MemberSerialization.OptIn)]
     public abstract class SequenceCondition : SequenceHasChanged, ISequenceCondition {
 
-        public SequenceCondition() {
+        protected SequenceCondition() {
         }
 
-        public SequenceCondition(SequenceCondition cloneMe) {
+        protected SequenceCondition(SequenceCondition cloneMe) {
             CopyMetaData(cloneMe);
         }
 
@@ -47,12 +48,12 @@ namespace OpenAstroAra.Sequencer.Conditions {
             Description = cloneMe.Description;
         }
 
-        public string Name { get; set; }
+        public string Name { get; set; } = string.Empty;
         public virtual bool AllowMultiplePerSet => false;
 
-        public string Description { get; set; }
-        public string Icon { get; set; }
-        public string Category { get; set; }
+        public string Description { get; set; } = string.Empty;
+        public string Icon { get; set; } = string.Empty;
+        public string Category { get; set; } = string.Empty;
 
         private SequenceEntityStatus status = SequenceEntityStatus.CREATED;
 
@@ -65,7 +66,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
         }
 
         [JsonProperty]
-        public ISequenceContainer Parent { get; set; }
+        public ISequenceContainer? Parent { get; set; }
 
         public ICommand ResetProgressCommand => new GalaSoft.MvvmLight.Command.RelayCommand<object>((o) => { ResetProgress(); ShowMenu = false; });
 
@@ -79,14 +80,14 @@ namespace OpenAstroAra.Sequencer.Conditions {
             }
         }
 
-        public IConditionWatchdog ConditionWatchdog { get; set; }
+        public IConditionWatchdog? ConditionWatchdog { get; set; }
 
         protected void RunWatchdogIfInsideSequenceRoot() {
             if (ConditionWatchdog != null) {
                 if (ItemUtility.IsInRootContainer(Parent)) {
                     ConditionWatchdog.Start();
                 } else {
-                    try { ConditionWatchdog?.Cancel(); } catch { }
+                    ConditionWatchdog.Cancel();
                 }
             }
         }
@@ -96,20 +97,21 @@ namespace OpenAstroAra.Sequencer.Conditions {
         public virtual void AfterParentChanged() {
         }
 
-        public void AttachNewParent(ISequenceContainer newParent) {
+        public void AttachNewParent(ISequenceContainer? newParent) {
             Parent = newParent;
 
             AfterParentChanged();
         }
 
-        public bool RunCheck(ISequenceItem previousItem, ISequenceItem nextItem) {
-            if(this.Status == SequenceEntityStatus.DISABLED) { return false; }
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "Condition-check execution boundary: a Check()/Validate() implementation may throw any exception type. All are logged, mark the condition FAILED, and surface via RaiseFailureEvent so one condition cannot crash the run loop. CA1031 sanctions general catches at such recover-and-report boundaries.")]
+        public bool RunCheck(ISequenceItem? previousItem, ISequenceItem? nextItem) {
+            if (this.Status == SequenceEntityStatus.DISABLED) { return false; }
 
             var root = ItemUtility.GetRootContainer(this.Parent);
 
             try {
-                if (this is IValidatable && !(this is ISequenceContainer)) {
-                    var validatable = this as IValidatable;
+                if (this is IValidatable validatable && !(this is ISequenceContainer)) {
                     if (!validatable.Validate()) {
                         throw new SequenceEntityFailedValidationException(string.Join(", ", validatable.Issues));
                     }
@@ -137,7 +139,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
             }
         }
 
-        public abstract bool Check(ISequenceItem previousItem, ISequenceItem nextItem);
+        public abstract bool Check(ISequenceItem? previousItem, ISequenceItem? nextItem);
 
         public abstract object Clone();
 
@@ -165,9 +167,9 @@ namespace OpenAstroAra.Sequencer.Conditions {
 
         public ICommand DetachCommand => new GalaSoft.MvvmLight.Command.RelayCommand<object>((o) => Detach());
 
-        public ICommand MoveUpCommand => null;
+        public ICommand? MoveUpCommand => null;
 
-        public ICommand MoveDownCommand => null;
+        public ICommand? MoveDownCommand => null;
         public ICommand DisableEnableCommand => new GalaSoft.MvvmLight.Command.RelayCommand(() => {
             if (Status != SequenceEntityStatus.DISABLED) {
                 Status = SequenceEntityStatus.DISABLED;
@@ -195,7 +197,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
         /// </summary>
         /// <returns></returns>
         protected bool IsActive() {
-            return ItemUtility.IsInRootContainer(Parent) && Parent.Status == SequenceEntityStatus.RUNNING && Status != SequenceEntityStatus.DISABLED;
+            return ItemUtility.IsInRootContainer(Parent) && Parent?.Status == SequenceEntityStatus.RUNNING && Status != SequenceEntityStatus.DISABLED;
         }
     }
 }

@@ -13,7 +13,7 @@
 #endregion "copyright"
 
 using OpenAstroAra.Astrometry;
-using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Core.Locale;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Core.Utility;
@@ -29,8 +29,8 @@ using System.Threading.Tasks;
 
 namespace OpenAstroAra.PlateSolving.Solvers {
 
-    internal class Dc3PinPointSolver : BaseSolver {
-        private readonly Dc3PoinPointCatalogEnum catalogType;
+    internal sealed class Dc3PinPointSolver : BaseSolver {
+        private readonly Dc3PoinPointCatalog catalogType;
         private readonly string catalogRootDir;
         private readonly double maxMagnitude;
         private readonly double expansion;
@@ -49,9 +49,9 @@ namespace OpenAstroAra.PlateSolving.Solvers {
         protected override async Task<PlateSolveResult> SolveAsyncImpl(IImageData source,
                                                                        PlateSolveParameter parameter,
                                                                        PlateSolveImageProperties imageProperties,
-                                                                       IProgress<ApplicationStatus> progress,
+                                                                       IProgress<ApplicationStatus>? progress,
                                                                        CancellationToken ct) {
-            string filePath = null;
+            string? filePath = null;
             bool attached = false;
             bool success = false;
 
@@ -59,29 +59,29 @@ namespace OpenAstroAra.PlateSolving.Solvers {
                 Success = false,
             };
 
-            dynamic pinPoint = null;
+            dynamic? pinPoint = null;
 
             try {
                 // Save the image to the solving working directory
                 FileSaveInfo fileSaveInfo = new() {
                     FilePath = WORKING_DIRECTORY,
                     FilePattern = Path.GetRandomFileName(),
-                    FileType = FileTypeEnum.FITS
+                    FileType = FileType.FITS
                 };
 
-                filePath = await source.SaveToDisk(fileSaveInfo, ct, forceFileType: true);
+                filePath = await source.SaveToDisk(fileSaveInfo, forceFileType: true, cancelToken: ct);
 
                 await Task.Run(() => {
 
                     // Instantiate a new PinPoint object via its COM interface
                     try {
-                        Type PinPointType = Type.GetTypeFromProgID("PinPoint.Plate");
-                        pinPoint = Activator.CreateInstance(PinPointType);
-                    } catch (ArgumentNullException) {
+                        Type? PinPointType = Type.GetTypeFromProgID("PinPoint.Plate");
+                        pinPoint = Activator.CreateInstance(PinPointType ?? throw new InvalidOperationException("PinPoint.Plate COM component is not registered."))!;
+                    } catch (InvalidOperationException) {
                         Logger.Error($"Failed to initialize PinPoint. It or its 64bit component does not appear to be installed.");
 
                         if (!parameter.DisableNotifications) {
-                            Notification.ShowError(Loc.Instance["LblPinPointNotInstalled"]);
+                            Notifier.ShowError(Loc.Instance["LblPinPointNotInstalled"]);
                         }
 
                         throw new InvalidComObjectException();
@@ -89,7 +89,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
                         Logger.Error($"Failed to initialize PinPoint: {ex.GetType().Name}: {ex.Message}");
 
                         if (!parameter.DisableNotifications) {
-                            Notification.ShowError(Loc.Instance["LblPinPointFailedInitialize"]);
+                            Notifier.ShowError(Loc.Instance["LblPinPointFailedInitialize"]);
                         }
 
                         throw new InvalidComObjectException();
@@ -131,9 +131,9 @@ namespace OpenAstroAra.PlateSolving.Solvers {
                 }, ct);
 
                 // Fill out the solve results, deallocate the PinPoint object, and return
-                if (success) {
+                if (success && pinPoint != null) {
                     plateSolveResult.Success = true;
-                    plateSolveResult.Coordinates = new Coordinates(pinPoint.RightAscension, pinPoint.Declination, Epoch.J2000, Coordinates.RAType.Hours);
+                    plateSolveResult.Coordinates = new Coordinates(pinPoint!.RightAscension, pinPoint.Declination, Epoch.J2000, Coordinates.RAType.Hours);
                     plateSolveResult.PositionAngle = pinPoint.PositionAngle;
                     plateSolveResult.Pixscale = Math.Abs(pinPoint.ArcsecPerPixelHoriz);
 
@@ -143,8 +143,8 @@ namespace OpenAstroAra.PlateSolving.Solvers {
                 }
             } catch (InvalidComObjectException) {
                 return plateSolveResult;
-            } catch (Exception ex) {
-                Notification.ShowExternalError(ex.Message, Loc.Instance["LblPinPointErrorMessage"]);
+            } catch (COMException ex) {
+                Notifier.ShowExternalError(ex.Message, Loc.Instance["LblPinPointErrorMessage"]);
                 Logger.Error($"PinPoint failed to solve: {ex.GetType().Name}: {ex.Message}");
                 return plateSolveResult;
             } finally {
@@ -171,10 +171,10 @@ namespace OpenAstroAra.PlateSolving.Solvers {
         protected override void EnsureSolverValid(PlateSolveParameter parameter) {
 
             try {
-                Type PinPointType = Type.GetTypeFromProgID("PinPoint.Plate");
-                dynamic pinPoint = Activator.CreateInstance(PinPointType);
+                Type? PinPointType = Type.GetTypeFromProgID("PinPoint.Plate");
+                dynamic pinPoint = Activator.CreateInstance(PinPointType ?? throw new InvalidOperationException("PinPoint.Plate COM component is not registered."))!;
                 Marshal.ReleaseComObject(pinPoint);
-            } catch (ArgumentNullException) {
+            } catch (InvalidOperationException) {
             }
         }
     }

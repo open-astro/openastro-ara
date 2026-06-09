@@ -23,23 +23,21 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging.Filters
-{
-    using System;
-    using System.Collections.Generic;
-    using System.Drawing.Imaging;
+namespace Accord.Imaging.Filters {
+    using Accord.Diagnostics;
     using Accord.Imaging;
     using Accord.Imaging.Filters;
     using Accord.Math;
-    using Accord.Diagnostics;
     using Accord.Math.Distances;
+    using System;
+    using System.Collections.Generic;
+    using System.Drawing.Imaging;
 
     /// <summary>
     ///   Distance functions that can be used with <see cref="DistanceTransform"/>.
     /// </summary>
     /// 
-    public enum DistanceTransformMethod
-    {
+    public enum DistanceTransformMethod {
         /// <summary>
         ///   Chessboard distance.
         /// </summary>
@@ -115,8 +113,7 @@ namespace Accord.Imaging.Filters
     /// </code>
     /// </example>
     /// 
-    public class DistanceTransform : BaseInPlaceFilter
-    {
+    public class DistanceTransform : BaseInPlaceFilter {
         private float max = 0;
         private IntPoint ued;
         private DistanceTransformMethod distance = DistanceTransformMethod.Euclidean;
@@ -128,8 +125,7 @@ namespace Accord.Imaging.Filters
         ///   Format translations dictionary.
         /// </summary>
         /// 
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -137,8 +133,7 @@ namespace Accord.Imaging.Filters
         ///   Gets the resulting pixels of the last transfomed image as a float[] array.
         /// </summary>
         /// 
-        public float[] Pixels
-        {
+        public float[] Pixels {
             get { return fPixels; }
         }
 
@@ -146,8 +141,7 @@ namespace Accord.Imaging.Filters
         /// Initializes a new instance of the <see cref="DistanceTransform"/> class.
         /// </summary>
         /// 
-        public DistanceTransform()
-        {
+        public DistanceTransform() {
             formatTranslations = new Dictionary<PixelFormat, PixelFormat>();
             formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
         }
@@ -157,8 +151,7 @@ namespace Accord.Imaging.Filters
         /// </summary>
         /// 
         public DistanceTransform(DistanceTransformMethod method)
-            : this()
-        {
+            : this() {
             this.distance = method;
         }
 
@@ -166,8 +159,7 @@ namespace Accord.Imaging.Filters
         ///   Gets the maximum distance from the transform.
         /// </summary>
         /// 
-        public float MaximumDistance
-        {
+        public float MaximumDistance {
             get { return max; }
         }
 
@@ -175,8 +167,7 @@ namespace Accord.Imaging.Filters
         ///   Gets the ultimate eroded point.
         /// </summary>
         /// 
-        public IntPoint UltimateErodedPoint
-        {
+        public IntPoint UltimateErodedPoint {
             get { return ued; }
         }
 
@@ -187,8 +178,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <param name="image">Source image data.</param>
         /// 
-        protected unsafe override void ProcessFilter(UnmanagedImage image)
-        {
+        protected unsafe override void ProcessFilter(UnmanagedImage image) {
             int width = image.Width;
             int height = image.Height;
             PixelFormat format = image.PixelFormat;
@@ -200,8 +190,7 @@ namespace Accord.Imaging.Filters
             byte[] bPixels = image.ToByteArray();
             this.fPixels = new float[bPixels.Length];
 
-            for (int i = 0; i < fPixels.Length; i++)
-            {
+            for (int i = 0; i < fPixels.Length; i++) {
                 if (bPixels[i] != 0)
                     fPixels[i] = float.MaxValue;
             }
@@ -209,8 +198,7 @@ namespace Accord.Imaging.Filters
             int[][] pointBufs = Jagged.Zeros<int>(2, width);
 
             // pass 1 & 2: increasing y
-            for (int x = 0; x < width; x++)
-            {
+            for (int x = 0; x < width; x++) {
                 pointBufs[0][x] = -1;
                 pointBufs[1][x] = -1;
             }
@@ -219,8 +207,7 @@ namespace Accord.Imaging.Filters
                 edmLine(bPixels, fPixels, pointBufs, width, y * width, y);
 
             // pass 3 & 4: decreasing y
-            for (int x = 0; x < width; x++)
-            {
+            for (int x = 0; x < width; x++) {
                 pointBufs[0][x] = -1;
                 pointBufs[1][x] = -1;
             }
@@ -229,32 +216,23 @@ namespace Accord.Imaging.Filters
                 edmLine(bPixels, fPixels, pointBufs, width, y * width, y);
 
             // Finish applying the distance function
-            if (NeedSquareRoot(distance))
-            {
-                for (int i = 0, p = 0; i < height; i++)
-                {
-                    for (int j = 0; j < width; j++, p++)
-                    {
+            if (NeedSquareRoot(distance)) {
+                for (int i = 0, p = 0; i < height; i++) {
+                    for (int j = 0; j < width; j++, p++) {
                         float f = fPixels[p] = (fPixels[p] < 0f) ? 0 : (float)Math.Sqrt(fPixels[p]);
 
-                        if (f > max)
-                        {
+                        if (f > max) {
                             max = f;
                             ued = new IntPoint(i, j);
                         }
                     }
                 }
-            }
-            else
-            {
-                for (int i = 0, p = 0; i < height; i++)
-                {
-                    for (int j = 0; j < width; j++, p++)
-                    {
+            } else {
+                for (int i = 0, p = 0; i < height; i++) {
+                    for (int j = 0; j < width; j++, p++) {
                         float f = fPixels[p] = (fPixels[p] < 0f) ? 0 : fPixels[p];
 
-                        if (f > max)
-                        {
+                        if (f > max) {
                             max = f;
                             ued = new IntPoint(i, j);
                         }
@@ -263,13 +241,11 @@ namespace Accord.Imaging.Filters
             }
 
             // Normalize and store
-            fixed (float* srcPtr = fPixels)
-            {
+            fixed (float* srcPtr = fPixels) {
                 int offset = image.Offset;
                 byte* dst = (byte*)image.ImageData.ToPointer();
                 float* src = srcPtr;
-                for (int i = 0; i < height; i++)
-                {
+                for (int i = 0; i < height; i++) {
                     for (int j = 0; j < width; j++, src++, dst++)
                         (*dst) = (byte)Vector.Scale(*src, 0, max, 0, 255);
                     dst += offset;
@@ -280,8 +256,7 @@ namespace Accord.Imaging.Filters
 
 
         // Handle a line; two passes: left-to-right and right-to-left
-        private void edmLine(byte[] bPixels, float[] fPixels, int[][] pointBufs, int width, int offset, int y)
-        {
+        private void edmLine(byte[] bPixels, float[] fPixels, int[][] pointBufs, int width, int offset, int y) {
             int[] points = pointBufs[0]; // the buffer for the left-to-right pass
 
             // point at (-/+1, -/+1) to current one (-1,-1 in the first pass)
@@ -291,15 +266,11 @@ namespace Accord.Imaging.Filters
 
             int distSqr = Int32.MaxValue; // this value is used only if edges are not background
 
-            for (int x = 0; x < width; x++, offset++)
-            {
+            for (int x = 0; x < width; x++, offset++) {
                 pNextDiag = points[x];
-                if (bPixels[offset] == 0)
-                {
+                if (bPixels[offset] == 0) {
                     points[x] = x | y << 16; // remember coordinates as a candidate for nearest background point
-                }
-                else
-                {
+                } else {
                     // foreground pixel:
                     float dist2 = minDist2(points, pPrev, pDiag, x, y, distSqr, distance);
                     if (fPixels[offset] > dist2)
@@ -313,16 +284,12 @@ namespace Accord.Imaging.Filters
             points = pointBufs[1]; // the buffer for the right-to-left pass. Low short contains x, high short y
             pPrev = -1;
             pDiag = -1;
-            for (int x = width - 1; x >= 0; x--, offset--)
-            {
+            for (int x = width - 1; x >= 0; x--, offset--) {
                 pNextDiag = points[x];
 
-                if (bPixels[offset] == 0)
-                {
+                if (bPixels[offset] == 0) {
                     points[x] = x | y << 16; // remember coordinates as a candidate for nearest background point
-                }
-                else
-                {
+                } else {
                     // foreground pixel:
                     float dist2 = minDist2(points, pPrev, pDiag, x, y, distSqr, distance);
                     if (fPixels[offset] > dist2)
@@ -334,36 +301,30 @@ namespace Accord.Imaging.Filters
             }
         }
 
-        private float minDist2(int[] points, int pPrev, int pDiag, int x, int y, int distSqr, DistanceTransformMethod distance)
-        {
+        private float minDist2(int[] points, int pPrev, int pDiag, int x, int y, int distSqr, DistanceTransformMethod distance) {
             int p0 = points[x]; // the nearest background point for the same x in the previous line
             int nearestPoint = p0;
 
-            if (p0 != -1)
-            {
+            if (p0 != -1) {
                 int x0 = p0 & 0xffff; int y0 = (p0 >> 16) & 0xffff;
                 int dist1Sqr = calcDistance(x, y, x0, y0, distance);
                 if (dist1Sqr < distSqr)
                     distSqr = dist1Sqr;
             }
 
-            if (pDiag != p0 && pDiag != -1)
-            {
+            if (pDiag != p0 && pDiag != -1) {
                 int x1 = pDiag & 0xffff; int y1 = (pDiag >> 16) & 0xffff;
                 int dist1Sqr = calcDistance(x, y, x1, y1, distance);
-                if (dist1Sqr < distSqr)
-                {
+                if (dist1Sqr < distSqr) {
                     nearestPoint = pDiag;
                     distSqr = dist1Sqr;
                 }
             }
 
-            if (pPrev != pDiag && pPrev != -1)
-            {
+            if (pPrev != pDiag && pPrev != -1) {
                 int x1 = pPrev & 0xffff; int y1 = (pPrev >> 16) & 0xffff;
                 int dist1Sqr = calcDistance(x, y, x1, y1, distance);
-                if (dist1Sqr < distSqr)
-                {
+                if (dist1Sqr < distSqr) {
                     nearestPoint = pPrev;
                     distSqr = dist1Sqr;
                 }
@@ -373,10 +334,8 @@ namespace Accord.Imaging.Filters
             return (float)distSqr;
         }
 
-        private int calcDistance(int x, int y, int x0, int y0, DistanceTransformMethod distance)
-        {
-            switch (distance)
-            {
+        private int calcDistance(int x, int y, int x0, int y0, DistanceTransformMethod distance) {
+            switch (distance) {
                 case DistanceTransformMethod.Euclidean:
                     return (x - x0) * (x - x0) + (y - y0) * (y - y0);
                 case DistanceTransformMethod.Manhattan:
@@ -390,10 +349,8 @@ namespace Accord.Imaging.Filters
             throw new Exception();
         }
 
-        private bool NeedSquareRoot(DistanceTransformMethod distance)
-        {
-            switch (distance)
-            {
+        private bool NeedSquareRoot(DistanceTransformMethod distance) {
+            switch (distance) {
                 case DistanceTransformMethod.Euclidean:
                     return true;
                 case DistanceTransformMethod.Chessboard:

@@ -12,23 +12,24 @@
 
 #endregion "copyright"
 
+using CommunityToolkit.Mvvm.ComponentModel;
 using Newtonsoft.Json;
-using OpenAstroAra.Core.Model;
-using OpenAstroAra.Sequencer.Utility.DateTimeProvider;
 using OpenAstroAra.Astrometry;
+using OpenAstroAra.Core.Locale;
+using OpenAstroAra.Core.Model;
+using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Sequencer.Utility.DateTimeProvider;
+using OpenAstroAra.Sequencer.Validations;
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel.Composition;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using OpenAstroAra.Core.Utility;
-using OpenAstroAra.Sequencer.Validations;
-using OpenAstroAra.Core.Locale;
-using CommunityToolkit.Mvvm.ComponentModel;
-using System.Diagnostics;
 
 namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
 
@@ -44,18 +45,18 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
         private int minutes;
         private int minutesOffset;
         private int seconds;
-        private IDateTimeProvider selectedProvider;
+        private IDateTimeProvider? selectedProvider;
 
         [ImportingConstructor]
         public WaitForTime(IList<IDateTimeProvider> dateTimeProviders) {
             DateTime = new SystemDateTime();
-            this.DateTimeProviders = dateTimeProviders;
+            this.dateTimeProviders = dateTimeProviders;
             this.SelectedProvider = DateTimeProviders?.FirstOrDefault();
         }
 
-        public WaitForTime(IList<IDateTimeProvider> dateTimeProviders, IDateTimeProvider selectedProvider) {
+        public WaitForTime(IList<IDateTimeProvider> dateTimeProviders, IDateTimeProvider? selectedProvider) {
             DateTime = new SystemDateTime();
-            this.DateTimeProviders = dateTimeProviders;
+            this.dateTimeProviders = dateTimeProviders;
             this.SelectedProvider = selectedProvider;
         }
 
@@ -98,13 +99,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
             return i.Count == 0;
         }
 
-        public IList<IDateTimeProvider> DateTimeProviders {
-            get => dateTimeProviders;
-            set {
-                dateTimeProviders = value;
-                RaisePropertyChanged();
-            }
-        }
+        public IList<IDateTimeProvider> DateTimeProviders => dateTimeProviders;
 
         public bool HasFixedTimeProvider => selectedProvider != null && !(selectedProvider is OpenAstroAra.Sequencer.Utility.DateTimeProvider.TimeProvider);
 
@@ -146,7 +141,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
         }
 
         [JsonProperty]
-        public IDateTimeProvider SelectedProvider {
+        public IDateTimeProvider? SelectedProvider {
             get => selectedProvider;
             set {
                 selectedProvider = value;
@@ -162,25 +157,27 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
         private TimeOnly rolloverTime;
 
         private bool timeDeterminedSuccessfully;
-        private string failureReason;
+        private string failureReason = string.Empty;
         private DateTime lastReferenceDate;
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "Time-determination boundary: the selected IDateTimeProvider and nighttime calculation may throw a provider-specific TimeProviderException or any other exception; the failure reason is captured and surfaced through Validate() rather than aborting. CA1031 sanctions general catches at such recover-and-report boundaries.")]
         private void UpdateTime() {
             try {
-                RolloverTime = SelectedProvider.GetRolloverTime(this);
+                RolloverTime = SelectedProvider?.GetRolloverTime(this) ?? RolloverTime;
                 lastReferenceDate = NighttimeCalculator.GetReferenceDate(DateTime.Now);
                 if (HasFixedTimeProvider) {
-                    var t = SelectedProvider.GetDateTime(this) + TimeSpan.FromMinutes(MinutesOffset);
+                    var t = selectedProvider!.GetDateTime(this) + TimeSpan.FromMinutes(MinutesOffset);
                     Hours = t.Hour;
                     Minutes = t.Minute;
                     Seconds = t.Second;
-                    
+
                 }
                 timeDeterminedSuccessfully = true;
-            } catch(Exception ex) {
+            } catch (Exception ex) {
                 timeDeterminedSuccessfully = false;
                 failureReason = ex is TimeProviderException tpe ? tpe.LocalizedMessage : ex.Message;
                 Validate();
-            }            
+            }
         }
 
         public override void AfterParentChanged() {
@@ -190,18 +187,18 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
         public ICustomDateTime DateTime { get; set; }
 
         public override Task Execute(IProgress<ApplicationStatus> progress, CancellationToken token) {
-            return OpenAstroAra.Core.Utility.CoreUtil.Wait(GetEstimatedDuration(), true, token, progress, "");
+            return OpenAstroAra.Core.Utility.CoreUtil.Wait(GetEstimatedDuration(), true, progress, "", token);
         }
 
         public override TimeSpan GetEstimatedDuration() {
             var now = DateTime.Now;
             var then = new DateTime(now.Year, now.Month, now.Day, Hours, Minutes, Seconds);
 
-            RolloverTime = SelectedProvider.GetRolloverTime(this);
+            RolloverTime = SelectedProvider?.GetRolloverTime(this) ?? RolloverTime;
             var timeOnlyNow = TimeOnly.FromDateTime(now);
             var timeOnlyThen = TimeOnly.FromDateTime(then);
 
-            if(timeOnlyNow < RolloverTime && timeOnlyThen >= RolloverTime) {
+            if (timeOnlyNow < RolloverTime && timeOnlyThen >= RolloverTime) {
                 then = then.AddDays(-1);
             }
 

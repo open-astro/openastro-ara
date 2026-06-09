@@ -12,26 +12,26 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Core.Enum;
-using System;
-using System.Threading;
-using System.Threading.Tasks;
+using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Core.Model;
+using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Image.ImageAnalysis;
 using OpenAstroAra.Image.Interfaces;
 using OpenAstroAra.Profile.Interfaces;
-using OpenAstroAra.Core.Utility;
+using System;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace OpenAstroAra.Image.ImageData {
 
     public class RenderedImage : BaseINPC, IRenderedImage {
-        protected readonly IProfileService profileService;
-        protected readonly IStarDetection starDetection;
-        protected readonly IStarAnnotator starAnnotator;
+        private protected readonly IProfileService profileService;
+        private protected readonly IStarDetection starDetection;
+        private protected readonly IStarAnnotator starAnnotator;
 
         public IImageData RawImageData { get; private set; }
 
-        private byte[] image;
+        private byte[]? image;
 
         public byte[] Image {
             get => this.image ?? OriginalImage;
@@ -78,10 +78,10 @@ namespace OpenAstroAra.Image.ImageData {
 
         public Task<IRenderedImage> DetectStars(
                 bool annotateImage,
-                StarSensitivityEnum sensitivity,
-                NoiseReductionEnum noiseReduction,
-                CancellationToken cancelToken = default,
-                IProgress<ApplicationStatus> progress = default(Progress<ApplicationStatus>)) =>
+                StarSensitivity sensitivity,
+                NoiseReduction noiseReduction,
+                IProgress<ApplicationStatus>? progress = default(Progress<ApplicationStatus>),
+                CancellationToken cancelToken = default) =>
             throw new NotImplementedException("DetectStars pending OpenCvSharp4 wiring.");
 
         public Task<byte[]> GetThumbnail() =>

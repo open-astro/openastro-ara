@@ -5,8 +5,7 @@
 // andrew.kirillov@gmail.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -20,8 +19,7 @@ namespace Accord.Imaging.Filters
     /// of information about image processing filters implementing <see cref="IFilter"/> interface
     /// or another filter's interface.</para></remarks>
     /// 
-    public interface IFilterInformation
-    {
+    public interface IFilterInformation {
         /// <summary>
         /// Format translations dictionary.
         /// </summary>

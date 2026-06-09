@@ -12,7 +12,7 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Core.Model.Equipment;
 using OpenAstroAra.Profile.Interfaces;
 using System;
@@ -22,7 +22,11 @@ namespace OpenAstroAra.Profile {
 
     [Serializable()]
     [DataContract]
-    public class CameraSettings : Settings, ICameraSettings {
+    public sealed class CameraSettings : Settings, ICameraSettings {
+
+        public CameraSettings() {
+            SetDefaultValues();
+        }
 
         [OnDeserializing]
         public void OnDeserializing(StreamingContext context) {
@@ -33,11 +37,11 @@ namespace OpenAstroAra.Profile {
             id = "No_Device";
             lastDeviceName = "";
             pixelSize = 3.8;
-            bulbMode = CameraBulbModeEnum.NATIVE;
+            bulbMode = CameraBulbMode.NATIVE;
             serialPort = "COM1";
             bitDepth = 16;
-            bayerPattern = BayerPatternEnum.Auto;
-            rawConverter = RawConverterEnum.FREEIMAGE;
+            bayerPattern = BayerPattern.Auto;
+            rawConverter = RawConverter.FREEIMAGE;
             minFlatExposureTime = 0.2;
             maxFlatExposureTime = 20;
             fileCameraFolder = string.Empty;
@@ -78,11 +82,9 @@ namespace OpenAstroAra.Profile {
             badPixelCorrectionThreshold = 60;
 
             zwoAsiMonoBinMode = false;
-
-            ascomCreate32BitData = false;
         }
 
-        private string id;
+        private string id = string.Empty;
 
         [DataMember]
         public string Id {
@@ -95,7 +97,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string lastDeviceName;
+        private string lastDeviceName = string.Empty;
 
         [DataMember]
         public string LastDeviceName {
@@ -121,10 +123,10 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private BayerPatternEnum bayerPattern;
+        private BayerPattern bayerPattern;
 
         [DataMember]
-        public BayerPatternEnum BayerPattern {
+        public BayerPattern BayerPattern {
             get => bayerPattern;
             set {
                 if (bayerPattern != value) {
@@ -134,10 +136,10 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private CameraBulbModeEnum bulbMode;
+        private CameraBulbMode bulbMode;
 
         [DataMember]
-        public CameraBulbModeEnum BulbMode {
+        public CameraBulbMode BulbMode {
             get => bulbMode;
             set {
                 if (bulbMode != value) {
@@ -147,7 +149,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string serialPort;
+        private string serialPort = string.Empty;
 
         [DataMember]
         public string SerialPort {
@@ -173,10 +175,10 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private RawConverterEnum rawConverter;
+        private RawConverter rawConverter;
 
         [DataMember]
-        public RawConverterEnum RawConverter {
+        public RawConverter RawConverter {
             get => rawConverter;
             set {
                 if (rawConverter != value) {
@@ -216,7 +218,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string fileCameraFolder;
+        private string fileCameraFolder = string.Empty;
 
         [DataMember]
         public string FileCameraFolder {
@@ -229,7 +231,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string fileCameraExtension;
+        private string fileCameraExtension = string.Empty;
 
         [DataMember]
         public string FileCameraExtension {
@@ -307,7 +309,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private BinningMode fliFloodBin;
+        private BinningMode fliFloodBin = new BinningMode(1, 1);
 
         [DataMember]
         public BinningMode FLIFloodBin {
@@ -619,7 +621,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string trackingCameraASCOMServerPipeName;
+        private string trackingCameraASCOMServerPipeName = string.Empty;
 
         [DataMember]
         public string TrackingCameraASCOMServerPipeName {
@@ -697,17 +699,12 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private bool ascomCreate32BitData;
-
         [DataMember]
         public bool ASCOMCreate32BitData {
-            get => false; //ascomCreate32BitData;
-            set {
-                //if(ascomCreate32BitData != value) {
-                //    ascomCreate32BitData = value;
-                //    RaisePropertyChanged();
-                //}
-            }
+            // Retained as a serialization no-op for profile back-compat; the
+            // ASCOM 32-bit data path was removed, so this is always false.
+            get => false;
+            set { }
         }
 
         #region GenericCamera

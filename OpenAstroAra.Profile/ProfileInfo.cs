@@ -21,7 +21,7 @@ namespace OpenAstroAra.Profile {
     public class ProfileMeta : BaseINPC {
         public Guid Id { get; set; }
         public DateTime LastUsed { get; set; }
-        private string name;
+        private string name = string.Empty;
 
         public string Name {
             get => name;
@@ -30,7 +30,7 @@ namespace OpenAstroAra.Profile {
                 RaisePropertyChanged();
             }
         }
-        private string description;
+        private string description = string.Empty;
 
         public string Description {
             get => description;
@@ -40,7 +40,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        public string Location { get; set; }
+        public string Location { get; set; } = string.Empty;
         private bool isActive;
 
         public bool IsActive {
@@ -58,10 +58,10 @@ namespace OpenAstroAra.Profile {
         public Guid Id { get; set; }
 
         [DataMember]
-        public string Name { get; set; }
+        public string Name { get; set; } = string.Empty;
 
         [DataMember]
-        public string Description { get; set; }
+        public string Description { get; set; } = string.Empty;
 
         [DataMember]
         public DateTime LastUsed { get; set; }

@@ -26,15 +26,14 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging.Formats
-{
+namespace Accord.Imaging.Formats {
+    using Accord.Compat;
     using System;
     using System.Collections.Generic;
     using System.Drawing;
     using System.Drawing.Imaging;
     using System.Globalization;
     using System.IO;
-    using Accord.Compat;
     using System.Linq;
     using System.Threading;
 
@@ -64,10 +63,9 @@ namespace Accord.Imaging.Formats
     /// <seealso cref="PNMCodec"/>
     /// <seealso cref="FITSCodec"/>
     /// 
-    public static class ImageDecoder
-    {
+    public static class ImageDecoder {
         private static Dictionary<string, Type> decoderTypes = new Dictionary<string, Type>();
-        private static ThreadLocal<Dictionary<string, IImageDecoder>> decoders = 
+        private static ThreadLocal<Dictionary<string, IImageDecoder>> decoders =
             new ThreadLocal<Dictionary<string, IImageDecoder>>(() => new Dictionary<string, IImageDecoder>());
 
         /// <summary>
@@ -75,8 +73,7 @@ namespace Accord.Imaging.Formats
         /// </summary>
         /// 
         [Obsolete("Please mark your decoder class with the FormatDecoderAttribute instead.")]
-        public static void RegisterDecoder(string fileExtension, IImageDecoder decoder)
-        {
+        public static void RegisterDecoder(string fileExtension, IImageDecoder decoder) {
             decoderTypes.Add(fileExtension.ToUpperInvariant(), decoder.GetType());
         }
 
@@ -94,8 +91,7 @@ namespace Accord.Imaging.Formats
         /// found, the method uses default .NET's image decoding routine (see
         /// <see cref="System.Drawing.Image.FromFile(string)"/>).</para></remarks>
         /// 
-        public static Bitmap DecodeFromFile(string fileName)
-        {
+        public static Bitmap DecodeFromFile(string fileName) {
             ImageInfo imageInfo = null;
 
             return DecodeFromFile(fileName, out imageInfo);
@@ -116,17 +112,14 @@ namespace Accord.Imaging.Formats
         /// found, the method uses default .NET's image decoding routine (see
         /// <see cref="System.Drawing.Image.FromFile(string)"/>).</para></remarks>
         /// 
-        public static Bitmap DecodeFromFile(string fileName, out ImageInfo imageInfo)
-        {
+        public static Bitmap DecodeFromFile(string fileName, out ImageInfo imageInfo) {
             string fileExtension = FormatDecoderAttribute.GetNormalizedExtension(fileName);
 
             IImageDecoder decoder = FormatDecoderAttribute.GetDecoders(fileExtension, decoderTypes, decoders.Value);
 
-            if (decoder != null)
-            {
+            if (decoder != null) {
                 // open stream
-                using (FileStream stream = new FileStream(fileName, FileMode.Open, FileAccess.Read))
-                {
+                using (FileStream stream = new FileStream(fileName, FileMode.Open, FileAccess.Read)) {
                     // open decoder
                     decoder.Open(stream);
 
@@ -137,9 +130,7 @@ namespace Accord.Imaging.Formats
                     decoder.Close();
                     return bitmap;
                 }
-            }
-            else
-            {
+            } else {
                 // use default .NET's image decoding routine
                 Bitmap bitmap = FromFile(fileName);
 
@@ -151,13 +142,11 @@ namespace Accord.Imaging.Formats
             }
         }
 
-        private static System.Drawing.Bitmap FromFile(string fileName)
-        {
+        private static System.Drawing.Bitmap FromFile(string fileName) {
             Bitmap loadedImage = null;
 
             // read image to temporary memory stream
-            using (FileStream stream = File.OpenRead(fileName))
-            {
+            using (FileStream stream = File.OpenRead(fileName)) {
                 MemoryStream memoryStream = new MemoryStream();
                 stream.CopyTo(memoryStream);
                 loadedImage = (Bitmap)Bitmap.FromStream(memoryStream);

@@ -20,7 +20,11 @@ namespace OpenAstroAra.Profile {
 
     [Serializable()]
     [DataContract]
-    internal class SafetyMonitorSettings : Settings, ISafetyMonitorSettings {
+    internal sealed class SafetyMonitorSettings : Settings, ISafetyMonitorSettings {
+
+        public SafetyMonitorSettings() {
+            SetDefaultValues();
+        }
 
         [OnDeserializing]
         public void OnDeserializing(StreamingContext context) {
@@ -32,7 +36,7 @@ namespace OpenAstroAra.Profile {
             lastDeviceName = string.Empty;
         }
 
-        private string id;
+        private string id = string.Empty;
 
         [DataMember]
         public string Id {
@@ -45,7 +49,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string lastDeviceName;
+        private string lastDeviceName = string.Empty;
 
         [DataMember]
         public string LastDeviceName {

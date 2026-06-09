@@ -47,9 +47,9 @@ namespace OpenAstroAra.Sequencer.Container {
                 Name = Name,
                 Category = Category,
                 Description = Description,
-                Items = new ObservableCollection<ISequenceItem>(Items.Select(i => i.Clone() as ISequenceItem)),
-                Triggers = new ObservableCollection<ISequenceTrigger>(Triggers.Select(t => t.Clone() as ISequenceTrigger)),
-                Conditions = new ObservableCollection<ISequenceCondition>(Conditions.Select(t => t.Clone() as ISequenceCondition)),
+                Items = new ObservableCollection<ISequenceItem>(Items.Select(i => (ISequenceItem)i.Clone())),
+                Triggers = new ObservableCollection<ISequenceTrigger>(Triggers.Select(t => (ISequenceTrigger)t.Clone())),
+                Conditions = new ObservableCollection<ISequenceCondition>(Conditions.Select(t => (ISequenceCondition)t.Clone())),
             };
 
             foreach (var item in clone.Items) {

@@ -12,7 +12,7 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Profile.Interfaces;
 using System;
@@ -27,7 +27,11 @@ namespace OpenAstroAra.Profile {
 
     [Serializable()]
     [DataContract]
-    public class ApplicationSettings : Settings, IApplicationSettings {
+    public sealed class ApplicationSettings : Settings, IApplicationSettings {
+
+        public ApplicationSettings() {
+            SetDefaultValues();
+        }
 
         [OnDeserializing]
         public void OnDeserializing(StreamingContext context) {
@@ -50,7 +54,7 @@ namespace OpenAstroAra.Profile {
 
         protected override void SetDefaultValues() {
             language = new CultureInfo("en-GB");
-            logLevel = LogLevelEnum.INFO;
+            logLevel = LogLevel.INFO;
             devicePollingInterval = 2;
             skyAtlasImageRepository = string.Empty;
             skySurveyCacheDirectory = Path.Combine(CoreUtil.APPLICATIONTEMPPATH, "FramingAssistantCache");
@@ -68,7 +72,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private CultureInfo language;
+        private CultureInfo language = new CultureInfo("en-GB");
 
         public CultureInfo Language {
             get => language;
@@ -80,10 +84,10 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private LogLevelEnum logLevel;
+        private LogLevel logLevel;
 
         [DataMember]
-        public LogLevelEnum LogLevel {
+        public LogLevel LogLevel {
             get => logLevel;
             set {
                 if (logLevel != value) {
@@ -106,9 +110,9 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string skyAtlasImageRepository;
+        private string skyAtlasImageRepository = string.Empty;
 
-        [Obsolete]
+        [Obsolete("Sky Atlas offline image repository is no longer used in the headless build; retained for profile deserialization only.")]
         [DataMember]
         public string SkyAtlasImageRepository {
             get => skyAtlasImageRepository;
@@ -120,7 +124,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string skySurveyCacheDirectory;
+        private string skySurveyCacheDirectory = string.Empty;
 
         [DataMember]
         public string SkySurveyCacheDirectory {
@@ -133,15 +137,16 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        public IReadOnlyDictionary<string, string> SelectedPluggableBehaviorsLookup { get; private set; }
+        public IReadOnlyDictionary<string, string> SelectedPluggableBehaviorsLookup { get; private set; } = System.Collections.Immutable.ImmutableDictionary<string, string>.Empty;
 
-        private void SelectedPluggableBehaviors_CollectionChanged(object sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e) {
+        private void SelectedPluggableBehaviors_CollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e) {
             SelectedPluggableBehaviorsLookup = SelectedPluggableBehaviors.ToList().ToImmutableDictionary(kvp => kvp.Key, kvp => kvp.Value);
             RaisePropertyChanged(nameof(SelectedPluggableBehaviors));
             RaisePropertyChanged(nameof(SelectedPluggableBehaviorsLookup));
         }
 
-        private AsyncObservableCollection<KeyValuePair<string, string>> selectedPluggableBehaviors;
+        [NonSerialized]
+        private AsyncObservableCollection<KeyValuePair<string, string>> selectedPluggableBehaviors = new();
 
         [DataMember]
         public AsyncObservableCollection<KeyValuePair<string, string>> SelectedPluggableBehaviors {

@@ -12,12 +12,13 @@
 
 #endregion "copyright"
 
-using System;
-using OpenAstroAra.Sequencer.SequenceItem;
 using Newtonsoft.Json.Linq;
 using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Sequencer.Container;
+using OpenAstroAra.Sequencer.SequenceItem;
+using System;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 
 namespace OpenAstroAra.Sequencer.Serialization {
 
@@ -30,42 +31,44 @@ namespace OpenAstroAra.Sequencer.Serialization {
             this.sequenceContainerCreationConverter = sequenceContainerCreationConverter;
         }
 
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "Factory-instantiation recovery boundary: a reflective GetItem<T> invoke may surface any exception (TargetInvocationException, argument/cast/type-load faults from arbitrary instruction constructors). All are logged and replaced with an UnknownSequenceItem placeholder so one bad entity cannot fail the whole sequence load. CA1031 sanctions general catches at such recover-and-continue boundaries.")]
         public override ISequenceItem Create(Type objectType, JObject jObject) {
             if (jObject.SelectToken("Strategy.$type") != null) {
                 return sequenceContainerCreationConverter.Create(objectType, jObject);
             }
 
-            if(jObject.TryGetValue("ImageType", out var value)) {                
-                if(value.Value<string>() == "DARKFLAT") {
+            if (jObject.TryGetValue("ImageType", out var value)) {
+                if (value.Value<string>() == "DARKFLAT") {
                     // Migration of values prior to 3.0
                     jObject["ImageType"] = new JValue("DARK");
                 }
             }
 
             if (jObject.TryGetValue("$type", out var token)) {
-                token = PluginMergeMigration(token?.ToString());
-                var t = GetType(token?.ToString());
+                token = PluginMergeMigration(token?.ToString() ?? string.Empty);
+                var t = GetType(token?.ToString() ?? string.Empty);
                 if (t == null) {
-                    return new UnknownSequenceItem(token?.ToString());
+                    return new UnknownSequenceItem(token?.ToString() ?? string.Empty);
                 }
                 try {
-                    var method = factory.GetType().GetMethod(nameof(factory.GetItem)).MakeGenericMethod(new Type[] { t });
+                    var method = factory.GetType().GetMethod(nameof(factory.GetItem))!.MakeGenericMethod(new Type[] { t });
                     var obj = method.Invoke(factory, null);
                     if (obj == null) {
                         Logger.Error($"Encountered unknown sequence item: {token?.ToString()}");
-                        return new UnknownSequenceItem(token?.ToString());
+                        return new UnknownSequenceItem(token?.ToString() ?? string.Empty);
                     }
                     return (ISequenceItem)obj;
                 } catch (Exception e) {
                     Logger.Error($"Encountered unknown sequence item: {token?.ToString()}", e);
-                    return new UnknownSequenceItem(token?.ToString());
+                    return new UnknownSequenceItem(token?.ToString() ?? string.Empty);
                 }
             } else {
-                return new UnknownSequenceItem(token?.ToString());
+                return new UnknownSequenceItem(token?.ToString() ?? string.Empty);
             }
         }
 
-        private string PluginMergeMigration(string token) => token switch {
+        private static string PluginMergeMigration(string token) => token switch {
             "NINA.Plugins.Connector.Instructions.ConnectAllEquipment, NINA.Plugins.Connector" => "OpenAstroAra.Sequencer.SequenceItem.Connect.ConnectAllEquipment, OpenAstroAra.Sequencer",
             "NINA.Plugins.Connector.Instructions.ConnectEquipment, NINA.Plugins.Connector" => "OpenAstroAra.Sequencer.SequenceItem.Connect.ConnectEquipment, OpenAstroAra.Sequencer",
             "NINA.Plugins.Connector.Instructions.DisconnectEquipment, NINA.Plugins.Connector" => "OpenAstroAra.Sequencer.SequenceItem.Connect.DisconnectEquipment, OpenAstroAra.Sequencer",

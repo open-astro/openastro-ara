@@ -43,9 +43,9 @@ public static class ImageEndpoints {
             .WithName("ListFrames");
 
         frames.MapGet("/{id:guid}", async (Guid id, IFrameRepository repo, CancellationToken ct) => {
-                var frame = await repo.GetAsync(id, ct);
-                return frame is null ? Results.NotFound() : Results.Ok(frame);
-            })
+            var frame = await repo.GetAsync(id, ct);
+            return frame is null ? Results.NotFound() : Results.Ok(frame);
+        })
               .Produces<FrameDto>(StatusCodes.Status200OK)
               .ProducesProblem(StatusCodes.Status404NotFound)
               .WithName("GetFrame");
@@ -54,11 +54,11 @@ public static class ImageEndpoints {
         // JPEG placeholder for now; §65 stretch pipeline replaces it with
         // a real OpenCvSharp4 render from the captured FITS.
         frames.MapPost("/{id:guid}/preview", async (Guid id, [FromBody] FramePreviewRequestDto request, IFrameRepository repo, CancellationToken ct) => {
-                var result = await repo.GetPreviewAsync(id, request, ct);
-                return result is null
-                    ? Results.NotFound()
-                    : Results.Bytes(result.Value.Bytes, result.Value.ContentType);
-            })
+            var result = await repo.GetPreviewAsync(id, request, ct);
+            return result is null
+                ? Results.NotFound()
+                : Results.Bytes(result.Value.Bytes, result.Value.ContentType);
+        })
             .Accepts<FramePreviewRequestDto>("application/json")
             .Produces<byte[]>(StatusCodes.Status200OK, "image/jpeg")
             .ProducesProblem(StatusCodes.Status404NotFound)
@@ -79,11 +79,11 @@ public static class ImageEndpoints {
             .WithName("DeleteFramePreviewVariants");
 
         frames.MapGet("/{id:guid}/thumbnail", async (Guid id, IFrameRepository repo, CancellationToken ct) => {
-                var result = await repo.GetThumbnailAsync(id, ct);
-                return result is null
-                    ? Results.NotFound()
-                    : Results.Bytes(result.Value.Bytes, result.Value.ContentType);
-            })
+            var result = await repo.GetThumbnailAsync(id, ct);
+            return result is null
+                ? Results.NotFound()
+                : Results.Bytes(result.Value.Bytes, result.Value.ContentType);
+        })
             .Produces<byte[]>(StatusCodes.Status200OK, "image/jpeg")
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("GetFrameThumbnail");
@@ -147,9 +147,9 @@ public static class ImageEndpoints {
             .WithName("ListSessions");
 
         sessions.MapGet("/{id:guid}", async (Guid id, ISessionService svc, CancellationToken ct) => {
-                var session = await svc.GetAsync(id, ct);
-                return session is null ? Results.NotFound() : Results.Ok(session);
-            })
+            var session = await svc.GetAsync(id, ct);
+            return session is null ? Results.NotFound() : Results.Ok(session);
+        })
                 .Produces<SessionDto>(StatusCodes.Status200OK)
                 .ProducesProblem(StatusCodes.Status404NotFound)
                 .WithName("GetSession");
@@ -173,15 +173,15 @@ public static class ImageEndpoints {
                 async (ISessionService svc, Guid id, [FromBody] ResumeTargetRequestDto request,
                        [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey,
                        CancellationToken ct) => {
-                    // Verify the session exists before accepting the operation —
-                    // matches §40 wire contract where resume-target on an unknown
-                    // session is 404, not a 202 the operator will silently watch
-                    // never make progress.
-                    var session = await svc.GetAsync(id, ct);
-                    return session is null
-                        ? Results.NotFound()
-                        : Results.Accepted(value: await svc.ResumeTargetAsync(id, request, idempotencyKey, ct));
-                })
+                           // Verify the session exists before accepting the operation —
+                           // matches §40 wire contract where resume-target on an unknown
+                           // session is 404, not a 202 the operator will silently watch
+                           // never make progress.
+                           var session = await svc.GetAsync(id, ct);
+                           return session is null
+                               ? Results.NotFound()
+                               : Results.Accepted(value: await svc.ResumeTargetAsync(id, request, idempotencyKey, ct));
+                       })
             .Accepts<ResumeTargetRequestDto>("application/json")
             .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
             .ProducesProblem(StatusCodes.Status404NotFound)
@@ -191,11 +191,11 @@ public static class ImageEndpoints {
                 async (ISessionService svc, Guid id, [FromBody] SessionRestretchRequestDto request,
                        [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey,
                        CancellationToken ct) => {
-                    var session = await svc.GetAsync(id, ct);
-                    return session is null
-                        ? Results.NotFound()
-                        : Results.Accepted(value: await svc.RestretchAsync(id, request, idempotencyKey, ct));
-                })
+                           var session = await svc.GetAsync(id, ct);
+                           return session is null
+                               ? Results.NotFound()
+                               : Results.Accepted(value: await svc.RestretchAsync(id, request, idempotencyKey, ct));
+                       })
             .Accepts<SessionRestretchRequestDto>("application/json")
             .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
             .ProducesProblem(StatusCodes.Status404NotFound)

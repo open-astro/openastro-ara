@@ -1,12 +1,11 @@
 // AForge Image Processing Library
 // AForge.NET framework
 //
-// Copyright © Andrew Kirillov, 2005-2008
+// Copyright ï¿½ Andrew Kirillov, 2005-2008
 // andrew.kirillov@gmail.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Drawing;
     using System.Drawing.Imaging;
@@ -25,8 +24,7 @@ namespace Accord.Imaging.Filters
     /// <seealso cref="IFilter"/>
     /// <seealso cref="IInPlacePartialFilter"/>
     /// 
-    public interface IInPlaceFilter
-    {
+    public interface IInPlaceFilter {
         /// <summary>
         /// Apply filter to an image.
         /// </summary>
@@ -35,7 +33,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <remarks>The method applies filter directly to the provided image data.</remarks>
         /// 
-        void ApplyInPlace( Bitmap image );
+        void ApplyInPlace(Bitmap image);
 
         /// <summary>
         /// Apply filter to an image.
@@ -45,7 +43,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <remarks>The method applies filter directly to the provided image data.</remarks>
         /// 
-        void ApplyInPlace( BitmapData imageData );
+        void ApplyInPlace(BitmapData imageData);
 
         /// <summary>
         /// Apply filter to an image in unmanaged memory.
@@ -55,7 +53,6 @@ namespace Accord.Imaging.Filters
         /// 
         /// <remarks>The method applies filter directly to the provided image data.</remarks>
         /// 
-        void ApplyInPlace( UnmanagedImage image );
+        void ApplyInPlace(UnmanagedImage image);
     }
 }
-

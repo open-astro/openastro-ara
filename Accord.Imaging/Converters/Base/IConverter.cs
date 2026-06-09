@@ -20,8 +20,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging.Converters
-{
+namespace Accord.Imaging.Converters {
 
     /// <summary>
     ///   Public interface for image converter algorithms.
@@ -30,8 +29,7 @@ namespace Accord.Imaging.Converters
     /// <typeparam name="TInput">Input image type.</typeparam>
     /// <typeparam name="TOutput">Output image type.</typeparam>
     /// 
-    public interface IConverter<TInput, TOutput>
-    {
+    public interface IConverter<TInput, TOutput> {
         /// <summary>
         ///   Converts an image from one representation to another.
         /// </summary>

@@ -14,6 +14,7 @@
 
 using Newtonsoft.Json;
 using System;
+using System.Collections.Generic;
 
 namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
 
@@ -29,7 +30,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
     public abstract class Phd2Method<T> : Phd2Method {
 
         [JsonProperty(PropertyName = "params")]
-        public T Parameters { get; set; }
+        public T? Parameters { get; set; }
     }
 
     public class Phd2Guide : Phd2Method<Phd2GuideParameter> {
@@ -39,13 +40,13 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
     public class Phd2GuideParameter {
 
         [JsonProperty(PropertyName = "settle")]
-        public Phd2Settle Settle { get; set; }
+        public Phd2Settle? Settle { get; set; }
 
         [JsonProperty(PropertyName = "recalibrate")]
         public bool Recalibrate { get; set; }
 
         [JsonProperty(PropertyName = "roi")]
-        public int[] Roi { get; set; }
+        public IReadOnlyList<int>? Roi { get; set; }
     }
 
     public class Phd2Dither : Phd2Method<Phd2DitherParameter> {
@@ -61,7 +62,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         public bool RaOnly { get; set; }
 
         [JsonProperty(PropertyName = "settle")]
-        public Phd2Settle Settle { get; set; }
+        public Phd2Settle? Settle { get; set; }
     }
 
     public class Phd2Settle {
@@ -87,7 +88,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
     public class Phd2FindStarParameter {
 
         [JsonProperty(PropertyName = "roi")]
-        public int[] Roi { get; set; }
+        public IReadOnlyList<int>? Roi { get; set; }
     }
 
     public class Phd2Loop : Phd2Method {
@@ -237,13 +238,13 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
     public class Phd2SetLockShiftParamsParameter {
 
         [JsonProperty(PropertyName = "rate")]
-        public double[] Rate { get; set; }
+        public IReadOnlyList<double>? Rate { get; set; }
 
         [JsonProperty(PropertyName = "units")]
-        public string Units { get; set; }
+        public string Units { get; set; } = string.Empty;
 
         [JsonProperty(PropertyName = "axes")]
-        public string Axes { get; set; }
+        public string Axes { get; set; } = string.Empty;
     }
 
     public class Phd2CaptureSingleFrame : Phd2Method<Phd2CaptureSingleFrameParameter> {
@@ -256,7 +257,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         public int Exposure { get; set; }
 
         [JsonProperty(PropertyName = "subframe")]
-        public int[] Subframe { get; set; }
+        public IReadOnlyList<int>? Subframe { get; set; }
     }
 
     public class Phd2FlipCalibration : Phd2Method {
@@ -276,54 +277,55 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
     }
 
     public class PhdMethodResponse {
-        public string jsonrpc;
-        public PhdError error;
-        public string id;
+        public string? jsonrpc { get; set; }
+        public PhdError? error { get; set; }
+        public string? id { get; set; }
     }
 
     public class GenericPhdMethodResponse : PhdMethodResponse {
-        public object result;
+        public object? result { get; set; }
     }
 
     public class BooleanPhdMethodResponse : PhdMethodResponse {
-        public bool result;
+        public bool? result { get; set; }
     }
 
     public class GetCameraFrameSizeResponse : PhdMethodResponse {
-        public int[] result;
+        public IReadOnlyList<int>? result { get; set; }
     }
 
     public class PhdImageResult {
-        public int frame;
-        public int width;
-        public int height;
-        public double[] star_pos;
-        public string pixels;
+        public int frame { get; set; }
+        public int width { get; set; }
+        public int height { get; set; }
+        [JsonProperty(PropertyName = "star_pos")]
+        public IReadOnlyList<double>? StarPos { get; set; }
+        public string? pixels { get; set; }
     }
 
     public class Phd2ProfileResponse {
-        public int id;
-        public string name { get; set; }
+        public int? id { get; set; }
+        public string name { get; set; } = string.Empty;
     }
 
     public class GetProfileResponse : PhdMethodResponse {
-        public Phd2ProfileResponse result;
+        public Phd2ProfileResponse? result { get; set; }
     }
 
     public class GetProfilesResponse : PhdMethodResponse {
-        public Phd2ProfileResponse[] result;
+        public IReadOnlyList<Phd2ProfileResponse>? result { get; set; }
     }
 
     public class GetLockPositionResponse : PhdMethodResponse {
-        public float[] result;
+        public IReadOnlyList<float>? result { get; set; }
     }
 
     public class GetLockShiftParamsResponse : PhdMethodResponse {
-        public LockShiftParams result;
+        public LockShiftParams? result { get; set; }
     }
 
     public class GetExposureResponse : PhdMethodResponse {
-        public int result;
+        public int? result { get; set; }
     }
 
     public class LockShiftParams {
@@ -332,17 +334,17 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         public bool Enabled { get; set; }
 
         [JsonProperty(PropertyName = "rate")]
-        public float[] Rate { get; set; }
+        public IReadOnlyList<float>? Rate { get; set; }
 
         [JsonProperty(PropertyName = "units")]
-        public string Units { get; set; }
+        public string Units { get; set; } = string.Empty;
 
         [JsonProperty(PropertyName = "axes")]
-        public string Axes { get; set; }
+        public string Axes { get; set; } = string.Empty;
     }
 
     public class PhdError {
-        public int code;
-        public string message;
+        public int code { get; set; }
+        public string? message { get; set; }
     }
 }

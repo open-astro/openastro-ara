@@ -14,7 +14,7 @@
 
 namespace OpenAstroAra.Image.FileFormat.XISF {
 
-    public static class XISFMetaDataProperty {
+    internal static class XISFMetaDataProperty {
 
         public static class XISF {
             public static readonly string Namespace = "XISF:";

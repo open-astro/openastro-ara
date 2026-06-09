@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -12,11 +12,11 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Core.Enum;
 using OpenAstroAra.Astrometry;
-using System.Collections.Generic;
+using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Equipment.Interfaces;
 using System.Collections;
+using System.Collections.Generic;
 
 namespace OpenAstroAra.Equipment.Equipment.MyTelescope {
 
@@ -93,7 +93,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyTelescope {
             }
         }
 
-        private string rightAscensionString;
+        private string rightAscensionString = string.Empty;
 
         public string RightAscensionString {
             get => rightAscensionString;
@@ -105,7 +105,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyTelescope {
             }
         }
 
-        private string declinationString;
+        private string declinationString = string.Empty;
 
         public string DeclinationString {
             get => declinationString;
@@ -117,7 +117,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyTelescope {
             }
         }
 
-        private Coordinates coordinates;
+        private Coordinates coordinates = null!;
 
         public Coordinates Coordinates {
             get => coordinates;
@@ -201,7 +201,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyTelescope {
             }
         }
 
-        private string siderealTimeString;
+        private string siderealTimeString = string.Empty;
 
         public string SiderealTimeString {
             get => siderealTimeString;
@@ -213,7 +213,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyTelescope {
             }
         }
 
-        private string hoursToMeridianString;
+        private string hoursToMeridianString = string.Empty;
 
         public string HoursToMeridianString {
             get => hoursToMeridianString;
@@ -262,17 +262,9 @@ namespace OpenAstroAra.Equipment.Equipment.MyTelescope {
             }
         }
 
-        private IList<TrackingMode> trackingModes;
+        private IList<TrackingMode> trackingModes = new List<TrackingMode>();
 
-        public IList<TrackingMode> TrackingModes {
-            get => trackingModes;
-            set {
-                if (trackingModes != value) {
-                    trackingModes = value;
-                    RaisePropertyChanged();
-                }
-            }
-        }
+        public IList<TrackingMode> TrackingModes => trackingModes;
 
         private bool atHome;
 
@@ -382,7 +374,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyTelescope {
             }
         }
 
-        private string timeToMeridianFlipString;
+        private string timeToMeridianFlipString = string.Empty;
 
         public string TimeToMeridianFlipString {
             get => timeToMeridianFlipString;
@@ -394,7 +386,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyTelescope {
             }
         }
 
-        private Coordinates targetCoordinates;
+        private Coordinates targetCoordinates = null!;
 
         public Coordinates TargetCoordinates {
             get => targetCoordinates;
@@ -478,41 +470,17 @@ namespace OpenAstroAra.Equipment.Equipment.MyTelescope {
             }
         }
 
-        private IList<(double, double)> primaryAxisRates;
+        private IList<(double, double)> primaryAxisRates = new List<(double, double)>();
 
-        public IList<(double, double)> PrimaryAxisRates {
-            get => primaryAxisRates;
-            set {
-                if (primaryAxisRates != value) {
-                    primaryAxisRates = value;
-                    RaisePropertyChanged();
-                }
-            }
-        }
+        public IList<(double, double)> PrimaryAxisRates => primaryAxisRates;
 
-        private IList<(double, double)> secondaryAxisRates;
+        private IList<(double, double)> secondaryAxisRates = new List<(double, double)>();
 
-        public IList<(double, double)> SecondaryAxisRates {
-            get => secondaryAxisRates;
-            set {
-                if (secondaryAxisRates != value) {
-                    secondaryAxisRates = value;
-                    RaisePropertyChanged();
-                }
-            }
-        }
+        public IList<(double, double)> SecondaryAxisRates => secondaryAxisRates;
 
-        private IList<string> supportedActions;
+        private IList<string> supportedActions = new List<string>();
 
-        public IList<string> SupportedActions {
-            get => supportedActions;
-            set {
-                if (supportedActions != value) {
-                    supportedActions = value;
-                    RaisePropertyChanged();
-                }
-            }
-        }
+        public IList<string> SupportedActions => supportedActions;
 
         private AlignmentMode alignmentMode;
 

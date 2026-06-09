@@ -20,15 +20,15 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace OpenAstroAra.Core.Enum {
+namespace OpenAstroAra.Core.Enums {
 
     [TypeConverter(typeof(EnumDescriptionTypeConverter))]
-    public enum MountTypeEnum {
+    public enum MountType {
 
         [Description("LblEquatorial")]
         EQUATORIAL,
 
         [Description("LblForkOnWedge")]
-        FORK_ON_WEDGE,
+        ForkOnWedge,
     }
 }

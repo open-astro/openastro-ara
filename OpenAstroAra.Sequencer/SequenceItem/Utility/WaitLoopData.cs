@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -7,7 +8,7 @@ using System.Threading.Tasks;
 namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
     using Newtonsoft.Json;
     using OpenAstroAra.Astrometry;
-    using OpenAstroAra.Core.Enum;
+    using OpenAstroAra.Core.Enums;
     using OpenAstroAra.Core.Model;
     using OpenAstroAra.Core.Utility;
     using OpenAstroAra.Profile.Interfaces;
@@ -18,12 +19,12 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
         private double targetAltitude;
         private double offset;
         private double currentAltitude;
-        private string risingSettingDisplay;
-        private string expectedTime;
+        private string risingSettingDisplay = string.Empty;
+        private string expectedTime = string.Empty;
         private string approximate = "";
         private DateTime expectedDateTime = DateTime.Now;
         private Action calculateExpectedTime;
-        private ComparisonOperatorEnum comparator;
+        private ComparisonOperator comparator;
         private IProfileService profileService;
 
         public WaitLoopData(IProfileService profileService, bool useCustomHorizon, Action calculateExpectedTime, string name) {
@@ -76,11 +77,11 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
         }
 
         [JsonProperty]
-        public ComparisonOperatorEnum Comparator {
+        public ComparisonOperator Comparator {
             get {
                 // Backward compatibility
-                if (comparator == ComparisonOperatorEnum.EQUALS || comparator == ComparisonOperatorEnum.NOT_EQUAL) {
-                    comparator = ComparisonOperatorEnum.GREATER_THAN;
+                if (comparator == ComparisonOperator.EQUALS || comparator == ComparisonOperator.NotEqual) {
+                    comparator = ComparisonOperator.GreaterThan;
                 }
                 return comparator;
             }
@@ -93,33 +94,32 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
         }
 
         public bool UseCustomHorizon { get; private set; }
-        public string Name { get; private set; }
+        public string Name { get; private set; } = string.Empty;
         public double Latitude { get; private set; }
         public double Longitude { get; private set; }
         public double Elevation { get; private set; }
-        public CustomHorizon Horizon { get; set; }
+        public CustomHorizon? Horizon { get; set; }
         public ObserverInfo Observer { get; private set; }
-        
+
         public double TargetAltitude {
             get => targetAltitude;
             set {
                 if (targetAltitude != value) {
                     targetAltitude = value;
                     // While "thinking" we show this. 
-                    if(!ExpectedTime.EndsWith("\u231B")) {
+                    if (!ExpectedTime.EndsWith('\u231B')) {
                         ExpectedTime = ExpectedTime + "\u231B";
                     }
                     RaisePropertyChanged();
                 }
             }
         }
-                
-        public ComparisonOperatorEnum[] ComparisonOperators => Enum.GetValues(typeof(ComparisonOperatorEnum))
-            .Cast<ComparisonOperatorEnum>()
-            .Where(p => p != ComparisonOperatorEnum.GREATER_THAN_OR_EQUAL)
-            .Where(p => p != ComparisonOperatorEnum.LESS_THAN_OR_EQUAL)
-            .Where(p => p != ComparisonOperatorEnum.EQUALS)
-            .Where(p => p != ComparisonOperatorEnum.NOT_EQUAL)
+
+        public static IReadOnlyList<ComparisonOperator> ComparisonOperators => Enum.GetValues<ComparisonOperator>()
+            .Where(p => p != ComparisonOperator.GreaterThanOrEqual)
+            .Where(p => p != ComparisonOperator.LessThanOrEqual)
+            .Where(p => p != ComparisonOperator.EQUALS)
+            .Where(p => p != ComparisonOperator.NotEqual)
             .ToArray();
 
 
@@ -173,7 +173,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
             get => expectedDateTime;
             set {
                 expectedDateTime = value;
-                ExpectedTime = value.ToString("t");
+                ExpectedTime = value.ToString("t", CultureInfo.CurrentCulture);
             }
         }
 
@@ -203,5 +203,3 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
         }
     }
 }
-
-

@@ -15,10 +15,10 @@
 using OpenAstroAra.Core.Utility;
 using System.ComponentModel;
 
-namespace OpenAstroAra.Core.Enum {
+namespace OpenAstroAra.Core.Enums {
 
     [TypeConverter(typeof(EnumDescriptionTypeConverter))]
-    public enum AFMethodEnum {
+    public enum AFMethod {
 
         [Description("LblAFStarHFR")]
         STARHFR,

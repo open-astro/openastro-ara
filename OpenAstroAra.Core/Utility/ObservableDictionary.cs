@@ -3,13 +3,13 @@ using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
- 
- 
+
+
 namespace OpenAstroAra.Core.Utility {
     /// <summary>
     ///     Based on https://referencesource.microsoft.com/#PresentationFramework/src/Framework/MS/Internal/Annotations/ObservableDictionary.cs
     /// </summary>
-    public class ObservableDictionary<TKey, TValue> : IDictionary<TKey, TValue>, INotifyPropertyChanged {
+    public sealed class ObservableDictionary<TKey, TValue> : IDictionary<TKey, TValue>, INotifyPropertyChanged where TKey : notnull {
         //------------------------------------------------------
         //
         //  Constructors
@@ -45,7 +45,7 @@ namespace OpenAstroAra.Core.Utility {
         /// <exception cref="ArgumentException">a value for key is already present in the locator part</exception>
         public void Add(TKey key, TValue val) {
             if (key == null) {
-                throw new ArgumentNullException("key");
+                throw new ArgumentNullException(nameof(key));
             }
             _nameValues.Add(key, val);
             FireDictionaryChanged();
@@ -113,9 +113,9 @@ namespace OpenAstroAra.Core.Utility {
         /// <param name="value"></param>
         /// <returns></returns>
         /// <exception cref="ArgumentNullException">key is null</exception>
-        public bool TryGetValue(TKey key, out TValue value) {
+        public bool TryGetValue(TKey key, [System.Diagnostics.CodeAnalysis.MaybeNullWhen(false)] out TValue value) {
             if (key == null)
-                throw new ArgumentNullException("key");
+                throw new ArgumentNullException(nameof(key));
 
             return _nameValues.TryGetValue(key, out value);
         }
@@ -157,10 +157,9 @@ namespace OpenAstroAra.Core.Utility {
         /// <exception cref="ArgumentNullException">target is null</exception>
         /// <exception cref="ArgumentOutOfRangeException">startIndex is less than zero or greater than the lenght of target</exception>
         void ICollection<KeyValuePair<TKey, TValue>>.CopyTo(KeyValuePair<TKey, TValue>[] target, int startIndex) {
-            if (target == null)
-                throw new ArgumentNullException("target");
+            ArgumentNullException.ThrowIfNull(target);
             if (startIndex < 0 || startIndex > target.Length)
-                throw new ArgumentOutOfRangeException("startIndex");
+                throw new ArgumentOutOfRangeException(nameof(startIndex));
 
             ((ICollection<KeyValuePair<TKey, TValue>>)_nameValues).CopyTo(target, startIndex);
         }
@@ -198,27 +197,31 @@ namespace OpenAstroAra.Core.Utility {
         /// </summary>
         /// <param name="key">key</param>
         /// <returns>the value stored in this locator part for key</returns>
-        public TValue this[TKey key] {
+        // The public indexer is deliberately lenient: it returns default(TValue)
+        // for a missing key instead of throwing (legacy NINA behavior relied on by
+        // callers). The strict IDictionary contract (throw KeyNotFoundException on a
+        // missing key, non-null return) is honored by the explicit interface indexer
+        // below, so consumers that go through IDictionary<TKey,TValue> get the
+        // standard semantics.
+        public TValue? this[TKey key] {
             get {
                 if (key == null) {
-                    throw new ArgumentNullException("key");
+                    throw new ArgumentNullException(nameof(key));
                 }
 
-                TValue value = default(TValue);
-                _nameValues.TryGetValue(key, out value);
+                _nameValues.TryGetValue(key, out var value);
                 return value;
             }
             set {
                 if (key == null) {
-                    throw new ArgumentNullException("key");
+                    throw new ArgumentNullException(nameof(key));
                 }
 
                 if (value == null) {
-                    throw new ArgumentNullException("value");
+                    throw new ArgumentNullException(nameof(value));
                 }
 
-                TValue oldValue = default(TValue);
-                _nameValues.TryGetValue(key, out oldValue);
+                _nameValues.TryGetValue(key, out var oldValue);
 
                 // If the new value is actually different, then we add it and fire
                 // a change notification
@@ -227,6 +230,22 @@ namespace OpenAstroAra.Core.Utility {
                     FireDictionaryChanged();
                 }
             }
+        }
+
+        /// <summary>
+        /// Strict <see cref="IDictionary{TKey,TValue}"/> indexer: throws
+        /// <see cref="KeyNotFoundException"/> for a missing key, matching the BCL
+        /// contract. The lenient default-returning behavior remains available via
+        /// the public indexer.
+        /// </summary>
+        TValue IDictionary<TKey, TValue>.this[TKey key] {
+            get {
+                if (key == null) {
+                    throw new ArgumentNullException(nameof(key));
+                }
+                return _nameValues[key];
+            }
+            set => this[key] = value;
         }
 
         /// <summary>
@@ -275,7 +294,7 @@ namespace OpenAstroAra.Core.Utility {
         /// <summary>
         ///
         /// </summary>
-        public event PropertyChangedEventHandler PropertyChanged;
+        public event PropertyChangedEventHandler? PropertyChanged;
 
         #endregion Public Events
 

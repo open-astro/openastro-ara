@@ -6,8 +6,7 @@
 // contacts@aforgenet.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -29,8 +28,7 @@ namespace Accord.Imaging.Filters
     /// <para>The filter accepts 8/16 bpp grayscale and 24/32/48/64 bpp color images for processing.</para>
     /// </remarks>
     /// 
-    public class ApplyMask : BaseInPlacePartialFilter
-    {
+    public class ApplyMask : BaseInPlacePartialFilter {
         private Bitmap maskImage;
         private UnmanagedImage unmanagedMaskImage;
         private byte[,] mask;
@@ -48,13 +46,10 @@ namespace Accord.Imaging.Filters
         /// 
         /// <exception cref="ArgumentException">The mask image must be 8 bpp grayscale image.</exception>
         /// 
-        public Bitmap MaskImage
-        {
+        public Bitmap MaskImage {
             get { return maskImage; }
-            set
-            {
-                if ((maskImage != null) && (maskImage.PixelFormat != PixelFormat.Format8bppIndexed))
-                {
+            set {
+                if ((maskImage != null) && (maskImage.PixelFormat != PixelFormat.Format8bppIndexed)) {
                     throw new ArgumentException("The mask image must be 8 bpp grayscale image.");
                 }
 
@@ -77,13 +72,10 @@ namespace Accord.Imaging.Filters
         /// 
         /// <exception cref="ArgumentException">The mask image must be 8 bpp grayscale image.</exception>
         /// 
-        public UnmanagedImage UnmanagedMaskImage
-        {
+        public UnmanagedImage UnmanagedMaskImage {
             get { return unmanagedMaskImage; }
-            set
-            {
-                if ((unmanagedMaskImage != null) && (unmanagedMaskImage.PixelFormat != PixelFormat.Format8bppIndexed))
-                {
+            set {
+                if ((unmanagedMaskImage != null) && (unmanagedMaskImage.PixelFormat != PixelFormat.Format8bppIndexed)) {
                     throw new ArgumentException("The mask image must be 8 bpp grayscale image.");
                 }
 
@@ -106,11 +98,9 @@ namespace Accord.Imaging.Filters
         /// </code>
         /// </para></remarks>
         /// 
-        public byte[,] Mask
-        {
+        public byte[,] Mask {
             get { return mask; }
-            set
-            {
+            set {
                 mask = value;
                 maskImage = null;
                 unmanagedMaskImage = null;
@@ -127,13 +117,11 @@ namespace Accord.Imaging.Filters
         /// <remarks><para>See <see cref="IFilterInformation.FormatTranslations"/>
         /// documentation for additional information.</para></remarks>
         /// 
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
-        private ApplyMask()
-        {
+        private ApplyMask() {
             formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
             formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format24bppRgb;
             formatTranslations[PixelFormat.Format32bppArgb] = PixelFormat.Format32bppArgb;
@@ -152,8 +140,7 @@ namespace Accord.Imaging.Filters
         /// <param name="maskImage"><see cref="MaskImage">Mask image</see> to use.</param>
         /// 
         public ApplyMask(Bitmap maskImage)
-            : this()
-        {
+            : this() {
             MaskImage = maskImage;
         }
 
@@ -164,8 +151,7 @@ namespace Accord.Imaging.Filters
         /// <param name="unmanagedMaskImage"><see cref="UnmanagedMaskImage">Unmanaged mask image</see> to use.</param>
         /// 
         public ApplyMask(UnmanagedImage unmanagedMaskImage)
-            : this()
-        {
+            : this() {
             UnmanagedMaskImage = unmanagedMaskImage;
         }
 
@@ -176,8 +162,7 @@ namespace Accord.Imaging.Filters
         /// <param name="mask"><see cref="Mask"/> to use.</param>
         /// 
         public ApplyMask(byte[,] mask)
-            : this()
-        {
+            : this() {
             Mask = mask;
         }
 
@@ -191,61 +176,45 @@ namespace Accord.Imaging.Filters
         /// <exception cref="NullReferenceException">None of the possible mask properties were set. Need to provide mask before applying the filter.</exception>
         /// <exception cref="ArgumentException">Invalid size of provided mask. Its size must be the same as the size of the image to mask.</exception>
         ///
-        protected override unsafe void ProcessFilter(UnmanagedImage image, Rectangle rect)
-        {
-            if (mask != null)
-            {
+        protected override unsafe void ProcessFilter(UnmanagedImage image, Rectangle rect) {
+            if (mask != null) {
                 if ((image.Width != mask.GetLength(1)) ||
-                     (image.Height != mask.GetLength(0)))
-                {
+                     (image.Height != mask.GetLength(0))) {
                     throw new ArgumentException("Invalid size of mask array. Its size must be the same as the size of the image to mask.");
                 }
 
-                fixed (byte* maskPtr = mask)
-                {
+                fixed (byte* maskPtr = mask) {
                     ProcessImage(image, rect, maskPtr, mask.GetLength(1));
                 }
-            }
-            else if (unmanagedMaskImage != null)
-            {
+            } else if (unmanagedMaskImage != null) {
                 if ((image.Width != unmanagedMaskImage.Width) ||
-                     (image.Height != unmanagedMaskImage.Height))
-                {
+                     (image.Height != unmanagedMaskImage.Height)) {
                     throw new ArgumentException("Invalid size of unmanaged mask image. Its size must be the same as the size of the image to mask.");
                 }
 
                 ProcessImage(image, rect, (byte*)unmanagedMaskImage.ImageData.ToPointer(),
                               unmanagedMaskImage.Stride);
-            }
-            else if (maskImage != null)
-            {
+            } else if (maskImage != null) {
                 if ((image.Width != maskImage.Width) ||
-                     (image.Height != maskImage.Height))
-                {
+                     (image.Height != maskImage.Height)) {
                     throw new ArgumentException("Invalid size of mask image. Its size must be the same as the size of the image to mask.");
                 }
 
                 BitmapData maskData = maskImage.LockBits(new Rectangle(0, 0, image.Width, image.Height),
                     ImageLockMode.ReadOnly, PixelFormat.Format8bppIndexed);
 
-                try
-                {
+                try {
                     ProcessImage(image, rect, (byte*)maskData.Scan0.ToPointer(),
                                   maskData.Stride);
-                }
-                finally
-                {
+                } finally {
                     maskImage.UnlockBits(maskData);
                 }
-            }
-            else
-            {
+            } else {
                 throw new InvalidOperationException("None of the possible mask properties were set. Need to provide mask before applying the filter.");
             }
         }
 
-        private static unsafe void ProcessImage(UnmanagedImage image, Rectangle rect, byte* mask, int maskLineSize)
-        {
+        private static unsafe void ProcessImage(UnmanagedImage image, Rectangle rect, byte* mask, int maskLineSize) {
             int pixelSize = Bitmap.GetPixelFormatSize(image.PixelFormat) / 8;
 
             int startY = rect.Top;
@@ -260,24 +229,19 @@ namespace Accord.Imaging.Filters
             // allign mask to the first pixel
             mask += maskLineSize * startY + startX;
 
-            if ((pixelSize <= 4) && (pixelSize != 2))
-            {
+            if ((pixelSize <= 4) && (pixelSize != 2)) {
                 // 8 bits per channel
                 byte* imagePtr = (byte*)image.ImageData.ToPointer() +
                                  stride * startY + pixelSize * startX;
                 int offset = stride - rect.Width * pixelSize;
 
                 #region 8 bit cases
-                switch (pixelSize)
-                {
+                switch (pixelSize) {
                     case 1:
                         // 8 bpp grayscale
-                        for (int y = startY; y < stopY; y++)
-                        {
-                            for (int x = startX; x < stopX; x++, imagePtr++, mask++)
-                            {
-                                if (*mask == 0)
-                                {
+                        for (int y = startY; y < stopY; y++) {
+                            for (int x = startX; x < stopX; x++, imagePtr++, mask++) {
+                                if (*mask == 0) {
                                     *imagePtr = 0;
                                 }
                             }
@@ -288,12 +252,9 @@ namespace Accord.Imaging.Filters
 
                     case 3:
                         // 24 bpp color
-                        for (int y = startY; y < stopY; y++)
-                        {
-                            for (int x = startX; x < stopX; x++, imagePtr += 3, mask++)
-                            {
-                                if (*mask == 0)
-                                {
+                        for (int y = startY; y < stopY; y++) {
+                            for (int x = startX; x < stopX; x++, imagePtr += 3, mask++) {
+                                if (*mask == 0) {
                                     imagePtr[RGB.R] = 0;
                                     imagePtr[RGB.G] = 0;
                                     imagePtr[RGB.B] = 0;
@@ -306,12 +267,9 @@ namespace Accord.Imaging.Filters
 
                     case 4:
                         // 32 bpp color
-                        for (int y = startY; y < stopY; y++)
-                        {
-                            for (int x = startX; x < stopX; x++, imagePtr += 4, mask++)
-                            {
-                                if (*mask == 0)
-                                {
+                        for (int y = startY; y < stopY; y++) {
+                            for (int x = startX; x < stopX; x++, imagePtr += 4, mask++) {
+                                if (*mask == 0) {
                                     imagePtr[RGB.R] = 0;
                                     imagePtr[RGB.G] = 0;
                                     imagePtr[RGB.B] = 0;
@@ -324,26 +282,20 @@ namespace Accord.Imaging.Filters
                         break;
                 }
                 #endregion
-            }
-            else
-            {
+            } else {
                 // 16 bits per channel
                 byte* imagePtrBase = (byte*)image.ImageData.ToPointer() +
                                      stride * startY + pixelSize * startX;
 
                 #region 16 bit cases
-                switch (pixelSize)
-                {
+                switch (pixelSize) {
                     case 2:
                         // 16 bpp grayscale
-                        for (int y = startY; y < stopY; y++)
-                        {
+                        for (int y = startY; y < stopY; y++) {
                             ushort* imagePtr = (ushort*)imagePtrBase;
 
-                            for (int x = startX; x < stopX; x++, imagePtr++, mask++)
-                            {
-                                if (*mask == 0)
-                                {
+                            for (int x = startX; x < stopX; x++, imagePtr++, mask++) {
+                                if (*mask == 0) {
                                     *imagePtr = 0;
                                 }
                             }
@@ -354,14 +306,11 @@ namespace Accord.Imaging.Filters
 
                     case 6:
                         // 16 bpp grayscale
-                        for (int y = startY; y < stopY; y++)
-                        {
+                        for (int y = startY; y < stopY; y++) {
                             ushort* imagePtr = (ushort*)imagePtrBase;
 
-                            for (int x = startX; x < stopX; x++, imagePtr += 3, mask++)
-                            {
-                                if (*mask == 0)
-                                {
+                            for (int x = startX; x < stopX; x++, imagePtr += 3, mask++) {
+                                if (*mask == 0) {
                                     imagePtr[RGB.R] = 0;
                                     imagePtr[RGB.G] = 0;
                                     imagePtr[RGB.B] = 0;
@@ -374,14 +323,11 @@ namespace Accord.Imaging.Filters
 
                     case 8:
                         // 16 bpp grayscale
-                        for (int y = startY; y < stopY; y++)
-                        {
+                        for (int y = startY; y < stopY; y++) {
                             ushort* imagePtr = (ushort*)imagePtrBase;
 
-                            for (int x = startX; x < stopX; x++, imagePtr += 4, mask++)
-                            {
-                                if (*mask == 0)
-                                {
+                            for (int x = startX; x < stopX; x++, imagePtr += 4, mask++) {
+                                if (*mask == 0) {
                                     imagePtr[RGB.R] = 0;
                                     imagePtr[RGB.G] = 0;
                                     imagePtr[RGB.B] = 0;

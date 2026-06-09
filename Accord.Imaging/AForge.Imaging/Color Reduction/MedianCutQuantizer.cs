@@ -6,8 +6,7 @@
 // contacts@aforgenet.com
 //
 
-namespace Accord.Imaging.ColorReduction
-{
+namespace Accord.Imaging.ColorReduction {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -37,8 +36,7 @@ namespace Accord.Imaging.ColorReduction
     /// 
     /// <seealso cref="ColorImageQuantizer"/>
     /// 
-    public class MedianCutQuantizer : IColorQuantizer
-    {
+    public class MedianCutQuantizer : IColorQuantizer {
         private List<Color> colors = new List<Color>();
 
         /// <summary>
@@ -51,8 +49,7 @@ namespace Accord.Imaging.ColorReduction
         /// is used later by <see cref="GetPalette"/> method to build reduced color table of the specified size.</para>
         /// </remarks>
         /// 
-        public void AddColor(Color color)
-        {
+        public void AddColor(Color color) {
             colors.Add(color);
         }
 
@@ -67,8 +64,7 @@ namespace Accord.Imaging.ColorReduction
         /// <remarks><para>The method must be called after continuously calling <see cref="AddColor"/> method and
         /// returns reduced color palette for colors accumulated/processed so far.</para></remarks>
         /// 
-        public Color[] GetPalette(int colorCount)
-        {
+        public Color[] GetPalette(int colorCount) {
             List<MedianCutCube> cubes = new List<MedianCutCube>();
             cubes.Add(new MedianCutCube(colors));
 
@@ -78,8 +74,7 @@ namespace Accord.Imaging.ColorReduction
             // get the final palette
             Color[] palette = new Color[colorCount];
 
-            for (int i = 0; i < colorCount; i++)
-            {
+            for (int i = 0; i < colorCount; i++) {
                 palette[i] = cubes[i].Color;
             }
 
@@ -91,32 +86,24 @@ namespace Accord.Imaging.ColorReduction
         /// so far processed.
         /// </summary>
         /// 
-        public void Clear()
-        {
+        public void Clear() {
             colors.Clear();
         }
 
         // Split specified list of cubes into smaller cubes until the list gets the specified size
-        private static void SplitCubes(List<MedianCutCube> cubes, int count)
-        {
+        private static void SplitCubes(List<MedianCutCube> cubes, int count) {
             int cubeIndexToSplit = cubes.Count - 1;
 
-            while (cubes.Count < count)
-            {
+            while (cubes.Count < count) {
                 MedianCutCube cubeToSplit = cubes[cubeIndexToSplit];
                 MedianCutCube cube1, cube2;
 
                 // find the longest color size to use for splitting
-                if ((cubeToSplit.RedSize >= cubeToSplit.GreenSize) && (cubeToSplit.RedSize >= cubeToSplit.BlueSize))
-                {
+                if ((cubeToSplit.RedSize >= cubeToSplit.GreenSize) && (cubeToSplit.RedSize >= cubeToSplit.BlueSize)) {
                     cubeToSplit.SplitAtMedian(RGB.R, out cube1, out cube2);
-                }
-                else if (cubeToSplit.GreenSize >= cubeToSplit.BlueSize)
-                {
+                } else if (cubeToSplit.GreenSize >= cubeToSplit.BlueSize) {
                     cubeToSplit.SplitAtMedian(RGB.G, out cube1, out cube2);
-                }
-                else
-                {
+                } else {
                     cubeToSplit.SplitAtMedian(RGB.B, out cube1, out cube2);
                 }
 
@@ -126,8 +113,7 @@ namespace Accord.Imaging.ColorReduction
                 cubes.Insert(cubeIndexToSplit, cube1);
                 cubes.Insert(cubeIndexToSplit, cube2);
 
-                if (--cubeIndexToSplit < 0)
-                {
+                if (--cubeIndexToSplit < 0) {
                     cubeIndexToSplit = cubes.Count - 1;
                 }
             }

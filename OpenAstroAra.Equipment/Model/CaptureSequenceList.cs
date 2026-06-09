@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -12,20 +12,20 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Astrometry;
+using OpenAstroAra.Core.Enums;
+using OpenAstroAra.Core.Locale;
+using OpenAstroAra.Core.Model.Equipment;
+using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Core.Utility.Notification;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Xml;
 using System.Xml.Serialization;
-using OpenAstroAra.Core.Enum;
-using OpenAstroAra.Core.Model.Equipment;
-using OpenAstroAra.Core.Locale;
-using System.Globalization;
 
 namespace OpenAstroAra.Equipment.Model {
 
@@ -39,16 +39,11 @@ namespace OpenAstroAra.Equipment.Model {
             Coordinates = new Coordinates(0, 0, Epoch.J2000, Coordinates.RAType.Hours);
         }
 
+        [NonSerialized]
         private AsyncObservableCollection<CaptureSequence> _items = new AsyncObservableCollection<CaptureSequence>();
 
         [XmlElement(nameof(CaptureSequence))]
-        public AsyncObservableCollection<CaptureSequence> Items {
-            get => _items;
-            set {
-                _items = value;
-                RaisePropertyChanged();
-            }
-        }
+        public AsyncObservableCollection<CaptureSequence> Items => _items;
 
         public IEnumerator<CaptureSequence> GetEnumerator() {
             return Items.GetEnumerator();
@@ -88,41 +83,42 @@ namespace OpenAstroAra.Equipment.Model {
                 using (StreamWriter writer = new StreamWriter(path)) {
                     xmlSerializer.Serialize(writer, this);
                 }
-            } catch (Exception ex) {
+            } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException or XmlException or InvalidOperationException) {
                 Logger.Error(ex);
-                Notification.ShowError(ex.Message);
+                Notifier.ShowError(ex.Message);
             }
         }
 
-        public static CaptureSequenceList Load(string fileName, ICollection<FilterInfo> filters, double latitude, double longitude) {
+        public static CaptureSequenceList? Load(string fileName, ICollection<FilterInfo> filters, double latitude, double longitude) {
             try {
                 using (var s = new FileStream(fileName, FileMode.Open)) {
                     return Load(s, fileName, filters, latitude, longitude);
                 }
-            } catch (Exception ex) {
+            } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException or XmlException or InvalidOperationException) {
                 Logger.Error(ex);
-                Notification.ShowError(ex.Message);
+                Notifier.ShowError(ex.Message);
                 return null;
             }
         }
 
-        public static CaptureSequenceList Load(Stream stream, string fileName, ICollection<FilterInfo> filters, double latitude, double longitude) {
-            CaptureSequenceList l = null;
+        public static CaptureSequenceList? Load(Stream stream, string fileName, ICollection<FilterInfo> filters, double latitude, double longitude) {
+            CaptureSequenceList? l = null;
             try {
                 XmlSerializer xmlSerializer = new XmlSerializer(typeof(CaptureSequenceList));
                 xmlSerializer.UnknownAttribute += XmlSerializer_UnknownAttribute;
 
-                l = (CaptureSequenceList)xmlSerializer.Deserialize(stream);
+                using var xmlReader = XmlReader.Create(stream, new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null });
+                l = (CaptureSequenceList)xmlSerializer.Deserialize(xmlReader)!;
                 foreach (var s in l.Items) {
                     // Migration of values prior to 3.0
                     if (s.ImageType == "DARKFLAT") {
-                        s.ImageType = CaptureSequence.ImageTypes.DARK;
+                        s.ImageType = ImageTypes.DARK;
                     }
                 }
                 AdjustSequenceToMatchCurrentProfile(filters, latitude, longitude, l);
-            } catch (Exception ex) {
+            } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException or XmlException or InvalidOperationException) {
                 Logger.Error(ex);
-                Notification.ShowError(Loc.Instance["LblLoadSequenceFailed"] + Environment.NewLine + ex.Message);
+                Notifier.ShowError(Loc.Instance["LblLoadSequenceFailed"] + Environment.NewLine + ex.Message);
             }
             return l;
         }
@@ -135,7 +131,7 @@ namespace OpenAstroAra.Equipment.Model {
                     if (filter == null) {
                         filter = filters.Where((f) => f.Position == s.FilterType.Position).FirstOrDefault();
                         if (filter == null) {
-                            Notification.ShowWarning(string.Format(Loc.Instance["LblFilterNotFoundForPosition"], (s.FilterType.Position + 1)));
+                            Notifier.ShowWarning(string.Format(CultureInfo.CurrentCulture, Loc.Instance["LblFilterNotFoundForPosition"], (s.FilterType.Position + 1)));
                         }
                     }
                     s.FilterType = filter;
@@ -151,39 +147,40 @@ namespace OpenAstroAra.Equipment.Model {
                 using (StreamWriter writer = new StreamWriter(path)) {
                     xmlSerializer.Serialize(writer, sequenceSet);
                 }
-            } catch (Exception ex) {
+            } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException or XmlException or InvalidOperationException) {
                 Logger.Error(ex);
-                Notification.ShowError(ex.Message);
+                Notifier.ShowError(ex.Message);
             }
         }
 
-        public static List<CaptureSequenceList> LoadSequenceSet(Stream stream, ICollection<FilterInfo> filters, double latitude, double longitude) {
-            List<CaptureSequenceList> c = null;
+        public static IReadOnlyList<CaptureSequenceList>? LoadSequenceSet(Stream stream, ICollection<FilterInfo> filters, double latitude, double longitude) {
+            List<CaptureSequenceList>? c = null;
             try {
                 XmlSerializer xmlSerializer = new XmlSerializer(typeof(List<CaptureSequenceList>));
-                xmlSerializer.UnknownAttribute += XmlSerializer_UnknownAttribute;                
+                xmlSerializer.UnknownAttribute += XmlSerializer_UnknownAttribute;
 
-                c = (List<CaptureSequenceList>)xmlSerializer.Deserialize(stream);
-                
+                using var xmlReader = XmlReader.Create(stream, new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null });
+                c = (List<CaptureSequenceList>)xmlSerializer.Deserialize(xmlReader)!;
+
                 foreach (var l in c) {
-                    foreach(var s in l.Items) {
+                    foreach (var s in l.Items) {
                         // Migration of values prior to 3.0
                         if (s.ImageType == "DARKFLAT") {
-                            s.ImageType = CaptureSequence.ImageTypes.DARK;
+                            s.ImageType = ImageTypes.DARK;
                         }
                     }
                     AdjustSequenceToMatchCurrentProfile(filters, latitude, longitude, l);
                 }
-            } catch (Exception ex) {
+            } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException or XmlException or InvalidOperationException) {
                 Logger.Error(ex);
-                Notification.ShowError(Loc.Instance["LblLoadSequenceSetFailed"] + Environment.NewLine + ex.Message);
+                Notifier.ShowError(Loc.Instance["LblLoadSequenceSetFailed"] + Environment.NewLine + ex.Message);
             }
             return c;
         }
 
-        private static void XmlSerializer_UnknownAttribute(object sender, XmlAttributeEventArgs e) {
-            var list = (CaptureSequenceList)e.ObjectBeingDeserialized;
-            if (e.Attr.Name == "Rotation") {
+        private static void XmlSerializer_UnknownAttribute(object? sender, XmlAttributeEventArgs e) {
+            var list = (CaptureSequenceList)e.ObjectBeingDeserialized!;
+            if (e.Attr!.Name == "Rotation") {
                 list.DeprecatedRotation = double.Parse(e.Attr.Value, CultureInfo.InvariantCulture);
             }
         }
@@ -199,7 +196,7 @@ namespace OpenAstroAra.Equipment.Model {
             this.DSO = dso;
         }
 
-        private string _targetName;
+        private string _targetName = string.Empty;
 
         [XmlAttribute(nameof(TargetName))]
         public string TargetName {
@@ -221,15 +218,15 @@ namespace OpenAstroAra.Equipment.Model {
             }
         }
 
-        public CaptureSequence GetNextSequenceItem(CaptureSequence currentItem) {
+        public CaptureSequence? GetNextSequenceItem(CaptureSequence currentItem) {
             if (Items.Count == 0) { return null; }
 
-            CaptureSequence seq = currentItem;
+            CaptureSequence? seq = currentItem;
 
             if (Mode == SequenceMode.STANDARD) {
                 if (seq?.ProgressExposureCount == seq?.TotalExposureCount) {
                     //No exposures remaining. Get next Sequence
-                    var idx = Items.IndexOf(seq) + 1;
+                    var idx = Items.IndexOf(seq!) + 1;
                     seq = Items.Skip(idx).Where(i => i.Enabled).FirstOrDefault();
                     if (seq != null) {
                         return GetNextSequenceItem(seq);
@@ -247,7 +244,7 @@ namespace OpenAstroAra.Equipment.Model {
                     seq = Items.First(i => i.Enabled);
                 } else {
                     do {
-                        var idx = (Items.IndexOf(seq) + 1) % Items.Count;
+                        var idx = (Items.IndexOf(seq!) + 1) % Items.Count;
                         seq = Items[idx];
                     } while (!seq.Enabled);
                 }
@@ -260,7 +257,7 @@ namespace OpenAstroAra.Equipment.Model {
             return seq;
         }
 
-        private Coordinates _coordinates;
+        private Coordinates _coordinates = null!;
 
         [XmlElement(nameof(Coordinates))]
         public Coordinates Coordinates {
@@ -400,8 +397,15 @@ namespace OpenAstroAra.Equipment.Model {
 
         [XmlAttribute(attributeName: "Rotation")]
         public double DeprecatedRotation {
+            get => 360 - PositionAngle;
             set => PositionAngle = 360 - value;
         }
+
+        // Legacy "Rotation" attribute is read-only migration input; never written back
+        // (PositionAngle is the current serialized form).
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822:Mark members as static",
+            Justification = "XmlSerializer discovers ShouldSerialize<Property> pattern methods by reflection and invokes them on the instance; the method must be a public instance member.")]
+        public bool ShouldSerializeDeprecatedRotation() => false;
 
         private void RaiseCoordinatesChanged() {
             RaisePropertyChanged(nameof(PositionAngle));
@@ -414,13 +418,14 @@ namespace OpenAstroAra.Equipment.Model {
                 RaisePropertyChanged(nameof(DecMinutes));
                 RaisePropertyChanged(nameof(DecSeconds));
                 DSO.Name = this.TargetName;
-                DSO.Coordinates = Coordinates;
+                DSO.Coordinates = Coordinates!;
                 DSO.RotationPositionAngle = PositionAngle;
                 NegativeDec = DSO?.Coordinates?.Dec < 0;
             }
         }
 
-        private DeepSkyObject _dso;
+        [NonSerialized]
+        private DeepSkyObject _dso = null!;
 
         [XmlIgnore]
         public DeepSkyObject DSO {
@@ -569,7 +574,7 @@ namespace OpenAstroAra.Equipment.Model {
             }
         }
 
-        private bool _autoFocusAfterTemperatureChange = false;
+        private bool _autoFocusAfterTemperatureChange;
 
         [XmlAttribute(nameof(AutoFocusAfterTemperatureChange))]
         public bool AutoFocusAfterTemperatureChange {
@@ -591,7 +596,7 @@ namespace OpenAstroAra.Equipment.Model {
             }
         }
 
-        private bool _autoFocusAfterHFRChange = false;
+        private bool _autoFocusAfterHFRChange;
 
         [XmlAttribute(nameof(AutoFocusAfterHFRChange))]
         public bool AutoFocusAfterHFRChange {

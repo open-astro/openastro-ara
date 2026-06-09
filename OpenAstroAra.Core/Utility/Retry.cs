@@ -8,9 +8,9 @@ using System.Threading.Tasks;
 namespace OpenAstroAra.Core.Utility {
     public static class Retry {
         public static Task Do(Action action, TimeSpan retryInterval, int maxAttemptCount = 3) {
-            return Do<object>(() => {
+            return Do(() => {
                 action();
-                return null;
+                return Task.CompletedTask;
             }, retryInterval, maxAttemptCount);
         }
 
@@ -36,9 +36,12 @@ namespace OpenAstroAra.Core.Utility {
                         await Task.Delay(retryInterval);
                     }
                     return await action();
-                } catch (Exception ex) {
+                }
+#pragma warning disable CA1031 // generic retry: the caller's action can throw any exception type; we collect them all and surface an AggregateException after the final attempt
+                catch (Exception ex) {
                     exceptions.Add(ex);
                 }
+#pragma warning restore CA1031
             }
             throw new AggregateException(exceptions);
         }

@@ -12,13 +12,14 @@
 
 #endregion "copyright"
 
-using System;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Sequencer.Conditions;
 using OpenAstroAra.Sequencer.SequenceItem;
 using OpenAstroAra.Sequencer.Trigger;
+using System;
+using System.Diagnostics.CodeAnalysis;
 
 namespace OpenAstroAra.Sequencer.Serialization {
 
@@ -40,27 +41,29 @@ namespace OpenAstroAra.Sequencer.Serialization {
 
         public override bool CanWrite => false;
 
-        public override object ReadJson(JsonReader reader,
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "Per-entity deserialization recovery boundary: any failure while resolving/creating/populating a single sequence entity (JSON, reflection, type-load, or cast faults) is logged and replaced with an Unknown* placeholder so one corrupt entity cannot fail the entire sequence load. CA1031 documents that catching general exceptions is acceptable at such recover-and-continue boundaries.")]
+        public override object? ReadJson(JsonReader reader,
                                         Type objectType,
-                                         object existingValue,
+                                         object? existingValue,
                                          JsonSerializer serializer) {
             if (reader.TokenType == JsonToken.Null) return null;
 
             // Load JObject from stream
             JObject jObject = JObject.Load(reader);
-            T target = default(T);
+            T? target = default(T);
             try {
 
                 if (jObject != null) {
                     if (jObject["$ref"] != null) {
-                        string id = (jObject["$ref"] as JValue).Value as string;
-                        target = (T)serializer.ReferenceResolver.ResolveReference(serializer, id);
+                        string? id = (jObject["$ref"] as JValue)?.Value as string;
+                        target = (T)serializer.ReferenceResolver!.ResolveReference(serializer, id!);
                     } else {
                         // Create target object based on JObject
                         target = Create(objectType, jObject);
 
                         // Populate the object properties
-                        serializer.Populate(jObject.CreateReader(), target);
+                        serializer.Populate(jObject.CreateReader(), target!);
                     }
                 }
             } catch (Exception ex) {
@@ -77,17 +80,17 @@ namespace OpenAstroAra.Sequencer.Serialization {
                     default:
                         return new UnknownSequenceItem(unknownEntityName);
                 }
-                
+
             }
 
             return target;
         }
 
-        public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer) {
+        public override void WriteJson(JsonWriter writer, object? value, JsonSerializer serializer) {
             throw new NotImplementedException();
         }
 
-        protected Type GetType(string typeString) {
+        protected Type? GetType(string typeString) {
             var t = Type.GetType(typeString);
             if (t != null) return t;
 
@@ -114,11 +117,11 @@ namespace OpenAstroAra.Sequencer.Serialization {
             // Pre-split assembly migration fallbacks. Only kicks in when the
             // namespace remap above didn't find a match, so legacy "single-
             // NINA-assembly" bodies still resolve.
-            t = Type.GetType(typeString.Replace(", NINA", ", OpenAstroAra.Sequencer"));
+            t = Type.GetType(typeString.Replace(", NINA", ", OpenAstroAra.Sequencer", StringComparison.Ordinal));
             if (t != null) return t;
-            t = Type.GetType(typeString.Replace(", NINA", ", OpenAstroAra.Core"));
+            t = Type.GetType(typeString.Replace(", NINA", ", OpenAstroAra.Core", StringComparison.Ordinal));
             if (t != null) return t;
-            t = Type.GetType(typeString.Replace(", NINA", ", OpenAstroAra.Astrometry"));
+            t = Type.GetType(typeString.Replace(", NINA", ", OpenAstroAra.Astrometry", StringComparison.Ordinal));
             return t;
         }
     }
@@ -140,9 +143,9 @@ namespace OpenAstroAra.Sequencer.Serialization {
         /// </summary>
         public static string RemapNamespace(string typeString) {
             return typeString
-                .Replace("NINA.Sequencer", "OpenAstroAra.Sequencer")
-                .Replace("NINA.Astrometry", "OpenAstroAra.Astrometry")
-                .Replace("NINA.Core", "OpenAstroAra.Core");
+                .Replace("NINA.Sequencer", "OpenAstroAra.Sequencer", StringComparison.Ordinal)
+                .Replace("NINA.Astrometry", "OpenAstroAra.Astrometry", StringComparison.Ordinal)
+                .Replace("NINA.Core", "OpenAstroAra.Core", StringComparison.Ordinal);
         }
     }
 }

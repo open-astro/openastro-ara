@@ -1,12 +1,11 @@
 // AForge Image Processing Library
 // AForge.NET framework
 //
-// Copyright © Andrew Kirillov, 2005-2008
+// Copyright ï¿½ Andrew Kirillov, 2005-2008
 // andrew.kirillov@gmail.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -35,26 +34,23 @@ namespace Accord.Imaging.Filters
     /// <img src="..\images\imaging\rotate_channels.jpg" width="480" height="361" />
     /// </remarks>
     /// 
-    public sealed class RotateChannels : BaseInPlacePartialFilter
-    {
+    public sealed class RotateChannels : BaseInPlacePartialFilter {
         // private format translation dictionary
-        private Dictionary<PixelFormat, PixelFormat> formatTranslations = new Dictionary<PixelFormat, PixelFormat>( );
+        private Dictionary<PixelFormat, PixelFormat> formatTranslations = new Dictionary<PixelFormat, PixelFormat>();
 
         /// <summary>
         /// Format translations dictionary.
         /// </summary>
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
         /// <summary>   
         /// Initializes a new instance of the <see cref="RotateChannels"/> class.
         /// </summary>
-        public RotateChannels( )
-        {
-            formatTranslations[PixelFormat.Format24bppRgb]  = PixelFormat.Format24bppRgb;
-            formatTranslations[PixelFormat.Format32bppRgb]  = PixelFormat.Format32bppRgb;
+        public RotateChannels() {
+            formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format24bppRgb;
+            formatTranslations[PixelFormat.Format32bppRgb] = PixelFormat.Format32bppRgb;
             formatTranslations[PixelFormat.Format32bppArgb] = PixelFormat.Format32bppArgb;
         }
 
@@ -65,29 +61,26 @@ namespace Accord.Imaging.Filters
         /// <param name="image">Source image data.</param>
         /// <param name="rect">Image rectangle for processing by the filter.</param>
         ///
-        protected override unsafe void ProcessFilter( UnmanagedImage image, Rectangle rect )
-        {
-            int pixelSize = ( image.PixelFormat == PixelFormat.Format24bppRgb ) ? 3 : 4;
+        protected override unsafe void ProcessFilter(UnmanagedImage image, Rectangle rect) {
+            int pixelSize = (image.PixelFormat == PixelFormat.Format24bppRgb) ? 3 : 4;
 
-            int startX  = rect.Left;
-            int startY  = rect.Top;
-            int stopX   = startX + rect.Width;
-            int stopY   = startY + rect.Height;
-            int offset  = image.Stride - rect.Width * pixelSize;
+            int startX = rect.Left;
+            int startY = rect.Top;
+            int stopX = startX + rect.Width;
+            int stopY = startY + rect.Height;
+            int offset = image.Stride - rect.Width * pixelSize;
 
             // do the job
-            byte* ptr = (byte*) image.ImageData.ToPointer( );
+            byte* ptr = (byte*)image.ImageData.ToPointer();
             byte t;
 
             // allign pointer to the first pixel to process
-            ptr += ( startY * image.Stride + startX * pixelSize );
+            ptr += (startY * image.Stride + startX * pixelSize);
 
             // for each line
-            for ( int y = startY; y < stopY; y++ )
-            {
+            for (int y = startY; y < stopY; y++) {
                 // for each pixel
-                for ( int x = startX; x < stopX; x++, ptr += pixelSize )
-                {
+                for (int x = startX; x < stopX; x++, ptr += pixelSize) {
                     // rotate colors of each pixel
                     t = ptr[RGB.R];
                     ptr[RGB.R] = ptr[RGB.G];

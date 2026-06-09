@@ -12,14 +12,14 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Enums;
 
 namespace OpenAstroAra.Equipment.Interfaces {
 
     public interface IPlanetariumFactory {
 
-        IPlanetarium GetPlanetarium();
+        IPlanetarium? GetPlanetarium();
 
-        IPlanetarium GetPlanetarium(PlanetariumEnum planetarium);
+        IPlanetarium? GetPlanetarium(Planetarium planetarium);
     }
 }

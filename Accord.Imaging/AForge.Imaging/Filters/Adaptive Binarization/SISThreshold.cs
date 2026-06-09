@@ -1,12 +1,11 @@
 // AForge Image Processing Library
 // AForge.NET framework
 //
-// Copyright © Andrew Kirillov, 2005-2009
+// Copyright ï¿½ Andrew Kirillov, 2005-2009
 // andrew.kirillov@aforgenet.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -46,8 +45,7 @@ namespace Accord.Imaging.Filters
     /// <seealso cref="IterativeThreshold"/>
     /// <seealso cref="OtsuThreshold"/>
     /// 
-    public class SISThreshold : BaseInPlacePartialFilter
-    {
+    public class SISThreshold : BaseInPlacePartialFilter {
         private Threshold thresholdFilter = new Threshold();
 
         // private format translation dictionary
@@ -56,8 +54,7 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Format translations dictionary.
         /// </summary>
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -68,8 +65,7 @@ namespace Accord.Imaging.Filters
         /// <remarks><para>The property is read only and represents the value, which
         /// was automaticaly calculated using image statistics.</para></remarks>
         /// 
-        public int ThresholdValue
-        {
+        public int ThresholdValue {
             get { return thresholdFilter.ThresholdValue; }
         }
 
@@ -77,8 +73,7 @@ namespace Accord.Imaging.Filters
         /// Initializes a new instance of the <see cref="SISThreshold"/> class.
         /// </summary>
         /// 
-        public SISThreshold()
-        {
+        public SISThreshold() {
             // initialize format translation dictionary
             formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
         }
@@ -98,8 +93,7 @@ namespace Accord.Imaging.Filters
         /// <exception cref="UnsupportedImageFormatException">Source pixel format is not supported by the routine. It should be
         /// 8 bpp grayscale (indexed) image.</exception>
         /// 
-        public int CalculateThreshold(Bitmap image, Rectangle rect)
-        {
+        public int CalculateThreshold(Bitmap image, Rectangle rect) {
             int calculatedThreshold = 0;
 
             // lock source bitmap data
@@ -107,12 +101,9 @@ namespace Accord.Imaging.Filters
                 new Rectangle(0, 0, image.Width, image.Height),
                 ImageLockMode.ReadOnly, image.PixelFormat);
 
-            try
-            {
+            try {
                 calculatedThreshold = CalculateThreshold(data, rect);
-            }
-            finally
-            {
+            } finally {
                 // unlock image
                 image.UnlockBits(data);
             }
@@ -135,8 +126,7 @@ namespace Accord.Imaging.Filters
         /// <exception cref="UnsupportedImageFormatException">Source pixel format is not supported by the routine. It should be
         /// 8 bpp grayscale (indexed) image.</exception>
         /// 
-        public int CalculateThreshold(BitmapData image, Rectangle rect)
-        {
+        public int CalculateThreshold(BitmapData image, Rectangle rect) {
             return CalculateThreshold(new UnmanagedImage(image), rect);
         }
 
@@ -155,8 +145,7 @@ namespace Accord.Imaging.Filters
         /// <exception cref="UnsupportedImageFormatException">Source pixel format is not supported by the routine. It should be
         /// 8 bpp grayscale (indexed) image.</exception>
         /// 
-        public static int CalculateThreshold(UnmanagedImage image, Rectangle rect)
-        {
+        public static int CalculateThreshold(UnmanagedImage image, Rectangle rect) {
             if (image.PixelFormat != PixelFormat.Format8bppIndexed)
                 throw new UnsupportedImageFormatException("Source pixel format is not supported by the routine.");
 
@@ -172,8 +161,7 @@ namespace Accord.Imaging.Filters
             // differences and weights
             double ex, ey, weight, weightTotal = 0, total = 0;
 
-            unsafe
-            {
+            unsafe {
                 // do the job
                 byte* ptr = (byte*)image.ImageData.ToPointer();
 
@@ -184,12 +172,10 @@ namespace Accord.Imaging.Filters
                 ptr += stride;
 
                 // for each line
-                for (int y = startY + 1; y < stopYM1; y++)
-                {
+                for (int y = startY + 1; y < stopYM1; y++) {
                     ptr++;
                     // for each pixels
-                    for (int x = startX + 1; x < stopXM1; x++, ptr++)
-                    {
+                    for (int x = startX + 1; x < stopXM1; x++, ptr++) {
                         // the equations are:
                         // ex = | I(x + 1, y) - I(x - 1, y) |
                         // ey = | I(x, y + 1) - I(x, y - 1) |
@@ -218,8 +204,7 @@ namespace Accord.Imaging.Filters
         /// <param name="image">Source image data.</param>
         /// <param name="rect">Image rectangle for processing by the filter.</param>
         /// 
-        protected override unsafe void ProcessFilter(UnmanagedImage image, Rectangle rect)
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage image, Rectangle rect) {
             // calculate threshold
             thresholdFilter.ThresholdValue = CalculateThreshold(image, rect);
 

@@ -1,17 +1,16 @@
 // AForge Image Processing Library
 // AForge.NET framework
 //
-// Copyright © AForge.NET, 2007-2014
+// Copyright ï¿½ AForge.NET, 2007-2014
 // aforge.net@gmail.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
+    using AForge;
     using System;
     using System.Collections.Generic;
     using System.Drawing;
     using System.Drawing.Imaging;
-    using AForge;
 
     /// <summary>
     /// Saturation adjusting in HSL color space.
@@ -39,8 +38,7 @@ namespace Accord.Imaging.Filters
     /// <img src="..\images\imaging\saturation_correction.jpg" width="480" height="361" />
     /// </remarks>
     /// 
-    public class SaturationCorrection : BaseInPlacePartialFilter
-    {
+    public class SaturationCorrection : BaseInPlacePartialFilter {
         private float adjustValue;	// [-1, 1]
 
         /// <summary>
@@ -50,8 +48,7 @@ namespace Accord.Imaging.Filters
         /// <remarks>Default value is set to <b>0.1</b>, which corresponds to increasing
         /// saturation by 10%.</remarks>
         /// 
-        public float AdjustValue
-        {
+        public float AdjustValue {
             get { return adjustValue; }
             set { adjustValue = Math.Max(-1.0f, Math.Min(1.0f, value)); }
         }
@@ -62,8 +59,7 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Format translations dictionary.
         /// </summary>
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -71,8 +67,7 @@ namespace Accord.Imaging.Filters
         /// Initializes a new instance of the <see cref="SaturationCorrection"/> class.
         /// </summary>
         /// 
-        public SaturationCorrection() : this(0.1f)
-        {
+        public SaturationCorrection() : this(0.1f) {
         }
 
         /// <summary>
@@ -81,8 +76,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <param name="adjustValue">Saturation adjust value.</param>
         /// 
-        public SaturationCorrection(float adjustValue)
-        {
+        public SaturationCorrection(float adjustValue) {
             AdjustValue = adjustValue;
 
             formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format24bppRgb;
@@ -98,8 +92,7 @@ namespace Accord.Imaging.Filters
         /// <param name="image">Source image data.</param>
         /// <param name="rect">Image rectangle for processing by the filter.</param>
         ///
-        protected override unsafe void ProcessFilter(UnmanagedImage image, Rectangle rect)
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage image, Rectangle rect) {
             int pixelSize = Bitmap.GetPixelFormatSize(image.PixelFormat) / 8;
 
             int startX = rect.Left;
@@ -120,11 +113,9 @@ namespace Accord.Imaging.Filters
             ptr += (startY * image.Stride + startX * pixelSize);
 
             // for each row
-            for (int y = startY; y < stopY; y++)
-            {
+            for (int y = startY; y < stopY; y++) {
                 // for each pixel
-                for (int x = startX; x < stopX; x++, ptr += pixelSize)
-                {
+                for (int x = startX; x < stopX; x++, ptr += pixelSize) {
                     rgb.Red = ptr[RGB.R];
                     rgb.Green = ptr[RGB.G];
                     rgb.Blue = ptr[RGB.B];
@@ -132,12 +123,9 @@ namespace Accord.Imaging.Filters
                     // convert to HSL
                     Accord.Imaging.HSL.FromRGB(rgb, ref hsl);
 
-                    if (adjustValue > 0)
-                    {
+                    if (adjustValue > 0) {
                         hsl.Saturation += (1.0f - hsl.Saturation) * adjustValue * hsl.Saturation;
-                    }
-                    else if (adjustValue < 0)
-                    {
+                    } else if (adjustValue < 0) {
                         hsl.Saturation *= desaturationChangeFactor;
                     }
 

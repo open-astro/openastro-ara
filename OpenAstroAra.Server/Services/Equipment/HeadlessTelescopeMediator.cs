@@ -1,3 +1,9 @@
+// Headless server stub: the device-event members in this file satisfy the
+// equipment mediator interfaces but are never raised server-side (the Flutter
+// client drives state over REST/WS), so CS0067 "event is never used" is
+// expected here and intentionally suppressed for the whole file.
+#pragma warning disable CS0067
+
 #region "copyright"
 
 /*
@@ -13,7 +19,7 @@
 #endregion "copyright"
 
 using OpenAstroAra.Astrometry;
-using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Equipment.Equipment.MyTelescope;
 using OpenAstroAra.Equipment.Interfaces;
@@ -50,7 +56,9 @@ public sealed class HeadlessTelescopeMediator : ITelescopeMediator {
     public string SendCommandString(string command, bool raw = true) => string.Empty;
     public bool SendCommandBool(string command, bool raw = true) => false;
     public void SendCommandBlind(string command, bool raw = true) { }
-    public IDevice GetDevice() => null!;
+    public IDevice GetDevice() =>
+        throw new NotSupportedException(
+            "Headless telescope stub has no backing IDevice; real Alpaca-backed wiring swaps in at the DI registration point once §14e Alpaca simulator pinning lands.");
 
     public event Func<object, EventArgs, Task>? Connected;
     public event Func<object, EventArgs, Task>? Disconnected;
@@ -66,7 +74,7 @@ public sealed class HeadlessTelescopeMediator : ITelescopeMediator {
     public Task<bool> SlewToCoordinatesAsync(Coordinates coords, CancellationToken token) =>
         Task.FromResult(false);
 
-    [Obsolete]
+    [Obsolete("Use SlewToTopocentricCoordinates instead.")]
     public Task<bool> SlewToCoordinatesAsync(TopocentricCoordinates coords, CancellationToken token) =>
         Task.FromResult(false);
 
@@ -99,11 +107,11 @@ public sealed class HeadlessTelescopeMediator : ITelescopeMediator {
 
     public PierSide DestinationSideOfPier(Coordinates coordinates) => PierSide.pierUnknown;
 
-    public event Func<object, BeforeMeridianFlipEventArgs, Task>? BeforeMeridianFlip;
-    public Task RaiseBeforeMeridianFlip(BeforeMeridianFlipEventArgs e) => Task.CompletedTask;
+    public event Func<object, BeforeMeridianFlipEventArgs, Task>? MeridianFlipping;
+    public Task RaiseMeridianFlipping(BeforeMeridianFlipEventArgs e) => Task.CompletedTask;
 
-    public event Func<object, AfterMeridianFlipEventArgs, Task>? AfterMeridianFlip;
-    public Task RaiseAfterMeridianFlip(AfterMeridianFlipEventArgs e) => Task.CompletedTask;
+    public event Func<object, AfterMeridianFlipEventArgs, Task>? MeridianFlipped;
+    public Task RaiseMeridianFlipped(AfterMeridianFlipEventArgs e) => Task.CompletedTask;
 
     public event Func<object, EventArgs, Task>? Parked;
     public event Func<object, EventArgs, Task>? Homed;

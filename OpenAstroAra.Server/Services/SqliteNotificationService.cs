@@ -12,10 +12,11 @@
 
 #endregion "copyright"
 
-using System.Text.Json;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using OpenAstroAra.Server.Contracts;
+using System.Text.Json;
 
 namespace OpenAstroAra.Server.Services;
 
@@ -25,7 +26,7 @@ namespace OpenAstroAra.Server.Services;
 /// the §28 catalog; preferences live as a JSON blob in <c>app_config</c>
 /// under the <c>notification_preferences</c> key.
 /// </summary>
-public sealed class SqliteNotificationService : INotificationService {
+public sealed partial class SqliteNotificationService : INotificationService {
     private const string PrefsKey = "notification_preferences";
 
     private static readonly Guid[] SampleIds = new[] {
@@ -35,11 +36,11 @@ public sealed class SqliteNotificationService : INotificationService {
     };
 
     private readonly IAraDatabase _db;
-    private readonly ILogger<SqliteNotificationService>? _logger;
+    private readonly ILogger<SqliteNotificationService> _logger;
 
     public SqliteNotificationService(IAraDatabase db, ILogger<SqliteNotificationService>? logger) {
         _db = db;
-        _logger = logger;
+        _logger = logger ?? NullLogger<SqliteNotificationService>.Instance;
     }
 
     /// <summary>
@@ -95,7 +96,7 @@ public sealed class SqliteNotificationService : INotificationService {
             RelatedEntityType: null,
             RelatedEntityId: null), ct);
 
-        _logger?.LogInformation("Seeded 3 sample notifications into catalog");
+        LogSeededNotifications();
     }
 
     public async Task<CursorPage<NotificationDto>> ListAsync(int limit, string? cursor, bool? unreadOnly, CancellationToken ct) {
@@ -270,4 +271,7 @@ public sealed class SqliteNotificationService : INotificationService {
             new NotificationCategoryPrefDto(NotificationCategory.Safety, true, NotificationSeverity.Info),
             new NotificationCategoryPrefDto(NotificationCategory.Alarm, true, NotificationSeverity.Warning),
         });
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Seeded 3 sample notifications into catalog")]
+    private partial void LogSeededNotifications();
 }

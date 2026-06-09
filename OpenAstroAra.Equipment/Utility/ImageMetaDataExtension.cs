@@ -12,23 +12,26 @@
 
 #endregion "copyright"
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using OpenAstroAra.Core.Enum;
-using System.Text;
-using System.Threading.Tasks;
-using OpenAstroAra.Image.ImageData;
+using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Equipment.Equipment.MyCamera;
-using OpenAstroAra.Equipment.Equipment.MyTelescope;
 using OpenAstroAra.Equipment.Equipment.MyFilterWheel;
 using OpenAstroAra.Equipment.Equipment.MyFocuser;
 using OpenAstroAra.Equipment.Equipment.MyRotator;
+using OpenAstroAra.Equipment.Equipment.MyTelescope;
 using OpenAstroAra.Equipment.Equipment.MyWeatherData;
 using OpenAstroAra.Equipment.Interfaces;
+using OpenAstroAra.Image.ImageData;
+using System;
+using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
 
 namespace OpenAstroAra.Equipment.Utility {
 
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort metadata population: each catch guards a single copy of a device-info field into ImageMetaData and substitutes a sentinel (NaN / -1) when the source getter throws (e.g. a value unavailable on the current driver, or an offline device). Capturing every field independently keeps one unreadable value from aborting the whole metadata snapshot. CA1031 sanctions general catches at such recover-and-continue boundaries.")]
     public static class ImageMetaDataExtension {
 
         public static void FromCamera(this ImageMetaData data, ICamera info) {
@@ -37,7 +40,7 @@ namespace OpenAstroAra.Equipment.Utility {
                 data.Camera.Name = info.Name;
                 try { data.Camera.Temperature = info.Temperature; } catch { data.Camera.Temperature = double.NaN; }
                 data.Camera.Gain = -1;
-                if(info.CanGetGain) {
+                if (info.CanGetGain) {
                     try { data.Camera.Gain = info.Gain; } catch { data.Camera.Gain = -1; }
                 }
                 try { data.Camera.Offset = info.Offset; } catch { data.Camera.Offset = -1; }
@@ -56,9 +59,9 @@ namespace OpenAstroAra.Equipment.Utility {
                 data.Camera.SensorType = info.SensorType;
 
                 if (data.Camera.SensorType != SensorType.Monochrome) {
-                    if (data.Camera.BayerPattern == BayerPatternEnum.None) { // Treat it like a monochrome camera (for mono-bin modes on OSCs)
+                    if (data.Camera.BayerPattern == BayerPattern.None) { // Treat it like a monochrome camera (for mono-bin modes on OSCs)
                         data.Camera.SensorType = SensorType.Monochrome;
-                    } else if (data.Camera.BayerPattern == BayerPatternEnum.Auto) { // Take the sensor type from the camera driver
+                    } else if (data.Camera.BayerPattern == BayerPattern.Auto) { // Take the sensor type from the camera driver
                         data.Camera.SensorType = info.SensorType;
                         data.Camera.BayerOffsetX = info.BayerOffsetX;
                         data.Camera.BayerOffsetY = info.BayerOffsetY;
@@ -93,9 +96,9 @@ namespace OpenAstroAra.Equipment.Utility {
                 data.Camera.SensorType = info.SensorType;
 
                 if (data.Camera.SensorType != SensorType.Monochrome) {
-                    if (data.Camera.BayerPattern == BayerPatternEnum.None) { // Treat it like a monochrome camera (for mono-bin modes on OSCs)
+                    if (data.Camera.BayerPattern == BayerPattern.None) { // Treat it like a monochrome camera (for mono-bin modes on OSCs)
                         data.Camera.SensorType = SensorType.Monochrome;
-                    } else if (data.Camera.BayerPattern == BayerPatternEnum.Auto) { // Take the sensor type from the camera driver
+                    } else if (data.Camera.BayerPattern == BayerPattern.Auto) { // Take the sensor type from the camera driver
                         data.Camera.SensorType = info.SensorType;
                         data.Camera.BayerOffsetX = info.BayerOffsetX;
                         data.Camera.BayerOffsetY = info.BayerOffsetY;

@@ -15,10 +15,10 @@
 using OpenAstroAra.Core.Utility;
 using System.ComponentModel;
 
-namespace OpenAstroAra.Core.Enum {
+namespace OpenAstroAra.Core.Enums {
 
     [TypeConverter(typeof(EnumDescriptionTypeConverter))]
-    public enum AutoUpdateSourceEnum {
+    public enum AutoUpdateSource {
 
         [Description("LblRelease")]
         RELEASE,

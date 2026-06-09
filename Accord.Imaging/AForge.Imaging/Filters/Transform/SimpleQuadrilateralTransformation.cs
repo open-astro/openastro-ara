@@ -6,8 +6,7 @@
 // andrew.kirillov@aforgenet.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using AForge;
     using System;
     using System.Collections.Generic;
@@ -66,8 +65,7 @@ namespace Accord.Imaging.Filters
     /// 
     /// <seealso cref="QuadrilateralTransformation"/>
     ///
-    public class SimpleQuadrilateralTransformation : BaseTransformationFilter
-    {
+    public class SimpleQuadrilateralTransformation : BaseTransformationFilter {
         private bool automaticSizeCalculaton = true;
         private bool useInterpolation = true;
 
@@ -81,8 +79,7 @@ namespace Accord.Imaging.Filters
         /// <remarks><para>See <see cref="IFilterInformation.FormatTranslations"/>
         /// documentation for additional information.</para></remarks>
         /// 
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -112,14 +109,11 @@ namespace Accord.Imaging.Filters
         /// <para>Default value is set to <see langword="true"/>.</para>
         /// </remarks>
         /// 
-        public bool AutomaticSizeCalculaton
-        {
+        public bool AutomaticSizeCalculaton {
             get { return automaticSizeCalculaton; }
-            set
-            {
+            set {
                 automaticSizeCalculaton = value;
-                if (value)
-                {
+                if (value) {
                     CalculateDestinationSize();
                 }
             }
@@ -139,14 +133,11 @@ namespace Accord.Imaging.Filters
         /// class itself for additional information.</para>
         /// </remarks>
         /// 
-        public List<IntPoint> SourceQuadrilateral
-        {
+        public List<IntPoint> SourceQuadrilateral {
             get { return sourceQuadrilateral; }
-            set
-            {
+            set {
                 sourceQuadrilateral = value;
-                if (automaticSizeCalculaton)
-                {
+                if (automaticSizeCalculaton) {
                     CalculateDestinationSize();
                 }
             }
@@ -164,13 +155,10 @@ namespace Accord.Imaging.Filters
         /// is calculated automatically based on <see cref="SourceQuadrilateral"/> property.</note></para>
         /// </remarks>
         /// 
-        public int NewWidth
-        {
+        public int NewWidth {
             get { return newWidth; }
-            set
-            {
-                if (!automaticSizeCalculaton)
-                {
+            set {
+                if (!automaticSizeCalculaton) {
                     newWidth = Math.Max(1, value);
                 }
             }
@@ -188,13 +176,10 @@ namespace Accord.Imaging.Filters
         /// is calculated automatically based on <see cref="SourceQuadrilateral"/> property.</note></para>
         /// </remarks>
         /// 
-        public int NewHeight
-        {
+        public int NewHeight {
             get { return newHeight; }
-            set
-            {
-                if (!automaticSizeCalculaton)
-                {
+            set {
+                if (!automaticSizeCalculaton) {
                     newHeight = Math.Max(1, value);
                 }
             }
@@ -208,8 +193,7 @@ namespace Accord.Imaging.Filters
         /// is used.</para>
         /// </remarks>
         /// 
-        public bool UseInterpolation
-        {
+        public bool UseInterpolation {
             get { return useInterpolation; }
             set { useInterpolation = value; }
         }
@@ -218,8 +202,7 @@ namespace Accord.Imaging.Filters
         /// Initializes a new instance of the <see cref="SimpleQuadrilateralTransformation"/> class.
         /// </summary>
         /// 
-        public SimpleQuadrilateralTransformation()
-        {
+        public SimpleQuadrilateralTransformation() {
             formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
             formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format24bppRgb;
             formatTranslations[PixelFormat.Format32bppRgb] = PixelFormat.Format32bppRgb;
@@ -240,8 +223,7 @@ namespace Accord.Imaging.Filters
         /// height as specified by user.</para></remarks>
         /// 
         public SimpleQuadrilateralTransformation(List<IntPoint> sourceQuadrilateral, int newWidth, int newHeight)
-            : this()
-        {
+            : this() {
             this.automaticSizeCalculaton = false;
             this.sourceQuadrilateral = sourceQuadrilateral;
             this.newWidth = newWidth;
@@ -259,8 +241,7 @@ namespace Accord.Imaging.Filters
         /// height automatically calculated based on <see cref="SourceQuadrilateral"/> property.</para></remarks>
         ///
         public SimpleQuadrilateralTransformation(List<IntPoint> sourceQuadrilateral)
-            : this()
-        {
+            : this() {
             this.automaticSizeCalculaton = true;
             this.sourceQuadrilateral = sourceQuadrilateral;
             CalculateDestinationSize();
@@ -276,8 +257,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <exception cref="NullReferenceException">Source quadrilateral was not set.</exception>
         /// 
-        protected override System.Drawing.Size CalculateNewImageSize(UnmanagedImage sourceData)
-        {
+        protected override System.Drawing.Size CalculateNewImageSize(UnmanagedImage sourceData) {
             if (sourceQuadrilateral == null)
                 throw new InvalidOperationException("Source quadrilateral was not set.");
 
@@ -285,8 +265,7 @@ namespace Accord.Imaging.Filters
         }
 
         // Calculates size of destination image
-        private void CalculateDestinationSize()
-        {
+        private void CalculateDestinationSize() {
             if (sourceQuadrilateral == null)
                 throw new InvalidOperationException("Source quadrilateral was not set.");
 
@@ -303,8 +282,7 @@ namespace Accord.Imaging.Filters
         /// <param name="sourceData">Source image data.</param>
         /// <param name="destinationData">Destination image data.</param>
         /// 
-        protected override unsafe void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData)
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData) {
             // get source and destination images size
             int srcWidth = sourceData.Width;
             int srcHeight = sourceData.Height;
@@ -348,26 +326,20 @@ namespace Accord.Imaging.Filters
             */
 
             // left edge
-            if (sourceQuadrilateral[3].X == sourceQuadrilateral[0].X)
-            {
+            if (sourceQuadrilateral[3].X == sourceQuadrilateral[0].X) {
                 kLeft = 0;
                 bLeft = sourceQuadrilateral[3].X;
-            }
-            else
-            {
+            } else {
                 kLeft = (double)(sourceQuadrilateral[3].Y - sourceQuadrilateral[0].Y) /
                                  (sourceQuadrilateral[3].X - sourceQuadrilateral[0].X);
                 bLeft = (double)sourceQuadrilateral[0].Y - kLeft * sourceQuadrilateral[0].X;
             }
 
             // right edge
-            if (sourceQuadrilateral[2].X == sourceQuadrilateral[1].X)
-            {
+            if (sourceQuadrilateral[2].X == sourceQuadrilateral[1].X) {
                 kRight = 0;
                 bRight = sourceQuadrilateral[2].X;
-            }
-            else
-            {
+            } else {
                 kRight = (double)(sourceQuadrilateral[2].Y - sourceQuadrilateral[1].Y) /
                                   (sourceQuadrilateral[2].X - sourceQuadrilateral[1].X);
                 bRight = (double)sourceQuadrilateral[1].Y - kRight * sourceQuadrilateral[1].X;
@@ -396,8 +368,7 @@ namespace Accord.Imaging.Filters
             byte* p1, p2, p3, p4, p;
 
             // for each line
-            for (int y = 0; y < dstHeight; y++)
-            {
+            for (int y = 0; y < dstHeight; y++) {
                 byte* dst = baseDst + dstStride * y;
 
                 // find corresponding Y on the left edge of the quadrilateral
@@ -413,51 +384,38 @@ namespace Accord.Imaging.Filters
                 // find equation of the line joining points on the left and right edges
                 double kHoriz, bHoriz;
 
-                if (xHorizLeft == xHorizRight)
-                {
+                if (xHorizLeft == xHorizRight) {
                     kHoriz = 0;
                     bHoriz = xHorizRight;
-                }
-                else
-                {
+                } else {
                     kHoriz = (yHorizRight - yHorizLeft) / (xHorizRight - xHorizLeft);
                     bHoriz = yHorizLeft - kHoriz * xHorizLeft;
                 }
 
                 double horizFactor = (xHorizRight - xHorizLeft) / dstWidth;
 
-                if (!useInterpolation)
-                {
-                    for (int x = 0; x < dstWidth; x++)
-                    {
+                if (!useInterpolation) {
+                    for (int x = 0; x < dstWidth; x++) {
                         double xs = horizFactor * x + xHorizLeft;
                         double ys = kHoriz * xs + bHoriz;
 
-                        if ((xs >= 0) && (ys >= 0) && (xs < srcWidth) && (ys < srcHeight))
-                        {
+                        if ((xs >= 0) && (ys >= 0) && (xs < srcWidth) && (ys < srcHeight)) {
                             // get pointer to the pixel in the source image
                             p = baseSrc + ((int)ys * srcStride + (int)xs * pixelSize);
                             // copy pixel's values
-                            for (int i = 0; i < pixelSize; i++, dst++, p++)
-                            {
+                            for (int i = 0; i < pixelSize; i++, dst++, p++) {
                                 *dst = *p;
                             }
-                        }
-                        else
-                        {
+                        } else {
                             dst += pixelSize;
                         }
                     }
-                }
-                else
-                {
-                    for (int x = 0; x < dstWidth; x++)
-                    {
+                } else {
+                    for (int x = 0; x < dstWidth; x++) {
                         double xs = horizFactor * x + xHorizLeft;
                         double ys = kHoriz * xs + bHoriz;
 
-                        if ((xs >= 0) && (ys >= 0) && (xs < srcWidth) && (ys < srcHeight))
-                        {
+                        if ((xs >= 0) && (ys >= 0) && (xs < srcWidth) && (ys < srcHeight)) {
                             sx1 = (int)xs;
                             sx2 = (sx1 == xmax) ? sx1 : sx1 + 1;
                             dx1 = xs - sx1;
@@ -478,15 +436,12 @@ namespace Accord.Imaging.Filters
                             p4 += sx2 * pixelSize;
 
                             // interpolate using 4 points
-                            for (int i = 0; i < pixelSize; i++, dst++, p1++, p2++, p3++, p4++)
-                            {
+                            for (int i = 0; i < pixelSize; i++, dst++, p1++, p2++, p3++, p4++) {
                                 *dst = (byte)(
                                     dy2 * (dx2 * (*p1) + dx1 * (*p2)) +
                                     dy1 * (dx2 * (*p3) + dx1 * (*p4)));
                             }
-                        }
-                        else
-                        {
+                        } else {
                             dst += pixelSize;
                         }
                     }

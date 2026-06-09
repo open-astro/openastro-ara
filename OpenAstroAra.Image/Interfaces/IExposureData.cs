@@ -12,7 +12,7 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Image.ImageData;
 using System;
@@ -24,7 +24,7 @@ namespace OpenAstroAra.Image.Interfaces {
         int BitDepth { get; }
         ImageMetaData MetaData { get; }
 
-        Task<IImageData> ToImageData(IProgress<ApplicationStatus> progress = default, CancellationToken cancelToken = default);
+        Task<IImageData> ToImageData(IProgress<ApplicationStatus>? progress = default, CancellationToken cancelToken = default);
     }
 
     public interface IExposureDataFactory {
@@ -33,7 +33,7 @@ namespace OpenAstroAra.Image.Interfaces {
 
         Flipped2DExposureData CreateFlipped2DExposureData(Array flipped2DArray, int bitDepth, bool isBayered, ImageMetaData metaData);
 
-        RAWExposureData CreateRAWExposureData(RawConverterEnum converter, byte[] rawBytes, string rawType, int bitDepth, ImageMetaData metaData);
+        RAWExposureData CreateRAWExposureData(RawConverter converter, byte[] rawBytes, string rawType, int bitDepth, ImageMetaData metaData);
 
         ImageArrayExposureData CreateImageArrayExposureData(ushort[] input, int width, int height, int bitDepth, bool isBayered, ImageMetaData metaData);
 

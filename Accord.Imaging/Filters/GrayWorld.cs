@@ -34,12 +34,11 @@
 //   POSSIBILITY OF SUCH DAMAGE.
 //
 
-namespace Accord.Imaging.Filters
-{
-    using System.Collections.Generic;
-    using System.Drawing.Imaging;
+namespace Accord.Imaging.Filters {
     using Accord.Imaging;
     using Accord.Imaging.Filters;
+    using System.Collections.Generic;
+    using System.Drawing.Imaging;
 
     /// <summary>
     ///   Gray World filter for color normalization.
@@ -87,16 +86,14 @@ namespace Accord.Imaging.Filters
     /// <img src="..\images\gray-world.png" /> 
     /// </example>
     /// 
-    public class GrayWorld : BaseInPlaceFilter
-    {
+    public class GrayWorld : BaseInPlaceFilter {
         Dictionary<PixelFormat, PixelFormat> formatTranslations;
 
         /// <summary>
         ///   Format translations dictionary.
         /// </summary>
         /// 
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -104,8 +101,7 @@ namespace Accord.Imaging.Filters
         ///   Initializes a new instance of the <see cref="GrayWorld"/> class.
         /// </summary>
         /// 
-        public GrayWorld()
-        {
+        public GrayWorld() {
             formatTranslations = new Dictionary<PixelFormat, PixelFormat>();
             formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format24bppRgb;
             formatTranslations[PixelFormat.Format32bppArgb] = PixelFormat.Format32bppArgb;
@@ -117,8 +113,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <param name="image">Source image data.</param>
         /// 
-        protected unsafe override void ProcessFilter(UnmanagedImage image)
-        {
+        protected unsafe override void ProcessFilter(UnmanagedImage image) {
             int width = image.Width;
             int height = image.Height;
 
@@ -132,10 +127,8 @@ namespace Accord.Imaging.Filters
 
             byte* src = (byte*)image.ImageData.ToPointer();
 
-            for (int y = 0; y < height; y++)
-            {
-                for (int x = 0; x < width; x++, src += pixelSize)
-                {
+            for (int y = 0; y < height; y++) {
+                for (int x = 0; x < width; x++, src += pixelSize) {
                     Rmean += src[RGB.R];
                     Gmean += src[RGB.G];
                     Bmean += src[RGB.B];
@@ -156,10 +149,8 @@ namespace Accord.Imaging.Filters
             double kb = mean / Bmean;
 
             src = (byte*)image.ImageData.ToPointer();
-            for (int y = 0; y < height; y++)
-            {
-                for (int x = 0; x < width; x++, src += pixelSize)
-                {
+            for (int y = 0; y < height; y++) {
+                for (int x = 0; x < width; x++, src += pixelSize) {
                     double r = kr * src[RGB.R];
                     double g = kg * src[RGB.G];
                     double b = kb * src[RGB.B];

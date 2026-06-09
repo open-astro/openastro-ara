@@ -13,9 +13,10 @@
 #endregion "copyright"
 
 using Newtonsoft.Json;
+using OpenAstroAra.Core.Locale;
 using OpenAstroAra.Core.Model;
-using OpenAstroAra.Sequencer.Validations;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Sequencer.Validations;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -24,7 +25,6 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using OpenAstroAra.Core.Locale;
 
 namespace OpenAstroAra.Sequencer.SequenceItem.Camera {
 
@@ -54,7 +54,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Camera {
 
         private ICameraMediator cameraMediator;
 
-        private double temperature = 0;
+        private double temperature;
 
         [JsonProperty]
         public double Temperature {

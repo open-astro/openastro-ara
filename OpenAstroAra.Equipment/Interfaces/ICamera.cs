@@ -12,7 +12,7 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Core.Model.Equipment;
 using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Equipment.Model;
@@ -93,11 +93,11 @@ namespace OpenAstroAra.Equipment.Interfaces {
 
         void AbortExposure();
 
-        Task<IExposureData> DownloadExposure(CancellationToken token);
+        Task<IExposureData?> DownloadExposure(CancellationToken token);
 
         void StartLiveView(CaptureSequence sequence);
 
-        Task<IExposureData> DownloadLiveView(CancellationToken token);
+        Task<IExposureData?> DownloadLiveView(CancellationToken token);
 
         void StopLiveView();
 

@@ -12,18 +12,18 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Core.Enum;
-using OpenAstroAra.Image.ImageData;
 using OpenAstroAra.Astrometry;
+using OpenAstroAra.Core.Enums;
+using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Image.ImageData;
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
-using OpenAstroAra.Core.Utility;
-using System.Collections.Generic;
 
 namespace OpenAstroAra.Image.FileFormat.XISF {
     /*
@@ -33,7 +33,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
     public class XISFHeader {
         public XDocument Content { get; private set; }
         public XElement MetaData { get; private set; }
-        public XElement Image { get; private set; }
+        public XElement? Image { get; private set; }
         public uint Size { get; private set; }
 
         private XElement Xisf;
@@ -53,13 +53,13 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
 
             MetaData = new XElement(xmlns + "Metadata");
 
-            AddMetaDataProperty(XISFMetaDataProperty.XISF.CreationTime, DateTime.UtcNow.ToString("o"));
+            AddMetaDataProperty(XISFMetaDataProperty.XISF.CreationTime, DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture));
             AddMetaDataProperty(XISFMetaDataProperty.XISF.CreatorApplication, CoreUtil.Title);
 
             Xisf.Add(MetaData);
 
             Content = new XDocument(
-                new XDeclaration("1.0", "UTF-8", null), 
+                new XDeclaration("1.0", "UTF-8", null),
                 Xisf
             );
         }
@@ -69,18 +69,20 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
         /// </summary>
         /// <param name="header"></param>
         public XISFHeader(XElement header) : this() {
-            MetaData = header.Element(xmlns + "Metadata");
-            if (MetaData == null) {
-                MetaData = header.Elements().FirstOrDefault(x => x.Name?.LocalName == "Metadata");
+            // Keep the empty Metadata element created by this() if the source has none.
+            var parsedMetaData = header.Element(xmlns + "Metadata")
+                ?? header.Elements().FirstOrDefault(x => x.Name?.LocalName == "Metadata");
+            if (parsedMetaData != null) {
+                MetaData = parsedMetaData;
             }
 
-            Image = header.Element(xmlns + "Image");
-            if (Image == null) {
-                Image = header.Elements().FirstOrDefault(x => x.Name?.LocalName == "Image");
-            }
+            Image = header.Element(xmlns + "Image")
+                ?? header.Elements().FirstOrDefault(x => x.Name?.LocalName == "Image");
 
             Xisf.Add(MetaData);
-            Xisf.Add(Image);
+            if (Image != null) {
+                Xisf.Add(Image);
+            }
         }
 
         public int ByteCount {
@@ -97,11 +99,11 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
             metaData.GenericHeaders = GetAllFITSKeywords();
 
             if (TryGetImageProperty(XISFImageProperty.Observation.Time.Start, out var value)) {
-                metaData.Image.ExposureStart = DateTime.Parse(value);
+                metaData.Image.ExposureStart = DateTime.Parse(value, CultureInfo.InvariantCulture);
             }
 
             if (TryGetFITSProperty("DATE-AVG", out value)) {
-                metaData.Image.ExposureMidPoint = DateTime.Parse(value);
+                metaData.Image.ExposureMidPoint = DateTime.Parse(value, CultureInfo.InvariantCulture);
             }
 
             if (TryGetImageProperty(XISFImageProperty.Instrument.ExposureTime, out value)) {
@@ -154,7 +156,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
             }
 
             if (TryGetFITSProperty("BAYERPAT", out value)) {
-                metaData.Camera.SensorType = metaData.StringToSensorType(value);
+                metaData.Camera.SensorType = ImageMetaData.StringToSensorType(value);
             }
 
             if (TryGetFITSProperty("XBAYEROFF", out value)) {
@@ -333,7 +335,8 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
         /// <returns>True if successful, false if invalid input or no info found for given key</returns>
         private bool TryGetImageProperty(string[] property, out string value) {
             value = string.Empty;
-            if (property?.Length < 2) { return false; }
+            if (property == null || property.Length < 2) { return false; }
+            if (Image is null) { return false; }
 
             string id = property[0];
             string type = property[1];
@@ -344,10 +347,11 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
             if (type == "String") {
                 value = elem.Value;
             } else {
-                if (elem.Attribute("value") == null) {
+                var attr = elem.Attribute("value");
+                if (attr == null) {
                     return false;
                 }
-                value = elem.Attribute("value").Value;
+                value = attr.Value;
             }
 
             return true;
@@ -361,17 +365,18 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
         /// <returns>True if successful, false if invalid input or no info found for given key</returns>
         private bool TryGetFITSProperty(string key, out string value) {
             value = string.Empty;
-            var elements = Image.Elements(xmlns + "FITSKeyword");
-            if (!elements.Any()) { return false; }
+            if (Image is null) { return false; }
+            var elements = Image.Elements(xmlns + "FITSKeyword").ToList();
+            if (elements.Count == 0) { return false; }
 
             var elem = elements.FirstOrDefault(el => el.Attribute("name")?.Value == key);
             if (elem == null) { return false; }
 
-            value = elem.Attribute("value").Value;
+            value = elem.Attribute("value")?.Value ?? string.Empty;
 
-            if (value.StartsWith("'")) {
+            if (value.StartsWith('\'')) {
                 value = value.Trim();
-                value = value.Remove(value.Length - 1, 1).Remove(0, 1).Replace(@"''", @"'");
+                value = value.Remove(value.Length - 1, 1).Remove(0, 1).Replace(@"''", @"'", StringComparison.Ordinal);
             }
 
             return true;
@@ -379,8 +384,9 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
 
         private List<IGenericMetaDataHeader> GetAllFITSKeywords() {
             var l = new List<IGenericMetaDataHeader>();
-            var elements = Image.Elements(xmlns + "FITSKeyword");
-            if (!elements.Any()) { return l; }
+            if (Image is null) { return l; }
+            var elements = Image.Elements(xmlns + "FITSKeyword").ToList();
+            if (elements.Count == 0) { return l; }
 
             foreach (var elem in elements) {
                 if (elem == null) { continue; }
@@ -388,18 +394,18 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                 var key = elem.Attribute("name")?.Value;
                 if (key == null) { continue; }
 
-                var value = elem.Attribute("value").Value;
+                var value = elem.Attribute("value")?.Value ?? string.Empty;
                 var comment = elem.Attribute("comment")?.Value ?? string.Empty;
 
 
-                if (value.StartsWith("'")) {
+                if (value.StartsWith('\'')) {
                     value = value.Trim();
-                    value = value.Remove(value.Length - 1, 1).Remove(0, 1).Replace(@"''", @"'");
+                    value = value.Remove(value.Length - 1, 1).Remove(0, 1).Replace(@"''", @"'", StringComparison.Ordinal);
                     l.Add(new StringMetaDataHeader(key, value, comment));
                 } else if (value == "T" || value == "F") {
                     var boolean = value.Trim() == "T" ? true : false;
                     l.Add(new BoolMetaDataHeader(key, boolean, comment));
-                } else if (value.Contains(".") && double.TryParse(value, CultureInfo.InvariantCulture, out var number)) {
+                } else if (value.Contains('.', StringComparison.Ordinal) && double.TryParse(value, CultureInfo.InvariantCulture, out var number)) {
                     l.Add(new DoubleMetaDataHeader(key, number, comment));
                 } else if (int.TryParse(value, out var integer)) {
                     l.Add(new IntMetaDataHeader(key, integer, comment));
@@ -469,15 +475,15 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                 AddImageFITSKeyword("READOUTM", metaData.Camera.ReadoutModeName, "Sensor readout mode");
             }
 
-            if (metaData.Camera.SensorType != SensorType.Monochrome && metaData.Camera.BayerPattern != BayerPatternEnum.None) {
-                AddImageFITSKeyword("BAYERPAT", metaData.Camera.SensorType.ToString().ToUpper(), "Sensor Bayer pattern");
+            if (metaData.Camera.SensorType != SensorType.Monochrome && metaData.Camera.BayerPattern != BayerPattern.None) {
+                AddImageFITSKeyword("BAYERPAT", metaData.Camera.SensorType.ToString().ToUpperInvariant(), "Sensor Bayer pattern");
                 AddImageFITSKeyword("XBAYROFF", metaData.Camera.BayerOffsetX, "Bayer pattern X axis offset");
                 AddImageFITSKeyword("YBAYROFF", metaData.Camera.BayerOffsetY, "Bayer pattern Y axis offset");
 
                 /*
                  * Add XISF ColorFilterArray element. We support only 2x2 bayer patterns for now.
                  */
-                AddCfaAttribute(metaData.Camera.SensorType.ToString().ToUpper(), 2, 2);
+                AddCfaAttribute(metaData.Camera.SensorType.ToString().ToUpperInvariant(), 2, 2);
             }
 
             if (metaData.Camera.USBLimit > -1) {
@@ -683,7 +689,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
             }
 
             AddImageProperty(XISFImageProperty.Observation.Equinox, 2000d, "Equinox of celestial coordinate system");
-            AddImageFITSKeyword("SWCREATE", string.Format("N.I.N.A. {0} ({1})", CoreUtil.Version, DllLoader.IsX86() ? "x86" : "x64"), "Software that created this file");
+            AddImageFITSKeyword("SWCREATE", string.Format(CultureInfo.InvariantCulture, "N.I.N.A. {0} ({1})", CoreUtil.Version, DllLoader.IsX86() ? "x86" : "x64"), "Software that created this file");
 
             foreach (var elem in metaData.GenericHeaders) {
                 switch (elem) {
@@ -802,16 +808,16 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
             AddImageFITSKeywordInternal(name, FloatToFitsString(value), comment);
         }
 
-        private string DoubleToFitsString(double value) {
+        private static string DoubleToFitsString(double value) {
             return value.ToString("0.0##############", CultureInfo.InvariantCulture);
         }
 
-        private string FloatToFitsString(float value) {
+        private static string FloatToFitsString(float value) {
             return value.ToString("0.0##############", CultureInfo.InvariantCulture);
         }
 
         private void AddProperty(XElement elem, string[] property, string value, string comment = "") {
-            if (property?.Length < 2 || elem == null) {
+            if (property == null || property.Length < 2 || elem == null) {
                 return;
             }
             string id = property[0];
@@ -836,7 +842,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
             elem.Add(xelem);
         }
 
-        private PierSide ParsePierSide(string value) {
+        private static PierSide ParsePierSide(string value) {
             var strVal = value.Trim();
 
             if (strVal.StartsWith("west", true, CultureInfo.InvariantCulture)) {
@@ -877,7 +883,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
         /// <param name="imageProperties"></param>
         /// <param name="imageType"></param>
         public void AddImageMetaData(ImageProperties imageProperties, string imageType, XISFSampleFormat format = XISFSampleFormat.UInt16) {
-            if (imageType == "SNAPSHOT") { imageType = "LIGHT"; } 
+            if (imageType == "SNAPSHOT") { imageType = "LIGHT"; }
 
             XElement image = new XElement(xmlns + "Image",
                     new XAttribute("geometry", imageProperties.Width + ":" + imageProperties.Height + ":" + "1"),

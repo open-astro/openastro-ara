@@ -22,7 +22,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.MetaGuide {
         private MetaGuideMountMsg() {
         }
 
-        public static MetaGuideMountMsg Create(string[] args) {
+        public static MetaGuideMountMsg? Create(string[] args) {
             if (args.Length < 6) {
                 return null;
             }
@@ -30,12 +30,12 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.MetaGuide {
                 return new MetaGuideMountMsg() {
                     MountName = args[5]
                 };
-            } catch (Exception ex) {
+            } catch (Exception ex) when (ex is FormatException or OverflowException) {
                 Logger.Error(ex);
                 return null;
             }
         }
 
-        public string MountName { get; private set; }
+        public string MountName { get; private set; } = string.Empty;
     }
 }

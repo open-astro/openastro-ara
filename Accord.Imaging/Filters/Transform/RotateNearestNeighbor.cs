@@ -2,10 +2,10 @@
 // AForge/Accord.NET Framework
 // http://accord-framework.net
 //
-// Copyright © AForge.NET, 2005-2015
+// Copyright ï¿½ AForge.NET, 2005-2015
 // contacts@aforgenet.com
 //
-// Copyright © César Souza, 2009-2017
+// Copyright ï¿½ Cï¿½sar Souza, 2009-2017
 // cesarsouza at gmail.com
 //
 //    This library is free software; you can redistribute it and/or
@@ -23,8 +23,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using Accord.Imaging;
     using Accord.Imaging.Filters;
     using System;
@@ -61,8 +60,7 @@ namespace Accord.Imaging.Filters
     /// <seealso cref="RotateBilinear"/>
     /// <seealso cref="RotateBicubic"/>
     /// 
-    public class RotateNearestNeighbor : BaseRotateFilter
-    {
+    public class RotateNearestNeighbor : BaseRotateFilter {
         // format translation dictionary
         private Dictionary<PixelFormat, PixelFormat> formatTranslations = new Dictionary<PixelFormat, PixelFormat>();
 
@@ -70,8 +68,7 @@ namespace Accord.Imaging.Filters
         /// Format translations dictionary.
         /// </summary>
         /// 
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -86,8 +83,7 @@ namespace Accord.Imaging.Filters
         /// </para></remarks>
         /// 
         public RotateNearestNeighbor(double angle)
-            : this(angle, false)
-        {
+            : this(angle, false) {
         }
 
         /// <summary>
@@ -98,8 +94,7 @@ namespace Accord.Imaging.Filters
         /// <param name="keepSize">Keep image size or not.</param>
         /// 
         public RotateNearestNeighbor(double angle, bool keepSize)
-            : base(angle, keepSize)
-        {
+            : base(angle, keepSize) {
             formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
             formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format24bppRgb;
             formatTranslations[PixelFormat.Format32bppRgb] = PixelFormat.Format32bppRgb;
@@ -115,12 +110,10 @@ namespace Accord.Imaging.Filters
         /// <param name="sourceData">Source image data.</param>
         /// <param name="destinationData">Destination image data.</param>
         /// 
-        protected override void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData)
-        {
+        protected override void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData) {
             int pixelSize = Bitmap.GetPixelFormatSize(sourceData.PixelFormat) / 8;
 
-            switch (pixelSize)
-            {
+            switch (pixelSize) {
                 case 1:
                 case 3:
                     ProcessFilter8bpc(sourceData, destinationData);
@@ -133,8 +126,7 @@ namespace Accord.Imaging.Filters
         }
 
         // Process the filter on the image with 8 bits per color channel
-        private unsafe void ProcessFilter8bpc(UnmanagedImage sourceData, UnmanagedImage destinationData)
-        {
+        private unsafe void ProcessFilter8bpc(UnmanagedImage sourceData, UnmanagedImage destinationData) {
             // get source image size
             int width = sourceData.Width;
             int height = sourceData.Height;
@@ -174,27 +166,21 @@ namespace Accord.Imaging.Filters
             byte* p;
 
             // check pixel format
-            if (destinationData.PixelFormat == PixelFormat.Format8bppIndexed)
-            {
+            if (destinationData.PixelFormat == PixelFormat.Format8bppIndexed) {
                 // grayscale
                 cy = -newYradius;
-                for (int y = 0; y < newHeight; y++)
-                {
+                for (int y = 0; y < newHeight; y++) {
                     cx = -newXradius;
-                    for (int x = 0; x < newWidth; x++, dst++)
-                    {
+                    for (int x = 0; x < newWidth; x++, dst++) {
                         // coordinate of the nearest point
                         ox = (int)(angleCos * cx + angleSin * cy + oldXradius);
                         oy = (int)(-angleSin * cx + angleCos * cy + oldYradius);
 
                         // validate source pixel's coordinates
-                        if ((ox < 0) || (oy < 0) || (ox >= width) || (oy >= height))
-                        {
+                        if ((ox < 0) || (oy < 0) || (ox >= width) || (oy >= height)) {
                             // fill destination image with filler
                             *dst = fillG;
-                        }
-                        else
-                        {
+                        } else {
                             // fill destination image with pixel from source image
                             *dst = src[oy * srcStride + ox];
                         }
@@ -203,31 +189,24 @@ namespace Accord.Imaging.Filters
                     cy++;
                     dst += dstOffset;
                 }
-            }
-            else if (destinationData.PixelFormat == PixelFormat.Format24bppRgb
-                  || destinationData.PixelFormat == PixelFormat.Format32bppRgb)
-            {
+            } else if (destinationData.PixelFormat == PixelFormat.Format24bppRgb
+                    || destinationData.PixelFormat == PixelFormat.Format32bppRgb) {
                 // RGB
                 cy = -newYradius;
-                for (int y = 0; y < newHeight; y++)
-                {
+                for (int y = 0; y < newHeight; y++) {
                     cx = -newXradius;
-                    for (int x = 0; x < newWidth; x++, dst += 3)
-                    {
+                    for (int x = 0; x < newWidth; x++, dst += 3) {
                         // coordinate of the nearest point
                         ox = (int)(angleCos * cx + angleSin * cy + oldXradius);
                         oy = (int)(-angleSin * cx + angleCos * cy + oldYradius);
 
                         // validate source pixel's coordinates
-                        if ((ox < 0) || (oy < 0) || (ox >= width) || (oy >= height))
-                        {
+                        if ((ox < 0) || (oy < 0) || (ox >= width) || (oy >= height)) {
                             // fill destination image with filler
                             dst[RGB.R] = fillR;
                             dst[RGB.G] = fillG;
                             dst[RGB.B] = fillB;
-                        }
-                        else
-                        {
+                        } else {
                             // fill destination image with pixel from source image
                             p = src + oy * srcStride + ox * 3;
 
@@ -240,31 +219,24 @@ namespace Accord.Imaging.Filters
                     cy++;
                     dst += dstOffset;
                 }
-            }
-            else if (destinationData.PixelFormat == PixelFormat.Format32bppArgb)
-            {
+            } else if (destinationData.PixelFormat == PixelFormat.Format32bppArgb) {
                 // ARGB
                 cy = -newYradius;
-                for (int y = 0; y < newHeight; y++)
-                {
+                for (int y = 0; y < newHeight; y++) {
                     cx = -newXradius;
-                    for (int x = 0; x < newWidth; x++, dst += 3)
-                    {
+                    for (int x = 0; x < newWidth; x++, dst += 3) {
                         // coordinate of the nearest point
                         ox = (int)(angleCos * cx + angleSin * cy + oldXradius);
                         oy = (int)(-angleSin * cx + angleCos * cy + oldYradius);
 
                         // validate source pixel's coordinates
-                        if ((ox < 0) || (oy < 0) || (ox >= width) || (oy >= height))
-                        {
+                        if ((ox < 0) || (oy < 0) || (ox >= width) || (oy >= height)) {
                             // fill destination image with filler
                             dst[RGB.A] = fillA;
                             dst[RGB.R] = fillR;
                             dst[RGB.G] = fillG;
                             dst[RGB.B] = fillB;
-                        }
-                        else
-                        {
+                        } else {
                             // fill destination image with pixel from source image
                             p = src + oy * srcStride + ox * 3;
 
@@ -278,17 +250,14 @@ namespace Accord.Imaging.Filters
                     cy++;
                     dst += dstOffset;
                 }
-            }
-            else
-            {
+            } else {
                 // We should never reach here.
                 throw new InvalidOperationException("Pixel format should have been validated before.");
             }
         }
 
         // Process the filter on the image with 16 bits per color channel.
-        private unsafe void ProcessFilter16bpc(UnmanagedImage sourceData, UnmanagedImage destinationData)
-        {
+        private unsafe void ProcessFilter16bpc(UnmanagedImage sourceData, UnmanagedImage destinationData) {
             // get source image size
             int width = sourceData.Width;
             int height = sourceData.Height;
@@ -326,29 +295,23 @@ namespace Accord.Imaging.Filters
             ushort* p;
 
             // check pixel format
-            if (destinationData.PixelFormat == PixelFormat.Format16bppGrayScale)
-            {
+            if (destinationData.PixelFormat == PixelFormat.Format16bppGrayScale) {
                 // grayscale
                 cy = -halfNewHeight;
-                for (int y = 0; y < newHeight; y++)
-                {
+                for (int y = 0; y < newHeight; y++) {
                     ushort* dst = (ushort*)(dstBase + y * dstStride);
 
                     cx = -halfNewWidth;
-                    for (int x = 0; x < newWidth; x++, dst++)
-                    {
+                    for (int x = 0; x < newWidth; x++, dst++) {
                         // coordinate of the nearest point
                         ox = (int)(angleCos * cx + angleSin * cy + halfWidth);
                         oy = (int)(-angleSin * cx + angleCos * cy + halfHeight);
 
                         // validate source pixel's coordinates
-                        if ((ox < 0) || (oy < 0) || (ox >= width) || (oy >= height))
-                        {
+                        if ((ox < 0) || (oy < 0) || (ox >= width) || (oy >= height)) {
                             // fill destination image with filler
                             *dst = fillG;
-                        }
-                        else
-                        {
+                        } else {
                             // fill destination image with pixel from source image
                             p = (ushort*)(src + oy * srcStride + ox * 2);
                             *dst = *p;
@@ -357,32 +320,25 @@ namespace Accord.Imaging.Filters
                     }
                     cy++;
                 }
-            }
-            else
-            {
+            } else {
                 // RGB
                 cy = -halfNewHeight;
-                for (int y = 0; y < newHeight; y++)
-                {
+                for (int y = 0; y < newHeight; y++) {
                     ushort* dst = (ushort*)(dstBase + y * dstStride);
 
                     cx = -halfNewWidth;
-                    for (int x = 0; x < newWidth; x++, dst += 3)
-                    {
+                    for (int x = 0; x < newWidth; x++, dst += 3) {
                         // coordinate of the nearest point
                         ox = (int)(angleCos * cx + angleSin * cy + halfWidth);
                         oy = (int)(-angleSin * cx + angleCos * cy + halfHeight);
 
                         // validate source pixel's coordinates
-                        if ((ox < 0) || (oy < 0) || (ox >= width) || (oy >= height))
-                        {
+                        if ((ox < 0) || (oy < 0) || (ox >= width) || (oy >= height)) {
                             // fill destination image with filler
                             dst[RGB.R] = fillR;
                             dst[RGB.G] = fillG;
                             dst[RGB.B] = fillB;
-                        }
-                        else
-                        {
+                        } else {
                             // fill destination image with pixel from source image
                             p = (ushort*)(src + oy * srcStride + ox * 6);
 

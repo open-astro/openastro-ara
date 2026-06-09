@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -13,8 +13,8 @@
 #endregion "copyright"
 
 using Moq;
-using OpenAstroAra.Core.Utility.SerialCommunication;
 using NUnit.Framework;
+using OpenAstroAra.Core.Utility.SerialCommunication;
 using System;
 using System.IO;
 using System.IO.Ports;
@@ -22,10 +22,10 @@ using System.Threading.Tasks;
 
 namespace OpenAstroAra.Test.SerialCommunication {
 
-    internal class TestSdk : SerialSdk {
+    internal sealed class TestSdk : SerialSdk {
     }
 
-    internal class TestCacheableResponse : Response {
+    internal sealed class TestCacheableResponse : Response {
         public override int Ttl => 500;
     }
 
@@ -48,6 +48,11 @@ namespace OpenAstroAra.Test.SerialCommunication {
             _mockCommand.Setup(m => m.HasResponse).Returns(true);
             _mockSerialPort.Reset();
             _sut = new TestSdk { SerialPort = _mockSerialPort.Object };
+        }
+
+        [TearDown]
+        public void Cleanup() {
+            _sut?.Dispose();
         }
 
         [Test]
@@ -114,7 +119,7 @@ namespace OpenAstroAra.Test.SerialCommunication {
                     It.IsAny<int>(), It.IsAny<Parity>(), It.IsAny<int>(),
                     It.IsAny<StopBits>(), It.IsAny<Handshake>(), It.IsAny<bool>(),
                     It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>()))
-                .Throws(new Exception());
+                .Throws(new System.IO.IOException());
 
             var result = _sut.InitializeSerialPort("COM3", this);
 
@@ -132,7 +137,7 @@ namespace OpenAstroAra.Test.SerialCommunication {
 
             var result = await _sut.SendCommand<TestResponse>(_mockCommand.Object);
 
-            Assert.That(result, Is.TypeOf(typeof(TestResponse)));
+            Assert.That(result, Is.TypeOf<TestResponse>());
             Assert.That(result.CheckDeviceResponse(DEVICE_RESPONSE), Is.True);
             _mockSerialPort.Verify(m => m.Write(It.IsAny<string>()), Times.Once);
         }
@@ -172,7 +177,7 @@ namespace OpenAstroAra.Test.SerialCommunication {
 
             var result = await _sut.SendCommand<TestResponse>(_mockCommand.Object);
 
-            Assert.That(result, Is.TypeOf(typeof(TestResponse)));
+            Assert.That(result, Is.TypeOf<TestResponse>());
             _mockSerialPort.Verify(m => m.Write(It.IsAny<string>()), Times.Once);
         }
 
@@ -184,7 +189,7 @@ namespace OpenAstroAra.Test.SerialCommunication {
 
             var result = await _sut.SendCommand<TestResponse>(_mockCommand.Object);
 
-            Assert.That(result, Is.TypeOf(typeof(TestResponse)));
+            Assert.That(result, Is.TypeOf<TestResponse>());
             _mockSerialPort.Verify(m => m.Write(It.IsAny<string>()), Times.Once);
             _mockSerialPort.Verify(m => m.ReadLine(), Times.Exactly(2));
         }
@@ -201,7 +206,7 @@ namespace OpenAstroAra.Test.SerialCommunication {
         [Test]
         public void TestSendCommandTimeoutOnReadNonRecoverableExceptionDuringCleanup() {
             _mockSerialPort.Setup(m => m.ReadLine()).Throws(new TimeoutException());
-            _mockSerialPort.Setup(m => m.BytesToRead).Throws(new Exception());
+            _mockSerialPort.Setup(m => m.BytesToRead).Throws(new InvalidOperationException());
 
             Assert.That(async () => await _sut.SendCommand<TestResponse>(_mockCommand.Object), Throws.TypeOf<SerialPortClosedException>());
 
@@ -236,7 +241,7 @@ namespace OpenAstroAra.Test.SerialCommunication {
             _mockSerialPort.Setup(m => m.ReadLine()).Returns(DEVICE_RESPONSE2);
             var result2 = await _sut.SendCommand<TestResponse>(_mockCommand.Object);
 
-            Assert.That(result1.Equals(result2), Is.False);
+            Assert.That(result1!.Equals(result2), Is.False);
         }
 
         [Test]
@@ -247,7 +252,7 @@ namespace OpenAstroAra.Test.SerialCommunication {
             _mockSerialPort.Setup(m => m.ReadLine()).Returns(DEVICE_RESPONSE2);
             var result2 = await _sut.SendCommand<TestCacheableResponse>(_mockCommand.Object);
 
-            Assert.That(result1.Equals(result2), Is.True);
+            Assert.That(result1!.Equals(result2), Is.True);
         }
 
         [Test]

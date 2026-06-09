@@ -63,7 +63,8 @@ namespace OpenAstroAra.Equipment.Equipment.MyDome {
             get {
                 if (DriverFollowing) {
                     return Loc.Instance["LblDomeFollowingViaDriver"];
-                } if (ApplicationFollowing) {
+                }
+                if (ApplicationFollowing) {
                     return Loc.Instance["LblDomeFollowingViaNINA"];
                 }
                 return Loc.Instance["LblOff"];

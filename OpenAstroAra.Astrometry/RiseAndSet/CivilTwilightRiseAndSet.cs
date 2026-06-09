@@ -5,7 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace OpenAstroAra.Astrometry.RiseAndSet {
-    internal class CivilTwilightRiseAndSet : SunCustomRiseAndSet {
+    internal sealed class CivilTwilightRiseAndSet : SunCustomRiseAndSet {
         [Obsolete("Use method with elevation parameter instead")]
         public CivilTwilightRiseAndSet(DateTime date, double latitude, double longitude) : this(date, latitude, longitude, elevation: 0) { }
 

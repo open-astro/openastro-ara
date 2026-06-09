@@ -27,6 +27,6 @@ namespace OpenAstroAra.Astrometry.Body {
 
         protected override string Name => "Sun";
 
-        protected override NOVAS.Body BodyNumber => NOVAS.Body.Sun;
+        private protected override NOVAS.Body BodyNumber => NOVAS.Body.Sun;
     }
 }

@@ -25,7 +25,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyFilterWheel {
             set { isMoving = value; RaisePropertyChanged(); }
         }
 
-        private FilterInfo _selectedFilter;
+        private FilterInfo _selectedFilter = null!;
 
         public FilterInfo SelectedFilter {
             get => _selectedFilter;
@@ -35,14 +35,8 @@ namespace OpenAstroAra.Equipment.Equipment.MyFilterWheel {
             }
         }
 
-        private IList<string> supportedActions;
+        private IList<string> supportedActions = new List<string>();
 
-        public IList<string> SupportedActions {
-            get => supportedActions;
-            set {
-                supportedActions = value;
-                RaisePropertyChanged();
-            }
-        }
+        public IList<string> SupportedActions => supportedActions;
     }
 }

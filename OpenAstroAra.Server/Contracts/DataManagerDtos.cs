@@ -29,7 +29,7 @@ public sealed record DataPackageDto(
     string Version,
     bool IsInstalled,
     DateTimeOffset? InstalledUtc,
-    string? SourceUrl);
+    Uri? SourceUrl);
 
 /// <summary>POST /api/v1/data-manager/download body.</summary>
 public sealed record DownloadRequestDto(
@@ -56,7 +56,7 @@ public sealed record BugReportPreparationDto(
     Guid PreparationId,
     string Status,
     long EstimatedSizeBytes,
-    string? DownloadUrl,
+    Uri? DownloadUrl,
     DateTimeOffset? CompletedUtc);
 
 // ─── Full backup (ZIP / restore) (§43) ──────────────────────────────────────
@@ -66,11 +66,11 @@ public sealed record BackupZipDto(
     DateTimeOffset CreatedUtc,
     long SizeBytes,
     string Sha256,
-    string DownloadUrl,
+    Uri DownloadUrl,
     IReadOnlyList<string> IncludedAreas);
 
 public sealed record RestoreRequestDto(
-    string BackupSourceUrl,
+    Uri BackupSourceUrl,
     bool RestoreSequences,
     bool RestoreProfiles,
     bool RestoreFrameMetadata,
@@ -83,7 +83,7 @@ public sealed record ProfileShareDto(
     string ProfileName,
     System.Text.Json.JsonElement Manifest,
     long PayloadBytes,
-    string DownloadUrl);
+    Uri DownloadUrl);
 
 public sealed record ProfileShareImportPreviewDto(
     Guid ImportToken,

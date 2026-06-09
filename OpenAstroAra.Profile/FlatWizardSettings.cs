@@ -12,7 +12,7 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Core.Model.Equipment;
 using OpenAstroAra.Profile.Interfaces;
 using System;
@@ -22,7 +22,11 @@ namespace OpenAstroAra.Profile {
 
     [Serializable()]
     [DataContract]
-    public class FlatWizardSettings : Settings, IFlatWizardSettings {
+    public sealed class FlatWizardSettings : Settings, IFlatWizardSettings {
+
+        public FlatWizardSettings() {
+            SetDefaultValues();
+        }
 
         [OnDeserializing]
         public void OnDeserializing(StreamingContext context) {

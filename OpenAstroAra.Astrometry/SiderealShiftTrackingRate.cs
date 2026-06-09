@@ -3,8 +3,8 @@ using System;
 namespace OpenAstroAra.Astrometry {
     public class SiderealShiftTrackingRate {
         public static readonly SiderealShiftTrackingRate Disabled = CreateDisabled();
-        public const double SIDEREAL_SEC_PER_SI_SEC = 1.00273791552838d;
-        public const double SIDEREAL_RATE = 15.0d * SIDEREAL_SEC_PER_SI_SEC;
+        public const double SiderealSecPerSiSec = 1.00273791552838d;
+        public const double SiderealRate = 15.0d * SiderealSecPerSiSec;
 
         private SiderealShiftTrackingRate(bool enabled, double raDegreesPerHour, double decDegreesPerHour) {
             this.Enabled = enabled;
@@ -13,7 +13,7 @@ namespace OpenAstroAra.Astrometry {
         }
 
         public bool Enabled { get; private set; }
-        public double RASecondsPerSiderealSecond => RAArcsecsPerSec / SIDEREAL_RATE;
+        public double RASecondsPerSiderealSecond => RAArcsecsPerSec / SiderealRate;
         public double RADegreesPerHour { get; private set; }
         public double DecDegreesPerHour { get; private set; }
         public double RAArcsecsPerHour => RADegreesPerHour * 3600.0d;

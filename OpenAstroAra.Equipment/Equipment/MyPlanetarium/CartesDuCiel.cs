@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -13,22 +13,22 @@
 #endregion "copyright"
 
 using OpenAstroAra.Astrometry;
-using OpenAstroAra.Core.Utility.TcpRaw;
-using OpenAstroAra.Profile.Interfaces;
-using System;
-using System.Threading.Tasks;
-using System.Text.RegularExpressions;
 using OpenAstroAra.Core.Utility;
-using System.Linq;
-using System.Globalization;
+using OpenAstroAra.Core.Utility.TcpRaw;
 using OpenAstroAra.Equipment.Exceptions;
 using OpenAstroAra.Equipment.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
+using System;
+using System.Globalization;
+using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace OpenAstroAra.Equipment.Equipment.MyPlanetarium {
 
-    internal class CartesDuCiel : IPlanetarium {
-        private string address;
+    internal sealed class CartesDuCiel : IPlanetarium {
+        private string address = string.Empty;
         private int port;
 
         public CartesDuCiel(IProfileService profileService) {
@@ -51,7 +51,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyPlanetarium {
                 var query = new BasicQuery(address, port, command);
                 string response = await query.SendQuery();
 
-                if (!response.StartsWith("OK!")) {
+                if (!response.StartsWith("OK!", StringComparison.Ordinal)) {
                     return await GetView();
                 }
 
@@ -62,16 +62,16 @@ namespace OpenAstroAra.Equipment.Equipment.MyPlanetarium {
                     return await GetView();
                 }
 
-                if (!Match(columns[0].Replace("OK!", string.Empty), @"(([0-9]{1,2})([h|:]|[?]{2})([0-9]{1,2})([m|:]|[?]{2})?([0-9]{1,2}(?:\.[0-9]+){0,1})?([s|:]|[?]{2}))", out var raString)) { throw new PlanetariumObjectNotSelectedException(); }
+                if (!Match(columns[0].Replace("OK!", string.Empty, StringComparison.Ordinal), @"(([0-9]{1,2})([h|:]|[?]{2})([0-9]{1,2})([m|:]|[?]{2})?([0-9]{1,2}(?:\.[0-9]+){0,1})?([s|:]|[?]{2}))", out var raString)) { throw new PlanetariumObjectNotSelectedException(); }
                 var ra = AstroUtil.HMSToDegrees(raString);
 
-                if (!Match(columns[1], @"([\+|-]([0-9]{1,2})([d|°|:]|[?]{2})([0-9]{1,2})([m|'|:]|[?]{2})?([0-9]{1,2}(?:\.[0-9]+){0,1})?([s|""|:]|[?]{2}))", out var decString)) { throw new PlanetariumObjectNotSelectedException(); }
+                if (!Match(columns[1], @"([\+|-]([0-9]{1,2})([d|ï¿½|:]|[?]{2})([0-9]{1,2})([m|'|:]|[?]{2})?([0-9]{1,2}(?:\.[0-9]+){0,1})?([s|""|:]|[?]{2}))", out var decString)) { throw new PlanetariumObjectNotSelectedException(); }
                 var dec = AstroUtil.DMSToDegrees(decString);
 
                 if (!Match(columns.Last(), @"(?<=Equinox:).*", out var equinox)) { throw new PlanetariumObjectNotSelectedException(); }
-                equinox = equinox.Replace("\r", string.Empty).Replace("\n", string.Empty);
+                equinox = equinox.Replace("\r", string.Empty, StringComparison.Ordinal).Replace("\n", string.Empty, StringComparison.Ordinal);
 
-                var coordinates = new Coordinates(Angle.ByDegree(ra), Angle.ByDegree(dec), equinox.ToLower().Contains("2000") ? Epoch.J2000 : Epoch.JNOW);
+                var coordinates = new Coordinates(Angle.ByDegree(ra), Angle.ByDegree(dec), equinox.Contains("2000", StringComparison.OrdinalIgnoreCase) ? Epoch.J2000 : Epoch.JNOW);
 
                 var dso = new DeepSkyObject(columns[3].Trim(), coordinates.Transform(Epoch.J2000), string.Empty, null);
 
@@ -95,13 +95,13 @@ namespace OpenAstroAra.Equipment.Equipment.MyPlanetarium {
                 var queryEq = new BasicQuery(address, port, commandEq);
                 string responseEq = await queryEq.SendQuery();
 
-                if (!responseRa.StartsWith("OK!") || !responseDec.StartsWith("OK!")) { throw new PlanetariumObjectNotSelectedException(); }
+                if (!responseRa.StartsWith("OK!", StringComparison.Ordinal) || !responseDec.StartsWith("OK!", StringComparison.Ordinal)) { throw new PlanetariumObjectNotSelectedException(); }
 
-                var ra = double.Parse(responseRa.Replace("OK!", string.Empty).Replace("\r", string.Empty).Replace("\n", string.Empty), CultureInfo.InvariantCulture);
-                var dec = double.Parse(responseDec.Replace("OK!", string.Empty).Replace("\r", string.Empty).Replace("\n", string.Empty), CultureInfo.InvariantCulture);
-                var equinox = responseEq.Replace("OK!", string.Empty).Replace("\r", string.Empty).Replace("\n", string.Empty);
+                var ra = double.Parse(responseRa.Replace("OK!", string.Empty, StringComparison.Ordinal).Replace("\r", string.Empty, StringComparison.Ordinal).Replace("\n", string.Empty, StringComparison.Ordinal), CultureInfo.InvariantCulture);
+                var dec = double.Parse(responseDec.Replace("OK!", string.Empty, StringComparison.Ordinal).Replace("\r", string.Empty, StringComparison.Ordinal).Replace("\n", string.Empty, StringComparison.Ordinal), CultureInfo.InvariantCulture);
+                var equinox = responseEq.Replace("OK!", string.Empty, StringComparison.Ordinal).Replace("\r", string.Empty, StringComparison.Ordinal).Replace("\n", string.Empty, StringComparison.Ordinal);
 
-                var coordinates = new Coordinates(Angle.ByHours(ra), Angle.ByDegree(dec), equinox.ToLower().Contains("2000") ? Epoch.J2000 : Epoch.JNOW);
+                var coordinates = new Coordinates(Angle.ByHours(ra), Angle.ByDegree(dec), equinox.Contains("2000", StringComparison.OrdinalIgnoreCase) ? Epoch.J2000 : Epoch.JNOW);
 
                 return new DeepSkyObject(string.Empty, coordinates.Transform(Epoch.J2000), string.Empty, null);
             } catch (Exception ex) {
@@ -117,13 +117,13 @@ namespace OpenAstroAra.Equipment.Equipment.MyPlanetarium {
                 var query = new BasicQuery(address, port, command);
                 string response = await query.SendQuery(token);
 
-                if (!response.StartsWith("OK!")) { throw new PlanetariumFailedToGetCoordinates(); }
+                if (!response.StartsWith("OK!", StringComparison.Ordinal)) { throw new PlanetariumFailedToGetCoordinatesException(); }
 
-                if (!Match(response, @"(?<=LAT:)[\+|-]([0-9]{1,2})[:|d]([0-9]{1,2})[:|m]?([0-9]{1,2}(?:\.[0-9]+){0,1})?[:|s]", out var latutideString)) { throw new PlanetariumFailedToGetCoordinates(); }
+                if (!Match(response, @"(?<=LAT:)[\+|-]([0-9]{1,2})[:|d]([0-9]{1,2})[:|m]?([0-9]{1,2}(?:\.[0-9]+){0,1})?[:|s]", out var latutideString)) { throw new PlanetariumFailedToGetCoordinatesException(); }
 
-                if (!Match(response, @"(?<=LON:)[\+|-]([0-9]{1,3})[:|d]([0-9]{1,2})[:|m]?([0-9]{1,2}(?:\.[0-9]+){0,1})?[:|s]", out var longitudeString)) { throw new PlanetariumFailedToGetCoordinates(); }
+                if (!Match(response, @"(?<=LON:)[\+|-]([0-9]{1,3})[:|d]([0-9]{1,2})[:|m]?([0-9]{1,2}(?:\.[0-9]+){0,1})?[:|s]", out var longitudeString)) { throw new PlanetariumFailedToGetCoordinatesException(); }
 
-                if (!Match(response, @"(?<=ALT:)([0-9]{0,5})[m]", out var altitudeString)) { throw new PlanetariumFailedToGetCoordinates(); }
+                if (!Match(response, @"(?<=ALT:)([0-9]{0,5})[m]", out var altitudeString)) { throw new PlanetariumFailedToGetCoordinatesException(); }
 
                 var coords = new Location {
                     Latitude = AstroUtil.DMSToDegrees(latutideString),
@@ -144,7 +144,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyPlanetarium {
             return Task.FromResult(double.NaN);
         }
 
-        private bool Match(string input, string pattern, out string result) {
+        private static bool Match(string input, string pattern, out string result) {
             result = string.Empty;
             var regex = new Regex(pattern);
             var match = regex.Match(input);

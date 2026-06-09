@@ -19,8 +19,8 @@ namespace OpenAstroAra.Astrometry.RiseAndSet {
             return body.Altitude - SunAltitude;
         }
 
-        protected override BasicBody GetBody(DateTime date) {
-            return new Sun(date, Latitude, Longitude, Elevation);
+        protected override BasicBody GetBody(DateTime dateTime) {
+            return new Sun(dateTime, Latitude, Longitude, Elevation);
         }
     }
 }

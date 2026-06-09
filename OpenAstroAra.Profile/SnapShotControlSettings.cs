@@ -18,7 +18,11 @@ using System.Runtime.Serialization;
 
 namespace OpenAstroAra.Profile {
 
-    public class SnapShotControlSettings : Settings, ISnapShotControlSettings {
+    public sealed class SnapShotControlSettings : Settings, ISnapShotControlSettings {
+
+        public SnapShotControlSettings() {
+            SetDefaultValues();
+        }
 
         [OnDeserializing]
         public void OnDeserializing(StreamingContext context) {
@@ -46,10 +50,10 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private FilterInfo filter;
+        private FilterInfo? filter;
 
         [DataMember]
-        public FilterInfo Filter {
+        public FilterInfo? Filter {
             get => filter;
             set {
                 if (filter != value) {
@@ -87,8 +91,8 @@ namespace OpenAstroAra.Profile {
 
         private bool loop;
 
-        [DataMember]
-        public bool Loop {
+        [DataMember(Name = "Loop")]
+        public bool LoopExposures {
             get => loop;
             set {
                 if (loop != value) {

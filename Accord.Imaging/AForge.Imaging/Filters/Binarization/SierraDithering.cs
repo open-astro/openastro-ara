@@ -1,14 +1,13 @@
 // AForge Image Processing Library
 // AForge.NET framework
 //
-// Copyright © Andrew Kirillov, 2005-2008
+// Copyright ï¿½ Andrew Kirillov, 2005-2008
 // andrew.kirillov@gmail.com
 //
 // Original idea from CxImage
 // http://www.codeproject.com/bitmap/cximage.asp
 //
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Drawing;
     using System.Drawing.Imaging;
@@ -49,18 +48,16 @@ namespace Accord.Imaging.Filters
     /// <seealso cref="JarvisJudiceNinkeDithering"/>
     /// <seealso cref="StuckiDithering"/>
     /// 
-    public sealed class SierraDithering : ErrorDiffusionToAdjacentNeighbors
-    {
+    public sealed class SierraDithering : ErrorDiffusionToAdjacentNeighbors {
         /// <summary>
         /// Initializes a new instance of the <see cref="SierraDithering"/> class.
         /// </summary>
         /// 
-        public SierraDithering( ) : base( new int[3][] {
+        public SierraDithering() : base(new int[3][] {
             new int[2] { 5, 3 },
             new int[5] { 2, 4, 5, 4, 2 },
             new int[3] { 2, 3, 2 }
-        } )
-        {
+        }) {
         }
     }
 }

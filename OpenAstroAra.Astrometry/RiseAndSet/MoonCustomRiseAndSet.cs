@@ -20,8 +20,8 @@ namespace OpenAstroAra.Astrometry.RiseAndSet {
             return body.Altitude - MoonAltitude;
         }
 
-        protected override BasicBody GetBody(DateTime date) {
-            return new Moon(date, Latitude, Longitude, Elevation);
+        protected override BasicBody GetBody(DateTime dateTime) {
+            return new Moon(dateTime, Latitude, Longitude, Elevation);
         }
     }
 }

@@ -15,27 +15,27 @@
 using OpenAstroAra.Core.Utility;
 using System.ComponentModel;
 
-namespace OpenAstroAra.Core.Enum {
+namespace OpenAstroAra.Core.Enums {
 
     [TypeConverter(typeof(EnumDescriptionTypeConverter))]
-    public enum ComparisonOperatorEnum {
+    public enum ComparisonOperator {
 
         [Description("LblComparatorEquals")]
         EQUALS,
 
         [Description("LblCompatatorLessThan")]
-        LESS_THAN,
+        LessThan,
 
         [Description("LblComparatorLessThanOrEqual")]
-        LESS_THAN_OR_EQUAL,
+        LessThanOrEqual,
 
         [Description("LblComparatorGreaterThan")]
-        GREATER_THAN,
+        GreaterThan,
 
         [Description("LblComparatorGreaterThanOrEqual")]
-        GREATER_THAN_OR_EQUAL,
+        GreaterThanOrEqual,
 
         [Description("LblComparatorNotEqual")]
-        NOT_EQUAL
+        NotEqual
     }
 }

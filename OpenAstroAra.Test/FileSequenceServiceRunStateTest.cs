@@ -38,7 +38,7 @@ namespace OpenAstroAra.Test {
 
         [TearDown]
         public void TearDown() {
-            try { Directory.Delete(_profileDir, recursive: true); } catch { }
+            try { Directory.Delete(_profileDir, recursive: true); } catch (System.IO.IOException) { } catch (System.UnauthorizedAccessException) { }
         }
 
         private static SequenceCreateRequestDto BodyRequest(string name) {
@@ -96,8 +96,8 @@ namespace OpenAstroAra.Test {
             var libDir = Path.Combine(_profileDir, "sequences", "library");
             var src = Path.Combine(libDir, $"{dto.Id:D}.json");
             var renamed = Path.Combine(libDir, $"{runningSequenceId:D}.json");
-            var json = File.ReadAllText(src).Replace(dto.Id.ToString("D"), runningSequenceId.ToString("D"));
-            File.WriteAllText(renamed, json);
+            var json = (await File.ReadAllTextAsync(src)).Replace(dto.Id.ToString("D"), runningSequenceId.ToString("D"), StringComparison.Ordinal);
+            await File.WriteAllTextAsync(renamed, json);
             File.Delete(src);
 
             var page = await svc.ListAsync(50, null, CancellationToken.None);

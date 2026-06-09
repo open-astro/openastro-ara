@@ -12,12 +12,12 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Image.Interfaces;
 using OpenAstroAra.Astrometry;
+using OpenAstroAra.Image.Interfaces;
 
 namespace OpenAstroAra.PlateSolving {
 
-    internal class PlateSolveImageProperties {
+    internal sealed class PlateSolveImageProperties {
         public double FocalLength { get; private set; }
         public double PixelSize { get; private set; }
         public double ImageWidth { get; private set; }

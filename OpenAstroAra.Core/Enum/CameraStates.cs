@@ -15,7 +15,7 @@
 using OpenAstroAra.Core.Utility;
 using System.ComponentModel;
 
-namespace OpenAstroAra.Core.Enum {
+namespace OpenAstroAra.Core.Enums {
 
     /// <summary>
     /// This mirrors the ASCOM CameraStates enum with the addition of a -1 "Unknown" state

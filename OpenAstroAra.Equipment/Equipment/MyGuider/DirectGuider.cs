@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -12,27 +12,27 @@
 
 #endregion "copyright"
 
+using Accord.Statistics.Distributions.Univariate;
+using OpenAstroAra.Astrometry;
+using OpenAstroAra.Core.Enums;
+using OpenAstroAra.Core.Interfaces;
+using OpenAstroAra.Core.Locale;
+using OpenAstroAra.Core.Model;
 using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Core.Utility.Notification;
+using OpenAstroAra.Equipment.Equipment.MyGuider.PHD2;
+using OpenAstroAra.Equipment.Equipment.MyTelescope;
+using OpenAstroAra.Equipment.Interfaces;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Profile.Interfaces;
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using OpenAstroAra.Astrometry;
-using Accord.Statistics.Distributions.Univariate;
-using OpenAstroAra.Core.Enum;
-using OpenAstroAra.Equipment.Interfaces.Mediator;
-using OpenAstroAra.Core.Locale;
-using OpenAstroAra.Core.Interfaces;
-using OpenAstroAra.Equipment.Interfaces;
-using OpenAstroAra.Equipment.Equipment.MyTelescope;
-using OpenAstroAra.Core.Model;
-using System.Collections.Generic;
-using OpenAstroAra.Equipment.Equipment.MyGuider.PHD2;
 
 namespace OpenAstroAra.Equipment.Equipment.MyGuider {
 
-    public class DirectGuider : BaseINPC, IGuider, ITelescopeConsumer {
+    public sealed class DirectGuider : BaseINPC, IGuider, ITelescopeConsumer {
         private readonly IProfileService profileService;
         private readonly ITelescopeMediator telescopeMediator;
 
@@ -52,7 +52,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider {
         public void UpdateDeviceInfo(TelescopeInfo telescopeInfo) {
             this.telescopeInfo = telescopeInfo;
             if (Connected && !this.telescopeInfo.Connected) {
-                Notification.ShowWarning(Loc.Instance["LblMountDitherMountDisconnect"]);
+                Notifier.ShowWarning(Loc.Instance["LblMountDitherMountDisconnect"]);
                 Logger.Warning("Telescope is disconnected. Direct Guide will disconnect. Dither will not occur.");
                 Disconnect();
             } else {
@@ -72,12 +72,12 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider {
         private static double ToNormalizedGuideRate(double arcsecPerSecond) {
             if (double.IsNaN(arcsecPerSecond) || arcsecPerSecond <= 0) {
                 // Default guiding rate is 0.5x sidereal
-                return AstroUtil.SIDEREAL_RATE_ARCSECONDS_PER_SECOND / 2.0;
+                return AstroUtil.SiderealRateArcsecondsPerSecond / 2.0;
             }
             return arcsecPerSecond;
         }
 
-        private bool guiding = false;
+        private bool guiding;
 
         private bool _connected;
 
@@ -103,7 +103,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider {
             }
         }
 
-        private double _directGuideDuration = 0.0;
+        private double _directGuideDuration;
 
         public double DirectGuideDuration {
             get => _directGuideDuration;
@@ -115,7 +115,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider {
             }
         }
 
-        private double _westEastGuideRate = 0.0;
+        private double _westEastGuideRate;
 
         public double WestEastGuideRate {
             get => _westEastGuideRate;
@@ -127,7 +127,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider {
             }
         }
 
-        private double _northSouthGuideRate = 0.0;
+        private double _northSouthGuideRate;
 
         public double NorthSouthGuideRate {
             get => _northSouthGuideRate;
@@ -164,7 +164,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider {
             if (telescopeInfo.Connected) {
                 Connected = true;
             } else {
-                Notification.ShowWarning(Loc.Instance["LblMountDitherConnectionFail"]);
+                Notifier.ShowWarning(Loc.Instance["LblMountDitherConnectionFail"]);
                 Connected = false;
             }
 
@@ -217,12 +217,12 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider {
         }
 
         private readonly Random random = new Random();
-        private double previousWestEastOffsetPixels = 0.0;
-        private double previousNorthSouthOffsetPixels = 0.0;
+        private double previousWestEastOffsetPixels;
+        private double previousNorthSouthOffsetPixels;
 
         public event EventHandler<IGuideStep> GuideEvent { add { } remove { } }
 
-        public async Task<bool>Dither (double ditherPixels, TimeSpan settleTime, bool ditherRAOnly, IProgress<ApplicationStatus> progress, CancellationToken ct) {
+        public async Task<bool> Dither(double ditherPixels, TimeSpan settleTime, bool ditherRAOnly, IProgress<ApplicationStatus> progress, CancellationToken ct) {
             try {
                 State = "Dithering...";
 
@@ -277,6 +277,8 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider {
         /// </summary>
         /// <returns>Parameters for two guide pulses, one in N/S direction and one in E/W direction</returns>
 
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "CA5394:Do not use insecure randomness",
+            Justification = "Used only to pick a random dither direction/offset for guiding; this is non-security numerical jitter, not a cryptographic or security-sensitive value.")]
         private GuidePulses SelectDitherPulse(double ditherPixels) {
             double ditherAngle = random.NextDouble() * Math.PI;
             double cosAngle = Math.Cos(ditherAngle);
@@ -320,6 +322,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider {
 
         public void Dispose() {
             this.telescopeMediator.RemoveConsumer(this);
+            GC.SuppressFinalize(this);
         }
 
         public void SetupDialog() {

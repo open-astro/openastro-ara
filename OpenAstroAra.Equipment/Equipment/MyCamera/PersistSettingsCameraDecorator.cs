@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -12,21 +12,24 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Core.Enum;
-using OpenAstroAra.Profile.Interfaces;
+using OpenAstroAra.Core.Enums;
+using OpenAstroAra.Core.Model.Equipment;
 using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Equipment.Interfaces;
+using OpenAstroAra.Equipment.Model;
+using OpenAstroAra.Image.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 using System.Threading.Tasks;
-using OpenAstroAra.Core.Model.Equipment;
-using OpenAstroAra.Image.Interfaces;
-using OpenAstroAra.Equipment.Model;
-using OpenAstroAra.Equipment.Interfaces;
 
 namespace OpenAstroAra.Equipment.Equipment.MyCamera {
 
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Persisted-setting restore boundary: every catch in this decorator wraps a single write to the underlying camera driver while re-applying a value saved in the profile. A driver/SDK/ASCOM property set can throw any exception type; the failure is logged and the offending persisted value cleared so that one rejected setting cannot fail camera initialization. CA1031 sanctions general catches at such recover-and-continue boundaries.")]
     public class PersistSettingsCameraDecorator : BaseINPC, ICamera {
         public ICamera Camera { get; }
         private readonly IProfileService profileService;
@@ -37,7 +40,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyCamera {
             this.Camera.PropertyChanged += Camera_PropertyChanged;
         }
 
-        private void Camera_PropertyChanged(object sender, PropertyChangedEventArgs e) {
+        private void Camera_PropertyChanged(object? sender, PropertyChangedEventArgs e) {
             RaisePropertyChanged(e.PropertyName);
         }
 
@@ -319,11 +322,11 @@ namespace OpenAstroAra.Equipment.Equipment.MyCamera {
             this.Camera.Disconnect();
         }
 
-        public Task<IExposureData> DownloadExposure(CancellationToken token) {
+        public Task<IExposureData?> DownloadExposure(CancellationToken token) {
             return this.Camera.DownloadExposure(token);
         }
 
-        public Task<IExposureData> DownloadLiveView(CancellationToken token) {
+        public Task<IExposureData?> DownloadLiveView(CancellationToken token) {
             return this.Camera.DownloadLiveView(token);
         }
 

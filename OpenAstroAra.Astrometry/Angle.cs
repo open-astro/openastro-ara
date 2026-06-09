@@ -95,7 +95,7 @@ namespace OpenAstroAra.Astrometry {
                 || ((360.0 - diffDegrees) - toleranceDegrees) <= EQUALS_EPSILON;
         }
         public bool Equals(Angle that, Angle tolerance, bool oneEightyIsEqual) {
-            if(!oneEightyIsEqual) { return this.Equals(that, tolerance); }
+            if (!oneEightyIsEqual) { return this.Equals(that, tolerance); }
 
             var thisDegrees = AstroUtil.EuclidianModulus(this.Degree, 180.0);
             var thatDegrees = AstroUtil.EuclidianModulus(that.Degree, 180.0);
@@ -105,7 +105,7 @@ namespace OpenAstroAra.Astrometry {
                 || ((180 - diffDegrees) - toleranceDegrees) <= EQUALS_EPSILON;
         }
 
-        public override bool Equals(object obj) {
+        public override bool Equals(object? obj) {
             return obj is Angle angle &&
                    Degree == angle.Degree &&
                    ArcMinutes == angle.ArcMinutes &&
@@ -178,5 +178,30 @@ namespace OpenAstroAra.Astrometry {
         public static Angle operator /(double a, Angle b) {
             return Angle.ByRadians(a / b.Radians);
         }
+
+        // Friendly-named alternates for the operators above (CA2225).
+        public static Angle Negate(Angle item) => -item;
+
+        public static Angle Add(Angle left, Angle right) => left + right;
+
+        public static Angle Add(double left, Angle right) => left + right;
+
+        public static Angle Add(Angle left, double right) => left + right;
+
+        public static Angle Subtract(Angle left, Angle right) => left - right;
+
+        public static Angle Subtract(double left, Angle right) => left - right;
+
+        public static Angle Subtract(Angle left, double right) => left - right;
+
+        public static Angle Multiply(Angle left, Angle right) => left * right;
+
+        public static Angle Multiply(double left, Angle right) => left * right;
+
+        public static Angle Divide(Angle left, Angle right) => left / right;
+
+        public static Angle Divide(Angle left, double right) => left / right;
+
+        public static Angle Divide(double left, Angle right) => left / right;
     }
 }

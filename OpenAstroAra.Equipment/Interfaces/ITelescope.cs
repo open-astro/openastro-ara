@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -13,11 +13,11 @@
 #endregion "copyright"
 
 using OpenAstroAra.Astrometry;
-using System.Threading.Tasks;
-using System.Collections.Generic;
-using OpenAstroAra.Core.Enum;
-using System.Threading;
+using OpenAstroAra.Core.Enums;
 using System;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace OpenAstroAra.Equipment.Interfaces {
 
@@ -30,13 +30,13 @@ namespace OpenAstroAra.Equipment.Interfaces {
         Stopped
     }
 
-    public struct TrackingRate {
-        public static TrackingRate STOPPED = new TrackingRate() { TrackingMode = TrackingMode.Stopped };
-        public TrackingMode TrackingMode;
-        public double? CustomRightAscensionRate;
-        public double? CustomDeclinationRate;
+    public struct TrackingRate : IEquatable<TrackingRate> {
+        public static readonly TrackingRate STOPPED = new TrackingRate() { TrackingMode = TrackingMode.Stopped };
+        public TrackingMode TrackingMode { get; set; }
+        public double? CustomRightAscensionRate { get; set; }
+        public double? CustomDeclinationRate { get; set; }
 
-        public override bool Equals(object obj) {
+        public override bool Equals(object? obj) {
             return obj is TrackingRate rate &&
                    TrackingMode == rate.TrackingMode &&
                    CustomRightAscensionRate == rate.CustomRightAscensionRate &&
@@ -53,6 +53,12 @@ namespace OpenAstroAra.Equipment.Interfaces {
 
         public static bool operator !=(TrackingRate left, TrackingRate right) {
             return !(left == right);
+        }
+
+        public bool Equals(TrackingRate other) {
+            return TrackingMode == other.TrackingMode &&
+                   CustomRightAscensionRate == other.CustomRightAscensionRate &&
+                   CustomDeclinationRate == other.CustomDeclinationRate;
         }
     }
 
@@ -118,7 +124,7 @@ namespace OpenAstroAra.Equipment.Interfaces {
 
         Task Park(CancellationToken token);
 
-        void Setpark();
+        void SetPark();
 
         Task<bool> SlewToCoordinates(Coordinates coordinates, CancellationToken token);
 

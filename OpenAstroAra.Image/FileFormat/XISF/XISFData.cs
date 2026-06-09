@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -14,9 +14,10 @@
 
 using Ionic.Zlib;
 using K4os.Compression.LZ4;
-using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Core.Utility;
 using System;
+using System.Globalization;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
@@ -33,22 +34,22 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
         /// <summary>
         /// Uncompressed array size in bytes
         /// </summary>
-        public uint Size { get; } = 0;
+        public uint Size { get; }
 
         /// <summary>
         /// Array compression algorithm
         /// </summary>
-        public XISFCompressionTypeEnum CompressionType { get; private set; }
+        public XISFCompressionType CompressionType { get; private set; }
 
         /// <summary>
         /// Array compression algorithm textual name
         /// </summary>
-        public string CompressionName { get; private set; }
+        public string? CompressionName { get; private set; }
 
         /// <summary>
         /// Compressed array size in bytes. -1 for an uncompressed array
         /// </summary>
-        public uint CompressedSize { get; } = 0;
+        public uint CompressedSize { get; }
 
         /// <summary>
         /// Perform byte shuffling on the byte array prior to compression
@@ -58,22 +59,22 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
         /// <summary>
         /// Length in bytes of a data item for the shuffling algorithm
         /// </summary>
-        public int ShuffleItemSize { get; private set; } = 0;
+        public int ShuffleItemSize { get; private set; }
 
         /// <summary>
         /// XISF block checksum algorithm
         /// </summary>
-        public XISFChecksumTypeEnum ChecksumType { get; }
+        public XISFChecksumType ChecksumType { get; }
 
         /// <summary>
         /// XISF block checksum algorithm textual name
         /// </summary>
-        public string ChecksumName { get; private set; }
+        public string? ChecksumName { get; private set; }
 
         /// <summary>
         /// XISF block checksum value. Empty if no checksum applied
         /// </summary>
-        public string Checksum { get; private set; }
+        public string? Checksum { get; private set; }
 
         public XISFData(ushort[] data, FileSaveInfo fileSaveInfo) {
             CompressionType = fileSaveInfo.XISFCompressionType;
@@ -91,7 +92,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
 
             Data = PrepareArray(byteArray);
             Size = (uint)data.Length * sizeof(ushort);
-            CompressedSize = CompressionType == XISFCompressionTypeEnum.NONE ? 0 : (uint)Data.Length;
+            CompressedSize = CompressionType == XISFCompressionType.NONE ? 0 : (uint)Data.Length;
         }
 
         public XISFData(int[] data, FileSaveInfo fileSaveInfo) : this(Array.ConvertAll(data, item => (uint)item), fileSaveInfo) {
@@ -112,7 +113,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
 
             Data = PrepareArray(byteArray);
             Size = (uint)data.Length * sizeof(uint);
-            CompressedSize = CompressionType == XISFCompressionTypeEnum.NONE ? 0 : (uint)Data.Length;
+            CompressedSize = CompressionType == XISFCompressionType.NONE ? 0 : (uint)Data.Length;
         }
 
         /// <summary>
@@ -129,6 +130,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
         /// </summary>
         /// <param name="data"></param>
         /// <returns>Uncompressed or compressed byte array</returns>
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "CA5350:Do not use weak cryptographic algorithms", Justification = "SHA-1 is one of the integrity checksum algorithms defined by the XISF file-format specification; the algorithm is selected per the file for data-integrity verification, not for any security decision.")]
         private byte[] PrepareArray(byte[] byteArray) {
             byte[] outArray;
 
@@ -136,7 +138,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
              * Compress the data block as configured.
              */
             using (MyStopWatch.Measure($"XISF Compression = {CompressionType}")) {
-                if (CompressionType == XISFCompressionTypeEnum.LZ4) {
+                if (CompressionType == XISFCompressionType.LZ4) {
                     if (ByteShuffling) {
                         CompressionName = "lz4+sh";
                         byteArray = Shuffle(byteArray, ShuffleItemSize);
@@ -149,8 +151,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
 
                     outArray = new byte[compressedSize];
                     Array.Copy(tmpArray, outArray, outArray.Length);
-                    tmpArray = null;
-                } else if (CompressionType == XISFCompressionTypeEnum.LZ4HC) {
+                } else if (CompressionType == XISFCompressionType.LZ4HC) {
                     if (ByteShuffling) {
                         CompressionName = "lz4hc+sh";
                         byteArray = Shuffle(byteArray, ShuffleItemSize);
@@ -163,8 +164,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
 
                     outArray = new byte[compressedSize];
                     Array.Copy(tmpArray, outArray, outArray.Length);
-                    tmpArray = null;
-                } else if (CompressionType == XISFCompressionTypeEnum.ZLIB) {
+                } else if (CompressionType == XISFCompressionType.ZLIB) {
                     if (ByteShuffling) {
                         CompressionName = "zlib+sh";
                         byteArray = Shuffle(byteArray, ShuffleItemSize);
@@ -188,14 +188,14 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
                 } else {
                     outArray = byteArray;
                 }
-                CompressionType = XISFCompressionTypeEnum.NONE;
+                CompressionType = XISFCompressionType.NONE;
 
                 Logger.Debug("XISF output array is larger after compression. Image will be prepared uncompressed instead.");
             }
 
-            if (CompressionType != XISFCompressionTypeEnum.NONE) {
+            if (CompressionType != XISFCompressionType.NONE) {
                 double percentChanged = (1 - ((double)outArray.Length / (double)byteArray.Length)) * 100;
-                Logger.Debug($"XISF: {CompressionType} compressed {byteArray.Length} bytes to {outArray.Length} bytes ({percentChanged.ToString("#.##")}%)");
+                Logger.Debug($"XISF: {CompressionType} compressed {byteArray.Length} bytes to {outArray.Length} bytes ({percentChanged.ToString("#.##", CultureInfo.InvariantCulture)}%)");
             }
 
             /*
@@ -204,42 +204,32 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
              */
             using (MyStopWatch.Measure($"XISF Checksum = {ChecksumType}")) {
                 switch (ChecksumType) {
-                    case XISFChecksumTypeEnum.SHA1:
-                        SHA1 sha1 = SHA1.Create();
-                        Checksum = GetStringFromHash(sha1.ComputeHash(outArray));
+                    case XISFChecksumType.SHA1:
+                        Checksum = GetStringFromHash(SHA1.HashData(outArray));
                         ChecksumName = "sha-1";
-                        sha1.Dispose();
                         break;
 
-                    case XISFChecksumTypeEnum.SHA256:
-                        SHA256 sha256 = SHA256.Create();
-                        Checksum = GetStringFromHash(sha256.ComputeHash(outArray));
+                    case XISFChecksumType.SHA256:
+                        Checksum = GetStringFromHash(SHA256.HashData(outArray));
                         ChecksumName = "sha-256";
-                        sha256.Dispose();
                         break;
 
-                    case XISFChecksumTypeEnum.SHA512:
-                        SHA512 sha512 = SHA512.Create();
-                        Checksum = GetStringFromHash(sha512.ComputeHash(outArray));
+                    case XISFChecksumType.SHA512:
+                        Checksum = GetStringFromHash(SHA512.HashData(outArray));
                         ChecksumName = "sha-512";
-                        sha512.Dispose();
                         break;
 
-                    case XISFChecksumTypeEnum.SHA3_256:
-                        SHA3_256 sha3_256 = SHA3_256.Create();
-                        Checksum = GetStringFromHash(sha3_256.ComputeHash(outArray));
+                    case XISFChecksumType.Sha3256:
+                        Checksum = GetStringFromHash(SHA3_256.HashData(outArray));
                         ChecksumName = "sha3-256";
-                        sha3_256.Dispose();
                         break;
 
-                    case XISFChecksumTypeEnum.SHA3_512:
-                        SHA3_512 sha3_512 = SHA3_512.Create();
-                        Checksum = GetStringFromHash(sha3_512.ComputeHash(outArray));
+                    case XISFChecksumType.Sha3512:
+                        Checksum = GetStringFromHash(SHA3_512.HashData(outArray));
                         ChecksumName = "sha3-512";
-                        sha3_512.Dispose();
                         break;
 
-                    case XISFChecksumTypeEnum.NONE:
+                    case XISFChecksumType.NONE:
                     default:
                         Checksum = null;
                         ChecksumName = null;
@@ -253,7 +243,7 @@ namespace OpenAstroAra.Image.FileFormat.XISF {
         private static string GetStringFromHash(byte[] hash) {
             StringBuilder result = new StringBuilder();
             for (int i = 0; i < hash.Length; i++) {
-                result.Append(hash[i].ToString("x2"));
+                result.Append(hash[i].ToString("x2", CultureInfo.InvariantCulture));
             }
             return result.ToString();
         }

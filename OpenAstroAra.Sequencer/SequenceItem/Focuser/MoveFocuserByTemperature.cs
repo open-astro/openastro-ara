@@ -13,9 +13,11 @@
 #endregion "copyright"
 
 using Newtonsoft.Json;
+using OpenAstroAra.Core.Locale;
 using OpenAstroAra.Core.Model;
-using OpenAstroAra.Sequencer.Validations;
+using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Sequencer.Validations;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.Composition;
@@ -23,8 +25,6 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using OpenAstroAra.Core.Locale;
-using OpenAstroAra.Core.Utility;
 
 namespace OpenAstroAra.Sequencer.SequenceItem.Focuser {
 
@@ -34,7 +34,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Focuser {
     [ExportMetadata("Category", "Lbl_SequenceCategory_Focuser")]
     [Export(typeof(ISequenceItem))]
     [JsonObject(MemberSerialization.OptIn)]
-    public class MoveFocuserByTemperature : SequenceItem, IValidatable, IFocuserConsumer {
+    public sealed class MoveFocuserByTemperature : SequenceItem, IValidatable, IFocuserConsumer {
 
         [ImportingConstructor]
         public MoveFocuserByTemperature(IFocuserMediator focuserMediator) {
@@ -68,8 +68,6 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Focuser {
 
         private static double lastTemperature = -1000;
 
-        private static double lastRoundoff = 0;
-
         private bool absolute = true;
 
         [JsonProperty]
@@ -81,7 +79,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Focuser {
             }
         }
 
-        private double intercept = 0;
+        private double intercept;
 
         [JsonProperty]
         public double Intercept {
@@ -143,18 +141,18 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Focuser {
         }
 
         public void Dispose() {
+            // No unmanaged or owned-disposable state; the focuser mediator is not owned here.
+            GC.SuppressFinalize(this);
         }
 
         public void UpdateEndAutoFocusRun(AutoFocusInfo info) {
             Logger.Info($"Autofocus notification received - Temperature {info.Temperature}");
             lastTemperature = info.Temperature;
-            lastRoundoff = 0;
         }
 
         public void UpdateUserFocused(Equipment.Equipment.MyFocuser.FocuserInfo info) {
             Logger.Info($"User Focused notification received - Temperature {info.Temperature}");
             lastTemperature = info.Temperature;
-            lastRoundoff = 0;
         }
     }
 }

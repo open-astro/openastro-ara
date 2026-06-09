@@ -21,7 +21,7 @@ namespace OpenAstroAra.Profile {
 
     [Serializable()]
     [DataContract]
-    public class SequenceSettings : Settings, ISequenceSettings {
+    public sealed class SequenceSettings : Settings, ISequenceSettings {
 
         public SequenceSettings() {
             SetDefaultValues();
@@ -68,7 +68,7 @@ namespace OpenAstroAra.Profile {
             disableSimpleSequencer = false;
         }
 
-        private string templatePath;
+        private string templatePath = string.Empty;
 
         [DataMember]
         // Used by legacy sequencer
@@ -152,7 +152,7 @@ namespace OpenAstroAra.Profile {
             set => estimatedDownloadTime = new TimeSpan(value);
         }
 
-        private string sequenceFolder;
+        private string sequenceFolder = string.Empty;
 
         [DataMember]
         public string DefaultSequenceFolder {
@@ -165,7 +165,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string sequenceCompleteCommand;
+        private string sequenceCompleteCommand = string.Empty;
 
         [DataMember]
         public string SequenceCompleteCommand {
@@ -178,7 +178,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string templateFolder;
+        private string templateFolder = string.Empty;
 
         [DataMember]
         public string SequencerTemplatesFolder {
@@ -191,7 +191,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string targetsFolder;
+        private string targetsFolder = string.Empty;
 
         [DataMember]
         public string SequencerTargetsFolder {
@@ -204,7 +204,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string startupSequenceTemplate;
+        private string startupSequenceTemplate = string.Empty;
 
         [DataMember]
         public string StartupSequenceTemplate {

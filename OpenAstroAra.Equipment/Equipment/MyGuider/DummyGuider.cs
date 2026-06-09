@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -12,20 +12,19 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Profile.Interfaces;
-using OpenAstroAra.Core.Utility;
-using System;
-using System.Threading;
-using System.Threading.Tasks;
+using OpenAstroAra.Astrometry;
 using OpenAstroAra.Core.Interfaces;
 using OpenAstroAra.Core.Locale;
-using OpenAstroAra.Equipment.Interfaces;
 using OpenAstroAra.Core.Model;
-using OpenAstroAra.Astrometry;
-using System.Collections.Generic;
+using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Equipment.Equipment.MyGuider.PHD2;
+using OpenAstroAra.Equipment.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
+using System;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 
-#pragma warning disable 1998
 
 namespace OpenAstroAra.Equipment.Equipment.MyGuider {
 
@@ -66,36 +65,36 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider {
 
         public string DriverVersion => "1.0";
 
-        public async Task<bool> Connect(CancellationToken token) {
+        public Task<bool> Connect(CancellationToken token) {
             profileService.ActiveProfile.GuiderSettings.GuiderName = Id;
 
             Connected = false;
 
-            return Connected;
+            return Task.FromResult(Connected);
         }
 
-        public async Task<bool> AutoSelectGuideStar() {
-            return true;
+        public Task<bool> AutoSelectGuideStar() {
+            return Task.FromResult(true);
         }
 
         public void Disconnect() {
             Connected = false;
         }
 
-        public async Task<bool> Pause(bool pause, CancellationToken ct) {
-            return true;
+        public static Task<bool> Pause(bool pause, CancellationToken ct) {
+            return Task.FromResult(true);
         }
 
-        public async Task<bool> StartGuiding(bool forceCalibration, IProgress<ApplicationStatus> progress, CancellationToken ct) {
-            return true;
+        public Task<bool> StartGuiding(bool forceCalibration, IProgress<ApplicationStatus> progress, CancellationToken ct) {
+            return Task.FromResult(true);
         }
 
-        public async Task<bool> StopGuiding(CancellationToken ct) {
-            return true;
+        public Task<bool> StopGuiding(CancellationToken ct) {
+            return Task.FromResult(true);
         }
 
-        public async Task<bool> Dither(IProgress<ApplicationStatus> progress, CancellationToken ct) {
-            return true;
+        public Task<bool> Dither(IProgress<ApplicationStatus> progress, CancellationToken ct) {
+            return Task.FromResult(true);
         }
 
         public bool CanClearCalibration => true;
@@ -106,8 +105,8 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider {
 
         public SiderealShiftTrackingRate ShiftRate => SiderealShiftTrackingRate.Disabled;
 
-        public async Task<bool> ClearCalibration(CancellationToken ct) {
-            return true;
+        public Task<bool> ClearCalibration(CancellationToken ct) {
+            return Task.FromResult(true);
         }
 
         public void SetupDialog() {

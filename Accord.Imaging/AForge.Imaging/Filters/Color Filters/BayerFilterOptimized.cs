@@ -6,8 +6,7 @@
 // contacts@aforgenet.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -16,8 +15,7 @@ namespace Accord.Imaging.Filters
     /// <summary>
     /// Set of Bayer patterns supported by <see cref="BayerFilterOptimized"/>.
     /// </summary>
-    public enum BayerPattern
-    {
+    public enum BayerPattern {
         /// <summary>
         /// Pattern:<br /><br />
         /// G R<br />
@@ -59,8 +57,7 @@ namespace Accord.Imaging.Filters
     /// 
     /// <seealso cref="BayerFilter"/>
     /// 
-    public class BayerFilterOptimized : BaseFilter
-    {
+    public class BayerFilterOptimized : BaseFilter {
         private BayerPattern bayerPattern = BayerPattern.GRBG;
 
         /// <summary>
@@ -73,8 +70,7 @@ namespace Accord.Imaging.Filters
         /// <para>Default value is set to <see cref="BayerPattern.GRBG"/>.</para>
         /// </remarks>
         /// 
-        public BayerPattern Pattern
-        {
+        public BayerPattern Pattern {
             get { return bayerPattern; }
             set { bayerPattern = value; }
         }
@@ -89,8 +85,7 @@ namespace Accord.Imaging.Filters
         /// <remarks><para>See <see cref="IFilterInformation.FormatTranslations"/>
         /// documentation for additional information.</para></remarks>
         /// 
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -98,8 +93,7 @@ namespace Accord.Imaging.Filters
         /// Initializes a new instance of the <see cref="BayerFilterOptimized"/> class.
         /// </summary>
         /// 
-        public BayerFilterOptimized()
-        {
+        public BayerFilterOptimized() {
             // initialize format translation dictionary
             formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format24bppRgb;
         }
@@ -111,20 +105,17 @@ namespace Accord.Imaging.Filters
         /// <param name="sourceData">Source image data.</param>
         /// <param name="destinationData">Destination image data.</param>
         /// 
-        protected override void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData)
-        {
+        protected override void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData) {
             // get width and height
             int width = sourceData.Width;
             int height = sourceData.Height;
 
             if (((width & 1) == 1) || ((height & 1) == 1) ||
-                 (width < 2) || (height < 2))
-            {
+                 (width < 2) || (height < 2)) {
                 throw new InvalidImagePropertiesException("Source image must have even width and height. Width and height can not be smaller than 2.");
             }
 
-            switch (bayerPattern)
-            {
+            switch (bayerPattern) {
                 case BayerPattern.GRBG:
                     ApplyGRBG(sourceData, destinationData);
                     break;
@@ -136,8 +127,7 @@ namespace Accord.Imaging.Filters
         }
 
         #region GRBG pattern
-        private static unsafe void ApplyGRBG(UnmanagedImage sourceData, UnmanagedImage destinationData)
-        {
+        private static unsafe void ApplyGRBG(UnmanagedImage sourceData, UnmanagedImage destinationData) {
             int width = sourceData.Width;
             int height = sourceData.Height;
 
@@ -172,8 +162,7 @@ namespace Accord.Imaging.Filters
             src++;
             dst += 3;
 
-            for (int x = 1; x < widthM1; x += 2)
-            {
+            for (int x = 1; x < widthM1; x += 2) {
                 // . . .
                 // G R G
                 // B G B
@@ -208,8 +197,7 @@ namespace Accord.Imaging.Filters
             dst += dstOffset + 3;
 
             // --- process all lines except the first one and the last one
-            for (int y = 1; y < heightM1; y += 2)
-            {
+            for (int y = 1; y < heightM1; y += 2) {
                 // . G R
                 // . B G
                 // . G R
@@ -234,8 +222,7 @@ namespace Accord.Imaging.Filters
                 src++;
                 dst += 3;
 
-                for (int x = 1; x < widthM1; x += 2)
-                {
+                for (int x = 1; x < widthM1; x += 2) {
                     // G R G
                     // B G B
                     // G R G
@@ -322,8 +309,7 @@ namespace Accord.Imaging.Filters
             src++;
             dst += 3;
 
-            for (int x = 1; x < widthM1; x += 2)
-            {
+            for (int x = 1; x < widthM1; x += 2) {
                 // G R G
                 // B G B
                 // . . .
@@ -355,8 +341,7 @@ namespace Accord.Imaging.Filters
         #endregion
 
         #region BGGR pattern
-        private static unsafe void ApplyBGGR(UnmanagedImage sourceData, UnmanagedImage destinationData)
-        {
+        private static unsafe void ApplyBGGR(UnmanagedImage sourceData, UnmanagedImage destinationData) {
             int width = sourceData.Width;
             int height = sourceData.Height;
 
@@ -391,8 +376,7 @@ namespace Accord.Imaging.Filters
             src++;
             dst += 3;
 
-            for (int x = 1; x < widthM1; x += 2)
-            {
+            for (int x = 1; x < widthM1; x += 2) {
                 // . . .
                 // B G B 
                 // G R G
@@ -427,8 +411,7 @@ namespace Accord.Imaging.Filters
             dst += dstOffset + 3;
 
             // --- process all lines except the first one and the last one
-            for (int y = 1; y < heightM1; y += 2)
-            {
+            for (int y = 1; y < heightM1; y += 2) {
                 // . B G 
                 // . G R
                 // . B G
@@ -453,8 +436,7 @@ namespace Accord.Imaging.Filters
                 src++;
                 dst += 3;
 
-                for (int x = 1; x < widthM1; x += 2)
-                {
+                for (int x = 1; x < widthM1; x += 2) {
                     // B G B
                     // G R G
                     // B G B
@@ -533,8 +515,7 @@ namespace Accord.Imaging.Filters
             src++;
             dst += 3;
 
-            for (int x = 1; x < widthM1; x += 2)
-            {
+            for (int x = 1; x < widthM1; x += 2) {
                 // B G B 
                 // G R G 
                 // . . .

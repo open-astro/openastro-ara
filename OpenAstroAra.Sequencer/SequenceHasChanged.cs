@@ -21,7 +21,7 @@ namespace OpenAstroAra.Sequencer {
     // Kept as a static delegate consumers can replace if a future
     // command-level confirm gate is needed.
     public class SequenceHasChanged : OpenAstroAra.Core.Utility.BaseINPC, ISequenceHasChanged {
-        protected bool hasChanged;
+        private bool hasChanged;
         public virtual bool HasChanged { get => hasChanged; set => hasChanged = value; }
         public virtual void ClearHasChanged() => hasChanged = false;
         public virtual bool AskHasChanged(string name) => false;

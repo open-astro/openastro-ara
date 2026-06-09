@@ -1,12 +1,11 @@
 // AForge Image Processing Library
 // AForge.NET framework
 //
-// Copyright © Andrew Kirillov, 2005-2008
+// Copyright ï¿½ Andrew Kirillov, 2005-2008
 // andrew.kirillov@gmail.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -41,18 +40,16 @@ namespace Accord.Imaging.Filters
     /// <img src="..\images\imaging\threshold_carry.jpg" width="480" height="361" />
     /// </remarks>
     /// 
-    public class ThresholdWithCarry : BaseInPlacePartialFilter
-    {
+    public class ThresholdWithCarry : BaseInPlacePartialFilter {
         private byte threshold = 128;
 
         // private format translation dictionary
-        private Dictionary<PixelFormat, PixelFormat> formatTranslations = new Dictionary<PixelFormat, PixelFormat>( );
+        private Dictionary<PixelFormat, PixelFormat> formatTranslations = new Dictionary<PixelFormat, PixelFormat>();
 
         /// <summary>
         /// Format translations dictionary.
         /// </summary>
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -62,8 +59,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <remarks>Default value is 128.</remarks>
         /// 
-        public byte ThresholdValue
-        {
+        public byte ThresholdValue {
             get { return threshold; }
             set { threshold = value; }
         }
@@ -72,8 +68,7 @@ namespace Accord.Imaging.Filters
         /// Initializes a new instance of the <see cref="ThresholdWithCarry"/> class.
         /// </summary>
         /// 
-        public ThresholdWithCarry( )
-        {
+        public ThresholdWithCarry() {
             // initialize format translation dictionary
             formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
         }
@@ -84,9 +79,8 @@ namespace Accord.Imaging.Filters
         /// 
         /// <param name="threshold">Threshold value.</param>
         /// 
-        public ThresholdWithCarry( byte threshold )
-            : this( )
-        {
+        public ThresholdWithCarry(byte threshold)
+            : this() {
             this.threshold = threshold;
         }
 
@@ -97,41 +91,35 @@ namespace Accord.Imaging.Filters
         /// <param name="image">Source image data.</param>
         /// <param name="rect">Image rectangle for processing by the filter.</param>
         /// 
-        protected override unsafe void ProcessFilter( UnmanagedImage image, Rectangle rect )
-        {
-            int startX  = rect.Left;
-            int startY  = rect.Top;
-            int stopX   = startX + rect.Width;
-            int stopY   = startY + rect.Height;
-            int offset  = image.Stride - rect.Width;
+        protected override unsafe void ProcessFilter(UnmanagedImage image, Rectangle rect) {
+            int startX = rect.Left;
+            int startY = rect.Top;
+            int stopX = startX + rect.Width;
+            int stopY = startY + rect.Height;
+            int offset = image.Stride - rect.Width;
 
             // value which is caried from pixel to pixel
             short carry = 0;
 
             // do the job
-            byte* ptr = (byte*) image.ImageData.ToPointer( );
+            byte* ptr = (byte*)image.ImageData.ToPointer();
 
             // allign pointer to the first pixel to process
-            ptr += ( startY * image.Stride + startX );
+            ptr += (startY * image.Stride + startX);
 
             // for each line	
-            for ( int y = startY; y < stopY; y++ )
-            {
+            for (int y = startY; y < stopY; y++) {
                 carry = 0;
 
                 // for each pixel
-                for ( int x = startX; x < stopX; x++, ptr++ )
-                {
+                for (int x = startX; x < stopX; x++, ptr++) {
                     carry += *ptr;
 
-                    if ( carry >= threshold )
-                    {
-                        *ptr = (byte) 255;
+                    if (carry >= threshold) {
+                        *ptr = (byte)255;
                         carry -= 255;
-                    }
-                    else
-                    {
-                        *ptr = (byte) 0;
+                    } else {
+                        *ptr = (byte)0;
                     }
                 }
                 ptr += offset;

@@ -2,12 +2,11 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © AForge.NET, 2005-2011
+// Copyright ï¿½ AForge.NET, 2005-2011
 // contacts@aforgenet.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -50,8 +49,7 @@ namespace Accord.Imaging.Filters
     /// <img src="..\images\imaging\emboss.jpg" width="480" height="361" />
     /// </remarks>
     /// 
-    public class Convolution : BaseUsingCopyPartialFilter
-    {
+    public class Convolution : BaseUsingCopyPartialFilter {
         // convolution kernel
         private int[,] kernel;
         // division factor
@@ -71,8 +69,7 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Format translations dictionary.
         /// </summary>
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -90,11 +87,9 @@ namespace Accord.Imaging.Filters
         /// 
         /// <exception cref="ArgumentException">Invalid kernel size is specified.</exception>
         /// 
-        public int[,] Kernel
-        {
+        public int[,] Kernel {
             get { return kernel; }
-            set
-            {
+            set {
                 int s = value.GetLength(0);
 
                 // check kernel size
@@ -119,11 +114,9 @@ namespace Accord.Imaging.Filters
         /// 
         /// <exception cref="ArgumentException">Divisor can not be equal to zero.</exception>
         /// 
-        public int Divisor
-        {
+        public int Divisor {
             get { return divisor; }
-            set
-            {
+            set {
                 if (value == 0)
                     throw new ArgumentException("Divisor can not be equal to zero.");
                 divisor = value;
@@ -141,8 +134,7 @@ namespace Accord.Imaging.Filters
         /// <para>Default value is set to <b>0</b>.</para>
         /// </remarks>
         /// 
-        public int Threshold
-        {
+        public int Threshold {
             get { return threshold; }
             set { threshold = value; }
         }
@@ -162,8 +154,7 @@ namespace Accord.Imaging.Filters
         /// <para>Default value is set to <see langword="true"/>.</para>
         /// </remarks>
         /// 
-        public bool DynamicDivisorForEdges
-        {
+        public bool DynamicDivisorForEdges {
             get { return dynamicDivisorForEdges; }
             set { dynamicDivisorForEdges = value; }
         }
@@ -180,8 +171,7 @@ namespace Accord.Imaging.Filters
         /// <para>Default value is set to <see langword="false"/>.</para>
         /// </remarks>
         /// 
-        public bool ProcessAlpha
-        {
+        public bool ProcessAlpha {
             get { return processAlpha; }
             set { processAlpha = value; }
         }
@@ -189,8 +179,7 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Initializes a new instance of the <see cref="Convolution"/> class.
         /// </summary>
-        protected Convolution()
-        {
+        protected Convolution() {
             formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
             formatTranslations[PixelFormat.Format16bppGrayScale] = PixelFormat.Format16bppGrayScale;
             formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format24bppRgb;
@@ -215,17 +204,14 @@ namespace Accord.Imaging.Filters
         /// square, its width/height should be odd and should be in the [3, 25] range.</exception>
         /// 
         public Convolution(int[,] kernel)
-            : this()
-        {
+            : this() {
             Kernel = kernel;
 
             divisor = 0;
 
             // calculate divisor
-            for (int i = 0, n = kernel.GetLength(0); i < n; i++)
-            {
-                for (int j = 0, k = kernel.GetLength(1); j < k; j++)
-                {
+            for (int i = 0, n = kernel.GetLength(0); i < n; i++) {
+                for (int j = 0, k = kernel.GetLength(1); j < k; j++) {
                     divisor += kernel[i, j];
                 }
             }
@@ -245,8 +231,7 @@ namespace Accord.Imaging.Filters
         /// <exception cref="ArgumentException">Divisor can not be equal to zero.</exception>
         /// 
         public Convolution(int[,] kernel, int divisor)
-            : this()
-        {
+            : this() {
             Kernel = kernel;
             Divisor = divisor;
         }
@@ -259,8 +244,7 @@ namespace Accord.Imaging.Filters
         /// <param name="destinationData">Destination image data.</param>
         /// <param name="rect">Image rectangle for processing by the filter.</param>
         /// 
-        protected override unsafe void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData, Rectangle rect)
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData, Rectangle rect) {
             int pixelSize = Image.GetPixelFormatSize(sourceData.PixelFormat) / 8;
 
             // processing start and stop X,Y positions
@@ -270,8 +254,7 @@ namespace Accord.Imaging.Filters
             int stopY = startY + rect.Height;
 
             // check pixel size to find if we deal with 8 or 16 bpp channels
-            if ((pixelSize <= 4) && (pixelSize != 2))
-            {
+            if ((pixelSize <= 4) && (pixelSize != 2)) {
                 int srcStride = sourceData.Stride;
                 int dstStride = destinationData.Stride;
 
@@ -286,26 +269,18 @@ namespace Accord.Imaging.Filters
                 dst += (startY * dstStride + startX * pixelSize);
 
                 // do the processing job
-                if (destinationData.PixelFormat == PixelFormat.Format8bppIndexed)
-                {
+                if (destinationData.PixelFormat == PixelFormat.Format8bppIndexed) {
                     // grayscale image
                     Process8bppImage(src, dst, srcStride, dstStride, srcOffset, dstOffset, startX, startY, stopX, stopY);
-                }
-                else
-                {
+                } else {
                     // RGB image
-                    if ((pixelSize == 3) || (!processAlpha))
-                    {
+                    if ((pixelSize == 3) || (!processAlpha)) {
                         Process24bppImage(src, dst, srcStride, dstStride, srcOffset, dstOffset, startX, startY, stopX, stopY, pixelSize);
-                    }
-                    else
-                    {
+                    } else {
                         Process32bppImage(src, dst, srcStride, dstStride, srcOffset, dstOffset, startX, startY, stopX, stopY);
                     }
                 }
-            }
-            else
-            {
+            } else {
                 pixelSize /= 2;
 
                 int dstStride = destinationData.Stride / 2;
@@ -319,20 +294,14 @@ namespace Accord.Imaging.Filters
                 baseSrc += (startX * pixelSize);
                 baseDst += (startX * pixelSize);
 
-                if (sourceData.PixelFormat == PixelFormat.Format16bppGrayScale)
-                {
+                if (sourceData.PixelFormat == PixelFormat.Format16bppGrayScale) {
                     // 16 bpp grayscale image
                     Process16bppImage(baseSrc, baseDst, srcStride, dstStride, startX, startY, stopX, stopY);
-                }
-                else
-                {
+                } else {
                     // RGB image
-                    if ((pixelSize == 3) || (!processAlpha))
-                    {
+                    if ((pixelSize == 3) || (!processAlpha)) {
                         Process48bppImage(baseSrc, baseDst, srcStride, dstStride, startX, startY, stopX, stopY, pixelSize);
-                    }
-                    else
-                    {
+                    } else {
                         Process64bppImage(baseSrc, baseDst, srcStride, dstStride, startX, startY, stopX, stopY);
                     }
                 }
@@ -342,8 +311,7 @@ namespace Accord.Imaging.Filters
         // Process 8 bpp grayscale images
         private unsafe void Process8bppImage(byte* src, byte* dst,
                                               int srcStride, int dstStride, int srcOffset, int dstOffset,
-                                              int startX, int startY, int stopX, int stopY)
-        {
+                                              int startX, int startY, int stopX, int stopY) {
             // loop and array indexes
             int i, j, t, k, ir, jr;
             // kernel's radius
@@ -357,16 +325,13 @@ namespace Accord.Imaging.Filters
             int processedKernelSize;
 
             // for each line
-            for (int y = startY; y < stopY; y++)
-            {
+            for (int y = startY; y < stopY; y++) {
                 // for each pixel
-                for (int x = startX; x < stopX; x++, src++, dst++)
-                {
+                for (int x = startX; x < stopX; x++, src++, dst++) {
                     g = div = processedKernelSize = 0;
 
                     // for each kernel row
-                    for (i = 0; i < size; i++)
-                    {
+                    for (i = 0; i < size; i++) {
                         ir = i - radius;
                         t = y + ir;
 
@@ -378,8 +343,7 @@ namespace Accord.Imaging.Filters
                             break;
 
                         // for each kernel column
-                        for (j = 0; j < size; j++)
-                        {
+                        for (j = 0; j < size; j++) {
                             jr = j - radius;
                             t = x + jr;
 
@@ -387,8 +351,7 @@ namespace Accord.Imaging.Filters
                             if (t < startX)
                                 continue;
 
-                            if (t < stopX)
-                            {
+                            if (t < stopX) {
                                 k = kernel[i, j];
 
                                 div += k;
@@ -399,24 +362,19 @@ namespace Accord.Imaging.Filters
                     }
 
                     // check if all kernel elements were processed
-                    if (processedKernelSize == kernelSize)
-                    {
+                    if (processedKernelSize == kernelSize) {
                         // all kernel elements are processed - we are not on the edge
                         div = divisor;
-                    }
-                    else
-                    {
+                    } else {
                         // we are on edge. do we need to use dynamic divisor or not?
-                        if (!dynamicDivisorForEdges)
-                        {
+                        if (!dynamicDivisorForEdges) {
                             // do
                             div = divisor;
                         }
                     }
 
                     // check divider
-                    if (div != 0)
-                    {
+                    if (div != 0) {
                         g /= div;
                     }
                     g += threshold;
@@ -430,8 +388,7 @@ namespace Accord.Imaging.Filters
         // Process 24 bpp images or 32 bpp images with copying alpha channel
         private unsafe void Process24bppImage(byte* src, byte* dst,
                                                int srcStride, int dstStride, int srcOffset, int dstOffset,
-                                               int startX, int startY, int stopX, int stopY, int pixelSize)
-        {
+                                               int startX, int startY, int stopX, int stopY, int pixelSize) {
             // loop and array indexes
             int i, j, t, k, ir, jr;
             // kernel's radius
@@ -447,16 +404,13 @@ namespace Accord.Imaging.Filters
             byte* p;
 
             // for each line
-            for (int y = startY; y < stopY; y++)
-            {
+            for (int y = startY; y < stopY; y++) {
                 // for each pixel
-                for (int x = startX; x < stopX; x++, src += pixelSize, dst += pixelSize)
-                {
+                for (int x = startX; x < stopX; x++, src += pixelSize, dst += pixelSize) {
                     r = g = b = div = processedKernelSize = 0;
 
                     // for each kernel row
-                    for (i = 0; i < size; i++)
-                    {
+                    for (i = 0; i < size; i++) {
                         ir = i - radius;
                         t = y + ir;
 
@@ -468,8 +422,7 @@ namespace Accord.Imaging.Filters
                             break;
 
                         // for each kernel column
-                        for (j = 0; j < size; j++)
-                        {
+                        for (j = 0; j < size; j++) {
                             jr = j - radius;
                             t = x + jr;
 
@@ -477,8 +430,7 @@ namespace Accord.Imaging.Filters
                             if (t < startX)
                                 continue;
 
-                            if (t < stopX)
-                            {
+                            if (t < stopX) {
                                 k = kernel[i, j];
                                 p = &src[ir * srcStride + jr * pixelSize];
 
@@ -494,24 +446,19 @@ namespace Accord.Imaging.Filters
                     }
 
                     // check if all kernel elements were processed
-                    if (processedKernelSize == kernelSize)
-                    {
+                    if (processedKernelSize == kernelSize) {
                         // all kernel elements are processed - we are not on the edge
                         div = divisor;
-                    }
-                    else
-                    {
+                    } else {
                         // we are on edge. do we need to use dynamic divisor or not?
-                        if (!dynamicDivisorForEdges)
-                        {
+                        if (!dynamicDivisorForEdges) {
                             // do
                             div = divisor;
                         }
                     }
 
                     // check divider
-                    if (div != 0)
-                    {
+                    if (div != 0) {
                         r /= div;
                         g /= div;
                         b /= div;
@@ -536,8 +483,7 @@ namespace Accord.Imaging.Filters
         // Process 32 bpp images including alpha channel
         private unsafe void Process32bppImage(byte* src, byte* dst,
                                                int srcStride, int dstStride, int srcOffset, int dstOffset,
-                                               int startX, int startY, int stopX, int stopY)
-        {
+                                               int startX, int startY, int stopX, int stopY) {
             // loop and array indexes
             int i, j, t, k, ir, jr;
             // kernel's radius
@@ -553,16 +499,13 @@ namespace Accord.Imaging.Filters
             byte* p;
 
             // for each line
-            for (int y = startY; y < stopY; y++)
-            {
+            for (int y = startY; y < stopY; y++) {
                 // for each pixel
-                for (int x = startX; x < stopX; x++, src += 4, dst += 4)
-                {
+                for (int x = startX; x < stopX; x++, src += 4, dst += 4) {
                     r = g = b = a = div = processedKernelSize = 0;
 
                     // for each kernel row
-                    for (i = 0; i < size; i++)
-                    {
+                    for (i = 0; i < size; i++) {
                         ir = i - radius;
                         t = y + ir;
 
@@ -574,8 +517,7 @@ namespace Accord.Imaging.Filters
                             break;
 
                         // for each kernel column
-                        for (j = 0; j < size; j++)
-                        {
+                        for (j = 0; j < size; j++) {
                             jr = j - radius;
                             t = x + jr;
 
@@ -583,8 +525,7 @@ namespace Accord.Imaging.Filters
                             if (t < startX)
                                 continue;
 
-                            if (t < stopX)
-                            {
+                            if (t < stopX) {
                                 k = kernel[i, j];
                                 p = &src[ir * srcStride + jr * 4];
 
@@ -601,24 +542,19 @@ namespace Accord.Imaging.Filters
                     }
 
                     // check if all kernel elements were processed
-                    if (processedKernelSize == kernelSize)
-                    {
+                    if (processedKernelSize == kernelSize) {
                         // all kernel elements are processed - we are not on the edge
                         div = divisor;
-                    }
-                    else
-                    {
+                    } else {
                         // we are on edge. do we need to use dynamic divisor or not?
-                        if (!dynamicDivisorForEdges)
-                        {
+                        if (!dynamicDivisorForEdges) {
                             // do
                             div = divisor;
                         }
                     }
 
                     // check divider
-                    if (div != 0)
-                    {
+                    if (div != 0) {
                         r /= div;
                         g /= div;
                         b /= div;
@@ -641,8 +577,7 @@ namespace Accord.Imaging.Filters
 
         // Process 16 bpp grayscale images
         private unsafe void Process16bppImage(ushort* baseSrc, ushort* baseDst, int srcStride, int dstStride,
-                                               int startX, int startY, int stopX, int stopY)
-        {
+                                               int startX, int startY, int stopX, int stopY) {
             // loop and array indexes
             int i, j, t, k, ir, jr;
             // kernel's radius
@@ -656,19 +591,16 @@ namespace Accord.Imaging.Filters
             int processedKernelSize;
 
             // for each line
-            for (int y = startY; y < stopY; y++)
-            {
+            for (int y = startY; y < stopY; y++) {
                 ushort* src = baseSrc + y * srcStride;
                 ushort* dst = baseDst + y * dstStride;
 
                 // for each pixel
-                for (int x = startX; x < stopX; x++, src++, dst++)
-                {
+                for (int x = startX; x < stopX; x++, src++, dst++) {
                     g = div = processedKernelSize = 0;
 
                     // for each kernel row
-                    for (i = 0; i < size; i++)
-                    {
+                    for (i = 0; i < size; i++) {
                         ir = i - radius;
                         t = y + ir;
 
@@ -680,8 +612,7 @@ namespace Accord.Imaging.Filters
                             break;
 
                         // for each kernel column
-                        for (j = 0; j < size; j++)
-                        {
+                        for (j = 0; j < size; j++) {
                             jr = j - radius;
                             t = x + jr;
 
@@ -689,8 +620,7 @@ namespace Accord.Imaging.Filters
                             if (t < startX)
                                 continue;
 
-                            if (t < stopX)
-                            {
+                            if (t < stopX) {
                                 k = kernel[i, j];
 
                                 div += k;
@@ -701,24 +631,19 @@ namespace Accord.Imaging.Filters
                     }
 
                     // check if all kernel elements were processed
-                    if (processedKernelSize == kernelSize)
-                    {
+                    if (processedKernelSize == kernelSize) {
                         // all kernel elements are processed - we are not on the edge
                         div = divisor;
-                    }
-                    else
-                    {
+                    } else {
                         // we are on edge. do we need to use dynamic divisor or not?
-                        if (!dynamicDivisorForEdges)
-                        {
+                        if (!dynamicDivisorForEdges) {
                             // do
                             div = divisor;
                         }
                     }
 
                     // check divider
-                    if (div != 0)
-                    {
+                    if (div != 0) {
                         g /= div;
                     }
                     g += threshold;
@@ -729,8 +654,7 @@ namespace Accord.Imaging.Filters
 
         // Process 48 bpp images or 64 bpp images with copying alpha channel
         private unsafe void Process48bppImage(ushort* baseSrc, ushort* baseDst, int srcStride, int dstStride,
-                                               int startX, int startY, int stopX, int stopY, int pixelSize)
-        {
+                                               int startX, int startY, int stopX, int stopY, int pixelSize) {
             // loop and array indexes
             int i, j, t, k, ir, jr;
             // kernel's radius
@@ -746,19 +670,16 @@ namespace Accord.Imaging.Filters
             ushort* p;
 
             // for each line
-            for (int y = startY; y < stopY; y++)
-            {
+            for (int y = startY; y < stopY; y++) {
                 ushort* src = baseSrc + y * srcStride;
                 ushort* dst = baseDst + y * dstStride;
 
                 // for each pixel
-                for (int x = startX; x < stopX; x++, src += pixelSize, dst += pixelSize)
-                {
+                for (int x = startX; x < stopX; x++, src += pixelSize, dst += pixelSize) {
                     r = g = b = div = processedKernelSize = 0;
 
                     // for each kernel row
-                    for (i = 0; i < size; i++)
-                    {
+                    for (i = 0; i < size; i++) {
                         ir = i - radius;
                         t = y + ir;
 
@@ -770,8 +691,7 @@ namespace Accord.Imaging.Filters
                             break;
 
                         // for each kernel column
-                        for (j = 0; j < size; j++)
-                        {
+                        for (j = 0; j < size; j++) {
                             jr = j - radius;
                             t = x + jr;
 
@@ -779,8 +699,7 @@ namespace Accord.Imaging.Filters
                             if (t < startX)
                                 continue;
 
-                            if (t < stopX)
-                            {
+                            if (t < stopX) {
                                 k = kernel[i, j];
                                 p = &src[ir * srcStride + jr * pixelSize];
 
@@ -796,24 +715,19 @@ namespace Accord.Imaging.Filters
                     }
 
                     // check if all kernel elements were processed
-                    if (processedKernelSize == kernelSize)
-                    {
+                    if (processedKernelSize == kernelSize) {
                         // all kernel elements are processed - we are not on the edge
                         div = divisor;
-                    }
-                    else
-                    {
+                    } else {
                         // we are on edge. do we need to use dynamic divisor or not?
-                        if (!dynamicDivisorForEdges)
-                        {
+                        if (!dynamicDivisorForEdges) {
                             // do
                             div = divisor;
                         }
                     }
 
                     // check divider
-                    if (div != 0)
-                    {
+                    if (div != 0) {
                         r /= div;
                         g /= div;
                         b /= div;
@@ -835,8 +749,7 @@ namespace Accord.Imaging.Filters
 
         // Process 64 bpp images including alpha channel
         private unsafe void Process64bppImage(ushort* baseSrc, ushort* baseDst, int srcStride, int dstStride,
-                                               int startX, int startY, int stopX, int stopY)
-        {
+                                               int startX, int startY, int stopX, int stopY) {
             // loop and array indexes
             int i, j, t, k, ir, jr;
             // kernel's radius
@@ -852,19 +765,16 @@ namespace Accord.Imaging.Filters
             ushort* p;
 
             // for each line
-            for (int y = startY; y < stopY; y++)
-            {
+            for (int y = startY; y < stopY; y++) {
                 ushort* src = baseSrc + y * srcStride;
                 ushort* dst = baseDst + y * dstStride;
 
                 // for each pixel
-                for (int x = startX; x < stopX; x++, src += 4, dst += 4)
-                {
+                for (int x = startX; x < stopX; x++, src += 4, dst += 4) {
                     r = g = b = a = div = processedKernelSize = 0;
 
                     // for each kernel row
-                    for (i = 0; i < size; i++)
-                    {
+                    for (i = 0; i < size; i++) {
                         ir = i - radius;
                         t = y + ir;
 
@@ -876,8 +786,7 @@ namespace Accord.Imaging.Filters
                             break;
 
                         // for each kernel column
-                        for (j = 0; j < size; j++)
-                        {
+                        for (j = 0; j < size; j++) {
                             jr = j - radius;
                             t = x + jr;
 
@@ -885,8 +794,7 @@ namespace Accord.Imaging.Filters
                             if (t < startX)
                                 continue;
 
-                            if (t < stopX)
-                            {
+                            if (t < stopX) {
                                 k = kernel[i, j];
                                 p = &src[ir * srcStride + jr * 4];
 
@@ -903,24 +811,19 @@ namespace Accord.Imaging.Filters
                     }
 
                     // check if all kernel elements were processed
-                    if (processedKernelSize == kernelSize)
-                    {
+                    if (processedKernelSize == kernelSize) {
                         // all kernel elements are processed - we are not on the edge
                         div = divisor;
-                    }
-                    else
-                    {
+                    } else {
                         // we are on edge. do we need to use dynamic divisor or not?
-                        if (!dynamicDivisorForEdges)
-                        {
+                        if (!dynamicDivisorForEdges) {
                             // do
                             div = divisor;
                         }
                     }
 
                     // check divider
-                    if (div != 0)
-                    {
+                    if (div != 0) {
                         r /= div;
                         g /= div;
                         b /= div;

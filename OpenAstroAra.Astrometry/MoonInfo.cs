@@ -3,6 +3,7 @@ using OxyPlot;
 using OxyPlot.Axes;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -14,7 +15,7 @@ namespace OpenAstroAra.Astrometry {
         }
 
         private Coordinates _coordinates;
-        private ObserverInfo _observer;
+        private ObserverInfo _observer = null!;  // set via SetReferenceDateAndObserver before any calculation
 
         private DataPoint _maxMoonAltitude;
 
@@ -31,8 +32,8 @@ namespace OpenAstroAra.Astrometry {
             }
         }
 
-        private List<DataPoint> datapoints;
-        public List<DataPoint> DataPoints => datapoints;
+        private List<DataPoint>? datapoints;
+        public IReadOnlyList<DataPoint>? DataPoints => datapoints;
 
         private static Dictionary<DateTime, List<DataPoint>> Points = new Dictionary<DateTime, List<DataPoint>>();
 
@@ -58,12 +59,12 @@ namespace OpenAstroAra.Astrometry {
             get => _separation;
             set {
                 _separation = value;
-                SeparationText = Math.Round(Separation, 0).ToString().PadLeft(3, '0') + "°";
+                SeparationText = Math.Round(Separation, 0).ToString(CultureInfo.InvariantCulture).PadLeft(3, '0') + "°";
                 RaisePropertyChanged();
             }
         }
 
-        private string _separationText;
+        private string _separationText = string.Empty;
 
         public string SeparationText {
             get => _separationText;
@@ -85,14 +86,14 @@ namespace OpenAstroAra.Astrometry {
             }
         }
 
-        public AstroUtil.MoonPhase Phase => AstroUtil.GetMoonPhase(DateTime.Now);
+        public static AstroUtil.MoonPhase Phase => AstroUtil.GetMoonPhase(DateTime.Now, new ObserverInfo());
 
         // Phase 0.5p2 net10.0 conversion: WPF Color shade for the moon-icon
         // tinting is client-side concern (Flutter renders the chart). Returning
         // an ARGB hex string preserves the wire format.
-        public string Color {
+        public static string Color {
             get {
-                double angle = Math.Abs(AstroUtil.GetMoonPositionAngle(DateTime.Now));
+                double angle = Math.Abs(AstroUtil.GetMoonPositionAngle(DateTime.Now, new ObserverInfo()));
                 byte gray = (byte)(angle * 255 / 180);
                 byte alpha = (byte)(255 - gray);
                 return $"#{alpha:X2}{gray:X2}{gray:X2}{gray:X2}";
@@ -101,9 +102,9 @@ namespace OpenAstroAra.Astrometry {
 
         private static object lockObj = new object();
         private void CalculateMoonData() {
-            lock(lockObj) { 
-                if(_referenceDate == DateTime.MinValue) { return;  }
-                if(!Points.ContainsKey(_referenceDate)) {
+            lock (lockObj) {
+                if (_referenceDate == DateTime.MinValue) { return; }
+                if (!Points.ContainsKey(_referenceDate)) {
                     var list = new List<DataPoint>();
 
                     DateTime start = _referenceDate;
@@ -117,12 +118,12 @@ namespace OpenAstroAra.Astrometry {
 
                 datapoints = Points[_referenceDate];
                 MaxAltitude = datapoints.OrderByDescending((x) => x.Y).FirstOrDefault();
-                RaisePropertyChanged("DataPoints");
+                RaisePropertyChanged(nameof(DataPoints));
             }
         }
 
         private void CalculateSeparation(DateTime time) {
-            NOVAS.SkyPosition pos = AstroUtil.GetMoonPosition(time, AstroUtil.GetJulianDate(time), _observer);
+            SkyPosition pos = AstroUtil.GetMoonPosition(time, AstroUtil.GetJulianDate(time), _observer);
             var moonRaRadians = AstroUtil.ToRadians(AstroUtil.HoursToDegrees(pos.RA));
             var moonDecRadians = AstroUtil.ToRadians(pos.Dec);
 

@@ -13,13 +13,13 @@
 #endregion "copyright"
 
 using NUnit.Framework;
+using NUnit.Framework.Legacy;
+using OpenAstroAra.Core.Utility;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using OpenAstroAra.Core.Utility;
-using NUnit.Framework.Legacy;
 
 namespace OpenAstroAra.Test.Utility {
 
@@ -29,14 +29,14 @@ namespace OpenAstroAra.Test.Utility {
         [Test]
         public void UnicodeToAsciiNullTest() {
             // Arrange
-            string unicode = null;
+            string? unicode = null;
             string ascii = "";
 
             // Act
             string result = TextEncoding.UnicodeToAscii(unicode);
 
             // Assert
-            ClassicAssert.AreEqual(ascii, result);
+            Assert.That(result, Is.EqualTo(ascii));
         }
 
         [Test]
@@ -49,7 +49,7 @@ namespace OpenAstroAra.Test.Utility {
             string result = TextEncoding.UnicodeToAscii(unicode);
 
             // Assert
-            ClassicAssert.AreEqual(ascii, result);
+            Assert.That(result, Is.EqualTo(ascii));
         }
 
         [Test]
@@ -62,20 +62,20 @@ namespace OpenAstroAra.Test.Utility {
             string result = TextEncoding.UnicodeToAscii(unicode);
 
             // Assert
-            ClassicAssert.AreEqual(ascii, result);
+            Assert.That(result, Is.EqualTo(ascii));
         }
 
         [Test]
         public void GreekToLatinAbbreviationNullTest() {
             // Arrange
-            string hasGreek = null;
+            string? hasGreek = null;
             string inLatin = "";
 
             // Act
             string result = TextEncoding.GreekToLatinAbbreviation(hasGreek);
 
             // Assert
-            ClassicAssert.AreEqual(inLatin, result);
+            Assert.That(result, Is.EqualTo(inLatin));
         }
 
         [Test]
@@ -88,7 +88,7 @@ namespace OpenAstroAra.Test.Utility {
             string result = TextEncoding.GreekToLatinAbbreviation(hasGreek);
 
             // Assert
-            ClassicAssert.AreEqual(inLatin, result);
+            Assert.That(result, Is.EqualTo(inLatin));
         }
 
         [Test]
@@ -101,7 +101,7 @@ namespace OpenAstroAra.Test.Utility {
             string result = TextEncoding.GreekToLatinAbbreviation(hasGreek);
 
             // Assert
-            ClassicAssert.AreEqual(inLatin, result);
+            Assert.That(result, Is.EqualTo(inLatin));
         }
 
         [Test]
@@ -114,7 +114,7 @@ namespace OpenAstroAra.Test.Utility {
             string result = TextEncoding.GreekToLatinAbbreviation(hasOnylLatin);
 
             // Assert
-            ClassicAssert.AreEqual(inLatin, result);
+            Assert.That(result, Is.EqualTo(inLatin));
         }
     }
 }

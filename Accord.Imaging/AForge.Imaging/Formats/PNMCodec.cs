@@ -26,12 +26,11 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging.Formats
-{
+namespace Accord.Imaging.Formats {
     using System;
-    using System.IO;
     using System.Drawing;
     using System.Drawing.Imaging;
+    using System.IO;
     using System.Text;
 
     /// <summary>
@@ -62,8 +61,7 @@ namespace Accord.Imaging.Formats
     [FormatDecoder("pgm")]
     [FormatDecoder("pnm")]
     [FormatDecoder("ppm")]
-    public class PNMCodec : IImageDecoder
-    {
+    public class PNMCodec : IImageDecoder {
         // stream with PNM encoded data
         private Stream stream = null;
         // information about images retrieved from header
@@ -85,8 +83,7 @@ namespace Accord.Imaging.Formats
         /// <exception cref="NotSupportedException">Format of the PNM image is not supported.</exception>
         /// <exception cref="ArgumentException">The stream contains invalid (broken) PNM image.</exception>
         /// 
-        public Bitmap DecodeSingleFrame(Stream stream)
-        {
+        public Bitmap DecodeSingleFrame(Stream stream) {
             PNMImageInfo imageInfo = ReadHeader(stream);
 
             return ReadImageFrame(stream, imageInfo);
@@ -104,8 +101,7 @@ namespace Accord.Imaging.Formats
         /// <exception cref="NotSupportedException">Format of the PNM image is not supported.</exception>
         /// <exception cref="ArgumentException">The stream contains invalid (broken) PNM image.</exception>
         ///
-        public int Open(Stream stream)
-        {
+        public int Open(Stream stream) {
             // close previous decoding
             Close();
 
@@ -129,11 +125,9 @@ namespace Accord.Imaging.Formats
         /// <exception cref="ArgumentOutOfRangeException">Stream does not contain frame with specified index.</exception>
         /// <exception cref="ArgumentException">The stream contains invalid (broken) PNM image.</exception>
         /// 
-        public Bitmap DecodeFrame(int frameIndex, out ImageInfo imageInfo)
-        {
+        public Bitmap DecodeFrame(int frameIndex, out ImageInfo imageInfo) {
             // check requested frame index
-            if (frameIndex != 0)
-            {
+            if (frameIndex != 0) {
                 throw new ArgumentOutOfRangeException("Currently opened stream does not contain frame with specified index.");
             }
 
@@ -156,56 +150,47 @@ namespace Accord.Imaging.Formats
         /// <remarks><para>The method does not close stream itself, but just closes
         /// decoding cleaning all associated data with it.</para></remarks>
         /// 
-        public void Close()
-        {
+        public void Close() {
             stream = null;
             imageInfo = null;
         }
 
         // Read and process PNM header. After the header is read stream pointer will
         // point to data.
-        private PNMImageInfo ReadHeader(Stream stream)
-        {
+        private PNMImageInfo ReadHeader(Stream stream) {
             // read magic word
             char magic1 = (char)stream.ReadByte();
             char magic2 = (char)stream.ReadByte();
 
             // check if it is valid PNM image
-            if ((magic1 != 'P') || (magic2 < '1') || (magic2 > '6'))
-            {
+            if ((magic1 != 'P') || (magic2 < '1') || (magic2 > '6')) {
                 throw new FormatException("The stream does not contain PNM image.");
             }
 
             // check if it is P2, P3, P5 or P6 format
-            if ((magic2 != '2') && (magic2 != '3') && (magic2 != '5') && (magic2 != '6'))
-            {
+            if ((magic2 != '2') && (magic2 != '3') && (magic2 != '5') && (magic2 != '6')) {
                 throw new NotSupportedException("Format P{0} is not supported yet. Only P2, P3, P5 and P6 are supported for now.".Format(magic2));
             }
 
             int width = 0, height = 0, maxValue = 0;
 
-            try
-            {
+            try {
                 // read image's width and height
                 width = ReadIntegerValue(stream);
                 height = ReadIntegerValue(stream);
                 // read pixel's highiest value
                 maxValue = ReadIntegerValue(stream);
-            }
-            catch
-            {
+            } catch {
                 throw new ArgumentException("The stream does not contain valid PNM image.");
             }
 
             // check if all attributes are valid
-            if ((width <= 0) || (height <= 0) || (maxValue <= 0))
-            {
+            if ((width <= 0) || (height <= 0) || (maxValue <= 0)) {
                 throw new ArgumentException("The stream does not contain valid PNM image.");
             }
 
             // check maximum pixel's value
-            if (maxValue > 255)
-            {
+            if (maxValue > 255) {
                 throw new NotSupportedException("255 is the maximum pixel's value, which is supported for now.");
             }
 
@@ -218,13 +203,10 @@ namespace Accord.Imaging.Formats
         }
 
         // Read image frame from the specified stream (current stream's position is used)
-        private static Bitmap ReadImageFrame(Stream stream, PNMImageInfo imageInfo)
-        {
-            try
-            {
+        private static Bitmap ReadImageFrame(Stream stream, PNMImageInfo imageInfo) {
+            try {
                 // decode PNM image depending on its format
-                switch (imageInfo.Version)
-                {
+                switch (imageInfo.Version) {
                     case 2:
                         return ReadP2Image(new StreamReader(stream), imageInfo.Width, imageInfo.Height, imageInfo.MaxDataValue);
                     case 3:
@@ -234,9 +216,7 @@ namespace Accord.Imaging.Formats
                     case 6:
                         return ReadP6Image(stream, imageInfo.Width, imageInfo.Height, imageInfo.MaxDataValue);
                 }
-            }
-            catch
-            {
+            } catch {
                 throw new ArgumentException("The stream does not contain valid PNM image.");
             }
 
@@ -244,8 +224,7 @@ namespace Accord.Imaging.Formats
         }
 
         // Load P2 PGM image (grayscale PNM image with ascii encoding)
-        private static unsafe Bitmap ReadP2Image(TextReader stream, int width, int height, int maxValue)
-        {
+        private static unsafe Bitmap ReadP2Image(TextReader stream, int width, int height, int maxValue) {
             double scalingFactor = 255 / (double)maxValue;
 
             // create new bitmap and lock it
@@ -260,8 +239,7 @@ namespace Accord.Imaging.Formats
             string all = stream.ReadToEnd();
             string[] values = all.Split(emptyChars, StringSplitOptions.RemoveEmptyEntries);
 
-            for (int y = 0, z = 0; y < height; y++)
-            {
+            for (int y = 0, z = 0; y < height; y++) {
                 // fill next image row
                 for (int x = 0; x < width; x++, ptr++, z++)
                     *ptr = (byte)(scalingFactor * Byte.Parse(values[z]));
@@ -274,8 +252,7 @@ namespace Accord.Imaging.Formats
         }
 
         // Load P5 PGM image (grayscale PNM image with binary encoding)
-        private static unsafe Bitmap ReadP5Image(Stream stream, int width, int height, int maxValue)
-        {
+        private static unsafe Bitmap ReadP5Image(Stream stream, int width, int height, int maxValue) {
             double scalingFactor = 255 / (double)maxValue;
 
             // create new bitmap and lock it
@@ -291,18 +268,15 @@ namespace Accord.Imaging.Formats
             int totalBytesRead = 0, bytesRead = 0;
 
             // load all rows
-            for (int y = 0; y < height; y++)
-            {
+            for (int y = 0; y < height; y++) {
                 totalBytesRead = 0;
                 bytesRead = 0;
 
                 // load next line
-                while (totalBytesRead != width)
-                {
+                while (totalBytesRead != width) {
                     bytesRead = stream.Read(line, totalBytesRead, width - totalBytesRead);
 
-                    if (bytesRead == 0)
-                    {
+                    if (bytesRead == 0) {
                         // if we've reached the end before complete image is loaded, then there should
                         // be something wrong
                         throw new InvalidOperationException("Execution should not reach here.");
@@ -314,8 +288,7 @@ namespace Accord.Imaging.Formats
                 // fill next image row
                 byte* row = ptr + stride * y;
 
-                for (int x = 0; x < width; x++, row++)
-                {
+                for (int x = 0; x < width; x++, row++) {
                     *row = (byte)(scalingFactor * line[x]);
                 }
             }
@@ -326,8 +299,7 @@ namespace Accord.Imaging.Formats
         }
 
         // Load P3 PPM image (color PNM image with ascii encoding)
-        private static unsafe Bitmap ReadP3Image(TextReader stream, int width, int height, int maxValue)
-        {
+        private static unsafe Bitmap ReadP3Image(TextReader stream, int width, int height, int maxValue) {
             double scalingFactor = 255 / (double)maxValue;
 
             // create new bitmap and lock it
@@ -343,11 +315,9 @@ namespace Accord.Imaging.Formats
             string[] values = all.Split(emptyChars, StringSplitOptions.RemoveEmptyEntries);
 
             // load all rows
-            for (int y = 0, z = 0; y < height; y++)
-            {
+            for (int y = 0, z = 0; y < height; y++) {
                 // fill next image row
-                for (int x = 0, i = 0; x < width; x++, i += 3, ptr += 3, z += 3)
-                {
+                for (int x = 0, i = 0; x < width; x++, i += 3, ptr += 3, z += 3) {
                     ptr[2] = (byte)(scalingFactor * Byte.Parse(values[z + 0]));   // red
                     ptr[1] = (byte)(scalingFactor * Byte.Parse(values[z + 1]));   // green
                     ptr[0] = (byte)(scalingFactor * Byte.Parse(values[z + 2]));   // blue
@@ -362,8 +332,7 @@ namespace Accord.Imaging.Formats
         }
 
         // Load P6 PPM image (color PNM image with binary encoding)
-        private static unsafe Bitmap ReadP6Image(Stream stream, int width, int height, int maxValue)
-        {
+        private static unsafe Bitmap ReadP6Image(Stream stream, int width, int height, int maxValue) {
             double scalingFactor = (double)255 / maxValue;
 
             // create new bitmap and lock it
@@ -380,18 +349,15 @@ namespace Accord.Imaging.Formats
             int totalBytesRead = 0, bytesRead = 0;
 
             // load all rows
-            for (int y = 0; y < height; y++)
-            {
+            for (int y = 0; y < height; y++) {
                 totalBytesRead = 0;
                 bytesRead = 0;
 
                 // load next line
-                while (totalBytesRead != lineSize)
-                {
+                while (totalBytesRead != lineSize) {
                     bytesRead = stream.Read(line, totalBytesRead, lineSize - totalBytesRead);
 
-                    if (bytesRead == 0)
-                    {
+                    if (bytesRead == 0) {
                         // if we've reached the end before complete image is loaded, then there should
                         // be something wrong
                         throw new InvalidOperationException("Execution should not reach here.");
@@ -403,8 +369,7 @@ namespace Accord.Imaging.Formats
                 // fill next image row
                 byte* row = ptr + stride * y;
 
-                for (int x = 0, i = 0; x < width; x++, i += 3, row += 3)
-                {
+                for (int x = 0, i = 0; x < width; x++, i += 3, row += 3) {
                     row[2] = (byte)(scalingFactor * line[i]);       // red
                     row[1] = (byte)(scalingFactor * line[i + 1]);   // green
                     row[0] = (byte)(scalingFactor * line[i + 2]);   // blue
@@ -417,8 +382,7 @@ namespace Accord.Imaging.Formats
         }
 
         // Read integer ASCII value from the source stream.
-        private int ReadIntegerValue(Stream stream)
-        {
+        private int ReadIntegerValue(Stream stream) {
             byte[] buffer = new byte[256];
             int bytesRead = 1;
 
@@ -433,20 +397,16 @@ namespace Accord.Imaging.Formats
         // Skip spaces (spaces, new lines, tabs and comment lines) in the specified stream
         // and return the first non-space byte. Stream's position will point to the next
         // byte coming after the first found non-space byte.
-        private byte SkipSpaces(Stream stream)
-        {
+        private byte SkipSpaces(Stream stream) {
             byte nextByte = (byte)stream.ReadByte();
 
-            while ((nextByte == ' ') || (nextByte == '\n') || (nextByte == '\r') || (nextByte == '\t'))
-            {
+            while ((nextByte == ' ') || (nextByte == '\n') || (nextByte == '\r') || (nextByte == '\t')) {
                 nextByte = (byte)stream.ReadByte();
             }
 
-            if (nextByte == '#')
-            {
+            if (nextByte == '#') {
                 // read until new line
-                while (nextByte != '\n')
-                {
+                while (nextByte != '\n') {
                     nextByte = (byte)stream.ReadByte();
                 }
                 // skip pending spaces or another comment
@@ -459,13 +419,11 @@ namespace Accord.Imaging.Formats
         // Read stream until space is found (space, new line, tab or comment). Returns
         // number of bytes read. Stream's position will point to the next
         // byte coming after the first found space byte.
-        private static int ReadUntilSpace(Stream stream, byte[] buffer, int start)
-        {
+        private static int ReadUntilSpace(Stream stream, byte[] buffer, int start) {
             byte nextByte = (byte)stream.ReadByte();
             int bytesRead = 0;
 
-            while ((nextByte != ' ') && (nextByte != '\n') && (nextByte != '\r') && (nextByte != '\t') && (nextByte != '#'))
-            {
+            while ((nextByte != ' ') && (nextByte != '\n') && (nextByte != '\r') && (nextByte != '\t') && (nextByte != '#')) {
                 buffer[start + bytesRead] = nextByte;
                 bytesRead++;
                 nextByte = (byte)stream.ReadByte();

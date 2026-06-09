@@ -34,12 +34,11 @@
 //   POSSIBILITY OF SUCH DAMAGE.
 //
 
-namespace Accord.Imaging.Filters
-{
-    using System.Collections.Generic;
-    using System.Drawing.Imaging;
+namespace Accord.Imaging.Filters {
     using Accord.Imaging;
     using Accord.Imaging.Filters;
+    using System.Collections.Generic;
+    using System.Drawing.Imaging;
 
     /// <summary>
     ///   White Patch filter for color normalization.
@@ -65,16 +64,14 @@ namespace Accord.Imaging.Filters
     /// <img src="..\images\white-patch.png" /> 
     /// </example>
     /// 
-    public class WhitePatch : BaseInPlaceFilter
-    {
+    public class WhitePatch : BaseInPlaceFilter {
         Dictionary<PixelFormat, PixelFormat> formatTranslations;
 
         /// <summary>
         ///   Format translations dictionary.
         /// </summary>
         /// 
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -82,8 +79,7 @@ namespace Accord.Imaging.Filters
         ///   Initializes a new instance of the <see cref="WhitePatch"/> class.
         /// </summary>
         /// 
-        public WhitePatch()
-        {
+        public WhitePatch() {
             formatTranslations = new Dictionary<PixelFormat, PixelFormat>();
             formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format24bppRgb;
             formatTranslations[PixelFormat.Format32bppArgb] = PixelFormat.Format32bppArgb;
@@ -95,8 +91,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <param name="image">Source image data.</param>
         /// 
-        protected unsafe override void ProcessFilter(UnmanagedImage image)
-        {
+        protected unsafe override void ProcessFilter(UnmanagedImage image) {
             int width = image.Width;
             int height = image.Height;
 
@@ -108,10 +103,8 @@ namespace Accord.Imaging.Filters
 
             // Get maximum color image values
             int maxR = 0, maxG = 0, maxB = 0;
-            for (int i = 0; i < height; i++)
-            {
-                for (int j = 0; j < width; j++)
-                {
+            for (int i = 0; i < height; i++) {
+                for (int j = 0; j < width; j++) {
                     if (src[RGB.R] > maxR) maxR = src[RGB.R];
                     if (src[RGB.G] > maxG) maxG = src[RGB.G];
                     if (src[RGB.B] > maxB) maxB = src[RGB.B];
@@ -124,10 +117,8 @@ namespace Accord.Imaging.Filters
 
 
             src = (byte*)image.ImageData.ToPointer();
-            for (int y = 0; y < height; y++)
-            {
-                for (int x = 0; x < width; x++, src += pixelSize)
-                {
+            for (int y = 0; y < height; y++) {
+                for (int x = 0; x < width; x++, src += pixelSize) {
                     double r = kr * src[RGB.R];
                     double g = kg * src[RGB.G];
                     double b = kb * src[RGB.B];

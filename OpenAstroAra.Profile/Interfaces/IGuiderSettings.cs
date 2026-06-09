@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -12,7 +12,7 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Enums;
 
 namespace OpenAstroAra.Profile.Interfaces {
 
@@ -21,11 +21,11 @@ namespace OpenAstroAra.Profile.Interfaces {
         string LastDeviceName { get; set; }
         double DitherPixels { get; set; }
         bool DitherRAOnly { get; set; }
-        GuiderScaleEnum PHD2GuiderScale { get; set; }
+        GuiderScale PHD2GuiderScale { get; set; }
         double MaxY { get; set; }
         int PHD2HistorySize { get; set; }
         int PHD2ServerPort { get; set; }
-        string PHD2ServerUrl { get; set; }
+        string PHD2ServerHost { get; set; }
         int PHD2InstanceNumber { get; set; }
         int SettleTime { get; set; }
         double SettlePixels { get; set; }
@@ -43,7 +43,7 @@ namespace OpenAstroAra.Profile.Interfaces {
         int PHD2ROIPct { get; set; }
         int? PHD2ProfileId { get; set; }
         int SkyGuardServerPort { get; set; }
-        string SkyGuardServerUrl { get; set; }
+        string SkyGuardServerHost { get; set; }
         string SkyGuardPath { get; set; }
         int SkyGuardCallbackPort { get; set; }
         bool SkyGuardTimeLapsChecked { get; set; }

@@ -12,6 +12,7 @@
 
 #endregion "copyright"
 
+using System;
 using System.Collections;
 using System.Collections.Specialized;
 using System.Text;
@@ -20,7 +21,7 @@ namespace OpenAstroAra.Core.Utility {
 
     public static class TextEncoding {
 
-        public static string UnicodeToAscii(string input) {
+        public static string UnicodeToAscii(string? input) {
             if (string.IsNullOrWhiteSpace(input)) { return ""; }
             Encoding ascii = Encoding.ASCII;
             Encoding unicode = Encoding.Unicode;
@@ -33,11 +34,11 @@ namespace OpenAstroAra.Core.Utility {
             return new string(asciiChars);
         }
 
-        public static string GreekToLatinAbbreviation(string input) {
+        public static string GreekToLatinAbbreviation(string? input) {
             if (string.IsNullOrWhiteSpace(input)) { return ""; }
 
             foreach (DictionaryEntry greekchar in GreekToAbbreviationMap) {
-                input = input.Replace(greekchar.Key.ToString(), greekchar.Value.ToString());
+                input = input.Replace(greekchar.Key.ToString() ?? string.Empty, greekchar.Value?.ToString() ?? string.Empty, StringComparison.Ordinal);
             }
             return input;
         }

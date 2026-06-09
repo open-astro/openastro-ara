@@ -13,15 +13,15 @@
 #endregion "copyright"
 
 using Newtonsoft.Json;
-using OpenAstroAra.Profile.Interfaces;
-using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Astrometry;
+using OpenAstroAra.Core.Locale;
+using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Profile.Interfaces;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using OpenAstroAra.Core.Locale;
 
 namespace OpenAstroAra.Sequencer.Utility.DateTimeProvider {
 
@@ -34,25 +34,25 @@ namespace OpenAstroAra.Sequencer.Utility.DateTimeProvider {
         }
 
         public string Name { get; } = Loc.Instance["LblMeridian"];
-        public ICustomDateTime DateTime { get; set; } = new SystemDateTime();
+        public ICustomDateTime CustomDateTime { get; set; } = new SystemDateTime();
 
         public DateTime GetDateTime(ISequenceEntity context) {
             var contextCoordinates = ItemUtility.RetrieveContextCoordinates(context?.Parent);
             if (contextCoordinates != null) {
-                var siderealTime = Angle.ByHours(AstroUtil.GetLocalSiderealTime(DateTime.Now, profileService.ActiveProfile.AstrometrySettings.Longitude));
+                var siderealTime = Angle.ByHours(AstroUtil.GetLocalSiderealTime(CustomDateTime.Now, profileService.ActiveProfile.AstrometrySettings.Longitude));
                 var timeToMeridian = MeridianFlip.TimeToMeridian(contextCoordinates.Coordinates, siderealTime);
-                return DateTime.Now + timeToMeridian;
+                return CustomDateTime.Now + timeToMeridian;
             }
-            return DateTime.Now;
+            return CustomDateTime.Now;
         }
         public TimeOnly GetRolloverTime(ISequenceEntity context) {
             var contextCoordinates = ItemUtility.RetrieveContextCoordinates(context?.Parent);
             if (contextCoordinates != null) {
-                var siderealTime = Angle.ByHours(AstroUtil.GetLocalSiderealTime(DateTime.Now, profileService.ActiveProfile.AstrometrySettings.Longitude));
+                var siderealTime = Angle.ByHours(AstroUtil.GetLocalSiderealTime(CustomDateTime.Now, profileService.ActiveProfile.AstrometrySettings.Longitude));
                 var timeToMeridian = MeridianFlip.TimeToMeridian(contextCoordinates.Coordinates, siderealTime);
-                return TimeOnly.FromDateTime(DateTime.Now + timeToMeridian + TimeSpan.FromHours(12));
+                return TimeOnly.FromDateTime(CustomDateTime.Now + timeToMeridian + TimeSpan.FromHours(12));
             }
-            return TimeOnly.FromDateTime(DateTime.Now + TimeSpan.FromHours(12));
+            return TimeOnly.FromDateTime(CustomDateTime.Now + TimeSpan.FromHours(12));
         }
     }
 }

@@ -1,4 +1,4 @@
-using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Core.Model.Equipment;
 using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Equipment.Interfaces;
@@ -9,15 +9,18 @@ using OpenAstroAra.Image.Interfaces;
 using OpenAstroAra.Profile.Interfaces;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace OpenAstroAra.Equipment.Equipment.MyCamera {
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Native camera-SDK interaction boundary: GenericCamera wraps an arbitrary IGenericCameraSDK whose Connect/Disconnect/Stop/Abort/GetExposure calls may throw any SDK/native exception type. These catches log or swallow at the SDK boundary so a driver fault cannot crash the camera lifecycle (failed download leaves data null; stop/abort are best-effort). CA1031 sanctions general catches at such recover-and-continue boundaries.")]
     public class GenericCamera : BaseINPC, ICamera {
         private IGenericCameraSDK sdk;
-        protected IProfileService profileService;
+        private protected IProfileService profileService;
         private readonly IExposureDataFactory exposureDataFactory;
 
         public GenericCamera(string id, string name, string category, string driverVersion, bool supportBitScaling, IGenericCameraSDK sdk, IProfileService profileService, IExposureDataFactory exposureDataFactory) {
@@ -67,7 +70,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyCamera {
             CanSetTemperature = sdk.HasTemperatureControl();
             HasDewHeater = sdk.HasDewHeater();
 
-            ReadoutModes = sdk.GetReadoutModes();            
+            ReadoutModes = sdk.GetReadoutModes().ToList();
         }
 
         private bool supportBitScaling;
@@ -109,7 +112,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyCamera {
             }
         }
 
-        public AsyncObservableCollection<BinningMode> BinningModes { get; private set; }
+        public AsyncObservableCollection<BinningMode> BinningModes { get; private set; } = new AsyncObservableCollection<BinningMode>();
 
         public short MaxBinX { get; private set; }
 
@@ -198,7 +201,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyCamera {
         }
 
         public void StartExposure(CaptureSequence sequence) {
-            var isSnap = sequence.ImageType == CaptureSequence.ImageTypes.SNAPSHOT;
+            var isSnap = sequence.ImageType == ImageTypes.SNAPSHOT;
             var readoutMode = isSnap ? ReadoutModeForSnapImages : ReadoutModeForNormalImages;
             ReadoutMode = readoutMode;
 
@@ -224,7 +227,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyCamera {
         public async Task WaitUntilExposureIsReady(CancellationToken token) {
             using (token.Register(() => AbortExposure())) {
                 while (!sdk.IsExposureReady()) {
-                    await CoreUtil.Wait(TimeSpan.FromMilliseconds(10), token);
+                    await CoreUtil.Wait(TimeSpan.FromMilliseconds(10), token: token);
                 }
                 lastExposureEndTime = DateTime.UtcNow;
             }
@@ -243,13 +246,13 @@ namespace OpenAstroAra.Equipment.Equipment.MyCamera {
             } catch (Exception) { }
         }
 
-        public async Task<IExposureData> DownloadExposure(CancellationToken token) {
-            ushort[] data = null;
+        public async Task<IExposureData?> DownloadExposure(CancellationToken token) {
+            ushort[]? data = null;
             using (var downloadCts = CancellationTokenSource.CreateLinkedTokenSource(token)) {
                 try {
                     downloadCts.CancelAfter(TimeSpan.FromSeconds(Math.Max(60, profileService.ActiveProfile.CameraSettings.Timeout)));
                     data = await sdk.GetExposure(exposureTaskTime, exposureTaskWidth, exposureTaskHeight, downloadCts.Token);
-                } catch { }                
+                } catch { }
             }
             if (data == null) { return null; }
 
@@ -302,8 +305,8 @@ namespace OpenAstroAra.Equipment.Equipment.MyCamera {
             set {
                 if (CanSetTemperature) {
                     if (sdk.SetCooler(value)) {
-                        if(value && HasAdjustableFan) { 
-                            sdk.SetFanPercentage(profileService.ActiveProfile.CameraSettings.GenericCameraFanSpeed); 
+                        if (value && HasAdjustableFan) {
+                            sdk.SetFanPercentage(profileService.ActiveProfile.CameraSettings.GenericCameraFanSpeed);
                         }
                         RaisePropertyChanged();
                     }
@@ -349,7 +352,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyCamera {
 
         public int FanSpeed {
             get {
-                if(HasAdjustableFan) { 
+                if (HasAdjustableFan) {
                     return sdk.GetFanPercentage();
                 } else {
                     return 0;
@@ -388,7 +391,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyCamera {
             get => profileService.ActiveProfile.CameraSettings.GenericCameraDewHeaterStrength;
             set {
                 profileService.ActiveProfile.CameraSettings.GenericCameraDewHeaterStrength = value;
-                if(DewHeaterOn) {
+                if (DewHeaterOn) {
                     sdk.SetDewHeater(profileService.ActiveProfile.CameraSettings.GenericCameraDewHeaterStrength);
                 }
                 RaisePropertyChanged();
@@ -440,8 +443,8 @@ namespace OpenAstroAra.Equipment.Equipment.MyCamera {
             sdk.StartVideoCapture(sequence.ExposureTime, width, height);
         }
 
-        public Task<IExposureData> DownloadLiveView(CancellationToken token) {
-            return Task.Run<IExposureData>(async () => {
+        public Task<IExposureData?> DownloadLiveView(CancellationToken token) {
+            return Task.Run<IExposureData?>(async () => {
                 try {
                     var lastLiveViewExposureStart = DateTime.UtcNow;
                     var data = await sdk.GetVideoCapture(exposureTaskTime, exposureTaskWidth, exposureTaskHeight, token);
@@ -471,7 +474,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyCamera {
         }
 
 
-        private bool _liveViewEnabled = false;
+        private bool _liveViewEnabled;
         public bool LiveViewEnabled {
             get => _liveViewEnabled;
             set {
@@ -504,7 +507,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyCamera {
             }
         }
 
-        private short _readoutModeForNormalImages = 0;
+        private short _readoutModeForNormalImages;
         public short ReadoutModeForNormalImages {
             get => _readoutModeForNormalImages;
             set {
@@ -518,7 +521,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyCamera {
             }
         }
 
-        private short _readoutModeForSnapImages = 0;
+        private short _readoutModeForSnapImages;
         public short ReadoutModeForSnapImages {
             get => _readoutModeForSnapImages;
             set {
@@ -550,8 +553,8 @@ namespace OpenAstroAra.Equipment.Equipment.MyCamera {
         public bool HasBattery => false;
         public int BatteryLevel => -1;
         public double ElectronsPerADU => double.NaN;
-        public short BayerOffsetX { get; } = 0;
-        public short BayerOffsetY { get; } = 0;
+        public short BayerOffsetX { get; }
+        public short BayerOffsetY { get; }
 
         public IList<int> Gains => new List<int>();
 

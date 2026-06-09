@@ -12,28 +12,25 @@
 
 #endregion "copyright"
 
-using System;
-using System.IO;
-using System.Threading;
-using System.Threading.Tasks;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Image.Interfaces;
 using OpenAstroAra.PlateSolving.Interfaces;
+using System;
+using System.Globalization;
+using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace OpenAstroAra.PlateSolving.Solvers {
 
     internal abstract class BaseSolver : IPlateSolver {
-        protected static string WORKING_DIRECTORY;
-        protected static string FAILED_DIRECTORY;
-        protected static string FAILED_FILENAME;
-        static BaseSolver() {
-            var sessionDate = DateTime.Now.ToString("yyyyMMdd-HHmmss");
-            var processId = Environment.ProcessId;
-            FAILED_FILENAME = $"{sessionDate}.{processId}";
-            WORKING_DIRECTORY = Path.Combine(CoreUtil.APPLICATIONTEMPPATH, "PlateSolver");
-            FAILED_DIRECTORY = Path.Combine(CoreUtil.APPLICATIONTEMPPATH, "PlateSolver", "Failed");
+        protected static readonly string WORKING_DIRECTORY = Path.Combine(CoreUtil.APPLICATIONTEMPPATH, "PlateSolver");
+        protected static readonly string FAILED_DIRECTORY = Path.Combine(CoreUtil.APPLICATIONTEMPPATH, "PlateSolver", "Failed");
+        protected static readonly string FAILED_FILENAME =
+            $"{DateTime.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture)}.{Environment.ProcessId}";
 
+        static BaseSolver() {
             CreateOrCleanupDirectory(WORKING_DIRECTORY);
             CreateOrCleanupDirectory(FAILED_DIRECTORY);
         }
@@ -42,7 +39,9 @@ namespace OpenAstroAra.PlateSolving.Solvers {
             if (!Directory.Exists(path)) {
                 try {
                     Directory.CreateDirectory(path);
-                } catch (Exception ex) {
+                } catch (IOException ex) {
+                    Logger.Error(ex);
+                } catch (UnauthorizedAccessException ex) {
                     Logger.Error(ex);
                 }
             } else {
@@ -51,7 +50,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
 
         }
 
-        public async Task<PlateSolveResult> SolveAsync(IImageData source, PlateSolveParameter parameter, IProgress<ApplicationStatus> progress, CancellationToken canceltoken) {
+        public async Task<PlateSolveResult> SolveAsync(IImageData source, PlateSolveParameter parameter, IProgress<ApplicationStatus>? progress, CancellationToken canceltoken) {
             EnsureSolverValid(parameter);
             var imageProperties = PlateSolveImageProperties.Create(parameter, source);
             return await SolveAsyncImpl(source, parameter, imageProperties, progress, canceltoken);
@@ -61,7 +60,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
             IImageData source,
             PlateSolveParameter parameter,
             PlateSolveImageProperties imageProperties,
-            IProgress<ApplicationStatus> progress,
+            IProgress<ApplicationStatus>? progress,
             CancellationToken canceltoken);
 
         protected virtual void EnsureSolverValid(PlateSolveParameter parameter) {

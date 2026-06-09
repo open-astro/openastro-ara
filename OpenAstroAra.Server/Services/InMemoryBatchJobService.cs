@@ -12,9 +12,13 @@
 
 #endregion "copyright"
 
-using System.Collections.Concurrent;
+using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using OpenAstroAra.Server.Contracts;
+using System.Collections.Concurrent;
+using System.IO;
+using System.Text.Json;
 
 namespace OpenAstroAra.Server.Services;
 
@@ -23,13 +27,13 @@ namespace OpenAstroAra.Server.Services;
 /// each entry holds a CancellationTokenSource that lets DELETE
 /// /api/v1/jobs/{id} abort the worker.
 /// </summary>
-public sealed class InMemoryBatchJobService : IBatchJobService {
+public sealed partial class InMemoryBatchJobService : IBatchJobService {
     private readonly ConcurrentDictionary<Guid, JobState> _jobs = new();
     private readonly ConcurrentDictionary<string, Guid> _activeByType = new();
-    private readonly ILogger<InMemoryBatchJobService>? _logger;
+    private readonly ILogger<InMemoryBatchJobService> _logger;
 
     public InMemoryBatchJobService(ILogger<InMemoryBatchJobService>? logger) {
-        _logger = logger;
+        _logger = logger ?? NullLogger<InMemoryBatchJobService>.Instance;
     }
 
     public BatchJobDto Enqueue(string jobType, int totalSteps, Func<Action<int>, CancellationToken, Task> work) {
@@ -69,10 +73,13 @@ public sealed class InMemoryBatchJobService : IBatchJobService {
                 }
             } catch (OperationCanceledException) {
                 state.State = "cancelled";
-            } catch (Exception ex) {
+            } catch (Exception ex) when (ex is IOException or InvalidOperationException or ArgumentException
+                                          or SqliteException or JsonException or OpenAstroAra.Fits.FitsException) {
+                // Batch work is DB + image + WS publish (see the §65.7 restretch job);
+                // record the failure on the job rather than faulting the worker task.
                 state.State = "failed";
                 state.ErrorMessage = ex.Message;
-                _logger?.LogError(ex, "Batch job {JobId} ({JobType}) failed", jobId, jobType);
+                LogJobFailed(ex, jobId, jobType);
             } finally {
                 state.FinishedUtc = DateTimeOffset.UtcNow;
                 _activeByType.TryRemove(new KeyValuePair<string, Guid>(jobType, jobId));
@@ -82,7 +89,7 @@ public sealed class InMemoryBatchJobService : IBatchJobService {
         return Snapshot(state);
     }
 
-    public BatchJobDto? Get(Guid jobId) =>
+    public BatchJobDto? GetJob(Guid jobId) =>
         _jobs.TryGetValue(jobId, out var state) ? Snapshot(state) : null;
 
     public bool TryCancel(Guid jobId) {
@@ -117,4 +124,7 @@ public sealed class InMemoryBatchJobService : IBatchJobService {
         public string? ErrorMessage { get; set; }
         public CancellationTokenSource Cts { get; set; } = new();
     }
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Batch job {JobId} ({JobType}) failed")]
+    private partial void LogJobFailed(Exception ex, Guid jobId, string jobType);
 }

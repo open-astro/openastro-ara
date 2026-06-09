@@ -12,7 +12,7 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Core.Model.Equipment;
 using OpenAstroAra.Profile.Interfaces;
 using System;
@@ -25,8 +25,12 @@ namespace OpenAstroAra.Profile {
 
     [Serializable()]
     [DataContract]
-    public partial class PlateSolveSettings : Settings, IPlateSolveSettings {
-        private PlateSolverEnum plateSolverType = PlateSolverEnum.ASTAP;
+    public sealed partial class PlateSolveSettings : Settings, IPlateSolveSettings {
+
+        public PlateSolveSettings() {
+            SetDefaultValues();
+        }
+        private PlateSolver plateSolverType = PlateSolver.ASTAP;
 
         [OnDeserializing]
         public void OnDeserializing(StreamingContext context) {
@@ -34,10 +38,10 @@ namespace OpenAstroAra.Profile {
         }
 
         protected override void SetDefaultValues() {
-            plateSolverType = PlateSolverEnum.ASTAP;
-            blindSolverType = BlindSolverEnum.ASTAP;
+            plateSolverType = PlateSolver.ASTAP;
+            blindSolverType = BlindSolver.ASTAP;
             blindFailoverEnabled = true;
-            astrometryURL = "http://nova.astrometry.net";
+            astrometryURL = new Uri("http://nova.astrometry.net");
             astrometryAPIKey = string.Empty;
             cygwinLocation = string.Empty;
             searchRadius = 30;
@@ -70,7 +74,7 @@ namespace OpenAstroAra.Profile {
             _theSkyXHost = "localhost";
             _theSkyXPort = 3040;
 
-            pinPointCatalogType = Dc3PoinPointCatalogEnum.ppGSCACT;
+            pinPointCatalogType = Dc3PoinPointCatalog.ppGSCACT;
             pinPointCatalogRoot = Environment.ExpandEnvironmentVariables(@"%SYSTEMDRIVE%\GSC11\");
             pinPointMaxMagnitude = 20;
             pinPointExpansion = 40;
@@ -79,7 +83,7 @@ namespace OpenAstroAra.Profile {
         }
 
         [DataMember]
-        public PlateSolverEnum PlateSolverType {
+        public PlateSolver PlateSolverType {
             get => plateSolverType;
             set {
                 if (plateSolverType != value) {
@@ -89,10 +93,10 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private BlindSolverEnum blindSolverType;
+        private BlindSolver blindSolverType;
 
         [DataMember]
-        public BlindSolverEnum BlindSolverType {
+        public BlindSolver BlindSolverType {
             get => blindSolverType;
             set {
                 if (blindSolverType != value) {
@@ -102,23 +106,20 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string astrometryURL;
+        private Uri? astrometryURL;
 
         [DataMember]
-        public string AstrometryURL {
+        public Uri? AstrometryURL {
             get => astrometryURL;
             set {
-                // Clear out any whitespace characters in the URL
-                string url = Whitespace().Replace(value, string.Empty);
-
-                if (astrometryURL != url) {
-                    astrometryURL = url;
+                if (astrometryURL != value) {
+                    astrometryURL = value;
                     RaisePropertyChanged();
                 }
             }
         }
 
-        private string astrometryAPIKey;
+        private string astrometryAPIKey = string.Empty;
 
         [DataMember]
         public string AstrometryAPIKey {
@@ -136,7 +137,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string cygwinLocation;
+        private string cygwinLocation = string.Empty;
 
         [DataMember]
         public string CygwinLocation {
@@ -162,7 +163,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string pS2Location;
+        private string pS2Location = string.Empty;
 
         [DataMember]
         public string PS2Location {
@@ -175,7 +176,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string pS3Location;
+        private string pS3Location = string.Empty;
 
         [DataMember]
         public string PS3Location {
@@ -266,10 +267,10 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private FilterInfo filter;
+        private FilterInfo? filter;
 
         [DataMember]
-        public FilterInfo Filter {
+        public FilterInfo? Filter {
             get => filter;
             set {
                 if (filter != value) {
@@ -279,7 +280,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string aspsLocation;
+        private string aspsLocation = string.Empty;
 
         [DataMember]
         public string AspsLocation {
@@ -292,7 +293,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string aSTAPLocation;
+        private string aSTAPLocation = string.Empty;
 
         [DataMember]
         public string ASTAPLocation {
@@ -396,7 +397,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string _theSkyXHost;
+        private string _theSkyXHost = string.Empty;
 
         [DataMember]
         public string TheSkyXHost {
@@ -423,10 +424,10 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private Dc3PoinPointCatalogEnum pinPointCatalogType;
+        private Dc3PoinPointCatalog pinPointCatalogType;
 
         [DataMember]
-        public Dc3PoinPointCatalogEnum PinPointCatalogType {
+        public Dc3PoinPointCatalog PinPointCatalogType {
             get => pinPointCatalogType;
             set {
                 if (pinPointCatalogType != value) {
@@ -437,7 +438,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string pinPointCatalogRoot;
+        private string pinPointCatalogRoot = string.Empty;
 
         [DataMember]
         public string PinPointCatalogRoot {
@@ -479,7 +480,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string pinPointAllSkyApiKey;
+        private string pinPointAllSkyApiKey = string.Empty;
 
         [DataMember]
         public string PinPointAllSkyApiKey {
@@ -495,7 +496,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string pinPointAllSkyApiHost;
+        private string pinPointAllSkyApiHost = string.Empty;
 
         [DataMember]
         public string PinPointAllSkyApiHost {

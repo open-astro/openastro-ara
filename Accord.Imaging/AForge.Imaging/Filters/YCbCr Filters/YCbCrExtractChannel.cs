@@ -1,12 +1,11 @@
 // AForge Image Processing Library
 // AForge.NET framework
 //
-// Copyright © Andrew Kirillov, 2005-2009
+// Copyright ï¿½ Andrew Kirillov, 2005-2009
 // andrew.kirillov@aforgenet.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -33,8 +32,7 @@ namespace Accord.Imaging.Filters
     /// 
     /// <seealso cref="YCbCrReplaceChannel"/>
     /// 
-    public class YCbCrExtractChannel : BaseFilter
-    {
+    public class YCbCrExtractChannel : BaseFilter {
         private short channel = YCbCr.YIndex;
 
         // private format translation dictionary
@@ -43,8 +41,7 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Format translations dictionary.
         /// </summary>
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -56,17 +53,14 @@ namespace Accord.Imaging.Filters
         /// 
         /// <exception cref="ArgumentException">Invalid channel was specified.</exception>
         /// 
-        public short Channel
-        {
+        public short Channel {
             get { return channel; }
-            set
-            {
+            set {
                 if (
                     (value != YCbCr.YIndex) &&
                     (value != YCbCr.CbIndex) &&
                     (value != YCbCr.CrIndex)
-                    )
-                {
+                    ) {
                     throw new ArgumentException("Invalid channel was specified.");
                 }
                 channel = value;
@@ -77,8 +71,7 @@ namespace Accord.Imaging.Filters
         /// Initializes a new instance of the <see cref="YCbCrExtractChannel"/> class.
         /// </summary>
         /// 
-        public YCbCrExtractChannel()
-        {
+        public YCbCrExtractChannel() {
             // initialize format translation dictionary
             formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format8bppIndexed;
             formatTranslations[PixelFormat.Format32bppRgb] = PixelFormat.Format8bppIndexed;
@@ -92,8 +85,7 @@ namespace Accord.Imaging.Filters
         /// <param name="channel">YCbCr channel to extract.</param>
         /// 
         public YCbCrExtractChannel(short channel)
-            : this()
-        {
+            : this() {
             this.Channel = channel;
         }
 
@@ -104,8 +96,7 @@ namespace Accord.Imaging.Filters
         /// <param name="sourceData">Source image data.</param>
         /// <param name="destinationData">Destination image data.</param>
         /// 
-        protected override unsafe void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData)
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData) {
             int pixelSize = Image.GetPixelFormatSize(sourceData.PixelFormat) / 8;
 
             // get width and height
@@ -123,11 +114,9 @@ namespace Accord.Imaging.Filters
             byte v = 0;
 
             // for each row
-            for (int y = 0; y < height; y++)
-            {
+            for (int y = 0; y < height; y++) {
                 // for each pixel
-                for (int x = 0; x < width; x++, src += pixelSize, dst++)
-                {
+                for (int x = 0; x < width; x++, src += pixelSize, dst++) {
                     rgb.Red = src[RGB.R];
                     rgb.Green = src[RGB.G];
                     rgb.Blue = src[RGB.B];
@@ -135,8 +124,7 @@ namespace Accord.Imaging.Filters
                     // convert to YCbCr
                     Accord.Imaging.YCbCr.FromRGB(rgb, ref ycbcr);
 
-                    switch (channel)
-                    {
+                    switch (channel) {
                         case YCbCr.YIndex:
                             v = (byte)(ycbcr.Y * 255);
                             break;

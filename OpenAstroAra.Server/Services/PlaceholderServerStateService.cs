@@ -12,8 +12,11 @@
 
 #endregion "copyright"
 
-using System.Text.Json;
+using Microsoft.Data.Sqlite;
 using OpenAstroAra.Server.Contracts;
+using System;
+using System.IO;
+using System.Text.Json;
 
 namespace OpenAstroAra.Server.Services;
 
@@ -87,7 +90,7 @@ public sealed class PlaceholderServerStateService : IServerStateService {
                 """;
             using var doc = JsonDocument.Parse(json);
             return doc.RootElement.Clone();
-        } catch {
+        } catch (Exception ex) when (ex is JsonException or InvalidOperationException or SqliteException or IOException) {
             return _empty.RootElement.Clone();
         }
     }
@@ -109,7 +112,7 @@ public sealed class PlaceholderServerStateService : IServerStateService {
                 """;
             using var doc = JsonDocument.Parse(json);
             return doc.RootElement.Clone();
-        } catch {
+        } catch (Exception ex) when (ex is JsonException or InvalidOperationException or SqliteException or IOException) {
             return _empty.RootElement.Clone();
         }
     }
@@ -163,7 +166,7 @@ public sealed class PlaceholderServerStateService : IServerStateService {
             // the restart banner during this gap.
             await Task.Delay(TimeSpan.FromSeconds(2));
             TrySpawnSystemctl("restart", "openastroara-server");
-        });
+        }, CancellationToken.None);
         return Task.FromResult(accepted);
     }
 
@@ -177,7 +180,7 @@ public sealed class PlaceholderServerStateService : IServerStateService {
                 """;
             using var doc = JsonDocument.Parse(json);
             await _broadcaster.PublishAsync("server.restart_imminent", doc.RootElement.Clone(), CancellationToken.None);
-        } catch {
+        } catch (Exception ex) when (ex is JsonException or IOException or InvalidOperationException or ObjectDisposedException) {
             // Broadcast best-effort — never let it abort the restart.
         }
     }
@@ -210,7 +213,7 @@ public sealed class PlaceholderServerStateService : IServerStateService {
                 CreateNoWindow = true,
             };
             System.Diagnostics.Process.Start(psi);
-        } catch {
+        } catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or PlatformNotSupportedException or IOException) {
             // No systemctl in PATH (non-Linux dev runs, or restricted
             // environment without polkit permission). Swallow — the 202
             // was already sent and there's nothing useful to log from a

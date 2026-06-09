@@ -13,16 +13,15 @@
 #endregion "copyright"
 
 using Newtonsoft.Json;
-using System.Windows.Input;
-using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Core.Model;
+using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Sequencer.Conditions;
 using OpenAstroAra.Sequencer.Container.ExecutionStrategy;
 using OpenAstroAra.Sequencer.DragDrop;
 using OpenAstroAra.Sequencer.SequenceItem;
 using OpenAstroAra.Sequencer.Trigger;
 using OpenAstroAra.Sequencer.Validations;
-using OpenAstroAra.Core.Utility;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -31,6 +30,7 @@ using System.Runtime.Serialization;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Windows.Input;
 namespace OpenAstroAra.Sequencer.Container {
 
     [JsonObject(MemberSerialization.OptIn)]
@@ -47,7 +47,7 @@ namespace OpenAstroAra.Sequencer.Container {
         [JsonProperty]
         public IExecutionStrategy Strategy { get; }
 
-        public SequenceContainer(IExecutionStrategy strategy) {
+        protected SequenceContainer(IExecutionStrategy strategy) {
             this.Strategy = strategy;
         }
 
@@ -78,7 +78,7 @@ namespace OpenAstroAra.Sequencer.Container {
             }
         }
 
-        public int Iterations { get; set; } = 0;
+        public int Iterations { get; set; }
 
         public IList<string> Issues { get; protected set; } = new ObservableCollection<string>();
 
@@ -95,13 +95,15 @@ namespace OpenAstroAra.Sequencer.Container {
         [JsonProperty]
         public IList<ISequenceTrigger> Triggers { get; protected set; } = new ObservableCollection<ISequenceTrigger>();
 
-        private void DropInSequenceCondition(DropIntoParameters parameters) {
+        private void DropInSequenceCondition(DropIntoParameters? parameters) {
+            if (parameters == null) { return; }
             lock (lockObj) {
                 ISequenceCondition item;
                 var source = parameters.Source as ISequenceCondition;
+                if (source == null) { return; }
                 //var target = parameters.Target as ISequenceItem;
 
-                if (source?.Parent != null && !parameters.Duplicate) {
+                if (source.Parent != null && !parameters.Duplicate) {
                     item = source;
                 } else {
                     item = (ISequenceCondition)source.Clone();
@@ -114,17 +116,19 @@ namespace OpenAstroAra.Sequencer.Container {
             }
         }
 
-        private void DropInSequenceItem(DropIntoParameters parameters) {
+        private void DropInSequenceItem(DropIntoParameters? parameters) {
+            if (parameters == null) { return; }
             lock (lockObj) {
                 ISequenceItem item;
-                ISequenceItem source;
+                ISequenceItem? source;
 
-                if (parameters.Source is TemplatedSequenceContainer) {
-                    item = (parameters.Source as TemplatedSequenceContainer).Clone();
-                } else if (parameters.Source is TargetSequenceContainer) {
-                    item = (parameters.Source as TargetSequenceContainer).Clone();
+                if (parameters.Source is TemplatedSequenceContainer templated) {
+                    item = templated.Clone();
+                } else if (parameters.Source is TargetSequenceContainer targetContainerSource) {
+                    item = targetContainerSource.Clone();
                 } else {
                     source = parameters.Source as ISequenceItem;
+                    if (source == null) { return; }
                     if (source.Parent != null && !parameters.Duplicate) {
                         item = source;
                     } else {
@@ -133,26 +137,26 @@ namespace OpenAstroAra.Sequencer.Container {
                 }
                 var target = parameters.Target as ISequenceItem;
 
-                if (parameters.Position == DropTargetEnum.Center && item.Parent != this) {
+                if (parameters.Position == DropTarget.Center && item.Parent != this) {
                     InsertIntoSequenceBlocks(Items.Count, item);
                 }
 
                 var targetContainer = parameters.Target == this ? Parent : this;
 
-                if (parameters.Position == DropTargetEnum.Bottom || parameters.Position == DropTargetEnum.Top) {
-                    var newIndex = targetContainer.Items.IndexOf(targetContainer == Parent ? this : target);
+                if ((parameters.Position == DropTarget.Bottom || parameters.Position == DropTarget.Top)
+                    && targetContainer is IDropContainer drop) {
+                    var newIndex = targetContainer.Items.IndexOf((targetContainer == Parent ? this : target)!);
                     var oldIndex = targetContainer.Items.IndexOf(item);
 
-                    var drop = targetContainer as IDropContainer;
                     if (oldIndex == -1) {
-                        if (parameters.Position == DropTargetEnum.Top) {
+                        if (parameters.Position == DropTarget.Top) {
                             drop.InsertIntoSequenceBlocks(newIndex, item);
                         } else {
                             drop.InsertIntoSequenceBlocks(newIndex + 1, item);
                         }
                     } else {
-                        if (parameters.Position == DropTargetEnum.Top && newIndex > oldIndex) newIndex--;
-                        if (parameters.Position == DropTargetEnum.Bottom && newIndex < oldIndex) newIndex++;
+                        if (parameters.Position == DropTarget.Top && newIndex > oldIndex) newIndex--;
+                        if (parameters.Position == DropTarget.Bottom && newIndex < oldIndex) newIndex++;
                         drop.MoveWithinIntoSequenceBlocks(oldIndex, newIndex);
                     }
                 }
@@ -161,10 +165,12 @@ namespace OpenAstroAra.Sequencer.Container {
             }
         }
 
-        private void DropInSequenceTrigger(DropIntoParameters parameters) {
+        private void DropInSequenceTrigger(DropIntoParameters? parameters) {
+            if (parameters == null) { return; }
             lock (lockObj) {
                 ISequenceTrigger item;
                 var source = parameters.Source as ISequenceTrigger;
+                if (source == null) { return; }
 
                 if (source.Parent != null && !parameters.Duplicate) {
                     item = source;
@@ -208,11 +214,11 @@ namespace OpenAstroAra.Sequencer.Container {
                 foreach (var item in Items) {
                     item.AfterParentChanged();
 
-                    IValidatable validatable = (item as IValidatable);
-                    if (validatable != null) {                        
+                    IValidatable? validatable = (item as IValidatable);
+                    if (validatable != null) {
                         try {
                             validatable.Validate();
-                        } catch (Exception ex) {
+                        } catch (Exception ex) when (ex is InvalidOperationException or ArgumentException) {
                             Logger.Error(ex);
                         }
                     }
@@ -220,11 +226,11 @@ namespace OpenAstroAra.Sequencer.Container {
                 foreach (var condition in Conditions) {
                     condition.AfterParentChanged();
 
-                    IValidatable validatable = (condition as IValidatable);
+                    IValidatable? validatable = (condition as IValidatable);
                     if (validatable != null) {
                         try {
                             validatable.Validate();
-                        } catch (Exception ex) {
+                        } catch (Exception ex) when (ex is InvalidOperationException or ArgumentException) {
                             Logger.Error(ex);
                         }
                     }
@@ -232,11 +238,11 @@ namespace OpenAstroAra.Sequencer.Container {
                 foreach (var trigger in Triggers) {
                     trigger.AfterParentChanged();
 
-                    IValidatable validatable = (trigger as IValidatable);
+                    IValidatable? validatable = (trigger as IValidatable);
                     if (validatable != null) {
                         try {
                             validatable.Validate();
-                        } catch (Exception ex) {
+                        } catch (Exception ex) when (ex is InvalidOperationException or ArgumentException) {
                             Logger.Error(ex);
                         }
                     }
@@ -244,7 +250,7 @@ namespace OpenAstroAra.Sequencer.Container {
             }
         }
 
-        public bool CheckConditions(ISequenceItem previousItem, ISequenceItem nextItem) {
+        public bool CheckConditions(ISequenceItem? previousItem, ISequenceItem? nextItem) {
             lock (lockObj) {
                 var c = GetConditionsSnapshot().Where(x => x.Status != SequenceEntityStatus.DISABLED).ToList();
 
@@ -277,11 +283,11 @@ namespace OpenAstroAra.Sequencer.Container {
                         }
                     }
                 }
-            });
+            }, token);
             return executionTask;
         }
 
-        public ISequenceRootContainer GetRootContainer(ISequenceContainer container) {
+        public static ISequenceRootContainer? GetRootContainer(ISequenceContainer container) {
             if (container.Parent == null) {
                 if (!(container is ISequenceRootContainer)) {
                     return null;
@@ -351,6 +357,7 @@ namespace OpenAstroAra.Sequencer.Container {
                     if (Parent is SequenceRootContainer) {
                         if (thisIndex == Parent.Items.Count - 1) return;
                         var newParent = Parent.Items[thisIndex + 1] as ISequenceContainer;
+                        if (newParent == null) { return; }
                         newParent.Items.Insert(0, item);
                         item.Parent?.Remove(item);
                         item.AttachNewParent(newParent);
@@ -388,6 +395,7 @@ namespace OpenAstroAra.Sequencer.Container {
                     if (Parent is SequenceRootContainer) {
                         if (thisIndex == 0) return;
                         var newParent = Parent.Items[thisIndex - 1] as ISequenceContainer;
+                        if (newParent == null) { return; }
                         newParent.Add(item);
                     } else {
                         Parent.Items.Insert(thisIndex, item);
@@ -480,7 +488,7 @@ namespace OpenAstroAra.Sequencer.Container {
                 ResetConditions();
                 ResetProgress();
                 foreach (var child in Items) {
-                    if (child is ISequenceContainer) (child as ISequenceContainer).ResetAll();
+                    if (child is ISequenceContainer container) container.ResetAll();
                     else child.ResetProgress();
                 }
             }
@@ -501,25 +509,25 @@ namespace OpenAstroAra.Sequencer.Container {
             this.Parent?.ResetProgressCascaded();
         }
 
-        public async Task RunTriggers(ISequenceItem previousItem, ISequenceItem nextItem, IProgress<ApplicationStatus> progress, CancellationToken token) {
+        public async Task RunTriggers(ISequenceItem? previousItem, ISequenceItem? nextItem, IProgress<ApplicationStatus> progress, CancellationToken token) {
             IList<ISequenceTrigger> localTriggers;
             lock (lockObj) {
                 localTriggers = Triggers.ToArray();
             }
             foreach (var trigger in localTriggers) {
-                if(trigger.Status == SequenceEntityStatus.DISABLED) { continue; }
+                if (trigger.Status == SequenceEntityStatus.DISABLED) { continue; }
                 try {
                     if (trigger.ShouldTrigger(previousItem, nextItem)) {
                         var context = nextItem?.Parent ?? previousItem?.Parent ?? this;
                         await trigger.Run(context, progress, token);
                     }
-                } catch(Exception ex) {
+                } catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or OperationCanceledException or System.IO.IOException) {
                     Logger.Error(ex);
                 }
             }
         }
 
-        public async Task RunTriggersAfter(ISequenceItem previousItem, ISequenceItem nextItem, IProgress<ApplicationStatus> progress, CancellationToken token) {
+        public async Task RunTriggersAfter(ISequenceItem? previousItem, ISequenceItem? nextItem, IProgress<ApplicationStatus> progress, CancellationToken token) {
             IList<ISequenceTrigger> localTriggers;
             lock (lockObj) {
                 localTriggers = Triggers.ToArray();
@@ -531,7 +539,7 @@ namespace OpenAstroAra.Sequencer.Container {
                         var context = nextItem?.Parent ?? previousItem?.Parent ?? this;
                         await trigger.Run(context, progress, token);
                     }
-                } catch (Exception ex) {
+                } catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or OperationCanceledException or System.IO.IOException) {
                     Logger.Error(ex);
                 }
             }
@@ -541,33 +549,33 @@ namespace OpenAstroAra.Sequencer.Container {
             lock (lockObj) {
                 var valid = true;
                 foreach (var item in Items) {
-                    IValidatable validatable = (item as IValidatable);
+                    IValidatable? validatable = (item as IValidatable);
                     if (validatable != null) {
                         try {
                             valid = validatable.Validate() && valid;
-                        } catch(Exception ex) {
+                        } catch (Exception ex) when (ex is InvalidOperationException or ArgumentException) {
                             Logger.Error(ex);
                             valid = false;
-                        }                        
+                        }
                     }
                 }
                 foreach (var item in Conditions) {
-                    IValidatable validatable = (item as IValidatable);
+                    IValidatable? validatable = (item as IValidatable);
                     if (validatable != null) {
                         try {
                             valid = validatable.Validate() && valid;
-                        } catch (Exception ex) {
+                        } catch (Exception ex) when (ex is InvalidOperationException or ArgumentException) {
                             Logger.Error(ex);
                             valid = false;
                         }
                     }
                 }
                 foreach (var item in Triggers) {
-                    IValidatable validatable = (item as IValidatable);
+                    IValidatable? validatable = (item as IValidatable);
                     if (validatable != null) {
                         try {
                             valid = validatable.Validate() && valid;
-                        } catch (Exception ex) {
+                        } catch (Exception ex) when (ex is InvalidOperationException or ArgumentException) {
                             Logger.Error(ex);
                             valid = false;
                         }
@@ -592,7 +600,7 @@ namespace OpenAstroAra.Sequencer.Container {
                 var items = GetItemsSnapshot();
                 var itemsByStatus = items.GroupBy(x => x.Status);
                 var itemString = string.Empty;
-                foreach(var i in itemsByStatus) {
+                foreach (var i in itemsByStatus) {
                     itemString += $", Items[{i.Key}]: {i.Count()}";
                 }
 
@@ -600,14 +608,14 @@ namespace OpenAstroAra.Sequencer.Container {
             }
         }
 
-        private CancellationTokenSource localCTS;
-        private Task executionTask;
+        private CancellationTokenSource? localCTS;
+        private Task? executionTask;
 
         public virtual async Task Interrupt() {
             if (localCTS != null) {
                 try {
-                    localCTS?.Cancel();
-                } catch { }
+                    await localCTS.CancelAsync();
+                } catch (ObjectDisposedException) { }
 
                 if (executionTask != null) {
                     await executionTask;

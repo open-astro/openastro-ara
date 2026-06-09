@@ -1,16 +1,15 @@
 // AForge Image Processing Library
 // AForge.NET framework
 //
-// Copyright © Andrew Kirillov, 2005-2008
+// Copyright ï¿½ Andrew Kirillov, 2005-2008
 // andrew.kirillov@aforgenet.com
 //
 
-namespace Accord.Imaging.Filters
-{
-	/// <summary>
-	/// Simple edge detector.
-	/// </summary>
-	/// 
+namespace Accord.Imaging.Filters {
+    /// <summary>
+    /// Simple edge detector.
+    /// </summary>
+    /// 
     /// <remarks><para>The filter performs <see cref="Convolution">convolution filter</see> using
     /// the edges kernel:</para>
     /// 
@@ -39,16 +38,14 @@ namespace Accord.Imaging.Filters
     /// 
     /// <seealso cref="Convolution"/>
     ///
-    public sealed class Edges : Convolution
-	{
-		/// <summary>
-		/// Initializes a new instance of the <see cref="Edges"/> class.
-		/// </summary>
-		public Edges( ) : base( new int[,] {
-										{  0, -1,  0 },
-										{ -1,  4, -1 },
-										{  0, -1,  0 } } )
-		{
-		}
-	}
+    public sealed class Edges : Convolution {
+        /// <summary>
+        /// Initializes a new instance of the <see cref="Edges"/> class.
+        /// </summary>
+        public Edges() : base(new int[,] {
+                                        {  0, -1,  0 },
+                                        { -1,  4, -1 },
+                                        {  0, -1,  0 } }) {
+        }
+    }
 }

@@ -29,6 +29,6 @@ namespace OpenAstroAra.Server.Services;
 /// </summary>
 public interface IBatchJobService {
     BatchJobDto Enqueue(string jobType, int totalSteps, Func<Action<int>, CancellationToken, Task> work);
-    BatchJobDto? Get(Guid jobId);
+    BatchJobDto? GetJob(Guid jobId);
     bool TryCancel(Guid jobId);
 }

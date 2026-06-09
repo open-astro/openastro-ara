@@ -58,12 +58,12 @@ public sealed class PlaceholderCameraService : ICameraService {
         var frameId = Guid.NewGuid();
         return Task.FromResult(new ExposureResponseDto(
             FrameId: frameId.ToString(),
-            PreviewUrl: $"/api/v1/frames/{frameId}/preview",
+            PreviewUrl: new Uri($"/api/v1/frames/{frameId}/preview", UriKind.Relative),
             ExposureSec: 1.0,
             CapturedAt: DateTimeOffset.UtcNow.ToString("O")));
     }
     public Task AbortExposureAsync(CancellationToken ct) => Task.CompletedTask;
-    public Task SetCoolerAsync(bool on, double? targetTemperatureC, CancellationToken ct) => Task.CompletedTask;
+    public Task SetCoolerAsync(bool enabled, double? targetTemperatureC, CancellationToken ct) => Task.CompletedTask;
 }
 
 public sealed class PlaceholderTelescopeService : ITelescopeService {

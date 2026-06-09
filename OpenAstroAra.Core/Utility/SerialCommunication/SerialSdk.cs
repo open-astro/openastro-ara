@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -14,6 +14,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.IO.Ports;
 using System.Threading;
@@ -21,53 +22,62 @@ using System.Threading.Tasks;
 
 namespace OpenAstroAra.Core.Utility.SerialCommunication {
 
-    public abstract class SerialSdk : ISerialSdk {
+    public abstract class SerialSdk : ISerialSdk, IDisposable {
         protected virtual string LogName => "Generic Serial Sdk";
 
         private readonly ResponseCache _cache = new ResponseCache();
-        public ISerialPort SerialPort { get; set; }
+        public ISerialPort? SerialPort { get; set; }
 
-        private ISerialPortProvider _provider;
+        private ISerialPortProvider? _provider;
 
         public ISerialPortProvider SerialPortProvider {
-            protected get => _provider ?? (_provider = new SerialPortProvider());
+            get => _provider ?? (_provider = new SerialPortProvider());
             set => _provider = value;
         }
 
         private readonly List<object> clients = new List<object>();
         private readonly SemaphoreSlim ssSerial = new SemaphoreSlim(1, 1);
 
-        public virtual bool InitializeSerialPort(string portName, object client, int baudRate = 9600, Parity parity = Parity.None, int dataBits = 8,
+        public virtual bool InitializeSerialPort(string? portName, object client, int baudRate = 9600, Parity parity = Parity.None, int dataBits = 8,
             StopBits stopBits = StopBits.One, Handshake handShake = Handshake.None, bool dtrEnable = false,
             string newLine = "\n", int readTimeout = 500, int writeTimeout = 500) {
             try {
                 ssSerial.Wait();
                 if (string.IsNullOrEmpty(portName)) return false;
                 if (!clients.Contains(client)) { clients.Add(client); }
-                if (SerialPort != null && SerialPort.PortName.Equals(portName)) {
+                if (SerialPort != null && SerialPort.PortName.Equals(portName, StringComparison.Ordinal)) {
                     return true;
                 }
                 SerialPort = SerialPortProvider.GetSerialPort(portName, baudRate, parity, dataBits, stopBits, handShake, dtrEnable, newLine, readTimeout, writeTimeout);
                 SerialPort?.Open();
-            } catch (Exception ex) {
-                Logger.Error(ex);
-                Notification.Notification.ShowError(string.Format(Locale.Loc.Instance["LblSerialPortCannotOpen"], SerialPort?.PortName, ex.GetType().Name));
-
-                if (clients.Contains(client)) { clients.Remove(client); }
-                SerialPort = null;
+            } catch (IOException ex) {
+                HandleOpenFailure(ex, client);
+            } catch (UnauthorizedAccessException ex) {
+                HandleOpenFailure(ex, client);
+            } catch (ArgumentException ex) {
+                HandleOpenFailure(ex, client);
+            } catch (InvalidOperationException ex) {
+                HandleOpenFailure(ex, client);
             } finally {
                 ssSerial.Release();
             }
             return SerialPort != null;
+
+            void HandleOpenFailure(Exception ex, object failedClient) {
+                Logger.Error(ex);
+                Notification.Notifier.ShowError(string.Format(CultureInfo.CurrentCulture, Locale.Loc.Instance["LblSerialPortCannotOpen"], SerialPort?.PortName, ex.GetType().Name));
+                clients.Remove(failedClient);
+                SerialPort = null;
+            }
         }
 
-        public Task<TResult> SendCommand<TResult>(ISerialCommand command) where TResult : Response, new() {
+        public Task<TResult?> SendCommand<TResult>(ISerialCommand? command) where TResult : Response, new() {
             return Task.Run(() => {
-                if (command == null) throw new ArgumentNullException(nameof(command));
+                ArgumentNullException.ThrowIfNull(command);
                 ssSerial.Wait();
                 TResult response;
                 if (_cache.HasValidResponse(command.GetType(), typeof(TResult))) {
-                    response = (TResult)_cache.Get(command.GetType(), typeof(TResult));
+                    response = (TResult)_cache.Get(command.GetType(), typeof(TResult))!;
                     ssSerial.Release();
                     return response;
                 }
@@ -82,7 +92,7 @@ namespace OpenAstroAra.Core.Utility.SerialCommunication {
                     var result = string.Empty;
                     var retries = 2;
                     while (string.IsNullOrEmpty(result) && retries >= 0) {
-                        result = ReadAndLog(command, ref retries);
+                        result = ReadAndLog(command, ref retries) ?? string.Empty;
                     }
 
                     response = new TResult { DeviceResponse = result };
@@ -104,7 +114,7 @@ namespace OpenAstroAra.Core.Utility.SerialCommunication {
 
         private void CleanupInBuffer() {
             try {
-                Logger.Error($"Cleaning up {SerialPort?.BytesToRead.ToString()} from read buffer.");
+                Logger.Error($"Cleaning up {SerialPort?.BytesToRead.ToString(CultureInfo.InvariantCulture)} from read buffer.");
                 SerialPort?.DiscardInBuffer();
             } catch (Exception ex) {
                 Logger.Error($"{LogName}: Port is in an invalid state. {ex}");
@@ -129,8 +139,8 @@ namespace OpenAstroAra.Core.Utility.SerialCommunication {
             }
         }
 
-        private string ReadAndLog(ISerialCommand command, ref int retries) {
-            string result = null;
+        private string? ReadAndLog(ISerialCommand command, ref int retries) {
+            string? result = null;
             try {
                 result = SerialPort?.ReadLine();
                 Logger.Trace($"{LogName}: response : {result}");
@@ -158,6 +168,17 @@ namespace OpenAstroAra.Core.Utility.SerialCommunication {
                 SerialPort = null;
             } finally {
                 ssSerial.Release();
+            }
+        }
+
+        public void Dispose() {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        protected virtual void Dispose(bool disposing) {
+            if (disposing) {
+                ssSerial.Dispose();
             }
         }
     }

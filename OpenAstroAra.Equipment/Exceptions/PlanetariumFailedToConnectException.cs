@@ -12,15 +12,20 @@
 
 #endregion "copyright"
 
-namespace OpenAstroAra.Core.Model {
+using System;
 
-    public class NullFilter {
-        public static NullFilter Instance { get; } = new NullFilter();
+namespace OpenAstroAra.Equipment.Exceptions {
 
-        public string Name => "(" + Locale.Loc.Instance["LblCurrent"] + ")";
+    [Serializable]
+    public class PlanetariumFailedToConnectException : Exception {
 
-        public override string ToString() {
-            return Name;
+        public PlanetariumFailedToConnectException() {
+        }
+
+        public PlanetariumFailedToConnectException(string message) : base(message) {
+        }
+
+        public PlanetariumFailedToConnectException(string message, Exception innerException) : base(message, innerException) {
         }
     }
 }

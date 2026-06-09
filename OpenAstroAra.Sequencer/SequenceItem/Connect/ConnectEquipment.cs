@@ -83,8 +83,8 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
             SelectedDevice = "Camera";
         }
 
-        public List<string> Devices { get; }
-        private string selectedDevice;
+        public IReadOnlyList<string> Devices { get; }
+        private string selectedDevice = string.Empty;
 
         [JsonProperty]
         public string SelectedDevice {
@@ -96,7 +96,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
             }
         }
 
-        private object GetMediator() {
+        private object? GetMediator() {
             switch (SelectedDevice) {
                 case "Camera": return cameraMediator;
                 case "Filter Wheel": return fwMediator;
@@ -114,7 +114,8 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
             }
         }
 
-        public string GetProfileId() {
+        public string? ProfileId {
+            get {
             switch (SelectedDevice) {
                 case "Camera": return profileService.ActiveProfile.CameraSettings.Id;
                 case "Filter Wheel": return profileService.ActiveProfile.FilterWheelSettings.Id;
@@ -129,6 +130,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
                 case "Dome": return profileService.ActiveProfile.DomeSettings.Id;
                 case "Safety Monitor": return profileService.ActiveProfile.SafetyMonitorSettings.Id;
                 default: return null;
+            }
             }
         }
 
@@ -162,25 +164,26 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
 
 
             if (!IsConnected()) {
-                var profileId = GetProfileId();
+                var profileId = ProfileId;
                 var mediator = GetMediator();
+                if (mediator == null) { return; }
 
                 var type = mediator.GetType();
                 var GetInfo = type.GetMethod("GetInfo");
                 var Rescan = type.GetMethod("Rescan");
-                var devices = await (Task<IList<string>>)Rescan.Invoke(mediator, null);
+                var devices = await (Task<IList<string>>)Rescan!.Invoke(mediator, null)!;
 
-                if (devices.Contains(profileId)) {
+                if (profileId != null && devices.Contains(profileId)) {
                     var Connect = type.GetMethod("Connect");
-                    var success = await (Task<bool>)Connect.Invoke(mediator, null);
+                    var success = await (Task<bool>)Connect!.Invoke(mediator, null)!;
 
-                    DeviceInfo infoAfterConnect = (DeviceInfo)GetInfo.Invoke(mediator, null);
+                    DeviceInfo infoAfterConnect = (DeviceInfo)GetInfo!.Invoke(mediator, null)!;
                     success = success && infoAfterConnect.Connected;
                     if (!success) {
-                        throw new Exception($"Failed to connect to {SelectedDevice}");
+                        throw new SequenceEntityFailedException($"Failed to connect to {SelectedDevice}");
                     }
                 } else {
-                    throw new Exception($"Failed to connect to {SelectedDevice} as it was not found");
+                    throw new SequenceEntityFailedException($"Failed to connect to {SelectedDevice} as it was not found");
                 }
             } else {
                 Logger.Info($"{SelectedDevice} is already connected");
@@ -189,17 +192,18 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
 
         public bool IsConnected() {
             var mediator = GetMediator();
+            if (mediator == null) { return false; }
 
             var type = mediator.GetType();
             var GetInfo = type.GetMethod("GetInfo");
-            DeviceInfo info = (DeviceInfo)GetInfo.Invoke(mediator, null);
+            DeviceInfo info = (DeviceInfo)GetInfo!.Invoke(mediator, null)!;
             return info.Connected;
         }
 
         public bool Validate() {
             var i = new List<string>();
 
-            var profileId = GetProfileId();
+            var profileId = ProfileId;
             if (profileId == "No_Device" || profileId == "No_Guider") {
                 i.Add($"There is no device id stored in the profile for the {SelectedDevice}. Make sure to manually connect a {SelectedDevice} once, so that a device id for a {SelectedDevice} is stored in the profile.");
             }
@@ -209,7 +213,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
         }
 
         public override string ToString() {
-            return $"Category: {Category}, Item: {nameof(ConnectEquipment)}, Selected device: {SelectedDevice}, Selected device id: {GetProfileId()}";
+            return $"Category: {Category}, Item: {nameof(ConnectEquipment)}, Selected device: {SelectedDevice}, Selected device id: {ProfileId}";
         }
     }
 }

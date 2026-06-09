@@ -12,9 +12,12 @@
 
 #endregion "copyright"
 
-using System.Text.Json;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using OpenAstroAra.Server.Contracts;
+using System;
+using System.IO;
+using System.Text.Json;
 
 namespace OpenAstroAra.Server.Services;
 
@@ -33,22 +36,21 @@ namespace OpenAstroAra.Server.Services;
 /// blocking startup. That handling lands when the daemon-startup
 /// reconciliation lands; this helper covers the write path only.
 /// </summary>
-public sealed class ActiveSequenceCheckpoint {
+public sealed partial class ActiveSequenceCheckpoint {
 
     public const string FileName = "current.json";
 
     private readonly string _activeDir;
     private readonly string _path;
-    private readonly ILogger? _logger;
+    private readonly ILogger _logger;
     private readonly object _lock = new();
 
     public ActiveSequenceCheckpoint(string profileDir, ILogger? logger = null) {
         _activeDir = System.IO.Path.Combine(profileDir, "sequences", FileSequenceService.ActiveDirName);
         _path = System.IO.Path.Combine(_activeDir, FileName);
-        _logger = logger;
-        try { Directory.CreateDirectory(_activeDir); }
-        catch (Exception ex) {
-            _logger?.LogWarning(ex, "Failed to create active sequences dir {Path}", _activeDir);
+        _logger = logger ?? NullLogger.Instance;
+        try { Directory.CreateDirectory(_activeDir); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+            LogCreateDirFailed(ex, _activeDir);
         }
     }
 
@@ -68,8 +70,8 @@ public sealed class ActiveSequenceCheckpoint {
                 var json = JsonSerializer.Serialize(state, AraJsonSerializerContext.Default.SequenceRunStateDto);
                 File.WriteAllText(tempPath, json);
                 File.Move(tempPath, _path, overwrite: true);
-            } catch (Exception ex) {
-                _logger?.LogWarning(ex, "Failed to write active sequence checkpoint to {Path}", _path);
+            } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) {
+                LogWriteFailed(ex, _path);
             }
         }
     }
@@ -83,8 +85,8 @@ public sealed class ActiveSequenceCheckpoint {
         lock (_lock) {
             try {
                 if (File.Exists(_path)) File.Delete(_path);
-            } catch (Exception ex) {
-                _logger?.LogWarning(ex, "Failed to clear active sequence checkpoint at {Path}", _path);
+            } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+                LogClearFailed(ex, _path);
             }
         }
     }
@@ -104,9 +106,21 @@ public sealed class ActiveSequenceCheckpoint {
         try {
             var json = File.ReadAllText(_path);
             return JsonSerializer.Deserialize(json, AraJsonSerializerContext.Default.SequenceRunStateDto);
-        } catch (Exception ex) {
-            _logger?.LogWarning(ex, "Failed to read active sequence checkpoint from {Path}", _path);
+        } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) {
+            LogReadFailed(ex, _path);
             return null;
         }
     }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to create active sequences dir {Path}")]
+    private partial void LogCreateDirFailed(Exception ex, string path);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to write active sequence checkpoint to {Path}")]
+    private partial void LogWriteFailed(Exception ex, string path);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to clear active sequence checkpoint at {Path}")]
+    private partial void LogClearFailed(Exception ex, string path);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to read active sequence checkpoint from {Path}")]
+    private partial void LogReadFailed(Exception ex, string path);
 }

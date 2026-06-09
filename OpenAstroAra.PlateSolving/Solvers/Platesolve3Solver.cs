@@ -21,7 +21,7 @@ using System.IO;
 
 namespace OpenAstroAra.PlateSolving.Solvers {
 
-    internal class Platesolve3Solver : CLISolver {
+    internal sealed class Platesolve3Solver : CLISolver {
 
         public Platesolve3Solver(string executableLocation)
             : base(executableLocation) {
@@ -84,10 +84,10 @@ namespace OpenAstroAra.PlateSolving.Solvers {
             PlateSolveResult result = new PlateSolveResult() { Success = false };
             if (File.Exists(outputFilePath)) {
                 using (var s = new StreamReader(outputFilePath)) {
-                    string line;
+                    string? line;
                     int linenr = 0;
                     while ((line = s.ReadLine()) != null) {
-                        if (linenr == 0 && line.ToLower() != "true") {
+                        if (linenr == 0 && !line.Equals("true", StringComparison.OrdinalIgnoreCase)) {
                             // If platesolving succeeds it will start with a line containing True
                             return result;
                         }
@@ -110,7 +110,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
                                 }
                                 result.PositionAngle = double.Parse(resultArr[1], CultureInfo.InvariantCulture);
                             }
-                        }   
+                        }
                         if (linenr == 4) {
                             if (resultArr.Length >= 2) {
                                 //result.Flipped = double.Parse(resultArr[0], CultureInfo.InvariantCulture) >= 0;
@@ -128,7 +128,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
         }
 
         protected override string GetOutputPath(string imageFilePath) {
-            return Path.Combine(Path.GetDirectoryName(imageFilePath), Path.GetFileNameWithoutExtension(imageFilePath)) + "_PS3.txt";
+            return Path.Combine(Path.GetDirectoryName(imageFilePath) ?? string.Empty, Path.GetFileNameWithoutExtension(imageFilePath)) + "_PS3.txt";
         }
     }
 }

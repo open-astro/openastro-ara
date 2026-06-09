@@ -10,23 +10,23 @@
 */
 #endregion "copyright"
 using FluentAssertions;
-using OpenAstroAra.Image.ImageData;
-using OpenAstroAra.Core.Utility;
-using OpenAstroAra.Astrometry;
 using NUnit.Framework;
+using OpenAstroAra.Astrometry;
+using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Image.FileFormat.FITS;
+using OpenAstroAra.Image.ImageData;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using OpenAstroAra.Image.FileFormat.FITS;
 
 namespace OpenAstroAra.Test {
 
     [Platform("Win")]
 
     [TestFixture]
-    internal class FITSTest {
+    internal sealed class FITSTest {
 
         [Test]
         public void FITSConstructorTest() {
@@ -72,7 +72,7 @@ namespace OpenAstroAra.Test {
                 new FITSHeaderCard("YBINNING",1, "Y axis binning factor"),
                 new FITSHeaderCard("ROWORDER","TOP-DOWN", "FITS Image Orientation"),
                 new FITSHeaderCard("EQUINOX", 2000d, "Equinox of celestial coordinate system"),
-                new FITSHeaderCard("SWCREATE",string.Format("N.I.N.A. {0} ({1})", OpenAstroAra.Core.Utility.CoreUtil.Version, DllLoader.IsX86() ? "x86" : "x64"), "Software that created this file"),
+                new FITSHeaderCard("SWCREATE",string.Format(System.Globalization.CultureInfo.InvariantCulture, "N.I.N.A. {0} ({1})", OpenAstroAra.Core.Utility.CoreUtil.Version, DllLoader.IsX86() ? "x86" : "x64"), "Software that created this file"),
             };
 
             //Act
@@ -549,7 +549,7 @@ namespace OpenAstroAra.Test {
             var sut = new FITSHeaderCard(key, value, comment);
 
             sut.Key.Should().Be(key);
-            sut.Value.Should().Be(value.ToString());
+            sut.Value.Should().Be(value.ToString(System.Globalization.CultureInfo.InvariantCulture));
             sut.Comment.Should().Be(comment);
             sut.GetHeaderString().Should().Be("SOME    =                  113 / some comment                                   ");
         }
@@ -583,7 +583,7 @@ namespace OpenAstroAra.Test {
         [TestCase(-100)]
         public void FITSOriginalValue_StringTest(int value) {
             var card = new FITSHeaderCard("KEY", value, string.Empty);
-            card.OriginalValue.Should().Be(value.ToString());
+            card.OriginalValue.Should().Be(value.ToString(System.Globalization.CultureInfo.InvariantCulture));
         }
 
         [Test]

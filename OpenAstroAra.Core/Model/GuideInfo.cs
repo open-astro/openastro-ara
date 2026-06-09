@@ -15,7 +15,6 @@
 using OpenAstroAra.Core.Interfaces;
 using System.Runtime.Serialization;
 
-#pragma warning disable 1998
 
 namespace OpenAstroAra.Core.Model {
 
@@ -26,9 +25,9 @@ namespace OpenAstroAra.Core.Model {
     public class GuideInfo {
 
         [DataMember]
-        public IGuideStep GuideStep { get; set; }
+        public IGuideStep? GuideStep { get; set; }
 
         [DataMember]
-        public string State { get; set; }
+        public string State { get; set; } = string.Empty;
     }
 }

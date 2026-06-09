@@ -20,8 +20,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System.Collections.Generic;
     using System.Drawing;
     using System.Drawing.Imaging;
@@ -31,8 +30,7 @@ namespace Accord.Imaging.Filters
     ///   Filter to mark (highlight) rectangles in a image.
     /// </summary>
     /// 
-    public class RectanglesMarker : BaseInPlaceFilter
-    {
+    public class RectanglesMarker : BaseInPlaceFilter {
         private Color markerColor = Color.White;
         private Color fillColor = Color.Transparent;
         private IEnumerable<Rectangle> rectangles;
@@ -43,8 +41,7 @@ namespace Accord.Imaging.Filters
         ///   Color used to mark pairs.
         /// </summary>
         /// 
-        public Color MarkerColor
-        {
+        public Color MarkerColor {
             get { return markerColor; }
             set { markerColor = value; }
         }
@@ -54,8 +51,7 @@ namespace Accord.Imaging.Filters
         ///   rectangles. Default is Transparent.
         /// </summary>
         /// 
-        public Color FillColor
-        {
+        public Color FillColor {
             get { return fillColor; }
             set { fillColor = value; }
         }
@@ -64,8 +60,7 @@ namespace Accord.Imaging.Filters
         ///   The set of rectangles.
         /// </summary>
         /// 
-        public Rectangle SingleRectangle
-        {
+        public Rectangle SingleRectangle {
             get { return rectangles.First(); }
             set { rectangles = new[] { value }; }
         }
@@ -74,8 +69,7 @@ namespace Accord.Imaging.Filters
         ///   The set of rectangles.
         /// </summary>
         /// 
-        public IEnumerable<Rectangle> Rectangles
-        {
+        public IEnumerable<Rectangle> Rectangles {
             get { return rectangles; }
             set { rectangles = value; }
         }
@@ -85,8 +79,7 @@ namespace Accord.Imaging.Filters
         ///   Format translations dictionary.
         /// </summary>
         /// 
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -98,8 +91,7 @@ namespace Accord.Imaging.Filters
         /// <param name="markerColor">The color to use to drawn the rectangles.</param>
         /// 
         public RectanglesMarker(Color markerColor)
-            : this(null, markerColor)
-        {
+            : this(null, markerColor) {
         }
 
         /// <summary>
@@ -109,8 +101,7 @@ namespace Accord.Imaging.Filters
         /// <param name="rectangles">Set of rectangles to be drawn.</param>
         /// 
         public RectanglesMarker(params Rectangle[] rectangles)
-            : this(rectangles, Color.White)
-        {
+            : this(rectangles, Color.White) {
         }
 
         /// <summary>
@@ -120,8 +111,7 @@ namespace Accord.Imaging.Filters
         /// <param name="rectangles">Set of rectangles to be drawn.</param>
         /// 
         public RectanglesMarker(IEnumerable<Rectangle> rectangles)
-            : this(rectangles, Color.White)
-        {
+            : this(rectangles, Color.White) {
         }
 
         /// <summary>
@@ -131,8 +121,7 @@ namespace Accord.Imaging.Filters
         /// <param name="rectangles">Set of rectangles to be drawn.</param>
         /// <param name="markerColor">The color to use to drawn the rectangles.</param>
         /// 
-        public RectanglesMarker(IEnumerable<Rectangle> rectangles, Color markerColor)
-        {
+        public RectanglesMarker(IEnumerable<Rectangle> rectangles, Color markerColor) {
             this.rectangles = rectangles;
             this.markerColor = markerColor;
 
@@ -144,11 +133,9 @@ namespace Accord.Imaging.Filters
         /// <summary>
         ///   Applies the filter to the image.
         /// </summary>
-        protected override void ProcessFilter(UnmanagedImage image)
-        {
+        protected override void ProcessFilter(UnmanagedImage image) {
             // mark all rectangular regions
-            foreach (Rectangle rectangle in rectangles)
-            {
+            foreach (Rectangle rectangle in rectangles) {
                 Drawing.Rectangle(image, rectangle, markerColor);
                 if (fillColor != Color.Transparent)
                     Drawing.FillRectangle(image, rectangle, fillColor);

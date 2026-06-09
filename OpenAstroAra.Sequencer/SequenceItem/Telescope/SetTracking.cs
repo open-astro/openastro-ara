@@ -13,8 +13,10 @@
 #endregion "copyright"
 
 using Newtonsoft.Json;
-using OpenAstroAra.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Core.Locale;
 using OpenAstroAra.Core.Model;
+using OpenAstroAra.Equipment.Interfaces;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Sequencer.Validations;
 using System;
 using System.Collections.Generic;
@@ -22,8 +24,6 @@ using System.Collections.Immutable;
 using System.ComponentModel.Composition;
 using System.Threading;
 using System.Threading.Tasks;
-using OpenAstroAra.Core.Locale;
-using OpenAstroAra.Equipment.Interfaces;
 
 namespace OpenAstroAra.Sequencer.SequenceItem.Telescope {
 
@@ -34,17 +34,12 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Telescope {
     [Export(typeof(ISequenceItem))]
     [JsonObject(MemberSerialization.OptIn)]
     public class SetTracking : SequenceItem, IValidatable {
-        private static readonly IList<TrackingMode> trackingModeChoices;
-
-        static SetTracking() {
-            var trackingModeChoicesBuilder = ImmutableList.CreateBuilder<TrackingMode>();
-            trackingModeChoicesBuilder.Add(TrackingMode.Sidereal);
-            trackingModeChoicesBuilder.Add(TrackingMode.King);
-            trackingModeChoicesBuilder.Add(TrackingMode.Solar);
-            trackingModeChoicesBuilder.Add(TrackingMode.Lunar);
-            trackingModeChoicesBuilder.Add(TrackingMode.Stopped);
-            trackingModeChoices = trackingModeChoicesBuilder.ToImmutable();
-        }
+        private static readonly IList<TrackingMode> trackingModeChoices = ImmutableList.Create(
+            TrackingMode.Sidereal,
+            TrackingMode.King,
+            TrackingMode.Solar,
+            TrackingMode.Lunar,
+            TrackingMode.Stopped);
 
         [ImportingConstructor]
         public SetTracking(ITelescopeMediator telescopeMediator) {
@@ -83,7 +78,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Telescope {
             }
         }
 
-        public IList<TrackingMode> TrackingModeChoices => trackingModeChoices;
+        public static IList<TrackingMode> TrackingModeChoices => trackingModeChoices;
 
         public override Task Execute(IProgress<ApplicationStatus> progress, CancellationToken token) {
             telescopeMediator.SetTrackingMode(TrackingMode);

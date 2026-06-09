@@ -32,8 +32,8 @@ namespace OpenAstroAra.Astrometry {
         }
 
         private DateTime creationDate;
-        private Angle raAngle;
-        private Angle decAngle;
+        private Angle raAngle = Angle.Zero;
+        private Angle decAngle = Angle.Zero;
 
         /// <summary>
         /// Right Ascension in hours
@@ -183,7 +183,7 @@ namespace OpenAstroAra.Astrometry {
             return jnowCoordinates;
         }
 
-        private double GetJdTT(DateTime date) {
+        private static double GetJdTT(DateTime date) {
             var utcDate = date.ToUniversalTime();
             double tai1 = 0, tai2 = 0, tt1 = 0, tt2 = 0;
             var utc = AstroUtil.GetJulianDate(utcDate);
@@ -584,6 +584,13 @@ namespace OpenAstroAra.Astrometry {
                 this.Epoch,
                 this.creationDate,
                 this.DateTime);
+
+        // Friendly-named alternates for the operators above (CA2225).
+        public static Separation Subtract(Coordinates left, Coordinates right) => left - right;
+
+        public static Coordinates Add(Coordinates left, Separation right) => left + right;
+
+        public static Coordinates Subtract(Coordinates left, Separation right) => left - right;
     }
 
     /// <summary>

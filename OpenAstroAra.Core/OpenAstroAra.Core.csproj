@@ -32,7 +32,6 @@
   <ItemGroup>
     <PackageReference Include="Accord.Math" Version="3.8.2-alpha" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
-    <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json">

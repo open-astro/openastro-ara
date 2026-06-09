@@ -33,7 +33,7 @@ namespace OpenAstroAra.Equipment.Equipment {
 
         public string Id => "No_Device";
 
-        public string Name { get; private set; }
+        public string Name { get; private set; } = string.Empty;
         public string DisplayName => Name;
 
         public bool Connected => false;
@@ -44,7 +44,7 @@ namespace OpenAstroAra.Equipment.Equipment {
 
         public string DriverVersion => string.Empty;
 
-        public event PropertyChangedEventHandler PropertyChanged { add { } remove { } }
+        public event PropertyChangedEventHandler? PropertyChanged { add { } remove { } }
 
         public async Task<bool> Connect(CancellationToken token) {
             return await Task.Run(() => false, token);

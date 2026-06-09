@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -12,7 +12,7 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Enums;
 
 namespace OpenAstroAra.Profile.Interfaces {
 
@@ -22,14 +22,14 @@ namespace OpenAstroAra.Profile.Interfaces {
         string FilePatternDARK { get; set; }
         string FilePatternBIAS { get; set; }
         string FilePatternFLAT { get; set; }
-        FileTypeEnum FileType { get; set; }
-        TIFFCompressionTypeEnum TIFFCompressionType { get; set; }
-        XISFCompressionTypeEnum XISFCompressionType { get; set; }
-        XISFChecksumTypeEnum XISFChecksumType { get; set; }
+        FileType FileType { get; set; }
+        TIFFCompressionType TIFFCompressionType { get; set; }
+        XISFCompressionType XISFCompressionType { get; set; }
+        XISFChecksumType XISFChecksumType { get; set; }
         bool XISFByteShuffling { get; set; }
-        FITSCompressionTypeEnum FITSCompressionType { get; set; }
+        FITSCompressionType FITSCompressionType { get; set; }
         bool FITSAddFzExtension { get; set; }
         bool FITSUseLegacyWriter { get; set; }
-        string GetFilePattern(string imageType);
+        string ResolveFilePatternForImageType(string imageType);
     }
 }

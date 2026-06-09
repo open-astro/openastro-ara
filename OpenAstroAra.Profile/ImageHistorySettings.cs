@@ -12,7 +12,7 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Profile.Interfaces;
 using System;
@@ -23,7 +23,11 @@ namespace OpenAstroAra.Profile {
 
     [Serializable()]
     [DataContract]
-    public class ImageHistorySettings : Settings, IImageHistorySettings {
+    public sealed class ImageHistorySettings : Settings, IImageHistorySettings {
+
+        public ImageHistorySettings() {
+            SetDefaultValues();
+        }
 
         [OnDeserializing]
         public void OnDeserializing(StreamingContext context) {
@@ -31,14 +35,14 @@ namespace OpenAstroAra.Profile {
         }
 
         protected override void SetDefaultValues() {
-            _imageHistoryLeftSelected = ImageHistoryEnum.HFR;
-            _imageHistoryRightSelected = ImageHistoryEnum.Stars;
+            _imageHistoryLeftSelected = ImageHistory.HFR;
+            _imageHistoryRightSelected = ImageHistory.Stars;
         }
 
-        private ImageHistoryEnum _imageHistoryLeftSelected;
+        private ImageHistory _imageHistoryLeftSelected;
 
         [DataMember]
-        public ImageHistoryEnum ImageHistoryLeftSelected {
+        public ImageHistory ImageHistoryLeftSelected {
             get => _imageHistoryLeftSelected;
             set {
                 if (_imageHistoryLeftSelected != value) {
@@ -48,10 +52,10 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private ImageHistoryEnum _imageHistoryRightSelected;
+        private ImageHistory _imageHistoryRightSelected;
 
         [DataMember]
-        public ImageHistoryEnum ImageHistoryRightSelected {
+        public ImageHistory ImageHistoryRightSelected {
             get => _imageHistoryRightSelected;
             set {
                 if (_imageHistoryRightSelected != value) {

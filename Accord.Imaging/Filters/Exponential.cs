@@ -23,13 +23,12 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
+    using Accord.Imaging;
+    using Accord.Imaging.Filters;
     using System;
     using System.Collections.Generic;
     using System.Drawing.Imaging;
-    using Accord.Imaging;
-    using Accord.Imaging.Filters;
 
     /// <summary>
     ///   Exponential filter.
@@ -63,16 +62,14 @@ namespace Accord.Imaging.Filters
     /// 
     /// <seealso cref="Logarithm"/>
     /// 
-    public class Exponential : BaseInPlaceFilter
-    {
+    public class Exponential : BaseInPlaceFilter {
         private Dictionary<PixelFormat, PixelFormat> formatTranslations;
 
         /// <summary>
         ///   Format translations dictionary.
         /// </summary>
         /// 
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -80,8 +77,7 @@ namespace Accord.Imaging.Filters
         ///   Initializes a new instance of the <see cref="Exponential"/> class.
         /// </summary>
         /// 
-        public Exponential()
-        {
+        public Exponential() {
             formatTranslations = new Dictionary<PixelFormat, PixelFormat>();
             formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
             formatTranslations[PixelFormat.Format16bppGrayScale] = PixelFormat.Format16bppGrayScale;
@@ -98,8 +94,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <param name="image">Source image data.</param>
         /// 
-        protected unsafe override void ProcessFilter(UnmanagedImage image)
-        {
+        protected unsafe override void ProcessFilter(UnmanagedImage image) {
             int width = image.Width;
             int height = image.Height;
             PixelFormat format = image.PixelFormat;
@@ -114,12 +109,9 @@ namespace Accord.Imaging.Filters
             byte* src = (byte*)image.ImageData.ToPointer();
 
 
-            for (int y = 0; y < height; y++)
-            {
-                for (int x = 0; x < lineWidth; x++, src++)
-                {
-                    if (*src > 0)
-                    {
+            for (int y = 0; y < height; y++) {
+                for (int x = 0; x < lineWidth; x++, src++) {
+                    if (*src > 0) {
                         double v = Math.Exp(*src / scale);
 
                         *src = (byte)(v > 0 ? (v < 255 ? v : 255) : 0);

@@ -13,17 +13,17 @@
 #endregion "copyright"
 
 using Newtonsoft.Json;
+using OpenAstroAra.Core.Locale;
 using OpenAstroAra.Core.Model;
-using OpenAstroAra.Sequencer.Validations;
+using OpenAstroAra.Equipment.Interfaces;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Sequencer.Validations;
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.ComponentModel.Composition;
 using System.Threading;
 using System.Threading.Tasks;
-using OpenAstroAra.Core.Locale;
-using OpenAstroAra.Equipment.Interfaces;
 
 namespace OpenAstroAra.Sequencer.SequenceItem.Dome {
 
@@ -66,7 +66,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Dome {
         public override async Task Execute(IProgress<ApplicationStatus> progress, CancellationToken token) {
             if (Validate()) {
                 if (!await domeFollower.TriggerTelescopeSync()) {
-                    throw new Exception("Synchronize dome operation didn't complete successfully");
+                    throw new SequenceEntityFailedException("Synchronize dome operation didn't complete successfully");
                 }
             } else {
                 throw new SequenceItemSkippedException(string.Join(",", Issues));

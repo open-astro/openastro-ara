@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -19,8 +19,8 @@ namespace OpenAstroAra.Astrometry.Body {
 
     public abstract class BasicBody {
         [Obsolete("Use method with elevation parameter instead")]
-        public BasicBody(DateTime date, double latitude, double longitude) : this(date, latitude, longitude, elevation: 0) { }
-        public BasicBody(DateTime date, double latitude, double longitude, double elevation) {
+        protected BasicBody(DateTime date, double latitude, double longitude) : this(date, latitude, longitude, elevation: 0) { }
+        protected BasicBody(DateTime date, double latitude, double longitude, double elevation) {
             this.Date = date;
             this.Latitude = latitude;
             this.Longitude = longitude;
@@ -36,7 +36,7 @@ namespace OpenAstroAra.Astrometry.Body {
 
         public abstract double Radius { get; }
         protected abstract string Name { get; }
-        protected abstract NOVAS.Body BodyNumber { get; }
+        private protected abstract NOVAS.Body BodyNumber { get; }
 
         public Task Calculate() {
             return Task.Run(() => {
@@ -61,7 +61,7 @@ namespace OpenAstroAra.Astrometry.Body {
                     Type = (short)NOVAS.ObjectType.MajorPlanetSunOrMoon
                 };
 
-                var objPosition = new NOVAS.SkyPosition();
+                var objPosition = new SkyPosition();
 
                 NOVAS.Place(jd, obj, observer, deltaT, NOVAS.CoordinateSystem.EquinoxOfDate, NOVAS.Accuracy.Full, ref objPosition);
                 this.Distance = AstroUtil.AUToKilometer(objPosition.Dis);

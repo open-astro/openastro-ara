@@ -2,17 +2,17 @@
 // The Accord.NET Framework
 // http://accord-framework.net
 //
-// Copyright © César Souza, 2009-2017
+// Copyright ï¿½ Cï¿½sar Souza, 2009-2017
 // cesarsouza at gmail.com
 //
 // AForge Image Processing Library
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © Andrew Kirillov, 2005-2009
+// Copyright ï¿½ Andrew Kirillov, 2005-2009
 // andrew.kirillov@aforgenet.com
 //
-// Copyright © Frank Nagl, 2007
+// Copyright ï¿½ Frank Nagl, 2007
 // admin@franknagl.de
 //
 //    This library is free software; you can redistribute it and/or
@@ -30,14 +30,13 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging
-{
+namespace Accord.Imaging {
+    using Accord.Compat;
+    using Accord.Imaging.Filters;
     using System;
+    using System.Collections.Generic;
     using System.Drawing;
     using System.Drawing.Imaging;
-    using System.Collections.Generic;
-    using Accord.Imaging.Filters;
-    using Accord.Compat;
 
     /// <summary>
     /// Susan corners detector.
@@ -86,8 +85,7 @@ namespace Accord.Imaging
     /// 
     /// <seealso cref="MoravecCornersDetector"/>
     /// 
-    public class SusanCornersDetector : BaseCornersDetector
-    {
+    public class SusanCornersDetector : BaseCornersDetector {
         // brightness difference threshold
         private int differenceThreshold = 25;
 
@@ -108,8 +106,7 @@ namespace Accord.Imaging
         /// <para>Default value is set to <b>25</b>.</para>
         /// </remarks>
         /// 
-        public int DifferenceThreshold
-        {
+        public int DifferenceThreshold {
             get { return differenceThreshold; }
             set { differenceThreshold = value; }
         }
@@ -129,8 +126,7 @@ namespace Accord.Imaging
         /// <para>Default value is set to <b>18</b>, which is half of maximum amount of pixels in USAN.</para>
         /// </remarks>
         /// 
-        public int GeometricalThreshold
-        {
+        public int GeometricalThreshold {
             get { return geometricalThreshold; }
             set { geometricalThreshold = value; }
         }
@@ -140,8 +136,7 @@ namespace Accord.Imaging
         /// <summary>
         /// Initializes a new instance of the <see cref="SusanCornersDetector"/> class.
         /// </summary>
-        public SusanCornersDetector()
-        {
+        public SusanCornersDetector() {
             base.SupportedFormats.UnionWith(new[] { PixelFormat.Format8bppIndexed,
                PixelFormat.Format24bppRgb,
                PixelFormat.Format32bppRgb,
@@ -155,8 +150,7 @@ namespace Accord.Imaging
         /// <param name="differenceThreshold">Brightness difference threshold.</param>
         /// <param name="geometricalThreshold">Geometrical threshold.</param>
         /// 
-        public SusanCornersDetector(int differenceThreshold, int geometricalThreshold) : this()
-        {
+        public SusanCornersDetector(int differenceThreshold, int geometricalThreshold) : this() {
             this.differenceThreshold = differenceThreshold;
             this.geometricalThreshold = geometricalThreshold;
         }
@@ -166,8 +160,7 @@ namespace Accord.Imaging
         /// actual corners detection, transforming the input image into a list of points.
         /// </summary>
         /// 
-        protected override List<IntPoint> InnerProcess(UnmanagedImage image)
-        {
+        protected override List<IntPoint> InnerProcess(UnmanagedImage image) {
             // get source image size
             int width = image.Width;
             int height = image.Height;
@@ -175,12 +168,9 @@ namespace Accord.Imaging
             // make sure we have grayscale image
             UnmanagedImage grayImage = null;
 
-            if (image.PixelFormat == PixelFormat.Format8bppIndexed)
-            {
+            if (image.PixelFormat == PixelFormat.Format8bppIndexed) {
                 grayImage = image;
-            }
-            else
-            {
+            } else {
                 // create temporary grayscale image
                 grayImage = Grayscale.CommonAlgorithms.BT709.Apply(image);
             }
@@ -188,19 +178,16 @@ namespace Accord.Imaging
             int[,] susanMap = new int[height, width];
 
             // do the job
-            unsafe
-            {
+            unsafe {
                 int stride = grayImage.Stride;
                 int offset = grayImage.Offset;
 
                 byte* src = (byte*)grayImage.ImageData.ToPointer() + stride * 3 + 3;
 
                 // for each row
-                for (int y = 3, maxY = height - 3; y < maxY; y++)
-                {
+                for (int y = 3, maxY = height - 3; y < maxY; y++) {
                     // for each pixel
-                    for (int x = 3, maxX = width - 3; x < maxX; x++, src++)
-                    {
+                    for (int x = 3, maxX = width - 3; x < maxX; x++, src++) {
                         // get value of the nucleus
                         byte nucleusValue = *src;
                         // usan - number of pixels with similar brightness
@@ -209,8 +196,7 @@ namespace Accord.Imaging
                         int cx = 0, cy = 0;
 
                         // for each row of the mask
-                        for (int i = -3; i <= 3; i++)
-                        {
+                        for (int i = -3; i <= 3; i++) {
                             // determine row's radius
                             int r = rowRadius[i + 3];
 
@@ -218,11 +204,9 @@ namespace Accord.Imaging
                             byte* ptr = (byte*)((long)src + (long)(stride * i));
 
                             // for each element of the mask's row
-                            for (int j = -r; j <= r; j++)
-                            {
+                            for (int j = -r; j <= r; j++) {
                                 // differenceThreshold
-                                if (System.Math.Abs(nucleusValue - ptr[j]) <= differenceThreshold)
-                                {
+                                if (System.Math.Abs(nucleusValue - ptr[j]) <= differenceThreshold) {
                                     usan++;
 
                                     cx += x + j;
@@ -232,23 +216,17 @@ namespace Accord.Imaging
                         }
 
                         // check usan size
-                        if (usan < geometricalThreshold)
-                        {
+                        if (usan < geometricalThreshold) {
                             cx /= usan;
                             cy /= usan;
 
-                            if ((x != cx) || (y != cy))
-                            {
+                            if ((x != cx) || (y != cy)) {
                                 // cornersList.Add( new Point( x, y ) );
                                 usan = (geometricalThreshold - usan);
-                            }
-                            else
-                            {
+                            } else {
                                 usan = 0;
                             }
-                        }
-                        else
-                        {
+                        } else {
                             usan = 0;
                         }
 
@@ -260,8 +238,7 @@ namespace Accord.Imaging
                 }
             }
 
-            if (image.PixelFormat != PixelFormat.Format8bppIndexed)
-            {
+            if (image.PixelFormat != PixelFormat.Format8bppIndexed) {
                 // free grayscale image
                 grayImage.Dispose();
             }
@@ -270,21 +247,16 @@ namespace Accord.Imaging
             List<IntPoint> cornersList = new List<IntPoint>();
 
             // for each row
-            for (int y = 2, maxY = height - 2; y < maxY; y++)
-            {
+            for (int y = 2, maxY = height - 2; y < maxY; y++) {
                 // for each pixel
-                for (int x = 2, maxX = width - 2; x < maxX; x++)
-                {
+                for (int x = 2, maxX = width - 2; x < maxX; x++) {
                     int currentValue = susanMap[y, x];
 
                     // for each windows' row
-                    for (int i = -2; (currentValue != 0) && (i <= 2); i++)
-                    {
+                    for (int i = -2; (currentValue != 0) && (i <= 2); i++) {
                         // for each windows' pixel
-                        for (int j = -2; j <= 2; j++)
-                        {
-                            if (susanMap[y + i, x + j] > currentValue)
-                            {
+                        for (int j = -2; j <= 2; j++) {
+                            if (susanMap[y + i, x + j] > currentValue) {
                                 currentValue = 0;
                                 break;
                             }
@@ -292,8 +264,7 @@ namespace Accord.Imaging
                     }
 
                     // check if this point is really interesting
-                    if (currentValue != 0)
-                    {
+                    if (currentValue != 0) {
                         cornersList.Add(new IntPoint(x, y));
                     }
                 }
@@ -306,10 +277,8 @@ namespace Accord.Imaging
         /// Creates a new object that is a copy of the current instance.
         /// </summary>
         /// 
-        protected override object Clone(ISet<PixelFormat> supportedFormats)
-        {
-            return new SusanCornersDetector(differenceThreshold, geometricalThreshold)
-            {
+        protected override object Clone(ISet<PixelFormat> supportedFormats) {
+            return new SusanCornersDetector(differenceThreshold, geometricalThreshold) {
                 SupportedFormats = supportedFormats
             };
         }

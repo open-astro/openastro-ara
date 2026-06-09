@@ -12,10 +12,14 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Sequencer.SequenceItem;
-using OpenAstroAra.Sequencer.Validations;
+using OpenAstroAra.Core.Enums;
+using OpenAstroAra.Core.Locale;
 using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Sequencer.SequenceItem;
+using OpenAstroAra.Sequencer.SequenceItem.Utility;
+using OpenAstroAra.Sequencer.Utility;
+using OpenAstroAra.Sequencer.Validations;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.Composition;
@@ -23,10 +27,6 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using OpenAstroAra.Core.Locale;
-using OpenAstroAra.Core.Enum;
-using OpenAstroAra.Sequencer.Utility;
-using OpenAstroAra.Sequencer.SequenceItem.Utility;
 
 namespace OpenAstroAra.Sequencer.Conditions {
 
@@ -36,7 +36,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
     [ExportMetadata("Category", "Lbl_SequenceCategory_Condition")]
     [Export(typeof(ISequenceCondition))]
     public class SafetyMonitorCondition : SequenceCondition, IValidatable {
-        protected ISafetyMonitorMediator safetyMonitorMediator;
+        private protected readonly ISafetyMonitorMediator safetyMonitorMediator;
 
         [ImportingConstructor]
         public SafetyMonitorCondition(ISafetyMonitorMediator safetyMonitorMediator) {
@@ -89,9 +89,9 @@ namespace OpenAstroAra.Sequencer.Conditions {
             return true;
         }
 
-        public override bool Check(ISequenceItem previousItem, ISequenceItem nextItem) {
+        public override bool Check(ISequenceItem? previousItem, ISequenceItem? nextItem) {
             var info = safetyMonitorMediator.GetInfo();
-            IsSafe = info.Connected && info.IsSafe; 
+            IsSafe = info.Connected && info.IsSafe;
             if (!IsSafe && IsActive()) {
                 Logger.Info($"{nameof(SafetyMonitorCondition)} finished. Status=Unsafe");
             }
@@ -109,7 +109,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
         }
 
         public override void SequenceBlockTeardown() {
-            try { ConditionWatchdog?.Cancel(); } catch { }
+            ConditionWatchdog?.Cancel();
         }
 
         public override void SequenceBlockInitialize() {
@@ -143,7 +143,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
         public LoopWhileUnsafe(ISafetyMonitorMediator safetyMonitorMediator) : base(safetyMonitorMediator) {
         }
 
-        public override bool Check(ISequenceItem previousItem, ISequenceItem nextItem) {
+        public override bool Check(ISequenceItem? previousItem, ISequenceItem? nextItem) {
             var info = safetyMonitorMediator.GetInfo();
             IsSafe = info.Connected && info.IsSafe;
             if (IsSafe && IsActive()) {

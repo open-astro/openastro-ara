@@ -12,12 +12,14 @@
 
 #endregion "copyright"
 
+using Nito.AsyncEx;
+using Nito.AsyncEx.Synchronous;
 using OpenAstroAra.Core.Locale;
 using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Core.Utility.Notification;
-using Nito.AsyncEx;
-using Nito.AsyncEx.Synchronous;
 using System;
+using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -26,41 +28,29 @@ using System.Threading.Tasks;
 
 namespace OpenAstroAra.Equipment.Equipment.MyGuider.MetaGuide {
 
-    public delegate void OnCameraDelegate(MetaGuideCameraMsg msg);
-
-    public delegate void OnStatusDelegate(MetaGuideStatusMsg msg);
-
-    public delegate void OnGuideDelegate(MetaGuideGuideMsg msg);
-
-    public delegate void OnGuideParamsDelegate(MetaGuideGuideParamsMsg msg);
-
-    public delegate void OnCalibrationInfoDelegate(MetaGuideCalibrationInfoMsg msg);
-
-    public delegate void OnMountDelegate(MetaGuideMountMsg msg);
-
-    public delegate void OnDisconnectedDelegate();
-
     public class MetaGuideListener {
 
-        public event OnCameraDelegate OnCamera;
+        public event EventHandler<MetaGuideCameraMsg>? OnCamera;
 
-        public event OnStatusDelegate OnStatus;
+        public event EventHandler<MetaGuideStatusMsg>? OnStatus;
 
-        public event OnGuideDelegate OnGuide;
+        public event EventHandler<MetaGuideGuideMsg>? OnGuide;
 
-        public event OnGuideParamsDelegate OnGuideParams;
+        public event EventHandler<MetaGuideGuideParamsMsg>? OnGuideParams;
 
-        public event OnCalibrationInfoDelegate OnCalibrationInfo;
+        public event EventHandler<MetaGuideCalibrationInfoMsg>? OnCalibrationInfo;
 
-        public event OnMountDelegate OnMount;
+        public event EventHandler<MetaGuideMountMsg>? OnMount;
 
-        public event OnDisconnectedDelegate OnDisconnected;
+        public event EventHandler? OnDisconnected;
 
         private const int METAGUIDE_QUEUE_TIMEOUT_MS = 5000;
 
         public MetaGuideListener() {
         }
 
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "UDP message-processing boundary: each datagram is parsed and dispatched to arbitrary subscriber event handlers; any handler or malformed-message fault is logged so one bad packet cannot tear down the long-running listen loop. CA1031 sanctions general catches at such recover-and-continue boundaries.")]
         private void ProcessMessage(string[] splitMessage) {
             try {
                 if (splitMessage[0] == "OPENSCI" && splitMessage[1] == "ASTRO" && splitMessage[3] == "MG") {
@@ -69,7 +59,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.MetaGuide {
                         case "CAMERA": {
                                 var parsedMessage = MetaGuideCameraMsg.Create(splitMessage);
                                 if (parsedMessage != null) {
-                                    this.OnCamera?.Invoke(parsedMessage);
+                                    this.OnCamera?.Invoke(this, parsedMessage);
                                 }
                             }
                             break;
@@ -77,7 +67,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.MetaGuide {
                         case "STATUS": {
                                 var parsedMessage = MetaGuideStatusMsg.Create(splitMessage);
                                 if (parsedMessage != null) {
-                                    this.OnStatus?.Invoke(parsedMessage);
+                                    this.OnStatus?.Invoke(this, parsedMessage);
                                 }
                             }
                             break;
@@ -85,7 +75,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.MetaGuide {
                         case "GUIDE": {
                                 var parsedMessage = MetaGuideGuideMsg.Create(splitMessage);
                                 if (parsedMessage != null) {
-                                    this.OnGuide?.Invoke(parsedMessage);
+                                    this.OnGuide?.Invoke(this, parsedMessage);
                                 }
                             }
                             break;
@@ -93,7 +83,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.MetaGuide {
                         case "GUIDEPARMS": {
                                 var parsedMessage = MetaGuideGuideParamsMsg.Create(splitMessage);
                                 if (parsedMessage != null) {
-                                    this.OnGuideParams?.Invoke(parsedMessage);
+                                    this.OnGuideParams?.Invoke(this, parsedMessage);
                                 }
                             }
                             break;
@@ -101,7 +91,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.MetaGuide {
                         case "CALINFO": {
                                 var parsedMessage = MetaGuideCalibrationInfoMsg.Create(splitMessage);
                                 if (parsedMessage != null) {
-                                    this.OnCalibrationInfo?.Invoke(parsedMessage);
+                                    this.OnCalibrationInfo?.Invoke(this, parsedMessage);
                                 }
                             }
                             break;
@@ -109,7 +99,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.MetaGuide {
                         case "MOUNTNAME": {
                                 var parsedMessage = MetaGuideMountMsg.Create(splitMessage);
                                 if (parsedMessage != null) {
-                                    this.OnMount?.Invoke(parsedMessage);
+                                    this.OnMount?.Invoke(this, parsedMessage);
                                 }
                             }
                             break;
@@ -120,7 +110,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.MetaGuide {
                 }
             } catch (Exception ex) {
                 Logger.Error(ex);
-                Notification.ShowError(String.Format(Loc.Instance["LblMetaGuideListenerError"], ex.Message));
+                Notifier.ShowError(String.Format(CultureInfo.CurrentCulture, Loc.Instance["LblMetaGuideListenerError"], ex.Message));
             }
         }
 
@@ -135,7 +125,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.MetaGuide {
                     }
                 } catch (OperationCanceledException) {
                 }
-            });
+            }, cancellationToken);
         }
 
         public async Task RunListener(
@@ -143,8 +133,8 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.MetaGuide {
             int port,
             CancellationToken ct) {
             await Task.Run(async () => {
-                Task consumerTask = null;
-                Socket socket = null;
+                Task? consumerTask = null;
+                Socket? socket = null;
                 var consumerTokenSource = new CancellationTokenSource();
 
                 try {
@@ -168,7 +158,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.MetaGuide {
                     while (!ct.IsCancellationRequested) {
                         var bytesReceived = socket.ReceiveFrom(receiveBytes, ref remoteEndpoint);
                         var rawMessage = Encoding.UTF8.GetString(receiveBytes, 0, bytesReceived);
-                        var splitMessage = rawMessage.Split(new char[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+                        var splitMessage = rawMessage.Split(' ', StringSplitOptions.RemoveEmptyEntries);
 
                         var timeoutTokenSource = new CancellationTokenSource(TimeSpan.FromMilliseconds(METAGUIDE_QUEUE_TIMEOUT_MS));
                         var timeoutOrCancelledTokenSource = CancellationTokenSource.CreateLinkedTokenSource(ct, timeoutTokenSource.Token);
@@ -179,13 +169,13 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.MetaGuide {
                     }
                 } catch (Exception ex) {
                     Logger.Error(ex);
-                    Notification.ShowError(ex.Message);
+                    Notifier.ShowError(ex.Message);
                     throw;
                 } finally {
                     socket?.Close();
-                    try { consumerTokenSource?.Cancel(); } catch { }
+                    try { if (consumerTokenSource != null) { await consumerTokenSource.CancelAsync(); } } catch (ObjectDisposedException) { }
                     consumerTask?.WaitWithoutException(new CancellationTokenSource(METAGUIDE_QUEUE_TIMEOUT_MS).Token);
-                    this.OnDisconnected?.Invoke();
+                    this.OnDisconnected?.Invoke(this, System.EventArgs.Empty);
                 }
             }, ct);
         }

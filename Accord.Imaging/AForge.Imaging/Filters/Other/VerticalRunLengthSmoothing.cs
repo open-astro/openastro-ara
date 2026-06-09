@@ -6,8 +6,7 @@
 // contacts@aforgenet.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -46,8 +45,7 @@ namespace Accord.Imaging.Filters
     /// 
     /// <see cref="HorizontalRunLengthSmoothing"/>
     /// 
-    public class VerticalRunLengthSmoothing : BaseInPlacePartialFilter
-    {
+    public class VerticalRunLengthSmoothing : BaseInPlacePartialFilter {
         private int maxGapSize = 10;
         private bool processGapsWithImageBorders = false;
 
@@ -62,10 +60,9 @@ namespace Accord.Imaging.Filters
         /// 
         /// <para>Default value is set to <b>10</b>. Minimum value is 1. Maximum value is 1000.</para></remarks>
         ///
-        public int MaxGapSize
-        {
+        public int MaxGapSize {
             get { return maxGapSize; }
-            set { maxGapSize = Math.Max( 1, Math.Min( 1000, value ) ); }
+            set { maxGapSize = Math.Max(1, Math.Min(1000, value)); }
         }
 
         /// <summary>
@@ -78,14 +75,13 @@ namespace Accord.Imaging.Filters
         /// <para>Default value is set to <see langword="false"/>.</para>
         /// </remarks>
         /// 
-        public bool ProcessGapsWithImageBorders
-        {
+        public bool ProcessGapsWithImageBorders {
             get { return processGapsWithImageBorders; }
             set { processGapsWithImageBorders = value; }
         }
 
         // private format translation dictionary
-        private Dictionary<PixelFormat, PixelFormat> formatTranslations = new Dictionary<PixelFormat, PixelFormat>( );
+        private Dictionary<PixelFormat, PixelFormat> formatTranslations = new Dictionary<PixelFormat, PixelFormat>();
 
         /// <summary>
         /// Format translations dictionary.
@@ -94,8 +90,7 @@ namespace Accord.Imaging.Filters
         /// <remarks><para>See <see cref="IFilterInformation.FormatTranslations"/>
         /// documentation for additional information.</para></remarks>
         /// 
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -103,8 +98,7 @@ namespace Accord.Imaging.Filters
         /// Initializes a new instance of the <see cref="VerticalRunLengthSmoothing"/> class.
         /// </summary>
         /// 
-        public VerticalRunLengthSmoothing( )
-        {
+        public VerticalRunLengthSmoothing() {
             formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
         }
 
@@ -114,9 +108,8 @@ namespace Accord.Imaging.Filters
         /// 
         /// <param name="maxGapSize">Maximum gap size to fill (see <see cref="MaxGapSize"/>).</param>
         ///
-        public VerticalRunLengthSmoothing( int maxGapSize )
-            : this( )
-        {
+        public VerticalRunLengthSmoothing(int maxGapSize)
+            : this() {
             MaxGapSize = maxGapSize;
         }
 
@@ -127,44 +120,37 @@ namespace Accord.Imaging.Filters
         /// <param name="image">Source image data.</param>
         /// <param name="rect">Image rectangle for processing by the filter.</param>
         ///
-        protected override unsafe void ProcessFilter( UnmanagedImage image, Rectangle rect )
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage image, Rectangle rect) {
             int startX = rect.Left;
-            int stopX  = startX + rect.Width;
+            int stopX = startX + rect.Width;
 
             int height = rect.Height;
 
             int stride = image.Stride;
 
-            byte* basePtr = (byte*) image.ImageData.ToPointer( ) + rect.Top * stride + startX;
+            byte* basePtr = (byte*)image.ImageData.ToPointer() + rect.Top * stride + startX;
 
-            for ( int x = startX; x < stopX; x++ )
-            {
+            for (int x = startX; x < stopX; x++) {
                 byte* ptr = basePtr;
                 byte* columnStartPtr = ptr;
                 byte* columnEndPtr = ptr + stride * height;
 
                 // fill gaps between white pixels
-                while ( ptr < columnEndPtr )
-                {
+                while (ptr < columnEndPtr) {
                     byte* gapStart = ptr;
-                    int  gapSize = 0;
+                    int gapSize = 0;
 
                     // look for non black pixel
-                    while ( ( ptr < columnEndPtr ) && ( *ptr == 0 ) )
-                    {
+                    while ((ptr < columnEndPtr) && (*ptr == 0)) {
                         ptr += stride;
                         gapSize++;
                     }
 
                     // fill the gap between white areas
-                    if ( gapSize <= maxGapSize )
-                    {
-                        if ( ( processGapsWithImageBorders ) ||
-                           ( ( gapStart != columnStartPtr ) && ( ptr != columnEndPtr ) ) )
-                        {
-                            while ( gapStart < ptr )
-                            {
+                    if (gapSize <= maxGapSize) {
+                        if ((processGapsWithImageBorders) ||
+                           ((gapStart != columnStartPtr) && (ptr != columnEndPtr))) {
+                            while (gapStart < ptr) {
                                 *gapStart = 255;
                                 gapStart += stride;
                             }
@@ -172,8 +158,7 @@ namespace Accord.Imaging.Filters
                     }
 
                     // skip all non black pixels
-                    while ( ( ptr < columnEndPtr ) && ( *ptr != 0 ) )
-                    {
+                    while ((ptr < columnEndPtr) && (*ptr != 0)) {
                         ptr += stride;
                     }
                 }

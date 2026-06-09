@@ -83,19 +83,19 @@ namespace OpenAstroAra.Test.Utility {
         [Test]
         public void ResolveEmpty_returns_placeholder_for_null_or_whitespace() {
             Assert.That(FilenameTemplateSanitizer.ResolveEmpty(null,
-                FilenameTemplateSanitizer.EmptyTokenPlaceholders.SensorTemp), Is.EqualTo("noTemp"));
+                EmptyTokenPlaceholders.SensorTemp), Is.EqualTo("noTemp"));
             Assert.That(FilenameTemplateSanitizer.ResolveEmpty("",
-                FilenameTemplateSanitizer.EmptyTokenPlaceholders.Filter), Is.EqualTo("noFilter"));
+                EmptyTokenPlaceholders.Filter), Is.EqualTo("noFilter"));
             Assert.That(FilenameTemplateSanitizer.ResolveEmpty("   ",
-                FilenameTemplateSanitizer.EmptyTokenPlaceholders.Gain), Is.EqualTo("noGain"));
+                EmptyTokenPlaceholders.Gain), Is.EqualTo("noGain"));
         }
 
         [Test]
         public void ResolveEmpty_returns_value_when_non_empty() {
             Assert.That(FilenameTemplateSanitizer.ResolveEmpty("Ha",
-                FilenameTemplateSanitizer.EmptyTokenPlaceholders.Filter), Is.EqualTo("Ha"));
+                EmptyTokenPlaceholders.Filter), Is.EqualTo("Ha"));
             Assert.That(FilenameTemplateSanitizer.ResolveEmpty("-10.5",
-                FilenameTemplateSanitizer.EmptyTokenPlaceholders.SensorTemp), Is.EqualTo("-10.5"));
+                EmptyTokenPlaceholders.SensorTemp), Is.EqualTo("-10.5"));
         }
 
         [Test]

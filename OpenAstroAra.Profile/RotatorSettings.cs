@@ -12,7 +12,7 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Profile.Interfaces;
 using System;
 using System.Runtime.Serialization;
@@ -21,7 +21,11 @@ namespace OpenAstroAra.Profile {
 
     [Serializable()]
     [DataContract]
-    internal class RotatorSettings : Settings, IRotatorSettings {
+    internal sealed class RotatorSettings : Settings, IRotatorSettings {
+
+        public RotatorSettings() {
+            SetDefaultValues();
+        }
 
         [OnDeserializing]
         public void OnDeserializing(StreamingContext context) {
@@ -32,11 +36,11 @@ namespace OpenAstroAra.Profile {
             id = "No_Device";
             lastDeviceName = string.Empty;
             reverse2 = false;
-            rangeType = RotatorRangeTypeEnum.FULL;
+            rangeType = RotatorRangeType.FULL;
             rangeStartMechanicalPosition = 0.0f;
         }
 
-        private string id;
+        private string id = string.Empty;
 
         [DataMember]
         public string Id {
@@ -49,7 +53,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string lastDeviceName;
+        private string lastDeviceName = string.Empty;
 
         [DataMember]
         public string LastDeviceName {
@@ -86,10 +90,10 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private RotatorRangeTypeEnum rangeType;
+        private RotatorRangeType rangeType;
 
         [DataMember]
-        public RotatorRangeTypeEnum RangeType {
+        public RotatorRangeType RangeType {
             get => rangeType;
             set {
                 if (rangeType != value) {

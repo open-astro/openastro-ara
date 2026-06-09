@@ -39,9 +39,9 @@ namespace OpenAstroAra.Equipment.Equipment.MySwitch {
 
         public short Id { get; private set; }
 
-        public string Name { get; private set; }
+        public string Name { get; private set; } = string.Empty;
 
-        public string Description { get; }
+        public string Description { get; } = string.Empty;
 
         public double Value { get; }
 

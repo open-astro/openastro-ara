@@ -2,12 +2,11 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © Andrew Kirillov, 2005-2009
+// Copyright ï¿½ Andrew Kirillov, 2005-2009
 // andrew.kirillov@aforgenet.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using Accord.Imaging.Textures;
     using System;
     using System.Collections.Generic;
@@ -67,8 +66,7 @@ namespace Accord.Imaging.Filters
     /// <img src="..\images\imaging\textured_merge2.jpg" width="480" height="361" />
     /// </remarks>
     /// 
-    public class TexturedMerge : BaseInPlaceFilter2
-    {
+    public class TexturedMerge : BaseInPlaceFilter2 {
         // texture generator
         private ITextureGenerator textureGenerator;
         // generated texture
@@ -83,8 +81,7 @@ namespace Accord.Imaging.Filters
         ///
         /// <remarks><para>See <see cref="IFilterInformation.FormatTranslations"/> for more information.</para></remarks>
         ///
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -102,8 +99,7 @@ namespace Accord.Imaging.Filters
         /// generator is specified than the static generated texture is not used.</note></para>
         /// </remarks>
         /// 
-        public float[,] Texture
-        {
+        public float[,] Texture {
             get { return texture; }
             set { texture = value; }
         }
@@ -117,15 +113,13 @@ namespace Accord.Imaging.Filters
         /// <para><note>The property has priority over the <see cref="Texture"/> property.</note></para>
         /// </remarks>
         /// 
-        public ITextureGenerator TextureGenerator
-        {
+        public ITextureGenerator TextureGenerator {
             get { return textureGenerator; }
             set { textureGenerator = value; }
         }
 
         // Private constructor to do common initialization
-        private TexturedMerge()
-        {
+        private TexturedMerge() {
             formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
             formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format24bppRgb;
         }
@@ -137,8 +131,7 @@ namespace Accord.Imaging.Filters
         /// <param name="texture">Generated texture.</param>
         /// 
         public TexturedMerge(float[,] texture)
-            : this()
-        {
+            : this() {
             this.texture = texture;
         }
 
@@ -149,8 +142,7 @@ namespace Accord.Imaging.Filters
         /// <param name="generator">Texture generator.</param>
         /// 
         public TexturedMerge(ITextureGenerator generator)
-            : this()
-        {
+            : this() {
             this.textureGenerator = generator;
         }
 
@@ -161,8 +153,7 @@ namespace Accord.Imaging.Filters
         /// <param name="image">Source image data.</param>
         /// <param name="overlay">Overlay image data.</param>
         ///
-        protected override unsafe void ProcessFilter(UnmanagedImage image, UnmanagedImage overlay)
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage image, UnmanagedImage overlay) {
             // get image dimension
             int width = image.Width;
             int height = image.Height;
@@ -173,12 +164,9 @@ namespace Accord.Imaging.Filters
 
             // if generator was specified, then generate a texture
             // otherwise use provided texture
-            if (textureGenerator != null)
-            {
+            if (textureGenerator != null) {
                 texture = textureGenerator.Generate(width, height);
-            }
-            else
-            {
+            } else {
                 widthToProcess = Math.Min(width, texture.GetLength(1));
                 heightToProcess = Math.Min(height, texture.GetLength(0));
             }
@@ -192,16 +180,13 @@ namespace Accord.Imaging.Filters
             byte* ovr = (byte*)overlay.ImageData.ToPointer();
 
             // for each line
-            for (int y = 0; y < heightToProcess; y++)
-            {
+            for (int y = 0; y < heightToProcess; y++) {
                 // for each pixel
-                for (int x = 0; x < widthToProcess; x++)
-                {
+                for (int x = 0; x < widthToProcess; x++) {
                     double t1 = texture[y, x];
                     double t2 = 1 - t1;
 
-                    for (int i = 0; i < pixelSize; i++, ptr++, ovr++)
-                    {
+                    for (int i = 0; i < pixelSize; i++, ptr++, ovr++) {
                         *ptr = (byte)Math.Min(255.0f, *ptr * t1 + *ovr * t2);
                     }
                 }

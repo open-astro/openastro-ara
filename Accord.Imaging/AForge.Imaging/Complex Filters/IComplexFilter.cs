@@ -2,15 +2,14 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © Andrew Kirillov, 2005-2009
+// Copyright ï¿½ Andrew Kirillov, 2005-2009
 // andrew.kirillov@aforgenet.com
 //
 
-namespace Accord.Imaging.ComplexFilters
-{
-    using System;
+namespace Accord.Imaging.ComplexFilters {
     using AForge;
     using AForge.Math;
+    using System;
 
     /// <summary>
     /// Image processing filter, which operates with Fourier transformed
@@ -21,14 +20,13 @@ namespace Accord.Imaging.ComplexFilters
     /// provided by all image processing filter, which operate with Fourier
     /// transformed complex image.</remarks>
     /// 
-    public interface IComplexFilter
-    {
+    public interface IComplexFilter {
         /// <summary>
         /// Apply filter to complex image.
         /// </summary>
         /// 
         /// <param name="complexImage">Complex image to apply filter to.</param>
         /// 
-        void Apply( ComplexImage complexImage );
+        void Apply(ComplexImage complexImage);
     }
 }

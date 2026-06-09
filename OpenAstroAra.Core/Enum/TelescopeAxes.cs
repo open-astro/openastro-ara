@@ -12,7 +12,7 @@
 
 #endregion "copyright"
 
-namespace OpenAstroAra.Core.Enum {
+namespace OpenAstroAra.Core.Enums {
 
     public enum TelescopeAxes {
 

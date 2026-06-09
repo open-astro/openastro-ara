@@ -2,14 +2,14 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © Andrew Kirillov, 2005-2009
+// Copyright ï¿½ Andrew Kirillov, 2005-2009
 // andrew.kirillov@aforgenet.com
 //
 // Accord Imaging Library
 // The Accord.NET Framework
 // http://accord-framework.net
 //
-// Copyright © César Souza, 2009-2017
+// Copyright ï¿½ Cï¿½sar Souza, 2009-2017
 // cesarsouza at gmail.com
 //
 //    This library is free software; you can redistribute it and/or
@@ -27,13 +27,12 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging
-{
+namespace Accord.Imaging {
+    using AForge;
     using System;
+    using System.ComponentModel;
     using System.Drawing;
     using System.Drawing.Imaging;
-    using System.ComponentModel;
-    using AForge;
 
     /// <summary>
     /// Image's blob.
@@ -48,8 +47,7 @@ namespace Accord.Imaging
     /// </remarks>
     /// 
     [Serializable]
-    public class Blob
-    {
+    public class Blob {
         // blob's image
         private UnmanagedImage image;
         // blob's image size - as original image or not
@@ -79,8 +77,7 @@ namespace Accord.Imaging
         /// or <see cref="BlobCounterBase.ExtractBlobsImage( UnmanagedImage, Blob, bool )"/> method.</para></remarks>
         ///
         [Browsable(false)]
-        public UnmanagedImage Image
-        {
+        public UnmanagedImage Image {
             get { return image; }
             set { image = value; }
         }
@@ -95,8 +92,7 @@ namespace Accord.Imaging
         /// image size equals to size of actual blob.</para></remarks>
         /// 
         [Browsable(false)]
-        public bool OriginalSize
-        {
+        public bool OriginalSize {
             get { return originalSize; }
             set { originalSize = value; }
         }
@@ -108,8 +104,7 @@ namespace Accord.Imaging
         /// <remarks><para>The property specifies position of the blob in the original image
         /// and its size.</para></remarks>
         /// 
-        public Rectangle Rectangle
-        {
+        public Rectangle Rectangle {
             get { return rect; }
             set { rect = value; }
         }
@@ -118,8 +113,7 @@ namespace Accord.Imaging
         /// Blob's ID in the original image.
         /// </summary>
         [Browsable(false)]
-        public int ID
-        {
+        public int ID {
             get { return id; }
             set { id = value; }
         }
@@ -131,8 +125,7 @@ namespace Accord.Imaging
         /// <remarks><para>The property equals to blob's area measured in number of pixels
         /// contained by the blob.</para></remarks>
         /// 
-        public int Area
-        {
+        public int Area {
             get { return area; }
             set { area = value; }
         }
@@ -148,8 +141,7 @@ namespace Accord.Imaging
         /// for example, then it means that only half of the bounding rectangle is filled
         /// by blob's pixels.</para></remarks>
         /// 
-        public double Fullness
-        {
+        public double Fullness {
             get { return fullness; }
             set { fullness = value; }
         }
@@ -161,8 +153,7 @@ namespace Accord.Imaging
         /// <remarks><para>The property keeps center of gravity point, which is calculated as
         /// mean value of X and Y coordinates of blob's points.</para></remarks>
         /// 
-        public Accord.Point CenterOfGravity
-        {
+        public Accord.Point CenterOfGravity {
             get { return cog; }
             set { cog = value; }
         }
@@ -173,8 +164,7 @@ namespace Accord.Imaging
         /// 
         /// <remarks><para>The property keeps mean color of pixels comprising the blob.</para></remarks>
         /// 
-        public Color ColorMean
-        {
+        public Color ColorMean {
             get { return colorMean; }
             set { colorMean = value; }
         }
@@ -185,8 +175,7 @@ namespace Accord.Imaging
         /// 
         /// <remarks><para>The property keeps standard deviation of pixels' colors comprising the blob.</para></remarks>
         /// 
-        public Color ColorStdDev
-        {
+        public Color ColorStdDev {
             get { return colorStdDev; }
             set { colorStdDev = value; }
         }
@@ -202,8 +191,7 @@ namespace Accord.Imaging
         /// image may be extracted later using <see cref="BlobCounterBase.ExtractBlobsImage( Bitmap, Blob, bool )"/>
         /// or <see cref="BlobCounterBase.ExtractBlobsImage( UnmanagedImage, Blob, bool )"/> method.</para></remarks>
         /// 
-        public Blob(int id, Rectangle rect)
-        {
+        public Blob(int id, Rectangle rect) {
             this.id = id;
             this.rect = rect;
         }
@@ -218,8 +206,7 @@ namespace Accord.Imaging
         /// 
         /// <remarks><para>This constructor initializes the <see cref="Image"/> property.</para></remarks>
         /// 
-        public Blob(int id, Rectangle rect, UnmanagedImage img)
-        {
+        public Blob(int id, Rectangle rect, UnmanagedImage img) {
             this.id = id;
             this.rect = rect;
             this.image = img;
@@ -237,8 +224,7 @@ namespace Accord.Imaging
         /// <see cref="BlobCounterBase.ExtractBlobsImage( Bitmap, Blob, bool )"/>
         /// or <see cref="BlobCounterBase.ExtractBlobsImage( UnmanagedImage, Blob, bool )"/> method.</para></remarks>
         /// 
-        public Blob(Blob source, bool copyImage = false)
-        {
+        public Blob(Blob source, bool copyImage = false) {
             // copy everything except image
             id = source.id;
             rect = source.rect;

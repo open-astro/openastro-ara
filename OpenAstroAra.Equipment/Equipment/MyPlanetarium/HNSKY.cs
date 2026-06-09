@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -12,20 +12,20 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Astrometry;
+using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Core.Utility.TcpRaw;
-using OpenAstroAra.Profile.Interfaces;
-using System;
-using System.Threading.Tasks;
 using OpenAstroAra.Equipment.Exceptions;
 using OpenAstroAra.Equipment.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
+using System;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace OpenAstroAra.Equipment.Equipment.MyPlanetarium {
 
-    internal class HNSKY : IPlanetarium {
-        private string address;
+    internal sealed class HNSKY : IPlanetarium {
+        private string address = string.Empty;
         private int port;
 
         public HNSKY(IProfileService profileService) {
@@ -59,7 +59,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyPlanetarium {
                  */
                 string[] info = response.Split(' ');
 
-                if (!(info[0].Equals("?") || string.IsNullOrEmpty(info[2]))) {
+                if (!(info[0].Equals("?", StringComparison.Ordinal) || string.IsNullOrEmpty(info[2]))) {
                     Coordinates newCoordinates = new Coordinates(AstroUtil.RadianToHour(double.Parse(info[0].Replace(',', '.'), System.Globalization.CultureInfo.InvariantCulture)),
                                                          AstroUtil.ToDegree(double.Parse(info[1].Replace(',', '.'), System.Globalization.CultureInfo.InvariantCulture)),
                                                          Epoch.J2000, Coordinates.RAType.Hours);
@@ -97,7 +97,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyPlanetarium {
                  */
                 var info = response.Split(' ');
 
-                if (!(info[0].Equals("?") || string.IsNullOrEmpty(info[1]))) {
+                if (!(info[0].Equals("?", StringComparison.Ordinal) || string.IsNullOrEmpty(info[1]))) {
                     /*
                      * East is negative and West is positive in HNSKY.
                      * We must flip longitude's sign here.
@@ -110,7 +110,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyPlanetarium {
 
                     return loc;
                 } else {
-                    throw new PlanetariumFailedToGetCoordinates();
+                    throw new PlanetariumFailedToGetCoordinatesException();
                 }
             } catch (OperationCanceledException) {
                 throw;

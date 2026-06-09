@@ -25,22 +25,22 @@ namespace OpenAstroAra.Equipment.Equipment {
         private bool connected;
 
         [ObservableProperty]
-        private string name;
+        private string name = string.Empty;
 
         [ObservableProperty]
-        private string displayName;
+        private string displayName = string.Empty;
 
         [ObservableProperty]
-        private string description;
+        private string description = string.Empty;
 
         [ObservableProperty]
-        private string driverInfo;
+        private string driverInfo = string.Empty;
 
         [ObservableProperty]
-        private string driverVersion;
+        private string driverVersion = string.Empty;
 
         [ObservableProperty]
-        private string deviceId;
+        private string deviceId = string.Empty;
 
         public static T CreateDefaultInstance<T>() where T : DeviceInfo, new() {
             return new T() {
@@ -49,7 +49,7 @@ namespace OpenAstroAra.Equipment.Equipment {
         }
 
         public void Reset() {
-            var defaultInstance = Activator.CreateInstance(this.GetType()) as DeviceInfo;
+            var defaultInstance = (DeviceInfo)Activator.CreateInstance(this.GetType())!;
             defaultInstance.Connected = false;
             this.CopyFrom(defaultInstance);
         }

@@ -13,15 +13,15 @@
 #endregion "copyright"
 
 using Newtonsoft.Json;
-using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Astrometry;
+using OpenAstroAra.Astrometry.Interfaces;
+using OpenAstroAra.Core.Locale;
+using OpenAstroAra.Core.Utility;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using OpenAstroAra.Core.Locale;
-using OpenAstroAra.Astrometry.Interfaces;
 
 namespace OpenAstroAra.Sequencer.Utility.DateTimeProvider {
 
@@ -34,10 +34,10 @@ namespace OpenAstroAra.Sequencer.Utility.DateTimeProvider {
         }
 
         public string Name { get; } = Loc.Instance["LblNauticalDawn"];
-        public ICustomDateTime DateTime { get; set; } = new SystemDateTime();
+        public ICustomDateTime CustomDateTime { get; set; } = new SystemDateTime();
 
         public DateTime GetDateTime(ISequenceEntity context) {
-            var night = nighttimeCalculator.Calculate().NauticalTwilightRiseAndSet.Rise;
+            var night = nighttimeCalculator.Calculate().NauticalTwilightRiseAndSet?.Rise;
             if (!night.HasValue) {
                 throw new TimeProviderException("No nautical dawn", Loc.Instance["Lbl_TimeProvider_NoNauticalDawn"]);
             }
@@ -45,7 +45,7 @@ namespace OpenAstroAra.Sequencer.Utility.DateTimeProvider {
         }
 
         public TimeOnly GetRolloverTime(ISequenceEntity context) {
-            var dusk = nighttimeCalculator.Calculate().SunRiseAndSet.Set;
+            var dusk = nighttimeCalculator.Calculate().SunRiseAndSet?.SetTime;
             if (!dusk.HasValue) {
                 return new TimeOnly(12, 0, 0);
             }

@@ -12,12 +12,12 @@
 
 #endregion "copyright"
 
-using System.Collections.Generic;
-using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Mvc;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Contracts.WsEvents;
 using OpenAstroAra.Server.Endpoints;
+using System.Collections.Generic;
+using System.Text.Json.Serialization;
 
 namespace OpenAstroAra.Server;
 
@@ -193,7 +193,7 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(WsResumeRequestDto))]
 [JsonSerializable(typeof(WsResumeResponseDto))]
 // /api/v1/ws/catalog response shape (defined inline in WebSocketEndpoints).
-[JsonSerializable(typeof(WebSocketEndpoints.WsCatalogResponse))]
+[JsonSerializable(typeof(WsCatalogResponse))]
 // Concrete CursorPage<T> instantiations — one per paginated endpoint.
 [JsonSerializable(typeof(CursorPage<CalibrationSessionDto>))]
 [JsonSerializable(typeof(CursorPage<DiagnosticEventDto>))]

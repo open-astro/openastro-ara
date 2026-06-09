@@ -1,18 +1,17 @@
 // AForge Image Processing Library
 // AForge.NET framework
 //
-// Copyright © AForge.NET, 2007-2011
+// Copyright ï¿½ AForge.NET, 2007-2011
 // contacts@aforgenet.com
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
+    using Accord;
+    using AForge;
     using System;
     using System.Collections.Generic;
     using System.Drawing;
     using System.Drawing.Imaging;
-    using AForge;
-    using Accord;
 
     /// <summary>
     /// Linear correction of YCbCr channels.
@@ -44,8 +43,7 @@ namespace Accord.Imaging.Filters
     /// <seealso cref="HSLLinear"/>
     /// <seealso cref="YCbCrLinear"/>
     /// 
-    public class YCbCrLinear : BaseInPlacePartialFilter
-    {
+    public class YCbCrLinear : BaseInPlacePartialFilter {
         private Range inY = new Range(0.0f, 1.0f);
         private Range inCb = new Range(-0.5f, 0.5f);
         private Range inCr = new Range(-0.5f, 0.5f);
@@ -64,8 +62,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <remarks>Y component is measured in the range of [0, 1].</remarks>
         ///
-        public Range InY
-        {
+        public Range InY {
             get { return inY; }
             set { inY = value; }
         }
@@ -76,8 +73,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <remarks>Cb component is measured in the range of [-0.5, 0.5].</remarks>
         ///
-        public Range InCb
-        {
+        public Range InCb {
             get { return inCb; }
             set { inCb = value; }
         }
@@ -88,8 +84,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <remarks>Cr component is measured in the range of [-0.5, 0.5].</remarks>
         ///
-        public Range InCr
-        {
+        public Range InCr {
             get { return inCr; }
             set { inCr = value; }
         }
@@ -100,8 +95,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <remarks>Y component is measured in the range of [0, 1].</remarks>
         ///
-        public Range OutY
-        {
+        public Range OutY {
             get { return outY; }
             set { outY = value; }
         }
@@ -112,8 +106,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <remarks>Cb component is measured in the range of [-0.5, 0.5].</remarks>
         ///
-        public Range OutCb
-        {
+        public Range OutCb {
             get { return outCb; }
             set { outCb = value; }
         }
@@ -124,8 +117,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <remarks>Cr component is measured in the range of [-0.5, 0.5].</remarks>
         ///
-        public Range OutCr
-        {
+        public Range OutCr {
             get { return outCr; }
             set { outCr = value; }
         }
@@ -135,8 +127,7 @@ namespace Accord.Imaging.Filters
         /// <summary>
         /// Format translations dictionary.
         /// </summary>
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -144,8 +135,7 @@ namespace Accord.Imaging.Filters
         /// Initializes a new instance of the <see cref="YCbCrLinear"/> class.
         /// </summary>
         /// 
-        public YCbCrLinear()
-        {
+        public YCbCrLinear() {
             formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format24bppRgb;
             formatTranslations[PixelFormat.Format32bppRgb] = PixelFormat.Format32bppRgb;
             formatTranslations[PixelFormat.Format32bppArgb] = PixelFormat.Format32bppArgb;
@@ -158,8 +148,7 @@ namespace Accord.Imaging.Filters
         /// <param name="image">Source image data.</param>
         /// <param name="rect">Image rectangle for processing by the filter.</param>
         ///
-        protected override unsafe void ProcessFilter(UnmanagedImage image, Rectangle rect)
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage image, Rectangle rect) {
             int pixelSize = Image.GetPixelFormatSize(image.PixelFormat) / 8;
 
             int startX = rect.Left;
@@ -176,20 +165,17 @@ namespace Accord.Imaging.Filters
             float kcr = 0, bcr = 0;
 
             // Y line parameters
-            if (inY.Max != inY.Min)
-            {
+            if (inY.Max != inY.Min) {
                 ky = (outY.Max - outY.Min) / (inY.Max - inY.Min);
                 by = outY.Min - ky * inY.Min;
             }
             // Cb line parameters
-            if (inCb.Max != inCb.Min)
-            {
+            if (inCb.Max != inCb.Min) {
                 kcb = (outCb.Max - outCb.Min) / (inCb.Max - inCb.Min);
                 bcb = outCb.Min - kcb * inCb.Min;
             }
             // Cr line parameters
-            if (inCr.Max != inCr.Min)
-            {
+            if (inCr.Max != inCr.Min) {
                 kcr = (outCr.Max - outCr.Min) / (inCr.Max - inCr.Min);
                 bcr = outCr.Min - kcr * inCr.Min;
             }
@@ -201,11 +187,9 @@ namespace Accord.Imaging.Filters
             ptr += (startY * image.Stride + startX * pixelSize);
 
             // for each row
-            for (int y = startY; y < stopY; y++)
-            {
+            for (int y = startY; y < stopY; y++) {
                 // for each pixel
-                for (int x = startX; x < stopX; x++, ptr += pixelSize)
-                {
+                for (int x = startX; x < stopX; x++, ptr += pixelSize) {
                     rgb.Red = ptr[RGB.R];
                     rgb.Green = ptr[RGB.G];
                     rgb.Blue = ptr[RGB.B];

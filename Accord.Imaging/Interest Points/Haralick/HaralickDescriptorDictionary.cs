@@ -23,12 +23,11 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging
-{
-    using System;
-    using System.Collections.Generic;
+namespace Accord.Imaging {
     using Accord.Math;
     using Accord.Statistics;
+    using System;
+    using System.Collections.Generic;
     using System.Runtime.Serialization;
 
     /// <summary>
@@ -40,14 +39,12 @@ namespace Accord.Imaging
     /// <seealso cref="HaralickDescriptor"/>
     /// 
     [Serializable]
-    public class HaralickDescriptorDictionary : SortedDictionary<CooccurrenceDegree, HaralickDescriptor>
-    {
+    public class HaralickDescriptorDictionary : SortedDictionary<CooccurrenceDegree, HaralickDescriptor> {
         /// <summary>
         ///   Initializes a new instance of the <see cref="HaralickDescriptorDictionary"/> class.
         /// </summary>
         /// 
-        public HaralickDescriptorDictionary()
-        {
+        public HaralickDescriptorDictionary() {
         }
 
         /// <summary>
@@ -68,14 +65,12 @@ namespace Accord.Imaging
         ///   degrees will be concatenated into this single result vector.
         /// </remarks>
         /// 
-        public double[] Combine(int features)
-        {
+        public double[] Combine(int features) {
             int count = this.Count;
             double[] haralick = new double[features * count];
 
             int c = 0;
-            foreach (KeyValuePair<CooccurrenceDegree, HaralickDescriptor> pair in this)
-            {
+            foreach (KeyValuePair<CooccurrenceDegree, HaralickDescriptor> pair in this) {
                 HaralickDescriptor descriptor = pair.Value;
                 double[] vector = descriptor.GetVector(features);
 
@@ -104,12 +99,10 @@ namespace Accord.Imaging
         ///   degrees will be averaged into this single result vector.
         /// </remarks>
         /// 
-        public double[] Average(int features)
-        {
+        public double[] Average(int features) {
             double[] haralick = new double[features];
 
-            foreach (KeyValuePair<CooccurrenceDegree, HaralickDescriptor> pair in this)
-            {
+            foreach (KeyValuePair<CooccurrenceDegree, HaralickDescriptor> pair in this) {
                 HaralickDescriptor descriptor = pair.Value;
                 double[] vector = descriptor.GetVector(features);
 
@@ -143,8 +136,7 @@ namespace Accord.Imaging
         ///   the range of this feature.
         /// </remarks>
         /// 
-        public double[] AverageWithRange(int features)
-        {
+        public double[] AverageWithRange(int features) {
             int degrees = this.Count;
 
             double[][] vectors = new double[features][];
@@ -152,8 +144,7 @@ namespace Accord.Imaging
                 vectors[i] = new double[degrees];
 
             int c = 0;
-            foreach (KeyValuePair<CooccurrenceDegree, HaralickDescriptor> pair in this)
-            {
+            foreach (KeyValuePair<CooccurrenceDegree, HaralickDescriptor> pair in this) {
                 HaralickDescriptor descriptor = pair.Value;
                 double[] vector = descriptor.GetVector(features);
 
@@ -165,8 +156,7 @@ namespace Accord.Imaging
             double[] haralick = new double[features * 2];
 
             int j = 0;
-            for (int i = 0; i < vectors.Length; i++)
-            {
+            for (int i = 0; i < vectors.Length; i++) {
                 haralick[j++] = vectors[i].Mean();
                 haralick[j++] = vectors[i].GetRange().Length;
             }
@@ -192,8 +182,7 @@ namespace Accord.Imaging
         ///   the mean will be scaled to be in a [-1,1] interval.
         /// </remarks>
         /// 
-        public double[] Normalize(int features)
-        {
+        public double[] Normalize(int features) {
             int degrees = this.Count;
 
             double[][] vectors = new double[features][];
@@ -201,8 +190,7 @@ namespace Accord.Imaging
                 vectors[i] = new double[degrees];
 
             int c = 0;
-            foreach (KeyValuePair<CooccurrenceDegree, HaralickDescriptor> pair in this)
-            {
+            foreach (KeyValuePair<CooccurrenceDegree, HaralickDescriptor> pair in this) {
                 HaralickDescriptor descriptor = pair.Value;
                 double[] vector = descriptor.GetVector(features);
 
@@ -213,8 +201,7 @@ namespace Accord.Imaging
 
             double[] haralick = new double[features];
 
-            for (int i = 0; i < vectors.Length; i++)
-            {
+            for (int i = 0; i < vectors.Length; i++) {
                 DoubleRange range = vectors[i].GetRange();
                 double mean = vectors[i].Mean();
 

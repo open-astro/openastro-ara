@@ -21,7 +21,7 @@ using System.Linq;
 namespace OpenAstroAra.Image.ImageData {
 
     public class ImageStatistics : BaseINPC, IImageStatistics {
-        public static ImageStatistics EmptyImageStatistics = new ImageStatistics();
+        public static readonly ImageStatistics EmptyImageStatistics = new ImageStatistics();
 
         public const int HISTOGRAMRESOLUTION = 100;
 
@@ -37,7 +37,7 @@ namespace OpenAstroAra.Image.ImageData {
         public long MaxOccurrences { get; private set; }
         public int Min { get; private set; }
         public long MinOccurrences { get; private set; }
-        public ImmutableList<OxyPlot.DataPoint> Histogram { get; private set; }
+        public ImmutableList<OxyPlot.DataPoint> Histogram { get; private set; } = ImmutableList<OxyPlot.DataPoint>.Empty;
 
         public static IImageStatistics Create(IImageData imageData) {
             return Create(imageData.Properties, imageData.Data.FlatArray);

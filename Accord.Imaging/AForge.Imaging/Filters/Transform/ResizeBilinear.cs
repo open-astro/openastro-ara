@@ -2,14 +2,14 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © Andrew Kirillov, 2005-2008
+// Copyright ï¿½ Andrew Kirillov, 2005-2008
 // andrew.kirillov@aforgenet.com
 //
 // Accord Imaging Library
 // The Accord.NET Framework
 // http://accord-framework.net
 //
-// Copyright © César Souza, 2009-2017
+// Copyright ï¿½ Cï¿½sar Souza, 2009-2017
 // cesarsouza at gmail.com
 //
 //    This library is free software; you can redistribute it and/or
@@ -27,8 +27,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -61,16 +60,14 @@ namespace Accord.Imaging.Filters
     /// <seealso cref="ResizeNearestNeighbor"/>
     /// <seealso cref="ResizeBicubic"/>
     ///
-    public class ResizeBilinear : BaseResizeFilter
-    {
+    public class ResizeBilinear : BaseResizeFilter {
         // format translation dictionary
         private Dictionary<PixelFormat, PixelFormat> formatTranslations = new Dictionary<PixelFormat, PixelFormat>();
 
         /// <summary>
         /// Format translations dictionary.
         /// </summary>
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -82,8 +79,7 @@ namespace Accord.Imaging.Filters
         /// <param name="newHeight">Height of the new image.</param>
         /// 
 		public ResizeBilinear(int newWidth, int newHeight) :
-            base(newWidth, newHeight)
-        {
+            base(newWidth, newHeight) {
             formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
             formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format24bppRgb;
             formatTranslations[PixelFormat.Format32bppRgb] = PixelFormat.Format32bppRgb;
@@ -100,8 +96,7 @@ namespace Accord.Imaging.Filters
         /// <param name="sourceData">Source image data.</param>
         /// <param name="destinationData">Destination image data.</param>
         /// 
-        protected override unsafe void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData)
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage sourceData, UnmanagedImage destinationData) {
             // get source image size
             int width = sourceData.Width;
             int height = sourceData.Height;
@@ -122,8 +117,7 @@ namespace Accord.Imaging.Filters
             // temporary pointers
 
             // for each line
-            for (int y = 0; y < newHeight; y++)
-            {
+            for (int y = 0; y < newHeight; y++) {
                 // Y coordinates
                 double oy = (double)y * yFactor;
                 int oy1 = (int)oy;
@@ -136,8 +130,7 @@ namespace Accord.Imaging.Filters
                 byte* tp2 = src + oy2 * srcStride;
 
                 // for each pixel
-                for (int x = 0; x < newWidth; x++)
-                {
+                for (int x = 0; x < newWidth; x++) {
                     // X coordinates
                     double ox = (double)x * xFactor;
                     int ox1 = (int)ox;
@@ -152,8 +145,7 @@ namespace Accord.Imaging.Filters
                     byte* p4 = tp2 + ox2 * pixelSize;
 
                     // interpolate using 4 points
-                    for (int i = 0; i < pixelSize; i++, dst++, p1++, p2++, p3++, p4++)
-                    {
+                    for (int i = 0; i < pixelSize; i++, dst++, p1++, p2++, p3++, p4++) {
                         *dst = (byte)(
                             dy2 * (dx2 * (*p1) + dx1 * (*p2)) +
                             dy1 * (dx2 * (*p3) + dx1 * (*p4)));

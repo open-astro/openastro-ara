@@ -12,7 +12,7 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Profile.Interfaces;
 using System;
 using System.Runtime.Serialization;
@@ -21,7 +21,11 @@ namespace OpenAstroAra.Profile {
 
     [Serializable()]
     [DataContract]
-    public class PlanetariumSettings : Settings, IPlanetariumSettings {
+    public sealed class PlanetariumSettings : Settings, IPlanetariumSettings {
+
+        public PlanetariumSettings() {
+            SetDefaultValues();
+        }
 
         [OnDeserializing]
         public void OnDeserializing(StreamingContext context) {
@@ -42,10 +46,10 @@ namespace OpenAstroAra.Profile {
             c2aHost = "localhost";
             skytechxPort = 2055;
             skytechxHost = "localhost";
-            preferredPlanetarium = PlanetariumEnum.CDC;
+            preferredPlanetarium = Planetarium.CDC;
         }
 
-        private string stellariumHost;
+        private string stellariumHost = string.Empty;
 
         [DataMember]
         public string StellariumHost {
@@ -71,7 +75,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string cdCHost;
+        private string cdCHost = string.Empty;
 
         [DataMember]
         public string CdCHost {
@@ -97,7 +101,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string tsxHost;
+        private string tsxHost = string.Empty;
 
         [DataMember]
         public string TSXHost {
@@ -136,7 +140,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string hnskyHost;
+        private string hnskyHost = string.Empty;
 
         [DataMember]
         public string HNSKYHost {
@@ -162,7 +166,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string c2aHost;
+        private string c2aHost = string.Empty;
 
         [DataMember]
         public string C2AHost {
@@ -188,7 +192,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string skytechxHost;
+        private string skytechxHost = string.Empty;
 
         [DataMember]
         public string SkytechXHost {
@@ -214,10 +218,10 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private PlanetariumEnum preferredPlanetarium;
+        private Planetarium preferredPlanetarium;
 
         [DataMember]
-        public PlanetariumEnum PreferredPlanetarium {
+        public Planetarium PreferredPlanetarium {
             get => preferredPlanetarium;
             set {
                 if (preferredPlanetarium != value) {

@@ -2,14 +2,14 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © Andrew Kirillov, 2005-2009
+// Copyright ï¿½ Andrew Kirillov, 2005-2009
 // andrew.kirillov@aforgenet.com
 //
 // Accord Imaging Library
 // The Accord.NET Framework
 // http://accord-framework.net
 //
-// Copyright © César Souza, 2009-2017
+// Copyright ï¿½ Cï¿½sar Souza, 2009-2017
 // cesarsouza at gmail.com
 //
 //    This library is free software; you can redistribute it and/or
@@ -27,8 +27,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging.Filters
-{
+namespace Accord.Imaging.Filters {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -61,8 +60,7 @@ namespace Accord.Imaging.Filters
     /// <img src="..\images\imaging\biggest_blob.jpg" width="141" height="226" />
     /// </remarks>
     /// 
-    public class ExtractBiggestBlob : IFilter, IFilterInformation
-    {
+    public class ExtractBiggestBlob : IFilter, IFilterInformation {
         private Bitmap originalImage = null;
         private IntPoint blobPosition;
 
@@ -73,8 +71,7 @@ namespace Accord.Imaging.Filters
         /// <remarks><para>After applying the filter this property keeps position of the extracted
         /// blob in the source image.</para></remarks>
         /// 
-        public IntPoint BlobPosition
-        {
+        public IntPoint BlobPosition {
             get { return blobPosition; }
         }
 
@@ -89,23 +86,18 @@ namespace Accord.Imaging.Filters
         /// <para>See <see cref="IFilterInformation.FormatTranslations"/> for more information.</para>
         /// </remarks>
         ///
-        public Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
-            get
-            {
+        public Dictionary<PixelFormat, PixelFormat> FormatTranslations {
+            get {
                 Dictionary<PixelFormat, PixelFormat> formatTranslations = new Dictionary<PixelFormat, PixelFormat>();
 
                 // initialize format translation dictionary
-                if (originalImage == null)
-                {
+                if (originalImage == null) {
                     formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
                     formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format24bppRgb;
                     formatTranslations[PixelFormat.Format32bppArgb] = PixelFormat.Format32bppArgb;
                     formatTranslations[PixelFormat.Format32bppRgb] = PixelFormat.Format32bppRgb;
                     formatTranslations[PixelFormat.Format32bppPArgb] = PixelFormat.Format32bppPArgb;
-                }
-                else
-                {
+                } else {
                     formatTranslations[PixelFormat.Format8bppIndexed] = originalImage.PixelFormat;
                     formatTranslations[PixelFormat.Format24bppRgb] = originalImage.PixelFormat;
                     formatTranslations[PixelFormat.Format32bppArgb] = originalImage.PixelFormat;
@@ -125,8 +117,7 @@ namespace Accord.Imaging.Filters
         /// is extracted from the image, which is passed to <see cref="Apply(Bitmap)"/> image.</para>
         /// </remarks>
         /// 
-        public Bitmap OriginalImage
-        {
+        public Bitmap OriginalImage {
             get { return originalImage; }
             set { originalImage = value; }
         }
@@ -144,8 +135,7 @@ namespace Accord.Imaging.Filters
         /// <exception cref="InvalidImagePropertiesException">Source and original images must have the same size.</exception>
         /// <exception cref="ArgumentException">The source image does not contain any blobs.</exception>
         ///
-        public Bitmap Apply(Bitmap image)
-        {
+        public Bitmap Apply(Bitmap image) {
             // lock source bitmap data
             BitmapData srcData = image.LockBits(
                 new Rectangle(0, 0, image.Width, image.Height),
@@ -153,13 +143,10 @@ namespace Accord.Imaging.Filters
 
             Bitmap dstImage = null;
 
-            try
-            {
+            try {
                 // apply the filter
                 dstImage = Apply(srcData);
-            }
-            finally
-            {
+            } finally {
                 // unlock source image
                 image.UnlockBits(srcData);
             }
@@ -180,10 +167,8 @@ namespace Accord.Imaging.Filters
         /// <exception cref="InvalidImagePropertiesException">Source and original images must have the same size.</exception>
         /// <exception cref="ArgumentException">The source image does not contain any blobs.</exception>
         ///
-        public Bitmap Apply(BitmapData imageData)
-        {
-            using (UnmanagedImage biggestBlob = Apply(new UnmanagedImage(imageData)))
-            {
+        public Bitmap Apply(BitmapData imageData) {
+            using (UnmanagedImage biggestBlob = Apply(new UnmanagedImage(imageData))) {
                 // dispose unmanaged image of the biggest blob
                 return biggestBlob.ToManagedImage();
             }
@@ -198,8 +183,7 @@ namespace Accord.Imaging.Filters
         /// <returns>Returns filter's result obtained by applying the filter to
         /// the source image.</returns>
         /// 
-        public UnmanagedImage Apply(UnmanagedImage image)
-        {
+        public UnmanagedImage Apply(UnmanagedImage image) {
             // check pixel format of the source image
             if (!FormatTranslations.ContainsKey(image.PixelFormat))
                 throw new UnsupportedImageFormatException("Source pixel format is not supported by the filter.");
@@ -214,12 +198,10 @@ namespace Accord.Imaging.Filters
             int maxSize = 0;
             Blob biggestBlob = null;
 
-            for (int i = 0, n = blobs.Length; i < n; i++)
-            {
+            for (int i = 0, n = blobs.Length; i < n; i++) {
                 int size = blobs[i].Rectangle.Width * blobs[i].Rectangle.Height;
 
-                if (size > maxSize)
-                {
+                if (size > maxSize) {
                     maxSize = size;
                     biggestBlob = blobs[i];
                 }
@@ -232,12 +214,9 @@ namespace Accord.Imaging.Filters
             blobPosition = new IntPoint(biggestBlob.Rectangle.Left, biggestBlob.Rectangle.Top);
 
             // extract biggest blob's image
-            if (originalImage == null)
-            {
+            if (originalImage == null) {
                 blobCounter.ExtractBlobsImage(image, biggestBlob, false);
-            }
-            else
-            {
+            } else {
                 // check original image's format
                 if (
                     (originalImage.PixelFormat != PixelFormat.Format24bppRgb) &&
@@ -245,8 +224,7 @@ namespace Accord.Imaging.Filters
                     (originalImage.PixelFormat != PixelFormat.Format32bppRgb) &&
                     (originalImage.PixelFormat != PixelFormat.Format32bppPArgb) &&
                     (originalImage.PixelFormat != PixelFormat.Format8bppIndexed)
-                    )
-                {
+                    ) {
                     throw new UnsupportedImageFormatException("Original image may be grayscale (8bpp indexed) or color (24/32bpp) image only.");
                 }
 
@@ -267,8 +245,7 @@ namespace Accord.Imaging.Filters
         /// <param name="sourceImage">Source image to be processed.</param>
         /// <param name="destinationImage">Destination image to store filter's result.</param>
         /// 
-        public void Apply(UnmanagedImage sourceImage, UnmanagedImage destinationImage)
-        {
+        public void Apply(UnmanagedImage sourceImage, UnmanagedImage destinationImage) {
             Apply(sourceImage).Copy(destinationImage);
         }
     }

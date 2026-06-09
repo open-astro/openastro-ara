@@ -31,10 +31,10 @@ namespace OpenAstroAra.Astrometry {
         /// <param name="crval2">Reference y pixel value</param>
         /// <param name="crpix1">Reference pixel x</param>
         /// <param name="crpix2">Reference pixel y</param>
-        /// <param name="cd1_1">CDn_m tranformation matrix</param>
-        /// <param name="cd1_2">CDn_m tranformation matrix</param>
-        /// <param name="cd2_1">CDn_m tranformation matrix</param>
-        /// <param name="cd2_2">CDn_m tranformation matrix</param>
+        /// <param name="cd11">CDn_m tranformation matrix</param>
+        /// <param name="cd12">CDn_m tranformation matrix</param>
+        /// <param name="cd21">CDn_m tranformation matrix</param>
+        /// <param name="cd22">CDn_m tranformation matrix</param>
         /// <remarks>
         /// http://hosting.astro.cornell.edu/~vassilis/isocont/node17.html
         /// https://www.astro.rug.nl/~gipsy/tsk/fitsreproj.dc1
@@ -45,30 +45,30 @@ namespace OpenAstroAra.Astrometry {
             double crval2,
             double crpix1,
             double crpix2,
-            double cd1_1,
-            double cd1_2,
-            double cd2_1,
-            double cd2_2
+            double cd11,
+            double cd12,
+            double cd21,
+            double cd22
         ) {
             Point = new Point(crpix1, crpix2);
             Coordinates = new Coordinates(Angle.ByDegree(crval1), Angle.ByDegree(crval2), Epoch.J2000);
 
-            var determinant = cd1_1 * cd2_2 - cd1_2 * cd2_1;
+            var determinant = cd11 * cd22 - cd12 * cd21;
 
             var sign = 1;
             if (determinant < 0) {
                 sign = -1;
             }
 
-            var cdelta1 = sign * Math.Sqrt(cd1_1 * cd1_1 + cd2_1 * cd2_1);
-            var cdelta2 = Math.Sqrt(cd1_2 * cd1_2 + cd2_2 * cd2_2);
+            var cdelta1 = sign * Math.Sqrt(cd11 * cd11 + cd21 * cd21);
+            var cdelta2 = Math.Sqrt(cd12 * cd12 + cd22 * cd22);
 
             if (cdelta1 >= 0 || cdelta2 < 0) {
                 Flipped = true;
             }
 
-            var rot1_cd = Math.Atan2(sign * cd1_2, cd2_2);
-            var rot2_cd = Math.Atan2(sign * cd1_1, cd2_1) - Math.PI / 2d;
+            var rot1_cd = Math.Atan2(sign * cd12, cd22);
+            var rot2_cd = Math.Atan2(sign * cd11, cd21) - Math.PI / 2d;
             var rotation = AstroUtil.ToDegree(Flipped ? -rot2_cd : rot2_cd);
             var skew = AstroUtil.ToDegree(Math.Abs(rot1_cd - rot2_cd));
 
@@ -135,7 +135,7 @@ namespace OpenAstroAra.Astrometry {
         /// <param name="pixelX">x pixel value</param>
         /// <param name="pixelY">y pixel value</param>
         /// <returns>Coordinates at position x|y</returns>
-        public Coordinates GetCoordinates(double pixelX, double pixelY) {
+        public Coordinates GetCoordinatesAtPixel(double pixelX, double pixelY) {
             return Coordinates.Shift(pixelX - Point.X, pixelY - Point.Y, Rotation, PixelScaleX, PixelScaleY, Coordinates.ProjectionType.Gnomonic);
         }
     }

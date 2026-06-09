@@ -12,7 +12,7 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Profile.Interfaces;
 using System;
 using System.IO;
@@ -22,7 +22,11 @@ namespace OpenAstroAra.Profile {
 
     [Serializable()]
     [DataContract]
-    public class ImageFileSettings : Settings, IImageFileSettings {
+    public sealed class ImageFileSettings : Settings, IImageFileSettings {
+
+        public ImageFileSettings() {
+            SetDefaultValues();
+        }
 
         [OnDeserializing]
         public void OnDeserializing(StreamingContext context) {
@@ -35,17 +39,17 @@ namespace OpenAstroAra.Profile {
             filePatternDARK = "";
             filePatternBIAS = "";
             filePatternFLAT = "";
-            fileType = FileTypeEnum.FITS;
-            tiffCompressionType = TIFFCompressionTypeEnum.NONE;
-            xisfCompressionType = XISFCompressionTypeEnum.NONE;
-            xisfChecksumType = XISFChecksumTypeEnum.SHA256;
+            fileType = FileType.FITS;
+            tiffCompressionType = TIFFCompressionType.NONE;
+            xisfCompressionType = XISFCompressionType.NONE;
+            xisfChecksumType = XISFChecksumType.SHA256;
             xisfByteShuffling = false;
-            fitsCompressionType = FITSCompressionTypeEnum.NONE;
+            fitsCompressionType = FITSCompressionType.NONE;
             fitsAddFzExtension = true;
             fitsUseLegacyWriter = true;
         }
 
-        private string filePath;
+        private string filePath = string.Empty;
 
         [DataMember]
         public string FilePath {
@@ -58,7 +62,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string filePattern;
+        private string filePattern = string.Empty;
 
         [DataMember]
         public string FilePattern {
@@ -71,7 +75,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string filePatternDARK;
+        private string filePatternDARK = string.Empty;
 
         [DataMember]
         public string FilePatternDARK {
@@ -84,7 +88,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string filePatternFLAT;
+        private string filePatternFLAT = string.Empty;
 
         [DataMember]
         public string FilePatternFLAT {
@@ -97,7 +101,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string filePatternBIAS;
+        private string filePatternBIAS = string.Empty;
 
         [DataMember]
         public string FilePatternBIAS {
@@ -110,30 +114,30 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private FileTypeEnum fileType;
+        private FileType fileType;
 
         [DataMember]
-        public FileTypeEnum FileType {
+        public FileType FileType {
             get {
                 /*
-                 * The TIFF_LZW and TIFF_ZIP file types are obsoleted and
+                 * The TIFFLzw and TIFFZip file types are obsoleted and
                  * the compression options are specified separately now. This block
                  * will catch any old profiles that have old file types set and
                  * correct them to adhere to the new scheme.
                  */
-#pragma warning disable CS0612 // Type or member is obsolete
+#pragma warning disable CS0612, CS0618 // intentionally reads the obsolete TIFFLzw/TIFFZip file types to migrate old profiles
                 switch (fileType) {
-                    case FileTypeEnum.TIFF_LZW:
-                        FileType = FileTypeEnum.TIFF;
-                        TIFFCompressionType = TIFFCompressionTypeEnum.LZW;
+                    case FileType.TIFFLzw:
+                        FileType = FileType.TIFF;
+                        TIFFCompressionType = TIFFCompressionType.LZW;
                         break;
 
-                    case FileTypeEnum.TIFF_ZIP:
-                        FileType = FileTypeEnum.TIFF;
-                        TIFFCompressionType = TIFFCompressionTypeEnum.ZIP;
+                    case FileType.TIFFZip:
+                        FileType = FileType.TIFF;
+                        TIFFCompressionType = TIFFCompressionType.ZIP;
                         break;
                 }
-#pragma warning restore CS0612 // Type or member is obsolete
+#pragma warning restore CS0612, CS0618 // Type or member is obsolete
 
                 return fileType;
             }
@@ -145,10 +149,10 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private TIFFCompressionTypeEnum tiffCompressionType;
+        private TIFFCompressionType tiffCompressionType;
 
         [DataMember]
-        public TIFFCompressionTypeEnum TIFFCompressionType {
+        public TIFFCompressionType TIFFCompressionType {
             get => tiffCompressionType;
             set {
                 if (tiffCompressionType != value) {
@@ -158,10 +162,10 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private XISFCompressionTypeEnum xisfCompressionType;
+        private XISFCompressionType xisfCompressionType;
 
         [DataMember]
-        public XISFCompressionTypeEnum XISFCompressionType {
+        public XISFCompressionType XISFCompressionType {
             get => xisfCompressionType;
             set {
                 if (xisfCompressionType != value) {
@@ -171,10 +175,10 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private XISFChecksumTypeEnum xisfChecksumType;
+        private XISFChecksumType xisfChecksumType;
 
         [DataMember]
-        public XISFChecksumTypeEnum XISFChecksumType {
+        public XISFChecksumType XISFChecksumType {
             get => xisfChecksumType;
             set {
                 if (xisfChecksumType != value) {
@@ -197,10 +201,10 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private FITSCompressionTypeEnum fitsCompressionType;
+        private FITSCompressionType fitsCompressionType;
 
         [DataMember]
-        public FITSCompressionTypeEnum FITSCompressionType {
+        public FITSCompressionType FITSCompressionType {
             get => fitsCompressionType;
             set {
                 if (fitsCompressionType != value) {
@@ -228,17 +232,17 @@ namespace OpenAstroAra.Profile {
         public bool FITSUseLegacyWriter {
             get => fitsUseLegacyWriter;
             set {
-                if(fitsUseLegacyWriter != value) {
+                if (fitsUseLegacyWriter != value) {
                     fitsUseLegacyWriter = value;
                     RaisePropertyChanged();
                 }
             }
         }
 
-        public string GetFilePattern(string imageType) {
+        public string ResolveFilePatternForImageType(string imageType) {
             var pattern = FilePattern;
 
-            if(imageType == "DARK" && !string.IsNullOrWhiteSpace(FilePatternDARK)) {
+            if (imageType == "DARK" && !string.IsNullOrWhiteSpace(FilePatternDARK)) {
                 pattern = FilePatternDARK;
             }
             if (imageType == "FLAT" && !string.IsNullOrWhiteSpace(FilePatternFLAT)) {

@@ -125,10 +125,10 @@ namespace OpenAstroAra.Sequencer.Trigger.Connect {
         }
 
         public override string ToString() {
-            return $"Category: {Category}, Item: {nameof(ReconnectTrigger)}, Selected device: {connectEquipmentInstruction.SelectedDevice}, Selected device id: {connectEquipmentInstruction.GetProfileId()}";
+            return $"Category: {Category}, Item: {nameof(ReconnectTrigger)}, Selected device: {connectEquipmentInstruction.SelectedDevice}, Selected device id: {connectEquipmentInstruction.ProfileId}";
         }
 
-        public override bool ShouldTrigger(ISequenceItem previousItem, ISequenceItem nextItem) {
+        public override bool ShouldTrigger(ISequenceItem? previousItem, ISequenceItem? nextItem) {
             var isConnected = connectEquipmentInstruction.IsConnected();
             Logger.Debug($"The {connectEquipmentInstruction.SelectedDevice} is ${(isConnected ? "connected" : "not connected. Trigger should fire.")}");
             return !isConnected;
@@ -136,8 +136,8 @@ namespace OpenAstroAra.Sequencer.Trigger.Connect {
 
         public override async Task Execute(ISequenceContainer context, IProgress<ApplicationStatus> progress, CancellationToken token) {
             await TriggerRunner.Run(progress, token);
-            if (ConnectEquipmentInstruction.Status == Core.Enum.SequenceEntityStatus.FAILED) {
-                throw new Exception($"Failed to connect to {ConnectEquipmentInstruction.SelectedDevice}");
+            if (ConnectEquipmentInstruction.Status == Core.Enums.SequenceEntityStatus.FAILED) {
+                throw new SequenceEntityFailedException($"Failed to connect to {ConnectEquipmentInstruction.SelectedDevice}");
             }
         }
     }

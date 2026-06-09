@@ -9,11 +9,11 @@
     file, You can obtain one at http://mozilla.org/MPL/2.0/.
 */
 #endregion "copyright"
-using NUnit.Framework;
 using FluentAssertions;
+using NUnit.Framework;
+using OpenAstroAra.Core.Model;
 using System;
 using System.IO;
-using OpenAstroAra.Core.Model;
 using System.Reflection;
 
 namespace OpenAstroAra.Test.AstrometryTest {
@@ -23,7 +23,7 @@ namespace OpenAstroAra.Test.AstrometryTest {
     [TestFixture]
     public class CustomHorizonTest {
 
-        [Test]        
+        [Test]
         [TestCase("commas.hrz", 17)]
         [TestCase("full360.hrz", 361)]
         [TestCase("incomplete.hrz", 5)]
@@ -36,8 +36,8 @@ namespace OpenAstroAra.Test.AstrometryTest {
             var customHorizon = CustomHorizon.FromFilePath(testFile);
 
             customHorizon.Should().NotBeNull();
-            ((double[])typeof(CustomHorizon).GetField("azimuths", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(customHorizon)).Length.Should().Be(expectedEntries);
-            ((double[])typeof(CustomHorizon).GetField("altitudes", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(customHorizon)).Length.Should().Be(expectedEntries);
+            ((double[])typeof(CustomHorizon).GetField("azimuths", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(customHorizon)!).Length.Should().Be(expectedEntries);
+            ((double[])typeof(CustomHorizon).GetField("altitudes", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(customHorizon)!).Length.Should().Be(expectedEntries);
 
         }
 

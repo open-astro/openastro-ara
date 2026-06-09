@@ -12,22 +12,22 @@
 
 #endregion "copyright"
 
+using OpenAstroAra.Core.Enums;
+using OpenAstroAra.Core.Interfaces;
+using OpenAstroAra.Core.Locale;
+using OpenAstroAra.Core.Model;
 using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Image.ImageAnalysis;
+using OpenAstroAra.Image.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using OpenAstroAra.Core.Model;
-using OpenAstroAra.Core.Locale;
-using OpenAstroAra.Image.Interfaces;
-using OpenAstroAra.Core.Enum;
-using OpenAstroAra.Image.ImageAnalysis;
-using OpenAstroAra.Profile.Interfaces;
-using OpenAstroAra.Core.Interfaces;
 
 namespace OpenAstroAra.Image.ImageData {
 
     public abstract class BaseExposureData : IExposureData {
-        protected readonly IImageDataFactory imageDataFactory;
+        private protected readonly IImageDataFactory imageDataFactory;
 
         public int BitDepth { get; private set; }
         public ImageMetaData MetaData { get; private set; }
@@ -38,7 +38,7 @@ namespace OpenAstroAra.Image.ImageData {
             this.imageDataFactory = imageDataFactory;
         }
 
-        public abstract Task<IImageData> ToImageData(IProgress<ApplicationStatus> progress = default, CancellationToken cancelToken = default);
+        public abstract Task<IImageData> ToImageData(IProgress<ApplicationStatus>? progress = default, CancellationToken cancelToken = default);
     }
 
     public class CachedExposureData : BaseExposureData {
@@ -49,11 +49,13 @@ namespace OpenAstroAra.Image.ImageData {
             this.imageData = imageData;
         }
 
-        public override Task<IImageData> ToImageData(IProgress<ApplicationStatus> progress = default, CancellationToken cancelToken = default) {
+        public override Task<IImageData> ToImageData(IProgress<ApplicationStatus>? progress = default, CancellationToken cancelToken = default) {
             return Task.FromResult(this.imageData);
         }
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1814:Prefer jagged arrays over multidimensional",
+        Justification = "These process the camera's native rectangular 2D pixel buffer (width x height) as delivered by the ASCOM/SDK drivers; a rectangular multidimensional array is the correct, contiguous representation for image data and a jagged array would regress both layout and interop.")]
     public class Flipped2DExposureData : BaseExposureData {
         private readonly Array flatArray;
         public bool IsBayered { get; private set; }
@@ -82,8 +84,8 @@ namespace OpenAstroAra.Image.ImageData {
             Create32BitData = create32BitData;
         }
 
-        public override async Task<IImageData> ToImageData(IProgress<ApplicationStatus> progress = default, CancellationToken cancelToken = default) {
-            switch(flatArray) {
+        public override async Task<IImageData> ToImageData(IProgress<ApplicationStatus>? progress = default, CancellationToken cancelToken = default) {
+            switch (flatArray) {
                 case int[] integers:
                     return imageDataFactory.CreateBaseImageData(
                         imageArray: new ImageArrayInt(integers),
@@ -265,7 +267,7 @@ namespace OpenAstroAra.Image.ImageData {
             this.rawType = rawType;
         }
 
-        public override async Task<IImageData> ToImageData(IProgress<ApplicationStatus> progress = default, CancellationToken cancelToken = default) {
+        public override async Task<IImageData> ToImageData(IProgress<ApplicationStatus>? progress = default, CancellationToken cancelToken = default) {
             try {
                 progress?.Report(new ApplicationStatus { Status = Loc.Instance["LblPrepareExposure"] });
                 using (var memoryStream = new System.IO.MemoryStream(this.rawBytes)) {
@@ -284,10 +286,10 @@ namespace OpenAstroAra.Image.ImageData {
     }
 
     public class ExposureDataFactory : IExposureDataFactory {
-        protected readonly IImageDataFactory imageDataFactory;
-        protected readonly IProfileService profileService;
-        protected readonly IPluggableBehaviorSelector<IStarDetection> starDetectionSelector;
-        protected readonly IPluggableBehaviorSelector<IStarAnnotator> starAnnotatorSelector;
+        private protected readonly IImageDataFactory imageDataFactory;
+        private protected readonly IProfileService profileService;
+        private protected readonly IPluggableBehaviorSelector<IStarDetection> starDetectionSelector;
+        private protected readonly IPluggableBehaviorSelector<IStarAnnotator> starAnnotatorSelector;
 
         public ExposureDataFactory(IImageDataFactory imageDataFactory, IProfileService profileService, IPluggableBehaviorSelector<IStarDetection> starDetectionSelector, IPluggableBehaviorSelector<IStarAnnotator> starAnnotatorSelector) {
             this.imageDataFactory = imageDataFactory;
@@ -304,7 +306,7 @@ namespace OpenAstroAra.Image.ImageData {
             return new Flipped2DExposureData(flipped2DArray, bitDepth, isBayered, metaData, imageDataFactory, profileService.ActiveProfile.CameraSettings.ASCOMCreate32BitData);
         }
 
-        public RAWExposureData CreateRAWExposureData(RawConverterEnum converter, byte[] rawBytes, string rawType, int bitDepth, ImageMetaData metaData) =>
+        public RAWExposureData CreateRAWExposureData(RawConverter converter, byte[] rawBytes, string rawType, int bitDepth, ImageMetaData metaData) =>
             // RawConverterFactory deleted (DCRaw + FreeImage WPF dependencies);
             // RAW decoding lands with libraw integration per playbook §line-2105.
             throw new NotImplementedException("CreateRAWExposureData pending libraw integration.");

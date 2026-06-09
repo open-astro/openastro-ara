@@ -23,10 +23,10 @@ namespace OpenAstroAra.Profile {
     [DataContract]
     public abstract class Settings : SerializableINPC, ISettings {
 
-        public Settings() {
-            SetDefaultValues();
-        }
-
+        // CA2214: the base constructor intentionally does NOT call the overridable
+        // SetDefaultValues(). Each concrete (sealed) settings type calls SetDefaultValues()
+        // from its own constructor instead, so the virtual method is never invoked while the
+        // object is still partially constructed.
         protected abstract void SetDefaultValues();
     }
 }

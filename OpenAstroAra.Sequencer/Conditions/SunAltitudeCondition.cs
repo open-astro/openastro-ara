@@ -13,15 +13,15 @@
 #endregion "copyright"
 
 using Newtonsoft.Json;
-using OpenAstroAra.Profile.Interfaces;
+using Nito.AsyncEx;
 using OpenAstroAra.Astrometry;
+using OpenAstroAra.Astrometry.RiseAndSet;
+using OpenAstroAra.Core.Enums;
+using OpenAstroAra.Core.Locale;
+using OpenAstroAra.Profile.Interfaces;
+using OpenAstroAra.Sequencer.SequenceItem.Utility;
 using System;
 using System.ComponentModel.Composition;
-using OpenAstroAra.Sequencer.SequenceItem.Utility;
-using OpenAstroAra.Astrometry.RiseAndSet;
-using OpenAstroAra.Core.Enum;
-using Nito.AsyncEx;
-using OpenAstroAra.Core.Locale;
 
 namespace OpenAstroAra.Sequencer.Conditions {
 
@@ -44,12 +44,12 @@ namespace OpenAstroAra.Sequencer.Conditions {
         public override object Clone() {
             return new SunAltitudeCondition(this) {
                 Data = Data.Clone()
-           };
+            };
         }
 
         private DateTimeOffset lastCalculation = DateTimeOffset.MinValue;
         private double lastCalculationOffset = double.NaN;
-        private ComparisonOperatorEnum lastCalculationComparator = ComparisonOperatorEnum.EQUALS;
+        private ComparisonOperator lastCalculationComparator = ComparisonOperator.EQUALS;
 
         public override void CalculateExpectedTime() {
             Data.CurrentAltitude = AstroUtil.GetSunAltitude(DateTime.Now, Data.Observer);
@@ -80,7 +80,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
         private DateTime CalculateExpectedDateTime(DateTime time) {
             var customRiseAndSet = new SunCustomRiseAndSet(NighttimeCalculator.GetReferenceDate(time), Data.Observer.Latitude, Data.Observer.Longitude, Data.Observer.Elevation, GetDataOffset());
             AsyncContext.Run(customRiseAndSet.Calculate);
-            return (Data.Comparator == ComparisonOperatorEnum.GREATER_THAN || Data.Comparator == ComparisonOperatorEnum.GREATER_THAN_OR_EQUAL ? customRiseAndSet.Rise : customRiseAndSet.Set) ?? DateTime.MaxValue;
+            return (Data.Comparator == ComparisonOperator.GreaterThan || Data.Comparator == ComparisonOperator.GreaterThanOrEqual ? customRiseAndSet.Rise : customRiseAndSet.SetTime) ?? DateTime.MaxValue;
         }
 
         protected override double GetDataOffset() {

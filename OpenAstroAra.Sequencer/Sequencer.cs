@@ -12,34 +12,37 @@
 
 #endregion "copyright"
 
+using Newtonsoft.Json;
+using Newtonsoft.Json.Serialization;
+using OpenAstroAra.Astrometry;
+using OpenAstroAra.Core.Locale;
 using OpenAstroAra.Core.Model;
-using OpenAstroAra.Sequencer.SequenceItem.Camera;
+using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Sequencer.Conditions;
 using OpenAstroAra.Sequencer.Container;
+using OpenAstroAra.Sequencer.Container.ExecutionStrategy;
+using OpenAstroAra.Sequencer.SequenceItem;
+using OpenAstroAra.Sequencer.SequenceItem.Camera;
 using OpenAstroAra.Sequencer.SequenceItem.FilterWheel;
 using OpenAstroAra.Sequencer.SequenceItem.Focuser;
+using OpenAstroAra.Sequencer.SequenceItem.Guider;
 using OpenAstroAra.Sequencer.SequenceItem.Telescope;
 using OpenAstroAra.Sequencer.SequenceItem.Utility;
-using OpenAstroAra.Astrometry;
+using OpenAstroAra.Sequencer.Serialization;
+using OpenAstroAra.Sequencer.Trigger;
+using OpenAstroAra.Sequencer.Validations;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using OpenAstroAra.Sequencer.SequenceItem.Guider;
-using OpenAstroAra.Sequencer.Conditions;
-using OpenAstroAra.Sequencer.Trigger;
-using OpenAstroAra.Core.Utility;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Serialization;
-using OpenAstroAra.Sequencer.Container.ExecutionStrategy;
-using OpenAstroAra.Sequencer.Serialization;
-using OpenAstroAra.Sequencer.Validations;
-using OpenAstroAra.Core.Locale;
-using OpenAstroAra.Sequencer.SequenceItem;
 
 namespace OpenAstroAra.Sequencer {
 
+    [SuppressMessage("Naming", "CA1724:Type names should not match namespaces",
+        Justification = "Sequencer is the established public root type of the OpenAstroAra.Sequencer namespace (NINA-derived API). Renaming either the type or the namespace is a breaking change with no functional benefit. CA1724 documents that suppression is safe for shipping libraries.")]
     public class Sequencer : BaseINPC, ISequencer {
 
         public Sequencer(
@@ -48,17 +51,17 @@ namespace OpenAstroAra.Sequencer {
             MainContainer = sequenceRootContainer;
         }
         // This is a hack to utilize the TreeView control. The Items will just point at the single item in the sequencer which is the root node in the tree
-        public List<ISequenceRootContainer> Items => new List<ISequenceRootContainer> { MainContainer };
+        public IReadOnlyList<ISequenceRootContainer> Items => new List<ISequenceRootContainer> { MainContainer };
 
-        private ISequenceRootContainer mainContainer;
+        private ISequenceRootContainer mainContainer = null!;  // set via MainContainer in the constructor
 
         public ISequenceRootContainer MainContainer {
             get => mainContainer;
             set {
-                if(mainContainer != null && mainContainer != value){
+                if (mainContainer != null && mainContainer != value) {
                     // when a new sequence is loaded, allow existing sequence elements to detect that
                     // they are no longer part of the sequence root container.
-                    foreach(var item in mainContainer.GetItemsSnapshot()){
+                    foreach (var item in mainContainer.GetItemsSnapshot()) {
                         item.Detach();
                     }
                 }
@@ -69,7 +72,7 @@ namespace OpenAstroAra.Sequencer {
         }
 
 
-        public Task Start(IProgress<ApplicationStatus> progress, CancellationToken token, bool skipIssuePrompt) {
+        public Task Start(IProgress<ApplicationStatus> progress, bool skipIssuePrompt, CancellationToken token) {
             return Task.Run(async () => {
                 if (!skipIssuePrompt && !PromptForIssues()) {
                     return false;
@@ -88,13 +91,13 @@ namespace OpenAstroAra.Sequencer {
         }
 
         public Task Start(IProgress<ApplicationStatus> progress, CancellationToken token) {
-            return Start(progress, token, false);
+            return Start(progress, false, token);
         }
 
         private bool PromptForIssues() {
-            var issues = Validate(MainContainer).Distinct();
+            var issues = Validate(MainContainer).Distinct().ToList();
 
-            if (issues.Any()) {
+            if (issues.Count > 0) {
                 var builder = new StringBuilder();
                 builder.AppendLine(Loc.Instance["LblPreSequenceChecklist"]).AppendLine();
 
@@ -115,7 +118,7 @@ namespace OpenAstroAra.Sequencer {
             return true;
         }
 
-        private void Initialize(ISequenceContainer context) {
+        private static void Initialize(ISequenceContainer context) {
             if (context != null) {
                 var conditionable = context as IConditionable;
                 if (conditionable != null) {
@@ -132,15 +135,14 @@ namespace OpenAstroAra.Sequencer {
 
                 foreach (var item in context.GetItemsSnapshot()) {
                     item.Initialize();
-                    if (item is ISequenceContainer) {
-                        var container = item as ISequenceContainer;
+                    if (item is ISequenceContainer container) {
                         Initialize(container);
                     }
                 }
             }
         }
 
-        private void Teardown(ISequenceContainer context) {
+        private static void Teardown(ISequenceContainer context) {
             if (context != null) {
                 var conditionable = context as IConditionable;
                 if (conditionable != null) {
@@ -157,21 +159,19 @@ namespace OpenAstroAra.Sequencer {
 
                 foreach (var item in context.GetItemsSnapshot()) {
                     item.Teardown();
-                    if (item is ISequenceContainer) {
-                        var container = item as ISequenceContainer;
+                    if (item is ISequenceContainer container) {
                         Teardown(container);
                     }
                 }
             }
         }
 
-        private IList<string> Validate(ISequenceContainer container) {
+        private static List<string> Validate(ISequenceContainer container) {
             List<string> issues = new List<string>();
 
             if (container is IConditionable conditionable) {
                 foreach (var condition in conditionable.GetConditionsSnapshot()) {
-                    if (condition.Status != Core.Enum.SequenceEntityStatus.DISABLED && condition is IValidatable) {
-                        var v = condition as IValidatable;
+                    if (condition.Status != Core.Enums.SequenceEntityStatus.DISABLED && condition is IValidatable v) {
                         v.Validate();
                         issues.AddRange(v.Issues);
                     }
@@ -180,8 +180,7 @@ namespace OpenAstroAra.Sequencer {
 
             if (container is ITriggerable triggerable) {
                 foreach (var trigger in triggerable.GetTriggersSnapshot()) {
-                    if (trigger.Status != Core.Enum.SequenceEntityStatus.DISABLED && trigger is IValidatable) {
-                        var v = trigger as IValidatable;
+                    if (trigger.Status != Core.Enums.SequenceEntityStatus.DISABLED && trigger is IValidatable v) {
                         v.Validate();
                         issues.AddRange(v.Issues);
                     }
@@ -189,15 +188,14 @@ namespace OpenAstroAra.Sequencer {
             }
 
             foreach (var item in container.GetItemsSnapshot()) {
-                if (item.Status != Core.Enum.SequenceEntityStatus.DISABLED && item is IValidatable) {
-                    var v = item as IValidatable;
+                if (item.Status != Core.Enums.SequenceEntityStatus.DISABLED && item is IValidatable v) {
                     v.Validate();
                     issues.AddRange(v.Issues);
                 }
 
-                if (item is ISequenceContainer && !(item is IImmutableContainer) && item.Status != Core.Enum.SequenceEntityStatus.DISABLED) {
+                if (item is ISequenceContainer childContainer && !(item is IImmutableContainer) && item.Status != Core.Enums.SequenceEntityStatus.DISABLED) {
                     // The immutablecontainer is excluded as it will itself validate the things of its children
-                    issues.AddRange(Validate(item as ISequenceContainer));
+                    issues.AddRange(Validate(childContainer));
                 }
             }
             return issues;

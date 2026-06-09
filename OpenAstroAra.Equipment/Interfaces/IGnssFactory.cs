@@ -12,7 +12,7 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Enums;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -22,7 +22,7 @@ using System.Threading.Tasks;
 namespace OpenAstroAra.Equipment.Interfaces {
     public interface IGnssFactory {
 
-        IGnss GetGnssSource();
-        IGnss GetGnssSource(GnssSourceEnum gnss);
+        IGnss? GetGnssSource();
+        IGnss? GetGnssSource(GnssSource gnss);
     }
 }

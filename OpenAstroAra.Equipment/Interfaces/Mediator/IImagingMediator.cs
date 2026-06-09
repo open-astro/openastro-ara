@@ -28,14 +28,14 @@ namespace OpenAstroAra.Equipment.Interfaces.Mediator {
         Task<IExposureData> CaptureImage(
             CaptureSequence sequence,
             CancellationToken token,
-            IProgress<ApplicationStatus> progress,
+            IProgress<ApplicationStatus>? progress,
             string targetName = "");
 
         Task<IRenderedImage> CaptureAndPrepareImage(
             CaptureSequence sequence,
             PrepareImageParameters parameters,
             CancellationToken token,
-            IProgress<ApplicationStatus> progress);
+            IProgress<ApplicationStatus>? progress);
 
         Task<IRenderedImage> PrepareImage(
             IImageData imageData,
@@ -56,11 +56,11 @@ namespace OpenAstroAra.Equipment.Interfaces.Mediator {
 
         void SetSubSambleRectangle(ObservableRectangle observableRectangle);
 
-        event EventHandler<ImagePreparedEventArgs> ImagePrepared;        
+        event EventHandler<ImagePreparedEventArgs> ImagePrepared;
     }
 
     public class ImagePreparedEventArgs : EventArgs {
-        public IRenderedImage RenderedImage { get; set; }
-        public PrepareImageParameters Parameters { get; set; }
+        public IRenderedImage? RenderedImage { get; set; }
+        public PrepareImageParameters? Parameters { get; set; }
     }
 }

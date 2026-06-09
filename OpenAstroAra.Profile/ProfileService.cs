@@ -12,24 +12,25 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Core.Locale;
+using OpenAstroAra.Core.Model;
+using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Core.Utility.Notification;
+using OpenAstroAra.Profile.Interfaces;
 using System;
 using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Runtime.Serialization;
 using System.Threading;
-using OpenAstroAra.Core.Utility.Notification;
-using OpenAstroAra.Core.Model;
-using OpenAstroAra.Profile.Interfaces;
+using System.Xml;
 
 namespace OpenAstroAra.Profile {
 
-    public class ProfileService : BaseINPC, IProfileService {
-        private static object lockobj = new object();
+    public sealed class ProfileService : BaseINPC, IProfileService, IDisposable {
+        private static readonly object lockobj = new object();
 
-        public static string PROFILEFOLDER = Path.Combine(CoreUtil.APPLICATIONTEMPPATH, "Profiles");
+        public static readonly string PROFILEFOLDER = Path.Combine(CoreUtil.APPLICATIONTEMPPATH, "Profiles");
 
         public ProfileService() {
             saveTimer = new System.Timers.Timer();
@@ -40,7 +41,7 @@ namespace OpenAstroAra.Profile {
             Profiles = new AsyncObservableCollection<ProfileMeta>();
         }
 
-        private FileSystemWatcher profileFileWatcher;
+        private FileSystemWatcher? profileFileWatcher;
 
         public void CreateWatcher() {
             profileFileWatcher?.Dispose();
@@ -71,10 +72,10 @@ namespace OpenAstroAra.Profile {
 
         private void ProfileFileWatcher_Created(object sender, FileSystemEventArgs e) {
             lock (lockobj) {
-                ProfileMeta info = null;
+                ProfileMeta? info = null;
                 var retries = 0;
                 do {
-                    info = Profile.Peek(Path.Combine(PROFILEFOLDER, e.Name));
+                    info = Profile.Peek(Path.Combine(PROFILEFOLDER, e.Name ?? string.Empty));
                     if (info == null) {
                         Thread.Sleep(TimeSpan.FromMilliseconds(500));
                         retries++;
@@ -84,7 +85,7 @@ namespace OpenAstroAra.Profile {
                 if (info != null) {
                     Profiles.Add(info);
                 } else {
-                    var id = Guid.Parse(Path.GetFileNameWithoutExtension(e.Name));
+                    var id = Guid.Parse(Path.GetFileNameWithoutExtension(e.Name ?? string.Empty));
                     Profiles.Add(new ProfileMeta() { Id = id, Location = e.FullPath, LastUsed = DateTime.MinValue, IsActive = false, Name = "UNKOWN" });
                 }
             }
@@ -102,7 +103,7 @@ namespace OpenAstroAra.Profile {
         /// </summary>
         /// <param name="sender"></param>
         /// <param name="e"></param>
-        private void SaveTimer_Elapsed(object sender, System.Timers.ElapsedEventArgs e) {
+        private void SaveTimer_Elapsed(object? sender, System.Timers.ElapsedEventArgs e) {
             Save();
         }
 
@@ -121,7 +122,7 @@ namespace OpenAstroAra.Profile {
                     Directory
                         .GetFiles(PROFILEFOLDER, "*.profile")
                         .Select(Profile.Peek)
-                        .Where(p => p != null)
+                        .OfType<ProfileMeta>()
                         .OrderByDescending(x => x.LastUsed)
                         .ToList()
                         .ForEach(Profiles.Add);
@@ -155,7 +156,7 @@ namespace OpenAstroAra.Profile {
                 using (MyStopWatch.Measure()) {
                     try {
                         ActiveProfile.Save();
-                    } catch (Exception ex) {
+                    } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or SerializationException or XmlException) {
                         Logger.Error(ex);
                     }
                 }
@@ -176,7 +177,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private void SettingsChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e) {
+        private void SettingsChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e) {
             if (e.PropertyName == "Settings") {
                 System.Threading.Tasks.Task.Run(() => TryScheduleSave());
             }
@@ -200,16 +201,16 @@ namespace OpenAstroAra.Profile {
 
         public bool ProfileWasSpecifiedFromCommandLineArgs { get; private set; }
 
-        public event EventHandler LocaleChanged;
-        
+        public event EventHandler? LocaleChanged;
+
         public void ChangeLocale(CultureInfo language) {
             ActiveProfile.ApplicationSettings.Language = language;
 
             CultureInfo.DefaultThreadCurrentUICulture = language;
             Loc.Instance.ReloadLocale(ActiveProfile.ApplicationSettings.Culture);
             var eventHandler = LocaleChanged;
-            if (eventHandler != null) { 
-                eventHandler.Invoke(this, null);
+            if (eventHandler != null) {
+                eventHandler.Invoke(this, EventArgs.Empty);
             }
         }
 
@@ -217,7 +218,7 @@ namespace OpenAstroAra.Profile {
             ActiveProfile.AstrometrySettings.Latitude = latitude;
             var eventHandler = LocationChanged;
             if (eventHandler != null) {
-                eventHandler.Invoke(this, null);
+                eventHandler.Invoke(this, EventArgs.Empty);
             }
         }
 
@@ -225,7 +226,7 @@ namespace OpenAstroAra.Profile {
             ActiveProfile.AstrometrySettings.Longitude = longitude;
             var eventHandler = LocationChanged;
             if (eventHandler != null) {
-                LocationChanged.Invoke(this, null);
+                eventHandler.Invoke(this, EventArgs.Empty);
             }
         }
 
@@ -233,7 +234,7 @@ namespace OpenAstroAra.Profile {
             ActiveProfile.AstrometrySettings.Elevation = elevation;
             var eventHandler = LocationChanged;
             if (eventHandler != null) {
-                eventHandler.Invoke(this, null);
+                eventHandler.Invoke(this, EventArgs.Empty);
             }
         }
 
@@ -247,25 +248,25 @@ namespace OpenAstroAra.Profile {
                     ActiveProfile.AstrometrySettings.HorizonFilePath = string.Empty;
                     ActiveProfile.AstrometrySettings.Horizon = null;
                 }
-            } catch (Exception ex) {
+            } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or Newtonsoft.Json.JsonException) {
                 ActiveProfile.AstrometrySettings.HorizonFilePath = string.Empty;
                 ActiveProfile.AstrometrySettings.Horizon = null;
                 Logger.Error(ex);
-                Notification.ShowError(Loc.Instance["LblFailedToLoadCustomHorizon"] + ex.Message);
+                Notifier.ShowError(Loc.Instance["LblFailedToLoadCustomHorizon"] + ex.Message);
             }
 
             var eventHandler = HorizonChanged;
             if (eventHandler != null) {
-                eventHandler.Invoke(this, null);
+                eventHandler.Invoke(this, EventArgs.Empty);
             }
         }
 
-        public event EventHandler LocationChanged;
-        public event EventHandler BeforeProfileChanging;
+        public event EventHandler? LocationChanged;
+        public event EventHandler? ProfileChanging;
 
-        public event EventHandler ProfileChanged;
+        public event EventHandler? ProfileChanged;
 
-        public event EventHandler HorizonChanged;
+        public event EventHandler? HorizonChanged;
 
         public AsyncObservableCollection<ProfileMeta> Profiles { get; }
 
@@ -280,7 +281,7 @@ namespace OpenAstroAra.Profile {
                         profileFileWatcher.EnableRaisingEvents = false;
                     }
 
-                    IProfile clone = null;
+                    IProfile? clone = null;
                     if (profileInfo.Id == ActiveProfile.Id) {
                         clone = Profile.Clone(ActiveProfile);
                     } else {
@@ -288,7 +289,7 @@ namespace OpenAstroAra.Profile {
                             var p = Profile.Load(profileInfo.Location);
                             clone = Profile.Clone(p);
                             p.Dispose();
-                        } catch (Exception) {
+                        } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or SerializationException or XmlException) {
                             //Profile is in use
                             return false;
                         }
@@ -310,7 +311,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private IProfile activeProfile;
+        private IProfile activeProfile = null!;  // set during initialization before ActiveProfile is exposed
 
         public IProfile ActiveProfile {
             get => activeProfile;
@@ -320,17 +321,13 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        public bool SelectProfile(ProfileMeta info) {
+        public bool SelectProfile(ProfileMeta profileInfo) {
             lock (lockobj) {
                 using (MyStopWatch.Measure()) {
                     try {
-                        var eventHandlerBeforeProfileChanging = BeforeProfileChanging;
-                        if (eventHandlerBeforeProfileChanging != null) {
-                            eventHandlerBeforeProfileChanging.Invoke(this, new EventArgs());
-
-                        }
+                        ProfileChanging?.Invoke(this, EventArgs.Empty);
                         var old = activeProfile;
-                        var p = Profile.Load(info.Location);
+                        var p = Profile.Load(profileInfo.Location);
 
                         UnregisterChangedEventHandlers();
                         if (ActiveProfile != null) {
@@ -339,7 +336,7 @@ namespace OpenAstroAra.Profile {
                         }
 
                         ActiveProfile = p;
-                        info.IsActive = true;
+                        profileInfo.IsActive = true;
 
                         System.Threading.Thread.CurrentThread.CurrentUICulture = ActiveProfile.ApplicationSettings.Language;
                         Loc.Instance.ReloadLocale(ActiveProfile.ApplicationSettings.Culture);
@@ -351,14 +348,14 @@ namespace OpenAstroAra.Profile {
                         }
                         var eventHandlerLocale = LocaleChanged;
                         if (eventHandlerLocale != null) {
-                            eventHandlerLocale.Invoke(this, null);
+                            eventHandlerLocale.Invoke(this, EventArgs.Empty);
                         }
                         var eventHandlerLocation = LocationChanged;
                         if (eventHandlerLocation != null) {
-                            eventHandlerLocation.Invoke(this, null);
+                            eventHandlerLocation.Invoke(this, EventArgs.Empty);
                         }
                         RegisterChangedEventHandlers();
-                    } catch (Exception ex) {
+                    } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or SerializationException or XmlException or CultureNotFoundException) {
                         Logger.Error(ex);
                         return false;
                     }
@@ -372,9 +369,18 @@ namespace OpenAstroAra.Profile {
                 if (ActiveProfile != null) {
                     try {
                         ActiveProfile.Dispose();
-                    } catch (Exception) { }
+                    } catch (Exception ex) when (ex is IOException or ObjectDisposedException) { }
                 }
             }
+        }
+
+        public void Dispose() {
+            profileFileWatcher?.Dispose();
+            saveTimer.Dispose();
+            lock (lockobj) {
+                activeProfile?.Dispose();
+            }
+            GC.SuppressFinalize(this);
         }
 
         private ProfileMeta AddDefaultProfile(string name) {
@@ -398,12 +404,12 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        public bool RemoveProfile(ProfileMeta info) {
+        public bool RemoveProfile(ProfileMeta profileInfo) {
             lock (lockobj) {
-                if (!Profile.Remove(info)) {
+                if (!Profile.Remove(profileInfo)) {
                     return false;
                 } else {
-                    Profiles.Remove(info);
+                    Profiles.Remove(profileInfo);
                     return true;
                 }
             }
@@ -411,15 +417,15 @@ namespace OpenAstroAra.Profile {
 
         #region Migration
 
-        private void MigrateModularizedSolutionNamespaceChange() {
+        private static void MigrateModularizedSolutionNamespaceChange() {
             foreach (var profileFile in Directory.GetFiles(PROFILEFOLDER)) {
                 try {
                     var profile = File.ReadAllText(profileFile);
-                    if (profile.Contains("http://schemas.datacontract.org/2004/07/NINA.Utility")) {
+                    if (profile.Contains("http://schemas.datacontract.org/2004/07/NINA.Utility", StringComparison.Ordinal)) {
                         Logger.Info($"Migrating profile {profileFile}");
-                        profile = profile.Replace("http://schemas.datacontract.org/2004/07/NINA.Model.MyFilterWheel", "http://schemas.datacontract.org/2004/07/OpenAstroAra.Core.Model.Equipment")
-                             .Replace("http://schemas.datacontract.org/2004/07/NINA.Model.MyCamera", "http://schemas.datacontract.org/2004/07/OpenAstroAra.Core.Model.Equipment")
-                             .Replace("http://schemas.datacontract.org/2004/07/NINA.Utility", "http://schemas.datacontract.org/2004/07/OpenAstroAra.Core.Utility.ColorSchema");
+                        profile = profile.Replace("http://schemas.datacontract.org/2004/07/NINA.Model.MyFilterWheel", "http://schemas.datacontract.org/2004/07/OpenAstroAra.Core.Model.Equipment", StringComparison.Ordinal)
+                             .Replace("http://schemas.datacontract.org/2004/07/NINA.Model.MyCamera", "http://schemas.datacontract.org/2004/07/OpenAstroAra.Core.Model.Equipment", StringComparison.Ordinal)
+                             .Replace("http://schemas.datacontract.org/2004/07/NINA.Utility", "http://schemas.datacontract.org/2004/07/OpenAstroAra.Core.Utility.ColorSchema", StringComparison.Ordinal);
 
                         var backupfolder = PROFILEFOLDER + "_old";
                         if (!Directory.Exists(backupfolder)) {
@@ -431,7 +437,7 @@ namespace OpenAstroAra.Profile {
                         if (!File.Exists(backupDestination)) {
                             try {
                                 File.Move(profileFile, backupDestination);
-                            } catch (Exception ex) {
+                            } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
                                 Logger.Error(ex);
                             }
                         }
@@ -439,7 +445,7 @@ namespace OpenAstroAra.Profile {
                         // Save adjusted profile
                         File.WriteAllText(profileFile, profile);
                     }
-                } catch (Exception ex) {
+                } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
                     Logger.Error($"Failed to migrate profile {profileFile} due to ", ex);
                 }
             }

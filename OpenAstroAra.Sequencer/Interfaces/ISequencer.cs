@@ -24,6 +24,6 @@ namespace OpenAstroAra.Sequencer {
         ISequenceRootContainer MainContainer { get; set; }
 
         Task Start(IProgress<ApplicationStatus> progress, CancellationToken token);
-        Task Start(IProgress<ApplicationStatus> progress, CancellationToken token, bool skipIssuePrompt);
+        Task Start(IProgress<ApplicationStatus> progress, bool skipIssuePrompt, CancellationToken token);
     }
 }

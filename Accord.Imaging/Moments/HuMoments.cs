@@ -20,11 +20,10 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging.Moments
-{
+namespace Accord.Imaging.Moments {
+    using Accord.Imaging;
     using System;
     using System.Drawing;
-    using Accord.Imaging;
 
     /// <summary>
     ///   Hu's set of invariant image moments.
@@ -72,8 +71,7 @@ namespace Accord.Imaging.Moments
     /// <seealso cref="CentralMoments"/>
     /// 
     [Serializable]
-    public class HuMoments : MomentsBase, IMoments
-    {
+    public class HuMoments : MomentsBase, IMoments {
 
         private const int defaultOrder = 3;
 
@@ -157,8 +155,7 @@ namespace Accord.Imaging.Moments
         /// 
         /// <param name="moments">The central moments to use as base of calculations.</param>
         /// 
-        public void Compute(CentralMoments moments)
-        {
+        public void Compute(CentralMoments moments) {
             double inv = 1.0 / moments.Mu00;
             double inv2 = 1.0 / (moments.Mu00 * moments.Mu00);
             double inv5d2 = Math.Sqrt(inv2 * inv2 * inv);
@@ -222,8 +219,7 @@ namespace Accord.Imaging.Moments
         /// <param name="image">The image whose moments should be computed.</param>
         /// <param name="area">The region of interest in the image to compute moments for.</param>
         /// 
-        public override void Compute(UnmanagedImage image, Rectangle area)
-        {
+        public override void Compute(UnmanagedImage image, Rectangle area) {
             RawMoments raw = new RawMoments(image, area, Order);
             CentralMoments center = new CentralMoments(raw);
             this.Compute(center);
@@ -236,8 +232,7 @@ namespace Accord.Imaging.Moments
         /// <param name="image">The image whose moments should be computed.</param>
         /// <param name="area">The region of interest in the image to compute moments for.</param>
         /// 
-        public override void Compute(float[,] image, Rectangle area)
-        {
+        public override void Compute(float[,] image, Rectangle area) {
             RawMoments raw = new RawMoments(image, area, Order);
             CentralMoments center = new CentralMoments(raw);
             this.Compute(center);

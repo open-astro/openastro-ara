@@ -13,17 +13,18 @@
 #endregion "copyright"
 
 using Newtonsoft.Json;
+using OpenAstroAra.Astrometry;
+using OpenAstroAra.Core.Enums;
+using OpenAstroAra.Core.Locale;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Sequencer.Validations;
-using OpenAstroAra.Astrometry;
-using OpenAstroAra.Core.Enum;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.Composition;
+using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
-using OpenAstroAra.Core.Locale;
 using static OpenAstroAra.Sequencer.Utility.ItemUtility;
 
 namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
@@ -36,8 +37,8 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
     [JsonObject(MemberSerialization.OptIn)]
     public class WaitForAltitude : WaitForAltitudeBase, IValidatable {
         private bool hasDsoParent;
-        private string aboveOrBelow;
- 
+        private string aboveOrBelow = string.Empty;
+
         [ImportingConstructor]
         public WaitForAltitude(IProfileService profileService) : base(profileService, useCustomHorizon: false) {
             AboveOrBelow = ">";
@@ -47,14 +48,14 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
         private WaitForAltitude(WaitForAltitude cloneMe) : this(cloneMe.ProfileService) {
             CopyMetaData(cloneMe);
         }
-        
+
         public override object Clone() {
             return new WaitForAltitude(this) {
                 AboveOrBelow = AboveOrBelow,
                 Data = Data.Clone()
             };
         }
-        
+
         [JsonProperty]
         public string AboveOrBelow {
             get => aboveOrBelow;
@@ -66,8 +67,8 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
                 }
 
                 aboveOrBelow = value;
-                if (aboveOrBelow == ">") Data.Comparator = ComparisonOperatorEnum.GREATER_THAN;
-                else Data.Comparator = ComparisonOperatorEnum.LESS_THAN_OR_EQUAL;
+                if (aboveOrBelow == ">") Data.Comparator = ComparisonOperator.GreaterThan;
+                else Data.Comparator = ComparisonOperator.LessThanOrEqual;
                 CalculateExpectedTime();
                 RaisePropertyChanged();
             }
@@ -78,7 +79,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
                 var coordinates = Data.Coordinates.Coordinates;
                 var altaz = coordinates.Transform(Angle.ByDegree(Data.Latitude), Angle.ByDegree(Data.Longitude), Data.Elevation);
                 progress?.Report(new ApplicationStatus() {
-                    Status = string.Format(Loc.Instance["Lbl_SequenceItem_Utility_WaitForAltitude_Progress"], Math.Round(altaz.Altitude.Degree, 2), Data.TargetAltitude)
+                    Status = string.Format(CultureInfo.CurrentCulture, Loc.Instance["Lbl_SequenceItem_Utility_WaitForAltitude_Progress"], Math.Round(altaz.Altitude.Degree, 2), Data.TargetAltitude)
                 });
 
                 if (aboveOrBelow == ">" && altaz.Altitude.Degree >= Data.Offset) {
@@ -115,7 +116,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
             var contextCoordinates = RetrieveContextCoordinates(this.Parent);
             if (contextCoordinates != null) {
                 Data.Coordinates.Coordinates = contextCoordinates.Coordinates;
-               HasDsoParent = true;
+                HasDsoParent = true;
             } else {
                 HasDsoParent = false;
             }

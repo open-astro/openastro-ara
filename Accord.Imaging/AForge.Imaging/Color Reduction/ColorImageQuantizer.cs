@@ -6,8 +6,7 @@
 // contacts@aforgenet.com
 //
 
-namespace Accord.Imaging.ColorReduction
-{
+namespace Accord.Imaging.ColorReduction {
     using System;
     using System.Collections.Generic;
     using System.Drawing;
@@ -38,8 +37,7 @@ namespace Accord.Imaging.ColorReduction
     /// <img src="..\images\imaging\reduced_colors.png" width="480" height="361" />
     /// </remarks>
     ///
-    public class ColorImageQuantizer
-    {
+    public class ColorImageQuantizer {
         private IColorQuantizer quantizer;
         private bool useCaching = false;
 
@@ -47,8 +45,7 @@ namespace Accord.Imaging.ColorReduction
         /// Color quantization algorithm used by this class to build color palettes for the specified images.
         /// </summary>
         /// 
-        public IColorQuantizer Quantizer
-        {
+        public IColorQuantizer Quantizer {
             get { return quantizer; }
             set { quantizer = value; }
         }
@@ -70,8 +67,7 @@ namespace Accord.Imaging.ColorReduction
         /// <para>Default value is set to <see langword="false"/>.</para>
         /// </remarks>
         /// 
-        public bool UseCaching
-        {
+        public bool UseCaching {
             get { return useCaching; }
             set { useCaching = value; }
         }
@@ -82,8 +78,7 @@ namespace Accord.Imaging.ColorReduction
         /// 
         /// <param name="quantizer">Color quantization algorithm to use for processing images.</param>
         /// 
-        public ColorImageQuantizer(IColorQuantizer quantizer)
-        {
+        public ColorImageQuantizer(IColorQuantizer quantizer) {
             this.quantizer = quantizer;
         }
 
@@ -98,17 +93,13 @@ namespace Accord.Imaging.ColorReduction
         /// 
         /// <remarks><para>See <see cref="CalculatePalette(UnmanagedImage, int)"/> for details.</para></remarks>
         /// 
-        public Color[] CalculatePalette(Bitmap image, int paletteSize)
-        {
+        public Color[] CalculatePalette(Bitmap image, int paletteSize) {
             BitmapData data = image.LockBits(new Rectangle(0, 0, image.Width, image.Height),
                 ImageLockMode.ReadOnly, image.PixelFormat);
 
-            try
-            {
+            try {
                 return CalculatePalette(new UnmanagedImage(data), paletteSize);
-            }
-            finally
-            {
+            } finally {
                 image.UnlockBits(data);
             }
         }
@@ -128,13 +119,11 @@ namespace Accord.Imaging.ColorReduction
         ///
         /// <exception cref="UnsupportedImageFormatException">Unsupported format of the source image - it must 24 or 32 bpp color image.</exception>
         ///
-        public Color[] CalculatePalette(UnmanagedImage image, int paletteSize)
-        {
+        public Color[] CalculatePalette(UnmanagedImage image, int paletteSize) {
             if ((image.PixelFormat != PixelFormat.Format24bppRgb) &&
                  (image.PixelFormat != PixelFormat.Format32bppRgb) &&
                  (image.PixelFormat != PixelFormat.Format32bppArgb) &&
-                 (image.PixelFormat != PixelFormat.Format32bppPArgb))
-            {
+                 (image.PixelFormat != PixelFormat.Format32bppPArgb)) {
                 throw new UnsupportedImageFormatException("Unsupported format of the source image.");
             }
 
@@ -145,15 +134,12 @@ namespace Accord.Imaging.ColorReduction
 
             int pixelSize = Bitmap.GetPixelFormatSize(image.PixelFormat) / 8;
 
-            unsafe
-            {
+            unsafe {
                 byte* ptr = (byte*)image.ImageData.ToPointer();
                 int offset = image.Stride - width * pixelSize;
 
-                for (int y = 0; y < height; y++)
-                {
-                    for (int x = 0; x < width; x++, ptr += pixelSize)
-                    {
+                for (int y = 0; y < height; y++) {
+                    for (int x = 0; x < width; x++, ptr += pixelSize) {
                         quantizer.AddColor(Color.FromArgb(ptr[RGB.R], ptr[RGB.G], ptr[RGB.B]));
                     }
 
@@ -175,19 +161,15 @@ namespace Accord.Imaging.ColorReduction
         /// 
         /// <remarks><para>See <see cref="ReduceColors(UnmanagedImage, int)"/> for details.</para></remarks>
         /// 
-        public Bitmap ReduceColors(Bitmap image, int paletteSize)
-        {
+        public Bitmap ReduceColors(Bitmap image, int paletteSize) {
             BitmapData data = image.LockBits(new Rectangle(0, 0, image.Width, image.Height),
                 ImageLockMode.ReadOnly, image.PixelFormat);
 
-            try
-            {
+            try {
                 Bitmap result = ReduceColors(new UnmanagedImage(data), paletteSize);
                 result.CopyResolutionFrom(image);
                 return result;
-            }
-            finally
-            {
+            } finally {
                 image.UnlockBits(data);
             }
         }
@@ -213,10 +195,8 @@ namespace Accord.Imaging.ColorReduction
         /// <exception cref="UnsupportedImageFormatException">Unsupported format of the source image - it must 24 or 32 bpp color image.</exception>
         /// <exception cref="ArgumentException">Invalid size of the target color palette.</exception>
         /// 
-        public Bitmap ReduceColors(UnmanagedImage image, int paletteSize)
-        {
-            if ((paletteSize < 2) || (paletteSize > 256))
-            {
+        public Bitmap ReduceColors(UnmanagedImage image, int paletteSize) {
+            if ((paletteSize < 2) || (paletteSize > 256)) {
                 throw new ArgumentException("Invalid size of the target color palette.");
             }
 
@@ -234,19 +214,15 @@ namespace Accord.Imaging.ColorReduction
         /// 
         /// <remarks><para>See <see cref="ReduceColors(UnmanagedImage, Color[])"/> for details.</para></remarks>
         /// 
-        public Bitmap ReduceColors(Bitmap image, Color[] palette)
-        {
+        public Bitmap ReduceColors(Bitmap image, Color[] palette) {
             BitmapData data = image.LockBits(new Rectangle(0, 0, image.Width, image.Height),
                 ImageLockMode.ReadOnly, image.PixelFormat);
 
-            try
-            {
+            try {
                 Bitmap result = ReduceColors(new UnmanagedImage(data), palette);
                 result.CopyResolutionFrom(image);
                 return result;
-            }
-            finally
-            {
+            } finally {
                 image.UnlockBits(data);
             }
         }
@@ -271,18 +247,15 @@ namespace Accord.Imaging.ColorReduction
         /// <exception cref="UnsupportedImageFormatException">Unsupported format of the source image - it must 24 or 32 bpp color image.</exception>
         /// <exception cref="ArgumentException">Invalid size of the target color palette.</exception>
         /// 
-        public Bitmap ReduceColors(UnmanagedImage image, Color[] palette)
-        {
+        public Bitmap ReduceColors(UnmanagedImage image, Color[] palette) {
             if ((image.PixelFormat != PixelFormat.Format24bppRgb) &&
                  (image.PixelFormat != PixelFormat.Format32bppRgb) &&
                  (image.PixelFormat != PixelFormat.Format32bppArgb) &&
-                 (image.PixelFormat != PixelFormat.Format32bppPArgb))
-            {
+                 (image.PixelFormat != PixelFormat.Format32bppPArgb)) {
                 throw new UnsupportedImageFormatException("Unsupported format of the source image.");
             }
 
-            if ((palette.Length < 2) || (palette.Length > 256))
-            {
+            if ((palette.Length < 2) || (palette.Length > 256)) {
                 throw new ArgumentException("Invalid size of the target color palette.");
             }
 
@@ -302,8 +275,7 @@ namespace Accord.Imaging.ColorReduction
                 PixelFormat.Format8bppIndexed : PixelFormat.Format4bppIndexed);
             // and init its palette
             ColorPalette cp = destImage.Palette;
-            for (int i = 0, n = palette.Length; i < n; i++)
-            {
+            for (int i = 0, n = palette.Length; i < n; i++) {
                 cp.Entries[i] = palette[i];
             }
             destImage.Palette = cp;
@@ -313,38 +285,29 @@ namespace Accord.Imaging.ColorReduction
                 ImageLockMode.ReadWrite, destImage.PixelFormat);
 
             // do the job
-            unsafe
-            {
+            unsafe {
                 byte* ptr = (byte*)image.ImageData.ToPointer();
                 byte* dstBase = (byte*)destData.Scan0.ToPointer();
 
                 bool is8bpp = (palette.Length > 16);
 
                 // for each line
-                for (int y = 0; y < height; y++)
-                {
+                for (int y = 0; y < height; y++) {
                     byte* dst = dstBase + y * destData.Stride;
 
                     // for each pixels
-                    for (int x = 0; x < width; x++, ptr += pixelSize)
-                    {
+                    for (int x = 0; x < width; x++, ptr += pixelSize) {
                         // get color from palette, which is the closest to current pixel's value
                         byte colorIndex = (byte)GetClosestColor(ptr[RGB.R], ptr[RGB.G], ptr[RGB.B]);
 
                         // write color index as pixel's value to destination image
-                        if (is8bpp)
-                        {
+                        if (is8bpp) {
                             *dst = colorIndex;
                             dst++;
-                        }
-                        else
-                        {
-                            if (x % 2 == 0)
-                            {
+                        } else {
+                            if (x % 2 == 0) {
                                 *dst |= (byte)(colorIndex << 4);
-                            }
-                            else
-                            {
+                            } else {
                                 *dst |= (colorIndex);
                                 dst++;
                             }
@@ -363,38 +326,33 @@ namespace Accord.Imaging.ColorReduction
         [NonSerialized]
         private Color[] paletteToUse;
         [NonSerialized]
-        private Dictionary<Color, int> cache = new Dictionary<Color, int>( );
+        private Dictionary<Color, int> cache = new Dictionary<Color, int>();
 
         // Get closest color from palette to specified color
-        private int GetClosestColor(int red, int green, int blue)
-        {
+        private int GetClosestColor(int red, int green, int blue) {
             Color color = Color.FromArgb(red, green, blue);
 
-            if ((useCaching) && (cache.ContainsKey(color)))
-            {
+            if ((useCaching) && (cache.ContainsKey(color))) {
                 return cache[color];
             }
 
             int colorIndex = 0;
             int minError = int.MaxValue;
 
-            for (int i = 0, n = paletteToUse.Length; i < n; i++)
-            {
+            for (int i = 0, n = paletteToUse.Length; i < n; i++) {
                 int dr = red - paletteToUse[i].R;
                 int dg = green - paletteToUse[i].G;
                 int db = blue - paletteToUse[i].B;
 
                 int error = dr * dr + dg * dg + db * db;
 
-                if (error < minError)
-                {
+                if (error < minError) {
                     minError = error;
                     colorIndex = (byte)i;
                 }
             }
 
-            if (useCaching)
-            {
+            if (useCaching) {
                 cache.Add(color, colorIndex);
             }
 

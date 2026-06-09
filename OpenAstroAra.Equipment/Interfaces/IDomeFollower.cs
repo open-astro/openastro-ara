@@ -12,12 +12,12 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Equipment.Equipment.MyTelescope;
 using OpenAstroAra.Astrometry;
+using OpenAstroAra.Core.Enums;
+using OpenAstroAra.Equipment.Equipment.MyTelescope;
 using System.ComponentModel;
 using System.Threading;
 using System.Threading.Tasks;
-using OpenAstroAra.Core.Enum;
 
 namespace OpenAstroAra.Equipment.Interfaces {
 
@@ -25,7 +25,7 @@ namespace OpenAstroAra.Equipment.Interfaces {
         bool IsSynchronized { get; }
         bool IsFollowing { get; }
 
-        Task Stop();
+        Task StopAsync();
 
         Task Start();
 

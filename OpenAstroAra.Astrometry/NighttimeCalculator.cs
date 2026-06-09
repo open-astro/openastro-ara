@@ -22,9 +22,9 @@ using System.Timers;
 
 namespace OpenAstroAra.Astrometry {
 
-    public class NighttimeCalculator : BaseINPC, INighttimeCalculator {
+    public sealed class NighttimeCalculator : BaseINPC, INighttimeCalculator, IDisposable {
         private readonly IProfileService profileService;
-        private Timer ReferenceDateTimer = null;
+        private readonly Timer? ReferenceDateTimer;
         private DateTime LastReferenceDate;
 
         public NighttimeCalculator(IProfileService profile) {
@@ -38,23 +38,27 @@ namespace OpenAstroAra.Astrometry {
             ReferenceDateTimer.Enabled = true;
         }
 
-        private void OnTimedEvent(object source, ElapsedEventArgs e) {
+        private void OnTimedEvent(object? source, ElapsedEventArgs e) {
             DateTime referenceDate = NighttimeCalculator.GetReferenceDate(DateTime.Now);
             if (LastReferenceDate != referenceDate) {
-                OnReferenceDayChanged?.Invoke(this, null);
+                OnReferenceDayChanged?.Invoke(this, EventArgs.Empty);
             }
         }
 
-        private IDictionary<string, NighttimeData> Cache;
+        private readonly Dictionary<string, NighttimeData> Cache;
 
-        private object lockObj = new object();
+        private readonly object lockObj = new object();
 
-        public event EventHandler OnReferenceDayChanged;
+        public event EventHandler? OnReferenceDayChanged;
 
-        public NighttimeData Calculate(DateTime? date = null) {
+        public void Dispose() {
+            ReferenceDateTimer?.Dispose();
+        }
+
+        public NighttimeData Calculate(DateTime? selectedDate = null) {
             lock (lockObj) {
-                var selectedDate = date.HasValue ? date.Value : DateTime.Now;
-                var referenceDate = GetReferenceDate(selectedDate);
+                var effectiveDate = selectedDate ?? DateTime.Now;
+                var referenceDate = GetReferenceDate(effectiveDate);
                 var latitude = profileService.ActiveProfile.AstrometrySettings.Latitude;
                 var longitude = profileService.ActiveProfile.AstrometrySettings.Longitude;
                 var elevation = profileService.ActiveProfile.AstrometrySettings.Elevation;
@@ -72,7 +76,7 @@ namespace OpenAstroAra.Astrometry {
                     var moonPhase = AstroUtil.GetMoonPhase(referenceDate, new ObserverInfo() { Latitude = latitude, Longitude = longitude, Elevation = elevation });
                     var illumination = AstroUtil.GetMoonIllumination(referenceDate, new ObserverInfo() { Latitude = latitude, Longitude = longitude, Elevation = elevation });
 
-                    var data = new NighttimeData(date: selectedDate, referenceDate: referenceDate, moonPhase: moonPhase, moonIllumination: illumination, twilightRiseAndSet: twilightRiseAndSet, nauticalTwilightRiseAndSet: nauticalTwilightRiseAndSet,
+                    var data = new NighttimeData(date: effectiveDate, referenceDate: referenceDate, moonPhase: moonPhase, moonIllumination: illumination, twilightRiseAndSet: twilightRiseAndSet, nauticalTwilightRiseAndSet: nauticalTwilightRiseAndSet,
                         sunRiseAndSet: sunRiseAndSet, moonRiseAndSet: moonRiseAndSet, civilTwilightRiseAndSet: civilTwilightRiseAndSet);
                     Cache[key] = data;
                     return data;

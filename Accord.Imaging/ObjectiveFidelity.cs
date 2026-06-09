@@ -20,12 +20,11 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging
-{
+namespace Accord.Imaging {
+    using Accord.Compat;
     using System;
     using System.Drawing;
     using System.Drawing.Imaging;
-    using Accord.Compat;
     using System.Threading.Tasks;
 
     /// <summary>
@@ -60,8 +59,7 @@ namespace Accord.Imaging
     /// </code>
     /// </example>
     /// 
-    public class ObjectiveFidelity
-    {
+    public class ObjectiveFidelity {
         private long totalError;
         private double meanError;
         private double mse;
@@ -75,8 +73,7 @@ namespace Accord.Imaging
         ///  Gets the total error between the two images.
         /// </summary>
         /// 
-        public long AbsoluteError
-        {
+        public long AbsoluteError {
             get { return totalError; }
         }
 
@@ -84,8 +81,7 @@ namespace Accord.Imaging
         ///   Gets the average error between the two images.
         /// </summary>
         /// 
-        public double MeanError
-        {
+        public double MeanError {
             get { return meanError; }
         }
 
@@ -93,8 +89,7 @@ namespace Accord.Imaging
         ///   Gets the root mean square error between the two images.
         /// </summary>
         /// 
-        public double MeanSquareError
-        {
+        public double MeanSquareError {
             get { return mse; }
         }
 
@@ -102,8 +97,7 @@ namespace Accord.Imaging
         ///   Gets the signal to noise ratio.
         /// </summary>
         /// 
-        public double SignalToNoiseRatio
-        {
+        public double SignalToNoiseRatio {
             get { return signalNoiseRatio; }
         }
 
@@ -111,8 +105,7 @@ namespace Accord.Imaging
         ///   Gets the peak signal to noise ratio.
         /// </summary>
         /// 
-        public double PeakSignalToNoiseRatio
-        {
+        public double PeakSignalToNoiseRatio {
             get { return peakSignalNoiseRatio; }
         }
 
@@ -120,8 +113,7 @@ namespace Accord.Imaging
         ///   Gets the derivative signal to noise ratio.
         /// </summary>
         /// 
-        public double DerivativeSignalNoiseRatio
-        {
+        public double DerivativeSignalNoiseRatio {
             get { return derivativeSignalNoiseRatio; }
         }
 
@@ -129,11 +121,9 @@ namespace Accord.Imaging
         ///   Gets the level used in peak signal to noise ratio.
         /// </summary>
         /// 
-        public int Level
-        {
+        public int Level {
             get { return level; }
-            set
-            {
+            set {
                 if (value < 0 || value > 255)
                     throw new ArgumentOutOfRangeException("value", "Value must be between 0 and 255.");
                 level = value;
@@ -144,8 +134,7 @@ namespace Accord.Imaging
         ///   Initializes a new instance of the <see cref="ObjectiveFidelity"/> class.
         /// </summary>
         /// 
-        public ObjectiveFidelity()
-        {
+        public ObjectiveFidelity() {
         }
 
         /// <summary>
@@ -155,8 +144,7 @@ namespace Accord.Imaging
         /// <param name="a">The first image to be compared.</param>
         /// <param name="b">The second image that will be compared.</param>
         /// 
-        public ObjectiveFidelity(Bitmap a, Bitmap b)
-        {
+        public ObjectiveFidelity(Bitmap a, Bitmap b) {
             Compute(a, b);
         }
 
@@ -167,8 +155,7 @@ namespace Accord.Imaging
         /// <param name="a">The first image to be compared.</param>
         /// <param name="b">The second image that will be compared.</param>
         /// 
-        public ObjectiveFidelity(BitmapData a, BitmapData b)
-        {
+        public ObjectiveFidelity(BitmapData a, BitmapData b) {
             Compute(a, b);
         }
 
@@ -179,8 +166,7 @@ namespace Accord.Imaging
         /// <param name="a">The first image to be compared.</param>
         /// <param name="b">The second image that will be compared.</param>
         /// 
-        public ObjectiveFidelity(UnmanagedImage a, UnmanagedImage b)
-        {
+        public ObjectiveFidelity(UnmanagedImage a, UnmanagedImage b) {
             Compute(a, b);
         }
 
@@ -191,8 +177,7 @@ namespace Accord.Imaging
         /// <param name="a">The first image to be compared.</param>
         /// <param name="b">The second image that will be compared.</param>
         /// 
-        public void Compute(Bitmap a, Bitmap b)
-        {
+        public void Compute(Bitmap a, Bitmap b) {
             // lock source image
             BitmapData dataOriginal = a.LockBits(ImageLockMode.ReadOnly);
             BitmapData dataReconstructed = b.LockBits(ImageLockMode.ReadOnly);
@@ -210,8 +195,7 @@ namespace Accord.Imaging
         /// <param name="a">The first image to be compared.</param>
         /// <param name="b">The second image that will be compared.</param>
         /// 
-        public void Compute(BitmapData a, BitmapData b)
-        {
+        public void Compute(BitmapData a, BitmapData b) {
             Compute(new UnmanagedImage(a), new UnmanagedImage(b));
         }
 
@@ -222,25 +206,21 @@ namespace Accord.Imaging
         /// <param name="a">The first image to be compared.</param>
         /// <param name="b">The second image that will be compared.</param>
         /// 
-        public void Compute(UnmanagedImage a, UnmanagedImage b)
-        {
+        public void Compute(UnmanagedImage a, UnmanagedImage b) {
             // check image format
             if (!(a.PixelFormat == PixelFormat.Format8bppIndexed ||
-                b.PixelFormat == PixelFormat.Format8bppIndexed))
-            {
+                b.PixelFormat == PixelFormat.Format8bppIndexed)) {
                 throw new UnsupportedImageFormatException("Only grayscale images are supported.");
             }
 
             // check image format
             if (!(a.PixelFormat == PixelFormat.Format8bppIndexed &&
-                b.PixelFormat == PixelFormat.Format8bppIndexed))
-            {
+                b.PixelFormat == PixelFormat.Format8bppIndexed)) {
                 throw new UnsupportedImageFormatException("The both images must be in the same pixel format.");
             }
 
             // check image size
-            if ((a.Width != b.Width) || (a.Height != b.Height))
-            {
+            if ((a.Width != b.Width) || (a.Height != b.Height)) {
                 throw new ArgumentException("The both images must be in the same size.");
             }
 
@@ -257,17 +237,14 @@ namespace Accord.Imaging
             double sumOfSquares = 0;
             double imageSumOfSquares = 0;
 
-            unsafe
-            {
+            unsafe {
                 byte* ptrA = (byte*)a.ImageData.ToPointer();
                 byte* ptrB = (byte*)b.ImageData.ToPointer();
 
 
                 // Compute all metrics above
-                for (int y = 0; y < height; y++)
-                {
-                    for (int x = 0; x < width; x++, ptrA++, ptrB++)
-                    {
+                for (int y = 0; y < height; y++) {
+                    for (int x = 0; x < width; x++, ptrA++, ptrB++) {
                         long pA = *ptrA;
                         long pB = *ptrB;
 
@@ -304,16 +281,13 @@ namespace Accord.Imaging
 
 
             // signal to noise ratio
-            if (sumOfSquares != 0)
-            {
+            if (sumOfSquares != 0) {
                 // Signal to noise ratio
                 this.signalNoiseRatio = System.Math.Sqrt(imageSumOfSquares / sumOfSquares);
 
                 // peak signal to noise ratio
                 this.peakSignalNoiseRatio = 10 * Math.Log10((level * level) / meanError);
-            }
-            else
-            {
+            } else {
                 this.signalNoiseRatio = 0;
                 this.peakSignalNoiseRatio = 0;
             }
@@ -323,8 +297,7 @@ namespace Accord.Imaging
         }
 
 
-        private static unsafe double derivativeSNR(UnmanagedImage a, UnmanagedImage b)
-        {
+        private static unsafe double derivativeSNR(UnmanagedImage a, UnmanagedImage b) {
             int width = a.Width;
             int height = a.Height;
 
@@ -338,10 +311,8 @@ namespace Accord.Imaging
             double sum1 = 0;
             double sum2 = 0;
 
-            for (int y = 0; y < height - 1; y++)
-            {
-                for (int x = 0; x < width - 1; x++, ptrA++, ptrB++)
-                {
+            for (int y = 0; y < height - 1; y++) {
+                for (int x = 0; x < width - 1; x++, ptrA++, ptrB++) {
                     // original image
                     int gradO = System.Math.Abs(*ptrA - ptrA[+stride]) + System.Math.Abs(*ptrA - ptrA[+1]);
                     sum1 += gradO * gradO;

@@ -15,10 +15,10 @@
 using OpenAstroAra.Core.Utility;
 using System.ComponentModel;
 
-namespace OpenAstroAra.Core.Enum {
+namespace OpenAstroAra.Core.Enums {
 
     [TypeConverter(typeof(EnumDescriptionTypeConverter))]
-    public enum SkyAtlasOrderByFieldsEnum {
+    public enum SkyAtlasOrderByFields {
 
         [Description("LblSize")]
         SIZEMAX,
@@ -43,7 +43,7 @@ namespace OpenAstroAra.Core.Enum {
     }
 
     [TypeConverter(typeof(EnumDescriptionTypeConverter))]
-    public enum SkyAtlasOrderByDirectionEnum {
+    public enum SkyAtlasOrderByDirection {
 
         [Description("LblDescending")]
         DESC,

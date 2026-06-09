@@ -14,6 +14,13 @@
 
 using System.Runtime.InteropServices;
 
+// CA5392/CA5393: constrain native library resolution to the OS "safe"
+// directories (which include the application directory) and nothing else, so
+// CFITSIO can't be hijacked by DLL-planting from the current/working directory.
+// SafeDirectories is the value both rules accept (AssemblyDirectory is rejected
+// by CA5393 as attacker-influenceable for side-loaded assemblies).
+[assembly: DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
+
 namespace OpenAstroAra.Fits;
 
 /// <summary>
@@ -128,7 +135,7 @@ internal static partial class CFitsIO {
 /// error string from <c>ffgerr</c>.
 /// </summary>
 public sealed class FitsException : Exception {
-    public string Operation { get; }
+    public string Operation { get; } = string.Empty;
     public int StatusCode { get; }
 
     public FitsException(string operation, int statusCode)
@@ -143,6 +150,15 @@ public sealed class FitsException : Exception {
         var nullTerminator = Array.IndexOf<byte>(buffer, 0);
         var length = nullTerminator >= 0 ? nullTerminator : buffer.Length;
         return System.Text.Encoding.ASCII.GetString(buffer, 0, length);
+    }
+
+    public FitsException() {
+    }
+
+    public FitsException(string message) : base(message) {
+    }
+
+    public FitsException(string message, Exception innerException) : base(message, innerException) {
     }
 }
 

@@ -23,8 +23,7 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging
-{
+namespace Accord.Imaging {
     using System;
     using System.Drawing;
 
@@ -48,8 +47,7 @@ namespace Accord.Imaging
         /// <param name="scale">The point's scale.</param>
         /// <param name="laplacian">The point's laplacian value.</param>
         /// 
-        public SpeededUpRobustFeaturePoint(double x, double y, double scale, int laplacian)
-        {
+        public SpeededUpRobustFeaturePoint(double x, double y, double scale, int laplacian) {
             this.X = x;
             this.Y = y;
             this.Scale = scale;
@@ -68,8 +66,7 @@ namespace Accord.Imaging
         /// <param name="response">The point's response value.</param>
         /// 
         public SpeededUpRobustFeaturePoint(double x, double y, double scale, int laplacian,
-            double orientation, double response)
-        {
+            double orientation, double response) {
             this.X = x;
             this.Y = y;
             this.Scale = scale;
@@ -91,8 +88,7 @@ namespace Accord.Imaging
         /// <param name="response">The point's response value.</param>
         /// 
         public SpeededUpRobustFeaturePoint(double x, double y, double scale, int laplacian,
-            double orientation, double response, double[] descriptor)
-        {
+            double orientation, double response, double[] descriptor) {
             this.X = x;
             this.Y = y;
             this.Scale = scale;
@@ -154,8 +150,7 @@ namespace Accord.Imaging
         ///   Converts the feature point to a <see cref="Accord.IntPoint"/>.
         /// </summary>
         /// 
-        public Accord.IntPoint ToIntPoint()
-        {
+        public Accord.IntPoint ToIntPoint() {
             return new Accord.IntPoint((int)X, (int)Y);
         }
 
@@ -167,8 +162,7 @@ namespace Accord.Imaging
         ///   The result of the conversion.
         /// </returns>
         /// 
-        public Point ToPoint()
-        {
+        public Point ToPoint() {
             return new Point((int)X, (int)Y);
         }
 
@@ -180,8 +174,7 @@ namespace Accord.Imaging
         ///   The result of the conversion.
         /// </returns>
         /// 
-        public PointF ToPointF()
-        {
+        public PointF ToPointF() {
             return new PointF((float)X, (float)Y);
         }
 
@@ -196,8 +189,7 @@ namespace Accord.Imaging
         ///   The result of the conversion.
         /// </returns>
         /// 
-        public static implicit operator Point(SpeededUpRobustFeaturePoint point)
-        {
+        public static implicit operator Point(SpeededUpRobustFeaturePoint point) {
             return point.ToPoint();
         }
 
@@ -212,8 +204,7 @@ namespace Accord.Imaging
         ///   The result of the conversion.
         /// </returns>
         /// 
-        public static implicit operator PointF(SpeededUpRobustFeaturePoint point)
-        {
+        public static implicit operator PointF(SpeededUpRobustFeaturePoint point) {
             return point.ToPointF();
         }
 
@@ -228,8 +219,7 @@ namespace Accord.Imaging
         ///   The result of the conversion.
         /// </returns>
         /// 
-        public static implicit operator Accord.IntPoint(SpeededUpRobustFeaturePoint point)
-        {
+        public static implicit operator Accord.IntPoint(SpeededUpRobustFeaturePoint point) {
             return point.ToIntPoint();
         }
     }

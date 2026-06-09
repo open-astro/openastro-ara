@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -12,21 +12,21 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Astrometry;
+using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Core.Utility.TcpRaw;
+using OpenAstroAra.Equipment.Exceptions;
+using OpenAstroAra.Equipment.Interfaces;
 using OpenAstroAra.Profile.Interfaces;
 using System;
 using System.Globalization;
-using System.Threading.Tasks;
-using OpenAstroAra.Equipment.Exceptions;
-using OpenAstroAra.Equipment.Interfaces;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace OpenAstroAra.Equipment.Equipment.MyPlanetarium {
 
-    internal class SkytechX : IPlanetarium {
-        private string address;
+    internal sealed class SkytechX : IPlanetarium {
+        private string address = string.Empty;
         private int port;
 
         public SkytechX(IProfileService profileService) {

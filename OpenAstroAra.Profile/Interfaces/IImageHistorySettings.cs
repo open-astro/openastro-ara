@@ -12,12 +12,12 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Enums;
 
 namespace OpenAstroAra.Profile.Interfaces {
 
     public interface IImageHistorySettings : ISettings {
-        ImageHistoryEnum ImageHistoryLeftSelected { get; set; }
-        ImageHistoryEnum ImageHistoryRightSelected { get; set; }
+        ImageHistory ImageHistoryLeftSelected { get; set; }
+        ImageHistory ImageHistoryRightSelected { get; set; }
     }
 }

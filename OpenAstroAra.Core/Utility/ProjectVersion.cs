@@ -56,10 +56,10 @@ namespace OpenAstroAra.Core.Utility {
             int major = version.Major;
             int minor = version.Minor;
             int build = version.Build;
-            string revision = version.Revision.ToString();
+            string revision = version.Revision.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
             string channel = revision.Substring(0, 1);
-            string buildNumber = revision.Substring(1, revision.Length - 1);
+            string buildNumber = revision.Substring(1);
 
             string patch = string.Empty;
             if (build > 0) {

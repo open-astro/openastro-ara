@@ -7,15 +7,13 @@
 //
 
 
-namespace Accord.Imaging
-{
+namespace Accord.Imaging {
+    using Accord.Math.Geometry;
+    using AForge;
     using System;
     using System.Collections.Generic;
     using System.Drawing;
     using System.Drawing.Imaging;
-
-    using AForge;
-    using Accord.Math.Geometry;
 
     /// <summary>
     /// Searching of quadrilateral/triangle corners.
@@ -59,8 +57,7 @@ namespace Accord.Imaging
     /// <img src="..\images\imaging\quadrilateral_finder.png" width="320" height="240" />
     /// </remarks>
     ///
-    public class QuadrilateralFinder
-    {
+    public class QuadrilateralFinder {
         /// <summary>
         /// Find corners of quadrilateral/triangular area in the specified image.
         /// </summary>
@@ -74,8 +71,7 @@ namespace Accord.Imaging
         ///
         /// <exception cref="UnsupportedImageFormatException">Unsupported pixel format of the source image.</exception>
         /// 
-        public List<IntPoint> ProcessImage(Bitmap image)
-        {
+        public List<IntPoint> ProcessImage(Bitmap image) {
             CheckPixelFormat(image.PixelFormat);
 
             // lock source image
@@ -85,13 +81,10 @@ namespace Accord.Imaging
 
             List<IntPoint> corners = null;
 
-            try
-            {
+            try {
                 // process the image
                 corners = ProcessImage(new UnmanagedImage(imageData));
-            }
-            finally
-            {
+            } finally {
                 // unlock image
                 image.UnlockBits(imageData);
             }
@@ -112,8 +105,7 @@ namespace Accord.Imaging
         ///
         /// <exception cref="UnsupportedImageFormatException">Unsupported pixel format of the source image.</exception>
         /// 
-        public List<IntPoint> ProcessImage(BitmapData imageData)
-        {
+        public List<IntPoint> ProcessImage(BitmapData imageData) {
             return ProcessImage(new UnmanagedImage(imageData));
         }
 
@@ -130,8 +122,7 @@ namespace Accord.Imaging
         ///
         /// <exception cref="UnsupportedImageFormatException">Unsupported pixel format of the source image.</exception>
         /// 
-        public List<IntPoint> ProcessImage(UnmanagedImage image)
-        {
+        public List<IntPoint> ProcessImage(UnmanagedImage image) {
             CheckPixelFormat(image.PixelFormat);
 
             // get source image size
@@ -142,37 +133,29 @@ namespace Accord.Imaging
             List<IntPoint> points = new List<IntPoint>();
 
             // collect edge points
-            unsafe
-            {
+            unsafe {
                 byte* src = (byte*)image.ImageData.ToPointer();
                 int stride = image.Stride;
 
                 bool lineIsEmpty;
 
-                if (image.PixelFormat == PixelFormat.Format8bppIndexed)
-                {
+                if (image.PixelFormat == PixelFormat.Format8bppIndexed) {
                     // for each row
-                    for (int y = 0; y < height; y++)
-                    {
+                    for (int y = 0; y < height; y++) {
                         lineIsEmpty = true;
 
                         // scan from left to right
-                        for (int x = 0; x < width; x++)
-                        {
-                            if (src[x] != 0)
-                            {
+                        for (int x = 0; x < width; x++) {
+                            if (src[x] != 0) {
                                 points.Add(new IntPoint(x, y));
                                 lineIsEmpty = false;
                                 break;
                             }
                         }
-                        if (!lineIsEmpty)
-                        {
+                        if (!lineIsEmpty) {
                             // scan from right to left
-                            for (int x = width - 1; x >= 0; x--)
-                            {
-                                if (src[x] != 0)
-                                {
+                            for (int x = width - 1; x >= 0; x--) {
+                                if (src[x] != 0) {
                                     points.Add(new IntPoint(x, y));
                                     break;
                                 }
@@ -180,37 +163,29 @@ namespace Accord.Imaging
                         }
                         src += stride;
                     }
-                }
-                else
-                {
+                } else {
                     // 24 or 32 bpp color image
                     int pixelSize = System.Drawing.Image.GetPixelFormatSize(image.PixelFormat) / 8;
 
                     byte* ptr = null;
 
                     // for each row
-                    for (int y = 0; y < height; y++)
-                    {
+                    for (int y = 0; y < height; y++) {
                         lineIsEmpty = true;
                         // scan from left to right
                         ptr = src;
-                        for (int x = 0; x < width; x++, ptr += pixelSize)
-                        {
-                            if ((ptr[RGB.R] != 0) || (ptr[RGB.G] != 0) || (ptr[RGB.B] != 0))
-                            {
+                        for (int x = 0; x < width; x++, ptr += pixelSize) {
+                            if ((ptr[RGB.R] != 0) || (ptr[RGB.G] != 0) || (ptr[RGB.B] != 0)) {
                                 points.Add(new IntPoint(x, y));
                                 lineIsEmpty = false;
                                 break;
                             }
                         }
-                        if (!lineIsEmpty)
-                        {
+                        if (!lineIsEmpty) {
                             // scan from right to left
                             ptr = src + width * pixelSize - pixelSize;
-                            for (int x = width - 1; x >= 0; x--, ptr -= pixelSize)
-                            {
-                                if ((ptr[RGB.R] != 0) || (ptr[RGB.G] != 0) || (ptr[RGB.B] != 0))
-                                {
+                            for (int x = width - 1; x >= 0; x--, ptr -= pixelSize) {
+                                if ((ptr[RGB.R] != 0) || (ptr[RGB.G] != 0) || (ptr[RGB.B] != 0)) {
                                     points.Add(new IntPoint(x, y));
                                     break;
                                 }
@@ -224,14 +199,12 @@ namespace Accord.Imaging
             return PointsCloud.FindQuadrilateralCorners(points);
         }
 
-        private static void CheckPixelFormat(PixelFormat format)
-        {
+        private static void CheckPixelFormat(PixelFormat format) {
             // check image format
             if ((format != PixelFormat.Format8bppIndexed) &&
                 (format != PixelFormat.Format24bppRgb) &&
                 (format != PixelFormat.Format32bppArgb) &&
-                (format != PixelFormat.Format32bppPArgb))
-            {
+                (format != PixelFormat.Format32bppPArgb)) {
                 throw new UnsupportedImageFormatException("Unsupported pixel format of the source image.");
             }
         }

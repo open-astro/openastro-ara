@@ -27,13 +27,12 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 
-namespace Accord.Imaging
-{
+namespace Accord.Imaging {
+    using AForge;
     using System;
     using System.Collections.Generic;
     using System.Drawing;
     using System.Drawing.Imaging;
-    using AForge;
 
     /// <summary>
     /// Possible object orders.
@@ -42,8 +41,7 @@ namespace Accord.Imaging
     /// <remarks>The enumeration defines possible sorting orders of objects, found by blob
     /// counting classes.</remarks>
     /// 
-    public enum ObjectsOrder
-    {
+    public enum ObjectsOrder {
         /// <summary>
         /// Unsorted order (as it is collected by algorithm).
         /// </summary>
@@ -109,8 +107,7 @@ namespace Accord.Imaging
     /// </code>
     /// </remarks>
     /// 
-    public abstract class BlobCounterBase : IDisposable
-    {
+    public abstract class BlobCounterBase : IDisposable {
         // found blobs
         List<Blob> blobs = new List<Blob>();
 
@@ -152,8 +149,7 @@ namespace Accord.Imaging
         /// <remarks><para>Number of objects (blobs) found by <see cref="ProcessImage(Bitmap)"/> method.
         /// </para></remarks>
         /// 
-        public int ObjectsCount
-        {
+        public int ObjectsCount {
             get { return objectsCount; }
             protected set { objectsCount = value; }
         }
@@ -166,8 +162,7 @@ namespace Accord.Imaging
         /// labels for all objects. Background is represented with <b>0</b> value,
         /// but objects are represented with labels starting from <b>1</b>.</remarks>
         /// 
-        public int[] ObjectLabels
-        {
+        public int[] ObjectLabels {
             get { return objectLabels; }
             protected set { objectLabels = value; }
         }
@@ -180,8 +175,7 @@ namespace Accord.Imaging
         /// by <see cref="GetObjectsRectangles"/>, <see cref="GetObjectsInformation"/>, etc.
         /// </para></remarks>
         /// 
-        public ObjectsOrder ObjectsOrder
-        {
+        public ObjectsOrder ObjectsOrder {
             get { return objectsOrder; }
             set { objectsOrder = value; }
         }
@@ -199,8 +193,7 @@ namespace Accord.Imaging
         /// 
         /// <para>Default value is set to <see langword="false"/>.</para></remarks>
         /// 
-        public bool FilterBlobs
-        {
+        public bool FilterBlobs {
             get { return filterBlobs; }
             set { filterBlobs = value; }
         }
@@ -219,8 +212,7 @@ namespace Accord.Imaging
         /// <para>Default value is set to <see langword="false"/>, what means uncoupled filtering by size.</para>
         /// </remarks>
         /// 
-        public bool CoupledSizeFiltering
-        {
+        public bool CoupledSizeFiltering {
             get { return coupledSizeFiltering; }
             set { coupledSizeFiltering = value; }
         }
@@ -237,8 +229,7 @@ namespace Accord.Imaging
         /// <para>See documentation to <see cref="CoupledSizeFiltering"/> for additional information.</para>
         /// </remarks>
         /// 
-        public int MinWidth
-        {
+        public int MinWidth {
             get { return minWidth; }
             set { minWidth = value; }
         }
@@ -255,8 +246,7 @@ namespace Accord.Imaging
         /// <para>See documentation to <see cref="CoupledSizeFiltering"/> for additional information.</para>
         /// </remarks>
         /// 
-        public int MinHeight
-        {
+        public int MinHeight {
             get { return minHeight; }
             set { minHeight = value; }
         }
@@ -273,8 +263,7 @@ namespace Accord.Imaging
         /// <para>See documentation to <see cref="CoupledSizeFiltering"/> for additional information.</para>
         /// </remarks>
         /// 
-        public int MaxWidth
-        {
+        public int MaxWidth {
             get { return maxWidth; }
             set { maxWidth = value; }
         }
@@ -291,8 +280,7 @@ namespace Accord.Imaging
         /// <para>See documentation to <see cref="CoupledSizeFiltering"/> for additional information.</para>
         /// </remarks>
         /// 
-        public int MaxHeight
-        {
+        public int MaxHeight {
             get { return maxHeight; }
             set { maxHeight = value; }
         }
@@ -308,8 +296,7 @@ namespace Accord.Imaging
         /// with <see cref="MinWidth"/>, <see cref="MinHeight"/>, <see cref="MaxWidth"/> and <see cref="MaxHeight"/>.</note></para>
         /// </remarks>
         /// 
-        public IBlobsFilter BlobsFilter
-        {
+        public IBlobsFilter BlobsFilter {
             get { return filter; }
             set { filter = value; }
         }
@@ -324,8 +311,7 @@ namespace Accord.Imaging
         /// <see cref="ProcessImage(BitmapData)"/> or <see cref="ProcessImage(UnmanagedImage)"/>
         /// method should be called to collect objects map.</remarks>
         /// 
-        protected BlobCounterBase()
-        {
+        protected BlobCounterBase() {
         }
 
         /// <summary>
@@ -337,8 +323,7 @@ namespace Accord.Imaging
         /// <remarks>Creates new instance of the <see cref="BlobCounterBase"/> class with
         /// initialized objects map built by calling <see cref="ProcessImage(Bitmap)"/> method.</remarks>
         /// 
-        protected BlobCounterBase(Bitmap image)
-        {
+        protected BlobCounterBase(Bitmap image) {
             ProcessImage(image);
         }
 
@@ -351,8 +336,7 @@ namespace Accord.Imaging
         /// <remarks>Creates new instance of the <see cref="BlobCounterBase"/> class with
         /// initialized objects map built by calling <see cref="ProcessImage(BitmapData)"/> method.</remarks>
         /// 
-        protected BlobCounterBase(BitmapData imageData)
-        {
+        protected BlobCounterBase(BitmapData imageData) {
             ProcessImage(imageData);
         }
 
@@ -365,8 +349,7 @@ namespace Accord.Imaging
         /// <remarks>Creates new instance of the <see cref="BlobCounterBase"/> class with
         /// initialized objects map built by calling <see cref="ProcessImage(UnmanagedImage)"/> method.</remarks>
         /// 
-        protected BlobCounterBase(UnmanagedImage image)
-        {
+        protected BlobCounterBase(UnmanagedImage image) {
             ProcessImage(image);
         }
 
@@ -380,20 +363,16 @@ namespace Accord.Imaging
         /// 
         /// <exception cref="UnsupportedImageFormatException">Unsupported pixel format of the source image.</exception>
         /// 
-        public void ProcessImage(Bitmap image)
-        {
+        public void ProcessImage(Bitmap image) {
             // lock source bitmap data
             BitmapData imageData = image.LockBits(
                 new Rectangle(0, 0, image.Width, image.Height),
                 ImageLockMode.ReadOnly, image.PixelFormat);
 
-            try
-            {
+            try {
                 // process image
                 ProcessImage(imageData);
-            }
-            finally
-            {
+            } finally {
                 // unlock source image
                 image.UnlockBits(imageData);
             }
@@ -409,8 +388,7 @@ namespace Accord.Imaging
         /// 
         /// <exception cref="UnsupportedImageFormatException">Unsupported pixel format of the source image.</exception>
         /// 
-        public void ProcessImage(BitmapData imageData)
-        {
+        public void ProcessImage(BitmapData imageData) {
             // do actual objects map building
             ProcessImage(new UnmanagedImage(imageData));
         }
@@ -427,8 +405,7 @@ namespace Accord.Imaging
         /// <exception cref="InvalidImagePropertiesException">Thrown by some inherited classes if some image property other
         /// than the pixel format is not supported. See that class's documentation or the exception message for details.</exception>
         /// 
-        public void ProcessImage(UnmanagedImage image)
-        {
+        public void ProcessImage(UnmanagedImage image) {
             ImageWidth = image.Width;
             ImageHeight = image.Height;
 
@@ -439,8 +416,7 @@ namespace Accord.Imaging
             CollectObjectsInfo(image);
 
             // filter blobs by size if required
-            if (filterBlobs)
-            {
+            if (filterBlobs) {
                 // labels remapping array
                 int[] labelsMap = new int[objectsCount + 1];
                 for (int i = 1; i <= objectsCount; i++)
@@ -449,45 +425,34 @@ namespace Accord.Imaging
                 // check dimension of all objects and filter them
                 int objectsToRemove = 0;
 
-                if (filter == null)
-                {
-                    for (int i = objectsCount - 1; i >= 0; i--)
-                    {
+                if (filter == null) {
+                    for (int i = objectsCount - 1; i >= 0; i--) {
                         int blobWidth = blobs[i].Rectangle.Width;
                         int blobHeight = blobs[i].Rectangle.Height;
 
-                        if (coupledSizeFiltering == false)
-                        {
+                        if (coupledSizeFiltering == false) {
                             // uncoupled filtering
                             if (
                                 (blobWidth < minWidth) || (blobHeight < minHeight) ||
-                                (blobWidth > maxWidth) || (blobHeight > maxHeight))
-                            {
+                                (blobWidth > maxWidth) || (blobHeight > maxHeight)) {
                                 labelsMap[i + 1] = 0;
                                 objectsToRemove++;
                                 blobs.RemoveAt(i);
                             }
-                        }
-                        else
-                        {
+                        } else {
                             // coupled filtering
                             if (
                                 ((blobWidth < minWidth) && (blobHeight < minHeight)) ||
-                                ((blobWidth > maxWidth) && (blobHeight > maxHeight)))
-                            {
+                                ((blobWidth > maxWidth) && (blobHeight > maxHeight))) {
                                 labelsMap[i + 1] = 0;
                                 objectsToRemove++;
                                 blobs.RemoveAt(i);
                             }
                         }
                     }
-                }
-                else
-                {
-                    for (int i = objectsCount - 1; i >= 0; i--)
-                    {
-                        if (!filter.Check(blobs[i]))
-                        {
+                } else {
+                    for (int i = objectsCount - 1; i >= 0; i--) {
+                        if (!filter.Check(blobs[i])) {
                             labelsMap[i + 1] = 0;
                             objectsToRemove++;
                             blobs.RemoveAt(i);
@@ -497,10 +462,8 @@ namespace Accord.Imaging
 
                 // update labels remapping array
                 int label = 0;
-                for (int i = 1; i <= objectsCount; i++)
-                {
-                    if (labelsMap[i] != 0)
-                    {
+                for (int i = 1; i <= objectsCount; i++) {
+                    if (labelsMap[i] != 0) {
                         label++;
                         // update remapping array
                         labelsMap[i] = label;
@@ -537,8 +500,7 @@ namespace Accord.Imaging
         /// <exception cref="ApplicationException">No image was processed before, so objects' rectangles
         /// can not be collected.</exception>
         /// 
-        public Rectangle[] GetObjectsRectangles()
-        {
+        public Rectangle[] GetObjectsRectangles() {
             // check if objects map was collected
             if (objectLabels == null)
                 throw new InvalidOperationException("Image should be processed before to collect objects map.");
@@ -589,8 +551,7 @@ namespace Accord.Imaging
         /// <exception cref="ApplicationException">No image was processed before, so objects' information
         /// can not be collected.</exception>
         /// 
-        public Blob[] GetObjectsInformation()
-        {
+        public Blob[] GetObjectsInformation() {
             // check if objects map was collected
             if (objectLabels == null)
                 throw new InvalidOperationException("Image should be processed before to collect objects map.");
@@ -628,21 +589,17 @@ namespace Accord.Imaging
         /// <exception cref="ApplicationException">No image was processed before, so objects
         /// can not be collected.</exception>
         /// 
-        public Blob[] GetObjects(Bitmap image, bool extractInOriginalSize)
-        {
+        public Blob[] GetObjects(Bitmap image, bool extractInOriginalSize) {
             Blob[] blobs = null;
             // lock source bitmap data
             BitmapData imageData = image.LockBits(
                 new Rectangle(0, 0, image.Width, image.Height),
                 ImageLockMode.ReadOnly, image.PixelFormat);
 
-            try
-            {
+            try {
                 // process image
                 blobs = GetObjects(new UnmanagedImage(imageData), extractInOriginalSize);
-            }
-            finally
-            {
+            } finally {
                 // unlock source images
                 image.UnlockBits(imageData);
             }
@@ -673,8 +630,7 @@ namespace Accord.Imaging
         /// <exception cref="ApplicationException">No image was processed before, so objects
         /// can not be collected.</exception>
         /// 
-        public Blob[] GetObjects(UnmanagedImage image, bool extractInOriginalSize)
-        {
+        public Blob[] GetObjects(UnmanagedImage image, bool extractInOriginalSize) {
             CheckArgs(image);
 
             // image size
@@ -686,8 +642,7 @@ namespace Accord.Imaging
             Blob[] objects = new Blob[objectsCount];
 
             // create each image
-            for (int k = 0; k < objectsCount; k++)
-            {
+            for (int k = 0; k < objectsCount; k++) {
                 int objectWidth = blobs[k].Rectangle.Width;
                 int objectHeight = blobs[k].Rectangle.Height;
 
@@ -705,14 +660,12 @@ namespace Accord.Imaging
                 UnmanagedImage dstImage = UnmanagedImage.Create(blobImageWidth, blobImageHeight, image.PixelFormat);
 
                 // copy image
-                unsafe
-                {
+                unsafe {
                     byte* src = (byte*)image.ImageData.ToPointer() + ymin * srcStride + xmin * pixelSize;
                     byte* dst = (byte*)dstImage.ImageData.ToPointer();
                     int p = ymin * width + xmin;
 
-                    if (extractInOriginalSize)
-                    {
+                    if (extractInOriginalSize) {
                         // also align the destination pointer 
                         dst += ymin * dstImage.Stride + xmin * pixelSize;
                     }
@@ -722,18 +675,14 @@ namespace Accord.Imaging
                     int labelsOffset = width - objectWidth;
 
                     // for each line
-                    for (int y = ymin; y <= ymax; y++)
-                    {
+                    for (int y = ymin; y <= ymax; y++) {
                         // copy each pixel
-                        for (int x = xmin; x <= xmax; x++, p++, dst += pixelSize, src += pixelSize)
-                        {
-                            if (objectLabels[p] == label)
-                            {
+                        for (int x = xmin; x <= xmax; x++, p++, dst += pixelSize, src += pixelSize) {
+                            if (objectLabels[p] == label) {
                                 // copy pixel
                                 *dst = *src;
 
-                                if (pixelSize > 1)
-                                {
+                                if (pixelSize > 1) {
                                     dst[1] = src[1];
                                     dst[2] = src[2];
 
@@ -756,8 +705,7 @@ namespace Accord.Imaging
             return objects;
         }
 
-        private void CheckArgs(UnmanagedImage image)
-        {
+        private void CheckArgs(UnmanagedImage image) {
             // check if objects map was collected
             if (objectLabels == null)
                 throw new InvalidOperationException("Image should be processed before to collect objects map.");
@@ -794,20 +742,16 @@ namespace Accord.Imaging
         /// <exception cref="ApplicationException">No image was processed before, so blob
         /// can not be extracted.</exception>
         /// 
-        public void ExtractBlobsImage(Bitmap image, Blob blob, bool extractInOriginalSize)
-        {
+        public void ExtractBlobsImage(Bitmap image, Blob blob, bool extractInOriginalSize) {
             // lock source bitmap data
             BitmapData imageData = image.LockBits(
                 new Rectangle(0, 0, image.Width, image.Height),
                 ImageLockMode.ReadOnly, image.PixelFormat);
 
-            try
-            {
+            try {
                 // process image
                 ExtractBlobsImage(new UnmanagedImage(imageData), blob, extractInOriginalSize);
-            }
-            finally
-            {
+            } finally {
                 // unlock source images
                 image.UnlockBits(imageData);
             }
@@ -837,8 +781,7 @@ namespace Accord.Imaging
         /// <exception cref="ApplicationException">No image was processed before, so blob
         /// can not be extracted.</exception>
         /// 
-        public void ExtractBlobsImage(UnmanagedImage image, Blob blob, bool extractInOriginalSize)
-        {
+        public void ExtractBlobsImage(UnmanagedImage image, Blob blob, bool extractInOriginalSize) {
             CheckArgs(image);
 
             // image size
@@ -865,14 +808,12 @@ namespace Accord.Imaging
             blob.OriginalSize = extractInOriginalSize;
 
             // copy image
-            unsafe
-            {
+            unsafe {
                 byte* src = (byte*)image.ImageData.ToPointer() + ymin * srcStride + xmin * pixelSize;
                 byte* dst = (byte*)blob.Image.ImageData.ToPointer();
                 int p = ymin * width + xmin;
 
-                if (extractInOriginalSize)
-                {
+                if (extractInOriginalSize) {
                     // also align the destination pointer 
                     dst += ymin * blob.Image.Stride + xmin * pixelSize;
                 }
@@ -882,21 +823,17 @@ namespace Accord.Imaging
                 int labelsOffset = width - objectWidth;
 
                 // for each line
-                for (int y = ymin; y <= ymax; y++)
-                {
+                for (int y = ymin; y <= ymax; y++) {
                     // copy each pixel
-                    for (int x = xmin; x <= xmax; x++, p++, dst += pixelSize, src += pixelSize)
-                    {
-                        if (objectLabels[p] == label)
-                        {
+                    for (int x = xmin; x <= xmax; x++, p++, dst += pixelSize, src += pixelSize) {
+                        if (objectLabels[p] == label) {
                             image.CheckBounds(src);
                             blob.Image.CheckBounds(dst);
 
                             // copy pixel
                             *dst = *src;
 
-                            if (pixelSize > 1)
-                            {
+                            if (pixelSize > 1) {
                                 dst[1] = src[1];
                                 dst[2] = src[2];
 
@@ -932,8 +869,7 @@ namespace Accord.Imaging
         /// <exception cref="ApplicationException">No image was processed before, so blob
         /// can not be extracted.</exception>
         /// 
-        public void GetBlobsLeftAndRightEdges(Blob blob, out List<IntPoint> leftEdge, out List<IntPoint> rightEdge)
-        {
+        public void GetBlobsLeftAndRightEdges(Blob blob, out List<IntPoint> leftEdge, out List<IntPoint> rightEdge) {
             // check if objects map was collected
             if (objectLabels == null)
                 throw new InvalidOperationException("Image should be processed before to collect objects map.");
@@ -949,14 +885,11 @@ namespace Accord.Imaging
             int label = blob.ID;
 
             // for each line
-            for (int y = ymin; y <= ymax; y++)
-            {
+            for (int y = ymin; y <= ymax; y++) {
                 // scan from left to right
                 int p = y * ImageWidth + xmin;
-                for (int x = xmin; x <= xmax; x++, p++)
-                {
-                    if (objectLabels[p] == label)
-                    {
+                for (int x = xmin; x <= xmax; x++, p++) {
+                    if (objectLabels[p] == label) {
                         leftEdge.Add(new IntPoint(x, y));
                         break;
                     }
@@ -964,10 +897,8 @@ namespace Accord.Imaging
 
                 // scan from right to left
                 p = y * ImageWidth + xmax;
-                for (int x = xmax; x >= xmin; x--, p--)
-                {
-                    if (objectLabels[p] == label)
-                    {
+                for (int x = xmax; x >= xmin; x--, p--) {
+                    if (objectLabels[p] == label) {
                         rightEdge.Add(new IntPoint(x, y));
                         break;
                     }
@@ -995,8 +926,7 @@ namespace Accord.Imaging
         /// <exception cref="ApplicationException">No image was processed before, so blob
         /// can not be extracted.</exception>
         /// 
-        public void GetBlobsTopAndBottomEdges(Blob blob, out List<IntPoint> topEdge, out List<IntPoint> bottomEdge)
-        {
+        public void GetBlobsTopAndBottomEdges(Blob blob, out List<IntPoint> topEdge, out List<IntPoint> bottomEdge) {
             // check if objects map was collected
             if (objectLabels == null)
                 throw new InvalidOperationException("Image should be processed before to collect objects map.");
@@ -1012,14 +942,11 @@ namespace Accord.Imaging
             int label = blob.ID;
 
             // for each column
-            for (int x = xmin; x <= xmax; x++)
-            {
+            for (int x = xmin; x <= xmax; x++) {
                 // scan from top to bottom
                 int p = ymin * ImageWidth + x;
-                for (int y = ymin; y <= ymax; y++, p += ImageWidth)
-                {
-                    if (objectLabels[p] == label)
-                    {
+                for (int y = ymin; y <= ymax; y++, p += ImageWidth) {
+                    if (objectLabels[p] == label) {
                         topEdge.Add(new IntPoint(x, y));
                         break;
                     }
@@ -1027,10 +954,8 @@ namespace Accord.Imaging
 
                 // scan from bottom to top
                 p = ymax * ImageWidth + x;
-                for (int y = ymax; y >= ymin; y--, p -= ImageWidth)
-                {
-                    if (objectLabels[p] == label)
-                    {
+                for (int y = ymax; y >= ymin; y--, p -= ImageWidth) {
+                    if (objectLabels[p] == label) {
                         bottomEdge.Add(new IntPoint(x, y));
                         break;
                     }
@@ -1059,8 +984,7 @@ namespace Accord.Imaging
         /// <exception cref="ApplicationException">No image was processed before, so blob
         /// can not be extracted.</exception>
         /// 
-        public List<IntPoint> GetBlobsEdgePoints(Blob blob)
-        {
+        public List<IntPoint> GetBlobsEdgePoints(Blob blob) {
             // check if objects map was collected
             if (objectLabels == null)
                 throw new InvalidOperationException("Image should be processed before to collect objects map.");
@@ -1080,14 +1004,11 @@ namespace Accord.Imaging
             int[] rightProcessedPoints = new int[blob.Rectangle.Height];
 
             // for each line
-            for (int y = ymin; y <= ymax; y++)
-            {
+            for (int y = ymin; y <= ymax; y++) {
                 // scan from left to right
                 int p = y * ImageWidth + xmin;
-                for (int x = xmin; x <= xmax; x++, p++)
-                {
-                    if (objectLabels[p] == label)
-                    {
+                for (int x = xmin; x <= xmax; x++, p++) {
+                    if (objectLabels[p] == label) {
                         edgePoints.Add(new IntPoint(x, y));
                         leftProcessedPoints[y - ymin] = x;
                         break;
@@ -1096,10 +1017,8 @@ namespace Accord.Imaging
 
                 // scan from right to left
                 p = y * ImageWidth + xmax;
-                for (int x = xmax; x >= xmin; x--, p--)
-                {
-                    if (objectLabels[p] == label)
-                    {
+                for (int x = xmax; x >= xmin; x--, p--) {
+                    if (objectLabels[p] == label) {
                         // avoid adding the point we already have
                         if (leftProcessedPoints[y - ymin] != x)
                             edgePoints.Add(new IntPoint(x, y));
@@ -1111,18 +1030,14 @@ namespace Accord.Imaging
             }
 
             // for each column
-            for (int x = xmin; x <= xmax; x++)
-            {
+            for (int x = xmin; x <= xmax; x++) {
                 // scan from top to bottom
                 int p = ymin * ImageWidth + x;
-                for (int y = ymin, y0 = 0; y <= ymax; y++, y0++, p += ImageWidth)
-                {
-                    if (objectLabels[p] == label)
-                    {
+                for (int y = ymin, y0 = 0; y <= ymax; y++, y0++, p += ImageWidth) {
+                    if (objectLabels[p] == label) {
                         // avoid adding the point we already have
                         if ((leftProcessedPoints[y0] != x) &&
-                            (rightProcessedPoints[y0] != x))
-                        {
+                            (rightProcessedPoints[y0] != x)) {
                             edgePoints.Add(new IntPoint(x, y));
                         }
                         break;
@@ -1131,14 +1046,11 @@ namespace Accord.Imaging
 
                 // scan from bottom to top
                 p = ymax * ImageWidth + x;
-                for (int y = ymax, y0 = ymax - ymin; y >= ymin; y--, y0--, p -= ImageWidth)
-                {
-                    if (objectLabels[p] == label)
-                    {
+                for (int y = ymax, y0 = ymax - ymin; y >= ymin; y--, y0--, p -= ImageWidth) {
+                    if (objectLabels[p] == label) {
                         // avoid adding the point we already have
                         if ((leftProcessedPoints[y0] != x) &&
-                            (rightProcessedPoints[y0] != x))
-                        {
+                            (rightProcessedPoints[y0] != x)) {
                             edgePoints.Add(new IntPoint(x, y));
                         }
                         break;
@@ -1165,8 +1077,7 @@ namespace Accord.Imaging
 
 
         // Collect objects' rectangles
-        private unsafe void CollectObjectsInfo(UnmanagedImage image)
-        {
+        private unsafe void CollectObjectsInfo(UnmanagedImage image) {
             int i = 0, label;
 
             // create object coordinates arrays
@@ -1187,24 +1098,20 @@ namespace Accord.Imaging
             long[] stdDevG = new long[objectsCount + 1];
             long[] stdDevB = new long[objectsCount + 1];
 
-            for (int j = 1; j <= objectsCount; j++)
-            {
+            for (int j = 1; j <= objectsCount; j++) {
                 x1[j] = ImageWidth;
                 y1[j] = ImageHeight;
             }
 
             byte* src = (byte*)image.ImageData.ToPointer();
 
-            if (image.PixelFormat == PixelFormat.Format8bppIndexed)
-            {
+            if (image.PixelFormat == PixelFormat.Format8bppIndexed) {
                 int offset = image.Stride - ImageWidth;
                 byte g; // pixel's grey value
 
                 // walk through labels array
-                for (int y = 0; y < ImageHeight; y++)
-                {
-                    for (int x = 0; x < ImageWidth; x++, i++, src++)
-                    {
+                for (int y = 0; y < ImageHeight; y++) {
+                    for (int x = 0; x < ImageWidth; x++, i++, src++) {
                         // get current label
                         label = objectLabels[i];
 
@@ -1237,24 +1144,19 @@ namespace Accord.Imaging
                     src += offset;
                 }
 
-                for (int j = 1; j <= objectsCount; j++)
-                {
+                for (int j = 1; j <= objectsCount; j++) {
                     meanR[j] = meanB[j] = meanG[j];
                     stdDevR[j] = stdDevB[j] = stdDevG[j];
                 }
-            }
-            else
-            {
+            } else {
                 // color images
                 int pixelSize = Bitmap.GetPixelFormatSize(image.PixelFormat) / 8;
                 int offset = image.Stride - ImageWidth * pixelSize;
                 byte r, g, b; // RGB value
 
                 // walk through labels array
-                for (int y = 0; y < ImageHeight; y++)
-                {
-                    for (int x = 0; x < ImageWidth; x++, i++, src += pixelSize)
-                    {
+                for (int y = 0; y < ImageHeight; y++) {
+                    for (int x = 0; x < ImageWidth; x++, i++, src += pixelSize) {
                         // get current label
                         label = objectLabels[i];
 
@@ -1297,8 +1199,7 @@ namespace Accord.Imaging
             // create blobs
             blobs.Clear();
 
-            for (int j = 1; j <= objectsCount; j++)
-            {
+            for (int j = 1; j <= objectsCount; j++) {
                 int blobArea = area[j];
 
                 Blob blob = new Blob(j, new Rectangle(x1[j], y1[j], x2[j] - x1[j], y2[j] - y1[j]));
@@ -1316,22 +1217,18 @@ namespace Accord.Imaging
         }
 
         // Rectangles' and blobs' sorter
-        private class BlobsSorter : System.Collections.Generic.IComparer<Blob>
-        {
+        private class BlobsSorter : System.Collections.Generic.IComparer<Blob> {
             private ObjectsOrder order;
 
-            public BlobsSorter(ObjectsOrder order)
-            {
+            public BlobsSorter(ObjectsOrder order) {
                 this.order = order;
             }
 
-            public int Compare(Blob a, Blob b)
-            {
+            public int Compare(Blob a, Blob b) {
                 Rectangle aRect = a.Rectangle;
                 Rectangle bRect = b.Rectangle;
 
-                switch (order)
-                {
+                switch (order) {
                     case ObjectsOrder.Size: // sort by size
 
                         // the order is changed to descending
@@ -1356,8 +1253,7 @@ namespace Accord.Imaging
         /// <summary>
         /// Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.
         /// </summary>
-        public void Dispose()
-        {
+        public void Dispose() {
             Dispose(true);
             GC.SuppressFinalize(this);
         }
@@ -1366,10 +1262,8 @@ namespace Accord.Imaging
         /// Releases unmanaged and - optionally - managed resources.
         /// </summary>
         /// <param name="disposing"><c>true</c> to release both managed and unmanaged resources; <c>false</c> to release only unmanaged resources.</param>
-        protected virtual void Dispose(bool disposing)
-        {
-            if (disposing)
-            {
+        protected virtual void Dispose(bool disposing) {
+            if (disposing) {
                 // free managed resources
                 this.blobs.Clear();
                 this.blobs = null;

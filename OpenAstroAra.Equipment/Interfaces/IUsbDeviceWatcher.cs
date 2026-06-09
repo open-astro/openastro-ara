@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 namespace OpenAstroAra.Equipment.Interfaces {
     public interface IUsbDeviceWatcher : IDisposable {
         void Start();
-        void Stop();
+        void StopWatching();
         event EventHandler<UsbDeviceEventArgs> DeviceInserted;
         event EventHandler<UsbDeviceEventArgs> DeviceRemoved;
     }

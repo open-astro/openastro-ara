@@ -12,20 +12,20 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Astrometry;
-using System;
-using System.Threading;
-using System.Threading.Tasks;
-using OpenAstroAra.Core.Model;
-using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Core.Locale;
+using OpenAstroAra.Core.Model;
+using OpenAstroAra.Core.Model.Equipment;
+using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Core.Utility.Notification;
+using OpenAstroAra.Equipment.Interfaces;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Equipment.Model;
 using OpenAstroAra.PlateSolving.Interfaces;
-using OpenAstroAra.Equipment.Interfaces;
-using OpenAstroAra.Core.Utility.Notification;
-using OpenAstroAra.Core.Model.Equipment;
+using System;
 using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace OpenAstroAra.PlateSolving {
 
@@ -51,19 +51,20 @@ namespace OpenAstroAra.PlateSolving {
 
         public ICaptureSolver CaptureSolver { get; set; }
 
-        public async Task<CenteringSolveResult> CenterWithMeasurements(CaptureSequence seq, CenterSolveParameter parameter, IProgress<PlateSolveProgress> solveProgress, IProgress<ApplicationStatus> progress, CancellationToken ct) {
+        public async Task<CenteringSolveResult?> CenterWithMeasurements(CaptureSequence seq, CenterSolveParameter parameter, IProgress<PlateSolveProgress>? solveProgress, IProgress<ApplicationStatus>? progress, CancellationToken ct) {
             return await Center(seq, parameter, solveProgress, progress, ct) as CenteringSolveResult;
         }
 
-        public async Task<PlateSolveResult> Center(CaptureSequence seq, CenterSolveParameter parameter, IProgress<PlateSolveProgress> solveProgress, IProgress<ApplicationStatus> progress, CancellationToken ct) {
-            if (parameter?.Coordinates == null) { throw new ArgumentException(nameof(CenterSolveParameter.Coordinates)); }
-            if (parameter?.Threshold <= 0) { throw new ArgumentException(nameof(CenterSolveParameter.Threshold)); }
+        public async Task<PlateSolveResult> Center(CaptureSequence seq, CenterSolveParameter parameter, IProgress<PlateSolveProgress>? solveProgress, IProgress<ApplicationStatus>? progress, CancellationToken ct) {
+            ArgumentNullException.ThrowIfNull(parameter);
+            if (parameter.Coordinates == null) { throw new ArgumentException(nameof(CenterSolveParameter.Coordinates)); }
+            if (parameter.Threshold <= 0) { throw new ArgumentException(nameof(CenterSolveParameter.Threshold)); }
 
             var startTime = DateTimeOffset.UtcNow;
-            FilterInfo oldFilter = null;
+            FilterInfo? oldFilter = null;
             if (seq.FilterType != null) {
                 oldFilter = filterWheelMediator.GetInfo()?.SelectedFilter;
-                await filterWheelMediator.ChangeFilter(seq.FilterType, ct, progress);
+                await filterWheelMediator.ChangeFilter(seq.FilterType, progress, ct);
             }
 
             try {
@@ -83,7 +84,7 @@ namespace OpenAstroAra.PlateSolving {
                     centeringAttempt.AddSolveResult(result);
                     centeringAttempt.AddSubMeasurement(solveMeasurement.Stop());
 
-                    if (result.Success == false) {
+                    if (result.Success == false || result.Coordinates == null) {
                         centeringAttempt.Stop();
                         //Solving failed. Give up.
                         break;
@@ -140,10 +141,10 @@ namespace OpenAstroAra.PlateSolving {
                         var domeInfo = domeMediator.GetInfo();
                         if (domeInfo.Connected && domeInfo.CanSetAzimuth && !domeFollower.IsFollowing) {
                             var domeSyncMeasurement = new Measurement("DomeSync").Start();
-                            progress.Report(new ApplicationStatus() { Status = Loc.Instance["LblSynchronizingDome"] });
+                            progress?.Report(new ApplicationStatus() { Status = Loc.Instance["LblSynchronizingDome"] });
                             Logger.Info($"Centering Solver - Synchronize dome to scope since dome following is not enabled");
                             if (!await domeFollower.TriggerTelescopeSync()) {
-                                Notification.ShowWarning(Loc.Instance["LblDomeSyncFailureDuringCentering"]);
+                                Notifier.ShowWarning(Loc.Instance["LblDomeSyncFailureDuringCentering"]);
                                 Logger.Warning("Centering Solver - Synchronize dome operation didn't complete successfully. Moving on");
                             }
                             centeringAttempt.AddSubMeasurement(domeSyncMeasurement.Stop());
@@ -166,16 +167,16 @@ namespace OpenAstroAra.PlateSolving {
 
                     // Set an absurdly high timeout, but at least make sure that this cannot go on forever. The existing token may have been cancelled already, so we need
                     // to use a new one
-                    var timeoutCts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
-                    await filterWheelMediator.ChangeFilter(oldFilter, timeoutCts.Token, progress);
+                    using var timeoutCts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+                    await filterWheelMediator.ChangeFilter(oldFilter, progress, timeoutCts.Token);
                 }
             }
         }
     }
 
     public class CenteringSolveResult : PlateSolveResult {
-        private List<CenteringMeasurement> attempts;
-        public CenteringSolveResult(PlateSolveResult result, CaptureSequence captureSequence, DateTimeOffset startTime, DateTimeOffset endTime, List<CenteringMeasurement> attempts) : base(result.SolveTime) {
+        private readonly IReadOnlyList<CenteringMeasurement> attempts;
+        public CenteringSolveResult(PlateSolveResult result, CaptureSequence captureSequence, DateTimeOffset startTime, DateTimeOffset endTime, IReadOnlyList<CenteringMeasurement> attempts) : base(result.SolveTime) {
             this.Coordinates = result.Coordinates;
             this.Flipped = result.Flipped;
             this.Pixscale = result.Pixscale;
@@ -190,7 +191,7 @@ namespace OpenAstroAra.PlateSolving {
             this.attempts = attempts;
         }
 
-        public IReadOnlyCollection<CenteringMeasurement> Attempts { get => attempts.AsReadOnly(); }
+        public IReadOnlyCollection<CenteringMeasurement> Attempts { get => attempts; }
         public CaptureSequence CaptureSequence { get; set; }
         public DateTimeOffset StartTime { get; }
         public DateTimeOffset EndTime { get; set; }
@@ -201,7 +202,7 @@ namespace OpenAstroAra.PlateSolving {
         public CenteringMeasurement() : base("Centering") {
         }
 
-        public PlateSolveResult PlateSolveResult { get; private set; }
+        public PlateSolveResult? PlateSolveResult { get; private set; }
 
         public void AddSolveResult(PlateSolveResult result) {
             PlateSolveResult = result;

@@ -35,7 +35,7 @@ public interface ICameraService {
     Task<OperationAcceptedDto> DisconnectAsync(string? idempotencyKey, CancellationToken ct);
     Task<ExposureResponseDto> StartExposureAsync(ExposureRequestDto request, string? idempotencyKey, CancellationToken ct);
     Task AbortExposureAsync(CancellationToken ct);
-    Task SetCoolerAsync(bool on, double? targetTemperatureC, CancellationToken ct);
+    Task SetCoolerAsync(bool enabled, double? targetTemperatureC, CancellationToken ct);
 }
 
 public interface ITelescopeService {

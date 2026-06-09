@@ -14,7 +14,7 @@
 
 namespace OpenAstroAra.Image.FileFormat.XISF.DataConverter {
 
-    internal class UInt32Converter : IDataConverter {
+    internal sealed class UInt32Converter : IDataConverter {
 
         public ushort[] Convert(byte[] rawData) {
             ushort[] data = new ushort[rawData.Length / 4];

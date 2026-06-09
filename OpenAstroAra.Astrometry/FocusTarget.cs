@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -12,9 +12,9 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Core.Utility;
-using OpenAstroAra.Core.Locale;
 using OpenAstroAra.Astrometry;
+using OpenAstroAra.Core.Locale;
+using OpenAstroAra.Core.Utility;
 using System;
 
 namespace OpenAstroAra.Astrometry {
@@ -25,7 +25,7 @@ namespace OpenAstroAra.Astrometry {
             Name = name;
         }
 
-        private string name;
+        private string name = string.Empty;
 
         public string Name {
             get => name;
@@ -35,7 +35,7 @@ namespace OpenAstroAra.Astrometry {
             }
         }
 
-        private Coordinates coordinates;
+        private Coordinates coordinates = null!;  // set via Coordinates property before CalculateAltAz is called
 
         public Coordinates Coordinates {
             get => coordinates;
@@ -94,7 +94,7 @@ namespace OpenAstroAra.Astrometry {
 
         public string AltitudeString => AstroUtil.DegreesToDMS(Altitude);
 
-        public string Information => $"{Name} ({SkyDirection}, Alt: {Altitude:0.00}°, Az: {Azimuth:0.00}°)";
+        public string Information => $"{Name} ({SkyDirection}, Alt: {Altitude:0.00}ï¿½, Az: {Azimuth:0.00}ï¿½)";
 
         public override string ToString() {
             return Information;

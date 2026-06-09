@@ -13,11 +13,13 @@
 #endregion "copyright"
 
 using Newtonsoft.Json;
+using OpenAstroAra.Astrometry;
+using OpenAstroAra.Core.Locale;
 using OpenAstroAra.Core.Model;
+using OpenAstroAra.Core.Utility.Notification;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Sequencer.Validations;
-using OpenAstroAra.Astrometry;
-using OpenAstroAra.Equipment.Interfaces.Mediator;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -26,8 +28,6 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using OpenAstroAra.Core.Locale;
-using OpenAstroAra.Core.Utility.Notification;
 using System.Windows;
 
 namespace OpenAstroAra.Sequencer.SequenceItem.Telescope {
@@ -50,7 +50,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Telescope {
             profileService.LocationChanged += ProfileService_LocationChanged;
         }
 
-        private void ProfileService_LocationChanged(object sender, EventArgs e) {
+        private void ProfileService_LocationChanged(object? sender, EventArgs e) {
             Coordinates?.SetPosition(Angle.ByDegree(profileService.ActiveProfile.AstrometrySettings.Latitude), Angle.ByDegree(profileService.ActiveProfile.AstrometrySettings.Longitude), profileService.ActiveProfile.AstrometrySettings.Elevation);
         }
 
@@ -60,7 +60,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Telescope {
 
         public override object Clone() {
             return new SlewScopeToAltAz(this) {
-                Coordinates = Coordinates?.Clone()
+                Coordinates = Coordinates.Clone()
             };
         }
 
@@ -83,11 +83,11 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Telescope {
 
         public override async Task Execute(IProgress<ApplicationStatus> progress, CancellationToken token) {
             if (telescopeMediator.GetInfo().AtPark) {
-                Notification.ShowError(Loc.Instance["LblTelescopeParkedWarning"]);
+                Notifier.ShowError(Loc.Instance["LblTelescopeParkedWarning"]);
                 throw new SequenceEntityFailedException(Loc.Instance["LblTelescopeParkedWarning"]);
             }
             var stoppedGuiding = await guiderMediator.StopGuiding(token);
-            await telescopeMediator.SlewToCoordinatesAsync(Coordinates.Coordinates, token);
+            await telescopeMediator.SlewToTopocentricCoordinates(Coordinates.Coordinates, token);
             if (stoppedGuiding) {
                 await guiderMediator.StartGuiding(false, progress, token);
             }

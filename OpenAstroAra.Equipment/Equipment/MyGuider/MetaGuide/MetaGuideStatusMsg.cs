@@ -23,7 +23,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.MetaGuide {
         private MetaGuideStatusMsg() {
         }
 
-        public static MetaGuideStatusMsg Create(string[] args) {
+        public static MetaGuideStatusMsg? Create(string[] args) {
             if (args.Length < 28) {
                 return null;
             }
@@ -53,7 +53,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.MetaGuide {
                     Guiding = int.Parse(args[26], CultureInfo.InvariantCulture.NumberFormat) > 0,
                     MetaGuideVersion = Version.Parse(args[27])
                 };
-            } catch (Exception ex) {
+            } catch (Exception ex) when (ex is FormatException or OverflowException) {
                 Logger.Error(ex);
                 return null;
             }
@@ -81,6 +81,6 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.MetaGuide {
         public double PixelSize { get; private set; }
         public double ArcSecPerPixel { get; private set; }
         public bool Guiding { get; private set; }
-        public Version MetaGuideVersion { get; private set; }
+        public Version? MetaGuideVersion { get; private set; }
     }
 }

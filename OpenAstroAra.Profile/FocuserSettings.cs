@@ -12,7 +12,7 @@
 
 #endregion "copyright"
 
-using OpenAstroAra.Core.Enum;
+using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Profile.Interfaces;
 using System;
 using System.Runtime.Serialization;
@@ -21,7 +21,11 @@ namespace OpenAstroAra.Profile {
 
     [Serializable()]
     [DataContract]
-    public class FocuserSettings : Settings, IFocuserSettings {
+    public sealed class FocuserSettings : Settings, IFocuserSettings {
+
+        public FocuserSettings() {
+            SetDefaultValues();
+        }
 
         [OnDeserializing]
         public void OnDeserializing(StreamingContext context) {
@@ -37,7 +41,7 @@ namespace OpenAstroAra.Profile {
             autoFocusExposureTime = 4;
             autoFocusDisableGuiding = false;
             focuserSettleTime = 0;
-            autoFocusMethod = AFMethodEnum.STARHFR;
+            autoFocusMethod = AFMethod.STARHFR;
             autoFocusTotalNumberOfAttempts = 1;
             autoFocusNumberOfFramesPerPoint = 1;
             autoFocusInnerCropRatio = 1;
@@ -46,14 +50,14 @@ namespace OpenAstroAra.Profile {
             backlashIn = 0;
             backlashOut = 0;
             autoFocusBinning = 1;
-            autoFocusCurveFitting = AFCurveFittingEnum.HYPERBOLIC;
-            contrastDetectionMethod = ContrastDetectionMethodEnum.Statistics;
+            autoFocusCurveFitting = AFCurveFitting.HYPERBOLIC;
+            contrastDetectionMethod = ContrastDetectionMethod.Statistics;
             backlashCompensationModel = BacklashCompensationModel.OVERSHOOT;
             autoFocusTimeoutSeconds = 600;
             rSquaredThreshold = 0.7;
         }
 
-        private string id;
+        private string id = string.Empty;
 
         [DataMember]
         public string Id {
@@ -66,7 +70,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string lastDeviceName;
+        private string lastDeviceName = string.Empty;
 
         [DataMember]
         public string LastDeviceName {
@@ -133,10 +137,10 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private AFMethodEnum autoFocusMethod;
+        private AFMethod autoFocusMethod;
 
         [DataMember]
-        public AFMethodEnum AutoFocusMethod {
+        public AFMethod AutoFocusMethod {
             get => autoFocusMethod;
             set {
                 if (autoFocusMethod != value) {
@@ -146,10 +150,10 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private ContrastDetectionMethodEnum contrastDetectionMethod;
+        private ContrastDetectionMethod contrastDetectionMethod;
 
         [DataMember]
-        public ContrastDetectionMethodEnum ContrastDetectionMethod {
+        public ContrastDetectionMethod ContrastDetectionMethod {
             get => contrastDetectionMethod;
             set {
                 if (contrastDetectionMethod != value) {
@@ -195,8 +199,8 @@ namespace OpenAstroAra.Profile {
                 return autoFocusTotalNumberOfAttempts;
             }
             set {
-                if(value < 1) { value = 1; }
-                if(value > 5) { value = 5; }
+                if (value < 1) { value = 1; }
+                if (value > 5) { value = 5; }
                 if (autoFocusTotalNumberOfAttempts != value) {
                     autoFocusTotalNumberOfAttempts = value;
                     RaisePropertyChanged();
@@ -302,10 +306,10 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private AFCurveFittingEnum autoFocusCurveFitting;
+        private AFCurveFitting autoFocusCurveFitting;
 
         [DataMember]
-        public AFCurveFittingEnum AutoFocusCurveFitting {
+        public AFCurveFitting AutoFocusCurveFitting {
             get => autoFocusCurveFitting;
             set {
                 if (autoFocusCurveFitting != value) {

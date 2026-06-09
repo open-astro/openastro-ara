@@ -15,10 +15,10 @@
 using OpenAstroAra.Core.Utility;
 using System.ComponentModel;
 
-namespace OpenAstroAra.Core.Enum {
+namespace OpenAstroAra.Core.Enums {
 
     [TypeConverter(typeof(EnumDescriptionTypeConverter))]
-    public enum ImageHistoryEnum {
+    public enum ImageHistory {
 
         [Description("LblNone")]
         NONE,

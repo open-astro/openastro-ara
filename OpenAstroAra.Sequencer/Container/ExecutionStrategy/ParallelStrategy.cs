@@ -38,7 +38,7 @@ namespace OpenAstroAra.Sequencer.Container.ExecutionStrategy {
             var tasks = new List<Task>();
             var items = context.GetItemsSnapshot();
             foreach (var item in items) {
-                if(item.Status != Core.Enum.SequenceEntityStatus.DISABLED) { 
+                if (item.Status != Core.Enums.SequenceEntityStatus.DISABLED) {
                     var itemProgress = new Progress<ApplicationStatus>((p) => {
                         p.Source = item.Name;
                         progress?.Report(p);

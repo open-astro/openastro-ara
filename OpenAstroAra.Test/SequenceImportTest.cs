@@ -39,7 +39,7 @@ namespace OpenAstroAra.Test {
 
         [TearDown]
         public void TearDown() {
-            try { Directory.Delete(_profileDir, recursive: true); } catch { }
+            try { Directory.Delete(_profileDir, recursive: true); } catch (System.IO.IOException) { } catch (System.UnauthorizedAccessException) { }
         }
 
         private static (Mock<ISequenceService> mock, Func<SequenceCreateRequestDto?> captured) NewSequenceServiceMock() {
@@ -85,7 +85,7 @@ namespace OpenAstroAra.Test {
             Assert.That(result.Warnings, Is.Empty.Or.None.Contains("schemaVersion"));
             // Body should be unchanged.
             // Original was pretty-printed; preserved through pass-through.
-            var roundTrip = captured()!.Body.GetRawText().Replace(" ", "").Replace("\n", "").Replace("\r", "");
+            var roundTrip = captured()!.Body.GetRawText().Replace(" ", "", System.StringComparison.Ordinal).Replace("\n", "", System.StringComparison.Ordinal).Replace("\r", "", System.StringComparison.Ordinal);
             Assert.That(roundTrip, Does.Contain("\"schemaVersion\":\"openastroara-sequence-v1\""));
         }
 

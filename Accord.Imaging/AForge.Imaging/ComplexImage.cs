@@ -2,17 +2,16 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © Andrew Kirillov, 2005-2009
+// Copyright ï¿½ Andrew Kirillov, 2005-2009
 // andrew.kirillov@aforgenet.com
 //
 
-namespace Accord.Imaging
-{
+namespace Accord.Imaging {
+    using Accord.Compat;
+    using Accord.Math;
     using System;
     using System.Drawing;
     using System.Drawing.Imaging;
-    using Accord.Math;
-    using Accord.Compat;
     using System.Numerics;
 
     /// <summary>
@@ -38,8 +37,7 @@ namespace Accord.Imaging
     /// <img src="..\images\imaging\fourier.jpg" width="256" height="256" />
     /// </remarks>
     /// 
-    public class ComplexImage : ICloneable
-    {
+    public class ComplexImage : ICloneable {
         // image complex data
         private Complex[,] data;
 
@@ -54,8 +52,7 @@ namespace Accord.Imaging
         /// Image width.
         /// </summary>
         /// 
-        public int Width
-        {
+        public int Width {
             get { return width; }
         }
 
@@ -63,8 +60,7 @@ namespace Accord.Imaging
         /// Image height.
         /// </summary>
         /// 
-        public int Height
-        {
+        public int Height {
             get { return height; }
         }
 
@@ -72,8 +68,7 @@ namespace Accord.Imaging
         /// Status of the image - Fourier transformed or not.
         /// </summary>
         /// 
-        public bool FourierTransformed
-        {
+        public bool FourierTransformed {
             get { return fourierTransformed; }
         }
 
@@ -84,8 +79,7 @@ namespace Accord.Imaging
         /// <remarks>Return's 2D array of [<b>height</b>, <b>width</b>] size, which keeps image's
         /// complex data.</remarks>
         /// 
-        public Complex[,] Data
-        {
+        public Complex[,] Data {
             get { return data; }
         }
 
@@ -100,8 +94,7 @@ namespace Accord.Imaging
         /// class directly. To create an instance of this class <see cref="FromBitmap(Bitmap)"/> or
         /// <see cref="FromBitmap(BitmapData)"/> method should be used.</remarks>
         ///
-        protected ComplexImage(int width, int height)
-        {
+        protected ComplexImage(int width, int height) {
             this.width = width;
             this.height = height;
             this.data = new Complex[height, width];
@@ -114,16 +107,13 @@ namespace Accord.Imaging
         /// 
         /// <returns>Returns copy of the complex image.</returns>
         /// 
-        public object Clone()
-        {
+        public object Clone() {
             // create new complex image
             ComplexImage dstImage = new ComplexImage(width, height);
             Complex[,] data = dstImage.data;
 
-            for (int i = 0; i < height; i++)
-            {
-                for (int j = 0; j < width; j++)
-                {
+            for (int i = 0; i < height; i++) {
+                for (int j = 0; j < width; j++) {
                     data[i, j] = this.data[i, j];
                 }
             }
@@ -145,11 +135,9 @@ namespace Accord.Imaging
         /// <exception cref="UnsupportedImageFormatException">The source image has incorrect pixel format.</exception>
         /// <exception cref="InvalidImagePropertiesException">Image width and height should be power of 2.</exception>
         /// 
-        public static ComplexImage FromBitmap(Bitmap image)
-        {
+        public static ComplexImage FromBitmap(Bitmap image) {
             // check image format
-            if (image.PixelFormat != PixelFormat.Format8bppIndexed)
-            {
+            if (image.PixelFormat != PixelFormat.Format8bppIndexed) {
                 throw new UnsupportedImageFormatException("Source image can be graysclae (8bpp indexed) image only.");
             }
 
@@ -160,12 +148,9 @@ namespace Accord.Imaging
 
             ComplexImage complexImage;
 
-            try
-            {
+            try {
                 complexImage = FromBitmap(imageData);
-            }
-            finally
-            {
+            } finally {
                 // unlock source images
                 image.UnlockBits(imageData);
             }
@@ -184,11 +169,9 @@ namespace Accord.Imaging
         /// <exception cref="UnsupportedImageFormatException">The source image has incorrect pixel format.</exception>
         /// <exception cref="InvalidImagePropertiesException">Image width and height should be power of 2.</exception>
         /// 
-        public static ComplexImage FromBitmap(BitmapData imageData)
-        {
+        public static ComplexImage FromBitmap(BitmapData imageData) {
             // check image format
-            if (imageData.PixelFormat != PixelFormat.Format8bppIndexed)
-            {
+            if (imageData.PixelFormat != PixelFormat.Format8bppIndexed) {
                 throw new UnsupportedImageFormatException("Source image can be graysclae (8bpp indexed) image only.");
             }
 
@@ -198,8 +181,7 @@ namespace Accord.Imaging
             int offset = imageData.Stride - width;
 
             // check image size
-            if ((!Accord.Math.Tools.IsPowerOf2(width)) || (!Accord.Math.Tools.IsPowerOf2(height)))
-            {
+            if ((!Accord.Math.Tools.IsPowerOf2(width)) || (!Accord.Math.Tools.IsPowerOf2(height))) {
                 throw new InvalidImagePropertiesException("Image width and height should be power of 2.");
             }
 
@@ -209,13 +191,11 @@ namespace Accord.Imaging
             Complex[,] data = complexImage.data;
 
             // do the job
-            unsafe
-            {
+            unsafe {
                 byte* src = (byte*)imageData.Scan0.ToPointer();
 
                 // for each line
-                for (int y = 0; y < height; y++)
-                {
+                for (int y = 0; y < height; y++) {
                     // for each pixel
                     for (int x = 0; x < width; x++, src++)
                         data[y, x] = new Complex((float)*src / 255, data[y, x].Imaginary);
@@ -233,8 +213,7 @@ namespace Accord.Imaging
         /// 
         /// <returns>Returns grayscale bitmap.</returns>
         /// 
-        public Bitmap ToBitmap()
-        {
+        public Bitmap ToBitmap() {
             // create new image
             Bitmap dstImage = Accord.Imaging.Image.CreateGrayscaleImage(width, height);
 
@@ -247,14 +226,11 @@ namespace Accord.Imaging
             double scale = (fourierTransformed) ? Math.Sqrt(width * height) : 1;
 
             // do the job
-            unsafe
-            {
+            unsafe {
                 byte* dst = (byte*)dstData.Scan0.ToPointer();
 
-                for (int y = 0; y < height; y++)
-                {
-                    for (int x = 0; x < width; x++, dst++)
-                    {
+                for (int y = 0; y < height; y++) {
+                    for (int x = 0; x < width; x++, dst++) {
                         *dst = (byte)System.Math.Max(0, System.Math.Min(255, data[y, x].Magnitude * scale * 255));
                     }
                     dst += offset;
@@ -270,14 +246,10 @@ namespace Accord.Imaging
         /// Applies forward fast Fourier transformation to the complex image.
         /// </summary>
         /// 
-        public void ForwardFourierTransform()
-        {
-            if (!fourierTransformed)
-            {
-                for (int y = 0; y < height; y++)
-                {
-                    for (int x = 0; x < width; x++)
-                    {
+        public void ForwardFourierTransform() {
+            if (!fourierTransformed) {
+                for (int y = 0; y < height; y++) {
+                    for (int x = 0; x < width; x++) {
                         if (((x + y) & 0x1) != 0)
                             data[y, x] *= -1;
                     }
@@ -292,17 +264,13 @@ namespace Accord.Imaging
         /// Applies backward fast Fourier transformation to the complex image.
         /// </summary>
         /// 
-        public void BackwardFourierTransform()
-        {
-            if (fourierTransformed)
-            {
+        public void BackwardFourierTransform() {
+            if (fourierTransformed) {
                 FourierTransform.FFT2(data, FourierTransform.Direction.Backward);
                 fourierTransformed = false;
 
-                for (int y = 0; y < height; y++)
-                {
-                    for (int x = 0; x < width; x++)
-                    {
+                for (int y = 0; y < height; y++) {
+                    for (int x = 0; x < width; x++) {
                         if (((x + y) & 0x1) != 0)
                             data[y, x] *= -1;
                     }

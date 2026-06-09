@@ -20,12 +20,14 @@ namespace OpenAstroAra.Fits;
 
 /// <summary>Pixel bit-depth of a FITS image HDU per §72.4.</summary>
 public enum FitsBitDepth {
+    /// <summary>Unset/unknown bit depth (default).</summary>
+    None = 0,
     Byte = CFitsIO.BYTE_IMG,
-    Short = CFitsIO.SHORT_IMG,
+    Signed16 = CFitsIO.SHORT_IMG,
     UnsignedShort = CFitsIO.USHORT_IMG,
-    Long = CFitsIO.LONG_IMG,
-    Float = CFitsIO.FLOAT_IMG,
-    Double = CFitsIO.DOUBLE_IMG,
+    Signed32 = CFitsIO.LONG_IMG,
+    Real32 = CFitsIO.FLOAT_IMG,
+    Real64 = CFitsIO.DOUBLE_IMG,
 }
 
 /// <summary>File access mode for <see cref="FitsImage.Open"/>.</summary>
@@ -53,6 +55,7 @@ public sealed class FitsImage : IDisposable {
     private readonly string? _finalPath;
     private readonly string? _tempPath;
     private bool _disposed;
+    private bool _completed;
 
     private FitsImage(IntPtr fptr, string? finalPath, string? tempPath) {
         _fptr = fptr;
@@ -69,8 +72,8 @@ public sealed class FitsImage : IDisposable {
     /// <param name="height">Image height in pixels.</param>
     /// <param name="bitDepth">Pixel bit-depth.</param>
     public static FitsImage Create(string path, int width, int height, FitsBitDepth bitDepth) {
-        if (width <= 0) throw new ArgumentOutOfRangeException(nameof(width));
-        if (height <= 0) throw new ArgumentOutOfRangeException(nameof(height));
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
         var tempPath = path + ".tmp";
         // CFITSIO refuses to create a file that already exists. Caller
         // may have crashed mid-write previously — purge the stale temp
@@ -249,9 +252,9 @@ public sealed class FitsImage : IDisposable {
         // FITS card format: keyword (cols 1-8) "= " (cols 9-10) value (cols 11-80).
         // Comment is " / <text>" inside the value field.
         var text = Encoding.ASCII.GetString(card);
-        var nullTerm = text.IndexOf('\0');
+        var nullTerm = text.IndexOf('\0', StringComparison.Ordinal);
         if (nullTerm >= 0) text = text[..nullTerm];
-        var eq = text.IndexOf('=');
+        var eq = text.IndexOf('=', StringComparison.Ordinal);
         if (eq < 1 || eq > 8) {
             // COMMENT / HISTORY / END / blank — skip
             return (string.Empty, string.Empty);
@@ -279,33 +282,72 @@ public sealed class FitsImage : IDisposable {
         return -1;
     }
 
+    /// <summary>
+    /// §28.7/§72.5 atomic-write completion for the write path (<see cref="Create"/>):
+    /// closes the CFITSIO handle, atomically renames <c>&lt;path&gt;.tmp</c> to the
+    /// final path, and fsyncs the parent directory. Throws <see cref="FitsException"/>
+    /// if the underlying close fails (the temp is removed first so no torn FITS is
+    /// left behind). No-op on the read path (<see cref="Open"/>). Call this before
+    /// disposing to surface write failures; <see cref="Dispose"/> alone abandons the
+    /// in-progress write.
+    /// </summary>
+    public void Complete() {
+        if (_completed || _fptr == IntPtr.Zero) return;
+
+        var status = 0;
+        var closed = CFitsIO.CloseFile(_fptr, ref status) == 0;
+        _fptr = IntPtr.Zero;
+
+        // Read path: nothing to finalize.
+        if (_tempPath is null || _finalPath is null) {
+            _completed = true;
+            return;
+        }
+
+        if (!closed) {
+            // CFITSIO close failed — the temp file may be corrupt. Best effort:
+            // delete it so the next exposure doesn't trip on a stale tmp. Surface
+            // the underlying status so the caller learns about the write failure.
+            TryDeleteTemp();
+            throw new FitsException("ffclos", status);
+        }
+
+        // Atomic rename + fsync the parent dir so the rename itself is durable.
+        // File.Move on POSIX does an atomic rename; on Windows it's atomic when
+        // within a single volume.
+        File.Move(_tempPath, _finalPath, overwrite: true);
+        SyncParentDirectory(_finalPath);
+        _completed = true;
+    }
+
     public void Dispose() {
         if (_disposed) return;
         _disposed = true;
 
-        var status = 0;
-        var closed = _fptr != IntPtr.Zero
-            && CFitsIO.CloseFile(_fptr, ref status) == 0;
-        _fptr = IntPtr.Zero;
-
-        // §28.7 atomic-write completion. Only applies to the write path
-        // (Create) — Open() leaves _tempPath null and we exit early.
-        if (_tempPath is null || _finalPath is null) return;
-
-        if (!closed) {
-            // CFITSIO close failed — the temp file may be corrupt. Best
-            // effort: try to delete it so the next exposure doesn't trip
-            // on a stale tmp. Re-throw the underlying status so the
-            // caller learns about the write failure.
-            try { File.Delete(_tempPath); } catch { /* swallow */ }
-            throw new FitsException("ffclos", status);
+        // Best-effort cleanup; never throws (CA1065). If Complete() already ran,
+        // the handle is gone and the file is committed — nothing to do. Otherwise
+        // release the native handle and remove any orphaned temp file; the §28.8
+        // startup scan would also reap it, but cleaning up here is tidier.
+        if (_fptr != IntPtr.Zero) {
+            var status = 0;
+            CFitsIO.CloseFile(_fptr, ref status);
+            _fptr = IntPtr.Zero;
         }
 
-        // Atomic rename + fsync the parent dir so the rename itself is
-        // durable. File.Move on POSIX does an atomic rename; on Windows
-        // it's atomic when within a single volume.
-        File.Move(_tempPath, _finalPath, overwrite: true);
-        SyncParentDirectory(_finalPath);
+        if (!_completed && _tempPath is not null) {
+            TryDeleteTemp();
+        }
+    }
+
+    private void TryDeleteTemp() {
+        if (_tempPath is null) return;
+        try {
+            File.Delete(_tempPath);
+        } catch (IOException) {
+            // best effort — startup scan (§28.8) reaps stragglers
+        } catch (UnauthorizedAccessException) {
+            // best effort — startup scan (§28.8) reaps stragglers
+        }
     }
 
     private static void SyncParentDirectory(string filePath) {

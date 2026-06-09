@@ -2,17 +2,16 @@
 // AForge.NET framework
 // http://www.aforgenet.com/framework/
 //
-// Copyright © Volodymyr Goncharov, 2007
+// Copyright ï¿½ Volodymyr Goncharov, 2007
 // volodymyr.goncharov@gmail.com
 //
-// Copyright © Andrew Kirillov, 2007-2009
+// Copyright ï¿½ Andrew Kirillov, 2007-2009
 // andrew.kirillov@aforgenet.com
 //
 
-namespace Accord.Imaging.Filters
-{
-    using System.Drawing;
+namespace Accord.Imaging.Filters {
     using System.Collections.Generic;
+    using System.Drawing;
     using System.Drawing.Imaging;
 
     /// <summary>
@@ -41,8 +40,7 @@ namespace Accord.Imaging.Filters
     /// 
     /// <seealso cref="CanvasFill"/>
     /// 
-    public class CanvasCrop : BaseInPlaceFilter
-    {
+    public class CanvasCrop : BaseInPlaceFilter {
         // RGB fill color
         private byte fillRed = 255;
         private byte fillGreen = 255;
@@ -62,8 +60,7 @@ namespace Accord.Imaging.Filters
         /// <remarks><para>See <see cref="IFilterInformation.FormatTranslations"/>
         /// documentation for additional information.</para></remarks>
         /// 
-        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations
-        {
+        public override Dictionary<PixelFormat, PixelFormat> FormatTranslations {
             get { return formatTranslations; }
         }
 
@@ -75,11 +72,9 @@ namespace Accord.Imaging.Filters
         /// 
         /// <para>Default value is set to white - RGB(255, 255, 255).</para></remarks>
         /// 
-        public Color FillColorRGB
-        {
+        public Color FillColorRGB {
             get { return Color.FromArgb(fillRed, fillGreen, fillBlue); }
-            set
-            {
+            set {
                 fillRed = value.R;
                 fillGreen = value.G;
                 fillBlue = value.B;
@@ -94,8 +89,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <para>Default value is set to white - 255.</para></remarks>
         /// 
-        public byte FillColorGray
-        {
+        public byte FillColorGray {
             get { return fillGray; }
             set { fillGray = value; }
         }
@@ -107,15 +101,13 @@ namespace Accord.Imaging.Filters
         /// <remarks>Pixels inside of the specified region will keep their values, but
         /// pixels outside of the region will be filled with specified color.</remarks>
         /// 
-        public Rectangle Region
-        {
+        public Rectangle Region {
             get { return region; }
             set { region = value; }
         }
 
         // Private constructor to do common initialization
-        private CanvasCrop()
-        {
+        private CanvasCrop() {
             formatTranslations[PixelFormat.Format8bppIndexed] = PixelFormat.Format8bppIndexed;
             formatTranslations[PixelFormat.Format24bppRgb] = PixelFormat.Format24bppRgb;
             formatTranslations[PixelFormat.Format32bppArgb] = PixelFormat.Format32bppArgb;
@@ -129,8 +121,7 @@ namespace Accord.Imaging.Filters
         /// <param name="region">Region to keep.</param>
         /// 
         public CanvasCrop(Rectangle region)
-            : this()
-        {
+            : this() {
             this.region = region;
         }
 
@@ -142,8 +133,7 @@ namespace Accord.Imaging.Filters
         /// <param name="fillColorRgb">RGB color to use for filling areas outside of specified region in color images.</param>
         /// 
         public CanvasCrop(Rectangle region, Color fillColorRgb)
-            : this()
-        {
+            : this() {
             this.region = region;
             this.fillRed = fillColorRgb.R;
             this.fillGreen = fillColorRgb.G;
@@ -158,8 +148,7 @@ namespace Accord.Imaging.Filters
         /// <param name="fillColorGray">Gray color to use for filling areas outside of specified region in grayscale images.</param>
         /// 
         public CanvasCrop(Rectangle region, byte fillColorGray)
-            : this()
-        {
+            : this() {
             this.region = region;
             this.fillGray = fillColorGray;
         }
@@ -173,8 +162,7 @@ namespace Accord.Imaging.Filters
         /// <param name="fillColorGray">Gray color to use for filling areas outside of specified region in grayscale images.</param>
         /// 
         public CanvasCrop(Rectangle region, Color fillColorRgb, byte fillColorGray)
-            : this()
-        {
+            : this() {
             this.region = region;
             this.fillRed = fillColorRgb.R;
             this.fillGreen = fillColorRgb.G;
@@ -188,8 +176,7 @@ namespace Accord.Imaging.Filters
         /// 
         /// <param name="image">Source image data.</param>
         ///
-        protected override unsafe void ProcessFilter(UnmanagedImage image)
-        {
+        protected override unsafe void ProcessFilter(UnmanagedImage image) {
             int pixelSize = Image.GetPixelFormatSize(image.PixelFormat) / 8;
 
             // get image width and height
@@ -200,30 +187,21 @@ namespace Accord.Imaging.Filters
             // do the job
             byte* ptr = (byte*)image.ImageData.ToPointer();
 
-            if (image.PixelFormat == PixelFormat.Format8bppIndexed)
-            {
+            if (image.PixelFormat == PixelFormat.Format8bppIndexed) {
                 // grayscale image
-                for (int y = 0; y < height; y++)
-                {
-                    for (int x = 0; x < width; x++, ptr++)
-                    {
-                        if (!region.Contains(x, y))
-                        {
+                for (int y = 0; y < height; y++) {
+                    for (int x = 0; x < width; x++, ptr++) {
+                        if (!region.Contains(x, y)) {
                             *ptr = fillGray;
                         }
                     }
                     ptr += offset;
                 }
-            }
-            else
-            {
+            } else {
                 // color image
-                for (int y = 0; y < height; y++)
-                {
-                    for (int x = 0; x < width; x++, ptr += pixelSize)
-                    {
-                        if (!region.Contains(x, y))
-                        {
+                for (int y = 0; y < height; y++) {
+                    for (int x = 0; x < width; x++, ptr += pixelSize) {
+                        if (!region.Contains(x, y)) {
                             // red
                             ptr[RGB.R] = fillRed;
                             // green

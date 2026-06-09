@@ -26,9 +26,9 @@
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Image.Interfaces;
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Collections.Generic;
 
 namespace OpenAstroAra.Image.ImageAnalysis {
 
@@ -47,7 +47,7 @@ namespace OpenAstroAra.Image.ImageAnalysis {
         public int DetectedStars { get; set; }
         public double AverageHFR { get; set; }
         public double HFRStdDev { get; set; }
-        public List<DetectedStar> StarList { get; set; } = new();
+        public IReadOnlyList<DetectedStar> StarList { get; set; } = new List<DetectedStar>();
     }
 
     public class DetectedStar {
