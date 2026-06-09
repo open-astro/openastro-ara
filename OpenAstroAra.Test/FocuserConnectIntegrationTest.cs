@@ -111,6 +111,9 @@ namespace OpenAstroAra.Test {
             var target = current < max / 2 ? Math.Min(max, max / 2 + 100) : Math.Max(0, max / 2 - 100);
 
             // Blocking move via the mediator — returns once the device settles at the target.
+            // Exact equality is safe against the OmniSim (no step-size quantisation, so it lands
+            // exactly on the requested integer position); a physical focuser that rounds to the
+            // nearest motor step could settle a step or two off and would want a small tolerance.
             var settled = await svc.MoveFocuser(target, CancellationToken.None).ConfigureAwait(false);
             Assert.That(settled, Is.EqualTo(target), "MoveFocuser should return the settled position");
             Assert.That(svc.GetInfo().Position, Is.EqualTo(target), "the mediator snapshot should reflect the move");

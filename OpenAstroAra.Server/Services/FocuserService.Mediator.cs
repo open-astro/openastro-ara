@@ -161,8 +161,12 @@ public sealed partial class FocuserService : IFocuserMediator {
             LogMoveFailed(ex, target);
         }
         RefreshCacheOnce();
+        // Prefer a direct device read for the returned position so a single-flight RefreshCacheOnce
+        // that no-op'd against a concurrent timer tick can't make us report a stale cache value (or
+        // the optimistic `target` fallback) instead of where the focuser actually settled.
+        var settled = ReadPosition(client);
         lock (_gate) {
-            return _runtime.Position ?? target;
+            return settled ?? _runtime.Position ?? target;
         }
     }
 
@@ -174,21 +178,43 @@ public sealed partial class FocuserService : IFocuserMediator {
     private async Task WaitForMoveCompleteAsync(AlpacaFocuser client, CancellationToken ct) {
         for (var i = 0; i < MoveSettleMaxPolls; i++) {
             await Task.Delay(MoveSettlePollInterval, ct).ConfigureAwait(false);
+            // Stop if the device is gone (disconnected / superseded / disposed): a dropped connection
+            // must NOT be mistaken for "settled" the way a swallowed IsMoving read would be.
+            bool stillOurClient;
+            lock (_gate) {
+                stillOurClient = !_disposed && _state == EquipmentConnectionState.Connected
+                    && ReferenceEquals(_client, client);
+            }
+            if (!stillOurClient) {
+                return;
+            }
             var moving = ReadIsMoving(client);
             RefreshCacheOnce();
-            if (!moving) {
+            // Only a CONFIRMED not-moving read ends the wait; a transient read failure (null) keeps
+            // us waiting (bounded) rather than reporting a settle we never observed.
+            if (moving == false) {
                 return;
             }
         }
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Per-field read boundary: a transient/unsupported IsMoving read throws; treat it as 'not moving' (settled) rather than faulting the settle-wait. CA1031's log-and-recover boundary applies.")]
-    private static bool ReadIsMoving(AlpacaFocuser client) {
+        Justification = "Per-field read boundary: a transient/unsupported IsMoving read throws; report null ('unknown') so the settle-wait keeps polling rather than concluding 'settled', while a genuine disconnect is caught by the connection check in the loop. CA1031's log-and-recover boundary applies.")]
+    private static bool? ReadIsMoving(AlpacaFocuser client) {
         try {
             return client.IsMoving;
         } catch (Exception) {
-            return false;
+            return null;
+        }
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Per-field read boundary: a transient/unsupported Position read throws; report null so the caller falls back to the cached position rather than faulting. CA1031's log-and-recover boundary applies.")]
+    private static int? ReadPosition(AlpacaFocuser client) {
+        try {
+            return client.Position;
+        } catch (Exception) {
+            return null;
         }
     }
 
