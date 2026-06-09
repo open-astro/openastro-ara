@@ -81,22 +81,29 @@ public sealed partial class FocuserService : IFocuserMediator {
     public Task<int> MoveFocuser(int position, CancellationToken ct) => MoveFocuserBlockingAsync(position, ct);
 
     // Relative move: current position + signed offset.
-    public Task<int> MoveFocuserRelative(int position, CancellationToken ct) {
-        int current;
-        lock (_gate) {
-            current = _runtime.Position ?? 0;
-        }
-        return MoveFocuserBlockingAsync(current + position, ct);
-    }
+    public Task<int> MoveFocuserRelative(int position, CancellationToken ct) =>
+        MoveFocuserBlockingAsync(CurrentPosition() + position, ct);
 
     // Temperature-relative move (NINA semantics): shift the current position by slope × temperature.
-    public Task<int> MoveFocuserByTemperatureRelative(double temperature, double Slope, CancellationToken ct) {
-        int current;
+    public Task<int> MoveFocuserByTemperatureRelative(double temperature, double Slope, CancellationToken ct) =>
+        MoveFocuserBlockingAsync(CurrentPosition() + (int)Math.Round(Slope * temperature), ct);
+
+    // Base position for a relative move. Prefer a fresh DIRECT device read over the §32.4 cache so
+    // the computed absolute target doesn't drift by up to one polling interval (the cache can lag, and
+    // a relative move is only meaningful against the focuser's true current position). Falls back to
+    // the cache when disconnected / the read fails.
+    private int CurrentPosition() {
+        AlpacaFocuser? client;
         lock (_gate) {
-            current = _runtime.Position ?? 0;
+            client = _state == EquipmentConnectionState.Connected ? _client : null;
         }
-        var target = current + (int)Math.Round(Slope * temperature);
-        return MoveFocuserBlockingAsync(target, ct);
+        var live = client is not null ? ReadPosition(client) : null;
+        if (live is int p) {
+            return p;
+        }
+        lock (_gate) {
+            return _runtime.Position ?? 0;
+        }
     }
 
     public void ToggleTempComp(bool tempComp) {
@@ -155,9 +162,12 @@ public sealed partial class FocuserService : IFocuserMediator {
             }
             await moveTask.ConfigureAwait(false); // observe Move()'s result / surface its exception
             await WaitForMoveCompleteAsync(client, ct).ConfigureAwait(false);
-        } catch (OperationCanceledException) {
-            throw; // honour sequencer cancellation
+        } catch (OperationCanceledException) when (ct.IsCancellationRequested) {
+            throw; // genuine sequencer cancellation — propagate so the run aborts
         } catch (Exception ex) {
+            // Anything else, INCLUDING an OperationCanceledException the Alpaca HTTP client raises for
+            // its OWN internal timeout (ct not cancelled), is a device fault: log it and report the
+            // last known position rather than aborting the autonomous run as if cancelled.
             LogMoveFailed(ex, target);
         }
         RefreshCacheOnce();
