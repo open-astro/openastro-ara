@@ -30,6 +30,8 @@ os="$(uname -s)"; arch="$(uname -m)"
 case "$os/$arch" in
   Linux/x86_64)   artifact="ascom.alpaca.simulators.linux-x64.tar.xz";     subdir="ascom.alpaca.simulators.linux-x64" ;;
   Linux/aarch64)  artifact="ascom.alpaca.simulators.linux-aarch64.tar.xz"; subdir="ascom.alpaca.simulators.linux-aarch64" ;;
+  # Darwin/* (incl. Apple Silicon) -> macos-x64: upstream ships no aarch64 macOS
+  # build, so the x64 artifact under Rosetta is the only/right fallback.
   Darwin/*)       artifact="ascom.alpaca.simulators.macos-x64.zip";        subdir="ascom.alpaca.simulators.macos-x64" ;;
   *) echo "unsupported platform: $os/$arch" >&2; exit 1 ;;
 esac

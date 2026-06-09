@@ -85,6 +85,9 @@ jobs:
   alpaca-sim-smoke:
     name: Alpaca simulator harness (smoke)
     runs-on: ubuntu-latest
+    timeout-minutes: 10  # bound the job if a runner/OmniSim hang outlives the 90s poll
+    permissions:
+      contents: read  # only needs to check out + download a public release artifact
     steps:
       - name: Checkout (no LFS)
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v4.x — pinned per zizmor + CodeRabbit security finding on PR #12
@@ -145,7 +148,9 @@ jobs:
           echo "apiversions: $(curl -fsS http://127.0.0.1:32323/management/apiversions)"
           devices="$(curl -fsS http://127.0.0.1:32323/management/v1/configureddevices)"
           echo "configured devices: $devices"
-          if ! echo "$devices" | grep -qi 'camera'; then
+          # Match the DeviceType field specifically (tolerant of JSON whitespace),
+          # not just the substring "camera" anywhere in the payload.
+          if ! echo "$devices" | grep -Eqi '"DeviceType"[[:space:]]*:[[:space:]]*"Camera"'; then
             echo "::error::no Camera device in configured devices"
             echo "--- simulator log ---"; cat /tmp/alpaca-sim.log || true
             exit 1
