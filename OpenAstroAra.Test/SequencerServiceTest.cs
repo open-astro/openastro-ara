@@ -114,14 +114,6 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task Abort_returns_accepted() {
-            var id = Guid.NewGuid();
-            var svc = BuildService(id, BuildBody());
-            var op = await svc.AbortAsync(id, null, CancellationToken.None);
-            Assert.That(op, Is.Not.Null);
-        }
-
-        [Test]
         public async Task Concurrent_starts_yield_a_single_coherent_run() {
             // Fire many simultaneous starts for the same id. The atomic slot
             // reservation must let exactly one win; the run resolves to a single

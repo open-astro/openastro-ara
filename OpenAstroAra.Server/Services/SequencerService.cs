@@ -92,23 +92,26 @@ public sealed partial class SequencerService : ISequencerService {
         // takes this fresh run; a live (non-terminal) run keeps the slot; a
         // finished run is replaced (restart allowed). We own the run iff the
         // returned reference is ours.
-        var run = new RunState();
-        var reserved = _runs.AddOrUpdate(id, run, (_, existing) => IsTerminal(existing.State) ? run : existing);
-        if (!ReferenceEquals(reserved, run)) {
+        var run = TryReserveRun(id);
+        if (run is null) {
             // A live run already owns the slot — idempotent.
             return PlaceholderEquipmentHelpers.Accepted("sequencer.start", idempotencyKey);
         }
         PruneTerminalRuns();
 
         // We own the slot. Load + deserialize the saved body; frames-total comes
-        // from the instruction count so WILMA can size its progress UI.
+        // from the instruction count so WILMA can size its progress UI. Set the
+        // count only once we have a runnable root, so a failed deserialize leaves
+        // a Failed run with FramesTotal 0 rather than a misleading non-zero total.
         ISequenceRootContainer? root = null;
         var sequences = _sequencesResolver?.Invoke();
         if (sequences is not null) {
             var dto = await sequences.GetAsync(id, ct);
             if (dto is not null) {
-                run.InstructionCount = SequenceBodyInspector.Inspect(dto.Body).InstructionCount;
                 root = ToRootContainer(dto.Body);
+                if (root is not null) {
+                    run.InstructionCount = SequenceBodyInspector.Inspect(dto.Body).InstructionCount;
+                }
             }
         }
 
@@ -152,6 +155,24 @@ public sealed partial class SequencerService : ISequencerService {
         s is SequenceRunState.Completed or SequenceRunState.Failed or SequenceRunState.Stopped;
 
     /// <summary>
+    /// Atomically reserve the run slot for <paramref name="id"/>. Returns the
+    /// owned <see cref="RunState"/> if this caller won (absent slot, or replacing
+    /// a finished run), or null if a live run already owns it. A run built but not
+    /// installed (lost the race) is disposed here so its CTS never leaks — and
+    /// because the disposal stays local to this helper, the run the caller uses is
+    /// provably never disposed.
+    /// </summary>
+    private RunState? TryReserveRun(Guid id) {
+        var run = new RunState();
+        var reserved = _runs.AddOrUpdate(id, run, (_, existing) => IsTerminal(existing.State) ? run : existing);
+        if (ReferenceEquals(reserved, run)) {
+            return run;
+        }
+        run.Dispose();
+        return null;
+    }
+
+    /// <summary>
     /// Transition a live run to Aborting/Stopped and cancel its token. No-ops on
     /// an already-terminal run so we never touch a disposed CTS; the CancelAsync
     /// is still guarded against the narrow worker-disposes-during-abort race.
@@ -169,11 +190,12 @@ public sealed partial class SequencerService : ISequencerService {
 
     /// <summary>Evict the oldest terminal runs once retention exceeds the cap (live runs are kept).</summary>
     private void PruneTerminalRuns() {
-        if (_runs.Count <= MaxRetainedRuns) return;
+        var count = _runs.Count;
+        if (count <= MaxRetainedRuns) return;
         var terminal = _runs.Where(kv => IsTerminal(kv.Value.State))
                             .OrderBy(kv => kv.Value.StartedUtc)
                             .ToList();
-        var toRemove = _runs.Count - MaxRetainedRuns;
+        var toRemove = count - MaxRetainedRuns;
         foreach (var kv in terminal) {
             if (toRemove-- <= 0) break;
             if (_runs.TryRemove(kv.Key, out var removed)) removed.Dispose();
