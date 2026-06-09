@@ -47,14 +47,20 @@ namespace OpenAstroAra.Test {
             Assert.That(text, Does.Match(@"Pinned SHA:\s*[0-9a-f]{40}"), "needs a 40-hex 'Pinned SHA:'");
         }
 
-        [Test]
-        public void Pins_the_linux_x64_ci_artifact_with_a_sha256() {
-            // linux-x64 is the CI target — it must be pinned with a 64-hex sha256.
+        // Every platform artifact the download script can request must be pinned by
+        // identity with a 64-hex sha256 — not just present-as-some-checksum. This
+        // stops a future auto-bump PR from silently dropping a platform's line
+        // (linux-x64 is the CI target; aarch64 + macos-x64 are dev/runtime targets).
+        [TestCase("ascom.alpaca.simulators.linux-x64.tar.xz")]
+        [TestCase("ascom.alpaca.simulators.linux-aarch64.tar.xz")]
+        [TestCase("ascom.alpaca.simulators.macos-x64.zip")]
+        public void Pins_each_platform_artifact_with_a_sha256(string artifact) {
             var text = ReadPinFile();
+            var pattern = Regex.Escape(artifact) + @"\s+sha256:\s*[0-9a-f]{64}";
             Assert.That(
-                Regex.IsMatch(text, @"linux-x64\.tar\.xz\s+sha256:\s*[0-9a-f]{64}"),
+                Regex.IsMatch(text, pattern),
                 Is.True,
-                "the linux-x64 artifact must be pinned with a 64-hex sha256");
+                $"{artifact} must be pinned with a 64-hex sha256");
         }
 
         [Test]
