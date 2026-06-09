@@ -19,6 +19,7 @@
 #endregion "copyright"
 
 using ASCOM.Alpaca.Clients;
+using Microsoft.Extensions.Logging;
 using OpenAstroAra.Equipment.Equipment.MyFocuser;
 using OpenAstroAra.Equipment.Interfaces;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
@@ -56,6 +57,9 @@ public sealed partial class FocuserService : IFocuserMediator {
     // tolerate a transient blip, large enough not to give up on a real device prematurely.
     private const int UnknownReadsBeforeSettled = 3;
     private static readonly TimeSpan MoveSettlePollInterval = TimeSpan.FromMilliseconds(100);
+    // Wall-clock ceiling for a single blocking Move: a silent device must not park a sequence thread
+    // until the OS TCP timeout (minutes). Generous — real focuser travel is seconds, not minutes.
+    private static readonly TimeSpan MoveHardTimeout = TimeSpan.FromMinutes(5);
 
     /// <summary>
     /// Synchronous live snapshot for the Sequencer, served from the §32.4 cache the background loop
@@ -150,19 +154,22 @@ public sealed partial class FocuserService : IFocuserMediator {
             }
         }
         try {
-            // The blocking ASCOM Move is launched on the pool; race it against the sequencer token so
-            // a hung HTTP call (unresponsive device / dropped link) can't pin the sequence thread
-            // indefinitely "regardless of cancellation". A non-cancelled hang is still bounded by the
-            // Alpaca client's own HTTP timeout. The abandoned move is observed so it can't surface as
-            // an unobserved task exception.
+            // The blocking ASCOM Move is launched on the pool; race it against BOTH the sequencer
+            // token and an explicit wall-clock bound (CancelAfter on the linked source) so a hung HTTP
+            // call can't pin the sequence thread "regardless of cancellation" even when ct never fires
+            // and the Alpaca client's own HTTP timeout is generous. The abandoned move is observed so
+            // it can't surface as an unobserved task exception.
             var moveTask = Task.Run(() => client.Move(target), CancellationToken.None);
             using (var linked = CancellationTokenSource.CreateLinkedTokenSource(ct)) {
+                linked.CancelAfter(MoveHardTimeout);
                 var completed = await Task.WhenAny(moveTask, Task.Delay(Timeout.Infinite, linked.Token)).ConfigureAwait(false);
-                await linked.CancelAsync().ConfigureAwait(false); // release the pending delay (whichever path) so it can't leak
                 if (completed != moveTask) {
                     ObserveQuietly(moveTask);
-                    ct.ThrowIfCancellationRequested();
+                    ct.ThrowIfCancellationRequested();          // sequencer cancel → propagate
+                    throw new TimeoutException(                 // wall-clock bound → device fault
+                        $"focuser Move to {target} did not complete within {MoveHardTimeout.TotalSeconds:0}s");
                 }
+                await linked.CancelAsync().ConfigureAwait(false); // move won the race: cancel the timer so it can't leak
             }
             await moveTask.ConfigureAwait(false); // observe Move()'s result / surface its exception
             await WaitForMoveCompleteAsync(client, ct).ConfigureAwait(false);
@@ -214,7 +221,10 @@ public sealed partial class FocuserService : IFocuserMediator {
                 // A brief streak of nulls is a transient read blip — keep waiting. A persistent
                 // streak means the driver doesn't implement IsMoving at all; for such drivers the
                 // ASCOM Move() blocks until done, so by now it's complete — stop rather than burning
-                // the full ~60s bound on a property that will never report motion.
+                // the full ~60s bound on a property that will never report motion. The trade-off: a
+                // NON-blocking driver whose IsMoving is transient-error-prone could also produce a
+                // streak this long mid-move and settle early; the MoveSettleMaxPolls hard bound and
+                // the post-wait direct Position read backstop that (rare) case.
                 if (++unknownStreak >= UnknownReadsBeforeSettled) {
                     return;
                 }
@@ -244,11 +254,12 @@ public sealed partial class FocuserService : IFocuserMediator {
         }
     }
 
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Observes an abandoned (cancelled-past) move task purely to swallow any later fault so it cannot surface as an unobserved task exception; nothing actionable to do with it. CA1031's log-and-recover boundary applies.")]
-    private static void ObserveQuietly(Task task) {
+    // Observes an abandoned (cancelled/timed-out) move task so a later fault can't surface as an
+    // UnobservedTaskException, and logs it at Debug for post-mortem (the move is already abandoned —
+    // nothing actionable, but a silent device fault should leave a trace).
+    private void ObserveQuietly(Task task) {
         _ = task.ContinueWith(
-            t => { _ = t.Exception; },
+            t => LogAbandonedMoveFaulted(t.Exception!),
             CancellationToken.None,
             TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
             TaskScheduler.Default);
@@ -282,4 +293,7 @@ public sealed partial class FocuserService : IFocuserMediator {
 
     public event Func<object, EventArgs, Task>? Connected;
     public event Func<object, EventArgs, Task>? Disconnected;
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "abandoned focuser move (cancelled/timed-out) later faulted")]
+    private partial void LogAbandonedMoveFaulted(Exception ex);
 }
