@@ -451,7 +451,10 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         public DateTimeOffset StartedUtc { get; } = DateTimeOffset.UtcNow;
         public DateTimeOffset? CompletedUtc { get; private set; }
         public CancellationTokenSource Cts { get; } = new();
-        public Task? Worker { get; set; }   // the RunWorkerAsync task, so shutdown can await teardown
+        // The RunWorkerAsync task, so shutdown can await teardown. volatile: written
+        // on the request thread (StartAsync) and read on the shutdown thread.
+        private volatile Task? _worker;
+        public Task? Worker { get => _worker; set => _worker = value; }
 
         public void SetDescription(string? description) {
             if (string.IsNullOrEmpty(description)) return;
