@@ -147,6 +147,22 @@ namespace OpenAstroAra.Test {
                 () => { _ = svc.ParkAsync(null, CancellationToken.None); });
         }
 
+        [Test]
+        public void OpenShutterAsync_after_Dispose_throws_ObjectDisposedException() {
+            var svc = new DomeService();
+            svc.Dispose();
+            Assert.Throws<ObjectDisposedException>(
+                () => { _ = svc.OpenShutterAsync(null, CancellationToken.None); });
+        }
+
+        [Test]
+        public void CloseShutterAsync_after_Dispose_throws_ObjectDisposedException() {
+            var svc = new DomeService();
+            svc.Dispose();
+            Assert.Throws<ObjectDisposedException>(
+                () => { _ = svc.CloseShutterAsync(null, CancellationToken.None); });
+        }
+
         private static async Task<DomeDto?> PollUntilNotConnectingAsync(DomeService svc) {
             for (var i = 0; i < 150; i++) {
                 var dto = await svc.GetAsync(CancellationToken.None);

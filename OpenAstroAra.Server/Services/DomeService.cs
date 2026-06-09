@@ -219,10 +219,13 @@ public sealed partial class DomeService : IDomeService, IDisposable {
         try { parked = c.AtPark; } catch (Exception) { parked = false; }
 
         var shutterOpen = shutter == ShutterState.Open;
-        // State precedence: motion (slew / shutter transit) first, then error, then resting flags.
-        var state = slewing ? "slewing"
+        // State precedence: a shutter fault wins over everything so a caller polling for error
+        // recovery sees it even mid-slew (the shutter and azimuth drive are independent mechanisms —
+        // a jam can co-occur with rotation; azimuth still updates, so motion stays observable). Then
+        // motion (slew / shutter transit), then the resting flags.
+        var state = shutter == ShutterState.Error ? "error"
+            : slewing ? "slewing"
             : (shutter is ShutterState.Opening or ShutterState.Closing) ? "shutter_moving"
-            : shutter == ShutterState.Error ? "error"
             : parked ? "parked"
             : shutterOpen ? "shutter_open"
             : "idle";
