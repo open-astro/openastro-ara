@@ -15,6 +15,7 @@
 using ASCOM.Alpaca.Clients;
 using ASCOM.Common.Alpaca;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using OpenAstroAra.Server.Contracts;
 using System;
 using System.Diagnostics.CodeAnalysis;
@@ -42,9 +43,9 @@ namespace OpenAstroAra.Server.Services;
 /// with the Sequencer's <c>ISafetyMonitorMediator</c> (so <c>WaitUntilSafe</c> sees the live
 /// device) is the next increment — tracked in design/PORT_TODO.md.
 /// </summary>
-public sealed class SafetyMonitorService : ISafetyMonitorService, IDisposable {
+public sealed partial class SafetyMonitorService : ISafetyMonitorService, IDisposable {
 
-    private readonly ILogger<SafetyMonitorService>? _logger;
+    private readonly ILogger<SafetyMonitorService> _logger;
     private readonly object _gate = new();
     private AlpacaSafetyMonitor? _client;
     private DiscoveredDeviceDto? _device;
@@ -53,7 +54,7 @@ public sealed class SafetyMonitorService : ISafetyMonitorService, IDisposable {
     private bool _disposed;
 
     public SafetyMonitorService(ILogger<SafetyMonitorService>? logger = null) {
-        _logger = logger;
+        _logger = logger ?? NullLogger<SafetyMonitorService>.Instance;
     }
 
     public async Task<SafetyMonitorDto?> GetAsync(CancellationToken ct) {
@@ -98,7 +99,8 @@ public sealed class SafetyMonitorService : ISafetyMonitorService, IDisposable {
             SetState(EquipmentConnectionState.Connecting);
         }
         // 202 contract: do the blocking Alpaca connect off-thread; GetAsync reports the outcome.
-        _ = Task.Run(() => ConnectInBackground(device));
+        // CancellationToken.None: this is intentionally fire-and-forget, not tied to the request.
+        _ = Task.Run(() => ConnectInBackground(device), CancellationToken.None);
         return Task.FromResult(Accepted("safety-monitor.connect", idempotencyKey));
     }
 
@@ -114,7 +116,7 @@ public sealed class SafetyMonitorService : ISafetyMonitorService, IDisposable {
             // change on completion and dispose its own client (supersede check below).
         }
         if (client is not null) {
-            _ = Task.Run(() => SafeDisconnectDispose(client));
+            _ = Task.Run(() => SafeDisconnectDispose(client), CancellationToken.None);
         }
         return Task.FromResult(Accepted("safety-monitor.disconnect", idempotencyKey));
     }
@@ -126,13 +128,15 @@ public sealed class SafetyMonitorService : ISafetyMonitorService, IDisposable {
             return client.IsSafe;
         } catch (Exception ex) {
             SetState(EquipmentConnectionState.Error);
-            _logger?.LogWarning(ex, "SafetyMonitor IsSafe read failed; marking connection Error");
+            LogIsSafeReadFailed(ex);
             return false;
         }
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Background connect boundary: constructing the Alpaca client and setting Connected can throw arbitrary driver/HTTP/socket exceptions; any escape must surface as the Error state and be contained, never fault the fire-and-forget task or the daemon. CA1031's log-and-recover boundary applies.")]
+    [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
+        Justification = "Ownership of the AlpacaSafetyMonitor is managed explicitly: on every non-adopt path (supersede or exception) SafeDisconnectDispose disposes it; on the adopt path it is stored in _client (local set to null) and disposed later by DisconnectAsync/Dispose. CA2000 cannot follow the transfer through the lock + helper.")]
     private void ConnectInBackground(DiscoveredDeviceDto device) {
         AlpacaSafetyMonitor? client = null;
         try {
@@ -160,8 +164,7 @@ public sealed class SafetyMonitorService : ISafetyMonitorService, IDisposable {
                 return;
             }
             client = null; // ownership transferred to _client
-            _logger?.LogInformation("SafetyMonitor connected: {Name} at {Host}:{Port}/{Device}",
-                device.Name, host, device.IpPort, device.AlpacaDeviceNumber);
+            LogConnected(device.Name, host, device.IpPort, device.AlpacaDeviceNumber);
         } catch (Exception ex) {
             if (client is not null) {
                 SafeDisconnectDispose(client);
@@ -173,7 +176,7 @@ public sealed class SafetyMonitorService : ISafetyMonitorService, IDisposable {
                     SetState(EquipmentConnectionState.Error);
                 }
             }
-            _logger?.LogError(ex, "SafetyMonitor connect failed for {Name}", device.Name);
+            LogConnectFailed(ex, device.Name);
         }
     }
 
@@ -183,7 +186,7 @@ public sealed class SafetyMonitorService : ISafetyMonitorService, IDisposable {
         try {
             client.Connected = false;
         } catch (Exception ex) {
-            _logger?.LogDebug(ex, "ignored error while disconnecting SafetyMonitor during teardown");
+            LogTeardownIgnored(ex);
         }
         client.Dispose();
     }
@@ -193,7 +196,7 @@ public sealed class SafetyMonitorService : ISafetyMonitorService, IDisposable {
         var c = _client;
         _client = null;
         if (c is not null) {
-            _ = Task.Run(() => SafeDisconnectDispose(c));
+            _ = Task.Run(() => SafeDisconnectDispose(c), CancellationToken.None);
         }
     }
 
@@ -225,4 +228,16 @@ public sealed class SafetyMonitorService : ISafetyMonitorService, IDisposable {
             SafeDisconnectDispose(client); // synchronous on dispose so teardown completes before exit
         }
     }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "SafetyMonitor IsSafe read failed; marking connection Error")]
+    private partial void LogIsSafeReadFailed(Exception ex);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "SafetyMonitor connected: {Name} at {Host}:{Port}/{Device}")]
+    private partial void LogConnected(string name, string host, int port, int device);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "SafetyMonitor connect failed for {Name}")]
+    private partial void LogConnectFailed(Exception ex, string name);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "ignored error while disconnecting SafetyMonitor during teardown")]
+    private partial void LogTeardownIgnored(Exception ex);
 }
