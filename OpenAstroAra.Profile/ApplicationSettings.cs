@@ -53,7 +53,7 @@ namespace OpenAstroAra.Profile {
         }
 
         protected override void SetDefaultValues() {
-            language = new CultureInfo("en-GB");
+            language = SafeCulture("en-GB");
             logLevel = LogLevel.INFO;
             devicePollingInterval = 2;
             skyAtlasImageRepository = string.Empty;
@@ -67,12 +67,26 @@ namespace OpenAstroAra.Profile {
         public string Culture {
             get => Language.Name;
             set {
-                Language = new CultureInfo(value);
+                Language = SafeCulture(value);
                 RaisePropertyChanged();
             }
         }
 
-        private CultureInfo language = new CultureInfo("en-GB");
+        // Resolve a named culture when ICU is available, but fall back to the
+        // invariant culture under globalization-invariant mode (the AOT server
+        // container) rather than throwing CultureNotFoundException on construction.
+        // The headless daemon does no server-side localization — UI localization
+        // lives in the Flutter client — so the exact default is immaterial; not
+        // crashing when a profile is constructed is what matters.
+        private static CultureInfo SafeCulture(string name) {
+            try {
+                return new CultureInfo(name);
+            } catch (CultureNotFoundException) {
+                return CultureInfo.InvariantCulture;
+            }
+        }
+
+        private CultureInfo language = SafeCulture("en-GB");
 
         public CultureInfo Language {
             get => language;

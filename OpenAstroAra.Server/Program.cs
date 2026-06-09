@@ -236,11 +236,25 @@ public partial class Program {
         // ActiveSequenceCheckpoint). Func<> resolver breaks the
         // FileSequenceService ↔ PlaceholderSequencerService construction-time
         // cycle (both reference each other now).
-        builder.Services.AddSingleton<ISequencerService>(sp =>
-            new PlaceholderSequencerService(
+        // §38 — real sequence execution. SequencerService deserializes the saved
+        // body and drives it through NINA's inherited Sequencer (full container
+        // semantics); equipment is still the headless-stub set, so no-equipment
+        // instructions run for real and equipment-bound ones no-op cleanly.
+        // One SequencerService instance, exposed under three registrations
+        // (concrete + ISequencerService + IHostedService) so there's no concrete
+        // cast — a future swap of the ISequencerService impl can't break the
+        // hosted-service registration with an InvalidCastException at startup.
+        builder.Services.AddSingleton<SequencerService>(sp =>
+            new SequencerService(
+                sp.GetRequiredService<SequenceBodyDeserializer>(),
                 sp.GetService<IWsBroadcaster>(),
                 () => sp.GetService<ISequenceService>(),
-                sp.GetService<ActiveSequenceCheckpoint>()));
+                sp.GetService<ActiveSequenceCheckpoint>(),
+                sp.GetService<ILogger<SequencerService>>()));
+        builder.Services.AddSingleton<ISequencerService>(sp => sp.GetRequiredService<SequencerService>());
+        // The same singleton as a hosted service so its IHostedService.StopAsync
+        // cancels any in-flight sequence runs on daemon shutdown.
+        builder.Services.AddHostedService(sp => sp.GetRequiredService<SequencerService>());
 
         // §38.7 — disk-shipped templates under {profileDir}/sequences/templates/
         // merged on top of the 3 hardcoded built-ins. .deb install can drop
