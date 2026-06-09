@@ -315,6 +315,8 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
                 rates.Add(rate.ToString());
             }
         } catch (Exception) {
+            // Discard any rates accumulated before a mid-enumeration failure so we never report a
+            // partial/torn list — an all-or-nothing read (empty == "rates unknown").
             rates.Clear();
         }
         return rates;

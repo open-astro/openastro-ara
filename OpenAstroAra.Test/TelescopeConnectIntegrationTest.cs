@@ -61,31 +61,33 @@ namespace OpenAstroAra.Test {
             Assert.That(connected!.State, Is.EqualTo(EquipmentConnectionState.Connected));
             Assert.That(connected.Capabilities, Is.Not.Null, "capabilities should be populated once connected");
 
-            // Make sure the mount can move: unpark (idempotent if already unparked) and enable tracking.
-            await svc.UnparkAsync(null, CancellationToken.None).ConfigureAwait(false);
-            await PollUntilAsync(svc, d => !d.Runtime.Parked).ConfigureAwait(false);
-            await svc.SetTrackingAsync(true, CancellationToken.None).ConfigureAwait(false);
-            var tracking = await PollUntilAsync(svc, d => d.Runtime.Tracking).ConfigureAwait(false);
-            Assert.That(tracking!.Runtime.Tracking, Is.True, "tracking should report on after SetTracking(true)");
+            // Drive the mount inside a try/finally so the simulator is always disconnected even if an
+            // assertion fires mid-test: DisconnectAsync runs the full SafeDisconnectDispose teardown
+            // (AbortSlew + Connected=false), unlike `using`/Dispose which takes the fast non-blocking
+            // path (DisposeQuietly only). That leaves the sim mount halted + disconnected for retries.
+            try {
+                // Make sure the mount can move: unpark (idempotent if already unparked) and track.
+                await svc.UnparkAsync(null, CancellationToken.None).ConfigureAwait(false);
+                await PollUntilAsync(svc, d => !d.Runtime.Parked).ConfigureAwait(false);
+                await svc.SetTrackingAsync(true, CancellationToken.None).ConfigureAwait(false);
+                var tracking = await PollUntilAsync(svc, d => d.Runtime.Tracking).ConfigureAwait(false);
+                Assert.That(tracking!.Runtime.Tracking, Is.True, "tracking should report on after SetTracking(true)");
 
-            // Slew to a coordinate near the current pointing so the OmniSim settles quickly, then
-            // confirm the read-back lands near the target.
-            var startRa = tracking.Runtime.RightAscensionHours ?? 6.0;
-            var targetRa = NormalizeRaHours(startRa + 0.2);
-            const double targetDec = 45.0;
-            await svc.SlewAsync(new SlewRequestDto(targetRa, targetDec), null, CancellationToken.None).ConfigureAwait(false);
-            var slewed = await PollUntilAsync(svc,
-                d => d.Runtime.DeclinationDegrees is double dec && Math.Abs(dec - targetDec) < 1.0
-                  && d.Runtime.State != "slewing").ConfigureAwait(false);
-            Assert.That(slewed!.Runtime.DeclinationDegrees, Is.Not.Null);
-            Assert.That(slewed.Runtime.DeclinationDegrees!.Value, Is.EqualTo(targetDec).Within(1.0),
-                "the mount should report ~45° declination after the slew");
-
-            // Stop tracking + abort (leave the device tidy) — best-effort, not asserted hard.
-            await svc.AbortSlewAsync(CancellationToken.None).ConfigureAwait(false);
-            await svc.SetTrackingAsync(false, CancellationToken.None).ConfigureAwait(false);
-
-            await svc.DisconnectAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+                // Slew to a coordinate near the current pointing so the OmniSim settles quickly, then
+                // confirm the read-back lands near the target.
+                var startRa = tracking.Runtime.RightAscensionHours ?? 6.0;
+                var targetRa = NormalizeRaHours(startRa + 0.2);
+                const double targetDec = 45.0;
+                await svc.SlewAsync(new SlewRequestDto(targetRa, targetDec), null, CancellationToken.None).ConfigureAwait(false);
+                var slewed = await PollUntilAsync(svc,
+                    d => d.Runtime.DeclinationDegrees is double dec && Math.Abs(dec - targetDec) < 1.0
+                      && d.Runtime.State != "slewing").ConfigureAwait(false);
+                Assert.That(slewed!.Runtime.DeclinationDegrees, Is.Not.Null);
+                Assert.That(slewed.Runtime.DeclinationDegrees!.Value, Is.EqualTo(targetDec).Within(1.0),
+                    "the mount should report ~45° declination after the slew");
+            } finally {
+                await svc.DisconnectAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+            }
             var disconnected = await PollUntilAsync(svc, d => d.State == EquipmentConnectionState.Disconnected).ConfigureAwait(false);
             Assert.That(disconnected!.State, Is.EqualTo(EquipmentConnectionState.Disconnected));
         }
