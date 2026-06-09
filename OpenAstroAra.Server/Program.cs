@@ -191,7 +191,9 @@ public partial class Program {
         // replaces the HeadlessSafetyMonitorMediator stub).
         builder.Services.AddSingleton<SafetyMonitorService>();
         builder.Services.AddSingleton<ISafetyMonitorService>(sp => sp.GetRequiredService<SafetyMonitorService>());
-        builder.Services.AddSingleton<IFlatDeviceService, PlaceholderFlatDeviceService>();
+        // §14e — seventh real device service: live flat device / CoverCalibrator (cover + light)
+        // + apply. REST-only; the mediator unification is a follow-up.
+        builder.Services.AddSingleton<IFlatDeviceService, FlatDeviceService>();
         builder.Services.AddSingleton<IGuiderService, PlaceholderGuiderService>();
         builder.Services.AddSingleton<IPolarAlignService, PlaceholderPolarAlignService>();
         // Phase 13.13 — §38 sequence CRUD + runtime control.
