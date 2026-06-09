@@ -22,6 +22,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Linq;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace OpenAstroAra.Server.Services;
 
@@ -85,29 +86,31 @@ public sealed partial class SequencerService : ISequencerService {
         Task.FromResult(_runs.TryGetValue(id, out var run) ? run.ToDto(id) : null);
 
     public async Task<OperationAcceptedDto> StartAsync(Guid id, SequenceStartRequestDto request, string? idempotencyKey, CancellationToken ct) {
-        var existing = _runs.GetValueOrDefault(id);
-        if (existing is not null && existing.State is SequenceRunState.Running or SequenceRunState.Paused or SequenceRunState.Starting) {
-            // Already running — idempotent: return the same operation rather
-            // than spawning a second worker over the same sequence.
+        // Atomically reserve the run slot BEFORE any async work. Two concurrent
+        // starts for the same id otherwise both pass a separate guard and both
+        // spawn a worker (TOCTOU). AddOrUpdate is atomic per key: an absent slot
+        // takes this fresh run; a live (non-terminal) run keeps the slot; a
+        // finished run is replaced (restart allowed). We own the run iff the
+        // returned reference is ours.
+        var run = new RunState();
+        var reserved = _runs.AddOrUpdate(id, run, (_, existing) => IsTerminal(existing.State) ? run : existing);
+        if (!ReferenceEquals(reserved, run)) {
+            // A live run already owns the slot — idempotent.
             return PlaceholderEquipmentHelpers.Accepted("sequencer.start", idempotencyKey);
         }
+        PruneTerminalRuns();
 
-        // Load + deserialize the saved body. Frames-total comes from the
-        // instruction count so WILMA can size its progress UI.
+        // We own the slot. Load + deserialize the saved body; frames-total comes
+        // from the instruction count so WILMA can size its progress UI.
         ISequenceRootContainer? root = null;
-        int instructionCount = 0;
         var sequences = _sequencesResolver?.Invoke();
         if (sequences is not null) {
             var dto = await sequences.GetAsync(id, ct);
             if (dto is not null) {
-                instructionCount = SequenceBodyInspector.Inspect(dto.Body).InstructionCount;
+                run.InstructionCount = SequenceBodyInspector.Inspect(dto.Body).InstructionCount;
                 root = ToRootContainer(dto.Body);
             }
         }
-
-        var run = new RunState(instructionCount);
-        _runs[id] = run;
-        PruneTerminalRuns();
 
         if (root is null) {
             // No body / undeserializable: fail the run immediately rather than
@@ -267,10 +270,18 @@ public sealed partial class SequencerService : ISequencerService {
     private async Task EmitAsync(string eventType, Guid sequenceId, RunState run) {
         if (_ws is null) return;
         try {
-            var json = $$"""
-                {"sequence_id":"{{sequenceId}}","run_id":"{{run.RunId}}","state":"{{run.State.ToString().ToLowerInvariant()}}","current_instruction_index":{{(run.CurrentInstructionIndex.HasValue ? run.CurrentInstructionIndex.Value.ToString() : "null")}},"frames_completed":{{run.FramesCompleted}},"frames_total":{{run.InstructionCount}}}
-                """;
-            using var doc = JsonDocument.Parse(json);
+            // Built with JsonObject (not string interpolation) so values are
+            // always correctly escaped — robust even if a user-supplied string
+            // field is added to the payload later.
+            var payload = new JsonObject {
+                ["sequence_id"] = sequenceId.ToString(),
+                ["run_id"] = run.RunId.ToString(),
+                ["state"] = run.State.ToString().ToLowerInvariant(),
+                ["current_instruction_index"] = run.CurrentInstructionIndex,
+                ["frames_completed"] = run.FramesCompleted,
+                ["frames_total"] = run.InstructionCount,
+            };
+            using var doc = JsonDocument.Parse(payload.ToJsonString());
             await _ws.PublishAsync(eventType, doc.RootElement.Clone(), CancellationToken.None);
         } catch (Exception) {
             // WS is best-effort; a failed publish must not affect the run.
@@ -290,14 +301,12 @@ public sealed partial class SequencerService : ISequencerService {
         public int? CurrentInstructionIndex { get; set; }
         public string? CurrentInstructionDescription { get; set; }
         public int FramesCompleted { get; set; }
-        public int InstructionCount { get; }
+        // Filled in after the body loads (StartAsync reserves the run slot before
+        // the async body read, so the count isn't known at construction).
+        public int InstructionCount { get; set; }
         public DateTimeOffset StartedUtc { get; } = DateTimeOffset.UtcNow;
         public DateTimeOffset? CompletedUtc { get; set; }
         public CancellationTokenSource Cts { get; } = new();
-
-        public RunState(int instructionCount) {
-            InstructionCount = instructionCount;
-        }
 
         /// <summary>Dispose the CTS (idempotent) — the record itself stays queryable in _runs.</summary>
         public void DisposeCts() => Cts.Dispose();

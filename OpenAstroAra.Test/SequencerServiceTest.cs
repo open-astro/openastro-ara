@@ -19,6 +19,7 @@ using OpenAstroAra.Sequencer.Serialization;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
 using System;
+using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -64,6 +65,14 @@ namespace OpenAstroAra.Test {
                 await Task.Delay(20);
             }
             return await svc.GetRunStateAsync(id, CancellationToken.None);
+        }
+
+        private static async Task WaitForStateAsync(SequencerService svc, Guid id, SequenceRunState target) {
+            for (var i = 0; i < 250; i++) { // up to ~5s
+                var s = await svc.GetRunStateAsync(id, CancellationToken.None);
+                if (s is not null && s.State == target) return;
+                await Task.Delay(20);
+            }
         }
 
         [Test]
@@ -113,6 +122,21 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Concurrent_starts_yield_a_single_coherent_run() {
+            // Fire many simultaneous starts for the same id. The atomic slot
+            // reservation must let exactly one win; the run resolves to a single
+            // coherent terminal state with no exception/corruption from the race.
+            var id = Guid.NewGuid();
+            var svc = BuildService(id, BuildBody());
+            var starts = Enumerable.Range(0, 8)
+                .Select(_ => svc.StartAsync(id, StartReq, null, CancellationToken.None))
+                .ToArray();
+            await Task.WhenAll(starts);
+            var state = await WaitForTerminalAsync(svc, id);
+            Assert.That(state!.State, Is.EqualTo(SequenceRunState.Completed));
+        }
+
+        [Test]
         public async Task Abort_during_run_stops_the_sequence() {
             // A long wait keeps the run in Running long enough to abort it; the
             // run must end as Stopped (not mis-reported Completed — guards the
@@ -120,7 +144,7 @@ namespace OpenAstroAra.Test {
             var id = Guid.NewGuid();
             var svc = BuildService(id, BuildBody(c => c.Items.Add(new WaitForTimeSpan { Time = 30 })));
             await svc.StartAsync(id, StartReq, null, CancellationToken.None);
-            await Task.Delay(150); // let the worker enter Running + start the wait
+            await WaitForStateAsync(svc, id, SequenceRunState.Running); // deterministic, not a fixed sleep
             await svc.AbortAsync(id, null, CancellationToken.None);
             var state = await WaitForTerminalAsync(svc, id);
             Assert.That(state!.State, Is.EqualTo(SequenceRunState.Stopped));
