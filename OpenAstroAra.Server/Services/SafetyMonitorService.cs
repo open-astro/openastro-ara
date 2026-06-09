@@ -72,6 +72,9 @@ public sealed partial class SafetyMonitorService : ISafetyMonitorService, IDispo
         }
         var safe = false;
         if (client is not null && state == EquipmentConnectionState.Connected) {
+            // ct gates only whether the read starts: once running, the blocking ASCOM
+            // IsSafe HTTP call has no cancellation path (inherent to the Alpaca client), so a
+            // cancelled GET may still wait out the in-flight request before observing ct.
             safe = await Task.Run(() => ReadIsSafe(client), ct).ConfigureAwait(false);
         }
         string transition;
@@ -82,6 +85,11 @@ public sealed partial class SafetyMonitorService : ISafetyMonitorService, IDispo
             state = _state;
             transition = _lastTransition.ToString("O", CultureInfo.InvariantCulture);
         }
+        // Don't report safe=true alongside a non-Connected state: a disconnect racing the
+        // off-thread IsSafe read could otherwise emit safe=true with state=Disconnected.
+        if (state != EquipmentConnectionState.Connected) {
+            safe = false;
+        }
         return new SafetyMonitorDto(device.UniqueId, device.Name, state, safe, transition);
     }
 
@@ -89,6 +97,7 @@ public sealed partial class SafetyMonitorService : ISafetyMonitorService, IDispo
         ArgumentNullException.ThrowIfNull(request);
         var device = request.Device;
         lock (_gate) {
+            ObjectDisposedException.ThrowIf(_disposed, this);
             // Idempotent: connecting to the same device while already connecting/connected
             // is a no-op accept (§60.5) — don't tear down a good connection.
             if ((_state == EquipmentConnectionState.Connecting || _state == EquipmentConnectionState.Connected)
@@ -108,6 +117,7 @@ public sealed partial class SafetyMonitorService : ISafetyMonitorService, IDispo
     public Task<OperationAcceptedDto> DisconnectAsync(string? idempotencyKey, CancellationToken ct) {
         AlpacaSafetyMonitor? client;
         lock (_gate) {
+            ObjectDisposedException.ThrowIf(_disposed, this);
             client = _client;
             _client = null;
             if (_device is not null) {
@@ -165,9 +175,11 @@ public sealed partial class SafetyMonitorService : ISafetyMonitorService, IDispo
             }
             var superseded = false;
             lock (_gate) {
-                // Only adopt this connection if it is still the one we want — a disconnect or a
-                // newer connect may have superseded it while the blocking connect was running.
-                if (_state == EquipmentConnectionState.Connecting && _device?.UniqueId == device.UniqueId) {
+                // Only adopt this connection if it is still the one we want — a disconnect, a
+                // newer connect, or a Dispose() may have superseded it while the blocking
+                // connect was running. The !_disposed check prevents adopting a client into a
+                // service whose Dispose() has already run (which would leak it).
+                if (!_disposed && _state == EquipmentConnectionState.Connecting && _device?.UniqueId == device.UniqueId) {
                     _client = client;
                     SetState(EquipmentConnectionState.Connected);
                 } else {
@@ -206,7 +218,9 @@ public sealed partial class SafetyMonitorService : ISafetyMonitorService, IDispo
         client.Dispose();
     }
 
-    // Caller holds _gate; offloads the blocking disconnect/dispose so we never do I/O under the lock.
+    // Caller holds _gate; offloads the blocking disconnect/dispose so we never do I/O under the
+    // lock. The discarded task is intentionally untracked — it may outlive the service instance,
+    // but SafeDisconnectDispose swallows everything, so there is no unobserved-fault risk.
     private void DisposeClientLocked() {
         var c = _client;
         _client = null;

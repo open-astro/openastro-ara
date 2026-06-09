@@ -78,6 +78,24 @@ namespace OpenAstroAra.Test {
             Assert.That(dto!.State, Is.EqualTo(EquipmentConnectionState.Disconnected));
         }
 
+        [Test]
+        public void ConnectAsync_after_Dispose_throws_ObjectDisposedException() {
+            var svc = new SafetyMonitorService();
+            svc.Dispose();
+            var dead = new DiscoveredDeviceDto(
+                "uid", "Device", DeviceType.SafetyMonitor, "127.0.0.1", "127.0.0.1", 1, 0, false);
+            Assert.Throws<ObjectDisposedException>(
+                () => { _ = svc.ConnectAsync(new ConnectRequestDto(dead), null, CancellationToken.None); });
+        }
+
+        [Test]
+        public void DisconnectAsync_after_Dispose_throws_ObjectDisposedException() {
+            var svc = new SafetyMonitorService();
+            svc.Dispose();
+            Assert.Throws<ObjectDisposedException>(
+                () => { _ = svc.DisconnectAsync(null, CancellationToken.None); });
+        }
+
         // Polls up to ~15s for the connection to leave Connecting (HTTP connect-refused on a
         // dead port is fast, but allow generous slack for a loaded CI runner).
         private static async Task<SafetyMonitorDto?> PollUntilNotConnectingAsync(SafetyMonitorService svc) {
