@@ -169,7 +169,9 @@ public partial class Program {
         // the IFocuserMediator unification (MoveFocuser/autofocus instructions) is a follow-up.
         builder.Services.AddSingleton<IFocuserService, FocuserService>();
         builder.Services.AddSingleton<IFilterWheelService, PlaceholderFilterWheelService>();
-        builder.Services.AddSingleton<IRotatorService, PlaceholderRotatorService>();
+        // §14e — fifth real device service: live rotator (mechanical/sky angle) + Move. REST-only;
+        // the IRotatorMediator unification is a follow-up.
+        builder.Services.AddSingleton<IRotatorService, RotatorService>();
         builder.Services.AddSingleton<IDomeService, PlaceholderDomeService>();
         // §14e — third real device service (first with a control action: SetValue). REST-only;
         // the ISwitchMediator unification (SetSwitchValue sequence instruction) is a follow-up.
