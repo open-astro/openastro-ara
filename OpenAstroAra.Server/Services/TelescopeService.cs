@@ -1,0 +1,444 @@
+#region "copyright"
+
+/*
+    Copyright (c) 2026 Open Astro and the OpenAstro Ara contributors
+
+    This file is part of OpenAstro Ara (forked from N.I.N.A.).
+
+    This Source Code Form is subject to the terms of the Mozilla Public
+    License, v. 2.0. If a copy of the MPL was not distributed with this
+    file, You can obtain one at http://mozilla.org/MPL/2.0/.
+*/
+
+#endregion "copyright"
+
+using ASCOM.Alpaca.Clients;
+using ASCOM.Common.Alpaca;
+using ASCOM.Common.DeviceInterfaces;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using OpenAstroAra.Server.Contracts;
+using System;
+using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace OpenAstroAra.Server.Services;
+
+/// <summary>
+/// §14e — ninth real Alpaca-backed device service. Replaces <c>PlaceholderTelescopeService</c>:
+/// connects to a discovered Alpaca Telescope (mount), serves its capabilities + live runtime
+/// (RA/Dec + tracking/parked/at-home) over the §6 REST surface, and drives it via three §60.5
+/// 202-Accepted background operations — <see cref="SlewAsync"/> (goto / sync), <see cref="ParkAsync"/>,
+/// <see cref="UnparkAsync"/> — plus two prompt synchronous writes, <see cref="SetTrackingAsync"/> and
+/// <see cref="AbortSlewAsync"/> (the §57 panic stop). Follows the established template (generation
+/// supersede, §32.4 background-refresh cache, read-once capabilities, AbortSlew-before-disconnect).
+/// REST-only — the <c>ITelescopeMediator</c> unification is the follow-up.
+/// </summary>
+public sealed partial class TelescopeService : ITelescopeService, IDisposable {
+
+    private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(2);
+    private static readonly TelescopeStateDto IdleRuntime = new("idle", null, null, false, false, false);
+
+    private readonly ILogger<TelescopeService> _logger;
+    private readonly object _gate = new();
+    private readonly Timer _refreshTimer;
+    private AlpacaTelescope? _client;
+    private DiscoveredDeviceDto? _device;
+    private EquipmentConnectionState _state = EquipmentConnectionState.Disconnected;
+    private TelescopeCapabilitiesDto? _capabilities;
+    private TelescopeStateDto _runtime = IdleRuntime;
+    private int _refreshing;
+    private long _connectGeneration;
+    private bool _disposed;
+
+    public TelescopeService(ILogger<TelescopeService>? logger = null) {
+        _logger = logger ?? NullLogger<TelescopeService>.Instance;
+        _refreshTimer = new Timer(RefreshTick, state: null, dueTime: RefreshInterval, period: RefreshInterval);
+    }
+
+    public Task<TelescopeDto?> GetAsync(CancellationToken ct) {
+        lock (_gate) {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            if (_device is null) {
+                return Task.FromResult<TelescopeDto?>(null);
+            }
+            var state = _state;
+            var connected = state == EquipmentConnectionState.Connected;
+            var runtime = connected ? _runtime : IdleRuntime;
+            var caps = connected ? _capabilities : null;
+            return Task.FromResult<TelescopeDto?>(new TelescopeDto(_device.UniqueId, _device.Name, state, caps, runtime));
+        }
+    }
+
+    public Task<OperationAcceptedDto> ConnectAsync(ConnectRequestDto request, string? idempotencyKey, CancellationToken ct) {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(request.Device);
+        var device = request.Device;
+        long generation;
+        lock (_gate) {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            if ((_state == EquipmentConnectionState.Connecting || _state == EquipmentConnectionState.Connected)
+                && _device?.UniqueId == device.UniqueId) {
+                return Task.FromResult(Accepted("telescope.connect", idempotencyKey));
+            }
+            DisposeClientLocked();
+            _device = device;
+            generation = ++_connectGeneration;
+            SetState(EquipmentConnectionState.Connecting);
+        }
+        _ = Task.Run(() => ConnectInBackground(device, generation), CancellationToken.None);
+        return Task.FromResult(Accepted("telescope.connect", idempotencyKey));
+    }
+
+    public Task<OperationAcceptedDto> DisconnectAsync(string? idempotencyKey, CancellationToken ct) {
+        AlpacaTelescope? client;
+        lock (_gate) {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            _connectGeneration++;
+            client = _client;
+            _client = null;
+            if (_device is not null) {
+                SetState(EquipmentConnectionState.Disconnected);
+            }
+        }
+        if (client is not null) {
+            _ = Task.Run(() => SafeDisconnectDispose(client), CancellationToken.None);
+        }
+        return Task.FromResult(Accepted("telescope.disconnect", idempotencyKey));
+    }
+
+    public Task<OperationAcceptedDto> SlewAsync(SlewRequestDto request, string? idempotencyKey, CancellationToken ct) {
+        ArgumentNullException.ThrowIfNull(request);
+        // Dispose check first, then argument range, then connection state — aligned with the other
+        // device services.
+        AlpacaTelescope? client;
+        lock (_gate) {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            client = _state == EquipmentConnectionState.Connected ? _client : null;
+        }
+        if (IsCoordinateOutOfRange(request.RightAscensionHours, request.DeclinationDegrees)) {
+            throw new ArgumentOutOfRangeException(nameof(request), request,
+                "RightAscensionHours must be in [0, 24) and DeclinationDegrees in [-90, 90].");
+        }
+        if (client is null) {
+            throw new InvalidOperationException("telescope is not connected");
+        }
+        var ra = request.RightAscensionHours;
+        var dec = request.DeclinationDegrees;
+        var sync = request.Sync ?? false;
+        _ = Task.Run(() => SlewInBackground(client, ra, dec, sync), CancellationToken.None);
+        return Task.FromResult(Accepted(sync ? "telescope.sync" : "telescope.slew", idempotencyKey));
+    }
+
+    public Task<OperationAcceptedDto> ParkAsync(ParkRequestDto request, string? idempotencyKey, CancellationToken ct) {
+        ArgumentNullException.ThrowIfNull(request);
+        var client = RequireConnectedClient();
+        _ = Task.Run(() => RunControlInBackground("telescope.park", client, c => c.Park()), CancellationToken.None);
+        return Task.FromResult(Accepted("telescope.park", idempotencyKey));
+    }
+
+    public Task<OperationAcceptedDto> UnparkAsync(string? idempotencyKey, CancellationToken ct) {
+        var client = RequireConnectedClient();
+        _ = Task.Run(() => RunControlInBackground("telescope.unpark", client, c => c.Unpark()), CancellationToken.None);
+        return Task.FromResult(Accepted("telescope.unpark", idempotencyKey));
+    }
+
+    public async Task SetTrackingAsync(bool enabled, CancellationToken ct) {
+        var client = RequireConnectedClient();
+        // Prompt synchronous write off the request thread (blocking ASCOM HTTP PUT), then reflect.
+        await Task.Run(() => client.Tracking = enabled, ct).ConfigureAwait(false);
+        RefreshCacheOnce();
+    }
+
+    public async Task AbortSlewAsync(CancellationToken ct) {
+        var client = RequireConnectedClient();
+        // §57 panic stop: issue AbortSlew immediately (universal — every mount supports it). Prompt
+        // synchronous write so the caller learns it landed; then refresh so State leaves "slewing".
+        await Task.Run(() => client.AbortSlew(), ct).ConfigureAwait(false);
+        RefreshCacheOnce();
+    }
+
+    private AlpacaTelescope RequireConnectedClient() {
+        AlpacaTelescope? client;
+        lock (_gate) {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            client = _state == EquipmentConnectionState.Connected ? _client : null;
+        }
+        return client ?? throw new InvalidOperationException("telescope is not connected");
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Background slew boundary: the blocking ASCOM SlewToCoordinatesAsync/SyncToCoordinates can throw arbitrary driver/HTTP exceptions, and a concurrent Disconnect/Dispose can dispose the captured client mid-call; any escape must be contained and logged, never fault the fire-and-forget task or the daemon. CA1031's log-and-recover boundary applies.")]
+    private void SlewInBackground(AlpacaTelescope client, double raHours, double decDeg, bool sync) {
+        try {
+            if (sync) {
+                // Sync recalibrates the pointing model to the given coordinates without moving.
+                client.SyncToCoordinates(raHours, decDeg);
+            } else {
+                // Async goto: returns immediately, Slewing goes true; the refresh cache surfaces
+                // State="slewing" until the mount settles.
+                client.SlewToCoordinatesAsync(raHours, decDeg);
+            }
+            RefreshCacheOnce();
+        } catch (Exception ex) {
+            LogSlewFailed(ex, raHours, decDeg);
+        }
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Background control boundary: the blocking ASCOM Park/Unpark can throw arbitrary driver/HTTP exceptions, and a concurrent Disconnect/Dispose can dispose the captured client mid-call; any escape must be contained and logged, never fault the fire-and-forget task or the daemon. CA1031's log-and-recover boundary applies.")]
+    private void RunControlInBackground(string op, AlpacaTelescope client, Action<AlpacaTelescope> action) {
+        try {
+            action(client);
+            RefreshCacheOnce();
+        } catch (Exception ex) {
+            LogControlFailed(ex, op);
+        }
+    }
+
+    private void RefreshTick(object? state) => RefreshCacheOnce();
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Timer-callback boundary: an unhandled exception in a System.Threading.Timer callback crashes the process. The per-field reads already absorb device failures; this catch-all is a hard backstop so a refresh tick can never fault the daemon. CA1031's log-and-recover boundary applies.")]
+    private void RefreshCacheOnce() {
+        if (Interlocked.CompareExchange(ref _refreshing, 1, 0) != 0) {
+            return;
+        }
+        try {
+            AlpacaTelescope? client;
+            bool needCaps;
+            lock (_gate) {
+                if (_disposed || _state != EquipmentConnectionState.Connected) {
+                    return;
+                }
+                client = _client;
+                needCaps = _capabilities is null;
+            }
+            if (client is null) {
+                return;
+            }
+            var runtime = ReadRuntime(client);
+            var caps = needCaps ? ReadCapabilities(client) : null;
+            lock (_gate) {
+                if (_state == EquipmentConnectionState.Connected && ReferenceEquals(_client, client)) {
+                    _runtime = runtime;
+                    if (caps is not null) {
+                        _capabilities = caps;
+                    }
+                }
+            }
+        } catch (Exception ex) {
+            LogRuntimeReadFailed(ex);
+        } finally {
+            Interlocked.Exchange(ref _refreshing, 0);
+        }
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Per-field read boundary: an unsupported/transiently-failing telescope property throws; that field falls back to its default rather than failing the whole runtime read. CA1031's log-and-recover boundary applies.")]
+    private static TelescopeStateDto ReadRuntime(AlpacaTelescope c) {
+        bool slewing;
+        try { slewing = c.Slewing; } catch (Exception) { slewing = false; }
+        double? ra;
+        try { ra = c.RightAscension; } catch (Exception) { ra = null; }
+        double? dec;
+        try { dec = c.Declination; } catch (Exception) { dec = null; }
+        bool tracking;
+        try { tracking = c.Tracking; } catch (Exception) { tracking = false; }
+        bool parked;
+        try { parked = c.AtPark; } catch (Exception) { parked = false; }
+        bool atHome;
+        try { atHome = c.AtHome; } catch (Exception) { atHome = false; }
+
+        // State precedence: a slew in progress wins (the mount is moving); then a parked mount (a
+        // definite rest state); then active tracking; otherwise idle.
+        var state = slewing ? "slewing"
+            : parked ? "parked"
+            : tracking ? "tracking"
+            : "idle";
+        return new TelescopeStateDto(state, ra, dec, tracking, parked, atHome);
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Per-field read boundary: an unsupported capability property throws; each flag falls back to false (and the rate list to empty) rather than failing the whole capability read. The RA/Dec range is fixed, so there is no essential field whose failure should null the whole DTO. CA1031's log-and-recover boundary applies.")]
+    private static TelescopeCapabilitiesDto ReadCapabilities(AlpacaTelescope c) {
+        bool canSlew;
+        try { canSlew = c.CanSlewAsync || c.CanSlew; } catch (Exception) { canSlew = false; }
+        bool canSync;
+        try { canSync = c.CanSync; } catch (Exception) { canSync = false; }
+        bool canPark;
+        try { canPark = c.CanPark; } catch (Exception) { canPark = false; }
+        bool canUnpark;
+        try { canUnpark = c.CanUnpark; } catch (Exception) { canUnpark = false; }
+        bool canSetTracking;
+        try { canSetTracking = c.CanSetTracking; } catch (Exception) { canSetTracking = false; }
+        bool canPulseGuide;
+        try { canPulseGuide = c.CanPulseGuide; } catch (Exception) { canPulseGuide = false; }
+        bool canFindHome;
+        try { canFindHome = c.CanFindHome; } catch (Exception) { canFindHome = false; }
+        return new TelescopeCapabilitiesDto(
+            CanSlew: canSlew, CanSync: canSync, CanPark: canPark, CanUnpark: canUnpark,
+            CanSetTracking: canSetTracking, CanPulseGuide: canPulseGuide, CanFindHome: canFindHome,
+            SupportedSiderealRates: ReadSiderealRates(c));
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Per-field read boundary: TrackingRates (or enumerating it) can throw on a driver that does not implement it; the supported-rate list falls back to empty rather than failing the whole capability read. CA1031's log-and-recover boundary applies.")]
+    private static List<string> ReadSiderealRates(AlpacaTelescope c) {
+        var rates = new List<string>();
+        try {
+            foreach (DriveRate rate in c.TrackingRates) {
+                rates.Add(rate.ToString());
+            }
+        } catch (Exception) {
+            rates.Clear();
+        }
+        return rates;
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Background connect boundary: constructing the Alpaca client and setting Connected can throw arbitrary driver/HTTP/socket exceptions; any escape must surface as the Error state and be contained, never fault the fire-and-forget task or the daemon. CA1031's log-and-recover boundary applies.")]
+    [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
+        Justification = "Ownership of the AlpacaTelescope is managed explicitly: on every non-adopt path SafeDisconnectDispose disposes it; on the adopt path it is stored in _client (local set to null) and disposed later by DisconnectAsync/Dispose. CA2000 cannot follow the transfer through the lock + helper.")]
+    private void ConnectInBackground(DiscoveredDeviceDto device, long generation) {
+        AlpacaTelescope? client = null;
+        var adopted = false;
+        try {
+            var host = string.IsNullOrWhiteSpace(device.IpAddress) ? device.HostName : device.IpAddress;
+            if (string.IsNullOrWhiteSpace(host)) {
+                throw new InvalidOperationException(
+                    $"discovered device '{device.Name}' carries neither an IP address nor a host name");
+            }
+            client = new AlpacaTelescope(
+                device.UseHttps ? ServiceType.Https : ServiceType.Http,
+                host, device.IpPort, device.AlpacaDeviceNumber, strictCasing: false, logger: null);
+            client.Connected = true;
+            lock (_gate) {
+                if (!_disposed && _connectGeneration == generation) {
+                    _client = client;
+                    _capabilities = null;       // re-read for the new device
+                    _runtime = IdleRuntime;     // don't serve a prior device's runtime
+                    SetState(EquipmentConnectionState.Connected);
+                    adopted = true;
+                }
+            }
+            if (!adopted) {
+                SafeDisconnectDispose(client);
+                return;
+            }
+            client = null; // ownership transferred to _client
+            RefreshCacheOnce(); // seed capabilities + runtime through the guarded path
+            bool stillConnected;
+            lock (_gate) {
+                stillConnected = _state == EquipmentConnectionState.Connected;
+            }
+            if (stillConnected) {
+                LogConnected(device.Name, host, device.IpPort, device.AlpacaDeviceNumber);
+            }
+        } catch (Exception ex) {
+            if (!adopted) {
+                if (client is not null) {
+                    SafeDisconnectDispose(client);
+                }
+                lock (_gate) {
+                    if (!_disposed && _connectGeneration == generation) {
+                        SetState(EquipmentConnectionState.Error);
+                    }
+                }
+                LogConnectFailed(ex, device.Name);
+            }
+        }
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort teardown: AbortSlew / Connected = false can throw driver/HTTP exceptions, which must be swallowed so Dispose always runs and cleanup completes. CA1031's log-and-recover boundary applies.")]
+    private void SafeDisconnectDispose(AlpacaTelescope client) {
+        try {
+            // Interrupt any in-flight slew so a disconnect-during-slew fails fast rather than
+            // waiting out the full ASCOM timeout.
+            client.AbortSlew();
+        } catch (Exception ex) {
+            LogTeardownIgnored(ex);
+        }
+        try {
+            client.Connected = false;
+        } catch (Exception ex) {
+            LogTeardownIgnored(ex);
+        }
+        DisposeQuietly(client);
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort teardown: ASCOM/COM-backed clients have been known to throw from Dispose(); the throw must be swallowed (and logged) rather than escape into a fire-and-forget Task.Run as an unobserved exception. CA1031's log-and-recover boundary applies.")]
+    private void DisposeQuietly(AlpacaTelescope client) {
+        try {
+            client.Dispose();
+        } catch (Exception ex) {
+            LogTeardownIgnored(ex);
+        }
+    }
+
+    private void DisposeClientLocked() {
+        var c = _client;
+        _client = null;
+        if (c is not null) {
+            _ = Task.Run(() => SafeDisconnectDispose(c), CancellationToken.None);
+        }
+    }
+
+    // Caller must hold _gate (every call site already does), so no inner lock here.
+    private void SetState(EquipmentConnectionState state) {
+        _state = state;
+    }
+
+    private static OperationAcceptedDto Accepted(string operationType, string? idempotencyKey) =>
+        new(OperationId: Guid.NewGuid(),
+            OperationType: operationType,
+            AcceptedUtc: DateTimeOffset.UtcNow,
+            IdempotencyKey: idempotencyKey);
+
+    // Extracted (internal) for direct unit testing. ASCOM equatorial coordinates: RA in [0, 24)
+    // hours, Dec in [-90, 90] degrees (the poles are valid).
+    internal static bool IsCoordinateOutOfRange(double raHours, double decDeg) =>
+        raHours < 0 || raHours >= 24 || decDeg < -90 || decDeg > 90;
+
+    public void Dispose() {
+        AlpacaTelescope? client;
+        lock (_gate) {
+            if (_disposed) {
+                return;
+            }
+            _disposed = true;
+            client = _client;
+            _client = null;
+        }
+        _refreshTimer.Dispose();
+        // Dispose the client directly (guarded), not via SafeDisconnectDispose: the courtesy
+        // AbortSlew/Connected=false are blocking HTTP calls (up to ~3s ASCOM timeout) that would hang
+        // container shutdown if the device is unreachable. DisposeQuietly releases resources only.
+        if (client is not null) {
+            DisposeQuietly(client);
+        }
+        GC.SuppressFinalize(this);
+    }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Telescope runtime read failed")]
+    private partial void LogRuntimeReadFailed(Exception ex);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Telescope slew to RA {Ra}h Dec {Dec}° failed")]
+    private partial void LogSlewFailed(Exception ex, double ra, double dec);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Telescope control op {Op} failed")]
+    private partial void LogControlFailed(Exception ex, string op);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Telescope connected: {Name} at {Host}:{Port}/{Device}")]
+    private partial void LogConnected(string name, string host, int port, int device);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Telescope connect failed for {Name}")]
+    private partial void LogConnectFailed(Exception ex, string name);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "ignored error while disconnecting Telescope during teardown")]
+    private partial void LogTeardownIgnored(Exception ex);
+}
