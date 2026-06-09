@@ -103,7 +103,9 @@ namespace OpenAstroAra.Test {
             var id = Guid.NewGuid();
             var svc = BuildService(id, body: null);
             await svc.StartAsync(id, StartReq, null, CancellationToken.None);
-            var state = await svc.GetRunStateAsync(id, CancellationToken.None);
+            // Body load + the Failed transition happen on the worker now, so wait
+            // for the terminal state rather than reading immediately.
+            var state = await WaitForTerminalAsync(svc, id);
             Assert.That(state!.State, Is.EqualTo(SequenceRunState.Failed));
         }
 

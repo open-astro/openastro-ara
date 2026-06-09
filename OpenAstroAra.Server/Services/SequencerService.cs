@@ -91,7 +91,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
     public Task<SequenceRunStateDto?> GetRunStateAsync(Guid id, CancellationToken ct) =>
         Task.FromResult(_runs.TryGetValue(id, out var run) ? run.ToDto(id) : null);
 
-    public async Task<OperationAcceptedDto> StartAsync(Guid id, SequenceStartRequestDto request, string? idempotencyKey, CancellationToken ct) {
+    public Task<OperationAcceptedDto> StartAsync(Guid id, SequenceStartRequestDto request, string? idempotencyKey, CancellationToken ct) {
         // Atomically reserve the run slot BEFORE any async work. Two concurrent
         // starts for the same id otherwise both pass a separate guard and both
         // spawn a worker (TOCTOU). AddOrUpdate is atomic per key: an absent slot
@@ -101,44 +101,64 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         var run = TryReserveRun(id);
         if (run is null) {
             // A live run already owns the slot — idempotent.
-            return PlaceholderEquipmentHelpers.Accepted("sequencer.start", idempotencyKey);
+            return Task.FromResult(PlaceholderEquipmentHelpers.Accepted("sequencer.start", idempotencyKey));
         }
         PruneTerminalRuns();
 
-        // We own the slot. Load + deserialize the saved body; frames-total comes
-        // from the instruction count so WILMA can size its progress UI. Set the
-        // count only once we have a runnable root, so a failed deserialize leaves
-        // a Failed run with FramesTotal 0 rather than a misleading non-zero total.
-        ISequenceRootContainer? root = null;
-        var sequences = _sequencesResolver?.Invoke();
-        if (sequences is not null) {
-            var dto = await sequences.GetAsync(id, ct);
-            if (dto is not null) {
-                root = ToRootContainer(dto.Body);
-                if (root is not null) {
-                    run.InstructionCount = SequenceBodyInspector.Inspect(dto.Body).InstructionCount;
-                }
-            }
+        // Assign the worker synchronously — before any await — so
+        // IHostedService.StopAsync always finds a Worker to await (closes the
+        // null-Worker shutdown window). The body load + deserialize + §28
+        // checkpoint claim run inside the worker, off the request path.
+        run.Worker = Task.Run(() => LoadAndRunAsync(id, run), CancellationToken.None);
+        return Task.FromResult(PlaceholderEquipmentHelpers.Accepted("sequencer.start", idempotencyKey));
+    }
+
+    // Worker entry: load + deserialize the body, then drive it. Split from
+    // StartAsync so the worker Task is assigned synchronously (no null-Worker
+    // window during shutdown). Broad catch on the load boundary: a bad body or
+    // store error must mark the run Failed + notify, never fault the worker task.
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Body-load boundary on the background worker: deserialization / store access can throw IO/Json/argument/etc.; any escape must surface as a Failed run via WS and be contained, not fault the worker. CA1031's log-and-recover boundary exception applies.")]
+    private async Task LoadAndRunAsync(Guid id, RunState run) {
+        ISequenceRootContainer? root;
+        try {
+            root = await LoadRootAsync(id, run);
+        } catch (Exception ex) {
+            LogRunFailed(ex, id);
+            run.State = SequenceRunState.Failed;
+            await EmitAsync("sequence.failed", id, run);
+            return;
         }
 
         if (root is null) {
-            // No body / undeserializable: fail the run immediately rather than
-            // spin a worker over nothing. The body validity is normally enforced
-            // by the §38.5 validator at persist time.
+            // No body / undeserializable: fail rather than spin over nothing. The
+            // §38.5 validator normally enforces body validity at persist time.
             run.State = SequenceRunState.Failed;
             await EmitAsync("sequence.failed", id, run);
-            return PlaceholderEquipmentHelpers.Accepted("sequencer.start", idempotencyKey);
+            return;
         }
 
         // §28 — checkpoint from start-of-run so the §28.2 reconciler can spot an
-        // interrupted run, not just one that got past its first instruction. Claim
-        // ownership first so this run's writes/clear are the ones that take effect.
-        // (If an abort lands in the window before the worker runs, this checkpoint
-        // is transient — the worker's finally clears it; no permanent leak.)
+        // interrupted run. Claim ownership first so this run's writes/clear win.
         ClaimCheckpoint(run);
         WriteCheckpointIfOwner(run, id);
-        run.Worker = Task.Run(() => RunWorkerAsync(id, run, root), CancellationToken.None);
-        return PlaceholderEquipmentHelpers.Accepted("sequencer.start", idempotencyKey);
+        await RunWorkerAsync(id, run, root);
+    }
+
+    private async Task<ISequenceRootContainer?> LoadRootAsync(Guid id, RunState run) {
+        var sequences = _sequencesResolver?.Invoke();
+        if (sequences is null) return null;
+        // Use the run's own token (the request CT is gone once StartAsync
+        // returned), so an abort during load still cancels it.
+        var dto = await sequences.GetAsync(id, run.Cts.Token);
+        if (dto is null) return null;
+        var root = ToRootContainer(dto.Body);
+        if (root is not null) {
+            // frames-total comes from the instruction count so WILMA can size its
+            // progress UI; set only once we have a runnable root.
+            run.InstructionCount = SequenceBodyInspector.Inspect(dto.Body).InstructionCount;
+        }
+        return root;
     }
 
     public Task<OperationAcceptedDto> PauseAsync(Guid id, string? idempotencyKey, CancellationToken ct) {
@@ -171,6 +191,11 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         var workers = new System.Collections.Generic.List<Task>();
         foreach (var run in _runs.Values) {
             if (IsTerminal(run.State)) continue;
+            // Narrow race: a run that finished its execution this instant (worker
+            // about to set Completed) gets marked Stopped here and reports
+            // "stopped" instead of "complete". Acceptable at shutdown — the run
+            // did stop, and the §28.2 reconciler (which keys off the checkpoint,
+            // cleared by the worker's finally) is unaffected.
             run.State = SequenceRunState.Stopped;
             try {
                 await run.Cts.CancelAsync();
