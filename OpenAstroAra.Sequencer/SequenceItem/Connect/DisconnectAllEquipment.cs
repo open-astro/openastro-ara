@@ -19,7 +19,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
     [ExportMetadata("Category", "Lbl_SequenceCategory_Connect")]
     [Export(typeof(ISequenceItem))]
     [JsonObject(MemberSerialization.OptIn)]
-    sealed class DisconnectAllEquipment : SequenceItem, IValidatable {
+    public sealed class DisconnectAllEquipment : SequenceItem, IValidatable {
         private ICameraMediator cameraMediator;
         private IFilterWheelMediator fwMediator;
         private IFocuserMediator focuserMediator;
@@ -70,7 +70,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
             };
         }
 
-        public List<string> Devices { get; }
+        public IReadOnlyList<string> Devices { get; }
 
 
         private object? GetMediator(string device) {

@@ -14,12 +14,15 @@
 
 using OpenAstroAra.Equipment.Interfaces;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Sequencer;
 using OpenAstroAra.Sequencer.Conditions;
 using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.SequenceItem;
 using OpenAstroAra.Sequencer.SequenceItem.Camera;
+using OpenAstroAra.Sequencer.SequenceItem.Connect;
 using OpenAstroAra.Sequencer.SequenceItem.Dome;
+using OpenAstroAra.Sequencer.SequenceItem.FilterWheel;
 using OpenAstroAra.Sequencer.SequenceItem.Focuser;
 using OpenAstroAra.Sequencer.SequenceItem.Guider;
 using OpenAstroAra.Sequencer.SequenceItem.Rotator;
@@ -129,17 +132,23 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
             IRotatorMediator? rotatorMediator = null,
             ISwitchMediator? switchMediator = null,
             IDomeMediator? domeMediator = null,
-            IDomeFollower? domeFollower = null) {
-        // §38k-9 … §38k-21 — equipment-mediator stubs default to no-op headless
+            IDomeFollower? domeFollower = null,
+            IFilterWheelMediator? filterWheelMediator = null,
+            IFlatDeviceMediator? flatDeviceMediator = null,
+            IWeatherDataMediator? weatherDataMediator = null,
+            IProfileService? profileService = null) {
+        // §38k-9 … §38k-22 — equipment-mediator stubs default to no-op headless
         // impls so call sites that don't yet have real Alpaca-backed mediators
         // still get a usable prototype set. As real drivers land (§14e Alpaca
         // simulator pinning gates this), Program.cs's DI can hand in real
         // mediators here instead.
         //
-        // §38k-15 note: HeadlessFilterWheelMediator is DI-registered in Program.cs
-        // to complete the mediator surface, but is NOT a parameter here — its only
-        // instruction (SwitchFilter) also needs IProfileService and lands in a
-        // follow-up §38k sub-PR, so the factory has no use for it yet.
+        // §38k-22 — profileService is a HeadlessProfileService stub: it exists
+        // only so the profile-bound instructions (Dither / SwitchFilter / the
+        // Connect dir) can be *constructed* as JSON-resolvable prototypes.
+        // Prototypes never execute, so a default ActiveProfile + no-op events
+        // suffice; reconciling the real user-edited profile (IProfileStore /
+        // profile.json) is an execution-engine concern decided later.
         safetyMonitorMediator ??= new HeadlessSafetyMonitorMediator();
         telescopeMediator ??= new HeadlessTelescopeMediator();
         guiderMediator ??= new HeadlessGuiderMediator();
@@ -150,6 +159,12 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
         domeMediator ??= new HeadlessDomeMediator();
         // §38k-21 — the one non-mediator dependency a dome instruction needs.
         domeFollower ??= new HeadlessDomeFollower();
+        // §38k-19/20 + §38k-22 — the remaining device mediators + the profile stub
+        // that the Connect dir + Dither/SwitchFilter need.
+        filterWheelMediator ??= new HeadlessFilterWheelMediator();
+        flatDeviceMediator ??= new HeadlessFlatDeviceMediator();
+        weatherDataMediator ??= new HeadlessWeatherDataMediator();
+        profileService ??= new HeadlessProfileService();
 
         return new HeadlessSequencerFactory(
             items: new List<ISequenceItem> {
@@ -194,9 +209,11 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
                 new DewHeater(cameraMediator),
                 // §38k-14 — guider instructions on the existing guider stub.
                 // StartGuiding / StopGuiding depend only on IGuiderMediator.
-                // (Dither also needs IProfileService → deferred to a follow-up.)
                 new StartGuiding(guiderMediator),
                 new StopGuiding(guiderMediator),
+                // §38k-22 — Dither additionally needs IProfileService (settings);
+                // satisfied by the HeadlessProfileService stub.
+                new Dither(guiderMediator, profileService),
                 // §38k-16 — rotator instruction. MoveRotatorMechanical depends
                 // only on IRotatorMediator.
                 new MoveRotatorMechanical(rotatorMediator),
@@ -217,6 +234,35 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
                 // from §38k-18 (it also needs IDomeFollower). With the headless
                 // dome-follower stub it now registers, completing the dome set.
                 new SynchronizeDome(domeMediator, domeFollower, telescopeMediator),
+                // §38k-22 — filter-wheel instruction. SwitchFilter needs
+                // IProfileService (filter list) + IFilterWheelMediator.
+                new SwitchFilter(profileService, filterWheelMediator),
+                // §38k-22 — Connect dir. All take the full 11 device mediators;
+                // Connect*/SwitchProfile also take IProfileService (profile-first),
+                // Disconnect* do not (camera-first). The Disconnect* classes were
+                // flipped internal→public in this PR so the factory can construct
+                // them. Real connect/disconnect orchestration runs at execution
+                // time (none today); these register so saved bodies resolve.
+                new ConnectAllEquipment(
+                    profileService, cameraMediator, filterWheelMediator, focuserMediator,
+                    rotatorMediator, telescopeMediator, guiderMediator, switchMediator,
+                    flatDeviceMediator, weatherDataMediator, domeMediator, safetyMonitorMediator),
+                new ConnectEquipment(
+                    profileService, cameraMediator, filterWheelMediator, focuserMediator,
+                    rotatorMediator, telescopeMediator, guiderMediator, switchMediator,
+                    flatDeviceMediator, weatherDataMediator, domeMediator, safetyMonitorMediator),
+                new DisconnectAllEquipment(
+                    cameraMediator, filterWheelMediator, focuserMediator, rotatorMediator,
+                    telescopeMediator, guiderMediator, switchMediator, flatDeviceMediator,
+                    weatherDataMediator, domeMediator, safetyMonitorMediator),
+                new DisconnectEquipment(
+                    cameraMediator, filterWheelMediator, focuserMediator, rotatorMediator,
+                    telescopeMediator, guiderMediator, switchMediator, flatDeviceMediator,
+                    weatherDataMediator, domeMediator, safetyMonitorMediator),
+                new SwitchProfile(
+                    profileService, cameraMediator, filterWheelMediator, focuserMediator,
+                    rotatorMediator, telescopeMediator, guiderMediator, switchMediator,
+                    flatDeviceMediator, weatherDataMediator, domeMediator, safetyMonitorMediator),
             },
             conditions: new List<ISequenceCondition> {
                 // §38k-7 — no-equipment conditions. LoopCondition bounds a

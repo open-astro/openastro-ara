@@ -317,6 +317,12 @@ public partial class Program {
         // §38k-21 — IDomeFollower stub (non-mediator dome dependency of SynchronizeDome).
         builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.IDomeFollower,
             OpenAstroAra.Server.Services.Equipment.HeadlessDomeFollower>();
+        // §38k-22 — HeadlessProfileService stub: lets the profile-bound instruction
+        // prototypes (Dither / SwitchFilter / Connect / Disconnect / SwitchProfile)
+        // construct. Returns a default in-memory profile; the real user-edited
+        // profile (IProfileStore / profile.json) wires in with the execution engine.
+        builder.Services.AddSingleton<OpenAstroAra.Profile.Interfaces.IProfileService,
+            OpenAstroAra.Server.Services.HeadlessProfileService>();
         builder.Services.AddSingleton<OpenAstroAra.Sequencer.ISequencerFactory>(sp =>
             HeadlessSequencerFactory.WithDefaults(
                 sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.ISafetyMonitorMediator>(),
@@ -327,7 +333,11 @@ public partial class Program {
                 sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.IRotatorMediator>(),
                 sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.ISwitchMediator>(),
                 sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.IDomeMediator>(),
-                domeFollower: sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.IDomeFollower>()));
+                domeFollower: sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.IDomeFollower>(),
+                filterWheelMediator: sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.IFilterWheelMediator>(),
+                flatDeviceMediator: sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.IFlatDeviceMediator>(),
+                weatherDataMediator: sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.IWeatherDataMediator>(),
+                profileService: sp.GetRequiredService<OpenAstroAra.Profile.Interfaces.IProfileService>()));
         builder.Services.AddSingleton<SequenceBodyDeserializer>();
 
         var app = builder.Build();
