@@ -160,6 +160,67 @@ jobs:
           fi
           echo "ok: Alpaca simulator is up and exposes a Camera device"
 
+  # §14e (PR2) — live discovery integration test. Starts the pinned OmniSim and runs
+  # the daemon's AlpacaEquipmentDiscoveryService against it, proving the UDP-broadcast
+  # discovery path (port 32227) finds the simulated devices end-to-end — the piece the
+  # smoke job (HTTP management API only) does not cover. Non-required while UDP
+  # discovery behaviour on hosted runners is being proven out.
+  alpaca-sim-integration:
+    name: Alpaca discovery integration test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read  # checkout + download a public release artifact; no write scope
+    steps:
+      - name: Checkout (no LFS)
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v4.x — pinned per zizmor + CodeRabbit security finding on PR #12
+        with:
+          lfs: false
+          persist-credentials: false
+
+      - name: Setup .NET 10 SDK
+        uses: actions/setup-dotnet@9a946fdbd5fb07b82b2f5a4466058b876ab72bb2  # v4.x pinned per zizmor pattern
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Cache NuGet packages
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4.3.0
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', 'Directory.Build.props', 'global.json') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Download + verify pinned Alpaca simulators
+        run: |
+          set -euo pipefail
+          bin="$(scripts/get-alpaca-simulators.sh)"
+          echo "ALPACA_SIM_BIN=$bin" >> "$GITHUB_ENV"
+
+      - name: Start simulator + run discovery integration test
+        run: |
+          set -euo pipefail
+          # Launch OmniSim in THIS step so it stays alive for the dotnet test run that
+          # follows (background processes don't survive across steps). Same invocation
+          # the smoke job proved out: single process, --urls only.
+          ( cd "$(dirname "$ALPACA_SIM_BIN")" && ./ascom.alpaca.simulators '--urls=http://*:32323' > /tmp/alpaca-sim.log 2>&1 & )
+          # Reap any lingering simulator on step exit.
+          trap 'pkill -f ascom.alpaca.simulators 2>/dev/null || true' EXIT
+          # Wait for the management API before handing off to the test (the test also
+          # self-gates, but a ready sim makes the discovery assertions meaningful).
+          up=""
+          for _ in $(seq 1 90); do
+            if curl -fsS -m 2 http://127.0.0.1:32323/management/apiversions >/dev/null 2>&1; then up=1; break; fi
+            sleep 1
+          done
+          if [ -z "$up" ]; then
+            echo "::error::Alpaca simulator did not come up on :32323"
+            echo "--- simulator log ---"; cat /tmp/alpaca-sim.log || true
+            exit 1
+          fi
+          dotnet test OpenAstroAra.Test/OpenAstroAra.Test.csproj -c Release \
+            --filter "TestCategory=Integration" --verbosity normal
+
   # Whole-solution analyzer gate. Directory.Build.props turns on the full CAxxxx
   # catalog (AnalysisMode=All), Nullable, and TreatWarningsAsErrors for every
   # project, so this single Release build of the .sln fails on ANY new analyzer
@@ -210,8 +271,12 @@ jobs:
       - name: dotnet build (solution, Release) — warnings are errors
         run: dotnet build OpenAstroAra.sln -c Release --no-restore
 
+      # Exclude the live Alpaca discovery test (TestCategory=Integration): it needs a
+      # running OmniSim, which this job doesn't start. It is covered by the dedicated
+      # alpaca-sim-integration job below. (The test also self-Ignores when no sim is
+      # reachable, so this filter is belt-and-suspenders for a clean unit run.)
       - name: dotnet test (solution, Release)
-        run: dotnet test OpenAstroAra.sln -c Release --no-build --verbosity normal
+        run: dotnet test OpenAstroAra.sln -c Release --no-build --verbosity normal --filter "TestCategory!=Integration"
 
   server-build:
     name: Server (build + cross-publish + Docker)
