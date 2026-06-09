@@ -314,6 +314,9 @@ public partial class Program {
             OpenAstroAra.Server.Services.Equipment.HeadlessFlatDeviceMediator>();
         builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.IWeatherDataMediator,
             OpenAstroAra.Server.Services.Equipment.HeadlessWeatherDataMediator>();
+        // §38k-21 — IDomeFollower stub (non-mediator dome dependency of SynchronizeDome).
+        builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.IDomeFollower,
+            OpenAstroAra.Server.Services.Equipment.HeadlessDomeFollower>();
         builder.Services.AddSingleton<OpenAstroAra.Sequencer.ISequencerFactory>(sp =>
             HeadlessSequencerFactory.WithDefaults(
                 sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.ISafetyMonitorMediator>(),
@@ -323,7 +326,8 @@ public partial class Program {
                 sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.ICameraMediator>(),
                 sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.IRotatorMediator>(),
                 sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.ISwitchMediator>(),
-                sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.IDomeMediator>()));
+                sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.IDomeMediator>(),
+                domeFollower: sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.IDomeFollower>()));
         builder.Services.AddSingleton<SequenceBodyDeserializer>();
 
         var app = builder.Build();
