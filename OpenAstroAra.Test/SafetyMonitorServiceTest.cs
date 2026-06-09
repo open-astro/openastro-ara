@@ -126,6 +126,14 @@ namespace OpenAstroAra.Test {
             Assert.That(info.IsSafe, Is.False);
         }
 
+        [Test]
+        public void GetDevice_throws_NotSupportedException() {
+            // Mirrors HeadlessSafetyMonitorMediator: no raw ASCOM IDevice is exposed; the
+            // Sequencer uses GetInfo() and connection is driven via the REST surface.
+            using var svc = new SafetyMonitorService();
+            Assert.Throws<NotSupportedException>(() => ((ISafetyMonitorMediator)svc).GetDevice());
+        }
+
         // Polls up to ~15s for the connection to leave Connecting (HTTP connect-refused on a
         // dead port is fast, but allow generous slack for a loaded CI runner).
         private static async Task<SafetyMonitorDto?> PollUntilNotConnectingAsync(SafetyMonitorService svc) {
