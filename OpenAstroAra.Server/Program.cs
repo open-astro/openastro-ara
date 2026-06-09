@@ -171,7 +171,11 @@ public partial class Program {
         builder.Services.AddSingleton<IDomeService, PlaceholderDomeService>();
         builder.Services.AddSingleton<ISwitchService, PlaceholderSwitchService>();
         builder.Services.AddSingleton<IObservingConditionsService, PlaceholderObservingConditionsService>();
-        builder.Services.AddSingleton<ISafetyMonitorService, PlaceholderSafetyMonitorService>();
+        // §14e — first real Alpaca-backed device service (others remain placeholders
+        // until each device's connect path lands). Connects to a discovered Alpaca
+        // SafetyMonitor and reports live state + IsSafe; covered by the
+        // alpaca-sim-integration CI job.
+        builder.Services.AddSingleton<ISafetyMonitorService, SafetyMonitorService>();
         builder.Services.AddSingleton<IFlatDeviceService, PlaceholderFlatDeviceService>();
         builder.Services.AddSingleton<IGuiderService, PlaceholderGuiderService>();
         builder.Services.AddSingleton<IPolarAlignService, PlaceholderPolarAlignService>();
