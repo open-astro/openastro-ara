@@ -73,12 +73,13 @@ public sealed partial class SafetyMonitorService : ISafetyMonitorService, IDispo
         var safe = false;
         if (client is not null && state == EquipmentConnectionState.Connected) {
             safe = await Task.Run(() => ReadIsSafe(client), ct).ConfigureAwait(false);
-            lock (_gate) {
-                state = _state; // ReadIsSafe may have demoted to Error
-            }
         }
         string transition;
         lock (_gate) {
+            // Single snapshot so the reported State and its transition timestamp are mutually
+            // consistent — ReadIsSafe (or a concurrent connect/disconnect) may have changed
+            // state while we were off-thread reading IsSafe.
+            state = _state;
             transition = _lastTransition.ToString("O", CultureInfo.InvariantCulture);
         }
         return new SafetyMonitorDto(device.UniqueId, device.Name, state, safe, transition);
@@ -127,7 +128,16 @@ public sealed partial class SafetyMonitorService : ISafetyMonitorService, IDispo
         try {
             return client.IsSafe;
         } catch (Exception ex) {
-            SetState(EquipmentConnectionState.Error);
+            lock (_gate) {
+                // Only demote to Error if this is still the live connection. A concurrent
+                // DisconnectAsync sets Disconnected and disposes the client off-thread; the
+                // resulting disposed-client throw here must NOT clobber Disconnected back to
+                // Error. Guarding on the same client instance also covers a reconnect.
+                if (_state == EquipmentConnectionState.Connected && ReferenceEquals(_client, client)) {
+                    _state = EquipmentConnectionState.Error;
+                    _lastTransition = DateTimeOffset.UtcNow;
+                }
+            }
             LogIsSafeReadFailed(ex);
             return false;
         }
@@ -144,6 +154,11 @@ public sealed partial class SafetyMonitorService : ISafetyMonitorService, IDispo
             client = new AlpacaSafetyMonitor(
                 device.UseHttps ? ServiceType.Https : ServiceType.Http,
                 host, device.IpPort, device.AlpacaDeviceNumber, strictCasing: false, logger: null);
+            // The blocking connect is bounded by the ASCOM client's establishConnectionTimeout
+            // (default 3s; standardDeviceResponseTimeout also 3s), so an unreachable or
+            // black-holed device surfaces as Error within seconds rather than wedging the
+            // service in Connecting. (SafetyMonitorServiceTest's dead-port case verifies the
+            // fast-fail path.)
             client.Connected = true;
             if (!client.Connected) {
                 throw new InvalidOperationException("device reported not connected after setting Connected = true");
