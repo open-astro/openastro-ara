@@ -74,6 +74,39 @@ namespace OpenAstroAra.Test {
             Assert.That(disconnected!.State, Is.EqualTo(EquipmentConnectionState.Disconnected));
         }
 
+        /// <summary>
+        /// §14e — the same <see cref="RotatorService"/> also serves <see cref="IRotatorMediator"/>:
+        /// the <c>MoveRotatorMechanical</c> instruction calls <c>GetInfo().Connected</c> (Validate)
+        /// and <c>MoveMechanical(angle)</c> (Execute), which blocks until the rotator settles and
+        /// returns the final mechanical angle. This exercises that live mediator path.
+        /// </summary>
+        [Test]
+        public async Task Mediator_MoveMechanical_drives_the_live_device_and_returns_the_settled_angle() {
+            var device = await DiscoverAsync().ConfigureAwait(false);
+            Assert.That(device, Is.Not.Null, "no Rotator device discovered from the running OmniSim");
+
+            using var svc = new RotatorService();
+            // RotatorService implements IRotatorMediator; GetInfo()/MoveMechanical below are the mediator
+            // surface MoveRotatorMechanical drives (called on the concrete type to satisfy CA1859 —
+            // interface conformance is covered by the unit test).
+
+            await svc.ConnectAsync(new ConnectRequestDto(device!), idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+            var connected = await PollUntilAsync(svc, s => s != EquipmentConnectionState.Connecting).ConfigureAwait(false);
+            Assert.That(connected!.State, Is.EqualTo(EquipmentConnectionState.Connected));
+            Assert.That(svc.GetInfo().Connected, Is.True, "the mediator should report connected once the REST connect lands");
+
+            const float target = 120.0f;
+            // Blocking move via the mediator — returns once the device settles at the target.
+            var settled = await svc.MoveMechanical(target, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(settled, Is.EqualTo(target).Within(0.5f), "MoveMechanical should return the settled mechanical angle");
+            Assert.That(svc.GetInfo().MechanicalPosition, Is.EqualTo(target).Within(0.5f),
+                "the mediator snapshot should reflect the move");
+
+            await svc.DisconnectAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+            var disconnected = await PollUntilAsync(svc, s => s == EquipmentConnectionState.Disconnected).ConfigureAwait(false);
+            Assert.That(disconnected!.State, Is.EqualTo(EquipmentConnectionState.Disconnected));
+        }
+
         private static async Task<DiscoveredDeviceDto?> DiscoverAsync() {
             var discovery = new AlpacaEquipmentDiscoveryService();
             for (var attempt = 1; attempt <= MaxDiscoveryAttempts; attempt++) {
