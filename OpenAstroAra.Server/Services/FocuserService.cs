@@ -123,16 +123,10 @@ public sealed partial class FocuserService : IFocuserService, IDisposable {
         }
         // Validate the target against known capabilities when available; the device validates the
         // bound itself otherwise (ASCOM Move throws InvalidValue out of range).
-        // Validate against capabilities only once they're loaded AND a real range is known
-        // (MaxPosition > 0); until then — or when a driver reports MaxStep=0 ("unlimited") — the
-        // device validates the bound. Gating the WHOLE check on MaxPosition > 0 means a relative
-        // focuser's valid negative offset isn't rejected when its max is unknown/unlimited.
-        // MinPosition is 0 for absolute focusers, -MaxStep for relative.
-        if (caps is not null && caps.MaxPosition > 0
-            && (request.TargetPosition < caps.MinPosition || request.TargetPosition > caps.MaxPosition)) {
+        if (IsTargetOutOfRange(caps, request.TargetPosition)) {
             throw new ArgumentOutOfRangeException(nameof(request), request.TargetPosition,
                 string.Create(System.Globalization.CultureInfo.InvariantCulture,
-                    $"TargetPosition is out of range ({caps.MinPosition}..{caps.MaxPosition})."));
+                    $"TargetPosition is out of range ({caps!.MinPosition}..{caps.MaxPosition})."));
         }
         // 202 contract: the move runs in the background; GetAsync reports State="moving" until the
         // device settles (the refresh cache picks up IsMoving / Position).
@@ -332,6 +326,14 @@ public sealed partial class FocuserService : IFocuserService, IDisposable {
             OperationType: operationType,
             AcceptedUtc: DateTimeOffset.UtcNow,
             IdempotencyKey: idempotencyKey);
+
+    // Extracted (internal) for direct unit testing. A target is out of range only when
+    // capabilities are loaded with a real range (MaxPosition > 0); otherwise the device validates
+    // the bound — covering both the caps-loading window and a relative focuser that reports
+    // MaxStep=0 ("unlimited"). MinPosition is 0 for absolute focusers, -MaxStep for relative.
+    internal static bool IsTargetOutOfRange(FocuserCapabilitiesDto? caps, int target) =>
+        caps is not null && caps.MaxPosition > 0
+            && (target < caps.MinPosition || target > caps.MaxPosition);
 
     public void Dispose() {
         AlpacaFocuser? client;

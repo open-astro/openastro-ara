@@ -59,12 +59,16 @@ namespace OpenAstroAra.Test {
             var connected = await PollUntilAsync(svc, s => s != EquipmentConnectionState.Connecting).ConfigureAwait(false);
             Assert.That(connected, Is.Not.Null, "connection never left the Connecting state");
             Assert.That(connected!.State, Is.EqualTo(EquipmentConnectionState.Connected));
-            Assert.That(connected.Capabilities, Is.Not.Null, "capabilities should be seeded on connect");
-            Assert.That(connected.Capabilities!.MaxPosition, Is.GreaterThan(0), "an absolute focuser exposes a max position");
+
+            // Capabilities are seeded by RefreshCacheOnce after the lock is released, so poll for
+            // them rather than asserting the instant State flips to Connected (avoids a race).
+            var withCaps = await PollUntilCapsAsync(svc).ConfigureAwait(false);
+            Assert.That(withCaps, Is.Not.Null, "capabilities were never seeded after connect");
+            Assert.That(withCaps!.Capabilities!.MaxPosition, Is.GreaterThan(0), "an absolute focuser exposes a max position");
 
             // Move to a target away from the current position and confirm the read-back.
-            var max = connected.Capabilities.MaxPosition;
-            var current = connected.Runtime.Position ?? 0;
+            var max = withCaps.Capabilities.MaxPosition;
+            var current = withCaps.Runtime.Position ?? 0;
             var target = current < max / 2 ? Math.Min(max, max / 2 + 100) : Math.Max(0, max / 2 - 100);
 
             await svc.MoveAsync(new FocuserMoveRequestDto(target), idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
@@ -100,6 +104,19 @@ namespace OpenAstroAra.Test {
                 await Task.Delay(TimeSpan.FromMilliseconds(200)).ConfigureAwait(false);
             }
             return await svc.GetAsync(CancellationToken.None).ConfigureAwait(false);
+        }
+
+        // Polls until capabilities are seeded (RefreshCacheOnce runs just after connect). Returns
+        // null if they never appear.
+        private static async Task<FocuserDto?> PollUntilCapsAsync(FocuserService svc) {
+            for (var i = 0; i < 50; i++) {
+                var dto = await svc.GetAsync(CancellationToken.None).ConfigureAwait(false);
+                if (dto?.Capabilities is not null) {
+                    return dto;
+                }
+                await Task.Delay(TimeSpan.FromMilliseconds(200)).ConfigureAwait(false);
+            }
+            return null;
         }
 
         // Up to ~16s for the move to complete + the 2s cache to reflect it. Returns null on

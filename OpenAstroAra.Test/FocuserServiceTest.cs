@@ -103,6 +103,35 @@ namespace OpenAstroAra.Test {
                 () => { _ = svc.MoveAsync(new FocuserMoveRequestDto(1000), null, CancellationToken.None); });
         }
 
+        // Direct coverage of the MoveAsync range-validation logic (pure function, no sim needed).
+        [Test]
+        public void IsTargetOutOfRange_absolute_focuser_enforces_zero_to_max() {
+            var caps = new FocuserCapabilitiesDto(MinPosition: 0, MaxPosition: 10000, StepSizeUm: 1, CanTempComp: false, AbsoluteFocuser: true);
+            Assert.That(FocuserService.IsTargetOutOfRange(caps, 5000), Is.False);
+            Assert.That(FocuserService.IsTargetOutOfRange(caps, 0), Is.False);
+            Assert.That(FocuserService.IsTargetOutOfRange(caps, 10000), Is.False);
+            Assert.That(FocuserService.IsTargetOutOfRange(caps, 10001), Is.True, "above max");
+            Assert.That(FocuserService.IsTargetOutOfRange(caps, -1), Is.True, "below 0 (absolute)");
+        }
+
+        [Test]
+        public void IsTargetOutOfRange_relative_focuser_allows_negative_offsets() {
+            var caps = new FocuserCapabilitiesDto(MinPosition: -10000, MaxPosition: 10000, StepSizeUm: 1, CanTempComp: false, AbsoluteFocuser: false);
+            Assert.That(FocuserService.IsTargetOutOfRange(caps, -5000), Is.False, "backward step is valid");
+            Assert.That(FocuserService.IsTargetOutOfRange(caps, -10000), Is.False);
+            Assert.That(FocuserService.IsTargetOutOfRange(caps, -10001), Is.True, "below -max");
+            Assert.That(FocuserService.IsTargetOutOfRange(caps, 10001), Is.True, "above max");
+        }
+
+        [Test]
+        public void IsTargetOutOfRange_unknown_or_unlimited_max_skips_validation() {
+            // caps null (loading window) or MaxPosition == 0 (driver "unlimited") -> device validates.
+            Assert.That(FocuserService.IsTargetOutOfRange(null, -99999), Is.False);
+            var unlimited = new FocuserCapabilitiesDto(MinPosition: 0, MaxPosition: 0, StepSizeUm: 1, CanTempComp: false, AbsoluteFocuser: false);
+            Assert.That(FocuserService.IsTargetOutOfRange(unlimited, -99999), Is.False);
+            Assert.That(FocuserService.IsTargetOutOfRange(unlimited, 99999), Is.False);
+        }
+
         private static async Task<FocuserDto?> PollUntilNotConnectingAsync(FocuserService svc) {
             for (var i = 0; i < 150; i++) {
                 var dto = await svc.GetAsync(CancellationToken.None);
