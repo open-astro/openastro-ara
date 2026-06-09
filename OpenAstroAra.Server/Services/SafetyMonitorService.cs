@@ -104,6 +104,9 @@ public sealed partial class SafetyMonitorService : ISafetyMonitorService, IDispo
         return new SafetyMonitorDto(device.UniqueId, device.Name, state, safe, transition);
     }
 
+    // ct is unused by design: under the §60.5 202-Accepted contract this method returns
+    // immediately and the work continues on a detached background task, so there is nothing for
+    // the request token to cancel. Kept in the signature to match the IEquipmentServices contract.
     public Task<OperationAcceptedDto> ConnectAsync(ConnectRequestDto request, string? idempotencyKey, CancellationToken ct) {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(request.Device); // guard a null Device from a malformed body
@@ -128,6 +131,7 @@ public sealed partial class SafetyMonitorService : ISafetyMonitorService, IDispo
         return Task.FromResult(Accepted("safety-monitor.connect", idempotencyKey));
     }
 
+    // ct is unused by design (see ConnectAsync): the 202 contract makes teardown fire-and-forget.
     public Task<OperationAcceptedDto> DisconnectAsync(string? idempotencyKey, CancellationToken ct) {
         AlpacaSafetyMonitor? client;
         lock (_gate) {
@@ -173,6 +177,7 @@ public sealed partial class SafetyMonitorService : ISafetyMonitorService, IDispo
         Justification = "Ownership of the AlpacaSafetyMonitor is managed explicitly: on every non-adopt path (supersede or exception) SafeDisconnectDispose disposes it; on the adopt path it is stored in _client (local set to null) and disposed later by DisconnectAsync/Dispose. CA2000 cannot follow the transfer through the lock + helper.")]
     private void ConnectInBackground(DiscoveredDeviceDto device, long generation) {
         AlpacaSafetyMonitor? client = null;
+        var adopted = false; // declared outside try so the catch can tell ownership already transferred
         try {
             var host = string.IsNullOrWhiteSpace(device.IpAddress) ? device.HostName : device.IpAddress;
             client = new AlpacaSafetyMonitor(
@@ -187,7 +192,6 @@ public sealed partial class SafetyMonitorService : ISafetyMonitorService, IDispo
             if (!client.Connected) {
                 throw new InvalidOperationException("device reported not connected after setting Connected = true");
             }
-            var superseded = false;
             lock (_gate) {
                 // Adopt only if this is still the current attempt: a newer connect, a disconnect,
                 // or a Dispose() bumps the generation / sets _disposed, in which case this
@@ -198,25 +202,28 @@ public sealed partial class SafetyMonitorService : ISafetyMonitorService, IDispo
                 if (!_disposed && _connectGeneration == generation) {
                     _client = client;
                     SetState(EquipmentConnectionState.Connected);
-                } else {
-                    superseded = true;
+                    adopted = true;
                 }
             }
-            if (superseded) {
+            if (!adopted) {
                 SafeDisconnectDispose(client);
                 return;
             }
             client = null; // ownership transferred to _client
             LogConnected(device.Name, host, device.IpPort, device.AlpacaDeviceNumber);
         } catch (Exception ex) {
-            if (client is not null) {
-                SafeDisconnectDispose(client);
-            }
-            lock (_gate) {
-                // Only demote to Error if this attempt is still the current one.
-                if (!_disposed && _connectGeneration == generation) {
-                    _client = null;
-                    SetState(EquipmentConnectionState.Error);
+            // Once adopted, the connection is live and owned by _client; a later throw (today
+            // only LogConnected, which doesn't throw) must NOT tear it down — just log. If not
+            // adopted, dispose this attempt's client and demote to Error when still current.
+            if (!adopted) {
+                if (client is not null) {
+                    SafeDisconnectDispose(client);
+                }
+                lock (_gate) {
+                    if (!_disposed && _connectGeneration == generation) {
+                        _client = null;
+                        SetState(EquipmentConnectionState.Error);
+                    }
                 }
             }
             LogConnectFailed(ex, device.Name);
