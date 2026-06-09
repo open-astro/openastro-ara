@@ -50,6 +50,7 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
     private TelescopeCapabilitiesDto? _capabilities;
     private TelescopeStateDto _runtime = IdleRuntime;
     private int _refreshing;
+    private int _refreshPending;
     private long _connectGeneration;
     private bool _disposed;
 
@@ -148,15 +149,19 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
     public async Task SetTrackingAsync(bool enabled, CancellationToken ct) {
         var client = RequireConnectedClient();
         // Prompt synchronous write off the request thread (blocking ASCOM HTTP PUT), then reflect.
-        await Task.Run(() => client.Tracking = enabled, ct).ConfigureAwait(false);
+        // CancellationToken.None (not ct): Task.Run(lambda, ct) never schedules the lambda if ct is
+        // already cancelled, which would silently skip the write — the same hazard as the abort path.
+        await Task.Run(() => client.Tracking = enabled, CancellationToken.None).ConfigureAwait(false);
         RefreshCacheOnce();
     }
 
     public async Task AbortSlewAsync(CancellationToken ct) {
         var client = RequireConnectedClient();
-        // §57 panic stop: issue AbortSlew immediately (universal — every mount supports it). Prompt
-        // synchronous write so the caller learns it landed; then refresh so State leaves "slewing".
-        await Task.Run(() => client.AbortSlew(), ct).ConfigureAwait(false);
+        // §57 panic stop: issue AbortSlew immediately (universal — every mount supports it).
+        // CancellationToken.None (not ct) is critical: Task.Run(lambda, ct) returns a pre-cancelled
+        // task WITHOUT running the lambda if ct is already cancelled, so an HTTP-timeout/disconnect
+        // that cancelled the token would silently never send the abort and the slew would continue.
+        await Task.Run(() => client.AbortSlew(), CancellationToken.None).ConfigureAwait(false);
         RefreshCacheOnce();
     }
 
@@ -200,12 +205,31 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
 
     private void RefreshTick(object? state) => RefreshCacheOnce();
 
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Timer-callback boundary: an unhandled exception in a System.Threading.Timer callback crashes the process. The per-field reads already absorb device failures; this catch-all is a hard backstop so a refresh tick can never fault the daemon. CA1031's log-and-recover boundary applies.")]
+    // Single-flight WITH coalescing: the 2s timer AND the post-write reflects in SetTrackingAsync/
+    // AbortSlewAsync all funnel here. A refresh requested while one is already running is NOT dropped
+    // — the in-flight owner makes one more pass after it finishes, so a write that lands mid-tick is
+    // reflected without waiting out the next 2s period (a tick that started reading before the write
+    // would otherwise commit the pre-write value and leave the cache stale for up to 2s). The owner
+    // never blocks on HTTP under a lock, so refreshes can't pile up thread-per-tick. (A follow-up
+    // request that races in during the window between the drain loop's exit and the _refreshing
+    // release is rare and self-heals on the next timer tick — no worse than the pre-coalescing 2s.)
     private void RefreshCacheOnce() {
+        Volatile.Write(ref _refreshPending, 1);
         if (Interlocked.CompareExchange(ref _refreshing, 1, 0) != 0) {
-            return;
+            return; // another thread owns the drain loop; we've flagged a follow-up pass for it
         }
+        try {
+            while (Interlocked.Exchange(ref _refreshPending, 0) == 1) {
+                RefreshPass();
+            }
+        } finally {
+            Interlocked.Exchange(ref _refreshing, 0);
+        }
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Timer-callback boundary: an unhandled exception escaping here (the timer tick / drain loop) crashes the process. The per-field reads already absorb device failures; this catch-all is a hard backstop so a refresh pass can never fault the daemon. CA1031's log-and-recover boundary applies.")]
+    private void RefreshPass() {
         try {
             AlpacaTelescope? client;
             bool needCaps;
@@ -231,8 +255,6 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
             }
         } catch (Exception ex) {
             LogRuntimeReadFailed(ex);
-        } finally {
-            Interlocked.Exchange(ref _refreshing, 0);
         }
     }
 
