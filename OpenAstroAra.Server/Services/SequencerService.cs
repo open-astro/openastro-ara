@@ -15,12 +15,15 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Sequencer;
 using OpenAstroAra.Sequencer.Container;
+using OpenAstroAra.Sequencer.SequenceItem;
 using OpenAstroAra.Server.Contracts;
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -160,13 +163,10 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         // returned), so an abort during load still cancels it.
         var dto = await sequences.GetAsync(id, run.Cts.Token);
         if (dto is null) return null;
-        var root = ToRootContainer(dto.Body);
-        if (root is not null) {
-            // frames-total comes from the instruction count so WILMA can size its
-            // progress UI; set only once we have a runnable root.
-            run.InstructionCount = SequenceBodyInspector.Inspect(dto.Body).InstructionCount;
-        }
-        return root;
+        // frames_total + frames_completed are derived from the deserialized leaf
+        // instructions by the worker (UpdateProgress) — the precise denominator we
+        // count completions against — so no separate inspector count is set here.
+        return ToRootContainer(dto.Body);
     }
 
     public Task<OperationAcceptedDto> PauseAsync(Guid id, string? idempotencyKey, CancellationToken ct) {
@@ -324,6 +324,49 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         return wrapper;
     }
 
+    // Flatten the container tree to its ordered leaf instructions (containers are
+    // themselves ISequenceItems; only non-containers are real instructions).
+    internal static List<ISequenceItem> CollectLeaves(ISequenceItem root) {
+        var leaves = new List<ISequenceItem>();
+        void Walk(ISequenceItem item) {
+            if (item is ISequenceContainer c) {
+                foreach (var child in c.GetItemsSnapshot()) {
+                    Walk(child);
+                }
+            } else {
+                leaves.Add(item);
+            }
+        }
+        Walk(root);
+        return leaves;
+    }
+
+    internal static int CountTerminalLeaves(List<ISequenceItem> leaves) {
+        var n = 0;
+        foreach (var leaf in leaves) {
+            // DISABLED is "done" too: SequentialStrategy only runs CREATED items, so
+            // a disabled leaf never executes and stays DISABLED — counting it keeps
+            // frames_completed consistent with frames_total on a successful run.
+            if (leaf.Status is SequenceEntityStatus.FINISHED or SequenceEntityStatus.FAILED
+                            or SequenceEntityStatus.SKIPPED or SequenceEntityStatus.DISABLED) {
+                n++;
+            }
+        }
+        return n;
+    }
+
+    // The first RUNNING leaf — current_instruction_index is a single value. Under a
+    // ParallelStrategy container several leaves can be RUNNING at once; this reports
+    // the first and drops the rest (acceptable for the single-index API).
+    internal static int? RunningLeafIndex(List<ISequenceItem> leaves) {
+        for (var i = 0; i < leaves.Count; i++) {
+            if (leaves[i].Status == SequenceEntityStatus.RUNNING) {
+                return i;
+            }
+        }
+        return null;
+    }
+
     // Sequence execution is a background log-and-recover boundary: an instruction
     // can throw anything (hardware/SDK/parse/domain), and an escaped exception
     // must mark the run Failed + notify, never crash the daemon. CA1031 sanctions
@@ -338,10 +381,16 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             // straight through to the terminal (aborted/stopped) emit below.
             if (run.State is not (SequenceRunState.Aborting or SequenceRunState.Stopped)) {
                 run.State = SequenceRunState.Running;
+                // Flatten the tree once to the ordered leaf instructions; their
+                // Status drives precise frames_completed / current_instruction_index.
+                // (frames_total = leaf count, the same denominator we count against.)
+                var leaves = CollectLeaves(root);
+                run.UpdateProgress(leaves.Count, completed: 0, runningIndex: null);
                 await EmitAsync("sequence.started", sequenceId, run);
 
                 var progress = new Progress<ApplicationStatus>(status => {
                     run.SetDescription(status.Status);
+                    run.UpdateProgress(leaves.Count, CountTerminalLeaves(leaves), RunningLeafIndex(leaves));
                     // Fire-and-forget; EmitAsync swallows all failures so there's no
                     // unobserved-task risk. No back-pressure yet — see PORT_TODO
                     // "Progress-emit back-pressure" for the debounce/single-in-flight
@@ -355,6 +404,10 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                 // cancellation surfaces via run.Cts below rather than as a throw.
                 var sequencer = new OpenAstroAra.Sequencer.Sequencer(root);
                 await sequencer.Start(progress, skipIssuePrompt: true, run.Cts.Token);
+
+                // Final snapshot — fast instructions may finish without firing a
+                // progress tick, so settle the completed count after the run.
+                run.UpdateProgress(leaves.Count, CountTerminalLeaves(leaves), runningIndex: null);
             }
 
             // Terminal transition is driven by the state Abort/Stop set before
@@ -427,7 +480,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         }
     }
 
-    [LoggerMessage(Level = LogLevel.Error, Message = "Sequence run {SequenceId} failed")]
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Error, Message = "Sequence run {SequenceId} failed")]
     private partial void LogRunFailed(Exception ex, Guid sequenceId);
 
     private sealed class RunState : IDisposable {
@@ -447,7 +500,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         // Filled in after the body loads (StartAsync reserves the run slot before
         // the async body read, so the count isn't known at construction). Set once
         // before the run becomes observable; an int read/write is atomic.
-        public int InstructionCount { get; set; }
+        public int InstructionCount { get; private set; }
         public DateTimeOffset StartedUtc { get; } = DateTimeOffset.UtcNow;
         public DateTimeOffset? CompletedUtc { get; private set; }
         public CancellationTokenSource Cts { get; } = new();
@@ -459,6 +512,15 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         public void SetDescription(string? description) {
             if (string.IsNullOrEmpty(description)) return;
             lock (_gate) { CurrentInstructionDescription = description; }
+        }
+
+        /// <summary>Set the instruction total + completed count + current index as one consistent snapshot.</summary>
+        public void UpdateProgress(int total, int completed, int? runningIndex) {
+            lock (_gate) {
+                InstructionCount = total;
+                FramesCompleted = Math.Min(completed, total); // clamp: a leaf subset count can't exceed the total
+                CurrentInstructionIndex = runningIndex;
+            }
         }
 
         public void MarkCompleted() {

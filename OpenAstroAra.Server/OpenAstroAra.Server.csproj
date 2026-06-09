@@ -8,6 +8,11 @@
     <AssemblyName>OpenAstroAra.Server</AssemblyName>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- Expose internal helpers (e.g. SequencerService leaf-progress counting) to the test project. -->
+    <InternalsVisibleTo Include="OpenAstroAra.Test" />
+  </ItemGroup>
+
   <!--
     AOT-mode publishing was on per playbook §71 but is paused for the §38
     orchestrator wiring. NINA's sequence JSON schema (preserved verbatim

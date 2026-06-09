@@ -14,12 +14,15 @@
 
 using Microsoft.Extensions.Hosting;
 using NUnit.Framework;
+using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Sequencer.Container;
+using OpenAstroAra.Sequencer.SequenceItem;
 using OpenAstroAra.Sequencer.SequenceItem.Utility;
 using OpenAstroAra.Sequencer.Serialization;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Threading;
@@ -96,6 +99,39 @@ namespace OpenAstroAra.Test {
             await svc.StartAsync(id, StartReq, null, CancellationToken.None);
             var state = await WaitForTerminalAsync(svc, id);
             Assert.That(state!.State, Is.EqualTo(SequenceRunState.Completed));
+        }
+
+        [Test]
+        public void CountTerminalLeaves_counts_disabled_as_done() {
+            // A DISABLED leaf never runs (SequentialStrategy only picks CREATED), so
+            // it stays DISABLED — it must count as "done" or a successful run with a
+            // disabled instruction would report frames_completed < frames_total.
+            var leaves = new List<ISequenceItem> {
+                new Annotation { Status = SequenceEntityStatus.FINISHED },
+                new Annotation { Status = SequenceEntityStatus.DISABLED },
+                new Annotation { Status = SequenceEntityStatus.SKIPPED },
+                new Annotation { Status = SequenceEntityStatus.CREATED },
+                new Annotation { Status = SequenceEntityStatus.RUNNING },
+            };
+            // FINISHED + DISABLED + SKIPPED = 3 done; CREATED + RUNNING are not.
+            Assert.That(SequencerService.CountTerminalLeaves(leaves), Is.EqualTo(3));
+            Assert.That(SequencerService.RunningLeafIndex(leaves), Is.EqualTo(4));
+        }
+
+        [Test]
+        public async Task Completed_run_reports_all_instructions_done() {
+            var id = Guid.NewGuid();
+            var svc = BuildService(id, BuildBody(c => {
+                c.Items.Add(new Annotation { Name = "a" });
+                c.Items.Add(new WaitForTimeSpan { Time = 0 });
+                c.Items.Add(new Annotation { Name = "b" });
+            }));
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            var state = await WaitForTerminalAsync(svc, id);
+            Assert.That(state!.State, Is.EqualTo(SequenceRunState.Completed));
+            Assert.That(state.FramesTotal, Is.EqualTo(3), "3 leaf instructions");
+            Assert.That(state.FramesCompleted, Is.EqualTo(3), "all completed");
+            Assert.That(state.CurrentInstructionIndex, Is.Null, "nothing running at completion");
         }
 
         [Test]
