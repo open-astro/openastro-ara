@@ -51,6 +51,9 @@ public sealed partial class SafetyMonitorService : ISafetyMonitorService, IDispo
     private DiscoveredDeviceDto? _device;
     private EquipmentConnectionState _state = EquipmentConnectionState.Disconnected;
     private DateTimeOffset _lastTransition = DateTimeOffset.UtcNow;
+    // Bumped by every ConnectAsync/DisconnectAsync so a late-completing background connect can
+    // tell whether it is still the current attempt before adopting its client (supersede check).
+    private long _connectGeneration;
     private bool _disposed;
 
     public SafetyMonitorService(ILogger<SafetyMonitorService>? logger = null) {
@@ -62,6 +65,8 @@ public sealed partial class SafetyMonitorService : ISafetyMonitorService, IDispo
         DiscoveredDeviceDto? device;
         EquipmentConnectionState state;
         lock (_gate) {
+            // All public operations throw after Dispose() (uniform with Connect/Disconnect).
+            ObjectDisposedException.ThrowIf(_disposed, this);
             client = _client;
             device = _device;
             state = _state;
@@ -75,6 +80,9 @@ public sealed partial class SafetyMonitorService : ISafetyMonitorService, IDispo
             // ct gates only whether the read starts: once running, the blocking ASCOM
             // IsSafe HTTP call has no cancellation path (inherent to the Alpaca client), so a
             // cancelled GET may still wait out the in-flight request before observing ct.
+            // A concurrent DisconnectAsync may dispose this same client while the read is in
+            // flight; ReadIsSafe catches the resulting throw and the ReferenceEquals guard keeps
+            // it from clobbering the new state — the concurrent dispose-while-reading is by design.
             safe = await Task.Run(() => ReadIsSafe(client), ct).ConfigureAwait(false);
         }
         string transition;
@@ -96,6 +104,7 @@ public sealed partial class SafetyMonitorService : ISafetyMonitorService, IDispo
     public Task<OperationAcceptedDto> ConnectAsync(ConnectRequestDto request, string? idempotencyKey, CancellationToken ct) {
         ArgumentNullException.ThrowIfNull(request);
         var device = request.Device;
+        long generation;
         lock (_gate) {
             ObjectDisposedException.ThrowIf(_disposed, this);
             // Idempotent: connecting to the same device while already connecting/connected
@@ -106,11 +115,12 @@ public sealed partial class SafetyMonitorService : ISafetyMonitorService, IDispo
             }
             DisposeClientLocked();
             _device = device;
+            generation = ++_connectGeneration; // this attempt's id; later attempts/disconnects bump it
             SetState(EquipmentConnectionState.Connecting);
         }
         // 202 contract: do the blocking Alpaca connect off-thread; GetAsync reports the outcome.
         // CancellationToken.None: this is intentionally fire-and-forget, not tied to the request.
-        _ = Task.Run(() => ConnectInBackground(device), CancellationToken.None);
+        _ = Task.Run(() => ConnectInBackground(device, generation), CancellationToken.None);
         return Task.FromResult(Accepted("safety-monitor.connect", idempotencyKey));
     }
 
@@ -118,13 +128,14 @@ public sealed partial class SafetyMonitorService : ISafetyMonitorService, IDispo
         AlpacaSafetyMonitor? client;
         lock (_gate) {
             ObjectDisposedException.ThrowIf(_disposed, this);
+            _connectGeneration++; // invalidate any in-flight connect so it won't adopt its client
             client = _client;
             _client = null;
             if (_device is not null) {
                 SetState(EquipmentConnectionState.Disconnected);
             }
-            // A connect still in flight (Connecting, _client null) will observe the state
-            // change on completion and dispose its own client (supersede check below).
+            // A connect still in flight will see the bumped generation on completion and dispose
+            // its own client (supersede check in ConnectInBackground).
         }
         if (client is not null) {
             _ = Task.Run(() => SafeDisconnectDispose(client), CancellationToken.None);
@@ -144,8 +155,7 @@ public sealed partial class SafetyMonitorService : ISafetyMonitorService, IDispo
                 // resulting disposed-client throw here must NOT clobber Disconnected back to
                 // Error. Guarding on the same client instance also covers a reconnect.
                 if (_state == EquipmentConnectionState.Connected && ReferenceEquals(_client, client)) {
-                    _state = EquipmentConnectionState.Error;
-                    _lastTransition = DateTimeOffset.UtcNow;
+                    SetState(EquipmentConnectionState.Error); // reentrant lock; keeps all transitions on one path
                 }
             }
             LogIsSafeReadFailed(ex);
@@ -157,7 +167,7 @@ public sealed partial class SafetyMonitorService : ISafetyMonitorService, IDispo
         Justification = "Background connect boundary: constructing the Alpaca client and setting Connected can throw arbitrary driver/HTTP/socket exceptions; any escape must surface as the Error state and be contained, never fault the fire-and-forget task or the daemon. CA1031's log-and-recover boundary applies.")]
     [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
         Justification = "Ownership of the AlpacaSafetyMonitor is managed explicitly: on every non-adopt path (supersede or exception) SafeDisconnectDispose disposes it; on the adopt path it is stored in _client (local set to null) and disposed later by DisconnectAsync/Dispose. CA2000 cannot follow the transfer through the lock + helper.")]
-    private void ConnectInBackground(DiscoveredDeviceDto device) {
+    private void ConnectInBackground(DiscoveredDeviceDto device, long generation) {
         AlpacaSafetyMonitor? client = null;
         try {
             var host = string.IsNullOrWhiteSpace(device.IpAddress) ? device.HostName : device.IpAddress;
@@ -175,11 +185,13 @@ public sealed partial class SafetyMonitorService : ISafetyMonitorService, IDispo
             }
             var superseded = false;
             lock (_gate) {
-                // Only adopt this connection if it is still the one we want — a disconnect, a
-                // newer connect, or a Dispose() may have superseded it while the blocking
-                // connect was running. The !_disposed check prevents adopting a client into a
-                // service whose Dispose() has already run (which would leak it).
-                if (!_disposed && _state == EquipmentConnectionState.Connecting && _device?.UniqueId == device.UniqueId) {
+                // Adopt only if this is still the current attempt: a newer connect, a disconnect,
+                // or a Dispose() bumps the generation / sets _disposed, in which case this
+                // late-completing connect must not adopt (which would leak its client and/or
+                // resurrect a torn-down connection). The generation check also covers the
+                // connect -> disconnect -> reconnect-to-same-device sequence that a UniqueId
+                // comparison alone could not distinguish.
+                if (!_disposed && _connectGeneration == generation) {
                     _client = client;
                     SetState(EquipmentConnectionState.Connected);
                 } else {
@@ -198,7 +210,7 @@ public sealed partial class SafetyMonitorService : ISafetyMonitorService, IDispo
             }
             lock (_gate) {
                 // Only demote to Error if this attempt is still the current one.
-                if (_state == EquipmentConnectionState.Connecting && _device?.UniqueId == device.UniqueId) {
+                if (!_disposed && _connectGeneration == generation) {
                     _client = null;
                     SetState(EquipmentConnectionState.Error);
                 }

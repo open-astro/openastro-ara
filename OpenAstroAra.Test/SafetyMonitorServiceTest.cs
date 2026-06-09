@@ -96,6 +96,14 @@ namespace OpenAstroAra.Test {
                 () => { _ = svc.DisconnectAsync(null, CancellationToken.None); });
         }
 
+        [Test]
+        public void GetAsync_after_Dispose_throws_ObjectDisposedException() {
+            var svc = new SafetyMonitorService();
+            svc.Dispose();
+            Assert.ThrowsAsync<ObjectDisposedException>(
+                () => svc.GetAsync(CancellationToken.None));
+        }
+
         // Polls up to ~15s for the connection to leave Connecting (HTTP connect-refused on a
         // dead port is fast, but allow generous slack for a loaded CI runner).
         private static async Task<SafetyMonitorDto?> PollUntilNotConnectingAsync(SafetyMonitorService svc) {
