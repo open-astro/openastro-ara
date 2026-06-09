@@ -219,21 +219,24 @@ public sealed partial class SafetyMonitorService : ISafetyMonitorService, IDispo
             client = null; // ownership transferred to _client
             LogConnected(device.Name, host, device.IpPort, device.AlpacaDeviceNumber);
         } catch (Exception ex) {
-            // Once adopted, the connection is live and owned by _client; a later throw (today
-            // only LogConnected, which doesn't throw) must NOT tear it down — just log. If not
-            // adopted, dispose this attempt's client and demote to Error when still current.
+            // Once adopted, the connection is live and owned by _client; a later throw (today only
+            // LogConnected, which doesn't throw) must NOT tear it down or log a failure — just
+            // return. If not adopted, dispose this attempt's client, demote to Error when still
+            // current, and log the failure.
             if (!adopted) {
                 if (client is not null) {
                     SafeDisconnectDispose(client);
                 }
                 lock (_gate) {
+                    // No _client = null here: a non-adopted attempt never stored its client in
+                    // _client, and the generation guard ensures a newer connect's client is not
+                    // touched either.
                     if (!_disposed && _connectGeneration == generation) {
-                        _client = null;
                         SetState(EquipmentConnectionState.Error);
                     }
                 }
+                LogConnectFailed(ex, device.Name);
             }
-            LogConnectFailed(ex, device.Name);
         }
     }
 
