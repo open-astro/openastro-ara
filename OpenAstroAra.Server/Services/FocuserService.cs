@@ -47,7 +47,6 @@ public sealed partial class FocuserService : IFocuserService, IDisposable {
     private AlpacaFocuser? _client;
     private DiscoveredDeviceDto? _device;
     private EquipmentConnectionState _state = EquipmentConnectionState.Disconnected;
-    private DateTimeOffset _lastTransition = DateTimeOffset.UtcNow;
     private FocuserCapabilitiesDto? _capabilities;
     private FocuserStateDto _runtime = IdleRuntime;
     private int _refreshing;
@@ -125,7 +124,9 @@ public sealed partial class FocuserService : IFocuserService, IDisposable {
         // Validate the target against known capabilities when available; the device validates the
         // bound itself otherwise (ASCOM Move throws InvalidValue out of range).
         var min = caps?.MinPosition ?? 0;
-        if (request.TargetPosition < min || (caps is not null && request.TargetPosition > caps.MaxPosition)) {
+        // Only enforce the upper bound when we have a real (non-zero) max; otherwise let the device
+        // validate it. (ReadCapabilities never caches a zero max now, but keep this defensive.)
+        if (request.TargetPosition < min || (caps is not null && caps.MaxPosition > 0 && request.TargetPosition > caps.MaxPosition)) {
             throw new ArgumentOutOfRangeException(nameof(request), request.TargetPosition,
                 $"TargetPosition is out of range ({min}..{caps?.MaxPosition.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "?"}).");
         }
@@ -205,10 +206,13 @@ public sealed partial class FocuserService : IFocuserService, IDisposable {
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Per-field read boundary: an unsupported capability property throws; that field falls back to a default rather than failing the read. CA1031's log-and-recover boundary applies.")]
-    private static FocuserCapabilitiesDto ReadCapabilities(AlpacaFocuser c) {
+        Justification = "Per-field read boundary: an unsupported capability property throws; a non-essential field falls back to a default, while a failed MaxStep returns null so capabilities are not cached with a bogus zero range. CA1031's log-and-recover boundary applies.")]
+    private static FocuserCapabilitiesDto? ReadCapabilities(AlpacaFocuser c) {
         int maxStep;
-        try { maxStep = c.MaxStep; } catch (Exception) { maxStep = 0; }
+        // MaxStep is essential — if it fails, return null so we DON'T cache a [0,0] range (which
+        // would permanently reject every Move). RefreshCacheOnce leaves _capabilities null and the
+        // next tick retries; MoveAsync device-validates the bound until then.
+        try { maxStep = c.MaxStep; } catch (Exception) { return null; }
         double stepSize;
         try { stepSize = c.StepSize; } catch (Exception) { stepSize = 0; }
         bool canTempComp;
@@ -305,7 +309,6 @@ public sealed partial class FocuserService : IFocuserService, IDisposable {
     // Caller must hold _gate (every call site already does), so no inner lock here.
     private void SetState(EquipmentConnectionState state) {
         _state = state;
-        _lastTransition = DateTimeOffset.UtcNow;
     }
 
     private static OperationAcceptedDto Accepted(string operationType, string? idempotencyKey) =>
