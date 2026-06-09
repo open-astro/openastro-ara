@@ -107,14 +107,16 @@ public sealed partial class RotatorService : IRotatorService, IDisposable {
 
     public Task<OperationAcceptedDto> MoveAsync(RotatorMoveRequestDto request, string? idempotencyKey, CancellationToken ct) {
         ArgumentNullException.ThrowIfNull(request);
-        if (IsAngleOutOfRange(request.TargetAngleDeg)) {
-            throw new ArgumentOutOfRangeException(nameof(request), request.TargetAngleDeg,
-                "TargetAngleDeg must be in [0, 360).");
-        }
+        // Dispose check first (a disposed service can't be operated regardless of the argument),
+        // then argument range, then connection state — aligned with the other device services.
         AlpacaRotator? client;
         lock (_gate) {
             ObjectDisposedException.ThrowIf(_disposed, this);
             client = _state == EquipmentConnectionState.Connected ? _client : null;
+        }
+        if (IsAngleOutOfRange(request.TargetAngleDeg)) {
+            throw new ArgumentOutOfRangeException(nameof(request), request.TargetAngleDeg,
+                "TargetAngleDeg must be in [0, 360).");
         }
         if (client is null) {
             throw new InvalidOperationException("rotator is not connected");

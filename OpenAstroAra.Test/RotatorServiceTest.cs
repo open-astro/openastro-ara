@@ -111,9 +111,10 @@ namespace OpenAstroAra.Test {
         public void MoveAsync_after_Dispose_throws_ObjectDisposedException() {
             var svc = new RotatorService();
             svc.Dispose();
-            // 90 is a valid angle, so it reaches the disposed check rather than the range check.
+            // 360 is out of range, but the dispose check runs first, so ObjectDisposedException wins
+            // over ArgumentOutOfRangeException (ordering aligned with the other services).
             Assert.Throws<ObjectDisposedException>(
-                () => { _ = svc.MoveAsync(new RotatorMoveRequestDto(90), null, CancellationToken.None); });
+                () => { _ = svc.MoveAsync(new RotatorMoveRequestDto(360), null, CancellationToken.None); });
         }
 
         private static async Task<RotatorDto?> PollUntilNotConnectingAsync(RotatorService svc) {
