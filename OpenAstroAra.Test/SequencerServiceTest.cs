@@ -197,7 +197,10 @@ namespace OpenAstroAra.Test {
             var fake = new DelayedSequenceService(id, BuildBody());
             var svc = new SequencerService(deserializer, ws: null, sequencesResolver: () => fake, checkpoint: null);
             await svc.StartAsync(id, StartReq, null, CancellationToken.None);
-            await Task.Delay(150); // worker is in LoadRootAsync, awaiting GetAsync
+            // The run is registered synchronously by StartAsync, and the cancelled
+            // token makes the blocking GetAsync throw whenever the worker reaches it
+            // — so aborting now is deterministic, no fixed sleep needed to hit a window.
+            Assert.That(await svc.GetRunStateAsync(id, CancellationToken.None), Is.Not.Null);
             await svc.AbortAsync(id, null, CancellationToken.None);
             var state = await WaitForTerminalAsync(svc, id);
             Assert.That(state!.State, Is.EqualTo(SequenceRunState.Stopped));

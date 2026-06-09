@@ -342,6 +342,10 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
 
                 var progress = new Progress<ApplicationStatus>(status => {
                     run.SetDescription(status.Status);
+                    // Fire-and-forget; EmitAsync swallows all failures so there's no
+                    // unobserved-task risk. No back-pressure yet — see PORT_TODO
+                    // "Progress-emit back-pressure" for the debounce/single-in-flight
+                    // guard to add once equipment instructions report at capture rates.
                     _ = EmitAsync("sequence.progress", sequenceId, run);
                     WriteCheckpointIfOwner(run, sequenceId);
                 });
