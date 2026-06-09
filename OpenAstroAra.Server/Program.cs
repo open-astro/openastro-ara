@@ -168,9 +168,12 @@ public partial class Program {
         // park/unpark, set-tracking, abort-slew. REST-only; the ITelescopeMediator unification is a
         // follow-up.
         builder.Services.AddSingleton<ITelescopeService, TelescopeService>();
-        // §14e — fourth real device service: live focuser (position/temp) + Move. REST-only;
-        // the IFocuserMediator unification (MoveFocuser/autofocus instructions) is a follow-up.
-        builder.Services.AddSingleton<IFocuserService, FocuserService>();
+        // §14e — fourth real device service: live focuser (position/temp) + Move. One singleton
+        // backs BOTH the REST IFocuserService and the Sequencer's IFocuserMediator (§8.1), so the
+        // MoveFocuser* instructions drive the live device (the mediator wiring is below; this
+        // replaces the HeadlessFocuserMediator stub).
+        builder.Services.AddSingleton<FocuserService>();
+        builder.Services.AddSingleton<IFocuserService>(sp => sp.GetRequiredService<FocuserService>());
         // §14e — sixth real device service: live filter wheel (slots + current position) + change
         // slot. REST-only; the IFilterWheelMediator unification (SwitchFilter) is a follow-up.
         builder.Services.AddSingleton<IFilterWheelService, FilterWheelService>();
@@ -332,8 +335,10 @@ public partial class Program {
             OpenAstroAra.Server.Services.Equipment.HeadlessTelescopeMediator>();
         builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.IGuiderMediator,
             OpenAstroAra.Server.Services.Equipment.HeadlessGuiderMediator>();
-        builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.IFocuserMediator,
-            OpenAstroAra.Server.Services.Equipment.HeadlessFocuserMediator>();
+        // §14e — the real FocuserService backs IFocuserMediator too (replaces HeadlessFocuserMediator),
+        // so the MoveFocuser* sequence instructions drive the live Alpaca focuser.
+        builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.IFocuserMediator>(
+            sp => sp.GetRequiredService<FocuserService>());
         builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.ICameraMediator,
             OpenAstroAra.Server.Services.Equipment.HeadlessCameraMediator>();
         // §38k-15 — DI-registered to complete the mediator surface; its

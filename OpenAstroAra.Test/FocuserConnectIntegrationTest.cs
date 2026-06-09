@@ -82,6 +82,44 @@ namespace OpenAstroAra.Test {
             Assert.That(disconnected!.State, Is.EqualTo(EquipmentConnectionState.Disconnected));
         }
 
+        /// <summary>
+        /// §14e — the same <see cref="FocuserService"/> also serves <see cref="IFocuserMediator"/>:
+        /// the Sequencer's <c>MoveFocuserAbsolute</c> instruction calls <c>GetInfo().Connected</c>
+        /// (Validate) and <c>MoveFocuser(position)</c> (Execute), which blocks until the focuser
+        /// settles and returns the final position. This exercises that live mediator path.
+        /// </summary>
+        [Test]
+        public async Task Mediator_MoveFocuser_drives_the_live_device_and_returns_the_settled_position() {
+            var device = await DiscoverAsync().ConfigureAwait(false);
+            Assert.That(device, Is.Not.Null, "no Focuser device discovered from the running OmniSim");
+
+            using var svc = new FocuserService();
+            // FocuserService implements IFocuserMediator; the GetInfo()/MoveFocuser members below are
+            // exactly the mediator surface the MoveFocuserAbsolute instruction drives (called directly
+            // on the concrete type to satisfy CA1859 — interface conformance is covered by the unit test).
+
+            await svc.ConnectAsync(new ConnectRequestDto(device!), idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+            var connected = await PollUntilAsync(svc, s => s != EquipmentConnectionState.Connecting).ConfigureAwait(false);
+            Assert.That(connected!.State, Is.EqualTo(EquipmentConnectionState.Connected));
+
+            var withCaps = await PollUntilCapsAsync(svc).ConfigureAwait(false);
+            Assert.That(withCaps, Is.Not.Null, "capabilities were never seeded after connect");
+            Assert.That(svc.GetInfo().Connected, Is.True, "the mediator should report connected once the REST connect lands");
+
+            var max = withCaps!.Capabilities!.MaxPosition;
+            var current = svc.GetInfo().Position;
+            var target = current < max / 2 ? Math.Min(max, max / 2 + 100) : Math.Max(0, max / 2 - 100);
+
+            // Blocking move via the mediator — returns once the device settles at the target.
+            var settled = await svc.MoveFocuser(target, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(settled, Is.EqualTo(target), "MoveFocuser should return the settled position");
+            Assert.That(svc.GetInfo().Position, Is.EqualTo(target), "the mediator snapshot should reflect the move");
+
+            await svc.DisconnectAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+            var disconnected = await PollUntilAsync(svc, s => s == EquipmentConnectionState.Disconnected).ConfigureAwait(false);
+            Assert.That(disconnected!.State, Is.EqualTo(EquipmentConnectionState.Disconnected));
+        }
+
         private static async Task<DiscoveredDeviceDto?> DiscoverAsync() {
             var discovery = new AlpacaEquipmentDiscoveryService();
             for (var attempt = 1; attempt <= MaxDiscoveryAttempts; attempt++) {
