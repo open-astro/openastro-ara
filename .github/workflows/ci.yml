@@ -104,20 +104,37 @@ jobs:
           set -uo pipefail
           dir="$(dirname "$ALPACA_SIM_BIN")"
           cd "$dir"
-          # Reset auth (one-shot) so the API is reachable without a password.
-          ./ascom.alpaca.simulators --reset-auth || true
-          # Run headless on 127.0.0.1:32323.
-          ./ascom.alpaca.simulators '--urls=http://127.0.0.1:32323' --set-no-browser > /tmp/alpaca-sim.log 2>&1 &
+          # Single headless invocation. We pass ONLY --urls — no --set-no-browser,
+          # no --reset-auth. Why:
+          #   * OmniSim is single-instance: a SECOND process (Program.Main, global
+          #     mutex + named pipe) forwards its args to the first copy over the pipe
+          #     and exits, so a pre-run "reset" invocation never configures the server
+          #     that actually serves.
+          #   * --set-no-browser makes ProcessArgs() return true, which triggers the
+          #     `if (ProcessArgs(args)) return;` early-exit in Main — the process dies
+          #     before Kestrel binds. (This was the prior silent-exit bug.)
+          #   * The headless browser auto-launch is wrapped in try/catch and fails
+          #     harmlessly on a server with no default handler, so suppressing it is
+          #     unnecessary.
+          #   * --urls=http://*:32323 binds all interfaces (incl. loopback), matching
+          #     the upstream docker-compose invocation that is documented to work.
+          ./ascom.alpaca.simulators '--urls=http://*:32323' > /tmp/alpaca-sim.log 2>&1 &
           sim_pid=$!
           # Poll for the Alpaca management API to come up (up to ~90s — first start
           # initialises settings).
           up=""
           for i in $(seq 1 90); do
+            if ! kill -0 "$sim_pid" 2>/dev/null; then
+              echo "::error::Alpaca simulator process exited early (pid $sim_pid)"
+              echo "--- simulator log ---"; cat /tmp/alpaca-sim.log || true
+              exit 1
+            fi
             if curl -fsS -m 2 http://127.0.0.1:32323/management/apiversions >/dev/null 2>&1; then up=1; break; fi
             sleep 1
           done
           if [ -z "$up" ]; then
             echo "::error::Alpaca simulator did not respond on :32323"
+            echo "--- listening sockets ---"; ss -tlnp 2>/dev/null | grep -E ':32323|LISTEN' || true
             echo "--- simulator log ---"; cat /tmp/alpaca-sim.log || true
             kill "$sim_pid" 2>/dev/null || true
             exit 1
