@@ -197,7 +197,7 @@ public sealed partial class SafetyMonitorService : ISafetyMonitorService, IDispo
                 // resulting disposed-client throw here must NOT clobber Disconnected back to
                 // Error. Guarding on the same client instance also covers a reconnect.
                 if (_state == EquipmentConnectionState.Connected && ReferenceEquals(_client, client)) {
-                    SetState(EquipmentConnectionState.Error); // reentrant lock; keeps all transitions on one path
+                    SetState(EquipmentConnectionState.Error); // we hold _gate here; keeps all transitions on one path
                 }
             }
             LogIsSafeReadFailed(ex);

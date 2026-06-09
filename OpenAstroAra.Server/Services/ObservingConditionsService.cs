@@ -316,6 +316,10 @@ public sealed partial class ObservingConditionsService : IObservingConditionsSer
             _client = null;
         }
         _refreshTimer.Dispose();
+        // Dispose the client directly (guarded) rather than via SafeDisconnectDispose: the
+        // courtesy "Connected = false" is a blocking HTTP call (up to the ASCOM ~3s
+        // establishConnectionTimeout) that would hang container shutdown if the device is
+        // unreachable. DisposeQuietly releases the HttpClient resources without network I/O.
         if (client is not null) {
             DisposeQuietly(client);
         }
