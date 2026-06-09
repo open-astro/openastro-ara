@@ -77,6 +77,63 @@ jobs:
       # When `actionlint` style checks are wanted (e.g., shellcheck inside
       # `run:` blocks), re-add via `rhysd/actionlint` at Phase 14.
 
+  # §14e — Alpaca simulator harness smoke test. Downloads the pinned ASCOM OmniSim
+  # release (SHA-256 verified, not committed), runs it headless on the runner, and
+  # confirms its Alpaca API answers + exposes a Camera device. This proves the
+  # download-and-run harness works on the real linux-x64 target; the daemon-discovery
+  # integration test builds on it in a follow-up. Non-required for now.
+  alpaca-sim-smoke:
+    name: Alpaca simulator harness (smoke)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (no LFS)
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v4.x — pinned per zizmor + CodeRabbit security finding on PR #12
+        with:
+          lfs: false
+          persist-credentials: false
+
+      - name: Download + verify pinned Alpaca simulators
+        run: |
+          set -euo pipefail
+          bin="$(scripts/get-alpaca-simulators.sh)"
+          echo "ALPACA_SIM_BIN=$bin" >> "$GITHUB_ENV"
+          echo "ok: $bin"
+
+      - name: Start simulator + smoke-test the Alpaca API
+        run: |
+          set -uo pipefail
+          dir="$(dirname "$ALPACA_SIM_BIN")"
+          cd "$dir"
+          # Reset auth (one-shot) so the API is reachable without a password.
+          ./ascom.alpaca.simulators --reset-auth || true
+          # Run headless on 127.0.0.1:32323.
+          ./ascom.alpaca.simulators '--urls=http://127.0.0.1:32323' --set-no-browser > /tmp/alpaca-sim.log 2>&1 &
+          sim_pid=$!
+          # Poll for the Alpaca management API to come up (up to ~90s — first start
+          # initialises settings).
+          up=""
+          for i in $(seq 1 90); do
+            if curl -fsS -m 2 http://127.0.0.1:32323/management/apiversions >/dev/null 2>&1; then up=1; break; fi
+            sleep 1
+          done
+          if [ -z "$up" ]; then
+            echo "::error::Alpaca simulator did not respond on :32323"
+            echo "--- simulator log ---"; cat /tmp/alpaca-sim.log || true
+            kill "$sim_pid" 2>/dev/null || true
+            exit 1
+          fi
+          echo "apiversions: $(curl -fsS http://127.0.0.1:32323/management/apiversions)"
+          devices="$(curl -fsS http://127.0.0.1:32323/management/v1/configureddevices)"
+          echo "configured devices: $devices"
+          if ! echo "$devices" | grep -qi 'camera'; then
+            echo "::error::no Camera device in configured devices"
+            echo "--- simulator log ---"; cat /tmp/alpaca-sim.log || true
+            kill "$sim_pid" 2>/dev/null || true
+            exit 1
+          fi
+          echo "ok: Alpaca simulator is up and exposes a Camera device"
+          kill "$sim_pid" 2>/dev/null || true
+
   # Whole-solution analyzer gate. Directory.Build.props turns on the full CAxxxx
   # catalog (AnalysisMode=All), Nullable, and TreatWarningsAsErrors for every
   # project, so this single Release build of the .sln fails on ANY new analyzer
