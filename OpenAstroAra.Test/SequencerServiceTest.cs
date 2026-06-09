@@ -49,11 +49,11 @@ namespace OpenAstroAra.Test {
             return doc.RootElement.Clone();
         }
 
-        private static SequencerService BuildService(Guid id, JsonElement? body) {
+        private static SequencerService BuildService(Guid id, JsonElement? body, IWsBroadcaster? ws = null) {
             var factory = HeadlessSequencerFactory.WithDefaults();
             var deserializer = new SequenceBodyDeserializer(factory);
             var fake = new FakeSequenceService(id, body);
-            return new SequencerService(deserializer, ws: null, sequencesResolver: () => fake, checkpoint: null);
+            return new SequencerService(deserializer, ws: ws, sequencesResolver: () => fake, checkpoint: null);
         }
 
         private static async Task<SequenceRunStateDto?> WaitForTerminalAsync(SequencerService svc, Guid id) {
@@ -148,6 +148,30 @@ namespace OpenAstroAra.Test {
             await svc.AbortAsync(id, null, CancellationToken.None);
             var state = await WaitForTerminalAsync(svc, id);
             Assert.That(state!.State, Is.EqualTo(SequenceRunState.Stopped));
+        }
+
+        [Test]
+        public async Task Completed_run_emits_started_then_complete_WS_events() {
+            var id = Guid.NewGuid();
+            var ws = new RecordingWsBroadcaster();
+            var svc = BuildService(id, BuildBody(), ws);
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForTerminalAsync(svc, id);
+            Assert.That(ws.Events, Does.Contain("sequence.started"));
+            Assert.That(ws.Events, Does.Contain("sequence.complete"));
+            Assert.That(ws.Events, Does.Not.Contain("sequence.aborted"));
+            Assert.That(ws.Events, Does.Not.Contain("sequence.stopped"));
+        }
+
+        /// <summary>Records the event types published, to assert the WS lifecycle.</summary>
+        private sealed class RecordingWsBroadcaster : IWsBroadcaster {
+            private readonly System.Collections.Concurrent.ConcurrentQueue<string> _events = new();
+            public System.Collections.Generic.IReadOnlyCollection<string> Events => _events;
+            public long CurrentSequence => _events.Count;
+            public Task PublishAsync(string eventType, JsonElement payload, CancellationToken ct) {
+                _events.Enqueue(eventType);
+                return Task.CompletedTask;
+            }
         }
 
         /// <summary>Minimal ISequenceService whose GetAsync returns the test body; the rest are unused.</summary>

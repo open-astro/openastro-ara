@@ -207,27 +207,26 @@ public sealed partial class SequencerService : ISequencerService {
         Justification = "Top-level sequence-run boundary: arbitrary instruction code executes here, so any escaped exception must be caught, logged, surfaced as a Failed run via WS, and contained — letting it propagate would fault the background worker and take down the daemon. CA1031's 'boundary that logs and recovers' exception applies.")]
     private async Task RunWorkerAsync(Guid sequenceId, RunState run, ISequenceRootContainer root) {
         try {
-            // Only claim Running if an abort/stop didn't already land in the
-            // window between StartAsync spawning this worker and it running —
-            // otherwise we'd clobber Aborting/Stopped and mis-emit "complete".
-            if (run.State == SequenceRunState.Starting) {
+            // If an abort/stop landed before this worker started (in the window
+            // between StartAsync spawning it and it running), skip both the
+            // execution AND the misleading "sequence.started" event — fall
+            // straight through to the terminal (aborted/stopped) emit below.
+            if (run.State is not (SequenceRunState.Aborting or SequenceRunState.Stopped)) {
                 run.State = SequenceRunState.Running;
+                await EmitAsync("sequence.started", sequenceId, run);
+
+                var progress = new Progress<ApplicationStatus>(status => {
+                    run.SetDescription(status.Status);
+                    _ = EmitAsync("sequence.progress", sequenceId, run);
+                    _checkpoint?.Write(run.ToDto(sequenceId));
+                });
+
+                // Real execution. Sequencer.Start runs MainContainer.Run with
+                // Initialize/Teardown and swallows OperationCanceledException, so
+                // cancellation surfaces via run.Cts below rather than as a throw.
+                var sequencer = new OpenAstroAra.Sequencer.Sequencer(root);
+                await sequencer.Start(progress, skipIssuePrompt: true, run.Cts.Token);
             }
-            await EmitAsync("sequence.started", sequenceId, run);
-
-            var progress = new Progress<ApplicationStatus>(status => {
-                if (!string.IsNullOrEmpty(status.Status)) {
-                    run.CurrentInstructionDescription = status.Status;
-                }
-                _ = EmitAsync("sequence.progress", sequenceId, run);
-                _checkpoint?.Write(run.ToDto(sequenceId));
-            });
-
-            // Real execution. Sequencer.Start runs MainContainer.Run with
-            // Initialize/Teardown and swallows OperationCanceledException, so
-            // cancellation surfaces via run.Cts below rather than as a throw.
-            var sequencer = new OpenAstroAra.Sequencer.Sequencer(root);
-            await sequencer.Start(progress, skipIssuePrompt: true, run.Cts.Token);
 
             // Terminal transition is driven by the state Abort/Stop set before
             // cancelling (Sequencer.Start swallows OperationCanceledException, so
@@ -246,7 +245,7 @@ public sealed partial class SequencerService : ISequencerService {
                 await EmitAsync("sequence.stopped", sequenceId, run);
             } else {
                 run.State = SequenceRunState.Completed;
-                run.CompletedUtc = DateTimeOffset.UtcNow;
+                run.MarkCompleted();
                 await EmitAsync("sequence.complete", sequenceId, run);
             }
         } catch (Exception ex) {
@@ -295,34 +294,52 @@ public sealed partial class SequencerService : ISequencerService {
         // State is written from Abort/Stop (request threads) and the background
         // worker; volatile makes the cross-thread visibility explicit.
         private volatile SequenceRunState _state = SequenceRunState.Starting;
+        // The remaining telemetry fields are written on the worker and read via
+        // ToDto on request threads (GetRunState / checkpoint). _gate guards both
+        // sides so a request thread always sees a consistent snapshot.
+        private readonly object _gate = new();
 
         public Guid RunId { get; } = Guid.NewGuid();
         public SequenceRunState State { get => _state; set => _state = value; }
-        public int? CurrentInstructionIndex { get; set; }
-        public string? CurrentInstructionDescription { get; set; }
-        public int FramesCompleted { get; set; }
+        public int? CurrentInstructionIndex { get; private set; }   // wired with instruction-level hooks (deferred)
+        public string? CurrentInstructionDescription { get; private set; }
+        public int FramesCompleted { get; private set; }            // wired with instruction-level hooks (deferred)
         // Filled in after the body loads (StartAsync reserves the run slot before
-        // the async body read, so the count isn't known at construction).
+        // the async body read, so the count isn't known at construction). Set once
+        // before the run becomes observable; an int read/write is atomic.
         public int InstructionCount { get; set; }
         public DateTimeOffset StartedUtc { get; } = DateTimeOffset.UtcNow;
-        public DateTimeOffset? CompletedUtc { get; set; }
+        public DateTimeOffset? CompletedUtc { get; private set; }
         public CancellationTokenSource Cts { get; } = new();
+
+        public void SetDescription(string? description) {
+            if (string.IsNullOrEmpty(description)) return;
+            lock (_gate) { CurrentInstructionDescription = description; }
+        }
+
+        public void MarkCompleted() {
+            lock (_gate) { CompletedUtc = DateTimeOffset.UtcNow; }
+        }
 
         /// <summary>Dispose the CTS (idempotent) — the record itself stays queryable in _runs.</summary>
         public void DisposeCts() => Cts.Dispose();
 
         public void Dispose() => Cts.Dispose();
 
-        public SequenceRunStateDto ToDto(Guid sequenceId) => new(
-            SequenceId: sequenceId,
-            RunId: RunId,
-            State: State,
-            CurrentInstructionIndex: CurrentInstructionIndex,
-            CurrentTargetName: null,
-            StartedUtc: StartedUtc,
-            CompletedUtc: CompletedUtc,
-            FramesCompleted: FramesCompleted,
-            FramesTotal: InstructionCount,
-            CurrentInstructionDescription: CurrentInstructionDescription);
+        public SequenceRunStateDto ToDto(Guid sequenceId) {
+            lock (_gate) {
+                return new(
+                    SequenceId: sequenceId,
+                    RunId: RunId,
+                    State: _state,
+                    CurrentInstructionIndex: CurrentInstructionIndex,
+                    CurrentTargetName: null,
+                    StartedUtc: StartedUtc,
+                    CompletedUtc: CompletedUtc,
+                    FramesCompleted: FramesCompleted,
+                    FramesTotal: InstructionCount,
+                    CurrentInstructionDescription: CurrentInstructionDescription);
+            }
+        }
     }
 }
