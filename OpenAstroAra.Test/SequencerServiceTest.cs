@@ -187,6 +187,41 @@ namespace OpenAstroAra.Test {
             Assert.That(ws.Events, Does.Not.Contain("sequence.stopped"));
         }
 
+        [Test]
+        public async Task Abort_during_body_load_reports_stopped_not_failed() {
+            // GetAsync blocks (honoring the token) so abort lands while the body is
+            // still loading; the run must end Stopped, not Failed.
+            var id = Guid.NewGuid();
+            var factory = HeadlessSequencerFactory.WithDefaults();
+            var deserializer = new SequenceBodyDeserializer(factory);
+            var fake = new DelayedSequenceService(id, BuildBody());
+            var svc = new SequencerService(deserializer, ws: null, sequencesResolver: () => fake, checkpoint: null);
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await Task.Delay(150); // worker is in LoadRootAsync, awaiting GetAsync
+            await svc.AbortAsync(id, null, CancellationToken.None);
+            var state = await WaitForTerminalAsync(svc, id);
+            Assert.That(state!.State, Is.EqualTo(SequenceRunState.Stopped));
+        }
+
+        /// <summary>ISequenceService whose GetAsync blocks (honoring the token) to exercise abort-during-load.</summary>
+        private sealed class DelayedSequenceService : ISequenceService {
+            private readonly Guid _id;
+            private readonly JsonElement _body;
+            public DelayedSequenceService(Guid id, JsonElement body) { _id = id; _body = body; }
+
+            public async Task<SequenceDto?> GetAsync(Guid id, CancellationToken ct) {
+                await Task.Delay(TimeSpan.FromSeconds(30), ct); // cancelled by abort -> OperationCanceledException
+                if (id != _id) return null;
+                return new SequenceDto(id, "Test", null, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch, _body, null);
+            }
+
+            public Task<CursorPage<SequenceListItemDto>> ListAsync(int limit, string? cursor, CancellationToken ct) => throw new NotSupportedException();
+            public Task<SequenceDto> CreateAsync(SequenceCreateRequestDto request, string? idempotencyKey, CancellationToken ct) => throw new NotSupportedException();
+            public Task<SequenceDto?> UpdateAsync(Guid id, SequenceUpdateRequestDto request, CancellationToken ct) => throw new NotSupportedException();
+            public Task<bool> DeleteAsync(Guid id, CancellationToken ct) => throw new NotSupportedException();
+            public Task<SequenceShareDto> ShareExportAsync(Guid id, CancellationToken ct) => throw new NotSupportedException();
+        }
+
         /// <summary>Records the event types published, to assert the WS lifecycle.</summary>
         private sealed class RecordingWsBroadcaster : IWsBroadcaster {
             private readonly System.Collections.Concurrent.ConcurrentQueue<string> _events = new();

@@ -123,6 +123,14 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         ISequenceRootContainer? root;
         try {
             root = await LoadRootAsync(id, run);
+        } catch (OperationCanceledException) when (run.Cts.IsCancellationRequested) {
+            // Abort/stop arrived during the body load (RequestCancelAsync already
+            // set Aborting/Stopped + cancelled the token). Route through the
+            // worker's terminal path with a throwaway root: it skips execution for
+            // a non-Starting state and emits aborted/stopped (NOT failed), clears
+            // any checkpoint, and disposes the CTS.
+            await RunWorkerAsync(id, run, new SequenceRootContainer());
+            return;
         } catch (Exception ex) {
             LogRunFailed(ex, id);
             run.State = SequenceRunState.Failed;
