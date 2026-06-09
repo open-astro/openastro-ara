@@ -169,7 +169,9 @@ public partial class Program {
         builder.Services.AddSingleton<IFilterWheelService, PlaceholderFilterWheelService>();
         builder.Services.AddSingleton<IRotatorService, PlaceholderRotatorService>();
         builder.Services.AddSingleton<IDomeService, PlaceholderDomeService>();
-        builder.Services.AddSingleton<ISwitchService, PlaceholderSwitchService>();
+        // §14e — third real device service (first with a control action: SetValue). REST-only;
+        // the ISwitchMediator unification (SetSwitchValue sequence instruction) is a follow-up.
+        builder.Services.AddSingleton<ISwitchService, SwitchService>();
         // §14e — second real device service: live weather sensors over REST (read-only, §32.4
         // cached). REST-only — no sequence instruction consumes the weather mediator's data, so
         // IWeatherDataMediator stays the headless stub.
