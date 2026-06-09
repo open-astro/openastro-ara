@@ -123,14 +123,13 @@ public sealed partial class FocuserService : IFocuserService, IDisposable {
         }
         // Validate the target against known capabilities when available; the device validates the
         // bound itself otherwise (ASCOM Move throws InvalidValue out of range).
-        // Validate against capabilities only once they're loaded; until then (the first ~2s after
-        // connect) the device validates the bound. This avoids rejecting a valid negative offset on
-        // a relative focuser before caps load (a min=0 fallback would otherwise reject it). The
-        // upper bound is also skipped when MaxPosition is 0 (unknown). MinPosition is 0 for absolute
-        // focusers, -MaxStep for relative.
-        if (caps is not null
-            && (request.TargetPosition < caps.MinPosition
-                || (caps.MaxPosition > 0 && request.TargetPosition > caps.MaxPosition))) {
+        // Validate against capabilities only once they're loaded AND a real range is known
+        // (MaxPosition > 0); until then — or when a driver reports MaxStep=0 ("unlimited") — the
+        // device validates the bound. Gating the WHOLE check on MaxPosition > 0 means a relative
+        // focuser's valid negative offset isn't rejected when its max is unknown/unlimited.
+        // MinPosition is 0 for absolute focusers, -MaxStep for relative.
+        if (caps is not null && caps.MaxPosition > 0
+            && (request.TargetPosition < caps.MinPosition || request.TargetPosition > caps.MaxPosition)) {
             throw new ArgumentOutOfRangeException(nameof(request), request.TargetPosition,
                 string.Create(System.Globalization.CultureInfo.InvariantCulture,
                     $"TargetPosition is out of range ({caps.MinPosition}..{caps.MaxPosition})."));
@@ -357,7 +356,10 @@ public sealed partial class FocuserService : IFocuserService, IDisposable {
     [LoggerMessage(Level = LogLevel.Warning, Message = "Focuser runtime read failed")]
     private partial void LogRuntimeReadFailed(Exception ex);
 
-    [LoggerMessage(Level = LogLevel.Error, Message = "Focuser move to {Target} failed")]
+    // Warning, not Error: a move that the device rejects (e.g. ASCOM InvalidValue for an
+    // out-of-range target accepted in the caps-unknown window) is an operation that didn't
+    // complete, not a daemon fault. GetAsync reflects the unchanged position.
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Focuser move to {Target} failed")]
     private partial void LogMoveFailed(Exception ex, int target);
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Focuser TempComp set ignored")]

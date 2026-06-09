@@ -102,7 +102,9 @@ namespace OpenAstroAra.Test {
             return await svc.GetAsync(CancellationToken.None).ConfigureAwait(false);
         }
 
-        // Up to ~16s for the move to complete + the 2s cache to reflect it.
+        // Up to ~16s for the move to complete + the 2s cache to reflect it. Returns null on
+        // timeout so the caller's Is.Not.Null assertion fails fast with the right message rather
+        // than a confusing position-equality mismatch.
         private static async Task<FocuserDto?> PollUntilPositionAsync(FocuserService svc, int target) {
             for (var i = 0; i < 80; i++) {
                 var dto = await svc.GetAsync(CancellationToken.None).ConfigureAwait(false);
@@ -111,7 +113,7 @@ namespace OpenAstroAra.Test {
                 }
                 await Task.Delay(TimeSpan.FromMilliseconds(200)).ConfigureAwait(false);
             }
-            return await svc.GetAsync(CancellationToken.None).ConfigureAwait(false);
+            return null;
         }
     }
 }
