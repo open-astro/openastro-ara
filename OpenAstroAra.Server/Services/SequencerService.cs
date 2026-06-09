@@ -20,6 +20,7 @@ using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Server.Contracts;
 using System;
 using System.Collections.Concurrent;
+using System.Linq;
 using System.Text.Json;
 
 namespace OpenAstroAra.Server.Services;
@@ -61,6 +62,11 @@ public sealed partial class SequencerService : ISequencerService {
     private readonly SequenceBodyDeserializer _deserializer;
     private readonly ILogger<SequencerService> _logger;
     private readonly ConcurrentDictionary<Guid, RunState> _runs = new();
+    // Completed runs stay queryable via GetRunState after they finish (WILMA
+    // polls run-state past completion); cap retention so the dictionary can't
+    // grow unbounded over a long-lived daemon. Live (non-terminal) runs are
+    // never evicted.
+    private const int MaxRetainedRuns = 64;
 
     public SequencerService(
             SequenceBodyDeserializer deserializer,
@@ -101,6 +107,7 @@ public sealed partial class SequencerService : ISequencerService {
 
         var run = new RunState(instructionCount);
         _runs[id] = run;
+        PruneTerminalRuns();
 
         if (root is null) {
             // No body / undeserializable: fail the run immediately rather than
@@ -129,19 +136,45 @@ public sealed partial class SequencerService : ISequencerService {
         Task.FromResult(PlaceholderEquipmentHelpers.Accepted("sequencer.resume", idempotencyKey));
 
     public async Task<OperationAcceptedDto> AbortAsync(Guid id, string? idempotencyKey, CancellationToken ct) {
-        if (_runs.TryGetValue(id, out var run)) {
-            run.State = SequenceRunState.Aborting;
-            await run.Cts.CancelAsync();
-        }
+        await RequestCancelAsync(id, SequenceRunState.Aborting);
         return PlaceholderEquipmentHelpers.Accepted("sequencer.abort", idempotencyKey);
     }
 
     public async Task<OperationAcceptedDto> StopAsync(Guid id, string? idempotencyKey, CancellationToken ct) {
-        if (_runs.TryGetValue(id, out var run)) {
-            run.State = SequenceRunState.Stopped;
-            await run.Cts.CancelAsync();
-        }
+        await RequestCancelAsync(id, SequenceRunState.Stopped);
         return PlaceholderEquipmentHelpers.Accepted("sequencer.stop", idempotencyKey);
+    }
+
+    private static bool IsTerminal(SequenceRunState s) =>
+        s is SequenceRunState.Completed or SequenceRunState.Failed or SequenceRunState.Stopped;
+
+    /// <summary>
+    /// Transition a live run to Aborting/Stopped and cancel its token. No-ops on
+    /// an already-terminal run so we never touch a disposed CTS; the CancelAsync
+    /// is still guarded against the narrow worker-disposes-during-abort race.
+    /// </summary>
+    private async Task RequestCancelAsync(Guid id, SequenceRunState desired) {
+        if (!_runs.TryGetValue(id, out var run) || IsTerminal(run.State)) return;
+        run.State = desired;
+        try {
+            await run.Cts.CancelAsync();
+        } catch (ObjectDisposedException) {
+            // Worker reached terminal + disposed the CTS between the check above
+            // and here — the run is already ending, nothing more to cancel.
+        }
+    }
+
+    /// <summary>Evict the oldest terminal runs once retention exceeds the cap (live runs are kept).</summary>
+    private void PruneTerminalRuns() {
+        if (_runs.Count <= MaxRetainedRuns) return;
+        var terminal = _runs.Where(kv => IsTerminal(kv.Value.State))
+                            .OrderBy(kv => kv.Value.StartedUtc)
+                            .ToList();
+        var toRemove = _runs.Count - MaxRetainedRuns;
+        foreach (var kv in terminal) {
+            if (toRemove-- <= 0) break;
+            if (_runs.TryRemove(kv.Key, out var removed)) removed.Dispose();
+        }
     }
 
     /// <summary>
@@ -171,7 +204,12 @@ public sealed partial class SequencerService : ISequencerService {
         Justification = "Top-level sequence-run boundary: arbitrary instruction code executes here, so any escaped exception must be caught, logged, surfaced as a Failed run via WS, and contained — letting it propagate would fault the background worker and take down the daemon. CA1031's 'boundary that logs and recovers' exception applies.")]
     private async Task RunWorkerAsync(Guid sequenceId, RunState run, ISequenceRootContainer root) {
         try {
-            run.State = SequenceRunState.Running;
+            // Only claim Running if an abort/stop didn't already land in the
+            // window between StartAsync spawning this worker and it running —
+            // otherwise we'd clobber Aborting/Stopped and mis-emit "complete".
+            if (run.State == SequenceRunState.Starting) {
+                run.State = SequenceRunState.Running;
+            }
             await EmitAsync("sequence.started", sequenceId, run);
 
             var progress = new Progress<ApplicationStatus>(status => {
@@ -198,6 +236,11 @@ public sealed partial class SequencerService : ISequencerService {
                 await EmitAsync("sequence.aborted", sequenceId, run);
             } else if (run.State == SequenceRunState.Stopped) {
                 await EmitAsync("sequence.stopped", sequenceId, run);
+            } else if (run.Cts.IsCancellationRequested) {
+                // Defensive: cancelled but the Aborting/Stopped marker was lost
+                // to a race — treat as a stop rather than reporting completion.
+                run.State = SequenceRunState.Stopped;
+                await EmitAsync("sequence.stopped", sequenceId, run);
             } else {
                 run.State = SequenceRunState.Completed;
                 run.CompletedUtc = DateTimeOffset.UtcNow;
@@ -211,9 +254,16 @@ public sealed partial class SequencerService : ISequencerService {
             // §28 — terminal transition clears active/current.json; a missing
             // file is the canonical "nothing running" signal for §28.2.
             _checkpoint?.Clear();
+            // The run is terminal: dispose its CTS (the only IDisposable). The
+            // RunState record stays in _runs for post-completion GetRunState
+            // polling; Abort/Stop guard against touching a disposed CTS, and
+            // PruneTerminalRuns bounds retention.
+            run.DisposeCts();
         }
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "WS publish is best-effort and EmitAsync is called fire-and-forget from the progress callback (_ = EmitAsync(...)); ANY failure from a custom IWsBroadcaster (e.g. SocketException) must be swallowed here so it cannot surface as an unobserved task exception or affect the run. CA1031's 'boundary that logs and recovers' exception applies.")]
     private async Task EmitAsync(string eventType, Guid sequenceId, RunState run) {
         if (_ws is null) return;
         try {
@@ -222,7 +272,7 @@ public sealed partial class SequencerService : ISequencerService {
                 """;
             using var doc = JsonDocument.Parse(json);
             await _ws.PublishAsync(eventType, doc.RootElement.Clone(), CancellationToken.None);
-        } catch (Exception ex) when (ex is JsonException or IOException or InvalidOperationException or ObjectDisposedException) {
+        } catch (Exception) {
             // WS is best-effort; a failed publish must not affect the run.
         }
     }
@@ -230,9 +280,13 @@ public sealed partial class SequencerService : ISequencerService {
     [LoggerMessage(Level = LogLevel.Error, Message = "Sequence run {SequenceId} failed")]
     private partial void LogRunFailed(Exception ex, Guid sequenceId);
 
-    private sealed class RunState {
+    private sealed class RunState : IDisposable {
+        // State is written from Abort/Stop (request threads) and the background
+        // worker; volatile makes the cross-thread visibility explicit.
+        private volatile SequenceRunState _state = SequenceRunState.Starting;
+
         public Guid RunId { get; } = Guid.NewGuid();
-        public SequenceRunState State { get; set; } = SequenceRunState.Starting;
+        public SequenceRunState State { get => _state; set => _state = value; }
         public int? CurrentInstructionIndex { get; set; }
         public string? CurrentInstructionDescription { get; set; }
         public int FramesCompleted { get; set; }
@@ -244,6 +298,11 @@ public sealed partial class SequencerService : ISequencerService {
         public RunState(int instructionCount) {
             InstructionCount = instructionCount;
         }
+
+        /// <summary>Dispose the CTS (idempotent) — the record itself stays queryable in _runs.</summary>
+        public void DisposeCts() => Cts.Dispose();
+
+        public void Dispose() => Cts.Dispose();
 
         public SequenceRunStateDto ToDto(Guid sequenceId) => new(
             SequenceId: sequenceId,

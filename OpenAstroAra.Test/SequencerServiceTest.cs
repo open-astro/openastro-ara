@@ -112,6 +112,20 @@ namespace OpenAstroAra.Test {
             Assert.That(op, Is.Not.Null);
         }
 
+        [Test]
+        public async Task Abort_during_run_stops_the_sequence() {
+            // A long wait keeps the run in Running long enough to abort it; the
+            // run must end as Stopped (not mis-reported Completed — guards the
+            // abort-state-vs-worker race).
+            var id = Guid.NewGuid();
+            var svc = BuildService(id, BuildBody(c => c.Items.Add(new WaitForTimeSpan { Time = 30 })));
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await Task.Delay(150); // let the worker enter Running + start the wait
+            await svc.AbortAsync(id, null, CancellationToken.None);
+            var state = await WaitForTerminalAsync(svc, id);
+            Assert.That(state!.State, Is.EqualTo(SequenceRunState.Stopped));
+        }
+
         /// <summary>Minimal ISequenceService whose GetAsync returns the test body; the rest are unused.</summary>
         private sealed class FakeSequenceService : ISequenceService {
             private readonly Guid _id;
