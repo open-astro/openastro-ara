@@ -355,6 +355,9 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         return n;
     }
 
+    // The first RUNNING leaf — current_instruction_index is a single value. Under a
+    // ParallelStrategy container several leaves can be RUNNING at once; this reports
+    // the first and drops the rest (acceptable for the single-index API).
     internal static int? RunningLeafIndex(List<ISequenceItem> leaves) {
         for (var i = 0; i < leaves.Count; i++) {
             if (leaves[i].Status == SequenceEntityStatus.RUNNING) {
@@ -515,7 +518,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         public void UpdateProgress(int total, int completed, int? runningIndex) {
             lock (_gate) {
                 InstructionCount = total;
-                FramesCompleted = Math.Min(completed, total); // CountTerminalLeaves is >= 0
+                FramesCompleted = Math.Min(completed, total); // clamp: a leaf subset count can't exceed the total
                 CurrentInstructionIndex = runningIndex;
             }
         }
