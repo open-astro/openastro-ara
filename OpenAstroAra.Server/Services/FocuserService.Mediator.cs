@@ -51,6 +51,10 @@ public sealed partial class FocuserService : IFocuserMediator {
     // (the device keeps moving; the cache catches up on the next timer tick) rather than blocking a
     // sequence thread indefinitely.
     private const int MoveSettleMaxPolls = 600;
+    // Consecutive unreadable IsMoving polls (~each MoveSettlePollInterval) after which we treat the
+    // property as unsupported and stop waiting, rather than burning the full bound. Small enough to
+    // tolerate a transient blip, large enough not to give up on a real device prematurely.
+    private const int UnknownReadsBeforeSettled = 3;
     private static readonly TimeSpan MoveSettlePollInterval = TimeSpan.FromMilliseconds(100);
 
     /// <summary>
@@ -172,11 +176,13 @@ public sealed partial class FocuserService : IFocuserMediator {
         }
         RefreshCacheOnce();
         // Prefer a direct device read for the returned position so a single-flight RefreshCacheOnce
-        // that no-op'd against a concurrent timer tick can't make us report a stale cache value (or
-        // the optimistic `target` fallback) instead of where the focuser actually settled.
+        // that no-op'd against a concurrent timer tick can't make us report a stale cache value
+        // instead of where the focuser actually settled. If both the live read and the cache are
+        // unavailable, report 0 ("unknown") rather than the requested target — a failed move must not
+        // hand back the target and let the caller infer it reached it.
         var settled = ReadPosition(client);
         lock (_gate) {
-            return settled ?? _runtime.Position ?? target;
+            return settled ?? _runtime.Position ?? 0;
         }
     }
 
@@ -186,6 +192,7 @@ public sealed partial class FocuserService : IFocuserMediator {
     // IsMoving asynchronously a chance to do so before the first read, so a just-issued Move is not
     // mistaken for already-settled.
     private async Task WaitForMoveCompleteAsync(AlpacaFocuser client, CancellationToken ct) {
+        var unknownStreak = 0;
         for (var i = 0; i < MoveSettleMaxPolls; i++) {
             await Task.Delay(MoveSettlePollInterval, ct).ConfigureAwait(false);
             // Stop if the device is gone (disconnected / superseded / disposed): a dropped connection
@@ -200,10 +207,19 @@ public sealed partial class FocuserService : IFocuserMediator {
             }
             var moving = ReadIsMoving(client);
             RefreshCacheOnce();
-            // Only a CONFIRMED not-moving read ends the wait; a transient read failure (null) keeps
-            // us waiting (bounded) rather than reporting a settle we never observed.
             if (moving == false) {
-                return;
+                return; // confirmed settled
+            }
+            if (moving is null) {
+                // A brief streak of nulls is a transient read blip — keep waiting. A persistent
+                // streak means the driver doesn't implement IsMoving at all; for such drivers the
+                // ASCOM Move() blocks until done, so by now it's complete — stop rather than burning
+                // the full ~60s bound on a property that will never report motion.
+                if (++unknownStreak >= UnknownReadsBeforeSettled) {
+                    return;
+                }
+            } else {
+                unknownStreak = 0; // moving == true: a real read; reset the transient counter
             }
         }
     }
