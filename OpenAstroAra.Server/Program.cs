@@ -174,7 +174,9 @@ public partial class Program {
         // §14e — fifth real device service: live rotator (mechanical/sky angle) + Move. REST-only;
         // the IRotatorMediator unification is a follow-up.
         builder.Services.AddSingleton<IRotatorService, RotatorService>();
-        builder.Services.AddSingleton<IDomeService, PlaceholderDomeService>();
+        // §14e — eighth real device service: live dome (azimuth + shutter/home/park) + slew, park,
+        // open/close shutter. REST-only; the IDomeMediator unification is a follow-up.
+        builder.Services.AddSingleton<IDomeService, DomeService>();
         // §14e — third real device service (first with a control action: SetValue). REST-only;
         // the ISwitchMediator unification (SetSwitchValue sequence instruction) is a follow-up.
         builder.Services.AddSingleton<ISwitchService, SwitchService>();
