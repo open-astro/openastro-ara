@@ -18,7 +18,6 @@
 
 #endregion "copyright"
 
-using ASCOM.Alpaca.Clients;
 using OpenAstroAra.Equipment.Equipment.MySafetyMonitor;
 using OpenAstroAra.Equipment.Interfaces;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
@@ -49,37 +48,18 @@ public sealed partial class SafetyMonitorService : ISafetyMonitorMediator {
     /// a disposed/torn-down service simply reports "not connected".
     /// </summary>
     public SafetyMonitorInfo GetInfo() {
-        AlpacaSafetyMonitor? client;
-        EquipmentConnectionState state;
         lock (_gate) {
-            client = _disposed ? null : _client;
-            state = _state;
+            // Single consistent snapshot, served from the cache the background loop maintains
+            // (§32.4) — no blocking HTTP read on the sequence thread. Never throws after Dispose
+            // (a running sequence may poll during shutdown): _disposed simply yields "not connected".
+            var connected = !_disposed && _state == EquipmentConnectionState.Connected && _client is not null;
+            return new SafetyMonitorInfo {
+                Connected = connected,
+                IsSafe = connected && _cachedSafe,
+                Name = _device?.Name ?? string.Empty,
+                DeviceId = _device?.UniqueId ?? string.Empty,
+            };
         }
-        var safe = false;
-        if (state == EquipmentConnectionState.Connected && client is not null) {
-            // Bounded synchronous read on the caller's (sequence) thread, reusing the same
-            // ReferenceEquals/Error-demotion guards as the REST path.
-            safe = ReadIsSafe(client!);
-        }
-        bool connected;
-        DiscoveredDeviceDto? device;
-        lock (_gate) {
-            // One consistent final snapshot (like GetAsync): device identity + connected come
-            // from the same lock, so a reconnect-to-a-different-device race during ReadIsSafe
-            // can't pair the old device's Name/DeviceId with the new connection's state. safe is
-            // kept only if the client we read is still the live, Connected one.
-            connected = !_disposed && _state == EquipmentConnectionState.Connected && ReferenceEquals(_client, client);
-            device = _device;
-            if (!connected) {
-                safe = false;
-            }
-        }
-        return new SafetyMonitorInfo {
-            Connected = connected,
-            IsSafe = safe,
-            Name = device?.Name ?? string.Empty,
-            DeviceId = device?.UniqueId ?? string.Empty,
-        };
     }
 
     // Connection lifecycle is driven by the REST surface (ConnectAsync/DisconnectAsync), not the
