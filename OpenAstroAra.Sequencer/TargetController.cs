@@ -185,6 +185,8 @@ namespace OpenAstroAra.Sequencer {
             }
         }
 
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "Target-load boundary awaited by async void event handlers (FileSystemWatcher Changed / ProfileChanged). An exception that escaped this catch would propagate out of an async void method and become an unhandled, process-fatal exception, so it MUST catch everything, log, and surface via the UI. CA1031 sanctions general catches at such log-and-recover boundaries.")]
         private Task LoadTargets() {
             return Task.Run(async () => {
                 try {
@@ -225,7 +227,7 @@ namespace OpenAstroAra.Sequencer {
                         TargetsLoadingProgress++;
                     }
                     await RefreshFilters();
-                } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException or ArgumentException or Newtonsoft.Json.JsonException) {
+                } catch (Exception ex) {
                     Logger.Error(ex);
                     Notifier.ShowError(Loc.Instance["Lbl_SequenceTargetController_LoadUserTargetFailed"]);
                 } finally {

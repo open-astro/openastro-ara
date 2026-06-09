@@ -156,6 +156,8 @@ namespace OpenAstroAra.Sequencer {
             }
         }
 
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "Template-load boundary awaited by async void event handlers (FileSystemWatcher Changed / ProfileChanged). An exception that escaped this catch would propagate out of an async void method and become an unhandled, process-fatal exception, so it MUST catch everything, log, and surface via the UI. CA1031 sanctions general catches at such log-and-recover boundaries.")]
         private Task LoadUserTemplates() {
             return Task.Run(async () => {
                 try {
@@ -200,7 +202,7 @@ namespace OpenAstroAra.Sequencer {
                             Logger.Error(ex);
                         }
                     });
-                } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or Newtonsoft.Json.JsonException or InvalidOperationException) {
+                } catch (Exception ex) {
                     Logger.Error(ex);
                     Notifier.ShowError(Loc.Instance["Lbl_SequenceTemplateController_LoadUserTemplatesFailed"]);
                 } finally {
