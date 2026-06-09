@@ -24,6 +24,10 @@ base_url="https://github.com/ASCOMInitiative/ASCOM.Alpaca.Simulators/releases/do
 
 tag="$(awk -F': *' '/^Pinned release:/{print $2; exit}' "$pin_file")"
 [ -n "$tag" ] || { echo "could not read 'Pinned release:' from $pin_file" >&2; exit 1; }
+# Fail fast on a malformed pin (stray whitespace/control char) before it is
+# interpolated into the download URL. The pin file is repo-committed, so this is
+# defence-in-depth, not expected to trip.
+[[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "malformed 'Pinned release' tag: '$tag'" >&2; exit 1; }
 
 # Pick the release artifact for this platform.
 os="$(uname -s)"; arch="$(uname -m)"
@@ -50,6 +54,9 @@ fi
 
 mkdir -p "$dest"
 tmp="$dest/$artifact"
+# Always remove the temp archive on any exit path (SHA mismatch, extract failure,
+# success) so a partial/leftover download never lingers in fixtures/.
+trap 'rm -f "$tmp"' EXIT
 echo "downloading $artifact ($tag)..." >&2
 curl -fsSL -o "$tmp" "$base_url/$tag/$artifact"
 
@@ -62,7 +69,7 @@ if [ "$actual" != "$expected" ]; then
   echo "SHA-256 mismatch for $artifact" >&2
   echo "  expected: $expected" >&2
   echo "  actual:   $actual" >&2
-  rm -f "$tmp"; exit 1
+  exit 1
 fi
 
 echo "extracting $artifact..." >&2
@@ -73,7 +80,6 @@ case "$artifact" in
 esac
 [ -f "$bin" ] || { echo "expected binary not found after extract: $bin" >&2; exit 1; }
 chmod +x "$bin"
-rm -f "$tmp"
 # Clear the previous-pin marker for THIS artifact so an upgrade doesn't leave a
 # stale .ok-<oldtag>-<artifact> behind. Scoped to the current artifact (any tag),
 # so a re-download on a multi-platform dev box can't invalidate another platform's

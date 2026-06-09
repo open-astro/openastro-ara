@@ -127,11 +127,13 @@ jobs:
           # the success path). GitHub runners also clean up at job end, but this is
           # standard background-process hygiene.
           trap 'kill "$sim_pid" 2>/dev/null || true' EXIT
-          # Poll for the Alpaca management API to come up. Worst case ~270s: 90
-          # iterations x (curl -m 2 timeout + 1s sleep). The job's timeout-minutes: 10
-          # is the real backstop; first start also initialises settings.
+          # Poll for the Alpaca management API to come up. Worst case is
+          # max_attempts x (curl -m 2 timeout + 1s sleep) ~= 270s at 90; the job's
+          # timeout-minutes: 10 is the real backstop. Bump max_attempts if OmniSim
+          # cold-start ever grows. First start also initialises settings.
+          max_attempts=90
           up=""
-          for i in $(seq 1 90); do
+          for i in $(seq 1 "$max_attempts"); do
             if ! kill -0 "$sim_pid" 2>/dev/null; then
               echo "::error::Alpaca simulator process exited early (pid $sim_pid)"
               echo "--- simulator log ---"; cat /tmp/alpaca-sim.log || true
