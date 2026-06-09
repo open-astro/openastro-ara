@@ -123,8 +123,7 @@ public sealed partial class FlatDeviceService : IFlatDeviceService, IDisposable 
         if (client is null) {
             throw new InvalidOperationException("flat device is not connected");
         }
-        var req = request;
-        _ = Task.Run(() => ApplyInBackground(client, req, maxBrightness), CancellationToken.None);
+        _ = Task.Run(() => ApplyInBackground(client, request, maxBrightness), CancellationToken.None);
         return Task.FromResult(Accepted("flat-device.apply", idempotencyKey));
     }
 
@@ -141,8 +140,12 @@ public sealed partial class FlatDeviceService : IFlatDeviceService, IDisposable 
             }
             if (req.LightOn is bool lit) {
                 if (lit) {
-                    // Turn on at the requested brightness, or full if none was given.
-                    client.CalibratorOn(req.Brightness ?? maxBrightness ?? 0);
+                    // Turn on at the requested brightness, else full. Read MaxBrightness fresh if it
+                    // isn't cached yet (a LightOn right after connect can beat the first refresh) so
+                    // we never call CalibratorOn(0) — illuminate-at-zero is meaningless and some
+                    // drivers reject it. Fall back to 1 only if the device has no readable max.
+                    var level = req.Brightness ?? maxBrightness ?? ReadMaxBrightness(client) ?? 1;
+                    client.CalibratorOn(level);
                 } else {
                     client.CalibratorOff();
                 }
