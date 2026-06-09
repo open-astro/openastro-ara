@@ -12,6 +12,7 @@
 
 #endregion "copyright"
 
+using Microsoft.Extensions.Hosting;
 using NUnit.Framework;
 using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.SequenceItem.Utility;
@@ -142,6 +143,19 @@ namespace OpenAstroAra.Test {
             var secondRunId = (await svc.GetRunStateAsync(id, CancellationToken.None))!.RunId;
             Assert.That(secondRunId, Is.EqualTo(firstRunId));
             await svc.AbortAsync(id, null, CancellationToken.None); // clean up the long run
+        }
+
+        [Test]
+        public async Task Host_shutdown_stops_live_runs() {
+            // On daemon shutdown (IHostedService.StopAsync), in-flight runs must be
+            // cancelled rather than abandoned mid-execution.
+            var id = Guid.NewGuid();
+            var svc = BuildService(id, BuildBody(c => c.Items.Add(new WaitForTimeSpan { Time = 30 })));
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForStateAsync(svc, id, SequenceRunState.Running);
+            await ((IHostedService)svc).StopAsync(CancellationToken.None);
+            var state = await WaitForTerminalAsync(svc, id);
+            Assert.That(state!.State, Is.EqualTo(SequenceRunState.Stopped));
         }
 
         [Test]

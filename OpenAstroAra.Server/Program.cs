@@ -247,6 +247,10 @@ public partial class Program {
                 () => sp.GetService<ISequenceService>(),
                 sp.GetService<ActiveSequenceCheckpoint>(),
                 sp.GetService<ILogger<SequencerService>>()));
+        // Register the SAME singleton as a hosted service so its IHostedService.StopAsync
+        // cancels any in-flight sequence runs on daemon shutdown.
+        builder.Services.AddHostedService(sp =>
+            (SequencerService)sp.GetRequiredService<ISequencerService>());
 
         // §38.7 — disk-shipped templates under {profileDir}/sequences/templates/
         // merged on top of the 3 hardcoded built-ins. .deb install can drop

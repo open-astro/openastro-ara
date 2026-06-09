@@ -12,6 +12,7 @@
 
 #endregion "copyright"
 
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using OpenAstroAra.Core.Model;
@@ -52,7 +53,7 @@ namespace OpenAstroAra.Server.Services;
 /// instruction-boundary pause gate added to the execution loop. Until then these
 /// are accepted no-ops rather than faking a "paused" state the run wouldn't honor.
 /// </summary>
-public sealed partial class SequencerService : ISequencerService {
+public sealed partial class SequencerService : ISequencerService, IHostedService {
 
     private readonly IWsBroadcaster? _ws;
     // Lazy resolver — FileSequenceService (ISequenceService) and this service
@@ -132,6 +133,8 @@ public sealed partial class SequencerService : ISequencerService {
         // §28 — checkpoint from start-of-run so the §28.2 reconciler can spot an
         // interrupted run, not just one that got past its first instruction. Claim
         // ownership first so this run's writes/clear are the ones that take effect.
+        // (If an abort lands in the window before the worker runs, this checkpoint
+        // is transient — the worker's finally clears it; no permanent leak.)
         ClaimCheckpoint(run);
         WriteCheckpointIfOwner(run, id);
         _ = Task.Run(() => RunWorkerAsync(id, run, root), CancellationToken.None);
@@ -156,6 +159,24 @@ public sealed partial class SequencerService : ISequencerService {
     public async Task<OperationAcceptedDto> StopAsync(Guid id, string? idempotencyKey, CancellationToken ct) {
         await RequestCancelAsync(id, SequenceRunState.Stopped);
         return PlaceholderEquipmentHelpers.Accepted("sequencer.stop", idempotencyKey);
+    }
+
+    // IHostedService — explicit impl so it doesn't collide with the public
+    // StartAsync(Guid, ...) above. On daemon shutdown, cancel every live run so
+    // in-flight workers stop promptly instead of being abandoned mid-execution
+    // (the §28.2 reconciler still classifies whatever checkpoint survives).
+    Task IHostedService.StartAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+    async Task IHostedService.StopAsync(CancellationToken cancellationToken) {
+        foreach (var run in _runs.Values) {
+            if (IsTerminal(run.State)) continue;
+            run.State = SequenceRunState.Stopped;
+            try {
+                await run.Cts.CancelAsync();
+            } catch (ObjectDisposedException) {
+                // Worker reached terminal + disposed concurrently — already ending.
+            }
+        }
     }
 
     private static bool IsTerminal(SequenceRunState s) =>
