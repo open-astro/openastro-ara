@@ -56,6 +56,9 @@ public sealed partial class RotatorService : IRotatorService, IDisposable {
     public Task<RotatorDto?> GetAsync(CancellationToken ct) {
         lock (_gate) {
             ObjectDisposedException.ThrowIf(_disposed, this);
+            // null ONLY when no device has ever been selected (-> 404). After a disconnect the
+            // device is retained and the DTO is returned with Disconnected state + idle runtime
+            // ("device selected but not connected"), consistent across all the device services.
             if (_device is null) {
                 return Task.FromResult<RotatorDto?>(null);
             }
@@ -117,6 +120,8 @@ public sealed partial class RotatorService : IRotatorService, IDisposable {
             throw new InvalidOperationException("rotator is not connected");
         }
         var useSkyAngle = request.UseSkyAngle;
+        // ASCOM rotator Move APIs take a float; the cast from the DTO's double loses ~1e-5° at most,
+        // negligible for a rotator angle.
         var target = (float)request.TargetAngleDeg;
         _ = Task.Run(() => MoveInBackground(client, target, useSkyAngle), CancellationToken.None);
         return Task.FromResult(Accepted("rotator.move", idempotencyKey));
