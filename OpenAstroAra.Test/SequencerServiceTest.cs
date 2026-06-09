@@ -99,6 +99,22 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Completed_run_reports_all_instructions_done() {
+            var id = Guid.NewGuid();
+            var svc = BuildService(id, BuildBody(c => {
+                c.Items.Add(new Annotation { Name = "a" });
+                c.Items.Add(new WaitForTimeSpan { Time = 0 });
+                c.Items.Add(new Annotation { Name = "b" });
+            }));
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            var state = await WaitForTerminalAsync(svc, id);
+            Assert.That(state!.State, Is.EqualTo(SequenceRunState.Completed));
+            Assert.That(state.FramesTotal, Is.EqualTo(3), "3 leaf instructions");
+            Assert.That(state.FramesCompleted, Is.EqualTo(3), "all completed");
+            Assert.That(state.CurrentInstructionIndex, Is.Null, "nothing running at completion");
+        }
+
+        [Test]
         public async Task Missing_body_fails_the_run() {
             var id = Guid.NewGuid();
             var svc = BuildService(id, body: null);
