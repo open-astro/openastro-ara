@@ -180,6 +180,10 @@ public sealed partial class SafetyMonitorService : ISafetyMonitorService, IDispo
         var adopted = false; // declared outside try so the catch can tell ownership already transferred
         try {
             var host = string.IsNullOrWhiteSpace(device.IpAddress) ? device.HostName : device.IpAddress;
+            if (string.IsNullOrWhiteSpace(host)) {
+                throw new InvalidOperationException(
+                    $"discovered device '{device.Name}' carries neither an IP address nor a host name");
+            }
             client = new AlpacaSafetyMonitor(
                 device.UseHttps ? ServiceType.Https : ServiceType.Http,
                 host, device.IpPort, device.AlpacaDeviceNumber, strictCasing: false, logger: null);
@@ -188,10 +192,13 @@ public sealed partial class SafetyMonitorService : ISafetyMonitorService, IDispo
             // black-holed device surfaces as Error within seconds rather than wedging the
             // service in Connecting. (SafetyMonitorServiceTest's dead-port case verifies the
             // fast-fail path.)
+            //
+            // Trust the setter: the Alpaca `Connected = true` PUT is authoritative and throws on
+            // a real connect failure. We deliberately do NOT re-GET `Connected` to confirm — a
+            // second round-trip can transiently read false on a slow device that already accepted
+            // the SET, which would falsely demote a good connection to Error while leaving the
+            // device connected on its side.
             client.Connected = true;
-            if (!client.Connected) {
-                throw new InvalidOperationException("device reported not connected after setting Connected = true");
-            }
             lock (_gate) {
                 // Adopt only if this is still the current attempt: a newer connect, a disconnect,
                 // or a Dispose() bumps the generation / sets _disposed, in which case this
