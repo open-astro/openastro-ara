@@ -303,6 +303,17 @@ public partial class Program {
             OpenAstroAra.Server.Services.Equipment.HeadlessSwitchMediator>();
         builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.IDomeMediator,
             OpenAstroAra.Server.Services.Equipment.HeadlessDomeMediator>();
+        // §38k-19/20 — last two device-mediator stubs complete the device set.
+        // No instruction prototype consumes them yet (there are no flat-device /
+        // weather sequence items, and the Connect dir — Connect*/Disconnect*/
+        // SwitchProfile — is deferred: Connect*/SwitchProfile need IProfileService,
+        // and the Disconnect* classes are `internal` in the Sequencer; they land
+        // together as the Connect capstone). DI-registered so consumers can resolve
+        // the full IDeviceMediator surface.
+        builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.IFlatDeviceMediator,
+            OpenAstroAra.Server.Services.Equipment.HeadlessFlatDeviceMediator>();
+        builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.IWeatherDataMediator,
+            OpenAstroAra.Server.Services.Equipment.HeadlessWeatherDataMediator>();
         builder.Services.AddSingleton<OpenAstroAra.Sequencer.ISequencerFactory>(sp =>
             HeadlessSequencerFactory.WithDefaults(
                 sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.ISafetyMonitorMediator>(),
