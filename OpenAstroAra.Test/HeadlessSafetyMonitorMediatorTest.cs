@@ -90,5 +90,16 @@ namespace OpenAstroAra.Test {
             var factory = HeadlessSequencerFactory.WithDefaults(customMediator);
             Assert.That(factory.GetItem<WaitUntilSafe>(), Is.Not.Null);
         }
+
+        [Test]
+        public void WithDefaults_accepts_the_real_SafetyMonitorService_as_mediator() {
+            // §14e — the real SafetyMonitorService now backs the mediator surface (the same
+            // singleton Program.cs registers for ISafetyMonitorService). The factory must accept
+            // it so WaitUntilSafe reads the live device; with nothing connected, GetInfo reports
+            // disconnected (verified in SafetyMonitorServiceTest).
+            using var svc = new SafetyMonitorService();
+            var factory = HeadlessSequencerFactory.WithDefaults(svc);
+            Assert.That(factory.GetItem<WaitUntilSafe>(), Is.Not.Null);
+        }
     }
 }

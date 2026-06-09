@@ -174,8 +174,12 @@ public partial class Program {
         // §14e — first real Alpaca-backed device service (others remain placeholders
         // until each device's connect path lands). Connects to a discovered Alpaca
         // SafetyMonitor and reports live state + IsSafe; covered by the
-        // alpaca-sim-integration CI job.
-        builder.Services.AddSingleton<ISafetyMonitorService, SafetyMonitorService>();
+        // alpaca-sim-integration CI job. One singleton backs BOTH the REST
+        // ISafetyMonitorService and the Sequencer's ISafetyMonitorMediator (§8.1), so
+        // WaitUntilSafe reads the live device (the mediator wiring is below; this
+        // replaces the HeadlessSafetyMonitorMediator stub).
+        builder.Services.AddSingleton<SafetyMonitorService>();
+        builder.Services.AddSingleton<ISafetyMonitorService>(sp => sp.GetRequiredService<SafetyMonitorService>());
         builder.Services.AddSingleton<IFlatDeviceService, PlaceholderFlatDeviceService>();
         builder.Services.AddSingleton<IGuiderService, PlaceholderGuiderService>();
         builder.Services.AddSingleton<IPolarAlignService, PlaceholderPolarAlignService>();
@@ -301,8 +305,11 @@ public partial class Program {
         // simulator pinning lands; SequenceBodyDeserializer is safe to
         // consume now — unknown $type values still gracefully degrade to
         // UnknownSequenceContainer for unregistered instruction types.
-        builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.ISafetyMonitorMediator,
-            OpenAstroAra.Server.Services.Equipment.HeadlessSafetyMonitorMediator>();
+        // §14e — SafetyMonitor's mediator is the REAL service (registered above), so
+        // WaitUntilSafe reads the live Alpaca device. The other devices remain headless
+        // stubs until their real services land.
+        builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.ISafetyMonitorMediator>(
+            sp => sp.GetRequiredService<SafetyMonitorService>());
         builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator,
             OpenAstroAra.Server.Services.Equipment.HeadlessTelescopeMediator>();
         builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.IGuiderMediator,

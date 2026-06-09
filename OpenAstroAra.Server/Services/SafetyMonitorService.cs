@@ -39,9 +39,9 @@ namespace OpenAstroAra.Server.Services;
 /// <see cref="EquipmentConnectionState.Error"/>. The ASCOM Alpaca client calls
 /// (<c>Connected</c>, <c>IsSafe</c>) are blocking HTTP, so they run off the request thread.
 ///
-/// This wires the REST (<see cref="ISafetyMonitorService"/>) surface only. Unifying this
-/// with the Sequencer's <c>ISafetyMonitorMediator</c> (so <c>WaitUntilSafe</c> sees the live
-/// device) is the next increment — tracked in design/PORT_TODO.md.
+/// This class also serves the Sequencer's <c>ISafetyMonitorMediator</c> (so <c>WaitUntilSafe</c>
+/// reads the live device) — that surface lives in the <c>SafetyMonitorService.Mediator.cs</c>
+/// partial; one singleton is registered for both interfaces per playbook §8.1.
 /// </summary>
 public sealed partial class SafetyMonitorService : ISafetyMonitorService, IDisposable {
 
