@@ -52,13 +52,16 @@ public sealed partial class FocuserService : IFocuserMediator {
     // (the device keeps moving; the cache catches up on the next timer tick) rather than blocking a
     // sequence thread indefinitely.
     private const int MoveSettleMaxPolls = 600;
-    // Consecutive unreadable IsMoving polls (~each MoveSettlePollInterval) after which we treat the
-    // property as unsupported and stop waiting, rather than burning the full bound. Small enough to
-    // tolerate a transient blip, large enough not to give up on a real device prematurely.
-    private const int UnknownReadsBeforeSettled = 3;
+    // Consecutive unreadable IsMoving polls (~each MoveSettlePollInterval = ~500ms here) after which
+    // we treat the property as unsupported and stop waiting, rather than burning the full bound. Large
+    // enough to ride out a transient read-blip streak on a non-blocking driver, small enough not to
+    // waste ~60s on a driver that genuinely never implements IsMoving.
+    private const int UnknownReadsBeforeSettled = 5;
     private static readonly TimeSpan MoveSettlePollInterval = TimeSpan.FromMilliseconds(100);
-    // Wall-clock ceiling for a single blocking Move: a silent device must not park a sequence thread
-    // until the OS TCP timeout (minutes). Generous — real focuser travel is seconds, not minutes.
+    // Wall-clock ceiling for the blocking client.Move() CALL only (not the whole operation): a silent
+    // device must not park a sequence thread until the OS TCP timeout (minutes). The subsequent
+    // settle-wait adds at most MoveSettleMaxPolls × MoveSettlePollInterval (~60s), so the worst-case
+    // total is ~MoveHardTimeout + 60s. Generous — real focuser travel is seconds, not minutes.
     private static readonly TimeSpan MoveHardTimeout = TimeSpan.FromMinutes(5);
 
     /// <summary>
