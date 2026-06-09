@@ -75,11 +75,18 @@ public sealed class HeadlessCameraMediator : ICameraMediator {
 
     // ICameraMediator additions.
 
-    // Exposure-producing members: no honest headless sentinel exists, so throw
-    // rather than fabricate an IExposureData. No registered prototype calls these.
+    // Exposure-producing members: no honest headless sentinel exists, so they
+    // surface NotSupportedException rather than fabricate an IExposureData. No
+    // registered prototype calls these. The Task-returning members return a
+    // *faulted task* (Task.FromException) rather than throwing synchronously, so
+    // a caller that stores the task before awaiting still observes the fault on
+    // await (idiomatic async behavior). The IAsyncEnumerable LiveView overloads
+    // throw on the call: an async-iterator that deferred the throw to
+    // enumeration would need an unreachable `yield`, which is CS0162 under
+    // TreatWarningsAsErrors.
     public Task Capture(CaptureSequence sequence, CancellationToken token, IProgress<ApplicationStatus> progress) =>
-        throw new NotSupportedException(
-            "Headless camera stub cannot capture exposures; the full TakeExposure path lands with the IImagingMediator stub + image pipeline in a later §38k sub-PR.");
+        Task.FromException(new NotSupportedException(
+            "Headless camera stub cannot capture exposures; the full TakeExposure path lands with the IImagingMediator stub + image pipeline in a later §38k sub-PR."));
 
     public IAsyncEnumerable<IExposureData> LiveView(CancellationToken token) =>
         throw new NotSupportedException("Headless camera stub cannot stream a live view.");
@@ -88,7 +95,8 @@ public sealed class HeadlessCameraMediator : ICameraMediator {
         throw new NotSupportedException("Headless camera stub cannot stream a live view.");
 
     public Task<IExposureData> Download(CancellationToken token) =>
-        throw new NotSupportedException("Headless camera stub cannot download exposures.");
+        Task.FromException<IExposureData>(new NotSupportedException(
+            "Headless camera stub cannot download exposures."));
 
     public void AbortExposure() { }
 
