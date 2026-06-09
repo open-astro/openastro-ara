@@ -139,8 +139,22 @@ public sealed partial class FocuserService : IFocuserMediator {
             }
         }
         try {
-            await Task.Run(() => client.Move(target), CancellationToken.None).ConfigureAwait(false);
-            await WaitForMoveCompleteAsync(ct).ConfigureAwait(false);
+            // The blocking ASCOM Move is launched on the pool; race it against the sequencer token so
+            // a hung HTTP call (unresponsive device / dropped link) can't pin the sequence thread
+            // indefinitely "regardless of cancellation". A non-cancelled hang is still bounded by the
+            // Alpaca client's own HTTP timeout. The abandoned move is observed so it can't surface as
+            // an unobserved task exception.
+            var moveTask = Task.Run(() => client.Move(target), CancellationToken.None);
+            using (var linked = CancellationTokenSource.CreateLinkedTokenSource(ct)) {
+                var completed = await Task.WhenAny(moveTask, Task.Delay(Timeout.Infinite, linked.Token)).ConfigureAwait(false);
+                await linked.CancelAsync().ConfigureAwait(false); // release the pending delay (whichever path) so it can't leak
+                if (completed != moveTask) {
+                    ObserveQuietly(moveTask);
+                    ct.ThrowIfCancellationRequested();
+                }
+            }
+            await moveTask.ConfigureAwait(false); // observe Move()'s result / surface its exception
+            await WaitForMoveCompleteAsync(client, ct).ConfigureAwait(false);
         } catch (OperationCanceledException) {
             throw; // honour sequencer cancellation
         } catch (Exception ex) {
@@ -152,19 +166,40 @@ public sealed partial class FocuserService : IFocuserMediator {
         }
     }
 
-    // Polls the §32.4 cache (refreshing each tick) until the focuser leaves the "moving" state or the
-    // bound elapses. An initial delay gives the device time to assert IsMoving before the first read,
-    // so a just-issued Move is not mistaken for already-settled.
-    private async Task WaitForMoveCompleteAsync(CancellationToken ct) {
+    // Polls the device's IsMoving directly (not via the single-flight cache, which can no-op against a
+    // concurrent timer tick) until the focuser settles or the bound elapses, refreshing the §32.4
+    // cache each tick so GetInfo/GetAsync stay current. The leading delay gives firmware that asserts
+    // IsMoving asynchronously a chance to do so before the first read, so a just-issued Move is not
+    // mistaken for already-settled.
+    private async Task WaitForMoveCompleteAsync(AlpacaFocuser client, CancellationToken ct) {
         for (var i = 0; i < MoveSettleMaxPolls; i++) {
             await Task.Delay(MoveSettlePollInterval, ct).ConfigureAwait(false);
+            var moving = ReadIsMoving(client);
             RefreshCacheOnce();
-            lock (_gate) {
-                if (_runtime.State != "moving") {
-                    return;
-                }
+            if (!moving) {
+                return;
             }
         }
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Per-field read boundary: a transient/unsupported IsMoving read throws; treat it as 'not moving' (settled) rather than faulting the settle-wait. CA1031's log-and-recover boundary applies.")]
+    private static bool ReadIsMoving(AlpacaFocuser client) {
+        try {
+            return client.IsMoving;
+        } catch (Exception) {
+            return false;
+        }
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Observes an abandoned (cancelled-past) move task purely to swallow any later fault so it cannot surface as an unobserved task exception; nothing actionable to do with it. CA1031's log-and-recover boundary applies.")]
+    private static void ObserveQuietly(Task task) {
+        _ = task.ContinueWith(
+            t => { _ = t.Exception; },
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
     }
 
     // Connection lifecycle is driven by the REST surface (ConnectAsync/DisconnectAsync), not the
