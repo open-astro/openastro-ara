@@ -14,7 +14,6 @@
 
 using OpenAstroAra.Equipment.Model;
 using System;
-using System.Runtime.Serialization;
 
 namespace OpenAstroAra.Equipment.Exceptions {
 
@@ -38,5 +37,6 @@ namespace OpenAstroAra.Equipment.Exceptions {
         }
 
         public CameraDownloadFailedException(string message, Exception innerException) : base(message, innerException) {
-        }    }
+        }
+    }
 }

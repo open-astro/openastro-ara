@@ -26,7 +26,8 @@ namespace OpenAstroAra.Core.Utility.SerialCommunication {
         }
 
         public SerialPortClosedException(string message, Exception innerException) : base(message, innerException) {
-        }    }
+        }
+    }
 
     [Serializable]
     public class InvalidDeviceResponseException : Exception {
@@ -38,5 +39,6 @@ namespace OpenAstroAra.Core.Utility.SerialCommunication {
         }
 
         public InvalidDeviceResponseException(string message, Exception innerException) : base(message, innerException) {
-        }    }
+        }
+    }
 }
