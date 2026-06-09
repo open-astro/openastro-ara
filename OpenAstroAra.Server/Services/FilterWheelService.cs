@@ -117,6 +117,14 @@ public sealed partial class FilterWheelService : IFilterWheelService, IDisposabl
             client = _state == EquipmentConnectionState.Connected ? _client : null;
             slots = _slots;
         }
+        // ASCOM addresses slots by a short; validate before the narrowing cast so an out-of-range
+        // position fails loudly (with a 4xx) instead of silently wrapping (e.g. (short)32768 ==
+        // -32768) and getting a 202 for a logically-invalid request. This also covers the window
+        // before _slots is loaded, where IsPositionOutOfRange defers to the device.
+        if (request.Position is < 0 or > short.MaxValue) {
+            throw new ArgumentOutOfRangeException(nameof(request), request.Position,
+                "Position is out of range for an ASCOM FilterWheel (0..32767).");
+        }
         if (IsPositionOutOfRange(slots, request.Position)) {
             throw new ArgumentOutOfRangeException(nameof(request), request.Position,
                 $"Position is out of range (0..{(slots!.Count - 1).ToString(System.Globalization.CultureInfo.InvariantCulture)}).");
@@ -179,10 +187,12 @@ public sealed partial class FilterWheelService : IFilterWheelService, IDisposabl
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Per-field read boundary: a transiently-failing Position read reports null/idle rather than failing the snapshot. CA1031's log-and-recover boundary applies.")]
-    private static FilterWheelStateDto ReadRuntime(AlpacaFilterWheel c) {
+        Justification = "Per-field read boundary: a transiently-failing Position read reports idle (and logs at Debug) rather than failing the snapshot. CA1031's log-and-recover boundary applies.")]
+    private FilterWheelStateDto ReadRuntime(AlpacaFilterWheel c) {
         short pos;
-        try { pos = c.Position; } catch (Exception) { return IdleRuntime; }
+        // Log at Debug, not silently: a persistent Position fault would otherwise present as a
+        // steady "idle" with no diagnostic trail.
+        try { pos = c.Position; } catch (Exception ex) { LogPositionReadFailed(ex); return IdleRuntime; }
         // ASCOM reports Position == -1 while the wheel is moving between slots.
         return pos < 0 ? new FilterWheelStateDto("moving", null) : new FilterWheelStateDto("idle", pos);
     }
@@ -326,6 +336,9 @@ public sealed partial class FilterWheelService : IFilterWheelService, IDisposabl
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "FilterWheel runtime read failed")]
     private partial void LogRuntimeReadFailed(Exception ex);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "FilterWheel Position read failed (reported idle)")]
+    private partial void LogPositionReadFailed(Exception ex);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "FilterWheel change to slot {Position} failed")]
     private partial void LogChangeFailed(Exception ex, int position);

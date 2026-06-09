@@ -67,6 +67,17 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void ChangeFilterAsync_with_position_beyond_short_throws_ArgumentOutOfRange() {
+            using var svc = new FilterWheelService();
+            // > short.MaxValue would silently wrap on the (short) cast — must throw (before the
+            // connected check, so it's reachable without a sim).
+            Assert.Throws<ArgumentOutOfRangeException>(
+                () => { _ = svc.ChangeFilterAsync(new FilterChangeRequestDto(40000), null, CancellationToken.None); });
+            Assert.Throws<ArgumentOutOfRangeException>(
+                () => { _ = svc.ChangeFilterAsync(new FilterChangeRequestDto(-1), null, CancellationToken.None); });
+        }
+
+        [Test]
         public void IsPositionOutOfRange_enforces_slot_bounds() {
             var slots = new List<FilterSlotDto> {
                 new(0, "L", 0), new(1, "R", 0), new(2, "G", 0), new(3, "B", 0), new(4, "Ha", 0),
