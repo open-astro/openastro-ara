@@ -1,5 +1,18 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <!-- Belt-and-suspenders opt-out from the repo-wide analyzer escalation. This vendored
+       upstream library is already excluded in Directory.Build.props via a project-name
+       condition, but a future rename of this project would silently re-enable
+       AnalysisMode=All + TreatWarningsAsErrors + Nullable on third-party code. Repeating the
+       opt-out here (project properties override Directory.Build.props) keeps it off
+       regardless of the project name. -->
+  <PropertyGroup>
+    <EnableNETAnalyzers>false</EnableNETAnalyzers>
+    <AnalysisMode>Default</AnalysisMode>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <Nullable>disable</Nullable>
+  </PropertyGroup>
+
   <PropertyGroup>
     <AssemblyName>Accord.Imaging</AssemblyName>
     <RootNamespace>Accord.Imaging</RootNamespace>
