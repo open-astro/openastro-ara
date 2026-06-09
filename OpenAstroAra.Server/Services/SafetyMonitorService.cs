@@ -197,7 +197,7 @@ public sealed partial class SafetyMonitorService : ISafetyMonitorService, IDispo
                 // resulting disposed-client throw here must NOT clobber Disconnected back to
                 // Error. Guarding on the same client instance also covers a reconnect.
                 if (_state == EquipmentConnectionState.Connected && ReferenceEquals(_client, client)) {
-                    SetState(EquipmentConnectionState.Error); // reentrant lock; keeps all transitions on one path
+                    SetState(EquipmentConnectionState.Error); // we hold _gate here; keeps all transitions on one path
                 }
             }
             LogIsSafeReadFailed(ex);
@@ -242,6 +242,10 @@ public sealed partial class SafetyMonitorService : ISafetyMonitorService, IDispo
                 // comparison alone could not distinguish.
                 if (!_disposed && _connectGeneration == generation) {
                     _client = client;
+                    // Clear before going Connected so we don't briefly serve a PRIOR device's
+                    // IsSafe under the NEW device's identity during the seed window (a stale
+                    // true could otherwise mislead WaitUntilSafe for one poll).
+                    _cachedSafe = false;
                     SetState(EquipmentConnectionState.Connected);
                     adopted = true;
                 }
@@ -319,12 +323,10 @@ public sealed partial class SafetyMonitorService : ISafetyMonitorService, IDispo
         }
     }
 
-    // lock is reentrant, so this is safe to call whether or not the caller already holds _gate.
+    // Caller must hold _gate (every call site already does), so no inner lock here.
     private void SetState(EquipmentConnectionState state) {
-        lock (_gate) {
-            _state = state;
-            _lastTransition = DateTimeOffset.UtcNow;
-        }
+        _state = state;
+        _lastTransition = DateTimeOffset.UtcNow;
     }
 
     private static OperationAcceptedDto Accepted(string operationType, string? idempotencyKey) =>

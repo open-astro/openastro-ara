@@ -170,7 +170,10 @@ public partial class Program {
         builder.Services.AddSingleton<IRotatorService, PlaceholderRotatorService>();
         builder.Services.AddSingleton<IDomeService, PlaceholderDomeService>();
         builder.Services.AddSingleton<ISwitchService, PlaceholderSwitchService>();
-        builder.Services.AddSingleton<IObservingConditionsService, PlaceholderObservingConditionsService>();
+        // §14e — second real device service: live weather sensors over REST (read-only, §32.4
+        // cached). REST-only — no sequence instruction consumes the weather mediator's data, so
+        // IWeatherDataMediator stays the headless stub.
+        builder.Services.AddSingleton<IObservingConditionsService, ObservingConditionsService>();
         // §14e — first real Alpaca-backed device service (others remain placeholders
         // until each device's connect path lands). Connects to a discovered Alpaca
         // SafetyMonitor and reports live state + IsSafe; covered by the
