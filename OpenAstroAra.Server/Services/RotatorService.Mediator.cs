@@ -120,6 +120,10 @@ public sealed partial class RotatorService : IRotatorMediator {
 
     // Base sky angle for a relative move — prefer a fresh DIRECT device read over the §32.4 cache so
     // the computed absolute target doesn't drift by a polling interval. Falls back to the cache.
+    // NOTE: this single read runs synchronously on the caller's thread (before the move is offloaded);
+    // a slow-but-not-failing HTTP call could briefly block it, bounded by the Alpaca client's socket
+    // timeout. Alpaca reads are normally sub-ms and any exception falls back to the cache, so this is
+    // an accepted tradeoff (parity with the focuser-mediator temperature read).
     private float CurrentSkyAngle() {
         AlpacaRotator? client;
         lock (_gate) {
