@@ -138,7 +138,7 @@ public sealed partial class FocuserService : IFocuserService, IDisposable {
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Background move boundary: the blocking ASCOM Move / TempComp set can throw arbitrary driver/HTTP exceptions; any escape must be contained and logged, never fault the fire-and-forget task or the daemon. CA1031's log-and-recover boundary applies.")]
+        Justification = "Background move boundary: the blocking ASCOM Move / TempComp set can throw arbitrary driver/HTTP exceptions; any escape must be contained and logged, never fault the fire-and-forget task or the daemon. This also covers the dispose-ordering edge — a concurrent DisconnectAsync/Dispose can dispose the captured client before (or during) Move(), so the call throws ObjectDisposed/HTTP here; caught and logged. CA1031's log-and-recover boundary applies.")]
     private void MoveInBackground(AlpacaFocuser client, int target, bool? useTempComp) {
         try {
             if (useTempComp is bool tc) {
@@ -219,7 +219,12 @@ public sealed partial class FocuserService : IFocuserService, IDisposable {
         try { canTempComp = c.TempCompAvailable; } catch (Exception) { canTempComp = false; }
         bool absolute;
         try { absolute = c.Absolute; } catch (Exception) { absolute = false; }
-        return new FocuserCapabilitiesDto(MinPosition: 0, MaxPosition: maxStep, StepSizeUm: stepSize,
+        // Absolute focusers take an absolute target in [0, MaxStep]; relative focusers take a
+        // signed offset in [-MaxStep, MaxStep] (negative = backward). MinPosition reflects that so
+        // MoveAsync's range check accepts backward moves on a relative focuser.
+        return new FocuserCapabilitiesDto(
+            MinPosition: absolute ? 0 : -maxStep,
+            MaxPosition: maxStep, StepSizeUm: stepSize,
             CanTempComp: canTempComp, AbsoluteFocuser: absolute);
     }
 
