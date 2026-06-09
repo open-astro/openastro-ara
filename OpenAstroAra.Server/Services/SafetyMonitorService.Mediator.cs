@@ -51,21 +51,25 @@ public sealed partial class SafetyMonitorService : ISafetyMonitorMediator {
     public SafetyMonitorInfo GetInfo() {
         AlpacaSafetyMonitor? client;
         EquipmentConnectionState state;
-        DiscoveredDeviceDto? device;
         lock (_gate) {
             client = _disposed ? null : _client;
             state = _state;
-            device = _device;
         }
-        var connected = state == EquipmentConnectionState.Connected && client is not null;
         var safe = false;
-        if (connected) {
+        if (state == EquipmentConnectionState.Connected && client is not null) {
             // Bounded synchronous read on the caller's (sequence) thread, reusing the same
             // ReferenceEquals/Error-demotion guards as the REST path.
             safe = ReadIsSafe(client!);
-            lock (_gate) {
-                connected = _state == EquipmentConnectionState.Connected && ReferenceEquals(_client, client);
-            }
+        }
+        bool connected;
+        DiscoveredDeviceDto? device;
+        lock (_gate) {
+            // One consistent final snapshot (like GetAsync): device identity + connected come
+            // from the same lock, so a reconnect-to-a-different-device race during ReadIsSafe
+            // can't pair the old device's Name/DeviceId with the new connection's state. safe is
+            // kept only if the client we read is still the live, Connected one.
+            connected = !_disposed && _state == EquipmentConnectionState.Connected && ReferenceEquals(_client, client);
+            device = _device;
             if (!connected) {
                 safe = false;
             }
