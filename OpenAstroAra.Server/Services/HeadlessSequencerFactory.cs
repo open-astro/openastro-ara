@@ -12,6 +12,7 @@
 
 #endregion "copyright"
 
+using OpenAstroAra.Equipment.Interfaces;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Sequencer;
 using OpenAstroAra.Sequencer.Conditions;
@@ -127,8 +128,9 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
             ICameraMediator? cameraMediator = null,
             IRotatorMediator? rotatorMediator = null,
             ISwitchMediator? switchMediator = null,
-            IDomeMediator? domeMediator = null) {
-        // §38k-9 … §38k-18 — equipment-mediator stubs default to no-op headless
+            IDomeMediator? domeMediator = null,
+            IDomeFollower? domeFollower = null) {
+        // §38k-9 … §38k-21 — equipment-mediator stubs default to no-op headless
         // impls so call sites that don't yet have real Alpaca-backed mediators
         // still get a usable prototype set. As real drivers land (§14e Alpaca
         // simulator pinning gates this), Program.cs's DI can hand in real
@@ -146,6 +148,8 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
         rotatorMediator ??= new HeadlessRotatorMediator();
         switchMediator ??= new HeadlessSwitchMediator();
         domeMediator ??= new HeadlessDomeMediator();
+        // §38k-21 — the one non-mediator dependency a dome instruction needs.
+        domeFollower ??= new HeadlessDomeFollower();
 
         return new HeadlessSequencerFactory(
             items: new List<ISequenceItem> {
@@ -209,6 +213,10 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
                 new SlewDomeAzimuth(domeMediator),
                 new EnableDomeSynchronization(domeMediator, telescopeMediator),
                 new DisableDomeSynchronization(domeMediator, telescopeMediator),
+                // §38k-21 — SynchronizeDome was the one dome instruction deferred
+                // from §38k-18 (it also needs IDomeFollower). With the headless
+                // dome-follower stub it now registers, completing the dome set.
+                new SynchronizeDome(domeMediator, domeFollower, telescopeMediator),
             },
             conditions: new List<ISequenceCondition> {
                 // §38k-7 — no-equipment conditions. LoopCondition bounds a
