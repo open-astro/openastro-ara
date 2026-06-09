@@ -140,11 +140,14 @@ public sealed partial class FlatDeviceService : IFlatDeviceService, IDisposable 
             }
             if (req.LightOn is bool lit) {
                 if (lit) {
-                    // Turn on at the requested brightness, else full. Read MaxBrightness fresh if it
-                    // isn't cached yet (a LightOn right after connect can beat the first refresh) so
-                    // we never call CalibratorOn(0) — illuminate-at-zero is meaningless and some
-                    // drivers reject it. Fall back to 1 only if the device has no readable max.
-                    var level = req.Brightness ?? maxBrightness ?? ReadMaxBrightness(client) ?? 1;
+                    // Turn on at the requested brightness, else full. ASCOM CalibratorOn wants
+                    // [1, MaxBrightness]; treat an explicit 0 the same as unspecified (LightOn=true
+                    // means "on", so 0 can't be honoured literally). Read MaxBrightness fresh if it
+                    // isn't cached yet (a LightOn right after connect can beat the first refresh);
+                    // fall back to 1 only if the device has no readable max — never CalibratorOn(0).
+                    var level = (req.Brightness is int reqB && reqB > 0)
+                        ? reqB
+                        : maxBrightness ?? ReadMaxBrightness(client) ?? 1;
                     client.CalibratorOn(level);
                 } else {
                     client.CalibratorOff();
