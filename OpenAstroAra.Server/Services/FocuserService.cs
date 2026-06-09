@@ -281,6 +281,13 @@ public sealed partial class FocuserService : IFocuserService, IDisposable {
         Justification = "Best-effort teardown: Connected = false can throw driver/HTTP exceptions, which must be swallowed so Dispose always runs and cleanup completes. CA1031's log-and-recover boundary applies.")]
     private void SafeDisconnectDispose(AlpacaFocuser client) {
         try {
+            // Interrupt any in-flight Move so a disconnect-during-move doesn't wait out the full
+            // ASCOM timeout (the blocking Move on the background task fails fast once halted).
+            client.Halt();
+        } catch (Exception ex) {
+            LogTeardownIgnored(ex);
+        }
+        try {
             client.Connected = false;
         } catch (Exception ex) {
             LogTeardownIgnored(ex);
