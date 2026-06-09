@@ -223,6 +223,10 @@ public sealed partial class ObservingConditionsService : IObservingConditionsSer
             lock (_gate) {
                 if (!_disposed && _connectGeneration == generation) {
                     _client = client;
+                    // Clear before going Connected: otherwise GetAsync could serve the PRIOR
+                    // device's readings under the NEW device's identity during the seed window.
+                    _cached = EmptyReadings;
+                    _capturedAt = DateTimeOffset.UtcNow;
                     SetState(EquipmentConnectionState.Connected);
                     adopted = true;
                 }

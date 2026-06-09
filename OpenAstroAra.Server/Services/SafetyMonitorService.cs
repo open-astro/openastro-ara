@@ -242,6 +242,10 @@ public sealed partial class SafetyMonitorService : ISafetyMonitorService, IDispo
                 // comparison alone could not distinguish.
                 if (!_disposed && _connectGeneration == generation) {
                     _client = client;
+                    // Clear before going Connected so we don't briefly serve a PRIOR device's
+                    // IsSafe under the NEW device's identity during the seed window (a stale
+                    // true could otherwise mislead WaitUntilSafe for one poll).
+                    _cachedSafe = false;
                     SetState(EquipmentConnectionState.Connected);
                     adopted = true;
                 }
