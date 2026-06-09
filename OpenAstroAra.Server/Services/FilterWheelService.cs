@@ -97,6 +97,10 @@ public sealed partial class FilterWheelService : IFilterWheelService, IDisposabl
             _connectGeneration++;
             client = _client;
             _client = null;
+            // Clear the slot list too: it must not outlive the connection, so a ChangeFilterAsync
+            // while disconnected validates against the live (absent) slots and reports "not
+            // connected" rather than an ArgumentOutOfRange against a prior session's slots.
+            _slots = null;
             if (_device is not null) {
                 SetState(EquipmentConnectionState.Disconnected);
             }
@@ -199,14 +203,17 @@ public sealed partial class FilterWheelService : IFilterWheelService, IDisposabl
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Slots read boundary: if Names fails, return null so we DON'T cache an empty/partial slot list (the next tick retries). CA1031's log-and-recover boundary applies.")]
-    private static List<FilterSlotDto>? ReadSlots(AlpacaFilterWheel c) {
+    private List<FilterSlotDto>? ReadSlots(AlpacaFilterWheel c) {
         string[] names;
         try { names = c.Names; } catch (Exception) { return null; }
         if (names is null) {
             return null;
         }
         int[] offsets;
-        try { offsets = c.FocusOffsets; } catch (Exception) { offsets = Array.Empty<int>(); }
+        // Log at Debug: unlike Names (which returns null and retries), a FocusOffsets failure
+        // persists (offsets are read-once), so a driver that doesn't implement them would silently
+        // show all-zero offsets forever with no diagnostic trail.
+        try { offsets = c.FocusOffsets; } catch (Exception ex) { LogFocusOffsetsFailed(ex); offsets = Array.Empty<int>(); }
         var slots = new List<FilterSlotDto>(names.Length);
         for (var i = 0; i < names.Length; i++) {
             var offset = i < (offsets?.Length ?? 0) ? offsets![i] : 0;
@@ -339,6 +346,9 @@ public sealed partial class FilterWheelService : IFilterWheelService, IDisposabl
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "FilterWheel Position read failed (reported idle)")]
     private partial void LogPositionReadFailed(Exception ex);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "FilterWheel FocusOffsets read failed (offsets default to 0)")]
+    private partial void LogFocusOffsetsFailed(Exception ex);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "FilterWheel change to slot {Position} failed")]
     private partial void LogChangeFailed(Exception ex, int position);
