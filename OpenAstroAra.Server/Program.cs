@@ -178,8 +178,11 @@ public partial class Program {
         // slot. REST-only; the IFilterWheelMediator unification (SwitchFilter) is a follow-up.
         builder.Services.AddSingleton<IFilterWheelService, FilterWheelService>();
         // §14e — fifth real device service: live rotator (mechanical/sky angle) + Move. REST-only;
-        // the IRotatorMediator unification is a follow-up.
-        builder.Services.AddSingleton<IRotatorService, RotatorService>();
+        // One singleton backs BOTH the REST IRotatorService and the Sequencer's IRotatorMediator
+        // (§8.1), so MoveRotatorMechanical drives the live device (mediator wiring is below; this
+        // replaces the HeadlessRotatorMediator stub).
+        builder.Services.AddSingleton<RotatorService>();
+        builder.Services.AddSingleton<IRotatorService>(sp => sp.GetRequiredService<RotatorService>());
         // §14e — eighth real device service: live dome (azimuth + shutter/home/park) + slew, park,
         // open/close shutter. REST-only; the IDomeMediator unification is a follow-up.
         builder.Services.AddSingleton<IDomeService, DomeService>();
@@ -345,8 +348,10 @@ public partial class Program {
         // SwitchFilter instruction (needs IProfileService) lands in a follow-up.
         builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.IFilterWheelMediator,
             OpenAstroAra.Server.Services.Equipment.HeadlessFilterWheelMediator>();
-        builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.IRotatorMediator,
-            OpenAstroAra.Server.Services.Equipment.HeadlessRotatorMediator>();
+        // §14e — the real RotatorService backs IRotatorMediator too (replaces HeadlessRotatorMediator),
+        // so MoveRotatorMechanical drives the live Alpaca rotator.
+        builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.IRotatorMediator>(
+            sp => sp.GetRequiredService<RotatorService>());
         builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.ISwitchMediator,
             OpenAstroAra.Server.Services.Equipment.HeadlessSwitchMediator>();
         builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.IDomeMediator,
