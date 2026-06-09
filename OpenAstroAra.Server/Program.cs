@@ -165,7 +165,9 @@ public partial class Program {
         // land per-device in the real-infra phase + Phase 14.
         builder.Services.AddSingleton<ICameraService, PlaceholderCameraService>();
         builder.Services.AddSingleton<ITelescopeService, PlaceholderTelescopeService>();
-        builder.Services.AddSingleton<IFocuserService, PlaceholderFocuserService>();
+        // §14e — fourth real device service: live focuser (position/temp) + Move. REST-only;
+        // the IFocuserMediator unification (MoveFocuser/autofocus instructions) is a follow-up.
+        builder.Services.AddSingleton<IFocuserService, FocuserService>();
         builder.Services.AddSingleton<IFilterWheelService, PlaceholderFilterWheelService>();
         builder.Services.AddSingleton<IRotatorService, PlaceholderRotatorService>();
         builder.Services.AddSingleton<IDomeService, PlaceholderDomeService>();
