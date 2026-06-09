@@ -286,8 +286,14 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Per-field read boundary: an unsupported capability property throws; each flag falls back to false (and the rate list to empty) rather than failing the whole capability read. The RA/Dec range is fixed, so there is no essential field whose failure should null the whole DTO. CA1031's log-and-recover boundary applies.")]
     private static TelescopeCapabilitiesDto ReadCapabilities(AlpacaTelescope c) {
-        bool canSlew;
-        try { canSlew = c.CanSlewAsync || c.CanSlew; } catch (Exception) { canSlew = false; }
+        // Read each slew capability in its OWN try: an older driver can THROW NotImplemented from
+        // CanSlewAsync, and a combined `CanSlewAsync || CanSlew` in one try would then fall to false
+        // even when sync CanSlew is true. CanSlew is true if the mount supports either goto mode.
+        bool canSlewAsync = false;
+        try { canSlewAsync = c.CanSlewAsync; } catch (Exception) { canSlewAsync = false; }
+        bool canSlewSync = false;
+        try { canSlewSync = c.CanSlew; } catch (Exception) { canSlewSync = false; }
+        var canSlew = canSlewAsync || canSlewSync;
         bool canSync;
         try { canSync = c.CanSync; } catch (Exception) { canSync = false; }
         bool canPark;
