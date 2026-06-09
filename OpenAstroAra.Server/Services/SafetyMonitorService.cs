@@ -323,12 +323,10 @@ public sealed partial class SafetyMonitorService : ISafetyMonitorService, IDispo
         }
     }
 
-    // lock is reentrant, so this is safe to call whether or not the caller already holds _gate.
+    // Caller must hold _gate (every call site already does), so no inner lock here.
     private void SetState(EquipmentConnectionState state) {
-        lock (_gate) {
-            _state = state;
-            _lastTransition = DateTimeOffset.UtcNow;
-        }
+        _state = state;
+        _lastTransition = DateTimeOffset.UtcNow;
     }
 
     private static OperationAcceptedDto Accepted(string operationType, string? idempotencyKey) =>

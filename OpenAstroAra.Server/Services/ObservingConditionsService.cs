@@ -183,21 +183,25 @@ public sealed partial class ObservingConditionsService : IObservingConditionsSer
     // the sensors it has, and an unimplemented (or transiently failing) sensor yields null rather
     // than failing the whole snapshot. Per-sensor failures do NOT demote the connection — weather
     // sensors are independently optional, unlike SafetyMonitor's single IsSafe.
-    private static Readings ReadSensors(AlpacaObservingConditions c) => new(
-        TemperatureC: ReadSensor(() => c.Temperature),
-        HumidityPct: ReadSensor(() => c.Humidity),
-        PressureHpa: ReadSensor(() => c.Pressure),
-        CloudCoverPct: ReadSensor(() => c.CloudCover),
-        WindSpeedMs: ReadSensor(() => c.WindSpeed),
-        WindDirectionDeg: ReadSensor(() => c.WindDirection),
-        RainRate: ReadSensor(() => c.RainRate));
+    private Readings ReadSensors(AlpacaObservingConditions c) => new(
+        TemperatureC: ReadSensor("Temperature", () => c.Temperature),
+        HumidityPct: ReadSensor("Humidity", () => c.Humidity),
+        PressureHpa: ReadSensor("Pressure", () => c.Pressure),
+        CloudCoverPct: ReadSensor("CloudCover", () => c.CloudCover),
+        WindSpeedMs: ReadSensor("WindSpeed", () => c.WindSpeed),
+        WindDirectionDeg: ReadSensor("WindDirection", () => c.WindDirection),
+        RainRate: ReadSensor("RainRate", () => c.RainRate));
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Per-sensor read boundary: an ObservingConditions sensor that is not implemented throws (ASCOM NotImplementedException) and a transient driver/HTTP error can too; either way the sensor is reported absent (null), never propagated. CA1031's log-and-recover boundary applies.")]
-    private static double? ReadSensor(Func<double> read) {
+    private double? ReadSensor(string sensor, Func<double> read) {
         try {
             return read();
-        } catch (Exception) {
+        } catch (Exception ex) {
+            // Debug, not Warning: an unimplemented sensor throws every 2s by design, so this must
+            // not be noisy — but it's available (with the sensor name) when diagnosing a sensor
+            // that flips from working to failing, which a bare null would hide.
+            LogSensorUnavailable(sensor, ex);
             return null;
         }
     }
@@ -289,11 +293,10 @@ public sealed partial class ObservingConditionsService : IObservingConditionsSer
         }
     }
 
+    // Caller must hold _gate (every call site already does), so no inner lock here.
     private void SetState(EquipmentConnectionState state) {
-        lock (_gate) {
-            _state = state;
-            _lastTransition = DateTimeOffset.UtcNow;
-        }
+        _state = state;
+        _lastTransition = DateTimeOffset.UtcNow;
     }
 
     private static OperationAcceptedDto Accepted(string operationType, string? idempotencyKey) =>
@@ -321,6 +324,9 @@ public sealed partial class ObservingConditionsService : IObservingConditionsSer
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "ObservingConditions sensor read failed")]
     private partial void LogSensorReadFailed(Exception ex);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "ObservingConditions sensor {Sensor} unavailable (reported as null)")]
+    private partial void LogSensorUnavailable(string sensor, Exception ex);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "ObservingConditions connected: {Name} at {Host}:{Port}/{Device}")]
     private partial void LogConnected(string name, string host, int port, int device);
