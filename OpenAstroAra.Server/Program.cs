@@ -236,11 +236,17 @@ public partial class Program {
         // ActiveSequenceCheckpoint). Func<> resolver breaks the
         // FileSequenceService ↔ PlaceholderSequencerService construction-time
         // cycle (both reference each other now).
+        // §38 — real sequence execution. SequencerService deserializes the saved
+        // body and drives it through NINA's inherited Sequencer (full container
+        // semantics); equipment is still the headless-stub set, so no-equipment
+        // instructions run for real and equipment-bound ones no-op cleanly.
         builder.Services.AddSingleton<ISequencerService>(sp =>
-            new PlaceholderSequencerService(
+            new SequencerService(
+                sp.GetRequiredService<SequenceBodyDeserializer>(),
                 sp.GetService<IWsBroadcaster>(),
                 () => sp.GetService<ISequenceService>(),
-                sp.GetService<ActiveSequenceCheckpoint>()));
+                sp.GetService<ActiveSequenceCheckpoint>(),
+                sp.GetService<ILogger<SequencerService>>()));
 
         // §38.7 — disk-shipped templates under {profileDir}/sequences/templates/
         // merged on top of the 3 hardcoded built-ins. .deb install can drop
