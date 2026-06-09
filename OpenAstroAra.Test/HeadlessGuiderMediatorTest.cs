@@ -96,5 +96,20 @@ namespace OpenAstroAra.Test {
             Assert.That(prototype, Is.Not.Null);
             Assert.That(prototype, Is.InstanceOf<ParkScope>());
         }
+
+        // §38k-14 — guider-only instructions on the existing guider stub.
+        // (Dither also needs IProfileService → deferred to a follow-up.)
+
+        [Test]
+        public void WithDefaults_registers_StartGuiding() {
+            var factory = HeadlessSequencerFactory.WithDefaults();
+            Assert.That(factory.Items.Select(i => i.GetType().Name), Does.Contain("StartGuiding"));
+        }
+
+        [Test]
+        public void WithDefaults_registers_StopGuiding() {
+            var factory = HeadlessSequencerFactory.WithDefaults();
+            Assert.That(factory.Items.Select(i => i.GetType().Name), Does.Contain("StopGuiding"));
+        }
     }
 }
