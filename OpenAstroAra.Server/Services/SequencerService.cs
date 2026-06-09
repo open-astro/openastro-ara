@@ -68,6 +68,11 @@ public sealed partial class SequencerService : ISequencerService {
     // grow unbounded over a long-lived daemon. Live (non-terminal) runs are
     // never evicted.
     private const int MaxRetainedRuns = 64;
+    // §28 active/current.json is a single file (single-active-run by design —
+    // one sequence at a time on shared equipment). Track which run currently
+    // owns it so a finishing run can't clear/stomp a checkpoint a newer run wrote.
+    private readonly object _checkpointGate = new();
+    private Guid _checkpointOwner;
 
     public SequencerService(
             SequenceBodyDeserializer deserializer,
@@ -125,8 +130,10 @@ public sealed partial class SequencerService : ISequencerService {
         }
 
         // §28 — checkpoint from start-of-run so the §28.2 reconciler can spot an
-        // interrupted run, not just one that got past its first instruction.
-        _checkpoint?.Write(run.ToDto(id));
+        // interrupted run, not just one that got past its first instruction. Claim
+        // ownership first so this run's writes/clear are the ones that take effect.
+        ClaimCheckpoint(run);
+        WriteCheckpointIfOwner(run, id);
         _ = Task.Run(() => RunWorkerAsync(id, run, root), CancellationToken.None);
         return PlaceholderEquipmentHelpers.Accepted("sequencer.start", idempotencyKey);
     }
@@ -188,6 +195,30 @@ public sealed partial class SequencerService : ISequencerService {
         }
     }
 
+    // Checkpoint ownership — only the run that currently owns active/current.json
+    // writes or clears it, so concurrent runs (should they occur) can't stomp each
+    // other's §28 checkpoint. The latest run to start takes ownership.
+    private void ClaimCheckpoint(RunState run) {
+        lock (_checkpointGate) { _checkpointOwner = run.RunId; }
+    }
+
+    private void WriteCheckpointIfOwner(RunState run, Guid sequenceId) {
+        if (_checkpoint is null) return;
+        lock (_checkpointGate) {
+            if (_checkpointOwner != run.RunId) return;
+            _checkpoint.Write(run.ToDto(sequenceId));
+        }
+    }
+
+    private void ClearCheckpointIfOwner(RunState run) {
+        if (_checkpoint is null) return;
+        lock (_checkpointGate) {
+            if (_checkpointOwner != run.RunId) return;
+            _checkpoint.Clear();
+            _checkpointOwner = Guid.Empty;
+        }
+    }
+
     /// <summary>Evict the oldest terminal runs once retention exceeds the cap (live runs are kept).</summary>
     private void PruneTerminalRuns() {
         var count = _runs.Count;
@@ -240,7 +271,7 @@ public sealed partial class SequencerService : ISequencerService {
                 var progress = new Progress<ApplicationStatus>(status => {
                     run.SetDescription(status.Status);
                     _ = EmitAsync("sequence.progress", sequenceId, run);
-                    _checkpoint?.Write(run.ToDto(sequenceId));
+                    WriteCheckpointIfOwner(run, sequenceId);
                 });
 
                 // Real execution. Sequencer.Start runs MainContainer.Run with
@@ -270,14 +301,22 @@ public sealed partial class SequencerService : ISequencerService {
                 run.MarkCompleted();
                 await EmitAsync("sequence.complete", sequenceId, run);
             }
+        } catch (OperationCanceledException) {
+            // Today NINA's Sequencer.Start swallows OCE and returns normally, so
+            // the terminal block above handles abort/stop. This guard keeps the
+            // engine correct if a Sequencer subclass / future NINA version ever
+            // lets OCE escape — a cancelled run is reported Stopped, not Failed.
+            run.State = SequenceRunState.Stopped;
+            await EmitAsync("sequence.stopped", sequenceId, run);
         } catch (Exception ex) {
             LogRunFailed(ex, sequenceId);
             run.State = SequenceRunState.Failed;
             await EmitAsync("sequence.failed", sequenceId, run);
         } finally {
-            // §28 — terminal transition clears active/current.json; a missing
-            // file is the canonical "nothing running" signal for §28.2.
-            _checkpoint?.Clear();
+            // §28 — terminal transition clears active/current.json (only if this
+            // run still owns it); a missing file is the canonical "nothing
+            // running" signal for §28.2.
+            ClearCheckpointIfOwner(run);
             // The run is terminal: dispose its CTS (the only IDisposable). The
             // RunState record stays in _runs for post-completion GetRunState
             // polling; Abort/Stop guard against touching a disposed CTS, and
@@ -343,10 +382,20 @@ public sealed partial class SequencerService : ISequencerService {
             lock (_gate) { CompletedUtc = DateTimeOffset.UtcNow; }
         }
 
-        /// <summary>Dispose the CTS (idempotent) — the record itself stays queryable in _runs.</summary>
-        public void DisposeCts() => Cts.Dispose();
+        private int _ctsDisposed;
+        // Dispose the CTS exactly once — it's reached from both the worker's
+        // finally (terminal) and PruneTerminalRuns eviction. CTS.Dispose is
+        // documented idempotent, but the guard makes that explicit + cheap.
+        private void DisposeCtsOnce() {
+            if (Interlocked.Exchange(ref _ctsDisposed, 1) == 0) {
+                Cts.Dispose();
+            }
+        }
 
-        public void Dispose() => Cts.Dispose();
+        /// <summary>Dispose the CTS once — the record itself stays queryable in _runs.</summary>
+        public void DisposeCts() => DisposeCtsOnce();
+
+        public void Dispose() => DisposeCtsOnce();
 
         public SequenceRunStateDto ToDto(Guid sequenceId) {
             lock (_gate) {

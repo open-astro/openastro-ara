@@ -129,6 +129,22 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Second_start_while_running_is_idempotent_same_run() {
+            // A second start for an already-running id must NOT spawn a second
+            // worker — the run id stays the same (the atomic reservation keeps the
+            // live run).
+            var id = Guid.NewGuid();
+            var svc = BuildService(id, BuildBody(c => c.Items.Add(new WaitForTimeSpan { Time = 30 })));
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForStateAsync(svc, id, SequenceRunState.Running);
+            var firstRunId = (await svc.GetRunStateAsync(id, CancellationToken.None))!.RunId;
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            var secondRunId = (await svc.GetRunStateAsync(id, CancellationToken.None))!.RunId;
+            Assert.That(secondRunId, Is.EqualTo(firstRunId));
+            await svc.AbortAsync(id, null, CancellationToken.None); // clean up the long run
+        }
+
+        [Test]
         public async Task Abort_during_run_stops_the_sequence() {
             // A long wait keeps the run in Running long enough to abort it; the
             // run must end as Stopped (not mis-reported Completed — guards the
