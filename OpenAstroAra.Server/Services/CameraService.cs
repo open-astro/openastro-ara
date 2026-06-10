@@ -154,7 +154,7 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         // Dispose → argument range → connected, aligned with the other device services. Range
         // checks use the read-once caps when present; a zero max means that capability read failed
         // ("unknown") and validation defers to the device rather than rejecting everything.
-        if (request.ExposureSec <= 0
+        if (request.ExposureSec <= 0 || double.IsNaN(request.ExposureSec) || double.IsInfinity(request.ExposureSec)
             || (caps is not null && caps.MaxExposureSec > 0
                 && (request.ExposureSec < caps.MinExposureSec || request.ExposureSec > caps.MaxExposureSec))) {
             throw new ArgumentOutOfRangeException(nameof(request), request.ExposureSec,
@@ -254,7 +254,14 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             RefreshCacheOnce();
 
             var filePath = WriteFits(frameId, pixels, width, height, request, capturedAt);
-            await RegisterFrameAsync(frameId, request, capturedAt, filePath, width, height).ConfigureAwait(false);
+            try {
+                await RegisterFrameAsync(frameId, request, capturedAt, filePath, width, height).ConfigureAwait(false);
+            } catch (Exception ex) {
+                // The FITS is on disk but invisible to the catalog; name the path so an operator can
+                // recover it — and the §28.8 startup orphan scan re-registers it on the next boot.
+                LogCatalogRegistrationFailed(ex, frameId, filePath);
+                return;
+            }
             LogCaptureComplete(frameId, width, height, filePath);
         } catch (Exception ex) {
             LogCaptureFailed(ex, frameId);
@@ -277,10 +284,14 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         TrySet(() => {
             var maxX = client.CameraXSize / request.BinX;
             var maxY = client.CameraYSize / request.BinY;
-            client.StartX = request.OffsetX ?? 0;
-            client.StartY = request.OffsetY ?? 0;
-            client.NumX = Math.Min(request.Width ?? maxX, maxX - (request.OffsetX ?? 0));
-            client.NumY = Math.Min(request.Height ?? maxY, maxY - (request.OffsetY ?? 0));
+            var startX = Math.Clamp(request.OffsetX ?? 0, 0, Math.Max(0, maxX - 1));
+            var startY = Math.Clamp(request.OffsetY ?? 0, 0, Math.Max(0, maxY - 1));
+            client.StartX = startX;
+            client.StartY = startY;
+            // Clamp to at least 1px so an off-sensor offset can't drive NumX/NumY negative (the
+            // driver throw would be logged as "unsupported", which would be misleading).
+            client.NumX = Math.Max(1, Math.Min(request.Width ?? maxX, maxX - startX));
+            client.NumY = Math.Max(1, Math.Min(request.Height ?? maxY, maxY - startY));
         }, "subframe");
     }
 
@@ -696,6 +707,9 @@ public sealed partial class CameraService : ICameraService, IDisposable {
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Capture {FrameId} failed")]
     private partial void LogCaptureFailed(Exception ex, Guid frameId);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Capture {FrameId} wrote {Path} but catalog registration failed — the §28.8 startup scan will recover it on the next boot")]
+    private partial void LogCatalogRegistrationFailed(Exception ex, Guid frameId, string path);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Capture {FrameId} never reported ImageReady within the {ExposureSec}s exposure + margin")]
     private partial void LogCaptureFailedNotReady(Guid frameId, double exposureSec);
