@@ -100,8 +100,10 @@ namespace OpenAstroAra.Test {
             await svc.ConnectAsync(new ConnectRequestDto(device!), idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
             var connected = await PollUntilAsync(svc, d => d.State != EquipmentConnectionState.Connecting).ConfigureAwait(false);
             Assert.That(connected!.State, Is.EqualTo(EquipmentConnectionState.Connected));
-            // Capabilities are seeded by the refresh after connect — poll until the mediator sees them.
-            await PollUntilAsync(svc, _ => svc.GetInfo().Connected).ConfigureAwait(false);
+            // Connected flips true the instant ConnectInBackground adopts the client, BEFORE the first
+            // refresh seeds the capability flags — so poll on a cap (CanSetAzimuth, true for a slewing
+            // dome) to wait for the real ready-state an instruction's Validate() would see.
+            await PollUntilAsync(svc, _ => svc.GetInfo().CanSetAzimuth || svc.GetInfo().CanSetShutter).ConfigureAwait(false);
             Assert.That(svc.GetInfo().Connected, Is.True, "the mediator should report connected once the REST connect lands");
 
             // Drive the dome through the live mediator. NOTE: the OmniSim dome's shutter/slew ops are

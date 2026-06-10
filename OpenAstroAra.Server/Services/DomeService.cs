@@ -49,7 +49,9 @@ public sealed partial class DomeService : IDomeService, IDisposable {
     // Read-once capabilities + the raw ASCOM shutter status, cached for the IDomeMediator GetInfo()
     // snapshot (the REST DomeDto doesn't expose them). Populated by the §32.4 refresh; reset on adopt.
     private DomeCaps? _domeCaps;
-    private ShutterState _shutterStatusRaw = ShutterState.Closed;
+    // Error maps to NINA ShutterError ("not yet read") so GetInfo honestly signals "unknown" in the
+    // ≤2s window between connect and the first refresh, rather than a possibly-false ShutterClosed.
+    private ShutterState _shutterStatusRaw = ShutterState.Error;
     private int _refreshing;
     private long _connectGeneration;
     private bool _disposed;
@@ -283,7 +285,7 @@ public sealed partial class DomeService : IDomeService, IDisposable {
                     _client = client;
                     _runtime = IdleRuntime;                  // don't serve a prior device's runtime
                     _domeCaps = null;                        // re-read capabilities for the new device
-                    _shutterStatusRaw = ShutterState.Closed; // don't report the prior device's shutter until the first refresh
+                    _shutterStatusRaw = ShutterState.Error; // "not yet read" until the first refresh, not a false Closed
                     SetState(EquipmentConnectionState.Connected);
                     adopted = true;
                 }
