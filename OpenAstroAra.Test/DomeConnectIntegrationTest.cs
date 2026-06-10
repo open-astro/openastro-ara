@@ -81,6 +81,47 @@ namespace OpenAstroAra.Test {
             Assert.That(disconnected!.State, Is.EqualTo(EquipmentConnectionState.Disconnected));
         }
 
+        /// <summary>
+        /// §14e — the same <see cref="DomeService"/> also serves <see cref="IDomeMediator"/>: the dome
+        /// instructions call <c>GetInfo()</c> (Validate → Connected/CanSetAzimuth) and the blocking
+        /// control ops (Execute). This exercises the live mediator OpenShutter + SlewToAzimuth path —
+        /// each blocks until its terminal condition and returns true, leaving GetInfo accurate.
+        /// </summary>
+        [Test]
+        public async Task Mediator_OpenShutter_and_SlewToAzimuth_drive_the_live_device() {
+            var device = await DiscoverAsync().ConfigureAwait(false);
+            Assert.That(device, Is.Not.Null, "no Dome discovered from the running OmniSim");
+
+            using var svc = new DomeService();
+            // DomeService implements IDomeMediator; GetInfo()/OpenShutter/SlewToAzimuth below are the
+            // mediator surface the dome instructions drive (called on the concrete type to satisfy
+            // CA1859 — interface conformance is covered by the unit test).
+
+            await svc.ConnectAsync(new ConnectRequestDto(device!), idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+            var connected = await PollUntilAsync(svc, d => d.State != EquipmentConnectionState.Connecting).ConfigureAwait(false);
+            Assert.That(connected!.State, Is.EqualTo(EquipmentConnectionState.Connected));
+            // Capabilities are seeded by the refresh after connect — poll until the mediator sees them.
+            await PollUntilAsync(svc, _ => svc.GetInfo().Connected).ConfigureAwait(false);
+
+            // Blocking OpenShutter via the mediator — returns true once the shutter reports open.
+            var openOk = await svc.OpenShutter(CancellationToken.None).ConfigureAwait(false);
+            Assert.That(openOk, Is.True, "mediator OpenShutter should reach ShutterOpen and return true");
+            Assert.That(svc.GetInfo().ShutterStatus,
+                Is.EqualTo(OpenAstroAra.Equipment.Interfaces.ShutterState.ShutterOpen),
+                "GetInfo should report ShutterOpen after the blocking OpenShutter");
+
+            // Blocking SlewToAzimuth — returns true once the dome settles near the target.
+            var slewOk = await svc.SlewToAzimuth(120.0, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(slewOk, Is.True, "mediator SlewToAzimuth should settle near the target and return true");
+
+            // Leave tidy (best-effort).
+            await svc.CloseShutter(CancellationToken.None).ConfigureAwait(false);
+
+            await svc.DisconnectAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+            var disconnected = await PollUntilAsync(svc, d => d.State == EquipmentConnectionState.Disconnected).ConfigureAwait(false);
+            Assert.That(disconnected!.State, Is.EqualTo(EquipmentConnectionState.Disconnected));
+        }
+
         private static async Task<DiscoveredDeviceDto?> DiscoverAsync() {
             var discovery = new AlpacaEquipmentDiscoveryService();
             for (var attempt = 1; attempt <= MaxDiscoveryAttempts; attempt++) {
