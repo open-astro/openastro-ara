@@ -39,6 +39,7 @@ namespace OpenAstroAra.Astrometry {
         public static readonly string EphemerisLocation = Path.Combine(System.AppDomain.CurrentDomain.BaseDirectory, "External", "JPLEPH");
 
         static NOVAS() {
+            AstrometryNativeResolver.Register(); // map the Windows DLL name to libnovas31 off-Windows
             DllLoader.LoadDll(Path.Combine("NOVAS", DLLNAME));
 
             short a = 0;
