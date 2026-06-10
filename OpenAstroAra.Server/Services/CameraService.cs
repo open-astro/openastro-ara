@@ -156,14 +156,19 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             throw new ArgumentOutOfRangeException(nameof(request), request.ExposureSec,
                 "ExposureSec is outside the camera's supported exposure range.");
         }
+        // ASCOM types BinX/BinY/Gain as short on the device; validate the short range explicitly
+        // (services-wide validate-before-narrowing-cast convention) so an extreme value fails
+        // loudly with a 4xx instead of silently truncating on the wire.
         if (request.BinX < 1 || request.BinY < 1
+            || request.BinX > short.MaxValue || request.BinY > short.MaxValue
             || (caps is not null && caps.MaxBinX > 0 && caps.MaxBinY > 0
                 && (request.BinX > caps.MaxBinX || request.BinY > caps.MaxBinY))) {
             throw new ArgumentOutOfRangeException(nameof(request), $"{request.BinX}x{request.BinY}",
                 "Binning is outside the camera's supported range.");
         }
-        if (request.Gain is int gain && caps is not null && caps.MaxGain > 0
-            && (gain < caps.MinGain || gain > caps.MaxGain)) {
+        if (request.Gain is int gain
+            && (gain < 0 || gain > short.MaxValue
+                || (caps is not null && caps.MaxGain > 0 && (gain < caps.MinGain || gain > caps.MaxGain)))) {
             throw new ArgumentOutOfRangeException(nameof(request), gain,
                 "Gain is outside the camera's supported range.");
         }
@@ -182,7 +187,14 @@ public sealed partial class CameraService : ICameraService, IDisposable {
 
         var frameId = Guid.NewGuid();
         var capturedAt = DateTimeOffset.UtcNow;
-        _ = Task.Run(() => CaptureInBackgroundAsync(client, frameId, request, capturedAt), CancellationToken.None);
+        try {
+            _ = Task.Run(() => CaptureInBackgroundAsync(client, frameId, request, capturedAt), CancellationToken.None);
+        } catch {
+            // Task.Run can only realistically throw under extreme conditions (OOM); the in-flight
+            // flag must not leak a permanently-blocked camera.
+            Interlocked.Exchange(ref _captureInFlight, 0);
+            throw;
+        }
         return Task.FromResult(new ExposureResponseDto(
             FrameId: frameId.ToString(),
             PreviewUrl: new Uri($"/api/v1/frames/{frameId}/preview", UriKind.Relative),
