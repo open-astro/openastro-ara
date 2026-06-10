@@ -177,8 +177,12 @@ public partial class Program {
         builder.Services.AddSingleton<FocuserService>();
         builder.Services.AddSingleton<IFocuserService>(sp => sp.GetRequiredService<FocuserService>());
         // §14e — sixth real device service: live filter wheel (slots + current position) + change
-        // slot. REST-only; the IFilterWheelMediator unification (SwitchFilter) is a follow-up.
-        builder.Services.AddSingleton<IFilterWheelService, FilterWheelService>();
+        // slot. One singleton backs BOTH the REST IFilterWheelService and the Sequencer's
+        // IFilterWheelMediator (§8.1), so SwitchFilter drives the live device (mediator wiring is
+        // below; this replaces the HeadlessFilterWheelMediator stub). On connect the wheel's filter
+        // list imports into the active profile so SwitchFilter resolves filters by name/position.
+        builder.Services.AddSingleton<FilterWheelService>();
+        builder.Services.AddSingleton<IFilterWheelService>(sp => sp.GetRequiredService<FilterWheelService>());
         // §14e — fifth real device service: live rotator (mechanical/sky angle) + Move. REST-only;
         // One singleton backs BOTH the REST IRotatorService and the Sequencer's IRotatorMediator
         // (§8.1), so MoveRotatorMechanical drives the live device (mediator wiring is below; this
@@ -355,10 +359,12 @@ public partial class Program {
             sp => sp.GetRequiredService<FocuserService>());
         builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.ICameraMediator,
             OpenAstroAra.Server.Services.Equipment.HeadlessCameraMediator>();
-        // §38k-15 — DI-registered to complete the mediator surface; its
-        // SwitchFilter instruction (needs IProfileService) lands in a follow-up.
-        builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.IFilterWheelMediator,
-            OpenAstroAra.Server.Services.Equipment.HeadlessFilterWheelMediator>();
+        // §14e — the real FilterWheelService backs IFilterWheelMediator too (replaces
+        // HeadlessFilterWheelMediator), so SwitchFilter drives the live Alpaca wheel. Its filter
+        // list imports into IProfileService.ActiveProfile on connect (SwitchFilter resolves by
+        // name/position against that list).
+        builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.IFilterWheelMediator>(
+            sp => sp.GetRequiredService<FilterWheelService>());
         // §14e — the real RotatorService backs IRotatorMediator too (replaces HeadlessRotatorMediator),
         // so MoveRotatorMechanical drives the live Alpaca rotator.
         builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.IRotatorMediator>(
