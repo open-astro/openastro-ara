@@ -163,7 +163,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
 
         private TaskCompletionSource<bool>? _tcs;
 
-        private bool initialized = false;
+        private bool initialized;
 
         public async Task<bool> Connect(CancellationToken token) {
             bool connected = false;
@@ -189,7 +189,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                     }
                 }
                 Logger.Error($"Failed to resolve PHD2 server {serverHost}: {ex.Message}");
-                Notifier.ShowError(string.Format(Loc.Instance["LblPhd2ServerHostNotResolved"], serverHost));
+                Notifier.ShowError(string.Format(CultureInfo.InvariantCulture, Loc.Instance["LblPhd2ServerHostNotResolved"], serverHost));
                 return connected;
             }
 
@@ -222,9 +222,9 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                         // openastro-phd2 advertises itself via PHDSubver ("openastroara" prefix)
                         // or via dev-version semver suffix; both forms are treated as openastro-phd2.
                         bool isOpenAstroPhd2 =
-                            phdSubver.IndexOf("openastroara", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                            phdSubver.IndexOf("openastro-phd2", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                            phdVersionString.IndexOf("openastro-phd2", StringComparison.OrdinalIgnoreCase) >= 0;
+                            phdSubver.Contains("openastroara", StringComparison.OrdinalIgnoreCase) ||
+                            phdSubver.Contains("openastro-phd2", StringComparison.OrdinalIgnoreCase) ||
+                            phdVersionString.Contains("openastro-phd2", StringComparison.OrdinalIgnoreCase);
                         if (isOpenAstroPhd2) {
                             Logger.Info($"Connected to openastro-phd2 v{phdVersionString} (subver {phdSubver}).");
                         } else {
@@ -261,7 +261,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                     var msg = new Phd2GetPixelScale();
                     var resp = await SendMessage(msg);
                     if (resp.result != null) {
-                        PixelScale = double.Parse(resp.result.ToString().Replace(",", "."), CultureInfo.InvariantCulture);
+                        PixelScale = double.Parse(resp.result.ToString().Replace(",", ".", StringComparison.Ordinal), CultureInfo.InvariantCulture);
                     }
                 } catch (Exception ex) {
                     Logger.Error(ex);
@@ -289,7 +289,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             if (targetProfile == null) {
                 Logger.Error($"PHD2 profile {id} could not be found");
                 await GetProfiles();
-                Notifier.ShowWarning(String.Format(Loc.Instance["LblPhd2ProfileNotFound"], id, _activeProfile?.name));
+                Notifier.ShowWarning(String.Format(CultureInfo.InvariantCulture, Loc.Instance["LblPhd2ProfileNotFound"], id, _activeProfile?.name));
                 // Clear the saved id so we don't try and restore the missing profile next time
                 profileService.ActiveProfile.GuiderSettings.PHD2ProfileId = null;
                 return false;
@@ -360,7 +360,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                         var timeout = profileService.ActiveProfile.GuiderSettings.SettleTimeout;
                         if (elapsed.TotalSeconds > (timeout + 10)) {
                             //Failsafe when phd is not sending settlingdone message
-                            Notifier.ShowWarning(string.Format(Loc.Instance["LblGuiderNoSettleDone"], timeout));
+                            Notifier.ShowWarning(string.Format(CultureInfo.InvariantCulture, Loc.Instance["LblGuiderNoSettleDone"], timeout));
                             Logger.Warning($"Phd2 - Guider did not send SettleDone message in expected time  ({timeout}s + 10s). Skipping.");
                             Settling = false;
                         }
@@ -401,7 +401,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
 
         private static void CheckPhdError(PhdMethodResponse m) {
             if (m.error != null) {
-                Notifier.ShowError(String.Format(Loc.Instance["LblPHDError"], m.error.message, m.error.code));
+                Notifier.ShowError(String.Format(CultureInfo.InvariantCulture, Loc.Instance["LblPHDError"], m.error.message, m.error.code));
                 Logger.Warning("PHDError: " + m.error.message + " CODE: " + m.error.code);
             }
         }
@@ -844,7 +844,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 while ((line = await reader.ReadLineAsync()) != null) {
                     var o = JObject.Parse(line);
                     string phdevent = "";
-                    var t = o.GetValue("id");
+                    var t = o.GetValue("id", StringComparison.Ordinal);
                     if (t != null) {
                         phdevent = t.ToString();
                     }
@@ -1048,14 +1048,14 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             var getProfileResponse = await SendMessage<GetProfileResponse>(getProfile);
             if (getProfileResponse.error != null) {
                 Logger.Error($"Failed GetProfile: {getProfileResponse.error}");
-                throw new Exception(Loc.Instance["LblPhd2FailedGetProfiles"]);
+                throw new InvalidOperationException(Loc.Instance["LblPhd2FailedGetProfiles"]);
             }
 
             var getProfiles = new Phd2GetProfiles();
             var getProfilesResponse = await SendMessage<GetProfilesResponse>(getProfiles);
             if (getProfileResponse.error != null) {
                 Logger.Error($"Failed GetProfiles: {getProfilesResponse.error}");
-                throw new Exception(Loc.Instance["LblPhd2FailedGetProfiles"]);
+                throw new InvalidOperationException(Loc.Instance["LblPhd2FailedGetProfiles"]);
             }
 
             _activeProfile = getProfileResponse.result;
@@ -1170,7 +1170,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 while (true) {
                     var state = GetState(client);
                     if (state == TcpState.CloseWait) {
-                        throw new Exception(Loc.Instance["LblPhd2ServerConnectionLost"]);
+                        throw new InvalidOperationException(Loc.Instance["LblPhd2ServerConnectionLost"]);
                     }
 
                     var message = string.Empty;
@@ -1184,7 +1184,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                     foreach (string line in lines) {
                         if (!string.IsNullOrEmpty(line) && line.StartsWith('{')) {
                             JObject o = JObject.Parse(line, jls);
-                            JToken t = o.GetValue("Event");
+                            JToken t = o.GetValue("Event", StringComparison.Ordinal);
                             string phdevent = "";
                             if (t != null) {
                                 phdevent = t.ToString();
@@ -1199,7 +1199,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             } catch (OperationCanceledException) {
             } catch (Exception ex) {
                 Logger.Error(ex);
-                Notifier.ShowError(String.Format(Loc.Instance["LblPHDErrorMsg"], ex.Message));
+                Notifier.ShowError(String.Format(CultureInfo.InvariantCulture, Loc.Instance["LblPHDErrorMsg"], ex.Message));
                 throw;
             } finally {
                 Settling = false;
