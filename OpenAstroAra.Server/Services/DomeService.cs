@@ -281,8 +281,9 @@ public sealed partial class DomeService : IDomeService, IDisposable {
             lock (_gate) {
                 if (!_disposed && _connectGeneration == generation) {
                     _client = client;
-                    _runtime = IdleRuntime; // don't serve a prior device's runtime
-                    _domeCaps = null;       // re-read capabilities for the new device
+                    _runtime = IdleRuntime;                  // don't serve a prior device's runtime
+                    _domeCaps = null;                        // re-read capabilities for the new device
+                    _shutterStatusRaw = ShutterState.Closed; // don't report the prior device's shutter until the first refresh
                     SetState(EquipmentConnectionState.Connected);
                     adopted = true;
                 }

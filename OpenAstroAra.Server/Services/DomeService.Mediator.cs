@@ -57,7 +57,8 @@ public sealed partial class DomeService : IDomeMediator {
     private static readonly TimeSpan DomeOpPollInterval = TimeSpan.FromMilliseconds(100);
     // Wall-clock ceiling for a single blocking dome call (OpenShutter/Park/...): a silent device must
     // not park a sequence thread until the OS TCP timeout. The terminal-condition wait adds its own
-    // bound on top.
+    // bound (DomeOpSettleMaxPolls × DomeOpPollInterval ≈ 3min) on top, so the worst-case total before
+    // RunDomeOpAsync returns is ~8min — generous for a physical dome; cancellation (ct) cuts it short.
     private static readonly TimeSpan DomeOpHardTimeout = TimeSpan.FromMinutes(5);
 
     /// <summary>
