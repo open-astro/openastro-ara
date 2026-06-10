@@ -59,14 +59,16 @@ public sealed partial class StoreBackedProfileService : IProfileService, IDispos
     // objects are MVVM property bags with no thread-safety of their own — Apply must not run
     // twice into the same Profile concurrently.
     private readonly object _hydrateLock = new();
-    private bool _disposed;
+    private volatile bool _disposed;
 
     public StoreBackedProfileService(IProfileStore store, ILogger<StoreBackedProfileService>? logger = null) {
         ArgumentNullException.ThrowIfNull(store);
         _store = store;
         _logger = logger ?? NullLogger<StoreBackedProfileService>.Instance;
-        Hydrate();
+        // Subscribe BEFORE the initial hydration so a PUT that lands mid-construction can't be
+        // missed; _hydrateLock serializes its re-hydration against this one.
         _store.Changed += OnStoreChanged;
+        Hydrate();
     }
 
     public bool ProfileWasSpecifiedFromCommandLineArgs => false;
@@ -86,6 +88,9 @@ public sealed partial class StoreBackedProfileService : IProfileService, IDispos
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Store-changed event boundary: a hydration failure (e.g. an unparseable enum token in one section) must degrade to keeping the previous values and logging, never throw back into the REST PUT that triggered the event. CA1031's log-and-recover boundary applies.")]
     private void Hydrate() {
+        if (_disposed) {
+            return; // an in-flight Changed handler racing Dispose must not write to ActiveProfile
+        }
         try {
             lock (_hydrateLock) {
                 ProfileStoreMapper.Apply(_store, ActiveProfile);
@@ -133,6 +138,10 @@ public sealed partial class StoreBackedProfileService : IProfileService, IDispos
 /// </summary>
 internal static class ProfileStoreMapper {
 
+    // Each Get takes the store lock independently, so a PUT landing mid-pass can yield a briefly
+    // mixed snapshot (pre-PUT section A, post-PUT section B). Accepted: that PUT fires its own
+    // Changed, the follow-up hydration runs, and the steady state is always consistent — section
+    // values are independent, so no instruction can observe a torn single value.
     internal static void Apply(IProfileStore store, IProfile profile) {
         ApplySite(store.GetSiteSettings(), profile);
         ApplyPhd2(store.GetPhd2Settings(), profile);
