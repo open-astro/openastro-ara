@@ -13,6 +13,7 @@
 #endregion "copyright"
 
 using OpenAstroAra.Server.Contracts;
+using System;
 
 namespace OpenAstroAra.Server.Services;
 
@@ -26,6 +27,12 @@ namespace OpenAstroAra.Server.Services;
 /// </summary>
 public sealed class InMemoryProfileStore : IProfileStore {
     private readonly object _lock = new();
+
+    public event EventHandler? Changed;
+
+    // Raised OUTSIDE _lock (after the section swap) so a subscriber that reads back through the
+    // Get* methods can't deadlock against the store.
+    private void RaiseChanged() => Changed?.Invoke(this, EventArgs.Empty);
 
     private ImagingDefaultsDto _imagingDefaults = new(
         ExposureSeconds: 5,
@@ -55,6 +62,7 @@ public sealed class InMemoryProfileStore : IProfileStore {
 
     public void PutImagingDefaults(ImagingDefaultsDto value) {
         lock (_lock) { _imagingDefaults = value; }
+        RaiseChanged();
     }
 
     public StorageSettingsDto GetStorageSettings() {
@@ -63,6 +71,7 @@ public sealed class InMemoryProfileStore : IProfileStore {
 
     public void PutStorageSettings(StorageSettingsDto value) {
         lock (_lock) { _storage = value; }
+        RaiseChanged();
     }
 
     // Defaults match NotificationsSettings() — every trigger + channel on,
@@ -88,6 +97,7 @@ public sealed class InMemoryProfileStore : IProfileStore {
 
     public void PutNotificationsSettings(NotificationsSettingsDto value) {
         lock (_lock) { _notifications = value; }
+        RaiseChanged();
     }
 
     // Defaults match SiteSettings() constructor. Lat/lon default to 0,0
@@ -111,6 +121,7 @@ public sealed class InMemoryProfileStore : IProfileStore {
 
     public void PutSiteSettings(SiteSettingsDto value) {
         lock (_lock) { _site = value; }
+        RaiseChanged();
     }
 
     // Defaults match FilenamesSettings() — slash separator + RICE-compress
@@ -125,6 +136,7 @@ public sealed class InMemoryProfileStore : IProfileStore {
 
     public void PutFilenamesSettings(FilenamesSettingsDto value) {
         lock (_lock) { _filenames = value; }
+        RaiseChanged();
     }
 
     // Defaults match SafetyPolicies() constructor.
@@ -148,6 +160,7 @@ public sealed class InMemoryProfileStore : IProfileStore {
 
     public void PutSafetyPolicies(SafetyPoliciesDto value) {
         lock (_lock) { _safety = value; }
+        RaiseChanged();
     }
 
     // Defaults match AutofocusSettings() constructor.
@@ -171,6 +184,7 @@ public sealed class InMemoryProfileStore : IProfileStore {
 
     public void PutAutofocusSettings(AutofocusSettingsDto value) {
         lock (_lock) { _autofocus = value; }
+        RaiseChanged();
     }
 
     // Defaults match PlateSolveSettings() constructor.
@@ -193,6 +207,7 @@ public sealed class InMemoryProfileStore : IProfileStore {
 
     public void PutPlateSolveSettings(PlateSolveSettingsDto value) {
         lock (_lock) { _plateSolve = value; }
+        RaiseChanged();
     }
 
     // Default matches DiagnosticsModeNotifier's build() — notify_only is
@@ -205,6 +220,7 @@ public sealed class InMemoryProfileStore : IProfileStore {
 
     public void PutDiagnosticsMode(DiagnosticsModeDto value) {
         lock (_lock) { _diagnosticsMode = value; }
+        RaiseChanged();
     }
 
     // Defaults match Phd2Settings() constructor.
@@ -226,6 +242,7 @@ public sealed class InMemoryProfileStore : IProfileStore {
 
     public void PutPhd2Settings(Phd2SettingsDto value) {
         lock (_lock) { _phd2 = value; }
+        RaiseChanged();
     }
 
     // Defaults match EquipmentConnectionSettings() constructor: camera +
@@ -250,6 +267,7 @@ public sealed class InMemoryProfileStore : IProfileStore {
 
     public void PutEquipmentConnection(EquipmentConnectionDto value) {
         lock (_lock) { _equipmentConnection = value; }
+        RaiseChanged();
     }
 
     // §65.2 stretch defaults — auto_stf for Lights, calibration frames
@@ -267,5 +285,6 @@ public sealed class InMemoryProfileStore : IProfileStore {
 
     public void PutStretchDefaults(StretchDefaultsDto value) {
         lock (_lock) { _stretchDefaults = value; }
+        RaiseChanged();
     }
 }
