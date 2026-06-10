@@ -13,11 +13,13 @@
 #endregion "copyright"
 
 using Microsoft.Extensions.Logging;
+using OpenAstroAra.Core.Interfaces;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Equipment.Equipment.MyGuider.PHD2;
 using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Server.Contracts;
 using System;
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 using System.Threading.Tasks;
@@ -50,6 +52,11 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
     // stream, not through NINA's in-process IProgress reporter.
     private readonly IProgress<ApplicationStatus> _noProgress = new Progress<ApplicationStatus>();
 
+    // §63.2 RMS window: the most recent guide-step errors (raw pixels), bounded so the RMS reflects
+    // recent guiding rather than the whole session. Fed by the guider's GuideEvent stream.
+    private const int MaxGuideStepWindow = 200;
+    private readonly Queue<(double Ra, double Dec)> _guideSteps = new();
+
     private PHD2Guider? _guider;
     private EquipmentConnectionState _state = EquipmentConnectionState.Disconnected;
     private long _connectGeneration; // this attempt's id; later attempts/disconnects bump it to supersede
@@ -66,11 +73,12 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             if (_guider is null) {
                 return Task.FromResult<GuiderDto?>(null);
             }
+            var (rmsTotal, rmsRa, rmsDec) = ComputeRms(_guideSteps);
             var runtime = new GuiderStateDto(
                 State: MapGuidingState(_guider.State),
-                RmsTotal: null, // TODO(§63): accumulate from GuideEvent (guider-b)
-                RmsRa: null,
-                RmsDec: null,
+                RmsTotal: rmsTotal, // raw pixels over the recent guide-step window
+                RmsRa: rmsRa,
+                RmsDec: rmsDec,
                 CurrentProfile: _guider.SelectedProfile?.Name);
             return Task.FromResult<GuiderDto?>(new GuiderDto("PHD2_Single", "PHD2", _state, runtime));
         }
@@ -97,6 +105,8 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             // listener's finally when the link dies. Without this, _state would stay Connected
             // forever and RequireConnectedGuider would keep dispatching to a dead guider.
             guider.PHD2ConnectionLost += OnConnectionLost;
+            guider.GuideEvent += OnGuideStep;
+            _guideSteps.Clear(); // fresh session — drop the prior connection's RMS window
             _guider = guider;
             generation = ++_connectGeneration;
             SetStateLocked(EquipmentConnectionState.Connecting);
@@ -168,6 +178,38 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
         }
     }
 
+    // Append each guide step's raw RA/Dec error to the bounded RMS window. Guarded on the current
+    // guider so a torn-down stale instance's late event can't pollute a newer session's window.
+    private void OnGuideStep(object? sender, IGuideStep step) {
+        if (step is null) {
+            return;
+        }
+        lock (_gate) {
+            if (!ReferenceEquals(sender, _guider)) {
+                return;
+            }
+            _guideSteps.Enqueue((step.RADistanceRaw, step.DECDistanceRaw));
+            while (_guideSteps.Count > MaxGuideStepWindow) {
+                _guideSteps.Dequeue();
+            }
+        }
+    }
+
+    // RMS (root-mean-square) of the windowed guide errors, in raw pixels. Total is the combined
+    // RA/Dec magnitude RMS = sqrt(mean(ra^2 + dec^2)). Null when no steps have arrived yet.
+    internal static (double? Total, double? Ra, double? Dec) ComputeRms(IReadOnlyCollection<(double Ra, double Dec)> steps) {
+        if (steps.Count == 0) {
+            return (null, null, null);
+        }
+        double sumRa2 = 0, sumDec2 = 0;
+        foreach (var (ra, dec) in steps) {
+            sumRa2 += ra * ra;
+            sumDec2 += dec * dec;
+        }
+        var n = steps.Count;
+        return (Math.Sqrt((sumRa2 + sumDec2) / n), Math.Sqrt(sumRa2 / n), Math.Sqrt(sumDec2 / n));
+    }
+
     private PHD2Guider RequireConnectedGuider() {
         lock (_gate) {
             ObjectDisposedException.ThrowIf(_disposed, this);
@@ -199,6 +241,7 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
     private void DisposeGuiderLocked() {
         if (_guider is not null) {
             _guider.PHD2ConnectionLost -= OnConnectionLost;
+            _guider.GuideEvent -= OnGuideStep;
             _guider.Disconnect();
             _guider.Dispose();
             _guider = null;

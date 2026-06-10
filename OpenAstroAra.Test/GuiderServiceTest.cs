@@ -68,6 +68,24 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void ComputeRms_returns_null_for_empty_window() {
+            var (total, ra, dec) = GuiderService.ComputeRms(System.Array.Empty<(double, double)>());
+            Assert.That(total, Is.Null);
+            Assert.That(ra, Is.Null);
+            Assert.That(dec, Is.Null);
+        }
+
+        [Test]
+        public void ComputeRms_is_root_mean_square_over_the_window() {
+            // RA errors {3,-3} → rmsRa=3; Dec errors {4,-4} → rmsDec=4; total=sqrt((9+9+16+16)/2)=5.
+            var steps = new[] { (3.0, 4.0), (-3.0, -4.0) };
+            var (total, ra, dec) = GuiderService.ComputeRms(steps);
+            Assert.That(ra!.Value, Is.EqualTo(3.0).Within(1e-9));
+            Assert.That(dec!.Value, Is.EqualTo(4.0).Within(1e-9));
+            Assert.That(total!.Value, Is.EqualTo(5.0).Within(1e-9));
+        }
+
+        [Test]
         public void Ops_after_Dispose_throw_ObjectDisposed() {
             var svc = NewService();
             svc.Dispose();
