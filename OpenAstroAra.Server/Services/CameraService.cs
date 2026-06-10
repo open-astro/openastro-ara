@@ -255,7 +255,9 @@ public sealed partial class CameraService : ICameraService, IDisposable {
     }
 
     // Per-setting guarded writes: an unsupported optional setting (e.g. Gain on a gain-less driver)
-    // must not abort the capture; subframe defaults to full sensor when unspecified.
+    // must not abort the capture; subframe defaults to full sensor when unspecified. Subframe
+    // bounds are deliberately NOT pre-validated: an out-of-bounds subframe logs + falls back to the
+    // driver's current framing (per-setting-guarded strategy) rather than failing the capture.
     private void ApplyExposureSettings(AlpacaCamera client, ExposureRequestDto request) {
         TrySet(() => client.BinX = (short)request.BinX, "BinX");
         TrySet(() => client.BinY = (short)request.BinY, "BinY");
@@ -321,21 +323,40 @@ public sealed partial class CameraService : ICameraService, IDisposable {
     /// direct sim-free unit testing.
     /// </summary>
     internal static (ushort[] Pixels, int Width, int Height) ConvertImageArray(object? imageArray) {
-        if (imageArray is not int[,] plane) {
-            throw new InvalidOperationException(imageArray is int[,,]
-                ? "color (3-axis) ImageArray is not supported by the v1 capture path"
-                : $"unsupported ImageArray payload: {imageArray?.GetType().Name ?? "null"}");
-        }
-        var width = plane.GetLength(0);
-        var height = plane.GetLength(1);
-        var pixels = new ushort[width * height];
-        for (var y = 0; y < height; y++) {
-            var row = y * width;
-            for (var x = 0; x < width; x++) {
-                pixels[row + x] = (ushort)Math.Clamp(plane[x, y], ushort.MinValue, ushort.MaxValue);
+        // The Alpaca spec mandates int for grayscale, but ASCOM-bridged drivers (legacy ZWO/QHY
+        // bridges) are known to return double[,] — handle both; anything else (incl. 3-axis color,
+        // unsupported in v1) fails with the actual payload type in the message so the capture-failed
+        // log is diagnosable.
+        switch (imageArray) {
+            case int[,] ints: {
+                var width = ints.GetLength(0);
+                var height = ints.GetLength(1);
+                var pixels = new ushort[width * height];
+                for (var y = 0; y < height; y++) {
+                    var row = y * width;
+                    for (var x = 0; x < width; x++) {
+                        pixels[row + x] = (ushort)Math.Clamp(ints[x, y], ushort.MinValue, ushort.MaxValue);
+                    }
+                }
+                return (pixels, width, height);
             }
+            case double[,] doubles: {
+                var width = doubles.GetLength(0);
+                var height = doubles.GetLength(1);
+                var pixels = new ushort[width * height];
+                for (var y = 0; y < height; y++) {
+                    var row = y * width;
+                    for (var x = 0; x < width; x++) {
+                        pixels[row + x] = (ushort)Math.Clamp((long)Math.Round(doubles[x, y]), ushort.MinValue, ushort.MaxValue);
+                    }
+                }
+                return (pixels, width, height);
+            }
+            default:
+                throw new InvalidOperationException(imageArray is Array { Rank: 3 }
+                    ? "color (3-axis) ImageArray is not supported by the v1 capture path"
+                    : $"unsupported ImageArray payload: {imageArray?.GetType().Name ?? "null"}");
         }
-        return (pixels, width, height);
     }
 
     private string WriteFits(Guid frameId, ushort[] pixels, int width, int height, ExposureRequestDto request, DateTimeOffset capturedAt) {
@@ -388,7 +409,10 @@ public sealed partial class CameraService : ICameraService, IDisposable {
     private async Task RegisterFrameAsync(Guid frameId, ExposureRequestDto request, DateTimeOffset capturedAt, string filePath, int width, int height) {
         var sessionId = await _frames!.EnsureManualCaptureSessionAsync(CancellationToken.None).ConfigureAwait(false);
         var fileSize = new FileInfo(filePath).Length;
-        var ccdTemp = _runtime.CcdTemperature ?? 0.0;
+        double ccdTemp;
+        lock (_gate) {
+            ccdTemp = _runtime.CcdTemperature ?? 0.0; // _runtime is written under _gate; read it there too
+        }
         await _frames.InsertAsync(new FrameDto(
             Id: frameId,
             SessionId: sessionId,

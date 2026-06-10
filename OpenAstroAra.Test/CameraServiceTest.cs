@@ -99,6 +99,20 @@ namespace OpenAstroAra.Test {
 
         [Test]
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1814:Prefer jagged arrays over multidimensional",
+            Justification = "The API under test consumes ASCOM's ImageArray, which IS a multidimensional array by spec.")]
+        public void ConvertImageArray_handles_double_payloads_from_bridged_drivers() {
+            var arr = new double[2, 2];
+            arr[0, 0] = 10.4; arr[1, 0] = 20.6;
+            arr[0, 1] = -3.0; arr[1, 1] = 99999.0;
+
+            var (pixels, width, height) = CameraService.ConvertImageArray(arr);
+
+            Assert.That((width, height), Is.EqualTo((2, 2)));
+            Assert.That(pixels, Is.EqualTo(new ushort[] { 10, 21, 0, 65535 }));
+        }
+
+        [Test]
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1814:Prefer jagged arrays over multidimensional",
             Justification = "The API under test consumes ASCOM's ImageArray, which IS a multidimensional array by spec (3-axis = color).")]
         public void ConvertImageArray_rejects_color_and_unknown_payloads() {
             Assert.Throws<InvalidOperationException>(() => CameraService.ConvertImageArray(new int[2, 2, 3]));
