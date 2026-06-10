@@ -50,7 +50,9 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
     private DiscoveredDeviceDto? _device;
     private EquipmentConnectionState _state = EquipmentConnectionState.Disconnected;
     private DateTimeOffset _lastTransition = DateTimeOffset.UtcNow;
-    private IReadOnlyList<SwitchPortDto> _cachedPorts = Array.Empty<SwitchPortDto>();
+    // Full per-port snapshot (superset of the REST SwitchPortDto: + Description/StepSize, which the
+    // ISwitchMediator surface needs for SetSwitchValue.Validate). GetAsync projects the DTO view.
+    private IReadOnlyList<SwitchPortSnapshot> _cachedSnapshots = Array.Empty<SwitchPortSnapshot>();
     private int _refreshing;
     private long _connectGeneration;
     private bool _disposed;
@@ -69,7 +71,9 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
                 return Task.FromResult<SwitchDto?>(null);
             }
             var state = _state;
-            var ports = state == EquipmentConnectionState.Connected ? _cachedPorts : Array.Empty<SwitchPortDto>();
+            IReadOnlyList<SwitchPortDto> ports = state == EquipmentConnectionState.Connected
+                ? ProjectPorts(_cachedSnapshots)
+                : Array.Empty<SwitchPortDto>();
             return Task.FromResult<SwitchDto?>(new SwitchDto(_device.UniqueId, _device.Name, state, ports));
         }
     }
@@ -156,7 +160,7 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
             var ports = ReadPorts(client);
             lock (_gate) {
                 if (_state == EquipmentConnectionState.Connected && ReferenceEquals(_client, client)) {
-                    _cachedPorts = ports;
+                    _cachedSnapshots = ports;
                 }
             }
         } catch (Exception ex) {
@@ -170,27 +174,47 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
     // than failing the whole snapshot.
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Per-port read boundary: a switch port read can throw driver/HTTP exceptions; that port is skipped, never propagated. CA1031's log-and-recover boundary applies.")]
-    private IReadOnlyList<SwitchPortDto> ReadPorts(AlpacaSwitch c) {
+    private IReadOnlyList<SwitchPortSnapshot> ReadPorts(AlpacaSwitch c) {
         short max;
         try {
             max = c.MaxSwitch;
         } catch (Exception ex) {
             LogPortReadFailed(ex);
-            return Array.Empty<SwitchPortDto>();
+            return Array.Empty<SwitchPortSnapshot>();
         }
-        var ports = new List<SwitchPortDto>(max);
+        var ports = new List<SwitchPortSnapshot>(max);
         for (short i = 0; i < max; i++) {
             try {
-                ports.Add(new SwitchPortDto(
+                ports.Add(new SwitchPortSnapshot(
                     Id: i,
                     Name: c.GetSwitchName(i),
+                    Description: ReadDescription(c, i),
                     Value: c.GetSwitchValue(i),
                     Min: c.MinSwitchValue(i),
                     Max: c.MaxSwitchValue(i),
+                    StepSize: c.SwitchStep(i),
                     CanWrite: c.CanWrite(i)));
             } catch (Exception ex) {
                 LogPortUnavailable(i, ex);
             }
+        }
+        return ports;
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Per-field read boundary: the description is cosmetic — a driver that throws from GetSwitchDescription must not knock the whole port out of the snapshot the way a failed value/range read does. CA1031's log-and-recover boundary applies.")]
+    private static string ReadDescription(AlpacaSwitch c, short id) {
+        try {
+            return c.GetSwitchDescription(id) ?? string.Empty;
+        } catch (Exception) {
+            return string.Empty;
+        }
+    }
+
+    private static List<SwitchPortDto> ProjectPorts(IReadOnlyList<SwitchPortSnapshot> snapshots) {
+        var ports = new List<SwitchPortDto>(snapshots.Count);
+        foreach (var s in snapshots) {
+            ports.Add(new SwitchPortDto(s.Id, s.Name, s.Value, s.Min, s.Max, s.CanWrite));
         }
         return ports;
     }
@@ -215,7 +239,7 @@ public sealed partial class SwitchService : ISwitchService, IDisposable {
             lock (_gate) {
                 if (!_disposed && _connectGeneration == generation) {
                     _client = client;
-                    _cachedPorts = Array.Empty<SwitchPortDto>(); // don't serve a prior device's ports
+                    _cachedSnapshots = Array.Empty<SwitchPortSnapshot>(); // don't serve a prior device's ports
                     SetState(EquipmentConnectionState.Connected);
                     adopted = true;
                 }
