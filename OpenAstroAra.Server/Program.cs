@@ -191,9 +191,12 @@ public partial class Program {
         // below; this replaces the HeadlessDomeMediator stub).
         builder.Services.AddSingleton<DomeService>();
         builder.Services.AddSingleton<IDomeService>(sp => sp.GetRequiredService<DomeService>());
-        // §14e — third real device service (first with a control action: SetValue). REST-only;
-        // the ISwitchMediator unification (SetSwitchValue sequence instruction) is a follow-up.
-        builder.Services.AddSingleton<ISwitchService, SwitchService>();
+        // §14e — third real device service (first with a control action: SetValue). One singleton
+        // backs BOTH the REST ISwitchService and the Sequencer's ISwitchMediator (§8.1), so the
+        // SetSwitchValue instruction drives the live device (mediator wiring is below; this replaces
+        // the HeadlessSwitchMediator stub).
+        builder.Services.AddSingleton<SwitchService>();
+        builder.Services.AddSingleton<ISwitchService>(sp => sp.GetRequiredService<SwitchService>());
         // §14e — second real device service: live weather sensors over REST (read-only, §32.4
         // cached). REST-only — no sequence instruction consumes the weather mediator's data, so
         // IWeatherDataMediator stays the headless stub.
@@ -360,8 +363,11 @@ public partial class Program {
         // so MoveRotatorMechanical drives the live Alpaca rotator.
         builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.IRotatorMediator>(
             sp => sp.GetRequiredService<RotatorService>());
-        builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.ISwitchMediator,
-            OpenAstroAra.Server.Services.Equipment.HeadlessSwitchMediator>();
+        // §14e — the real SwitchService backs ISwitchMediator too (replaces HeadlessSwitchMediator),
+        // so SetSwitchValue drives the live Alpaca switch hub (writable ports surfaced as
+        // IWritableSwitch wrappers with real min/max/step for Validate).
+        builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.ISwitchMediator>(
+            sp => sp.GetRequiredService<SwitchService>());
         // §14e — the real DomeService backs IDomeMediator too (replaces HeadlessDomeMediator), so the
         // Open/Close shutter, Park, FindHome and SlewAzimuth instructions drive the live Alpaca dome.
         builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.IDomeMediator>(

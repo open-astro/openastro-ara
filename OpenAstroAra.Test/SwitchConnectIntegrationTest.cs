@@ -13,6 +13,7 @@
 #endregion "copyright"
 
 using NUnit.Framework;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
 using System;
@@ -20,6 +21,7 @@ using System.Linq;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
+using DeviceType = OpenAstroAra.Server.Contracts.DeviceType;
 
 namespace OpenAstroAra.Test {
 
@@ -83,6 +85,65 @@ namespace OpenAstroAra.Test {
             }
 
             await svc.DisconnectAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+            var disconnected = await PollUntilAsync(svc, s => s == EquipmentConnectionState.Disconnected).ConfigureAwait(false);
+            Assert.That(disconnected!.State, Is.EqualTo(EquipmentConnectionState.Disconnected));
+        }
+
+        /// <summary>
+        /// §14e — the same <see cref="SwitchService"/> also serves <see cref="ISwitchMediator"/>: the
+        /// <c>SetSwitchValue</c> instruction reads <c>GetInfo()</c> (Validate → writable switches with
+        /// real min/max/step) and calls <c>SetSwitchValue(collectionIndex, value)</c> (Execute). This
+        /// exercises the live mediator surface end-to-end, including the collection-index→port-id
+        /// mapping.
+        /// </summary>
+        [Test]
+        public async Task Mediator_GetInfo_and_SetSwitchValue_drive_the_live_device() {
+            var device = await DiscoverAsync().ConfigureAwait(false);
+            Assert.That(device, Is.Not.Null, "no Switch device discovered from the running OmniSim");
+
+            using var svc = new SwitchService();
+            await svc.ConnectAsync(new ConnectRequestDto(device!), idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+            var connected = await PollUntilAsync(svc, s => s != EquipmentConnectionState.Connecting).ConfigureAwait(false);
+            Assert.That(connected!.State, Is.EqualTo(EquipmentConnectionState.Connected));
+            Assert.That(connected.Ports, Is.Not.Empty);
+
+            try {
+                var info = ((ISwitchMediator)svc).GetInfo();
+                Assert.That(info.Connected, Is.True);
+                Assert.That(info.WritableSwitches, Is.Not.Null);
+                Assert.That(info.WritableSwitches, Is.Not.Empty,
+                    "the simulated Switch should expose writable ports for SetSwitchValue.Validate");
+
+                // Pick a writable switch with a real range, like the instruction's Validate would.
+                var index = -1;
+                for (var i = 0; i < info.WritableSwitches!.Count; i++) {
+                    if (info.WritableSwitches[i].Maximum > info.WritableSwitches[i].Minimum) {
+                        index = i;
+                        break;
+                    }
+                }
+                if (index < 0) {
+                    Assert.Warn("no writable port with a usable range on the simulated Switch — mediator write not exercised");
+                    return;
+                }
+
+                var target = info.WritableSwitches[index];
+                var newValue = Math.Abs(target.Value - target.Maximum) < double.Epsilon ? target.Minimum : target.Maximum;
+                await ((ISwitchMediator)svc).SetSwitchValue((short)index, newValue, progress: null!, CancellationToken.None).ConfigureAwait(false);
+
+                // The wrapper's Value reads the live §32.4 cache, so the same stored reference must
+                // converge on the written value as the refresh ticks.
+                var reflected = false;
+                for (var i = 0; i < 40 && !reflected; i++) {
+                    reflected = Math.Abs(target.Value - newValue) < 1e-6;
+                    if (!reflected) {
+                        await Task.Delay(TimeSpan.FromMilliseconds(200)).ConfigureAwait(false);
+                    }
+                }
+                Assert.That(reflected, Is.True, "the mediator write should be reflected by the live wrapper Value");
+            } finally {
+                await svc.DisconnectAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+            }
             var disconnected = await PollUntilAsync(svc, s => s == EquipmentConnectionState.Disconnected).ConfigureAwait(false);
             Assert.That(disconnected!.State, Is.EqualTo(EquipmentConnectionState.Disconnected));
         }
