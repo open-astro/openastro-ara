@@ -93,7 +93,9 @@ public sealed record ExposureRequestDto(
     int BinX = 1, int BinY = 1,
     int? OffsetX = null, int? OffsetY = null,
     int? Width = null, int? Height = null,
-    string? FilterName = null);
+    string? FilterName = null,
+    // Electronic (pedestal) offset — distinct from the OffsetX/Y subframe position.
+    int? CameraOffset = null);
 
 public sealed record ExposureResponseDto(
     string FrameId,

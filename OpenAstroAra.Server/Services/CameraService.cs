@@ -322,6 +322,9 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         if (request.Gain is int gain) {
             TrySet(() => client.Gain = (short)gain, "Gain");
         }
+        if (request.CameraOffset is int cameraOffset) {
+            TrySet(() => client.Offset = cameraOffset, "Offset");
+        }
         TrySet(() => {
             var maxX = client.CameraXSize / request.BinX;
             var maxY = client.CameraYSize / request.BinY;
@@ -433,12 +436,16 @@ public sealed partial class CameraService : ICameraService, IDisposable {
     private static ExposureRequestDto ReadAppliedSettings(AlpacaCamera client, ExposureRequestDto request) {
         int binX = request.BinX, binY = request.BinY;
         var gain = request.Gain;
+        var cameraOffset = request.CameraOffset;
         try { binX = client.BinX; } catch (Exception) { }
         try { binY = client.BinY; } catch (Exception) { }
         if (gain is not null) {
             try { gain = client.Gain; } catch (Exception) { }
         }
-        return request with { BinX = binX, BinY = binY, Gain = gain };
+        if (cameraOffset is not null) {
+            try { cameraOffset = client.Offset; } catch (Exception) { }
+        }
+        return request with { BinX = binX, BinY = binY, Gain = gain, CameraOffset = cameraOffset };
     }
 
     private string WriteFits(Guid frameId, ushort[] pixels, int width, int height, ExposureRequestDto request, string imageType, DateTimeOffset capturedAt) {
@@ -451,6 +458,9 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         fits.SetHeader("EXPTIME", request.ExposureSec, "exposure seconds");
         if (request.Gain is int gain) {
             fits.SetHeader("GAIN", gain, "camera gain");
+        }
+        if (request.CameraOffset is int fitsOffset) {
+            fits.SetHeader("OFFSET", fitsOffset, "camera offset (pedestal)");
         }
         fits.SetHeader("XBINNING", request.BinX, "binning X");
         fits.SetHeader("YBINNING", request.BinY, "binning Y");
@@ -506,7 +516,7 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             // the column+DTO to double is tracked in PORT_TODO (wire-shape change for WILMA).
             ExposureSeconds: Math.Max(1, (int)Math.Round(request.ExposureSec)),
             Gain: request.Gain ?? -1,
-            Offset: null,
+            Offset: request.CameraOffset,
             TemperatureC: ccdTemp,
             CapturedUtc: capturedAt,
             FilePath: filePath,

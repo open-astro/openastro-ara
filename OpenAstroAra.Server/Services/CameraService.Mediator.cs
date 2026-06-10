@@ -99,7 +99,8 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
             Gain: sequence.Gain < 0 ? null : sequence.Gain, // NINA convention: -1 = camera default
             BinX: Math.Max(1, (int)(sequence.Binning?.X ?? 1)),
             BinY: Math.Max(1, (int)(sequence.Binning?.Y ?? 1)),
-            FilterName: sequence.FilterType?.Name);
+            FilterName: sequence.FilterType?.Name,
+            CameraOffset: sequence.Offset < 0 ? null : sequence.Offset); // same -1 convention as Gain
         var imageType = string.IsNullOrWhiteSpace(sequence.ImageType) ? ImageTypes.LIGHT : sequence.ImageType;
         var effectiveTarget = string.IsNullOrWhiteSpace(targetName) ? "Sequence capture" : targetName;
 
