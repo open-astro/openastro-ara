@@ -45,12 +45,24 @@ using ASCOM.Common.Helpers;
 // TODO(§63): replace with proper per-site annotations once the live PHD2 path is exercised.
 #nullable disable warnings
 
+// CA1031: the JSON-RPC listener + connection/command methods catch-and-log broadly on purpose — a
+// socket/parse/PHD2-protocol fault must never crash the background listener, and narrowing risks
+// missing an exception type and tearing down guiding. This mirrors NINA's original handling; the
+// top-level boundaries log and recover. TODO(§63): revisit per-method narrowing if the live path
+// surfaces specific recoverable types.
+#pragma warning disable CA1031 // Do not catch general exception types
+
 namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
 
-    public partial class PHD2Guider : BaseINPC, IGuider {
+    public sealed partial class PHD2Guider : BaseINPC, IGuider, IDisposable {
 
         public PHD2Guider(IProfileService profileService) {
             this.profileService = profileService;
+        }
+
+        public void Dispose() {
+            _clientCTS?.Dispose();
+            GC.SuppressFinalize(this);
         }
 
         private readonly IProfileService profileService;
@@ -581,7 +593,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                         }
                         return true;
                     }
-                    try { cancelOnTimeoutOrParent?.Cancel(); } catch { }
+                    try { await cancelOnTimeoutOrParent.CancelAsync(); } catch { }
                 }
                 retries += 1;
 
@@ -729,7 +741,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             }
         }
 
-        public async Task<bool> StopGuiding(CancellationToken token) {
+        public async Task<bool> StopGuiding(CancellationToken ct) {
             if (!Connected) {
                 return false;
             }
@@ -739,7 +751,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                     Logger.Info($"Phd2 - Stop Guiding skipped, as the app is already in state {state}");
                     return false;
                 }
-                return await StopCapture(token);
+                return await StopCapture(ct);
             } catch (IOException ee) // communication error with phd2
               {
                 Logger.Error(ee);
@@ -859,7 +871,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 Logger.Error("Phd2 error while sending messge", ex);
             }
 
-            var genericError = (T)Activator.CreateInstance(typeof(T));
+            var genericError = Activator.CreateInstance<T>();
             genericError.id = msg.Id.ToString();
             genericError.error = new PhdError() { code = -1, message = "Unable to get response from phd2" };
             return genericError;
@@ -1117,14 +1129,14 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                     throw new FileNotFoundException();
                 }
 
-                var process = new Process {
+                using var process = new Process {
                     StartInfo = {
                         FileName = profileService.ActiveProfile.GuiderSettings.PHD2Path,
                         Arguments = $"-i={profileService.ActiveProfile.GuiderSettings.PHD2InstanceNumber}"
                     }
-                    };
-                process?.Start();
-                process?.WaitForInputIdle();
+                };
+                process.Start();
+                process.WaitForInputIdle();
 
                 await Task.Delay(2000);
 
@@ -1176,8 +1188,8 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                     var message = string.Empty;
                     while (s.DataAvailable) {
                         byte[] response = new byte[1024];
-                        await s.ReadAsync(response, _clientCTS.Token);
-                        message += Encoding.ASCII.GetString(response);
+                        var bytesRead = await s.ReadAsync(response, _clientCTS.Token);
+                        message += Encoding.ASCII.GetString(response, 0, bytesRead);
                     }
 
                     var lines = message.Split(new[] { Environment.NewLine }, StringSplitOptions.None);
