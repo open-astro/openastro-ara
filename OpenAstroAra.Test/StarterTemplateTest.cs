@@ -14,6 +14,7 @@
 
 using NUnit.Framework;
 using OpenAstroAra.Sequencer.Container;
+using OpenAstroAra.Sequencer.SequenceItem.FilterWheel;
 using OpenAstroAra.Server.Services;
 using System.Collections.Generic;
 using System.IO;
@@ -76,14 +77,11 @@ namespace OpenAstroAra.Test {
                 // No REGISTERED instruction may silently degrade: anything Unknown must be one of
                 // the deliberate NINA-verbatim capture nodes (TakeExposure — not ported yet; they
                 // activate via the §38k-6 remap the day the capture path lands).
-                var unknowns = container.GetItemsSnapshot()
+                var items = container.GetItemsSnapshot();
+                var unknowns = items
                     .Where(i => i.GetType().Name.StartsWith("Unknown", System.StringComparison.Ordinal))
                     .ToList();
-                foreach (var item in container.GetItemsSnapshot()) {
-                    TestContext.Out.WriteLine($"{dto.Name}: {item.GetType().Name}");
-                }
-                Assert.That(container.GetItemsSnapshot().Count, Is.GreaterThan(0));
-                Assert.That(unknowns.Count, Is.LessThan(container.GetItemsSnapshot().Count),
+                Assert.That(unknowns, Has.Count.LessThan(items.Count),
                     $"{dto.Name}: every top-level item degraded to Unknown — the template schema has drifted");
             }
         }
@@ -102,7 +100,7 @@ namespace OpenAstroAra.Test {
             foreach (var block in blocks) {
                 Assert.That(block.GetConditionsSnapshot(), Has.Count.EqualTo(1),
                     $"{block.Name}: per-filter loop condition missing");
-                Assert.That(block.GetItemsSnapshot().Any(i => i.GetType().Name == "SwitchFilter"),
+                Assert.That(block.GetItemsSnapshot().Any(i => i is SwitchFilter),
                     Is.True, $"{block.Name}: SwitchFilter did not resolve to its real type");
             }
         }

@@ -80,9 +80,15 @@ public sealed partial class PlaceholderSequenceTemplateService : ISequenceTempla
             foreach (var shipped in Directory.EnumerateFiles(shippedDir, "*.json")) {
                 var name = Path.GetFileName(shipped);
                 var target = Path.Combine(_templatesDir, name);
-                if (!File.Exists(target)) {
+                if (File.Exists(target)) {
+                    continue;
+                }
+                try {
                     File.Copy(shipped, target);
                     LogTemplateSeeded(name);
+                } catch (IOException) when (File.Exists(target)) {
+                    // Exists-check + copy isn't atomic: a second daemon instance won the race and
+                    // the template IS seeded — not a failure, no warning.
                 }
             }
         } catch (Exception ex) {
