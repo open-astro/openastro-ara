@@ -1,0 +1,80 @@
+#region "copyright"
+
+/*
+    Copyright (c) 2026 Open Astro and the OpenAstro Ara contributors
+
+    This file is part of OpenAstro Ara (forked from N.I.N.A.).
+
+    This Source Code Form is subject to the terms of the Mozilla Public
+    License, v. 2.0. If a copy of the MPL was not distributed with this
+    file, You can obtain one at http://mozilla.org/MPL/2.0/.
+*/
+
+#endregion "copyright"
+
+using Microsoft.Extensions.Logging.Abstractions;
+using NUnit.Framework;
+using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Services;
+using System;
+using System.Threading;
+
+namespace OpenAstroAra.Test {
+
+    /// <summary>
+    /// Sim-free coverage for the §63 guider-a <see cref="GuiderService"/>: the not-connected and
+    /// post-dispose contracts that don't need a live PHD2 server. The live connect→guide→disconnect
+    /// path is exercised by an integration test against a real openastro-phd2 instance.
+    /// </summary>
+    [TestFixture]
+    public class GuiderServiceTest {
+
+        private static GuiderService NewService() =>
+            new(new HeadlessProfileService(), NullLogger<GuiderService>.Instance);
+
+        [Test]
+        public async System.Threading.Tasks.Task GetAsync_returns_null_before_connect() {
+            using var svc = NewService();
+            Assert.That(await svc.GetAsync(CancellationToken.None), Is.Null);
+        }
+
+        [Test]
+        public void StartGuidingAsync_when_not_connected_throws_InvalidOperation() {
+            using var svc = NewService();
+            Assert.Throws<InvalidOperationException>(
+                () => { _ = svc.StartGuidingAsync(null, CancellationToken.None); });
+        }
+
+        [Test]
+        public void StopGuidingAsync_when_not_connected_throws_InvalidOperation() {
+            using var svc = NewService();
+            Assert.Throws<InvalidOperationException>(
+                () => { _ = svc.StopGuidingAsync(null, CancellationToken.None); });
+        }
+
+        [Test]
+        public void DitherAsync_when_not_connected_throws_InvalidOperation() {
+            using var svc = NewService();
+            Assert.Throws<InvalidOperationException>(
+                () => { _ = svc.DitherAsync(3.0, null, CancellationToken.None); });
+        }
+
+        [Test]
+        public async System.Threading.Tasks.Task DisconnectAsync_is_an_accepted_no_op_when_not_connected() {
+            using var svc = NewService();
+            var accepted = await svc.DisconnectAsync("idem-1", CancellationToken.None);
+            Assert.That(accepted.OperationType, Is.EqualTo("guider.disconnect"));
+            Assert.That(accepted.IdempotencyKey, Is.EqualTo("idem-1"));
+        }
+
+        [Test]
+        public void Ops_after_Dispose_throw_ObjectDisposed() {
+            var svc = NewService();
+            svc.Dispose();
+            Assert.Throws<ObjectDisposedException>(
+                () => { _ = svc.GetAsync(CancellationToken.None); });
+            Assert.Throws<ObjectDisposedException>(
+                () => { _ = svc.ConnectAsync(new GuiderConnectRequestDto(), null, CancellationToken.None); });
+        }
+    }
+}
