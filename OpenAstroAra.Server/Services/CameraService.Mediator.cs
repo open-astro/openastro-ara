@@ -139,7 +139,7 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
 
     // NINA ImageTypes → §28 catalog FrameType. SNAPSHOT counts as a light; DARKFLAT (used by some
     // NINA flows) lands as Dark, matching the FITS IMAGETYP it carries.
-    internal static FrameType MapFrameType(string imageType) => imageType?.ToUpperInvariant() switch {
+    internal static FrameType MapFrameType(string? imageType) => imageType?.ToUpperInvariant() switch {
         "FLAT" => FrameType.Flat,
         "DARK" or "DARKFLAT" => FrameType.Dark,
         "BIAS" => FrameType.Bias,
