@@ -55,6 +55,12 @@ public sealed partial class FilterWheelService : IFilterWheelMediator {
     // Wall-clock ceiling for the blocking ASCOM Position write (the rotation itself is tracked by
     // the settle-wait): a hung HTTP call must not pin the sequence thread.
     private static readonly TimeSpan FilterChangeHardTimeout = TimeSpan.FromMinutes(1);
+    // Guards every access to the active profile's FilterWheelFilters collection within the daemon:
+    // ObservableCollection is not safe for concurrent read+write, the import-on-connect mutates it
+    // on the refresh thread, and GetInfo/ChangeFilter iterate it on the sequence thread. Deliberately
+    // separate from _gate (the import must not run inside _gate — observable-callback re-entry) and
+    // never nested inside it (readers snapshot under this lock BEFORE taking _gate).
+    private readonly object _profileFiltersLock = new();
 
     /// <summary>
     /// Synchronous live snapshot for the Sequencer, served from the §32.4 cache (no blocking HTTP on
@@ -64,6 +70,7 @@ public sealed partial class FilterWheelService : IFilterWheelMediator {
     /// names), mirroring how NINA surfaces the current filter.
     /// </summary>
     public FilterWheelInfo GetInfo() {
+        var profileSnapshot = SnapshotProfileFilters();
         lock (_gate) {
             var connected = !_disposed && _state == EquipmentConnectionState.Connected && _client is not null;
             var runtime = _runtime;
@@ -75,7 +82,7 @@ public sealed partial class FilterWheelService : IFilterWheelMediator {
                 IsMoving = connected && runtime.State == "moving",
             };
             if (connected && runtime.CurrentSlot is int position) {
-                var resolved = ResolveFilter(ProfileFilters(), slots, position);
+                var resolved = ResolveFilter(profileSnapshot, slots, position);
                 if (resolved is not null) {
                     info.SelectedFilter = resolved;
                 }
@@ -90,6 +97,8 @@ public sealed partial class FilterWheelService : IFilterWheelMediator {
     /// filter actually reached (profile/slot-resolved), or <paramref name="inputFilter"/> unchanged
     /// when the change could not be confirmed — not-connected and out-of-range resolve to a logged
     /// no-op (the instruction's Validate has already blocked those; a race degrades gracefully).
+    /// An unconfirmed change is safe to retry: re-issuing the same target against a wheel that did
+    /// reach it (e.g. the write outlived the hard timeout but landed) settles immediately.
     /// Genuine sequencer cancellation propagates.
     /// </summary>
     public async Task<FilterInfo> ChangeFilter(FilterInfo inputFilter, IProgress<ApplicationStatus>? progress = null, CancellationToken token = default) {
@@ -109,8 +118,19 @@ public sealed partial class FilterWheelService : IFilterWheelMediator {
         if (!reached) {
             return inputFilter;
         }
+        var profileSnapshot = SnapshotProfileFilters();
         lock (_gate) {
-            return ResolveFilter(ProfileFilters(), _slots, target) ?? inputFilter;
+            return ResolveFilter(profileSnapshot, _slots, target) ?? inputFilter;
+        }
+    }
+
+    // Copy-on-read under _profileFiltersLock so iteration can never observe a concurrent import
+    // mutating the observable collection. The only in-daemon writer is ImportProfileFilters (same
+    // lock); the snapshot is tiny (filter count).
+    private List<FilterInfo>? SnapshotProfileFilters() {
+        lock (_profileFiltersLock) {
+            var filters = ProfileFilters();
+            return filters is null ? null : new List<FilterInfo>(filters);
         }
     }
 
@@ -143,9 +163,10 @@ public sealed partial class FilterWheelService : IFilterWheelMediator {
     }
 
     // Polls the device directly until it reports the target position (ASCOM: -1 while rotating),
-    // refreshing the §32.4 cache each tick so GetInfo stays current. Delay-before-check gives the
-    // driver one poll interval to leave the old position before the first read. False on timeout /
-    // a dropped-or-superseded connection.
+    // folding each polled value straight into the §32.4 runtime cache so GetInfo stays current
+    // WITHOUT a second Position read per tick (one network call per poll). Delay-before-check gives
+    // the driver one poll interval to leave the old position before the first read. False on
+    // timeout / a dropped-or-superseded connection.
     private async Task<bool> WaitForPositionAsync(AlpacaFilterWheel client, short target, CancellationToken ct) {
         var loggedReadFailure = false;
         for (var i = 0; i < FilterChangeSettleMaxPolls; i++) {
@@ -159,11 +180,20 @@ public sealed partial class FilterWheelService : IFilterWheelMediator {
                 return false; // disconnected / superseded — the change can't be confirmed
             }
             var position = ReadPositionSafe(client);
-            if (position is null && !loggedReadFailure) {
-                LogPositionPollFailed();
-                loggedReadFailure = true;
+            if (position is null) {
+                if (!loggedReadFailure) {
+                    LogPositionPollFailed();
+                    loggedReadFailure = true;
+                }
+                continue; // failed read: keep the prior cached runtime, poll again
             }
-            RefreshCacheOnce();
+            lock (_gate) {
+                if (_state == EquipmentConnectionState.Connected && ReferenceEquals(_client, client)) {
+                    _runtime = position < 0
+                        ? new FilterWheelStateDto("moving", null)
+                        : new FilterWheelStateDto("idle", position);
+                }
+            }
             if (position == target) {
                 return true;
             }
@@ -217,7 +247,9 @@ public sealed partial class FilterWheelService : IFilterWheelMediator {
         if (filters is null) {
             return; // REST-only construction (unit tests): no profile to import into
         }
-        SyncProfileFilters(filters, slots);
+        lock (_profileFiltersLock) {
+            SyncProfileFilters(filters, slots);
+        }
         LogProfileFiltersImported(slots.Count);
     }
 
