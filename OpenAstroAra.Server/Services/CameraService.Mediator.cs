@@ -52,6 +52,13 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
     // in-flight gate before each re-check; captures are seconds-to-minutes, so 100ms is plenty fine.
     private static readonly TimeSpan CaptureGatePollInterval = TimeSpan.FromMilliseconds(100);
 
+    // Upper bound on the gate wait. A legitimate in-flight capture self-bounds to its exposure +
+    // ImageReadyMargin, so the only way the gate stays held past a generous ceiling is a leaked
+    // flag (e.g. a faulted background task). Surfacing a clear TimeoutException beats blocking the
+    // whole sequence run until the run token is cancelled. 20 min clears the longest DSO exposure
+    // (§18.J caps the workflow at 900s) plus download + margin with room to spare.
+    private static readonly TimeSpan CaptureGateMaxWait = TimeSpan.FromMinutes(20);
+
     /// <summary>
     /// Synchronous live snapshot for the Sequencer from the §32.4 cache (never throws after
     /// Dispose). Populates what the instructions consume: <c>Connected</c> (TakeExposure/cooling
@@ -106,8 +113,13 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
 
         // Acquire the shared in-flight gate (REST rejects when busy; the sequencer WAITS — a
         // sequence capture must queue behind a manual snapshot, not abort the run).
+        var gateDeadline = DateTimeOffset.UtcNow + CaptureGateMaxWait;
         while (Interlocked.CompareExchange(ref _captureInFlight, 1, 0) != 0) {
             token.ThrowIfCancellationRequested();
+            if (DateTimeOffset.UtcNow >= gateDeadline) {
+                throw new TimeoutException(
+                    $"timed out after {CaptureGateMaxWait.TotalMinutes:0} min waiting for an in-progress capture to release the camera; the in-flight gate may be stuck — check the daemon log");
+            }
             await Task.Delay(CaptureGatePollInterval, token).ConfigureAwait(false);
         }
         try {

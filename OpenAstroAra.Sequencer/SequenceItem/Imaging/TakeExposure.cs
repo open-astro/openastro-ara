@@ -141,7 +141,10 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Imaging {
             // The capture pipeline persists the frame server-side; the in-memory exposure data is
             // deliberately discarded (see class doc).
             _ = await imagingMediator.CaptureImage(sequence, token, progress, Parent?.Name ?? string.Empty);
-            ExposureCount++;
+            // Atomic: a ParallelContainer can drive concurrent executions, and a lost update would
+            // persist a wrong count through the [JsonProperty] backing field.
+            Interlocked.Increment(ref exposureCount);
+            RaisePropertyChanged(nameof(ExposureCount));
         }
 
         public bool Validate() {

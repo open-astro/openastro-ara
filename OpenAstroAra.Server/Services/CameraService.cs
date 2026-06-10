@@ -192,7 +192,7 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         var frameId = Guid.NewGuid();
         var capturedAt = DateTimeOffset.UtcNow;
         try {
-            _ = Task.Run(() => CaptureInBackgroundAsync(client, frameId, request, capturedAt), CancellationToken.None);
+            _ = Task.Run(() => CaptureInBackgroundAsync(client, frameId, request), CancellationToken.None);
         } catch {
             // Task.Run can only realistically throw under extreme conditions (OOM); the in-flight
             // flag must not leak a permanently-blocked camera.
@@ -230,7 +230,7 @@ public sealed partial class CameraService : ICameraService, IDisposable {
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Background capture boundary: every stage (ASCOM writes, the blocking download, FITS IO, the catalog insert) can throw arbitrary driver/HTTP/disk exceptions, and a concurrent Disconnect/Dispose can dispose the captured client mid-capture; any escape must be contained and logged as a failed capture (the pre-announced frame simply never appears), never fault the fire-and-forget task or the daemon. CA1031's log-and-recover boundary applies.")]
-    private async Task CaptureInBackgroundAsync(AlpacaCamera client, Guid frameId, ExposureRequestDto request, DateTimeOffset capturedAt) {
+    private async Task CaptureInBackgroundAsync(AlpacaCamera client, Guid frameId, ExposureRequestDto request) {
         try {
             await CaptureCoreAsync(client, frameId, request, "LIGHT", FrameType.Light, "Manual capture", CancellationToken.None).ConfigureAwait(false);
         } catch (Exception ex) {
