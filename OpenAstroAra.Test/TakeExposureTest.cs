@@ -57,6 +57,22 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Validate_flags_unrecognized_image_type() {
+            var recognized = NewPrototype();
+            recognized.ExposureTime = 1;
+            recognized.ImageType = "FLAT";
+            recognized.Validate();
+
+            var bad = NewPrototype();
+            bad.ExposureTime = 1;
+            bad.ImageType = "NARROWBAND";
+            bad.Validate();
+
+            // Only the unrecognized image type differs, so it adds exactly one more issue.
+            Assert.That(bad.Issues.Count, Is.EqualTo(recognized.Issues.Count + 1));
+        }
+
+        [Test]
         public void Clone_preserves_every_json_property() {
             var item = NewPrototype();
             item.ExposureTime = 120.5;

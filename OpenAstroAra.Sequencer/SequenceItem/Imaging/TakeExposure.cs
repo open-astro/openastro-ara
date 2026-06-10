@@ -158,9 +158,22 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Imaging {
             if (ExposureTime <= 0) {
                 i.Add(Loc.Instance["LblExposureTimeNotValid"]);
             }
+            // An unrecognized ImageType would map to Light yet still be written verbatim into the
+            // FITS IMAGETYP header, where plate-solvers and calibration matchers could misfile it.
+            // Reject the typo here; blank is fine — Execute defaults it to LIGHT.
+            if (!string.IsNullOrWhiteSpace(ImageType) && !IsRecognizedImageType(ImageType)) {
+                i.Add(Loc.Instance["LblImageTypeNotValid"]);
+            }
             Issues = i;
             return i.Count == 0;
         }
+
+        private static readonly string[] RecognizedImageTypes = {
+            ImageTypes.LIGHT, ImageTypes.FLAT, ImageTypes.DARK, ImageTypes.BIAS, ImageTypes.SNAPSHOT, "DARKFLAT",
+        };
+
+        private static bool IsRecognizedImageType(string imageType) =>
+            Array.Exists(RecognizedImageTypes, t => string.Equals(t, imageType, StringComparison.OrdinalIgnoreCase));
 
         public override void AfterParentChanged() {
             Validate();
