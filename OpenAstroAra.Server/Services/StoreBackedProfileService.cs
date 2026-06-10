@@ -44,7 +44,7 @@ namespace OpenAstroAra.Server.Services;
 /// user actually edited, not compile-time defaults.
 ///
 /// Mapped sections (see <see cref="ProfileStoreMapper"/>): site → astrometry (lat/long/elevation),
-/// PHD2 → guider (host/port/dither/settle), autofocus → focuser (step/exposure/binning/attempts),
+/// PHD2 → guider (host/port/dither/settle), autofocus → focuser (step/initial-offset/exposure/binning),
 /// storage+filenames → image file (path/pattern/format), plate-solve numerics, safety-policy
 /// meridian fields. Sections with no NINA-profile counterpart (notifications, diagnostics mode,
 /// stretch defaults, equipment auto-connect) are daemon-side concerns and stay store-only.
@@ -55,6 +55,10 @@ public sealed partial class StoreBackedProfileService : IProfileService, IDispos
 
     private readonly IProfileStore _store;
     private readonly ILogger<StoreBackedProfileService> _logger;
+    // Serializes hydrations: two concurrent REST PUTs both raise Changed, and NINA's settings
+    // objects are MVVM property bags with no thread-safety of their own — Apply must not run
+    // twice into the same Profile concurrently.
+    private readonly object _hydrateLock = new();
     private bool _disposed;
 
     public StoreBackedProfileService(IProfileStore store, ILogger<StoreBackedProfileService>? logger = null) {
@@ -83,7 +87,9 @@ public sealed partial class StoreBackedProfileService : IProfileService, IDispos
         Justification = "Store-changed event boundary: a hydration failure (e.g. an unparseable enum token in one section) must degrade to keeping the previous values and logging, never throw back into the REST PUT that triggered the event. CA1031's log-and-recover boundary applies.")]
     private void Hydrate() {
         try {
-            ProfileStoreMapper.Apply(_store, ActiveProfile);
+            lock (_hydrateLock) {
+                ProfileStoreMapper.Apply(_store, ActiveProfile);
+            }
         } catch (Exception ex) {
             LogHydrateFailed(ex);
         }
