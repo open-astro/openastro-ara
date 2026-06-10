@@ -55,7 +55,7 @@ Deferred during the §38k-13…18 equipment-mediator stub layer (PR #315). Each 
 
 ## Execution-engine TODOs
 
-- **§28 `ExposureSeconds` is `int` across the frames schema + DTOs** (flagged on #343). Sub-second calibration exposures (bias/short darks) round up to 1s in the catalog (the FITS `EXPTIME` header preserves the exact value). Widening to `double` touches the SQLite column affinity, `FrameDto`/`FrameListItemDto`, the stats aggregations and the WILMA codegen wire shape — do it as one dedicated pass before the calibration workflows (§40) ship.
+- **§28 `ExposureSeconds` is `int` across the frames schema + DTOs** (flagged on #343). Sub-second calibration exposures (bias/short darks) round up to 1s in the catalog (the FITS `EXPTIME` header preserves the exact value). Widening to `double` touches the SQLite column affinity, `FrameDto`/`FrameListItemDto`, the stats aggregations and the WILMA codegen wire shape — do it as one dedicated pass before the calibration workflows (§40) ship. **Same pass: make `Gain` nullable end-to-end** (the capture path currently carries `Gain ?? -1` as a magic sentinel into the int column, also flagged on #343).
 
 The §38 execution engine (`SequencerService`, #319) now **runs** sequences for real through NINA's inherited `Sequencer`. These items refine it as real equipment + data models land:
 

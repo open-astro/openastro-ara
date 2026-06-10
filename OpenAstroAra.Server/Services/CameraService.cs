@@ -233,6 +233,10 @@ public sealed partial class CameraService : ICameraService, IDisposable {
     private async Task CaptureInBackgroundAsync(AlpacaCamera client, Guid frameId, ExposureRequestDto request, DateTimeOffset capturedAt) {
         try {
             ApplyExposureSettings(client, request);
+            // Re-stamp NOW, after the settings round-trips (up to 7 Alpaca calls — seconds on a slow
+            // bridge): DATE-OBS feeds plate-solving, so the FITS header must carry the actual
+            // exposure start, not the request-accepted time the §60.5 response reported.
+            capturedAt = DateTimeOffset.UtcNow;
             client.StartExposure(request.ExposureSec, true);
             RefreshCacheOnce();
 
