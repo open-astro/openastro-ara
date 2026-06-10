@@ -193,6 +193,13 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-nuget-
 
+      # §14e capture path: CameraConnectIntegrationTest writes a real FITS file through
+      # CFITSIO (P/Invoke), so the runtime lib must be present in this job too.
+      - name: Install CFITSIO (Linux)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libcfitsio-dev
+
       - name: dotnet restore (test project)
         run: dotnet restore OpenAstroAra.Test/OpenAstroAra.Test.csproj
 

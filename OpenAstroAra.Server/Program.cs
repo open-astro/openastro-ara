@@ -163,7 +163,6 @@ public partial class Program {
         // types (§52). All Gets return null → 404; Connects/Disconnects/
         // Actions return 202 OperationAccepted. Real ASCOM Alpaca drivers
         // land per-device in the real-infra phase + Phase 14.
-        builder.Services.AddSingleton<ICameraService, PlaceholderCameraService>();
         // §14e — ninth real device service: live mount (RA/Dec + tracking/parked/home) + slew/sync,
         // park/unpark, set-tracking, abort-slew. One singleton backs BOTH the REST ITelescopeService
         // and the Sequencer's ITelescopeMediator (§8.1), so the telescope instructions drive the live
@@ -257,6 +256,20 @@ public partial class Program {
         var profileDir = ResolveProfileDir();
         builder.Services.AddSingleton<IProfileStore>(sp =>
             new FileProfileStore(profileDir, sp.GetService<ILogger<FileProfileStore>>()));
+
+        // §14e — tenth real device service and the head of the capture path: live Alpaca camera
+        // (caps + cooler/state runtime) whose StartExposure runs a REAL capture — exposure →
+        // ImageReady → ImageArray download → §72 FITS write (atomic §28.7) → §28 catalog insert —
+        // so the existing preview/thumbnail/download endpoints serve the new frame immediately.
+        // Registered here (not with the other device services above) because it needs the
+        // profileDir-scoped IFrameRepository/IProfileStore. REST-only; the ICameraMediator/
+        // IImagingMediator unification (TakeExposure) is the follow-up.
+        builder.Services.AddSingleton<ICameraService>(sp =>
+            new CameraService(
+                sp.GetRequiredService<ILogger<CameraService>>(),
+                sp.GetRequiredService<IFrameRepository>(),
+                sp.GetRequiredService<IProfileStore>(),
+                fallbackFramesDir: System.IO.Path.Combine(profileDir, "frames")));
 
         // Phase 38a — §38.2 filesystem-backed sequence library at
         // {profileDir}/sequences/library/. Replaces the in-memory placeholder
