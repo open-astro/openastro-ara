@@ -180,7 +180,9 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Imaging {
         }
 
         public override TimeSpan GetEstimatedDuration() {
-            return TimeSpan.FromSeconds(ExposureTime);
+            // Clamp at zero so a parent container summing durations before Validate() runs can't get
+            // a negative total from an invalid (<= 0) exposure.
+            return TimeSpan.FromSeconds(Math.Max(0, ExposureTime));
         }
 
         public override string ToString() {

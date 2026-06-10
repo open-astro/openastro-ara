@@ -470,7 +470,7 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             fits.SetHeader("GAIN", gain, "camera gain");
         }
         if (request.CameraOffset is int fitsOffset) {
-            fits.SetHeader("OFFSET", fitsOffset, "camera offset (pedestal)");
+            fits.SetHeader("OFFSET", fitsOffset, "Sensor gain offset");
         }
         fits.SetHeader("XBINNING", request.BinX, "binning X");
         fits.SetHeader("YBINNING", request.BinY, "binning Y");
