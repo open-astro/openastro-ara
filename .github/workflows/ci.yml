@@ -276,6 +276,13 @@ jobs:
       - name: dotnet build (solution, Release) — warnings are errors
         run: dotnet build OpenAstroAra.sln -c Release --no-restore
 
+      # §14e — build the SOFA/NOVAS31 astrometry natives from the vendored C sources and
+      # stage them next to the test binary, so AstrometryNativeTransformTest exercises the
+      # REAL cross-epoch transforms (it self-Ignores when the natives are absent; this step
+      # makes sure CI never silently skips it).
+      - name: Build astrometry natives (SOFA + NOVAS31) for tests
+        run: ./scripts/build-astrometry-natives.sh OpenAstroAra.Test/bin/Release/net10.0
+
       # Exclude the live Alpaca discovery test (TestCategory=Integration): it needs a
       # running OmniSim, which this job doesn't start. It is covered by the dedicated
       # alpaca-sim-integration job below. (The test also self-Ignores when no sim is

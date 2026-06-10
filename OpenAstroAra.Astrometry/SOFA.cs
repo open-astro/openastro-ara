@@ -26,6 +26,7 @@ namespace OpenAstroAra.Astrometry {
         private const string DLLNAME = "SOFAlib.dll";
 
         static SOFA() {
+            AstrometryNativeResolver.Register(); // map the Windows DLL name to libsofa off-Windows
             DllLoader.LoadDll(Path.Combine("SOFA", DLLNAME));
         }
 
