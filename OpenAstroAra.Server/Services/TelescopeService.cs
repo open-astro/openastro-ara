@@ -49,6 +49,10 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
     private EquipmentConnectionState _state = EquipmentConnectionState.Disconnected;
     private TelescopeCapabilitiesDto? _capabilities;
     private TelescopeStateDto _runtime = IdleRuntime;
+    // Mount-native coordinate system, read once with the capabilities and consumed by the
+    // ITelescopeMediator partial (coordinate transform + GetInfo epoch). EquatorialCoordinateType has
+    // no "unknown" member; Other is the honest pre-read sentinel (the mediator maps it to JNOW).
+    private EquatorialCoordinateType _equatorialSystemRaw = EquatorialCoordinateType.Other;
     private int _refreshing;
     private int _refreshPending;
     private long _connectGeneration;
@@ -245,11 +249,15 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
             }
             var runtime = ReadRuntime(client);
             var caps = needCaps ? ReadCapabilities(client) : null;
+            var equatorialSystem = needCaps ? ReadEquatorialSystem(client) : (EquatorialCoordinateType?)null;
             lock (_gate) {
                 if (_state == EquipmentConnectionState.Connected && ReferenceEquals(_client, client)) {
                     _runtime = runtime;
                     if (caps is not null) {
                         _capabilities = caps;
+                    }
+                    if (equatorialSystem is not null) {
+                        _equatorialSystemRaw = equatorialSystem.Value;
                     }
                 }
             }
@@ -313,6 +321,16 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Per-field read boundary: an unsupported/transiently-failing EquatorialSystem read throws; fall back to Other (the pre-read sentinel, mapped to JNOW by the mediator) rather than failing the whole capability read. CA1031's log-and-recover boundary applies.")]
+    private static EquatorialCoordinateType ReadEquatorialSystem(AlpacaTelescope c) {
+        try {
+            return c.EquatorialSystem;
+        } catch (Exception) {
+            return EquatorialCoordinateType.Other;
+        }
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Per-field read boundary: TrackingRates (or enumerating it) can throw on a driver that does not implement it; the supported-rate list falls back to empty rather than failing the whole capability read. CA1031's log-and-recover boundary applies.")]
     private static List<string> ReadSiderealRates(AlpacaTelescope c) {
         var rates = new List<string>();
@@ -349,6 +367,7 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
                 if (!_disposed && _connectGeneration == generation) {
                     _client = client;
                     _capabilities = null;       // re-read for the new device
+                    _equatorialSystemRaw = EquatorialCoordinateType.Other; // "not yet read" until the first refresh
                     _runtime = IdleRuntime;     // don't serve a prior device's runtime
                     SetState(EquipmentConnectionState.Connected);
                     adopted = true;
