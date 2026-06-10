@@ -250,6 +250,9 @@ public sealed partial class CameraService : ICameraService, IDisposable {
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Catalog-registration boundary: any DB failure after a successful FITS write degrades to an Error log naming the recoverable file (the §28.8 startup scan re-registers it) rather than faulting the capture worker. CA1031's log-and-recover boundary applies.")]
     private async Task<bool> CaptureCoreAsync(AlpacaCamera client, Guid frameId, ExposureRequestDto request, string imageType, FrameType frameType, string targetName, CancellationToken ct) {
+        // Entry checkpoint: ApplyExposureSettings is up to 7 synchronous Alpaca round-trips with no
+        // ct hook, so honor a cancel that arrived before any device work begins. Inert for REST.
+        ct.ThrowIfCancellationRequested();
         ApplyExposureSettings(client, request);
         // Stamp NOW, after the settings round-trips (up to 7 Alpaca calls — seconds on a slow
         // bridge): DATE-OBS feeds plate-solving, so the FITS header must carry the actual

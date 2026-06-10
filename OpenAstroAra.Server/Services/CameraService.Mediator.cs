@@ -126,6 +126,7 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
             // Re-snapshot under the gate: a disconnect/reconnect during a long queue wait can
             // supersede the client we grabbed before the loop, and we must not issue ASCOM commands
             // (ApplyExposureSettings/StartExposure) against a stale connection — fast-fail instead.
+            // (_frames needs no re-check: it's set once in the constructor and never reassigned.)
             lock (_gate) {
                 client = !_disposed && _state == EquipmentConnectionState.Connected ? _client : null;
             }
@@ -147,7 +148,9 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
     }
 
     // NINA ImageTypes → §28 catalog FrameType. SNAPSHOT counts as a light; DARKFLAT (used by some
-    // NINA flows) lands as Dark, matching the FITS IMAGETYP it carries.
+    // NINA flows) coarsens to the catalog's Dark — the FrameType enum has no DarkFlat — while the
+    // FITS IMAGETYP header preserves the finer "DARKFLAT" string. The catalog type is intentionally
+    // broader than the header for these, not a mismatch.
     internal static FrameType MapFrameType(string? imageType) => imageType?.ToUpperInvariant() switch {
         "FLAT" => FrameType.Flat,
         "DARK" or "DARKFLAT" => FrameType.Dark,
