@@ -88,11 +88,13 @@ public sealed partial class StoreBackedProfileService : IProfileService, IDispos
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Store-changed event boundary: a hydration failure (e.g. an unparseable enum token in one section) must degrade to keeping the previous values and logging, never throw back into the REST PUT that triggered the event. CA1031's log-and-recover boundary applies.")]
     private void Hydrate() {
-        if (_disposed) {
-            return; // an in-flight Changed handler racing Dispose must not write to ActiveProfile
-        }
         try {
             lock (_hydrateLock) {
+                // Guard INSIDE the lock: checked outside, a handler that passed the check could
+                // still apply after Dispose flipped the flag (check and apply must be atomic).
+                if (_disposed) {
+                    return;
+                }
                 ProfileStoreMapper.Apply(_store, ActiveProfile);
             }
         } catch (Exception ex) {
@@ -112,10 +114,12 @@ public sealed partial class StoreBackedProfileService : IProfileService, IDispos
     public void Release() { }
 
     public void Dispose() {
-        if (_disposed) {
-            return;
+        lock (_hydrateLock) {
+            if (_disposed) {
+                return;
+            }
+            _disposed = true;
         }
-        _disposed = true;
         _store.Changed -= OnStoreChanged;
     }
 
@@ -138,10 +142,16 @@ public sealed partial class StoreBackedProfileService : IProfileService, IDispos
 /// </summary>
 internal static class ProfileStoreMapper {
 
-    // Each Get takes the store lock independently, so a PUT landing mid-pass can yield a briefly
-    // mixed snapshot (pre-PUT section A, post-PUT section B). Accepted: that PUT fires its own
-    // Changed, the follow-up hydration runs, and the steady state is always consistent — section
-    // values are independent, so no instruction can observe a torn single value.
+    // Two accepted consistency windows, both self-converging and both inherent to NINA's mutable
+    // profile model (instructions read ActiveProfile with no lock, exactly as NINA's own UI-edits-
+    // while-sequencing does):
+    // 1. Cross-section: each Get takes the store lock independently, so a PUT landing mid-pass can
+    //    yield pre-PUT section A + post-PUT section B. The PUT fires its own Changed, the follow-up
+    //    hydration runs, and the steady state is consistent.
+    // 2. Within-section: an instruction reading while ApplySite writes Latitude→Longitude→Elevation
+    //    sequentially can observe new Latitude + old Longitude for one read. Individual doubles
+    //    don't tear (atomic loads), the window is a user-save during a running instruction, and the
+    //    next read is consistent.
     internal static void Apply(IProfileStore store, IProfile profile) {
         ApplySite(store.GetSiteSettings(), profile);
         ApplyPhd2(store.GetPhd2Settings(), profile);
