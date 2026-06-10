@@ -118,7 +118,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Imaging {
         [JsonProperty]
         public int ExposureCount {
             get => Volatile.Read(ref exposureCount);
-            set { exposureCount = value; RaisePropertyChanged(); }
+            set { Volatile.Write(ref exposureCount, value); RaisePropertyChanged(); }
         }
 
         private IList<string> issues = new List<string>();

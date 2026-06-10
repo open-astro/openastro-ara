@@ -255,6 +255,10 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         // bridge): DATE-OBS feeds plate-solving, so the FITS header must carry the actual
         // exposure start, not the request-accepted time the §60.5 response reported.
         var capturedAt = DateTimeOffset.UtcNow;
+        // A sequencer cancel during the up-to-7 ApplyExposureSettings round-trips above shouldn't
+        // still kick off an exposure we'd only abort on the first ImageReady poll. Inert for REST
+        // (CancellationToken.None).
+        ct.ThrowIfCancellationRequested();
         client.StartExposure(request.ExposureSec, true);
         RefreshCacheOnce();
 
