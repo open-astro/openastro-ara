@@ -68,6 +68,10 @@ public sealed partial class CameraService : ICameraService, IDisposable {
     private int _refreshPending;
     private long _connectGeneration;
     private int _captureInFlight;
+    // Set around the blocking ImageArray transfer: serializing Alpaca bridges queue every request
+    // behind the download, so timer refreshes would stall for the whole window — skip them instead
+    // (exposure progress still updates: the ImageReady poll loop refreshes every tick).
+    private int _downloading;
     private bool _disposed;
 
     public CameraService(
@@ -239,7 +243,13 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             }
 
             // The blocking download (single large JSON/imagebytes transfer); runs on this worker.
-            var imageArray = client.ImageArray;
+            object? imageArray;
+            Interlocked.Exchange(ref _downloading, 1);
+            try {
+                imageArray = client.ImageArray;
+            } finally {
+                Interlocked.Exchange(ref _downloading, 0);
+            }
             var (pixels, width, height) = ConvertImageArray(imageArray);
             RefreshCacheOnce();
 
@@ -459,6 +469,9 @@ public sealed partial class CameraService : ICameraService, IDisposable {
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Timer-callback boundary: an unhandled exception escaping here crashes the process; the per-field reads already absorb device failures, this is the hard backstop. CA1031's log-and-recover boundary applies.")]
     private void RefreshPass() {
+        if (Volatile.Read(ref _downloading) == 1) {
+            return; // don't queue status reads behind the blocking image download
+        }
         try {
             AlpacaCamera? client;
             bool needCaps;
@@ -606,10 +619,15 @@ public sealed partial class CameraService : ICameraService, IDisposable {
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Best-effort teardown: AbortExposure / Connected = false can throw driver/HTTP exceptions, which must be swallowed so Dispose always runs. CA1031's log-and-recover boundary applies.")]
     private void SafeDisconnectDispose(AlpacaCamera client) {
-        try {
-            client.AbortExposure(); // interrupt an in-flight exposure so disconnect fails fast
-        } catch (Exception ex) {
-            LogTeardownIgnored(ex);
+        // Only interrupt when an exposure is actually in flight: several drivers (ZWO/QHY) throw
+        // from AbortExposure when idle, which would put a spurious teardown entry in every normal
+        // disconnect's log.
+        if (Volatile.Read(ref _captureInFlight) == 1) {
+            try {
+                client.AbortExposure();
+            } catch (Exception ex) {
+                LogTeardownIgnored(ex);
+            }
         }
         try {
             client.Connected = false;
