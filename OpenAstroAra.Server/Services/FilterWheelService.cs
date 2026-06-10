@@ -41,6 +41,10 @@ public sealed partial class FilterWheelService : IFilterWheelService, IDisposabl
     private readonly ILogger<FilterWheelService> _logger;
     private readonly object _gate = new();
     private readonly Timer _refreshTimer;
+    // The Sequencer-facing profile (null in REST-only unit tests): the §14e mediator partial imports
+    // the connected wheel's slot list into ActiveProfile.FilterWheelSettings.FilterWheelFilters
+    // (NINA's import-on-connect semantics) so SwitchFilter can resolve its filter by name/position.
+    private readonly OpenAstroAra.Profile.Interfaces.IProfileService? _profileService;
     private AlpacaFilterWheel? _client;
     private DiscoveredDeviceDto? _device;
     private EquipmentConnectionState _state = EquipmentConnectionState.Disconnected;
@@ -50,8 +54,11 @@ public sealed partial class FilterWheelService : IFilterWheelService, IDisposabl
     private long _connectGeneration;
     private bool _disposed;
 
-    public FilterWheelService(ILogger<FilterWheelService>? logger = null) {
+    public FilterWheelService(
+        ILogger<FilterWheelService>? logger = null,
+        OpenAstroAra.Profile.Interfaces.IProfileService? profileService = null) {
         _logger = logger ?? NullLogger<FilterWheelService>.Instance;
+        _profileService = profileService;
         _refreshTimer = new Timer(RefreshTick, state: null, dueTime: RefreshInterval, period: RefreshInterval);
     }
 
@@ -175,13 +182,20 @@ public sealed partial class FilterWheelService : IFilterWheelService, IDisposabl
             }
             var runtime = ReadRuntime(client);
             var slots = needSlots ? ReadSlots(client) : null;
+            var adoptedSlots = false;
             lock (_gate) {
                 if (_state == EquipmentConnectionState.Connected && ReferenceEquals(_client, client)) {
                     _runtime = runtime;
                     if (slots is not null) {
                         _slots = slots;
+                        adoptedSlots = true;
                     }
                 }
+            }
+            if (adoptedSlots) {
+                // First slot read for this connection: import the device's filter list into the
+                // active profile (outside the lock — it walks an observable collection).
+                ImportProfileFilters(slots!);
             }
         } catch (Exception ex) {
             LogRuntimeReadFailed(ex);
