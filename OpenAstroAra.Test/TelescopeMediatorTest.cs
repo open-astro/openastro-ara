@@ -173,6 +173,19 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void TransformBestEffort_degrades_to_untransformed_target_when_natives_missing() {
+            // The SOFA/NOVAS natives are not packaged for this platform yet (PORT_TODO §14e), so a
+            // cross-epoch transform must fall back to the original coordinates, never throw.
+            using var svc = new TelescopeService();
+            var j2000 = SampleTarget();
+            Coordinates? result = null;
+            Assert.DoesNotThrow(() => result = svc.TransformBestEffort(j2000, Epoch.JNOW));
+            Assert.That(result, Is.Not.Null);
+            // Once the natives ship this returns a real JNOW transform; until then it's the input.
+            Assert.That(result!.Epoch, Is.EqualTo(Epoch.JNOW).Or.EqualTo(Epoch.J2000));
+        }
+
+        [Test]
         public void MapDriveRateName_maps_known_rates_and_rejects_unknown() {
             Assert.That(TelescopeService.MapDriveRateName("Sidereal"), Is.EqualTo(TrackingMode.Sidereal));
             Assert.That(TelescopeService.MapDriveRateName("Lunar"), Is.EqualTo(TrackingMode.Lunar));

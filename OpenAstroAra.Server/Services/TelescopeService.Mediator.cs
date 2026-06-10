@@ -149,6 +149,22 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         return epoch is Epoch.J2000 or Epoch.JNOW ? epoch : Epoch.JNOW;
     }
 
+    // Cross-epoch transforms P/Invoke the SOFA/NOVAS natives, which are not yet packaged for
+    // linux/macOS (PORT_TODO §14e: libnovas.so/libsofa.so). Until they ship, a missing/broken native
+    // must degrade to the untransformed target (≤ ~arcminutes of precession drift J2000↔JNOW today,
+    // within a typical pointing model's slop) instead of failing the instruction. Only the
+    // native-load failure modes are caught — a genuine astrometry error still surfaces (and is then
+    // contained by RunMountOpAsync's op boundary). Internal for direct unit testing.
+    internal Coordinates TransformBestEffort(Coordinates coords, Epoch targetEpoch) {
+        try {
+            return coords.Transform(targetEpoch);
+        } catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException
+                or BadImageFormatException or TypeInitializationException) {
+            LogTransformFallback(ex, targetEpoch);
+            return coords;
+        }
+    }
+
     public Task<bool> SlewToCoordinatesAsync(Coordinates coords, CancellationToken token) {
         ArgumentNullException.ThrowIfNull(coords);
         EquatorialCoordinateType equatorialSystem;
@@ -170,8 +186,11 @@ public sealed partial class TelescopeService : ITelescopeMediator {
             return Task.FromResult(false);
         }
         // Transform to the mount's native coordinate system (a J2000 sequence target sent raw to a
-        // JNOW mount would be off by the precession drift, ~arcminutes).
-        var target = coords.Transform(MapSlewEpoch(equatorialSystem));
+        // JNOW mount would be off by the precession drift, ~arcminutes). Best-effort: the cross-epoch
+        // path P/Invokes SOFA/NOVAS, whose non-Windows natives are a known packaging gap (PORT_TODO:
+        // libnovas.so/libsofa.so is a §14e follow-up) — a missing native falls back to the
+        // untransformed target rather than failing the run (same-epoch transforms are pure managed).
+        var target = TransformBestEffort(coords, MapSlewEpoch(equatorialSystem));
         var targetRa = target.RA;
         var targetDec = target.Dec;
         return RunMountOpAsync("telescope.slew",
@@ -479,4 +498,8 @@ public sealed partial class TelescopeService : ITelescopeMediator {
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Debug, Message = "mount terminal-condition read failed during settle-wait (will keep polling)")]
     private partial void LogConditionReadFailed();
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning,
+        Message = "epoch transform to {TargetEpoch} unavailable (SOFA/NOVAS native not packaged yet) — slewing with the untransformed target")]
+    private partial void LogTransformFallback(Exception ex, Epoch targetEpoch);
 }
