@@ -26,6 +26,8 @@ See `3rd-party-licenses.txt` (added at first release) for the bundled-dependency
 - **ASCOM.Alpaca.Components / Device / Tools** (ASCOM Initiative, ASCOM license) — equipment control.
 - **Zeroconf** (MIT) — mDNS service announcement.
 - **Serilog** (Apache-2.0) — structured logging.
+- **Accord.NET** (Accord.Math / Accord.Statistics, **LGPL-2.1**) — numerical/imaging algorithms, inherited from N.I.N.A. Distributed as separate, dynamically-linked .NET assemblies (satisfying the LGPL relinking allowance); ARA does not modify Accord.
+- **FreeImage** (via VVVV.FreeImage, used under the **FreeImage Public License v1.0** — the permissive arm of its FIPL-or-GPL dual license) — image-format decoding for the §2105 render path.
 
 ## Trademarks
 
