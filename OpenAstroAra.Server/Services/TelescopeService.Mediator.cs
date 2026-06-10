@@ -54,12 +54,18 @@ namespace OpenAstroAra.Server.Services;
 /// </summary>
 public sealed partial class TelescopeService : ITelescopeMediator {
 
-    private const int MountOpSettleMaxPolls = 1800; // ~180s at the poll interval — slews can be slow
+    private const int MountOpSettleMaxPolls = 1800; // ~180s at the poll interval (park/unpark/findhome)
+    // Slews get their own, larger ceiling: a slow-slew mount (1–2°/s and below) doing a long goto
+    // can legitimately take 5–10 minutes, and a settled-too-early ceiling reports a SUCCESSFUL slew
+    // as false to the instruction. ~600s covers a worst-case meridian-to-horizon goto on slow gear
+    // without meaningfully widening the hung-driver window (cancellation still cuts it short).
+    private const int SlewSettleMaxPolls = 6000; // ~600s at the poll interval
     private static readonly TimeSpan MountOpPollInterval = TimeSpan.FromMilliseconds(100);
     // Wall-clock ceiling for a single blocking mount call (Park/Unpark/FindHome/the slew kickoff): a
     // silent device must not park a sequence thread until the OS TCP timeout. The terminal-condition
-    // wait adds its own bound (MountOpSettleMaxPolls × MountOpPollInterval ≈ 3min) on top, so the
-    // worst-case total before RunMountOpAsync returns is ~8min; cancellation (ct) cuts it short.
+    // wait adds its own bound on top (~3min for park/unpark/findhome, ~10min for a slew), so the
+    // worst-case total before RunMountOpAsync returns is ~8min (~15min for a slew); cancellation (ct)
+    // cuts it short.
     private static readonly TimeSpan MountOpHardTimeout = TimeSpan.FromMinutes(5);
     // Sanity bound on the post-slew pointing, paired with the authoritative !Slewing signal. Generous
     // (5°, parity with the dome's azimuth window) on purpose: it only guards against a premature exit
@@ -201,7 +207,8 @@ public sealed partial class TelescopeService : ITelescopeMediator {
                 c.SlewToCoordinatesAsync(targetRa, targetDec);
             },
             c => !ReadSlewing(c) && PointingNear(c, targetRa, targetDec),
-            token);
+            token,
+            SlewSettleMaxPolls);
     }
 
     public Task<bool> ParkTelescope(IProgress<ApplicationStatus> progress, CancellationToken token) =>
@@ -243,7 +250,7 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         if (client is null) {
             return;
         }
-        await WaitForMountConditionAsync(client, c => !ReadSlewing(c), token).ConfigureAwait(false);
+        await WaitForMountConditionAsync(client, c => !ReadSlewing(c), token, SlewSettleMaxPolls).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -262,7 +269,7 @@ public sealed partial class TelescopeService : ITelescopeMediator {
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Sequencer mount-op boundary: the blocking ASCOM call can throw arbitrary driver/HTTP exceptions and a concurrent Disconnect/Dispose can dispose the captured client mid-op; genuine sequencer cancellation is rethrown but any other escape (including a device/HTTP-timeout OCE) is logged and reported as a failed op (false) rather than faulting the autonomous run. CA1031's log-and-recover boundary applies.")]
-    private async Task<bool> RunMountOpAsync(string op, Action<AlpacaTelescope> action, Func<AlpacaTelescope, bool> isDone, CancellationToken ct) {
+    private async Task<bool> RunMountOpAsync(string op, Action<AlpacaTelescope> action, Func<AlpacaTelescope, bool> isDone, CancellationToken ct, int settleMaxPolls = MountOpSettleMaxPolls) {
         var client = ConnectedClientOrNull();
         if (client is null) {
             return false; // not connected: the instruction's Validate has already blocked this
@@ -282,7 +289,7 @@ public sealed partial class TelescopeService : ITelescopeMediator {
                 await linked.CancelAsync().ConfigureAwait(false);
             }
             await opTask.ConfigureAwait(false); // observe the op's result / surface its exception
-            return await WaitForMountConditionAsync(client, isDone, ct).ConfigureAwait(false);
+            return await WaitForMountConditionAsync(client, isDone, ct, settleMaxPolls).ConfigureAwait(false);
         } catch (OperationCanceledException) when (ct.IsCancellationRequested) {
             throw; // genuine sequencer cancellation — propagate so the run aborts
         } catch (Exception ex) {
@@ -298,9 +305,9 @@ public sealed partial class TelescopeService : ITelescopeMediator {
     // read !Slewing + near-target and declare a slew settled before the mount ever moved (a target
     // within the tolerance of the current heading defeats the PointingNear guard). One unconditional
     // poll interval gives the driver that window; it costs 100ms on already-satisfied conditions.
-    private async Task<bool> WaitForMountConditionAsync(AlpacaTelescope client, Func<AlpacaTelescope, bool> isDone, CancellationToken ct) {
+    private async Task<bool> WaitForMountConditionAsync(AlpacaTelescope client, Func<AlpacaTelescope, bool> isDone, CancellationToken ct, int maxPolls = MountOpSettleMaxPolls) {
         var loggedReadFailure = false;
-        for (var i = 0; i < MountOpSettleMaxPolls; i++) {
+        for (var i = 0; i < maxPolls; i++) {
             await Task.Delay(MountOpPollInterval, ct).ConfigureAwait(false);
             bool stillOurClient;
             lock (_gate) {
