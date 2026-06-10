@@ -216,8 +216,11 @@ public sealed partial class TelescopeService : ITelescopeMediator {
             c => ReadAtPark(c) && !ReadSlewing(c), token);
 
     public Task<bool> UnparkTelescope(IProgress<ApplicationStatus> progress, CancellationToken token) =>
+        // !Slewing matters here too: a motorised unpark can clear AtPark the moment the command is
+        // accepted while the mount is still moving to its unpark position — returning early would
+        // let a back-to-back slew/tracking change land mid-motion.
         RunMountOpAsync("telescope.unpark", c => c.Unpark(),
-            c => !ReadAtPark(c), token);
+            c => !ReadAtPark(c) && !ReadSlewing(c), token);
 
     public Task<bool> FindHome(IProgress<ApplicationStatus> progress, CancellationToken token) =>
         RunMountOpAsync("telescope.findhome", c => c.FindHome(),
