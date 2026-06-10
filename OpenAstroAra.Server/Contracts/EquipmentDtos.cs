@@ -77,6 +77,7 @@ public sealed record CameraCapabilitiesDto(
     double PixelSizeUm,
     bool CanSetTemperature, bool CanAbortExposure, bool CanGetCoolerPower,
     int MinGain, int MaxGain,
+    int MinOffset, int MaxOffset,
     int MinBinX, int MaxBinX, int MinBinY, int MaxBinY,
     double MinExposureSec, double MaxExposureSec);
 
@@ -93,7 +94,9 @@ public sealed record ExposureRequestDto(
     int BinX = 1, int BinY = 1,
     int? OffsetX = null, int? OffsetY = null,
     int? Width = null, int? Height = null,
-    string? FilterName = null);
+    string? FilterName = null,
+    // Electronic (pedestal) offset — distinct from the OffsetX/Y subframe position.
+    int? CameraOffset = null);
 
 public sealed record ExposureResponseDto(
     string FrameId,

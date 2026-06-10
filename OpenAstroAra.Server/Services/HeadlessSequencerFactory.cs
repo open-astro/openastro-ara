@@ -136,7 +136,8 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
             IFilterWheelMediator? filterWheelMediator = null,
             IFlatDeviceMediator? flatDeviceMediator = null,
             IWeatherDataMediator? weatherDataMediator = null,
-            IProfileService? profileService = null) {
+            IProfileService? profileService = null,
+            IImagingMediator? imagingMediator = null) {
         // §38k-9 … §38k-22 — equipment-mediator stubs default to no-op headless
         // impls so call sites that don't yet have real Alpaca-backed mediators
         // still get a usable prototype set. As real drivers land (§14e Alpaca
@@ -154,6 +155,10 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
         guiderMediator ??= new HeadlessGuiderMediator();
         focuserMediator ??= new HeadlessFocuserMediator();
         cameraMediator ??= new HeadlessCameraMediator();
+        // §14e PRb — TakeExposure's capture dependency; the real CameraService-backed
+        // IImagingMediator swaps in via Program.cs DI, this stub only enables prototype
+        // construction (clone/validate — never executed headless without real wiring).
+        imagingMediator ??= new HeadlessImagingMediator();
         rotatorMediator ??= new HeadlessRotatorMediator();
         switchMediator ??= new HeadlessSwitchMediator();
         domeMediator ??= new HeadlessDomeMediator();
@@ -202,6 +207,9 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
                 // they register against the headless camera stub: Cool/Warm
                 // report "didn't succeed" off the not-connected sentinel, and
                 // SetUSBLimit / SetReadoutMode / DewHeater no-op.
+                // §14e PRb — the capture instruction itself; NINA-imported bodies + the §38.7
+                // starter templates resolve to it via the §38k-6 namespace remap.
+                new OpenAstroAra.Sequencer.SequenceItem.Imaging.TakeExposure(cameraMediator, imagingMediator),
                 new CoolCamera(cameraMediator),
                 new WarmCamera(cameraMediator),
                 new SetUSBLimit(cameraMediator),

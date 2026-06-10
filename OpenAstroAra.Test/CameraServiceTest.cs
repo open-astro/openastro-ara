@@ -64,6 +64,15 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void StartExposureAsync_rejects_negative_offset() {
+            using var svc = new CameraService();
+            // Offset validates before the connected check too; a negative offset fails fast rather
+            // than falling through to the device default.
+            Assert.Throws<ArgumentOutOfRangeException>(
+                () => { _ = svc.StartExposureAsync(new ExposureRequestDto(1.0, Gain: null, CameraOffset: -5), null, CancellationToken.None); });
+        }
+
+        [Test]
         public void AbortExposureAsync_when_not_connected_throws_InvalidOperation() {
             using var svc = new CameraService();
             // Async method: the guard surfaces on the returned Task.

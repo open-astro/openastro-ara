@@ -176,6 +176,16 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             throw new ArgumentOutOfRangeException(nameof(request), gain,
                 "Gain is outside the camera's supported range.");
         }
+        // Validate offset the same way as Gain: a 0 MaxOffset means the bounds read failed (or the
+        // camera is in offset-index mode), so defer to the device. Without this, an out-of-range
+        // offset would silently fall through TrySet to the device default (the read-back keeps the
+        // FITS header honest, but the request should fail fast rather than be quietly ignored).
+        if (request.CameraOffset is int cameraOffset
+            && (cameraOffset < 0
+                || (caps is not null && caps.MaxOffset > 0 && (cameraOffset < caps.MinOffset || cameraOffset > caps.MaxOffset)))) {
+            throw new ArgumentOutOfRangeException(nameof(request), cameraOffset,
+                "Offset is outside the camera's supported range.");
+        }
         if (client is null) {
             throw new InvalidOperationException("camera is not connected");
         }
@@ -192,7 +202,7 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         var frameId = Guid.NewGuid();
         var capturedAt = DateTimeOffset.UtcNow;
         try {
-            _ = Task.Run(() => CaptureInBackgroundAsync(client, frameId, request, capturedAt), CancellationToken.None);
+            _ = Task.Run(() => CaptureInBackgroundAsync(client, frameId, request), CancellationToken.None);
         } catch {
             // Task.Run can only realistically throw under extreme conditions (OOM); the in-flight
             // flag must not leak a permanently-blocked camera.
@@ -230,56 +240,104 @@ public sealed partial class CameraService : ICameraService, IDisposable {
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Background capture boundary: every stage (ASCOM writes, the blocking download, FITS IO, the catalog insert) can throw arbitrary driver/HTTP/disk exceptions, and a concurrent Disconnect/Dispose can dispose the captured client mid-capture; any escape must be contained and logged as a failed capture (the pre-announced frame simply never appears), never fault the fire-and-forget task or the daemon. CA1031's log-and-recover boundary applies.")]
-    private async Task CaptureInBackgroundAsync(AlpacaCamera client, Guid frameId, ExposureRequestDto request, DateTimeOffset capturedAt) {
+    private async Task CaptureInBackgroundAsync(AlpacaCamera client, Guid frameId, ExposureRequestDto request) {
         try {
-            ApplyExposureSettings(client, request);
-            // Re-stamp NOW, after the settings round-trips (up to 7 Alpaca calls — seconds on a slow
-            // bridge): DATE-OBS feeds plate-solving, so the FITS header must carry the actual
-            // exposure start, not the request-accepted time the §60.5 response reported.
-            capturedAt = DateTimeOffset.UtcNow;
-            client.StartExposure(request.ExposureSec, true);
-            RefreshCacheOnce();
-
-            var ready = await WaitForImageReadyAsync(client, request.ExposureSec).ConfigureAwait(false);
-            if (ready is null) {
-                LogCaptureAbandonedDisconnect(frameId); // disconnect/supersede, NOT a device timeout
-                return;
-            }
-            if (ready == false) {
-                LogCaptureFailedNotReady(frameId, request.ExposureSec);
-                return;
-            }
-
-            // The blocking download (single large JSON/imagebytes transfer); runs on this worker.
-            object? imageArray;
-            Interlocked.Exchange(ref _downloading, 1);
-            try {
-                imageArray = client.ImageArray;
-            } finally {
-                Interlocked.Exchange(ref _downloading, 0);
-            }
-            var (pixels, width, height) = ConvertImageArray(imageArray);
-            RefreshCacheOnce();
-
-            // Read back what the driver ACTUALLY applied for the header write: a driver can
-            // silently coerce a setting TrySet appeared to accept (e.g. symmetric-binning
-            // enforcement), and XBINNING/GAIN feed plate-solving + calibration matching.
-            var applied = ReadAppliedSettings(client, request);
-            var filePath = WriteFits(frameId, pixels, width, height, applied, capturedAt);
-            try {
-                await RegisterFrameAsync(frameId, request, capturedAt, filePath, width, height).ConfigureAwait(false);
-            } catch (Exception ex) {
-                // The FITS is on disk but invisible to the catalog; name the path so an operator can
-                // recover it — and the §28.8 startup orphan scan re-registers it on the next boot.
-                LogCatalogRegistrationFailed(ex, frameId, filePath);
-                return;
-            }
-            LogCaptureComplete(frameId, width, height, filePath);
+            // LIGHT is deliberate, not an oversight: the §60.5 manual-capture endpoint takes light/
+            // test snapshots; calibration frames are sequencer-driven. See PORT_TODO.md "REST manual
+            // capture is LIGHT-only by design" for the optional ImageType-field follow-up.
+            // The bool result is intentionally ignored (fire-and-forget): a false/failed capture is
+            // already logged inside CaptureCoreAsync, and the pre-announced frame simply never lands
+            // — unlike the sequencer path, there's no caller to surface a throw to.
+            _ = await CaptureCoreAsync(client, frameId, request, "LIGHT", FrameType.Light, "Manual capture", CancellationToken.None).ConfigureAwait(false);
         } catch (Exception ex) {
             LogCaptureFailed(ex, frameId);
         } finally {
             Interlocked.Exchange(ref _captureInFlight, 0);
             RefreshCacheOnce();
+        }
+    }
+
+    /// <summary>
+    /// The capture pipeline shared by the REST background path and the §14e PRb sequencer path
+    /// (<c>IImagingMediator.CaptureImage</c> on the mediator partial). Caller owns the in-flight
+    /// gate and the exception boundary; genuine cancellation (the sequencer token) aborts the
+    /// exposure best-effort and propagates. Returns true only when the frame landed in the catalog.
+    /// </summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Catalog-registration boundary: any DB failure after a successful FITS write degrades to an Error log naming the recoverable file (the §28.8 startup scan re-registers it) rather than faulting the capture worker. CA1031's log-and-recover boundary applies.")]
+    private async Task<bool> CaptureCoreAsync(AlpacaCamera client, Guid frameId, ExposureRequestDto request, string imageType, FrameType frameType, string targetName, CancellationToken ct) {
+        // Entry checkpoint: ApplyExposureSettings is up to 7 synchronous Alpaca round-trips with no
+        // ct hook, so honor a cancel that arrived before any device work begins. Inert for REST.
+        ct.ThrowIfCancellationRequested();
+        ApplyExposureSettings(client, request);
+        // Stamp NOW, after the settings round-trips (up to 7 Alpaca calls — seconds on a slow
+        // bridge): DATE-OBS feeds plate-solving, so the FITS header must carry the actual
+        // exposure start, not the request-accepted time the §60.5 response reported.
+        var capturedAt = DateTimeOffset.UtcNow;
+        // A sequencer cancel during the up-to-7 ApplyExposureSettings round-trips above shouldn't
+        // still kick off an exposure we'd only abort on the first ImageReady poll. Inert for REST
+        // (CancellationToken.None).
+        ct.ThrowIfCancellationRequested();
+        client.StartExposure(request.ExposureSec, true);
+        RefreshCacheOnce();
+
+        bool? ready;
+        try {
+            ready = await WaitForImageReadyAsync(client, request.ExposureSec, ct).ConfigureAwait(false);
+        } catch (OperationCanceledException) when (ct.IsCancellationRequested) {
+            TryAbortQuietly(client); // sequencer cancel mid-exposure: stop the camera, then propagate
+            throw;
+        }
+        if (ready is null) {
+            LogCaptureAbandonedDisconnect(frameId); // disconnect/supersede, NOT a device timeout
+            return false;
+        }
+        if (ready == false) {
+            LogCaptureFailedNotReady(frameId, request.ExposureSec);
+            return false;
+        }
+
+        // The exposure is complete (ImageReady), but the download below is a synchronous 10-30s
+        // transfer on a large sensor / slow bridge with no ct hook — honor a sequencer cancel here
+        // so the run doesn't block on a frame it's discarding. No abort: the camera already holds a
+        // finished image, nothing to stop. REST passes CancellationToken.None, so this is inert there.
+        ct.ThrowIfCancellationRequested();
+
+        // The blocking download (single large JSON/imagebytes transfer); runs on this worker.
+        object? imageArray;
+        Interlocked.Exchange(ref _downloading, 1);
+        try {
+            imageArray = client.ImageArray;
+        } finally {
+            Interlocked.Exchange(ref _downloading, 0);
+        }
+        var (pixels, width, height) = ConvertImageArray(imageArray);
+        RefreshCacheOnce();
+
+        // Read back what the driver ACTUALLY applied for the header write: a driver can
+        // silently coerce a setting TrySet appeared to accept (e.g. symmetric-binning
+        // enforcement), and XBINNING/GAIN feed plate-solving + calibration matching.
+        var applied = ReadAppliedSettings(client, request);
+        var filePath = WriteFits(frameId, pixels, width, height, applied, imageType, capturedAt);
+        try {
+            await RegisterFrameAsync(frameId, request, frameType, targetName, capturedAt, filePath, width, height).ConfigureAwait(false);
+        } catch (Exception ex) {
+            // The FITS is on disk but invisible to the catalog; name the path so an operator can
+            // recover it — and the §28.8 startup orphan scan re-registers it on the next boot.
+            LogCatalogRegistrationFailed(ex, frameId, filePath);
+            return false;
+        }
+        LogCaptureComplete(frameId, width, height, filePath);
+        return true;
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort cancellation abort: AbortExposure on a cancelled capture can throw driver/HTTP exceptions which must not mask the OperationCanceledException being propagated. CA1031's log-and-recover boundary applies.")]
+    private void TryAbortQuietly(AlpacaCamera client) {
+        try {
+            client.AbortExposure();
+        } catch (Exception ex) {
+            LogTeardownIgnored(ex);
         }
     }
 
@@ -292,6 +350,9 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         TrySet(() => client.BinY = (short)request.BinY, "BinY");
         if (request.Gain is int gain) {
             TrySet(() => client.Gain = (short)gain, "Gain");
+        }
+        if (request.CameraOffset is int cameraOffset) {
+            TrySet(() => client.Offset = cameraOffset, "Offset");
         }
         TrySet(() => {
             var maxX = client.CameraXSize / request.BinX;
@@ -320,10 +381,10 @@ public sealed partial class CameraService : ICameraService, IDisposable {
     // Polls ImageReady until set, bounded by the exposure duration + readout margin. Distinguishes
     // the two non-ready outcomes so the capture log names the real cause: false = device timeout,
     // null = the connection was dropped/superseded mid-capture.
-    private async Task<bool?> WaitForImageReadyAsync(AlpacaCamera client, double exposureSec) {
+    private async Task<bool?> WaitForImageReadyAsync(AlpacaCamera client, double exposureSec, CancellationToken ct) {
         var deadline = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(exposureSec) + ImageReadyMargin;
         while (DateTimeOffset.UtcNow < deadline) {
-            await Task.Delay(ImageReadyPollInterval, CancellationToken.None).ConfigureAwait(false);
+            await Task.Delay(ImageReadyPollInterval, ct).ConfigureAwait(false);
             bool stillOurClient;
             lock (_gate) {
                 stillOurClient = !_disposed && _state == EquipmentConnectionState.Connected
@@ -404,24 +465,33 @@ public sealed partial class CameraService : ICameraService, IDisposable {
     private static ExposureRequestDto ReadAppliedSettings(AlpacaCamera client, ExposureRequestDto request) {
         int binX = request.BinX, binY = request.BinY;
         var gain = request.Gain;
+        var cameraOffset = request.CameraOffset;
         try { binX = client.BinX; } catch (Exception) { }
         try { binY = client.BinY; } catch (Exception) { }
         if (gain is not null) {
             try { gain = client.Gain; } catch (Exception) { }
         }
-        return request with { BinX = binX, BinY = binY, Gain = gain };
+        if (cameraOffset is not null) {
+            try { cameraOffset = client.Offset; } catch (Exception) { }
+        }
+        return request with { BinX = binX, BinY = binY, Gain = gain, CameraOffset = cameraOffset };
     }
 
-    private string WriteFits(Guid frameId, ushort[] pixels, int width, int height, ExposureRequestDto request, DateTimeOffset capturedAt) {
+    private string WriteFits(Guid frameId, ushort[] pixels, int width, int height, ExposureRequestDto request, string imageType, DateTimeOffset capturedAt) {
         var dir = ResolveFramesDir();
         Directory.CreateDirectory(dir);
         var path = Path.Combine(dir, $"{frameId}.fits");
         using var fits = FitsImage.Create(path, width, height, FitsBitDepth.UnsignedShort);
         fits.WriteImageData(pixels);
-        fits.SetHeader("IMAGETYP", "LIGHT", "frame type");
+        // FITS convention + case-sensitive calibration matchers/plate-solvers want an uppercase
+        // IMAGETYP; Validate() accepts the type case-insensitively, so normalize here at the write.
+        fits.SetHeader("IMAGETYP", imageType.ToUpperInvariant(), "frame type");
         fits.SetHeader("EXPTIME", request.ExposureSec, "exposure seconds");
         if (request.Gain is int gain) {
             fits.SetHeader("GAIN", gain, "camera gain");
+        }
+        if (request.CameraOffset is int fitsOffset) {
+            fits.SetHeader("OFFSET", fitsOffset, "Sensor gain offset");
         }
         fits.SetHeader("XBINNING", request.BinX, "binning X");
         fits.SetHeader("YBINNING", request.BinY, "binning Y");
@@ -459,7 +529,7 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         }
     }
 
-    private async Task RegisterFrameAsync(Guid frameId, ExposureRequestDto request, DateTimeOffset capturedAt, string filePath, int width, int height) {
+    private async Task RegisterFrameAsync(Guid frameId, ExposureRequestDto request, FrameType frameType, string targetName, DateTimeOffset capturedAt, string filePath, int width, int height) {
         var sessionId = await _frames!.EnsureManualCaptureSessionAsync(CancellationToken.None).ConfigureAwait(false);
         var fileSize = new FileInfo(filePath).Length;
         double ccdTemp;
@@ -469,15 +539,15 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         await _frames.InsertAsync(new FrameDto(
             Id: frameId,
             SessionId: sessionId,
-            TargetName: "Manual capture",
-            FrameType: FrameType.Light,
+            TargetName: targetName,
+            FrameType: frameType,
             FilterName: string.IsNullOrWhiteSpace(request.FilterName) ? null : request.FilterName,
             // The catalog column is int (legacy §28 shape); sub-second exposures round up to 1 so
             // they never record as 0s. The FITS EXPTIME header preserves the exact value; widening
             // the column+DTO to double is tracked in PORT_TODO (wire-shape change for WILMA).
             ExposureSeconds: Math.Max(1, (int)Math.Round(request.ExposureSec)),
             Gain: request.Gain ?? -1,
-            Offset: null,
+            Offset: request.CameraOffset,
             TemperatureC: ccdTemp,
             CapturedUtc: capturedAt,
             FilePath: filePath,
@@ -582,6 +652,8 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         try { _ = c.CoolerPower; canCoolerPower = true; } catch (Exception) { }
         int minGain = 0, maxGain = 0;
         try { minGain = c.GainMin; maxGain = c.GainMax; } catch (Exception) { }
+        int minOffset = 0, maxOffset = 0;
+        try { minOffset = c.OffsetMin; maxOffset = c.OffsetMax; } catch (Exception) { }
         int maxBinX = 1, maxBinY = 1;
         try { maxBinX = c.MaxBinX; maxBinY = c.MaxBinY; } catch (Exception) { }
         double minExp = 0, maxExp = 0;
@@ -590,6 +662,7 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             SensorWidth: w, SensorHeight: h, PixelSizeUm: pixelSize,
             CanSetTemperature: canSetTemp, CanAbortExposure: canAbort, CanGetCoolerPower: canCoolerPower,
             MinGain: minGain, MaxGain: maxGain,
+            MinOffset: minOffset, MaxOffset: maxOffset,
             MinBinX: 1, MaxBinX: maxBinX, MinBinY: 1, MaxBinY: maxBinY,
             MinExposureSec: minExp, MaxExposureSec: maxExp);
     }
