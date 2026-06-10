@@ -262,14 +262,16 @@ public partial class Program {
         // ImageReady → ImageArray download → §72 FITS write (atomic §28.7) → §28 catalog insert —
         // so the existing preview/thumbnail/download endpoints serve the new frame immediately.
         // Registered here (not with the other device services above) because it needs the
-        // profileDir-scoped IFrameRepository/IProfileStore. REST-only; the ICameraMediator/
-        // IImagingMediator unification (TakeExposure) is the follow-up.
-        builder.Services.AddSingleton<ICameraService>(sp =>
+        // profileDir-scoped IFrameRepository/IProfileStore. One singleton backs the REST
+        // ICameraService AND the Sequencer's ICameraMediator + IImagingMediator (§14e PRb), so the
+        // TakeExposure instruction captures through the same pipeline as the REST endpoint.
+        builder.Services.AddSingleton<CameraService>(sp =>
             new CameraService(
                 sp.GetRequiredService<ILogger<CameraService>>(),
                 sp.GetRequiredService<IFrameRepository>(),
                 sp.GetRequiredService<IProfileStore>(),
                 fallbackFramesDir: System.IO.Path.Combine(profileDir, "frames")));
+        builder.Services.AddSingleton<ICameraService>(sp => sp.GetRequiredService<CameraService>());
 
         // Phase 38a — §38.2 filesystem-backed sequence library at
         // {profileDir}/sequences/library/. Replaces the in-memory placeholder
@@ -370,8 +372,13 @@ public partial class Program {
         // so the MoveFocuser* sequence instructions drive the live Alpaca focuser.
         builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.IFocuserMediator>(
             sp => sp.GetRequiredService<FocuserService>());
-        builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.ICameraMediator,
-            OpenAstroAra.Server.Services.Equipment.HeadlessCameraMediator>();
+        // §14e PRb — the real CameraService backs ICameraMediator + IImagingMediator too (replaces
+        // HeadlessCameraMediator), so TakeExposure validates against the live camera and captures
+        // through the §14e pipeline into the §28 catalog.
+        builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.ICameraMediator>(
+            sp => sp.GetRequiredService<CameraService>());
+        builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.IImagingMediator>(
+            sp => sp.GetRequiredService<CameraService>());
         // §14e — the real FilterWheelService backs IFilterWheelMediator too (replaces
         // HeadlessFilterWheelMediator), so SwitchFilter drives the live Alpaca wheel. Its filter
         // list imports into IProfileService.ActiveProfile on connect (SwitchFilter resolves by
@@ -428,7 +435,8 @@ public partial class Program {
                 filterWheelMediator: sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.IFilterWheelMediator>(),
                 flatDeviceMediator: sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.IFlatDeviceMediator>(),
                 weatherDataMediator: sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.IWeatherDataMediator>(),
-                profileService: sp.GetRequiredService<OpenAstroAra.Profile.Interfaces.IProfileService>()));
+                profileService: sp.GetRequiredService<OpenAstroAra.Profile.Interfaces.IProfileService>(),
+                imagingMediator: sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.IImagingMediator>()));
         builder.Services.AddSingleton<SequenceBodyDeserializer>();
 
         var app = builder.Build();

@@ -15,6 +15,7 @@
 using NUnit.Framework;
 using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.SequenceItem.FilterWheel;
+using OpenAstroAra.Sequencer.SequenceItem.Imaging;
 using OpenAstroAra.Server.Services;
 using System.Collections.Generic;
 using System.IO;
@@ -102,6 +103,9 @@ namespace OpenAstroAra.Test {
                     $"{block.Name}: per-filter loop condition missing");
                 Assert.That(block.GetItemsSnapshot().Any(i => i is SwitchFilter),
                     Is.True, $"{block.Name}: SwitchFilter did not resolve to its real type");
+                // §14e PRb: the NINA-verbatim capture nodes now resolve via the §38k-6 remap.
+                Assert.That(block.GetItemsSnapshot().Any(i => i is TakeExposure),
+                    Is.True, $"{block.Name}: TakeExposure did not resolve to the re-ported instruction");
             }
         }
     }
