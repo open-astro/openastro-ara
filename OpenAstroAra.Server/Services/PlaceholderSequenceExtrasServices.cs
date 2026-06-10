@@ -17,6 +17,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using OpenAstroAra.Server.Contracts;
 using System;
 using System.IO;
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 
 namespace OpenAstroAra.Server.Services;
@@ -46,10 +47,47 @@ public sealed partial class PlaceholderSequenceTemplateService : ISequenceTempla
     public PlaceholderSequenceTemplateService(
             ISequenceService sequences,
             string profileDir,
-            ILogger<PlaceholderSequenceTemplateService>? logger = null) {
+            ILogger<PlaceholderSequenceTemplateService>? logger = null,
+            bool seedStarterTemplates = true) {
         _sequences = sequences;
         _templatesDir = Path.Combine(profileDir, "sequences", FileSequenceService.TemplatesDirName);
         _logger = logger ?? NullLogger<PlaceholderSequenceTemplateService>.Instance;
+        // Opt-out exists for tests that assert merge behavior against their own fixture files;
+        // the daemon always seeds.
+        if (seedStarterTemplates) {
+            SeedStarterTemplates();
+        }
+    }
+
+    /// <summary>
+    /// §38.7 — seeds the disk-shipped starter templates (<c>templates/*.json</c> next to the
+    /// binary; carried into the .deb by the publish output) into the profile's templates dir on
+    /// first run. Copy-if-missing only: a user-edited (or user-deleted-and-recreated) template is
+    /// never overwritten, and removing a starter re-seeds it on the next start.
+    /// </summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Startup seeding boundary: a missing/readonly templates dir or a copy failure must degrade to 'no starter templates' (built-ins still serve), never fail daemon construction. CA1031's log-and-recover boundary applies.")]
+    private void SeedStarterTemplates() {
+        if (_templatesDir is null) {
+            return;
+        }
+        try {
+            var shippedDir = Path.Combine(AppContext.BaseDirectory, "templates");
+            if (!Directory.Exists(shippedDir)) {
+                return; // dev layouts without the Content output: built-ins still serve
+            }
+            Directory.CreateDirectory(_templatesDir);
+            foreach (var shipped in Directory.EnumerateFiles(shippedDir, "*.json")) {
+                var name = Path.GetFileName(shipped);
+                var target = Path.Combine(_templatesDir, name);
+                if (!File.Exists(target)) {
+                    File.Copy(shipped, target);
+                    LogTemplateSeeded(name);
+                }
+            }
+        } catch (Exception ex) {
+            LogTemplateSeedFailed(ex);
+        }
     }
 
     private static JsonElement TemplateBody(string targetTokenName, string filterSet, int framesPerFilter, int integrationMinutes) {
@@ -191,6 +229,12 @@ public sealed partial class PlaceholderSequenceTemplateService : ISequenceTempla
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Skipping invalid sequence template at {Path}")]
     private partial void LogInvalidTemplate(Exception ex, string path);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Seeded starter sequence template {Name} into the profile templates dir")]
+    private partial void LogTemplateSeeded(string name);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Starter-template seeding failed; built-in templates still serve")]
+    private partial void LogTemplateSeedFailed(Exception ex);
 }
 
 /// <summary>

@@ -1,0 +1,139 @@
+{
+  "name": "comet",
+  "category": "single-target",
+  "description": "Comet starter: short 30s subs in fast bursts to freeze nucleus motion, with a re-centering pause between bursts (comets move against the stars).",
+  "is_built_in": false,
+  "body": {
+    "schemaVersion": "openastroara-sequence-v1",
+    "$type": "OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer",
+    "Strategy": {
+      "$type": "OpenAstroAra.Sequencer.Container.ExecutionStrategy.SequentialStrategy, OpenAstroAra.Sequencer"
+    },
+    "Name": "Comet - {{target_name}}",
+    "Conditions": {
+      "$type": "System.Collections.ObjectModel.ObservableCollection`1[[OpenAstroAra.Sequencer.Conditions.ISequenceCondition, OpenAstroAra.Sequencer]], System.ObjectModel",
+      "$values": []
+    },
+    "IsExpanded": true,
+    "Items": {
+      "$type": "System.Collections.ObjectModel.ObservableCollection`1[[OpenAstroAra.Sequencer.SequenceItem.ISequenceItem, OpenAstroAra.Sequencer]], System.ObjectModel",
+      "$values": [
+        {
+          "$type": "OpenAstroAra.Sequencer.SequenceItem.Utility.Annotation, OpenAstroAra.Sequencer",
+          "Name": "Note",
+          "Text": "Center {{target_name}} (use current ephemeris); re-center between bursts.",
+          "Parent": null,
+          "ErrorBehavior": 0,
+          "Attempts": 1
+        },
+        {
+          "$type": "OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer",
+          "Strategy": {
+            "$type": "OpenAstroAra.Sequencer.Container.ExecutionStrategy.SequentialStrategy, OpenAstroAra.Sequencer"
+          },
+          "Name": "Burst x60",
+          "Conditions": {
+            "$type": "System.Collections.ObjectModel.ObservableCollection`1[[OpenAstroAra.Sequencer.Conditions.ISequenceCondition, OpenAstroAra.Sequencer]], System.ObjectModel",
+            "$values": [
+              {
+                "$type": "OpenAstroAra.Sequencer.Conditions.LoopCondition, OpenAstroAra.Sequencer",
+                "Iterations": 60,
+                "Parent": null
+              }
+            ]
+          },
+          "IsExpanded": true,
+          "Items": {
+            "$type": "System.Collections.ObjectModel.ObservableCollection`1[[OpenAstroAra.Sequencer.SequenceItem.ISequenceItem, OpenAstroAra.Sequencer]], System.ObjectModel",
+            "$values": [
+              {
+                "$type": "NINA.Sequencer.SequenceItem.Imaging.TakeExposure, NINA.Sequencer",
+                "ExposureTime": 30.0,
+                "Gain": -1,
+                "Offset": -1,
+                "Binning": {
+                  "$type": "OpenAstroAra.Core.Model.Equipment.BinningMode, OpenAstroAra.Core",
+                  "X": 1,
+                  "Y": 1
+                },
+                "ImageType": "LIGHT",
+                "ExposureCount": 0,
+                "Parent": null,
+                "ErrorBehavior": 0,
+                "Attempts": 1
+              }
+            ]
+          },
+          "Triggers": {
+            "$type": "System.Collections.ObjectModel.ObservableCollection`1[[OpenAstroAra.Sequencer.Trigger.ISequenceTrigger, OpenAstroAra.Sequencer]], System.ObjectModel",
+            "$values": []
+          },
+          "Parent": null,
+          "ErrorBehavior": 0,
+          "Attempts": 1
+        },
+        {
+          "$type": "OpenAstroAra.Sequencer.SequenceItem.Utility.WaitForTimeSpan, OpenAstroAra.Sequencer",
+          "Name": "Re-centering pause",
+          "Time": 120.0,
+          "Parent": null,
+          "ErrorBehavior": 0,
+          "Attempts": 1
+        },
+        {
+          "$type": "OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer",
+          "Strategy": {
+            "$type": "OpenAstroAra.Sequencer.Container.ExecutionStrategy.SequentialStrategy, OpenAstroAra.Sequencer"
+          },
+          "Name": "Burst 2 x60",
+          "Conditions": {
+            "$type": "System.Collections.ObjectModel.ObservableCollection`1[[OpenAstroAra.Sequencer.Conditions.ISequenceCondition, OpenAstroAra.Sequencer]], System.ObjectModel",
+            "$values": [
+              {
+                "$type": "OpenAstroAra.Sequencer.Conditions.LoopCondition, OpenAstroAra.Sequencer",
+                "Iterations": 60,
+                "Parent": null
+              }
+            ]
+          },
+          "IsExpanded": true,
+          "Items": {
+            "$type": "System.Collections.ObjectModel.ObservableCollection`1[[OpenAstroAra.Sequencer.SequenceItem.ISequenceItem, OpenAstroAra.Sequencer]], System.ObjectModel",
+            "$values": [
+              {
+                "$type": "NINA.Sequencer.SequenceItem.Imaging.TakeExposure, NINA.Sequencer",
+                "ExposureTime": 30.0,
+                "Gain": -1,
+                "Offset": -1,
+                "Binning": {
+                  "$type": "OpenAstroAra.Core.Model.Equipment.BinningMode, OpenAstroAra.Core",
+                  "X": 1,
+                  "Y": 1
+                },
+                "ImageType": "LIGHT",
+                "ExposureCount": 0,
+                "Parent": null,
+                "ErrorBehavior": 0,
+                "Attempts": 1
+              }
+            ]
+          },
+          "Triggers": {
+            "$type": "System.Collections.ObjectModel.ObservableCollection`1[[OpenAstroAra.Sequencer.Trigger.ISequenceTrigger, OpenAstroAra.Sequencer]], System.ObjectModel",
+            "$values": []
+          },
+          "Parent": null,
+          "ErrorBehavior": 0,
+          "Attempts": 1
+        }
+      ]
+    },
+    "Triggers": {
+      "$type": "System.Collections.ObjectModel.ObservableCollection`1[[OpenAstroAra.Sequencer.Trigger.ISequenceTrigger, OpenAstroAra.Sequencer]], System.ObjectModel",
+      "$values": []
+    },
+    "Parent": null,
+    "ErrorBehavior": 0,
+    "Attempts": 1
+  }
+}
