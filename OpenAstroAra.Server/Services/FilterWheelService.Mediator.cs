@@ -110,7 +110,10 @@ public sealed partial class FilterWheelService : IFilterWheelMediator {
             slots = _slots;
         }
         var target = inputFilter.Position;
-        if (client is null || target < 0 || (slots is not null && target >= slots.Count)) {
+        // slots == null means the first slot read hasn't landed yet (fresh connect): without the
+        // slot count the upper bound can't be validated, so skip explicitly rather than writing a
+        // possibly-out-of-range position to the device.
+        if (client is null || slots is null || target < 0 || target >= slots.Count) {
             LogFilterChangeSkipped(inputFilter.Name, target);
             return inputFilter;
         }
@@ -198,7 +201,8 @@ public sealed partial class FilterWheelService : IFilterWheelMediator {
                 return true;
             }
         }
-        return false; // timed out without reaching the target slot
+        LogFilterChangeTimedOut(target); // distinct from the pre-check "skipped" log for post-mortem
+        return false;
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
@@ -243,11 +247,13 @@ public sealed partial class FilterWheelService : IFilterWheelMediator {
     }
 
     private void ImportProfileFilters(List<FilterSlotDto> slots) {
-        var filters = ProfileFilters();
-        if (filters is null) {
-            return; // REST-only construction (unit tests): no profile to import into
-        }
+        // Resolve the collection reference INSIDE the lock (consistent with SnapshotProfileFilters)
+        // so a concurrent ActiveProfile swap can't land the import in an orphaned collection.
         lock (_profileFiltersLock) {
+            var filters = ProfileFilters();
+            if (filters is null) {
+                return; // REST-only construction (unit tests): no profile to import into
+            }
             SyncProfileFilters(filters, slots);
         }
         LogProfileFiltersImported(slots.Count);
@@ -309,6 +315,9 @@ public sealed partial class FilterWheelService : IFilterWheelMediator {
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Imported {Count} filters from the connected wheel into the active profile")]
     private partial void LogProfileFiltersImported(int count);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "filter change to position {Position} timed out waiting for the wheel to settle")]
+    private partial void LogFilterChangeTimedOut(short position);
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "filter-wheel position poll failed during settle-wait (will keep polling)")]
     private partial void LogPositionPollFailed();
