@@ -118,7 +118,7 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
             token.ThrowIfCancellationRequested();
             if (DateTimeOffset.UtcNow >= gateDeadline) {
                 throw new TimeoutException(
-                    $"timed out after {CaptureGateMaxWait.TotalMinutes:0} min waiting for an in-progress capture to release the camera; the in-flight gate may be stuck — check the daemon log");
+                    $"timed out after {CaptureGateMaxWait.TotalMinutes:0} min waiting for an in-progress capture to release the camera. Likely a manual capture running a very long exposure or a download stalled on a slow bridge; check the daemon log for an active capture, and if none is running reconnect the camera to clear the stuck gate.");
             }
             await Task.Delay(CaptureGatePollInterval, token).ConfigureAwait(false);
         }
