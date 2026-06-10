@@ -1359,6 +1359,9 @@ You can also calculate the bias by clicking the Snapshot button next to Bias Mea
   <data name="LblExposureTimeDescription" xml:space="preserve">
     <value>Exposure Time in seconds</value>
   </data>
+  <data name="LblExposureTimeNotValid" xml:space="preserve">
+    <value>Exposure time must be greater than zero</value>
+  </data>
   <data name="LblFieldOfView" xml:space="preserve">
     <value>Field Of View</value>
   </data>

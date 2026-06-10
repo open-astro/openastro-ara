@@ -42,6 +42,21 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Validate_flags_non_positive_exposure_time() {
+            var withValid = NewPrototype();
+            withValid.ExposureTime = 1;
+            withValid.Validate();
+
+            var withZero = NewPrototype();
+            withZero.ExposureTime = 0;
+            withZero.Validate();
+
+            // Both share the headless camera-not-connected issue; the only delta is the
+            // non-positive-exposure guard, so a zero exposure adds exactly one more issue.
+            Assert.That(withZero.Issues.Count, Is.EqualTo(withValid.Issues.Count + 1));
+        }
+
+        [Test]
         public void Clone_preserves_every_json_property() {
             var item = NewPrototype();
             item.ExposureTime = 120.5;

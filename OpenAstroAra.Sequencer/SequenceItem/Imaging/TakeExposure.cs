@@ -152,6 +152,12 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Imaging {
             if (!cameraMediator.GetInfo().Connected) {
                 i.Add(Loc.Instance["LblCameraNotConnected"]);
             }
+            // A NINA import or hand-edited sequence can carry a non-positive exposure; catch it here
+            // so the error stays in the validation layer instead of surfacing as an opaque driver
+            // exception from StartExposure(duration <= 0).
+            if (ExposureTime <= 0) {
+                i.Add(Loc.Instance["LblExposureTimeNotValid"]);
+            }
             Issues = i;
             return i.Count == 0;
         }
