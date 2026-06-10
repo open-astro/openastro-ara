@@ -67,6 +67,7 @@ public sealed partial class CameraService : ICameraService, IDisposable {
     private int _refreshing;
     private int _refreshPending;
     private long _connectGeneration;
+    private int _captureInFlight;
     private bool _disposed;
 
     public CameraService(
@@ -147,18 +148,22 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             caps = _capabilities;
         }
         // Dispose → argument range → connected, aligned with the other device services. Range
-        // checks use the read-once caps when present (pre-first-refresh the device validates).
+        // checks use the read-once caps when present; a zero max means that capability read failed
+        // ("unknown") and validation defers to the device rather than rejecting everything.
         if (request.ExposureSec <= 0
-            || (caps is not null && (request.ExposureSec < caps.MinExposureSec || request.ExposureSec > caps.MaxExposureSec))) {
+            || (caps is not null && caps.MaxExposureSec > 0
+                && (request.ExposureSec < caps.MinExposureSec || request.ExposureSec > caps.MaxExposureSec))) {
             throw new ArgumentOutOfRangeException(nameof(request), request.ExposureSec,
                 "ExposureSec is outside the camera's supported exposure range.");
         }
         if (request.BinX < 1 || request.BinY < 1
-            || (caps is not null && (request.BinX > caps.MaxBinX || request.BinY > caps.MaxBinY))) {
+            || (caps is not null && caps.MaxBinX > 0 && caps.MaxBinY > 0
+                && (request.BinX > caps.MaxBinX || request.BinY > caps.MaxBinY))) {
             throw new ArgumentOutOfRangeException(nameof(request), $"{request.BinX}x{request.BinY}",
                 "Binning is outside the camera's supported range.");
         }
-        if (request.Gain is int gain && caps is not null && (gain < caps.MinGain || gain > caps.MaxGain)) {
+        if (request.Gain is int gain && caps is not null && caps.MaxGain > 0
+            && (gain < caps.MinGain || gain > caps.MaxGain)) {
             throw new ArgumentOutOfRangeException(nameof(request), gain,
                 "Gain is outside the camera's supported range.");
         }
@@ -167,6 +172,12 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         }
         if (_frames is null) {
             throw new InvalidOperationException("frame catalog is not configured; captures cannot be stored");
+        }
+        // One capture at a time: two concurrent StartExposure calls against the same ASCOM device
+        // are undefined behavior for most drivers (and would corrupt the second download). The flag
+        // releases in the pipeline's finally.
+        if (Interlocked.CompareExchange(ref _captureInFlight, 1, 0) != 0) {
+            throw new InvalidOperationException("an exposure is already in progress");
         }
 
         var frameId = Guid.NewGuid();
@@ -226,6 +237,7 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         } catch (Exception ex) {
             LogCaptureFailed(ex, frameId);
         } finally {
+            Interlocked.Exchange(ref _captureInFlight, 0);
             RefreshCacheOnce();
         }
     }
@@ -371,7 +383,10 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             TargetName: "Manual capture",
             FrameType: FrameType.Light,
             FilterName: string.IsNullOrWhiteSpace(request.FilterName) ? null : request.FilterName,
-            ExposureSeconds: (int)Math.Round(request.ExposureSec),
+            // The catalog column is int (legacy §28 shape); sub-second exposures round up to 1 so
+            // they never record as 0s. The FITS EXPTIME header preserves the exact value; widening
+            // the column+DTO to double is tracked in PORT_TODO (wire-shape change for WILMA).
+            ExposureSeconds: Math.Max(1, (int)Math.Round(request.ExposureSec)),
             Gain: request.Gain ?? -1,
             Offset: null,
             TemperatureC: ccdTemp,

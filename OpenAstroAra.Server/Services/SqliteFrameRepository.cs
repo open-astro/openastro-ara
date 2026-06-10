@@ -184,27 +184,24 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         await InsertFrameAsync(conn, frame, ct).ConfigureAwait(false);
     }
 
-    // Lazily-created "manual capture" session for REST-initiated exposures. Cached per daemon
-    // lifetime; the row mirrors CaptureScanService's synthetic-recovery-session shape (ended_at
-    // stays NULL — the session is open as long as the daemon runs).
-    private Guid? _manualCaptureSessionId;
+    // Lazily-created "manual capture" session for REST-initiated exposures. All callers share ONE
+    // creation task, so no caller can observe the id before the INSERT committed (the sessions FK
+    // on frames is enforced — PRAGMA foreign_keys=ON). A failed creation resets so the next call
+    // retries.
+    private Task<Guid>? _manualSessionTask;
     private readonly object _manualSessionGate = new();
 
     /// <inheritdoc />
-    public async Task<Guid> EnsureManualCaptureSessionAsync(CancellationToken ct) {
-        // Reserve the id under a plain lock (cheap), then INSERT outside it. A duplicate insert
-        // can't happen: only the reserving caller proceeds to the INSERT; concurrent callers see
-        // the cached id immediately. If the INSERT throws, the reservation is rolled back so the
-        // next call retries.
-        Guid sid;
+    public Task<Guid> EnsureManualCaptureSessionAsync(CancellationToken ct) {
         lock (_manualSessionGate) {
-            if (_manualCaptureSessionId is Guid cached) {
-                return cached;
-            }
-            sid = Guid.NewGuid();
-            _manualCaptureSessionId = sid;
+            _manualSessionTask ??= CreateManualCaptureSessionAsync();
+            return _manualSessionTask;
         }
+    }
+
+    private async Task<Guid> CreateManualCaptureSessionAsync() {
         try {
+            var sid = Guid.NewGuid();
             await using var conn = _db.OpenConnection();
             await using var cmd = conn.CreateCommand();
             cmd.CommandText = """
@@ -217,13 +214,11 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
                 """;
             cmd.Parameters.AddWithValue("$id", sid.ToString());
             cmd.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.ToString("O"));
-            await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+            await cmd.ExecuteNonQueryAsync(CancellationToken.None).ConfigureAwait(false);
             return sid;
         } catch {
             lock (_manualSessionGate) {
-                if (_manualCaptureSessionId == sid) {
-                    _manualCaptureSessionId = null;
-                }
+                _manualSessionTask = null; // retry on the next call
             }
             throw;
         }

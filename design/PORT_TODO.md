@@ -55,6 +55,8 @@ Deferred during the §38k-13…18 equipment-mediator stub layer (PR #315). Each 
 
 ## Execution-engine TODOs
 
+- **§28 `ExposureSeconds` is `int` across the frames schema + DTOs** (flagged on #343). Sub-second calibration exposures (bias/short darks) round up to 1s in the catalog (the FITS `EXPTIME` header preserves the exact value). Widening to `double` touches the SQLite column affinity, `FrameDto`/`FrameListItemDto`, the stats aggregations and the WILMA codegen wire shape — do it as one dedicated pass before the calibration workflows (§40) ship.
+
 The §38 execution engine (`SequencerService`, #319) now **runs** sequences for real through NINA's inherited `Sequencer`. These items refine it as real equipment + data models land:
 
 - **Pause / Resume** (deferred in #319). The headless engine has no pause hook (NINA's was WPF-coupled and stripped), so `SequencerService.PauseAsync`/`ResumeAsync` are accepted no-ops today (they deliberately do NOT emit a `paused` event the run wouldn't honor). To honor pause, add an instruction-boundary pause gate to the execution loop — e.g. drive the root container's top-level items through a wrapper that awaits a pause-`TaskCompletionSource` between items, or thread a pause token NINA's containers check. Re-enable the `sequence.paused`/`sequence.resumed` WS events when real suspension works. **Client contract until then:** the endpoints return `202 Accepted` but do nothing, and run-state never reports `Paused` — **WILMA must not expose a pause control** (or must grey it out) so the user isn't misled into thinking a run paused. When real pause lands, surface it to the client (re-enable the button + the `paused`/`resumed` events).
