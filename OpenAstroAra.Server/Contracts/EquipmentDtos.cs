@@ -79,7 +79,10 @@ public sealed record CameraCapabilitiesDto(
     int MinGain, int MaxGain,
     int MinOffset, int MaxOffset,
     int MinBinX, int MaxBinX, int MinBinY, int MaxBinY,
-    double MinExposureSec, double MaxExposureSec);
+    double MinExposureSec, double MaxExposureSec,
+    // Bayer color-filter pattern at the image origin (RGGB/BGGR/GRBG/GBRG) for an OSC sensor;
+    // null for a monochrome sensor. Drives the §65 debayered color preview + the FITS BAYERPAT header.
+    string? BayerPattern = null);
 
 public sealed record CameraStateDto(
     string State,   // "idle" | "exposing" | "downloading" | "error"
