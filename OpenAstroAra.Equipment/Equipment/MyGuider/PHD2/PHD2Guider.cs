@@ -38,6 +38,13 @@ using System.Text.RegularExpressions;
 using System.Net;
 using ASCOM.Common.Helpers;
 
+// Recovered inherited PHD2 client (deleted in #242, restored from 840893eb8^). Nullable-reference
+// WARNINGS are disabled file-locally to preserve NINA's original, battle-tested null-handling on the
+// JSON-RPC/connection path rather than introduce ~37 speculative annotations that risk a runtime NRE.
+// The annotation context stays on (the connect-time field/property `?` annotations above are real).
+// TODO(§63): replace with proper per-site annotations once the live PHD2 path is exercised.
+#nullable disable warnings
+
 namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
 
     public partial class PHD2Guider : BaseINPC, IGuider {
@@ -55,7 +62,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
 
         public string Id => "PHD2_Single";
 
-        public PhdEventVersion Version {
+        public PhdEventVersion? Version {
             get => _version;
             set {
                 _version = value;
@@ -65,7 +72,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
 
         private PhdEventAppState? _appState;
 
-        public PhdEventAppState AppState {
+        public PhdEventAppState? AppState {
             get => _appState;
             set {
                 _appState = value;
@@ -142,7 +149,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
 
         private Phd2Profile? _selectedProfile;
 
-        public Phd2Profile SelectedProfile {
+        public Phd2Profile? SelectedProfile {
             get => _selectedProfile;
             set {
                 if (value != _selectedProfile) {
@@ -411,7 +418,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 // Wait for at least one exposure to finish
                 var exposureDurationResponse = await SendMessage<GetExposureResponse>(new Phd2GetExposure());
                 var durationMs = exposureDurationResponse.result;
-                await Task.Delay(TimeSpan.FromMilliseconds(durationMs + 1000));
+                await Task.Delay(TimeSpan.FromMilliseconds((durationMs ?? 0) + 1000));
 
                 var findStarMsg = new Phd2FindStar() {
                     Parameters = new Phd2FindStarParameter() {
@@ -786,7 +793,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         private string? shiftRateAxis;
         private IPAddress? phd2Ip;
 
-        public string ShiftRateAxis {
+        public string? ShiftRateAxis {
             get => shiftRateAxis;
             private set {
                 shiftRateAxis = value;
@@ -1054,9 +1061,9 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             _activeProfile = getProfileResponse.result;
             AvailableProfiles.Clear();
             foreach (var profile in getProfilesResponse.result) {
-                AvailableProfiles.Add(new Phd2Profile { Name = profile.name, Id = profile.id });
+                AvailableProfiles.Add(new Phd2Profile { Name = profile.name, Id = profile.id ?? 0 });
             }
-            SelectedProfile = AvailableProfiles.FirstOrDefault(x => x.Id == _activeProfile.id);
+            SelectedProfile = AvailableProfiles.FirstOrDefault(x => x.Id == _activeProfile?.id);
         }
 
         private async Task<bool> EnsurePHD2EquipmentConnected() {
