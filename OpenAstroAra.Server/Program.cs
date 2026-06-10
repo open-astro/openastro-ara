@@ -184,8 +184,11 @@ public partial class Program {
         builder.Services.AddSingleton<RotatorService>();
         builder.Services.AddSingleton<IRotatorService>(sp => sp.GetRequiredService<RotatorService>());
         // §14e — eighth real device service: live dome (azimuth + shutter/home/park) + slew, park,
-        // open/close shutter. REST-only; the IDomeMediator unification is a follow-up.
-        builder.Services.AddSingleton<IDomeService, DomeService>();
+        // open/close shutter. One singleton backs BOTH the REST IDomeService and the Sequencer's
+        // IDomeMediator (§8.1), so the dome instructions drive the live device (mediator wiring is
+        // below; this replaces the HeadlessDomeMediator stub).
+        builder.Services.AddSingleton<DomeService>();
+        builder.Services.AddSingleton<IDomeService>(sp => sp.GetRequiredService<DomeService>());
         // §14e — third real device service (first with a control action: SetValue). REST-only;
         // the ISwitchMediator unification (SetSwitchValue sequence instruction) is a follow-up.
         builder.Services.AddSingleton<ISwitchService, SwitchService>();
@@ -354,8 +357,10 @@ public partial class Program {
             sp => sp.GetRequiredService<RotatorService>());
         builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.ISwitchMediator,
             OpenAstroAra.Server.Services.Equipment.HeadlessSwitchMediator>();
-        builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.IDomeMediator,
-            OpenAstroAra.Server.Services.Equipment.HeadlessDomeMediator>();
+        // §14e — the real DomeService backs IDomeMediator too (replaces HeadlessDomeMediator), so the
+        // Open/Close shutter, Park, FindHome and SlewAzimuth instructions drive the live Alpaca dome.
+        builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.IDomeMediator>(
+            sp => sp.GetRequiredService<DomeService>());
         // §38k-19/20 — last two device-mediator stubs complete the device set.
         // No instruction prototype consumes them yet (there are no flat-device /
         // weather sequence items, and the Connect dir — Connect*/Disconnect*/

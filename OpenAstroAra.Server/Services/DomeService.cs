@@ -46,6 +46,12 @@ public sealed partial class DomeService : IDomeService, IDisposable {
     private DiscoveredDeviceDto? _device;
     private EquipmentConnectionState _state = EquipmentConnectionState.Disconnected;
     private DomeStateDto _runtime = IdleRuntime;
+    // Read-once capabilities + the raw ASCOM shutter status, cached for the IDomeMediator GetInfo()
+    // snapshot (the REST DomeDto doesn't expose them). Populated by the §32.4 refresh; reset on adopt.
+    private DomeCaps? _domeCaps;
+    // Error maps to NINA ShutterError ("not yet read") so GetInfo honestly signals "unknown" in the
+    // ≤2s window between connect and the first refresh, rather than a possibly-false ShutterClosed.
+    private ShutterState _shutterStatusRaw = ShutterState.Error;
     private int _refreshing;
     private long _connectGeneration;
     private bool _disposed;
@@ -188,13 +194,22 @@ public sealed partial class DomeService : IDomeService, IDisposable {
                 }
                 client = _client;
             }
+            bool needCaps;
+            lock (_gate) {
+                needCaps = _domeCaps is null;
+            }
             if (client is null) {
                 return;
             }
-            var runtime = ReadRuntime(client);
+            var (runtime, rawShutter) = ReadRuntime(client);
+            var caps = needCaps ? ReadCaps(client) : (DomeCaps?)null;
             lock (_gate) {
                 if (_state == EquipmentConnectionState.Connected && ReferenceEquals(_client, client)) {
                     _runtime = runtime;
+                    _shutterStatusRaw = rawShutter;
+                    if (caps is not null) {
+                        _domeCaps = caps;
+                    }
                 }
             }
         } catch (Exception ex) {
@@ -205,8 +220,24 @@ public sealed partial class DomeService : IDomeService, IDisposable {
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Per-field read boundary: an unsupported capability property throws; each flag falls back to false rather than failing the whole capability read. Capabilities are static, so this runs once per connection. CA1031's log-and-recover boundary applies.")]
+    private static DomeCaps ReadCaps(AlpacaDome c) {
+        bool canSetShutter;
+        try { canSetShutter = c.CanSetShutter; } catch (Exception) { canSetShutter = false; }
+        bool canSetAzimuth;
+        try { canSetAzimuth = c.CanSetAzimuth; } catch (Exception) { canSetAzimuth = false; }
+        bool canSyncAzimuth;
+        try { canSyncAzimuth = c.CanSyncAzimuth; } catch (Exception) { canSyncAzimuth = false; }
+        bool canPark;
+        try { canPark = c.CanPark; } catch (Exception) { canPark = false; }
+        bool canFindHome;
+        try { canFindHome = c.CanFindHome; } catch (Exception) { canFindHome = false; }
+        return new DomeCaps(canSetShutter, canSetAzimuth, canSyncAzimuth, canPark, canFindHome);
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Per-field read boundary: an unsupported/transiently-failing dome property throws; that field falls back to its default rather than failing the whole runtime read. CA1031's log-and-recover boundary applies.")]
-    private static DomeStateDto ReadRuntime(AlpacaDome c) {
+    private static (DomeStateDto Runtime, ShutterState RawShutter) ReadRuntime(AlpacaDome c) {
         bool slewing;
         try { slewing = c.Slewing; } catch (Exception) { slewing = false; }
         double? azimuth;
@@ -229,7 +260,7 @@ public sealed partial class DomeService : IDomeService, IDisposable {
             : parked ? "parked"
             : shutterOpen ? "shutter_open"
             : "idle";
-        return new DomeStateDto(state, azimuth, shutterOpen, atHome, parked);
+        return (new DomeStateDto(state, azimuth, shutterOpen, atHome, parked), shutter);
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
@@ -252,7 +283,9 @@ public sealed partial class DomeService : IDomeService, IDisposable {
             lock (_gate) {
                 if (!_disposed && _connectGeneration == generation) {
                     _client = client;
-                    _runtime = IdleRuntime; // don't serve a prior device's runtime
+                    _runtime = IdleRuntime;                  // don't serve a prior device's runtime
+                    _domeCaps = null;                        // re-read capabilities for the new device
+                    _shutterStatusRaw = ShutterState.Error; // "not yet read" until the first refresh, not a false Closed
                     SetState(EquipmentConnectionState.Connected);
                     adopted = true;
                 }
