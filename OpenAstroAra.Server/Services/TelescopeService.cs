@@ -49,10 +49,14 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
     private EquipmentConnectionState _state = EquipmentConnectionState.Disconnected;
     private TelescopeCapabilitiesDto? _capabilities;
     private TelescopeStateDto _runtime = IdleRuntime;
-    // Mount-native coordinate system, read once with the capabilities and consumed by the
-    // ITelescopeMediator partial (coordinate transform + GetInfo epoch). EquatorialCoordinateType has
-    // no "unknown" member; Other is the honest pre-read sentinel (the mediator maps it to JNOW).
+    // Mount-native coordinate system, consumed by the ITelescopeMediator partial (coordinate
+    // transform + GetInfo epoch). EquatorialCoordinateType has no "unknown" member; Other is the
+    // honest pre-read sentinel (the mediator maps it to JNOW). Unlike the read-once capabilities, the
+    // read is retried each refresh until ONE confirmed success (_equatorialSystemKnown): a transient
+    // failure on the first pass must not permanently freeze the sentinel — a J2000 mount stuck on
+    // "Other" would silently receive un-precession-corrected slew targets forever.
     private EquatorialCoordinateType _equatorialSystemRaw = EquatorialCoordinateType.Other;
+    private bool _equatorialSystemKnown;
     private int _refreshing;
     private int _refreshPending;
     private long _connectGeneration;
@@ -237,19 +241,23 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
         try {
             AlpacaTelescope? client;
             bool needCaps;
+            bool needEquatorialSystem;
             lock (_gate) {
                 if (_disposed || _state != EquipmentConnectionState.Connected) {
                     return;
                 }
                 client = _client;
                 needCaps = _capabilities is null;
+                needEquatorialSystem = !_equatorialSystemKnown;
             }
             if (client is null) {
                 return;
             }
             var runtime = ReadRuntime(client);
             var caps = needCaps ? ReadCapabilities(client) : null;
-            var equatorialSystem = needCaps ? ReadEquatorialSystem(client) : (EquatorialCoordinateType?)null;
+            // Retried every pass until one read succeeds (null = read failed; a genuine "Other" from
+            // the device counts as success and stops the retries).
+            var equatorialSystem = needEquatorialSystem ? ReadEquatorialSystem(client) : null;
             lock (_gate) {
                 if (_state == EquipmentConnectionState.Connected && ReferenceEquals(_client, client)) {
                     _runtime = runtime;
@@ -258,6 +266,7 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
                     }
                     if (equatorialSystem is not null) {
                         _equatorialSystemRaw = equatorialSystem.Value;
+                        _equatorialSystemKnown = true;
                     }
                 }
             }
@@ -321,12 +330,12 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Per-field read boundary: an unsupported/transiently-failing EquatorialSystem read throws; fall back to Other (the pre-read sentinel, mapped to JNOW by the mediator) rather than failing the whole capability read. CA1031's log-and-recover boundary applies.")]
-    private static EquatorialCoordinateType ReadEquatorialSystem(AlpacaTelescope c) {
+        Justification = "Per-field read boundary: an unsupported/transiently-failing EquatorialSystem read throws; report null ('read failed, retry next pass') rather than failing the whole refresh — RefreshPass distinguishes a failed read from a device genuinely reporting Other. CA1031's log-and-recover boundary applies.")]
+    private static EquatorialCoordinateType? ReadEquatorialSystem(AlpacaTelescope c) {
         try {
             return c.EquatorialSystem;
         } catch (Exception) {
-            return EquatorialCoordinateType.Other;
+            return null;
         }
     }
 
@@ -367,7 +376,8 @@ public sealed partial class TelescopeService : ITelescopeService, IDisposable {
                 if (!_disposed && _connectGeneration == generation) {
                     _client = client;
                     _capabilities = null;       // re-read for the new device
-                    _equatorialSystemRaw = EquatorialCoordinateType.Other; // "not yet read" until the first refresh
+                    _equatorialSystemRaw = EquatorialCoordinateType.Other; // "not yet read" until the first successful read
+                    _equatorialSystemKnown = false;
                     _runtime = IdleRuntime;     // don't serve a prior device's runtime
                     SetState(EquipmentConnectionState.Connected);
                     adopted = true;

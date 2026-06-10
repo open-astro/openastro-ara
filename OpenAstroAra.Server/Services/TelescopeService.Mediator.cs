@@ -293,9 +293,15 @@ public sealed partial class TelescopeService : ITelescopeMediator {
 
     // Polls the device directly until the terminal condition holds (refreshing the §32.4 cache each
     // tick so GetInfo stays current), or returns false on timeout / a dropped-or-superseded connection.
+    // Delay-BEFORE-check (rotator-style), not check-then-delay: ASCOM does not contractually require
+    // Slewing to be asserted before SlewToCoordinatesAsync returns, so an immediate first check could
+    // read !Slewing + near-target and declare a slew settled before the mount ever moved (a target
+    // within the tolerance of the current heading defeats the PointingNear guard). One unconditional
+    // poll interval gives the driver that window; it costs 100ms on already-satisfied conditions.
     private async Task<bool> WaitForMountConditionAsync(AlpacaTelescope client, Func<AlpacaTelescope, bool> isDone, CancellationToken ct) {
         var loggedReadFailure = false;
         for (var i = 0; i < MountOpSettleMaxPolls; i++) {
+            await Task.Delay(MountOpPollInterval, ct).ConfigureAwait(false);
             bool stillOurClient;
             lock (_gate) {
                 stillOurClient = !_disposed && _state == EquipmentConnectionState.Connected
@@ -316,7 +322,6 @@ public sealed partial class TelescopeService : ITelescopeMediator {
             if (done == true) {
                 return true;
             }
-            await Task.Delay(MountOpPollInterval, ct).ConfigureAwait(false);
         }
         return false; // timed out without reaching the terminal state
     }
