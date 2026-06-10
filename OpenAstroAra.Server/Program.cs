@@ -216,7 +216,10 @@ public partial class Program {
         // §14e — seventh real device service: live flat device / CoverCalibrator (cover + light)
         // + apply. REST-only; the mediator unification is a follow-up.
         builder.Services.AddSingleton<IFlatDeviceService, FlatDeviceService>();
-        builder.Services.AddSingleton<IGuiderService, GuiderService>();
+        // §63 — one GuiderService singleton backs both the REST IGuiderService and the Sequencer's
+        // IGuiderMediator (§8.1; the mediator alias is registered below, replacing HeadlessGuiderMediator).
+        builder.Services.AddSingleton<GuiderService>();
+        builder.Services.AddSingleton<IGuiderService>(sp => sp.GetRequiredService<GuiderService>());
         builder.Services.AddSingleton<IPolarAlignService, PlaceholderPolarAlignService>();
         // Phase 13.13 — §38 sequence CRUD + runtime control.
         // ISequenceService swapped to FileSequenceService below after
