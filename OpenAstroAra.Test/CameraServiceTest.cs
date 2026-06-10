@@ -101,14 +101,15 @@ namespace OpenAstroAra.Test {
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1814:Prefer jagged arrays over multidimensional",
             Justification = "The API under test consumes ASCOM's ImageArray, which IS a multidimensional array by spec.")]
         public void ConvertImageArray_handles_double_payloads_from_bridged_drivers() {
-            var arr = new double[2, 2];
-            arr[0, 0] = 10.4; arr[1, 0] = 20.6;
-            arr[0, 1] = -3.0; arr[1, 1] = 99999.0;
+            var arr = new double[3, 2];
+            arr[0, 0] = 10.4; arr[1, 0] = 20.6; arr[2, 0] = double.NaN;
+            arr[0, 1] = -3.0; arr[1, 1] = 99999.0; arr[2, 1] = double.PositiveInfinity;
 
             var (pixels, width, height) = CameraService.ConvertImageArray(arr);
 
-            Assert.That((width, height), Is.EqualTo((2, 2)));
-            Assert.That(pixels, Is.EqualTo(new ushort[] { 10, 21, 0, 65535 }));
+            Assert.That((width, height), Is.EqualTo((3, 2)));
+            // NaN reads as 0; saturated/+Inf clamps to white (65535), never wraps to black.
+            Assert.That(pixels, Is.EqualTo(new ushort[] { 10, 21, 0, 0, 65535, 65535 }));
         }
 
         [Test]

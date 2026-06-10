@@ -368,7 +368,13 @@ public sealed partial class CameraService : ICameraService, IDisposable {
                 for (var y = 0; y < height; y++) {
                     var row = y * width;
                     for (var x = 0; x < width; x++) {
-                        pixels[row + x] = (ushort)Math.Clamp((long)Math.Round(doubles[x, y]), ushort.MinValue, ushort.MaxValue);
+                        // Clamp in the double domain BEFORE casting: a saturated/+Inf pixel must
+                        // become white (65535), not wrap through the cast to black; NaN reads as 0.
+                        var v = doubles[x, y];
+                        pixels[row + x] = double.IsNaN(v) ? (ushort)0
+                            : v >= ushort.MaxValue ? ushort.MaxValue
+                            : v <= 0 ? (ushort)0
+                            : (ushort)Math.Round(v);
                     }
                 }
                 return (pixels, width, height);
