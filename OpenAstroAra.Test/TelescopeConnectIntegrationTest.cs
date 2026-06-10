@@ -13,12 +13,16 @@
 #endregion "copyright"
 
 using NUnit.Framework;
+using OpenAstroAra.Astrometry;
+using OpenAstroAra.Equipment.Interfaces;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
 using System;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
+using DeviceType = OpenAstroAra.Server.Contracts.DeviceType;
 
 namespace OpenAstroAra.Test {
 
@@ -85,6 +89,58 @@ namespace OpenAstroAra.Test {
                 Assert.That(slewed!.Runtime.DeclinationDegrees, Is.Not.Null);
                 Assert.That(slewed.Runtime.DeclinationDegrees!.Value, Is.EqualTo(targetDec).Within(1.0),
                     "the mount should report ~45° declination after the slew");
+            } finally {
+                await svc.DisconnectAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+            }
+            var disconnected = await PollUntilAsync(svc, d => d.State == EquipmentConnectionState.Disconnected).ConfigureAwait(false);
+            Assert.That(disconnected!.State, Is.EqualTo(EquipmentConnectionState.Disconnected));
+        }
+
+        /// <summary>
+        /// §14e — the same <see cref="TelescopeService"/> also serves <see cref="ITelescopeMediator"/>:
+        /// the telescope instructions read <c>GetInfo()</c> (Validate) and call the mount ops
+        /// (Execute). This exercises the live mediator Unpark + SetTrackingMode + SlewToCoordinatesAsync
+        /// path — the ops the §38k telescope instructions invoke.
+        /// </summary>
+        [Test]
+        public async Task Mediator_Unpark_SetTrackingMode_and_Slew_drive_the_live_device() {
+            var device = await DiscoverAsync().ConfigureAwait(false);
+            Assert.That(device, Is.Not.Null, "no Telescope discovered from the running OmniSim");
+
+            using var svc = new TelescopeService();
+            await svc.ConnectAsync(new ConnectRequestDto(device!), idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+            var connected = await PollUntilAsync(svc, d => d.State != EquipmentConnectionState.Connecting).ConfigureAwait(false);
+            Assert.That(connected!.State, Is.EqualTo(EquipmentConnectionState.Connected));
+
+            try {
+                // Wait for the first refresh so GetInfo serves capabilities + a real position.
+                await PollUntilAsync(svc, d => d.Capabilities is not null && d.Runtime.RightAscensionHours is not null).ConfigureAwait(false);
+
+                // The ops below are the ITelescopeMediator surface the instructions call; the casts
+                // are inline (CA1859) and bounded — each blocks until its terminal condition.
+                var unparked = await ((ITelescopeMediator)svc).UnparkTelescope(progress: null!, CancellationToken.None).ConfigureAwait(false);
+                Assert.That(unparked, Is.True, "UnparkTelescope should confirm the mount left the parked state");
+
+                Assert.That(((ITelescopeMediator)svc).SetTrackingMode(TrackingMode.Sidereal), Is.True,
+                    "SetTrackingMode(Sidereal) should succeed against the OmniSim mount");
+
+                var info = ((ITelescopeMediator)svc).GetInfo();
+                Assert.That(info.Connected, Is.True);
+                Assert.That(info.AtPark, Is.False);
+                Assert.That(info.TrackingModes, Does.Contain(TrackingMode.Sidereal),
+                    "GetInfo should surface the sim's supported tracking modes for SetTracking.Validate");
+
+                // Slew near the current pointing so the sim settles quickly; the mediator op returns
+                // true only once Slewing clears and the pointing lands inside the settle window.
+                var current = ((ITelescopeMediator)svc).GetCurrentPosition();
+                var target = new Coordinates(
+                    Angle.ByHours(NormalizeRaHours(current.RA + 0.2)), Angle.ByDegree(45.0), current.Epoch);
+                var slewed = await ((ITelescopeMediator)svc).SlewToCoordinatesAsync(target, CancellationToken.None).ConfigureAwait(false);
+                Assert.That(slewed, Is.True, "mediator slew should confirm arrival at the target");
+
+                var settled = ((ITelescopeMediator)svc).GetCurrentPosition();
+                Assert.That(settled.Dec, Is.EqualTo(45.0).Within(5.0),
+                    "post-slew GetCurrentPosition should reflect the slewed declination");
             } finally {
                 await svc.DisconnectAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
             }

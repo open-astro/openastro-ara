@@ -165,9 +165,11 @@ public partial class Program {
         // land per-device in the real-infra phase + Phase 14.
         builder.Services.AddSingleton<ICameraService, PlaceholderCameraService>();
         // §14e — ninth real device service: live mount (RA/Dec + tracking/parked/home) + slew/sync,
-        // park/unpark, set-tracking, abort-slew. REST-only; the ITelescopeMediator unification is a
-        // follow-up.
-        builder.Services.AddSingleton<ITelescopeService, TelescopeService>();
+        // park/unpark, set-tracking, abort-slew. One singleton backs BOTH the REST ITelescopeService
+        // and the Sequencer's ITelescopeMediator (§8.1), so the telescope instructions drive the live
+        // device (mediator wiring is below; this replaces the HeadlessTelescopeMediator stub).
+        builder.Services.AddSingleton<TelescopeService>();
+        builder.Services.AddSingleton<ITelescopeService>(sp => sp.GetRequiredService<TelescopeService>());
         // §14e — fourth real device service: live focuser (position/temp) + Move. One singleton
         // backs BOTH the REST IFocuserService and the Sequencer's IFocuserMediator (§8.1), so the
         // MoveFocuser* instructions drive the live device (the mediator wiring is below; this
@@ -337,8 +339,11 @@ public partial class Program {
         // stubs until their real services land.
         builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.ISafetyMonitorMediator>(
             sp => sp.GetRequiredService<SafetyMonitorService>());
-        builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator,
-            OpenAstroAra.Server.Services.Equipment.HeadlessTelescopeMediator>();
+        // §14e — the real TelescopeService backs ITelescopeMediator too (replaces
+        // HeadlessTelescopeMediator), so SetTracking, Park/UnparkScope, FindHome and
+        // SlewScopeToRaDec drive the live Alpaca mount.
+        builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator>(
+            sp => sp.GetRequiredService<TelescopeService>());
         builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.IGuiderMediator,
             OpenAstroAra.Server.Services.Equipment.HeadlessGuiderMediator>();
         // §14e — the real FocuserService backs IFocuserMediator too (replaces HeadlessFocuserMediator),
