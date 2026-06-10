@@ -1,0 +1,210 @@
+{
+  "name": "narrowband-shoo",
+  "category": "single-target",
+  "description": "Narrowband SHO starter: Ha/OIII/SII blocks of 300s subs for emission nebulae under any moon.",
+  "is_built_in": false,
+  "body": {
+    "schemaVersion": "openastroara-sequence-v1",
+    "$type": "OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer",
+    "Strategy": {
+      "$type": "OpenAstroAra.Sequencer.Container.ExecutionStrategy.SequentialStrategy, OpenAstroAra.Sequencer"
+    },
+    "Name": "SHO - {{target_name}}",
+    "Conditions": {
+      "$type": "System.Collections.ObjectModel.ObservableCollection`1[[OpenAstroAra.Sequencer.Conditions.ISequenceCondition, OpenAstroAra.Sequencer]], System.ObjectModel",
+      "$values": []
+    },
+    "IsExpanded": true,
+    "Items": {
+      "$type": "System.Collections.ObjectModel.ObservableCollection`1[[OpenAstroAra.Sequencer.SequenceItem.ISequenceItem, OpenAstroAra.Sequencer]], System.ObjectModel",
+      "$values": [
+        {
+          "$type": "OpenAstroAra.Sequencer.SequenceItem.Utility.Annotation, OpenAstroAra.Sequencer",
+          "Name": "Note",
+          "Text": "Frame and focus {{target_name}} before starting this sequence.",
+          "Parent": null,
+          "ErrorBehavior": 0,
+          "Attempts": 1
+        },
+        {
+          "$type": "OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer",
+          "Strategy": {
+            "$type": "OpenAstroAra.Sequencer.Container.ExecutionStrategy.SequentialStrategy, OpenAstroAra.Sequencer"
+          },
+          "Name": "Ha x20",
+          "Conditions": {
+            "$type": "System.Collections.ObjectModel.ObservableCollection`1[[OpenAstroAra.Sequencer.Conditions.ISequenceCondition, OpenAstroAra.Sequencer]], System.ObjectModel",
+            "$values": [
+              {
+                "$type": "OpenAstroAra.Sequencer.Conditions.LoopCondition, OpenAstroAra.Sequencer",
+                "Iterations": 20,
+                "Parent": null
+              }
+            ]
+          },
+          "IsExpanded": true,
+          "Items": {
+            "$type": "System.Collections.ObjectModel.ObservableCollection`1[[OpenAstroAra.Sequencer.SequenceItem.ISequenceItem, OpenAstroAra.Sequencer]], System.ObjectModel",
+            "$values": [
+              {
+                "$type": "OpenAstroAra.Sequencer.SequenceItem.FilterWheel.SwitchFilter, OpenAstroAra.Sequencer",
+                "Filter": {
+                  "$type": "OpenAstroAra.Core.Model.Equipment.FilterInfo, OpenAstroAra.Core",
+                  "_name": "Ha",
+                  "_position": 4
+                },
+                "Parent": null,
+                "ErrorBehavior": 0,
+                "Attempts": 1
+              },
+              {
+                "$type": "NINA.Sequencer.SequenceItem.Imaging.TakeExposure, NINA.Sequencer",
+                "ExposureTime": 300.0,
+                "Gain": -1,
+                "Offset": -1,
+                "Binning": {
+                  "$type": "OpenAstroAra.Core.Model.Equipment.BinningMode, OpenAstroAra.Core",
+                  "X": 1,
+                  "Y": 1
+                },
+                "ImageType": "LIGHT",
+                "ExposureCount": 0,
+                "Parent": null,
+                "ErrorBehavior": 0,
+                "Attempts": 1
+              }
+            ]
+          },
+          "Triggers": {
+            "$type": "System.Collections.ObjectModel.ObservableCollection`1[[OpenAstroAra.Sequencer.Trigger.ISequenceTrigger, OpenAstroAra.Sequencer]], System.ObjectModel",
+            "$values": []
+          },
+          "Parent": null,
+          "ErrorBehavior": 0,
+          "Attempts": 1
+        },
+        {
+          "$type": "OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer",
+          "Strategy": {
+            "$type": "OpenAstroAra.Sequencer.Container.ExecutionStrategy.SequentialStrategy, OpenAstroAra.Sequencer"
+          },
+          "Name": "OIII x20",
+          "Conditions": {
+            "$type": "System.Collections.ObjectModel.ObservableCollection`1[[OpenAstroAra.Sequencer.Conditions.ISequenceCondition, OpenAstroAra.Sequencer]], System.ObjectModel",
+            "$values": [
+              {
+                "$type": "OpenAstroAra.Sequencer.Conditions.LoopCondition, OpenAstroAra.Sequencer",
+                "Iterations": 20,
+                "Parent": null
+              }
+            ]
+          },
+          "IsExpanded": true,
+          "Items": {
+            "$type": "System.Collections.ObjectModel.ObservableCollection`1[[OpenAstroAra.Sequencer.SequenceItem.ISequenceItem, OpenAstroAra.Sequencer]], System.ObjectModel",
+            "$values": [
+              {
+                "$type": "OpenAstroAra.Sequencer.SequenceItem.FilterWheel.SwitchFilter, OpenAstroAra.Sequencer",
+                "Filter": {
+                  "$type": "OpenAstroAra.Core.Model.Equipment.FilterInfo, OpenAstroAra.Core",
+                  "_name": "OIII",
+                  "_position": 5
+                },
+                "Parent": null,
+                "ErrorBehavior": 0,
+                "Attempts": 1
+              },
+              {
+                "$type": "NINA.Sequencer.SequenceItem.Imaging.TakeExposure, NINA.Sequencer",
+                "ExposureTime": 300.0,
+                "Gain": -1,
+                "Offset": -1,
+                "Binning": {
+                  "$type": "OpenAstroAra.Core.Model.Equipment.BinningMode, OpenAstroAra.Core",
+                  "X": 1,
+                  "Y": 1
+                },
+                "ImageType": "LIGHT",
+                "ExposureCount": 0,
+                "Parent": null,
+                "ErrorBehavior": 0,
+                "Attempts": 1
+              }
+            ]
+          },
+          "Triggers": {
+            "$type": "System.Collections.ObjectModel.ObservableCollection`1[[OpenAstroAra.Sequencer.Trigger.ISequenceTrigger, OpenAstroAra.Sequencer]], System.ObjectModel",
+            "$values": []
+          },
+          "Parent": null,
+          "ErrorBehavior": 0,
+          "Attempts": 1
+        },
+        {
+          "$type": "OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer",
+          "Strategy": {
+            "$type": "OpenAstroAra.Sequencer.Container.ExecutionStrategy.SequentialStrategy, OpenAstroAra.Sequencer"
+          },
+          "Name": "SII x20",
+          "Conditions": {
+            "$type": "System.Collections.ObjectModel.ObservableCollection`1[[OpenAstroAra.Sequencer.Conditions.ISequenceCondition, OpenAstroAra.Sequencer]], System.ObjectModel",
+            "$values": [
+              {
+                "$type": "OpenAstroAra.Sequencer.Conditions.LoopCondition, OpenAstroAra.Sequencer",
+                "Iterations": 20,
+                "Parent": null
+              }
+            ]
+          },
+          "IsExpanded": true,
+          "Items": {
+            "$type": "System.Collections.ObjectModel.ObservableCollection`1[[OpenAstroAra.Sequencer.SequenceItem.ISequenceItem, OpenAstroAra.Sequencer]], System.ObjectModel",
+            "$values": [
+              {
+                "$type": "OpenAstroAra.Sequencer.SequenceItem.FilterWheel.SwitchFilter, OpenAstroAra.Sequencer",
+                "Filter": {
+                  "$type": "OpenAstroAra.Core.Model.Equipment.FilterInfo, OpenAstroAra.Core",
+                  "_name": "SII",
+                  "_position": 6
+                },
+                "Parent": null,
+                "ErrorBehavior": 0,
+                "Attempts": 1
+              },
+              {
+                "$type": "NINA.Sequencer.SequenceItem.Imaging.TakeExposure, NINA.Sequencer",
+                "ExposureTime": 300.0,
+                "Gain": -1,
+                "Offset": -1,
+                "Binning": {
+                  "$type": "OpenAstroAra.Core.Model.Equipment.BinningMode, OpenAstroAra.Core",
+                  "X": 1,
+                  "Y": 1
+                },
+                "ImageType": "LIGHT",
+                "ExposureCount": 0,
+                "Parent": null,
+                "ErrorBehavior": 0,
+                "Attempts": 1
+              }
+            ]
+          },
+          "Triggers": {
+            "$type": "System.Collections.ObjectModel.ObservableCollection`1[[OpenAstroAra.Sequencer.Trigger.ISequenceTrigger, OpenAstroAra.Sequencer]], System.ObjectModel",
+            "$values": []
+          },
+          "Parent": null,
+          "ErrorBehavior": 0,
+          "Attempts": 1
+        }
+      ]
+    },
+    "Triggers": {
+      "$type": "System.Collections.ObjectModel.ObservableCollection`1[[OpenAstroAra.Sequencer.Trigger.ISequenceTrigger, OpenAstroAra.Sequencer]], System.ObjectModel",
+      "$values": []
+    },
+    "Parent": null,
+    "ErrorBehavior": 0,
+    "Attempts": 1
+  }
+}

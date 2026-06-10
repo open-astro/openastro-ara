@@ -52,7 +52,7 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task ListAsync_returns_builtins_when_disk_dir_empty() {
-            var svc = new PlaceholderSequenceTemplateService(Mock.Of<ISequenceService>(), _profileDir);
+            var svc = new PlaceholderSequenceTemplateService(Mock.Of<ISequenceService>(), _profileDir, seedStarterTemplates: false);
             var list = await svc.ListAsync(CancellationToken.None);
             Assert.That(list, Has.Count.EqualTo(3));
             Assert.That(list.Select(t => t.Name),
@@ -73,7 +73,7 @@ namespace OpenAstroAra.Test {
                 """;
             await File.WriteAllTextAsync(Path.Combine(_templatesDir, "comet-2026-x1.json"), diskJson);
 
-            var svc = new PlaceholderSequenceTemplateService(Mock.Of<ISequenceService>(), _profileDir);
+            var svc = new PlaceholderSequenceTemplateService(Mock.Of<ISequenceService>(), _profileDir, seedStarterTemplates: false);
             var list = await svc.ListAsync(CancellationToken.None);
 
             Assert.That(list, Has.Count.EqualTo(4));
@@ -97,7 +97,7 @@ namespace OpenAstroAra.Test {
                 """;
             await File.WriteAllTextAsync(Path.Combine(_templatesDir, "single-target-lrgb.json"), diskJson);
 
-            var svc = new PlaceholderSequenceTemplateService(Mock.Of<ISequenceService>(), _profileDir);
+            var svc = new PlaceholderSequenceTemplateService(Mock.Of<ISequenceService>(), _profileDir, seedStarterTemplates: false);
             var list = await svc.ListAsync(CancellationToken.None);
 
             // Still 3 entries (override doesn't duplicate)
@@ -110,7 +110,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task ListAsync_skips_invalid_disk_files() {
             await File.WriteAllTextAsync(Path.Combine(_templatesDir, "bad.json"), "{ not valid json");
-            var svc = new PlaceholderSequenceTemplateService(Mock.Of<ISequenceService>(), _profileDir);
+            var svc = new PlaceholderSequenceTemplateService(Mock.Of<ISequenceService>(), _profileDir, seedStarterTemplates: false);
             var list = await svc.ListAsync(CancellationToken.None);
             Assert.That(list, Has.Count.EqualTo(3));  // built-ins only
         }
@@ -128,7 +128,7 @@ namespace OpenAstroAra.Test {
                 """;
             File.WriteAllText(Path.Combine(_templatesDir, "lunar-mosaic.json"), diskJson);
 
-            var svc = new PlaceholderSequenceTemplateService(Mock.Of<ISequenceService>(), _profileDir);
+            var svc = new PlaceholderSequenceTemplateService(Mock.Of<ISequenceService>(), _profileDir, seedStarterTemplates: false);
 
             Assert.That(svc.TemplateExists("lunar-mosaic"), Is.True);
             Assert.That(svc.TemplateExists("nonexistent"), Is.False);

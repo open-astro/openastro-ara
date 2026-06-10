@@ -63,4 +63,11 @@
     <PackageReference Include="ASCOM.Tools" Version="2.1.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- §38.7 disk-shipped starter sequence templates: copied next to the binary (and into the
+         publish output, so the .deb carries them); seeded into {profileDir}/sequences/templates/
+         on first run by PlaceholderSequenceTemplateService (never overwriting user edits). -->
+    <Content Update="templates\*.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>
