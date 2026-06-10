@@ -177,6 +177,58 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         LogSeededFrames();
     }
 
+    /// <inheritdoc />
+    public async Task InsertAsync(FrameDto frame, CancellationToken ct) {
+        ArgumentNullException.ThrowIfNull(frame);
+        await using var conn = _db.OpenConnection();
+        await InsertFrameAsync(conn, frame, ct).ConfigureAwait(false);
+    }
+
+    // Lazily-created "manual capture" session for REST-initiated exposures. Cached per daemon
+    // lifetime; the row mirrors CaptureScanService's synthetic-recovery-session shape (ended_at
+    // stays NULL — the session is open as long as the daemon runs).
+    private Guid? _manualCaptureSessionId;
+    private readonly object _manualSessionGate = new();
+
+    /// <inheritdoc />
+    public async Task<Guid> EnsureManualCaptureSessionAsync(CancellationToken ct) {
+        // Reserve the id under a plain lock (cheap), then INSERT outside it. A duplicate insert
+        // can't happen: only the reserving caller proceeds to the INSERT; concurrent callers see
+        // the cached id immediately. If the INSERT throws, the reservation is rolled back so the
+        // next call retries.
+        Guid sid;
+        lock (_manualSessionGate) {
+            if (_manualCaptureSessionId is Guid cached) {
+                return cached;
+            }
+            sid = Guid.NewGuid();
+            _manualCaptureSessionId = sid;
+        }
+        try {
+            await using var conn = _db.OpenConnection();
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = """
+                INSERT INTO sessions
+                    (id, profile_id, sequence_json, started_at, ended_at,
+                     recovery_needed, last_completed_instruction_id,
+                     current_target_id, frame_count)
+                VALUES
+                    ($id, NULL, NULL, $now, NULL, 0, NULL, NULL, 0);
+                """;
+            cmd.Parameters.AddWithValue("$id", sid.ToString());
+            cmd.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.ToString("O"));
+            await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+            return sid;
+        } catch {
+            lock (_manualSessionGate) {
+                if (_manualCaptureSessionId == sid) {
+                    _manualCaptureSessionId = null;
+                }
+            }
+            throw;
+        }
+    }
+
     private static async Task InsertFrameAsync(SqliteConnection conn, FrameDto f, CancellationToken ct) {
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = """

@@ -1,0 +1,645 @@
+#region "copyright"
+
+/*
+    Copyright (c) 2026 Open Astro and the OpenAstro Ara contributors
+
+    This file is part of OpenAstro Ara (forked from N.I.N.A.).
+
+    This Source Code Form is subject to the terms of the Mozilla Public
+    License, v. 2.0. If a copy of the MPL was not distributed with this
+    file, You can obtain one at http://mozilla.org/MPL/2.0/.
+*/
+
+#endregion "copyright"
+
+using ASCOM.Alpaca.Clients;
+using ASCOM.Common.Alpaca;
+using ASCOM.Common.DeviceInterfaces;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using OpenAstroAra.Fits;
+using OpenAstroAra.Server.Contracts;
+using System;
+using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
+using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace OpenAstroAra.Server.Services;
+
+/// <summary>
+/// §14e — tenth real Alpaca-backed device service and the head of the capture path. Replaces
+/// <c>PlaceholderCameraService</c>: connects to a discovered Alpaca Camera, serves capabilities +
+/// §32.4-cached runtime (state/temperature/cooler/progress), drives the cooler and exposure aborts,
+/// and — the substantive part — <see cref="StartExposureAsync"/> runs a REAL capture:
+/// pre-allocates the frame id and returns immediately (§60.5 async semantics: the preview URL 404s
+/// until the capture lands), while a background pipeline exposes, polls <c>ImageReady</c>, downloads
+/// <c>ImageArray</c>, writes a §72 <see cref="FitsImage"/> (atomic per §28.7) into the configured
+/// save directory and registers the frame in the §28 catalog — at which point the existing
+/// preview/thumbnail/download endpoints serve it like any other frame.
+///
+/// REST-only: the <c>ICameraMediator</c>/<c>IImagingMediator</c> unification (the
+/// <c>TakeExposure</c> instruction) is the follow-up increment.
+/// </summary>
+public sealed partial class CameraService : ICameraService, IDisposable {
+
+    private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan ImageReadyPollInterval = TimeSpan.FromMilliseconds(250);
+    // Margin on top of the requested exposure for the device to report ImageReady (shutter/readout
+    // latency) before the capture is reported failed. Download time is bounded separately by the
+    // blocking ImageArray call's own HTTP timeout.
+    private static readonly TimeSpan ImageReadyMargin = TimeSpan.FromSeconds(60);
+    private static readonly CameraStateDto IdleRuntime = new("idle", null, null, false, null);
+
+    private readonly ILogger<CameraService> _logger;
+    private readonly object _gate = new();
+    private readonly Timer _refreshTimer;
+    private readonly IFrameRepository? _frames;
+    private readonly IProfileStore? _profileStore;
+    private readonly string? _fallbackFramesDir;
+    private AlpacaCamera? _client;
+    private DiscoveredDeviceDto? _device;
+    private EquipmentConnectionState _state = EquipmentConnectionState.Disconnected;
+    private CameraCapabilitiesDto? _capabilities;
+    private CameraStateDto _runtime = IdleRuntime;
+    private int _refreshing;
+    private int _refreshPending;
+    private long _connectGeneration;
+    private bool _disposed;
+
+    public CameraService(
+        ILogger<CameraService>? logger = null,
+        IFrameRepository? frames = null,
+        IProfileStore? profileStore = null,
+        string? fallbackFramesDir = null) {
+        _logger = logger ?? NullLogger<CameraService>.Instance;
+        _frames = frames;
+        _profileStore = profileStore;
+        _fallbackFramesDir = fallbackFramesDir;
+        _refreshTimer = new Timer(RefreshTick, state: null, dueTime: RefreshInterval, period: RefreshInterval);
+    }
+
+    public Task<CameraDto?> GetAsync(CancellationToken ct) {
+        lock (_gate) {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            if (_device is null) {
+                return Task.FromResult<CameraDto?>(null);
+            }
+            var state = _state;
+            var connected = state == EquipmentConnectionState.Connected;
+            var runtime = connected ? _runtime : IdleRuntime;
+            var caps = connected ? _capabilities : null;
+            return Task.FromResult<CameraDto?>(new CameraDto(_device.UniqueId, _device.Name, state, caps, runtime));
+        }
+    }
+
+    public Task<OperationAcceptedDto> ConnectAsync(ConnectRequestDto request, string? idempotencyKey, CancellationToken ct) {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(request.Device);
+        var device = request.Device;
+        long generation;
+        lock (_gate) {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            if ((_state == EquipmentConnectionState.Connecting || _state == EquipmentConnectionState.Connected)
+                && _device?.UniqueId == device.UniqueId) {
+                return Task.FromResult(Accepted("camera.connect", idempotencyKey));
+            }
+            DisposeClientLocked();
+            _device = device;
+            generation = ++_connectGeneration;
+            SetState(EquipmentConnectionState.Connecting);
+        }
+        _ = Task.Run(() => ConnectInBackground(device, generation), CancellationToken.None);
+        return Task.FromResult(Accepted("camera.connect", idempotencyKey));
+    }
+
+    public Task<OperationAcceptedDto> DisconnectAsync(string? idempotencyKey, CancellationToken ct) {
+        AlpacaCamera? client;
+        lock (_gate) {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            _connectGeneration++;
+            client = _client;
+            _client = null;
+            if (_device is not null) {
+                SetState(EquipmentConnectionState.Disconnected);
+            }
+        }
+        if (client is not null) {
+            _ = Task.Run(() => SafeDisconnectDispose(client), CancellationToken.None);
+        }
+        return Task.FromResult(Accepted("camera.disconnect", idempotencyKey));
+    }
+
+    /// <summary>
+    /// §60.5 async capture: validates, pre-allocates the frame id, kicks the capture pipeline off
+    /// in the background and returns immediately. The returned <c>PreviewUrl</c> 404s until the
+    /// frame lands in the catalog (WILMA polls it the way it polls any operation result).
+    /// </summary>
+    public Task<ExposureResponseDto> StartExposureAsync(ExposureRequestDto request, string? idempotencyKey, CancellationToken ct) {
+        ArgumentNullException.ThrowIfNull(request);
+        AlpacaCamera? client;
+        CameraCapabilitiesDto? caps;
+        lock (_gate) {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            client = _state == EquipmentConnectionState.Connected ? _client : null;
+            caps = _capabilities;
+        }
+        // Dispose → argument range → connected, aligned with the other device services. Range
+        // checks use the read-once caps when present (pre-first-refresh the device validates).
+        if (request.ExposureSec <= 0
+            || (caps is not null && (request.ExposureSec < caps.MinExposureSec || request.ExposureSec > caps.MaxExposureSec))) {
+            throw new ArgumentOutOfRangeException(nameof(request), request.ExposureSec,
+                "ExposureSec is outside the camera's supported exposure range.");
+        }
+        if (request.BinX < 1 || request.BinY < 1
+            || (caps is not null && (request.BinX > caps.MaxBinX || request.BinY > caps.MaxBinY))) {
+            throw new ArgumentOutOfRangeException(nameof(request), $"{request.BinX}x{request.BinY}",
+                "Binning is outside the camera's supported range.");
+        }
+        if (request.Gain is int gain && caps is not null && (gain < caps.MinGain || gain > caps.MaxGain)) {
+            throw new ArgumentOutOfRangeException(nameof(request), gain,
+                "Gain is outside the camera's supported range.");
+        }
+        if (client is null) {
+            throw new InvalidOperationException("camera is not connected");
+        }
+        if (_frames is null) {
+            throw new InvalidOperationException("frame catalog is not configured; captures cannot be stored");
+        }
+
+        var frameId = Guid.NewGuid();
+        var capturedAt = DateTimeOffset.UtcNow;
+        _ = Task.Run(() => CaptureInBackgroundAsync(client, frameId, request, capturedAt), CancellationToken.None);
+        return Task.FromResult(new ExposureResponseDto(
+            FrameId: frameId.ToString(),
+            PreviewUrl: new Uri($"/api/v1/frames/{frameId}/preview", UriKind.Relative),
+            ExposureSec: request.ExposureSec,
+            CapturedAt: capturedAt.ToString("O")));
+    }
+
+    public async Task AbortExposureAsync(CancellationToken ct) {
+        var client = RequireConnectedClient();
+        // CancellationToken.None (not ct): Task.Run(lambda, ct) never schedules the lambda if ct is
+        // already cancelled, which would silently skip the abort — same hazard as the mount's
+        // AbortSlew panic stop.
+        await Task.Run(() => client.AbortExposure(), CancellationToken.None).ConfigureAwait(false);
+        RefreshCacheOnce();
+    }
+
+    public async Task SetCoolerAsync(bool enabled, double? targetTemperatureC, CancellationToken ct) {
+        var client = RequireConnectedClient();
+        await Task.Run(() => {
+            if (targetTemperatureC is double target) {
+                client.SetCCDTemperature = target;
+            }
+            client.CoolerOn = enabled;
+        }, CancellationToken.None).ConfigureAwait(false);
+        RefreshCacheOnce();
+    }
+
+    // ── Capture pipeline ─────────────────────────────────────────────────────────────────────────
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Background capture boundary: every stage (ASCOM writes, the blocking download, FITS IO, the catalog insert) can throw arbitrary driver/HTTP/disk exceptions, and a concurrent Disconnect/Dispose can dispose the captured client mid-capture; any escape must be contained and logged as a failed capture (the pre-announced frame simply never appears), never fault the fire-and-forget task or the daemon. CA1031's log-and-recover boundary applies.")]
+    private async Task CaptureInBackgroundAsync(AlpacaCamera client, Guid frameId, ExposureRequestDto request, DateTimeOffset capturedAt) {
+        try {
+            ApplyExposureSettings(client, request);
+            client.StartExposure(request.ExposureSec, true);
+            RefreshCacheOnce();
+
+            var ready = await WaitForImageReadyAsync(client, request.ExposureSec).ConfigureAwait(false);
+            if (!ready) {
+                LogCaptureFailedNotReady(frameId, request.ExposureSec);
+                return;
+            }
+
+            // The blocking download (single large JSON/imagebytes transfer); runs on this worker.
+            var imageArray = client.ImageArray;
+            var (pixels, width, height) = ConvertImageArray(imageArray);
+            RefreshCacheOnce();
+
+            var filePath = WriteFits(frameId, pixels, width, height, request, capturedAt);
+            await RegisterFrameAsync(frameId, request, capturedAt, filePath, width, height).ConfigureAwait(false);
+            LogCaptureComplete(frameId, width, height, filePath);
+        } catch (Exception ex) {
+            LogCaptureFailed(ex, frameId);
+        } finally {
+            RefreshCacheOnce();
+        }
+    }
+
+    // Per-setting guarded writes: an unsupported optional setting (e.g. Gain on a gain-less driver)
+    // must not abort the capture; subframe defaults to full sensor when unspecified.
+    private void ApplyExposureSettings(AlpacaCamera client, ExposureRequestDto request) {
+        TrySet(() => client.BinX = (short)request.BinX, "BinX");
+        TrySet(() => client.BinY = (short)request.BinY, "BinY");
+        if (request.Gain is int gain) {
+            TrySet(() => client.Gain = (short)gain, "Gain");
+        }
+        TrySet(() => {
+            var maxX = client.CameraXSize / request.BinX;
+            var maxY = client.CameraYSize / request.BinY;
+            client.StartX = request.OffsetX ?? 0;
+            client.StartY = request.OffsetY ?? 0;
+            client.NumX = Math.Min(request.Width ?? maxX, maxX - (request.OffsetX ?? 0));
+            client.NumY = Math.Min(request.Height ?? maxY, maxY - (request.OffsetY ?? 0));
+        }, "subframe");
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Per-setting write boundary: an optional exposure setting unsupported by the driver throws; it is logged and skipped so the capture proceeds with device defaults. CA1031's log-and-recover boundary applies.")]
+    private void TrySet(Action write, string setting) {
+        try {
+            write();
+        } catch (Exception ex) {
+            LogExposureSettingSkipped(ex, setting);
+        }
+    }
+
+    // Polls ImageReady until set, bounded by the exposure duration + readout margin. Stops early on
+    // a dropped/superseded connection.
+    private async Task<bool> WaitForImageReadyAsync(AlpacaCamera client, double exposureSec) {
+        var deadline = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(exposureSec) + ImageReadyMargin;
+        while (DateTimeOffset.UtcNow < deadline) {
+            await Task.Delay(ImageReadyPollInterval, CancellationToken.None).ConfigureAwait(false);
+            bool stillOurClient;
+            lock (_gate) {
+                stillOurClient = !_disposed && _state == EquipmentConnectionState.Connected
+                    && ReferenceEquals(_client, client);
+            }
+            if (!stillOurClient) {
+                return false; // disconnected / superseded — the capture can't complete
+            }
+            if (ReadImageReadySafe(client) == true) {
+                return true;
+            }
+            RefreshCacheOnce();
+        }
+        return false;
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Per-poll read boundary: a transient ImageReady read throws; report null ('unknown') so the wait keeps polling rather than faulting the capture. CA1031's log-and-recover boundary applies.")]
+    private static bool? ReadImageReadySafe(AlpacaCamera client) {
+        try {
+            return client.ImageReady;
+        } catch (Exception) {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Converts the ASCOM <c>ImageArray</c> (column-major <c>[x, y]</c> per the Alpaca spec) into
+    /// the row-major 16-bit buffer FITS expects, clamping to the ushort range. Color (3-axis)
+    /// arrays are rejected — the v1 capture path is mono/OSC-raw only. Extracted (internal) for
+    /// direct sim-free unit testing.
+    /// </summary>
+    internal static (ushort[] Pixels, int Width, int Height) ConvertImageArray(object? imageArray) {
+        if (imageArray is not int[,] plane) {
+            throw new InvalidOperationException(imageArray is int[,,]
+                ? "color (3-axis) ImageArray is not supported by the v1 capture path"
+                : $"unsupported ImageArray payload: {imageArray?.GetType().Name ?? "null"}");
+        }
+        var width = plane.GetLength(0);
+        var height = plane.GetLength(1);
+        var pixels = new ushort[width * height];
+        for (var y = 0; y < height; y++) {
+            var row = y * width;
+            for (var x = 0; x < width; x++) {
+                pixels[row + x] = (ushort)Math.Clamp(plane[x, y], ushort.MinValue, ushort.MaxValue);
+            }
+        }
+        return (pixels, width, height);
+    }
+
+    private string WriteFits(Guid frameId, ushort[] pixels, int width, int height, ExposureRequestDto request, DateTimeOffset capturedAt) {
+        var dir = ResolveFramesDir();
+        Directory.CreateDirectory(dir);
+        var path = Path.Combine(dir, $"{frameId}.fits");
+        using var fits = FitsImage.Create(path, width, height, FitsBitDepth.UnsignedShort);
+        fits.WriteImageData(pixels);
+        fits.SetHeader("IMAGETYP", "LIGHT", "frame type");
+        fits.SetHeader("EXPTIME", request.ExposureSec, "exposure seconds");
+        if (request.Gain is int gain) {
+            fits.SetHeader("GAIN", gain, "camera gain");
+        }
+        fits.SetHeader("XBINNING", request.BinX, "binning X");
+        fits.SetHeader("YBINNING", request.BinY, "binning Y");
+        fits.SetHeader("DATE-OBS", capturedAt.UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ss.fff", CultureInfo.InvariantCulture), "capture start UTC");
+        if (!string.IsNullOrWhiteSpace(request.FilterName)) {
+            fits.SetHeader("FILTER", request.FilterName!, "filter name");
+        }
+        fits.Complete(); // §28.7 atomic finish
+        return path;
+    }
+
+    // Save-directory resolution: the user's §29 storage setting when present AND creatable, else
+    // the daemon-local fallback (dev boxes where /media/openastroara doesn't exist). The "manual"
+    // subdir keeps REST captures apart from future sequence-run target dirs.
+    internal string ResolveFramesDir() {
+        var configured = _profileStore?.GetStorageSettings().SaveDirectory;
+        if (!string.IsNullOrWhiteSpace(configured)) {
+            var candidate = Path.Combine(configured, "manual");
+            if (TryEnsureDir(candidate)) {
+                return candidate;
+            }
+            LogSaveDirUnavailable(configured!);
+        }
+        return Path.Combine(_fallbackFramesDir ?? Path.Combine(AppContext.BaseDirectory, "frames"), "manual");
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Probe boundary: CreateDirectory failure (missing mount, permissions) selects the fallback dir rather than faulting the capture. CA1031's log-and-recover boundary applies.")]
+    private static bool TryEnsureDir(string dir) {
+        try {
+            Directory.CreateDirectory(dir);
+            return true;
+        } catch (Exception) {
+            return false;
+        }
+    }
+
+    private async Task RegisterFrameAsync(Guid frameId, ExposureRequestDto request, DateTimeOffset capturedAt, string filePath, int width, int height) {
+        var sessionId = await _frames!.EnsureManualCaptureSessionAsync(CancellationToken.None).ConfigureAwait(false);
+        var fileSize = new FileInfo(filePath).Length;
+        var ccdTemp = _runtime.CcdTemperature ?? 0.0;
+        await _frames.InsertAsync(new FrameDto(
+            Id: frameId,
+            SessionId: sessionId,
+            TargetName: "Manual capture",
+            FrameType: FrameType.Light,
+            FilterName: string.IsNullOrWhiteSpace(request.FilterName) ? null : request.FilterName,
+            ExposureSeconds: (int)Math.Round(request.ExposureSec),
+            Gain: request.Gain ?? -1,
+            Offset: null,
+            TemperatureC: ccdTemp,
+            CapturedUtc: capturedAt,
+            FilePath: filePath,
+            FileSizeBytes: fileSize,
+            Width: width,
+            Height: height,
+            BitDepth: 16,
+            Hfr: null, StarCount: null, Eccentricity: null, GuidingRmsArcsec: null, SnrEstimate: null,
+            QualityScore: null,
+            Rating: 0,
+            Tags: Array.Empty<string>()), CancellationToken.None).ConfigureAwait(false);
+    }
+
+    // ── §32.4 cache (single-flight with coalescing, mirrors TelescopeService) ────────────────────
+
+    private void RefreshTick(object? state) => RefreshCacheOnce();
+
+    private void RefreshCacheOnce() {
+        Volatile.Write(ref _refreshPending, 1);
+        if (Interlocked.CompareExchange(ref _refreshing, 1, 0) != 0) {
+            return;
+        }
+        try {
+            while (Interlocked.Exchange(ref _refreshPending, 0) == 1) {
+                RefreshPass();
+            }
+        } finally {
+            Interlocked.Exchange(ref _refreshing, 0);
+        }
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Timer-callback boundary: an unhandled exception escaping here crashes the process; the per-field reads already absorb device failures, this is the hard backstop. CA1031's log-and-recover boundary applies.")]
+    private void RefreshPass() {
+        try {
+            AlpacaCamera? client;
+            bool needCaps;
+            lock (_gate) {
+                if (_disposed || _state != EquipmentConnectionState.Connected) {
+                    return;
+                }
+                client = _client;
+                needCaps = _capabilities is null;
+            }
+            if (client is null) {
+                return;
+            }
+            var runtime = ReadRuntime(client);
+            var caps = needCaps ? ReadCapabilities(client) : null;
+            lock (_gate) {
+                if (_state == EquipmentConnectionState.Connected && ReferenceEquals(_client, client)) {
+                    _runtime = runtime;
+                    if (caps is not null) {
+                        _capabilities = caps;
+                    }
+                }
+            }
+        } catch (Exception ex) {
+            LogRuntimeReadFailed(ex);
+        }
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Per-field read boundary: an unsupported/transiently-failing camera property falls back to its default rather than failing the whole runtime read. CA1031's log-and-recover boundary applies.")]
+    private static CameraStateDto ReadRuntime(AlpacaCamera c) {
+        CameraState state;
+        try { state = c.CameraState; } catch (Exception) { state = CameraState.Idle; }
+        double? temp;
+        try { temp = c.CCDTemperature; } catch (Exception) { temp = null; }
+        bool coolerOn;
+        try { coolerOn = c.CoolerOn; } catch (Exception) { coolerOn = false; }
+        double? coolerPower;
+        try { coolerPower = coolerOn ? c.CoolerPower : null; } catch (Exception) { coolerPower = null; }
+        double? progress;
+        try { progress = state == CameraState.Exposing ? c.PercentCompleted : null; } catch (Exception) { progress = null; }
+        return new CameraStateDto(MapState(state), temp, coolerPower, coolerOn, progress);
+    }
+
+    // Extracted (internal) for direct unit testing.
+    internal static string MapState(CameraState state) => state switch {
+        CameraState.Exposing or CameraState.Waiting => "exposing",
+        CameraState.Reading or CameraState.Download => "downloading",
+        CameraState.Error => "error",
+        _ => "idle",
+    };
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Per-field read boundary: each capability falls back to a safe default (zeroed range / false flag) rather than failing the whole capability read; ranges of zero defer validation to the device. CA1031's log-and-recover boundary applies.")]
+    private static CameraCapabilitiesDto ReadCapabilities(AlpacaCamera c) {
+        int w = 0, h = 0;
+        try { w = c.CameraXSize; h = c.CameraYSize; } catch (Exception) { }
+        double pixelSize = 0;
+        try { pixelSize = c.PixelSizeX; } catch (Exception) { }
+        bool canSetTemp = false;
+        try { canSetTemp = c.CanSetCCDTemperature; } catch (Exception) { }
+        bool canAbort = false;
+        try { canAbort = c.CanAbortExposure; } catch (Exception) { }
+        bool canCoolerPower = false;
+        try { _ = c.CoolerPower; canCoolerPower = true; } catch (Exception) { }
+        int minGain = 0, maxGain = 0;
+        try { minGain = c.GainMin; maxGain = c.GainMax; } catch (Exception) { }
+        int maxBinX = 1, maxBinY = 1;
+        try { maxBinX = c.MaxBinX; maxBinY = c.MaxBinY; } catch (Exception) { }
+        double minExp = 0, maxExp = 0;
+        try { minExp = c.ExposureMin; maxExp = c.ExposureMax; } catch (Exception) { }
+        return new CameraCapabilitiesDto(
+            SensorWidth: w, SensorHeight: h, PixelSizeUm: pixelSize,
+            CanSetTemperature: canSetTemp, CanAbortExposure: canAbort, CanGetCoolerPower: canCoolerPower,
+            MinGain: minGain, MaxGain: maxGain,
+            MinBinX: 1, MaxBinX: maxBinX, MinBinY: 1, MaxBinY: maxBinY,
+            MinExposureSec: minExp, MaxExposureSec: maxExp);
+    }
+
+    // ── Connect / teardown (template) ────────────────────────────────────────────────────────────
+
+    private AlpacaCamera RequireConnectedClient() {
+        AlpacaCamera? client;
+        lock (_gate) {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            client = _state == EquipmentConnectionState.Connected ? _client : null;
+        }
+        return client ?? throw new InvalidOperationException("camera is not connected");
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Background connect boundary: constructing the Alpaca client and setting Connected can throw arbitrary driver/HTTP/socket exceptions; any escape must surface as the Error state and be contained. CA1031's log-and-recover boundary applies.")]
+    [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
+        Justification = "Ownership of the AlpacaCamera is managed explicitly: on every non-adopt path SafeDisconnectDispose disposes it; on the adopt path it is stored in _client and disposed later by DisconnectAsync/Dispose. CA2000 cannot follow the transfer through the lock + helper.")]
+    private void ConnectInBackground(DiscoveredDeviceDto device, long generation) {
+        AlpacaCamera? client = null;
+        var adopted = false;
+        try {
+            var host = string.IsNullOrWhiteSpace(device.IpAddress) ? device.HostName : device.IpAddress;
+            if (string.IsNullOrWhiteSpace(host)) {
+                throw new InvalidOperationException(
+                    $"discovered device '{device.Name}' carries neither an IP address nor a host name");
+            }
+            client = new AlpacaCamera(
+                device.UseHttps ? ServiceType.Https : ServiceType.Http,
+                host, device.IpPort, device.AlpacaDeviceNumber, strictCasing: false, logger: null);
+            client.Connected = true;
+            lock (_gate) {
+                if (!_disposed && _connectGeneration == generation) {
+                    _client = client;
+                    _capabilities = null;   // re-read for the new device
+                    _runtime = IdleRuntime; // don't serve a prior device's runtime
+                    SetState(EquipmentConnectionState.Connected);
+                    adopted = true;
+                }
+            }
+            if (!adopted) {
+                SafeDisconnectDispose(client);
+                return;
+            }
+            client = null; // ownership transferred to _client
+            RefreshCacheOnce();
+            bool stillConnected;
+            lock (_gate) {
+                stillConnected = _state == EquipmentConnectionState.Connected;
+            }
+            if (stillConnected) {
+                LogConnected(device.Name, host, device.IpPort, device.AlpacaDeviceNumber);
+            }
+        } catch (Exception ex) {
+            if (!adopted) {
+                if (client is not null) {
+                    SafeDisconnectDispose(client);
+                }
+                lock (_gate) {
+                    if (!_disposed && _connectGeneration == generation) {
+                        SetState(EquipmentConnectionState.Error);
+                    }
+                }
+                LogConnectFailed(ex, device.Name);
+            }
+        }
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort teardown: AbortExposure / Connected = false can throw driver/HTTP exceptions, which must be swallowed so Dispose always runs. CA1031's log-and-recover boundary applies.")]
+    private void SafeDisconnectDispose(AlpacaCamera client) {
+        try {
+            client.AbortExposure(); // interrupt an in-flight exposure so disconnect fails fast
+        } catch (Exception ex) {
+            LogTeardownIgnored(ex);
+        }
+        try {
+            client.Connected = false;
+        } catch (Exception ex) {
+            LogTeardownIgnored(ex);
+        }
+        DisposeQuietly(client);
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort teardown: ASCOM-backed clients have been known to throw from Dispose(); the throw must be swallowed rather than escape a fire-and-forget Task.Run. CA1031's log-and-recover boundary applies.")]
+    private void DisposeQuietly(AlpacaCamera client) {
+        try {
+            client.Dispose();
+        } catch (Exception ex) {
+            LogTeardownIgnored(ex);
+        }
+    }
+
+    private void DisposeClientLocked() {
+        var c = _client;
+        _client = null;
+        if (c is not null) {
+            _ = Task.Run(() => SafeDisconnectDispose(c), CancellationToken.None);
+        }
+    }
+
+    // Caller must hold _gate.
+    private void SetState(EquipmentConnectionState state) {
+        _state = state;
+    }
+
+    private static OperationAcceptedDto Accepted(string operationType, string? idempotencyKey) =>
+        new(OperationId: Guid.NewGuid(),
+            OperationType: operationType,
+            AcceptedUtc: DateTimeOffset.UtcNow,
+            IdempotencyKey: idempotencyKey);
+
+    public void Dispose() {
+        AlpacaCamera? client;
+        lock (_gate) {
+            if (_disposed) {
+                return;
+            }
+            _disposed = true;
+            client = _client;
+            _client = null;
+        }
+        _refreshTimer.Dispose();
+        // Dispose the client directly (guarded): the courtesy AbortExposure/Connected=false are
+        // blocking HTTP calls that would hang container shutdown if the device is unreachable.
+        if (client is not null) {
+            DisposeQuietly(client);
+        }
+        GC.SuppressFinalize(this);
+    }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Camera runtime read failed")]
+    private partial void LogRuntimeReadFailed(Exception ex);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Camera connected: {Name} at {Host}:{Port}/{Device}")]
+    private partial void LogConnected(string name, string host, int port, int device);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Camera connect failed for {Name}")]
+    private partial void LogConnectFailed(Exception ex, string name);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Capture {FrameId} failed")]
+    private partial void LogCaptureFailed(Exception ex, Guid frameId);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Capture {FrameId} never reported ImageReady within the {ExposureSec}s exposure + margin")]
+    private partial void LogCaptureFailedNotReady(Guid frameId, double exposureSec);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Capture {FrameId} complete: {Width}x{Height} -> {Path}")]
+    private partial void LogCaptureComplete(Guid frameId, int width, int height, string path);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "exposure setting {Setting} unsupported by the driver — capture proceeds with device defaults")]
+    private partial void LogExposureSettingSkipped(Exception ex, string setting);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "configured save directory {Dir} is unavailable — falling back to the daemon-local frames dir")]
+    private partial void LogSaveDirUnavailable(string dir);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "ignored error while disconnecting Camera during teardown")]
+    private partial void LogTeardownIgnored(Exception ex);
+}

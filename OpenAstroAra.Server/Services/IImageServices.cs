@@ -33,6 +33,19 @@ namespace OpenAstroAra.Server.Services;
 /// frame file — used by the WILMA library "Download original" action.
 /// </summary>
 public interface IFrameRepository {
+    /// <summary>
+    /// §14e capture write-path: inserts a newly captured frame row (the camera service writes the
+    /// FITS file first, then registers it here so previews/downloads serve immediately).
+    /// </summary>
+    Task InsertAsync(FrameDto frame, CancellationToken ct);
+
+    /// <summary>
+    /// §14e — id of the lazily-created "manual capture" session that REST-initiated exposures
+    /// attach to (sequence-run target sessions arrive with the capture-path engine wiring).
+    /// Idempotent per daemon lifetime.
+    /// </summary>
+    Task<Guid> EnsureManualCaptureSessionAsync(CancellationToken ct);
+
     Task<CursorPage<FrameListItemDto>> ListAsync(int limit, string? cursor, Guid? sessionId, string? targetName, CancellationToken ct);
     Task<FrameDto?> GetAsync(Guid id, CancellationToken ct);
     Task<(byte[] Bytes, string ContentType)?> GetPreviewAsync(Guid id, FramePreviewRequestDto request, CancellationToken ct);
