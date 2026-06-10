@@ -237,7 +237,11 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             RefreshCacheOnce();
 
             var ready = await WaitForImageReadyAsync(client, request.ExposureSec).ConfigureAwait(false);
-            if (!ready) {
+            if (ready is null) {
+                LogCaptureAbandonedDisconnect(frameId); // disconnect/supersede, NOT a device timeout
+                return;
+            }
+            if (ready == false) {
                 LogCaptureFailedNotReady(frameId, request.ExposureSec);
                 return;
             }
@@ -305,9 +309,10 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         }
     }
 
-    // Polls ImageReady until set, bounded by the exposure duration + readout margin. Stops early on
-    // a dropped/superseded connection.
-    private async Task<bool> WaitForImageReadyAsync(AlpacaCamera client, double exposureSec) {
+    // Polls ImageReady until set, bounded by the exposure duration + readout margin. Distinguishes
+    // the two non-ready outcomes so the capture log names the real cause: false = device timeout,
+    // null = the connection was dropped/superseded mid-capture.
+    private async Task<bool?> WaitForImageReadyAsync(AlpacaCamera client, double exposureSec) {
         var deadline = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(exposureSec) + ImageReadyMargin;
         while (DateTimeOffset.UtcNow < deadline) {
             await Task.Delay(ImageReadyPollInterval, CancellationToken.None).ConfigureAwait(false);
@@ -317,7 +322,7 @@ public sealed partial class CameraService : ICameraService, IDisposable {
                     && ReferenceEquals(_client, client);
             }
             if (!stillOurClient) {
-                return false; // disconnected / superseded — the capture can't complete
+                return null; // disconnected / superseded — the capture can't complete
             }
             if (ReadImageReadySafe(client) == true) {
                 return true;
@@ -719,6 +724,9 @@ public sealed partial class CameraService : ICameraService, IDisposable {
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Capture {FrameId} never reported ImageReady within the {ExposureSec}s exposure + margin")]
     private partial void LogCaptureFailedNotReady(Guid frameId, double exposureSec);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Capture {FrameId} abandoned: the camera was disconnected or superseded mid-capture")]
+    private partial void LogCaptureAbandonedDisconnect(Guid frameId);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Capture {FrameId} complete: {Width}x{Height} -> {Path}")]
     private partial void LogCaptureComplete(Guid frameId, int width, int height, string path);

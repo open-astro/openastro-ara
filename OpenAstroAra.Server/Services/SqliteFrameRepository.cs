@@ -193,10 +193,14 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
 
     /// <inheritdoc />
     public Task<Guid> EnsureManualCaptureSessionAsync(CancellationToken ct) {
+        Task<Guid> task;
         lock (_manualSessionGate) {
             _manualSessionTask ??= CreateManualCaptureSessionAsync();
-            return _manualSessionTask;
+            task = _manualSessionTask;
         }
+        // Honor the caller's token for the WAIT (the shared creation itself is not cancellable —
+        // a second caller must not have its session yanked by the first caller's timeout).
+        return task.WaitAsync(ct);
     }
 
     private async Task<Guid> CreateManualCaptureSessionAsync() {
