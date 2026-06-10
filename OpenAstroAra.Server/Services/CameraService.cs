@@ -261,7 +261,11 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             var (pixels, width, height) = ConvertImageArray(imageArray);
             RefreshCacheOnce();
 
-            var filePath = WriteFits(frameId, pixels, width, height, request, capturedAt);
+            // Read back what the driver ACTUALLY applied for the header write: a driver can
+            // silently coerce a setting TrySet appeared to accept (e.g. symmetric-binning
+            // enforcement), and XBINNING/GAIN feed plate-solving + calibration matching.
+            var applied = ReadAppliedSettings(client, request);
+            var filePath = WriteFits(frameId, pixels, width, height, applied, capturedAt);
             try {
                 await RegisterFrameAsync(frameId, request, capturedAt, filePath, width, height).ConfigureAwait(false);
             } catch (Exception ex) {
@@ -393,6 +397,19 @@ public sealed partial class CameraService : ICameraService, IDisposable {
                     ? "color (3-axis) ImageArray is not supported by the v1 capture path"
                     : $"unsupported ImageArray payload: {imageArray?.GetType().Name ?? "null"}");
         }
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Per-field readback boundary: a driver that throws from a settings read falls back to the requested value for that header rather than failing the capture. CA1031's log-and-recover boundary applies.")]
+    private static ExposureRequestDto ReadAppliedSettings(AlpacaCamera client, ExposureRequestDto request) {
+        int binX = request.BinX, binY = request.BinY;
+        var gain = request.Gain;
+        try { binX = client.BinX; } catch (Exception) { }
+        try { binY = client.BinY; } catch (Exception) { }
+        if (gain is not null) {
+            try { gain = client.Gain; } catch (Exception) { }
+        }
+        return request with { BinX = binX, BinY = binY, Gain = gain };
     }
 
     private string WriteFits(Guid frameId, ushort[] pixels, int width, int height, ExposureRequestDto request, DateTimeOffset capturedAt) {
