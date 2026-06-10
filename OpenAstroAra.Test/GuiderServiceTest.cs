@@ -86,6 +86,23 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Mediator_GetInfo_reports_disconnected_before_connect() {
+            using var svc = NewService();
+            // GuiderService also serves IGuiderMediator (§63 guider-c); GetInfo is the mediator member.
+            Assert.That(svc.GetInfo().Connected, Is.False);
+        }
+
+        [Test]
+        public async System.Threading.Tasks.Task Mediator_guide_ops_are_noop_false_when_not_connected() {
+            using var svc = NewService();
+            // Unlike the REST StartGuidingAsync (which throws), the mediator path returns false so the
+            // sequencer's attempt policy handles a not-connected guider gracefully.
+            Assert.That(await svc.StartGuiding(false, null!, CancellationToken.None), Is.False);
+            Assert.That(await svc.StopGuiding(CancellationToken.None), Is.False);
+            Assert.That(await svc.Dither(CancellationToken.None), Is.False);
+        }
+
+        [Test]
         public void Ops_after_Dispose_throw_ObjectDisposed() {
             var svc = NewService();
             svc.Dispose();
