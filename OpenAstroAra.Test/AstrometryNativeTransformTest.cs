@@ -42,7 +42,10 @@ namespace OpenAstroAra.Test {
             Assert.That(jnow.Epoch, Is.EqualTo(Epoch.JNOW));
             // ~26 years of precession since J2000.0 moves a mid-declination point by arcminutes:
             // the transform must produce a real, small shift — neither an identity copy nor garbage.
+            // Wrap-aware RA difference so a future test coordinate near 0h/24h can't produce a
+            // spuriously large shift.
             var raShiftDeg = Math.Abs(jnow.RADegrees - j2000.RADegrees);
+            raShiftDeg = Math.Min(raShiftDeg, 360.0 - raShiftDeg);
             var decShiftDeg = Math.Abs(jnow.Dec - j2000.Dec);
             Assert.That(raShiftDeg + decShiftDeg, Is.GreaterThan(0.001), "transform was an identity — natives not actually applied");
             Assert.That(raShiftDeg, Is.LessThan(1.0), "RA shift implausibly large for ~26y of precession");

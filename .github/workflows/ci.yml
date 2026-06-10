@@ -281,7 +281,16 @@ jobs:
       # REAL cross-epoch transforms (it self-Ignores when the natives are absent; this step
       # makes sure CI never silently skips it).
       - name: Build astrometry natives (SOFA + NOVAS31) for tests
-        run: ./scripts/build-astrometry-natives.sh OpenAstroAra.Test/bin/Release/net10.0
+        run: |
+          # Derive the TFM dir instead of hardcoding net10.0 (a TFM bump must not silently
+          # stop staging the natives — the transform tests would self-Ignore, masking it).
+          shopt -s nullglob
+          dirs=(OpenAstroAra.Test/bin/Release/net*/)
+          if [ "${#dirs[@]}" -ne 1 ]; then
+            echo "expected exactly one test output TFM dir, found: ${dirs[*]:-none}" >&2
+            exit 1
+          fi
+          ./scripts/build-astrometry-natives.sh "${dirs[0]}"
 
       # Exclude the live Alpaca discovery test (TestCategory=Integration): it needs a
       # running OmniSim, which this job doesn't start. It is covered by the dedicated
