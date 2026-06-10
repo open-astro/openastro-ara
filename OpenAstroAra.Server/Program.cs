@@ -392,12 +392,15 @@ public partial class Program {
         // §38k-21 — IDomeFollower stub (non-mediator dome dependency of SynchronizeDome).
         builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.IDomeFollower,
             OpenAstroAra.Server.Services.Equipment.HeadlessDomeFollower>();
-        // §38k-22 — HeadlessProfileService stub: lets the profile-bound instruction
-        // prototypes (Dither / SwitchFilter / Connect / Disconnect / SwitchProfile)
-        // construct. Returns a default in-memory profile; the real user-edited
-        // profile (IProfileStore / profile.json) wires in with the execution engine.
-        builder.Services.AddSingleton<OpenAstroAra.Profile.Interfaces.IProfileService,
-            OpenAstroAra.Server.Services.HeadlessProfileService>();
+        // §14e profile source-of-truth — StoreBackedProfileService (replaces the §38k-22
+        // HeadlessProfileService stub): ActiveProfile hydrates from IProfileStore (profile.json,
+        // the WILMA REST surface) at startup and on every settings PUT, so executing instructions
+        // read the user's edited site/guider/focuser/image-file/plate-solve values. The headless
+        // stub class is kept for factory/test defaults.
+        builder.Services.AddSingleton<OpenAstroAra.Profile.Interfaces.IProfileService>(sp =>
+            new StoreBackedProfileService(
+                sp.GetRequiredService<IProfileStore>(),
+                sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<StoreBackedProfileService>>()));
         builder.Services.AddSingleton<OpenAstroAra.Sequencer.ISequencerFactory>(sp =>
             HeadlessSequencerFactory.WithDefaults(
                 sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.ISafetyMonitorMediator>(),

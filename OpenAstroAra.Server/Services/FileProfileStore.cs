@@ -104,11 +104,16 @@ public sealed partial class FileProfileStore : IProfileStore {
     public EquipmentConnectionDto GetEquipmentConnection() { lock (_lock) { return _snapshot.EquipmentConnection; } }
     public void PutEquipmentConnection(EquipmentConnectionDto value) => UpdateAndPersist(s => s with { EquipmentConnection = value });
 
+    public event EventHandler? Changed;
+
     private void UpdateAndPersist(Func<ProfileSnapshotDto, ProfileSnapshotDto> mutate) {
         lock (_lock) {
             _snapshot = mutate(_snapshot);
             Persist(_snapshot);
         }
+        // Raised OUTSIDE _lock so a subscriber that reads back through the Get* methods can't
+        // deadlock against the store.
+        Changed?.Invoke(this, EventArgs.Empty);
     }
 
     private void Persist(ProfileSnapshotDto snapshot) {

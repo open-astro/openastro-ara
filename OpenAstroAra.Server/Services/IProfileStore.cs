@@ -23,6 +23,13 @@ namespace OpenAstroAra.Server.Services;
 /// §42 import/export flow is v0.1.0 per the §55.1 roadmap.
 /// </summary>
 public interface IProfileStore {
+    /// <summary>
+    /// Raised after any section is replaced via a Put. Subscribers (the §14e store-backed
+    /// <c>IProfileService</c>) re-read through the Get methods; implementations raise outside their
+    /// internal lock so a read-back can't deadlock.
+    /// </summary>
+    event System.EventHandler? Changed;
+
     ImagingDefaultsDto GetImagingDefaults();
     void PutImagingDefaults(ImagingDefaultsDto value);
 
