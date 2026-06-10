@@ -274,6 +274,12 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             return false;
         }
 
+        // The exposure is complete (ImageReady), but the download below is a synchronous 10-30s
+        // transfer on a large sensor / slow bridge with no ct hook — honor a sequencer cancel here
+        // so the run doesn't block on a frame it's discarding. No abort: the camera already holds a
+        // finished image, nothing to stop. REST passes CancellationToken.None, so this is inert there.
+        ct.ThrowIfCancellationRequested();
+
         // The blocking download (single large JSON/imagebytes transfer); runs on this worker.
         object? imageArray;
         Interlocked.Exchange(ref _downloading, 1);

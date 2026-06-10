@@ -117,7 +117,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Imaging {
         /// <summary>Running counter NINA persists per instruction (incremented per execution).</summary>
         [JsonProperty]
         public int ExposureCount {
-            get => exposureCount;
+            get => Volatile.Read(ref exposureCount);
             set { exposureCount = value; RaisePropertyChanged(); }
         }
 
