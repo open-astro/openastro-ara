@@ -60,6 +60,11 @@ public sealed partial class DomeService : IDomeMediator {
     // bound (DomeOpSettleMaxPolls × DomeOpPollInterval ≈ 3min) on top, so the worst-case total before
     // RunDomeOpAsync returns is ~8min — generous for a physical dome; cancellation (ct) cuts it short.
     private static readonly TimeSpan DomeOpHardTimeout = TimeSpan.FromMinutes(5);
+    // Sanity bound on the post-slew azimuth, paired with the authoritative !Slewing signal. Generous
+    // (5°) on purpose: physical domes settle within their own 1–5° positioning accuracy, so a tighter
+    // window would let a *completed* slew (Slewing==false) get vetoed and time out. It still guards
+    // against a premature exit where Slewing hasn't yet asserted and the dome is at its old heading.
+    private const double AzimuthToleranceDeg = 5.0;
 
     /// <summary>
     /// Synchronous live snapshot for the Sequencer, served from the §32.4 cache (no blocking HTTP on
@@ -170,6 +175,7 @@ public sealed partial class DomeService : IDomeMediator {
     // Polls the device directly until the terminal condition holds (refreshing the §32.4 cache each
     // tick so GetInfo stays current), or returns false on timeout / a dropped-or-superseded connection.
     private async Task<bool> WaitForDomeConditionAsync(AlpacaDome client, Func<AlpacaDome, bool> isDone, CancellationToken ct) {
+        var loggedReadFailure = false;
         for (var i = 0; i < DomeOpSettleMaxPolls; i++) {
             bool stillOurClient;
             lock (_gate) {
@@ -179,7 +185,15 @@ public sealed partial class DomeService : IDomeMediator {
             if (!stillOurClient) {
                 return false; // disconnected / superseded — the op can't be confirmed
             }
-            if (ReadCondition(client, isDone)) {
+            var done = ReadCondition(client, isDone);
+            if (done is null && !loggedReadFailure) {
+                // A consistently-throwing condition read (e.g. an unsupported property) would
+                // otherwise time out silently after the full bound — log it once so the timeout is
+                // diagnosable, then keep polling (treat as not-yet-met).
+                LogConditionReadFailed();
+                loggedReadFailure = true;
+            }
+            if (done == true) {
                 RefreshCacheOnce();
                 return true;
             }
@@ -190,12 +204,12 @@ public sealed partial class DomeService : IDomeMediator {
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Per-poll predicate boundary: a transient/unsupported device read throws; treat the condition as not-yet-met (keep polling) rather than faulting the wait. CA1031's log-and-recover boundary applies.")]
-    private static bool ReadCondition(AlpacaDome client, Func<AlpacaDome, bool> isDone) {
+        Justification = "Per-poll predicate boundary: a transient/unsupported device read throws; report null ('unknown') so the wait keeps polling (and logs once) rather than faulting. CA1031's log-and-recover boundary applies.")]
+    private static bool? ReadCondition(AlpacaDome client, Func<AlpacaDome, bool> isDone) {
         try {
             return isDone(client);
         } catch (Exception) {
-            return false;
+            return null;
         }
     }
 
@@ -215,7 +229,7 @@ public sealed partial class DomeService : IDomeMediator {
     private static bool ReadAtPark(AlpacaDome c) => c.AtPark;
     private static bool ReadAtHome(AlpacaDome c) => c.AtHome;
     private static bool ReadSlewing(AlpacaDome c) => c.Slewing;
-    private static bool AzimuthReached(AlpacaDome c, double target) => Math.Abs(c.Azimuth - target) < 1.0;
+    private static bool AzimuthReached(AlpacaDome c, double target) => Math.Abs(c.Azimuth - target) < AzimuthToleranceDeg;
 
     private static double NormalizeAzimuth(double deg) {
         var a = deg % 360.0;
@@ -256,4 +270,7 @@ public sealed partial class DomeService : IDomeMediator {
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Debug, Message = "abandoned dome op (cancelled/timed-out) later faulted")]
     private partial void LogAbandonedOpFaulted(Exception ex);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Debug, Message = "dome terminal-condition read failed during settle-wait (will keep polling)")]
+    private partial void LogConditionReadFailed();
 }
