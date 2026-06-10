@@ -134,6 +134,9 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
                 throw new InvalidOperationException("camera disconnected while the capture was queued");
             }
             var frameId = Guid.NewGuid();
+            // progress is intentionally not forwarded: the headless daemon reports capture progress
+            // to clients over the §60.9 WS stream (SequencerService), not through NINA's in-process
+            // IProgress reporter, which has no subscriber in the server.
             var ok = await CaptureCoreAsync(client, frameId, request, imageType, MapFrameType(imageType), effectiveTarget, token).ConfigureAwait(false);
             if (!ok) {
                 throw new InvalidOperationException(

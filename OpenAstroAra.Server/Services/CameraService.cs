@@ -232,6 +232,9 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         Justification = "Background capture boundary: every stage (ASCOM writes, the blocking download, FITS IO, the catalog insert) can throw arbitrary driver/HTTP/disk exceptions, and a concurrent Disconnect/Dispose can dispose the captured client mid-capture; any escape must be contained and logged as a failed capture (the pre-announced frame simply never appears), never fault the fire-and-forget task or the daemon. CA1031's log-and-recover boundary applies.")]
     private async Task CaptureInBackgroundAsync(AlpacaCamera client, Guid frameId, ExposureRequestDto request) {
         try {
+            // LIGHT is deliberate, not an oversight: the §60.5 manual-capture endpoint takes light/
+            // test snapshots; calibration frames are sequencer-driven. See PORT_TODO.md "REST manual
+            // capture is LIGHT-only by design" for the optional ImageType-field follow-up.
             await CaptureCoreAsync(client, frameId, request, "LIGHT", FrameType.Light, "Manual capture", CancellationToken.None).ConfigureAwait(false);
         } catch (Exception ex) {
             LogCaptureFailed(ex, frameId);

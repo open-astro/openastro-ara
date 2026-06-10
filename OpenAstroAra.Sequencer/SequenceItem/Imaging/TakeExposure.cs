@@ -118,6 +118,9 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Imaging {
         [JsonProperty]
         public int ExposureCount {
             get => Volatile.Read(ref exposureCount);
+            // Volatile.Write pairs with the Volatile.Read getter and the Interlocked.Increment in
+            // Execute. The setter is the JSON-deserialization / clone path, single-threaded in
+            // practice (it precedes execution), so the barrier is for consistency, not contention.
             set { Volatile.Write(ref exposureCount, value); RaisePropertyChanged(); }
         }
 
