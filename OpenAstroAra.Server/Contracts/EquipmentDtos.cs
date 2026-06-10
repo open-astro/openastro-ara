@@ -77,6 +77,7 @@ public sealed record CameraCapabilitiesDto(
     double PixelSizeUm,
     bool CanSetTemperature, bool CanAbortExposure, bool CanGetCoolerPower,
     int MinGain, int MaxGain,
+    int MinOffset, int MaxOffset,
     int MinBinX, int MaxBinX, int MinBinY, int MaxBinY,
     double MinExposureSec, double MaxExposureSec);
 

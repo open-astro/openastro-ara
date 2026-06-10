@@ -176,6 +176,16 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             throw new ArgumentOutOfRangeException(nameof(request), gain,
                 "Gain is outside the camera's supported range.");
         }
+        // Validate offset the same way as Gain: a 0 MaxOffset means the bounds read failed (or the
+        // camera is in offset-index mode), so defer to the device. Without this, an out-of-range
+        // offset would silently fall through TrySet to the device default (the read-back keeps the
+        // FITS header honest, but the request should fail fast rather than be quietly ignored).
+        if (request.CameraOffset is int cameraOffset
+            && (cameraOffset < 0
+                || (caps is not null && caps.MaxOffset > 0 && (cameraOffset < caps.MinOffset || cameraOffset > caps.MaxOffset)))) {
+            throw new ArgumentOutOfRangeException(nameof(request), cameraOffset,
+                "Offset is outside the camera's supported range.");
+        }
         if (client is null) {
             throw new InvalidOperationException("camera is not connected");
         }
@@ -235,7 +245,10 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             // LIGHT is deliberate, not an oversight: the §60.5 manual-capture endpoint takes light/
             // test snapshots; calibration frames are sequencer-driven. See PORT_TODO.md "REST manual
             // capture is LIGHT-only by design" for the optional ImageType-field follow-up.
-            await CaptureCoreAsync(client, frameId, request, "LIGHT", FrameType.Light, "Manual capture", CancellationToken.None).ConfigureAwait(false);
+            // The bool result is intentionally ignored (fire-and-forget): a false/failed capture is
+            // already logged inside CaptureCoreAsync, and the pre-announced frame simply never lands
+            // — unlike the sequencer path, there's no caller to surface a throw to.
+            _ = await CaptureCoreAsync(client, frameId, request, "LIGHT", FrameType.Light, "Manual capture", CancellationToken.None).ConfigureAwait(false);
         } catch (Exception ex) {
             LogCaptureFailed(ex, frameId);
         } finally {
@@ -639,6 +652,8 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         try { _ = c.CoolerPower; canCoolerPower = true; } catch (Exception) { }
         int minGain = 0, maxGain = 0;
         try { minGain = c.GainMin; maxGain = c.GainMax; } catch (Exception) { }
+        int minOffset = 0, maxOffset = 0;
+        try { minOffset = c.OffsetMin; maxOffset = c.OffsetMax; } catch (Exception) { }
         int maxBinX = 1, maxBinY = 1;
         try { maxBinX = c.MaxBinX; maxBinY = c.MaxBinY; } catch (Exception) { }
         double minExp = 0, maxExp = 0;
@@ -647,6 +662,7 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             SensorWidth: w, SensorHeight: h, PixelSizeUm: pixelSize,
             CanSetTemperature: canSetTemp, CanAbortExposure: canAbort, CanGetCoolerPower: canCoolerPower,
             MinGain: minGain, MaxGain: maxGain,
+            MinOffset: minOffset, MaxOffset: maxOffset,
             MinBinX: 1, MaxBinX: maxBinX, MinBinY: 1, MaxBinY: maxBinY,
             MinExposureSec: minExp, MaxExposureSec: maxExp);
     }
