@@ -123,6 +123,15 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
             await Task.Delay(CaptureGatePollInterval, token).ConfigureAwait(false);
         }
         try {
+            // Re-snapshot under the gate: a disconnect/reconnect during a long queue wait can
+            // supersede the client we grabbed before the loop, and we must not issue ASCOM commands
+            // (ApplyExposureSettings/StartExposure) against a stale connection — fast-fail instead.
+            lock (_gate) {
+                client = !_disposed && _state == EquipmentConnectionState.Connected ? _client : null;
+            }
+            if (client is null) {
+                throw new InvalidOperationException("camera disconnected while the capture was queued");
+            }
             var frameId = Guid.NewGuid();
             var ok = await CaptureCoreAsync(client, frameId, request, imageType, MapFrameType(imageType), effectiveTarget, token).ConfigureAwait(false);
             if (!ok) {

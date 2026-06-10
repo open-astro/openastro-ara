@@ -464,7 +464,9 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         var path = Path.Combine(dir, $"{frameId}.fits");
         using var fits = FitsImage.Create(path, width, height, FitsBitDepth.UnsignedShort);
         fits.WriteImageData(pixels);
-        fits.SetHeader("IMAGETYP", imageType, "frame type");
+        // FITS convention + case-sensitive calibration matchers/plate-solvers want an uppercase
+        // IMAGETYP; Validate() accepts the type case-insensitively, so normalize here at the write.
+        fits.SetHeader("IMAGETYP", imageType.ToUpperInvariant(), "frame type");
         fits.SetHeader("EXPTIME", request.ExposureSec, "exposure seconds");
         if (request.Gain is int gain) {
             fits.SetHeader("GAIN", gain, "camera gain");
