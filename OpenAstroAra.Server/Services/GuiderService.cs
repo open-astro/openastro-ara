@@ -93,6 +93,10 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             settings.PHD2ServerPort = request.Port;
             DisposeGuiderLocked();
             guider = new PHD2Guider(_profileService);
+            // Observe a mid-session socket drop: PHD2Guider raises PHD2ConnectionLost from its
+            // listener's finally when the link dies. Without this, _state would stay Connected
+            // forever and RequireConnectedGuider would keep dispatching to a dead guider.
+            guider.PHD2ConnectionLost += OnConnectionLost;
             _guider = guider;
             generation = ++_connectGeneration;
             SetStateLocked(EquipmentConnectionState.Connecting);
@@ -153,6 +157,17 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
         }
     }
 
+    // PHD2 dropped the socket mid-session: surface it as Error so GetAsync stops reporting Connected
+    // and RequireConnectedGuider rejects further guide ops until the client reconnects. Guarded on
+    // the current guider so a torn-down stale instance's late event can't clobber a newer connect.
+    private void OnConnectionLost(object? sender, EventArgs e) {
+        lock (_gate) {
+            if (ReferenceEquals(sender, _guider) && _state == EquipmentConnectionState.Connected) {
+                SetStateLocked(EquipmentConnectionState.Error);
+            }
+        }
+    }
+
     private PHD2Guider RequireConnectedGuider() {
         lock (_gate) {
             ObjectDisposedException.ThrowIf(_disposed, this);
@@ -182,9 +197,12 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
     private void SetStateLocked(EquipmentConnectionState state) => _state = state;
 
     private void DisposeGuiderLocked() {
-        _guider?.Disconnect();
-        _guider?.Dispose();
-        _guider = null;
+        if (_guider is not null) {
+            _guider.PHD2ConnectionLost -= OnConnectionLost;
+            _guider.Disconnect();
+            _guider.Dispose();
+            _guider = null;
+        }
     }
 
     public void Dispose() {
