@@ -49,6 +49,9 @@ namespace OpenAstroAra.Test {
             settings.SetupGet(s => s.Binning).Returns((short)1);
             settings.SetupGet(s => s.Threshold).Returns(2.0);
             settings.SetupGet(s => s.SearchRadius).Returns(15);
+            settings.SetupGet(s => s.Regions).Returns(2);
+            settings.SetupGet(s => s.DownSampleFactor).Returns(2);
+            settings.SetupGet(s => s.MaxObjects).Returns(500);
             settings.SetupGet(s => s.NumberOfAttempts).Returns(3);
             settings.SetupGet(s => s.ReattemptDelay).Returns(1.0);
 
@@ -76,7 +79,7 @@ namespace OpenAstroAra.Test {
                     It.IsAny<IDomeMediator>(), It.IsAny<IDomeFollower>()))
                 .Returns(centeringSolver.Object);
 
-            var sut = CreateSUT(profileService.Object, factory.Object);
+            using var sut = CreateSUT(profileService.Object, factory.Object);
             var target = new Coordinates(Angle.ByHours(5), Angle.ByDegree(20), Epoch.J2000);
 
             var result = await sut.CenterOnTarget(target, null, null, CancellationToken.None);
@@ -88,6 +91,9 @@ namespace OpenAstroAra.Test {
             Assert.That(captured.Threshold, Is.EqualTo(2.0));
             Assert.That(captured.Attempts, Is.EqualTo(3));
             Assert.That(captured.ReattemptDelay, Is.EqualTo(TimeSpan.FromMinutes(1))); // ReattemptDelay is minutes
+            Assert.That(captured.Regions, Is.EqualTo(2));
+            Assert.That(captured.DownSampleFactor, Is.EqualTo(2));
+            Assert.That(captured.MaxObjects, Is.EqualTo(500));
             Assert.That(captured.Coordinates!.RA, Is.EqualTo(5).Within(1e-6)); // target threaded through
             // The solve exposure is built from the profile too.
             Assert.That(capturedSeq, Is.Not.Null);
@@ -98,7 +104,7 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public void CenterOnTarget_throws_on_a_null_target() {
-            var sut = CreateSUT(new Mock<IProfileService>().Object, new Mock<IPlateSolverFactory>().Object);
+            using var sut = CreateSUT(new Mock<IProfileService>().Object, new Mock<IPlateSolverFactory>().Object);
             Assert.ThrowsAsync<ArgumentNullException>(
                 () => sut.CenterOnTarget(null!, null, null, CancellationToken.None));
         }
@@ -107,7 +113,7 @@ namespace OpenAstroAra.Test {
         public void CenterOnTarget_throws_when_no_active_profile_is_loaded() {
             var profileService = new Mock<IProfileService>();
             profileService.SetupGet(p => p.ActiveProfile).Returns((IProfile)null!);
-            var sut = CreateSUT(profileService.Object, new Mock<IPlateSolverFactory>().Object);
+            using var sut = CreateSUT(profileService.Object, new Mock<IPlateSolverFactory>().Object);
             var target = new Coordinates(Angle.ByHours(5), Angle.ByDegree(20), Epoch.J2000);
             Assert.ThrowsAsync<PlateSolverConfigurationException>(
                 () => sut.CenterOnTarget(target, null, null, CancellationToken.None));
@@ -123,7 +129,7 @@ namespace OpenAstroAra.Test {
             profileService.SetupGet(p => p.ActiveProfile.PlateSolveSettings).Returns(new Mock<IPlateSolveSettings>().Object);
             profileService.SetupGet(p => p.ActiveProfile.TelescopeSettings.FocalLength).Returns(focalLength);
             profileService.SetupGet(p => p.ActiveProfile.CameraSettings.PixelSize).Returns(pixelSize);
-            var sut = CreateSUT(profileService.Object, new Mock<IPlateSolverFactory>().Object);
+            using var sut = CreateSUT(profileService.Object, new Mock<IPlateSolverFactory>().Object);
             var target = new Coordinates(Angle.ByHours(5), Angle.ByDegree(20), Epoch.J2000);
             Assert.ThrowsAsync<PlateSolverConfigurationException>(
                 () => sut.CenterOnTarget(target, null, null, CancellationToken.None));

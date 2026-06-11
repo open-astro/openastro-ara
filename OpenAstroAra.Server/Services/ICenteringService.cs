@@ -37,7 +37,8 @@ public interface ICenteringService {
     /// is within the profile's centering threshold (or attempts are exhausted). Returns the final solve result
     /// (its <see cref="PlateSolveResult.Success"/> reflects whether centering converged).
     /// <paramref name="solveProgress"/> surfaces per-solve sub-progress (the inner loop) and
-    /// <paramref name="progress"/> the overall status; both optional.
+    /// <paramref name="progress"/> the overall status; both optional. Concurrent calls are serialized
+    /// internally (each one drives the mount) — a second caller waits for the first to complete.
     /// </summary>
     Task<PlateSolveResult> CenterOnTarget(Coordinates target, IProgress<PlateSolveProgress>? solveProgress,
         IProgress<ApplicationStatus>? progress, CancellationToken token);

@@ -29,7 +29,10 @@ namespace OpenAstroAra.Server.Services;
 
 /// <summary>§28 centering — see <see cref="ICenteringService"/>. Builds the capture sequence + center-solve
 /// parameters from the active profile and drives the ported centering loop over the live equipment.</summary>
-public class CenteringService : ICenteringService {
+public sealed class CenteringService : ICenteringService, IDisposable {
+    // Serialize centering ops: each one slews/syncs the mount, so two concurrent calls (e.g. the §58.4 flip
+    // recenter racing a REST caller) must not run at once. A second caller waits for the first to finish.
+    private readonly SemaphoreSlim _centeringGate = new(1, 1);
     private readonly IProfileService profileService;
     private readonly IPlateSolverFactory plateSolverFactory;
     private readonly IImagingMediator imagingMediator;
@@ -59,6 +62,16 @@ public class CenteringService : ICenteringService {
             IProgress<ApplicationStatus>? progress, CancellationToken token) {
         ArgumentNullException.ThrowIfNull(target);
 
+        await _centeringGate.WaitAsync(token);
+        try {
+            return await CenterCoreAsync(target, solveProgress, progress, token);
+        } finally {
+            _centeringGate.Release();
+        }
+    }
+
+    private Task<PlateSolveResult> CenterCoreAsync(Coordinates target, IProgress<PlateSolveProgress>? solveProgress,
+            IProgress<ApplicationStatus>? progress, CancellationToken token) {
         var profile = profileService.ActiveProfile
             ?? throw new PlateSolverConfigurationException("Cannot centre: no active profile is loaded.");
         var settings = profile.PlateSolveSettings;
@@ -97,7 +110,11 @@ public class CenteringService : ICenteringService {
             ReattemptDelay = TimeSpan.FromMinutes(settings.ReattemptDelay),
         };
 
-        // async method → unwrap the Task<PlateSolveResult> from the centering loop.
-        return await centeringSolver.Center(sequence, parameter, solveProgress, progress, ct: token);
+        return centeringSolver.Center(sequence, parameter, solveProgress, progress, ct: token);
+    }
+
+    public void Dispose() {
+        _centeringGate.Dispose();
+        GC.SuppressFinalize(this);
     }
 }
