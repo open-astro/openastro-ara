@@ -321,3 +321,10 @@ unit-testable core to the notification surface), **§58.8 first-flip 60 s confir
 severity escalation**, and the **re-focus-after-flip** step (gated on the live focuser AF V-curve sweep, itself a
 focuser-hardware blocker). The §58 profile block (`refocus_after_flip` policy, `guider_recal` mode,
 `first_flip_confirmed`) is not yet on ARA's profile model — these land with the profile-schema extension.
+
+### IDomeFollower.TriggerTelescopeSync has no cancellation token (from #366 review r2)
+`MeridianFlipExecutor.SynchronizeDome`'s non-following-dome path calls `IDomeFollower.TriggerTelescopeSync()`,
+which takes no `CancellationToken` (unlike `WaitForDomeSynchronization(token)` on the following path) — so a
+non-following dome sync can't be cancelled mid-slew. Inherited interface shape; bounded impact (best-effort,
+exceptions swallowed). Fix is a shared-interface change (`IDomeFollower` + its impls), out of scope for the
+§58.4 executor PR — fold into a dome-mediator follow-up that threads cancellation through the sync seam.
