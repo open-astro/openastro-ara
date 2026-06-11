@@ -62,8 +62,9 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
     private long _connectGeneration; // this attempt's id; later attempts/disconnects bump it to supersede
     private bool _disposed;
 
-    public GuiderService(IProfileService profileService, ILogger<GuiderService> logger) {
+    public GuiderService(IProfileService profileService, GuiderRecoveryCoordinator recovery, ILogger<GuiderService> logger) {
         _profileService = profileService ?? throw new ArgumentNullException(nameof(profileService));
+        _recovery = recovery ?? throw new ArgumentNullException(nameof(recovery));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -94,6 +95,8 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             if (_state is EquipmentConnectionState.Connecting or EquipmentConnectionState.Connected) {
                 return Task.FromResult(Accepted("guider.connect", idempotencyKey));
             }
+            // A fresh connect supersedes any §63.3 recovery still polling for the dropped session.
+            CancelRecoveryLocked();
             // PHD2Guider reads host/port from the profile (§63.5), so honor the request by writing
             // them in before the connect.
             var settings = _profileService.ActiveProfile.GuiderSettings;
@@ -120,6 +123,7 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
         lock (_gate) {
             ObjectDisposedException.ThrowIf(_disposed, this);
             ++_connectGeneration; // supersede any in-flight connect
+            CancelRecoveryLocked(); // the user gave up on the guider — stop recovering it
             DisposeGuiderLocked();
             SetStateLocked(EquipmentConnectionState.Disconnected);
         }
@@ -174,6 +178,8 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
         lock (_gate) {
             if (ReferenceEquals(sender, _guider) && _state == EquipmentConnectionState.Connected) {
                 SetStateLocked(EquipmentConnectionState.Error);
+                // §63.3 guider-d: the daemon dropped mid-session — try to recover the process.
+                BeginRecoveryLocked();
             }
         }
     }
@@ -254,6 +260,12 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
                 return;
             }
             _disposed = true;
+            // Cancel + dispose the in-flight recovery pass (if any). RunRecoveryAsync's finally also
+            // disposes under the gate; the null-check there makes either order safe, and disposing
+            // here satisfies CA2213. No new pass can start — BeginRecoveryLocked checks _disposed.
+            CancelRecoveryLocked();
+            _recoveryPassCts?.Dispose();
+            _recoveryPassCts = null;
             DisposeGuiderLocked();
         }
     }
