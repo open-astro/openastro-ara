@@ -35,6 +35,10 @@ class CameraExposureApi {
         'filter_name': p.filterSlot,
       },
     );
-    return (res.data?['frame_id'] as String?) ?? '';
+    final frameId = res.data?['frame_id'] as String?;
+    if (frameId == null || frameId.isEmpty) {
+      throw StateError('Exposure response did not include a frame_id.');
+    }
+    return frameId;
   }
 }

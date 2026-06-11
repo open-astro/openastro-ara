@@ -1898,8 +1898,10 @@ mkdir -p "$BIN"
 cp -L /opt/homebrew/lib/libcfitsio.dylib "$BIN/libcfitsio.dylib"
 cp -L /opt/homebrew/lib/libcfitsio.dylib "$BIN/cfitsio.dylib"
 ```
-A clean `dotnet build` wipes `bin/`, so re-copy after rebuilds. **TODO:** a macOS-only
-post-build copy target (or a `runtimes/` content entry) so this survives — not yet wired.
+A clean `dotnet build` wipes `bin/`, but the `CopyLibCfitsioMacOS` post-build target in
+`OpenAstroAra.Server.csproj` re-copies it automatically on every macOS build (guarded to
+macOS + the dylib existing, so it's a no-op on Linux/Windows/CI). The manual `cp` above is
+only needed if you haven't built since brew-installing cfitsio.
 
 **2. Start the daemon.**
 ```bash

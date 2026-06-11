@@ -124,3 +124,7 @@ Audited all NuGet PackageReferences across the solution for MPL-2.0-distribution
 ## §65 JpegEncoder.EncodeThumbnail null-resize guard (2026-06-10, from PR #349 review)
 
 `JpegEncoder.EncodeThumbnail` (grayscale, pre-existing since #208) calls `srcBitmap.Resize(...)` and passes the result straight to `SKImage.FromBitmap` with no null check. SkiaSharp's `Resize` returns `null` under memory pressure / on an unsupported size, which would NRE rather than surface a clear error. PR #349 added the same guard to the new `EncodeColorThumbnail` (`?? throw InvalidOperationException`); the grayscale twin should get the identical guard in a small follow-up (out of #349's OSC-debayer scope). Low severity — only triggers under allocation failure.
+
+## Client "active server" selector — servers.last is ambiguous with multiple saved servers (2026-06-10, from PR #350 review)
+
+The client picks the server for API calls via `savedServersProvider` → `servers.last` (insertion order). This is the **existing codebase convention** — `lib/state/settings/equipment_connection_state.dart:99` does `ProfileApi(servers.last)`, and PR #350 mirrored it in `last_frame_state.dart` + `imaging_tab.dart`. With >1 saved server this targets the wrong host. v0.0.1 is effectively single-server, so it's latent. Proper fix: introduce a canonical "active/current server" provider and route ALL per-server API construction through it (equipment connection, profile, frames, exposure, …) in one pass — out of scope for a single feature PR. Track here until that app-wide change lands.

@@ -85,6 +85,9 @@ class ImagingTab extends ConsumerWidget {
           .add(params.exposure + const Duration(seconds: 20));
       var landed = false;
       while (DateTime.now().isBefore(deadline)) {
+        // Bail if the user navigated away mid-capture — stop polling and don't
+        // touch a detached scaffold.
+        if (!context.mounted) return;
         if (await api.isRegistered(frameId)) {
           landed = true;
           break;

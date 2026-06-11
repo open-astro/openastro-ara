@@ -15,7 +15,7 @@ class FrameViewer extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final id = ref.watch(lastCapturedFrameIdProvider);
     if (id == null) {
-      return _Placeholder();
+      return const _Placeholder();
     }
     final preview = ref.watch(framePreviewProvider(id));
     return Container(
@@ -43,6 +43,8 @@ class FrameViewer extends ConsumerWidget {
 }
 
 class _Placeholder extends StatelessWidget {
+  const _Placeholder();
+
   @override
   Widget build(BuildContext context) {
     return Container(
