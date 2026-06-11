@@ -87,6 +87,7 @@ namespace OpenAstroAra.Test {
             Assert.That(captured.PixelSize, Is.EqualTo(3.8));
             Assert.That(captured.Threshold, Is.EqualTo(2.0));
             Assert.That(captured.Attempts, Is.EqualTo(3));
+            Assert.That(captured.ReattemptDelay, Is.EqualTo(TimeSpan.FromMinutes(1))); // ReattemptDelay is minutes
             Assert.That(captured.Coordinates!.RA, Is.EqualTo(5).Within(1e-6)); // target threaded through
             // The solve exposure is built from the profile too.
             Assert.That(capturedSeq, Is.Not.Null);
@@ -113,11 +114,15 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void CenterOnTarget_throws_when_focal_length_or_pixel_size_is_unconfigured() {
+        [TestCase(0.0, 3.8)]          // focal length zero
+        [TestCase(double.NaN, 3.8)]   // focal length NaN (default)
+        [TestCase(800.0, 0.0)]        // pixel size zero
+        [TestCase(800.0, double.NaN)] // pixel size NaN
+        public void CenterOnTarget_throws_when_focal_length_or_pixel_size_is_unconfigured(double focalLength, double pixelSize) {
             var profileService = new Mock<IProfileService>();
             profileService.SetupGet(p => p.ActiveProfile.PlateSolveSettings).Returns(new Mock<IPlateSolveSettings>().Object);
-            profileService.SetupGet(p => p.ActiveProfile.TelescopeSettings.FocalLength).Returns(0); // unset
-            profileService.SetupGet(p => p.ActiveProfile.CameraSettings.PixelSize).Returns(3.8);
+            profileService.SetupGet(p => p.ActiveProfile.TelescopeSettings.FocalLength).Returns(focalLength);
+            profileService.SetupGet(p => p.ActiveProfile.CameraSettings.PixelSize).Returns(pixelSize);
             var sut = CreateSUT(profileService.Object, new Mock<IPlateSolverFactory>().Object);
             var target = new Coordinates(Angle.ByHours(5), Angle.ByDegree(20), Epoch.J2000);
             Assert.ThrowsAsync<PlateSolverConfigurationException>(

@@ -93,11 +93,11 @@ public class CenteringService : ICenteringService {
             MaxObjects = settings.MaxObjects,
             Binning = settings.Binning,
             Attempts = settings.NumberOfAttempts,
+            // NINA's PlateSolveSettings.ReattemptDelay is in MINUTES (options "Reattempt delay [min]", default 2).
             ReattemptDelay = TimeSpan.FromMinutes(settings.ReattemptDelay),
         };
 
-        // await (not just return) so the guard throws above and any solver fault surface uniformly through the
-        // returned task rather than synchronously at the call site.
+        // async method → unwrap the Task<PlateSolveResult> from the centering loop.
         return await centeringSolver.Center(sequence, parameter, solveProgress, progress, ct: token);
     }
 }
