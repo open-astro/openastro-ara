@@ -61,15 +61,14 @@ namespace OpenAstroAra.Image.ImageAnalysis {
                 throw new ArgumentException(
                     $"pixel length ({pixels.Length}) doesn't match {width}×{height} = {(long)width * height}.");
             }
-            if (pixels.Length == 0) {
-                return new StarDetectionResult { DetectedStars = 0, AverageHFR = 0, HFRStdDev = 0 };
-            }
+            // width>0 && height>0 && length==width*height ⇒ length>0, so no empty-frame branch is needed.
 
             // Optional denoise into a working buffer so the centroid/flux read post-filter values.
             ushort[] work = parameters.NoiseReduction > 0
-                ? Median3x3(pixels, width, height)
+                ? Median3x3(pixels, width, height, token)
                 : pixels.ToArray();
 
+            token.ThrowIfCancellationRequested();
             var (median, sigma) = BackgroundStats(work);
             // k·σ above the background. Sensitivity carries k directly (8≈Normal, 5≈High, 3≈Highest);
             // guard a non-positive/garbage value to the Normal default so detection never floods.
@@ -87,20 +86,30 @@ namespace OpenAstroAra.Image.ImageAnalysis {
             return Summarize(stars);
         }
 
-        // Median + MAD-derived Gaussian-equivalent sigma. MAD is the median of |x - median|; scaling by
-        // 1.4826 makes it a consistent σ estimator for Gaussian noise while ignoring the star outliers.
-        private static (double median, double sigma) BackgroundStats(ushort[] pixels) {
-            var sorted = (ushort[])pixels.Clone();
-            Array.Sort(sorted);
-            int median = sorted[sorted.Length / 2];
+        // Background is a sky-wide statistic, so a strided subsample (~BackgroundSampleTarget pixels)
+        // gives the same median/MAD as the full frame at a fraction of the cost — two full-frame sorts on
+        // a 20-50 MP frame would be 1-3 s and a full clone; the sample is a few thousand entries and a sub-ms
+        // sort. MAD is the median of |x - median|; ×1.4826 makes it a consistent σ estimator for Gaussian
+        // noise while ignoring the star outliers. Frames at/under the target sample in full (stride 1).
+        private const int BackgroundSampleTarget = 20000;
 
-            // Reuse the sorted buffer for |x - median| in place — the deviation of a ushort from an
-            // integral median is itself ≤ 65535, so it fits, and we avoid a second full-frame allocation.
-            for (int i = 0; i < sorted.Length; i++) {
-                sorted[i] = (ushort)Math.Abs(sorted[i] - median);
+        private static (double median, double sigma) BackgroundStats(ushort[] pixels) {
+            int stride = Math.Max(1, pixels.Length / BackgroundSampleTarget);
+            int n = (pixels.Length + stride - 1) / stride;
+            var sample = new ushort[n];
+            for (int i = 0, j = 0; i < pixels.Length; i += stride) {
+                sample[j++] = pixels[i];
             }
-            Array.Sort(sorted);
-            double mad = sorted[sorted.Length / 2];
+            Array.Sort(sample);
+            int median = sample[sample.Length / 2];
+
+            // Reuse the sample buffer for |x - median| in place — the deviation of a ushort from an
+            // integral median is itself ≤ 65535, so it fits, and we avoid a second allocation.
+            for (int i = 0; i < sample.Length; i++) {
+                sample[i] = (ushort)Math.Abs(sample[i] - median);
+            }
+            Array.Sort(sample);
+            double mad = sample[sample.Length / 2];
             return (median, mad * 1.4826);
         }
 
@@ -131,9 +140,12 @@ namespace OpenAstroAra.Image.ImageAnalysis {
 
                 while (stack.Count > 0) {
                     int p = stack.Pop();
-                    // Once oversized, stop GROWING blob (a frame-spanning component would otherwise
-                    // accumulate millions of entries / tens of MB held until FindStars returns) but keep
-                    // draining the stack so every pixel of the component stays marked visited.
+                    // Once oversized, stop GROWING the blob list (it would otherwise reach O(frame) entries
+                    // and tens of MB held until FindStars returns) but keep draining the stack so the WHOLE
+                    // component is marked visited and discarded as one unit. Draining matters for correctness:
+                    // abandoning the component mid-flood would re-seed its remainder as fresh starts, and the
+                    // tail fragment could be small enough to masquerade as a star. The transient frontier
+                    // stack is bounded by the component (≤ frame) — the same order as the input we already hold.
                     if (!oversized) {
                         blob.Add(p);
                         if (blob.Count > maxArea) {
@@ -175,11 +187,12 @@ namespace OpenAstroAra.Image.ImageAnalysis {
         // HFR = Σ f·dist / Σ f, the radius that flux-weights to the star's spread. A saturated peak is
         // rejected — its clipped-flat core biases both centroid and HFR.
         private static DetectedStar? Measure(List<int> blob, ushort[] pixels, int width, double background) {
-            double sumF = 0, sumX = 0, sumY = 0;
+            double sumF = 0, sumX = 0, sumY = 0, sumV = 0;
             ushort peak = 0;
             foreach (int p in blob) {
                 ushort v = pixels[p];
                 if (v > peak) peak = v;
+                sumV += v;
                 double f = v - background;
                 if (f <= 0) continue;
                 int x = p % width, y = p / width;
@@ -206,7 +219,7 @@ namespace OpenAstroAra.Image.ImageAnalysis {
             return new DetectedStar {
                 Position = Math.Round(cy) * width + Math.Round(cx),
                 HFR = hfr,
-                AverageBrightness = sumF / blob.Count + background,
+                AverageBrightness = sumV / blob.Count, // mean raw brightness over every blob pixel
                 MaxBrightness = peak,
                 Background = background,
             };
@@ -237,10 +250,11 @@ namespace OpenAstroAra.Image.ImageAnalysis {
 
         // Light 3×3 median filter (edge pixels mirror-clamped) to knock down salt-and-pepper noise
         // before thresholding — keeps single hot pixels from registering as stars on noisy frames.
-        private static ushort[] Median3x3(ReadOnlySpan<ushort> pixels, int width, int height) {
+        private static ushort[] Median3x3(ReadOnlySpan<ushort> pixels, int width, int height, CancellationToken token) {
             var outp = new ushort[pixels.Length];
             Span<ushort> window = stackalloc ushort[9];
             for (int y = 0; y < height; y++) {
+                token.ThrowIfCancellationRequested();
                 for (int x = 0; x < width; x++) {
                     int n = 0;
                     for (int dy = -1; dy <= 1; dy++) {

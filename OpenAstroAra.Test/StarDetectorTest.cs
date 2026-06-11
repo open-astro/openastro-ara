@@ -155,6 +155,21 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Detect_rejects_a_frame_spanning_bright_region() {
+            // A large connected bright block (a flat/over-exposed region or nebula) is not a star: it
+            // exceeds the area cap and must be discarded — and detection must stay bounded, not blow up.
+            int w = 200, h = 200;
+            var frame = FlatField(w, h);
+            for (int y = 40; y < 140; y++) {
+                for (int x = 40; x < 140; x++) {
+                    frame[y * w + x] = 6000; // 100×100 = 10000-pixel connected component
+                }
+            }
+            var result = StarDetector.Detect(frame, w, h, NormalParams());
+            Assert.That(result.DetectedStars, Is.EqualTo(0));
+        }
+
+        [Test]
         public void Detect_honours_a_cancelled_token() {
             int w = 64, h = 64;
             using var cts = new System.Threading.CancellationTokenSource();
