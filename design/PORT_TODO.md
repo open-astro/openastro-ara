@@ -140,3 +140,15 @@ guider-d landed the §63.3 crash-detection + auto-restart core: `IGuiderProcessS
 - **`_recovering` stale-flag race (ultra-narrow).** If `ConnectAsync`/`DisconnectAsync` cancels a recovery pass, the background task is still unwinding (OCE caught, `finally` not yet run). If the new connection then dies and `OnConnectionLost` fires before that `finally` clears `_recovering`, `BeginRecoveryLocked` skips starting a fresh recovery. Window doesn't close on its own but is extremely unlikely (old task is at a catch/finally boundary). Low priority.
 - **`inactive` nudge on deliberate admin stop.** A manual `systemctl stop openastro-phd2` drops the socket → `OnConnectionLost` → recovery → sees `inactive` → nudges a restart (fighting the admin's intent). Acknowledged in-code; only reachable from an unexpected drop. Add a guard (e.g. skip the nudge for a clean `inactive` with no recent crash signal) only if silent auto-restart there proves undesirable in the field.
 - **Restart permission-failure is silent.** `RequestRestart` is fire-and-forget (mirrors §13), so a `systemctl restart` rejected for missing NOPASSWD/polkit exits non-zero with nothing logged. If a "restart was rejected" signal is wanted, make it await the child + log Warning on non-zero exit (changes the seam from `void` to `Task`).
+
+## Parked blockers (2026-06-11) — recorded per "note physical blockers + keep going"
+
+**Physical / hardware (can't do autonomously — revisit with hardware):**
+- **v0.0.1-ara.1 release tag + RPi smoke test** (Phase 15 terminus) — needs a physical Pi + user authority to tag. The autonomous terminus.
+- **Live guider integration tests** (guider-e push, guider connect/guide RMS) — `openastro-guider` was NOT on the LAN at scan time (subnet 192.168.1.0/24 had no :4400; only an unrelated Virata-EmWeb device on :8080). Unit-test mappers/serialization; run live integration when the guider is back up.
+- **Mount-dependent flows** (slew/track/polar-align loop, dome) — testable against the ASCOM OmniSim, but real-sky polar-align needs a mount + sky. Build + sim-test; defer on-sky verification.
+
+**Code-blocked (buildable, sequenced):**
+- **guider-e §63.5 param push** is blocked on ARA's profile lacking the §63.5 guider-config fields — `IGuiderSettings` only has PHD2 host/port/scale/history/ROI/profile-id, NOT guide focal length / pixel size / RA-Dec aggressiveness / min-motion / dec-guide-mode / calibration. Prereq: extend `IGuiderSettings` + the §37 profile section + AraJsonContext + the Flutter wizard Screen 10, THEN push (the guider-e-1 named-object RPC classes are ready). Tracked as task: "guider-e profile-model extension + §63.5 param push".
+
+**Tracking correction:** §38.7 disk-shipped starter templates (lrgb-dso/narrowband-shoo/comet) are **DONE** (real NINA-schema bodies in `OpenAstroAra.Server/templates/` + csproj Content publish entry + `StarterTemplateTest`), despite the stale "Future §38 sub-PRs" listing.
