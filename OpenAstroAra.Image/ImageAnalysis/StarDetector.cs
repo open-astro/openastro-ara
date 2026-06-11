@@ -121,10 +121,13 @@ namespace OpenAstroAra.Image.ImageAnalysis {
         // to a measured star (or rejected). Iterative stack — recursion would blow the stack on a big blob.
         private static List<DetectedStar> FindStars(ReadOnlySpan<ushort> pixels, int width, int height, double threshold, double background, CancellationToken token) {
             var stars = new List<DetectedStar>();
-            var visited = new bool[pixels.Length];
+            // BitArray (1 bit/pixel) over bool[] (1 byte/pixel): ~6 MB vs ~50 MB for a 50 MP frame —
+            // meaningful headroom on the Raspberry Pi target that shares RAM with the OS + FITS I/O.
+            var visited = new System.Collections.BitArray(pixels.Length);
             int maxArea = Math.Max(MaxStarAreaFloor, (int)(MaxStarAreaFraction * pixels.Length));
             var stack = new Stack<int>();
             var blob = new List<int>();
+            int popsSinceCancelCheck = 0;
 
             for (int start = 0; start < pixels.Length; start++) {
                 // Cheap periodic cancellation so a cancelled DetectStars actually short-circuits the
@@ -143,6 +146,12 @@ namespace OpenAstroAra.Image.ImageAnalysis {
                 bool oversized = false;
 
                 while (stack.Count > 0) {
+                    // The outer check fires per start-pixel, but a single frame-spanning component drains
+                    // entirely inside this while — so check here too, else a cancel during one giant blob
+                    // wouldn't be seen until the whole component finished.
+                    if ((++popsSinceCancelCheck & 0xFFF) == 0) {
+                        token.ThrowIfCancellationRequested();
+                    }
                     int p = stack.Pop();
                     // Once oversized, stop GROWING the blob list (it would otherwise reach O(frame) entries
                     // and tens of MB held until FindStars returns) but keep draining the stack so the WHOLE
