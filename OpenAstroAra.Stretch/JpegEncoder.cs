@@ -114,7 +114,8 @@ public static class JpegEncoder {
         var (dstW, dstH) = ScaleToFit(srcWidth, srcHeight, maxDim);
         using var srcBitmap = RgbToBitmap(rgb, srcWidth, srcHeight);
         var dstInfo = new SKImageInfo(dstW, dstH, SKColorType.Rgba8888, SKAlphaType.Opaque);
-        using var dstBitmap = srcBitmap.Resize(dstInfo, new SKSamplingOptions(SKCubicResampler.Mitchell));
+        using var dstBitmap = srcBitmap.Resize(dstInfo, new SKSamplingOptions(SKCubicResampler.Mitchell))
+            ?? throw new InvalidOperationException($"Skia failed to resize {srcWidth}×{srcHeight} → {dstW}×{dstH} thumbnail");
         using var image = SKImage.FromBitmap(dstBitmap);
         using var data = image.Encode(SKEncodedImageFormat.Jpeg, Math.Clamp(quality, 1, 100));
         return data.ToArray();

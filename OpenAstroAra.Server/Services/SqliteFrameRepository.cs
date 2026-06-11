@@ -470,6 +470,11 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
     // §65 OSC color: super-pixel debayer the raw mosaic → 3 half-res channels, stretch each, and
     // interleave to RGB. Per-channel auto-stretch incidentally auto-white-balances the preview; the
     // stored FITS stays the raw, undebayered mosaic.
+    //
+    // WB caveat: with a user-supplied stretchParams (manual black/white points), applying the same
+    // params per channel can shift white balance — those points were chosen against the mosaic's
+    // combined luminance, not per-channel. Acceptable for a preview; revisit if manual OSC stretch
+    // looks off.
     private static (byte[] Rgb, int Width, int Height) DebayerAndStretch(
         ushort[] mosaic, int width, int height, OpenAstroAra.Stretch.BayerPattern pattern,
         OpenAstroAra.Stretch.StretchAlgorithm algorithm, OpenAstroAra.Stretch.StretchParams? stretchParams) {

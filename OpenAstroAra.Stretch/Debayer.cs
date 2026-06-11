@@ -16,8 +16,8 @@ namespace OpenAstroAra.Stretch;
 
 /// <summary>
 /// The four Bayer color-filter-array layouts, named by the 2×2 tile at the image (0,0)
-/// origin (column-major within the tile, i.e. <c>RGGB</c> = R at (0,0), G at (1,0), G at (0,1),
-/// B at (1,1)). The capture path resolves the sensor's native pattern + ASCOM BayerOffsetX/Y
+/// origin in (x,y) = (column,row) order, i.e. <c>RGGB</c> = R at (0,0), G at (1,0), G at (0,1),
+/// B at (1,1). The capture path resolves the sensor's native pattern + ASCOM BayerOffsetX/Y
 /// into one of these and stamps it as the FITS <c>BAYERPAT</c> header.
 /// </summary>
 public enum BayerPattern { RGGB, BGGR, GRBG, GBRG }
