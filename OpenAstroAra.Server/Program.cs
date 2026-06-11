@@ -139,6 +139,11 @@ public partial class Program {
         // snapshot + §33.2.1 versions + §54 release notes. Restart endpoints
         // throw (§13 systemd-watchdog work needed).
         builder.Services.AddSingleton<IServerStateService, PlaceholderServerStateService>();
+        // §28 — image plate-solving. The factory builds the configured solver backend (ASTAP / Platesolve);
+        // PlateSolveService wraps the image-in → solution-out path. The §28 centering loop + §58.4 flip
+        // recenter build on this.
+        builder.Services.AddSingleton<OpenAstroAra.PlateSolving.Interfaces.IPlateSolverFactory, OpenAstroAra.PlateSolving.PlateSolverFactoryProxy>();
+        builder.Services.AddSingleton<OpenAstroAra.Server.Services.IPlateSolveService, OpenAstroAra.Server.Services.PlateSolveService>();
         // §65.5 batch-job tracker — backs /jobs/{id} status + the
         // session-restretch worker. In-memory by design: jobs are
         // ephemeral, state resets on daemon restart.
