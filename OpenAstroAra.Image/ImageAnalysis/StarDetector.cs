@@ -81,7 +81,10 @@ namespace OpenAstroAra.Image.ImageAnalysis {
 
             var stars = FindStars(work, width, height, threshold, background: median, token);
 
-            // Highest-quality stars first, then honour an explicit cap (0 = no cap).
+            // Highest-quality stars first, then honour an explicit cap (0 = no cap). With a cap, the
+            // returned count + HFR stats reflect the brightest-N, not the whole field — this is the NINA
+            // convention (bright stars give the cleanest, least-noisy HFR for focus), but a §59 autofocus
+            // caller passing a small cap should know its HFR is a bright-star statistic, not a field average.
             stars.Sort((a, b) => b.MaxBrightness.CompareTo(a.MaxBrightness));
             if (parameters.MaxNumberOfStars > 0 && stars.Count > parameters.MaxNumberOfStars) {
                 stars.RemoveRange(parameters.MaxNumberOfStars, stars.Count - parameters.MaxNumberOfStars);
@@ -159,6 +162,10 @@ namespace OpenAstroAra.Image.ImageAnalysis {
                     // abandoning the component mid-flood would re-seed its remainder as fresh starts, and the
                     // tail fragment could be small enough to masquerade as a star. The transient frontier
                     // stack is bounded by the component (≤ frame) — the same order as the input we already hold.
+                    // Caveat for the Pi target: a frame-spanning bright region (sub-half-frame so the median
+                    // threshold stays below it) can briefly push the int stack toward O(frame), ~2× the
+                    // working set for that one call; it's freed the instant the component is discarded. If
+                    // profiling ever flags this, swap to a scanline fill (frontier = spans, not pixels).
                     if (!oversized) {
                         blob.Add(p);
                         if (blob.Count > maxArea) {
@@ -196,9 +203,10 @@ namespace OpenAstroAra.Image.ImageAnalysis {
             return stars;
         }
 
-        // Flux-weighted centroid + Half-Flux-Radius. Flux is background-subtracted (f = max(0, v - bg));
-        // HFR = Σ f·dist / Σ f, the radius that flux-weights to the star's spread. A saturated peak is
-        // rejected — its clipped-flat core biases both centroid and HFR.
+        // Flux-weighted centroid + Half-Flux-Radius. Flux is background-subtracted (f = v - bg); every blob
+        // pixel is above threshold = bg + k·σ > bg, so f > 0 throughout — no per-pixel positivity guard is
+        // needed. HFR = Σ f·dist / Σ f, the radius that flux-weights to the star's spread. A saturated peak
+        // is rejected — its clipped-flat core biases both centroid and HFR.
         private static DetectedStar? Measure(List<int> blob, ReadOnlySpan<ushort> pixels, int width, double background) {
             double sumF = 0, sumX = 0, sumY = 0, sumV = 0;
             ushort peak = 0;
@@ -207,13 +215,12 @@ namespace OpenAstroAra.Image.ImageAnalysis {
                 if (v > peak) peak = v;
                 sumV += v;
                 double f = v - background;
-                if (f <= 0) continue;
                 int x = p % width, y = p / width;
                 sumF += f;
                 sumX += f * x;
                 sumY += f * y;
             }
-            if (sumF <= 0 || peak >= SaturationLevel) {
+            if (peak >= SaturationLevel) {
                 return null;
             }
             double cx = sumX / sumF, cy = sumY / sumF;
@@ -221,7 +228,6 @@ namespace OpenAstroAra.Image.ImageAnalysis {
             double sumFR = 0;
             foreach (int p in blob) {
                 double f = pixels[p] - background;
-                if (f <= 0) continue;
                 int x = p % width, y = p / width;
                 double dx = x - cx, dy = y - cy;
                 sumFR += f * Math.Sqrt(dx * dx + dy * dy);
