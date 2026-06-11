@@ -112,7 +112,10 @@ public sealed partial class SystemctlGuiderProcessSupervisor : IGuiderProcessSup
         try {
             var psi = new ProcessStartInfo("systemctl", $"is-active {Unit}") {
                 RedirectStandardOutput = true,
-                RedirectStandardError = true,
+                // Deliberately NOT redirecting stderr: we never read it, and a redirected-but-unread
+                // stderr pipe would deadlock WaitForExit if systemctl writes enough to it (e.g. a
+                // "Failed to connect to bus" error). Errors surface via the exception filter / a
+                // non-"active" stdout instead; stderr just inherits the daemon's.
                 UseShellExecute = false,
                 CreateNoWindow = true,
             };
