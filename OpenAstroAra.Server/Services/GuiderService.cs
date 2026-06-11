@@ -62,8 +62,9 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
     private long _connectGeneration; // this attempt's id; later attempts/disconnects bump it to supersede
     private bool _disposed;
 
-    public GuiderService(IProfileService profileService, ILogger<GuiderService> logger) {
+    public GuiderService(IProfileService profileService, GuiderRecoveryCoordinator recovery, ILogger<GuiderService> logger) {
         _profileService = profileService ?? throw new ArgumentNullException(nameof(profileService));
+        _recovery = recovery ?? throw new ArgumentNullException(nameof(recovery));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -174,6 +175,8 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
         lock (_gate) {
             if (ReferenceEquals(sender, _guider) && _state == EquipmentConnectionState.Connected) {
                 SetStateLocked(EquipmentConnectionState.Error);
+                // §63.3 guider-d: the daemon dropped mid-session — try to recover the process.
+                BeginRecoveryLocked();
             }
         }
     }
@@ -256,6 +259,10 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             _disposed = true;
             DisposeGuiderLocked();
         }
+        // Cancel + dispose outside the gate: an in-flight recovery pass observes cancellation and
+        // unwinds without needing the lock.
+        _recoveryCts.Cancel();
+        _recoveryCts.Dispose();
     }
 
     [LoggerMessage(Level = LogLevel.Error, Message = "PHD2 guider connect failed")]

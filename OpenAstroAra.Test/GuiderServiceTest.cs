@@ -13,6 +13,7 @@
 #endregion "copyright"
 
 using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
 using NUnit.Framework;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
@@ -30,7 +31,15 @@ namespace OpenAstroAra.Test {
     public class GuiderServiceTest {
 
         private static GuiderService NewService() =>
-            new(new HeadlessProfileService(), NullLogger<GuiderService>.Instance);
+            new(new HeadlessProfileService(), NewRecovery(), NullLogger<GuiderService>.Instance);
+
+        // These tests never trigger a connection drop, so recovery is wired but never runs — inert
+        // mocks suffice. The recovery decision tree itself is covered by GuiderRecoveryCoordinatorTest.
+        private static GuiderRecoveryCoordinator NewRecovery() =>
+            new(Mock.Of<IGuiderProcessSupervisor>(),
+                Mock.Of<INotificationService>(),
+                Mock.Of<IDiagnosticsService>(),
+                NullLogger<GuiderRecoveryCoordinator>.Instance);
 
         [Test]
         public async System.Threading.Tasks.Task GetAsync_returns_null_before_connect() {
