@@ -198,10 +198,86 @@ namespace OpenAstroAra.Test {
             var hyper = FocusCurveFit.FitHyperbolic(pts);
             var parab = FocusCurveFit.FitParabolic(pts);
 
+            Assert.That(hyper, Is.Not.Null);
+            Assert.That(parab, Is.Not.Null);
             Assert.That(hyper!.IsUsable, Is.True);
             Assert.That(parab!.IsUsable, Is.True);
             Assert.That(hyper.RSquared, Is.GreaterThan(parab.RSquared));
             Assert.That(hyper.RSquared, Is.GreaterThan(0.999)); // hyperbola fits its own data essentially exactly
+        }
+
+        [Test]
+        public void FitHyperbolic_throws_on_null_points() {
+            Assert.Throws<ArgumentNullException>(() => FocusCurveFit.FitHyperbolic(null!));
+        }
+
+        // Sample a piecewise-linear V: HFR = floor + (x<x0 ? leftSlope·(x0−x) : rightSlope·(x−x0)).
+        private static List<FocusPoint> Vee(double floor, double leftSlope, double rightSlope, double x0, double from, double to, double step, int stars = 100) {
+            var pts = new List<FocusPoint>();
+            for (double x = from; x <= to + 1e-9; x += step) {
+                double h = x < x0 ? floor + leftSlope * (x0 - x) : floor + rightSlope * (x - x0);
+                pts.Add(new FocusPoint(x, h, stars));
+            }
+            return pts;
+        }
+
+        [Test]
+        public void FitTrendlines_recovers_the_intersection_of_a_clean_symmetric_v() {
+            var pts = Vee(floor: 1.0, leftSlope: 0.2, rightSlope: 0.2, x0: 500, from: 400, to: 600, step: 25);
+            var fit = FocusCurveFit.FitTrendlines(pts);
+
+            Assert.That(fit, Is.Not.Null);
+            Assert.That(fit!.IsUsable, Is.True);
+            Assert.That(fit.Method, Is.EqualTo(AFCurveFitting.TRENDLINES));
+            Assert.That(fit.BestPosition, Is.EqualTo(500).Within(0.5));
+            Assert.That(fit.PredictedHfr, Is.EqualTo(1.0).Within(0.05));
+            Assert.That(fit.RSquared, Is.GreaterThan(0.999));
+            Assert.That(fit.WithinSampledRange, Is.True);
+        }
+
+        [Test]
+        public void FitTrendlines_recovers_the_intersection_of_an_asymmetric_v() {
+            // Different arm slopes — the line intersection still lands on the true vertex (a parabola/hyperbola
+            // would be biased by the asymmetry; this is the trendline method's strength).
+            var pts = Vee(floor: 2.0, leftSlope: 0.4, rightSlope: 0.15, x0: 500, from: 400, to: 600, step: 25);
+            var fit = FocusCurveFit.FitTrendlines(pts);
+
+            Assert.That(fit, Is.Not.Null);
+            Assert.That(fit!.IsUsable, Is.True);
+            Assert.That(fit.BestPosition, Is.EqualTo(500).Within(0.5));
+            Assert.That(fit.PredictedHfr, Is.EqualTo(2.0).Within(0.05));
+        }
+
+        [Test]
+        public void FitTrendlines_rejects_a_monotonic_sweep_with_the_minimum_at_an_edge() {
+            // HFR strictly decreasing → the minimum is the last point → the right arm has only one point.
+            var pts = new List<FocusPoint> { new(400, 9, 100), new(425, 7, 100), new(450, 5, 100), new(475, 3, 100), new(500, 1, 100) };
+            var fit = FocusCurveFit.FitTrendlines(pts);
+            Assert.That(fit, Is.Not.Null);
+            Assert.That(fit!.IsUsable, Is.False);
+            Assert.That(double.IsNaN(fit.BestPosition), Is.True);
+        }
+
+        [Test]
+        public void FitTrendlines_rejects_an_inverted_v() {
+            // ∩ shape (rises to a peak) — no focus minimum.
+            var pts = new List<FocusPoint> {
+                new(400, 1, 100), new(450, 5, 100), new(500, 9, 100), new(550, 5, 100), new(600, 1, 100),
+            };
+            var fit = FocusCurveFit.FitTrendlines(pts);
+            Assert.That(fit, Is.Not.Null);
+            Assert.That(fit!.IsUsable, Is.False);
+        }
+
+        [Test]
+        public void FitTrendlines_returns_null_below_min_points() {
+            var pts = new List<FocusPoint> { new(100, 5, 100), new(200, 3, 100) };
+            Assert.That(FocusCurveFit.FitTrendlines(pts), Is.Null);
+        }
+
+        [Test]
+        public void FitTrendlines_throws_on_null_points() {
+            Assert.Throws<ArgumentNullException>(() => FocusCurveFit.FitTrendlines(null!));
         }
 
         [Test]
