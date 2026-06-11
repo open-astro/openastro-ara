@@ -68,7 +68,12 @@ namespace OpenAstroAra.Image.ImageData {
         // §line-2105.
 
         public virtual IRenderedImage ReRender() =>
-            throw new NotImplementedException("ReRender pending OpenCvSharp4 wiring.");
+            // §2105: re-render the display buffer from the raw frame (RenderBitmapSource → a fresh
+            // RenderedImage). Used to refresh the rendered view from the source pixels after analysis.
+            // SYNCHRONOUS + CPU-bound (~50-200ms on a full-res frame, the Stretcher.Apply cost) — the
+            // inherited IRenderedImage contract is sync, so callers on a UI/event thread must offload.
+            // Note this re-renders from raw and so does NOT preserve a stretch applied via Stretch().
+            RawImageData.RenderImage();
 
         public IDebayeredImage Debayer(bool saveColorChannels = false, bool saveLumChannel = false, SensorType bayerPattern = SensorType.RGGB) =>
             throw new NotImplementedException("Debayer pending OpenCvSharp4 wiring.");
@@ -84,8 +89,20 @@ namespace OpenAstroAra.Image.ImageData {
                 CancellationToken cancelToken = default) =>
             throw new NotImplementedException("DetectStars pending OpenCvSharp4 wiring.");
 
-        public Task<byte[]> GetThumbnail() =>
-            throw new NotImplementedException("GetThumbnail pending OpenCvSharp4 wiring.");
+        public Task<byte[]> GetThumbnail() {
+            // §2105: 320px-max JPEG thumbnail of the rendered 8-bit grayscale buffer via the §65 encoder.
+            // Snapshot the buffer + dims at call time, then offload — resize + JPEG encode is ~50-200ms
+            // on a full-res frame, too long to run synchronously on the caller's thread.
+            var buffer = Image;
+            var width = RawImageData.Properties.Width;
+            var height = RawImageData.Properties.Height;
+            // EncodeThumbnail needs one grayscale byte/pixel. Make that invariant explicit so a future
+            // Stretch()/annotation path that swaps Image for a multi-channel buffer fails loudly here
+            // rather than deep inside the Task.Run.
+            System.Diagnostics.Debug.Assert(buffer.Length == width * height,
+                "GetThumbnail expects a 1-byte/pixel grayscale render buffer");
+            return Task.Run(() => OpenAstroAra.Stretch.JpegEncoder.EncodeThumbnail(buffer, width, height));
+        }
 
         public void UpdateAnalysis(StarDetectionParams p, StarDetectionResult result) =>
             throw new NotImplementedException("UpdateAnalysis pending OpenCvSharp4 wiring.");
