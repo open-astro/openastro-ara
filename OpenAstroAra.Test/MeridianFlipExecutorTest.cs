@@ -214,8 +214,11 @@ namespace OpenAstroAra.Test {
 
             Assert.ThrowsAsync<OperationCanceledException>(
                 () => sut.MeridianFlip(Target, TimeSpan.Zero, Progress, cts.Token));
-            // Cancellation still restores tracking before propagating.
+            // Cancellation still restores tracking before propagating...
             telescope.Verify(t => t.SetTrackingEnabled(true), Times.AtLeastOnce);
+            // ...but deliberately does NOT resume the guider — a cancel is the user stopping, so PHD2 stays
+            // stopped rather than being restarted against that intent.
+            guider.Verify(g => g.StartGuiding(It.IsAny<bool>(), It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()), Times.Never);
         }
 
         [Test]

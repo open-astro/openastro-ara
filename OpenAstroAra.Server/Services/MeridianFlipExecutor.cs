@@ -106,8 +106,9 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
                 guidingStopped = true;
             }
 
-            trackingDisabled = true; // PassMeridian's first action disables tracking.
-            await PassMeridian(timeToFlip, progress, token);
+            // The flag is set from inside PassMeridian, only after the SetTrackingEnabled(false) call returns —
+            // so a throw from that call doesn't leave us "restoring" tracking that was never disabled.
+            await PassMeridian(timeToFlip, () => trackingDisabled = true, progress, token);
 
             // Snapshot the pier side BEFORE the flip so §58.5 can verify it actually changed afterward — a
             // mount that reports the same (non-unknown) pier side after the slew likely didn't flip.
@@ -144,7 +145,12 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
             // Cancellation is not a flip failure — restore a safe tracking state, then let it propagate so the
             // sequence engine records CANCELLED (not FAILED). Only restore tracking if we actually disabled it
             // (cancellation can fire during StopAutoguider, before PassMeridian).
-            Logger.Info("Meridian Flip - Cancelled. Restoring tracking before propagating cancellation.");
+            //
+            // Deliberately do NOT resume guiding here (unlike the error path below): a cancel is the user
+            // stopping the session, so re-starting PHD2 would fight that intent — leaving the guider stopped is
+            // the expected outcome of a Stop (matches NINA's OCE path, which resumes nothing). Tracking is still
+            // restored because a mount sitting with tracking off is a worse rest state than one tracking sidereal.
+            Logger.Info("Meridian Flip - Cancelled. Restoring tracking (leaving the guider stopped) before propagating cancellation.");
             if (trackingDisabled) {
                 TryRestoreTracking();
             }
@@ -179,10 +185,12 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
 
     // Stop tracking, wait out the remaining time to the flip, then resume tracking — so the mount actually
     // crosses the meridian before the flip slew. timeToFlip is 0 when the meridian was already passed by
-    // pause_after, in which case this returns immediately after toggling tracking.
-    private async Task PassMeridian(TimeSpan timeToFlip, IProgress<ApplicationStatus> progress, CancellationToken token) {
+    // pause_after, in which case this returns immediately after toggling tracking. onTrackingDisabled fires
+    // only after the disable call returns, so the caller's restore-tracking guard reflects the real state.
+    private async Task PassMeridian(TimeSpan timeToFlip, Action onTrackingDisabled, IProgress<ApplicationStatus> progress, CancellationToken token) {
         Logger.Info("Meridian Flip - Stopping tracking to pass the meridian.");
         telescopeMediator.SetTrackingEnabled(false);
+        onTrackingDisabled();
 
         var remaining = timeToFlip;
         while (remaining.TotalSeconds >= 1) {
