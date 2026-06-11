@@ -35,6 +35,7 @@ public static class PlateSolveEndpoints {
         solve.MapPost("/frames/{id:guid}/solve", SolveFrameAsync)
             .Produces<PlateSolveResultDto>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status422UnprocessableEntity) // solver/profile not configured
             .WithName("SolveFrame")
             .WithSummary("Plate-solve a catalogued frame and return its astrometric solution.");
 
@@ -65,9 +66,12 @@ public static class PlateSolveEndpoints {
     }
 
     /// <summary>Map a solver result to the wire DTO. On an unsuccessful solve every field except Success is
-    /// null — RA/Dec have no coordinate, and orientation/scale/radius are unsolved (would otherwise read 0).</summary>
-    public static PlateSolveResultDto ToDto(OpenAstroAra.PlateSolving.PlateSolveResult result) => result.Success
-        ? new PlateSolveResultDto(true, result.Coordinates?.RA, result.Coordinates?.Dec,
-            result.PositionAngle, result.Pixscale, result.Radius)
-        : new PlateSolveResultDto(false, null, null, null, null, null);
+    /// null — RA/Dec have no coordinate, and orientation/scale/radius are unsolved (would otherwise read 0). A
+    /// "success" with no coordinates is a solver contract violation and is reported as a failure, not as a
+    /// contradictory {success:true, ra:null}.</summary>
+    public static PlateSolveResultDto ToDto(OpenAstroAra.PlateSolving.PlateSolveResult result) =>
+        result.Success && result.Coordinates != null
+            ? new PlateSolveResultDto(true, result.Coordinates.RA, result.Coordinates.Dec,
+                result.PositionAngle, result.Pixscale, result.Radius)
+            : new PlateSolveResultDto(false, null, null, null, null, null);
 }

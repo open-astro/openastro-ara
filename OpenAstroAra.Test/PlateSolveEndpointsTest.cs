@@ -47,6 +47,15 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void ToDto_treats_success_without_coordinates_as_a_failure() {
+            // A solver that sets Success=true but leaves Coordinates null is a contract violation — don't
+            // hand the client a contradictory {success:true, ra:null}; report it as failed.
+            var dto = PlateSolveEndpoints.ToDto(new PlateSolveResult { Success = true, Coordinates = null });
+            Assert.That(dto.Success, Is.False);
+            Assert.That(dto.Ra, Is.Null);
+        }
+
+        [Test]
         public void ToDto_nulls_every_field_on_a_failed_solve() {
             // Even though an unsolved PlateSolveResult has 0-valued Orientation/Pixscale/Radius, the DTO
             // reports them null so a failed solve can't be mistaken for a real (0,0,0) solution.

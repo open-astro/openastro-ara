@@ -285,3 +285,9 @@ reads the `StarDetectionAnalysis` property, not the service; `RenderImage()` is 
 centering loop / on-image annotation calls `RenderImage()` or `DetectStars` on a repo-loaded frame, wire it
 through a DI-registered `IImageDataFactory.CreateBaseImageData` (the concrete factory lives in BaseImageData.cs
 but isn't registered yet) instead of the `null!` ctor args.
+
+  - **Why not just inject IImageDataFactory now (#364 round-3):** the concrete `ImageDataFactory`
+    (`BaseImageData.cs`) needs `IPluggableBehaviorSelector<IStarDetection>` + `<IStarAnnotator>`, and neither
+    those selectors nor any `IStarDetection`/`IStarAnnotator` impl is registered in the headless Server DI yet
+    (star-detection behaviour selection was never wired headless). So the clean factory path needs that
+    selector chain built first — until then the `null!` (safe for the solve path) stands.
