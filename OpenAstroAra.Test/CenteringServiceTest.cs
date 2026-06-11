@@ -1,0 +1,111 @@
+#region "copyright"
+
+/*
+    Copyright (c) 2026 Open Astro and the OpenAstro Ara contributors
+
+    This file is part of OpenAstro Ara (forked from N.I.N.A.).
+
+    This Source Code Form is subject to the terms of the Mozilla Public
+    License, v. 2.0. If a copy of the MPL was not distributed with this
+    file, You can obtain one at http://mozilla.org/MPL/2.0/.
+*/
+
+#endregion "copyright"
+
+using Moq;
+using NUnit.Framework;
+using OpenAstroAra.Astrometry;
+using OpenAstroAra.Core.Model;
+using OpenAstroAra.Equipment.Interfaces;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Equipment.Model;
+using OpenAstroAra.PlateSolving;
+using OpenAstroAra.PlateSolving.Interfaces;
+using OpenAstroAra.Profile.Interfaces;
+using OpenAstroAra.Server.Services;
+using System;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace OpenAstroAra.Test {
+
+    /// <summary>
+    /// §28 — <see cref="CenteringService"/>. Verifies it assembles the <see cref="CenterSolveParameter"/> +
+    /// capture sequence from the active profile and delegates to the factory-built centering solver (no real
+    /// equipment or solver touched).
+    /// </summary>
+    [TestFixture]
+    public class CenteringServiceTest {
+
+        private static CenteringService CreateSUT(IProfileService profileService, IPlateSolverFactory factory) =>
+            new(profileService, factory, Mock.Of<IImagingMediator>(), Mock.Of<ITelescopeMediator>(),
+                Mock.Of<IFilterWheelMediator>(), Mock.Of<IDomeMediator>(), Mock.Of<IDomeFollower>());
+
+        [Test]
+        public async Task CenterOnTarget_builds_param_from_profile_and_delegates_to_the_centering_solver() {
+            var settings = new Mock<IPlateSolveSettings>();
+            settings.SetupGet(s => s.ExposureTime).Returns(5);
+            settings.SetupGet(s => s.Gain).Returns(120);
+            settings.SetupGet(s => s.Binning).Returns((short)1);
+            settings.SetupGet(s => s.Threshold).Returns(2.0);
+            settings.SetupGet(s => s.SearchRadius).Returns(15);
+            settings.SetupGet(s => s.NumberOfAttempts).Returns(3);
+            settings.SetupGet(s => s.ReattemptDelay).Returns(1.0);
+
+            var profileService = new Mock<IProfileService>();
+            profileService.SetupGet(p => p.ActiveProfile.PlateSolveSettings).Returns(settings.Object);
+            profileService.SetupGet(p => p.ActiveProfile.TelescopeSettings.FocalLength).Returns(800);
+            profileService.SetupGet(p => p.ActiveProfile.CameraSettings.PixelSize).Returns(3.8);
+
+            var expected = new PlateSolveResult { Success = true };
+            CenterSolveParameter? captured = null;
+            var centeringSolver = new Mock<ICenteringSolver>();
+            centeringSolver
+                .Setup(s => s.Center(It.IsAny<CaptureSequence>(), It.IsAny<CenterSolveParameter>(),
+                    It.IsAny<IProgress<PlateSolveProgress>>(), It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+                .Callback<CaptureSequence, CenterSolveParameter, IProgress<PlateSolveProgress>?, IProgress<ApplicationStatus>?, CancellationToken>(
+                    (_, p, _, _, _) => captured = p)
+                .ReturnsAsync(expected);
+
+            var factory = new Mock<IPlateSolverFactory>();
+            factory.Setup(f => f.GetPlateSolver(It.IsAny<IPlateSolveSettings>())).Returns(Mock.Of<IPlateSolver>());
+            factory.Setup(f => f.GetBlindSolver(It.IsAny<IPlateSolveSettings>())).Returns(Mock.Of<IPlateSolver>());
+            factory.Setup(f => f.GetCenteringSolver(It.IsAny<IPlateSolver>(), It.IsAny<IPlateSolver>(),
+                    It.IsAny<IImagingMediator>(), It.IsAny<ITelescopeMediator>(), It.IsAny<IFilterWheelMediator>(),
+                    It.IsAny<IDomeMediator>(), It.IsAny<IDomeFollower>()))
+                .Returns(centeringSolver.Object);
+
+            var sut = CreateSUT(profileService.Object, factory.Object);
+            var target = new Coordinates(Angle.ByHours(5), Angle.ByDegree(20), Epoch.J2000);
+
+            var result = await sut.CenterOnTarget(target, null, CancellationToken.None);
+
+            Assert.That(result, Is.SameAs(expected));
+            Assert.That(captured, Is.Not.Null);
+            Assert.That(captured!.FocalLength, Is.EqualTo(800));
+            Assert.That(captured.PixelSize, Is.EqualTo(3.8));
+            Assert.That(captured.Threshold, Is.EqualTo(2.0));
+            Assert.That(captured.Attempts, Is.EqualTo(3));
+            Assert.That(captured.Coordinates!.RA, Is.EqualTo(5).Within(1e-6)); // target threaded through
+        }
+
+        [Test]
+        public void CenterOnTarget_throws_on_a_null_target() {
+            var sut = CreateSUT(new Mock<IProfileService>().Object, new Mock<IPlateSolverFactory>().Object);
+            Assert.Throws<ArgumentNullException>(
+                () => sut.CenterOnTarget(null!, null, CancellationToken.None));
+        }
+
+        [Test]
+        public void CenterOnTarget_throws_when_focal_length_or_pixel_size_is_unconfigured() {
+            var profileService = new Mock<IProfileService>();
+            profileService.SetupGet(p => p.ActiveProfile.PlateSolveSettings).Returns(new Mock<IPlateSolveSettings>().Object);
+            profileService.SetupGet(p => p.ActiveProfile.TelescopeSettings.FocalLength).Returns(0); // unset
+            profileService.SetupGet(p => p.ActiveProfile.CameraSettings.PixelSize).Returns(3.8);
+            var sut = CreateSUT(profileService.Object, new Mock<IPlateSolverFactory>().Object);
+            var target = new Coordinates(Angle.ByHours(5), Angle.ByDegree(20), Epoch.J2000);
+            Assert.Throws<PlateSolverConfigurationException>(
+                () => sut.CenterOnTarget(target, null, CancellationToken.None));
+        }
+    }
+}

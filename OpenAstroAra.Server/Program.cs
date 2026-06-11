@@ -144,6 +144,8 @@ public partial class Program {
         // recenter build on this.
         builder.Services.AddSingleton<OpenAstroAra.PlateSolving.Interfaces.IPlateSolverFactory, OpenAstroAra.PlateSolving.PlateSolverFactoryProxy>();
         builder.Services.AddSingleton<OpenAstroAra.Server.Services.IPlateSolveService, OpenAstroAra.Server.Services.PlateSolveService>();
+        // §28 centering — slew → solve → sync → re-slew loop over live equipment (the §58.4 flip recenter uses it).
+        builder.Services.AddSingleton<OpenAstroAra.Server.Services.ICenteringService, OpenAstroAra.Server.Services.CenteringService>();
         // §65.5 batch-job tracker — backs /jobs/{id} status + the
         // session-restretch worker. In-memory by design: jobs are
         // ephemeral, state resets on daemon restart.
