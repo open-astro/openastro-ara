@@ -19,6 +19,19 @@ class LastCapturedFrameId extends Notifier<String?> {
 final lastCapturedFrameIdProvider =
     NotifierProvider<LastCapturedFrameId, String?>(LastCapturedFrameId.new);
 
+/// True while a "Take One" exposure + catalog-poll is in flight. The Imaging
+/// tab disables the capture button on this so a double-tap can't start two
+/// concurrent captures.
+class CaptureInProgress extends Notifier<bool> {
+  @override
+  bool build() => false;
+
+  void set(bool value) => state = value;
+}
+
+final captureInProgressProvider =
+    NotifierProvider<CaptureInProgress, bool>(CaptureInProgress.new);
+
 /// The stretched preview JPEG bytes for a given frame id. autoDispose so the
 /// bytes are released when the viewer moves on to the next frame.
 final framePreviewProvider =

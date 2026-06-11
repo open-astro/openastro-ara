@@ -25,6 +25,7 @@ class ImagingTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final liveViewOn = ref.watch(liveViewControllerProvider);
+    final exposing = ref.watch(captureInProgressProvider);
     return Column(
       children: [
         const _ImagingHeader(),
@@ -42,7 +43,7 @@ class ImagingTab extends ConsumerWidget {
               ),
               ExposureControlsPanel(
                 liveViewOn: liveViewOn,
-                onTakeOne: () => _takeOne(context, ref),
+                onTakeOne: exposing ? null : () => _takeOne(context, ref),
                 onLiveViewToggle: ref
                     .read(liveViewControllerProvider.notifier)
                     .set,
@@ -71,6 +72,11 @@ class ImagingTab extends ConsumerWidget {
     }
     final params = ref.read(exposureControllerProvider);
     final server = servers.last;
+    // Notifier handles, captured before any await so the finally-reset and the
+    // result update don't go through WidgetRef after a possible unmount.
+    final progress = ref.read(captureInProgressProvider.notifier);
+    final lastFrame = ref.read(lastCapturedFrameIdProvider.notifier);
+    progress.set(true);
     messenger.showSnackBar(
       SnackBar(content: Text(
           'Exposing ${params.exposure.inMilliseconds / 1000.0}s…')),
@@ -94,8 +100,10 @@ class ImagingTab extends ConsumerWidget {
         }
         await Future<void>.delayed(const Duration(milliseconds: 500));
       }
+      // The widget can unmount during the final delay, after the loop exits.
+      if (!context.mounted) return;
       if (landed) {
-        ref.read(lastCapturedFrameIdProvider.notifier).set(frameId);
+        lastFrame.set(frameId);
         // Force a re-fetch in case the same id was shown before.
         ref.invalidate(framePreviewProvider(frameId));
         messenger.showSnackBar(
@@ -110,6 +118,10 @@ class ImagingTab extends ConsumerWidget {
       messenger.showSnackBar(
         SnackBar(content: Text('Exposure failed: $e')),
       );
+    } finally {
+      // Direct call on the captured notifier — safe even if the widget
+      // unmounted (the notifier lives in the ProviderContainer).
+      progress.set(false);
     }
   }
 }

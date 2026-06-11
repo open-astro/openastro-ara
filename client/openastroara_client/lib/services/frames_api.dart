@@ -39,6 +39,12 @@ class FramesApi {
       data: const <String, dynamic>{},
       options: Options(responseType: ResponseType.bytes),
     );
-    return Uint8List.fromList(res.data ?? const <int>[]);
+    final bytes = Uint8List.fromList(res.data ?? const <int>[]);
+    if (bytes.isEmpty) {
+      // An empty body would make Image.memory throw an opaque "Invalid image
+      // data" codec error downstream — surface a clear message instead.
+      throw StateError('Server returned an empty preview for frame $id.');
+    }
+    return bytes;
   }
 }

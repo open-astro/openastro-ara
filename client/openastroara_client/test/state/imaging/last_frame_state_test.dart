@@ -26,4 +26,23 @@ void main() {
       expect(container.read(lastCapturedFrameIdProvider), 'second');
     });
   });
+
+  group('CaptureInProgress', () {
+    late ProviderContainer container;
+
+    setUp(() => container = ProviderContainer());
+    tearDown(() => container.dispose());
+
+    test('defaults to false', () {
+      expect(container.read(captureInProgressProvider), isFalse);
+    });
+
+    test('set toggles in-progress state', () {
+      final notifier = container.read(captureInProgressProvider.notifier);
+      notifier.set(true);
+      expect(container.read(captureInProgressProvider), isTrue);
+      notifier.set(false);
+      expect(container.read(captureInProgressProvider), isFalse);
+    });
+  });
 }
