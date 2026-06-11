@@ -29,8 +29,9 @@ namespace OpenAstroAra.Test {
 
         private static IRenderedImage NewRendered(int w, int h) {
             var pixels = new ushort[w * h];
+            var denom = System.Math.Max(1, pixels.Length - 1);
             for (int i = 0; i < pixels.Length; i++) {
-                pixels[i] = (ushort)((long)i * 65535 / (pixels.Length - 1));
+                pixels[i] = (ushort)((long)i * 65535 / denom);
             }
             var raw = new BaseImageData(pixels, w, h, bitDepth: 16, isBayered: false,
                 new ImageMetaData(), null!, null!, null!);

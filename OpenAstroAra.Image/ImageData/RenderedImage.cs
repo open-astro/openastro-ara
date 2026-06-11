@@ -86,10 +86,15 @@ namespace OpenAstroAra.Image.ImageData {
                 CancellationToken cancelToken = default) =>
             throw new NotImplementedException("DetectStars pending OpenCvSharp4 wiring.");
 
-        public Task<byte[]> GetThumbnail() =>
+        public Task<byte[]> GetThumbnail() {
             // §2105: 320px-max JPEG thumbnail of the rendered 8-bit grayscale buffer via the §65 encoder.
-            Task.FromResult(OpenAstroAra.Stretch.JpegEncoder.EncodeThumbnail(
-                Image, RawImageData.Properties.Width, RawImageData.Properties.Height));
+            // Snapshot the buffer + dims at call time, then offload — resize + JPEG encode is ~50-200ms
+            // on a full-res frame, too long to run synchronously on the caller's thread.
+            var buffer = Image;
+            var width = RawImageData.Properties.Width;
+            var height = RawImageData.Properties.Height;
+            return Task.Run(() => OpenAstroAra.Stretch.JpegEncoder.EncodeThumbnail(buffer, width, height));
+        }
 
         public void UpdateAnalysis(StarDetectionParams p, StarDetectionResult result) =>
             throw new NotImplementedException("UpdateAnalysis pending OpenCvSharp4 wiring.");
