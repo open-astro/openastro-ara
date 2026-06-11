@@ -52,9 +52,14 @@ public static class PlateSolveEndpoints {
             // Blind solve for now (no hint); a body-supplied approximate position can seed a faster near-solve.
             var result = await solver.SolveImage(image, approxCoordinates: null, progress: null, ct);
             return Results.Ok(ToDto(result));
-        } catch (InvalidOperationException ex) {
-            // Setup problems (no active profile, focal length / pixel size unconfigured) are the caller's to
-            // fix — surface them as 422 with the message, not an opaque 500.
+        } catch (Exception ex) when (ex is InvalidOperationException
+                or System.IO.FileNotFoundException
+                or OpenAstroAra.PlateSolving.PlateSolverConfigurationException) {
+            // User-fixable setup problems — surface as 422 with the message, not an opaque 500:
+            //  - InvalidOperationException: no active profile, focal length / pixel size unconfigured
+            //  - PlateSolverConfigurationException (e.g. ASTAP path missing/wrong/too-old): the common one after
+            //    focal length — the public base lets us catch it without the internal solver types being reachable
+            //  - FileNotFoundException: the configured solver executable isn't there
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
         }
     }

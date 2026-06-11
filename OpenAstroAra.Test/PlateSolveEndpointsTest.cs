@@ -31,6 +31,7 @@ namespace OpenAstroAra.Test {
             var result = new PlateSolveResult {
                 Success = true,
                 Coordinates = new Coordinates(Angle.ByHours(3.5), Angle.ByDegree(12.0), Epoch.J2000),
+                PositionAngle = 47.0,
                 Pixscale = 1.83,
                 Radius = 2.5,
             };
@@ -40,6 +41,7 @@ namespace OpenAstroAra.Test {
             Assert.That(dto.Success, Is.True);
             Assert.That(dto.Ra, Is.EqualTo(3.5).Within(1e-6));
             Assert.That(dto.Dec, Is.EqualTo(12.0).Within(1e-6));
+            Assert.That(dto.Orientation, Is.EqualTo(47.0));
             Assert.That(dto.PixelScale, Is.EqualTo(1.83));
             Assert.That(dto.SearchRadius, Is.EqualTo(2.5));
         }

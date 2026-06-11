@@ -277,3 +277,11 @@ or `…_darwin_M1.lpi` (Mac dev), install a star DB, and set `ASTAPLocation`. Ne
 §18.I "local solvers only"). Since `PlateSolveService` always calls `GetBlindSolver`, a profile still configured
 for AstrometryNet silently uses ASTAP as both primary + blind solver. Harmless (ASTAP is the intended backend),
 but the profile/wizard should drop the AstrometryNet blind option, or the factory should log the substitution.
+
+### plate-solve LoadImageDataAsync null detection deps (from #364 round-2)
+`SqliteFrameRepository.LoadImageDataAsync` passes the real `IProfileService` to the `BaseImageData` but leaves
+`starDetection`/`starAnnotator` `null!`. Safe for the solve path (CLISolver → `SaveToDisk` → `GetImagePatterns`
+reads the `StarDetectionAnalysis` property, not the service; `RenderImage()` is never called). When the §28
+centering loop / on-image annotation calls `RenderImage()` or `DetectStars` on a repo-loaded frame, wire it
+through a DI-registered `IImageDataFactory.CreateBaseImageData` (the concrete factory lives in BaseImageData.cs
+but isn't registered yet) instead of the `null!` ctor args.
