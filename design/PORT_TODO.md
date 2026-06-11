@@ -161,16 +161,25 @@ parameterized `Stretcher.Stf` (#356). Also fixed a real §65 AutoStf over-bright
 was landing ~0.65 instead of 0.25) caught in #354's review — improves every preview.
 
 Remaining §2105 stubs (each a meatier follow-up, all still dead code until Live View §64):
-- **`RenderedImage.Debayer(saveColorChannels, saveLumChannel, bayerPattern)` → `IDebayeredImage`** —
-  full-resolution debayer (bilinear/VNG), distinct from the §65 half-res `Debayer.SuperPixel` preview.
-  Needs a full-res kernel + a `DebayeredImage : IRenderedImage` impl producing `LRGBArrays` (Lum/R/G/B).
-- **`RenderedImage.DetectStars(...)` → star detection** — needs a real star-detection algorithm
-  (`IStarDetection` is a stub in `ImageAnalysis/HeadlessStubs.cs`); HFR/star-count/annotation.
-- **`RenderedImage.UpdateAnalysis(StarDetectionParams, StarDetectionResult)`** — stores the detection
-  result into the image's `IStarDetectionAnalysis`; coupled to DetectStars (do them together).
-- **`BaseImageData.RenderBitmapSource` Bayered note**: renders the raw mosaic (grey CFA) until Debayer lands.
+- ✅ **`RenderedImage.Debayer(...)` → `IDebayeredImage`** — DONE (#357). Full-res bilinear kernel
+  (`Stretcher.Debayer.Bilinear`) + `DebayeredImage : RenderedImage, IDebayeredImage` producing `LRGBArrays`.
+- ✅ **`RenderedImage.DetectStars(...)` → star detection** — DONE (#358). From-scratch `StarDetector`
+  (median+MAD background → median+k·σ threshold → optional 3×3 median pre-filter → 8-connected flood-fill
+  blobs → flux-weighted centroid + Half-Flux-Radius; rejects noise specks / edge-truncated / saturated /
+  frame-spanning blobs; `MaxNumberOfStars` cap brightest-first). Pure managed code (honours the §26 no-OpenCvSharp4
+  decision). The `IStarDetection`/`IStarAnnotator` interfaces in `HeadlessStubs.cs` stay as the (unused) DI seam.
+- ✅ **`RenderedImage.UpdateAnalysis(...)`** — DONE (#358). Publishes HFR/HFRStDev/DetectedStars/StarList
+  onto `RawImageData.StarDetectionAnalysis` (flows into the FITS HFR/StarCount pattern keys).
+  - **Annotation still deferred:** `DetectStars(annotateImage: true)` is a documented no-op — drawing the star
+    overlay onto the rendered buffer needs a §2105 annotator (SkiaSharp draw path). Not on the v0.0.1 critical
+    path (annotation is a Live-View/§64 nicety); wire it when Live View lands.
+- **`BaseImageData.RenderBitmapSource` Bayered note**: renders the raw mosaic (grey CFA) until the render path
+  calls Debayer for OSC display (the data path exists as of #357; the display wiring is Live-View-gated).
 - Also still stubbed (lower priority, libraw/DSLR): `ExposureData.CreateRAWExposureData`, `BaseImageData.SaveTiff`,
   `BaseImageData.FromFile` (non-FITS/XISF), `ImageArrayExposureData.FromBitmapSource`.
+
+**§2105 in-memory render is otherwise COMPLETE (#354–#358)** — only libraw RAW decode + on-image star
+annotation remain, both Live-View-gated (v0.1.0 scope).
 
 ### §2105 PR4 Debayer — scoped 2026-06-11 (types mapped, ready to implement)
 `RenderedImage.Debayer(saveColorChannels, saveLumChannel, SensorType bayerPattern) -> IDebayeredImage`.

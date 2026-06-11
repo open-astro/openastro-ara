@@ -45,7 +45,7 @@ Legend: ✅ done · 🟡 core done, follow-ups pending (or "= verify" where stat
 - ✅ **§15** Build + verification gate (analyzer gate warnings=errors + CI smoke gate) · ✅ **§17** Fork hygiene / MPL headers / NOTICE.md.
 - 🚫 **§21** Localization — en-only for v0.0.1 (non-English stripped 0.5e/f); i18n is v0.1.0.
 - ✅ **§23** Quick reference (+ §23.1 macOS dev-run) · ✅ **§25** Visual design — NINA UX cloned (placeholder icons).
-- 🟡 **§26** Image processing — **decision revised OpenCvSharp4 → SkiaSharp**; §2105 render PR1-4 done (#354-356 + full-res Debayer); `DetectStars`/`UpdateAnalysis` (star detection) + libraw RAW still pending (PORT_TODO).
+- 🟡 **§26** Image processing — **decision revised OpenCvSharp4 → SkiaSharp**; §2105 in-memory render **fully un-stubbed (#354–#358):** RenderBitmapSource/RenderImage, GetThumbnail, ReRender, Stretch, full-res Debayer, **DetectStars/UpdateAnalysis (from-scratch `StarDetector` — median+MAD threshold → blobs → flux-weighted centroid + HFR, no OpenCvSharp4)**. Only **libraw RAW decode** still pending (PORT_TODO).
 - ⬜ **§27** Single-client connection policy — close-code 4004 takeover deferred (§60.9 notes).
 - ✅ **§28** Sequence durability + crash recovery (SQLite catalog + §28.2/.7/.8).
 - 🟡 **§29** Storage / disk-space policy — storage settings + save-dir resolution done; active disk-space mgmt = verify.
@@ -73,7 +73,7 @@ Legend: ✅ done · 🟡 core done, follow-ups pending (or "= verify" where stat
 - 🚫 **§54** Bug report submission — `PlaceholderBugReportService`; v0.1.0.
 - ✅ **§56** Migrating from NINA (`.json` import).
 - 🟡 **§57** Stop Mount + slew safety — telescope abort/park done; full slew-safety policy = verify.
-- ⬜ **§58** Meridian flip — sequencer trigger pending · ⬜ **§59** Autofocus — gated on §2105 star detection (DetectStars pending).
+- ⬜ **§58** Meridian flip — sequencer trigger pending · ⬜ **§59** Autofocus — **§2105 DetectStars/HFR now available (#358)**; remaining work is the focuser V-curve sweep + the autofocus sequence wiring.
 - ✅ **§60** API conventions (pagination, Idempotency-Key, RFC7807, 202-Accepted, WS envelope).
 - ✅ **§61** Smart settings search (⌘K, #110-123) · ✅ **§62** Dither policy.
 - 🟡 **§63** PHD2 lifecycle — guider a/c/d (#345/346/351) + e-1 RPC classes (#352) done; e-2 push blocked on profile-model; e-4 dark-library + §63.3 active-poll pending.

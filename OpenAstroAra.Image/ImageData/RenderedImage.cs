@@ -125,8 +125,34 @@ namespace OpenAstroAra.Image.ImageData {
                 StarSensitivity sensitivity,
                 NoiseReduction noiseReduction,
                 IProgress<ApplicationStatus>? progress = default(Progress<ApplicationStatus>),
-                CancellationToken cancelToken = default) =>
-            throw new NotImplementedException("DetectStars pending OpenCvSharp4 wiring.");
+                CancellationToken cancelToken = default) {
+            // §2105: headless star detection + HFR on the raw 16-bit frame via the dependency-free
+            // StarDetector (the §26 decision ruled out OpenCvSharp4). Sensitivity selects the k·σ
+            // threshold; lower k ⇒ more stars. NoiseReduction != None turns on a 3×3 median pre-filter.
+            // Offloaded — the flood-fill is CPU-bound (~50-300ms full-res). On-image annotation is not
+            // yet wired (it needs the §2105 annotator); annotateImage is honoured as a no-op for now.
+            var parameters = new StarDetectionParams {
+                Sensitivity = SensitivityToSigma(sensitivity),
+                NoiseReduction = (int)noiseReduction,
+            };
+            var pixels = RawImageData.Data.FlatArray;
+            var width = RawImageData.Properties.Width;
+            var height = RawImageData.Properties.Height;
+            return Task.Run<IRenderedImage>(() => {
+                var result = StarDetector.Detect(pixels, width, height, parameters);
+                cancelToken.ThrowIfCancellationRequested();
+                UpdateAnalysis(parameters, result);
+                return this;
+            }, cancelToken);
+        }
+
+        // StarSensitivity → the background-threshold multiplier k (median + k·σ_MAD). A higher level
+        // pushes the threshold down toward the noise floor, recovering fainter stars.
+        private static double SensitivityToSigma(StarSensitivity sensitivity) => sensitivity switch {
+            StarSensitivity.High => 5.0,
+            StarSensitivity.Highest => 3.0,
+            _ => 8.0, // Normal
+        };
 
         public Task<byte[]> GetThumbnail() {
             // §2105: 320px-max JPEG thumbnail of the rendered 8-bit grayscale buffer via the §65 encoder.
@@ -143,7 +169,15 @@ namespace OpenAstroAra.Image.ImageData {
             return Task.Run(() => OpenAstroAra.Stretch.JpegEncoder.EncodeThumbnail(buffer, width, height));
         }
 
-        public void UpdateAnalysis(StarDetectionParams p, StarDetectionResult result) =>
-            throw new NotImplementedException("UpdateAnalysis pending OpenCvSharp4 wiring.");
+        public void UpdateAnalysis(StarDetectionParams p, StarDetectionResult result) {
+            // §2105: publish a detection result onto the raw frame's analysis so HFR/StarCount flow
+            // into the FITS pattern keys (BaseImageData stamps HFR/StarCount from here) and any INPC
+            // observers. Mirrors NINA's UpdateAnalysis contract.
+            var analysis = RawImageData.StarDetectionAnalysis;
+            analysis.HFR = result.AverageHFR;
+            analysis.HFRStDev = result.HFRStdDev;
+            analysis.DetectedStars = result.DetectedStars;
+            analysis.StarList = result.StarList;
+        }
     }
 }
