@@ -82,23 +82,46 @@ class ImagingTab extends ConsumerWidget {
           'Exposing ${params.exposure.inMilliseconds / 1000.0}s…')),
     );
     try {
-      final frameId = await CameraExposureApi(server).takeOne(params);
-      // The POST returns 202 immediately; the capture (expose → download →
-      // FITS) runs in the background. Poll the catalog until the frame is
-      // registered, then show it. Budget = exposure + a download margin.
+      // Phase 1 — the exposure POST. A failure here means the shot never
+      // started; the user should re-shoot.
+      final String frameId;
+      try {
+        frameId = await CameraExposureApi(server).takeOne(params);
+      } catch (e) {
+        if (context.mounted) {
+          messenger.showSnackBar(
+            SnackBar(content: Text('Exposure failed: $e')),
+          );
+        }
+        return;
+      }
+      // Phase 2 — the POST returned 202; the capture (expose → download → FITS)
+      // runs in the background. Poll the catalog until the frame is registered.
+      // A failure here means the exposure was accepted but we couldn't confirm
+      // it landed — distinct remedy (retry the preview, don't re-shoot).
       final api = FramesApi(server);
       final deadline = DateTime.now()
           .add(params.exposure + const Duration(seconds: 20));
       var landed = false;
-      while (DateTime.now().isBefore(deadline)) {
-        // Bail if the user navigated away mid-capture — stop polling and don't
-        // touch a detached scaffold.
-        if (!context.mounted) return;
-        if (await api.isRegistered(frameId)) {
-          landed = true;
-          break;
+      try {
+        while (DateTime.now().isBefore(deadline)) {
+          // Bail if the user navigated away mid-capture — stop polling and
+          // don't touch a detached scaffold.
+          if (!context.mounted) return;
+          if (await api.isRegistered(frameId)) {
+            landed = true;
+            break;
+          }
+          await Future<void>.delayed(const Duration(milliseconds: 500));
         }
-        await Future<void>.delayed(const Duration(milliseconds: 500));
+      } catch (e) {
+        if (context.mounted) {
+          messenger.showSnackBar(
+            SnackBar(content: Text(
+                'Exposure accepted but confirming the frame failed: $e')),
+          );
+        }
+        return;
       }
       // The widget can unmount during the final delay, after the loop exits.
       if (!context.mounted) return;
@@ -114,10 +137,6 @@ class ImagingTab extends ConsumerWidget {
           const SnackBar(content: Text('Capture timed out.')),
         );
       }
-    } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(content: Text('Exposure failed: $e')),
-      );
     } finally {
       // Direct call on the captured notifier — safe even if the widget
       // unmounted (the notifier lives in the ProviderContainer).
