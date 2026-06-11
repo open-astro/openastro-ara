@@ -82,9 +82,15 @@ namespace OpenAstroAra.Image.ImageData {
         }
 
         public byte[] RenderBitmapSource() {
-            // ImageUtility.CreateSourceFromArray (WPF BitmapSource pipeline)
-            // pending OpenCvSharp4 replacement per playbook §line-2105.
-            throw new NotImplementedException("RenderBitmapSource pending OpenCvSharp4 wiring.");
+            // §2105: render the raw 16-bit frame to an 8-bit display buffer (one byte/pixel, row-major)
+            // via the §65 SkiaSharp-era Stretcher — an auto-STF stretch so the result is viewable
+            // straight out of the camera. Re-stretch with explicit params is RenderedImage.Stretch().
+            //
+            // Bayered (OSC) frames render here as the raw, undebayered mosaic (a grey CFA pattern) —
+            // colour comes from the separate RenderedImage.Debayer() path (a later §2105 sub-PR); the
+            // catalog colour preview already debayers via Debayer.SuperPixel in the §65 server path.
+            return OpenAstroAra.Stretch.Stretcher.Apply(
+                OpenAstroAra.Stretch.StretchAlgorithm.AutoStf, Data.FlatArray);
         }
 
         public void SetImageStatistics(IImageStatistics statistics) {

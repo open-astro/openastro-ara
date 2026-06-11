@@ -40,6 +40,8 @@
     <ProjectReference Include="..\OpenAstroAra.Astrometry\OpenAstroAra.Astrometry.csproj" />
     <ProjectReference Include="..\OpenAstroAra.Core\OpenAstroAra.Core.csproj" />
     <ProjectReference Include="..\OpenAstroAra.Profile\OpenAstroAra.Profile.csproj" />
+    <!-- §2105: the in-memory render path reuses the §65 SkiaSharp stretch pipeline (no OpenCvSharp4). -->
+    <ProjectReference Include="..\OpenAstroAra.Stretch\OpenAstroAra.Stretch.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Iconic.Zlib.Netstandard" Version="1.0.0" />
