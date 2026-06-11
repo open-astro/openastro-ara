@@ -231,14 +231,34 @@ namespace OpenAstroAra.Test {
             SetupProfile(recenter: false);
             // §58.5 — pier side is snapshotted before the flip (pierEast) and re-read after (pierWest): a genuine
             // change is the verified-flip path. The check is log-only, so the flip still succeeds either way.
+            // A third pierWest fallback guards against a future refactor adding a GetInfo() call (Moq would
+            // otherwise return null past the sequence end → a misleading NRE rather than the regression).
             telescope.SetupSequence(t => t.GetInfo())
                 .Returns(new TelescopeInfo { Connected = true, SideOfPier = PierSide.pierEast })
+                .Returns(new TelescopeInfo { Connected = true, SideOfPier = PierSide.pierWest })
                 .Returns(new TelescopeInfo { Connected = true, SideOfPier = PierSide.pierWest });
             var sut = CreateSUT();
 
             var ok = await sut.MeridianFlip(Target, TimeSpan.Zero, Progress, CancellationToken.None);
 
             Assert.That(ok, Is.True);
+        }
+
+        [Test]
+        public async Task MeridianFlip_does_not_resume_or_restore_when_stopping_the_guider_threw_first() {
+            SetupProfile(recenter: true);
+            // StopAutoguider throws before PassMeridian runs: guiding was never stopped and tracking never
+            // disabled, so the failure path must NOT resume the guider or "restore" tracking (both would log a
+            // state change that never happened).
+            guider.Setup(g => g.StopGuiding(It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new InvalidOperationException("guider fault"));
+            var sut = CreateSUT();
+
+            var ok = await sut.MeridianFlip(Target, TimeSpan.Zero, Progress, CancellationToken.None);
+
+            Assert.That(ok, Is.False);
+            guider.Verify(g => g.StartGuiding(It.IsAny<bool>(), It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()), Times.Never);
+            telescope.Verify(t => t.SetTrackingEnabled(It.IsAny<bool>()), Times.Never);
         }
 
         [Test]

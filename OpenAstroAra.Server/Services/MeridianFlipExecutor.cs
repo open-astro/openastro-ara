@@ -94,11 +94,19 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
             $"Remaining wait: {timeToFlip}. Recenter: {settings.Recenter}. AutoFocusAfterFlip: {settings.AutoFocusAfterFlip}. " +
             $"SettleTime: {settings.SettleTime}s. GuiderConnected: {guiderConnected}.");
 
+        // Track what we actually touched so the catch blocks only undo real state changes: don't resume a
+        // guider we never stopped, don't "restore" tracking we never disabled (either would log a misleading
+        // state change).
+        var guidingStopped = false;
+        var trackingDisabled = false;
+
         try {
             if (guiderConnected) {
                 await StopAutoguider(token);
+                guidingStopped = true;
             }
 
+            trackingDisabled = true; // PassMeridian's first action disables tracking.
             await PassMeridian(timeToFlip, progress, token);
 
             // Snapshot the pier side BEFORE the flip so §58.5 can verify it actually changed afterward — a
@@ -134,23 +142,30 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
             return true;
         } catch (OperationCanceledException) {
             // Cancellation is not a flip failure — restore a safe tracking state, then let it propagate so the
-            // sequence engine records CANCELLED (not FAILED). Tracking can be left off mid-PassMeridian.
+            // sequence engine records CANCELLED (not FAILED). Only restore tracking if we actually disabled it
+            // (cancellation can fire during StopAutoguider, before PassMeridian).
             Logger.Info("Meridian Flip - Cancelled. Restoring tracking before propagating cancellation.");
-            TryRestoreTracking();
+            if (trackingDisabled) {
+                TryRestoreTracking();
+            }
             throw;
         } catch (Exception ex) {
             // A failed flip halts the sequence (the trigger throws on our false return). Best-effort restore:
             // resume guiding + re-enable tracking so the mount keeps the target rather than drifting. §58.9's
             // park-on-failure safe-rest state is the enhanced unattended layer (follow-up, PORT_TODO).
             Logger.Error("Meridian Flip - Failed.", ex);
-            if (guiderConnected) {
+            // Only resume a guider we actually stopped: if StopAutoguider itself threw, guiding was never
+            // stopped, so a resume would be spurious (and log a misleading "resume also failed").
+            if (guidingStopped) {
                 try {
                     await ResumeAutoguider(progress, CancellationToken.None);
                 } catch (Exception resumeEx) {
                     Logger.Error("Meridian Flip - Resuming the guider after a flip error also failed.", resumeEx);
                 }
             }
-            TryRestoreTracking();
+            if (trackingDisabled) {
+                TryRestoreTracking();
+            }
             return false;
         } finally {
             progress.Report(new ApplicationStatus { Source = "MeridianFlip", Status = string.Empty });
