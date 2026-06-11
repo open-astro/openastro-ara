@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -23,5 +23,12 @@ namespace OpenAstroAra.Image.Interfaces {
         double HFRStDev { get; set; }
         int DetectedStars { get; set; }
         IReadOnlyList<DetectedStar> StarList { get; set; }
+
+        /// <summary>
+        /// Publish a full detection result atomically: all four properties are updated before any
+        /// <see cref="INotifyPropertyChanged.PropertyChanged"/> fires, so observers never see a torn state
+        /// (e.g. a new HFR alongside a stale star count).
+        /// </summary>
+        void SetAll(double hfr, double hfrStDev, int detectedStars, IReadOnlyList<DetectedStar> starList);
     }
 }
