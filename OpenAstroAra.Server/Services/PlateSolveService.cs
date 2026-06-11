@@ -60,13 +60,23 @@ public class PlateSolveService : IPlateSolveService {
             ?? throw new InvalidOperationException("Cannot plate-solve: no active profile is loaded.");
         var settings = profile.PlateSolveSettings;
 
+        // Focal length + pixel size set the pixel scale / FOV the solver searches; a fresh profile leaves them
+        // unset (focal length defaults to NaN), which yields a degenerate FOV and an opaque solver failure.
+        // Fail fast with an actionable message instead.
+        double focalLength = profile.TelescopeSettings.FocalLength;
+        double pixelSize = profile.CameraSettings.PixelSize;
+        if (!(focalLength > 0) || !(pixelSize > 0)) {
+            throw new InvalidOperationException(
+                $"Cannot plate-solve: telescope focal length ({focalLength}) and camera pixel size ({pixelSize}) must both be configured (> 0) in the profile.");
+        }
+
         var plateSolver = plateSolverFactory.GetPlateSolver(settings);
         var blindSolver = plateSolverFactory.GetBlindSolver(settings);
         var imageSolver = plateSolverFactory.GetImageSolver(plateSolver, blindSolver);
 
         var parameter = new PlateSolveParameter {
-            FocalLength = profile.TelescopeSettings.FocalLength,
-            PixelSize = profile.CameraSettings.PixelSize,
+            FocalLength = focalLength,
+            PixelSize = pixelSize,
             SearchRadius = settings.SearchRadius,
             Regions = settings.Regions,
             DownSampleFactor = settings.DownSampleFactor,

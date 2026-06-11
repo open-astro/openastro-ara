@@ -87,5 +87,26 @@ namespace OpenAstroAra.Test {
             Assert.Throws<ArgumentNullException>(
                 () => sut.SolveImage(null!, null, null, CancellationToken.None));
         }
+
+        [Test]
+        public void SolveImage_throws_when_no_active_profile_is_loaded() {
+            var profileService = new Mock<IProfileService>();
+            profileService.SetupGet(p => p.ActiveProfile).Returns((IProfile)null!);
+            var sut = new PlateSolveService(profileService.Object, new Mock<IPlateSolverFactory>().Object);
+            Assert.Throws<InvalidOperationException>(
+                () => sut.SolveImage(Mock.Of<IImageData>(), null, null, CancellationToken.None));
+        }
+
+        [Test]
+        public void SolveImage_throws_when_focal_length_or_pixel_size_is_unconfigured() {
+            // A fresh profile leaves focal length unset (NaN/0) → degenerate FOV; fail fast.
+            var profileService = new Mock<IProfileService>();
+            profileService.SetupGet(p => p.ActiveProfile.PlateSolveSettings).Returns(new Mock<IPlateSolveSettings>().Object);
+            profileService.SetupGet(p => p.ActiveProfile.TelescopeSettings.FocalLength).Returns(0);
+            profileService.SetupGet(p => p.ActiveProfile.CameraSettings.PixelSize).Returns(3.8);
+            var sut = new PlateSolveService(profileService.Object, new Mock<IPlateSolverFactory>().Object);
+            Assert.Throws<InvalidOperationException>(
+                () => sut.SolveImage(Mock.Of<IImageData>(), null, null, CancellationToken.None));
+        }
     }
 }
