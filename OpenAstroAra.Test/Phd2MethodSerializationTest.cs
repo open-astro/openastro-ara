@@ -36,7 +36,8 @@ namespace OpenAstroAra.Test {
         public void Base_envelope_carries_method_and_id() {
             var json = Serialize(new Phd2SetSelectedCamera { Parameters = new() { Camera = "ZWO ASI120MM" } });
             Assert.That(json["method"]!.Value<string>(), Is.EqualTo("set_selected_camera"));
-            Assert.That(json["id"]!.Value<string>(), Is.Not.Empty, "every request gets a unique id");
+            Assert.That(System.Guid.TryParse(json["id"]!.Value<string>(), out _), Is.True,
+                "every request gets a unique GUID id");
         }
 
         [Test]
