@@ -21,11 +21,15 @@ class FrameViewer extends ConsumerWidget {
     return Container(
       color: AraColors.bgPanelAlt,
       child: preview.when(
+        // constrained: false + an unbounded boundary lays the image out at its
+        // native size so zooming walks into real pixels instead of magnifying a
+        // downscaled raster; minScale lets a large frame be pinched down to fit.
         data: (bytes) => InteractiveViewer(
+          constrained: false,
+          boundaryMargin: const EdgeInsets.all(double.infinity),
+          minScale: 0.1,
           maxScale: 8,
-          child: Center(
-            child: Image.memory(bytes, gaplessPlayback: true),
-          ),
+          child: Image.memory(bytes, gaplessPlayback: true),
         ),
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(

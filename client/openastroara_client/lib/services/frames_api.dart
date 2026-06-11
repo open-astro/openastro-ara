@@ -26,8 +26,18 @@ class FramesApi {
         '/api/v1/frames/$id',
         options: Options(validateStatus: (s) => s != null && s < 500),
       );
+      // 404 = not registered yet (still capturing); 200 = landed.
       return res.statusCode == 200;
-    } on DioException {
+    } on DioException catch (e) {
+      // A dropped connection / timeout is a real failure, not "frame not ready"
+      // — let it propagate so the caller surfaces it instead of spinning the
+      // poll loop for the full budget and reporting a bogus timeout.
+      if (e.type == DioExceptionType.connectionError ||
+          e.type == DioExceptionType.connectionTimeout ||
+          e.type == DioExceptionType.sendTimeout ||
+          e.type == DioExceptionType.receiveTimeout) {
+        rethrow;
+      }
       return false;
     }
   }
