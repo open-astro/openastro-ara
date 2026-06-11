@@ -44,11 +44,13 @@ public static class JpegEncoder {
         // without an RGB copy step.
         var info = new SKImageInfo(width, height, SKColorType.Gray8, SKAlphaType.Opaque);
         using var bitmap = new SKBitmap(info);
+        var dst = bitmap.GetPixels();
+        if (dst == IntPtr.Zero) throw new InvalidOperationException("Skia could not allocate the Gray8 bitmap backing buffer.");
         unsafe {
             fixed (byte* p = pixels) {
                 // CopyPixels signature wants a pointer + length; we hand it
                 // the unmanaged span directly.
-                System.Buffer.MemoryCopy(p, (void*)bitmap.GetPixels(), pixels.Length, pixels.Length);
+                System.Buffer.MemoryCopy(p, (void*)dst, pixels.Length, pixels.Length);
             }
         }
         using var image = SKImage.FromBitmap(bitmap);
@@ -72,14 +74,17 @@ public static class JpegEncoder {
 
         var srcInfo = new SKImageInfo(srcWidth, srcHeight, SKColorType.Gray8, SKAlphaType.Opaque);
         using var srcBitmap = new SKBitmap(srcInfo);
+        var src = srcBitmap.GetPixels();
+        if (src == IntPtr.Zero) throw new InvalidOperationException("Skia could not allocate the Gray8 bitmap backing buffer.");
         unsafe {
             fixed (byte* p = pixels) {
-                System.Buffer.MemoryCopy(p, (void*)srcBitmap.GetPixels(), pixels.Length, pixels.Length);
+                System.Buffer.MemoryCopy(p, (void*)src, pixels.Length, pixels.Length);
             }
         }
 
         var dstInfo = new SKImageInfo(dstW, dstH, SKColorType.Gray8, SKAlphaType.Opaque);
-        using var dstBitmap = srcBitmap.Resize(dstInfo, new SKSamplingOptions(SKCubicResampler.Mitchell));
+        using var dstBitmap = srcBitmap.Resize(dstInfo, new SKSamplingOptions(SKCubicResampler.Mitchell))
+            ?? throw new InvalidOperationException($"Skia failed to resize {srcWidth}×{srcHeight} → {dstW}×{dstH} thumbnail");
         using var image = SKImage.FromBitmap(dstBitmap);
         using var data = image.Encode(SKEncodedImageFormat.Jpeg, Math.Clamp(quality, 1, 100));
         return data.ToArray();
@@ -125,8 +130,13 @@ public static class JpegEncoder {
     private static SKBitmap RgbToBitmap(ReadOnlySpan<byte> rgb, int width, int height) {
         var info = new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Opaque);
         var bitmap = new SKBitmap(info);
+        var pixelPtr = bitmap.GetPixels();
+        if (pixelPtr == IntPtr.Zero) {
+            bitmap.Dispose();
+            throw new InvalidOperationException("Skia could not allocate the Rgba8888 bitmap backing buffer.");
+        }
         unsafe {
-            byte* dst = (byte*)bitmap.GetPixels();
+            byte* dst = (byte*)pixelPtr;
             int n = width * height;
             for (int i = 0, s = 0; i < n; i++, s += 3) {
                 int d = i * 4;
