@@ -203,10 +203,10 @@ public static class Stretcher {
     /// </summary>
     public static byte[] Stf(ReadOnlySpan<ushort> input, double targetBackground, double shadowSigma) {
         if (input.Length == 0) return Array.Empty<byte>();
-        // Background must be a strict 0..1 (it's a log base); clamp defensively.
-        if (targetBackground <= 0 || targetBackground >= 1) {
-            targetBackground = Math.Clamp(targetBackground, 0.001, 0.999);
-        }
+        // Guard the public knobs: targetBackground is a log base → strict 0..1; a negative shadowSigma
+        // would push bp above the median, making medianFraction negative and Math.Pow(neg, frac) NaN.
+        targetBackground = Math.Clamp(targetBackground, 0.001, 0.999);
+        shadowSigma = Math.Max(0, shadowSigma);
 
         // Median.
         var values = new ushort[input.Length];

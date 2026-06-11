@@ -109,6 +109,19 @@ public class StretcherTests {
     }
 
     [Fact]
+    public void Stf_guards_a_negative_shadow_sigma_against_nan_output() {
+        // A negative shadowSigma would push bp above the median → negative medianFraction →
+        // Math.Pow(neg, frac) = NaN → ToByte(NaN) = 0 → an all-black image. The guard clamps it.
+        var pixels = new ushort[1000];
+        for (var i = 0; i < pixels.Length; i++) pixels[i] = (ushort)(i * 60);
+
+        var output = Stretcher.Stf(pixels, targetBackground: 0.25, shadowSigma: -2.8);
+
+        Assert.Equal(pixels.Length, output.Length);
+        Assert.Contains(output, b => b > 0); // a real image, not all-zero from a NaN leak
+    }
+
+    [Fact]
     public void Manual_stretch_rejects_inverted_endpoints() {
         var ex = Assert.Throws<ArgumentException>(() =>
             Stretcher.Apply(StretchAlgorithm.Manual, new ushort[] { 0, 1 },
