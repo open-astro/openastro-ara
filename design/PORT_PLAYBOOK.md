@@ -73,7 +73,7 @@ Legend: ✅ done · 🟡 core done, follow-ups pending (or "= verify" where stat
 - 🚫 **§54** Bug report submission — `PlaceholderBugReportService`; v0.1.0.
 - ✅ **§56** Migrating from NINA (`.json` import).
 - 🟡 **§57** Stop Mount + slew safety — telescope abort/park done; full slew-safety policy = verify.
-- ⬜ **§58** Meridian flip — sequencer trigger pending · 🟡 **§59** Autofocus — **all three Classic AF curve fits landed** (parabolic #359, hyperbolic + `FitBest` §59.8 selection #360, trendlines #361), `FocusCurveFit` weighted LS on #358's HFR; remaining: the live focuser V-curve sweep + AF-sequence wiring (focuser-gated physical blocker), and Smart Focus (§59.2-4, likely v0.1.0).
+- 🟡 **§58** Meridian flip — `MeridianFlipTrigger` decision logic re-ported headless (#362) behind the `IMeridianFlipExecutor` seam; remaining: the §58.4 flip orchestration (executor impl) + side-of-pier projection test matrix. · 🟡 **§59** Autofocus — **all three Classic AF curve fits landed** (parabolic #359, hyperbolic + `FitBest` §59.8 selection #360, trendlines #361), `FocusCurveFit` weighted LS on #358's HFR; remaining: the live focuser V-curve sweep + AF-sequence wiring (focuser-gated physical blocker), and Smart Focus (§59.2-4, likely v0.1.0).
 - ✅ **§60** API conventions (pagination, Idempotency-Key, RFC7807, 202-Accepted, WS envelope).
 - ✅ **§61** Smart settings search (⌘K, #110-123) · ✅ **§62** Dither policy.
 - 🟡 **§63** PHD2 lifecycle — guider a/c/d (#345/346/351) + e-1 RPC classes (#352) done; e-2 push blocked on profile-model; e-4 dark-library + §63.3 active-poll pending.
