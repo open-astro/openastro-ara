@@ -27,7 +27,7 @@ namespace OpenAstroAra.PlateSolving.Solvers {
 
     internal sealed class ASTAPSolver : CLISolver {
 
-        public sealed class ASTAPValidationFailedException : Exception {
+        public sealed class ASTAPValidationFailedException : OpenAstroAra.PlateSolving.PlateSolverConfigurationException {
 
             internal ASTAPValidationFailedException(string reason) : base($"ASTAP validation failed: {reason}") {
             }

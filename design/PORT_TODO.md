@@ -277,3 +277,23 @@ or `…_darwin_M1.lpi` (Mac dev), install a star DB, and set `ASTAPLocation`. Ne
 §18.I "local solvers only"). Since `PlateSolveService` always calls `GetBlindSolver`, a profile still configured
 for AstrometryNet silently uses ASTAP as both primary + blind solver. Harmless (ASTAP is the intended backend),
 but the profile/wizard should drop the AstrometryNet blind option, or the factory should log the substitution.
+
+### plate-solve LoadImageDataAsync null detection deps (from #364 round-2)
+`SqliteFrameRepository.LoadImageDataAsync` passes the real `IProfileService` to the `BaseImageData` but leaves
+`starDetection`/`starAnnotator` `null!`. Safe for the solve path (CLISolver → `SaveToDisk` → `GetImagePatterns`
+reads the `StarDetectionAnalysis` property, not the service; `RenderImage()` is never called). When the §28
+centering loop / on-image annotation calls `RenderImage()` or `DetectStars` on a repo-loaded frame, wire it
+through a DI-registered `IImageDataFactory.CreateBaseImageData` (the concrete factory lives in BaseImageData.cs
+but isn't registered yet) instead of the `null!` ctor args.
+
+  - **Why not just inject IImageDataFactory now (#364 round-3):** the concrete `ImageDataFactory`
+    (`BaseImageData.cs`) needs `IPluggableBehaviorSelector<IStarDetection>` + `<IStarAnnotator>`, and neither
+    those selectors nor any `IStarDetection`/`IStarAnnotator` impl is registered in the headless Server DI yet
+    (star-detection behaviour selection was never wired headless). So the clean factory path needs that
+    selector chain built first — until then the `null!` (safe for the solve path) stands.
+
+  - **Concrete guard option (#364 round-5):** when the §28 centering loop (the first consumer that would call
+    `RenderImage()`/`DetectStars()` on a repo-loaded frame) lands, add a guard to `BaseImageData` — e.g. throw
+    `NotSupportedException` from `RenderImage`/`DetectStars` when constructed without star services — so a
+    missing-star-service frame fails loud + local instead of an opaque NRE. (Out of scope for the solve
+    endpoint, which never calls those.)

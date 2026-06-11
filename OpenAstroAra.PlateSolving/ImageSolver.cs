@@ -85,7 +85,7 @@ namespace OpenAstroAra.PlateSolving {
 
             // Check to make sure user has supplied the telescope's effective focal length (in mm)
             if (double.IsNaN(focalLength) || focalLength <= 0) {
-                throw new InvalidOperationException(Loc.Instance["LblPlateSolveNoFocalLength"]);
+                throw new PlateSolverConfigurationException(Loc.Instance["LblPlateSolveNoFocalLength"]);
             }
         }
     }

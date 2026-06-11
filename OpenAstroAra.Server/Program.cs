@@ -489,6 +489,7 @@ public partial class Program {
         app.MapSequenceEndpoints();
         app.MapCalibrationEndpoints();
         app.MapMosaicEndpoints();
+        app.MapPlateSolveEndpoints(); // §18.I — solve a catalogued frame
 
         // Phase 8 endpoint groups (501 stubs until service implementations land).
         app.MapImageEndpoints();
