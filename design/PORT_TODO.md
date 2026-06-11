@@ -252,3 +252,28 @@ Dead code until Live View (§64), so low urgency — but the algorithm must be c
   `RA == 0 && Dec == 0` as "unset" and substitutes the mount's current position (inherited from NINA). This
   misfires for a real object near the vernal equinox (RA 0h, Dec 0°) — spurious warning + a wrong flip
   coordinate. Low likelihood; if it ever matters, gate the heuristic on a tolerance or an explicit "unset" flag.
+
+## §18.I plate-solving — integration map + slices (2026-06-11)
+
+The solver backends (ASTAP/Platesolve2/3) + algorithms (`ImageSolver`/`CaptureSolver`/`CenteringSolver`) were
+ported in §0.5 but **never wired into a callable service** (no `ICenteringSolver`/`IImageSolver` caller existed).
+Wiring started:
+- ✅ **`PlateSolveService` (§18.I sub-PR 1, #363):** `IPlateSolveService.SolveImage(image, approxCoords, …)` —
+  builds the configured solver via `IPlateSolverFactory` (now DI-registered, `PlateSolverFactoryProxy`) +
+  assembles `PlateSolveParameter` from the active profile (focal length, pixel size, search/downsample). Image-in
+  → solution-out core, unit-tested with a mocked `IImageSolver`. DI: `IPlateSolveService` + `IPlateSolverFactory`.
+- **Next slices:** a REST solve endpoint (`POST /api/v1/platesolve/solve` against a captured frame id); the §28
+  **centering loop** (`CenteringSolver`: capture → solve → sync → re-slew); then the §58.4 flip recenter consumes it.
+
+**ASTAP backend (org fork `github.com/open-astro/ASTAP`, see [[reference-astap-fork]]) — integration is CLI, no API:**
+`ASTAPSolver` (a `CLISolver`) shells out to the `astap_cli` binary at the profile's `ASTAPLocation` with
+`-f/-fov/-r/-ra/-spd/-z` and reads the `.ini`/`.wcs` output — so **no ARA code change** is needed to integrate.
+The work is OPS: build the headless `command-line_version/astap_command_line` from the fork via
+`lazbuild -B astap_command_line_linux_aarch64.lpi` (Raspberry Pi deploy; `debian_package_scripts/` → a `.deb`)
+or `…_darwin_M1.lpi` (Mac dev), install a star DB, and set `ASTAPLocation`. Needs Lazarus+FPC to build.
+
+### plate-solve — blind-solver fallthrough (from #363 review)
+`PlateSolverFactory.GetBlindSolver` maps `BlindSolver.AstrometryNet` → ASTAP (AstrometryNet was removed per
+§18.I "local solvers only"). Since `PlateSolveService` always calls `GetBlindSolver`, a profile still configured
+for AstrometryNet silently uses ASTAP as both primary + blind solver. Harmless (ASTAP is the intended backend),
+but the profile/wizard should drop the AstrometryNet blind option, or the factory should log the substitution.
