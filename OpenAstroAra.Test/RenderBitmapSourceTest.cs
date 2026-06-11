@@ -14,7 +14,6 @@
 
 using NUnit.Framework;
 using OpenAstroAra.Image.ImageData;
-using OpenAstroAra.Stretch;
 
 namespace OpenAstroAra.Test {
 
@@ -48,12 +47,15 @@ namespace OpenAstroAra.Test {
 
             var rendered = data.RenderBitmapSource();
 
-            // It delegates to the §65 Stretcher's auto-STF — same bytes.
-            var expected = Stretcher.Apply(StretchAlgorithm.AutoStf, pixels);
-            Assert.That(rendered, Is.EqualTo(expected));
-            // A real stretch spreads the gradient across the dynamic range.
+            // Assert real stretch behavior (not a circular re-call of the implementation): the gradient
+            // is spread across the dynamic range — darkest ≈ 0, brightest ≈ 255 — and monotonic
+            // non-decreasing. A throwing/unimplemented path fails the first line; a no-op would not
+            // reach full range.
             Assert.That(rendered[0], Is.LessThanOrEqualTo(8));
             Assert.That(rendered[^1], Is.GreaterThanOrEqualTo(200));
+            for (int i = 1; i < rendered.Length; i++) {
+                Assert.That(rendered[i], Is.GreaterThanOrEqualTo(rendered[i - 1]));
+            }
         }
     }
 }

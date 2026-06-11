@@ -220,8 +220,12 @@ public static class Stretcher {
         double wp = Quickselect(values, wpIndex);
         if (wp <= bp) wp = bp + 1;
 
-        // Target background 0.25: midpoint = bp + 0.25 × (median - bp).
-        var mp = bp + 0.25 * (median - bp);
+        // Target background 0.25. The Manual stretch maps the *midpoint* input to 0.5 output
+        // (mpFraction^gamma = 0.5), so to land the median at 0.25 the midpoint must be the geometric
+        // mean of (median-bp) and (wp-bp): mp = bp + sqrt((median-bp)·(wp-bp)). A linear
+        // bp + 0.25·(median-bp) over-brightens the median to ~0.65 (it ignores that Manual's anchor
+        // is 0.5, not the target background).
+        var mp = bp + Math.Sqrt((median - bp) * (wp - bp));
         return Manual(input, new StretchParams(
             Blackpoint: bp / MaxValue,
             Midpoint: mp / MaxValue,

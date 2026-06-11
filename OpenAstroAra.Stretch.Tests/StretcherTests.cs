@@ -77,6 +77,23 @@ public class StretcherTests {
     }
 
     [Fact]
+    public void AutoStf_maps_the_median_near_quarter_brightness() {
+        // A background-dominated frame: ~10k pixels around a 12000 median (8000/12000 split → MAD), plus
+        // a few bright "stars" at 60000 for the 99.998-percentile whitepoint. PixInsight STF targets the
+        // background (median) at ~0.25 output ≈ 64/255 — NOT ~0.65 (≈166), which the old linear-midpoint
+        // formula produced. This is the test the gradient case can't catch (its median maps to 0.25 by
+        // coincidence under both formulas).
+        var pixels = new ushort[10000];
+        for (var i = 0; i < 9980; i++) pixels[i] = (ushort)(i % 2 == 0 ? 8000 : 12000);
+        for (var i = 9980; i < 10000; i++) pixels[i] = 60000;
+
+        var output = Stretcher.Apply(StretchAlgorithm.AutoStf, pixels);
+
+        // pixels[1] = 12000 (the median value) → should land near quarter brightness.
+        Assert.InRange((int)output[1], 45, 90);
+    }
+
+    [Fact]
     public void Manual_stretch_rejects_inverted_endpoints() {
         var ex = Assert.Throws<ArgumentException>(() =>
             Stretcher.Apply(StretchAlgorithm.Manual, new ushort[] { 0, 1 },
