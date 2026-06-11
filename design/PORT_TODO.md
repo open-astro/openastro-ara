@@ -291,3 +291,9 @@ but isn't registered yet) instead of the `null!` ctor args.
     those selectors nor any `IStarDetection`/`IStarAnnotator` impl is registered in the headless Server DI yet
     (star-detection behaviour selection was never wired headless). So the clean factory path needs that
     selector chain built first — until then the `null!` (safe for the solve path) stands.
+
+  - **Concrete guard option (#364 round-5):** when the §28 centering loop (the first consumer that would call
+    `RenderImage()`/`DetectStars()` on a repo-loaded frame) lands, add a guard to `BaseImageData` — e.g. throw
+    `NotSupportedException` from `RenderImage`/`DetectStars` when constructed without star services — so a
+    missing-star-service frame fails loud + local instead of an opaque NRE. (Out of scope for the solve
+    endpoint, which never calls those.)

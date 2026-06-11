@@ -93,7 +93,7 @@ namespace OpenAstroAra.Test {
             var profileService = new Mock<IProfileService>();
             profileService.SetupGet(p => p.ActiveProfile).Returns((IProfile)null!);
             var sut = new PlateSolveService(profileService.Object, new Mock<IPlateSolverFactory>().Object);
-            Assert.Throws<InvalidOperationException>(
+            Assert.Throws<PlateSolverConfigurationException>(
                 () => sut.SolveImage(Mock.Of<IImageData>(), null, null, CancellationToken.None));
         }
 
@@ -109,7 +109,7 @@ namespace OpenAstroAra.Test {
             profileService.SetupGet(p => p.ActiveProfile.TelescopeSettings.FocalLength).Returns(focalLength);
             profileService.SetupGet(p => p.ActiveProfile.CameraSettings.PixelSize).Returns(pixelSize);
             var sut = new PlateSolveService(profileService.Object, new Mock<IPlateSolverFactory>().Object);
-            Assert.Throws<InvalidOperationException>(
+            Assert.Throws<PlateSolverConfigurationException>(
                 () => sut.SolveImage(Mock.Of<IImageData>(), null, null, CancellationToken.None));
         }
     }

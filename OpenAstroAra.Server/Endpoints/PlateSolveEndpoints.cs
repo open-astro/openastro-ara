@@ -58,12 +58,11 @@ public static class PlateSolveEndpoints {
             // leaking it (the solver's own validation messages below are intentionally user-facing and kept).
             return Results.Problem("Plate-solver executable not found — check the solver path (e.g. ASTAPLocation) in the profile.",
                 statusCode: StatusCodes.Status422UnprocessableEntity);
-        } catch (Exception ex) when (ex is InvalidOperationException
-                or OpenAstroAra.PlateSolving.PlateSolverConfigurationException) {
-            // User-fixable setup problems with messages written to be shown to the user (no active profile;
-            // focal length / pixel size unconfigured; ASTAP path missing/wrong/too-old). The public
-            // PlateSolverConfigurationException base lets us catch the latter without the internal solver
-            // types being reachable. Surface as 422, not an opaque 500.
+        } catch (OpenAstroAra.PlateSolving.PlateSolverConfigurationException ex) {
+            // Every user-fixable setup problem now throws this (no active profile; focal length / pixel size
+            // unconfigured; ASTAP path missing/wrong/too-old) — the messages are written to be shown to the
+            // user. Catching the narrow public base (not InvalidOperationException) keeps the 422 scoped to
+            // known setup errors and avoids mis-mapping unrelated InvalidOperationExceptions. Surface as 422.
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
         }
     }
