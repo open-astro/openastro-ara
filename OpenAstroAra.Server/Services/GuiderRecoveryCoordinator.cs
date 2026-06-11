@@ -60,12 +60,19 @@ public sealed partial class GuiderRecoveryCoordinator {
         TimeSpan.FromSeconds(120),
     };
 
+    // Per-poll ceiling on a single `systemctl is-active` call. A partially-wedged systemd could
+    // otherwise block a poll indefinitely (the loop's token is only cancelled by Dispose / reconnect),
+    // silently stalling the whole backoff window. A timed-out poll is treated as "couldn't confirm —
+    // keep waiting", not as a failure.
+    internal static readonly TimeSpan DefaultPollTimeout = TimeSpan.FromSeconds(5);
+
     private readonly IGuiderProcessSupervisor _supervisor;
     private readonly INotificationService _notifications;
     private readonly IDiagnosticsService _diagnostics;
     private readonly ILogger<GuiderRecoveryCoordinator> _logger;
     private readonly IReadOnlyList<TimeSpan> _backoff;
     private readonly Func<TimeSpan, CancellationToken, Task> _delay;
+    private readonly TimeSpan _pollTimeout;
 
     public GuiderRecoveryCoordinator(
         IGuiderProcessSupervisor supervisor,
@@ -73,23 +80,25 @@ public sealed partial class GuiderRecoveryCoordinator {
         IDiagnosticsService diagnostics,
         ILogger<GuiderRecoveryCoordinator> logger)
         : this(supervisor, notifications, diagnostics, logger, DefaultBackoff,
-               static (delay, ct) => Task.Delay(delay, ct)) {
+               static (delay, ct) => Task.Delay(delay, ct), DefaultPollTimeout) {
     }
 
-    // Test seam: inject a short backoff + a no-op delay so the tree runs instantly.
+    // Test seam: inject a short backoff + a no-op delay + a tight poll timeout so the tree runs instantly.
     internal GuiderRecoveryCoordinator(
         IGuiderProcessSupervisor supervisor,
         INotificationService notifications,
         IDiagnosticsService diagnostics,
         ILogger<GuiderRecoveryCoordinator> logger,
         IReadOnlyList<TimeSpan> backoff,
-        Func<TimeSpan, CancellationToken, Task> delay) {
+        Func<TimeSpan, CancellationToken, Task> delay,
+        TimeSpan pollTimeout) {
         _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
         _notifications = notifications ?? throw new ArgumentNullException(nameof(notifications));
         _diagnostics = diagnostics ?? throw new ArgumentNullException(nameof(diagnostics));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _backoff = backoff ?? throw new ArgumentNullException(nameof(backoff));
         _delay = delay ?? throw new ArgumentNullException(nameof(delay));
+        _pollTimeout = pollTimeout;
     }
 
     /// <summary>Run one §63.3 recovery pass for a dropped guider. Caller guarantees single-flight.</summary>
@@ -102,7 +111,18 @@ public sealed partial class GuiderRecoveryCoordinator {
             await _delay(backoff, ct).ConfigureAwait(false);
             ct.ThrowIfCancellationRequested();
 
-            var status = await _supervisor.QueryStatusAsync(ct).ConfigureAwait(false);
+            // Bound each poll independently so a wedged `systemctl` can't stall the whole window.
+            // A timed-out poll (not an outer cancel) is "couldn't confirm" → keep waiting, not give up.
+            GuiderProcessStatus status;
+            using (var pollCts = CancellationTokenSource.CreateLinkedTokenSource(ct)) {
+                pollCts.CancelAfter(_pollTimeout);
+                try {
+                    status = await _supervisor.QueryStatusAsync(pollCts.Token).ConfigureAwait(false);
+                } catch (OperationCanceledException) when (!ct.IsCancellationRequested) {
+                    LogPollTimedOut();
+                    continue;
+                }
+            }
             switch (status) {
                 case GuiderProcessStatus.Active:
                     LogRecovered();
@@ -115,11 +135,13 @@ public sealed partial class GuiderRecoveryCoordinator {
 
                 case GuiderProcessStatus.Inactive:
                 case GuiderProcessStatus.Failed:
-                    // Neither bringing-itself-back state. A `failed` unit has exhausted systemd's
-                    // own retries; an `inactive` one was stopped and isn't restarting. Either way we
-                    // nudge a restart exactly once per pass (the sticky `nudged` flag) — re-issuing it
-                    // every poll would just thrash systemd while it's already coming up — then keep
-                    // polling for the unit to reach `active`.
+                    // Neither is a bringing-itself-back state. A `failed` unit has exhausted systemd's
+                    // own retries; an `inactive` one is stopped and not restarting (a deliberate
+                    // `systemctl stop` would also read inactive — but we only get here from
+                    // OnConnectionLost, i.e. the daemon died on us, so treating it as "won't
+                    // self-recover, nudge it" is correct). Either way we nudge a restart exactly once
+                    // per pass (the sticky `nudged` flag) — re-issuing it every poll would just thrash
+                    // systemd while it's already coming up — then keep polling for it to reach `active`.
                     if (!nudged) {
                         _supervisor.RequestRestart();
                         nudged = true;
@@ -202,6 +224,9 @@ public sealed partial class GuiderRecoveryCoordinator {
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Guider daemon recovered to active")]
     partial void LogRecovered();
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Guider status poll timed out (systemctl wedged?) — retrying")]
+    partial void LogPollTimedOut();
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Guider daemon did not recover within the backoff budget")]
     partial void LogRecoveryFailed();

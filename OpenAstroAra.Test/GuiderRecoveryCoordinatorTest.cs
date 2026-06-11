@@ -60,7 +60,11 @@ namespace OpenAstroAra.Test {
         private static GuiderRecoveryCoordinator NewCoordinator(
             IGuiderProcessSupervisor supervisor,
             out Mock<INotificationService> notifications,
-            out Mock<IDiagnosticsService> diagnostics) {
+            out Mock<IDiagnosticsService> diagnostics,
+            TimeSpan? pollTimeout = null,
+            Func<TimeSpan, CancellationToken, Task>? delay = null) {
+            // Explicit CreateAsync/CreateEventAsync setups (not implicit Moq defaults) so the emit
+            // calls resolve to a real completed Task on every path, including the cancellation tests.
             notifications = new Mock<INotificationService>();
             notifications.Setup(n => n.CreateAsync(It.IsAny<NotificationDto>(), It.IsAny<CancellationToken>()))
                 .Returns(Task.CompletedTask);
@@ -72,7 +76,20 @@ namespace OpenAstroAra.Test {
                 supervisor, notifications.Object, diagnostics.Object,
                 NullLogger<GuiderRecoveryCoordinator>.Instance,
                 FastBackoff,
-                static (_, _) => Task.CompletedTask);
+                delay ?? ((_, _) => Task.CompletedTask),
+                pollTimeout ?? TimeSpan.FromSeconds(30));
+        }
+
+        // Hangs the first poll (until the per-poll timeout cancels it), then reports active.
+        private sealed class HangingThenActiveSupervisor : IGuiderProcessSupervisor {
+            private int _calls;
+            public async Task<GuiderProcessStatus> QueryStatusAsync(CancellationToken ct) {
+                if (_calls++ == 0) {
+                    await Task.Delay(Timeout.Infinite, ct);
+                }
+                return GuiderProcessStatus.Active;
+            }
+            public void RequestRestart() { }
         }
 
         [Test]
@@ -156,14 +173,11 @@ namespace OpenAstroAra.Test {
         [Test]
         public void Cancellation_propagates_out_of_recovery() {
             var supervisor = new FakeSupervisor(GuiderProcessStatus.Activating);
-            // Delay that throws on a cancelled token so the loop observes cancellation.
-            var coordinator = new GuiderRecoveryCoordinator(
-                supervisor, Mock.Of<INotificationService>(), Mock.Of<IDiagnosticsService>(),
-                NullLogger<GuiderRecoveryCoordinator>.Instance,
-                FastBackoff,
-                static (_, ct) => Task.FromCanceled(ct));
             using var cts = new CancellationTokenSource();
             cts.Cancel();
+            // Delay that throws on a cancelled token so the loop observes cancellation pre-poll.
+            var coordinator = NewCoordinator(supervisor, out _, out _,
+                delay: static (_, ct) => Task.FromCanceled(ct));
 
             Assert.ThrowsAsync<TaskCanceledException>(() => coordinator.RecoverAsync(cts.Token));
         }
@@ -175,11 +189,8 @@ namespace OpenAstroAra.Test {
             var supervisor = new FakeSupervisor(GuiderProcessStatus.Activating);
             using var cts = new CancellationTokenSource();
             var delayCalls = 0;
-            var coordinator = new GuiderRecoveryCoordinator(
-                supervisor, Mock.Of<INotificationService>(), Mock.Of<IDiagnosticsService>(),
-                NullLogger<GuiderRecoveryCoordinator>.Instance,
-                FastBackoff,
-                async (_, ct) => {
+            var coordinator = NewCoordinator(supervisor, out _, out _,
+                delay: async (_, ct) => {
                     if (++delayCalls >= 2) {
                         await cts.CancelAsync();
                         ct.ThrowIfCancellationRequested();
@@ -188,6 +199,19 @@ namespace OpenAstroAra.Test {
 
             Assert.ThrowsAsync<OperationCanceledException>(() => coordinator.RecoverAsync(cts.Token));
             Assert.That(delayCalls, Is.EqualTo(2), "cancellation should land on the second loop iteration");
+        }
+
+        [Test]
+        public async Task Poll_timeout_keeps_waiting_and_recovers() {
+            // First poll wedges (systemctl hung) and is cut off by the per-poll timeout; recovery
+            // must keep going rather than give up, and recover when the next poll succeeds.
+            var supervisor = new HangingThenActiveSupervisor();
+            var coordinator = NewCoordinator(supervisor, out _, out _,
+                pollTimeout: TimeSpan.FromMilliseconds(50));
+
+            var outcome = await coordinator.RecoverAsync(CancellationToken.None);
+
+            Assert.That(outcome, Is.EqualTo(GuiderRecoveryOutcome.Recovered));
         }
     }
 }
