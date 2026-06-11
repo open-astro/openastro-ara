@@ -68,7 +68,9 @@ namespace OpenAstroAra.Image.ImageData {
         // §line-2105.
 
         public virtual IRenderedImage ReRender() =>
-            throw new NotImplementedException("ReRender pending OpenCvSharp4 wiring.");
+            // §2105: re-render the display buffer from the raw frame (RenderBitmapSource → a fresh
+            // RenderedImage). Used to refresh the rendered view from the source pixels after analysis.
+            RawImageData.RenderImage();
 
         public IDebayeredImage Debayer(bool saveColorChannels = false, bool saveLumChannel = false, SensorType bayerPattern = SensorType.RGGB) =>
             throw new NotImplementedException("Debayer pending OpenCvSharp4 wiring.");
@@ -85,7 +87,9 @@ namespace OpenAstroAra.Image.ImageData {
             throw new NotImplementedException("DetectStars pending OpenCvSharp4 wiring.");
 
         public Task<byte[]> GetThumbnail() =>
-            throw new NotImplementedException("GetThumbnail pending OpenCvSharp4 wiring.");
+            // §2105: 320px-max JPEG thumbnail of the rendered 8-bit grayscale buffer via the §65 encoder.
+            Task.FromResult(OpenAstroAra.Stretch.JpegEncoder.EncodeThumbnail(
+                Image, RawImageData.Properties.Width, RawImageData.Properties.Height));
 
         public void UpdateAnalysis(StarDetectionParams p, StarDetectionResult result) =>
             throw new NotImplementedException("UpdateAnalysis pending OpenCvSharp4 wiring.");
