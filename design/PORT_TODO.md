@@ -228,3 +228,21 @@ Implementation plan:
    inherited grayscale `Image` is the luminance render (or keep the existing render).
 3. Wire `RenderedImage.Debayer`; +tests (no colour bleed on a synthetic edge; correct plane sizes).
 Dead code until Live View (§64), so low urgency — but the algorithm must be correct, so do it fresh.
+
+## §58 meridian flip — follow-ups (2026-06-11, after the trigger re-port #362)
+
+`MeridianFlipTrigger` decision logic re-ported headless (#362) from `840893eb8^`, behind the new
+`IMeridianFlipExecutor` seam. Remaining §58 work:
+- **§58.4 flip orchestration (the executor impl):** replace `PlaceholderMeridianFlipExecutor` (throws) with the
+  real headless workflow — pause imaging → wait out `pause_after` → flip slew (`ITelescopeMediator`) →
+  plate-solve re-center (§28.2 tolerance, ≤3 retries) → optional re-focus (`refocus_after_flip` policy, §59
+  AF) → restart guiding (`IGuiderMediator`, auto-restore vs full recal) → §58.5 side-of-pier verification. Its
+  own sub-PR; needs telescope/camera/guider/focuser mediators + plate-solver. Move the `Recenter`/
+  `AutoFocusAfterFlip` precondition checks (currently dropped from the trigger's `Validate`) here.
+- **Side-of-pier projection test matrix:** the original NINA test had a large `[TestCase]` matrix exercising
+  `ShouldTrigger` with `UseSideOfPier=true` + projected `ExpectedPierSide`. Re-port deferred — it needs
+  `TelescopeInfo.Coordinates`/`SiderealTime` fixtures that yield a known expected pier side. The #362 tests
+  cover the no-pier timing decision + early-return guards + Validate.
+- **§58.6 profile schema gaps:** the playbook `meridian_flip` block has fields ARA's `IMeridianFlipSettings`
+  doesn't expose yet (`mode`, `max_wait_after_min` naming, `recenter_after_flip`, `refocus_after_flip` enum,
+  `guider_recal` enum, `skip_target_if_below_floor`, `first_flip_confirmed`). Map when the orchestration lands.
