@@ -164,6 +164,30 @@ namespace OpenAstroAra.Test.Sequencer.Trigger.MeridianFlip {
         }
 
         [Test]
+        public void Execute_throws_when_no_target_coordinates_are_available() {
+            // Context has none AND the mount returns null (disconnected mid-decision) — fail loud, don't
+            // continue un-flipped.
+            telescopeMediatorMock.Setup(x => x.GetCurrentPosition()).Returns((Coordinates)null!);
+            telescopeMediatorMock.Setup(x => x.GetInfo()).Returns(new TelescopeInfo { Connected = true, TimeToMeridianFlip = 1 });
+            var sut = CreateSUT();
+            Assert.ThrowsAsync<InvalidOperationException>(
+                () => sut.Execute(null!, new Progress<ApplicationStatus>(), CancellationToken.None));
+        }
+
+        [Test]
+        public void Execute_throws_when_the_executor_reports_failure() {
+            var coords = new Coordinates(Angle.ByHours(5), Angle.ByDegree(20), Epoch.J2000);
+            telescopeMediatorMock.Setup(x => x.GetCurrentPosition()).Returns(coords);
+            telescopeMediatorMock.Setup(x => x.GetInfo()).Returns(new TelescopeInfo { Connected = true, TimeToMeridianFlip = 1, Coordinates = coords });
+            executorMock
+                .Setup(x => x.MeridianFlip(It.IsAny<Coordinates>(), It.IsAny<TimeSpan>(), It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(false); // failure must halt the sequence, not continue un-flipped
+            var sut = CreateSUT();
+            Assert.ThrowsAsync<InvalidOperationException>(
+                () => sut.Execute(null!, new Progress<ApplicationStatus>(), CancellationToken.None));
+        }
+
+        [Test]
         public void Validate_fails_when_the_telescope_is_disconnected() {
             SetTelescope(timeToMeridianFlipHours: 10, connected: false);
             var sut = CreateSUT();

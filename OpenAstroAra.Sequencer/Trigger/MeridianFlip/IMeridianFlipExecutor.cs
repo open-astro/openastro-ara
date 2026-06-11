@@ -36,7 +36,10 @@ namespace OpenAstroAra.Sequencer.Trigger.MeridianFlip {
         /// <summary>
         /// Perform the flip for <paramref name="targetCoordinates"/>. <paramref name="timeToFlip"/> is how long
         /// to wait before the flip slew (0 when the meridian has already been passed by <c>pause_after</c>).
-        /// Returns true when the flip + recovery completed successfully.
+        /// Returns true when the flip + recovery completed successfully. Returning false (or throwing) is a
+        /// FAILURE: the trigger then halts the sequence rather than continue un-flipped — by the next
+        /// evaluation the mount may be past its flip window, an OTA-collision risk. Implementations may either
+        /// return false or throw on unrecoverable failure; both stop the sequence.
         /// </summary>
         Task<bool> MeridianFlip(Coordinates targetCoordinates, TimeSpan timeToFlip, IProgress<ApplicationStatus> progress, CancellationToken token);
     }

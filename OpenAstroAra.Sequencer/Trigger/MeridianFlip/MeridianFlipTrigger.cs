@@ -62,6 +62,8 @@ namespace OpenAstroAra.Sequencer.Trigger.MeridianFlip {
         }
 
         protected MeridianFlipTrigger(MeridianFlipTrigger cloneMe) : this(cloneMe.profileService, cloneMe.telescopeMediator, cloneMe.executor) {
+            // Dedup state (lastFlipTime/lastFlipCoordinates) is intentionally NOT copied — a fresh clone starts
+            // with no flip history so it evaluates the next flip on its own merits.
             CopyMetaData(cloneMe);
         }
 
@@ -144,6 +146,14 @@ namespace OpenAstroAra.Sequencer.Trigger.MeridianFlip {
                 throw new InvalidOperationException("Meridian flip aborted: no target coordinates available (telescope returned none).");
             }
 
+            if (double.IsNaN(TimeToMeridianFlip)) {
+                // The mount can start reporting NaN between ShouldTrigger and Execute. Without this guard
+                // CalculateMinimumTimeRemaining → TimeSpan.FromHours(NaN) throws a confusing OverflowException;
+                // fail with a clear, intentional safety error instead.
+                Logger.Error("Meridian Flip - Telescope reports an unknown (NaN) time to meridian flip during Execute. Cannot flip safely.");
+                throw new InvalidOperationException("Meridian flip aborted: unknown (NaN) time to meridian flip.");
+            }
+
             var timeToFlip = CalculateMinimumTimeRemaining();
             if (timeToFlip > TimeSpan.FromHours(2)) {
                 //Assume a delayed flip when the time is more than two hours and flip immediately
@@ -151,14 +161,16 @@ namespace OpenAstroAra.Sequencer.Trigger.MeridianFlip {
             }
 
             var success = await executor.MeridianFlip(target, timeToFlip, progress, token);
-            if (success) {
-                // Only record the flip on success — otherwise the ShouldTrigger dedup guard (no re-flip within
-                // 11 h) would suppress a retry after a failed slew / plate-solve for the rest of the session.
-                lastFlipTime = DateTime.Now;
-                lastFlipCoordinates = target;
-            } else {
+            if (!success) {
+                // A failed flip must halt the sequence, not continue un-flipped — by the next ShouldTrigger the
+                // mount may be past its flip window, the very OTA-collision risk the design guards against.
+                // (lastFlipTime is left unset so the dedup guard wouldn't suppress a retry either way.)
                 Logger.Error("Meridian Flip - The flip executor reported failure.");
+                throw new InvalidOperationException("Meridian flip failed: the executor reported failure.");
             }
+            // Record the successful flip so the dedup guard skips a redundant re-flip for the same target.
+            lastFlipTime = DateTime.Now;
+            lastFlipCoordinates = target;
         }
 
         public override void AfterParentChanged() {
