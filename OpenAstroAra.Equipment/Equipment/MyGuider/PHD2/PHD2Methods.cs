@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -207,7 +207,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         public override string Method => "get_use_subframes";
     }
 
-    // Â§63.5 guider-e: openastro-guider accepts named-object OR positional params
+    // §63.5 guider-e: openastro-guider accepts named-object OR positional params
     // (openastro-guider/design/API_REFERENCE.md). These setters use the documented named-object form
     // ({"axis":...,"name":...,"value":...} etc.). Repurposed from the previously-unused positional
     // (Array) variants.
@@ -261,7 +261,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         public override string Method => "set_alpaca_server";
     }
 
-    // "any subset of host,port,camera_device,telescope_device,rotator_device" â€” only the fields the
+    // "any subset of host,port,camera_device,telescope_device,rotator_device" - only the fields the
     // caller sets serialize (NullValueHandling.Ignore), so an unset field isn't pushed.
     public class Phd2SetAlpacaServerParameter {
 
@@ -285,7 +285,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         public override string Method => "set_profile_setup";
     }
 
-    // Subset of the writable Â§63.5 setup fields ARA pushes; only set fields serialize.
+    // Subset of the writable §63.5 setup fields ARA pushes; only set fields serialize.
     public class Phd2ProfileSetupParameter {
 
         [JsonProperty(PropertyName = "focal_length", NullValueHandling = NullValueHandling.Ignore)]
