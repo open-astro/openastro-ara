@@ -149,5 +149,23 @@ namespace OpenAstroAra.Test {
             Assert.That(dir, Does.StartWith(fallback));
             Assert.That(dir, Does.EndWith("manual"));
         }
+
+        // §65 OSC: ASCOM BayerOffsetX/Y shifts the CFA origin. The base RGGB pattern at the
+        // sensor origin, re-anchored to the image (0,0) origin, yields these four patterns.
+        [TestCase(0, 0, "RGGB")]
+        [TestCase(1, 0, "GRBG")]
+        [TestCase(0, 1, "GBRG")]
+        [TestCase(1, 1, "BGGR")]
+        public void EffectiveBayerPattern_maps_ascom_offsets(int ox, int oy, string expected) {
+            Assert.That(CameraService.EffectiveBayerPattern(ox, oy), Is.EqualTo(expected));
+        }
+
+        [TestCase(2, 0, "RGGB")]   // even offsets are equivalent to 0
+        [TestCase(3, 2, "GRBG")]   // odd-x, even-y ≡ (1,0)
+        [TestCase(-1, 0, "GRBG")]  // negative offsets normalize to [0,1]
+        [TestCase(-1, -1, "BGGR")]
+        public void EffectiveBayerPattern_normalizes_offsets_modulo_two(int ox, int oy, string expected) {
+            Assert.That(CameraService.EffectiveBayerPattern(ox, oy), Is.EqualTo(expected));
+        }
     }
 }

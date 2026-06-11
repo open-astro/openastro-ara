@@ -499,6 +499,17 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         if (!string.IsNullOrWhiteSpace(request.FilterName)) {
             fits.SetHeader("FILTER", request.FilterName!, "filter name");
         }
+        // OSC sensors: record the Bayer pattern so downstream stackers (and ARA's §65 color preview)
+        // can debayer the raw mosaic. The effective pattern is at the origin, so the offsets are 0.
+        // The stored data stays a raw, undebayered mosaic.
+        //
+        // Only at 1×1: hardware binning averages adjacent sensor cells, mixing R/G/B so the readout is
+        // no longer a Bayer mosaic — stamping BAYERPAT there would make the preview debayer garbage.
+        if (_capabilities?.BayerPattern is string bayerPat && request.BinX == 1 && request.BinY == 1) {
+            fits.SetHeader("BAYERPAT", bayerPat, "Bayer CFA pattern at image origin");
+            fits.SetHeader("XBAYROFF", 0, "Bayer X offset (baked into BAYERPAT)");
+            fits.SetHeader("YBAYROFF", 0, "Bayer Y offset (baked into BAYERPAT)");
+        }
         fits.Complete(); // §28.7 atomic finish
         return path;
     }
@@ -658,13 +669,39 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         try { maxBinX = c.MaxBinX; maxBinY = c.MaxBinY; } catch (Exception) { }
         double minExp = 0, maxExp = 0;
         try { minExp = c.ExposureMin; maxExp = c.ExposureMax; } catch (Exception) { }
+        // Bayer pattern (OSC): only SensorType.RGGB delivers a raw 2D Bayer mosaic we can debayer —
+        // its effective pattern at the image origin is RGGB shifted by ASCOM's BayerOffsetX/Y.
+        // SensorType.Color returns an already-debayered 3-plane array (rejected by ConvertImageArray),
+        // and Monochrome / exotic CMYG/LRGB layouts leave this null → no debayer.
+        string? bayerPattern = null;
+        try {
+            if (c.SensorType is SensorType.RGGB) {
+                int ox = 0, oy = 0;
+                try { ox = c.BayerOffsetX; oy = c.BayerOffsetY; } catch (Exception) { }
+                bayerPattern = EffectiveBayerPattern(ox, oy);
+            }
+        } catch (Exception) { }
         return new CameraCapabilitiesDto(
             SensorWidth: w, SensorHeight: h, PixelSizeUm: pixelSize,
             CanSetTemperature: canSetTemp, CanAbortExposure: canAbort, CanGetCoolerPower: canCoolerPower,
             MinGain: minGain, MaxGain: maxGain,
             MinOffset: minOffset, MaxOffset: maxOffset,
             MinBinX: 1, MaxBinX: maxBinX, MinBinY: 1, MaxBinY: maxBinY,
-            MinExposureSec: minExp, MaxExposureSec: maxExp);
+            MinExposureSec: minExp, MaxExposureSec: maxExp,
+            BayerPattern: bayerPattern);
+    }
+
+    // RGGB native + ASCOM BayerOffsetX/Y → the effective 2×2 pattern at the image (0,0) origin,
+    // so the FITS BAYERPAT can be written with XBAYROFF/YBAYROFF = 0.
+    internal static string EffectiveBayerPattern(int offsetX, int offsetY) {
+        int x = ((offsetX % 2) + 2) % 2;
+        int y = ((offsetY % 2) + 2) % 2;
+        return (x, y) switch {
+            (1, 0) => "GRBG",
+            (0, 1) => "GBRG",
+            (1, 1) => "BGGR",
+            _ => "RGGB",
+        };
     }
 
     // ── Connect / teardown (template) ────────────────────────────────────────────────────────────

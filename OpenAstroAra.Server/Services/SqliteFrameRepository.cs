@@ -413,9 +413,15 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
             return (cached, "image/jpeg");
         }
 
-        var (pixels, width, height) = LoadFitsPixels(filePath);
-        var stretched = OpenAstroAra.Stretch.Stretcher.Apply(algorithm, pixels, stretchParams);
-        var jpeg = OpenAstroAra.Stretch.JpegEncoder.EncodeGray(stretched, width, height);
+        var (pixels, width, height, bayerPat) = LoadFitsPixels(filePath);
+        byte[] jpeg;
+        if (OpenAstroAra.Stretch.Debayer.TryParse(bayerPat, out var pattern)) {
+            var (rgb, ow, oh) = DebayerAndStretch(pixels, width, height, pattern, algorithm, stretchParams);
+            jpeg = OpenAstroAra.Stretch.JpegEncoder.EncodeColor(rgb, ow, oh);
+        } else {
+            var stretched = OpenAstroAra.Stretch.Stretcher.Apply(algorithm, pixels, stretchParams);
+            jpeg = OpenAstroAra.Stretch.JpegEncoder.EncodeGray(stretched, width, height);
+        }
         TryWriteCache(cachePath, jpeg);
         EvictVariantsIfNeeded(filePath);
         return (jpeg, "image/jpeg");
@@ -426,14 +432,20 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath)) {
             return (PlaceholderJpegBytes, "image/jpeg");
         }
-        var (pixels, width, height) = LoadFitsPixels(filePath);
+        var (pixels, width, height, bayerPat) = LoadFitsPixels(filePath);
         // Thumbnail: §65.4 always uses the default stretch (re-stretch on
         // thumbnails is not supported in v0.0.1). Per-frame-type override
         // still applies — calibration frames get linear.
         var stretchDefaults = _profile.GetStretchDefaults();
         var algorithm = ResolveAlgorithm(null, frameType, stretchDefaults.LightDefault);
-        var stretched = OpenAstroAra.Stretch.Stretcher.Apply(algorithm, pixels);
-        var jpeg = OpenAstroAra.Stretch.JpegEncoder.EncodeThumbnail(stretched, width, height);
+        byte[] jpeg;
+        if (OpenAstroAra.Stretch.Debayer.TryParse(bayerPat, out var pattern)) {
+            var (rgb, ow, oh) = DebayerAndStretch(pixels, width, height, pattern, algorithm, null);
+            jpeg = OpenAstroAra.Stretch.JpegEncoder.EncodeColorThumbnail(rgb, ow, oh);
+        } else {
+            var stretched = OpenAstroAra.Stretch.Stretcher.Apply(algorithm, pixels);
+            jpeg = OpenAstroAra.Stretch.JpegEncoder.EncodeThumbnail(stretched, width, height);
+        }
         return (jpeg, "image/jpeg");
     }
 
@@ -447,11 +459,36 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         return (reader.GetString(0), ParseFrameType(reader.GetString(1)));
     }
 
-    private static (ushort[] Pixels, int Width, int Height) LoadFitsPixels(string filePath) {
+    private static (ushort[] Pixels, int Width, int Height, string? BayerPattern) LoadFitsPixels(string filePath) {
         using var fits = OpenAstroAra.Fits.FitsImage.Open(filePath);
         var (w, h) = fits.GetDimensions();
         var pixels = fits.ReadImageData16();
-        return (pixels, w, h);
+        var bayer = fits.ReadHeaders().TryGetValue("BAYERPAT", out var bp) ? bp : null;
+        return (pixels, w, h, bayer);
+    }
+
+    // §65 OSC color: super-pixel debayer the raw mosaic → 3 half-res channels, stretch each, and
+    // interleave to RGB. Per-channel auto-stretch incidentally auto-white-balances the preview; the
+    // stored FITS stays the raw, undebayered mosaic.
+    //
+    // WB caveat: with a user-supplied stretchParams (manual black/white points), applying the same
+    // params per channel can shift white balance — those points were chosen against the mosaic's
+    // combined luminance, not per-channel. Acceptable for a preview; revisit if manual OSC stretch
+    // looks off.
+    private static (byte[] Rgb, int Width, int Height) DebayerAndStretch(
+        ushort[] mosaic, int width, int height, OpenAstroAra.Stretch.BayerPattern pattern,
+        OpenAstroAra.Stretch.StretchAlgorithm algorithm, OpenAstroAra.Stretch.StretchParams? stretchParams) {
+        var (r, g, b, ow, oh) = OpenAstroAra.Stretch.Debayer.SuperPixel(mosaic, width, height, pattern);
+        var rs = OpenAstroAra.Stretch.Stretcher.Apply(algorithm, r, stretchParams);
+        var gs = OpenAstroAra.Stretch.Stretcher.Apply(algorithm, g, stretchParams);
+        var bs = OpenAstroAra.Stretch.Stretcher.Apply(algorithm, b, stretchParams);
+        var rgb = new byte[rs.Length * 3];
+        for (int i = 0, d = 0; i < rs.Length; i++, d += 3) {
+            rgb[d] = rs[i];
+            rgb[d + 1] = gs[i];
+            rgb[d + 2] = bs[i];
+        }
+        return (rgb, ow, oh);
     }
 
     /// <summary>
