@@ -93,6 +93,34 @@ public class StretcherTests {
         Assert.InRange((int)output[1], 45, 90);
     }
 
+    [Theory]
+    [InlineData(0.5, 110, 145)]  // brighter background target → median near mid-grey
+    [InlineData(0.1, 15, 40)]    // dimmer target → median near 0.1·255 ≈ 26
+    public void Stf_lands_the_median_near_the_requested_target_background(double target, int lo, int hi) {
+        // Median 12000 (8000/12000 split → MAD), a few bright "stars" at 60000 for the whitepoint.
+        var pixels = new ushort[10000];
+        for (var i = 0; i < 9980; i++) pixels[i] = (ushort)(i % 2 == 0 ? 8000 : 12000);
+        for (var i = 9980; i < 10000; i++) pixels[i] = 60000;
+
+        var output = Stretcher.Stf(pixels, targetBackground: target, shadowSigma: 2.8);
+
+        // pixels[1] = 12000 (the median value) → lands near target·255.
+        Assert.InRange((int)output[1], lo, hi);
+    }
+
+    [Fact]
+    public void Stf_guards_a_negative_shadow_sigma_against_nan_output() {
+        // A negative shadowSigma would push bp above the median → negative medianFraction →
+        // Math.Pow(neg, frac) = NaN → ToByte(NaN) = 0 → an all-black image. The guard clamps it.
+        var pixels = new ushort[1000];
+        for (var i = 0; i < pixels.Length; i++) pixels[i] = (ushort)(i * 60);
+
+        var output = Stretcher.Stf(pixels, targetBackground: 0.25, shadowSigma: -2.8);
+
+        Assert.Equal(pixels.Length, output.Length);
+        Assert.Contains(output, b => b > 0); // a real image, not all-zero from a NaN leak
+    }
+
     [Fact]
     public void Manual_stretch_rejects_inverted_endpoints() {
         var ex = Assert.Throws<ArgumentException>(() =>

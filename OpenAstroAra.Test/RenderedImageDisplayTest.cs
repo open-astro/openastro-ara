@@ -51,6 +51,23 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Stretch_with_a_brighter_factor_produces_a_brighter_median() {
+            // Background-dominated frame so the median is well-defined.
+            int w = 100, h = 100;
+            var pixels = new ushort[w * h];
+            for (int i = 0; i < pixels.Length - 50; i++) pixels[i] = (ushort)(i % 2 == 0 ? 8000 : 12000);
+            for (int i = pixels.Length - 50; i < pixels.Length; i++) pixels[i] = 60000;
+            var raw = new BaseImageData(pixels, w, h, 16, false, new ImageMetaData(), null!, null!, null!);
+            var rendered = raw.RenderImage();
+
+            var dim = await rendered.Stretch(factor: 0.1, blackClipping: -2.8, unlinked: false);
+            var bright = await rendered.Stretch(factor: 0.5, blackClipping: -2.8, unlinked: false);
+
+            // A 12000 (median) pixel is brighter under the higher target background.
+            Assert.That(bright.Image[1], Is.GreaterThan(dim.Image[1]));
+        }
+
+        [Test]
         public void ReRender_returns_a_fresh_image_of_the_same_dimensions() {
             int w = 32, h = 8;
             var rendered = NewRendered(w, h);
