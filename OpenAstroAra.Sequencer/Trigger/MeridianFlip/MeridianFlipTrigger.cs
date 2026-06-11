@@ -52,7 +52,7 @@ namespace OpenAstroAra.Sequencer.Trigger.MeridianFlip {
         private readonly IMeridianFlipExecutor executor;
 
         private DateTime lastFlipTime = DateTime.MinValue;
-        private Coordinates? lastFlipCoordiantes;
+        private Coordinates? lastFlipCoordinates;
 
         [ImportingConstructor]
         public MeridianFlipTrigger(IProfileService profileService, ITelescopeMediator telescopeMediator, IMeridianFlipExecutor executor) : base() {
@@ -135,36 +135,46 @@ namespace OpenAstroAra.Sequencer.Trigger.MeridianFlip {
                 Logger.Warning("Target coordinates are all zero. Most likely not intended. Taking current telescope coordinates instead for the flip.");
             }
 
+            if (target == null) {
+                // No target from the context AND the mount returned no current position (it can disconnect in
+                // the window between ShouldTrigger and Execute). Don't slew to nowhere — abort the flip.
+                Logger.Error("Meridian Flip - No target coordinates available (telescope returned none). Aborting flip.");
+                return;
+            }
+
             var timeToFlip = CalculateMinimumTimeRemaining();
             if (timeToFlip > TimeSpan.FromHours(2)) {
                 //Assume a delayed flip when the time is more than two hours and flip immediately
                 timeToFlip = TimeSpan.Zero;
             }
 
-            lastFlipTime = DateTime.Now;
-            lastFlipCoordiantes = target;
-            var success = await executor.MeridianFlip(target!, timeToFlip, progress, token);
-            if (!success) {
+            var success = await executor.MeridianFlip(target, timeToFlip, progress, token);
+            if (success) {
+                // Only record the flip on success — otherwise the ShouldTrigger dedup guard (no re-flip within
+                // 11 h) would suppress a retry after a failed slew / plate-solve for the rest of the session.
+                lastFlipTime = DateTime.Now;
+                lastFlipCoordinates = target;
+            } else {
                 Logger.Error("Meridian Flip - The flip executor reported failure.");
             }
         }
 
         public override void AfterParentChanged() {
             lastFlipTime = DateTime.MinValue;
-            lastFlipCoordiantes = null;
+            lastFlipCoordinates = null;
         }
 
         protected virtual TimeSpan CalculateMinimumTimeRemaining() {
             //Substract delta from maximum to get minimum time
             var delta = MaxMinutesAfterMeridian - MinutesAfterMeridian;
-            var time = CalculateMaximumTimeRemainaing() - TimeSpan.FromMinutes(delta);
+            var time = CalculateMaximumTimeRemaining() - TimeSpan.FromMinutes(delta);
             if (time < TimeSpan.Zero) {
                 time = TimeSpan.Zero;
             }
             return time;
         }
 
-        protected virtual TimeSpan CalculateMaximumTimeRemainaing() {
+        protected virtual TimeSpan CalculateMaximumTimeRemaining() {
             return TimeSpan.FromHours(TimeToMeridianFlip);
         }
 
@@ -174,7 +184,9 @@ namespace OpenAstroAra.Sequencer.Trigger.MeridianFlip {
             if (!telescopeInfo.Connected || double.IsNaN(telescopeInfo.TimeToMeridianFlip)) {
                 EarliestFlipTime = DateTime.MinValue;
                 LatestFlipTime = DateTime.MinValue;
-                Logger.Error("Meridian Flip - Telescope is not connected to evaluate if a flip should happen!");
+                Logger.Error(telescopeInfo.Connected
+                    ? "Meridian Flip - Telescope reports an unknown (NaN) time to meridian flip; cannot evaluate a flip!"
+                    : "Meridian Flip - Telescope is not connected to evaluate if a flip should happen!");
                 return false;
             }
 
@@ -200,7 +212,7 @@ namespace OpenAstroAra.Sequencer.Trigger.MeridianFlip {
             }
 
             // When side of pier is disabled - check if the last flip time was less than 11 hours ago and further check if the current position is similar to the last flip position. If all are true, no flip is required.
-            if (UseSideOfPier == false && (DateTime.Now - lastFlipTime) < TimeSpan.FromHours(11) && lastFlipCoordiantes != null && (lastFlipCoordiantes - telescopeInfo.Coordinates).Distance.ArcMinutes < 20) {
+            if (UseSideOfPier == false && (DateTime.Now - lastFlipTime) < TimeSpan.FromHours(11) && lastFlipCoordinates != null && (lastFlipCoordinates - telescopeInfo.Coordinates).Distance.ArcMinutes < 20) {
                 //A flip for the same target is only expected every 12 hours on planet earth and
                 Logger.Info($"Meridian Flip - Flip for the current target already happened at {lastFlipTime}. Skip flip evaluation");
                 return false;
@@ -210,7 +222,7 @@ namespace OpenAstroAra.Sequencer.Trigger.MeridianFlip {
 
             //The time to meridian flip reported by the telescope is the latest time for a flip to happen
             var minimumTimeRemaining = CalculateMinimumTimeRemaining();
-            var maximumTimeRemaining = CalculateMaximumTimeRemainaing();
+            var maximumTimeRemaining = CalculateMaximumTimeRemaining();
             var originalMaximumTimeRemaining = maximumTimeRemaining;
             if (PauseTimeBeforeMeridian != 0) {
                 //A pause prior to a meridian flip is a hard limit due to equipment obstruction. There is no possibility for a timerange as we have to pause early and wait for meridian to pass
