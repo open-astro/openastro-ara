@@ -148,5 +148,79 @@ namespace OpenAstroAra.Test {
         public void FitParabolic_throws_on_null_points() {
             Assert.Throws<ArgumentNullException>(() => FocusCurveFit.FitParabolic(null!));
         }
+
+        // Sample a focus hyperbola HFR = sqrt(a^2 + b^2 (x-x0)^2): minimum HFR = a at x = x0.
+        private static List<FocusPoint> Hyperbola(double a, double b, double x0, double from, double to, double step, int stars = 100) {
+            var pts = new List<FocusPoint>();
+            for (double x = from; x <= to + 1e-9; x += step) {
+                double d = x - x0;
+                pts.Add(new FocusPoint(x, Math.Sqrt(a * a + b * b * d * d), stars));
+            }
+            return pts;
+        }
+
+        [Test]
+        public void FitHyperbolic_recovers_the_vertex_of_a_clean_hyperbola() {
+            var pts = Hyperbola(a: 1.5, b: 0.05, x0: 500, from: 400, to: 600, step: 25);
+            var fit = FocusCurveFit.FitHyperbolic(pts);
+
+            Assert.That(fit, Is.Not.Null);
+            Assert.That(fit!.IsUsable, Is.True);
+            Assert.That(fit.Method, Is.EqualTo(AFCurveFitting.HYPERBOLIC));
+            Assert.That(fit.BestPosition, Is.EqualTo(500).Within(0.5));
+            Assert.That(fit.PredictedHfr, Is.EqualTo(1.5).Within(0.02));
+            Assert.That(fit.RSquared, Is.GreaterThan(0.999));
+            Assert.That(fit.WithinSampledRange, Is.True);
+        }
+
+        [Test]
+        public void FitHyperbolic_returns_null_below_min_points() {
+            var pts = new List<FocusPoint> { new(100, 5, 100), new(200, 3, 100) };
+            Assert.That(FocusCurveFit.FitHyperbolic(pts), Is.Null);
+        }
+
+        [Test]
+        public void FitBest_uses_the_parabola_on_a_clean_parabolic_curve() {
+            var pts = Parabola(a: 0.0005, x0: 500, c: 2.0, from: 400, to: 600, step: 25);
+            var fit = FocusCurveFit.FitBest(pts);
+
+            Assert.That(fit, Is.Not.Null);
+            Assert.That(fit!.IsUsable, Is.True);
+            Assert.That(fit.Method, Is.EqualTo(AFCurveFitting.PARABOLIC)); // good parabola ⇒ no fallback
+            Assert.That(fit.BestPosition, Is.EqualTo(500).Within(0.5));
+        }
+
+        [Test]
+        public void FitHyperbolic_models_a_sharp_v_better_than_a_parabola() {
+            // The reason §59.8 keeps a hyperbolic fallback: on a sharp V (nearly straight arms) the hyperbola
+            // is the correct model and the parabola is a compromise — so the hyperbola scores a higher R².
+            var pts = Hyperbola(a: 0.5, b: 2.0, x0: 500, from: 450, to: 550, step: 10);
+            var hyper = FocusCurveFit.FitHyperbolic(pts);
+            var parab = FocusCurveFit.FitParabolic(pts);
+
+            Assert.That(hyper!.IsUsable, Is.True);
+            Assert.That(parab!.IsUsable, Is.True);
+            Assert.That(hyper.RSquared, Is.GreaterThan(parab.RSquared));
+            Assert.That(hyper.RSquared, Is.GreaterThan(0.999)); // hyperbola fits its own data essentially exactly
+        }
+
+        [Test]
+        public void FitBest_keeps_a_good_parabola_even_on_hyperbolic_data() {
+            // A clean symmetric hyperbola is still fit by a parabola at R² ≈ 0.93 (> the 0.85 threshold), so
+            // FitBest keeps the cheaper parabola — and by symmetry its vertex is still the true centre.
+            var pts = Hyperbola(a: 1.5, b: 0.05, x0: 500, from: 400, to: 600, step: 25);
+            var best = FocusCurveFit.FitBest(pts);
+
+            Assert.That(best, Is.Not.Null);
+            Assert.That(best!.IsUsable, Is.True);
+            Assert.That(best.Method, Is.EqualTo(AFCurveFitting.PARABOLIC));
+            Assert.That(best.BestPosition, Is.EqualTo(500).Within(2.0));
+        }
+
+        [Test]
+        public void FitBest_returns_null_when_nothing_can_be_fit() {
+            var pts = new List<FocusPoint> { new(500, 5, 100), new(500, 4, 100) }; // one position, 2 points
+            Assert.That(FocusCurveFit.FitBest(pts), Is.Null);
+        }
     }
 }

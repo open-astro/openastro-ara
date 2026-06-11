@@ -194,9 +194,14 @@ annotation remain, both Live-View-gated (v0.1.0 scope).
 
 `FocusCurveFit.FitParabolic` (`OpenAstroAra.Core/Model/FocusCurveFit.cs`) landed the §59.8 parabolic fit
 (weighted LS → best-focus vertex + R² + usable/in-range flags) on #358's HFR. Remaining §59 work:
-- **Hyperbolic + trendline fits (§59.8 fallback):** parabolic R² < 0.85 should fall back to a hyperbolic fit
-  (`HFR = √(a² + b²·(x−c)²)`), and TREND* variants per `AFCurveFitting`. Hyperbolic is nonlinear (Gauss-Newton
-  / iterative) — its own sub-PR, next in the §59 queue. Pure math, no hardware → unit-testable now.
+- ✅ **Hyperbolic fit + §59.8 fallback selection:** DONE (#360). `FocusCurveFit.FitHyperbolic`
+  (`HFR = √(a² + b²·(x−c)²)`, linearised as a parabola in HFR² so it reuses the conditioned solve) +
+  `FitBest` (parabola, fall back to hyperbola when R² < 0.85 / unusable, keep the higher-R² usable fit).
+  Note: a clean *symmetric* curve is fit by a parabola at R² ≈ 0.93, so the fallback fires only on genuinely
+  messy data — documented + tested.
+- **Trendline fits (TREND* in `AFCurveFitting`):** two-line (left/right arm) regression + intersection, an
+  alternative to the smooth-curve fits for unusual star profiles. Lower priority than the smooth fits; its
+  own follow-up. Pure math, unit-testable now.
 - **Live focuser V-curve sweep (§59.8 / §59.3 Phase-1 calibration) — PHYSICAL BLOCKER (no focuser on the rig):**
   the orchestration that steps a connected Alpaca focuser through 9 positions, captures + runs `StarDetector`
   HFR at each, feeds `FocusCurveFit`, moves to the predicted best, and verifies. Needs a focuser to live-validate;
