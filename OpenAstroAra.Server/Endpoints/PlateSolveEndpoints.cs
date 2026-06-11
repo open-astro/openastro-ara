@@ -53,14 +53,17 @@ public static class PlateSolveEndpoints {
             // Blind solve for now (no hint); a body-supplied approximate position can seed a faster near-solve.
             var result = await solver.SolveImage(image, approxCoordinates: null, progress: null, ct);
             return Results.Ok(ToDto(result));
+        } catch (System.IO.FileNotFoundException) {
+            // Framework message embeds the full server-side path; return a fixed, helpful string instead of
+            // leaking it (the solver's own validation messages below are intentionally user-facing and kept).
+            return Results.Problem("Plate-solver executable not found — check the solver path (e.g. ASTAPLocation) in the profile.",
+                statusCode: StatusCodes.Status422UnprocessableEntity);
         } catch (Exception ex) when (ex is InvalidOperationException
-                or System.IO.FileNotFoundException
                 or OpenAstroAra.PlateSolving.PlateSolverConfigurationException) {
-            // User-fixable setup problems — surface as 422 with the message, not an opaque 500:
-            //  - InvalidOperationException: no active profile, focal length / pixel size unconfigured
-            //  - PlateSolverConfigurationException (e.g. ASTAP path missing/wrong/too-old): the common one after
-            //    focal length — the public base lets us catch it without the internal solver types being reachable
-            //  - FileNotFoundException: the configured solver executable isn't there
+            // User-fixable setup problems with messages written to be shown to the user (no active profile;
+            // focal length / pixel size unconfigured; ASTAP path missing/wrong/too-old). The public
+            // PlateSolverConfigurationException base lets us catch the latter without the internal solver
+            // types being reachable. Surface as 422, not an opaque 500.
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
         }
     }

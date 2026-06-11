@@ -459,6 +459,8 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath)) {
             return null;
         }
+        // A corrupt/truncated FITS lets LoadFitsPixels throw → 500, consistent with GetPreviewAsync/
+        // GetThumbnailAsync on the same file (a malformed catalogued frame is an exceptional, not user-input, case).
         var (pixels, width, height, bayerPat) = LoadFitsPixels(filePath);
         return new OpenAstroAra.Image.ImageData.BaseImageData(
             pixels, width, height, bitDepth: 16, isBayered: !string.IsNullOrEmpty(bayerPat),
