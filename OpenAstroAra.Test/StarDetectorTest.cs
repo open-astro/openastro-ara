@@ -198,6 +198,27 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void StarDetectionAnalysis_SetAll_is_atomic_from_any_observer() {
+            var analysis = new StarDetectionAnalysis();
+            var stars = new System.Collections.Generic.List<DetectedStar> { new DetectedStar { HFR = 2.0 } };
+            // Whichever property an observer wakes on, all four must already read the new values — no torn state.
+            var inconsistencies = 0;
+            analysis.PropertyChanged += (_, _) => {
+                if (analysis.HFR != 1.5 || analysis.HFRStDev != 0.25 || analysis.DetectedStars != 1
+                        || analysis.StarList.Count != 1) {
+                    inconsistencies++;
+                }
+            };
+
+            analysis.SetAll(1.5, 0.25, 1, stars);
+
+            Assert.That(inconsistencies, Is.EqualTo(0));
+            Assert.That(analysis.HFR, Is.EqualTo(1.5));
+            Assert.That(analysis.DetectedStars, Is.EqualTo(1));
+            Assert.That(analysis.StarList, Is.SameAs(stars));
+        }
+
+        [Test]
         public async System.Threading.Tasks.Task DetectStars_publishes_analysis_onto_the_raw_frame() {
             int w = 120, h = 120;
             var frame = FlatField(w, h);

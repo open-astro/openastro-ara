@@ -81,7 +81,7 @@ namespace OpenAstroAra.Image.ImageAnalysis {
 
             var stars = FindStars(work, width, height, threshold, background: median, token);
 
-            // Highest-quality stars first, then honour an explicit cap (0 = no cap). With a cap, the
+            // Highest-quality stars first, then honour an explicit cap (≤ 0 = no cap). With a cap, the
             // returned count + HFR stats reflect the brightest-N, not the whole field — this is the NINA
             // convention (bright stars give the cleanest, least-noisy HFR for focus), but a §59 autofocus
             // caller passing a small cap should know its HFR is a bright-star statistic, not a field average.
@@ -102,7 +102,7 @@ namespace OpenAstroAra.Image.ImageAnalysis {
 
         private static (double median, double sigma) BackgroundStats(ReadOnlySpan<ushort> pixels) {
             int stride = Math.Max(1, pixels.Length / BackgroundSampleTarget);
-            int n = (pixels.Length + stride - 1) / stride;
+            int n = (pixels.Length + stride - 1) / stride; // ceil(length/stride) — exact count of i=0,stride,2·stride,… < length
             var sample = new ushort[n];
             for (int i = 0, j = 0; i < pixels.Length; i += stride) {
                 sample[j++] = pixels[i];
@@ -252,6 +252,8 @@ namespace OpenAstroAra.Image.ImageAnalysis {
             foreach (var s in stars) mean += s.HFR;
             mean /= stars.Count;
 
+            // Population variance (÷ N, not ÷ N−1): HFR spread is a descriptive statistic over the whole
+            // detected set, not an inference about a larger sample — and a single star correctly yields 0.
             double variance = 0;
             foreach (var s in stars) {
                 double d = s.HFR - mean;

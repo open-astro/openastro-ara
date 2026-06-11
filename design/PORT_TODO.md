@@ -173,11 +173,9 @@ Remaining §2105 stubs (each a meatier follow-up, all still dead code until Live
   - **Annotation still deferred:** `DetectStars(annotateImage: true)` is a documented no-op (logs a Debug line) —
     drawing the star overlay onto the rendered buffer needs a §2105 annotator (SkiaSharp draw path). Not on the
     v0.0.1 critical path (annotation is a Live-View/§64 nicety); wire it when Live View lands.
-  - **Atomic analysis publish deferred:** `UpdateAnalysis` writes `StarList` before `DetectedStars` so the common
-    count-observer sees a consistent view, but the four `StarDetectionAnalysis` setters still raise four separate
-    `PropertyChanged` events — an `HFR`- or `StarList`-bound observer can wake mid-update. Harmless today (no live
-    binding). Proper fix = a coalesced batch-update on `StarDetectionAnalysis` (one notification), best designed
-    alongside the first real §59-autofocus / Live-View consumer. (#358 round-5 review.)
+  - ✅ **Atomic analysis publish:** DONE (#358 round-7). `IStarDetectionAnalysis.SetAll(...)` writes all four
+    backing fields before raising any `PropertyChanged`, so a §59-autofocus / Live-View observer woken by one
+    event always reads a consistent view (never new HFR with a stale star count). `UpdateAnalysis` uses it. +test.
 - **`BaseImageData.RenderBitmapSource` Bayered note**: renders the raw mosaic (grey CFA) until the render path
   calls Debayer for OSC display (the data path exists as of #357; the display wiring is Live-View-gated).
 - Also still stubbed (lower priority, libraw/DSLR): `ExposureData.CreateRAWExposureData`, `BaseImageData.SaveTiff`,

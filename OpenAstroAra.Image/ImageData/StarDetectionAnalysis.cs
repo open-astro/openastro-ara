@@ -1,7 +1,7 @@
 #region "copyright"
 
 /*
-    Copyright © 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
+    Copyright ï¿½ 2016 - 2024 Stefan Berg <isbeorn86+NINA@googlemail.com> and the N.I.N.A. contributors
 
     This file is part of N.I.N.A. - Nighttime Imaging 'N' Astronomy.
 
@@ -58,6 +58,20 @@ namespace OpenAstroAra.Image.ImageData {
         }
 
         public StarDetectionAnalysis() {
+        }
+
+        public void SetAll(double hfr, double hfrStDev, int detectedStars, IReadOnlyList<DetectedStar> starList) {
+            // Atomic publish: write every backing field first, THEN raise the change notifications, so any
+            // observer woken by one event already sees all four properties consistent (never new HFR with a
+            // stale DetectedStars/StarList). The per-property setters remain for callers that set one field.
+            this._hfr = hfr;
+            this._hfrStDev = hfrStDev;
+            this._detectedStars = detectedStars;
+            this._starList = starList;
+            this.RaisePropertyChanged(nameof(this.HFR));
+            this.RaisePropertyChanged(nameof(this.HFRStDev));
+            this.RaisePropertyChanged(nameof(this.DetectedStars));
+            this.RaisePropertyChanged(nameof(this.StarList));
         }
     }
 }
