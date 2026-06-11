@@ -160,7 +160,7 @@ public sealed partial class GuiderRecoveryCoordinator {
         }
 
         LogRecoveryFailed();
-        await NotifyFailedAsync(ct).ConfigureAwait(false);
+        await NotifyFailedAsync(nudged, ct).ConfigureAwait(false);
         return GuiderRecoveryOutcome.Failed;
     }
 
@@ -182,24 +182,30 @@ public sealed partial class GuiderRecoveryCoordinator {
             "Guider not auto-recoverable here",
             "Lost the guider link, but automatic recovery isn't available on this host. Restart the guider service manually."), ct);
 
-    private async Task NotifyFailedAsync(CancellationToken ct) {
+    private async Task NotifyFailedAsync(bool nudged, CancellationToken ct) {
         await _notifications.CreateAsync(NewNotification(
             NotificationSeverity.Critical,
             "Guider failed to recover",
             "The guider daemon did not come back. Guiding is unavailable until it is restored."), ct)
             .ConfigureAwait(false);
 
-        var now = DateTimeOffset.UtcNow;
+        // Only claim an auto-action if we actually issued the restart. If the unit stayed `activating`
+        // the whole window, systemd was retrying on its own and ARA never nudged it.
+        var description = nudged
+            ? $"The {SystemctlGuiderProcessSupervisor.Unit} guider daemon did not return to active despite a restart request."
+            : $"The {SystemctlGuiderProcessSupervisor.Unit} guider daemon did not return to active within the recovery window.";
         await _diagnostics.CreateEventAsync(
             new DiagnosticEventDto(
                 Id: Guid.NewGuid(),
                 EventType: "guider.process.failed",
                 Severity: DiagnosticHealth.Red,
-                Description: $"The {SystemctlGuiderProcessSupervisor.Unit} guider daemon did not return to active after a crash, despite a restart request.",
-                DetectedUtc: now,
+                Description: description,
+                DetectedUtc: DateTimeOffset.UtcNow,
                 ClearedUtc: null,
-                AutoActionTaken: true,
-                AutoActionDescription: $"Requested 'systemctl restart {SystemctlGuiderProcessSupervisor.Unit}'."),
+                AutoActionTaken: nudged,
+                AutoActionDescription: nudged
+                    ? $"Requested 'systemctl restart {SystemctlGuiderProcessSupervisor.Unit}'."
+                    : null),
             recommendedAction: $"Check the guider service: 'systemctl status {SystemctlGuiderProcessSupervisor.Unit}' and its journal.",
             autoCorrectible: false,
             ct).ConfigureAwait(false);

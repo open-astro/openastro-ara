@@ -143,8 +143,28 @@ namespace OpenAstroAra.Test {
             notifications.Verify(n => n.CreateAsync(
                 It.Is<NotificationDto>(x => x.Severity == NotificationSeverity.Critical), It.IsAny<CancellationToken>()),
                 Times.Once);
+            // We did nudge a restart, so the diagnostic claims the auto-action.
             diagnostics.Verify(d => d.CreateEventAsync(
-                It.Is<DiagnosticEventDto>(x => x.Severity == DiagnosticHealth.Red && x.EventType == "guider.process.failed"),
+                It.Is<DiagnosticEventDto>(x => x.Severity == DiagnosticHealth.Red
+                    && x.EventType == "guider.process.failed" && x.AutoActionTaken),
+                It.IsAny<string?>(), It.IsAny<bool?>(), It.IsAny<CancellationToken>()),
+                Times.Once);
+        }
+
+        [Test]
+        public async Task Persistent_activating_fails_without_claiming_a_restart_it_never_issued() {
+            // systemd keeps trying on its own (always activating) but never finishes within the window.
+            var supervisor = new FakeSupervisor(GuiderProcessStatus.Activating);
+            var coordinator = NewCoordinator(supervisor, out _, out var diagnostics);
+
+            var outcome = await coordinator.RecoverAsync(CancellationToken.None);
+
+            Assert.That(outcome, Is.EqualTo(GuiderRecoveryOutcome.Failed));
+            Assert.That(supervisor.RestartCount, Is.Zero, "activating never triggers a nudge");
+            // ARA never restarted it, so the diagnostic must NOT claim an auto-action.
+            diagnostics.Verify(d => d.CreateEventAsync(
+                It.Is<DiagnosticEventDto>(x => x.EventType == "guider.process.failed"
+                    && !x.AutoActionTaken && x.AutoActionDescription == null),
                 It.IsAny<string?>(), It.IsAny<bool?>(), It.IsAny<CancellationToken>()),
                 Times.Once);
         }
