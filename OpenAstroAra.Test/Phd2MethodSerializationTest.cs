@@ -99,5 +99,25 @@ namespace OpenAstroAra.Test {
             Assert.That(p.ContainsKey("guide_speed"), Is.False);
             Assert.That(p.ContainsKey("calibration_duration"), Is.False);
         }
+
+        [Test]
+        public void SetProfileSetup_calibration_and_binning_fields_use_guider_names() {
+            // Lock the calibration_* names against the authoritative guider contract
+            // (openastro-guider/doc/jsonrpc_api.md: calibration_duration 50..60000, calibration_distance
+            // 5..200 — NOT the playbook's stale PHD2-era `calibration_step_ms`).
+            var json = Serialize(new Phd2SetProfileSetup {
+                Parameters = new() {
+                    CameraBinning = 1,
+                    GuideSpeed = 0.5,
+                    CalibrationDuration = 750,
+                    CalibrationDistance = 25,
+                },
+            });
+            var p = (JObject)json["params"]!;
+            Assert.That(p["camera_binning"]!.Value<int>(), Is.EqualTo(1));
+            Assert.That(p["guide_speed"]!.Value<double>(), Is.EqualTo(0.5));
+            Assert.That(p["calibration_duration"]!.Value<int>(), Is.EqualTo(750));
+            Assert.That(p["calibration_distance"]!.Value<int>(), Is.EqualTo(25));
+        }
     }
 }
