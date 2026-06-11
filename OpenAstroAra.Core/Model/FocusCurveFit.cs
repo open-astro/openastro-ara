@@ -60,6 +60,41 @@ namespace OpenAstroAra.Core.Model {
         /// <summary>Minimum distinct positions needed to fit a parabola.</summary>
         public const int MinPoints = 3;
 
+        /// <summary>§59.8: below this parabolic R², <see cref="FitBest"/> falls back to a hyperbolic fit.</summary>
+        public const double HyperbolicFallbackRSquared = 0.85;
+
+        /// <summary>
+        /// §59.8 best-of fit: fit both models and apply <see cref="SelectBest"/>. Returns <c>null</c> only
+        /// when neither model can be fit at all. NOTE: empirically the parabola wins for essentially all
+        /// well-behaved focus curves — a clean symmetric curve fits a parabola at R² ≈ 0.93 (above the
+        /// fallback threshold), and the kinds of deviation that drop the parabola below it (asymmetry, a
+        /// near-zero deep centre) also make the hyperbola unusable. So the hyperbolic branch is a faithful
+        /// §59.8 safety net rather than a common path; the hyperbola's real use is as a user-selectable
+        /// method via <see cref="FitHyperbolic"/> directly.
+        /// </summary>
+        public static FocusCurveFitResult? FitBest(IReadOnlyList<FocusPoint> points) =>
+            SelectBest(FitParabolic(points), FitHyperbolic(points));
+
+        /// <summary>
+        /// §59.8 selection rule over two already-computed fits: keep the parabola when it's a usable minimum
+        /// with R² ≥ <see cref="HyperbolicFallbackRSquared"/>; otherwise fall back to the hyperbola, returning
+        /// whichever usable fit scores higher (parabola wins ties). Returns the parabola (possibly itself
+        /// unusable/null) when the hyperbola isn't usable. Pure function — no data required to exercise every
+        /// branch, including the threshold direction.
+        /// </summary>
+        public static FocusCurveFitResult? SelectBest(FocusCurveFitResult? parabola, FocusCurveFitResult? hyperbola) {
+            if (parabola is { IsUsable: true } && parabola.RSquared >= HyperbolicFallbackRSquared) {
+                return parabola; // a good parabola is the cheapest sufficient answer
+            }
+            if (hyperbola is not { IsUsable: true }) {
+                return parabola; // hyperbola unusable → best we have is the parabola (possibly itself unusable)
+            }
+            if (parabola is not { IsUsable: true }) {
+                return hyperbola;
+            }
+            return hyperbola.RSquared > parabola.RSquared ? hyperbola : parabola;
+        }
+
         /// <summary>
         /// Fit <paramref name="points"/> with a weighted parabola <c>HFR = A·x² + B·x + C</c> (weights =
         /// star counts, so noisy low-star samples pull the curve less) and return the vertex. Returns
@@ -69,6 +104,82 @@ namespace OpenAstroAra.Core.Model {
         /// </summary>
         public static FocusCurveFitResult? FitParabolic(IReadOnlyList<FocusPoint> points) {
             ArgumentNullException.ThrowIfNull(points);
+            var sol = SolveCentredParabola(points);
+            if (sol is null) {
+                return null;
+            }
+            var s = sol.Value;
+            bool upward = s.A > 0 && double.IsFinite(s.A) && double.IsFinite(s.B) && double.IsFinite(s.C);
+            double predictedHfr = upward ? (s.C - (s.B * s.B) / (4 * s.A)) : double.NaN;
+            // Usable only when it's a real focus minimum: an upward curve whose vertex HFR is positive. A
+            // downward curve OR a vertex that dips below zero HFR (a numerical artefact of noisy/sparse data)
+            // is not usable — and in BOTH cases BestPosition is NaN, so a caller skipping the guard can't act
+            // on a plausible-looking-but-invalid position.
+            bool usable = upward && predictedHfr > 0;
+            double bestPosition = usable ? s.XBar - s.B / (2 * s.A) : double.NaN;
+            double rSquared = WeightedRSquared(points, p => {
+                double x = p.Position - s.XBar;
+                return s.A * x * x + s.B * x + s.C; // the parabola value IS the predicted HFR
+            });
+
+            return new FocusCurveFitResult {
+                Method = AFCurveFitting.PARABOLIC,
+                BestPosition = bestPosition,
+                PredictedHfr = predictedHfr,
+                RSquared = rSquared,
+                IsUsable = usable,
+                WithinSampledRange = usable && bestPosition >= s.MinX && bestPosition <= s.MaxX,
+            };
+        }
+
+        /// <summary>
+        /// Fit <paramref name="points"/> with a focus hyperbola <c>HFR = √(a² + b²·(x − c)²)</c> (§59.8
+        /// fallback for unusual star profiles). The trick: squaring gives <c>HFR² = b²·x² − 2b²c·x +
+        /// (a² + b²c²)</c>, a parabola in HFR² — so this reuses the same conditioned solve on
+        /// <c>(position, HFR²)</c>, reads the vertex as best focus, and takes √ of the vertex value as the
+        /// predicted minimum HFR. R² is reported back in HFR units so it's directly comparable with
+        /// <see cref="FitParabolic"/>. Same null / <see cref="FocusCurveFitResult.IsUsable"/> contract.
+        /// </summary>
+        public static FocusCurveFitResult? FitHyperbolic(IReadOnlyList<FocusPoint> points) {
+            ArgumentNullException.ThrowIfNull(points);
+            var squared = new List<FocusPoint>(points.Count);
+            foreach (var p in points) {
+                squared.Add(new FocusPoint(p.Position, p.Hfr * p.Hfr, p.StarCount));
+            }
+            var sol = SolveCentredParabola(squared);
+            if (sol is null) {
+                return null;
+            }
+            var s = sol.Value;
+            bool upward = s.A > 0 && double.IsFinite(s.A) && double.IsFinite(s.B) && double.IsFinite(s.C);
+            double minHfrSq = upward ? (s.C - (s.B * s.B) / (4 * s.A)) : double.NaN; // = a², the squared min HFR
+            bool usable = upward && minHfrSq > 0;
+            double bestPosition = usable ? s.XBar - s.B / (2 * s.A) : double.NaN;
+            double predictedHfr = usable ? Math.Sqrt(minHfrSq) : double.NaN;
+            // R² in HFR units: the fitted hyperbola is √(the fitted HFR² parabola), clamped at 0 inside the √.
+            double rSquared = WeightedRSquared(points, p => {
+                double x = p.Position - s.XBar;
+                return Math.Sqrt(Math.Max(0, s.A * x * x + s.B * x + s.C));
+            });
+
+            return new FocusCurveFitResult {
+                Method = AFCurveFitting.HYPERBOLIC,
+                BestPosition = bestPosition,
+                PredictedHfr = predictedHfr,
+                RSquared = rSquared,
+                IsUsable = usable,
+                WithinSampledRange = usable && bestPosition >= s.MinX && bestPosition <= s.MaxX,
+            };
+        }
+
+        /// <summary>Centred parabola coefficients <c>y = A·(x−XBar)² + B·(x−XBar) + C</c> plus the sampled
+        /// position range. Shared by the parabolic + hyperbolic fits (the hyperbola fits this on HFR²).</summary>
+        private readonly record struct ParabolaSolution(double A, double B, double C, double XBar, double MinX, double MaxX);
+
+        // Solve the weighted normal equations for a parabola, pre-centring positions for numerical
+        // conditioning. Returns null for too-few-distinct-positions or a (relatively) singular system; the
+        // caller decides usability from the sign of A and the vertex. No upward/sign judgement here.
+        private static ParabolaSolution? SolveCentredParabola(IReadOnlyList<FocusPoint> points) {
             if (CountDistinctPositions(points) < MinPoints) {
                 return null;
             }
@@ -121,36 +232,29 @@ namespace OpenAstroAra.Core.Model {
             double a = Det3(t2, s3, s2, t1, s2, s1, t0, s1, s0) / det;
             double b = Det3(s4, t2, s2, s3, t1, s1, s2, t0, s0) / det;
             double c = Det3(s4, s3, t2, s3, s2, t1, s2, s1, t0) / det;
+            return new ParabolaSolution(a, b, c, xBar, minX, maxX);
+        }
 
-            bool upward = a > 0 && double.IsFinite(a) && double.IsFinite(b) && double.IsFinite(c);
-            double predictedHfr = upward ? (c - (b * b) / (4 * a)) : double.NaN;
-            // Usable only when it's a real focus minimum: an upward curve whose vertex HFR is positive. A
-            // downward curve OR a vertex that dips below zero HFR (a numerical artefact of noisy/sparse data)
-            // is not usable — and in BOTH cases BestPosition is NaN, so a caller skipping the guard can't act
-            // on a plausible-looking-but-invalid position.
-            bool usable = upward && predictedHfr > 0;
-            double bestPosition = usable ? xBar - b / (2 * a) : double.NaN;
-
-            // Weighted R² against the weighted mean of y (computed in the same centred coords).
-            double meanY = t0 / s0;
+        // Weighted R² of a fit against the data, both in HFR units: 1 − Σw(hfr − model)² / Σw(hfr − meanHfr)².
+        // `model` maps a point to its predicted HFR (the parabola value directly; the hyperbola's √ of it),
+        // so parabolic + hyperbolic R² are reported in the same units and are directly comparable. Returns 0
+        // for a degenerate (flat-HFR) data set.
+        private static double WeightedRSquared(IReadOnlyList<FocusPoint> points, Func<FocusPoint, double> model) {
+            double sw = 0, swy = 0;
+            foreach (var p in points) {
+                double w = Math.Max(1, p.StarCount);
+                sw += w;
+                swy += w * p.Hfr;
+            }
+            double meanY = swy / sw;
             double ssRes = 0, ssTot = 0;
             foreach (var p in points) {
                 double w = Math.Max(1, p.StarCount);
-                double x = p.Position - xBar;
-                double fit = a * x * x + b * x + c;
+                double fit = model(p);
                 ssRes += w * (p.Hfr - fit) * (p.Hfr - fit);
                 ssTot += w * (p.Hfr - meanY) * (p.Hfr - meanY);
             }
-            double rSquared = ssTot > 0 ? 1 - ssRes / ssTot : 0;
-
-            return new FocusCurveFitResult {
-                Method = AFCurveFitting.PARABOLIC,
-                BestPosition = bestPosition,
-                PredictedHfr = predictedHfr,
-                RSquared = rSquared,
-                IsUsable = usable,
-                WithinSampledRange = usable && bestPosition >= minX && bestPosition <= maxX,
-            };
+            return ssTot > 0 ? 1 - ssRes / ssTot : 0;
         }
 
         private static int CountDistinctPositions(IReadOnlyList<FocusPoint> points) {
