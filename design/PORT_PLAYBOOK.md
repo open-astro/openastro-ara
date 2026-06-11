@@ -1896,8 +1896,9 @@ brew install cfitsio
 BIN=OpenAstroAra.Server/bin/Release/net10.0/runtimes/osx-arm64/native
 mkdir -p "$BIN"
 cp -L /opt/homebrew/lib/libcfitsio.dylib "$BIN/libcfitsio.dylib"
-cp -L /opt/homebrew/lib/libcfitsio.dylib "$BIN/cfitsio.dylib"
 ```
+(`[DllImport("cfitsio")]` probes `libcfitsio.dylib` first on macOS, so the `lib`-prefixed
+name alone resolves — matching what the `CopyLibCfitsioMacOS` target copies.)
 A clean `dotnet build` wipes `bin/`, but the `CopyLibCfitsioMacOS` post-build target in
 `OpenAstroAra.Server.csproj` re-copies it automatically on every macOS build (guarded to
 macOS + the dylib existing, so it's a no-op on Linux/Windows/CI). The manual `cp` above is

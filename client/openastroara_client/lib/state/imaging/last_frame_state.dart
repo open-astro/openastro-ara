@@ -36,7 +36,9 @@ final captureInProgressProvider =
 /// bytes are released when the viewer moves on to the next frame.
 final framePreviewProvider =
     FutureProvider.autoDispose.family<Uint8List, String>((ref, id) async {
-  final servers = ref.watch(savedServersProvider).maybeWhen(
+  // Snapshot the server at fetch time (read, not watch): a later server-list
+  // change shouldn't re-fetch and blank the currently-displayed frame.
+  final servers = ref.read(savedServersProvider).maybeWhen(
         data: (list) => list,
         orElse: () => const <AraServer>[],
       );

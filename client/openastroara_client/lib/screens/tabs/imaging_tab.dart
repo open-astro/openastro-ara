@@ -89,6 +89,7 @@ class ImagingTab extends ConsumerWidget {
         frameId = await CameraExposureApi(server).takeOne(params);
       } catch (e) {
         if (context.mounted) {
+          messenger.hideCurrentSnackBar();
           messenger.showSnackBar(
             SnackBar(content: Text('Exposure failed: $e')),
           );
@@ -116,6 +117,7 @@ class ImagingTab extends ConsumerWidget {
         }
       } catch (e) {
         if (context.mounted) {
+          messenger.hideCurrentSnackBar();
           messenger.showSnackBar(
             SnackBar(content: Text(
                 'Exposure accepted but confirming the frame failed: $e')),
@@ -125,6 +127,8 @@ class ImagingTab extends ConsumerWidget {
       }
       // The widget can unmount during the final delay, after the loop exits.
       if (!context.mounted) return;
+      // Replace the "Exposing…" snackbar rather than queueing behind it.
+      messenger.hideCurrentSnackBar();
       if (landed) {
         lastFrame.set(frameId);
         // Force a re-fetch in case the same id was shown before.
