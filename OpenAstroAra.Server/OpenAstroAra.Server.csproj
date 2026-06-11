@@ -70,4 +70,21 @@
     <Content Update="templates\*.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <!-- macOS dev convenience (playbook §23.1): the §72 FITS P/Invoke loads `libcfitsio`, which
+       Homebrew installs to /opt/homebrew/lib — a path the .NET loader doesn't search, and macOS
+       SIP strips DYLD_* across the dotnet launcher so env-var overrides don't help. Copy it into
+       the output's native runtime dir where the loader does probe. Guarded to macOS + the dylib
+       actually existing (no-op on Linux/Windows/CI and when cfitsio isn't brew-installed), and
+       non-fatal so a missing dylib never breaks the build. The Linux artifact gets libcfitsio from
+       the .deb dependency, not here. -->
+  <Target Name="CopyLibCfitsioMacOS" AfterTargets="Build"
+          Condition="$([MSBuild]::IsOSPlatform('OSX')) And '$([System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture)' == 'Arm64' And Exists('/opt/homebrew/lib/libcfitsio.dylib')">
+    <!-- Apple Silicon only: the loader probes runtimes/osx-arm64/native, and Homebrew lives at
+         /opt/homebrew there. On Intel Macs the RID is osx-x64 (and brew is /usr/local), so the
+         architecture gate keeps this a true no-op rather than copying to the wrong native dir. -->
+    <Copy SourceFiles="/opt/homebrew/lib/libcfitsio.dylib"
+          DestinationFiles="$(OutDir)runtimes/osx-arm64/native/libcfitsio.dylib"
+          SkipUnchangedFiles="true" ContinueOnError="true" />
+  </Target>
+
 </Project>

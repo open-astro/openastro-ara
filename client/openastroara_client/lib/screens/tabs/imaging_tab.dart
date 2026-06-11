@@ -1,7 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../models/server.dart';
+import '../../services/camera_exposure_api.dart';
+import '../../services/frames_api.dart';
+import '../../state/imaging/exposure_state.dart';
+import '../../state/imaging/last_frame_state.dart';
 import '../../state/imaging/live_view_state.dart';
+import '../../state/saved_server_state.dart';
 import '../../widgets/imaging/diagnostic_panel.dart';
 import '../../widgets/imaging/exposure_controls_panel.dart';
 import '../../widgets/imaging/frame_viewer.dart';
@@ -19,6 +25,7 @@ class ImagingTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final liveViewOn = ref.watch(liveViewControllerProvider);
+    final exposing = ref.watch(captureInProgressProvider);
     return Column(
       children: [
         const _ImagingHeader(),
@@ -36,10 +43,7 @@ class ImagingTab extends ConsumerWidget {
               ),
               ExposureControlsPanel(
                 liveViewOn: liveViewOn,
-                onTakeOne: () {
-                  // Phase 12c.3: invoke /api/v1/sequence/exposure with the
-                  // current ExposureParams + the connected camera.
-                },
+                onTakeOne: exposing ? null : () => _takeOne(context, ref),
                 onLiveViewToggle: ref
                     .read(liveViewControllerProvider.notifier)
                     .set,
@@ -49,6 +53,99 @@ class ImagingTab extends ConsumerWidget {
         ),
       ],
     );
+  }
+
+  /// §14e Take One — fire a single exposure on the connected camera. The
+  /// daemon runs the capture in the background and registers the frame; we
+  /// just surface accepted/failed to the user.
+  Future<void> _takeOne(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final servers = ref.read(savedServersProvider).maybeWhen(
+          data: (list) => list,
+          orElse: () => const <AraServer>[],
+        );
+    if (servers.isEmpty) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Not connected to a server.')),
+      );
+      return;
+    }
+    final params = ref.read(exposureControllerProvider);
+    final server = servers.last;
+    // Notifier handles, captured before any await so the finally-reset and the
+    // result update don't go through WidgetRef after a possible unmount.
+    final progress = ref.read(captureInProgressProvider.notifier);
+    final lastFrame = ref.read(lastCapturedFrameIdProvider.notifier);
+    progress.set(true);
+    messenger.showSnackBar(
+      SnackBar(content: Text(
+          'Exposing ${params.exposure.inMilliseconds / 1000.0}s…')),
+    );
+    try {
+      // Phase 1 — the exposure POST. A failure here means the shot never
+      // started; the user should re-shoot.
+      final String frameId;
+      try {
+        frameId = await CameraExposureApi(server).takeOne(params);
+      } catch (e) {
+        if (context.mounted) {
+          messenger.hideCurrentSnackBar();
+          messenger.showSnackBar(
+            SnackBar(content: Text('Exposure failed: $e')),
+          );
+        }
+        return;
+      }
+      // Phase 2 — the POST returned 202; the capture (expose → download → FITS)
+      // runs in the background. Poll the catalog until the frame is registered.
+      // A failure here means the exposure was accepted but we couldn't confirm
+      // it landed — distinct remedy (retry the preview, don't re-shoot).
+      final api = FramesApi(server);
+      final deadline = DateTime.now()
+          .add(params.exposure + const Duration(seconds: 20));
+      var landed = false;
+      try {
+        while (DateTime.now().isBefore(deadline)) {
+          // Bail if the user navigated away mid-capture — stop polling and
+          // don't touch a detached scaffold.
+          if (!context.mounted) return;
+          if (await api.isRegistered(frameId)) {
+            landed = true;
+            break;
+          }
+          await Future<void>.delayed(const Duration(milliseconds: 500));
+        }
+      } catch (e) {
+        if (context.mounted) {
+          messenger.hideCurrentSnackBar();
+          messenger.showSnackBar(
+            SnackBar(content: Text(
+                'Exposure accepted but confirming the frame failed: $e')),
+          );
+        }
+        return;
+      }
+      // The widget can unmount during the final delay, after the loop exits.
+      if (!context.mounted) return;
+      // Replace the "Exposing…" snackbar rather than queueing behind it.
+      messenger.hideCurrentSnackBar();
+      if (landed) {
+        lastFrame.set(frameId);
+        // Force a re-fetch in case the same id was shown before.
+        ref.invalidate(framePreviewProvider(frameId));
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Frame captured.')),
+        );
+      } else {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Capture timed out.')),
+        );
+      }
+    } finally {
+      // Direct call on the captured notifier — safe even if the widget
+      // unmounted (the notifier lives in the ProviderContainer).
+      progress.set(false);
+    }
   }
 }
 
