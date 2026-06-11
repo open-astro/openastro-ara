@@ -64,16 +64,28 @@ namespace OpenAstroAra.Core.Model {
         public const double HyperbolicFallbackRSquared = 0.85;
 
         /// <summary>
-        /// §59.8 best-of fit: try the parabola; if it's not a usable minimum or its R² is below
-        /// <see cref="HyperbolicFallbackRSquared"/>, try the hyperbola and return whichever usable fit scores
-        /// higher (parabola wins ties). Returns <c>null</c> only when neither model can be fit at all.
+        /// §59.8 best-of fit: fit both models and apply <see cref="SelectBest"/>. Returns <c>null</c> only
+        /// when neither model can be fit at all. NOTE: empirically the parabola wins for essentially all
+        /// well-behaved focus curves — a clean symmetric curve fits a parabola at R² ≈ 0.93 (above the
+        /// fallback threshold), and the kinds of deviation that drop the parabola below it (asymmetry, a
+        /// near-zero deep centre) also make the hyperbola unusable. So the hyperbolic branch is a faithful
+        /// §59.8 safety net rather than a common path; the hyperbola's real use is as a user-selectable
+        /// method via <see cref="FitHyperbolic"/> directly.
         /// </summary>
-        public static FocusCurveFitResult? FitBest(IReadOnlyList<FocusPoint> points) {
-            var parabola = FitParabolic(points);
+        public static FocusCurveFitResult? FitBest(IReadOnlyList<FocusPoint> points) =>
+            SelectBest(FitParabolic(points), FitHyperbolic(points));
+
+        /// <summary>
+        /// §59.8 selection rule over two already-computed fits: keep the parabola when it's a usable minimum
+        /// with R² ≥ <see cref="HyperbolicFallbackRSquared"/>; otherwise fall back to the hyperbola, returning
+        /// whichever usable fit scores higher (parabola wins ties). Returns the parabola (possibly itself
+        /// unusable/null) when the hyperbola isn't usable. Pure function — no data required to exercise every
+        /// branch, including the threshold direction.
+        /// </summary>
+        public static FocusCurveFitResult? SelectBest(FocusCurveFitResult? parabola, FocusCurveFitResult? hyperbola) {
             if (parabola is { IsUsable: true } && parabola.RSquared >= HyperbolicFallbackRSquared) {
                 return parabola; // a good parabola is the cheapest sufficient answer
             }
-            var hyperbola = FitHyperbolic(points);
             if (hyperbola is not { IsUsable: true }) {
                 return parabola; // hyperbola unusable → best we have is the parabola (possibly itself unusable)
             }
