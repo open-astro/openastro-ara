@@ -104,7 +104,7 @@ namespace OpenAstroAra.Core.Model {
         /// </summary>
         public static FocusCurveFitResult? FitParabolic(IReadOnlyList<FocusPoint> points) {
             ArgumentNullException.ThrowIfNull(points);
-            var sol = SolveCentredParabola(points);
+            var sol = SolveCentredParabola(points, static p => p.Hfr);
             if (sol is null) {
                 return null;
             }
@@ -142,11 +142,8 @@ namespace OpenAstroAra.Core.Model {
         /// </summary>
         public static FocusCurveFitResult? FitHyperbolic(IReadOnlyList<FocusPoint> points) {
             ArgumentNullException.ThrowIfNull(points);
-            var squared = new List<FocusPoint>(points.Count);
-            foreach (var p in points) {
-                squared.Add(new FocusPoint(p.Position, p.Hfr * p.Hfr, p.StarCount));
-            }
-            var sol = SolveCentredParabola(squared);
+            // Fit the parabola on HFR² directly via the selector — no squared-copy list is materialised.
+            var sol = SolveCentredParabola(points, static p => p.Hfr * p.Hfr);
             if (sol is null) {
                 return null;
             }
@@ -172,6 +169,97 @@ namespace OpenAstroAra.Core.Model {
             };
         }
 
+        /// <summary>
+        /// Fit two trend LINES — one to each arm of the V — and return their intersection as best focus
+        /// (§59.8 TRENDLINES). The points are sorted by position and split at the minimum-HFR sample into a
+        /// descending left arm and an ascending right arm; each arm is weighted-least-squares fit to a line
+        /// and the lines are intersected. Unlike the smooth-curve fits this ignores the bottom's curvature
+        /// and reads focus from the straight arms — robust on a rounded/flat-bottomed curve — at the cost of
+        /// needing ≥2 distinct positions per arm. Returns <c>null</c> for too few points; a result with
+        /// <see cref="FocusCurveFitResult.IsUsable"/> false when the arms don't form a proper V (left slope
+        /// ≥ 0, right slope ≤ 0, the minimum sits at an end, or a sub-zero intersection HFR).
+        /// </summary>
+        public static FocusCurveFitResult? FitTrendlines(IReadOnlyList<FocusPoint> points) {
+            ArgumentNullException.ThrowIfNull(points);
+            if (CountDistinctPositions(points) < MinPoints) {
+                return null;
+            }
+
+            var sorted = new List<FocusPoint>(points);
+            sorted.Sort((a, b) => a.Position.CompareTo(b.Position));
+
+            // Pivot at the minimum-HFR sample; it anchors (and is shared by) both arms.
+            int minIdx = 0;
+            for (int i = 1; i < sorted.Count; i++) {
+                if (sorted[i].Hfr < sorted[minIdx].Hfr) {
+                    minIdx = i;
+                }
+            }
+            var left = sorted.GetRange(0, minIdx + 1);
+            var right = sorted.GetRange(minIdx, sorted.Count - minIdx);
+            double minX = sorted[0].Position, maxX = sorted[^1].Position;
+
+            var unusable = new FocusCurveFitResult {
+                Method = AFCurveFitting.TRENDLINES, BestPosition = double.NaN, PredictedHfr = double.NaN,
+                RSquared = 0, IsUsable = false, WithinSampledRange = false,
+            };
+            // Each arm needs ≥2 distinct positions to define a line; a minimum at either end leaves one arm a point.
+            if (CountDistinctPositions(left) < 2 || CountDistinctPositions(right) < 2) {
+                return unusable;
+            }
+
+            // Centre on the pivot position for conditioning; lines fit in x' = x − x0.
+            double x0 = sorted[minIdx].Position;
+            if (!TryFitLine(left, x0, out double mL, out double bL) || !TryFitLine(right, x0, out double mR, out double bR)) {
+                return unusable;
+            }
+
+            bool properV = mL < 0 && mR > 0; // descending then ascending
+            double xStar = properV ? (bR - bL) / (mL - mR) : double.NaN; // mL·x' + bL = mR·x' + bR
+            double predictedHfr = properV ? mL * xStar + bL : double.NaN;
+            bool usable = properV && double.IsFinite(predictedHfr) && predictedHfr > 0;
+            double bestPosition = usable ? x0 + xStar : double.NaN;
+
+            // Piecewise R²: each point against its own arm's line, split at the intersection.
+            double rSquared = usable
+                ? WeightedRSquared(points, p => {
+                    double x = p.Position - x0;
+                    return x <= xStar ? mL * x + bL : mR * x + bR;
+                })
+                : 0;
+
+            return new FocusCurveFitResult {
+                Method = AFCurveFitting.TRENDLINES,
+                BestPosition = bestPosition,
+                PredictedHfr = predictedHfr,
+                RSquared = rSquared,
+                IsUsable = usable,
+                WithinSampledRange = usable && bestPosition >= minX && bestPosition <= maxX,
+            };
+        }
+
+        // Weighted least-squares line y = m·(x−x0) + b over one arm. False on a degenerate arm (no x spread).
+        private static bool TryFitLine(IReadOnlyList<FocusPoint> arm, double x0, out double m, out double b) {
+            double sw = 0, swx = 0, swy = 0, swxx = 0, swxy = 0;
+            foreach (var p in arm) {
+                double w = Math.Max(1, p.StarCount);
+                double x = p.Position - x0, y = p.Hfr;
+                sw += w;
+                swx += w * x;
+                swy += w * y;
+                swxx += w * x * x;
+                swxy += w * x * y;
+            }
+            double denom = sw * swxx - swx * swx; // ∝ weighted variance of x ≥ 0; 0 ⇒ no x spread
+            if (denom <= 0 || denom < 1e-10 * Math.Max(1, sw * swxx)) {
+                m = b = double.NaN;
+                return false;
+            }
+            m = (sw * swxy - swx * swy) / denom;
+            b = (swy - m * swx) / sw;
+            return double.IsFinite(m) && double.IsFinite(b);
+        }
+
         /// <summary>Centred parabola coefficients <c>y = A·(x−XBar)² + B·(x−XBar) + C</c> plus the sampled
         /// position range. Shared by the parabolic + hyperbolic fits (the hyperbola fits this on HFR²).</summary>
         private readonly record struct ParabolaSolution(double A, double B, double C, double XBar, double MinX, double MaxX);
@@ -179,7 +267,7 @@ namespace OpenAstroAra.Core.Model {
         // Solve the weighted normal equations for a parabola, pre-centring positions for numerical
         // conditioning. Returns null for too-few-distinct-positions or a (relatively) singular system; the
         // caller decides usability from the sign of A and the vertex. No upward/sign judgement here.
-        private static ParabolaSolution? SolveCentredParabola(IReadOnlyList<FocusPoint> points) {
+        private static ParabolaSolution? SolveCentredParabola(IReadOnlyList<FocusPoint> points, Func<FocusPoint, double> ySelector) {
             if (CountDistinctPositions(points) < MinPoints) {
                 return null;
             }
@@ -208,7 +296,7 @@ namespace OpenAstroAra.Core.Model {
             double t0 = 0, t1 = 0, t2 = 0;
             foreach (var p in points) {
                 double w = Math.Max(1, p.StarCount);
-                double x = p.Position - xBar, y = p.Hfr;
+                double x = p.Position - xBar, y = ySelector(p);
                 double x2 = x * x;
                 s0 += w;
                 s1 += w * x;
