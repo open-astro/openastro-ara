@@ -36,6 +36,9 @@ public interface ICenteringService {
     /// Centre the mount on <paramref name="target"/>: capture, plate-solve, sync, and re-slew until the centre
     /// is within the profile's centering threshold (or attempts are exhausted). Returns the final solve result
     /// (its <see cref="PlateSolveResult.Success"/> reflects whether centering converged).
+    /// <paramref name="solveProgress"/> surfaces per-solve sub-progress (the inner loop) and
+    /// <paramref name="progress"/> the overall status; both optional.
     /// </summary>
-    Task<PlateSolveResult> CenterOnTarget(Coordinates target, IProgress<ApplicationStatus>? progress, CancellationToken token);
+    Task<PlateSolveResult> CenterOnTarget(Coordinates target, IProgress<PlateSolveProgress>? solveProgress,
+        IProgress<ApplicationStatus>? progress, CancellationToken token);
 }

@@ -59,12 +59,13 @@ namespace OpenAstroAra.Test {
 
             var expected = new PlateSolveResult { Success = true };
             CenterSolveParameter? captured = null;
+            CaptureSequence? capturedSeq = null;
             var centeringSolver = new Mock<ICenteringSolver>();
             centeringSolver
                 .Setup(s => s.Center(It.IsAny<CaptureSequence>(), It.IsAny<CenterSolveParameter>(),
                     It.IsAny<IProgress<PlateSolveProgress>>(), It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
                 .Callback<CaptureSequence, CenterSolveParameter, IProgress<PlateSolveProgress>?, IProgress<ApplicationStatus>?, CancellationToken>(
-                    (_, p, _, _, _) => captured = p)
+                    (seq, p, _, _, _) => { capturedSeq = seq; captured = p; })
                 .ReturnsAsync(expected);
 
             var factory = new Mock<IPlateSolverFactory>();
@@ -78,7 +79,7 @@ namespace OpenAstroAra.Test {
             var sut = CreateSUT(profileService.Object, factory.Object);
             var target = new Coordinates(Angle.ByHours(5), Angle.ByDegree(20), Epoch.J2000);
 
-            var result = await sut.CenterOnTarget(target, null, CancellationToken.None);
+            var result = await sut.CenterOnTarget(target, null, null, CancellationToken.None);
 
             Assert.That(result, Is.SameAs(expected));
             Assert.That(captured, Is.Not.Null);
@@ -87,13 +88,28 @@ namespace OpenAstroAra.Test {
             Assert.That(captured.Threshold, Is.EqualTo(2.0));
             Assert.That(captured.Attempts, Is.EqualTo(3));
             Assert.That(captured.Coordinates!.RA, Is.EqualTo(5).Within(1e-6)); // target threaded through
+            // The solve exposure is built from the profile too.
+            Assert.That(capturedSeq, Is.Not.Null);
+            Assert.That(capturedSeq!.ExposureTime, Is.EqualTo(5));
+            Assert.That(capturedSeq.Gain, Is.EqualTo(120));
+            Assert.That(capturedSeq.Binning.X, Is.EqualTo(1));
         }
 
         [Test]
         public void CenterOnTarget_throws_on_a_null_target() {
             var sut = CreateSUT(new Mock<IProfileService>().Object, new Mock<IPlateSolverFactory>().Object);
-            Assert.Throws<ArgumentNullException>(
-                () => sut.CenterOnTarget(null!, null, CancellationToken.None));
+            Assert.ThrowsAsync<ArgumentNullException>(
+                () => sut.CenterOnTarget(null!, null, null, CancellationToken.None));
+        }
+
+        [Test]
+        public void CenterOnTarget_throws_when_no_active_profile_is_loaded() {
+            var profileService = new Mock<IProfileService>();
+            profileService.SetupGet(p => p.ActiveProfile).Returns((IProfile)null!);
+            var sut = CreateSUT(profileService.Object, new Mock<IPlateSolverFactory>().Object);
+            var target = new Coordinates(Angle.ByHours(5), Angle.ByDegree(20), Epoch.J2000);
+            Assert.ThrowsAsync<PlateSolverConfigurationException>(
+                () => sut.CenterOnTarget(target, null, null, CancellationToken.None));
         }
 
         [Test]
@@ -104,8 +120,8 @@ namespace OpenAstroAra.Test {
             profileService.SetupGet(p => p.ActiveProfile.CameraSettings.PixelSize).Returns(3.8);
             var sut = CreateSUT(profileService.Object, new Mock<IPlateSolverFactory>().Object);
             var target = new Coordinates(Angle.ByHours(5), Angle.ByDegree(20), Epoch.J2000);
-            Assert.Throws<PlateSolverConfigurationException>(
-                () => sut.CenterOnTarget(target, null, CancellationToken.None));
+            Assert.ThrowsAsync<PlateSolverConfigurationException>(
+                () => sut.CenterOnTarget(target, null, null, CancellationToken.None));
         }
     }
 }

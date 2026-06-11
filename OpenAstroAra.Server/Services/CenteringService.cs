@@ -55,7 +55,8 @@ public class CenteringService : ICenteringService {
         this.domeFollower = domeFollower;
     }
 
-    public Task<PlateSolveResult> CenterOnTarget(Coordinates target, IProgress<ApplicationStatus>? progress, CancellationToken token) {
+    public async Task<PlateSolveResult> CenterOnTarget(Coordinates target, IProgress<PlateSolveProgress>? solveProgress,
+            IProgress<ApplicationStatus>? progress, CancellationToken token) {
         ArgumentNullException.ThrowIfNull(target);
 
         var profile = profileService.ActiveProfile
@@ -95,6 +96,8 @@ public class CenteringService : ICenteringService {
             ReattemptDelay = TimeSpan.FromMinutes(settings.ReattemptDelay),
         };
 
-        return centeringSolver.Center(sequence, parameter, solveProgress: null, progress: progress, ct: token);
+        // await (not just return) so the guard throws above and any solver fault surface uniformly through the
+        // returned task rather than synchronously at the call site.
+        return await centeringSolver.Center(sequence, parameter, solveProgress, progress, ct: token);
     }
 }
