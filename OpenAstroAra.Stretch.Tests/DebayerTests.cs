@@ -146,4 +146,84 @@ public class DebayerTests {
         ushort[] mosaic = { 1, 2 };
         Assert.Throws<ArgumentException>(() => Debayer.SuperPixel(mosaic, 2, 1, BayerPattern.RGGB));
     }
+
+    // Full-resolution bilinear: a per-channel-uniform mosaic (every R cell 1000, G 2000, B 3000) must
+    // reconstruct (1000, 2000, 3000) at every interior pixel, whatever its CFA site — proving each
+    // plane picks the right channel from the right neighbours. Output is full-size (width×height).
+    private static ushort[] UniformRggbMosaic(int w, int h) {
+        var m = new ushort[w * h];
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                bool ex = (x & 1) == 0, ey = (y & 1) == 0;
+                m[y * w + x] = (ushort)(ex && ey ? 1000 : (!ex && !ey ? 3000 : 2000)); // R / B / G
+            }
+        }
+        return m;
+    }
+
+    [Fact]
+    public void Bilinear_reconstructs_full_resolution_channels_at_interior_pixels() {
+        int w = 6, h = 6;
+        var (r, g, b) = Debayer.Bilinear(UniformRggbMosaic(w, h), w, h, BayerPattern.RGGB);
+        Assert.Equal(w * h, r.Length);
+        Assert.Equal(w * h, g.Length);
+        Assert.Equal(w * h, b.Length);
+        // Check an interior pixel of each CFA site type: red (2,2), green-on-red-row (3,2), blue (3,3).
+        foreach (var (x, y) in new[] { (2, 2), (3, 2), (3, 3) }) {
+            int i = y * w + x;
+            Assert.Equal(1000, r[i]);
+            Assert.Equal(2000, g[i]);
+            Assert.Equal(3000, b[i]);
+        }
+    }
+
+    // R/B tile positions per pattern — independent of the production CellOffsets, so a swap there is caught.
+    private static (int rc, int rr, int bc, int br) Cells(BayerPattern p) => p switch {
+        BayerPattern.RGGB => (0, 0, 1, 1),
+        BayerPattern.BGGR => (1, 1, 0, 0),
+        BayerPattern.GRBG => (1, 0, 0, 1),
+        BayerPattern.GBRG => (0, 1, 1, 0),
+        _ => (0, 0, 1, 1),
+    };
+
+    [Theory]
+    [InlineData(BayerPattern.RGGB)]
+    [InlineData(BayerPattern.BGGR)]
+    [InlineData(BayerPattern.GRBG)]
+    [InlineData(BayerPattern.GBRG)]
+    public void Bilinear_keeps_R_and_B_distinct_for_every_pattern(BayerPattern pattern) {
+        // R=1000 / B=3000 / G=2000 laid out for THIS pattern; debayering it must put 1000 in R and
+        // 3000 in B at a red site — a transposed R/B in CellOffsets would swap them.
+        int w = 6, h = 6;
+        var (rc, rr, bc, br) = Cells(pattern);
+        var m = new ushort[w * h];
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                int px = x & 1, py = y & 1;
+                m[y * w + x] = (ushort)((px == rc && py == rr) ? 1000 : ((px == bc && py == br) ? 3000 : 2000));
+            }
+        }
+        var (r, g, b) = Debayer.Bilinear(m, w, h, pattern);
+        int i = (rr + 2) * w + (rc + 2); // an interior red site
+        Assert.Equal(1000, r[i]);
+        Assert.Equal(2000, g[i]);
+        Assert.Equal(3000, b[i]);
+    }
+
+    [Fact]
+    public void Bilinear_edge_pixels_use_mirror_reflection_not_clamp() {
+        // Top-edge green at (1,0): its blue neighbours are (1,-1) and (1,1). Mirror reflects (1,-1)→(1,1),
+        // both blue=3000 → B=3000. Edge-clamping would sample (1,0) (green=2000) → a wrong B=2500.
+        int w = 6, h = 6;
+        var (r, g, b) = Debayer.Bilinear(UniformRggbMosaic(w, h), w, h, BayerPattern.RGGB);
+        int i = 0 * w + 1;
+        Assert.Equal(1000, r[i]);
+        Assert.Equal(2000, g[i]);
+        Assert.Equal(3000, b[i]); // 2500 under the old edge-clamping bug
+    }
+
+    [Fact]
+    public void Bilinear_rejects_mismatched_length() {
+        Assert.Throws<ArgumentException>(() => Debayer.Bilinear(new ushort[] { 1, 2, 3 }, 2, 2, BayerPattern.RGGB));
+    }
 }

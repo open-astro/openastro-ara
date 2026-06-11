@@ -13,8 +13,10 @@
 #endregion "copyright"
 
 using NUnit.Framework;
+using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Image.ImageData;
 using OpenAstroAra.Image.Interfaces;
+using System;
 using System.Threading.Tasks;
 
 namespace OpenAstroAra.Test {
@@ -65,6 +67,32 @@ namespace OpenAstroAra.Test {
 
             // A 12000 (median) pixel is brighter under the higher target background.
             Assert.That(bright.Image[1], Is.GreaterThan(dim.Image[1]));
+        }
+
+        [Test]
+        public void Debayer_produces_full_resolution_lrgb_planes() {
+            int w = 8, h = 8;
+            var raw = new BaseImageData(new ushort[w * h], w, h, 16, isBayered: true,
+                new ImageMetaData(), null!, null!, null!);
+            var rendered = raw.RenderImage();
+
+            var debayered = rendered.Debayer(saveColorChannels: true, saveLumChannel: true, SensorType.RGGB);
+
+            Assert.That(debayered.BayerPattern, Is.EqualTo(SensorType.RGGB));
+            Assert.That(debayered.SaveColorChannels, Is.True);
+            Assert.That(debayered.DebayeredData.Red.Length, Is.EqualTo(w * h));
+            Assert.That(debayered.DebayeredData.Green.Length, Is.EqualTo(w * h));
+            Assert.That(debayered.DebayeredData.Blue.Length, Is.EqualTo(w * h));
+            Assert.That(debayered.DebayeredData.Lum.Length, Is.EqualTo(w * h));
+        }
+
+        [Test]
+        public void Debayer_throws_for_an_unsupported_cfa() {
+            int w = 4, h = 4;
+            var raw = new BaseImageData(new ushort[w * h], w, h, 16, isBayered: true,
+                new ImageMetaData(), null!, null!, null!);
+            var rendered = raw.RenderImage();
+            Assert.Throws<NotSupportedException>(() => rendered.Debayer(bayerPattern: SensorType.CMYG));
         }
 
         [Test]
