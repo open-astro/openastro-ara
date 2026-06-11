@@ -31,6 +31,7 @@ using OpenAstroAra.Sequencer.SequenceItem.Switch;
 using OpenAstroAra.Sequencer.SequenceItem.Telescope;
 using OpenAstroAra.Sequencer.SequenceItem.Utility;
 using OpenAstroAra.Sequencer.Trigger;
+using OpenAstroAra.Sequencer.Trigger.MeridianFlip;
 using OpenAstroAra.Sequencer.Utility.DateTimeProvider;
 using OpenAstroAra.Server.Services.Equipment;
 using System.Windows.Data;
@@ -137,7 +138,8 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
             IFlatDeviceMediator? flatDeviceMediator = null,
             IWeatherDataMediator? weatherDataMediator = null,
             IProfileService? profileService = null,
-            IImagingMediator? imagingMediator = null) {
+            IImagingMediator? imagingMediator = null,
+            IMeridianFlipExecutor? meridianFlipExecutor = null) {
         // §38k-9 … §38k-22 — equipment-mediator stubs default to no-op headless
         // impls so call sites that don't yet have real Alpaca-backed mediators
         // still get a usable prototype set. As real drivers land (§14e Alpaca
@@ -170,6 +172,10 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
         flatDeviceMediator ??= new HeadlessFlatDeviceMediator();
         weatherDataMediator ??= new HeadlessWeatherDataMediator();
         profileService ??= new HeadlessProfileService();
+        // §58 — the meridian-flip trigger needs an IMeridianFlipExecutor to construct. The throwing
+        // placeholder keeps the prototype JSON-resolvable for clone/validate; Program.cs hands in the real
+        // §58.4 MeridianFlipExecutor so an executed flip actually runs the recovery sequence.
+        meridianFlipExecutor ??= new PlaceholderMeridianFlipExecutor();
 
         return new HeadlessSequencerFactory(
             items: new List<ISequenceItem> {
@@ -284,6 +290,13 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
                 new SequenceRootContainer(),
                 new SequentialContainer(),
                 new ParallelContainer(),
+            },
+            triggers: new List<ISequenceTrigger> {
+                // §58 — the meridian-flip trigger. Decision logic (#362) depends only on the telescope mediator
+                // + profile; the §58.4 orchestration runs through the injected executor. Registering the
+                // prototype lets a saved sequence body with a MeridianFlipTrigger resolve to the real trigger
+                // (rather than falling back to UnknownSequenceTrigger).
+                new MeridianFlipTrigger(profileService, telescopeMediator, meridianFlipExecutor),
             });
     }
 }

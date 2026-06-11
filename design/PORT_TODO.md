@@ -297,3 +297,34 @@ but isn't registered yet) instead of the `null!` ctor args.
     `NotSupportedException` from `RenderImage`/`DetectStars` when constructed without star services — so a
     missing-star-service frame fails loud + local instead of an opaque NRE. (Out of scope for the solve
     endpoint, which never calls those.)
+
+### §58.9 unattended meridian-flip safety layers (from §58.4 executor)
+The §58.4 `MeridianFlipExecutor` (Server) ships the core recovery sequence — stop guiding → pass meridian →
+flip slew → recenter → resume guiding → settle → §58.5 side-of-pier check — faithfully ported from NINA's
+`MeridianFlipVM.DoMeridianFlip`. Its failure path is NINA's (restore tracking + resume guiding + halt the
+sequence). The enhanced **§58.9 four-layer unattended-safety pipeline** is a deliberate follow-up:
+- **Layer 1 — pre-flight flight check** (~2 min before flip): endpoint-altitude prediction (skip target if
+  below the hard floor), mount-health probe, required-equipment-connected check (+ §42.3 hot-reconnect), sane
+  predicted slew duration.
+- **Layer 2 — in-slew watchdog**: sample mount state every 5 s — abort on stalled position (15 s no-change),
+  hard timeout (min of 3× predicted / 5 min), Alpaca fault events, or unchanged pier side after `IsSlewing`
+  clears. The executor currently fails the flip only when `telescopeMediator.MeridianFlip` returns false/throws.
+- **Layer 3 — post-flip verification gate**: the recenter is currently *best-effort* (a failed solve logs +
+  continues, matching NINA). §58.9 makes it a HARD gate (imaging does NOT resume on solve failure; solved
+  position must be within ±2° of intent).
+- **Layer 4 — safe-rest state on any failure**: park (if `CanPark`) else stop tracking + stop guider; §35.5
+  looping alarm audio. The executor instead re-enables tracking (NINA behaviour) to keep the target.
+
+Also follow-ups: **§58.7 failure notifications** (the executor logs via `Logger`; wiring `INotificationService`
+for the slew-retry/solve-fail/guider-recal-fail Critical/Urgent notifications is deferred to avoid coupling the
+unit-testable core to the notification surface), **§58.8 first-flip 60 s confirmation**, **§58.10 unattended-hours
+severity escalation**, and the **re-focus-after-flip** step (gated on the live focuser AF V-curve sweep, itself a
+focuser-hardware blocker). The §58 profile block (`refocus_after_flip` policy, `guider_recal` mode,
+`first_flip_confirmed`) is not yet on ARA's profile model — these land with the profile-schema extension.
+
+### IDomeFollower.TriggerTelescopeSync has no cancellation token (from #366 review r2)
+`MeridianFlipExecutor.SynchronizeDome`'s non-following-dome path calls `IDomeFollower.TriggerTelescopeSync()`,
+which takes no `CancellationToken` (unlike `WaitForDomeSynchronization(token)` on the following path) — so a
+non-following dome sync can't be cancelled mid-slew. Inherited interface shape; bounded impact (best-effort,
+exceptions swallowed). Fix is a shared-interface change (`IDomeFollower` + its impls), out of scope for the
+§58.4 executor PR — fold into a dome-mediator follow-up that threads cancellation through the sync seam.

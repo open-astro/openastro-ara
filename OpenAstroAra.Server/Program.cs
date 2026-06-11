@@ -146,6 +146,11 @@ public partial class Program {
         builder.Services.AddSingleton<OpenAstroAra.Server.Services.IPlateSolveService, OpenAstroAra.Server.Services.PlateSolveService>();
         // §28 centering — slew → solve → sync → re-slew loop over live equipment (the §58.4 flip recenter uses it).
         builder.Services.AddSingleton<OpenAstroAra.Server.Services.ICenteringService, OpenAstroAra.Server.Services.CenteringService>();
+        // §58.4 — the real meridian-flip orchestration (stop guiding → pass meridian → flip slew → recenter →
+        // resume guiding), replacing the throwing placeholder. Handed into the sequencer factory below so the
+        // MeridianFlipTrigger prototype runs it. Mount-gated to live-validate.
+        builder.Services.AddSingleton<OpenAstroAra.Sequencer.Trigger.MeridianFlip.IMeridianFlipExecutor,
+            OpenAstroAra.Server.Services.MeridianFlipExecutor>();
         // §65.5 batch-job tracker — backs /jobs/{id} status + the
         // session-restretch worker. In-memory by design: jobs are
         // ephemeral, state resets on daemon restart.
@@ -449,7 +454,8 @@ public partial class Program {
                 flatDeviceMediator: sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.IFlatDeviceMediator>(),
                 weatherDataMediator: sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.IWeatherDataMediator>(),
                 profileService: sp.GetRequiredService<OpenAstroAra.Profile.Interfaces.IProfileService>(),
-                imagingMediator: sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.IImagingMediator>()));
+                imagingMediator: sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.IImagingMediator>(),
+                meridianFlipExecutor: sp.GetRequiredService<OpenAstroAra.Sequencer.Trigger.MeridianFlip.IMeridianFlipExecutor>()));
         builder.Services.AddSingleton<SequenceBodyDeserializer>();
 
         var app = builder.Build();
