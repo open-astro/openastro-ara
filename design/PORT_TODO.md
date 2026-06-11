@@ -190,6 +190,23 @@ Remaining §2105 stubs (each a meatier follow-up, all still dead code until Live
 **§2105 in-memory render is otherwise COMPLETE (#354–#358)** — only libraw RAW decode + on-image star
 annotation remain, both Live-View-gated (v0.1.0 scope).
 
+## §59 autofocus — follow-ups (2026-06-11, after the curve-fit sub-PR #359)
+
+`FocusCurveFit.FitParabolic` (`OpenAstroAra.Core/Model/FocusCurveFit.cs`) landed the §59.8 parabolic fit
+(weighted LS → best-focus vertex + R² + usable/in-range flags) on #358's HFR. Remaining §59 work:
+- **Hyperbolic + trendline fits (§59.8 fallback):** parabolic R² < 0.85 should fall back to a hyperbolic fit
+  (`HFR = √(a² + b²·(x−c)²)`), and TREND* variants per `AFCurveFitting`. Hyperbolic is nonlinear (Gauss-Newton
+  / iterative) — its own sub-PR, next in the §59 queue. Pure math, no hardware → unit-testable now.
+- **Live focuser V-curve sweep (§59.8 / §59.3 Phase-1 calibration) — PHYSICAL BLOCKER (no focuser on the rig):**
+  the orchestration that steps a connected Alpaca focuser through 9 positions, captures + runs `StarDetector`
+  HFR at each, feeds `FocusCurveFit`, moves to the predicted best, and verifies. Needs a focuser to live-validate;
+  the user's Alpaca server is camera-only. Build the orchestration against `IFocuserMediator` (already unified,
+  #14e PR14) + the capture path, but defer end-to-end validation. Backlash auto-discovery (§59.7) rides on this.
+- **Smart Focus (§59.2–59.4):** the feature-vector model (donut diameters, asymmetry, telescope-type extractor)
+  + inverse-mapping calibration table. Research-grade "better than NINA" feature — likely v0.1.0, not v0.0.1.
+- **AF triggers + sequencer wiring (§59.5):** sequence-start / temp-Δ / HFR-drift / post-flip / first-filter
+  triggers consulting `/diagnostics/current` (§59.9). Sequencer-integration work, gated on the live sweep.
+
 ### §2105 PR4 Debayer — scoped 2026-06-11 (types mapped, ready to implement)
 `RenderedImage.Debayer(saveColorChannels, saveLumChannel, SensorType bayerPattern) -> IDebayeredImage`.
 Concrete shapes (all in OpenAstroAra.Image):
