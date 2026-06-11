@@ -137,9 +137,11 @@ namespace OpenAstroAra.Sequencer.Trigger.MeridianFlip {
 
             if (target == null) {
                 // No target from the context AND the mount returned no current position (it can disconnect in
-                // the window between ShouldTrigger and Execute). Don't slew to nowhere — abort the flip.
-                Logger.Error("Meridian Flip - No target coordinates available (telescope returned none). Aborting flip.");
-                return;
+                // the window between ShouldTrigger and Execute). THROW rather than return: silently continuing
+                // un-flipped carries the same OTA-collision risk the throwing placeholder guards against, so
+                // the sequence must halt (Run() catches this → FAILED + failure event).
+                Logger.Error("Meridian Flip - No target coordinates available (telescope returned none). Cannot flip safely.");
+                throw new InvalidOperationException("Meridian flip aborted: no target coordinates available (telescope returned none).");
             }
 
             var timeToFlip = CalculateMinimumTimeRemaining();
@@ -184,7 +186,10 @@ namespace OpenAstroAra.Sequencer.Trigger.MeridianFlip {
             if (!telescopeInfo.Connected || double.IsNaN(telescopeInfo.TimeToMeridianFlip)) {
                 EarliestFlipTime = DateTime.MinValue;
                 LatestFlipTime = DateTime.MinValue;
-                Logger.Error(telescopeInfo.Connected
+                // Warning, not Error: ShouldTrigger runs before every item, so a disconnected/NaN mount would
+                // otherwise flood the log at Error level while the sequence waits. Matches the parked/home/
+                // tracking guards' severity below.
+                Logger.Warning(telescopeInfo.Connected
                     ? "Meridian Flip - Telescope reports an unknown (NaN) time to meridian flip; cannot evaluate a flip!"
                     : "Meridian Flip - Telescope is not connected to evaluate if a flip should happen!");
                 return false;

@@ -14,12 +14,16 @@
 
 using Moq;
 using NUnit.Framework;
+using OpenAstroAra.Astrometry;
+using OpenAstroAra.Core.Model;
 using OpenAstroAra.Equipment.Equipment.MyTelescope;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Sequencer.SequenceItem;
 using OpenAstroAra.Sequencer.Trigger.MeridianFlip;
 using System;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace OpenAstroAra.Test.Sequencer.Trigger.MeridianFlip {
 
@@ -134,6 +138,29 @@ namespace OpenAstroAra.Test.Sequencer.Trigger.MeridianFlip {
             var should = CreateSUT().ShouldTrigger(null, NextItem(TimeSpan.FromMinutes(minAfter)).Object);
 
             Assert.That(should, Is.EqualTo(expectFlip));
+        }
+
+        [Test]
+        public async Task ShouldTrigger_skips_a_second_flip_for_the_same_target_within_11h() {
+            // A successful flip records (lastFlipTime, lastFlipCoordinates); evaluating again for the same
+            // target inside 11 h (with side-of-pier off) must not re-fire — the dedup guard.
+            var coords = new Coordinates(Angle.ByHours(5), Angle.ByDegree(20), Epoch.J2000);
+            telescopeMediatorMock.Setup(x => x.GetCurrentPosition()).Returns(coords);
+            telescopeMediatorMock.Setup(x => x.GetInfo()).Returns(new TelescopeInfo {
+                Connected = true,
+                TrackingEnabled = true,
+                TimeToMeridianFlip = 1,
+                Coordinates = coords,
+            });
+            executorMock
+                .Setup(x => x.MeridianFlip(It.IsAny<Coordinates>(), It.IsAny<TimeSpan>(), It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(true);
+
+            var sut = CreateSUT();
+            await sut.Execute(null!, new Progress<ApplicationStatus>(), CancellationToken.None);
+
+            var should = sut.ShouldTrigger(null, NextItem(TimeSpan.Zero).Object);
+            Assert.That(should, Is.False);
         }
 
         [Test]
