@@ -1,7 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../models/server.dart';
+import '../../services/camera_exposure_api.dart';
+import '../../services/frames_api.dart';
+import '../../state/imaging/exposure_state.dart';
+import '../../state/imaging/last_frame_state.dart';
 import '../../state/imaging/live_view_state.dart';
+import '../../state/saved_server_state.dart';
 import '../../widgets/imaging/diagnostic_panel.dart';
 import '../../widgets/imaging/exposure_controls_panel.dart';
 import '../../widgets/imaging/frame_viewer.dart';
@@ -36,10 +42,7 @@ class ImagingTab extends ConsumerWidget {
               ),
               ExposureControlsPanel(
                 liveViewOn: liveViewOn,
-                onTakeOne: () {
-                  // Phase 12c.3: invoke /api/v1/sequence/exposure with the
-                  // current ExposureParams + the connected camera.
-                },
+                onTakeOne: () => _takeOne(context, ref),
                 onLiveViewToggle: ref
                     .read(liveViewControllerProvider.notifier)
                     .set,
@@ -49,6 +52,62 @@ class ImagingTab extends ConsumerWidget {
         ),
       ],
     );
+  }
+
+  /// §14e Take One — fire a single exposure on the connected camera. The
+  /// daemon runs the capture in the background and registers the frame; we
+  /// just surface accepted/failed to the user.
+  Future<void> _takeOne(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final servers = ref.read(savedServersProvider).maybeWhen(
+          data: (list) => list,
+          orElse: () => const <AraServer>[],
+        );
+    if (servers.isEmpty) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Not connected to a server.')),
+      );
+      return;
+    }
+    final params = ref.read(exposureControllerProvider);
+    final server = servers.last;
+    messenger.showSnackBar(
+      SnackBar(content: Text(
+          'Exposing ${params.exposure.inMilliseconds / 1000.0}s…')),
+    );
+    try {
+      final frameId = await CameraExposureApi(server).takeOne(params);
+      // The POST returns 202 immediately; the capture (expose → download →
+      // FITS) runs in the background. Poll the catalog until the frame is
+      // registered, then show it. Budget = exposure + a download margin.
+      final api = FramesApi(server);
+      final deadline = DateTime.now()
+          .add(params.exposure + const Duration(seconds: 20));
+      var landed = false;
+      while (DateTime.now().isBefore(deadline)) {
+        if (await api.isRegistered(frameId)) {
+          landed = true;
+          break;
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 500));
+      }
+      if (landed) {
+        ref.read(lastCapturedFrameIdProvider.notifier).set(frameId);
+        // Force a re-fetch in case the same id was shown before.
+        ref.invalidate(framePreviewProvider(frameId));
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Frame captured.')),
+        );
+      } else {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Capture timed out.')),
+        );
+      }
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Exposure failed: $e')),
+      );
+    }
   }
 }
 

@@ -1,15 +1,48 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../state/imaging/last_frame_state.dart';
 import '../../theme/ara_colors.dart';
 
-/// Center pane of the Imaging tab — the most-recent frame's preview JPEG
-/// per §25.5.1. Renders a placeholder for Phase 12c.1; the real
-/// `Image.network(previewUrl)` + InteractiveViewer zoom/pan + plate-solve
-/// overlay land in Phase 12c.2 once `/api/v1/frames/{id}/preview` is
-/// service-side-functional.
-class FrameViewer extends StatelessWidget {
+/// Center pane of the Imaging tab — the most-recent frame's stretched preview
+/// JPEG per §25.5.1. Renders the placeholder until a frame is captured, then
+/// the live preview (fetched from `/api/v1/frames/{id}/preview`) with
+/// pinch/scroll zoom + pan.
+class FrameViewer extends ConsumerWidget {
   const FrameViewer({super.key});
 
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final id = ref.watch(lastCapturedFrameIdProvider);
+    if (id == null) {
+      return _Placeholder();
+    }
+    final preview = ref.watch(framePreviewProvider(id));
+    return Container(
+      color: AraColors.bgPanelAlt,
+      child: preview.when(
+        data: (bytes) => InteractiveViewer(
+          maxScale: 8,
+          child: Center(
+            child: Image.memory(bytes, gaplessPlayback: true),
+          ),
+        ),
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => Center(
+          child: Text(
+            'Preview failed: $e',
+            style: Theme.of(context)
+                .textTheme
+                .bodySmall
+                ?.copyWith(color: AraColors.textSecondary),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _Placeholder extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(

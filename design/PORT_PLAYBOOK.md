@@ -1878,6 +1878,52 @@ cd client/openastroara_client && dart run build_runner build --delete-conflictin
 cd client/openastroara_client && OPENASTROARA_DEFAULT_HOST=localhost:5555 flutter run -d macos
 ```
 
+### 23.1 Local dev run on macOS (daemon + app against a real Alpaca server)
+
+Running the full stack on an Apple-Silicon Mac for live hardware testing (verified
+2026-06-10 against a ZWO ASI290MM over Alpaca). The reference *deployment* target is
+ARM64 Linux (Pi), but the daemon + client both run on macOS for dev. Three non-obvious
+gotchas, all environmental — not code:
+
+**1. `libcfitsio` placement (capture writes real FITS via CFITSIO P/Invoke — §72).**
+`brew install cfitsio` drops the dylib in `/opt/homebrew/lib`, but the .NET loader does
+**not** search there, and macOS SIP **strips `DYLD_*` env vars** across the `dotnet`
+launcher boundary — so `DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib` is silently
+ignored and capture throws `DllNotFoundException: 'cfitsio'`. Fix: copy the dylib where
+the loader actually probes (the app's native runtime dir):
+```bash
+brew install cfitsio
+BIN=OpenAstroAra.Server/bin/Release/net10.0/runtimes/osx-arm64/native
+mkdir -p "$BIN"
+cp -L /opt/homebrew/lib/libcfitsio.dylib "$BIN/libcfitsio.dylib"
+cp -L /opt/homebrew/lib/libcfitsio.dylib "$BIN/cfitsio.dylib"
+```
+A clean `dotnet build` wipes `bin/`, so re-copy after rebuilds. **TODO:** a macOS-only
+post-build copy target (or a `runtimes/` content entry) so this survives — not yet wired.
+
+**2. Start the daemon.**
+```bash
+cd OpenAstroAra.Server && OPENASTROARA_PROFILE_DIR=/tmp/ara dotnet run   # listens on :5555
+curl -s localhost:5555/healthz   # -> ok ; Scalar API browser at /api/reference
+```
+Port 5555 (override `OPENASTROARA_PORT`). No auth (§67 trusted-LAN). JSON is snake_case.
+`/tmp/ara` is seeded with demo M31 frames (fake `/media/...` paths) — ignore them; real
+captures land in `/tmp/ara/frames/manual/`.
+
+**3. Launch the Flutter app — manual connect + detached.**
+mDNS auto-discovery **fails on macOS debug builds** (`No route to host` on multicast
+`0.0.0.0:5353` — no multicast entitlement), so the discovered-servers list stays empty;
+use the first-run screen's manual entry (host `localhost`, port `5555`). And launch the
+**built `.app` detached** rather than leaving `flutter run` in the background — a
+backgrounded `flutter run` exits ("Lost connection to device") and takes the app down:
+```bash
+cd client/openastroara_client
+flutter build macos --debug    # or: flutter run -d macos  (foreground only)
+open build/macos/Build/Products/Debug/openastroara.app
+```
+The saved server persists, so subsequent launches skip first-run and reconnect; a
+connected device's state lives daemon-side, so the app reflects it on reconnect.
+
 ---
 
 ## 24. What "done" looks like
