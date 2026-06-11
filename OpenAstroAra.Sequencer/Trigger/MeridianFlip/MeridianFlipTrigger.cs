@@ -51,6 +51,9 @@ namespace OpenAstroAra.Sequencer.Trigger.MeridianFlip {
         private readonly ITelescopeMediator telescopeMediator;
         private readonly IMeridianFlipExecutor executor;
 
+        // Dedup state: written in Execute, read in ShouldTrigger. No synchronization — the sequence engine
+        // runs a trigger on a single sequential flow (Run() awaits Execute(); ShouldTrigger is called between
+        // items), so these never overlap for one instance. Revisit if trigger evaluation ever goes concurrent.
         private DateTime lastFlipTime = DateTime.MinValue;
         private Coordinates? lastFlipCoordinates;
 
@@ -146,15 +149,16 @@ namespace OpenAstroAra.Sequencer.Trigger.MeridianFlip {
                 throw new InvalidOperationException("Meridian flip aborted: no target coordinates available (telescope returned none).");
             }
 
-            if (double.IsNaN(TimeToMeridianFlip)) {
-                // The mount can start reporting NaN between ShouldTrigger and Execute. Without this guard
-                // CalculateMinimumTimeRemaining → TimeSpan.FromHours(NaN) throws a confusing OverflowException;
-                // fail with a clear, intentional safety error instead.
+            // Snapshot the time-to-flip ONCE (the mount can start reporting NaN between ShouldTrigger and
+            // Execute). Without this guard CalculateMinimumTimeRemaining → TimeSpan.FromHours(NaN) throws a
+            // confusing OverflowException; fail with a clear, intentional safety error instead.
+            var timeToMeridian = telescopeMediator.GetInfo().TimeToMeridianFlip;
+            if (double.IsNaN(timeToMeridian)) {
                 Logger.Error("Meridian Flip - Telescope reports an unknown (NaN) time to meridian flip during Execute. Cannot flip safely.");
                 throw new InvalidOperationException("Meridian flip aborted: unknown (NaN) time to meridian flip.");
             }
 
-            var timeToFlip = CalculateMinimumTimeRemaining();
+            var timeToFlip = CalculateMinimumTimeRemaining(timeToMeridian);
             if (timeToFlip > TimeSpan.FromHours(2)) {
                 //Assume a delayed flip when the time is more than two hours and flip immediately
                 timeToFlip = TimeSpan.Zero;
@@ -178,18 +182,21 @@ namespace OpenAstroAra.Sequencer.Trigger.MeridianFlip {
             lastFlipCoordinates = null;
         }
 
-        protected virtual TimeSpan CalculateMinimumTimeRemaining() {
+        // Both take the time-to-meridian-flip as a parameter rather than re-reading the TimeToMeridianFlip
+        // property (a fresh GetInfo() each access): the caller snapshots it ONCE after its NaN guard, so a
+        // mid-evaluation disconnect/NaN can't slip a NaN into TimeSpan.FromHours() (→ OverflowException) here.
+        protected virtual TimeSpan CalculateMinimumTimeRemaining(double timeToMeridianFlipHours) {
             //Substract delta from maximum to get minimum time
             var delta = MaxMinutesAfterMeridian - MinutesAfterMeridian;
-            var time = CalculateMaximumTimeRemaining() - TimeSpan.FromMinutes(delta);
+            var time = CalculateMaximumTimeRemaining(timeToMeridianFlipHours) - TimeSpan.FromMinutes(delta);
             if (time < TimeSpan.Zero) {
                 time = TimeSpan.Zero;
             }
             return time;
         }
 
-        protected virtual TimeSpan CalculateMaximumTimeRemaining() {
-            return TimeSpan.FromHours(TimeToMeridianFlip);
+        protected virtual TimeSpan CalculateMaximumTimeRemaining(double timeToMeridianFlipHours) {
+            return TimeSpan.FromHours(timeToMeridianFlipHours);
         }
 
         public override bool ShouldTrigger(ISequenceItem? previousItem, ISequenceItem? nextItem) {
@@ -237,9 +244,11 @@ namespace OpenAstroAra.Sequencer.Trigger.MeridianFlip {
 
             var nextInstructionTime = nextItem?.GetEstimatedDuration().TotalSeconds ?? 0;
 
-            //The time to meridian flip reported by the telescope is the latest time for a flip to happen
-            var minimumTimeRemaining = CalculateMinimumTimeRemaining();
-            var maximumTimeRemaining = CalculateMaximumTimeRemaining();
+            //The time to meridian flip reported by the telescope is the latest time for a flip to happen.
+            //Use the snapshot guarded for NaN above — not the property — so the derived calc can't re-read a
+            //changed (NaN) value mid-evaluation.
+            var minimumTimeRemaining = CalculateMinimumTimeRemaining(telescopeInfo.TimeToMeridianFlip);
+            var maximumTimeRemaining = CalculateMaximumTimeRemaining(telescopeInfo.TimeToMeridianFlip);
             var originalMaximumTimeRemaining = maximumTimeRemaining;
             if (PauseTimeBeforeMeridian != 0) {
                 //A pause prior to a meridian flip is a hard limit due to equipment obstruction. There is no possibility for a timerange as we have to pause early and wait for meridian to pass

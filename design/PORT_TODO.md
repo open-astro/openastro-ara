@@ -246,3 +246,9 @@ Dead code until Live View (§64), so low urgency — but the algorithm must be c
 - **§58.6 profile schema gaps:** the playbook `meridian_flip` block has fields ARA's `IMeridianFlipSettings`
   doesn't expose yet (`mode`, `max_wait_after_min` naming, `recenter_after_flip`, `refocus_after_flip` enum,
   `guider_recal` enum, `skip_target_if_below_floor`, `first_flip_confirmed`). Map when the orchestration lands.
+
+### §58 trigger — minor follow-ups (from #362 review)
+- **Vernal-equinox zero-coordinate heuristic:** `MeridianFlipTrigger.Execute` treats a flip target of exactly
+  `RA == 0 && Dec == 0` as "unset" and substitutes the mount's current position (inherited from NINA). This
+  misfires for a real object near the vernal equinox (RA 0h, Dec 0°) — spurious warning + a wrong flip
+  coordinate. Low likelihood; if it ever matters, gate the heuristic on a tolerance or an explicit "unset" flag.
