@@ -207,12 +207,104 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         public override string Method => "get_use_subframes";
     }
 
-    public class Phd2SetAlgoParam : Phd2Method<Array> {
+    // §63.5 guider-e: openastro-guider accepts named-object OR positional params
+    // (openastro-guider/design/API_REFERENCE.md). These setters use the documented named-object form
+    // ({"axis":...,"name":...,"value":...} etc.). Repurposed from the previously-unused positional
+    // (Array) variants.
+    public class Phd2SetAlgoParam : Phd2Method<Phd2SetAlgoParamParameter> {
         public override string Method => "set_algo_param";
     }
 
-    public class Phd2SetDecGuideMode : Phd2Method<Array> {
+    public class Phd2SetAlgoParamParameter {
+
+        [JsonProperty(PropertyName = "axis")]
+        public string Axis { get; set; } = string.Empty;
+
+        [JsonProperty(PropertyName = "name")]
+        public string Name { get; set; } = string.Empty;
+
+        [JsonProperty(PropertyName = "value")]
+        public double Value { get; set; }
+    }
+
+    public class Phd2SetDecGuideMode : Phd2Method<Phd2SetDecGuideModeParameter> {
         public override string Method => "set_dec_guide_mode";
+    }
+
+    public class Phd2SetDecGuideModeParameter {
+
+        [JsonProperty(PropertyName = "mode")]
+        public string Mode { get; set; } = string.Empty;
+    }
+
+    public class Phd2SetSelectedCamera : Phd2Method<Phd2SetSelectedCameraParameter> {
+        public override string Method => "set_selected_camera";
+    }
+
+    public class Phd2SetSelectedCameraParameter {
+
+        [JsonProperty(PropertyName = "camera")]
+        public string Camera { get; set; } = string.Empty;
+    }
+
+    public class Phd2SetSelectedCameraId : Phd2Method<Phd2SetSelectedCameraIdParameter> {
+        public override string Method => "set_selected_camera_id";
+    }
+
+    public class Phd2SetSelectedCameraIdParameter {
+
+        [JsonProperty(PropertyName = "camera_id")]
+        public string CameraId { get; set; } = string.Empty;
+    }
+
+    public class Phd2SetAlpacaServer : Phd2Method<Phd2SetAlpacaServerParameter> {
+        public override string Method => "set_alpaca_server";
+    }
+
+    // "any subset of host,port,camera_device,telescope_device,rotator_device" - only the fields the
+    // caller sets serialize (NullValueHandling.Ignore), so an unset field isn't pushed.
+    public class Phd2SetAlpacaServerParameter {
+
+        [JsonProperty(PropertyName = "host", NullValueHandling = NullValueHandling.Ignore)]
+        public string? Host { get; set; }
+
+        [JsonProperty(PropertyName = "port", NullValueHandling = NullValueHandling.Ignore)]
+        public int? Port { get; set; }
+
+        [JsonProperty(PropertyName = "camera_device", NullValueHandling = NullValueHandling.Ignore)]
+        public int? CameraDevice { get; set; }
+
+        [JsonProperty(PropertyName = "telescope_device", NullValueHandling = NullValueHandling.Ignore)]
+        public int? TelescopeDevice { get; set; }
+
+        [JsonProperty(PropertyName = "rotator_device", NullValueHandling = NullValueHandling.Ignore)]
+        public int? RotatorDevice { get; set; }
+    }
+
+    public class Phd2SetProfileSetup : Phd2Method<Phd2ProfileSetupParameter> {
+        public override string Method => "set_profile_setup";
+    }
+
+    // Subset of the writable §63.5 setup fields ARA pushes; only set fields serialize.
+    public class Phd2ProfileSetupParameter {
+
+        [JsonProperty(PropertyName = "focal_length", NullValueHandling = NullValueHandling.Ignore)]
+        public int? FocalLength { get; set; }
+
+        [JsonProperty(PropertyName = "pixel_size", NullValueHandling = NullValueHandling.Ignore)]
+        public double? PixelSize { get; set; }
+
+        [JsonProperty(PropertyName = "camera_binning", NullValueHandling = NullValueHandling.Ignore)]
+        public int? CameraBinning { get; set; }
+
+        [JsonProperty(PropertyName = "guide_speed", NullValueHandling = NullValueHandling.Ignore)]
+        public double? GuideSpeed { get; set; }
+
+        [JsonProperty(PropertyName = "calibration_duration", NullValueHandling = NullValueHandling.Ignore)]
+        public int? CalibrationDuration { get; set; }
+
+        [JsonProperty(PropertyName = "calibration_distance", NullValueHandling = NullValueHandling.Ignore)]
+        public int? CalibrationDistance { get; set; }
     }
 
     public class Phd2SetExposure : Phd2Method<Array> {
