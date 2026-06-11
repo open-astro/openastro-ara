@@ -152,3 +152,22 @@ guider-d landed the §63.3 crash-detection + auto-restart core: `IGuiderProcessS
 - **guider-e §63.5 param push** is blocked on ARA's profile lacking the §63.5 guider-config fields — `IGuiderSettings` only has PHD2 host/port/scale/history/ROI/profile-id, NOT guide focal length / pixel size / RA-Dec aggressiveness / min-motion / dec-guide-mode / calibration. Prereq: extend `IGuiderSettings` + the §37 profile section + AraJsonContext + the Flutter wizard Screen 10, THEN push (the guider-e-1 named-object RPC classes are ready). Tracked as task: "guider-e profile-model extension + §63.5 param push".
 
 **Tracking correction:** §38.7 disk-shipped starter templates (lrgb-dso/narrowband-shoo/comet) are **DONE** (real NINA-schema bodies in `OpenAstroAra.Server/templates/` + csproj Content publish entry + `StarterTemplateTest`), despite the stale "Future §38 sub-PRs" listing.
+
+## §2105 in-memory render — remaining stubs (2026-06-11, after PR1-3)
+
+SkiaSharp decision made (§26 revised) + the thin §65-wrapper stubs un-stubbed and merged:
+RenderBitmapSource + RenderImage (#354), GetThumbnail + ReRender (#355), Stretch via a new
+parameterized `Stretcher.Stf` (#356). Also fixed a real §65 AutoStf over-brightness bug (median
+was landing ~0.65 instead of 0.25) caught in #354's review — improves every preview.
+
+Remaining §2105 stubs (each a meatier follow-up, all still dead code until Live View §64):
+- **`RenderedImage.Debayer(saveColorChannels, saveLumChannel, bayerPattern)` → `IDebayeredImage`** —
+  full-resolution debayer (bilinear/VNG), distinct from the §65 half-res `Debayer.SuperPixel` preview.
+  Needs a full-res kernel + a `DebayeredImage : IRenderedImage` impl producing `LRGBArrays` (Lum/R/G/B).
+- **`RenderedImage.DetectStars(...)` → star detection** — needs a real star-detection algorithm
+  (`IStarDetection` is a stub in `ImageAnalysis/HeadlessStubs.cs`); HFR/star-count/annotation.
+- **`RenderedImage.UpdateAnalysis(StarDetectionParams, StarDetectionResult)`** — stores the detection
+  result into the image's `IStarDetectionAnalysis`; coupled to DetectStars (do them together).
+- **`BaseImageData.RenderBitmapSource` Bayered note**: renders the raw mosaic (grey CFA) until Debayer lands.
+- Also still stubbed (lower priority, libraw/DSLR): `ExposureData.CreateRAWExposureData`, `BaseImageData.SaveTiff`,
+  `BaseImageData.FromFile` (non-FITS/XISF), `ImageArrayExposureData.FromBitmapSource`.
