@@ -131,6 +131,11 @@ namespace OpenAstroAra.Image.ImageData {
             // threshold; lower k ⇒ more stars. NoiseReduction != None turns on a 3×3 median pre-filter.
             // Offloaded — the flood-fill is CPU-bound (~50-300ms full-res). On-image annotation is not
             // yet wired (it needs the §2105 annotator); annotateImage is honoured as a no-op for now.
+            if (annotateImage) {
+                // The §2105 on-image annotator (overlay drawing) isn't wired yet — make the no-op visible
+                // so a future §59 autofocus caller that asks for annotation sees why it gets a plain frame.
+                Logger.Debug("DetectStars(annotateImage: true): star annotation not yet implemented; returning the un-annotated frame.");
+            }
             var parameters = new StarDetectionParams {
                 Sensitivity = SensitivityToSigma(sensitivity),
                 NoiseReduction = (int)noiseReduction,
