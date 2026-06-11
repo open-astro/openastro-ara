@@ -256,7 +256,9 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
         progress.Report(new ApplicationStatus { Source = "MeridianFlip", Status = "Re-centering" });
         var result = await centeringService.CenterOnTarget(target, null, progress, token);
         if (result == null || !result.Success) {
-            Logger.Error("Meridian Flip - Re-center after the flip failed. Continuing without it.");
+            // Warning, not Error: re-centering is best-effort and does not halt the flip (same severity as the
+            // best-effort dome sync). The §58.9 Layer 3 hard "no imaging on solve failure" gate is the follow-up.
+            Logger.Warning("Meridian Flip - Re-center after the flip failed. Continuing without it.");
         }
     }
 
