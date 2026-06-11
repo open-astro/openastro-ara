@@ -45,11 +45,16 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void ToDto_leaves_ra_dec_null_on_a_failed_solve() {
-            var dto = PlateSolveEndpoints.ToDto(new PlateSolveResult { Success = false }); // no Coordinates
+        public void ToDto_nulls_every_field_on_a_failed_solve() {
+            // Even though an unsolved PlateSolveResult has 0-valued Orientation/Pixscale/Radius, the DTO
+            // reports them null so a failed solve can't be mistaken for a real (0,0,0) solution.
+            var dto = PlateSolveEndpoints.ToDto(new PlateSolveResult { Success = false });
             Assert.That(dto.Success, Is.False);
             Assert.That(dto.Ra, Is.Null);
             Assert.That(dto.Dec, Is.Null);
+            Assert.That(dto.Orientation, Is.Null);
+            Assert.That(dto.PixelScale, Is.Null);
+            Assert.That(dto.SearchRadius, Is.Null);
         }
     }
 }

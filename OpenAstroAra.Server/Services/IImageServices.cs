@@ -54,10 +54,11 @@ public interface IFrameRepository {
 
     /// <summary>
     /// §18.I — load a catalogued frame's raw pixels as <see cref="OpenAstroAra.Image.Interfaces.IImageData"/>
-    /// for plate-solving (reuses the same FITS read path as previews). Null when the frame row or its FITS
-    /// file is missing.
+    /// for plate-solving (reuses the same FITS read path as previews). The <paramref name="profileService"/>
+    /// is the one the loaded image carries — the solver writes a temp FITS via the image's SaveToDisk, which
+    /// needs a real profile. Null when the frame row or its FITS file is missing.
     /// </summary>
-    Task<OpenAstroAra.Image.Interfaces.IImageData?> LoadImageDataAsync(Guid id, CancellationToken ct);
+    Task<OpenAstroAra.Image.Interfaces.IImageData?> LoadImageDataAsync(Guid id, OpenAstroAra.Profile.Interfaces.IProfileService profileService, CancellationToken ct);
     Task<OperationAcceptedDto> BulkRateAsync(BulkRateRequestDto request, string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> BulkTagAsync(BulkTagRequestDto request, string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> BulkDeleteAsync(BulkDeleteRequestDto request, string? idempotencyKey, CancellationToken ct);

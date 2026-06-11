@@ -449,10 +449,12 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         return (jpeg, "image/jpeg");
     }
 
-    public async Task<OpenAstroAra.Image.Interfaces.IImageData?> LoadImageDataAsync(Guid id, CancellationToken ct) {
+    public async Task<OpenAstroAra.Image.Interfaces.IImageData?> LoadImageDataAsync(
+            Guid id, OpenAstroAra.Profile.Interfaces.IProfileService profileService, CancellationToken ct) {
         // §18.I — reuse the proven preview FITS read path, then wrap the raw 16-bit pixels as IImageData for
-        // the plate-solver. Detection deps aren't touched by solving, so null is fine there (same as the
-        // §2105 render tests). FITS frames are 16-bit; isBayered just preserves the CFA flag for callers.
+        // the plate-solver. The real profileService is passed in (the CLI solver writes a temp FITS via the
+        // image's SaveToDisk, which reads the profile for the file pattern). Star detection/annotator are
+        // genuinely untouched by solving → null. FITS frames are 16-bit; isBayered preserves the CFA flag.
         var (filePath, _) = await GetPathAndTypeAsync(id, ct);
         if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath)) {
             return null;
@@ -460,7 +462,7 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         var (pixels, width, height, bayerPat) = LoadFitsPixels(filePath);
         return new OpenAstroAra.Image.ImageData.BaseImageData(
             pixels, width, height, bitDepth: 16, isBayered: !string.IsNullOrEmpty(bayerPat),
-            new OpenAstroAra.Image.ImageData.ImageMetaData(), null!, null!, null!);
+            new OpenAstroAra.Image.ImageData.ImageMetaData(), profileService, null!, null!);
     }
 
     private async Task<(string? FilePath, FrameType FrameType)> GetPathAndTypeAsync(Guid id, CancellationToken ct) {

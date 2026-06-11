@@ -16,12 +16,12 @@ namespace OpenAstroAra.Server.Contracts;
 
 /// <summary>
 /// §18.I — the astrometric solution for a frame. <see cref="Success"/> false means the solver ran but did not
-/// find a solution (e.g. too few stars, wrong field); <see cref="Ra"/>/<see cref="Dec"/> are then null.
+/// find a solution (e.g. too few stars, wrong field); every other field is then null (no solution to report).
 /// </summary>
 public record PlateSolveResultDto(
     bool Success,
-    double? Ra,            // right ascension at the frame centre, hours
-    double? Dec,           // declination at the frame centre, degrees
-    double Orientation,    // image rotation, degrees east-of-north
-    double PixelScale,     // arcsec / pixel
-    double SearchRadius);  // solved search radius, degrees
+    double? Ra,             // right ascension at the frame centre, hours
+    double? Dec,            // declination at the frame centre, degrees
+    double? Orientation,    // image rotation, degrees east-of-north
+    double? PixelScale,     // arcsec / pixel
+    double? SearchRadius);  // solved search radius, degrees

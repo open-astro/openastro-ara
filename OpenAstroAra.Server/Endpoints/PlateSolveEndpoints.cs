@@ -42,22 +42,27 @@ public static class PlateSolveEndpoints {
     }
 
     // Extracted (not an inline lambda) so the wiring is unit-testable with mocked services.
-    public static async Task<IResult> SolveFrameAsync(Guid id, IFrameRepository frames, IPlateSolveService solver, CancellationToken ct) {
-        var image = await frames.LoadImageDataAsync(id, ct);
+    public static async Task<IResult> SolveFrameAsync(Guid id, IFrameRepository frames, IPlateSolveService solver,
+            OpenAstroAra.Profile.Interfaces.IProfileService profileService, CancellationToken ct) {
+        var image = await frames.LoadImageDataAsync(id, profileService, ct);
         if (image is null) {
             return Results.NotFound();
         }
-        // Blind solve for now (no hint); a body-supplied approximate position can seed a faster near-solve later.
-        var result = await solver.SolveImage(image, approxCoordinates: null, progress: null, ct);
-        return Results.Ok(ToDto(result));
+        try {
+            // Blind solve for now (no hint); a body-supplied approximate position can seed a faster near-solve.
+            var result = await solver.SolveImage(image, approxCoordinates: null, progress: null, ct);
+            return Results.Ok(ToDto(result));
+        } catch (InvalidOperationException ex) {
+            // Setup problems (no active profile, focal length / pixel size unconfigured) are the caller's to
+            // fix — surface them as 422 with the message, not an opaque 500.
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
+        }
     }
 
-    /// <summary>Map a solver result to the wire DTO. RA/Dec are null on an unsuccessful (no-coordinate) solve.</summary>
-    public static PlateSolveResultDto ToDto(OpenAstroAra.PlateSolving.PlateSolveResult result) => new(
-        result.Success,
-        result.Coordinates?.RA,
-        result.Coordinates?.Dec,
-        result.PositionAngle,
-        result.Pixscale,
-        result.Radius);
+    /// <summary>Map a solver result to the wire DTO. On an unsuccessful solve every field except Success is
+    /// null — RA/Dec have no coordinate, and orientation/scale/radius are unsolved (would otherwise read 0).</summary>
+    public static PlateSolveResultDto ToDto(OpenAstroAra.PlateSolving.PlateSolveResult result) => result.Success
+        ? new PlateSolveResultDto(true, result.Coordinates?.RA, result.Coordinates?.Dec,
+            result.PositionAngle, result.Pixscale, result.Radius)
+        : new PlateSolveResultDto(false, null, null, null, null, null);
 }
