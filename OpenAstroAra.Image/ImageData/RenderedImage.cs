@@ -70,6 +70,9 @@ namespace OpenAstroAra.Image.ImageData {
         public virtual IRenderedImage ReRender() =>
             // §2105: re-render the display buffer from the raw frame (RenderBitmapSource → a fresh
             // RenderedImage). Used to refresh the rendered view from the source pixels after analysis.
+            // SYNCHRONOUS + CPU-bound (~50-200ms on a full-res frame, the Stretcher.Apply cost) — the
+            // inherited IRenderedImage contract is sync, so callers on a UI/event thread must offload.
+            // Note this re-renders from raw and so does NOT preserve a stretch applied via Stretch().
             RawImageData.RenderImage();
 
         public IDebayeredImage Debayer(bool saveColorChannels = false, bool saveLumChannel = false, SensorType bayerPattern = SensorType.RGGB) =>
@@ -93,6 +96,11 @@ namespace OpenAstroAra.Image.ImageData {
             var buffer = Image;
             var width = RawImageData.Properties.Width;
             var height = RawImageData.Properties.Height;
+            // EncodeThumbnail needs one grayscale byte/pixel. Make that invariant explicit so a future
+            // Stretch()/annotation path that swaps Image for a multi-channel buffer fails loudly here
+            // rather than deep inside the Task.Run.
+            System.Diagnostics.Debug.Assert(buffer.Length == width * height,
+                "GetThumbnail expects a 1-byte/pixel grayscale render buffer");
             return Task.Run(() => OpenAstroAra.Stretch.JpegEncoder.EncodeThumbnail(buffer, width, height));
         }
 
