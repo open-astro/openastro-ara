@@ -101,6 +101,10 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
 
             await PassMeridian(timeToFlip, progress, token);
 
+            // Snapshot the pier side BEFORE the flip so §58.5 can verify it actually changed afterward — a
+            // mount that reports the same (non-unknown) pier side after the slew likely didn't flip.
+            var pierSideBeforeFlip = telescopeMediator.GetInfo().SideOfPier;
+
             await DoFlip(targetCoordinates, settings.SettleTime, progress, token);
 
             // §58.4 step 3 — re-focus is conditional. The live AF V-curve sweep is focuser-gated and unbuilt,
@@ -119,9 +123,12 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
                 await ResumeAutoguider(progress, token);
             }
 
+            // Final settle — distinct from the post-flip-slew settle inside DoFlip. That one lets the mount
+            // mechanically settle before plate-solving; this one lets guiding re-converge before imaging
+            // resumes. Both use the same SettleTime (matching NINA's two-settle DoMeridianFlip).
             await Settle(settings.SettleTime, progress, token);
 
-            VerifySideOfPier();
+            VerifySideOfPier(pierSideBeforeFlip);
 
             Logger.Info("Meridian Flip - Completed successfully.");
             return true;
@@ -183,6 +190,8 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
             throw new InvalidOperationException("Meridian flip aborted: the mount reported the flip slew did not succeed.");
         }
 
+        // Post-flip-slew settle — let the mount mechanically settle before the recenter plate-solve. Distinct
+        // from the final settle in the main body (which waits for guiding to re-converge); both use SettleTime.
         await Settle(settleSeconds, progress, token);
 
         await SynchronizeDome(progress, token);
@@ -252,14 +261,19 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
         }
     }
 
-    // §58.5 — query the mount's pier side after the flip. Some Alpaca drivers don't change it or report
-    // pierUnknown; log a warning but continue (no brand-quirk database, per §52 Alpaca-only).
-    private void VerifySideOfPier() {
+    // §58.5 — verify the flip via side-of-pier by comparing the post-flip pier side against the snapshot taken
+    // before the slew. An unchanged (but known) pier side means the mount likely didn't actually flip; an
+    // unknown pier side can't be used to verify. Both cases warn but CONTINUE — some Alpaca drivers lie about
+    // pier side (no brand-quirk database, per §52 Alpaca-only). The HARD fail-on-unchanged is §58.9 Layer 2
+    // (deferred — see PORT_TODO).
+    private void VerifySideOfPier(PierSide pierSideBeforeFlip) {
         var sideOfPier = telescopeMediator.GetInfo().SideOfPier;
         if (sideOfPier == PierSide.pierUnknown) {
             Logger.Warning("Meridian Flip - The mount reports an unknown pier side after the flip; cannot verify the flip via side-of-pier. Continuing.");
+        } else if (sideOfPier == pierSideBeforeFlip) {
+            Logger.Warning($"Meridian Flip - The mount reports the same pier side ({sideOfPier}) after the flip as before it; the flip may not have actually happened. Continuing (some drivers misreport pier side).");
         } else {
-            Logger.Info($"Meridian Flip - Post-flip pier side reported as {sideOfPier}.");
+            Logger.Info($"Meridian Flip - Side-of-pier verified: {pierSideBeforeFlip} → {sideOfPier}.");
         }
     }
 

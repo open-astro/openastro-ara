@@ -184,8 +184,9 @@ namespace OpenAstroAra.Test {
             // No recenter once the flip failed.
             centering.Verify(c => c.CenterOnTarget(It.IsAny<Coordinates>(), It.IsAny<IProgress<PlateSolveProgress>>(),
                 It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()), Times.Never);
-            // Failure path re-enables tracking + resumes the guider.
-            telescope.Verify(t => t.SetTrackingEnabled(true), Times.AtLeastOnce);
+            // Tracking is re-enabled exactly twice: once resuming after PassMeridian, once in the failure-path
+            // TryRestoreTracking. The guider is resumed once (the failure-path best-effort resume).
+            telescope.Verify(t => t.SetTrackingEnabled(true), Times.Exactly(2));
             guider.Verify(g => g.StartGuiding(It.IsAny<bool>(), It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()), Times.Once);
         }
 
@@ -223,6 +224,21 @@ namespace OpenAstroAra.Test {
             var sut = CreateSUT();
             Assert.ThrowsAsync<ArgumentNullException>(
                 () => sut.MeridianFlip(null!, TimeSpan.Zero, Progress, CancellationToken.None));
+        }
+
+        [Test]
+        public async Task MeridianFlip_succeeds_when_the_pier_side_changes_across_the_flip() {
+            SetupProfile(recenter: false);
+            // §58.5 — pier side is snapshotted before the flip (pierEast) and re-read after (pierWest): a genuine
+            // change is the verified-flip path. The check is log-only, so the flip still succeeds either way.
+            telescope.SetupSequence(t => t.GetInfo())
+                .Returns(new TelescopeInfo { Connected = true, SideOfPier = PierSide.pierEast })
+                .Returns(new TelescopeInfo { Connected = true, SideOfPier = PierSide.pierWest });
+            var sut = CreateSUT();
+
+            var ok = await sut.MeridianFlip(Target, TimeSpan.Zero, Progress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
         }
 
         [Test]
