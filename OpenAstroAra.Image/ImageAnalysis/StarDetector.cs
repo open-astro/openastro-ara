@@ -14,6 +14,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Threading;
 
 namespace OpenAstroAra.Image.ImageAnalysis {
 
@@ -52,7 +53,7 @@ namespace OpenAstroAra.Image.ImageAnalysis {
         /// Detect stars in a 16-bit grayscale frame and return their count + HFR statistics.
         /// <paramref name="pixels"/> is row-major <c>width·height</c>; out-of-range dimensions throw.
         /// </summary>
-        public static StarDetectionResult Detect(ReadOnlySpan<ushort> pixels, int width, int height, StarDetectionParams parameters) {
+        public static StarDetectionResult Detect(ReadOnlySpan<ushort> pixels, int width, int height, StarDetectionParams parameters, CancellationToken token = default) {
             if (width <= 0 || height <= 0) {
                 throw new ArgumentException($"Invalid frame dimensions {width}×{height}.");
             }
@@ -75,7 +76,7 @@ namespace OpenAstroAra.Image.ImageAnalysis {
             double k = parameters.Sensitivity > 0 ? parameters.Sensitivity : 8.0;
             double threshold = median + k * Math.Max(1.0, sigma);
 
-            var stars = FindStars(work, width, height, threshold, background: median);
+            var stars = FindStars(work, width, height, threshold, background: median, token);
 
             // Highest-quality stars first, then honour an explicit cap (0 = no cap).
             stars.Sort((a, b) => b.MaxBrightness.CompareTo(a.MaxBrightness));
@@ -91,20 +92,21 @@ namespace OpenAstroAra.Image.ImageAnalysis {
         private static (double median, double sigma) BackgroundStats(ushort[] pixels) {
             var sorted = (ushort[])pixels.Clone();
             Array.Sort(sorted);
-            double median = sorted[sorted.Length / 2];
+            int median = sorted[sorted.Length / 2];
 
-            var dev = new int[sorted.Length];
+            // Reuse the sorted buffer for |x - median| in place — the deviation of a ushort from an
+            // integral median is itself ≤ 65535, so it fits, and we avoid a second full-frame allocation.
             for (int i = 0; i < sorted.Length; i++) {
-                dev[i] = Math.Abs(sorted[i] - (int)median);
+                sorted[i] = (ushort)Math.Abs(sorted[i] - median);
             }
-            Array.Sort(dev);
-            double mad = dev[dev.Length / 2];
+            Array.Sort(sorted);
+            double mad = sorted[sorted.Length / 2];
             return (median, mad * 1.4826);
         }
 
         // 8-connected flood-fill over every above-threshold pixel not yet claimed. Each blob is reduced
         // to a measured star (or rejected). Iterative stack — recursion would blow the stack on a big blob.
-        private static List<DetectedStar> FindStars(ushort[] pixels, int width, int height, double threshold, double background) {
+        private static List<DetectedStar> FindStars(ushort[] pixels, int width, int height, double threshold, double background, CancellationToken token) {
             var stars = new List<DetectedStar>();
             var visited = new bool[pixels.Length];
             int maxArea = Math.Max(MaxStarAreaFloor, (int)(MaxStarAreaFraction * pixels.Length));
@@ -112,6 +114,11 @@ namespace OpenAstroAra.Image.ImageAnalysis {
             var blob = new List<int>();
 
             for (int start = 0; start < pixels.Length; start++) {
+                // Cheap periodic cancellation so a cancelled DetectStars actually short-circuits the
+                // flood-fill (the bulk of the wall-clock) rather than only being checked after it returns.
+                if ((start & 0xFFFF) == 0) {
+                    token.ThrowIfCancellationRequested();
+                }
                 if (visited[start] || pixels[start] <= threshold) {
                     continue;
                 }
@@ -124,10 +131,14 @@ namespace OpenAstroAra.Image.ImageAnalysis {
 
                 while (stack.Count > 0) {
                     int p = stack.Pop();
-                    blob.Add(p);
-                    if (blob.Count > maxArea) {
-                        // Drain the rest of this component so its pixels stay marked, then drop it.
-                        oversized = true;
+                    // Once oversized, stop GROWING blob (a frame-spanning component would otherwise
+                    // accumulate millions of entries / tens of MB held until FindStars returns) but keep
+                    // draining the stack so every pixel of the component stays marked visited.
+                    if (!oversized) {
+                        blob.Add(p);
+                        if (blob.Count > maxArea) {
+                            oversized = true;
+                        }
                     }
                     int px = p % width, py = p / width;
                     if (px == 0 || py == 0 || px == width - 1 || py == height - 1) {

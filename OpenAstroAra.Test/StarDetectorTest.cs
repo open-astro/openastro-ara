@@ -155,6 +155,15 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Detect_honours_a_cancelled_token() {
+            int w = 64, h = 64;
+            using var cts = new System.Threading.CancellationTokenSource();
+            cts.Cancel();
+            Assert.Throws<OperationCanceledException>(
+                () => StarDetector.Detect(FlatField(w, h), w, h, NormalParams(), cts.Token));
+        }
+
+        [Test]
         public async System.Threading.Tasks.Task DetectStars_publishes_analysis_onto_the_raw_frame() {
             int w = 120, h = 120;
             var frame = FlatField(w, h);

@@ -139,8 +139,7 @@ namespace OpenAstroAra.Image.ImageData {
             var width = RawImageData.Properties.Width;
             var height = RawImageData.Properties.Height;
             return Task.Run<IRenderedImage>(() => {
-                var result = StarDetector.Detect(pixels, width, height, parameters);
-                cancelToken.ThrowIfCancellationRequested();
+                var result = StarDetector.Detect(pixels, width, height, parameters, cancelToken);
                 UpdateAnalysis(parameters, result);
                 return this;
             }, cancelToken);
