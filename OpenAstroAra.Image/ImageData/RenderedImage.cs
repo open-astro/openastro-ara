@@ -75,8 +75,38 @@ namespace OpenAstroAra.Image.ImageData {
             // Note this re-renders from raw and so does NOT preserve a stretch applied via Stretch().
             RawImageData.RenderImage();
 
-        public IDebayeredImage Debayer(bool saveColorChannels = false, bool saveLumChannel = false, SensorType bayerPattern = SensorType.RGGB) =>
-            throw new NotImplementedException("Debayer pending OpenCvSharp4 wiring.");
+        public IDebayeredImage Debayer(bool saveColorChannels = false, bool saveLumChannel = false, SensorType bayerPattern = SensorType.RGGB) {
+            // §2105: full-resolution bilinear debayer of the raw CFA mosaic into LRGB planes. The
+            // inherited grayscale Image (mono render) is reused; colour lives in DebayeredData. The
+            // inherited IRenderedImage.Debayer is synchronous + CPU-bound (~50-200ms full-res) — offload
+            // from a UI/event thread. Caller is responsible for only calling this on a Bayered frame.
+            var pattern = ToBayerPattern(bayerPattern);
+            var w = RawImageData.Properties.Width;
+            var h = RawImageData.Properties.Height;
+            var (r, g, b) = OpenAstroAra.Stretch.Debayer.Bilinear(RawImageData.Data.FlatArray, w, h, pattern);
+            var data = new LRGBArrays(Luminance(r, g, b), r, g, b);
+            return new DebayeredImage(Image, RawImageData, profileService, starDetection, starAnnotator,
+                data, saveColorChannels, saveLumChannel, bayerPattern);
+        }
+
+        // Map ASCOM SensorType → the §65 BayerPattern. Bayer-mosaic types only; exotic CFAs throw.
+        private static OpenAstroAra.Stretch.BayerPattern ToBayerPattern(SensorType s) => s switch {
+            SensorType.RGGB => OpenAstroAra.Stretch.BayerPattern.RGGB,
+            SensorType.BGGR => OpenAstroAra.Stretch.BayerPattern.BGGR,
+            SensorType.GBRG => OpenAstroAra.Stretch.BayerPattern.GBRG,
+            SensorType.GRBG => OpenAstroAra.Stretch.BayerPattern.GRBG,
+            _ => throw new NotSupportedException(
+                $"Bilinear debayer supports RGGB/BGGR/GBRG/GRBG; got {s} (CMYG/LRGB/etc. unsupported)."),
+        };
+
+        // Rec.601 luma from the debayered planes.
+        private static ushort[] Luminance(ushort[] r, ushort[] g, ushort[] b) {
+            var lum = new ushort[r.Length];
+            for (int i = 0; i < r.Length; i++) {
+                lum[i] = (ushort)(0.299 * r[i] + 0.587 * g[i] + 0.114 * b[i]);
+            }
+            return lum;
+        }
 
         public virtual Task<IRenderedImage> Stretch(double factor, double blackClipping, bool unlinked) {
             // §2105: re-stretch the raw 16-bit frame with explicit STF knobs via the §65 pipeline —

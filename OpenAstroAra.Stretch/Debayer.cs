@@ -85,6 +85,74 @@ public static class Debayer {
         return (r, g, b, ow, oh);
     }
 
+    /// <summary>
+    /// Full-resolution bilinear debayer of a raw mosaic into three R/G/B planes, each
+    /// <c>width × height</c>. At every pixel the native CFA channel is kept and the two missing
+    /// channels are bilinearly interpolated from the appropriate orthogonal / diagonal / row /
+    /// column neighbours (edge-clamped). Higher quality than <see cref="SuperPixel"/> (full
+    /// resolution, no blockiness) at ~4× the cost — for the §2105 in-memory render, not the §65
+    /// half-res preview. CPU-bound; offload from a UI/event thread.
+    /// </summary>
+    public static (ushort[] R, ushort[] G, ushort[] B) Bilinear(
+        ReadOnlySpan<ushort> mosaic, int width, int height, BayerPattern pattern) {
+        if (width <= 1 || height <= 1) {
+            throw new ArgumentException("Bayer mosaic must be at least 2×2.");
+        }
+        if (mosaic.Length != width * height) {
+            throw new ArgumentException(
+                $"mosaic length ({mosaic.Length}) doesn't match {width}×{height} = {width * height}");
+        }
+        var (rx, ry, bx, by, _, _, _, _) = CellOffsets(pattern);
+        var r = new ushort[mosaic.Length];
+        var g = new ushort[mosaic.Length];
+        var b = new ushort[mosaic.Length];
+
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                int idx = y * width + x;
+                ushort v = mosaic[idx];
+                int px = x & 1, py = y & 1;
+                if (px == rx && py == ry) {            // red site: G orthogonal, B diagonal
+                    r[idx] = v;
+                    g[idx] = MeanOrtho(mosaic, x, y, width, height);
+                    b[idx] = MeanDiag(mosaic, x, y, width, height);
+                } else if (px == bx && py == by) {     // blue site: G orthogonal, R diagonal
+                    b[idx] = v;
+                    g[idx] = MeanOrtho(mosaic, x, y, width, height);
+                    r[idx] = MeanDiag(mosaic, x, y, width, height);
+                } else {                                // green site
+                    g[idx] = v;
+                    // If this green shares red's tile-row, red is the left/right neighbour (blue up/down);
+                    // otherwise it shares red's column, so red is up/down (blue left/right).
+                    if (py == ry) {
+                        r[idx] = MeanH(mosaic, x, y, width, height);
+                        b[idx] = MeanV(mosaic, x, y, width, height);
+                    } else {
+                        r[idx] = MeanV(mosaic, x, y, width, height);
+                        b[idx] = MeanH(mosaic, x, y, width, height);
+                    }
+                }
+            }
+        }
+        return (r, g, b);
+    }
+
+    // Edge-clamped pixel read + round-half-up neighbour means for the bilinear kernel.
+    private static ushort Px(ReadOnlySpan<ushort> m, int x, int y, int w, int h) =>
+        m[Math.Clamp(y, 0, h - 1) * w + Math.Clamp(x, 0, w - 1)];
+
+    private static ushort MeanOrtho(ReadOnlySpan<ushort> m, int x, int y, int w, int h) =>
+        (ushort)((Px(m, x - 1, y, w, h) + Px(m, x + 1, y, w, h) + Px(m, x, y - 1, w, h) + Px(m, x, y + 1, w, h) + 2) / 4);
+
+    private static ushort MeanDiag(ReadOnlySpan<ushort> m, int x, int y, int w, int h) =>
+        (ushort)((Px(m, x - 1, y - 1, w, h) + Px(m, x + 1, y - 1, w, h) + Px(m, x - 1, y + 1, w, h) + Px(m, x + 1, y + 1, w, h) + 2) / 4);
+
+    private static ushort MeanH(ReadOnlySpan<ushort> m, int x, int y, int w, int h) =>
+        (ushort)((Px(m, x - 1, y, w, h) + Px(m, x + 1, y, w, h) + 1) / 2);
+
+    private static ushort MeanV(ReadOnlySpan<ushort> m, int x, int y, int w, int h) =>
+        (ushort)((Px(m, x, y - 1, w, h) + Px(m, x, y + 1, w, h) + 1) / 2);
+
     // (rx,ry, bx,by, g1x,g1y, g2x,g2y) for each pattern's 2×2 tile.
     private static (int, int, int, int, int, int, int, int) CellOffsets(BayerPattern pattern) => pattern switch {
         BayerPattern.RGGB => (0, 0, 1, 1, 1, 0, 0, 1), // R=(0,0) B=(1,1) G=(1,0),(0,1)

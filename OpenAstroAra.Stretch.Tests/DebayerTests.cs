@@ -146,4 +146,39 @@ public class DebayerTests {
         ushort[] mosaic = { 1, 2 };
         Assert.Throws<ArgumentException>(() => Debayer.SuperPixel(mosaic, 2, 1, BayerPattern.RGGB));
     }
+
+    // Full-resolution bilinear: a per-channel-uniform mosaic (every R cell 1000, G 2000, B 3000) must
+    // reconstruct (1000, 2000, 3000) at every interior pixel, whatever its CFA site — proving each
+    // plane picks the right channel from the right neighbours. Output is full-size (width×height).
+    private static ushort[] UniformRggbMosaic(int w, int h) {
+        var m = new ushort[w * h];
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                bool ex = (x & 1) == 0, ey = (y & 1) == 0;
+                m[y * w + x] = (ushort)(ex && ey ? 1000 : (!ex && !ey ? 3000 : 2000)); // R / B / G
+            }
+        }
+        return m;
+    }
+
+    [Fact]
+    public void Bilinear_reconstructs_full_resolution_channels_at_interior_pixels() {
+        int w = 6, h = 6;
+        var (r, g, b) = Debayer.Bilinear(UniformRggbMosaic(w, h), w, h, BayerPattern.RGGB);
+        Assert.Equal(w * h, r.Length);
+        Assert.Equal(w * h, g.Length);
+        Assert.Equal(w * h, b.Length);
+        // Check an interior pixel of each CFA site type: red (2,2), green-on-red-row (3,2), blue (3,3).
+        foreach (var (x, y) in new[] { (2, 2), (3, 2), (3, 3) }) {
+            int i = y * w + x;
+            Assert.Equal(1000, r[i]);
+            Assert.Equal(2000, g[i]);
+            Assert.Equal(3000, b[i]);
+        }
+    }
+
+    [Fact]
+    public void Bilinear_rejects_mismatched_length() {
+        Assert.Throws<ArgumentException>(() => Debayer.Bilinear(new ushort[] { 1, 2, 3 }, 2, 2, BayerPattern.RGGB));
+    }
 }

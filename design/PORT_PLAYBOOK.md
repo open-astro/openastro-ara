@@ -45,7 +45,7 @@ Legend: ✅ done · 🟡 core done, follow-ups pending (or "= verify" where stat
 - ✅ **§15** Build + verification gate (analyzer gate warnings=errors + CI smoke gate) · ✅ **§17** Fork hygiene / MPL headers / NOTICE.md.
 - 🚫 **§21** Localization — en-only for v0.0.1 (non-English stripped 0.5e/f); i18n is v0.1.0.
 - ✅ **§23** Quick reference (+ §23.1 macOS dev-run) · ✅ **§25** Visual design — NINA UX cloned (placeholder icons).
-- 🟡 **§26** Image processing — **decision revised OpenCvSharp4 → SkiaSharp**; §2105 render PR1-3 done (#354-356); Debayer/DetectStars/libraw pending (PORT_TODO).
+- 🟡 **§26** Image processing — **decision revised OpenCvSharp4 → SkiaSharp**; §2105 render PR1-4 done (#354-356 + full-res Debayer); `DetectStars`/`UpdateAnalysis` (star detection) + libraw RAW still pending (PORT_TODO).
 - ⬜ **§27** Single-client connection policy — close-code 4004 takeover deferred (§60.9 notes).
 - ✅ **§28** Sequence durability + crash recovery (SQLite catalog + §28.2/.7/.8).
 - 🟡 **§29** Storage / disk-space policy — storage settings + save-dir resolution done; active disk-space mgmt = verify.
