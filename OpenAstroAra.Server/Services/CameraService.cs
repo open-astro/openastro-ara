@@ -502,7 +502,10 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         // OSC sensors: record the Bayer pattern so downstream stackers (and ARA's §65 color preview)
         // can debayer the raw mosaic. The effective pattern is at the origin, so the offsets are 0.
         // The stored data stays a raw, undebayered mosaic.
-        if (_capabilities?.BayerPattern is string bayerPat) {
+        //
+        // Only at 1×1: hardware binning averages adjacent sensor cells, mixing R/G/B so the readout is
+        // no longer a Bayer mosaic — stamping BAYERPAT there would make the preview debayer garbage.
+        if (_capabilities?.BayerPattern is string bayerPat && request.BinX == 1 && request.BinY == 1) {
             fits.SetHeader("BAYERPAT", bayerPat, "Bayer CFA pattern at image origin");
             fits.SetHeader("XBAYROFF", 0, "Bayer X offset (baked into BAYERPAT)");
             fits.SetHeader("YBAYROFF", 0, "Bayer Y offset (baked into BAYERPAT)");

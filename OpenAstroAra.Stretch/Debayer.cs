@@ -91,6 +91,8 @@ public static class Debayer {
         BayerPattern.BGGR => (1, 1, 0, 0, 1, 0, 0, 1), // R=(1,1) B=(0,0) G=(1,0),(0,1)
         BayerPattern.GRBG => (1, 0, 0, 1, 0, 0, 1, 1), // R=(1,0) B=(0,1) G=(0,0),(1,1)
         BayerPattern.GBRG => (0, 1, 1, 0, 0, 0, 1, 1), // R=(0,1) B=(1,0) G=(0,0),(1,1)
-        _ => (0, 0, 1, 1, 1, 0, 0, 1),
+        // No silent RGGB fallback: a new pattern added without updating this map should fail loudly,
+        // not render wrong colors.
+        _ => throw new ArgumentOutOfRangeException(nameof(pattern), pattern, "Unhandled Bayer pattern"),
     };
 }

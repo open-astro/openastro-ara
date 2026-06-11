@@ -59,6 +59,16 @@ public class DebayerTests {
         Assert.Equal(80, b[0]);
     }
 
+    /// <summary>Green is the round-half-up mean of the two green cells; an odd sum exercises the +1.</summary>
+    [Fact]
+    public void SuperPixel_green_mean_rounds_half_up() {
+        //  R=10  G=20
+        //  G=41  B=80   → green = (20 + 41 + 1) / 2 = 31 (not 30)
+        ushort[] mosaic = { 10, 20, 41, 80 };
+        var (_, g, _, _, _) = Debayer.SuperPixel(mosaic, 2, 2, BayerPattern.RGGB);
+        Assert.Equal(31, g[0]);
+    }
+
     [Fact]
     public void SuperPixel_BGGR_single_tile_swaps_red_and_blue() {
         //  B=10  G=20
