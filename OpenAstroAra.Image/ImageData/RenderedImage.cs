@@ -178,10 +178,12 @@ namespace OpenAstroAra.Image.ImageData {
             // into the FITS pattern keys (BaseImageData stamps HFR/StarCount from here) and any INPC
             // observers. Mirrors NINA's UpdateAnalysis contract.
             var analysis = RawImageData.StarDetectionAnalysis;
+            // Publish StarList before DetectedStars so any INPC observer that wakes on the count change
+            // already sees the matching list (never count = N with the previous list).
+            analysis.StarList = result.StarList;
             analysis.HFR = result.AverageHFR;
             analysis.HFRStDev = result.HFRStdDev;
             analysis.DetectedStars = result.DetectedStars;
-            analysis.StarList = result.StarList;
         }
     }
 }

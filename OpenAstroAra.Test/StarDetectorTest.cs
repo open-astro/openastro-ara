@@ -150,6 +150,25 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Detect_with_noise_reduction_still_finds_a_star_and_suppresses_salt() {
+            // Exercises the Median3x3 pre-filter path: a real star (multi-pixel, survives the median)
+            // is still found, while scattered single-pixel salt spikes are smoothed below threshold.
+            int w = 120, h = 120;
+            var frame = FlatField(w, h);
+            AddStar(frame, w, h, 60, 60, amplitude: 6000, sigma: 2.0);
+            // Sprinkle isolated hot pixels the median filter should erase.
+            foreach (var (x, y) in new[] { (20, 20), (95, 30), (30, 95), (90, 90) }) {
+                frame[y * w + x] = 60000;
+            }
+
+            var result = StarDetector.Detect(frame, w, h,
+                new StarDetectionParams { Sensitivity = 8.0, NoiseReduction = 1 });
+
+            Assert.That(result.DetectedStars, Is.EqualTo(1));
+            Assert.That(result.AverageHFR, Is.GreaterThan(0.5).And.LessThan(5.0));
+        }
+
+        [Test]
         public void Detect_throws_on_dimension_mismatch() {
             Assert.Throws<ArgumentException>(() => StarDetector.Detect(new ushort[10], 4, 4, NormalParams()));
         }

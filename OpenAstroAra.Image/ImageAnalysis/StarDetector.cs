@@ -64,9 +64,13 @@ namespace OpenAstroAra.Image.ImageAnalysis {
             // width>0 && height>0 && length==width*height ⇒ length>0, so no empty-frame branch is needed.
 
             // Optional denoise into a working buffer so the centroid/flux read post-filter values.
-            ushort[] work = parameters.NoiseReduction > 0
-                ? Median3x3(pixels, width, height, token)
-                : pixels.ToArray();
+            // Only the denoise path needs a copy; BackgroundStats/FindStars read the pixels through a span
+            // without mutating, so the no-noise-reduction path (the common case, and what §59 autofocus hits
+            // per-frame) avoids a full-frame clone entirely.
+            ReadOnlySpan<ushort> work = pixels;
+            if (parameters.NoiseReduction > 0) {
+                work = Median3x3(pixels, width, height, token);
+            }
 
             token.ThrowIfCancellationRequested();
             var (median, sigma) = BackgroundStats(work);
@@ -93,7 +97,7 @@ namespace OpenAstroAra.Image.ImageAnalysis {
         // noise while ignoring the star outliers. Frames at/under the target sample in full (stride 1).
         private const int BackgroundSampleTarget = 20000;
 
-        private static (double median, double sigma) BackgroundStats(ushort[] pixels) {
+        private static (double median, double sigma) BackgroundStats(ReadOnlySpan<ushort> pixels) {
             int stride = Math.Max(1, pixels.Length / BackgroundSampleTarget);
             int n = (pixels.Length + stride - 1) / stride;
             var sample = new ushort[n];
@@ -115,7 +119,7 @@ namespace OpenAstroAra.Image.ImageAnalysis {
 
         // 8-connected flood-fill over every above-threshold pixel not yet claimed. Each blob is reduced
         // to a measured star (or rejected). Iterative stack — recursion would blow the stack on a big blob.
-        private static List<DetectedStar> FindStars(ushort[] pixels, int width, int height, double threshold, double background, CancellationToken token) {
+        private static List<DetectedStar> FindStars(ReadOnlySpan<ushort> pixels, int width, int height, double threshold, double background, CancellationToken token) {
             var stars = new List<DetectedStar>();
             var visited = new bool[pixels.Length];
             int maxArea = Math.Max(MaxStarAreaFloor, (int)(MaxStarAreaFraction * pixels.Length));
@@ -186,7 +190,7 @@ namespace OpenAstroAra.Image.ImageAnalysis {
         // Flux-weighted centroid + Half-Flux-Radius. Flux is background-subtracted (f = max(0, v - bg));
         // HFR = Σ f·dist / Σ f, the radius that flux-weights to the star's spread. A saturated peak is
         // rejected — its clipped-flat core biases both centroid and HFR.
-        private static DetectedStar? Measure(List<int> blob, ushort[] pixels, int width, double background) {
+        private static DetectedStar? Measure(List<int> blob, ReadOnlySpan<ushort> pixels, int width, double background) {
             double sumF = 0, sumX = 0, sumY = 0, sumV = 0;
             ushort peak = 0;
             foreach (int p in blob) {
