@@ -73,16 +73,31 @@ namespace OpenAstroAra.Core.Model {
                 return null;
             }
 
-            // Weighted normal equations for y = A x² + B x + C:
+            // Pre-centre positions on their weighted mean before fitting. Raw focuser positions (5k-50k steps
+            // on SCT / R&P focusers) make x⁴ ≈ 10²⁰, which both destroys double precision in the normal
+            // equations and inflates the determinant so far that a scale-fixed singularity test can never
+            // fire. Solving in centred coords x' = x − x̄ keeps every moment well-scaled; the vertex shifts
+            // back by x̄ at the end. (Weighting: a 0-star point still counts, just minimally.)
+            double sw = 0, swx = 0;
+            double minX = double.PositiveInfinity, maxX = double.NegativeInfinity;
+            foreach (var p in points) {
+                double w = Math.Max(1, p.StarCount);
+                sw += w;
+                swx += w * p.Position;
+                if (p.Position < minX) minX = p.Position;
+                if (p.Position > maxX) maxX = p.Position;
+            }
+            double xBar = swx / sw;
+
+            // Weighted normal equations for y = A·x'² + B·x' + C (x' centred):
             //   [S4 S3 S2][A]   [T2]
-            //   [S3 S2 S1][B] = [T1]      with S_k = Σ w·x^k,  T_k = Σ w·y·x^k.
+            //   [S3 S2 S1][B] = [T1]      with S_k = Σ w·x'^k,  T_k = Σ w·y·x'^k.
             //   [S2 S1 S0][C]   [T0]
             double s0 = 0, s1 = 0, s2 = 0, s3 = 0, s4 = 0;
             double t0 = 0, t1 = 0, t2 = 0;
-            double minX = double.PositiveInfinity, maxX = double.NegativeInfinity;
             foreach (var p in points) {
-                double w = Math.Max(1, p.StarCount); // a 0-star point still counts, just minimally
-                double x = p.Position, y = p.Hfr;
+                double w = Math.Max(1, p.StarCount);
+                double x = p.Position - xBar, y = p.Hfr;
                 double x2 = x * x;
                 s0 += w;
                 s1 += w * x;
@@ -92,32 +107,37 @@ namespace OpenAstroAra.Core.Model {
                 t0 += w * y;
                 t1 += w * y * x;
                 t2 += w * y * x2;
-                if (x < minX) minX = x;
-                if (x > maxX) maxX = x;
             }
 
-            // Solve the 3×3 system by Cramer's rule.
+            // Solve the 3×3 system by Cramer's rule. Singularity test is RELATIVE — abs(det) against the
+            // Hadamard scale of the diagonal (s4·s2·s0), an upper bound on |det| — so it's scale-invariant and
+            // fires for a genuinely near-singular sweep (effectively < 3 distinct positions) at any focuser
+            // step magnitude, not just small ones.
             double det = Det3(s4, s3, s2, s3, s2, s1, s2, s1, s0);
-            if (Math.Abs(det) < 1e-12) {
-                return null; // singular — not enough independent positions
+            double scale = s4 * s2 * s0;
+            if (scale <= 0 || Math.Abs(det) < 1e-10 * scale) {
+                return null;
             }
             double a = Det3(t2, s3, s2, t1, s2, s1, t0, s1, s0) / det;
             double b = Det3(s4, t2, s2, s3, t1, s1, s2, t0, s0) / det;
             double c = Det3(s4, s3, t2, s3, s2, t1, s2, s1, t0) / det;
 
             bool upward = a > 0 && double.IsFinite(a) && double.IsFinite(b) && double.IsFinite(c);
-            double bestPosition = upward ? -b / (2 * a) : double.NaN;
             double predictedHfr = upward ? (c - (b * b) / (4 * a)) : double.NaN;
-            // An upward parabola whose vertex dips below zero HFR is a numerical artefact of noisy/sparse
-            // data, not a real focus minimum — treat it as unusable so a caller never acts on it.
+            // Usable only when it's a real focus minimum: an upward curve whose vertex HFR is positive. A
+            // downward curve OR a vertex that dips below zero HFR (a numerical artefact of noisy/sparse data)
+            // is not usable — and in BOTH cases BestPosition is NaN, so a caller skipping the guard can't act
+            // on a plausible-looking-but-invalid position.
             bool usable = upward && predictedHfr > 0;
+            double bestPosition = usable ? xBar - b / (2 * a) : double.NaN;
 
-            // Weighted R² against the weighted mean of y.
+            // Weighted R² against the weighted mean of y (computed in the same centred coords).
             double meanY = t0 / s0;
             double ssRes = 0, ssTot = 0;
             foreach (var p in points) {
                 double w = Math.Max(1, p.StarCount);
-                double fit = a * p.Position * p.Position + b * p.Position + c;
+                double x = p.Position - xBar;
+                double fit = a * x * x + b * x + c;
                 ssRes += w * (p.Hfr - fit) * (p.Hfr - fit);
                 ssTot += w * (p.Hfr - meanY) * (p.Hfr - meanY);
             }

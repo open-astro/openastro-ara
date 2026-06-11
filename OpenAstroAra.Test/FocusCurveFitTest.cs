@@ -111,6 +111,24 @@ namespace OpenAstroAra.Test {
             Assert.That(fit!.PredictedHfr, Is.LessThan(0));
             Assert.That(fit.IsUsable, Is.False);
             Assert.That(fit.WithinSampledRange, Is.False);
+            // BestPosition must be NaN whenever the fit isn't usable — same contract as the downward case,
+            // so a caller that skips the IsUsable guard can't act on a plausible-looking-but-invalid position.
+            Assert.That(double.IsNaN(fit.BestPosition), Is.True);
+        }
+
+        [Test]
+        public void FitParabolic_is_accurate_at_large_focuser_positions() {
+            // SCT / R&P focusers sit at ~50000 steps, where raw x⁴ ≈ 10²⁰ would wreck precision — the
+            // pre-centred solve must still recover the vertex exactly.
+            var pts = Parabola(a: 0.0008, x0: 48000, c: 2.5, from: 47000, to: 49000, step: 250);
+            var fit = FocusCurveFit.FitParabolic(pts);
+
+            Assert.That(fit, Is.Not.Null);
+            Assert.That(fit!.IsUsable, Is.True);
+            Assert.That(fit.BestPosition, Is.EqualTo(48000).Within(1.0));
+            Assert.That(fit.PredictedHfr, Is.EqualTo(2.5).Within(0.05));
+            Assert.That(fit.RSquared, Is.GreaterThan(0.999));
+            Assert.That(fit.WithinSampledRange, Is.True);
         }
 
         [Test]
