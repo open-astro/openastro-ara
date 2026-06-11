@@ -151,5 +151,16 @@ namespace OpenAstroAra.Test.Sequencer.Trigger.MeridianFlip {
             Assert.That(sut.Validate(), Is.True);
             Assert.That(sut.Issues, Is.Empty);
         }
+
+        [Test]
+        public void Validate_fails_when_minutes_after_meridian_exceeds_max() {
+            // pause_after > max_wait inverts the flip-time window — caught at setup.
+            settingsMock.SetupGet(m => m.MinutesAfterMeridian).Returns(15);
+            settingsMock.SetupGet(m => m.MaxMinutesAfterMeridian).Returns(10);
+            SetTelescope(timeToMeridianFlipHours: 10);
+            var sut = CreateSUT();
+            Assert.That(sut.Validate(), Is.False);
+            Assert.That(sut.Issues, Is.Not.Empty);
+        }
     }
 }

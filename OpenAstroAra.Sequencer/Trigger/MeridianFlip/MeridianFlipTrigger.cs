@@ -322,6 +322,13 @@ namespace OpenAstroAra.Sequencer.Trigger.MeridianFlip {
                 valid = false;
             }
 
+            // A misconfigured window (pause_after > max_wait) inverts the flip-time math so the
+            // remaining-time fast path never fires. Catch it at setup — Run() validates before Execute().
+            if (MinutesAfterMeridian > MaxMinutesAfterMeridian) {
+                i.Add($"Meridian flip: minutes after meridian ({MinutesAfterMeridian}) must not exceed max minutes after meridian ({MaxMinutesAfterMeridian}).");
+                valid = false;
+            }
+
             // Recenter (camera) + AutoFocusAfterFlip (focuser) preconditions are validated by the
             // IMeridianFlipExecutor, which owns those mediators (§58.4 orchestration sub-PR).
             Issues = i;
