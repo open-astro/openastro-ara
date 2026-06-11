@@ -71,8 +71,10 @@ namespace OpenAstroAra.Test {
             Assert.That(captured!.FocalLength, Is.EqualTo(800));
             Assert.That(captured.PixelSize, Is.EqualTo(3.8));
             Assert.That(captured.SearchRadius, Is.EqualTo(15));
+            Assert.That(captured.Regions, Is.EqualTo(2));
             Assert.That(captured.DownSampleFactor, Is.EqualTo(2));
             Assert.That(captured.MaxObjects, Is.EqualTo(500));
+            Assert.That(captured.Binning, Is.EqualTo(1)); // set for a reason (solve at native scale), not a profile mirror
             // Seeds a near (non-blind) solve — the parameter clones/normalizes, so compare values not identity.
             Assert.That(captured.Coordinates, Is.Not.Null);
             Assert.That(captured.Coordinates!.RA, Is.EqualTo(coords.RA).Within(1e-6));

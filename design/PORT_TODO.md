@@ -271,3 +271,9 @@ Wiring started:
 The work is OPS: build the headless `command-line_version/astap_command_line` from the fork via
 `lazbuild -B astap_command_line_linux_aarch64.lpi` (Raspberry Pi deploy; `debian_package_scripts/` → a `.deb`)
 or `…_darwin_M1.lpi` (Mac dev), install a star DB, and set `ASTAPLocation`. Needs Lazarus+FPC to build.
+
+### plate-solve — blind-solver fallthrough (from #363 review)
+`PlateSolverFactory.GetBlindSolver` maps `BlindSolver.AstrometryNet` → ASTAP (AstrometryNet was removed per
+§18.I "local solvers only"). Since `PlateSolveService` always calls `GetBlindSolver`, a profile still configured
+for AstrometryNet silently uses ASTAP as both primary + blind solver. Harmless (ASTAP is the intended backend),
+but the profile/wizard should drop the AstrometryNet blind option, or the factory should log the substitution.

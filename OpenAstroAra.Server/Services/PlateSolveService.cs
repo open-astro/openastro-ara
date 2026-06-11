@@ -56,7 +56,8 @@ public class PlateSolveService : IPlateSolveService {
     public Task<PlateSolveResult> SolveImage(IImageData image, Coordinates? approxCoordinates, IProgress<ApplicationStatus>? progress, CancellationToken token) {
         ArgumentNullException.ThrowIfNull(image);
 
-        var profile = profileService.ActiveProfile;
+        var profile = profileService.ActiveProfile
+            ?? throw new InvalidOperationException("Cannot plate-solve: no active profile is loaded.");
         var settings = profile.PlateSolveSettings;
 
         var plateSolver = plateSolverFactory.GetPlateSolver(settings);
