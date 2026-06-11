@@ -51,6 +51,13 @@ public interface IFrameRepository {
     Task<(byte[] Bytes, string ContentType)?> GetPreviewAsync(Guid id, FramePreviewRequestDto request, CancellationToken ct);
     Task<(byte[] Bytes, string ContentType)?> GetThumbnailAsync(Guid id, CancellationToken ct);
     Task<(Stream FitsStream, string FileName)?> OpenDownloadAsync(Guid id, CancellationToken ct);
+
+    /// <summary>
+    /// §18.I — load a catalogued frame's raw pixels as <see cref="OpenAstroAra.Image.Interfaces.IImageData"/>
+    /// for plate-solving (reuses the same FITS read path as previews). Null when the frame row or its FITS
+    /// file is missing.
+    /// </summary>
+    Task<OpenAstroAra.Image.Interfaces.IImageData?> LoadImageDataAsync(Guid id, CancellationToken ct);
     Task<OperationAcceptedDto> BulkRateAsync(BulkRateRequestDto request, string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> BulkTagAsync(BulkTagRequestDto request, string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> BulkDeleteAsync(BulkDeleteRequestDto request, string? idempotencyKey, CancellationToken ct);
