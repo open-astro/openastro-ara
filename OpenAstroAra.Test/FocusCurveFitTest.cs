@@ -102,6 +102,18 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void FitParabolic_rejects_a_vertex_with_negative_predicted_hfr() {
+            // An upward parabola whose vertex dips below 0 HFR is a numerical artefact — must be unusable.
+            var pts = Parabola(a: 0.0005, x0: 500, c: -5.0, from: 400, to: 600, step: 25);
+            var fit = FocusCurveFit.FitParabolic(pts);
+
+            Assert.That(fit, Is.Not.Null);
+            Assert.That(fit!.PredictedHfr, Is.LessThan(0));
+            Assert.That(fit.IsUsable, Is.False);
+            Assert.That(fit.WithinSampledRange, Is.False);
+        }
+
+        [Test]
         public void FitParabolic_returns_null_below_min_points() {
             var pts = new List<FocusPoint> { new(100, 5, 100), new(200, 3, 100) }; // only 2
             Assert.That(FocusCurveFit.FitParabolic(pts), Is.Null);

@@ -26,10 +26,13 @@ namespace OpenAstroAra.Core.Model {
     public sealed class FocusCurveFitResult {
         /// <summary>The focuser position of the curve minimum (predicted best focus).</summary>
         public double BestPosition { get; init; }
-        /// <summary>The HFR the fit predicts at <see cref="BestPosition"/>.</summary>
+        /// <summary>The HFR the fit predicts at <see cref="BestPosition"/>. Always &gt; 0 when
+        /// <see cref="IsUsable"/> is true; a fit whose vertex falls below zero (noisy/sparse data) is
+        /// physically impossible and reported as not usable.</summary>
         public double PredictedHfr { get; init; }
-        /// <summary>Weighted coefficient of determination (0..1); higher = tighter fit. §59.8 falls back to
-        /// hyperbolic when the parabolic R² &lt; 0.85.</summary>
+        /// <summary>Weighted coefficient of determination (≤ 1; higher = tighter fit). Goes negative when the
+        /// parabola fits worse than a flat line through the mean — itself a strong fall-back signal, so do NOT
+        /// clamp to [0,1]. §59.8 falls back to hyperbolic when the parabolic R² &lt; 0.85.</summary>
         public double RSquared { get; init; }
         /// <summary>Which model produced this fit.</summary>
         public AFCurveFitting Method { get; init; }
@@ -105,6 +108,9 @@ namespace OpenAstroAra.Core.Model {
             bool upward = a > 0 && double.IsFinite(a) && double.IsFinite(b) && double.IsFinite(c);
             double bestPosition = upward ? -b / (2 * a) : double.NaN;
             double predictedHfr = upward ? (c - (b * b) / (4 * a)) : double.NaN;
+            // An upward parabola whose vertex dips below zero HFR is a numerical artefact of noisy/sparse
+            // data, not a real focus minimum — treat it as unusable so a caller never acts on it.
+            bool usable = upward && predictedHfr > 0;
 
             // Weighted R² against the weighted mean of y.
             double meanY = t0 / s0;
@@ -122,12 +128,15 @@ namespace OpenAstroAra.Core.Model {
                 BestPosition = bestPosition,
                 PredictedHfr = predictedHfr,
                 RSquared = rSquared,
-                IsUsable = upward,
-                WithinSampledRange = upward && bestPosition >= minX && bestPosition <= maxX,
+                IsUsable = usable,
+                WithinSampledRange = usable && bestPosition >= minX && bestPosition <= maxX,
             };
         }
 
         private static int CountDistinctPositions(IReadOnlyList<FocusPoint> points) {
+            // Exact equality is fine for integer focuser step positions (the normal case). If the live sweep
+            // ever feeds computed positions (start + i·step), round/quantize before fitting to avoid counting
+            // logically-identical positions as distinct.
             var seen = new HashSet<double>();
             foreach (var p in points) {
                 seen.Add(p.Position);
