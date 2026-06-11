@@ -98,9 +98,9 @@ public static class Debayer {
         if (width <= 1 || height <= 1) {
             throw new ArgumentException("Bayer mosaic must be at least 2×2.");
         }
-        if (mosaic.Length != width * height) {
+        if (mosaic.Length != (long)width * height) {
             throw new ArgumentException(
-                $"mosaic length ({mosaic.Length}) doesn't match {width}×{height} = {width * height}");
+                $"mosaic length ({mosaic.Length}) doesn't match {width}×{height} = {(long)width * height}");
         }
         var (rx, ry, bx, by, _, _, _, _) = CellOffsets(pattern);
         var r = new ushort[mosaic.Length];
@@ -137,9 +137,20 @@ public static class Debayer {
         return (r, g, b);
     }
 
-    // Edge-clamped pixel read + round-half-up neighbour means for the bilinear kernel.
+    // Mirror-reflected pixel read + round-half-up neighbour means for the bilinear kernel. Reflection
+    // (not clamping) at the borders is essential: a ±1 neighbour that falls off the edge reflects to
+    // the pixel 1 inside, shifting the index by 2 so it lands on the SAME CFA colour as the wanted
+    // (off-edge) neighbour — clamping would instead return the edge pixel itself, a wrong-colour
+    // sample, producing a coloured fringe along all four borders.
+    private static int Reflect(int i, int n) {
+        if (n == 1) return 0;
+        if (i < 0) return -i;               // -1 -> 1  (parity preserved)
+        if (i >= n) return 2 * (n - 1) - i; //  n -> n-2 (parity preserved)
+        return i;
+    }
+
     private static ushort Px(ReadOnlySpan<ushort> m, int x, int y, int w, int h) =>
-        m[Math.Clamp(y, 0, h - 1) * w + Math.Clamp(x, 0, w - 1)];
+        m[Reflect(y, h) * w + Reflect(x, w)];
 
     private static ushort MeanOrtho(ReadOnlySpan<ushort> m, int x, int y, int w, int h) =>
         (ushort)((Px(m, x - 1, y, w, h) + Px(m, x + 1, y, w, h) + Px(m, x, y - 1, w, h) + Px(m, x, y + 1, w, h) + 2) / 4);
