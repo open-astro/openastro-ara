@@ -95,6 +95,8 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             if (_state is EquipmentConnectionState.Connecting or EquipmentConnectionState.Connected) {
                 return Task.FromResult(Accepted("guider.connect", idempotencyKey));
             }
+            // A fresh connect supersedes any §63.3 recovery still polling for the dropped session.
+            CancelRecoveryLocked();
             // PHD2Guider reads host/port from the profile (§63.5), so honor the request by writing
             // them in before the connect.
             var settings = _profileService.ActiveProfile.GuiderSettings;
@@ -121,6 +123,7 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
         lock (_gate) {
             ObjectDisposedException.ThrowIf(_disposed, this);
             ++_connectGeneration; // supersede any in-flight connect
+            CancelRecoveryLocked(); // the user gave up on the guider — stop recovering it
             DisposeGuiderLocked();
             SetStateLocked(EquipmentConnectionState.Disconnected);
         }
@@ -257,12 +260,14 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
                 return;
             }
             _disposed = true;
+            // Cancel + dispose the in-flight recovery pass (if any). RunRecoveryAsync's finally also
+            // disposes under the gate; the null-check there makes either order safe, and disposing
+            // here satisfies CA2213. No new pass can start — BeginRecoveryLocked checks _disposed.
+            CancelRecoveryLocked();
+            _recoveryPassCts?.Dispose();
+            _recoveryPassCts = null;
             DisposeGuiderLocked();
         }
-        // Cancel + dispose outside the gate: an in-flight recovery pass observes cancellation and
-        // unwinds without needing the lock.
-        _recoveryCts.Cancel();
-        _recoveryCts.Dispose();
     }
 
     [LoggerMessage(Level = LogLevel.Error, Message = "PHD2 guider connect failed")]

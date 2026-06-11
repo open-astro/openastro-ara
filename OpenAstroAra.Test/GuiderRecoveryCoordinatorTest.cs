@@ -147,6 +147,10 @@ namespace OpenAstroAra.Test {
                 Times.Never);
             diagnostics.Verify(d => d.CreateEventAsync(It.IsAny<DiagnosticEventDto>(), It.IsAny<string?>(),
                 It.IsAny<bool?>(), It.IsAny<CancellationToken>()), Times.Never);
+            // But the "attempting to recover" warning is closed out with an Info so the user isn't left hanging.
+            notifications.Verify(n => n.CreateAsync(
+                It.Is<NotificationDto>(x => x.Severity == NotificationSeverity.Info), It.IsAny<CancellationToken>()),
+                Times.Once);
         }
 
         [Test]
@@ -162,6 +166,28 @@ namespace OpenAstroAra.Test {
             cts.Cancel();
 
             Assert.ThrowsAsync<TaskCanceledException>(() => coordinator.RecoverAsync(cts.Token));
+        }
+
+        [Test]
+        public void Cancellation_mid_loop_propagates() {
+            // The unit never resolves (always activating); cancel after the first poll completes so
+            // cancellation is observed mid-loop, not pre-loop.
+            var supervisor = new FakeSupervisor(GuiderProcessStatus.Activating);
+            using var cts = new CancellationTokenSource();
+            var delayCalls = 0;
+            var coordinator = new GuiderRecoveryCoordinator(
+                supervisor, Mock.Of<INotificationService>(), Mock.Of<IDiagnosticsService>(),
+                NullLogger<GuiderRecoveryCoordinator>.Instance,
+                FastBackoff,
+                async (_, ct) => {
+                    if (++delayCalls >= 2) {
+                        await cts.CancelAsync();
+                        ct.ThrowIfCancellationRequested();
+                    }
+                });
+
+            Assert.ThrowsAsync<OperationCanceledException>(() => coordinator.RecoverAsync(cts.Token));
+            Assert.That(delayCalls, Is.EqualTo(2), "cancellation should land on the second loop iteration");
         }
     }
 }

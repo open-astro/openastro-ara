@@ -115,7 +115,11 @@ public sealed partial class GuiderRecoveryCoordinator {
 
                 case GuiderProcessStatus.Inactive:
                 case GuiderProcessStatus.Failed:
-                    // systemd isn't bringing it back. Nudge once, then keep polling for it to come up.
+                    // Neither bringing-itself-back state. A `failed` unit has exhausted systemd's
+                    // own retries; an `inactive` one was stopped and isn't restarting. Either way we
+                    // nudge a restart exactly once per pass (the sticky `nudged` flag) — re-issuing it
+                    // every poll would just thrash systemd while it's already coming up — then keep
+                    // polling for the unit to reach `active`.
                     if (!nudged) {
                         _supervisor.RequestRestart();
                         nudged = true;
@@ -124,8 +128,11 @@ public sealed partial class GuiderRecoveryCoordinator {
 
                 case GuiderProcessStatus.Unknown:
                 default:
-                    // Not a systemd host (dev box) — nothing to supervise. Leave the Error state.
+                    // Not a systemd host (dev box) — nothing to supervise. Leave the Error state, but
+                    // close the loop on the "attempting to recover" warning so the user isn't left
+                    // hanging without an explanation.
                     LogUnsupervised();
+                    await NotifyUnsupervisedAsync(ct).ConfigureAwait(false);
                     return GuiderRecoveryOutcome.Unsupervised;
             }
         }
@@ -146,6 +153,12 @@ public sealed partial class GuiderRecoveryCoordinator {
             NotificationSeverity.Info,
             "Guider recovered",
             "The guider daemon is back up. Reconnect the guider to resume guiding."), ct);
+
+    private Task NotifyUnsupervisedAsync(CancellationToken ct) =>
+        _notifications.CreateAsync(NewNotification(
+            NotificationSeverity.Info,
+            "Guider not auto-recoverable here",
+            "Lost the guider link, but automatic recovery isn't available on this host. Restart the guider service manually."), ct);
 
     private async Task NotifyFailedAsync(CancellationToken ct) {
         await _notifications.CreateAsync(NewNotification(
