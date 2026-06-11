@@ -22,23 +22,15 @@ class FramesApi {
   /// capture finished writing the FITS. Until then GET returns 404.
   Future<bool> isRegistered(String id) async {
     try {
-      final res = await _dio.get<Map<String, dynamic>>(
-        '/api/v1/frames/$id',
-        options: Options(validateStatus: (s) => s != null && s < 500),
-      );
-      // 404 = not registered yet (still capturing); 200 = landed.
-      return res.statusCode == 200;
+      await _dio.get<Map<String, dynamic>>('/api/v1/frames/$id');
+      return true;
     } on DioException catch (e) {
-      // A dropped connection / timeout is a real failure, not "frame not ready"
-      // — let it propagate so the caller surfaces it instead of spinning the
-      // poll loop for the full budget and reporting a bogus timeout.
-      if (e.type == DioExceptionType.connectionError ||
-          e.type == DioExceptionType.connectionTimeout ||
-          e.type == DioExceptionType.sendTimeout ||
-          e.type == DioExceptionType.receiveTimeout) {
-        rethrow;
-      }
-      return false;
+      // 404 = not registered yet (still capturing) — the only "keep polling"
+      // case. Everything else (5xx, connection drop, timeout) is a real failure
+      // and must propagate, so the caller surfaces it instead of spinning the
+      // poll loop to a bogus timeout.
+      if (e.response?.statusCode == 404) return false;
+      rethrow;
     }
   }
 
