@@ -20,39 +20,46 @@ using System.Collections.Generic;
 namespace OpenAstroAra.Image.ImageData {
 
     public class StarDetectionAnalysis : BaseINPC, IStarDetectionAnalysis {
+        // The detector publishes from a Task.Run threadpool thread (RenderedImage.DetectStars) while a §59
+        // autofocus / Live-View consumer may read from another. _gate gives both a full memory barrier (so a
+        // reader sees the published values, not a stale cache) and torn-read safety for the double fields,
+        // which aren't individually atomic on 32-bit ARM (the Pi target). Reads + writes both take the lock;
+        // it's uncontended in practice (one publish per frame, occasional reads). PropertyChanged is always
+        // raised OUTSIDE the lock so observer callbacks can't deadlock or block the publisher.
+        private readonly object _gate = new object();
         private double _hfr = double.NaN;
         private double _hfrStDev = double.NaN;
         private int _detectedStars = -1;
         private IReadOnlyList<DetectedStar> _starList = new List<DetectedStar>();
 
         public double HFR {
-            get => this._hfr;
+            get { lock (this._gate) { return this._hfr; } }
             set {
-                this._hfr = value;
+                lock (this._gate) { this._hfr = value; }
                 this.RaisePropertyChanged();
             }
         }
 
         public double HFRStDev {
-            get => this._hfrStDev;
+            get { lock (this._gate) { return this._hfrStDev; } }
             set {
-                this._hfrStDev = value;
+                lock (this._gate) { this._hfrStDev = value; }
                 this.RaisePropertyChanged();
             }
         }
 
         public int DetectedStars {
-            get => this._detectedStars;
+            get { lock (this._gate) { return this._detectedStars; } }
             set {
-                this._detectedStars = value;
+                lock (this._gate) { this._detectedStars = value; }
                 this.RaisePropertyChanged();
             }
         }
 
         public IReadOnlyList<DetectedStar> StarList {
-            get => this._starList;
+            get { lock (this._gate) { return this._starList; } }
             set {
-                this._starList = value;
+                lock (this._gate) { this._starList = value; }
                 this.RaisePropertyChanged();
             }
         }
@@ -61,13 +68,15 @@ namespace OpenAstroAra.Image.ImageData {
         }
 
         public void SetAll(double hfr, double hfrStDev, int detectedStars, IReadOnlyList<DetectedStar> starList) {
-            // Atomic publish: write every backing field first, THEN raise the change notifications, so any
-            // observer woken by one event already sees all four properties consistent (never new HFR with a
-            // stale DetectedStars/StarList). The per-property setters remain for callers that set one field.
-            this._hfr = hfr;
-            this._hfrStDev = hfrStDev;
-            this._detectedStars = detectedStars;
-            this._starList = starList;
+            // Atomic publish: write every backing field under the lock (full barrier + no torn doubles for a
+            // cross-thread reader), THEN raise the change notifications outside it, so any observer woken by
+            // one event already sees all four properties consistent (never new HFR with a stale count).
+            lock (this._gate) {
+                this._hfr = hfr;
+                this._hfrStDev = hfrStDev;
+                this._detectedStars = detectedStars;
+                this._starList = starList;
+            }
             this.RaisePropertyChanged(nameof(this.HFR));
             this.RaisePropertyChanged(nameof(this.HFRStDev));
             this.RaisePropertyChanged(nameof(this.DetectedStars));
