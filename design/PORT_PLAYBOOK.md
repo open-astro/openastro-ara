@@ -26,6 +26,70 @@ This split is why **WILMA is not a thin client** — it's a planning workstation
 
 **Naming:** all references to `NINA.X` in this document describe the *current* project layout you'll find on disk. Phase 0.5 renames everything to `OpenAstroAra.X` (server-side) or carves it out for deletion. See §17.
 
+---
+
+## Port completion status — v0.0.1 section checklist
+
+**Maintained going forward; cross-reference `design/PORT_PROGRESS.md` Completed section for per-PR detail.** Updated 2026-06-11 (after #356).
+
+Legend: ✅ done · 🟡 core done, follow-ups pending (or "= verify" where status needs confirming) · ⬜ pending / placeholder service · 🚫 deferred to v0.1.0 (§55) · ⚙️ agent operating rule, not a shippable feature.
+
+- ⚙️ **§0/§0.5/§3/§16/§18/§19/§20/§22/§24/§55** — operating rules, design principles, phased plan, merge model, "done" definition, roadmap. Process guidance, not features.
+- ✅ **§1** Branch + tracking files · ✅ **§2** Target stack (.NET 10 / Flutter / Alpaca, locked).
+- ✅ **§4** Phase 0.5 fork hygiene + demolition (`phase-0.5a..p-complete`) · ✅ **§5** Phase 1 .NET 10 (folded into 0.5p).
+- ✅ **§6** Phase 2 Alpaca-only equipment · ✅ **§7** Phase 3 PHD2 repoint · ✅ **§8** Phase 4 Server scaffold (`:5555`, `/healthz`).
+- ✅ **§9** Phase 5 API contract (`openapi.yaml`) · ✅ **§10** Phases 6-9 endpoints (141 routes) · ✅ **§11** Phase 10 smoke test.
+- ✅ **§12** Phases 11-13 Flutter client (shell, 7 tabs, wizard, settings; mobile → §41/v0.1.0).
+- 🟡 **§13** RPi deployment — DEPLOY.md + .deb-in-CI done; actual Pi install + smoke = **physical-blocked** (PORT_TODO).
+- 🟡 **§14** Testing — 14a-d + 14e sim pinning (#321) done; ~750 unit tests; integration tests gated on sims/hardware.
+- ✅ **§15** Build + verification gate (analyzer gate warnings=errors + CI smoke gate) · ✅ **§17** Fork hygiene / MPL headers / NOTICE.md.
+- 🚫 **§21** Localization — en-only for v0.0.1 (non-English stripped 0.5e/f); i18n is v0.1.0.
+- ✅ **§23** Quick reference (+ §23.1 macOS dev-run) · ✅ **§25** Visual design — NINA UX cloned (placeholder icons).
+- 🟡 **§26** Image processing — **decision revised OpenCvSharp4 → SkiaSharp**; §2105 render PR1-3 done (#354-356); Debayer/DetectStars/libraw pending (PORT_TODO).
+- ⬜ **§27** Single-client connection policy — close-code 4004 takeover deferred (§60.9 notes).
+- ✅ **§28** Sequence durability + crash recovery (SQLite catalog + §28.2/.7/.8).
+- 🟡 **§29** Storage / disk-space policy — storage settings + save-dir resolution done; active disk-space mgmt = verify.
+- ✅ **§30** First-run + launch flow (`phase-11-complete`, mDNS + handshake).
+- 🟡 **§31** Time + location sync — site settings round-trip done; full waterfall = verify.
+- ✅ **§32** Network resilience (§60.9 WS resume + 30/60s heartbeat, #172-176).
+- 🟡 **§33** Version compat + updates — `/server/restart` + imminent-restart event done; apt-pushed updates = v0.1.0.
+- 🟡 **§34** Distribution + install — .deb packaging in CI (artifact); apt.openastro.net = post-v0.0.1.
+- ✅ **§35** Safety policies (editable per-profile, #94).
+- 🚫 **§36** Sky imagery + Data Manager — `PlaceholderDataManagerService`; v0.1.0.
+- ✅ **§37** Profile setup wizard (18-screen + round-trip persistence).
+- ✅ **§38** Sequence format + NINA import + real execution engine (#319-320).
+- 🟡 **§39** Calibration + auto-flats — `Placeholder{Calibration,DarkLibrary,AutoFlats}Service`; sequencer-driven frame types partial; dark-library = guider-e-4.
+- ✅ **§40** Captured-image library (list/preview/thumbnail/download, bulk ops, hfr-analysis).
+- 🚫 **§41** Mobile companion — iOS/Android deferred (§18.G), v0.1.0.
+- 🟡 **§42** Hardware fault recovery — guider-d crash-recovery (#351) done; per-equipment §42.2 fault flow partial.
+- 🚫 **§43** Backup + restore · 🚫 **§44** Real-time backup stream — `PlaceholderBackup*Service`; v0.1.0.
+- ⬜ **§45** Polar alignment — `PlaceholderPolarAlignService`; drives the guider's polar-align API (pending).
+- ✅ **§46** Notifications (SQLite, #201/203).
+- 🚫 **§47** Mosaic imaging — `PlaceholderMosaicService`; v0.1.0.
+- 🟡 **§48** Auto-flats + dark library — placeholders; real impl = guider-e-4 + sequencer.
+- ✅ **§49** API doc serving (Scalar UI) · ✅ **§50** Session analytics + Stats (SQLite, 8 views) · ✅ **§51** Real-time diagnostics (SQLite).
+- ✅ **§52** Mount Alpaca-only (AlpacaTelescope + sequencer mediator).
+- 🟡 **§53** Accessibility — baseline; full WCAG audit = ongoing.
+- 🚫 **§54** Bug report submission — `PlaceholderBugReportService`; v0.1.0.
+- ✅ **§56** Migrating from NINA (`.json` import).
+- 🟡 **§57** Stop Mount + slew safety — telescope abort/park done; full slew-safety policy = verify.
+- ⬜ **§58** Meridian flip — sequencer trigger pending · ⬜ **§59** Autofocus — gated on §2105 star detection (DetectStars pending).
+- ✅ **§60** API conventions (pagination, Idempotency-Key, RFC7807, 202-Accepted, WS envelope).
+- ✅ **§61** Smart settings search (⌘K, #110-123) · ✅ **§62** Dither policy.
+- 🟡 **§63** PHD2 lifecycle — guider a/c/d (#345/346/351) + e-1 RPC classes (#352) done; e-2 push blocked on profile-model; e-4 dark-library + §63.3 active-poll pending.
+- ⬜ **§64** Live View / Loop — §2105-gated; v0.1.0 scope.
+- ✅ **§65** Image stretching + preview API (7 algorithms, variant cache, OSC colour #349; AutoStf bug fixed #354).
+- ✅ **§66** Server concurrency model · ✅ **§67** Security model (trusted-LAN no-auth; remote = v0.1.0).
+- 🟡 **§68** AlpacaBridge integration — Alpaca discovery/connect/drive done; full bridge contract = verify.
+- ✅ **§69** In-app contextual help (registry + tooltips).
+- 🚫 **§70** Profile + sequence sharing — `PlaceholderProfileShareService`; v0.1.0.
+- 🟡 **§71** Native AOT — paused for §38 Newtonsoft (`<PublishAot>` off; revisit via `[JsonPolymorphic]` post-v0.0.1).
+- ✅ **§72** FITS library (cfitsio P/Invoke + atomic write, #197-200) · ✅ **§73** Exception handling (CA1031 boundaries, log-and-recover).
+- 🟡 **§74** Contributor/dev-onboarding doc — README + §23.1; full onboarding doc pending.
+- 🟡 **§75** Client distribution — Flutter builds all platforms; signed/store packaging = v0.1.0.
+
+**Rollup:** the v0.0.1 critical path — equipment discover→connect→capture→§72 FITS→§28 catalog→§65 preview→§38 sequencer→§63 guiding — is **✅ complete and live-validated**. Remaining v0.0.1 feature work: finish §2105 render (Debayer/DetectStars), §45 polar-align, guider-e profile push, §58 meridian flip, §59 autofocus. The 🚫 items are explicitly v0.1.0 (§55). The release itself (§13/§34 RPi smoke + `v0.0.1-ara.1` tag) is the **user/Pi-gated terminus**.
+
 **Repository:** single monorepo at `github.com/open-astro/openastro-ara`. Server (.NET) and client (Flutter) live in the same repo because the client is generated from the server's OpenAPI spec — they must move together. Final layout after the port:
 
 ```

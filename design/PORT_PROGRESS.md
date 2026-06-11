@@ -2,6 +2,8 @@
 
 Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1, "Currently working on" must point at a specific file, endpoint, or sub-PR — never "various refactoring."
 
+> **Section-level completion checklist:** see **`PORT_PLAYBOOK.md` → "Port completion status — v0.0.1 section checklist"** (near the top) for a ✅/🟡/⬜/🚫 status on all 77 playbook §sections. This file (PORT_PROGRESS) carries the per-PR narrative; the playbook checklist is the section-level rollup. Keep both current (each feature PR updates its Completed entry here + flips its §checklist marker there).
+
 ## Current
 
 - **Phase:** v0.0.1 feature completion. The headless daemon drives real Alpaca equipment end-to-end (discover→connect→capture→§72 FITS→§28 catalog→§65 preview), runs saved sequences through the ported NINA engine, and guides via the external `openastro-guider` daemon (guider a/c/d done). Active threads: **§2105 in-memory render** (un-stubbing the inherited Image render path on SkiaSharp — PR1-3 merged), **guider-e** (§63.5 profile push — guider-e-1 RPC classes merged; e-2 push blocked on a profile-model+wizard extension), **§45 polar-align**. Remaining placeholders (polar-align, backup, data-manager, profile-share, Live View) are v0.1.0 per RELEASE_NOTES; the `v0.0.1-ara.1` tag + RPi smoke are the user/Pi-gated terminus.
