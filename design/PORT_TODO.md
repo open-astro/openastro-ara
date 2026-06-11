@@ -171,3 +171,18 @@ Remaining §2105 stubs (each a meatier follow-up, all still dead code until Live
 - **`BaseImageData.RenderBitmapSource` Bayered note**: renders the raw mosaic (grey CFA) until Debayer lands.
 - Also still stubbed (lower priority, libraw/DSLR): `ExposureData.CreateRAWExposureData`, `BaseImageData.SaveTiff`,
   `BaseImageData.FromFile` (non-FITS/XISF), `ImageArrayExposureData.FromBitmapSource`.
+
+### §2105 PR4 Debayer — scoped 2026-06-11 (types mapped, ready to implement)
+`RenderedImage.Debayer(saveColorChannels, saveLumChannel, SensorType bayerPattern) -> IDebayeredImage`.
+Concrete shapes (all in OpenAstroAra.Image):
+- `IDebayeredImage : IRenderedImage` (`Interfaces/IDebayeredImage.cs`) adds `LRGBArrays DebayeredData`,
+  `bool SaveColorChannels`, `bool SaveLumChannel`, `SensorType BayerPattern`.
+- `LRGBArrays(ushort[] lum, red, green, blue)` (`ImageData/LRGBArrays.cs`) — four FULL-resolution planes.
+Implementation plan:
+1. A **full-resolution** debayer (bilinear per channel, pattern-aware) over the raw mosaic `ushort[]` —
+   NOT the §65 half-res `Debayer.SuperPixel`. Put it in `OpenAstroAra.Stretch/Debayer.cs` (e.g.
+   `Bilinear(mosaic, w, h, BayerPattern) -> (R,G,B)`), map SensorType→BayerPattern, Lum = weighted RGB.
+2. New `DebayeredImage : RenderedImage, IDebayeredImage` holding `DebayeredData` + the flags; its
+   inherited grayscale `Image` is the luminance render (or keep the existing render).
+3. Wire `RenderedImage.Debayer`; +tests (no colour bleed on a synthetic edge; correct plane sizes).
+Dead code until Live View (§64), so low urgency — but the algorithm must be correct, so do it fresh.
