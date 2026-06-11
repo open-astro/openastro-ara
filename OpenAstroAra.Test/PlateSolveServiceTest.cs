@@ -97,13 +97,17 @@ namespace OpenAstroAra.Test {
                 () => sut.SolveImage(Mock.Of<IImageData>(), null, null, CancellationToken.None));
         }
 
+        // A fresh profile leaves focal length unset (NaN) and either value can be 0 → degenerate FOV; fail fast.
         [Test]
-        public void SolveImage_throws_when_focal_length_or_pixel_size_is_unconfigured() {
-            // A fresh profile leaves focal length unset (NaN/0) → degenerate FOV; fail fast.
+        [TestCase(0.0, 3.8)]                       // focal length zero
+        [TestCase(double.NaN, 3.8)]                // focal length NaN (the default)
+        [TestCase(800.0, 0.0)]                     // pixel size zero
+        [TestCase(800.0, double.NaN)]              // pixel size NaN
+        public void SolveImage_throws_when_focal_length_or_pixel_size_is_unconfigured(double focalLength, double pixelSize) {
             var profileService = new Mock<IProfileService>();
             profileService.SetupGet(p => p.ActiveProfile.PlateSolveSettings).Returns(new Mock<IPlateSolveSettings>().Object);
-            profileService.SetupGet(p => p.ActiveProfile.TelescopeSettings.FocalLength).Returns(0);
-            profileService.SetupGet(p => p.ActiveProfile.CameraSettings.PixelSize).Returns(3.8);
+            profileService.SetupGet(p => p.ActiveProfile.TelescopeSettings.FocalLength).Returns(focalLength);
+            profileService.SetupGet(p => p.ActiveProfile.CameraSettings.PixelSize).Returns(pixelSize);
             var sut = new PlateSolveService(profileService.Object, new Mock<IPlateSolverFactory>().Object);
             Assert.Throws<InvalidOperationException>(
                 () => sut.SolveImage(Mock.Of<IImageData>(), null, null, CancellationToken.None));
