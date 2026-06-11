@@ -192,8 +192,21 @@ public static class Stretcher {
     // highlights clip at 99.998 percentile, midtone targets background 0.25.
     // Implementation: compute median + MAD via Quickselect (O(N) avg);
     // derive bp/mp/wp; apply Manual stretch with those params.
-    private static byte[] AutoStf(ReadOnlySpan<ushort> input) {
+    private static byte[] AutoStf(ReadOnlySpan<ushort> input) =>
+        // §65.1 adopted defaults: target background 0.25, shadow clip at 2.8 σ_MAD below the median.
+        Stf(input, targetBackground: 0.25, shadowSigma: 2.8);
+
+    /// <summary>
+    /// Screen-transfer-function auto-stretch with explicit knobs — <paramref name="targetBackground"/>
+    /// is the 0..1 output the median lands at, <paramref name="shadowSigma"/> is the shadow clip in
+    /// σ_MAD below the median. <see cref="StretchAlgorithm.AutoStf"/> is this with (0.25, 2.8).
+    /// </summary>
+    public static byte[] Stf(ReadOnlySpan<ushort> input, double targetBackground, double shadowSigma) {
         if (input.Length == 0) return Array.Empty<byte>();
+        // Background must be a strict 0..1 (it's a log base); clamp defensively.
+        if (targetBackground <= 0 || targetBackground >= 1) {
+            targetBackground = Math.Clamp(targetBackground, 0.001, 0.999);
+        }
 
         // Median.
         var values = new ushort[input.Length];
@@ -208,24 +221,24 @@ public static class Stretcher {
         }
         var mad = Quickselect(values, values.Length / 2);
 
-        // §65.1 adopted defaults: shadows = median − 2.8 σ_MAD, where
-        // σ_MAD = MAD / 0.6745 (Gaussian-equivalent). Highlights = 99.998
-        // percentile via a separate quickselect on the original values.
+        // Shadows = median − shadowSigma · σ_MAD, where σ_MAD = MAD / 0.6745 (Gaussian-equivalent).
+        // Highlights = 99.998 percentile via a separate quickselect on the original values.
         const double madToSigma = 1.0 / 0.6745;
         var sigma = mad * madToSigma;
-        var bp = Math.Max(0, median - 2.8 * sigma);
+        var bp = Math.Max(0, median - shadowSigma * sigma);
 
         input.CopyTo(values);
         var wpIndex = (int)Math.Floor(0.99998 * (values.Length - 1));
         double wp = Quickselect(values, wpIndex);
         if (wp <= bp) wp = bp + 1;
 
-        // Target background 0.25. The Manual stretch maps the *midpoint* input to 0.5 output
-        // (mpFraction^gamma = 0.5), so to land the median at 0.25 the midpoint must be the geometric
-        // mean of (median-bp) and (wp-bp): mp = bp + sqrt((median-bp)·(wp-bp)). A linear
-        // bp + 0.25·(median-bp) over-brightens the median to ~0.65 (it ignores that Manual's anchor
-        // is 0.5, not the target background).
-        var mp = bp + Math.Sqrt((median - bp) * (wp - bp));
+        // The Manual stretch maps the *midpoint* input to 0.5 output (mpFraction^gamma = 0.5). To land
+        // the median at `targetBackground` we need mpFraction = medianFraction ^ (ln0.5 / ln target):
+        // for target 0.25 that's the geometric mean (sqrt); a linear bp + target·(median-bp) would
+        // ignore Manual's 0.5 anchor and over-brighten.
+        var medianFraction = (median - bp) / (wp - bp);
+        var mpFraction = Math.Pow(medianFraction, Math.Log(0.5) / Math.Log(targetBackground));
+        var mp = bp + mpFraction * (wp - bp);
         return Manual(input, new StretchParams(
             Blackpoint: bp / MaxValue,
             Midpoint: mp / MaxValue,

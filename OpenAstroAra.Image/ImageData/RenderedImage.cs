@@ -78,8 +78,17 @@ namespace OpenAstroAra.Image.ImageData {
         public IDebayeredImage Debayer(bool saveColorChannels = false, bool saveLumChannel = false, SensorType bayerPattern = SensorType.RGGB) =>
             throw new NotImplementedException("Debayer pending OpenCvSharp4 wiring.");
 
-        public virtual Task<IRenderedImage> Stretch(double factor, double blackClipping, bool unlinked) =>
-            throw new NotImplementedException("Stretch pending OpenCvSharp4 wiring; use OpenAstroAra.Stretch headless pipeline.");
+        public virtual Task<IRenderedImage> Stretch(double factor, double blackClipping, bool unlinked) {
+            // §2105: re-stretch the raw 16-bit frame with explicit STF knobs via the §65 pipeline —
+            // factor = target background (0..1 the median maps to), blackClipping = shadow clip in
+            // σ_MAD below the median (NINA passes it negative, hence Abs). `unlinked` (per-channel
+            // colour) only applies once Debayer() lands; this grayscale render is inherently linked.
+            // Offloaded — Stf is CPU-bound (~50-200ms on a full-res frame).
+            var pixels = RawImageData.Data.FlatArray;
+            return Task.Run<IRenderedImage>(() => Create(
+                OpenAstroAra.Stretch.Stretcher.Stf(pixels, factor, Math.Abs(blackClipping)),
+                RawImageData, profileService, starDetection, starAnnotator));
+        }
 
         public Task<IRenderedImage> DetectStars(
                 bool annotateImage,
