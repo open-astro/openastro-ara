@@ -52,9 +52,11 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 return;
             }
 
-            // "Auto" dec-mode is intentionally skipped (it's PHD2's own default); note that so the absence of a
-            // set_dec_guide_mode in the push isn't read as a bug.
-            if (MapDecGuideMode(guider.DecGuideMode) == "Auto") {
+            // "Auto" dec-mode is intentionally skipped (it's PHD2's own default); surfacing its absence keeps a
+            // missing set_dec_guide_mode from reading as a bug. Inferred from the built message set (the single
+            // source of truth — BuildGuiderEngineConfigMessages emits one iff dec-mode != Auto) so this can't
+            // drift from the builder's own skip rule.
+            if (!messages.OfType<Phd2SetDecGuideMode>().Any()) {
                 Logger.Debug("PHD2 §63.5 push - dec-guide-mode is Auto (PHD2's default); not pushed, leaving the daemon's own setting.");
             }
 
@@ -76,6 +78,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 }
             }
 
+            var applied = 0;
             foreach (var msg in messages) {
                 ct.ThrowIfCancellationRequested();
                 try {
@@ -84,6 +87,8 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                         // SendMessage synthesizes an error on socket failure too (code -1), so this covers both
                         // a true PHD2 rejection and a transport failure — "not applied" reads correctly for both.
                         Logger.Warning($"PHD2 §63.5 push - {msg.Method} not applied: {resp.error}");
+                    } else {
+                        applied++;
                     }
                 } catch (OperationCanceledException) {
                     throw; // a cancelled Connect must stop the push, not swallow it as a per-message failure
@@ -92,10 +97,16 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 }
             }
 
-            // Summary so the connect log shows what guider-engine config ARA applied (and whether it had to
-            // drop the equipment to do it) at a glance — individual per-message lines above only appear on
-            // failure, so without this a successful push is silent.
-            Logger.Info($"PHD2 §63.5 push - applied {messages.Count} guider-engine setting message(s){(disconnectedForSetup ? " (equipment disconnected for set_profile_setup)" : string.Empty)}.");
+            // Summary so the connect log shows what guider-engine config reached the daemon at a glance — the
+            // per-message lines above only appear on failure, so without this a successful push is silent.
+            // Report applied-vs-attempted (not just the count) so a partial failure is visible at Info level
+            // without scanning for the Warning lines, and escalate to Warning when any message didn't land.
+            var setup = disconnectedForSetup ? " (equipment disconnected for set_profile_setup)" : string.Empty;
+            if (applied == messages.Count) {
+                Logger.Info($"PHD2 §63.5 push - applied all {messages.Count} guider-engine setting message(s){setup}.");
+            } else {
+                Logger.Warning($"PHD2 §63.5 push - applied {applied} of {messages.Count} guider-engine setting message(s); {messages.Count - applied} did not land (see warnings above){setup}.");
+            }
         }
 
         /// <summary>
