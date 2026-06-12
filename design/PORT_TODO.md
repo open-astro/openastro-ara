@@ -391,3 +391,19 @@ needs byte-preserving edits. The connect-path swap used the Edit tool safely; md
 - **Profile lifecycle (§63.4 table) beyond connect-time select/create:** `delete_profile` on ARA-profile delete,
   `clone_profile` on ARA-profile clone, `rename_profile` on rename — likely v0.1.0 (need ARA profile-lifecycle
   hooks that don't exist headless yet).
+
+## §29 disk-space monitor — follow-ups (2026-06-12, after the warn-only monitor)
+The §29 active disk-space gap is now closed by `DiskSpaceMonitor` (a `BackgroundService` that warns via a §51
+diagnostic + the §54 `OnDiskSpaceLow` notification when the save volume runs low; opens one issue on a downward
+transition, clears it on recovery via the new `IDiagnosticsService.ClearOpenEventsByTypeAsync`). Deferred:
+
+- **Configurable thresholds.** Low/Critical are fixed absolute defaults (10 GiB / 2 GiB). Astrophotographers
+  with small SSDs vs large arrays may want to tune these — add `MinFreeDiskGb` (or low/critical pair) to the
+  §29 `StorageSettingsDto` + the settings UI, and read them in the monitor (it already accepts ctor overrides).
+- **Hard-stop option (§29.x).** The monitor is warn-only by design. A "pause/abort the sequence when the disk is
+  critically low" policy (analogous to the §35 safety actions) would prevent a guaranteed-to-fail capture from
+  even starting — but that's a behavior change that belongs with a user-set policy toggle, not an unconditional
+  block. Gate it behind a setting.
+- **Per-frame pre-capture check.** The monitor polls on an interval (60 s); a burst of large frames could fill
+  the disk between ticks. A cheap pre-capture free-space check in the capture path (warn/skip) would tighten the
+  window — fold into the §42.2 capture-path hardening rather than the standalone monitor.

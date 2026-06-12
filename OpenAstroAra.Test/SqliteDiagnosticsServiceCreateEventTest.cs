@@ -101,6 +101,36 @@ namespace OpenAstroAra.Test {
                 "Pre-cleared diagnostic event should not appear in OpenIssues.");
         }
 
+        private static DiagnosticEventDto OpenEvent(Guid id, string eventType) =>
+            new(id, eventType, DiagnosticHealth.Yellow, $"open {eventType}",
+                DetectedUtc: DateTimeOffset.UtcNow, ClearedUtc: null, AutoActionTaken: false, AutoActionDescription: null);
+
+        [Test]
+        public async Task ClearOpenEventsByTypeAsync_resolves_only_open_events_of_that_type() {
+            var diskA = Guid.NewGuid();
+            var diskB = Guid.NewGuid();
+            var other = Guid.NewGuid();
+            await _svc.CreateEventAsync(OpenEvent(diskA, "storage.disk_space"), null, false, CancellationToken.None);
+            await _svc.CreateEventAsync(OpenEvent(diskB, "storage.disk_space"), null, false, CancellationToken.None);
+            await _svc.CreateEventAsync(OpenEvent(other, "equipment.camera"), null, false, CancellationToken.None);
+
+            var before = await _svc.GetStateAsync(CancellationToken.None);
+            Assert.That(before.OpenIssues, Has.Count.EqualTo(3));
+
+            var cleared = await _svc.ClearOpenEventsByTypeAsync(
+                "storage.disk_space", DateTimeOffset.UtcNow, CancellationToken.None);
+            Assert.That(cleared, Is.EqualTo(2));
+
+            var after = await _svc.GetStateAsync(CancellationToken.None);
+            Assert.That(after.OpenIssues.Select(i => i.Id), Is.EquivalentTo(new[] { other }),
+                "only the non-disk-space issue should remain open");
+
+            // Idempotent — clearing again resolves nothing.
+            var again = await _svc.ClearOpenEventsByTypeAsync(
+                "storage.disk_space", DateTimeOffset.UtcNow, CancellationToken.None);
+            Assert.That(again, Is.EqualTo(0));
+        }
+
         [Test]
         public async Task CreateEventAsync_after_seed_does_not_re_trigger_seed() {
             // EnsureSeededAsync should be no-op once any row exists, even
