@@ -142,7 +142,17 @@ class DiagnosticsAccumulator {
   String _label(StatusLevel level) {
     if (_open.isEmpty) return 'Diagnostics: nominal';
     final n = _open.length;
-    return 'Diagnostics: $n open issue${n == 1 ? '' : 's'}';
+    final plural = n == 1 ? '' : 's';
+    // Name the worst open severity in the label so the §53 a11y text conveys it
+    // (a screen reader can't see the pill colour).
+    switch (level) {
+      case StatusLevel.error:
+        return 'Diagnostics: $n critical issue$plural';
+      case StatusLevel.busy:
+        return 'Diagnostics: $n warning$plural';
+      default:
+        return 'Diagnostics: $n open issue$plural';
+    }
   }
 
   static int _rank(StatusLevel level) {
@@ -193,8 +203,12 @@ class DiagnosticsNotifier extends Notifier<DiagnosticsSnapshot> {
       type == DiagnosticsWsEvents.cleared;
 }
 
-/// §51 diagnostics snapshot for the active server. Auto-disposed with its
-/// watchers; rebuilds (fresh roll-up) when the active server's stream changes.
+/// §51 diagnostics snapshot for the active server. Intentionally **not**
+/// autoDispose: the health roll-up must persist app-wide (it keeps
+/// accumulating while you're on another tab, not just while the Imaging pill is
+/// on screen). The always-visible WS connection indicator already holds the
+/// underlying stream open, so this adds no extra lifetime. Rebuilds (fresh
+/// roll-up) when the active server's stream changes.
 final diagnosticsStateProvider =
     NotifierProvider<DiagnosticsNotifier, DiagnosticsSnapshot>(
         DiagnosticsNotifier.new);

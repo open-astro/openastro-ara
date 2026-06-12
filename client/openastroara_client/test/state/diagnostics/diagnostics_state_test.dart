@@ -35,7 +35,7 @@ void main() {
         'auto_action_taken': false,
       }));
       expect(snap.level, StatusLevel.busy);
-      expect(snap.label, 'Diagnostics: 1 open issue');
+      expect(snap.label, 'Diagnostics: 1 warning');
       expect(snap.events, hasLength(1));
       expect(snap.events.first.source, 'disk.low');
       expect(snap.events.first.message, 'Low disk space — free up space');
@@ -60,7 +60,7 @@ void main() {
       acc.apply(_ev(DiagnosticsWsEvents.issueDetected, {'event_type': 'disk.low', 'severity': 'yellow'}, seq: 1));
       final snap = acc.apply(_ev(DiagnosticsWsEvents.issueDetected, {'event_type': 'temp.high', 'severity': 'red'}, seq: 2));
       expect(snap.level, StatusLevel.error);
-      expect(snap.label, 'Diagnostics: 2 open issues');
+      expect(snap.label, 'Diagnostics: 2 critical issues');
     });
 
     test('cleared drops the open issue and re-rolls the level', () {
@@ -69,7 +69,7 @@ void main() {
       acc.apply(_ev(DiagnosticsWsEvents.issueDetected, {'event_type': 'temp.high', 'severity': 'red'}, seq: 2));
       final snap = acc.apply(_ev(DiagnosticsWsEvents.cleared, {'event_type': 'temp.high', 'cleared_count': 1}, seq: 3));
       expect(snap.level, StatusLevel.busy, reason: 'only the yellow issue remains open');
-      expect(snap.label, 'Diagnostics: 1 open issue');
+      expect(snap.label, 'Diagnostics: 1 warning');
       expect(snap.events.first.source, 'temp.high');
       expect(snap.events.first.message, 'Cleared');
       expect(snap.events.first.level, StatusLevel.connected);
@@ -87,7 +87,7 @@ void main() {
       final acc = DiagnosticsAccumulator();
       acc.apply(_ev(DiagnosticsWsEvents.issueDetected, {'event_type': 'disk.low', 'severity': 'yellow'}, seq: 1));
       final snap = acc.apply(_ev(DiagnosticsWsEvents.issueDetected, {'event_type': 'disk.low', 'severity': 'red'}, seq: 2));
-      expect(snap.label, 'Diagnostics: 1 open issue', reason: 'same event_type stays one open issue');
+      expect(snap.label, 'Diagnostics: 1 critical issue', reason: 'same event_type stays one open issue');
       expect(snap.level, StatusLevel.error);
     });
 
