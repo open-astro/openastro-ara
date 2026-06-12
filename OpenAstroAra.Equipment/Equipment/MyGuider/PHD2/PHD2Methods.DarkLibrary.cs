@@ -81,10 +81,13 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
 
     public class Phd2DeleteCalibrationFilesParameter {
 
-        [JsonProperty(PropertyName = "delete_dark_library", NullValueHandling = NullValueHandling.Ignore)]
-        public bool? DeleteDarkLibrary { get; set; }
+        // Both default true (the daemon's documented default = delete everything) and are always serialized, so
+        // an all-defaults request sends explicit booleans rather than an ambiguous empty params object. Set one
+        // false to keep that file.
+        [JsonProperty(PropertyName = "delete_dark_library")]
+        public bool DeleteDarkLibrary { get; set; } = true;
 
-        [JsonProperty(PropertyName = "delete_defect_map", NullValueHandling = NullValueHandling.Ignore)]
-        public bool? DeleteDefectMap { get; set; }
+        [JsonProperty(PropertyName = "delete_defect_map")]
+        public bool DeleteDefectMap { get; set; } = true;
     }
 }

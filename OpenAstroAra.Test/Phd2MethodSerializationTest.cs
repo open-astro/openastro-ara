@@ -177,12 +177,14 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void DeleteCalibrationFiles_emits_only_the_flags_that_are_set() {
-            var json = Serialize(new Phd2DeleteCalibrationFiles { Parameters = new() { DeleteDarkLibrary = true } });
+        public void DeleteCalibrationFiles_sends_both_flags_explicitly_no_empty_params() {
+            // Both default true (daemon default = delete everything); both always serialize so the request is
+            // never an ambiguous empty params object. Set one false to keep that file.
+            var json = Serialize(new Phd2DeleteCalibrationFiles { Parameters = new() { DeleteDefectMap = false } });
             Assert.That(json["method"]!.Value<string>(), Is.EqualTo("delete_calibration_files"));
             var p = (JObject)json["params"]!;
-            Assert.That(p["delete_dark_library"]!.Value<bool>(), Is.True);
-            Assert.That(p.ContainsKey("delete_defect_map"), Is.False);
+            Assert.That(p["delete_dark_library"]!.Value<bool>(), Is.True, "default true");
+            Assert.That(p["delete_defect_map"]!.Value<bool>(), Is.False);
         }
 
         [Test]
