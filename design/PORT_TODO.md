@@ -397,9 +397,10 @@ The §29 active disk-space gap is now closed by `DiskSpaceMonitor` (a `Backgroun
 diagnostic + the §54 `OnDiskSpaceLow` notification when the save volume runs low; opens one issue on a downward
 transition, clears it on recovery via the new `IDiagnosticsService.ClearOpenEventsByTypeAsync`). Deferred:
 
-- **Configurable thresholds.** Low/Critical are fixed absolute defaults (10 GiB / 2 GiB). Astrophotographers
-  with small SSDs vs large arrays may want to tune these — add `MinFreeDiskGb` (or low/critical pair) to the
-  §29 `StorageSettingsDto` + the settings UI, and read them in the monitor (it already accepts ctor overrides).
+- **Configurable thresholds.** ✅ DONE — `StorageSettingsDto.MinFreeDiskWarnGb` / `MinFreeDiskCriticalGb`
+  (optional, back-compat defaults 10/2), surfaced under Settings → Session → Storage; the monitor reads them
+  live each tick via the pure `ResolveThresholdBytes` (falls back to the 10/2 GiB defaults on a non-positive or
+  inverted pair). Client + server validate critical < warn.
 - **Hard-stop option (§29.x).** The monitor is warn-only by design. A "pause/abort the sequence when the disk is
   critically low" policy (analogous to the §35 safety actions) would prevent a guaranteed-to-fail capture from
   even starting — but that's a behavior change that belongs with a user-set policy toggle, not an unconditional

@@ -17,12 +17,18 @@ class StorageSettings {
   final StorageCompression compression;
   final String filenameTemplate;
 
+  // §29 disk-space monitor thresholds (whole GiB free on the save volume).
+  final int minFreeDiskWarnGb;
+  final int minFreeDiskCriticalGb;
+
   const StorageSettings({
     this.saveDirectory = '/media/openastroara',
     this.fileFormat = StorageFileFormat.fits,
     this.compression = StorageCompression.rice,
     this.filenameTemplate =
         r'$$DATEMINUS12$$\\$$IMAGETYPE$$\\$$DATETIME$$_$$FILTER$$_$$EXPOSURETIME$$s',
+    this.minFreeDiskWarnGb = 10,
+    this.minFreeDiskCriticalGb = 2,
   });
 
   StorageSettings copyWith({
@@ -30,12 +36,16 @@ class StorageSettings {
     StorageFileFormat? fileFormat,
     StorageCompression? compression,
     String? filenameTemplate,
+    int? minFreeDiskWarnGb,
+    int? minFreeDiskCriticalGb,
   }) =>
       StorageSettings(
         saveDirectory: saveDirectory ?? this.saveDirectory,
         fileFormat: fileFormat ?? this.fileFormat,
         compression: compression ?? this.compression,
         filenameTemplate: filenameTemplate ?? this.filenameTemplate,
+        minFreeDiskWarnGb: minFreeDiskWarnGb ?? this.minFreeDiskWarnGb,
+        minFreeDiskCriticalGb: minFreeDiskCriticalGb ?? this.minFreeDiskCriticalGb,
       );
 }
 
@@ -61,6 +71,22 @@ class StorageSettingsNotifier extends Notifier<StorageSettings> {
     if (v.isEmpty) return;
     state = state.copyWith(filenameTemplate: v);
   }
+
+  // §29 — thresholds are whole GiB ≥ 1. Each field validates independently (so editing one doesn't snap back
+  // just because it momentarily crosses the other); the critical-below-warn invariant is checked at save time
+  // ([thresholdsValid]) with a visible error, and the server rejects an invalid pair with a 400.
+  void setMinFreeDiskWarnGb(int v) {
+    if (v < 1) return;
+    state = state.copyWith(minFreeDiskWarnGb: v);
+  }
+
+  void setMinFreeDiskCriticalGb(int v) {
+    if (v < 1) return;
+    state = state.copyWith(minFreeDiskCriticalGb: v);
+  }
+
+  /// Whether the current pair satisfies critical &lt; warn (checked before persisting).
+  bool get thresholdsValid => state.minFreeDiskCriticalGb < state.minFreeDiskWarnGb;
 
   Future<void> hydrateFromServer(ProfileApi api) async {
     state = await api.getStorageSettings();

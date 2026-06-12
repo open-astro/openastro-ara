@@ -41,13 +41,24 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void Constructor_rejects_inverted_thresholds() {
-            // critical must be below low; inverted overrides would make Evaluate report Critical for almost
-            // anything (the critical arm is tested first). Fail loud at construction. (Services unused before
-            // the guard throws, so null! is safe here.)
-            Assert.Throws<System.ArgumentException>(() => new DiskSpaceMonitor(
-                profileStore: null!, diagnostics: null!, notifications: null!, logger: null!,
-                lowBytes: 1 * Gib, criticalBytes: 10 * Gib));
+        public void ResolveThresholdBytes_converts_valid_gib_pairs() {
+            var (low, crit) = DiskSpaceMonitor.ResolveThresholdBytes(warnGb: 20, criticalGb: 5);
+            Assert.That(low, Is.EqualTo(20 * Gib));
+            Assert.That(crit, Is.EqualTo(5 * Gib));
+        }
+
+        [Test]
+        public void ResolveThresholdBytes_falls_back_to_defaults_on_a_bad_pair() {
+            var defaults = (DiskSpaceMonitor.DefaultLowBytes, DiskSpaceMonitor.DefaultCriticalBytes);
+            // Inverted (critical >= warn) — Evaluate would otherwise read Critical for almost anything.
+            Assert.That(DiskSpaceMonitor.ResolveThresholdBytes(2, 10), Is.EqualTo(defaults));
+            // Equal is also rejected (warn must be strictly above critical).
+            Assert.That(DiskSpaceMonitor.ResolveThresholdBytes(5, 5), Is.EqualTo(defaults));
+            // Non-positive critical.
+            Assert.That(DiskSpaceMonitor.ResolveThresholdBytes(10, 0), Is.EqualTo(defaults));
+            Assert.That(DiskSpaceMonitor.ResolveThresholdBytes(10, -1), Is.EqualTo(defaults));
+            // Non-positive warn (even with a "valid"-looking critical).
+            Assert.That(DiskSpaceMonitor.ResolveThresholdBytes(0, 1), Is.EqualTo(defaults));
         }
 
         [Test]

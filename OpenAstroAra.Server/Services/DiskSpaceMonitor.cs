@@ -41,7 +41,9 @@ namespace OpenAstroAra.Server.Services {
     /// unattended session doesn't silently die on a full disk. It only <em>warns</em> — it never blocks or
     /// aborts a capture, and never deletes anything. Issues are opened on a downward transition and cleared on
     /// recovery (one open issue at a time). Thresholds are absolute free space (what determines whether the next
-    /// frames fit), defaulting to 10 GiB (Low) / 2 GiB (Critical); making them user-configurable is a follow-up.
+    /// frames fit) and come from the profile's §29 storage settings (<c>MinFreeDiskWarnGb</c> /
+    /// <c>MinFreeDiskCriticalGb</c>, read live each tick), falling back to 10 GiB (Low) / 2 GiB (Critical) when
+    /// the stored pair is non-positive or inverted.
     /// </summary>
     public sealed partial class DiskSpaceMonitor : BackgroundService {
 
@@ -55,8 +57,6 @@ namespace OpenAstroAra.Server.Services {
         private readonly IDiagnosticsService _diagnostics;
         private readonly INotificationService _notifications;
         private readonly ILogger<DiskSpaceMonitor> _logger;
-        private readonly long _lowBytes;
-        private readonly long _criticalBytes;
         private readonly TimeSpan _interval;
         private DiskSpaceLevel _last = DiskSpaceLevel.Ok;
 
@@ -65,21 +65,11 @@ namespace OpenAstroAra.Server.Services {
             IDiagnosticsService diagnostics,
             INotificationService notifications,
             ILogger<DiskSpaceMonitor> logger,
-            long? lowBytes = null,
-            long? criticalBytes = null,
             TimeSpan? interval = null) {
             _profileStore = profileStore;
             _diagnostics = diagnostics;
             _notifications = notifications;
             _logger = logger;
-            _lowBytes = lowBytes ?? DefaultLowBytes;
-            _criticalBytes = criticalBytes ?? DefaultCriticalBytes;
-            if (_criticalBytes >= _lowBytes) {
-                // Guard inverted overrides: Evaluate tests the critical arm first, so critical ≥ low would make
-                // almost any free-space value report Critical. Fail loud at construction, not subtly at runtime.
-                throw new ArgumentException(
-                    $"criticalBytes ({_criticalBytes}) must be below lowBytes ({_lowBytes}).", nameof(criticalBytes));
-            }
             _interval = interval ?? DefaultInterval;
         }
 
@@ -88,6 +78,21 @@ namespace OpenAstroAra.Server.Services {
             => freeBytes <= criticalBytes ? DiskSpaceLevel.Critical
              : freeBytes <= lowBytes ? DiskSpaceLevel.Low
              : DiskSpaceLevel.Ok;
+
+        /// <summary>
+        /// Convert the profile's whole-GiB warn/critical free-space thresholds to bytes. A non-positive or
+        /// inverted pair (critical ≥ warn — which <see cref="Evaluate"/> would read as "Critical for almost any
+        /// value", since it tests the critical arm first) is rejected in favour of the built-in 10/2 GiB
+        /// defaults, so a mis-set profile degrades to sane behaviour instead of crying Critical constantly.
+        /// </summary>
+        public static (long LowBytes, long CriticalBytes) ResolveThresholdBytes(int warnGb, int criticalGb) {
+            // Both must be ≥ 1 GiB and warn strictly above critical; otherwise fall back to the defaults.
+            if (warnGb < 1 || criticalGb < 1 || warnGb <= criticalGb) {
+                return (DefaultLowBytes, DefaultCriticalBytes);
+            }
+            const long gib = 1024L * 1024 * 1024;
+            return (warnGb * gib, criticalGb * gib);
+        }
 
         /// <summary>
         /// Whether a transition warrants a <em>new</em> low-disk notification: only when it got strictly worse
@@ -168,7 +173,8 @@ namespace OpenAstroAra.Server.Services {
         }
 
         private async Task CheckOnceAsync(CancellationToken ct) {
-            var saveDir = _profileStore.GetStorageSettings().SaveDirectory;
+            var storage = _profileStore.GetStorageSettings();
+            var saveDir = storage.SaveDirectory;
             if (string.IsNullOrWhiteSpace(saveDir)) {
                 return;
             }
@@ -177,7 +183,9 @@ namespace OpenAstroAra.Server.Services {
                 return; // volume not resolvable yet (e.g. the save mount isn't attached) — don't false-alarm
             }
 
-            var level = Evaluate(freeBytes.Value, _lowBytes, _criticalBytes);
+            // Thresholds come from the profile (live), so a settings change takes effect on the next tick.
+            var (lowBytes, criticalBytes) = ResolveThresholdBytes(storage.MinFreeDiskWarnGb, storage.MinFreeDiskCriticalGb);
+            var level = Evaluate(freeBytes.Value, lowBytes, criticalBytes);
             if (level == _last) {
                 return; // only act on transitions, so a sustained low disk doesn't re-fire every tick
             }

@@ -46,7 +46,13 @@ public sealed record StorageSettingsDto(
     string SaveDirectory,
     string FileFormat,
     string Compression,
-    string FilenameTemplate);
+    string FilenameTemplate,
+    // §29 disk-space monitor thresholds (whole GiB of free space on the save volume). Optional ctor defaults
+    // so a profile.json written before these fields existed still deserializes (System.Text.Json source-gen
+    // uses the default for a missing key). The monitor reads these live; DiskSpaceMonitor falls back to its own
+    // 10/2 defaults if a stored pair is non-positive or inverted.
+    int MinFreeDiskWarnGb = 10,
+    int MinFreeDiskCriticalGb = 2);
 
 /// <summary>
 /// §54 notifications settings — channel toggles + per-channel tokens +

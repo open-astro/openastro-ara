@@ -47,5 +47,35 @@ void main() {
       expect(container.read(storageSettingsProvider).filenameTemplate,
           r'$$TARGET$$/$$FILTER$$');
     });
+
+    test('§29 disk-space threshold defaults', () {
+      final s = container.read(storageSettingsProvider);
+      expect(s.minFreeDiskWarnGb, 10);
+      expect(s.minFreeDiskCriticalGb, 2);
+    });
+
+    test('§29 threshold setters validate each field independently (>= 1)', () {
+      final n = container.read(storageSettingsProvider.notifier);
+      // Non-positive is rejected per-field...
+      n.setMinFreeDiskWarnGb(0);
+      n.setMinFreeDiskWarnGb(-3);
+      expect(container.read(storageSettingsProvider).minFreeDiskWarnGb, 10);
+      // ...but a value that crosses the other threshold is accepted (validated at save, not on edit).
+      n.setMinFreeDiskWarnGb(1); // below critical default (2) — still accepted as an intermediate edit
+      expect(container.read(storageSettingsProvider).minFreeDiskWarnGb, 1);
+      n.setMinFreeDiskCriticalGb(0);
+      expect(container.read(storageSettingsProvider).minFreeDiskCriticalGb, 2);
+      n.setMinFreeDiskCriticalGb(8);
+      expect(container.read(storageSettingsProvider).minFreeDiskCriticalGb, 8);
+    });
+
+    test('§29 thresholdsValid flags an inverted pair (the save-time check)', () {
+      final n = container.read(storageSettingsProvider.notifier);
+      expect(n.thresholdsValid, isTrue); // defaults 10 > 2
+      n.setMinFreeDiskCriticalGb(8); // 8 >= warn? no, warn=10 → 8 < 10 still valid
+      expect(n.thresholdsValid, isTrue);
+      n.setMinFreeDiskWarnGb(5); // now critical(8) >= warn(5) → invalid
+      expect(n.thresholdsValid, isFalse);
+    });
   });
 }
