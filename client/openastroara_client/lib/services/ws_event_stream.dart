@@ -93,10 +93,11 @@ class WsEventStream {
   }
 
   void _open() {
-    if (_disposed) return;
-    // Defensive: a direct caller shouldn't be able to double-open alongside a
-    // pending reconnect (the connect() guard already blocks that, but keep the
-    // single-socket invariant local to _open too).
+    // Single-socket invariant, local to _open: never open over a live socket
+    // (would leak it). Unreachable in normal flow — _onClosed clears _socket
+    // before scheduling the reconnect timer, and cancelOnError stops a second
+    // _onClosed — but cheap insurance against any future double-teardown path.
+    if (_disposed || _socket != null) return;
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
     final socket = _connect(_url, const {'X-Ara-WS-Version': wsVersion});

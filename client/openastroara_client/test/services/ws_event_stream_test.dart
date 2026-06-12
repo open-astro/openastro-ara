@@ -195,6 +195,25 @@ void main() {
       await ws.dispose(); // must be a no-op, not StateError on the closed controller
     });
 
+    test('resume token survives a failed reconnect (no frame before the next drop)', () async {
+      final conn = _FakeConnector();
+      final ws = WsEventStream(server, connect: conn.connect, backoff: const [Duration.zero]);
+      ws.events.listen((_) {});
+      ws.connect();
+      conn.legs.first.incoming.add(_envelope('e', 42));
+      await pumpEventQueue();
+
+      await conn.legs[0].drop(); // leg 0 → reconnect (leg 1 carries the token)
+      await pumpEventQueue();
+      await conn.legs[1].drop(); // leg 1 drops before delivering any frame → reconnect again
+      await pumpEventQueue();
+
+      expect(conn.legs, hasLength(3));
+      expect(conn.legs[2].sent, [jsonEncode({'resume_token': '42'})],
+          reason: '_lastSeq is retained across a failed-handshake reconnect');
+      await ws.dispose();
+    });
+
     test('first connect sends no resume token', () async {
       final conn = _FakeConnector();
       final ws = WsEventStream(server, connect: conn.connect);
