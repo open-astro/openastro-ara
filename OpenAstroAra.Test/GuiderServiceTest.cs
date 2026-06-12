@@ -138,26 +138,51 @@ namespace OpenAstroAra.Test {
             Assert.That(await svc.GetCalibrationFilesStatusAsync(CancellationToken.None), Is.Null);
         }
 
+        // ── §63.6 guider-e-4c-b-2: defect-map build dispatch (mirrors the dark-library dispatch) ──
+
+        [Test]
+        public void BuildDefectMapDarksAsync_when_not_connected_throws_InvalidOperation() {
+            using var svc = NewService();
+            Assert.Throws<InvalidOperationException>(
+                () => { _ = svc.BuildDefectMapDarksAsync(new BuildDefectMapDarksRequestDto(), null, CancellationToken.None); });
+        }
+
+        [Test]
+        public void BuildDefectMapDarksAsync_validates_before_the_connection_check() {
+            using var svc = NewService();
+            Assert.Throws<ArgumentOutOfRangeException>(
+                () => { _ = svc.BuildDefectMapDarksAsync(new BuildDefectMapDarksRequestDto(FrameCount: 0), null, CancellationToken.None); });
+            Assert.Throws<ArgumentOutOfRangeException>(
+                () => { _ = svc.BuildDefectMapDarksAsync(new BuildDefectMapDarksRequestDto(ExposureMs: 0), null, CancellationToken.None); });
+        }
+
         // The concurrent-build gate sits behind RequireConnectedGuider (needs a live daemon), so its decision is
         // factored into a pure helper that's tested here directly — the 409 / idempotent-202 / start branches.
+        private const string DarkOp = "guider.dark_library.build";
+        private const string DefectOp = "guider.defect_map.build";
+
         [Test]
         public void ResolveBuildAdmission_starts_when_no_build_in_flight() {
-            Assert.That(GuiderService.ResolveBuildAdmission(inProgress: false, inFlightKey: "k1", requestKey: "k2"),
+            Assert.That(GuiderService.ResolveBuildAdmission(false, inFlightKey: "k1", inFlightOp: DarkOp, requestKey: "k2", requestOp: DefectOp),
                 Is.EqualTo(GuiderService.BuildAdmission.Start));
         }
 
         [Test]
-        public void ResolveBuildAdmission_idempotent_accepts_same_non_null_key() {
-            Assert.That(GuiderService.ResolveBuildAdmission(inProgress: true, inFlightKey: "k1", requestKey: "k1"),
+        public void ResolveBuildAdmission_idempotent_accepts_same_non_null_key_and_same_op() {
+            Assert.That(GuiderService.ResolveBuildAdmission(true, inFlightKey: "k1", inFlightOp: DarkOp, requestKey: "k1", requestOp: DarkOp),
                 Is.EqualTo(GuiderService.BuildAdmission.IdempotentAccept));
         }
 
         [Test]
-        public void ResolveBuildAdmission_rejects_a_different_or_keyless_concurrent_build() {
-            Assert.That(GuiderService.ResolveBuildAdmission(inProgress: true, inFlightKey: "k1", requestKey: "k2"),
+        public void ResolveBuildAdmission_rejects_different_key_keyless_or_cross_op_concurrent_build() {
+            Assert.That(GuiderService.ResolveBuildAdmission(true, inFlightKey: "k1", inFlightOp: DarkOp, requestKey: "k2", requestOp: DarkOp),
                 Is.EqualTo(GuiderService.BuildAdmission.Reject));
             // A null request key must never collapse onto an in-flight null key as "idempotent".
-            Assert.That(GuiderService.ResolveBuildAdmission(inProgress: true, inFlightKey: null, requestKey: null),
+            Assert.That(GuiderService.ResolveBuildAdmission(true, inFlightKey: null, inFlightOp: DarkOp, requestKey: null, requestOp: DarkOp),
+                Is.EqualTo(GuiderService.BuildAdmission.Reject));
+            // Same key but a DIFFERENT op must reject — else the caller gets a 202 for an op whose WS events
+            // (the in-flight op's) never fire for it, and it waits forever.
+            Assert.That(GuiderService.ResolveBuildAdmission(true, inFlightKey: "k1", inFlightOp: DarkOp, requestKey: "k1", requestOp: DefectOp),
                 Is.EqualTo(GuiderService.BuildAdmission.Reject));
         }
 

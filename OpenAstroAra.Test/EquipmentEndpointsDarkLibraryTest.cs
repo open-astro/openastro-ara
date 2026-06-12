@@ -71,6 +71,46 @@ namespace OpenAstroAra.Test {
             Assert.That(StatusOf(result), Is.EqualTo(StatusCodes.Status409Conflict));
         }
 
+        // ── §63.6 guider-e-4c-b-2: defect-map build endpoint mapping (mirrors the dark-library handler) ──
+
+        private static readonly BuildDefectMapDarksRequestDto DefectRequest = new(ExposureMs: 3000, FrameCount: 10);
+
+        [Test]
+        public async Task DefectMap_build_returns_202_accepted_on_success() {
+            var accepted = new OperationAcceptedDto(Guid.NewGuid(), "guider.defect_map.build", DateTimeOffset.UtcNow, "idem-2");
+            var svc = new Mock<IGuiderService>();
+            svc.Setup(s => s.BuildDefectMapDarksAsync(DefectRequest, "idem-2", It.IsAny<CancellationToken>()))
+                .ReturnsAsync(accepted);
+
+            var result = await EquipmentEndpoints.BuildDefectMapDarksAsync(DefectRequest, "idem-2", svc.Object, CancellationToken.None);
+
+            var typed = result as Accepted<OperationAcceptedDto>;
+            Assert.That(typed, Is.Not.Null);
+            Assert.That(typed!.Value, Is.SameAs(accepted));
+        }
+
+        [Test]
+        public async Task DefectMap_build_maps_validation_ArgumentException_to_400() {
+            var svc = new Mock<IGuiderService>();
+            svc.Setup(s => s.BuildDefectMapDarksAsync(It.IsAny<BuildDefectMapDarksRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new ArgumentOutOfRangeException("exposureMs"));
+
+            var result = await EquipmentEndpoints.BuildDefectMapDarksAsync(DefectRequest, null, svc.Object, CancellationToken.None);
+
+            Assert.That(StatusOf(result), Is.EqualTo(StatusCodes.Status400BadRequest));
+        }
+
+        [Test]
+        public async Task DefectMap_build_maps_not_connected_or_busy_InvalidOperation_to_409() {
+            var svc = new Mock<IGuiderService>();
+            svc.Setup(s => s.BuildDefectMapDarksAsync(It.IsAny<BuildDefectMapDarksRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new InvalidOperationException("a calibration build is already in progress"));
+
+            var result = await EquipmentEndpoints.BuildDefectMapDarksAsync(DefectRequest, null, svc.Object, CancellationToken.None);
+
+            Assert.That(StatusOf(result), Is.EqualTo(StatusCodes.Status409Conflict));
+        }
+
         private static int? StatusOf(IResult result) => (result as ProblemHttpResult)?.StatusCode;
     }
 }
