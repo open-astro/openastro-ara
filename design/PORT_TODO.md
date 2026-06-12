@@ -329,13 +329,13 @@ non-following dome sync can't be cancelled mid-slew. Inherited interface shape; 
 exceptions swallowed). Fix is a shared-interface change (`IDomeFollower` + its impls), out of scope for the
 §58.4 executor PR — fold into a dome-mediator follow-up that threads cancellation through the sync seam.
 
-### §39 calibration — dark matching ignores temperature (from SqliteCalibrationService)
-`SqliteCalibrationService.MatchingDarksAvailable` matches darks to lights by `(exposure_seconds, gain)` only.
-For cooled cameras, darks should also match the set-point temperature (within a tolerance, e.g. ±1°C). The
-catalog stores `temperature_c` per frame, so the EXCEPT query can add a rounded/bucketed temperature column —
-deferred until set-point temperature is reliably recorded on both lights and darks. Flats match by `filter`
-only (correct). The matching-flats generation returns a PLAN (one step per light filter); enqueuing it as a
-runnable §38 flat sequence is a separate follow-up.
+### §39 calibration — dark matching by temperature ✅ DONE (2026-06-12)
+`SqliteCalibrationService.MatchingDarksAvailable` now matches darks to lights by `(exposure_seconds, gain,
+ROUND(temperature_c, 0))` — temperature bucketed to the nearest whole degree. `temperature_c` is `NOT NULL`
+(an uncooled camera records the 0.0 sentinel that `CameraService` coalesces a missing CCD temperature to), so
+uncooled lights/darks still bucket-match. +3 tests (temp-mismatch rejects, within-degree bucketing, uncooled
+sentinel). Remaining §39 follow-up: the matching-flats generation returns a PLAN (one step per light filter);
+enqueuing it as a runnable §38 flat sequence is still a separate follow-up. Flats match by `filter` only (correct).
 
 ### §39 calibration — ListSessions is O(N) queries per page (from #370 review)
 `SqliteCalibrationService.ListSessionsAsync` runs `BuildSessionDtoAsync` per session = 4 queries each (header,

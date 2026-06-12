@@ -28,8 +28,9 @@ namespace OpenAstroAra.Server.Services;
 /// its per-filter summary, and whether matching flats/darks already exist, are derived live from the catalog.
 ///
 /// Matching rules (standard calibration practice): a flat matches a light by <c>filter</c>; a dark matches a
-/// light by <c>(exposure, gain)</c>. Temperature matching for cooled-camera darks is a refinement tracked in
-/// PORT_TODO. The dark-library <em>build</em> is a separate, guider/sequencer-gated concern (<see cref="IDarkLibraryService"/>);
+/// light by <c>(exposure, gain, temperature)</c>, where temperature is bucketed to the nearest whole degree
+/// (NULL temperature — an uncooled camera with no sensor — matches NULL). The dark-library <em>build</em> is a
+/// separate, guider/sequencer-gated concern (<see cref="IDarkLibraryService"/>);
 /// this service only reports availability + generates the matching-flats plan.
 /// </summary>
 public sealed class SqliteCalibrationService : ICalibrationService {
@@ -187,10 +188,16 @@ public sealed class SqliteCalibrationService : ICalibrationService {
             SELECT DISTINCT filter_name FROM frames WHERE frame_type = 'flat'
             """, ct);
 
+        // Darks match a light by (exposure, gain, temperature). Temperature is bucketed to the nearest whole
+        // degree via ROUND(temperature_c, 0): a cooled camera regulates to its set-point within a fraction of a
+        // degree, so same-set-point lights and darks land in the same bucket, while a dark shot at a different
+        // temperature correctly fails to match. temperature_c is NOT NULL — an uncooled camera (no temperature
+        // sensor) records the 0.0 sentinel (CameraService coalesces a missing CCD temperature to 0.0), the same
+        // on both its lights and darks, so they still bucket-match as before.
         var darksAvailable = await AllCoveredAsync(conn, sid, """
-            SELECT DISTINCT exposure_seconds, gain FROM frames WHERE frame_type = 'light' AND session_id = $sid
+            SELECT DISTINCT exposure_seconds, gain, ROUND(temperature_c, 0) FROM frames WHERE frame_type = 'light' AND session_id = $sid
             EXCEPT
-            SELECT DISTINCT exposure_seconds, gain FROM frames WHERE frame_type = 'dark'
+            SELECT DISTINCT exposure_seconds, gain, ROUND(temperature_c, 0) FROM frames WHERE frame_type = 'dark'
             """, ct);
 
         string? profileId = null;

@@ -138,9 +138,49 @@ namespace OpenAstroAra.Test {
             var wrongGain = await _svc.GetSessionAsync(Session, CancellationToken.None);
             Assert.That(wrongGain!.MatchingDarksAvailable, Is.False);
 
-            await InsertFrameAsync(Session, "dark", null, 300, 100, "DARK"); // matches exp + gain
+            await InsertFrameAsync(Session, "dark", null, 300, 100, "DARK"); // matches exp + gain (same -10°C default)
             var matched = await _svc.GetSessionAsync(Session, CancellationToken.None);
             Assert.That(matched!.MatchingDarksAvailable, Is.True);
+        }
+
+        [Test]
+        public async Task MatchingDarksAvailable_requires_temperature_match() {
+            await InsertFrameAsync(Session, "light", "Ha", 300, 100, "M42", temperatureC: -10.0);
+
+            // Right exposure + gain but a dark shot 15°C warmer is not a valid calibration match.
+            await InsertFrameAsync(Session, "dark", null, 300, 100, "DARK", temperatureC: 5.0);
+            var wrongTemp = await _svc.GetSessionAsync(Session, CancellationToken.None);
+            Assert.That(wrongTemp!.MatchingDarksAvailable, Is.False);
+
+            await InsertFrameAsync(Session, "dark", null, 300, 100, "DARK", temperatureC: -10.0);
+            var matched = await _svc.GetSessionAsync(Session, CancellationToken.None);
+            Assert.That(matched!.MatchingDarksAvailable, Is.True);
+        }
+
+        [Test]
+        public async Task MatchingDarksAvailable_buckets_temperature_to_the_nearest_degree() {
+            // A cooled camera regulating to ~-10°C records small fluctuations; lights and darks within the same
+            // whole-degree bucket still match.
+            await InsertFrameAsync(Session, "light", "Ha", 300, 100, "M42", temperatureC: -10.2);
+            await InsertFrameAsync(Session, "dark", null, 300, 100, "DARK", temperatureC: -9.8);
+            var matched = await _svc.GetSessionAsync(Session, CancellationToken.None);
+            Assert.That(matched!.MatchingDarksAvailable, Is.True);
+        }
+
+        [Test]
+        public async Task MatchingDarksAvailable_matches_uncooled_sentinel_temperature() {
+            // temperature_c is NOT NULL; an uncooled camera records the 0.0 sentinel on both lights and darks,
+            // so they bucket-match. A cooled light (-10°C) is not covered by that uncooled (0.0) dark.
+            await InsertFrameAsync(Session, "light", "Ha", 300, 100, "M42", temperatureC: 0.0);
+            await InsertFrameAsync(Session, "dark", null, 300, 100, "DARK", temperatureC: 0.0);
+            var matched = await _svc.GetSessionAsync(Session, CancellationToken.None);
+            Assert.That(matched!.MatchingDarksAvailable, Is.True);
+
+            var cooled = Guid.Parse("33333333-3333-3333-3333-3333333339c0");
+            await InsertSessionAsync(cooled);
+            await InsertFrameAsync(cooled, "light", "Ha", 300, 100, "M42", temperatureC: -10.0);
+            var uncoveredCooled = await _svc.GetSessionAsync(cooled, CancellationToken.None);
+            Assert.That(uncoveredCooled!.MatchingDarksAvailable, Is.False);
         }
 
         [Test]
@@ -182,14 +222,14 @@ namespace OpenAstroAra.Test {
             await cmd.ExecuteNonQueryAsync(CancellationToken.None);
         }
 
-        private async Task InsertFrameAsync(Guid sessionId, string frameType, string? filter, int exposureSeconds, int gain, string target) {
+        private async Task InsertFrameAsync(Guid sessionId, string frameType, string? filter, int exposureSeconds, int gain, string target, double temperatureC = -10.0) {
             await using var conn = _db.OpenConnection();
             await using var cmd = conn.CreateCommand();
             cmd.CommandText = """
                 INSERT INTO frames (id, session_id, target_name, frame_type, filter_name,
                     exposure_seconds, gain, temperature_c, captured_utc, file_path,
                     file_size_bytes, width, height, bit_depth)
-                VALUES ($id, $sid, $target, $type, $filter, $exp, $gain, -10.0, $utc,
+                VALUES ($id, $sid, $target, $type, $filter, $exp, $gain, $temp, $utc,
                     $path, 1000, 16, 16, 16);
                 """;
             cmd.Parameters.AddWithValue("$id", Guid.NewGuid().ToString());
@@ -199,6 +239,7 @@ namespace OpenAstroAra.Test {
             cmd.Parameters.AddWithValue("$filter", (object?)filter ?? DBNull.Value);
             cmd.Parameters.AddWithValue("$exp", exposureSeconds);
             cmd.Parameters.AddWithValue("$gain", gain);
+            cmd.Parameters.AddWithValue("$temp", temperatureC);
             cmd.Parameters.AddWithValue("$utc", DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture));
             cmd.Parameters.AddWithValue("$path", $"/tmp/{Guid.NewGuid():N}.fits");
             await cmd.ExecuteNonQueryAsync(CancellationToken.None);
