@@ -279,12 +279,14 @@ public sealed partial class SqliteDiagnosticsService : IDiagnosticsService {
         return affected;
     }
 
-    // DiagnosticHealth → the lowercase wire token (no ToLowerInvariant, per the analyzer gate).
+    // DiagnosticHealth → the lowercase wire token (no ToLowerInvariant, per the analyzer gate). An unhandled
+    // member throws rather than defaulting to "green" — silently reporting the *healthiest* state for an unknown
+    // severity is the wrong direction for a diagnostic, so force the mapping to be updated if the enum grows.
     private static string SeverityToken(DiagnosticHealth severity) => severity switch {
         DiagnosticHealth.Green => "green",
         DiagnosticHealth.Yellow => "yellow",
         DiagnosticHealth.Red => "red",
-        _ => "green",
+        _ => throw new ArgumentOutOfRangeException(nameof(severity), severity, "unhandled DiagnosticHealth"),
     };
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",

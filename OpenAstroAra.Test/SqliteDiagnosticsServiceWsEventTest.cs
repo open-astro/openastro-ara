@@ -34,9 +34,13 @@ namespace OpenAstroAra.Test {
 
         private sealed class FakeWsBroadcaster : IWsBroadcaster {
             public readonly List<(string Type, JsonElement Payload)> Published = new();
+            public bool Throw { get; set; }
             public long CurrentSequence { get; private set; }
             public Task PublishAsync(string eventType, JsonElement payload, CancellationToken ct) {
                 CurrentSequence++;
+                if (Throw) {
+                    throw new InvalidOperationException("broadcaster is down");
+                }
                 Published.Add((eventType, payload.Clone()));
                 return Task.CompletedTask;
             }
@@ -111,6 +115,20 @@ namespace OpenAstroAra.Test {
             var affected = await _svc.ClearOpenEventsByTypeAsync("nothing.open", DateTimeOffset.UtcNow, CancellationToken.None);
             Assert.That(affected, Is.EqualTo(0));
             Assert.That(_ws.Published, Is.Empty);
+        }
+
+        [Test]
+        public async Task A_throwing_broadcaster_does_not_propagate_to_callers() {
+            // WS emission is best-effort: a broadcaster fault must not surface as a failed diagnostic
+            // raise/clear, since the SQLite write (the source of truth) already succeeded.
+            _ws.Throw = true;
+
+            Assert.DoesNotThrowAsync(() => _svc.CreateEventAsync(
+                Event("disk.low", DiagnosticHealth.Yellow, autoAction: false),
+                recommendedAction: null, autoCorrectible: null, CancellationToken.None));
+
+            var affected = await _svc.ClearOpenEventsByTypeAsync("disk.low", DateTimeOffset.UtcNow, CancellationToken.None);
+            Assert.That(affected, Is.EqualTo(1), "the row was still persisted and cleared despite the WS fault");
         }
     }
 }
