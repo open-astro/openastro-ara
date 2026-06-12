@@ -18,19 +18,23 @@ class _FakeSavedServerService implements SavedServerService {
   Future<void> add(AraServer server) async {}
 }
 
-/// Subclasses [GuiderApi] (its Dio is unused) and records calls / serves
-/// scripted statuses.
-class _FakeGuiderApi extends GuiderApi {
-  _FakeGuiderApi() : super(const AraServer(hostname: 'h', port: 5555));
+/// Pure [GuiderClient] fake — no Dio / sockets. Records calls / serves scripted
+/// statuses.
+class _FakeGuiderApi implements GuiderClient {
   GuiderStatus? status;
   int connectCalls = 0;
   int disconnectCalls = 0;
+  int closeCalls = 0;
   String? lastHost;
   int? lastPort;
   bool throwOnConnect = false;
+  bool throwOnDisconnect = false;
 
   @override
   Future<GuiderStatus?> getStatus() async => status;
+
+  @override
+  void close() => closeCalls++;
 
   @override
   Future<void> connect({String host = 'localhost', int port = 4400}) async {
@@ -51,6 +55,9 @@ class _FakeGuiderApi extends GuiderApi {
   @override
   Future<void> disconnect() async {
     disconnectCalls++;
+    if (throwOnDisconnect) {
+      throw StateError('disconnect failed');
+    }
     status = const GuiderStatus(
       deviceId: 'phd2',
       name: 'PHD2',
@@ -60,7 +67,7 @@ class _FakeGuiderApi extends GuiderApi {
   }
 }
 
-ProviderContainer _container(List<AraServer> servers, GuiderApi api) {
+ProviderContainer _container(List<AraServer> servers, GuiderClient api) {
   final c = ProviderContainer(overrides: [
     savedServerServiceProvider.overrideWithValue(_FakeSavedServerService(servers)),
     guiderApiFactoryProvider.overrideWithValue((_) => api),
@@ -151,6 +158,24 @@ void main() {
 
       expect(api.disconnectCalls, 1);
       expect(c.read(guiderStatusProvider).value!.connectionState, GuiderConnectionState.disconnected);
+    });
+
+    test('a failed disconnect surfaces as AsyncError', () async {
+      final api = _FakeGuiderApi()
+        ..status = const GuiderStatus(
+          deviceId: 'phd2',
+          name: 'PHD2',
+          connectionState: GuiderConnectionState.connected,
+          runtimeState: GuiderRuntimeState.guiding,
+        )
+        ..throwOnDisconnect = true;
+      final c = _container(const [server], api);
+      await c.read(savedServersProvider.future);
+      await c.read(guiderStatusProvider.future);
+
+      await c.read(guiderStatusProvider.notifier).disconnect();
+
+      expect(c.read(guiderStatusProvider).hasError, isTrue);
     });
   });
 }

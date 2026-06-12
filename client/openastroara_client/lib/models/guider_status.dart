@@ -58,7 +58,9 @@ GuiderRuntimeState _runtimeFromWire(String? token) {
 /// Snapshot of the guider's link + runtime state, with the latest guiding RMS
 /// (total/RA/Dec, arcsec) and the active PHD2 profile name when connected.
 class GuiderStatus {
-  final String deviceId;
+  /// Daemon device id; `null` when the descriptor omitted it (distinguishable
+  /// from an explicitly-empty id).
+  final String? deviceId;
   final String name;
   final GuiderConnectionState connectionState;
   final GuiderRuntimeState runtimeState;
@@ -68,7 +70,7 @@ class GuiderStatus {
   final String? currentProfile;
 
   const GuiderStatus({
-    required this.deviceId,
+    this.deviceId,
     required this.name,
     required this.connectionState,
     required this.runtimeState,
@@ -88,7 +90,7 @@ class GuiderStatus {
     final runtime = json['runtime'];
     final runtimeMap = runtime is Map<String, dynamic> ? runtime : const <String, dynamic>{};
     return GuiderStatus(
-      deviceId: json['device_id'] as String? ?? '',
+      deviceId: json['device_id'] as String?,
       name: json['name'] as String? ?? 'Guider',
       connectionState: _connectionFromWire(json['state'] as String?),
       runtimeState: _runtimeFromWire(runtimeMap['state'] as String?),

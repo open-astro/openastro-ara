@@ -5,15 +5,15 @@ import '../../models/server.dart';
 import '../../services/guider_api.dart';
 import '../saved_server_state.dart';
 
-/// Builds a [GuiderApi] for a server. Overridable in tests so a fake can be
-/// injected (the default constructs a real Dio-backed client).
-final guiderApiFactoryProvider = Provider<GuiderApi Function(AraServer)>(
+/// Builds a [GuiderClient] for a server. Overridable in tests so a pure fake
+/// can be injected (the default constructs a real Dio-backed [GuiderApi]).
+final guiderApiFactoryProvider = Provider<GuiderClient Function(AraServer)>(
   (ref) => GuiderApi.new,
 );
 
-/// [GuiderApi] bound to the **active** server (`savedServers.last`), or `null`
-/// when no server is saved.
-final guiderApiProvider = Provider<GuiderApi?>((ref) {
+/// [GuiderClient] bound to the **active** server (`savedServers.last`), or
+/// `null` when no server is saved.
+final guiderApiProvider = Provider<GuiderClient?>((ref) {
   final servers = ref.watch(savedServersProvider).maybeWhen(
         data: (list) => list,
         orElse: () => const <AraServer>[],
@@ -50,7 +50,9 @@ class GuiderStatusNotifier extends AsyncNotifier<GuiderStatus?> {
       state = AsyncValue<GuiderStatus?>.error(e, st);
       return;
     }
-    await refresh();
+    // Refresh against the SAME client we just acted on — re-reading the provider
+    // could pick up a different server if the active one changed in between.
+    await refresh(api);
   }
 
   Future<void> disconnect() async {
@@ -62,11 +64,14 @@ class GuiderStatusNotifier extends AsyncNotifier<GuiderStatus?> {
       state = AsyncValue<GuiderStatus?>.error(e, st);
       return;
     }
-    await refresh();
+    await refresh(api);
   }
 
-  Future<void> refresh() async {
-    final api = ref.read(guiderApiProvider);
+  /// Re-read status. [client] pins the read to a specific [GuiderClient] (used
+  /// by connect/disconnect so a mid-action server switch can't redirect the
+  /// follow-up read); when omitted it reads the current active client.
+  Future<void> refresh([GuiderClient? client]) async {
+    final api = client ?? ref.read(guiderApiProvider);
     state = const AsyncValue<GuiderStatus?>.loading();
     state = await AsyncValue.guard<GuiderStatus?>(() async {
       if (api == null) return null;
