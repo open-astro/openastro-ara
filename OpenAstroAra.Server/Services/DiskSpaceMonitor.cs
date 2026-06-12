@@ -256,8 +256,12 @@ namespace OpenAstroAra.Server.Services {
 
             // §29 hard-stop policy: on entering Critical with OnDiskSpaceCritical=abort, halt any running
             // sequence first so the diagnostic below can record the auto-action accurately. Warn-only otherwise.
+            // `previous != Critical` keeps the gate self-contained (abort only on ENTERING Critical) even though
+            // CheckOnceAsync already only calls this on a level change. If the user hit Abort just before this
+            // fires, abortedRuns will be 0 (the run is already Aborting) — correct: they stopped it themselves,
+            // so no auto-action is recorded and no duplicate "Sequence halted" notification fires.
             var abortedRuns = 0;
-            if (level == DiskSpaceLevel.Critical
+            if (level == DiskSpaceLevel.Critical && previous != DiskSpaceLevel.Critical
                 && ShouldAbortSequence(_profileStore.GetSafetyPolicies().OnDiskSpaceCritical)) {
                 abortedRuns = await _sequencer.AbortActiveRunsAsync(ct);
                 if (abortedRuns > 0) {

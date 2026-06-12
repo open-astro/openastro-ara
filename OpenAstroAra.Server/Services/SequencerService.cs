@@ -191,8 +191,13 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
 
     public async Task<int> AbortActiveRunsAsync(CancellationToken ct) {
         var aborted = 0;
-        foreach (var (id, run) in _runs) {
+        // Snapshot the keys (ConcurrentDictionary.Keys copies) so a worker removing itself mid-iteration — while
+        // we await below — can't matter; re-fetch each run by id since it may have changed by the time we reach it.
+        foreach (var id in _runs.Keys) {
             ct.ThrowIfCancellationRequested();
+            if (!_runs.TryGetValue(id, out var run)) {
+                continue;
+            }
             // Skip terminal AND already-Aborting runs: a re-entrant call (a fast Critical→Warn→Critical
             // oscillation) must not re-count / re-notify a run that's already being aborted.
             if (!IsAbortableRun(run.State)) {
