@@ -248,10 +248,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                     }
 
                     await GetProfiles();
-                    if (profileService.ActiveProfile.GuiderSettings.PHD2ProfileId.HasValue
-                        && SelectedProfile?.Id != profileService.ActiveProfile.GuiderSettings.PHD2ProfileId) {
-                        await ChangeProfile(profileService.ActiveProfile.GuiderSettings.PHD2ProfileId.Value);
-                    }
+                    await EnsureAraGuiderProfileAsync(token);
                     await PushGuiderEngineConfigAsync(token);
                     await EnsurePHD2EquipmentConnected();
                     await TryRefreshShiftLockParams();

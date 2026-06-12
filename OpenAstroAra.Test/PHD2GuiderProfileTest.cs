@@ -65,5 +65,61 @@ namespace OpenAstroAra.Test {
             // the daemon's stored profile names.
             Assert.That(PHD2Guider.AraGuiderProfileName("c14-on-cem120"), Is.EqualTo(once));
         }
+
+        // ── §63.4 guider-e-3b: the pure connect-time selection decision ──────────────────────────────
+
+        private static System.Collections.Generic.List<Phd2Profile> Profiles(params (int id, string name)[] ps) {
+            var list = new System.Collections.Generic.List<Phd2Profile>();
+            foreach (var (id, name) in ps) {
+                list.Add(new Phd2Profile { Id = id, Name = name });
+            }
+            return list;
+        }
+
+        [Test]
+        public void Resolve_honors_explicit_PHD2ProfileId_override_over_the_name_mapping() {
+            // Override set and not currently selected → switch by id (ignores ara-slug entirely).
+            var r = PHD2Guider.ResolveAraProfileSelection(
+                overrideProfileId: 7, selectedProfileId: 3, activeAraProfileName: "Rig",
+                availableProfiles: Profiles((3, "Default"), (7, "Custom")));
+            Assert.That(r.Kind, Is.EqualTo(AraProfileActionKind.SelectById));
+            Assert.That(r.Id, Is.EqualTo(7));
+        }
+
+        [Test]
+        public void Resolve_override_already_selected_is_a_no_op() {
+            var r = PHD2Guider.ResolveAraProfileSelection(
+                overrideProfileId: 7, selectedProfileId: 7, activeAraProfileName: "Rig",
+                availableProfiles: Profiles((7, "Custom")));
+            Assert.That(r.Kind, Is.EqualTo(AraProfileActionKind.None));
+        }
+
+        [Test]
+        public void Resolve_selects_existing_ara_profile_by_name_when_not_current() {
+            // No override; ara-rig exists but a different profile is selected → select by name.
+            var r = PHD2Guider.ResolveAraProfileSelection(
+                overrideProfileId: null, selectedProfileId: 1, activeAraProfileName: "Rig",
+                availableProfiles: Profiles((1, "Default"), (2, "ara-rig")));
+            Assert.That(r.Kind, Is.EqualTo(AraProfileActionKind.SelectByName));
+            Assert.That(r.Id, Is.EqualTo(2));
+            Assert.That(r.Name, Is.EqualTo("ara-rig"));
+        }
+
+        [Test]
+        public void Resolve_no_op_when_ara_profile_already_selected() {
+            var r = PHD2Guider.ResolveAraProfileSelection(
+                overrideProfileId: null, selectedProfileId: 2, activeAraProfileName: "Rig",
+                availableProfiles: Profiles((1, "Default"), (2, "ara-rig")));
+            Assert.That(r.Kind, Is.EqualTo(AraProfileActionKind.None));
+        }
+
+        [Test]
+        public void Resolve_creates_ara_profile_when_absent() {
+            var r = PHD2Guider.ResolveAraProfileSelection(
+                overrideProfileId: null, selectedProfileId: 1, activeAraProfileName: "RedCat on HEQ5",
+                availableProfiles: Profiles((1, "Default")));
+            Assert.That(r.Kind, Is.EqualTo(AraProfileActionKind.Create));
+            Assert.That(r.Name, Is.EqualTo("ara-redcat-on-heq5"));
+        }
     }
 }
