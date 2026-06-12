@@ -214,6 +214,59 @@ void main() {
       await ws.dispose();
     });
 
+    // ── connection-state signal (slice 2a) ──
+
+    test('starts disconnected and goes connecting → connected on the first frame', () async {
+      final conn = _FakeConnector();
+      final ws = WsEventStream(server, connect: conn.connect);
+      expect(ws.connectionState, WsConnectionState.disconnected);
+      final states = <WsConnectionState>[];
+      ws.connectionStates.listen(states.add);
+
+      ws.connect();
+      expect(ws.connectionState, WsConnectionState.connecting);
+      conn.legs.first.incoming.add(_envelope('e', 1));
+      await pumpEventQueue();
+
+      expect(ws.connectionState, WsConnectionState.connected);
+      expect(states, [WsConnectionState.connecting, WsConnectionState.connected]);
+      await ws.dispose();
+    });
+
+    test('a drop transitions to reconnecting, then back to connected on a frame', () async {
+      final conn = _FakeConnector();
+      final ws = WsEventStream(server, connect: conn.connect, backoff: const [Duration.zero]);
+      final states = <WsConnectionState>[];
+      ws.connectionStates.listen(states.add);
+      ws.connect();
+      conn.legs.first.incoming.add(_envelope('e', 1));
+      await pumpEventQueue();
+
+      await conn.legs.first.drop();
+      await pumpEventQueue();
+      expect(ws.connectionState, WsConnectionState.reconnecting);
+      conn.legs[1].incoming.add(_envelope('e', 2));
+      await pumpEventQueue();
+
+      expect(states, [
+        WsConnectionState.connecting,
+        WsConnectionState.connected,
+        WsConnectionState.reconnecting,
+        WsConnectionState.connected,
+      ]);
+      await ws.dispose();
+    });
+
+    test('dispose transitions to disconnected', () async {
+      final conn = _FakeConnector();
+      final ws = WsEventStream(server, connect: conn.connect);
+      ws.connect();
+      conn.legs.first.incoming.add(_envelope('e', 1));
+      await pumpEventQueue();
+      await ws.dispose();
+      expect(ws.connectionState, WsConnectionState.disconnected);
+    });
+
     test('first connect sends no resume token', () async {
       final conn = _FakeConnector();
       final ws = WsEventStream(server, connect: conn.connect);

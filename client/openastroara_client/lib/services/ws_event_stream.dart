@@ -33,6 +33,13 @@ WsSocket _defaultConnect(Uri url, Map<String, String> headers) {
   );
 }
 
+/// Link state of a [WsEventStream], for consumers that need a connected /
+/// disconnected indicator (a silent broadcast stream can't tell "no events" from
+/// "link down"). `connecting` is the first attempt; `connected` is set once a
+/// frame actually arrives; `reconnecting` is a drop being retried with backoff;
+/// `disconnected` is the pre-connect and post-dispose terminal state.
+enum WsConnectionState { connecting, connected, reconnecting, disconnected }
+
 /// §60.9 WebSocket event-stream client. Connects to `ws://host:port/api/v1/ws`,
 /// parses `{type, ts, seq, payload}` envelopes, and exposes them as a broadcast
 /// [events] stream. On a dropped connection it reconnects with backoff and
@@ -55,6 +62,8 @@ class WsEventStream {
   final WsConnector _connect;
   final List<Duration> _backoff;
   final StreamController<WsEvent> _events = StreamController<WsEvent>.broadcast();
+  final StreamController<WsConnectionState> _connStates = StreamController<WsConnectionState>.broadcast();
+  WsConnectionState _connState = WsConnectionState.disconnected;
 
   WsSocket? _socket;
   StreamSubscription<dynamic>? _sub;
@@ -84,11 +93,26 @@ class WsEventStream {
   /// tests and diagnostics; the resume handshake uses it internally.
   int? get lastSeq => _lastSeq;
 
+  /// Broadcast stream of link-state transitions (deduplicated). The current
+  /// value is [connectionState].
+  Stream<WsConnectionState> get connectionStates => _connStates.stream;
+
+  /// Current link state (see [WsConnectionState]). `disconnected` until
+  /// [connect] is called and `disconnected` again after [dispose].
+  WsConnectionState get connectionState => _connState;
+
+  void _setConnState(WsConnectionState s) {
+    if (s == _connState) return;
+    _connState = s;
+    if (!_connStates.isClosed) _connStates.add(s);
+  }
+
   /// Open the connection. Idempotent: a second call while already open — or
   /// while a reconnect is pending in the backoff window — is a no-op (so it
   /// can't race the reconnect timer into opening a second, leaked socket).
   void connect() {
     if (_disposed || _socket != null || _reconnectTimer != null) return;
+    _setConnState(WsConnectionState.connecting);
     _open();
   }
 
@@ -131,6 +155,9 @@ class WsEventStream {
       return; // ignore non-JSON frames (don't reset backoff on garbage)
     }
     if (decoded is! Map<String, dynamic>) return;
+    // Any decoded frame (event OR the resume-response control frame) proves the
+    // link is live → connected.
+    _setConnState(WsConnectionState.connected);
     // The resume-response control frame (`{resumed, ...}`) is not an event.
     if (decoded.containsKey('resumed') && !decoded.containsKey('type')) {
       return;
@@ -170,6 +197,7 @@ class WsEventStream {
     // On the onDone path close() is a harmless no-op on the already-closed sink.
     if (socket != null) unawaited(socket.close());
     if (_disposed) return;
+    _setConnState(WsConnectionState.reconnecting);
     final i = _reconnectAttempt < _backoff.length ? _reconnectAttempt : _backoff.length - 1;
     final delay = _backoff[i];
     if (_reconnectAttempt < _backoff.length) _reconnectAttempt++;
@@ -188,6 +216,8 @@ class WsEventStream {
     _socket = null;
     await sub?.cancel();
     await socket?.close();
+    _setConnState(WsConnectionState.disconnected);
     if (!_events.isClosed) await _events.close();
+    if (!_connStates.isClosed) await _connStates.close();
   }
 }
