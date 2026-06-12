@@ -167,6 +167,16 @@ const List<Setting> settingsRegistry = [
     profilePath: 'safety.on_guider_lost',
   ),
   Setting(
+    id: 'safety.policies.on_disk_space_critical',
+    label: 'On critically-low disk',
+    description: 'Action when free space on the save volume hits the §29 critical threshold: warn only, or also abort the running sequence.',
+    keywords: ['disk', 'space', 'storage', 'full', 'critical', 'abort', 'halt', 'stop', 'sequence'],
+    path: ['Settings', 'Safety', 'Policies'],
+    type: SettingType.enumValue(['Warn only', 'Abort the running sequence']),
+    defaultValue: 'Warn only',
+    profilePath: 'safety.on_disk_space_critical',
+  ),
+  Setting(
     id: 'safety.policies.guider_retry_timeout',
     label: 'Guider retry timeout (s)',
     description: 'How long to keep retrying guider re-acquisition before giving up. Tied to the §54 plate-solve-failed notification trigger.',

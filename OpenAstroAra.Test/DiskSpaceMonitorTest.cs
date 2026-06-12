@@ -74,6 +74,17 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void ShouldAbortSequence_only_for_the_abort_policy() {
+            Assert.That(DiskSpaceMonitor.ShouldAbortSequence("abort"), Is.True);
+            Assert.That(DiskSpaceMonitor.ShouldAbortSequence("  Abort "), Is.True, "trimmed + case-insensitive");
+            // The default and anything unrecognised mean warn-only (safe).
+            Assert.That(DiskSpaceMonitor.ShouldAbortSequence("warn"), Is.False);
+            Assert.That(DiskSpaceMonitor.ShouldAbortSequence("pause"), Is.False);
+            Assert.That(DiskSpaceMonitor.ShouldAbortSequence(""), Is.False);
+            Assert.That(DiskSpaceMonitor.ShouldAbortSequence(null), Is.False);
+        }
+
+        [Test]
         public void LongestPrefixRoot_picks_the_most_specific_mount() {
             // A dedicated /media mount wins over the / root for a path under it.
             Assert.That(

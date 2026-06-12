@@ -1077,6 +1077,9 @@ components:
         on_guider_lost:                { type: string, enum: [pause_and_retry, skip_target, abort_sequence] }
         guider_retry_timeout_sec:      { type: integer, minimum: 0 }
         skip_target_if_recovery_fails: { type: boolean }
+        # §29 — action when the disk-space monitor hits the critical threshold. Optional for back-compat
+        # (defaults to "warn"); "abort" also halts any running sequence.
+        on_disk_space_critical:        { type: string, enum: [warn, abort], default: warn }
 
     FilenamesSettings:
       type: object

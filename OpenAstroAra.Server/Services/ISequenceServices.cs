@@ -49,6 +49,12 @@ public interface ISequencerService {
     Task<OperationAcceptedDto> ResumeAsync(Guid id, string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> AbortAsync(Guid id, string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> StopAsync(Guid id, string? idempotencyKey, CancellationToken ct);
+
+    /// <summary>
+    /// §29 — abort every still-running sequence (the disk-space monitor's "abort on critical" policy uses this
+    /// so a full disk halts capture rather than failing frame-by-frame). Returns the count of runs asked to abort.
+    /// </summary>
+    Task<int> AbortActiveRunsAsync(CancellationToken ct);
 }
 
 /// <summary>Templates per §38.6 / §38.7 — built-ins + user-saved.</summary>

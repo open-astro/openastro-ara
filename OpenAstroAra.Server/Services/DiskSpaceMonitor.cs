@@ -56,6 +56,7 @@ namespace OpenAstroAra.Server.Services {
         private readonly IProfileStore _profileStore;
         private readonly IDiagnosticsService _diagnostics;
         private readonly INotificationService _notifications;
+        private readonly ISequencerService _sequencer;
         private readonly ILogger<DiskSpaceMonitor> _logger;
         private readonly TimeSpan _interval;
         private DiskSpaceLevel _last = DiskSpaceLevel.Ok;
@@ -64,11 +65,13 @@ namespace OpenAstroAra.Server.Services {
             IProfileStore profileStore,
             IDiagnosticsService diagnostics,
             INotificationService notifications,
+            ISequencerService sequencer,
             ILogger<DiskSpaceMonitor> logger,
             TimeSpan? interval = null) {
             _profileStore = profileStore;
             _diagnostics = diagnostics;
             _notifications = notifications;
+            _sequencer = sequencer;
             _logger = logger;
             _interval = interval ?? DefaultInterval;
         }
@@ -102,6 +105,14 @@ namespace OpenAstroAra.Server.Services {
         /// </summary>
         public static bool ShouldNotify(DiskSpaceLevel previous, DiskSpaceLevel current)
             => current != DiskSpaceLevel.Ok && current > previous;
+
+        /// <summary>
+        /// Whether the §29 <c>OnDiskSpaceCritical</c> safety policy says to halt the running sequence (the only
+        /// non-warn action: "abort"). Anything else — including the "warn" default, an unknown value, or null —
+        /// means warn-only, so a mis-set policy degrades to the safe behaviour.
+        /// </summary>
+        public static bool ShouldAbortSequence(string? onDiskSpaceCritical)
+            => string.Equals(onDiskSpaceCritical?.Trim(), "abort", StringComparison.OrdinalIgnoreCase);
 
         /// <summary>
         /// Of the mounted volume roots, the one that actually contains <paramref name="fullPath"/> — the longest
@@ -275,6 +286,31 @@ namespace OpenAstroAra.Server.Services {
                         RelatedEntityId: null),
                     ct);
             }
+
+            // §29 hard-stop policy: on entering Critical, if OnDiskSpaceCritical=abort, halt any running
+            // sequence so it doesn't keep capturing into a near-full disk. Warn-only otherwise (the default).
+            if (level == DiskSpaceLevel.Critical
+                && ShouldAbortSequence(_profileStore.GetSafetyPolicies().OnDiskSpaceCritical)) {
+                var aborted = await _sequencer.AbortActiveRunsAsync(ct);
+                if (aborted > 0) {
+                    LogAbortedSequences(aborted, freeGb, saveDir);
+                    await _notifications.CreateAsync(
+                        new NotificationDto(
+                            Id: Guid.NewGuid(),
+                            PostedUtc: now,
+                            Severity: NotificationSeverity.Critical,
+                            Category: NotificationCategory.Storage,
+                            Title: "Sequence halted — disk critically low",
+                            Message: $"Aborted {aborted} running sequence(s): {freeGb:F1} GB free on {saveDir} (your OnDiskSpaceCritical policy is set to abort).",
+                            Read: false,
+                            Dismissed: false,
+                            DismissedUtc: null,
+                            Payload: null,
+                            RelatedEntityType: null,
+                            RelatedEntityId: null),
+                        ct);
+                }
+            }
         }
 
         [LoggerMessage(Level = LogLevel.Warning, Message = "Disk-space check failed; will retry next tick.")]
@@ -285,5 +321,8 @@ namespace OpenAstroAra.Server.Services {
 
         [LoggerMessage(Level = LogLevel.Warning, Message = "Disk space {Words} ({Previous}->{Level}): {FreeGb} GB free on {SaveDir}.")]
         private partial void LogLowSpace(string words, DiskSpaceLevel previous, DiskSpaceLevel level, double freeGb, string saveDir);
+
+        [LoggerMessage(Level = LogLevel.Warning, Message = "Disk critically low ({FreeGb} GB on {SaveDir}); OnDiskSpaceCritical=abort halted {Count} running sequence(s).")]
+        private partial void LogAbortedSequences(int count, double freeGb, string saveDir);
     }
 }

@@ -9,6 +9,7 @@ import '../../services/profile_api.dart';
 enum UnsafeAction { pauseAndPark, parkOnly, abortAndPark, ignore }
 enum AltitudeLimitAction { skipTarget, pauseSequence, abortSequence }
 enum GuiderLostAction { pauseAndRetry, skipTarget, abortSequence }
+enum DiskSpaceCriticalAction { warn, abort }
 
 class SafetyPolicies {
   // On unsafe weather.
@@ -31,6 +32,9 @@ class SafetyPolicies {
   final int guiderRetryTimeoutSec;
   final bool skipTargetIfRecoveryFails;
 
+  // §29 — on critically-low disk space.
+  final DiskSpaceCriticalAction onDiskSpaceCritical;
+
   const SafetyPolicies({
     this.onUnsafe = UnsafeAction.pauseAndPark,
     this.autoResumeWhenSafe = true,
@@ -44,6 +48,7 @@ class SafetyPolicies {
     this.onGuiderLost = GuiderLostAction.pauseAndRetry,
     this.guiderRetryTimeoutSec = 60,
     this.skipTargetIfRecoveryFails = true,
+    this.onDiskSpaceCritical = DiskSpaceCriticalAction.warn,
   });
 
   SafetyPolicies copyWith({
@@ -59,6 +64,7 @@ class SafetyPolicies {
     GuiderLostAction? onGuiderLost,
     int? guiderRetryTimeoutSec,
     bool? skipTargetIfRecoveryFails,
+    DiskSpaceCriticalAction? onDiskSpaceCritical,
   }) =>
       SafetyPolicies(
         onUnsafe: onUnsafe ?? this.onUnsafe,
@@ -76,6 +82,8 @@ class SafetyPolicies {
             guiderRetryTimeoutSec ?? this.guiderRetryTimeoutSec,
         skipTargetIfRecoveryFails:
             skipTargetIfRecoveryFails ?? this.skipTargetIfRecoveryFails,
+        onDiskSpaceCritical:
+            onDiskSpaceCritical ?? this.onDiskSpaceCritical,
       );
 }
 
@@ -118,6 +126,8 @@ class SafetyPoliciesNotifier extends Notifier<SafetyPolicies> {
 
   void setSkipTargetIfRecoveryFails(bool v) =>
       state = state.copyWith(skipTargetIfRecoveryFails: v);
+  void setOnDiskSpaceCritical(DiskSpaceCriticalAction a) =>
+      state = state.copyWith(onDiskSpaceCritical: a);
 
   Future<void> hydrateFromServer(ProfileApi api) async {
     state = await api.getSafetyPolicies();

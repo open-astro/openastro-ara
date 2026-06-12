@@ -189,6 +189,21 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         return PlaceholderEquipmentHelpers.Accepted("sequencer.stop", idempotencyKey);
     }
 
+    public async Task<int> AbortActiveRunsAsync(CancellationToken ct) {
+        var aborted = 0;
+        foreach (var (id, run) in _runs) {
+            ct.ThrowIfCancellationRequested();
+            if (IsTerminal(run.State)) {
+                continue;
+            }
+            // RequestCancelAsync re-checks terminality under the same race, so a run that finished between the
+            // check above and here is a harmless no-op; the count is "runs we asked to abort".
+            await RequestCancelAsync(id, SequenceRunState.Aborting);
+            aborted++;
+        }
+        return aborted;
+    }
+
     // IHostedService — explicit impl so it doesn't collide with the public
     // StartAsync(Guid, ...) above. On daemon shutdown, cancel every live run so
     // in-flight workers stop promptly instead of being abandoned mid-execution
