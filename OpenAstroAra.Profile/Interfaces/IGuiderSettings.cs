@@ -64,9 +64,10 @@ namespace OpenAstroAra.Profile.Interfaces {
         int GuideFocalLength { get; set; }
         /// <summary>Guide camera pixel size, µm (0 = unset).</summary>
         double GuidePixelSize { get; set; }
-        /// <summary>RA hysteresis aggressiveness, 0..1.</summary>
+        /// <summary>RA hysteresis aggressiveness as the 0..1 fraction PHD2's <c>set_algo_param</c> expects —
+        /// i.e. the GUI's 0-100% ÷ 100. guider-e-2 sends this to the RPC directly (no ×100 conversion).</summary>
         double RAAggressiveness { get; set; }
-        /// <summary>Dec aggressiveness, 0..1.</summary>
+        /// <summary>Dec aggressiveness, 0..1 (same wire scale as <see cref="RAAggressiveness"/>).</summary>
         double DecAggressiveness { get; set; }
         /// <summary>Minimum guide move, pixels (applied to both axes).</summary>
         double MinimumMove { get; set; }

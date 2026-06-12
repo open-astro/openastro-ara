@@ -667,7 +667,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string decGuideMode = string.Empty;
+        private string decGuideMode = "auto";
         [DataMember]
         public string DecGuideMode {
             get => decGuideMode;
