@@ -336,3 +336,10 @@ catalog stores `temperature_c` per frame, so the EXCEPT query can add a rounded/
 deferred until set-point temperature is reliably recorded on both lights and darks. Flats match by `filter`
 only (correct). The matching-flats generation returns a PLAN (one step per light filter); enqueuing it as a
 runnable §38 flat sequence is a separate follow-up.
+
+### §39 calibration — ListSessions is O(N) queries per page (from #370 review)
+`SqliteCalibrationService.ListSessionsAsync` runs `BuildSessionDtoAsync` per session = 4 queries each (header,
+per-filter, flats EXCEPT, darks EXCEPT). A 50-session page ≈ 201 queries. Acceptable at v0.0.1 scale over the
+embedded SQLite file (in-process, sub-ms each → tens of ms for a page), but a catalog with hundreds of nights
+would benefit from batching the per-filter + coverage queries via `IN ($ids)` / a single GROUP BY pass and
+assembling the DTOs in code. Defer until catalog sizes warrant it.

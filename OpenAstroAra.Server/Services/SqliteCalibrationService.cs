@@ -131,6 +131,9 @@ public sealed class SqliteCalibrationService : ICalibrationService {
         int lightCount;
         DateTimeOffset start, end;
         await using (var cmd = conn.CreateCommand()) {
+            // MIN(target_name) picks the lexicographically-first target for a multi-target session (mosaic /
+            // back-to-back nights). Acceptable for v0.0.1 — one representative name; a fuller multi-target
+            // summary is a future refinement.
             cmd.CommandText = """
                 SELECT COUNT(*), MIN(captured_utc), MAX(captured_utc), MIN(target_name)
                 FROM frames
@@ -138,7 +141,8 @@ public sealed class SqliteCalibrationService : ICalibrationService {
                 """;
             cmd.Parameters.AddWithValue("$sid", sid);
             await using var reader = await cmd.ExecuteReaderAsync(ct);
-            if (!await reader.ReadAsync(ct) || await reader.IsDBNullAsync(0, ct) || reader.GetInt32(0) == 0) {
+            // COUNT(*) is never NULL (0 for an empty set), so the zero check is the real "no lights" guard.
+            if (!await reader.ReadAsync(ct) || reader.GetInt32(0) == 0) {
                 return null;
             }
             lightCount = reader.GetInt32(0);
@@ -168,6 +172,9 @@ public sealed class SqliteCalibrationService : ICalibrationService {
             }
         }
 
+        // Calibration coverage is GLOBAL by design: flats/darks are a shared library reused across nights, so
+        // the right-hand side of each EXCEPT scans all flat/dark frames (not just this session's). Only the
+        // light requirements (left side) are session-scoped via $sid.
         // No trailing ';' — these are embedded as subqueries in AllCoveredAsync's SELECT COUNT(*) FROM (...).
         var flatsAvailable = await AllCoveredAsync(conn, sid, """
             SELECT DISTINCT filter_name FROM frames WHERE frame_type = 'light' AND session_id = $sid

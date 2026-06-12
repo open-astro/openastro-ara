@@ -50,6 +50,10 @@ namespace OpenAstroAra.Test {
 
         [TearDown]
         public void TearDown() {
+            // SqliteAraDatabase isn't IDisposable (each OpenConnection() returns a fresh caller-owned
+            // connection), but Microsoft.Data.Sqlite pools the underlying file handle — release it so the temp
+            // dir actually deletes on Windows rather than silently hitting the swallowed IOException.
+            SqliteConnection.ClearAllPools();
             try { Directory.Delete(_dir, recursive: true); } catch (IOException) { } catch (UnauthorizedAccessException) { }
         }
 
