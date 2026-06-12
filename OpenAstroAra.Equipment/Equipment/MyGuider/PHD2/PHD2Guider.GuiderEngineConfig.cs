@@ -44,11 +44,28 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             var guider = profileService.ActiveProfile.GuiderSettings;
             var messages = BuildGuiderEngineConfigMessages(guider);
 
+            if (messages.Count == 0) {
+                // All values left at their unset sentinels (0 / "auto") — nothing to push. Logged so an
+                // operator who expected their scope/aggressiveness to reach the guider can see the push ran
+                // but found nothing configured, rather than wondering whether it fired at all.
+                Logger.Debug("PHD2 §63.5 push - no guider-engine config set (all values unset/Auto); leaving the daemon's own settings.");
+                return;
+            }
+
+            // "Auto" dec-mode is intentionally skipped (it's PHD2's own default); surfacing its absence keeps a
+            // missing set_dec_guide_mode from reading as a bug. Inferred from the built message set (the single
+            // source of truth — BuildGuiderEngineConfigMessages emits one iff dec-mode != Auto) so this can't
+            // drift from the builder's own skip rule.
+            if (!messages.OfType<Phd2SetDecGuideMode>().Any()) {
+                Logger.Debug("PHD2 §63.5 push - dec-guide-mode is Auto (PHD2's default); not pushed, leaving the daemon's own setting.");
+            }
+
             // Only set_profile_setup (focal/pixel) needs the equipment off, so only pay the
             // disconnect → reconnect cost when one is actually being sent — otherwise the algo-param /
             // dec-mode pushes apply at runtime and we leave an already-connected (possibly calibrated)
             // session alone.
-            if (messages.OfType<Phd2SetProfileSetup>().Any()) {
+            var disconnectedForSetup = messages.OfType<Phd2SetProfileSetup>().Any();
+            if (disconnectedForSetup) {
                 // Best-effort like the sends: a socket drop here must not propagate into Connect's catch
                 // (user-visible error + aborted connect). Log + proceed — set_profile_setup will then just fail
                 // its own best-effort send if the equipment is still connected.
@@ -61,6 +78,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 }
             }
 
+            var applied = 0;
             foreach (var msg in messages) {
                 ct.ThrowIfCancellationRequested();
                 try {
@@ -69,12 +87,25 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                         // SendMessage synthesizes an error on socket failure too (code -1), so this covers both
                         // a true PHD2 rejection and a transport failure — "not applied" reads correctly for both.
                         Logger.Warning($"PHD2 §63.5 push - {msg.Method} not applied: {resp.error}");
+                    } else {
+                        applied++;
                     }
                 } catch (OperationCanceledException) {
                     throw; // a cancelled Connect must stop the push, not swallow it as a per-message failure
                 } catch (Exception ex) {
                     Logger.Warning($"PHD2 §63.5 push - {msg.Method} failed: {ex.Message}");
                 }
+            }
+
+            // Summary so the connect log shows what guider-engine config reached the daemon at a glance — the
+            // per-message lines above only appear on failure, so without this a successful push is silent.
+            // Report applied-vs-attempted (not just the count) so a partial failure is visible at Info level
+            // without scanning for the Warning lines, and escalate to Warning when any message didn't land.
+            var setup = disconnectedForSetup ? " (equipment disconnected for set_profile_setup)" : string.Empty;
+            if (applied == messages.Count) {
+                Logger.Info($"PHD2 §63.5 push - applied all {messages.Count} guider-engine setting message(s){setup}.");
+            } else {
+                Logger.Warning($"PHD2 §63.5 push - applied {applied} of {messages.Count} guider-engine setting message(s); {messages.Count - applied} did not land (see warnings above){setup}.");
             }
         }
 

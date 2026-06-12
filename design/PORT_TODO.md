@@ -343,3 +343,22 @@ per-filter, flats EXCEPT, darks EXCEPT). A 50-session page ≈ 201 queries. Acce
 embedded SQLite file (in-process, sub-ms each → tens of ms for a page), but a catalog with hundreds of nights
 would benefit from batching the per-filter + coverage queries via `IN ($ids)` / a single GROUP BY pass and
 assembling the DTOs in code. Defer until catalog sizes warrant it. The cursor is also a plain integer OFFSET (same pattern as the §28 frame repo), so a session inserted between page fetches can repeat/skip a row; the eventual keyset-pagination migration over captured_utc covers both.
+
+## §63.5 guider-e-2 — follow-ups (2026-06-11, from the #372 push review)
+The §63.5 on-connect push (`PHD2Guider.GuiderEngineConfig.cs`, #372) shipped the core map-and-push; two
+review-surfaced refinements are deferred (neither blocks correctness — both are "make a future config option
+expressible"):
+
+- **Per-axis minimum-move.** `BuildGuiderEngineConfigMessages` pushes the single `IGuiderSettings.MinimumMove`
+  to *both* RA and Dec (`set_algo_param {axis, "minMove"}`). PHD2 itself keeps independent RA/Dec min-move, and
+  a backlash-heavy Dec axis often wants a larger value than RA. Splitting ARA's `MinimumMove` into
+  `RAMinimumMove` / `DecMinimumMove` (profile + DTO + editor + the two push lines) is the clean extension —
+  deferred until there's a concrete ask, since the shared value is a sane default and the wire path already
+  sends per-axis messages (only the source field is shared).
+
+- **`DisconnectPHD2Equipment()` has no `CancellationToken`.** `PushGuiderEngineConfigAsync(ct)` threads `ct`
+  through every `SendMessage` and the per-message loop, but the `set_profile_setup` pre-disconnect calls
+  `DisconnectPHD2Equipment()` (inherited signature, no token), so a Connect cancelled *during* that disconnect
+  won't observe the cancel until the next `ThrowIfCancellationRequested`. Bounded (disconnect is fast +
+  best-effort, wrapped so a failure can't abort Connect), but threading a token through `DisconnectPHD2Equipment`
+  would make the cancel prompt. Inherited-interface change → its own follow-up, not the push PR.
