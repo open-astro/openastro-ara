@@ -173,6 +173,16 @@ void main() {
       expect(snap.events, hasLength(5), reason: 'log stays bounded');
     });
 
+    test('the open roll-up is bounded even under many distinct valid types', () {
+      final acc = DiagnosticsAccumulator(maxEvents: 4);
+      for (var i = 0; i < 50; i++) {
+        acc.apply(_ev(DiagnosticsWsEvents.issueDetected,
+            {'event_type': 'type.$i', 'severity': 'yellow'}, seq: i));
+      }
+      // _open is capped at maxEvents; the label reflects the bounded count.
+      expect(acc.snapshot.label, 'Diagnostics: 4 issues — warning');
+    });
+
     test('the log is bounded to maxEvents, most-recent first', () {
       final acc = DiagnosticsAccumulator(maxEvents: 3);
       for (var i = 0; i < 5; i++) {

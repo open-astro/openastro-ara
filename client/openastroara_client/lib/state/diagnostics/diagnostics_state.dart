@@ -129,6 +129,13 @@ class DiagnosticsAccumulator {
     // flooding malformed frames — log it (the _log is bounded) but don't count it.
     if (eventType != null) {
       _open[eventType] = level;
+      // Defence-in-depth: real daemons emit a small, fixed vocabulary of types,
+      // but cap _open too so a server flooding many *distinct* valid types can't
+      // grow it without bound. Map preserves insertion order, so evict the
+      // oldest key (re-detects update in place and never grow the map).
+      if (_open.length > maxEvents) {
+        _open.remove(_open.keys.first);
+      }
     }
     _append(DiagnosticEvent(
       timestamp: event.ts,
@@ -241,8 +248,10 @@ class DiagnosticsNotifier extends Notifier<DiagnosticsSnapshot> {
     // assigned after build() has returned the initial snapshot below.
     // TODO: no replay on reconnect — events the server emits while the socket is
     // down (WsEventStream auto-reconnects, so the stream stays non-null) are
-    // lost, so the pill can read stale-nominal until the next live event.
-    // Resolve when server-side history-on-connect lands.
+    // lost. A missed issue_detected reads stale-nominal; worse, a clear missed
+    // during the gap leaves that issue stuck in _open (pill stays amber/red with
+    // no recovery short of a server switch). Resolve when server-side
+    // history-on-connect lands.
     ref.listen(wsEventsProvider, (prev, next) {
       final event = next.asData?.value;
       // Cheap early-out for the non-diagnostics majority by routing prefix
@@ -263,9 +272,10 @@ class DiagnosticsNotifier extends Notifier<DiagnosticsSnapshot> {
 /// §51 diagnostics snapshot for the active server. Intentionally **not**
 /// autoDispose: the health roll-up must persist app-wide (it keeps
 /// accumulating while you're on another tab, not just while the Imaging pill is
-/// on screen). The always-visible WS connection indicator already holds the
-/// underlying stream open, so this adds no extra lifetime. Rebuilds (fresh
-/// roll-up) when the active server's stream changes.
+/// on screen). Because it `ref.watch`es [wsEventStreamProvider] in build(), this
+/// notifier itself holds the WS stream open for the whole app session — by
+/// design, so diagnostics keep flowing even when no diagnostics widget is
+/// mounted. Rebuilds (fresh roll-up) when the active server's stream changes.
 final diagnosticsStateProvider =
     NotifierProvider<DiagnosticsNotifier, DiagnosticsSnapshot>(
         DiagnosticsNotifier.new);
