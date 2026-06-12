@@ -66,6 +66,10 @@ StatusLevel severityToLevel(String? severity) {
 class DiagnosticsAccumulator {
   DiagnosticsAccumulator({this.maxEvents = 50});
 
+  /// Bounds both the recent-event [_log] and the open-issue roll-up [_open].
+  /// A real daemon's open-type count is far below this; the cap is purely a
+  /// defence against a misbehaving server. Shared deliberately — split into two
+  /// limits if a caller ever needs a short log without also shrinking the cap.
   final int maxEvents;
   // Most-recent-first ring of recent entries. ListQueue gives O(1) prepend
   // (addFirst) and O(1) bounded eviction (removeLast); the snapshot copies it
@@ -128,11 +132,14 @@ class DiagnosticsAccumulator {
     // inflate the count and grow _open without bound under a misbehaving server
     // flooding malformed frames — log it (the _log is bounded) but don't count it.
     if (eventType != null) {
+      // remove-then-insert re-positions a re-detected type at the tail, so the
+      // map orders by *most-recently-seen* and the cap below evicts LRU (not the
+      // type's stale original position).
+      _open.remove(eventType);
       _open[eventType] = level;
       // Defence-in-depth: real daemons emit a small, fixed vocabulary of types,
       // but cap _open too so a server flooding many *distinct* valid types can't
-      // grow it without bound. Map preserves insertion order, so evict the
-      // oldest key (re-detects update in place and never grow the map).
+      // grow it without bound. Evict the least-recently-seen key (the head).
       if (_open.length > maxEvents) {
         _open.remove(_open.keys.first);
       }
@@ -262,6 +269,9 @@ class DiagnosticsNotifier extends Notifier<DiagnosticsSnapshot> {
       if (event == null || !event.type.startsWith(DiagnosticsWsEvents.prefix)) {
         return;
       }
+      // apply() returns non-null only on a real change — that's the change
+      // signal (DiagnosticsSnapshot has reference identity, no value ==), so
+      // never assign `acc.snapshot` here unconditionally or watchers will churn.
       final folded = acc.apply(event);
       if (folded != null) state = folded;
     });

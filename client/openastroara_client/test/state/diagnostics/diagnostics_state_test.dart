@@ -183,6 +183,18 @@ void main() {
       expect(acc.snapshot.label, 'Diagnostics: 4 issues — warning');
     });
 
+    test('open-roll-up eviction is LRU — a re-detected type survives a later flood', () {
+      final acc = DiagnosticsAccumulator(maxEvents: 2);
+      acc.apply(_ev(DiagnosticsWsEvents.issueDetected, {'event_type': 'a', 'severity': 'yellow'}, seq: 1));
+      acc.apply(_ev(DiagnosticsWsEvents.issueDetected, {'event_type': 'b', 'severity': 'yellow'}, seq: 2));
+      acc.apply(_ev(DiagnosticsWsEvents.issueDetected, {'event_type': 'a', 'severity': 'red'}, seq: 3)); // touch a
+      acc.apply(_ev(DiagnosticsWsEvents.issueDetected, {'event_type': 'c', 'severity': 'yellow'}, seq: 4)); // over cap
+      final snap = acc.snapshot;
+      // b is least-recently-seen → evicted; a (re-detected, red) + c remain.
+      expect(snap.level, StatusLevel.error, reason: 'a is still open at red — not evicted despite being older');
+      expect(snap.label, 'Diagnostics: 2 issues — critical');
+    });
+
     test('the log is bounded to maxEvents, most-recent first', () {
       final acc = DiagnosticsAccumulator(maxEvents: 3);
       for (var i = 0; i < 5; i++) {
