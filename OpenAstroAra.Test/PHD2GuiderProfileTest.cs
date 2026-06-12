@@ -66,7 +66,11 @@ namespace OpenAstroAra.Test {
             Assert.That(PHD2Guider.AraGuiderProfileName("c14-on-cem120"), Is.EqualTo(once));
         }
 
-        // ── §63.4 guider-e-3b: the pure connect-time selection decision ──────────────────────────────
+        // ── §63.4 guider-e-3c: the id-suffixed, collision-free name + the connect-time selection decision ──
+
+        private static readonly System.Guid RigId = System.Guid.Parse("a3f8e1c2-1111-2222-3333-444455556666");
+        // The name the resolver targets for "Rig" + RigId (derived, not hardcoded, so the test tracks the format).
+        private static string RigName => PHD2Guider.AraGuiderProfileName("Rig", RigId);
 
         private static System.Collections.Generic.List<Phd2Profile> Profiles(params (int id, string name)[] ps) {
             var list = new System.Collections.Generic.List<Phd2Profile>();
@@ -77,10 +81,23 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Id_suffixed_name_disambiguates_same_slug_profiles() {
+            var a = System.Guid.Parse("aaaaaaaa-0000-0000-0000-000000000000");
+            var b = System.Guid.Parse("bbbbbbbb-0000-0000-0000-000000000000");
+            // "C-14" and "C 14" slug to the same bare name...
+            Assert.That(PHD2Guider.AraGuiderProfileName("C-14"), Is.EqualTo(PHD2Guider.AraGuiderProfileName("C 14")));
+            // ...but the id suffix makes the per-profile names distinct, and deterministic for a given Id.
+            Assert.That(PHD2Guider.AraGuiderProfileName("C-14", a), Is.EqualTo("ara-c-14-aaaaaaaa"));
+            Assert.That(PHD2Guider.AraGuiderProfileName("C 14", b), Is.EqualTo("ara-c-14-bbbbbbbb"));
+            Assert.That(PHD2Guider.AraGuiderProfileName("C-14", a),
+                Is.Not.EqualTo(PHD2Guider.AraGuiderProfileName("C 14", b)));
+        }
+
+        [Test]
         public void Resolve_honors_explicit_PHD2ProfileId_override_over_the_name_mapping() {
             // Override set and not currently selected → switch by id (ignores ara-slug entirely).
             var r = PHD2Guider.ResolveAraProfileSelection(
-                overrideProfileId: 7, selectedProfileId: 3, activeAraProfileName: "Rig",
+                overrideProfileId: 7, selectedProfileId: 3, activeAraProfileName: "Rig", activeAraProfileId: RigId,
                 availableProfiles: Profiles((3, "Default"), (7, "Custom")));
             Assert.That(r.Kind, Is.EqualTo(AraProfileActionKind.SelectById));
             Assert.That(r.Id, Is.EqualTo(7));
@@ -89,27 +106,27 @@ namespace OpenAstroAra.Test {
         [Test]
         public void Resolve_override_already_selected_is_a_no_op() {
             var r = PHD2Guider.ResolveAraProfileSelection(
-                overrideProfileId: 7, selectedProfileId: 7, activeAraProfileName: "Rig",
+                overrideProfileId: 7, selectedProfileId: 7, activeAraProfileName: "Rig", activeAraProfileId: RigId,
                 availableProfiles: Profiles((7, "Custom")));
             Assert.That(r.Kind, Is.EqualTo(AraProfileActionKind.None));
         }
 
         [Test]
         public void Resolve_selects_existing_ara_profile_by_name_when_not_current() {
-            // No override; ara-rig exists but a different profile is selected → select by name.
+            // No override; the id-suffixed ara name exists but a different profile is selected → select by name.
             var r = PHD2Guider.ResolveAraProfileSelection(
-                overrideProfileId: null, selectedProfileId: 1, activeAraProfileName: "Rig",
-                availableProfiles: Profiles((1, "Default"), (2, "ara-rig")));
+                overrideProfileId: null, selectedProfileId: 1, activeAraProfileName: "Rig", activeAraProfileId: RigId,
+                availableProfiles: Profiles((1, "Default"), (2, RigName)));
             Assert.That(r.Kind, Is.EqualTo(AraProfileActionKind.SelectByName));
             Assert.That(r.Id, Is.EqualTo(2));
-            Assert.That(r.Name, Is.EqualTo("ara-rig"));
+            Assert.That(r.Name, Is.EqualTo(RigName));
         }
 
         [Test]
         public void Resolve_no_op_when_ara_profile_already_selected() {
             var r = PHD2Guider.ResolveAraProfileSelection(
-                overrideProfileId: null, selectedProfileId: 2, activeAraProfileName: "Rig",
-                availableProfiles: Profiles((1, "Default"), (2, "ara-rig")));
+                overrideProfileId: null, selectedProfileId: 2, activeAraProfileName: "Rig", activeAraProfileId: RigId,
+                availableProfiles: Profiles((1, "Default"), (2, RigName)));
             Assert.That(r.Kind, Is.EqualTo(AraProfileActionKind.None));
         }
 
@@ -117,9 +134,9 @@ namespace OpenAstroAra.Test {
         public void Resolve_creates_ara_profile_when_absent() {
             var r = PHD2Guider.ResolveAraProfileSelection(
                 overrideProfileId: null, selectedProfileId: 1, activeAraProfileName: "RedCat on HEQ5",
-                availableProfiles: Profiles((1, "Default")));
+                activeAraProfileId: RigId, availableProfiles: Profiles((1, "Default")));
             Assert.That(r.Kind, Is.EqualTo(AraProfileActionKind.Create));
-            Assert.That(r.Name, Is.EqualTo("ara-redcat-on-heq5"));
+            Assert.That(r.Name, Is.EqualTo(PHD2Guider.AraGuiderProfileName("RedCat on HEQ5", RigId)));
         }
     }
 }

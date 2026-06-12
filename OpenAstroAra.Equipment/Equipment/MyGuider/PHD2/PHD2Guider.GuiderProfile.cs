@@ -59,9 +59,9 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         /// other separator (the slug is an internal PHD2 identifier, not user-facing text).
         /// </summary>
         /// <remarks>
-        /// Pure + socket-free so it's unit-testable without a live guider. Two ARA names that differ only in
-        /// punctuation/case can slug to the same PHD2 name (e.g. <c>"C-14"</c> and <c>"C 14"</c> → <c>ara-c-14</c>);
-        /// disambiguating that collision is deferred to the guider-e-3b wiring (tracked in PORT_TODO).
+        /// Pure + socket-free so it's unit-testable without a live guider. This bare-slug form can collide
+        /// (two names that slug the same → one PHD2 profile); the connect path uses the id-suffixed
+        /// <see cref="AraGuiderProfileName(string?, System.Guid)"/> overload to keep each ARA profile distinct.
         /// </remarks>
         public static string AraGuiderProfileName(string? araProfileName) {
             var sb = new StringBuilder();
@@ -87,17 +87,31 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         }
 
         /// <summary>
+        /// The collision-free PHD2 profile name for an ARA profile (guider-e-3c): the bare
+        /// <see cref="AraGuiderProfileName(string?)"/> slug plus a short suffix from the ARA profile's stable Id
+        /// (<c>ara-&lt;slug&gt;-&lt;id8&gt;</c>, e.g. <c>ara-c14-cem120-a3f8e1c2</c>). The suffix makes the name
+        /// deterministic <em>per ARA profile</em> yet unique <em>across</em> profiles, so two profiles whose
+        /// names slug identically (<c>"C-14"</c> / <c>"C 14"</c> → <c>ara-c-14</c>) still map to distinct PHD2
+        /// profiles. This needs no stored "resolved name" on the ARA profile — which matters because the
+        /// Equipment-layer guider has read-only <see cref="IProfileService"/> access and can't persist one back.
+        /// </summary>
+        public static string AraGuiderProfileName(string? araProfileName, System.Guid araProfileId) =>
+            AraGuiderProfileName(araProfileName) + "-" + araProfileId.ToString("N")[..8];
+
+        /// <summary>
         /// Decide what profile action a guider connect should take (§63.4), pure + socket-free so the connect
         /// path's choice is unit-testable. Precedence: an explicit <paramref name="overrideProfileId"/> (the
         /// inherited <c>GuiderSettings.PHD2ProfileId</c> — the user's manual override) wins and selects by id;
-        /// otherwise the ARA profile maps to its <c>ara-&lt;slug&gt;</c> PHD2 profile, selected by name if it
-        /// already exists or created if not. When the target is already the selected profile, the result is
-        /// <see cref="AraProfileActionKind.None"/> so connect doesn't needlessly drop the equipment.
+        /// otherwise the ARA profile maps to its id-suffixed <c>ara-&lt;slug&gt;-&lt;id8&gt;</c> PHD2 profile
+        /// (guider-e-3c, collision-free), selected by name if it already exists or created if not. When the
+        /// target is already the selected profile, the result is <see cref="AraProfileActionKind.None"/> so
+        /// connect doesn't needlessly drop the equipment.
         /// </summary>
         public static AraProfileSelection ResolveAraProfileSelection(
             int? overrideProfileId,
             int? selectedProfileId,
             string? activeAraProfileName,
+            System.Guid activeAraProfileId,
             IReadOnlyList<Phd2Profile> availableProfiles) {
 
             if (overrideProfileId.HasValue) {
@@ -106,7 +120,8 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                     : new AraProfileSelection(AraProfileActionKind.SelectById, overrideProfileId.Value, string.Empty);
             }
 
-            var araName = AraGuiderProfileName(activeAraProfileName);
+            // Id-suffixed name (guider-e-3c) so two ARA profiles with the same slug don't share one PHD2 profile.
+            var araName = AraGuiderProfileName(activeAraProfileName, activeAraProfileId);
             var existing = availableProfiles.FirstOrDefault(p => string.Equals(p.Name, araName, StringComparison.Ordinal));
             if (existing != null) {
                 return selectedProfileId == existing.Id
@@ -131,6 +146,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 guider.PHD2ProfileId,
                 SelectedProfile?.Id,
                 profileService.ActiveProfile.Name,
+                profileService.ActiveProfile.Id,
                 AvailableProfiles.ToList());
 
             switch (selection.Kind) {
