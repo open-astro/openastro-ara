@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/server.dart';
@@ -22,7 +24,10 @@ final wsEventStreamProvider = Provider.autoDispose<WsEventStream?>((ref) {
   if (servers.isEmpty) return null;
   final stream = ref.watch(wsEventStreamFactoryProvider)(servers.last);
   stream.connect();
-  ref.onDispose(stream.dispose);
+  // dispose() is async; onDispose takes a void callback, so the teardown
+  // (final `disconnected`, controller closes) runs fire-and-forget — explicit
+  // via unawaited. On a server-list change the old stream is torn down here.
+  ref.onDispose(() => unawaited(stream.dispose()));
   return stream;
 });
 
