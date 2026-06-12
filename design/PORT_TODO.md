@@ -444,5 +444,15 @@ structured problem-detail `type`) when the build UI lands and needs to tell them
 `build_defect_map_darks {exposure_ms def 3000, frame_count def 10, notes?, load_after def true}` →
 `{profile_id, defect_map_path, defect_count, exposure_ms, frame_count}`, and `set_defect_map_enabled {enabled}`.
 Serialization-locked (+4 tests). `rebuild_defect_map` is omitted — it's in the design reference but not the
-daemon's handler list (no handler yet). e-4c-b (guider method + service + endpoint, mirroring e-4b) is the
-follow-up; it can ship server-side independent of the wizard's optional "Also build defect map" affordance.
+daemon's handler list (no handler yet).
+
+**Shipped:** e-4c-b-1 — guider-client invocation (`PHD2Guider.DarkLibrary.cs`): `BuildDefectMapDarksAsync` +
+`BuildDefectMapDarksRequest` send-site validation (frame 1..50, exposure 1..600000 ms, notes ≤ 500). Refactored
+the shared daemon-limit constants to `Calibration*` names and extracted a shared `ValidateNotes` helper (used by
+both the dark-library + defect-map builders) to keep it DRY. +5 tests. (`get_calibration_files_status` already
+covers the defect-map status fields from e-4b-1.)
+
+**e-4c-b-2 (service + endpoint) — remaining:** a `GuiderService` 202-Accepted op + REST endpoint for the defect-map
+build (mirroring the dark-library e-4b-2 op: concurrent-build guard, idempotency, WS `guider.defect_map.started/
+complete/failed`) + a `set_defect_map_enabled` toggle. Can ship server-side independent of the wizard's optional
+"Also build defect map" affordance.
