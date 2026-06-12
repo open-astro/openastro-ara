@@ -7,6 +7,7 @@ import '../ws/ws_providers.dart';
 /// §60.9 `diagnostics.*` WS event-type tokens the §51 panel consumes (mirrors
 /// `WsEventCatalog` on the server). Routing is by these strings.
 abstract final class DiagnosticsWsEvents {
+  static const prefix = 'diagnostics.';
   static const issueDetected = 'diagnostics.issue_detected';
   static const autoActionTaken = 'diagnostics.auto_action_taken';
   static const cleared = 'diagnostics.cleared';
@@ -143,13 +144,15 @@ class DiagnosticsAccumulator {
     if (_open.isEmpty) return 'Diagnostics: nominal';
     final n = _open.length;
     final plural = n == 1 ? '' : 's';
-    // Name the worst open severity in the label so the §53 a11y text conveys it
-    // (a screen reader can't see the pill colour).
+    // The count is the honest total of open issues; the suffix names the *worst*
+    // severity (not a per-severity count) so a mixed set reads accurately — and
+    // so the §53 a11y text conveys severity a screen reader can't see in the
+    // pill colour.
     switch (level) {
       case StatusLevel.error:
-        return 'Diagnostics: $n critical issue$plural';
+        return 'Diagnostics: $n issue$plural — critical';
       case StatusLevel.busy:
-        return 'Diagnostics: $n warning$plural';
+        return 'Diagnostics: $n issue$plural — warning';
       default:
         return 'Diagnostics: $n open issue$plural';
     }
@@ -191,16 +194,16 @@ class DiagnosticsNotifier extends Notifier<DiagnosticsSnapshot> {
     final acc = DiagnosticsAccumulator();
     ref.listen(wsEventsProvider, (prev, next) {
       final event = next.asData?.value;
-      if (event == null || !_isDiagnostics(event.type)) return;
+      // Filter to the `diagnostics.*` family by routing prefix (matching the
+      // contract in [DiagnosticsWsEvents]); a new subtype needs no edit here.
+      // The accumulator already ignores any subtype it doesn't fold.
+      if (event == null || !event.type.startsWith(DiagnosticsWsEvents.prefix)) {
+        return;
+      }
       state = acc.apply(event);
     });
     return acc.snapshot;
   }
-
-  static bool _isDiagnostics(String type) =>
-      type == DiagnosticsWsEvents.issueDetected ||
-      type == DiagnosticsWsEvents.autoActionTaken ||
-      type == DiagnosticsWsEvents.cleared;
 }
 
 /// §51 diagnostics snapshot for the active server. Intentionally **not**

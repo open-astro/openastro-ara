@@ -86,7 +86,7 @@ void main() {
 
       final snap = container.read(diagnosticsStateProvider);
       expect(snap.level, StatusLevel.busy);
-      expect(snap.label, 'Diagnostics: 1 warning');
+      expect(snap.label, 'Diagnostics: 1 issue — warning');
       expect(snap.events.single.source, 'disk.low');
     });
 
