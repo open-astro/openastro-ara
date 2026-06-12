@@ -373,6 +373,13 @@ class ProfileApi {
         settleTimeoutSec: (j['settle_timeout_sec'] as num?)?.toInt() ?? 60,
         forceCalibrationEachSession:
             (j['force_calibration_each_session'] as bool?) ?? false,
+        // §63.5 guider-engine config (defaults match the server's optional-field defaults).
+        guideFocalLength: (j['guide_focal_length'] as num?)?.toInt() ?? 0,
+        guidePixelSize: (j['guide_pixel_size'] as num?)?.toDouble() ?? 0,
+        raAggressiveness: (j['ra_aggressiveness'] as num?)?.toDouble() ?? 0.7,
+        decAggressiveness: (j['dec_aggressiveness'] as num?)?.toDouble() ?? 0.7,
+        minimumMove: (j['minimum_move'] as num?)?.toDouble() ?? 0.15,
+        decGuideMode: (j['dec_guide_mode'] as String?) ?? 'auto',
       );
 
   static Map<String, dynamic> _phd2SettingsToJson(Phd2Settings v) => {
@@ -386,6 +393,12 @@ class ProfileApi {
         'settle_time_sec': v.settleTimeSec,
         'settle_timeout_sec': v.settleTimeoutSec,
         'force_calibration_each_session': v.forceCalibrationEachSession,
+        'guide_focal_length': v.guideFocalLength,
+        'guide_pixel_size': v.guidePixelSize,
+        'ra_aggressiveness': v.raAggressiveness,
+        'dec_aggressiveness': v.decAggressiveness,
+        'minimum_move': v.minimumMove,
+        'dec_guide_mode': v.decGuideMode,
       };
 
   // ── Diagnostics mode JSON mapping ──────────────────────────────────────

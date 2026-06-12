@@ -24,6 +24,14 @@ class Phd2Settings {
   // Calibration.
   final bool forceCalibrationEachSession;
 
+  // §63.5 guider-engine config (pushed to the guider daemon on connect).
+  final int guideFocalLength; // mm, 0 = unset
+  final double guidePixelSize; // µm, 0 = unset
+  final double raAggressiveness; // 0..1
+  final double decAggressiveness; // 0..1
+  final double minimumMove; // px
+  final String decGuideMode; // auto | north | south | off
+
   const Phd2Settings({
     this.host = 'localhost',
     this.port = 4400,
@@ -35,6 +43,12 @@ class Phd2Settings {
     this.settleTimeSec = 10,
     this.settleTimeoutSec = 60,
     this.forceCalibrationEachSession = false,
+    this.guideFocalLength = 0,
+    this.guidePixelSize = 0,
+    this.raAggressiveness = 0.7,
+    this.decAggressiveness = 0.7,
+    this.minimumMove = 0.15,
+    this.decGuideMode = 'auto',
   });
 
   Phd2Settings copyWith({
@@ -48,6 +62,12 @@ class Phd2Settings {
     int? settleTimeSec,
     int? settleTimeoutSec,
     bool? forceCalibrationEachSession,
+    int? guideFocalLength,
+    double? guidePixelSize,
+    double? raAggressiveness,
+    double? decAggressiveness,
+    double? minimumMove,
+    String? decGuideMode,
   }) =>
       Phd2Settings(
         host: host ?? this.host,
@@ -61,6 +81,12 @@ class Phd2Settings {
         settleTimeoutSec: settleTimeoutSec ?? this.settleTimeoutSec,
         forceCalibrationEachSession:
             forceCalibrationEachSession ?? this.forceCalibrationEachSession,
+        guideFocalLength: guideFocalLength ?? this.guideFocalLength,
+        guidePixelSize: guidePixelSize ?? this.guidePixelSize,
+        raAggressiveness: raAggressiveness ?? this.raAggressiveness,
+        decAggressiveness: decAggressiveness ?? this.decAggressiveness,
+        minimumMove: minimumMove ?? this.minimumMove,
+        decGuideMode: decGuideMode ?? this.decGuideMode,
       );
 }
 
@@ -117,6 +143,41 @@ class Phd2SettingsNotifier extends Notifier<Phd2Settings> {
 
   void setForceCalibrationEachSession(bool v) =>
       state = state.copyWith(forceCalibrationEachSession: v);
+
+  // §63.5 — guider-engine config. Ranges mirror the server's ApplyPhd2 normalization
+  // (aggressiveness ∈ [0,1], non-negative focal/pixel/min-move, dec-mode in the known set).
+  static const decGuideModes = ['auto', 'north', 'south', 'off'];
+
+  void setGuideFocalLength(int v) {
+    if (v < 0) return;
+    state = state.copyWith(guideFocalLength: v);
+  }
+
+  void setGuidePixelSize(double v) {
+    if (v < 0) return;
+    state = state.copyWith(guidePixelSize: v);
+  }
+
+  void setRaAggressiveness(double v) {
+    if (v < 0 || v > 1) return;
+    state = state.copyWith(raAggressiveness: v);
+  }
+
+  void setDecAggressiveness(double v) {
+    if (v < 0 || v > 1) return;
+    state = state.copyWith(decAggressiveness: v);
+  }
+
+  void setMinimumMove(double v) {
+    if (v < 0) return;
+    state = state.copyWith(minimumMove: v);
+  }
+
+  void setDecGuideMode(String v) {
+    final m = v.trim().toLowerCase();
+    if (!decGuideModes.contains(m)) return;
+    state = state.copyWith(decGuideMode: m);
+  }
 
   Future<void> hydrateFromServer(ProfileApi api) async {
     state = await api.getPhd2Settings();
