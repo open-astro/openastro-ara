@@ -184,7 +184,16 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 Logger.Warning($"PHD2 §63.4 - {msg.Method} for '{selection.Name}' failed: {ex.Message}");
             }
 
-            await GetProfiles(); // refresh AvailableProfiles + SelectedProfile to reflect the switch/create
+            // Refresh AvailableProfiles + SelectedProfile to reflect the switch/create. Best-effort: the profile
+            // was already selected on the daemon, so a failed refresh (GetProfiles throws on RPC error) must not
+            // abort the connect — the next GetProfiles in the connect path / a later poll will reconcile.
+            try {
+                await GetProfiles();
+            } catch (OperationCanceledException) {
+                throw;
+            } catch (Exception ex) {
+                Logger.Warning($"PHD2 §63.4 - profile refresh after select/create failed: {ex.Message}");
+            }
         }
     }
 }

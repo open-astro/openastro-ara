@@ -1063,7 +1063,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
 
             var getProfiles = new Phd2GetProfiles();
             var getProfilesResponse = await SendMessage<GetProfilesResponse>(getProfiles);
-            if (getProfileResponse.error != null) {
+            if (getProfilesResponse.error != null) {
                 Logger.Error($"Failed GetProfiles: {getProfilesResponse.error}");
                 throw new InvalidOperationException(Loc.Instance["LblPhd2FailedGetProfiles"]);
             }
