@@ -106,6 +106,39 @@ namespace OpenAstroAra.Test {
             Assert.That(req.Parameters!.MaxExposureMs, Is.EqualTo(600000));
         }
 
+        // ── BuildDefectMapDarksRequest: send-site validation (§63.6 guider-e-4c-b) ──
+
+        [Test]
+        public void DefectMap_request_carries_validated_params() {
+            var req = PHD2Guider.BuildDefectMapDarksRequest(exposureMs: 5000, frameCount: 20, notes: "rig A", loadAfter: false);
+            Assert.That(req.Parameters!.ExposureMs, Is.EqualTo(5000));
+            Assert.That(req.Parameters!.FrameCount, Is.EqualTo(20));
+            Assert.That(req.Parameters!.Notes, Is.EqualTo("rig A"));
+            Assert.That(req.Parameters!.LoadAfter, Is.False);
+        }
+
+        [Test]
+        public void DefectMap_request_accepts_boundaries_and_trims_notes() {
+            Assert.That(PHD2Guider.BuildDefectMapDarksRequest(1, 1, null, true).Parameters!.ExposureMs, Is.EqualTo(1));
+            var atMax = PHD2Guider.BuildDefectMapDarksRequest(600000, 50, "  note  ", true);
+            Assert.That(atMax.Parameters!.ExposureMs, Is.EqualTo(600000));
+            Assert.That(atMax.Parameters!.FrameCount, Is.EqualTo(50));
+            Assert.That(atMax.Parameters!.Notes, Is.EqualTo("note"), "notes are trimmed");
+        }
+
+        [Test]
+        public void DefectMap_request_rejects_out_of_range_frame_count_and_exposure() {
+            Assert.Throws<ArgumentOutOfRangeException>(() => PHD2Guider.BuildDefectMapDarksRequest(3000, 0, null, true));
+            Assert.Throws<ArgumentOutOfRangeException>(() => PHD2Guider.BuildDefectMapDarksRequest(3000, 51, null, true));
+            Assert.Throws<ArgumentOutOfRangeException>(() => PHD2Guider.BuildDefectMapDarksRequest(0, 10, null, true));
+            Assert.Throws<ArgumentOutOfRangeException>(() => PHD2Guider.BuildDefectMapDarksRequest(600001, 10, null, true));
+        }
+
+        [Test]
+        public void DefectMap_request_rejects_overlong_notes() {
+            Assert.Throws<ArgumentException>(() => PHD2Guider.BuildDefectMapDarksRequest(3000, 10, new string('x', 501), true));
+        }
+
         // ── Response deserialization ──
 
         [Test]
