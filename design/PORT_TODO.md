@@ -428,13 +428,21 @@ progress — see scope correction). +6 tests (service validation/connection cont
 server-side calibration-state store yet (the §39 calibration view derives from the frame catalog, not a guider
 artifact record), so this waits until such a store exists or the client reads it live from the status endpoint.
 
-**e-4b-3 (client UI) — BLOCKED on client WS infra (assessed 2026-06-12).** The cover-the-scope build modal +
-building/done indicator wants the §60.9 WS stream to observe `guider.dark_library.started/complete/failed` — but
-the **Flutter client has no WS event-stream client yet** (Phase 12c.3; the diagnostics provider is still a stub),
-and the guider isn't yet connectable from the client (no equipment-guider control service). A build button today
-would fire a 202 into the void with no completion signal. Defer e-4b-3 until 12c.3 lands the WS client (and the
-client gains guider-equipment control). Achievable degraded slice meanwhile (not yet built): GET-status panel +
-build button + manual refresh — low value without live completion, so parked with the WS work.
+**e-4b-3 (client UI) — partially unblocked (WS transport landed 2026-06-12).** The cover-the-scope build modal +
+building/done indicator wants the §60.9 WS stream to observe `guider.dark_library.started/complete/failed`.
+**Phase 12c.3 WS client — slice 1 (transport) shipped:** `lib/services/ws_event_stream.dart` (`WsEventStream`) +
+`lib/models/ws_event.dart` — connects `ws://host:port/api/v1/ws` (header `X-Ara-WS-Version: 1`, via
+`web_socket_channel`/`IOWebSocketChannel`), parses `{type,ts,seq,payload}` envelopes to a broadcast `Stream<WsEvent>`,
+reconnects with backoff + resumes from the last-seen seq (first-frame `{"resume_token":"<seq>"}`), skips the
+resume-response control frame + malformed frames. Injectable channel-seam (`WsSocket`/`WsConnector`); +6 tests.
+**Remaining for e-4b-3:** WS-client slice 2 — a Riverpod provider wiring the active server (`savedServersProvider →
+servers.last`) to a `WsEventStream` (lifecycle via `ref.onDispose`) + routing `diagnostics.*` → the existing
+`DiagnosticsSnapshot` contract (`diagnostic_panel.dart` stub) and `guider.dark_library.*` → the build modal.
+Slice 2 should also add a **connection-state signal** to `WsEventStream` (connected / reconnecting / disconnected) —
+the `events` stream alone can't tell consumers the link dropped (from #390 review); the diagnostics panel + build
+modal need a disconnected indicator. Web
+support needs a query-param version fallback (browser WS can't set the header). The guider isn't yet connectable
+from the client either (no equipment-guider control service) — also needed before the build button is useful.
 
 **e-4b-2 review follow-up (from #384 r5, deferred to e-4b-3):** the build POST returns 409 for both "guider not
 connected" and "build already in progress"; give the concurrent-build case a distinct signal (423 Locked or a
