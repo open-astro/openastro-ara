@@ -459,6 +459,12 @@ defect-map can't run at once on one camera) + a shared `EmitCalibrationEventAsyn
 complete/failed`. +6 tests (service validation/connection + endpoint 202/400/409). `GET …/darklibrary/status`
 already covers defect-map status.
 
-**e-4c remaining (deferred):** the `set_defect_map_enabled` / `set_dark_library_enabled` toggles (neither is wired
-today — no enable/disable endpoint for either calibration artifact yet) and the client "Also build defect map"
-affordance (gated on the same WS client + dark-library UI as e-4b-3).
+**Shipped:** e-4c-c — the enable/disable toggles. `PHD2Guider.SetDarkLibraryEnabledAsync` / `SetDefectMapEnabledAsync`
+(both return the status object via a shared `SendCalibrationStatusRpcAsync`), `GuiderService.SetDark/DefectMapEnabledAsync`
+(→ `CalibrationFilesStatusDto`; not-connected → 409, daemon-reject → 422), and `POST …/darklibrary/enabled` +
+`POST …/defectmap/enabled` (synchronous — return the updated status, not a 202 build). Extracted a shared `MapStatus`
+helper (dedupes the status→DTO mapping). +7 tests. **The §63.6 guider calibration surface is now server-complete**
+(build + status + enable/disable, for both darks and defect maps).
+
+**e-4c remaining (deferred):** the client "Also build defect map" affordance + the build/toggle/status UI (gated on
+the same WS client + dark-library UI as e-4b-3).

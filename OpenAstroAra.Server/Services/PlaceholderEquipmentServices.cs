@@ -183,6 +183,10 @@ public sealed class PlaceholderGuiderService : IGuiderService {
         Task.FromResult(PlaceholderEquipmentHelpers.Accepted("guider.defect_map.build", idempotencyKey));
     public Task<CalibrationFilesStatusDto?> GetCalibrationFilesStatusAsync(CancellationToken ct) =>
         Task.FromResult<CalibrationFilesStatusDto?>(null);
+    public Task<CalibrationFilesStatusDto> SetDarkLibraryEnabledAsync(bool enabled, CancellationToken ct) =>
+        throw new InvalidOperationException("guider is not connected");
+    public Task<CalibrationFilesStatusDto> SetDefectMapEnabledAsync(bool enabled, CancellationToken ct) =>
+        throw new InvalidOperationException("guider is not connected");
 }
 
 public sealed class PlaceholderPolarAlignService : IPolarAlignService {

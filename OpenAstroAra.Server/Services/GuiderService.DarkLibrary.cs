@@ -174,8 +174,31 @@ public sealed partial class GuiderService {
             // these as the disconnected contract (null) rather than surfacing a 500.
             return null;
         }
-        return new CalibrationFilesStatusDto(
-            ProfileId: status.ProfileId,
+        return MapStatus(status);
+    }
+
+    /// <summary>§63.6 — enable/disable dark subtraction; returns the updated status. Throws
+    /// InvalidOperationException (→ 409) when disconnected and GuiderRpcException (→ 422) when the daemon rejects
+    /// the toggle (e.g. enabling with no camera connected).</summary>
+    // Non-async outer so RequireConnectedGuider's "not connected" (InvalidOperationException) surfaces
+    // synchronously — same contract as the other guide ops (and the endpoint maps it to 409 either way).
+    public Task<CalibrationFilesStatusDto> SetDarkLibraryEnabledAsync(bool enabled, CancellationToken ct) {
+        var guider = RequireConnectedGuider();
+        return MapStatusAsync(guider.SetDarkLibraryEnabledAsync(enabled, ct));
+    }
+
+    /// <summary>§63.6 — enable/disable bad-pixel (defect-map) correction; returns the updated status. Same error
+    /// contract as <see cref="SetDarkLibraryEnabledAsync"/>.</summary>
+    public Task<CalibrationFilesStatusDto> SetDefectMapEnabledAsync(bool enabled, CancellationToken ct) {
+        var guider = RequireConnectedGuider();
+        return MapStatusAsync(guider.SetDefectMapEnabledAsync(enabled, ct));
+    }
+
+    private static async Task<CalibrationFilesStatusDto> MapStatusAsync(Task<Phd2CalibrationFilesStatus> rpc) =>
+        MapStatus(await rpc.ConfigureAwait(false));
+
+    private static CalibrationFilesStatusDto MapStatus(Phd2CalibrationFilesStatus status) =>
+        new(ProfileId: status.ProfileId,
             DarkLibraryPath: status.DarkLibraryPath,
             DefectMapPath: status.DefectMapPath,
             DarkLibraryExists: status.DarkLibraryExists,
@@ -189,7 +212,6 @@ public sealed partial class GuiderService {
             DarkCountLoaded: status.DarkCountLoaded,
             DarkMinExposureSecondsLoaded: status.DarkMinExposureSecondsLoaded,
             DarkMaxExposureSecondsLoaded: status.DarkMaxExposureSecondsLoaded);
-    }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "WS publish is best-effort: a failed publish from a custom IWsBroadcaster (e.g. SocketException) must not abort the background build or surface as an unobserved task exception. CA1031's log-and-recover boundary applies.")]

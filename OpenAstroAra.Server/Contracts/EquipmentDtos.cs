@@ -293,6 +293,10 @@ public sealed record BuildDefectMapDarksRequestDto(
     string? Notes = null,
     bool LoadAfter = true);
 
+/// <summary>Toggle a calibration artifact (dark library or defect map) on/off. Enabling needs a connected
+/// camera (the daemon loads the artifact).</summary>
+public sealed record SetCalibrationEnabledRequestDto(bool Enabled);
+
 /// <summary>The status read's envelope: <c>Connected</c> distinguishes "guider not connected" (Status null)
 /// from "connected, here's the status" — so a client polling to drive the "Build dark library" affordance never
 /// has to read a 404 as a missing route. Always returned with 200.</summary>
