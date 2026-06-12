@@ -214,20 +214,10 @@ annotation remain, both Live-View-gated (v0.1.0 scope).
 - **AF triggers + sequencer wiring (§59.5):** sequence-start / temp-Δ / HFR-drift / post-flip / first-filter
   triggers consulting `/diagnostics/current` (§59.9). Sequencer-integration work, gated on the live sweep.
 
-### §2105 PR4 Debayer — scoped 2026-06-11 (types mapped, ready to implement)
-`RenderedImage.Debayer(saveColorChannels, saveLumChannel, SensorType bayerPattern) -> IDebayeredImage`.
-Concrete shapes (all in OpenAstroAra.Image):
-- `IDebayeredImage : IRenderedImage` (`Interfaces/IDebayeredImage.cs`) adds `LRGBArrays DebayeredData`,
-  `bool SaveColorChannels`, `bool SaveLumChannel`, `SensorType BayerPattern`.
-- `LRGBArrays(ushort[] lum, red, green, blue)` (`ImageData/LRGBArrays.cs`) — four FULL-resolution planes.
-Implementation plan:
-1. A **full-resolution** debayer (bilinear per channel, pattern-aware) over the raw mosaic `ushort[]` —
-   NOT the §65 half-res `Debayer.SuperPixel`. Put it in `OpenAstroAra.Stretch/Debayer.cs` (e.g.
-   `Bilinear(mosaic, w, h, BayerPattern) -> (R,G,B)`), map SensorType→BayerPattern, Lum = weighted RGB.
-2. New `DebayeredImage : RenderedImage, IDebayeredImage` holding `DebayeredData` + the flags; its
-   inherited grayscale `Image` is the luminance render (or keep the existing render).
-3. Wire `RenderedImage.Debayer`; +tests (no colour bleed on a synthetic edge; correct plane sizes).
-Dead code until Live View (§64), so low urgency — but the algorithm must be correct, so do it fresh.
+### §2105 PR4 Debayer — ✅ DONE (shipped in #357)
+Full-resolution bilinear debayer landed in PR #357: `OpenAstroAra.Stretch/Debayer.Bilinear(mosaic, w, h, pattern)`,
+`IDebayeredImage`/`DebayeredImage`/`LRGBArrays`, and `RenderedImage.Debayer(...)` wired (Lum = weighted RGB). Dead
+code until Live View (§64). (Entry was left in "ready to implement" state; corrected here.)
 
 ## §58 meridian flip — follow-ups (2026-06-11, after the trigger re-port #362)
 
@@ -322,12 +312,11 @@ severity escalation**, and the **re-focus-after-flip** step (gated on the live f
 focuser-hardware blocker). The §58 profile block (`refocus_after_flip` policy, `guider_recal` mode,
 `first_flip_confirmed`) is not yet on ARA's profile model — these land with the profile-schema extension.
 
-### IDomeFollower.TriggerTelescopeSync has no cancellation token (from #366 review r2)
-`MeridianFlipExecutor.SynchronizeDome`'s non-following-dome path calls `IDomeFollower.TriggerTelescopeSync()`,
-which takes no `CancellationToken` (unlike `WaitForDomeSynchronization(token)` on the following path) — so a
-non-following dome sync can't be cancelled mid-slew. Inherited interface shape; bounded impact (best-effort,
-exceptions swallowed). Fix is a shared-interface change (`IDomeFollower` + its impls), out of scope for the
-§58.4 executor PR — fold into a dome-mediator follow-up that threads cancellation through the sync seam.
+### IDomeFollower.TriggerTelescopeSync has no cancellation token ✅ DONE (2026-06-12)
+`IDomeFollower.TriggerTelescopeSync` now takes a `CancellationToken` (matching `WaitForDomeSynchronization(token)`
+on the following path), threaded from the caller's token at all three call sites (`MeridianFlipExecutor.SynchronizeDome`,
+`CenteringSolver`, and the `SynchronizeDome` sequence item) so a non-following dome sync is cancellable mid-slew.
+`HeadlessDomeFollower` (the only impl) ignores it (no-op stub); a real dome-following impl will honor it.
 
 ### §39 calibration — dark matching by temperature ✅ DONE (2026-06-12)
 `SqliteCalibrationService.MatchingDarksAvailable` now matches darks to lights by `(exposure_seconds, gain,
@@ -439,8 +428,17 @@ progress — see scope correction). +6 tests (service validation/connection cont
 server-side calibration-state store yet (the §39 calibration view derives from the frame catalog, not a guider
 artifact record), so this waits until such a store exists or the client reads it live from the status endpoint.
 
-**e-4b-3 (client UI) — remaining:** the cover-the-scope build modal + building/done indicator, driven by the
-`GET …/darklibrary/status` affordance state (dark library exists? loaded/compatible?) and the WS build events.
+**e-4b-3 (client UI) — BLOCKED on client WS infra (assessed 2026-06-12).** The cover-the-scope build modal +
+building/done indicator wants the §60.9 WS stream to observe `guider.dark_library.started/complete/failed` — but
+the **Flutter client has no WS event-stream client yet** (Phase 12c.3; the diagnostics provider is still a stub),
+and the guider isn't yet connectable from the client (no equipment-guider control service). A build button today
+would fire a 202 into the void with no completion signal. Defer e-4b-3 until 12c.3 lands the WS client (and the
+client gains guider-equipment control). Achievable degraded slice meanwhile (not yet built): GET-status panel +
+build button + manual refresh — low value without live completion, so parked with the WS work.
+
+**e-4b-2 review follow-up (from #384 r5, deferred to e-4b-3):** the build POST returns 409 for both "guider not
+connected" and "build already in progress"; give the concurrent-build case a distinct signal (423 Locked or a
+structured problem-detail `type`) when the build UI lands and needs to tell them apart.
 
 **Deferred (advanced, §63.6):** the defect-map RPCs (`build_defect_map_darks`, `set_defect_map_enabled`) — add
 when defect maps are surfaced (wizard's optional "Also build defect map" checkbox, default off).

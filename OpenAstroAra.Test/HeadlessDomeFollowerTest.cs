@@ -41,7 +41,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task TriggerTelescopeSync_returns_false() {
             var f = new HeadlessDomeFollower();
-            Assert.That(await f.TriggerTelescopeSync(), Is.False);
+            Assert.That(await f.TriggerTelescopeSync(CancellationToken.None), Is.False);
         }
 
         [Test]
