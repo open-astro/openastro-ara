@@ -33,7 +33,7 @@ void main() {
         'description': 'Low disk space',
         'recommended_action': 'free up space',
         'auto_action_taken': false,
-      }));
+      }))!;
       expect(snap.level, StatusLevel.busy);
       expect(snap.label, 'Diagnostics: 1 issue — warning');
       expect(snap.events, hasLength(1));
@@ -50,7 +50,7 @@ void main() {
         'auto_action_taken': true,
         'auto_action_description': 'paused sequence',
         'recommended_action': 'free up space',
-      }));
+      }))!;
       expect(snap.level, StatusLevel.error);
       expect(snap.events.first.message, 'Disk full — paused sequence');
     });
@@ -58,7 +58,7 @@ void main() {
     test('worst open severity drives the overall level', () {
       final acc = DiagnosticsAccumulator();
       acc.apply(_ev(DiagnosticsWsEvents.issueDetected, {'event_type': 'disk.low', 'severity': 'yellow'}, seq: 1));
-      final snap = acc.apply(_ev(DiagnosticsWsEvents.issueDetected, {'event_type': 'temp.high', 'severity': 'red'}, seq: 2));
+      final snap = acc.apply(_ev(DiagnosticsWsEvents.issueDetected, {'event_type': 'temp.high', 'severity': 'red'}, seq: 2))!;
       expect(snap.level, StatusLevel.error);
       expect(snap.label, 'Diagnostics: 2 issues — critical');
     });
@@ -67,7 +67,7 @@ void main() {
       final acc = DiagnosticsAccumulator();
       acc.apply(_ev(DiagnosticsWsEvents.issueDetected, {'event_type': 'disk.low', 'severity': 'yellow'}, seq: 1));
       acc.apply(_ev(DiagnosticsWsEvents.issueDetected, {'event_type': 'temp.high', 'severity': 'red'}, seq: 2));
-      final snap = acc.apply(_ev(DiagnosticsWsEvents.cleared, {'event_type': 'temp.high', 'cleared_count': 1}, seq: 3));
+      final snap = acc.apply(_ev(DiagnosticsWsEvents.cleared, {'event_type': 'temp.high', 'cleared_count': 1}, seq: 3))!;
       expect(snap.level, StatusLevel.busy, reason: 'only the yellow issue remains open');
       expect(snap.label, 'Diagnostics: 1 issue — warning');
       expect(snap.events.first.source, 'temp.high');
@@ -78,7 +78,7 @@ void main() {
     test('clearing the last open issue returns to nominal', () {
       final acc = DiagnosticsAccumulator();
       acc.apply(_ev(DiagnosticsWsEvents.issueDetected, {'event_type': 'disk.low', 'severity': 'yellow'}, seq: 1));
-      final snap = acc.apply(_ev(DiagnosticsWsEvents.cleared, {'event_type': 'disk.low'}, seq: 2));
+      final snap = acc.apply(_ev(DiagnosticsWsEvents.cleared, {'event_type': 'disk.low'}, seq: 2))!;
       expect(snap.level, StatusLevel.connected);
       expect(snap.label, 'Diagnostics: nominal');
     });
@@ -86,14 +86,14 @@ void main() {
     test('re-detecting the same type updates severity without double-counting', () {
       final acc = DiagnosticsAccumulator();
       acc.apply(_ev(DiagnosticsWsEvents.issueDetected, {'event_type': 'disk.low', 'severity': 'yellow'}, seq: 1));
-      final snap = acc.apply(_ev(DiagnosticsWsEvents.issueDetected, {'event_type': 'disk.low', 'severity': 'red'}, seq: 2));
+      final snap = acc.apply(_ev(DiagnosticsWsEvents.issueDetected, {'event_type': 'disk.low', 'severity': 'red'}, seq: 2))!;
       expect(snap.label, 'Diagnostics: 1 issue — critical', reason: 'same event_type stays one open issue');
       expect(snap.level, StatusLevel.error);
     });
 
     test('an unknown-severity issue still names the severity in the label', () {
       final snap = DiagnosticsAccumulator().apply(_ev(DiagnosticsWsEvents.issueDetected,
-          {'event_type': 'odd.thing', 'description': 'no severity field'}));
+          {'event_type': 'odd.thing', 'description': 'no severity field'}))!;
       expect(snap.level, StatusLevel.info);
       expect(snap.label, 'Diagnostics: 1 issue — info');
     });
@@ -101,26 +101,42 @@ void main() {
     test('two event_type-less issues do not collide on one key', () {
       final acc = DiagnosticsAccumulator();
       acc.apply(_ev(DiagnosticsWsEvents.issueDetected, {'severity': 'yellow', 'description': 'a'}, seq: 1));
-      final snap = acc.apply(_ev(DiagnosticsWsEvents.issueDetected, {'severity': 'red', 'description': 'b'}, seq: 2));
+      final snap = acc.apply(_ev(DiagnosticsWsEvents.issueDetected, {'severity': 'red', 'description': 'b'}, seq: 2))!;
       expect(snap.label, 'Diagnostics: 2 issues — critical',
           reason: 'distinct malformed events stay distinct open issues');
       expect(snap.level, StatusLevel.error);
     });
 
-    test('a clear with no event_type removes nothing (unidentifiable target)', () {
+    test('a clear with no event_type removes nothing and is a no-op (null)', () {
       final acc = DiagnosticsAccumulator();
       acc.apply(_ev(DiagnosticsWsEvents.issueDetected, {'severity': 'red', 'description': 'a'}, seq: 1));
-      final snap = acc.apply(_ev(DiagnosticsWsEvents.cleared, {}, seq: 2));
+      final result = acc.apply(_ev(DiagnosticsWsEvents.cleared, {}, seq: 2));
+      expect(result, isNull, reason: 'no removal happened → no state change to publish');
+      final snap = acc.snapshot;
       expect(snap.level, StatusLevel.error, reason: 'the unidentifiable open issue is still open');
       expect(snap.label, 'Diagnostics: 1 issue — critical');
-      expect(snap.events.first.message, 'Cleared');
+      expect(snap.events.where((e) => e.message == 'Cleared'), isEmpty,
+          reason: 'no phantom Cleared entry for a non-existent issue');
     });
 
-    test('non-diagnostics events are ignored', () {
+    test('a clear for a type that was never open is a no-op (null)', () {
       final acc = DiagnosticsAccumulator();
-      final snap = acc.apply(_ev('guider.dark_library.complete', {'profile_id': 'p1'}));
-      expect(snap.events, isEmpty);
-      expect(snap.level, StatusLevel.connected);
+      final result = acc.apply(_ev(DiagnosticsWsEvents.cleared, {'event_type': 'never.open'}, seq: 1));
+      expect(result, isNull);
+      expect(acc.snapshot.events, isEmpty);
+    });
+
+    test('an unhandled diagnostics subtype is not folded (null)', () {
+      final acc = DiagnosticsAccumulator();
+      expect(acc.apply(_ev('diagnostics.health_changed', {'overall': 'green'})), isNull);
+      expect(acc.snapshot.events, isEmpty);
+    });
+
+    test('non-diagnostics events are not folded (null)', () {
+      final acc = DiagnosticsAccumulator();
+      expect(acc.apply(_ev('guider.dark_library.complete', {'profile_id': 'p1'})), isNull);
+      expect(acc.snapshot.events, isEmpty);
+      expect(acc.snapshot.level, StatusLevel.connected);
     });
 
     test('the log is bounded to maxEvents, most-recent first', () {

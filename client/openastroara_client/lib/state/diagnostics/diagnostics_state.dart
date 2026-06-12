@@ -69,18 +69,24 @@ class DiagnosticsAccumulator {
   // event_type → severity level of the latest still-open issue of that type.
   final Map<String, StatusLevel> _open = <String, StatusLevel>{};
 
-  /// Apply one event and return the resulting snapshot. Non-diagnostics events
-  /// (and unknown diagnostics subtypes) leave state untouched and return the
-  /// prior snapshot.
-  DiagnosticsSnapshot apply(WsEvent event) {
+  /// Fold one event and return the new snapshot, or `null` if the event was not
+  /// one this accumulator folds (a non-diagnostics type, or a `diagnostics.*`
+  /// subtype not yet handled). Returning null lets the caller skip a no-op
+  /// state assignment — [DiagnosticsSnapshot] has reference identity, so
+  /// assigning an unchanged-but-new object would churn watchers needlessly.
+  DiagnosticsSnapshot? apply(WsEvent event) {
+    final bool changed;
     switch (event.type) {
       case DiagnosticsWsEvents.issueDetected:
       case DiagnosticsWsEvents.autoActionTaken:
         _applyIssue(event);
+        changed = true;
       case DiagnosticsWsEvents.cleared:
-        _applyCleared(event);
+        changed = _applyCleared(event);
+      default:
+        return null;
     }
-    return snapshot;
+    return changed ? snapshot : null;
   }
 
   /// Current roll-up. Empty state (no open issues, no log) reads as nominal.
@@ -120,20 +126,25 @@ class DiagnosticsAccumulator {
     ));
   }
 
-  void _applyCleared(WsEvent event) {
+  /// Returns whether the clear changed state (a matching open issue was
+  /// removed), so the caller can suppress a no-op rebuild.
+  bool _applyCleared(WsEvent event) {
     final eventType = _string(event.payload['event_type']);
     // A clear with no event_type can't identify which open issue to drop, so it
     // removes nothing — symmetric with _applyIssue giving each event_type-less
     // issue a seq-unique key: an unidentifiable issue is, by design, unclearable.
-    if (eventType != null) {
-      _open.remove(eventType);
+    // Only log "Cleared" when a removal actually happened, so a duplicate or
+    // unmatched clear doesn't surface a phantom entry for a non-existent issue.
+    if (eventType == null || _open.remove(eventType) == null) {
+      return false;
     }
     _append(DiagnosticEvent(
       timestamp: event.ts,
       level: StatusLevel.connected,
-      source: eventType ?? 'unknown',
+      source: eventType,
       message: 'Cleared',
     ));
+    return true;
   }
 
   void _append(DiagnosticEvent entry) {
@@ -175,6 +186,9 @@ class DiagnosticsAccumulator {
     }
   }
 
+  // Severity ordering for the worst-open roll-up. disconnected ranks lowest and
+  // is unreachable here (severityToLevel never yields it); it's listed only to
+  // keep the switch exhaustive if a StatusLevel is added later.
   static int _rank(StatusLevel level) {
     switch (level) {
       case StatusLevel.error:
@@ -219,13 +233,16 @@ class DiagnosticsNotifier extends Notifier<DiagnosticsSnapshot> {
     // Resolve when server-side history-on-connect lands.
     ref.listen(wsEventsProvider, (prev, next) {
       final event = next.asData?.value;
-      // Filter to the `diagnostics.*` family by routing prefix (matching the
-      // contract in [DiagnosticsWsEvents]); a new subtype needs no edit here.
-      // The accumulator already ignores any subtype it doesn't fold.
+      // Cheap early-out for the non-diagnostics majority by routing prefix
+      // (matching the contract in [DiagnosticsWsEvents]); a new subtype needs no
+      // edit here. apply() returns null when it didn't fold the event (a
+      // not-yet-handled subtype, or a no-op clear) — only assign on a real
+      // change so unchanged-but-new snapshots don't churn watchers.
       if (event == null || !event.type.startsWith(DiagnosticsWsEvents.prefix)) {
         return;
       }
-      state = acc.apply(event);
+      final folded = acc.apply(event);
+      if (folded != null) state = folded;
     });
     return acc.snapshot;
   }
