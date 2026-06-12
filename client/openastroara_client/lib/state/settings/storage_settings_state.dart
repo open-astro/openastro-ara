@@ -72,17 +72,21 @@ class StorageSettingsNotifier extends Notifier<StorageSettings> {
     state = state.copyWith(filenameTemplate: v);
   }
 
-  // §29 — thresholds are whole GiB and must keep critical strictly below warn (mirrors the server's
-  // ResolveThresholdBytes, which falls back to defaults on a non-positive/inverted pair).
+  // §29 — thresholds are whole GiB ≥ 1. Each field validates independently (so editing one doesn't snap back
+  // just because it momentarily crosses the other); the critical-below-warn invariant is checked at save time
+  // ([thresholdsValid]) with a visible error, and the server rejects an invalid pair with a 400.
   void setMinFreeDiskWarnGb(int v) {
-    if (v < 1 || v <= state.minFreeDiskCriticalGb) return;
+    if (v < 1) return;
     state = state.copyWith(minFreeDiskWarnGb: v);
   }
 
   void setMinFreeDiskCriticalGb(int v) {
-    if (v < 1 || v >= state.minFreeDiskWarnGb) return;
+    if (v < 1) return;
     state = state.copyWith(minFreeDiskCriticalGb: v);
   }
+
+  /// Whether the current pair satisfies critical &lt; warn (checked before persisting).
+  bool get thresholdsValid => state.minFreeDiskCriticalGb < state.minFreeDiskWarnGb;
 
   Future<void> hydrateFromServer(ProfileApi api) async {
     state = await api.getStorageSettings();

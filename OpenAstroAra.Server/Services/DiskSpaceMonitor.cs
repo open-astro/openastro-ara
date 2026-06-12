@@ -86,7 +86,8 @@ namespace OpenAstroAra.Server.Services {
         /// defaults, so a mis-set profile degrades to sane behaviour instead of crying Critical constantly.
         /// </summary>
         public static (long LowBytes, long CriticalBytes) ResolveThresholdBytes(int warnGb, int criticalGb) {
-            if (criticalGb < 1 || warnGb <= criticalGb) {
+            // Both must be ≥ 1 GiB and warn strictly above critical; otherwise fall back to the defaults.
+            if (warnGb < 1 || criticalGb < 1 || warnGb <= criticalGb) {
                 return (DefaultLowBytes, DefaultCriticalBytes);
             }
             const long gib = 1024L * 1024 * 1024;

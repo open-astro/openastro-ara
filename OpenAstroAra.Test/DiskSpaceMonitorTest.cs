@@ -57,6 +57,8 @@ namespace OpenAstroAra.Test {
             // Non-positive critical.
             Assert.That(DiskSpaceMonitor.ResolveThresholdBytes(10, 0), Is.EqualTo(defaults));
             Assert.That(DiskSpaceMonitor.ResolveThresholdBytes(10, -1), Is.EqualTo(defaults));
+            // Non-positive warn (even with a "valid"-looking critical).
+            Assert.That(DiskSpaceMonitor.ResolveThresholdBytes(0, 1), Is.EqualTo(defaults));
         }
 
         [Test]

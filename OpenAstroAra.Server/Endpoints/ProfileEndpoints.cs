@@ -58,11 +58,19 @@ public static class ProfileEndpoints {
             .WithSummary("Get the active profile's storage settings.");
 
         profile.MapPut("/storage", (StorageSettingsDto body, IProfileStore store) => {
+            // §29 — reject an invalid disk-space threshold pair at write so the stored profile always matches
+            // what the monitor enforces (no silent fallback to defaults while the UI shows the bad numbers).
+            if (body.MinFreeDiskCriticalGb < 1 || body.MinFreeDiskWarnGb <= body.MinFreeDiskCriticalGb) {
+                return Results.Problem(
+                    detail: "min_free_disk_critical_gb must be >= 1 and strictly below min_free_disk_warn_gb.",
+                    statusCode: StatusCodes.Status400BadRequest);
+            }
             store.PutStorageSettings(body);
             return Results.Ok(body);
         })
             .Accepts<StorageSettingsDto>("application/json")
             .Produces<StorageSettingsDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
             .WithName("PutStorageSettings")
             .WithSummary("Replace the active profile's storage settings.");
 

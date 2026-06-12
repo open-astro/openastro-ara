@@ -39,12 +39,19 @@ class _StoragePanelState extends ConsumerState<StoragePanel> {
   }
 
   Future<void> _save() async {
+    final messenger = ScaffoldMessenger.of(context);
+    // §29 — block an inverted disk-space pair before it reaches the daemon (the server also rejects it 400).
+    if (!ref.read(storageSettingsProvider.notifier).thresholdsValid) {
+      setState(() => _lastError =
+          'Critical disk threshold must be below the warning threshold.');
+      messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
+      return;
+    }
     setState(() {
       _saving = true;
       _lastError = null;
     });
     final api = _api();
-    final messenger = ScaffoldMessenger.of(context);
     if (api == null) {
       setState(() {
         _saving = false;
