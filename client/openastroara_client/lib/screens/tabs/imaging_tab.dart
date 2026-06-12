@@ -7,11 +7,13 @@ import '../../services/frames_api.dart';
 import '../../state/imaging/exposure_state.dart';
 import '../../state/imaging/last_frame_state.dart';
 import '../../state/imaging/live_view_state.dart';
+import '../../state/imaging/solve_state.dart';
 import '../../state/saved_server_state.dart';
 import '../../widgets/imaging/diagnostic_panel.dart';
 import '../../widgets/imaging/exposure_controls_panel.dart';
 import '../../widgets/imaging/frame_viewer.dart';
 import '../../widgets/imaging/histogram_strip.dart';
+import '../../widgets/imaging/solve_panel.dart';
 import '../../widgets/status_indicator.dart';
 import '../../theme/ara_colors.dart';
 
@@ -37,6 +39,7 @@ class ImagingTab extends ConsumerWidget {
                   children: const [
                     Expanded(child: FrameViewer()),
                     HistogramStrip(),
+                    SolvePanel(),
                     DiagnosticPanel(),
                   ],
                 ),
@@ -76,6 +79,7 @@ class ImagingTab extends ConsumerWidget {
     // result update don't go through WidgetRef after a possible unmount.
     final progress = ref.read(captureInProgressProvider.notifier);
     final lastFrame = ref.read(lastCapturedFrameIdProvider.notifier);
+    final solve = ref.read(solveResultProvider.notifier);
     progress.set(true);
     messenger.showSnackBar(
       SnackBar(content: Text(
@@ -131,6 +135,8 @@ class ImagingTab extends ConsumerWidget {
       messenger.hideCurrentSnackBar();
       if (landed) {
         lastFrame.set(frameId);
+        // A new frame invalidates any previous solve result shown in the panel.
+        solve.clear();
         // Force a re-fetch in case the same id was shown before.
         ref.invalidate(framePreviewProvider(frameId));
         messenger.showSnackBar(
