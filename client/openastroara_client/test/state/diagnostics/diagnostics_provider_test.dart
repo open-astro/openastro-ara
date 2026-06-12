@@ -47,6 +47,10 @@ class _FakeConnector {
 String _frame(String type, Map<String, dynamic> payload, int seq) =>
     jsonEncode({'type': type, 'ts': '2026-06-12T12:00:00.000Z', 'seq': seq, 'payload': payload});
 
+// Note: these tests use `pumpEventQueue()` (no duration) to drain async work.
+// That's valid because the fake socket delivers frames via a StreamController —
+// microtask-only async, no Timer. If the delivery path ever adds a Timer, switch
+// to `pumpEventQueue(times: ...)` or a timed pump.
 void main() {
   group('diagnosticsStateProvider', () {
     test('no saved server → not connected', () async {

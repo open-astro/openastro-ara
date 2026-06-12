@@ -1,3 +1,5 @@
+import 'dart:collection';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/ws_event.dart';
@@ -65,7 +67,10 @@ class DiagnosticsAccumulator {
   DiagnosticsAccumulator({this.maxEvents = 50});
 
   final int maxEvents;
-  final List<DiagnosticEvent> _log = <DiagnosticEvent>[];
+  // Most-recent-first ring of recent entries. ListQueue gives O(1) prepend
+  // (addFirst) and O(1) bounded eviction (removeLast); the snapshot copies it
+  // out to a List for the panel's indexed rendering.
+  final ListQueue<DiagnosticEvent> _log = ListQueue<DiagnosticEvent>();
   // event_type → severity level of the latest still-open issue of that type.
   final Map<String, StatusLevel> _open = <String, StatusLevel>{};
 
@@ -155,7 +160,7 @@ class DiagnosticsAccumulator {
   }
 
   void _append(DiagnosticEvent entry) {
-    _log.insert(0, entry); // most-recent first (panel renders top-down)
+    _log.addFirst(entry); // most-recent first (panel renders top-down)
     if (_log.length > maxEvents) {
       _log.removeLast();
     }
