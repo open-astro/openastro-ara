@@ -974,8 +974,9 @@ components:
       required:
         [host, port, phd2_profile, dither_enabled, dither_every_n_frames,
          dither_pixels, settle_pixels, settle_time_sec, settle_timeout_sec,
-         force_calibration_each_session, guide_focal_length, guide_pixel_size,
-         ra_aggressiveness, dec_aggressiveness, minimum_move, dec_guide_mode]
+         force_calibration_each_session]
+      # The §63.5 guider-engine fields below are OPTIONAL: they carry server-side defaults so a profile.json
+      # written before this field set still deserializes correctly (missing key → default).
       properties:
         host:                           { type: string, minLength: 1 }
         port:                           { type: integer, minimum: 1024, maximum: 65535 }

@@ -14,8 +14,10 @@
 
 using NUnit.Framework;
 using OpenAstroAra.Core.Enums;
+using OpenAstroAra.Server;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
+using System.Text.Json;
 
 namespace OpenAstroAra.Test {
 
@@ -95,6 +97,29 @@ namespace OpenAstroAra.Test {
             Assert.That(guider.DecAggressiveness, Is.EqualTo(0.65));
             Assert.That(guider.MinimumMove, Is.EqualTo(0.2));
             Assert.That(guider.DecGuideMode, Is.EqualTo("north"));
+        }
+
+        [Test]
+        public void Phd2Settings_deserializes_pre_63_5_json_to_guider_engine_defaults() {
+            // An existing profile.json Phd2 section written before §63.5 — none of the guider-engine keys.
+            // The DTO's optional ctor defaults must fill them (not null / 0.0), so an upgrade doesn't leave
+            // aggressiveness at 0 ("never correct") or DecGuideMode null.
+            const string oldJson = """
+                {"host":"astro-pi.local","port":4400,"phd2_profile":"Default","dither_enabled":true,
+                 "dither_every_n_frames":1,"dither_pixels":5,"settle_pixels":1.5,"settle_time_sec":10,
+                 "settle_timeout_sec":60,"force_calibration_each_session":false}
+                """;
+
+            var dto = JsonSerializer.Deserialize(oldJson, AraJsonSerializerContext.Default.Phd2SettingsDto);
+
+            Assert.That(dto, Is.Not.Null);
+            Assert.That(dto!.Host, Is.EqualTo("astro-pi.local")); // existing keys still bind
+            Assert.That(dto.DecGuideMode, Is.EqualTo("auto"));
+            Assert.That(dto.RaAggressiveness, Is.EqualTo(0.7));
+            Assert.That(dto.DecAggressiveness, Is.EqualTo(0.7));
+            Assert.That(dto.MinimumMove, Is.EqualTo(0.15));
+            Assert.That(dto.GuideFocalLength, Is.EqualTo(0));
+            Assert.That(dto.GuidePixelSize, Is.EqualTo(0));
         }
 
         [Test]
