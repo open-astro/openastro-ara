@@ -363,39 +363,31 @@ expressible"):
   best-effort, wrapped so a failure can't abort Connect), but threading a token through `DisconnectPHD2Equipment`
   would make the cancel prompt. Inherited-interface change → its own follow-up, not the push PR.
 
-## §63.4 guider-e-3b — wire the ara-<slug> profile mapping into connect (2026-06-12, after e-3a)
-guider-e-3a (this PR) shipped the testable primitives: the `Phd2CreateProfile` / `Phd2SetProfileByName`
-named-object RPC classes (`PHD2Methods.GuiderProfiles.cs`) and the pure `PHD2Guider.AraGuiderProfileName`
-slug helper (`PHD2Guider.GuiderProfile.cs`). The remaining e-3b work drives them on connect:
+## §63.4 guider-e-3 — profile-name mapping: shipped + deferred (2026-06-12)
+**Shipped:** e-3a (#375) — the `Phd2CreateProfile` / `Phd2SetProfileByName` RPC classes + the pure
+`PHD2Guider.AraGuiderProfileName` slug helper. e-3b (this PR) — the connect-path wiring:
+`ResolveAraProfileSelection` (pure, unit-tested) + `EnsureAraGuiderProfileAsync` select-or-create on connect,
+honoring the `PHD2ProfileId` override precedence and pushing into the right profile before the §63.5 params.
+(Note: the earlier "PHD2Guider.cs is ISO-8859-1, edit with perl" worry was **wrong** — `PHD2Guider.cs` is clean
+UTF-8 (its copyright uses ASCII `(c)`, de-mojibaked in Phase 3); only `PHD2Methods.cs` still carries the © and
+needs byte-preserving edits. The connect-path swap used the Edit tool safely; md5 of line 4 verified unchanged.)
 
-- **Wire into the connect path.** In `PHD2Guider.cs` (~line 250-255, between `GetProfiles()` and
-  `PushGuiderEngineConfigAsync`), select-or-create the `ara-<slug>` profile: derive the name, look it up in the
-  `GetProfiles()` result, `set_profile_by_name` if present else `create_profile(name, select:true)`, then let
-  the §63.5 push populate it. **Encoding hazard:** `PHD2Guider.cs` is ISO-8859-1 (© glyph) — edit the call site
-  with byte-preserving `perl -0pi`/`sed`, NOT the Edit tool (re-encodes → mangles ©); verify `sed -n '4p' | md5`
-  unchanged. Keep the ISO-8859-1 edit to a single call swap; put the async orchestration in the UTF-8
-  `PHD2Guider.GuiderProfile.cs` partial.
-- **Precedence vs the inherited `PHD2ProfileId` override.** The connect path already selects by id when
-  `GuiderSettings.PHD2ProfileId` is set (the inherited explicit override). Decide precedence: honor an explicit
-  `PHD2ProfileId` (advanced manual control) and skip the ara-slug default, else apply the §63.4 name mapping.
+**Still deferred (e-3c / v0.1.0):**
 - **Slug-collision disambiguation.** `AraGuiderProfileName` maps by name only (per §63.4), so two ARA profiles
-  differing only in punctuation/case collide on the same PHD2 name (e.g. `"C-14"`/`"C 14"` → `ara-c-14`). If
-  this matters, e-3b can append a short stable disambiguator (e.g. first 6 of the ARA profile Id) on create and
-  store the resolved PHD2 name back on the ARA profile so lookups stay exact. **Specifically include the
-  `ara-default` case** (all-punctuation / non-ASCII-only names all map to `ara-default`): the select-or-create
-  must handle `ara-default` already being owned by a *different* ARA profile (from #375 review).
-- **Slug length cap (from #375 review).** `AraGuiderProfileName` has no length cap. The daemon docs
-  (`doc/jsonrpc_api.md` / `design/API_REFERENCE.md`) don't state a max profile-name length, so a cap now would be
-  a guess (and truncation reintroduces the collision problem above). e-3b should find the real openastro-guider
-  limit (read the daemon source / test an over-long `create_profile`) and, if one exists, cap the slug — paired
-  with the disambiguator so truncated names stay unique.
-- **Send-time param validation (from #375 review).** The e-3a RPC request classes are permissive DTOs by design:
-  `Phd2CreateProfileParameter` lets `copy_from` + `copy_from_id` both be set (the daemon treats them as mutually
-  exclusive → would error), and `Phd2SetProfileByNameParameter.Name` defaults to `""`. ARA never populates the
-  copy-source (it creates fresh), so no guard ships in e-3a — but the e-3b send path must validate before firing:
-  reject an empty name and enforce at-most-one copy source. (A `Debug.Assert` on the DTO was considered and
-  rejected — it would throw during Newtonsoft deserialization if a stored request ever carried both; the check
-  belongs at the call site, not on the serialization target.)
+  differing only in punctuation/case collide on one PHD2 name (`"C-14"`/`"C 14"` → `ara-c-14`), and all
+  all-punctuation / non-ASCII-only names collapse to `ara-default` (as does a profile literally named
+  "default"). e-3b's select-or-create currently treats same-slug profiles as the *same* profile (selects the
+  existing one). To isolate them, append a short stable disambiguator (e.g. first 6 of the ARA profile Id) on
+  create and store the resolved PHD2 name back on the ARA profile so lookups stay exact — needs a new
+  `GuiderSettings.PHD2ProfileName` field, hence deferred.
+- **Slug length cap (from #375 review).** No length cap; the daemon docs don't state a max profile-name length,
+  so a cap would be a guess (and truncation reintroduces the collision above). Find the real openastro-guider
+  limit (read the daemon source / test an over-long `create_profile`) and cap there if one exists, paired with
+  the disambiguator so truncated names stay unique.
+- **Send-time validation done; copy-source still latent.** e-3b guards the empty name at the send site (and the
+  resolver never yields one). ARA never sets a clone source, so `create_profile`'s mutually-exclusive
+  `copy_from`/`copy_from_id` stay unset by construction — if a future caller ever sets a copy source, enforce
+  at-most-one there (still not a `Debug.Assert` on the DTO — that would throw during deserialization).
 - **Profile lifecycle (§63.4 table) beyond connect-time select/create:** `delete_profile` on ARA-profile delete,
   `clone_profile` on ARA-profile clone, `rename_profile` on rename — likely v0.1.0 (need ARA profile-lifecycle
-  hooks that don't exist headless yet). CHANGELOG entry lands with e-3b (the first user-visible behavior).
+  hooks that don't exist headless yet).

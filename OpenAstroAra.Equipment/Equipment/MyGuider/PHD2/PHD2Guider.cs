@@ -248,10 +248,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                     }
 
                     await GetProfiles();
-                    if (profileService.ActiveProfile.GuiderSettings.PHD2ProfileId.HasValue
-                        && SelectedProfile?.Id != profileService.ActiveProfile.GuiderSettings.PHD2ProfileId) {
-                        await ChangeProfile(profileService.ActiveProfile.GuiderSettings.PHD2ProfileId.Value);
-                    }
+                    await EnsureAraGuiderProfileAsync(token);
                     await PushGuiderEngineConfigAsync(token);
                     await EnsurePHD2EquipmentConnected();
                     await TryRefreshShiftLockParams();
@@ -1066,7 +1063,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
 
             var getProfiles = new Phd2GetProfiles();
             var getProfilesResponse = await SendMessage<GetProfilesResponse>(getProfiles);
-            if (getProfileResponse.error != null) {
+            if (getProfilesResponse.error != null) {
                 Logger.Error($"Failed GetProfiles: {getProfilesResponse.error}");
                 throw new InvalidOperationException(Loc.Instance["LblPhd2FailedGetProfiles"]);
             }
