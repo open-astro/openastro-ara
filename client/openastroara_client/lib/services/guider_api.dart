@@ -55,7 +55,8 @@ class GuiderApi implements GuiderClient {
   /// poll [getStatus] for the resulting link state.
   @override
   Future<void> connect({String host = kDefaultGuiderHost, int port = kDefaultGuiderPort}) async {
-    await _dio.post<Map<String, dynamic>>(
+    // 202-Accepted with no body we read — poll getStatus() for the result.
+    await _dio.post<void>(
       '/api/v1/equipment/guider/connect',
       data: <String, dynamic>{'host': host, 'port': port},
     );
@@ -64,7 +65,7 @@ class GuiderApi implements GuiderClient {
   /// Ask the daemon to disconnect the guider. 202-Accepted.
   @override
   Future<void> disconnect() async {
-    await _dio.post<Map<String, dynamic>>('/api/v1/equipment/guider/disconnect');
+    await _dio.post<void>('/api/v1/equipment/guider/disconnect');
   }
 
   /// Releases the underlying Dio's connection pool. Call when the API is

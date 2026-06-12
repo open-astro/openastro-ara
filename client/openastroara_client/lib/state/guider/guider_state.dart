@@ -43,8 +43,12 @@ class GuiderStatusNotifier extends AsyncNotifier<GuiderStatus?> {
   }
 
   Future<void> connect({String host = kDefaultGuiderHost, int port = kDefaultGuiderPort}) async {
+    // Re-entrancy guard: ignore a second call while one is in flight (loading),
+    // so a double-tap doesn't fire two daemon requests with a racing refresh.
+    if (state.isLoading) return;
     final api = ref.read(guiderApiProvider);
     if (api == null) return;
+    state = const AsyncValue<GuiderStatus?>.loading();
     try {
       await api.connect(host: host, port: port);
     } catch (e, st) {
@@ -59,8 +63,10 @@ class GuiderStatusNotifier extends AsyncNotifier<GuiderStatus?> {
   }
 
   Future<void> disconnect() async {
+    if (state.isLoading) return;
     final api = ref.read(guiderApiProvider);
     if (api == null) return;
+    state = const AsyncValue<GuiderStatus?>.loading();
     try {
       await api.disconnect();
     } catch (e, st) {

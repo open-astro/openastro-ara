@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/guider_status.dart';
@@ -29,6 +31,7 @@ class _FakeGuiderApi implements GuiderClient {
   int? lastPort;
   bool throwOnConnect = false;
   bool throwOnDisconnect = false;
+  Completer<void>? connectGate;
 
   @override
   Future<GuiderStatus?> getStatus() async => status;
@@ -37,10 +40,11 @@ class _FakeGuiderApi implements GuiderClient {
   void close() => closeCalls++;
 
   @override
-  Future<void> connect({String host = 'localhost', int port = 4400}) async {
+  Future<void> connect({String host = kDefaultGuiderHost, int port = kDefaultGuiderPort}) async {
     connectCalls++;
     lastHost = host;
     lastPort = port;
+    if (connectGate != null) await connectGate!.future;
     if (throwOnConnect) {
       throw StateError('connect failed');
     }
@@ -158,6 +162,29 @@ void main() {
 
       expect(api.disconnectCalls, 1);
       expect(c.read(guiderStatusProvider).value!.connectionState, GuiderConnectionState.disconnected);
+    });
+
+    test('a second connect while one is in flight is ignored (re-entrancy guard)', () async {
+      final api = _FakeGuiderApi()
+        ..status = const GuiderStatus(
+          deviceId: 'phd2',
+          name: 'PHD2',
+          connectionState: GuiderConnectionState.disconnected,
+          runtimeState: GuiderRuntimeState.stopped,
+        )
+        ..connectGate = Completer<void>();
+      final c = _container(const [server], api);
+      await c.read(savedServersProvider.future);
+      await c.read(guiderStatusProvider.future);
+
+      final notifier = c.read(guiderStatusProvider.notifier);
+      final first = notifier.connect();
+      await pumpEventQueue(); // let the first call set loading + reach the gate
+      final second = notifier.connect(); // state.isLoading → early return
+      api.connectGate!.complete();
+      await Future.wait<void>([first, second]);
+
+      expect(api.connectCalls, 1, reason: 'the second call was guarded out');
     });
 
     test('a failed disconnect surfaces as AsyncError', () async {
