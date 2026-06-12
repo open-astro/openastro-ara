@@ -275,6 +275,8 @@ class ProfileApi {
         // (raw-string literal with `\\` double-backslash separators).
         filenameTemplate: (j['filename_template'] as String?) ??
             r'$$DATEMINUS12$$\\$$IMAGETYPE$$\\$$DATETIME$$_$$FILTER$$_$$EXPOSURETIME$$s',
+        minFreeDiskWarnGb: (j['min_free_disk_warn_gb'] as num?)?.toInt() ?? 10,
+        minFreeDiskCriticalGb: (j['min_free_disk_critical_gb'] as num?)?.toInt() ?? 2,
       );
 
   static Map<String, dynamic> _storageSettingsToJson(StorageSettings v) => {
@@ -282,6 +284,8 @@ class ProfileApi {
         'file_format': _fileFormatToString(v.fileFormat),
         'compression': v.compression.name,
         'filename_template': v.filenameTemplate,
+        'min_free_disk_warn_gb': v.minFreeDiskWarnGb,
+        'min_free_disk_critical_gb': v.minFreeDiskCriticalGb,
       };
 
   static StorageFileFormat _fileFormatFromString(String? s) {

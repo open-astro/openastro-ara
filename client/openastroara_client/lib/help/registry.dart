@@ -180,6 +180,28 @@ const Map<String, Help> helpRegistry = {
         'Use `\\` (or `/`) as the path separator. Subdirectories are created automatically.',
     relatedSettings: ['session.storage.filename_template'],
   ),
+  'session.storage.min_free_disk_warn_gb': Help(
+    key: 'session.storage.min_free_disk_warn_gb',
+    title: 'Low-disk warning threshold',
+    body: 'When free space on your image save volume drops below this many GB, the daemon raises a **warning** (a yellow diagnostic and, if enabled, a *Low disk space* notification) so you can free space before a session stalls.\n\n'
+        'It only warns — captures are never blocked and nothing is deleted — and the warning clears itself once space frees up. '
+        'Set this comfortably above one night of frames (large OSC/mono subs add up fast). Must be above the critical threshold.',
+    relatedSettings: [
+      'session.storage.min_free_disk_warn_gb',
+      'session.storage.min_free_disk_critical_gb',
+    ],
+  ),
+  'session.storage.min_free_disk_critical_gb': Help(
+    key: 'session.storage.min_free_disk_critical_gb',
+    title: 'Critical-disk threshold',
+    body: 'When free space drops below this many GB, the daemon escalates to a **critical** alert (a red diagnostic and, if enabled, a critical notification) — the disk is nearly full and the next frames may not fit.\n\n'
+        'Like the warning, this is advisory: ARA never blocks a capture or deletes data. Must be below the warning threshold. '
+        'If the warn/critical pair is left non-positive or inverted, the daemon falls back to its built-in 10 GB / 2 GB defaults.',
+    relatedSettings: [
+      'session.storage.min_free_disk_critical_gb',
+      'session.storage.min_free_disk_warn_gb',
+    ],
+  ),
 
   // §54 Notifications — help on the genuinely non-obvious controls (token
   // setup + the events with hidden semantics like retry budgets / thresholds).

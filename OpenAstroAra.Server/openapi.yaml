@@ -949,6 +949,10 @@ components:
         file_format:       { type: string, enum: [fits, xisf, fits_rice, fits_gzip] }
         compression:       { type: string, enum: [off, rice, gzip] }
         filename_template: { type: string, minLength: 1 }
+        # §29 disk-space monitor thresholds (whole GiB free on the save volume). Optional for back-compat;
+        # the monitor falls back to 10/2 GiB when omitted or set non-positive/inverted (critical >= warn).
+        min_free_disk_warn_gb:     { type: integer, minimum: 1, default: 10 }
+        min_free_disk_critical_gb: { type: integer, minimum: 1, default: 2 }
 
     EquipmentConnection:
       type: object

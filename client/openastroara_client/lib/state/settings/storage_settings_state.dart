@@ -17,12 +17,18 @@ class StorageSettings {
   final StorageCompression compression;
   final String filenameTemplate;
 
+  // §29 disk-space monitor thresholds (whole GiB free on the save volume).
+  final int minFreeDiskWarnGb;
+  final int minFreeDiskCriticalGb;
+
   const StorageSettings({
     this.saveDirectory = '/media/openastroara',
     this.fileFormat = StorageFileFormat.fits,
     this.compression = StorageCompression.rice,
     this.filenameTemplate =
         r'$$DATEMINUS12$$\\$$IMAGETYPE$$\\$$DATETIME$$_$$FILTER$$_$$EXPOSURETIME$$s',
+    this.minFreeDiskWarnGb = 10,
+    this.minFreeDiskCriticalGb = 2,
   });
 
   StorageSettings copyWith({
@@ -30,12 +36,16 @@ class StorageSettings {
     StorageFileFormat? fileFormat,
     StorageCompression? compression,
     String? filenameTemplate,
+    int? minFreeDiskWarnGb,
+    int? minFreeDiskCriticalGb,
   }) =>
       StorageSettings(
         saveDirectory: saveDirectory ?? this.saveDirectory,
         fileFormat: fileFormat ?? this.fileFormat,
         compression: compression ?? this.compression,
         filenameTemplate: filenameTemplate ?? this.filenameTemplate,
+        minFreeDiskWarnGb: minFreeDiskWarnGb ?? this.minFreeDiskWarnGb,
+        minFreeDiskCriticalGb: minFreeDiskCriticalGb ?? this.minFreeDiskCriticalGb,
       );
 }
 
@@ -60,6 +70,18 @@ class StorageSettingsNotifier extends Notifier<StorageSettings> {
     final v = t.trim();
     if (v.isEmpty) return;
     state = state.copyWith(filenameTemplate: v);
+  }
+
+  // §29 — thresholds are whole GiB and must keep critical strictly below warn (mirrors the server's
+  // ResolveThresholdBytes, which falls back to defaults on a non-positive/inverted pair).
+  void setMinFreeDiskWarnGb(int v) {
+    if (v < 1 || v <= state.minFreeDiskCriticalGb) return;
+    state = state.copyWith(minFreeDiskWarnGb: v);
+  }
+
+  void setMinFreeDiskCriticalGb(int v) {
+    if (v < 1 || v >= state.minFreeDiskWarnGb) return;
+    state = state.copyWith(minFreeDiskCriticalGb: v);
   }
 
   Future<void> hydrateFromServer(ProfileApi api) async {

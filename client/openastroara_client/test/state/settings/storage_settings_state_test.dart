@@ -47,5 +47,29 @@ void main() {
       expect(container.read(storageSettingsProvider).filenameTemplate,
           r'$$TARGET$$/$$FILTER$$');
     });
+
+    test('§29 disk-space threshold defaults', () {
+      final s = container.read(storageSettingsProvider);
+      expect(s.minFreeDiskWarnGb, 10);
+      expect(s.minFreeDiskCriticalGb, 2);
+    });
+
+    test('§29 threshold setters keep critical strictly below warn', () {
+      final n = container.read(storageSettingsProvider.notifier);
+      // Warn must stay above critical (default 2) and positive.
+      n.setMinFreeDiskWarnGb(0);
+      n.setMinFreeDiskWarnGb(2); // == critical, rejected
+      expect(container.read(storageSettingsProvider).minFreeDiskWarnGb, 10);
+      n.setMinFreeDiskWarnGb(25);
+      expect(container.read(storageSettingsProvider).minFreeDiskWarnGb, 25);
+
+      // Critical must stay below warn (now 25) and positive.
+      n.setMinFreeDiskCriticalGb(0);
+      n.setMinFreeDiskCriticalGb(25); // == warn, rejected
+      n.setMinFreeDiskCriticalGb(30); // > warn, rejected
+      expect(container.read(storageSettingsProvider).minFreeDiskCriticalGb, 2);
+      n.setMinFreeDiskCriticalGb(5);
+      expect(container.read(storageSettingsProvider).minFreeDiskCriticalGb, 5);
+    });
   });
 }

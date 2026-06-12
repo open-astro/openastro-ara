@@ -327,6 +327,26 @@ const List<Setting> settingsRegistry = [
     defaultValue: r'$$DATEMINUS12$$\\$$IMAGETYPE$$\\$$DATETIME$$_$$FILTER$$_$$EXPOSURETIME$$s',
     profilePath: 'storage.filename_template',
   ),
+  Setting(
+    id: 'session.storage.min_free_disk_warn_gb',
+    label: 'Low-disk warning threshold (GB)',
+    description: 'Free space on the save volume below which the daemon raises a low-disk warning. Must be above the critical threshold.',
+    keywords: ['disk', 'space', 'storage', 'free', 'warn', 'low', 'threshold', 'gb'],
+    path: ['Settings', 'Session', 'Storage'],
+    type: SettingType.intRange(min: 1, max: 100000),
+    defaultValue: 10,
+    profilePath: 'storage.min_free_disk_warn_gb',
+  ),
+  Setting(
+    id: 'session.storage.min_free_disk_critical_gb',
+    label: 'Critical-disk threshold (GB)',
+    description: 'Free space on the save volume below which the daemon raises a critical low-disk alert. Must be below the warning threshold.',
+    keywords: ['disk', 'space', 'storage', 'free', 'critical', 'low', 'threshold', 'gb'],
+    path: ['Settings', 'Session', 'Storage'],
+    type: SettingType.intRange(min: 1, max: 100000),
+    defaultValue: 2,
+    profilePath: 'storage.min_free_disk_critical_gb',
+  ),
 
   // §54 Notifications — 12 fields (5 channels + 7 triggers). State lives in
   // `notificationsSettingsProvider`.

@@ -6,6 +6,7 @@ import '../../../state/saved_server_state.dart';
 import '../../../state/settings/storage_settings_state.dart';
 import '../../../theme/ara_colors.dart';
 import '../../../widgets/settings/editable_field.dart';
+import '../../../widgets/settings/settings_row.dart';
 
 /// Storage panel per §29 — save directory + format + compression + filename
 /// template. Phase 12h.6c added the daemon round-trip — values hydrate from
@@ -165,6 +166,31 @@ class _StoragePanelState extends ConsumerState<StoragePanel> {
               ref.read(storageSettingsProvider).filenameTemplate,
           parse: n.setFilenameTemplate,
           maxLines: 2,
+        ),
+        const SettingsSectionHeader('Low-disk-space warning (§29)'),
+        EditableNumberRow(
+          label: 'Warn below (GB free)',
+          helpKey: 'session.storage.min_free_disk_warn_gb',
+          currentValue: s.minFreeDiskWarnGb.toString(),
+          getCanonical: () =>
+              ref.read(storageSettingsProvider).minFreeDiskWarnGb.toString(),
+          parse: (v) {
+            final gb = int.tryParse(v.trim());
+            if (gb != null) n.setMinFreeDiskWarnGb(gb);
+          },
+        ),
+        EditableNumberRow(
+          label: 'Critical below (GB free)',
+          helpKey: 'session.storage.min_free_disk_critical_gb',
+          currentValue: s.minFreeDiskCriticalGb.toString(),
+          getCanonical: () => ref
+              .read(storageSettingsProvider)
+              .minFreeDiskCriticalGb
+              .toString(),
+          parse: (v) {
+            final gb = int.tryParse(v.trim());
+            if (gb != null) n.setMinFreeDiskCriticalGb(gb);
+          },
         ),
         const SizedBox(height: 24),
         if (_lastError != null) ...[
