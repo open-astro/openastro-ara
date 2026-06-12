@@ -440,5 +440,9 @@ build button + manual refresh — low value without live completion, so parked w
 connected" and "build already in progress"; give the concurrent-build case a distinct signal (423 Locked or a
 structured problem-detail `type`) when the build UI lands and needs to tell them apart.
 
-**Deferred (advanced, §63.6):** the defect-map RPCs (`build_defect_map_darks`, `set_defect_map_enabled`) — add
-when defect maps are surfaced (wizard's optional "Also build defect map" checkbox, default off).
+**Shipped:** e-4c-a — defect-map RPC request/response shapes (`PHD2Methods.DarkLibrary.cs`):
+`build_defect_map_darks {exposure_ms def 3000, frame_count def 10, notes?, load_after def true}` →
+`{profile_id, defect_map_path, defect_count, exposure_ms, frame_count}`, and `set_defect_map_enabled {enabled}`.
+Serialization-locked (+4 tests). `rebuild_defect_map` is omitted — it's in the design reference but not the
+daemon's handler list (no handler yet). e-4c-b (guider method + service + endpoint, mirroring e-4b) is the
+follow-up; it can ship server-side independent of the wizard's optional "Also build defect map" affordance.
