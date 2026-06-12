@@ -36,6 +36,10 @@ public sealed class SqliteCalibrationService : ICalibrationService {
     // A conventional default flat count when the caller doesn't override it (NINA ships ~20-30).
     private const int DefaultFlatFrames = 20;
 
+    // Default target ADU for a flat (≈ half the 16-bit range, a standard flat-panel target). Preserves the
+    // prior placeholder default so a plan always carries a usable target unless the caller overrides it.
+    private const int DefaultTargetAdu = 32000;
+
     private readonly IAraDatabase _db;
 
     public SqliteCalibrationService(IAraDatabase db) {
@@ -102,13 +106,14 @@ public sealed class SqliteCalibrationService : ICalibrationService {
             ?? throw new CalibrationSessionNotFoundException(sessionId);
 
         var frameCount = request.OverrideFrameCount is int n && n > 0 ? n : DefaultFlatFrames;
+        var targetAdu = request.OverrideTargetAdu ?? DefaultTargetAdu;
         var steps = new List<GeneratedFlatStepDto>(session.FiltersUsed.Count);
         var total = 0;
         foreach (var filter in session.FiltersUsed) {
             steps.Add(new GeneratedFlatStepDto(
                 FilterName: filter.FilterName,
                 FrameCount: frameCount,
-                TargetAdu: request.OverrideTargetAdu,
+                TargetAdu: targetAdu,
                 PanelBrightness: null));
             total += frameCount;
         }
@@ -225,8 +230,12 @@ public sealed class SqliteCalibrationService : ICalibrationService {
 
     private const string NoFilter = "(no filter)";
 
+    // The app writes captured_utc as ISO-8601 "O", but a single corrupt/hand-edited row shouldn't 500 the
+    // whole session list — fall back to the epoch sentinel so the session still renders.
     private static DateTimeOffset ParseUtc(string s) =>
-        DateTimeOffset.Parse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
+        DateTimeOffset.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dto)
+            ? dto
+            : DateTimeOffset.UnixEpoch;
 }
 
 /// <summary>Thrown by <see cref="SqliteCalibrationService.GenerateMatchingFlatsAsync"/> when the session id has

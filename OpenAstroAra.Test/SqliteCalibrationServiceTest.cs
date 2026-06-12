@@ -77,6 +77,38 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task ListSessions_paginates_over_the_cursor() {
+            var s2 = Guid.Parse("33333333-3333-3333-3333-333333333332");
+            var s3 = Guid.Parse("33333333-3333-3333-3333-333333333333");
+            await InsertSessionAsync(s2);
+            await InsertSessionAsync(s3);
+            await InsertFrameAsync(Session, "light", "Ha", 300, 100, "M42");
+            await InsertFrameAsync(s2, "light", "Ha", 300, 100, "M81");
+            await InsertFrameAsync(s3, "light", "Ha", 300, 100, "M101");
+
+            var page1 = await _svc.ListSessionsAsync(2, null, CancellationToken.None);
+            Assert.That(page1.Items.Count, Is.EqualTo(2));
+            Assert.That(page1.HasMore, Is.True);
+            Assert.That(page1.NextCursor, Is.Not.Null);
+
+            var page2 = await _svc.ListSessionsAsync(2, page1.NextCursor, CancellationToken.None);
+            Assert.That(page2.Items.Count, Is.EqualTo(1));
+            Assert.That(page2.HasMore, Is.False);
+
+            // The two pages together cover all three sessions with no overlap.
+            var ids = page1.Items.Concat(page2.Items).Select(s => s.Id).ToHashSet();
+            Assert.That(ids, Is.EquivalentTo(new[] { Session, s2, s3 }));
+        }
+
+        [Test]
+        public async Task GenerateMatchingFlats_uses_the_default_target_adu_when_not_overridden() {
+            await InsertFrameAsync(Session, "light", "Ha", 300, 100, "M42");
+            var plan = await _svc.GenerateMatchingFlatsAsync(
+                Session, new MatchingFlatsRequestDto(null, null, GenerateOnly: true), CancellationToken.None);
+            Assert.That(plan.Steps.Single().TargetAdu, Is.EqualTo(32000));
+        }
+
+        [Test]
         public async Task GetSession_returns_null_for_a_session_with_no_light_frames() {
             await InsertFrameAsync(Session, "dark", null, 300, 100, "M42"); // darks only — not a calibration session
             var dto = await _svc.GetSessionAsync(Session, CancellationToken.None);
