@@ -76,5 +76,17 @@ namespace OpenAstroAra.Test {
                 DiskSpaceMonitor.LongestPrefixRoot(@"D:\Astro\M42\x.fits", WindowsRoots),
                 Is.EqualTo(@"D:\"));
         }
+
+        [Test]
+        public void LongestPrefixRoot_can_match_case_insensitively_for_windows_drive_letters() {
+            // A lowercase-drive save dir ("d:\...") must still match DriveInfo's uppercase "D:\" root when the
+            // caller opts into OrdinalIgnoreCase (Windows); the default Ordinal would miss it.
+            Assert.That(
+                DiskSpaceMonitor.LongestPrefixRoot(@"d:\Astro\x.fits", WindowsRoots),
+                Is.Null, "case-sensitive default does not match a lowercase drive letter");
+            Assert.That(
+                DiskSpaceMonitor.LongestPrefixRoot(@"d:\Astro\x.fits", WindowsRoots, System.StringComparison.OrdinalIgnoreCase),
+                Is.EqualTo(@"D:\"));
+        }
     }
 }

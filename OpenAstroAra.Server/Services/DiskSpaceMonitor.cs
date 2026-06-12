@@ -89,11 +89,12 @@ namespace OpenAstroAra.Server.Services {
         /// <c>/</c> root). Returns null when none match (e.g. the save mount isn't present yet). Pure, so the
         /// cross-platform path→volume choice is unit-testable without real drives.
         /// </summary>
-        public static string? LongestPrefixRoot(string fullPath, IEnumerable<string> driveRoots) {
+        public static string? LongestPrefixRoot(
+            string fullPath, IEnumerable<string> driveRoots, StringComparison comparison = StringComparison.Ordinal) {
             string? best = null;
             var bestLen = -1;
             foreach (var root in driveRoots) {
-                if (root.Length > bestLen && IsUnderRoot(fullPath, root)) {
+                if (root.Length > bestLen && IsUnderRoot(fullPath, root, comparison)) {
                     best = root;
                     bestLen = root.Length;
                 }
@@ -106,9 +107,11 @@ namespace OpenAstroAra.Server.Services {
         // A prefix match only counts on a path-component boundary, so a "/mnt/data" mount doesn't swallow a
         // "/mnt/data2" path. A root that already ends on a separator ("/" or "D:\") bounds on its own; otherwise
         // the char right after the matched prefix must be a separator. Both separator styles are accepted so the
-        // pure helper is deterministic across hosts (it's tested with Windows-style roots on a Unix CI box).
-        private static bool IsUnderRoot(string fullPath, string root) {
-            if (root.Length == 0 || !fullPath.StartsWith(root, StringComparison.Ordinal)) {
+        // pure helper is deterministic across hosts (it's tested with Windows-style roots on a Unix CI box). The
+        // caller picks the comparison: case-insensitive on Windows (DriveInfo uppercases "D:\" but a user's save
+        // dir may be "d:\..."), case-sensitive elsewhere (POSIX paths are case-sensitive).
+        private static bool IsUnderRoot(string fullPath, string root, StringComparison comparison) {
+            if (root.Length == 0 || !fullPath.StartsWith(root, comparison)) {
                 return false;
             }
             return fullPath.Length == root.Length
@@ -152,19 +155,24 @@ namespace OpenAstroAra.Server.Services {
             if (level == _last) {
                 return; // only act on transitions, so a sustained low disk doesn't re-fire every tick
             }
-            var previous = _last;
+            await EmitTransitionAsync(_last, level, freeBytes.Value, saveDir, ct);
+            // Commit the new level only after a successful emit: if EmitTransitionAsync throws partway (e.g. the
+            // clear succeeds but CreateEventAsync hits a transient DB error), _last stays put so the next tick
+            // re-detects the transition and retries instead of silently swallowing it.
             _last = level;
-            await EmitTransitionAsync(previous, level, freeBytes.Value, saveDir, ct);
         }
 
         private static long? TryGetFreeBytes(string saveDir) {
+            // Windows drive letters are case-insensitive (DriveInfo uppercases "D:\" but the save dir may be
+            // "d:\..."); POSIX paths are case-sensitive. Match both the prefix test and the drive lookup the same way.
+            var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
             var full = Path.GetFullPath(saveDir);
             var drives = DriveInfo.GetDrives().Where(IsReady).ToList();
-            var root = LongestPrefixRoot(full, drives.Select(d => d.RootDirectory.FullName));
+            var root = LongestPrefixRoot(full, drives.Select(d => d.RootDirectory.FullName), comparison);
             if (root is null) {
                 return null;
             }
-            return drives.First(d => d.RootDirectory.FullName == root).AvailableFreeSpace;
+            return drives.First(d => string.Equals(d.RootDirectory.FullName, root, comparison)).AvailableFreeSpace;
 
             static bool IsReady(DriveInfo d) {
                 try {
