@@ -78,6 +78,20 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Build_request_rejects_overlong_notes() {
+            // 501 chars (trimmed) exceeds the 500-char cap.
+            var tooLong = new string('x', 501);
+            Assert.Throws<ArgumentException>(() => PHD2Guider.BuildDarkLibraryRequest(5, null, null, false, tooLong, true));
+        }
+
+        [Test]
+        public void Build_request_accepts_notes_at_the_length_cap() {
+            var atCap = new string('x', 500);
+            var req = PHD2Guider.BuildDarkLibraryRequest(5, null, null, false, atCap, true);
+            Assert.That(req.Parameters!.Notes, Is.EqualTo(atCap));
+        }
+
+        [Test]
         public void Build_request_accepts_equal_min_and_max() {
             var req = PHD2Guider.BuildDarkLibraryRequest(5, 3000, 3000, false, null, true);
             Assert.That(req.Parameters!.MinExposureMs, Is.EqualTo(3000));

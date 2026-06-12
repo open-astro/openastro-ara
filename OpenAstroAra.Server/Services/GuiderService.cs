@@ -47,6 +47,8 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
 
     private readonly ILogger<GuiderService> _logger;
     private readonly IProfileService _profileService;
+    // §63.6: WS sink for guider.dark_library.* events. Optional so the service composes in tests without a hub.
+    private readonly IWsBroadcaster? _ws;
     private readonly object _gate = new();
     // A no-op progress sink: the headless daemon reports guider progress to clients over the §60.9 WS
     // stream, not through NINA's in-process IProgress reporter.
@@ -62,10 +64,12 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
     private long _connectGeneration; // this attempt's id; later attempts/disconnects bump it to supersede
     private bool _disposed;
 
-    public GuiderService(IProfileService profileService, GuiderRecoveryCoordinator recovery, ILogger<GuiderService> logger) {
+    public GuiderService(IProfileService profileService, GuiderRecoveryCoordinator recovery, ILogger<GuiderService> logger,
+            IWsBroadcaster? ws = null) {
         _profileService = profileService ?? throw new ArgumentNullException(nameof(profileService));
         _recovery = recovery ?? throw new ArgumentNullException(nameof(recovery));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _ws = ws;
     }
 
     public Task<GuiderDto?> GetAsync(CancellationToken ct) {

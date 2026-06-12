@@ -32,6 +32,9 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         internal const int DarkLibraryMaxFrameCount = 50;
         internal const int DarkLibraryMinExposureMs = 1;
         internal const int DarkLibraryMaxExposureMs = 600000;
+        // The daemon stores notes as free text; cap them so a client can't push an unbounded string through the
+        // RPC. 500 chars is generous for a human-entered build note.
+        internal const int DarkLibraryMaxNotesLength = 500;
 
         // A dark-library build captures frame_count frames at each matched exposure, so it can run for a long
         // time. Worst realistic case: 50 frames × ~5 matched exposure steps × a long per-frame exposure can push
@@ -62,13 +65,19 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 throw new ArgumentException(
                     $"min_exposure_ms ({min}) must not exceed max_exposure_ms ({max}).", nameof(minExposureMs));
             }
+            // Trim first so a note that's only padding doesn't count against the cap, then bound the real length.
+            var trimmedNotes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim();
+            if (trimmedNotes is not null && trimmedNotes.Length > DarkLibraryMaxNotesLength) {
+                throw new ArgumentException(
+                    $"notes must be at most {DarkLibraryMaxNotesLength} characters.", nameof(notes));
+            }
             return new Phd2BuildDarkLibrary {
                 Parameters = new Phd2BuildDarkLibraryParameter {
                     FrameCount = frameCount,
                     MinExposureMs = minExposureMs,
                     MaxExposureMs = maxExposureMs,
                     ClearExisting = clearExisting,
-                    Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim(),
+                    Notes = trimmedNotes,
                     LoadAfter = loadAfter,
                 },
             };

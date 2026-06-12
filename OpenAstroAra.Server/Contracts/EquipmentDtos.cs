@@ -271,6 +271,45 @@ public sealed record GuiderStateDto(
 
 public sealed record GuiderConnectRequestDto(string Host = "localhost", int Port = 4400);
 
+// ─── Guider dark library / calibration files (§63.6 guider-e-4b) ──────────────
+
+/// <summary>Request to build a dark-frame library for the active guider profile. All fields optional with
+/// daemon-aligned defaults; bounds are validated server-side before the build is dispatched (frame_count 1..50,
+/// exposure bounds 1..600000 ms, min ≤ max).</summary>
+public sealed record BuildDarkLibraryRequestDto(
+    int FrameCount = 5,
+    int? MinExposureMs = null,
+    int? MaxExposureMs = null,
+    bool ClearExisting = false,
+    string? Notes = null,
+    bool LoadAfter = true);
+
+/// <summary>The status read's envelope: <c>Connected</c> distinguishes "guider not connected" (Status null)
+/// from "connected, here's the status" — so a client polling to drive the "Build dark library" affordance never
+/// has to read a 404 as a missing route. Always returned with 200.</summary>
+public sealed record CalibrationFilesStatusResponseDto(
+    bool Connected,
+    CalibrationFilesStatusDto? Status);
+
+/// <summary>The guider's calibration-files status: which dark-library / defect-map files exist for the active
+/// profile, whether they're loaded/compatible, the auto-load flags, and (when a camera is connected and darks
+/// are loaded) the loaded-dark count + exposure range.</summary>
+public sealed record CalibrationFilesStatusDto(
+    int ProfileId,
+    string? DarkLibraryPath,
+    string? DefectMapPath,
+    bool DarkLibraryExists,
+    bool DefectMapExists,
+    bool DarkLibraryCompatible,
+    bool DefectMapCompatible,
+    bool DarkLibraryLoaded,
+    bool DefectMapLoaded,
+    bool AutoLoadDarks,
+    bool AutoLoadDefectMap,
+    int? DarkCountLoaded,
+    double? DarkMinExposureSecondsLoaded,
+    double? DarkMaxExposureSecondsLoaded);
+
 // ─── Polar Alignment (§10.6 row 12) ───────────────────────────────────────────
 
 public sealed record PolarAlignStateDto(

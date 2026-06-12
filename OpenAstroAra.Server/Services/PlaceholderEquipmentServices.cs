@@ -177,6 +177,10 @@ public sealed class PlaceholderGuiderService : IGuiderService {
         Task.FromResult(PlaceholderEquipmentHelpers.Accepted("guider.stop", idempotencyKey));
     public Task<OperationAcceptedDto> DitherAsync(double pixels, string? idempotencyKey, CancellationToken ct) =>
         Task.FromResult(PlaceholderEquipmentHelpers.Accepted("guider.dither", idempotencyKey));
+    public Task<OperationAcceptedDto> BuildDarkLibraryAsync(BuildDarkLibraryRequestDto request, string? idempotencyKey, CancellationToken ct) =>
+        Task.FromResult(PlaceholderEquipmentHelpers.Accepted("guider.dark_library.build", idempotencyKey));
+    public Task<CalibrationFilesStatusDto?> GetCalibrationFilesStatusAsync(CancellationToken ct) =>
+        Task.FromResult<CalibrationFilesStatusDto?>(null);
 }
 
 public sealed class PlaceholderPolarAlignService : IPolarAlignService {

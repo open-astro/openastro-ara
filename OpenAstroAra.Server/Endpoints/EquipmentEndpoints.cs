@@ -199,6 +199,18 @@ public static class EquipmentEndpoints {
         guider.MapPost("/dither", async (double pixels, [FromHeader(Name = "Idempotency-Key")] string? key, IGuiderService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.DitherAsync(pixels, key, ct)));
 
+        // §63.6 dark library: build (202, long-running ~minutes; WS reports guider.dark_library.started/complete)
+        // and a status read for the wizard's "Build dark library" affordance.
+        guider.MapPost("/darklibrary/build", async ([FromBody] BuildDarkLibraryRequestDto request,
+                [FromHeader(Name = "Idempotency-Key")] string? key, IGuiderService svc, CancellationToken ct) =>
+            await BuildDarkLibraryAsync(request, key, svc, ct));
+        // Always 200 with a {connected, status} envelope so a client polling to drive the build affordance can
+        // tell "guider not connected" (connected:false) apart from a missing route (404).
+        guider.MapGet("/darklibrary/status", async (IGuiderService svc, CancellationToken ct) => {
+            var dto = await svc.GetCalibrationFilesStatusAsync(ct);
+            return Results.Ok(new CalibrationFilesStatusResponseDto(Connected: dto is not null, Status: dto));
+        });
+
         // ─── Polar Alignment ───
         var polar = equipment.MapGroup("/polaralign");
         polar.MapGet("/status", async (IPolarAlignService svc, CancellationToken ct) =>
@@ -209,5 +221,21 @@ public static class EquipmentEndpoints {
             Results.Accepted(value: await svc.StopAsync(key, ct)));
 
         return app;
+    }
+
+    // Extracted (not an inline lambda) so the validation/connection error mapping is unit-testable with a mocked
+    // service. §63.6: a bad request (out-of-range frame count / exposure bound, or min > max) throws
+    // ArgumentException → 400; a disconnected guider throws InvalidOperationException → 409 Conflict.
+    public static async Task<IResult> BuildDarkLibraryAsync(
+            BuildDarkLibraryRequestDto request, string? idempotencyKey, IGuiderService svc, CancellationToken ct) {
+        try {
+            return Results.Accepted(value: await svc.BuildDarkLibraryAsync(request, idempotencyKey, ct));
+        } catch (System.ArgumentException ex) {
+            // Covers ArgumentOutOfRangeException (frame count / exposure bounds) and the min > max ArgumentException.
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status400BadRequest);
+        } catch (System.InvalidOperationException ex) {
+            // Guider not connected — can't accept a build it can't run.
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
+        }
     }
 }

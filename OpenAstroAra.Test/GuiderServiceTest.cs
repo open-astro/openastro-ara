@@ -111,6 +111,56 @@ namespace OpenAstroAra.Test {
             Assert.That(await svc.Dither(CancellationToken.None), Is.False);
         }
 
+        // ── §63.6 guider-e-4b-2: dark-library build dispatch ──
+
+        [Test]
+        public void BuildDarkLibraryAsync_when_not_connected_throws_InvalidOperation() {
+            using var svc = NewService();
+            // A valid request still can't be accepted with no guider connected.
+            Assert.Throws<InvalidOperationException>(
+                () => { _ = svc.BuildDarkLibraryAsync(new BuildDarkLibraryRequestDto(FrameCount: 5), null, CancellationToken.None); });
+        }
+
+        [Test]
+        public void BuildDarkLibraryAsync_validates_before_the_connection_check() {
+            using var svc = NewService();
+            // Validation runs first, so a bad request surfaces as ArgumentException even while disconnected
+            // (a 400, not a 409) — the endpoint relies on this ordering.
+            Assert.Throws<ArgumentOutOfRangeException>(
+                () => { _ = svc.BuildDarkLibraryAsync(new BuildDarkLibraryRequestDto(FrameCount: 0), null, CancellationToken.None); });
+            Assert.Throws<ArgumentException>(
+                () => { _ = svc.BuildDarkLibraryAsync(new BuildDarkLibraryRequestDto(MinExposureMs: 5000, MaxExposureMs: 1000), null, CancellationToken.None); });
+        }
+
+        [Test]
+        public async System.Threading.Tasks.Task GetCalibrationFilesStatusAsync_returns_null_before_connect() {
+            using var svc = NewService();
+            Assert.That(await svc.GetCalibrationFilesStatusAsync(CancellationToken.None), Is.Null);
+        }
+
+        // The concurrent-build gate sits behind RequireConnectedGuider (needs a live daemon), so its decision is
+        // factored into a pure helper that's tested here directly — the 409 / idempotent-202 / start branches.
+        [Test]
+        public void ResolveBuildAdmission_starts_when_no_build_in_flight() {
+            Assert.That(GuiderService.ResolveBuildAdmission(inProgress: false, inFlightKey: "k1", requestKey: "k2"),
+                Is.EqualTo(GuiderService.BuildAdmission.Start));
+        }
+
+        [Test]
+        public void ResolveBuildAdmission_idempotent_accepts_same_non_null_key() {
+            Assert.That(GuiderService.ResolveBuildAdmission(inProgress: true, inFlightKey: "k1", requestKey: "k1"),
+                Is.EqualTo(GuiderService.BuildAdmission.IdempotentAccept));
+        }
+
+        [Test]
+        public void ResolveBuildAdmission_rejects_a_different_or_keyless_concurrent_build() {
+            Assert.That(GuiderService.ResolveBuildAdmission(inProgress: true, inFlightKey: "k1", requestKey: "k2"),
+                Is.EqualTo(GuiderService.BuildAdmission.Reject));
+            // A null request key must never collapse onto an in-flight null key as "idempotent".
+            Assert.That(GuiderService.ResolveBuildAdmission(inProgress: true, inFlightKey: null, requestKey: null),
+                Is.EqualTo(GuiderService.BuildAdmission.Reject));
+        }
+
         [Test]
         public void Ops_after_Dispose_throw_ObjectDisposed() {
             var svc = NewService();
