@@ -12,14 +12,16 @@ import 'package:openastroara/state/ws/ws_providers.dart';
 import 'package:openastroara/widgets/status_indicator.dart';
 
 class _FakeSavedServerService implements SavedServerService {
-  _FakeSavedServerService(this._stored);
+  _FakeSavedServerService(List<AraServer> stored) : _stored = [...stored];
   final List<AraServer> _stored;
   @override
   Future<List<AraServer>> loadAll() async => List.unmodifiable(_stored);
   @override
-  Future<void> saveAll(List<AraServer> servers) async {}
+  Future<void> saveAll(List<AraServer> servers) async => _stored
+    ..clear()
+    ..addAll(servers);
   @override
-  Future<void> add(AraServer server) async {}
+  Future<void> add(AraServer server) async => _stored.add(server);
 }
 
 class _FakeSocket {
@@ -109,6 +111,36 @@ void main() {
 
       final snap = container.read(diagnosticsStateProvider);
       expect(snap.label, 'Diagnostics: nominal');
+      expect(snap.events, isEmpty);
+    });
+
+    test('switching the active server resets the roll-up', () async {
+      final conn = _FakeConnector();
+      final container = ProviderContainer(overrides: [
+        savedServerServiceProvider
+            .overrideWithValue(_FakeSavedServerService(const [AraServer(hostname: 'a', port: 5555)])),
+        wsEventStreamFactoryProvider.overrideWithValue((s) => WsEventStream(s, connect: conn.connect)),
+      ]);
+      addTearDown(container.dispose);
+      await container.read(savedServersProvider.future);
+
+      final sub = container.listen(diagnosticsStateProvider, (_, _) {});
+      addTearDown(sub.close);
+      await pumpEventQueue();
+
+      conn.legs.first.incoming.add(_frame('diagnostics.issue_detected',
+          {'event_type': 'disk.low', 'severity': 'yellow'}, 1));
+      await pumpEventQueue();
+      expect(container.read(diagnosticsStateProvider).level, StatusLevel.busy,
+          reason: 'issue is open on server a');
+
+      // Switch the active server (savedServers.last) → build() re-runs with a
+      // fresh accumulator, so server a's open issue must not carry over.
+      await container.read(savedServersProvider.notifier).add(const AraServer(hostname: 'b', port: 5555));
+      await pumpEventQueue();
+
+      final snap = container.read(diagnosticsStateProvider);
+      expect(snap.label, 'Diagnostics: nominal', reason: 'fresh accumulator on server switch');
       expect(snap.events, isEmpty);
     });
   });

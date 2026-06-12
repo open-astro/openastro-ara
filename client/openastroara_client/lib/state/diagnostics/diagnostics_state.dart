@@ -192,6 +192,10 @@ class DiagnosticsNotifier extends Notifier<DiagnosticsSnapshot> {
       );
     }
     final acc = DiagnosticsAccumulator();
+    // TODO: no replay on reconnect — events the server emits while the socket is
+    // down (WsEventStream auto-reconnects, so the stream stays non-null) are
+    // lost, so the pill can read stale-nominal until the next live event.
+    // Resolve when server-side history-on-connect lands.
     ref.listen(wsEventsProvider, (prev, next) {
       final event = next.asData?.value;
       // Filter to the `diagnostics.*` family by routing prefix (matching the
