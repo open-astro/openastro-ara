@@ -45,16 +45,24 @@ final wsConnectionStateProvider = StreamProvider.autoDispose<WsConnectionState>(
   final stream = ref.watch(wsEventStreamProvider);
   if (stream == null) return Stream.value(WsConnectionState.disconnected);
   final controller = StreamController<WsConnectionState>();
+  StreamSubscription<WsConnectionState>? sub;
+  // Every callback guards on isClosed: on provider dispose we close the
+  // controller and cancel the source, but the cancel is async, so a transition
+  // the disposing WsEventStream emits (e.g. its final `disconnected`) could
+  // otherwise hit a closed controller and throw StateError.
   controller.onListen = () {
-    final sub = stream.connectionStates.listen(
-      controller.add,
-      onError: controller.addError,
-      onDone: controller.close,
+    sub = stream.connectionStates.listen(
+      (s) { if (!controller.isClosed) controller.add(s); },
+      onError: (Object e, StackTrace st) { if (!controller.isClosed) controller.addError(e, st); },
+      onDone: () { if (!controller.isClosed) controller.close(); },
     );
-    controller.add(stream.connectionState); // current value, captured after the subscription
-    controller.onCancel = sub.cancel;
+    if (!controller.isClosed) controller.add(stream.connectionState); // current value, after subscribing
+    controller.onCancel = () => sub?.cancel();
   };
-  ref.onDispose(controller.close);
+  ref.onDispose(() {
+    sub?.cancel(); // cancel eagerly so no late event races the close()
+    if (!controller.isClosed) controller.close();
+  });
   return controller.stream;
 });
 

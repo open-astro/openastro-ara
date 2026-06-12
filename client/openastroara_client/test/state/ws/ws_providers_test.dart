@@ -91,5 +91,29 @@ void main() {
       expect(container.read(wsConnectionStateProvider).asData?.value, WsConnectionState.connected,
           reason: 'the provider follows the transition to connected (no dropped state)');
     });
+
+    test('disposing the providers while connected does not throw (close-race guard)', () async {
+      final conn = _FakeConnector();
+      final container = ProviderContainer(overrides: [
+        savedServerServiceProvider
+            .overrideWithValue(_FakeSavedServerService(const [AraServer(hostname: 'h', port: 5555)])),
+        wsEventStreamFactoryProvider.overrideWithValue((s) => WsEventStream(s, connect: conn.connect)),
+      ]);
+      await container.read(savedServersProvider.future);
+      final streamSub = container.listen(wsEventStreamProvider, (_, _) {});
+      final connSub = container.listen(wsConnectionStateProvider, (_, _) {});
+      conn.legs.first.incoming.add(_envelope(1));
+      await pumpEventQueue();
+
+      // Drop both listeners → autoDispose tears down the providers; the disposing
+      // WsEventStream emits a final `disconnected`, which must not hit a closed
+      // controller. A StateError here would surface as an unhandled async error.
+      connSub.close();
+      streamSub.close();
+      await pumpEventQueue();
+      container.dispose();
+      await pumpEventQueue();
+      // Reaching here without an unhandled exception is the assertion.
+    });
   });
 }
