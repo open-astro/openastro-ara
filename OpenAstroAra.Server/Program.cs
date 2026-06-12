@@ -247,8 +247,9 @@ public partial class Program {
         // §38j-6 — also writes active/current.json checkpoint per §28.1.
         // Registered later (after profileDir is resolved) so the checkpoint
         // dep can be constructed.
-        // Phase 13.14 — calibration + dark library + mosaic placeholders.
-        builder.Services.AddSingleton<ICalibrationService, PlaceholderCalibrationService>();
+        // §39 — calibration sessions + matching-flats derived live from the §28 SQLite catalog
+        // (replaces the Phase 13.14 fixture placeholder). Dark-library build + mosaics stay placeholders.
+        builder.Services.AddSingleton<ICalibrationService, SqliteCalibrationService>();
         builder.Services.AddSingleton<IDarkLibraryService, PlaceholderDarkLibraryService>();
         builder.Services.AddSingleton<IMosaicService, PlaceholderMosaicService>();
         // Phase 13.15 — sequence templates + NINA import + auto-flats.

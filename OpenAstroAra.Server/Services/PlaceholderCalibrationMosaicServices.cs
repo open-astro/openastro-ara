@@ -16,48 +16,8 @@ using OpenAstroAra.Server.Contracts;
 
 namespace OpenAstroAra.Server.Services;
 
-/// <summary>
-/// Phase 13.14 — placeholder <see cref="ICalibrationService"/>. One
-/// fixture calibration session matching the §13.2 sample frames so the
-/// §39 Calibration UI has a wire shape to render. Matching-flats
-/// generation returns a synthetic <see cref="GeneratedFlatSequenceDto"/>.
-/// </summary>
-public sealed class PlaceholderCalibrationService : ICalibrationService {
-    private static readonly Guid SampleSessionId =
-        Guid.Parse("11111111-1111-1111-1111-111111111111");
-
-    private static readonly CalibrationSessionDto SampleSession = new(
-        Id: SampleSessionId,
-        TargetName: "M31",
-        SessionStartUtc: new DateTimeOffset(2026, 5, 30, 3, 0, 0, TimeSpan.Zero),
-        SessionEndUtc: new DateTimeOffset(2026, 5, 30, 4, 30, 0, TimeSpan.Zero),
-        LightFrameCount: 2,
-        FiltersUsed: new[] {
-            new CalibrationFilterSummaryDto("L", 1, 180.0, RecommendedFlatFrames: 30),
-            new CalibrationFilterSummaryDto("R", 1, 180.0, RecommendedFlatFrames: 30),
-        },
-        MatchingFlatsAvailable: false,
-        MatchingDarksAvailable: true,
-        ProfileId: null);
-
-    public Task<CursorPage<CalibrationSessionDto>> ListSessionsAsync(int limit, string? cursor, CancellationToken ct) =>
-        Task.FromResult(new CursorPage<CalibrationSessionDto>(
-            new[] { SampleSession }, NextCursor: null, HasMore: false));
-
-    public Task<CalibrationSessionDto?> GetSessionAsync(Guid id, CancellationToken ct) =>
-        Task.FromResult<CalibrationSessionDto?>(id == SampleSessionId ? SampleSession : null);
-
-    public Task<GeneratedFlatSequenceDto> GenerateMatchingFlatsAsync(Guid sessionId, MatchingFlatsRequestDto request, CancellationToken ct) =>
-        Task.FromResult(new GeneratedFlatSequenceDto(
-            SourceSessionId: sessionId,
-            GeneratedSequenceId: Guid.NewGuid(),
-            GeneratedSequenceName: $"Flats for {sessionId:N}",
-            TotalFlatFrames: 60,
-            Steps: new[] {
-                new GeneratedFlatStepDto("L", request.OverrideFrameCount ?? 30, request.OverrideTargetAdu ?? 32000, PanelBrightness: 128),
-                new GeneratedFlatStepDto("R", request.OverrideFrameCount ?? 30, request.OverrideTargetAdu ?? 32000, PanelBrightness: 128),
-            }));
-}
+// §39 — the calibration session/matching-flats placeholder was replaced by the catalog-backed
+// SqliteCalibrationService. The dark-library + mosaic placeholders below remain (build is guider/sequencer-gated).
 
 /// <summary>
 /// Phase 13.14 — placeholder <see cref="IDarkLibraryService"/>. Status

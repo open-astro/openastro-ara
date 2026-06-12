@@ -328,3 +328,18 @@ which takes no `CancellationToken` (unlike `WaitForDomeSynchronization(token)` o
 non-following dome sync can't be cancelled mid-slew. Inherited interface shape; bounded impact (best-effort,
 exceptions swallowed). Fix is a shared-interface change (`IDomeFollower` + its impls), out of scope for the
 §58.4 executor PR — fold into a dome-mediator follow-up that threads cancellation through the sync seam.
+
+### §39 calibration — dark matching ignores temperature (from SqliteCalibrationService)
+`SqliteCalibrationService.MatchingDarksAvailable` matches darks to lights by `(exposure_seconds, gain)` only.
+For cooled cameras, darks should also match the set-point temperature (within a tolerance, e.g. ±1°C). The
+catalog stores `temperature_c` per frame, so the EXCEPT query can add a rounded/bucketed temperature column —
+deferred until set-point temperature is reliably recorded on both lights and darks. Flats match by `filter`
+only (correct). The matching-flats generation returns a PLAN (one step per light filter); enqueuing it as a
+runnable §38 flat sequence is a separate follow-up.
+
+### §39 calibration — ListSessions is O(N) queries per page (from #370 review)
+`SqliteCalibrationService.ListSessionsAsync` runs `BuildSessionDtoAsync` per session = 4 queries each (header,
+per-filter, flats EXCEPT, darks EXCEPT). A 50-session page ≈ 201 queries. Acceptable at v0.0.1 scale over the
+embedded SQLite file (in-process, sub-ms each → tens of ms for a page), but a catalog with hundreds of nights
+would benefit from batching the per-filter + coverage queries via `IN ($ids)` / a single GROUP BY pass and
+assembling the DTOs in code. Defer until catalog sizes warrant it.
