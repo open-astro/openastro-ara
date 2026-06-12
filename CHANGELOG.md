@@ -127,7 +127,7 @@ at the top. This happens in the same commit that pushes the release tag.
 - **Phase 12c.2 — Live View Notifier + Diagnostic Panel.** Live View toggle lifted out of `_ImagingTabState` widget state into `liveViewControllerProvider` (`lib/state/imaging/live_view_state.dart`) so cross-component observation works (bottom status bar, sequence-runner pause, etc.). §51 always-visible Diagnostic Panel (`lib/widgets/imaging/diagnostic_panel.dart`) renders below the histogram — collapsed by default, expanding shows recent events with per-event status dot + source + timestamp. `diagnosticsStateProvider` is the data source — stubbed in 12c.2 as "Diagnostics: not connected"; real `/api/v1/ws` event stream (`diagnostics.*` events per §60.9) wires up in Phase 12c.3 alongside Take One + frame-fetch.
 
 ### Fixed
-- **Plate solving — clearer blind-solver fallback.** A profile still configured for the (removed) AstrometryNet cloud blind solver was silently falling back to ASTAP. The daemon now substitutes ASTAP explicitly and logs it, so the solver actually used during a blind solve isn't a surprise. ARA ships local solvers only (§18.I); ASTAP is the intended backend.
+- **Plate solving — clearer AstrometryNet fallback.** A profile still configured for the (removed) AstrometryNet cloud solver — on either the primary or the blind solver — was silently falling back to ASTAP. The daemon now substitutes ASTAP explicitly and logs it, so the solver actually used isn't a surprise. ARA ships local solvers only (§18.I); ASTAP is the intended backend.
 
 ---
 

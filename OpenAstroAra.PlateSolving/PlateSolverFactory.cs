@@ -63,8 +63,20 @@ namespace OpenAstroAra.PlateSolving {
                 PlateSolver.ASPS => new AllSkyPlateSolver(plateSolveSettings.AspsLocation),
                 PlateSolver.TSXImageLink => new TheSkyXImageLinkSolver(plateSolveSettings.TheSkyXHost, plateSolveSettings.TheSkyXPort),
                 PlateSolver.PINPONT => new Dc3PinPointSolver(plateSolveSettings),
+                // The removed AstrometryNet substitutes ASTAP *explicitly* + logs (rather than silently hitting
+                // the default arm), so a profile still carrying it — primary (PlateSolverType) or blind
+                // (BlindSolver.AstrometryNet → PlateSolver.AstrometryNet) both funnel here — doesn't resolve to a
+                // different backend than configured without a trace.
+                PlateSolver.AstrometryNet => CreateAstapForRemovedAstrometryNet(plateSolveSettings),
                 _ => new ASTAPSolver(plateSolveSettings.ASTAPLocation),
             };
+        }
+
+        // The log fires per solve by design: it's a persistent profile misconfiguration the user should correct
+        // (e.g. a NINA import that carried AstrometryNet). Info-level so it informs without Error-level spam.
+        private static ASTAPSolver CreateAstapForRemovedAstrometryNet(IPlateSolveSettings plateSolveSettings) {
+            Logger.Info("Plate solve - solver is configured as AstrometryNet, which was removed (§18.I local-solvers-only). Using ASTAP instead.");
+            return new ASTAPSolver(plateSolveSettings.ASTAPLocation);
         }
 
         public static IPlateSolver GetPlateSolver(IPlateSolveSettings plateSolveSettings) {
@@ -72,16 +84,11 @@ namespace OpenAstroAra.PlateSolving {
         }
 
         public static IPlateSolver GetBlindSolver(IPlateSolveSettings plateSolveSettings) {
-            if (plateSolveSettings.BlindSolverType == BlindSolver.AstrometryNet) {
-                // The cloud astrometry.net blind solver was removed per §18.I (ARA ships local solvers only).
-                // A profile still carrying that setting previously mapped to PlateSolver.AstrometryNet and then
-                // fell through GetPlateSolver's default to ASTAP — silently. Substitute ASTAP explicitly and log
-                // it so the resolved backend isn't a surprise during a blind solve.
-                Logger.Info("Plate solve - blind solver is configured as AstrometryNet, which was removed (§18.I local-solvers-only). Using ASTAP for blind solving instead.");
-                return GetPlateSolver(plateSolveSettings, PlateSolver.ASTAP);
-            }
-
+            // BlindSolver.AstrometryNet maps to PlateSolver.AstrometryNet, which GetPlateSolver substitutes
+            // (with a log) to ASTAP — see CreateAstapForRemovedAstrometryNet. Both solver paths share that one
+            // substitution point.
             var type = plateSolveSettings.BlindSolverType switch {
+                BlindSolver.AstrometryNet => PlateSolver.AstrometryNet,
                 BlindSolver.LOCAL => PlateSolver.LOCAL,
                 BlindSolver.PLATESOLVE3 => PlateSolver.PLATESOLVE3,
                 BlindSolver.ASPS => PlateSolver.ASPS,
