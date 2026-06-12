@@ -27,6 +27,7 @@ class _FakeGuiderApi extends GuiderApi {
   int disconnectCalls = 0;
   String? lastHost;
   int? lastPort;
+  bool throwOnConnect = false;
 
   @override
   Future<GuiderStatus?> getStatus() async => status;
@@ -36,6 +37,9 @@ class _FakeGuiderApi extends GuiderApi {
     connectCalls++;
     lastHost = host;
     lastPort = port;
+    if (throwOnConnect) {
+      throw StateError('connect failed');
+    }
     status = const GuiderStatus(
       deviceId: 'phd2',
       name: 'PHD2',
@@ -111,6 +115,24 @@ void main() {
       expect(api.lastHost, '10.0.0.5');
       expect(api.lastPort, 4401);
       expect(c.read(guiderStatusProvider).value!.connectionState, GuiderConnectionState.connecting);
+    });
+
+    test('a failed connect surfaces as AsyncError (not a stale value)', () async {
+      final api = _FakeGuiderApi()
+        ..status = const GuiderStatus(
+          deviceId: 'phd2',
+          name: 'PHD2',
+          connectionState: GuiderConnectionState.disconnected,
+          runtimeState: GuiderRuntimeState.stopped,
+        )
+        ..throwOnConnect = true;
+      final c = _container(const [server], api);
+      await c.read(savedServersProvider.future);
+      await c.read(guiderStatusProvider.future);
+
+      await c.read(guiderStatusProvider.notifier).connect();
+
+      expect(c.read(guiderStatusProvider).hasError, isTrue);
     });
 
     test('disconnect() drives the status back to disconnected', () async {

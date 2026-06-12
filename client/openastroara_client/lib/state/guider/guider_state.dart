@@ -19,7 +19,11 @@ final guiderApiProvider = Provider<GuiderApi?>((ref) {
         orElse: () => const <AraServer>[],
       );
   if (servers.isEmpty) return null;
-  return ref.watch(guiderApiFactoryProvider)(servers.last);
+  final api = ref.watch(guiderApiFactoryProvider)(servers.last);
+  // Close the old Dio when the active server changes (provider recompute) or
+  // the provider is disposed, so connection pools don't leak.
+  ref.onDispose(api.close);
+  return api;
 });
 
 /// Live guider status for the active server. `null` data means either no server
@@ -38,14 +42,26 @@ class GuiderStatusNotifier extends AsyncNotifier<GuiderStatus?> {
   Future<void> connect({String host = 'localhost', int port = 4400}) async {
     final api = ref.read(guiderApiProvider);
     if (api == null) return;
-    await api.connect(host: host, port: port);
+    try {
+      await api.connect(host: host, port: port);
+    } catch (e, st) {
+      // Surface a failed connect as an error state so the UI can show it; a
+      // bare throw here would leave the notifier on its stale prior value.
+      state = AsyncValue<GuiderStatus?>.error(e, st);
+      return;
+    }
     await refresh();
   }
 
   Future<void> disconnect() async {
     final api = ref.read(guiderApiProvider);
     if (api == null) return;
-    await api.disconnect();
+    try {
+      await api.disconnect();
+    } catch (e, st) {
+      state = AsyncValue<GuiderStatus?>.error(e, st);
+      return;
+    }
     await refresh();
   }
 

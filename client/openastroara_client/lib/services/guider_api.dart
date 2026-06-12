@@ -48,4 +48,8 @@ class GuiderApi {
   Future<void> disconnect() async {
     await _dio.post<Map<String, dynamic>>('/api/v1/equipment/guider/disconnect');
   }
+
+  /// Releases the underlying Dio's connection pool. Call when the API is
+  /// replaced (e.g. the active server changed) so sockets don't leak.
+  void close() => _dio.close(force: true);
 }
