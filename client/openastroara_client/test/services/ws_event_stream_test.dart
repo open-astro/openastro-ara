@@ -137,6 +137,19 @@ void main() {
       await ws.dispose();
     });
 
+    test('lastSeq only advances — an out-of-order frame does not walk it back', () async {
+      final conn = _FakeConnector();
+      final ws = WsEventStream(server, connect: conn.connect);
+      ws.events.listen((_) {});
+      ws.connect();
+      conn.legs.first.incoming
+        ..add(_envelope('e', 10))
+        ..add(_envelope('e', 5)); // out of order / counter reset
+      await pumpEventQueue();
+      expect(ws.lastSeq, 10, reason: 'resume token must not regress on a lower seq');
+      await ws.dispose();
+    });
+
     test('first connect sends no resume token', () async {
       final conn = _FakeConnector();
       final ws = WsEventStream(server, connect: conn.connect);

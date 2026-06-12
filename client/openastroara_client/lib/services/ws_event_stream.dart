@@ -67,7 +67,10 @@ class WsEventStream {
     AraServer server, {
     WsConnector? connect,
     List<Duration>? backoff,
-  })  : _url = Uri.parse('ws://${server.hostname}:${server.port}/api/v1/ws'),
+  })  // TODO(wss): plaintext ws:// is fine for the trusted-LAN default, but the
+      // §67.4 / web-support follow-up must switch to wss:// for untrusted routes
+      // (the resume handshake + payloads would otherwise be in the clear).
+      : _url = Uri.parse('ws://${server.hostname}:${server.port}/api/v1/ws'),
         _connect = connect ?? _defaultConnect,
         _backoff = backoff ?? defaultBackoff;
 
@@ -110,13 +113,12 @@ class WsEventStream {
   }
 
   void _onFrame(dynamic frame) {
-    _reconnectAttempt = 0; // a delivered frame means the link is healthy again
     if (frame is! String) return;
     final Object? decoded;
     try {
       decoded = jsonDecode(frame);
     } on FormatException {
-      return; // ignore non-JSON frames
+      return; // ignore non-JSON frames (don't reset backoff on garbage)
     }
     if (decoded is! Map<String, dynamic>) return;
     // The resume-response control frame (`{resumed, ...}`) is not an event.
@@ -129,15 +131,21 @@ class WsEventStream {
     } on FormatException {
       return; // malformed envelope — skip it rather than kill the stream
     }
-    // seq is monotonically increasing per connection, and the server replays
-    // gap events in ascending order after a resume, so _lastSeq only advances —
-    // tracking the latest is sufficient for the resume token.
-    _lastSeq = event.seq;
+    // Reset backoff only on a genuinely-delivered event (not on malformed or
+    // control frames), so a server that spews garbage right before dropping
+    // can't keep us pinned to the first backoff slot.
+    _reconnectAttempt = 0;
+    // seq is per-connection monotonic and gap events replay in ascending order,
+    // so only ever advance _lastSeq — never let an out-of-order or
+    // counter-reset frame walk the resume token backwards.
+    if (_lastSeq == null || event.seq > _lastSeq!) {
+      _lastSeq = event.seq;
+    }
     if (!_events.isClosed) _events.add(event);
   }
 
   void _onClosed() {
-    _sub?.cancel();
+    unawaited(_sub?.cancel()); // sync callback can't await; cancel is fire-and-forget here (awaited in dispose)
     _sub = null;
     _socket = null;
     if (_disposed) return;
