@@ -283,7 +283,11 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
     // terminal) — so AbortActiveRunsAsync counts only runs it really stopped, not ones that finished naturally
     // in the TOCTOU window between the abortability check and here.
     private async Task<bool> RequestCancelAsync(Guid id, SequenceRunState desired) {
-        if (!_runs.TryGetValue(id, out var run) || IsTerminal(run.State)) return false;
+        // Also bail on an already-Aborting run: this closes the TOCTOU window where a concurrent abort (a user
+        // AbortAsync or a second AbortActiveRunsAsync) sets Aborting between the caller's abortability check and
+        // here — the losing writer returns false and isn't counted (no inflated "Sequence halted" tally). A
+        // run heading to a terminal state via Aborting still terminates; re-labelling it adds nothing.
+        if (!_runs.TryGetValue(id, out var run) || IsTerminal(run.State) || run.State == SequenceRunState.Aborting) return false;
         run.State = desired;
         try {
             await run.Cts.CancelAsync();
