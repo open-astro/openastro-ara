@@ -41,6 +41,18 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void ShouldNotify_only_on_a_strictly_worse_transition() {
+            // New alert when it degrades...
+            Assert.That(DiskSpaceMonitor.ShouldNotify(DiskSpaceLevel.Ok, DiskSpaceLevel.Low), Is.True);
+            Assert.That(DiskSpaceMonitor.ShouldNotify(DiskSpaceLevel.Low, DiskSpaceLevel.Critical), Is.True);
+            Assert.That(DiskSpaceMonitor.ShouldNotify(DiskSpaceLevel.Ok, DiskSpaceLevel.Critical), Is.True);
+            // ...but not on an improvement or recovery (the diagnostic still updates; the inbox doesn't pile up).
+            Assert.That(DiskSpaceMonitor.ShouldNotify(DiskSpaceLevel.Critical, DiskSpaceLevel.Low), Is.False);
+            Assert.That(DiskSpaceMonitor.ShouldNotify(DiskSpaceLevel.Low, DiskSpaceLevel.Ok), Is.False);
+            Assert.That(DiskSpaceMonitor.ShouldNotify(DiskSpaceLevel.Critical, DiskSpaceLevel.Ok), Is.False);
+        }
+
+        [Test]
         public void LongestPrefixRoot_picks_the_most_specific_mount() {
             // A dedicated /media mount wins over the / root for a path under it.
             Assert.That(

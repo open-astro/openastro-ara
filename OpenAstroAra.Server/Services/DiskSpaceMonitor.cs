@@ -84,6 +84,15 @@ namespace OpenAstroAra.Server.Services {
              : DiskSpaceLevel.Ok;
 
         /// <summary>
+        /// Whether a transition warrants a <em>new</em> low-disk notification: only when it got strictly worse
+        /// (Ok→Low, Low→Critical). Recovery and a Critical→Low improvement don't notify (the user was already
+        /// alerted at the worse level), so an oscillating disk doesn't pile up inbox entries. The diagnostic,
+        /// by contrast, always updates to reflect the current level.
+        /// </summary>
+        public static bool ShouldNotify(DiskSpaceLevel previous, DiskSpaceLevel current)
+            => current != DiskSpaceLevel.Ok && current > previous;
+
+        /// <summary>
         /// Of the mounted volume roots, the one that actually contains <paramref name="fullPath"/> — the longest
         /// root that is a prefix of the path (so a dedicated <c>/media/openastroara</c> mount wins over the
         /// <c>/</c> root). Returns null when none match (e.g. the save mount isn't present yet). Pure, so the
@@ -217,8 +226,10 @@ namespace OpenAstroAra.Server.Services {
                 autoCorrectible: false,
                 ct);
 
-            // The §54 inbox entry is gated on the user's OnDiskSpaceLow trigger toggle; the diagnostic above is not.
-            if (_profileStore.GetNotificationsSettings().OnDiskSpaceLow) {
+            // The §54 inbox entry is gated on the user's OnDiskSpaceLow trigger toggle + a strictly-worse
+            // transition (see ShouldNotify) so an oscillating disk doesn't accumulate entries; the diagnostic
+            // above is not gated either way (it always reflects the current level).
+            if (ShouldNotify(previous, level) && _profileStore.GetNotificationsSettings().OnDiskSpaceLow) {
                 await _notifications.CreateAsync(
                     new NotificationDto(
                         Id: Guid.NewGuid(),
