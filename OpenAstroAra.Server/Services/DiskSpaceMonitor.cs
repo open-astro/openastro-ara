@@ -74,6 +74,12 @@ namespace OpenAstroAra.Server.Services {
             _logger = logger;
             _lowBytes = lowBytes ?? DefaultLowBytes;
             _criticalBytes = criticalBytes ?? DefaultCriticalBytes;
+            if (_criticalBytes >= _lowBytes) {
+                // Guard inverted overrides: Evaluate tests the critical arm first, so critical ≥ low would make
+                // almost any free-space value report Critical. Fail loud at construction, not subtly at runtime.
+                throw new ArgumentException(
+                    $"criticalBytes ({_criticalBytes}) must be below lowBytes ({_lowBytes}).", nameof(criticalBytes));
+            }
             _interval = interval ?? DefaultInterval;
         }
 
@@ -181,7 +187,11 @@ namespace OpenAstroAra.Server.Services {
             if (root is null) {
                 return null;
             }
-            return drives.First(d => string.Equals(d.RootDirectory.FullName, root, comparison)).AvailableFreeSpace;
+            try {
+                return drives.First(d => string.Equals(d.RootDirectory.FullName, root, comparison)).AvailableFreeSpace;
+            } catch (IOException) {
+                return null; // the volume went away between the IsReady probe and the read — honor the Try* contract
+            }
 
             static bool IsReady(DriveInfo d) {
                 try {

@@ -41,6 +41,16 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Constructor_rejects_inverted_thresholds() {
+            // critical must be below low; inverted overrides would make Evaluate report Critical for almost
+            // anything (the critical arm is tested first). Fail loud at construction. (Services unused before
+            // the guard throws, so null! is safe here.)
+            Assert.Throws<System.ArgumentException>(() => new DiskSpaceMonitor(
+                profileStore: null!, diagnostics: null!, notifications: null!, logger: null!,
+                lowBytes: 1 * Gib, criticalBytes: 10 * Gib));
+        }
+
+        [Test]
         public void ShouldNotify_only_on_a_strictly_worse_transition() {
             // New alert when it degrades...
             Assert.That(DiskSpaceMonitor.ShouldNotify(DiskSpaceLevel.Ok, DiskSpaceLevel.Low), Is.True);
