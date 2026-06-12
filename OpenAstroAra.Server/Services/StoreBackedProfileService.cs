@@ -178,13 +178,15 @@ internal static class ProfileStoreMapper {
         guider.SettleTime = phd2.SettleTimeSec;
         guider.SettleTimeout = phd2.SettleTimeoutSec;
         // §63.5 guider-engine config — owned by ARA's profile, pushed to the guider daemon on connect
-        // (guider-e-2 maps these onto set_profile_setup / set_algo_param / set_dec_guide_mode).
+        // (guider-e-2 maps these onto set_profile_setup / set_algo_param / set_dec_guide_mode). Normalized
+        // here (not thrown — this runs on profile hydration) so the value guider-e-2 reads is always one PHD2
+        // accepts: aggressiveness ∈ [0,1], minimum-move ≥ 0, dec-guide-mode in the known set.
         guider.GuideFocalLength = phd2.GuideFocalLength;
         guider.GuidePixelSize = phd2.GuidePixelSize;
-        guider.RAAggressiveness = phd2.RaAggressiveness;
-        guider.DecAggressiveness = phd2.DecAggressiveness;
-        guider.MinimumMove = phd2.MinimumMove;
-        guider.DecGuideMode = phd2.DecGuideMode;
+        guider.RAAggressiveness = Math.Clamp(phd2.RaAggressiveness, 0.0, 1.0);
+        guider.DecAggressiveness = Math.Clamp(phd2.DecAggressiveness, 0.0, 1.0);
+        guider.MinimumMove = Math.Max(0.0, phd2.MinimumMove);
+        guider.DecGuideMode = NormalizeDecGuideMode(phd2.DecGuideMode);
         // DitherEnabled / DitherEveryNFrames are per-sequence concerns in NINA (the Dither
         // instruction + trigger carry them), and Phd2Profile selection is a §63 connect-time
         // concern — store-only here.
@@ -239,4 +241,14 @@ internal static class ProfileStoreMapper {
 
     internal static short ClampToShort(int value) =>
         (short)Math.Clamp(value, short.MinValue, short.MaxValue);
+
+    // §63.5 — coerce an unrecognized dec-guide-mode to "auto" so guider-e-2's set_dec_guide_mode never sends
+    // PHD2 a value it would reject. Case-insensitive; the openapi enum documents the accepted set.
+    private static readonly System.Collections.Generic.HashSet<string> DecGuideModes =
+        new(System.StringComparer.OrdinalIgnoreCase) { "auto", "north", "south", "off" };
+
+    internal static string NormalizeDecGuideMode(string? mode) {
+        var m = mode?.Trim().ToLowerInvariant();
+        return m != null && DecGuideModes.Contains(m) ? m : "auto";
+    }
 }

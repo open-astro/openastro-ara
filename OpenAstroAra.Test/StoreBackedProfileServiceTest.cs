@@ -100,6 +100,28 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Phd2_section_normalizes_out_of_range_guider_engine_values() {
+            var store = new InMemoryProfileStore();
+            using var svc = new StoreBackedProfileService(store);
+
+            store.PutPhd2Settings(new Phd2SettingsDto(
+                Host: "x", Port: 4400, Phd2Profile: "main",
+                DitherEnabled: true, DitherEveryNFrames: 1, DitherPixels: 5,
+                SettlePixels: 1.5, SettleTimeSec: 10, SettleTimeoutSec: 60,
+                ForceCalibrationEachSession: false,
+                GuideFocalLength: 250, GuidePixelSize: 2.9,
+                RaAggressiveness: 1.5, DecAggressiveness: -0.2, // out of [0,1]
+                MinimumMove: -1.0,                              // negative
+                DecGuideMode: "sideways"));                     // not in the known set
+
+            var guider = svc.ActiveProfile.GuiderSettings;
+            Assert.That(guider.RAAggressiveness, Is.EqualTo(1.0));   // clamped high
+            Assert.That(guider.DecAggressiveness, Is.EqualTo(0.0));  // clamped low
+            Assert.That(guider.MinimumMove, Is.EqualTo(0.0));        // floored at 0
+            Assert.That(guider.DecGuideMode, Is.EqualTo("auto"));    // unknown → auto
+        }
+
+        [Test]
         public void Phd2Settings_deserializes_pre_63_5_json_to_guider_engine_defaults() {
             // An existing profile.json Phd2 section written before §63.5 — none of the guider-engine keys.
             // The DTO's optional ctor defaults must fill them (not null / 0.0), so an upgrade doesn't leave

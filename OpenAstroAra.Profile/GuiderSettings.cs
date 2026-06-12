@@ -85,7 +85,7 @@ namespace OpenAstroAra.Profile {
             // §63.5 guider-engine config defaults (PHD2 hysteresis defaults; 0 = unset for focal/pixel).
             guideFocalLength = 0;
             guidePixelSize = 0;
-            rAAggressiveness = 0.7;
+            raAggressiveness = 0.7;
             decAggressiveness = 0.7;
             minimumMove = 0.15;
             decGuideMode = "auto";
@@ -631,13 +631,13 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private double rAAggressiveness;
+        private double raAggressiveness;
         [DataMember]
         public double RAAggressiveness {
-            get => rAAggressiveness;
+            get => raAggressiveness;
             set {
-                if (rAAggressiveness != value) {
-                    rAAggressiveness = value;
+                if (raAggressiveness != value) {
+                    raAggressiveness = value;
                     RaisePropertyChanged();
                 }
             }
@@ -667,7 +667,7 @@ namespace OpenAstroAra.Profile {
             }
         }
 
-        private string decGuideMode = "auto";
+        private string decGuideMode = string.Empty;
         [DataMember]
         public string DecGuideMode {
             get => decGuideMode;
