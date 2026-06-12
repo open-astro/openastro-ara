@@ -123,7 +123,7 @@ namespace OpenAstroAra.Test {
             // raise/clear, since the SQLite write (the source of truth) already succeeded.
             _ws.Throw = true;
 
-            Assert.DoesNotThrowAsync(() => _svc.CreateEventAsync(
+            Assert.DoesNotThrowAsync(async () => await _svc.CreateEventAsync(
                 Event("disk.low", DiagnosticHealth.Yellow, autoAction: false),
                 recommendedAction: null, autoCorrectible: null, CancellationToken.None));
 
