@@ -19,6 +19,7 @@ using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.PlateSolving.Interfaces;
 using OpenAstroAra.PlateSolving.Solvers;
 using OpenAstroAra.Profile.Interfaces;
+using System.Threading;
 
 namespace OpenAstroAra.PlateSolving {
 
@@ -47,6 +48,10 @@ namespace OpenAstroAra.PlateSolving {
 
     public static class PlateSolverFactory {
 
+        // Set once the AstrometryNet→ASTAP substitution has been logged, so a long automated run logs it once
+        // rather than every solve (see CreateAstapForRemovedAstrometryNet).
+        private static int astrometryNetSubstitutionWarned;
+
         /// <summary>
         /// Creates an instance of a Platesolver depending on the solver
         /// </summary>
@@ -72,10 +77,14 @@ namespace OpenAstroAra.PlateSolving {
             };
         }
 
-        // The log fires per solve by design: it's a persistent profile misconfiguration the user should correct
-        // (e.g. a NINA import that carried AstrometryNet). Info-level so it informs without Error-level spam.
+        // Warn once per process: it's a persistent profile-level misconfiguration the user should correct
+        // (e.g. a NINA import that carried AstrometryNet), so a long automated run shouldn't repeat the line
+        // every solve. Warning-level (not Info) — the configured solver silently differs from the one used,
+        // the same degraded-behaviour class as the CenteringSolver sync warnings.
         private static ASTAPSolver CreateAstapForRemovedAstrometryNet(IPlateSolveSettings plateSolveSettings) {
-            Logger.Info("Plate solve - solver is configured as AstrometryNet, which was removed (§18.I local-solvers-only). Using ASTAP instead.");
+            if (Interlocked.CompareExchange(ref astrometryNetSubstitutionWarned, 1, 0) == 0) {
+                Logger.Warning("Plate solve - solver is configured as AstrometryNet, which was removed (§18.I local-solvers-only). Using ASTAP instead.");
+            }
             return new ASTAPSolver(plateSolveSettings.ASTAPLocation);
         }
 
