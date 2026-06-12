@@ -109,12 +109,14 @@ namespace OpenAstroAra.Test {
                 DitherEnabled: true, DitherEveryNFrames: 1, DitherPixels: 5,
                 SettlePixels: 1.5, SettleTimeSec: 10, SettleTimeoutSec: 60,
                 ForceCalibrationEachSession: false,
-                GuideFocalLength: 250, GuidePixelSize: 2.9,
-                RaAggressiveness: 1.5, DecAggressiveness: -0.2, // out of [0,1]
-                MinimumMove: -1.0,                              // negative
-                DecGuideMode: "sideways"));                     // not in the known set
+                GuideFocalLength: -250, GuidePixelSize: -2.9,    // negative
+                RaAggressiveness: 1.5, DecAggressiveness: -0.2,  // out of [0,1]
+                MinimumMove: -1.0,                               // negative
+                DecGuideMode: "SIDEWAYS"));                       // not in the known set
 
             var guider = svc.ActiveProfile.GuiderSettings;
+            Assert.That(guider.GuideFocalLength, Is.EqualTo(0));     // floored at 0
+            Assert.That(guider.GuidePixelSize, Is.EqualTo(0.0));     // floored at 0
             Assert.That(guider.RAAggressiveness, Is.EqualTo(1.0));   // clamped high
             Assert.That(guider.DecAggressiveness, Is.EqualTo(0.0));  // clamped low
             Assert.That(guider.MinimumMove, Is.EqualTo(0.0));        // floored at 0

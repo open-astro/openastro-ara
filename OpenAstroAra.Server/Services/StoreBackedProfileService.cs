@@ -181,8 +181,8 @@ internal static class ProfileStoreMapper {
         // (guider-e-2 maps these onto set_profile_setup / set_algo_param / set_dec_guide_mode). Normalized
         // here (not thrown — this runs on profile hydration) so the value guider-e-2 reads is always one PHD2
         // accepts: aggressiveness ∈ [0,1], minimum-move ≥ 0, dec-guide-mode in the known set.
-        guider.GuideFocalLength = phd2.GuideFocalLength;
-        guider.GuidePixelSize = phd2.GuidePixelSize;
+        guider.GuideFocalLength = Math.Max(0, phd2.GuideFocalLength);
+        guider.GuidePixelSize = Math.Max(0.0, phd2.GuidePixelSize);
         guider.RAAggressiveness = Math.Clamp(phd2.RaAggressiveness, 0.0, 1.0);
         guider.DecAggressiveness = Math.Clamp(phd2.DecAggressiveness, 0.0, 1.0);
         guider.MinimumMove = Math.Max(0.0, phd2.MinimumMove);
@@ -244,8 +244,9 @@ internal static class ProfileStoreMapper {
 
     // §63.5 — coerce an unrecognized dec-guide-mode to "auto" so guider-e-2's set_dec_guide_mode never sends
     // PHD2 a value it would reject. Case-insensitive; the openapi enum documents the accepted set.
+    // Lowercase entries; the input is lowered before lookup, so the stored value is always normalized casing.
     private static readonly System.Collections.Generic.HashSet<string> DecGuideModes =
-        new(System.StringComparer.OrdinalIgnoreCase) { "auto", "north", "south", "off" };
+        new() { "auto", "north", "south", "off" };
 
     internal static string NormalizeDecGuideMode(string? mode) {
         var m = mode?.Trim().ToLowerInvariant();
