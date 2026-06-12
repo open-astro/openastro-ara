@@ -104,6 +104,9 @@ class WsEventStream {
     if (_lastSeq != null) {
       socket.send(jsonEncode({'resume_token': _lastSeq.toString()}));
     }
+    // cancelOnError auto-cancels the subscription before onError runs, so the
+    // sub.cancel() inside _onClosed is a harmless no-op on the error path (and
+    // the real cancel on the onDone path); either way the link is finished.
     _sub = socket.stream.listen(
       _onFrame,
       onDone: _onClosed,
@@ -165,9 +168,13 @@ class WsEventStream {
     _disposed = true;
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
-    _reconnectAttempt = 0;
-    await _sub?.cancel();
-    await _socket?.close();
+    _reconnectAttempt = 0; // harmless on this terminal op, but keeps state clean for any future reset()/reuse
+    final sub = _sub;
+    final socket = _socket;
+    _sub = null; // drop references so the cancelled sub / closed socket can be GC'd promptly
+    _socket = null;
+    await sub?.cancel();
+    await socket?.close();
     await _events.close();
   }
 }

@@ -48,13 +48,13 @@ void main() {
   const server = AraServer(hostname: 'host-a', port: 5555);
 
   group('WsEventStream transport', () {
-    test('connects to the ws URL with the version header', () {
+    test('connects to the ws URL with the version header', () async {
       final conn = _FakeConnector();
       final ws = WsEventStream(server, connect: conn.connect);
       ws.connect();
       expect(conn.lastUrl, Uri.parse('ws://host-a:5555/api/v1/ws'));
       expect(conn.lastHeaders, {'X-Ara-WS-Version': '1'});
-      ws.dispose();
+      await ws.dispose();
     });
 
     test('parses envelope frames, forwards events, and tracks lastSeq', () async {

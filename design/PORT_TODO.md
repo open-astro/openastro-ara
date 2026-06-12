@@ -437,7 +437,10 @@ reconnects with backoff + resumes from the last-seen seq (first-frame `{"resume_
 resume-response control frame + malformed frames. Injectable channel-seam (`WsSocket`/`WsConnector`); +6 tests.
 **Remaining for e-4b-3:** WS-client slice 2 — a Riverpod provider wiring the active server (`savedServersProvider →
 servers.last`) to a `WsEventStream` (lifecycle via `ref.onDispose`) + routing `diagnostics.*` → the existing
-`DiagnosticsSnapshot` contract (`diagnostic_panel.dart` stub) and `guider.dark_library.*` → the build modal. Web
+`DiagnosticsSnapshot` contract (`diagnostic_panel.dart` stub) and `guider.dark_library.*` → the build modal.
+Slice 2 should also add a **connection-state signal** to `WsEventStream` (connected / reconnecting / disconnected) —
+the `events` stream alone can't tell consumers the link dropped (from #390 review); the diagnostics panel + build
+modal need a disconnected indicator. Web
 support needs a query-param version fallback (browser WS can't set the header). The guider isn't yet connectable
 from the client either (no equipment-guider control service) — also needed before the build button is useful.
 
