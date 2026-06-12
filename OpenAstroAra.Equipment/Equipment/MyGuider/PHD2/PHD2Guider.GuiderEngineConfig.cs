@@ -17,6 +17,8 @@ using OpenAstroAra.Profile.Interfaces;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
@@ -38,15 +40,27 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         /// </summary>
         [SuppressMessage("Design", "CA1031:Do not catch general exception types",
             Justification = "Best-effort §63.5 push boundary: each setter RPC may throw (socket drop, a PHD2 build that doesn't expose a param) — it's logged and skipped so a config push can never fail or block the guider connect itself.")]
-        private async Task PushGuiderEngineConfigAsync() {
+        private async Task PushGuiderEngineConfigAsync(CancellationToken ct) {
             var guider = profileService.ActiveProfile.GuiderSettings;
-            await DisconnectPHD2Equipment();
-            foreach (var msg in BuildGuiderEngineConfigMessages(guider)) {
+            var messages = BuildGuiderEngineConfigMessages(guider);
+
+            // Only set_profile_setup (focal/pixel) needs the equipment off, so only pay the
+            // disconnect → reconnect cost when one is actually being sent — otherwise the algo-param /
+            // dec-mode pushes apply at runtime and we leave an already-connected (possibly calibrated)
+            // session alone.
+            if (messages.OfType<Phd2SetProfileSetup>().Any()) {
+                await DisconnectPHD2Equipment();
+            }
+
+            foreach (var msg in messages) {
+                ct.ThrowIfCancellationRequested();
                 try {
                     var resp = await SendMessage(msg);
                     if (resp?.error != null) {
                         Logger.Warning($"PHD2 §63.5 push - {msg.Method} rejected: {resp.error}");
                     }
+                } catch (OperationCanceledException) {
+                    throw; // a cancelled Connect must stop the push, not swallow it as a per-message failure
                 } catch (Exception ex) {
                     Logger.Warning($"PHD2 §63.5 push - {msg.Method} failed: {ex.Message}");
                 }
@@ -75,6 +89,8 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
 
             messages.Add(AlgoParam("ra", "aggressiveness", guider.RAAggressiveness));
             messages.Add(AlgoParam("dec", "aggressiveness", guider.DecAggressiveness));
+            // minMove is always pushed (unlike focal/pixel which guard on > 0): 0 is a valid minimum-move
+            // ("correct on any non-zero error"), so it's a real setting to send, not an "unset" sentinel.
             messages.Add(AlgoParam("ra", "minMove", guider.MinimumMove));
             messages.Add(AlgoParam("dec", "minMove", guider.MinimumMove));
 
