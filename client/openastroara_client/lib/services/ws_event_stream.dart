@@ -67,10 +67,12 @@ class WsEventStream {
     AraServer server, {
     WsConnector? connect,
     List<Duration>? backoff,
-  })  // TODO(wss): plaintext ws:// is fine for the trusted-LAN default, but the
-      // §67.4 / web-support follow-up must switch to wss:// for untrusted routes
-      // (the resume handshake + payloads would otherwise be in the clear).
-      : _url = Uri.parse('ws://${server.hostname}:${server.port}/api/v1/ws'),
+  })  : assert(backoff == null || backoff.isNotEmpty,
+            'backoff must be non-empty — _onClosed indexes into it on every reconnect'),
+        // TODO(wss): plaintext ws:// is fine for the trusted-LAN default, but the
+        // §67.4 / web-support follow-up must switch to wss:// for untrusted routes
+        // (the resume handshake + payloads would otherwise be in the clear).
+        _url = Uri.parse('ws://${server.hostname}:${server.port}/api/v1/ws'),
         _connect = connect ?? _defaultConnect,
         _backoff = backoff ?? defaultBackoff;
 

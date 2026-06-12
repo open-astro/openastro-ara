@@ -150,6 +150,12 @@ void main() {
       await ws.dispose();
     });
 
+    test('rejects an empty backoff list (would RangeError on reconnect)', () {
+      final conn = _FakeConnector();
+      expect(() => WsEventStream(server, connect: conn.connect, backoff: const []),
+          throwsA(isA<AssertionError>()));
+    });
+
     test('first connect sends no resume token', () async {
       final conn = _FakeConnector();
       final ws = WsEventStream(server, connect: conn.connect);
