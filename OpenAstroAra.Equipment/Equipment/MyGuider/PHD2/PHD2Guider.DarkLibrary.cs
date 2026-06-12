@@ -71,7 +71,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                     MinExposureMs = minExposureMs,
                     MaxExposureMs = maxExposureMs,
                     ClearExisting = clearExisting,
-                    Notes = ValidateNotes(notes),
+                    Notes = ValidateNotes(notes, nameof(notes)),
                     LoadAfter = loadAfter,
                 },
             };
@@ -95,27 +95,30 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 Parameters = new Phd2BuildDefectMapDarksParameter {
                     ExposureMs = exposureMs,
                     FrameCount = frameCount,
-                    Notes = ValidateNotes(notes),
+                    Notes = ValidateNotes(notes, nameof(notes)),
                     LoadAfter = loadAfter,
                 },
             };
         }
 
         private static void ValidateExposureBound(int? exposureMs, string paramName) {
+            // Message names the caller's parameter so it's precise for both the dark-library bounds
+            // (min_exposure_ms / max_exposure_ms) and the defect-map single exposure_ms.
             if (exposureMs is int ms && ms is < CalibrationMinExposureMs or > CalibrationMaxExposureMs) {
                 throw new ArgumentOutOfRangeException(paramName, ms,
-                    $"exposure must be {CalibrationMinExposureMs}..{CalibrationMaxExposureMs} ms.");
+                    $"{paramName} must be {CalibrationMinExposureMs}..{CalibrationMaxExposureMs} ms.");
             }
         }
 
         /// <summary>Trim-then-bound a free-text calibration note: whitespace-only → null (so an empty note isn't
         /// sent), and a real note over <see cref="CalibrationMaxNotesLength"/> chars throws so a client can't push
-        /// an unbounded string through the RPC. Shared by the dark-library + defect-map builders.</summary>
-        private static string? ValidateNotes(string? notes) {
+        /// an unbounded string through the RPC. Shared by the dark-library + defect-map builders; the caller's
+        /// <paramref name="paramName"/> is reported on the exception so it stays accurate per call site.</summary>
+        private static string? ValidateNotes(string? notes, string paramName) {
             var trimmed = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim();
             if (trimmed is not null && trimmed.Length > CalibrationMaxNotesLength) {
                 throw new ArgumentException(
-                    $"notes must be at most {CalibrationMaxNotesLength} characters.", nameof(notes));
+                    $"{paramName} must be at most {CalibrationMaxNotesLength} characters.", paramName);
             }
             return trimmed;
         }

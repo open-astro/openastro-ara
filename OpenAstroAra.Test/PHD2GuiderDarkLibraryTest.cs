@@ -135,8 +135,11 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void DefectMap_request_rejects_overlong_notes() {
+        public void DefectMap_request_rejects_overlong_notes_but_accepts_exactly_the_cap() {
             Assert.Throws<ArgumentException>(() => PHD2Guider.BuildDefectMapDarksRequest(3000, 10, new string('x', 501), true));
+            // Pin the inclusive boundary: exactly 500 chars is accepted (off-by-one guard).
+            var atCap = new string('x', 500);
+            Assert.That(PHD2Guider.BuildDefectMapDarksRequest(3000, 10, atCap, true).Parameters!.Notes, Is.EqualTo(atCap));
         }
 
         // ── Response deserialization ──
