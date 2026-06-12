@@ -178,7 +178,17 @@ public sealed record Phd2SettingsDto(
     double SettlePixels,
     int SettleTimeSec,
     int SettleTimeoutSec,
-    bool ForceCalibrationEachSession);
+    bool ForceCalibrationEachSession,
+    // §63.5 guider-engine config — pushed to the guider daemon on connect (guider-e-2). These carry default
+    // values so an existing profile.json written before this field set deserializes to the correct PHD2
+    // defaults (System.Text.Json uses an optional ctor parameter's default for a missing key) rather than
+    // null / 0.0 — otherwise an upgrade would leave aggressiveness at 0 ("never correct") and DecGuideMode null.
+    int GuideFocalLength = 0,
+    double GuidePixelSize = 0,
+    double RaAggressiveness = 0.7,
+    double DecAggressiveness = 0.7,
+    double MinimumMove = 0.15,
+    string DecGuideMode = "auto");
 
 /// <summary>
 /// §52.1 connection-lifecycle defaults — which equipment device types

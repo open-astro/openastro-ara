@@ -14,8 +14,10 @@
 
 using NUnit.Framework;
 using OpenAstroAra.Core.Enums;
+using OpenAstroAra.Server;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
+using System.Text.Json;
 
 namespace OpenAstroAra.Test {
 
@@ -77,7 +79,9 @@ namespace OpenAstroAra.Test {
                 Host: "astro-pi.local", Port: 4400, Phd2Profile: "main",
                 DitherEnabled: true, DitherEveryNFrames: 3, DitherPixels: 4.5,
                 SettlePixels: 1.25, SettleTimeSec: 9, SettleTimeoutSec: 77,
-                ForceCalibrationEachSession: false));
+                ForceCalibrationEachSession: false,
+                GuideFocalLength: 250, GuidePixelSize: 2.9, RaAggressiveness: 0.8,
+                DecAggressiveness: 0.65, MinimumMove: 0.2, DecGuideMode: "north"));
 
             var guider = svc.ActiveProfile.GuiderSettings;
             Assert.That(guider.PHD2ServerHost, Is.EqualTo("astro-pi.local"));
@@ -86,6 +90,60 @@ namespace OpenAstroAra.Test {
             Assert.That(guider.SettlePixels, Is.EqualTo(1.25));
             Assert.That(guider.SettleTime, Is.EqualTo(9));
             Assert.That(guider.SettleTimeout, Is.EqualTo(77));
+            // §63.5 guider-engine config.
+            Assert.That(guider.GuideFocalLength, Is.EqualTo(250));
+            Assert.That(guider.GuidePixelSize, Is.EqualTo(2.9));
+            Assert.That(guider.RAAggressiveness, Is.EqualTo(0.8));
+            Assert.That(guider.DecAggressiveness, Is.EqualTo(0.65));
+            Assert.That(guider.MinimumMove, Is.EqualTo(0.2));
+            Assert.That(guider.DecGuideMode, Is.EqualTo("north"));
+        }
+
+        [Test]
+        public void Phd2_section_normalizes_out_of_range_guider_engine_values() {
+            var store = new InMemoryProfileStore();
+            using var svc = new StoreBackedProfileService(store);
+
+            store.PutPhd2Settings(new Phd2SettingsDto(
+                Host: "x", Port: 4400, Phd2Profile: "main",
+                DitherEnabled: true, DitherEveryNFrames: 1, DitherPixels: 5,
+                SettlePixels: 1.5, SettleTimeSec: 10, SettleTimeoutSec: 60,
+                ForceCalibrationEachSession: false,
+                GuideFocalLength: -250, GuidePixelSize: -2.9,    // negative
+                RaAggressiveness: 1.5, DecAggressiveness: -0.2,  // out of [0,1]
+                MinimumMove: -1.0,                               // negative
+                DecGuideMode: "SIDEWAYS"));                       // not in the known set
+
+            var guider = svc.ActiveProfile.GuiderSettings;
+            Assert.That(guider.GuideFocalLength, Is.EqualTo(0));     // floored at 0
+            Assert.That(guider.GuidePixelSize, Is.EqualTo(0.0));     // floored at 0
+            Assert.That(guider.RAAggressiveness, Is.EqualTo(1.0));   // clamped high
+            Assert.That(guider.DecAggressiveness, Is.EqualTo(0.0));  // clamped low
+            Assert.That(guider.MinimumMove, Is.EqualTo(0.0));        // floored at 0
+            Assert.That(guider.DecGuideMode, Is.EqualTo("auto"));    // unknown → auto
+        }
+
+        [Test]
+        public void Phd2Settings_deserializes_pre_63_5_json_to_guider_engine_defaults() {
+            // An existing profile.json Phd2 section written before §63.5 — none of the guider-engine keys.
+            // The DTO's optional ctor defaults must fill them (not null / 0.0), so an upgrade doesn't leave
+            // aggressiveness at 0 ("never correct") or DecGuideMode null.
+            const string oldJson = """
+                {"host":"astro-pi.local","port":4400,"phd2_profile":"Default","dither_enabled":true,
+                 "dither_every_n_frames":1,"dither_pixels":5,"settle_pixels":1.5,"settle_time_sec":10,
+                 "settle_timeout_sec":60,"force_calibration_each_session":false}
+                """;
+
+            var dto = JsonSerializer.Deserialize(oldJson, AraJsonSerializerContext.Default.Phd2SettingsDto);
+
+            Assert.That(dto, Is.Not.Null);
+            Assert.That(dto!.Host, Is.EqualTo("astro-pi.local")); // existing keys still bind
+            Assert.That(dto.DecGuideMode, Is.EqualTo("auto"));
+            Assert.That(dto.RaAggressiveness, Is.EqualTo(0.7));
+            Assert.That(dto.DecAggressiveness, Is.EqualTo(0.7));
+            Assert.That(dto.MinimumMove, Is.EqualTo(0.15));
+            Assert.That(dto.GuideFocalLength, Is.EqualTo(0));
+            Assert.That(dto.GuidePixelSize, Is.EqualTo(0));
         }
 
         [Test]

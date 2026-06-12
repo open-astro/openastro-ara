@@ -203,7 +203,9 @@ public sealed partial class FileProfileStore : IProfileStore {
             Host: "localhost", Port: 4400, Phd2Profile: "Default",
             DitherEnabled: true, DitherEveryNFrames: 1, DitherPixels: 5.0,
             SettlePixels: 1.5, SettleTimeSec: 10, SettleTimeoutSec: 60,
-            ForceCalibrationEachSession: false),
+            ForceCalibrationEachSession: false,
+            GuideFocalLength: 0, GuidePixelSize: 0, RaAggressiveness: 0.7,
+            DecAggressiveness: 0.7, MinimumMove: 0.15, DecGuideMode: "auto"),
         EquipmentConnection: new(
             Camera: true, Mount: true, Focuser: true, FilterWheel: true,
             Rotator: true, Guider: false, FlatPanel: true, Dome: false,

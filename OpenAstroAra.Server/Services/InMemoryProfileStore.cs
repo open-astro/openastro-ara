@@ -234,7 +234,13 @@ public sealed class InMemoryProfileStore : IProfileStore {
         SettlePixels: 1.5,
         SettleTimeSec: 10,
         SettleTimeoutSec: 60,
-        ForceCalibrationEachSession: false);
+        ForceCalibrationEachSession: false,
+        GuideFocalLength: 0,
+        GuidePixelSize: 0,
+        RaAggressiveness: 0.7,
+        DecAggressiveness: 0.7,
+        MinimumMove: 0.15,
+        DecGuideMode: "auto");
 
     public Phd2SettingsDto GetPhd2Settings() {
         lock (_lock) { return _phd2; }

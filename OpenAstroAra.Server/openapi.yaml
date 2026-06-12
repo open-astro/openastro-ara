@@ -975,6 +975,8 @@ components:
         [host, port, phd2_profile, dither_enabled, dither_every_n_frames,
          dither_pixels, settle_pixels, settle_time_sec, settle_timeout_sec,
          force_calibration_each_session]
+      # The §63.5 guider-engine fields below are OPTIONAL: they carry server-side defaults so a profile.json
+      # written before this field set still deserializes correctly (missing key → default).
       properties:
         host:                           { type: string, minLength: 1 }
         port:                           { type: integer, minimum: 1024, maximum: 65535 }
@@ -986,6 +988,13 @@ components:
         settle_time_sec:                { type: integer, minimum: 0 }
         settle_timeout_sec:             { type: integer, minimum: 1 }
         force_calibration_each_session: { type: boolean }
+        # §63.5 guider-engine config (pushed to the guider daemon on connect).
+        guide_focal_length:             { type: integer, minimum: 0 }
+        guide_pixel_size:               { type: number, format: double, minimum: 0 }
+        ra_aggressiveness:              { type: number, format: double, minimum: 0, maximum: 1 }
+        dec_aggressiveness:             { type: number, format: double, minimum: 0, maximum: 1 }
+        minimum_move:                   { type: number, format: double, minimum: 0 }
+        dec_guide_mode:                 { type: string, enum: [auto, north, south, off] }
 
     DiagnosticsMode:
       type: object
