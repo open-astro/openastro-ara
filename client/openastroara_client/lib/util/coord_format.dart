@@ -29,7 +29,10 @@ String formatRaHms(double hours) {
 /// Dec in degrees → "±DD° MM' SS\"".
 String formatDecDms(double deg) {
   final sign = deg < 0 ? '-' : '+';
-  final a = deg.abs();
+  // Defensive: valid Dec is [-90°, +90°]. Clamp the magnitude so a server
+  // rounding glitch just past a pole can never render an impossible "+91°" /
+  // "+90° 30'".
+  final a = deg.abs().clamp(0.0, 90.0).toDouble();
   var d = a.floor();
   final mF = (a - d) * 60;
   var m = mF.floor();

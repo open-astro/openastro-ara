@@ -38,5 +38,15 @@ void main() {
       expect(out, isNot(contains('60"')));
       expect(out, '+46° 00\' 00"');
     });
+
+    test('renders the pole exactly', () {
+      expect(formatDecDms(90.0), '+90° 00\' 00"');
+      expect(formatDecDms(-90.0), '-90° 00\' 00"');
+    });
+
+    test('clamps an out-of-range value past the pole to 90', () {
+      // Can\'t arise from valid data, but a server glitch must never show +91°.
+      expect(formatDecDms(90.5), '+90° 00\' 00"');
+    });
   });
 }
