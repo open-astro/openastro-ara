@@ -13,11 +13,13 @@
 #endregion "copyright"
 
 using OpenAstroAra.Core.Enums;
+using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Equipment.Interfaces;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.PlateSolving.Interfaces;
 using OpenAstroAra.PlateSolving.Solvers;
 using OpenAstroAra.Profile.Interfaces;
+using System.Threading;
 
 namespace OpenAstroAra.PlateSolving {
 
@@ -46,6 +48,10 @@ namespace OpenAstroAra.PlateSolving {
 
     public static class PlateSolverFactory {
 
+        // Set once the AstrometryNet→ASTAP substitution has been logged, so a long automated run logs it once
+        // rather than every solve (see CreateAstapForRemovedAstrometryNet).
+        private static int astrometryNetSubstitutionWarned;
+
         /// <summary>
         /// Creates an instance of a Platesolver depending on the solver
         /// </summary>
@@ -62,8 +68,24 @@ namespace OpenAstroAra.PlateSolving {
                 PlateSolver.ASPS => new AllSkyPlateSolver(plateSolveSettings.AspsLocation),
                 PlateSolver.TSXImageLink => new TheSkyXImageLinkSolver(plateSolveSettings.TheSkyXHost, plateSolveSettings.TheSkyXPort),
                 PlateSolver.PINPONT => new Dc3PinPointSolver(plateSolveSettings),
+                // The removed AstrometryNet substitutes ASTAP *explicitly* + logs (rather than silently hitting
+                // the default arm), so a profile still carrying it — primary (PlateSolverType) or blind
+                // (BlindSolver.AstrometryNet → PlateSolver.AstrometryNet) both funnel here — doesn't resolve to a
+                // different backend than configured without a trace.
+                PlateSolver.AstrometryNet => CreateAstapForRemovedAstrometryNet(plateSolveSettings),
                 _ => new ASTAPSolver(plateSolveSettings.ASTAPLocation),
             };
+        }
+
+        // Warn once per process: it's a persistent profile-level misconfiguration the user should correct
+        // (e.g. a NINA import that carried AstrometryNet), so a long automated run shouldn't repeat the line
+        // every solve. Warning-level (not Info) — the configured solver silently differs from the one used,
+        // the same degraded-behaviour class as the CenteringSolver sync warnings.
+        private static ASTAPSolver CreateAstapForRemovedAstrometryNet(IPlateSolveSettings plateSolveSettings) {
+            if (Interlocked.CompareExchange(ref astrometryNetSubstitutionWarned, 1, 0) == 0) {
+                Logger.Warning("Plate solve - solver is configured as AstrometryNet, which was removed (§18.I local-solvers-only). Using ASTAP instead.");
+            }
+            return new ASTAPSolver(plateSolveSettings.ASTAPLocation);
         }
 
         public static IPlateSolver GetPlateSolver(IPlateSolveSettings plateSolveSettings) {
@@ -71,6 +93,9 @@ namespace OpenAstroAra.PlateSolving {
         }
 
         public static IPlateSolver GetBlindSolver(IPlateSolveSettings plateSolveSettings) {
+            // BlindSolver.AstrometryNet maps to PlateSolver.AstrometryNet, which GetPlateSolver substitutes
+            // (with a log) to ASTAP — see CreateAstapForRemovedAstrometryNet. Both solver paths share that one
+            // substitution point.
             var type = plateSolveSettings.BlindSolverType switch {
                 BlindSolver.AstrometryNet => PlateSolver.AstrometryNet,
                 BlindSolver.LOCAL => PlateSolver.LOCAL,
