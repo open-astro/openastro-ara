@@ -458,6 +458,50 @@ const Map<String, Help> helpRegistry = {
         'Recommended **off** for permanent setups (observatory rig); **on** for portable setups (grab-and-go scope, traveling kit).',
     relatedSettings: ['safety.policies.meridian_recal_guider'],
   ),
+  // §63.5 guider-engine config — pushed to the guider daemon on connect.
+  'eq.guider.guide_focal_length': Help(
+    key: 'eq.guider.guide_focal_length',
+    title: 'Guide focal length',
+    body: 'Focal length of the guide scope (mm). Combined with the guide-camera pixel size it sets the guider\'s arcsec/pixel scale, which PHD2 uses for star-mass thresholds and the guiding graph.\n\n'
+        'Leave **0** to keep whatever the PHD2 guide profile already has. Set it to push your value on connect.',
+    relatedSettings: ['eq.guider.guide_pixel_size'],
+  ),
+  'eq.guider.guide_pixel_size': Help(
+    key: 'eq.guider.guide_pixel_size',
+    title: 'Guide pixel size',
+    body: 'Pixel size of the guide camera (µm). With the guide focal length this gives the guider\'s arcsec/pixel scale.\n\n'
+        'Leave **0** to keep the PHD2 guide profile default.',
+    relatedSettings: ['eq.guider.guide_focal_length'],
+  ),
+  'eq.guider.ra_aggressiveness': Help(
+    key: 'eq.guider.ra_aggressiveness',
+    title: 'RA aggressiveness',
+    body: 'Fraction (0–1) of each measured RA error that PHD2 corrects per cycle. Lower values guide more gently (less prone to oscillation / chasing seeing); higher values track real drift faster.\n\n'
+        '**0.7** is a good default. Drop toward 0.5 if guiding oscillates; raise toward 0.9 only on a stiff, well-behaved mount.',
+    relatedSettings: ['eq.guider.dec_aggressiveness', 'eq.guider.minimum_move'],
+  ),
+  'eq.guider.dec_aggressiveness': Help(
+    key: 'eq.guider.dec_aggressiveness',
+    title: 'Dec aggressiveness',
+    body: 'Fraction (0–1) of each measured Dec error PHD2 corrects per cycle. Same idea as RA aggressiveness; Dec is often run a touch lower because of backlash near direction reversals.',
+    relatedSettings: ['eq.guider.ra_aggressiveness', 'eq.guider.dec_guide_mode'],
+  ),
+  'eq.guider.minimum_move': Help(
+    key: 'eq.guider.minimum_move',
+    title: 'Minimum move',
+    body: 'Smallest error (in guide pixels) PHD2 will react to. Errors below this are ignored, so the mount doesn\'t chase seeing noise.\n\n'
+        '**~0.15 px** is typical. Raise it in poor seeing to calm the corrections; lower it only with a very stable mount + sky.',
+    relatedSettings: ['eq.guider.ra_aggressiveness'],
+  ),
+  'eq.guider.dec_guide_mode': Help(
+    key: 'eq.guider.dec_guide_mode',
+    title: 'Dec guide mode',
+    body: 'How PHD2 corrects declination:\n\n'
+        '* **Auto**: correct in whichever direction the error appears (leaves PHD2\'s own setting alone — ARA won\'t push Auto).\n'
+        '* **North / South**: only ever push that direction. Useful on mounts with bad Dec backlash — pick the uphill side so backlash is always taken up.\n'
+        '* **Off**: no Dec guiding (RA only).',
+    relatedSettings: ['eq.guider.dec_aggressiveness'],
+  ),
 
   // §37.4 Filter Wheel slot labels.
   'eq.filterwheel.slot_labels': Help(
