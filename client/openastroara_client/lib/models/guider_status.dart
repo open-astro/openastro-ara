@@ -105,4 +105,23 @@ class GuiderStatus {
     if (v is num) return v.toDouble();
     return null;
   }
+
+  // Value equality so an unchanged poll result doesn't churn Riverpod listeners
+  // (each parse builds a fresh object). Matches the manual ==/hashCode pattern
+  // used by the project's other models.
+  @override
+  bool operator ==(Object other) =>
+      other is GuiderStatus &&
+      other.deviceId == deviceId &&
+      other.name == name &&
+      other.connectionState == connectionState &&
+      other.runtimeState == runtimeState &&
+      other.rmsTotal == rmsTotal &&
+      other.rmsRa == rmsRa &&
+      other.rmsDec == rmsDec &&
+      other.currentProfile == currentProfile;
+
+  @override
+  int get hashCode => Object.hash(deviceId, name, connectionState, runtimeState,
+      rmsTotal, rmsRa, rmsDec, currentProfile);
 }

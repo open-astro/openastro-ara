@@ -14,12 +14,15 @@ final guiderApiFactoryProvider = Provider<GuiderClient Function(AraServer)>(
 /// [GuiderClient] bound to the **active** server (`savedServers.last`), or
 /// `null` when no server is saved.
 final guiderApiProvider = Provider<GuiderClient?>((ref) {
-  final servers = ref.watch(savedServersProvider).maybeWhen(
-        data: (list) => list,
-        orElse: () => const <AraServer>[],
-      );
-  if (servers.isEmpty) return null;
-  final api = ref.watch(guiderApiFactoryProvider)(servers.last);
+  // Select only the active server (deduped by AraServer's value equality), so a
+  // same-content re-emit of savedServers doesn't rebuild this provider and
+  // force-close a Dio mid-request.
+  final server = ref.watch(savedServersProvider.select((async) => async.maybeWhen(
+        data: (list) => list.isEmpty ? null : list.last,
+        orElse: () => null,
+      )));
+  if (server == null) return null;
+  final api = ref.watch(guiderApiFactoryProvider)(server);
   // Close the old Dio when the active server changes (provider recompute) or
   // the provider is disposed, so connection pools don't leak.
   ref.onDispose(api.close);
@@ -39,7 +42,7 @@ class GuiderStatusNotifier extends AsyncNotifier<GuiderStatus?> {
     return api.getStatus();
   }
 
-  Future<void> connect({String host = 'localhost', int port = 4400}) async {
+  Future<void> connect({String host = kDefaultGuiderHost, int port = kDefaultGuiderPort}) async {
     final api = ref.read(guiderApiProvider);
     if (api == null) return;
     try {

@@ -3,6 +3,11 @@ import 'package:dio/dio.dart';
 import '../models/guider_status.dart';
 import '../models/server.dart';
 
+/// Default guider host/port (match the daemon's `GuiderConnectRequestDto`).
+/// Declared once so the [GuiderApi] impl and the state-layer action don't drift.
+const String kDefaultGuiderHost = 'localhost';
+const int kDefaultGuiderPort = 4400;
+
 /// The guider equipment operations the state layer depends on. An interface so
 /// tests can supply a pure fake (no Dio / sockets); [GuiderApi] is the
 /// Dio-backed production implementation.
@@ -49,7 +54,7 @@ class GuiderApi implements GuiderClient {
   /// (defaults match the daemon's `GuiderConnectRequestDto`). 202-Accepted;
   /// poll [getStatus] for the resulting link state.
   @override
-  Future<void> connect({String host = 'localhost', int port = 4400}) async {
+  Future<void> connect({String host = kDefaultGuiderHost, int port = kDefaultGuiderPort}) async {
     await _dio.post<Map<String, dynamic>>(
       '/api/v1/equipment/guider/connect',
       data: <String, dynamic>{'host': host, 'port': port},

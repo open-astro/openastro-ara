@@ -78,5 +78,21 @@ void main() {
       });
       expect(s.rmsTotal, 1.0);
     });
+
+    test('value equality — equal-content parses compare equal (no rebuild churn)', () {
+      Map<String, dynamic> frame() => <String, dynamic>{
+            'device_id': 'phd2',
+            'name': 'PHD2',
+            'state': 'connected',
+            'runtime': <String, dynamic>{'state': 'guiding', 'rms_total': 0.4},
+          };
+      final a = GuiderStatus.fromJson(frame());
+      final b = GuiderStatus.fromJson(frame());
+      expect(a, equals(b));
+      expect(a.hashCode, b.hashCode);
+
+      final c = GuiderStatus.fromJson(frame()..['state'] = 'disconnected');
+      expect(a, isNot(equals(c)));
+    });
   });
 }
