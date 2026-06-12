@@ -91,6 +91,22 @@ void main() {
       expect(snap.level, StatusLevel.error);
     });
 
+    test('an unknown-severity issue still names the severity in the label', () {
+      final snap = DiagnosticsAccumulator().apply(_ev(DiagnosticsWsEvents.issueDetected,
+          {'event_type': 'odd.thing', 'description': 'no severity field'}));
+      expect(snap.level, StatusLevel.info);
+      expect(snap.label, 'Diagnostics: 1 issue — info');
+    });
+
+    test('two event_type-less issues do not collide on one key', () {
+      final acc = DiagnosticsAccumulator();
+      acc.apply(_ev(DiagnosticsWsEvents.issueDetected, {'severity': 'yellow', 'description': 'a'}, seq: 1));
+      final snap = acc.apply(_ev(DiagnosticsWsEvents.issueDetected, {'severity': 'red', 'description': 'b'}, seq: 2));
+      expect(snap.label, 'Diagnostics: 2 issues — critical',
+          reason: 'distinct malformed events stay distinct open issues');
+      expect(snap.level, StatusLevel.error);
+    });
+
     test('non-diagnostics events are ignored', () {
       final acc = DiagnosticsAccumulator();
       final snap = acc.apply(_ev('guider.dark_library.complete', {'profile_id': 'p1'}));

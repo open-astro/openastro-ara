@@ -95,7 +95,10 @@ class DiagnosticsAccumulator {
 
   void _applyIssue(WsEvent event) {
     final p = event.payload;
-    final eventType = _string(p['event_type']) ?? 'unknown';
+    // event_type is the open-issue map key. A conformant server always sends it;
+    // fall back to a seq-unique token so two distinct malformed events don't
+    // collide on one key (which would under-count open issues and drop a severity).
+    final eventType = _string(p['event_type']) ?? 'unknown_${event.seq}';
     final level = severityToLevel(_string(p['severity']));
     final description = _string(p['description']) ?? eventType;
     final autoTaken = p['auto_action_taken'] == true;
@@ -153,6 +156,10 @@ class DiagnosticsAccumulator {
         return 'Diagnostics: $n issue$plural — critical';
       case StatusLevel.busy:
         return 'Diagnostics: $n issue$plural — warning';
+      case StatusLevel.info:
+        // Worst open issue had an unknown/absent severity — still name it so the
+        // a11y text isn't blank for exactly the malformed-payload case.
+        return 'Diagnostics: $n issue$plural — info';
       default:
         return 'Diagnostics: $n open issue$plural';
     }
