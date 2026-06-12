@@ -16,6 +16,10 @@ using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Contracts.WsEvents;
+using System.Diagnostics.CodeAnalysis;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace OpenAstroAra.Server.Services;
 
@@ -44,10 +48,13 @@ public sealed partial class SqliteDiagnosticsService : IDiagnosticsService {
 
     private readonly IAraDatabase _db;
     private readonly ILogger<SqliteDiagnosticsService> _logger;
+    // §60.9 WS sink for diagnostics.* events. Optional so the service composes in tests without a hub.
+    private readonly IWsBroadcaster? _ws;
 
-    public SqliteDiagnosticsService(IAraDatabase db, ILogger<SqliteDiagnosticsService>? logger) {
+    public SqliteDiagnosticsService(IAraDatabase db, ILogger<SqliteDiagnosticsService>? logger, IWsBroadcaster? ws = null) {
         _db = db;
         _logger = logger ?? NullLogger<SqliteDiagnosticsService>.Instance;
+        _ws = ws;
     }
 
     /// <summary>
@@ -234,6 +241,21 @@ public sealed partial class SqliteDiagnosticsService : IDiagnosticsService {
             recommendedAction: recommendedAction,
             autoCorrectible: autoCorrectible,
             ct: ct);
+        // §60.9: announce the raised diagnostic so clients update live. An event that records an auto-action
+        // taken is the auto_action_taken type; otherwise it's a newly-detected issue.
+        await EmitDiagnosticsEventAsync(
+            diagnosticEvent.AutoActionTaken ? WsEventCatalog.DiagnosticsAutoActionTaken : WsEventCatalog.DiagnosticsIssueDetected,
+            new JsonObject {
+                ["id"] = diagnosticEvent.Id.ToString(),
+                ["event_type"] = diagnosticEvent.EventType,
+                ["severity"] = SeverityToken(diagnosticEvent.Severity),
+                ["description"] = diagnosticEvent.Description,
+                ["detected_utc"] = diagnosticEvent.DetectedUtc.ToString("O"),
+                ["auto_action_taken"] = diagnosticEvent.AutoActionTaken,
+                ["auto_action_description"] = diagnosticEvent.AutoActionDescription,
+                ["recommended_action"] = recommendedAction,
+                ["auto_correctible"] = autoCorrectible,
+            });
     }
 
     public async Task<int> ClearOpenEventsByTypeAsync(string eventType, DateTimeOffset clearedUtc, CancellationToken ct) {
@@ -245,8 +267,46 @@ public sealed partial class SqliteDiagnosticsService : IDiagnosticsService {
             """;
         cmd.Parameters.AddWithValue("$cleared", clearedUtc.ToString("O"));
         cmd.Parameters.AddWithValue("$type", eventType);
-        return await cmd.ExecuteNonQueryAsync(ct);
+        var affected = await cmd.ExecuteNonQueryAsync(ct);
+        // Only announce a clear that actually closed open events — a no-op clear shouldn't churn the WS stream.
+        if (affected > 0) {
+            await EmitDiagnosticsEventAsync(WsEventCatalog.DiagnosticsCleared, new JsonObject {
+                ["event_type"] = eventType,
+                ["cleared_count"] = affected,
+                ["cleared_utc"] = clearedUtc.ToString("O"),
+            });
+        }
+        return affected;
     }
+
+    // DiagnosticHealth → the lowercase wire token (no ToLowerInvariant, per the analyzer gate). An unhandled
+    // member throws rather than defaulting to "green" — silently reporting the *healthiest* state for an unknown
+    // severity is the wrong direction for a diagnostic, so force the mapping to be updated if the enum grows.
+    private static string SeverityToken(DiagnosticHealth severity) => severity switch {
+        DiagnosticHealth.Green => "green",
+        DiagnosticHealth.Yellow => "yellow",
+        DiagnosticHealth.Red => "red",
+        _ => throw new ArgumentOutOfRangeException(nameof(severity), severity, "unhandled DiagnosticHealth"),
+    };
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "WS publish is best-effort: a failed publish from a custom IWsBroadcaster (e.g. SocketException) must not abort the diagnostic write or surface as an unobserved exception. CA1031's log-and-recover boundary applies.")]
+    private async Task EmitDiagnosticsEventAsync(string eventType, JsonObject payload) {
+        if (_ws is null) {
+            return;
+        }
+        try {
+            // ToJsonString()+Parse is the AOT-safe way to build a JsonElement from a JsonObject (SerializeToElement
+            // takes the reflection path the warnings=errors AOT gate rejects) — mirrors SequencerService.EmitAsync.
+            using var doc = JsonDocument.Parse(payload.ToJsonString());
+            await _ws.PublishAsync(eventType, doc.RootElement.Clone(), CancellationToken.None).ConfigureAwait(false);
+        } catch (Exception ex) {
+            LogDiagnosticsWsPublishFailed(eventType, ex);
+        }
+    }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Diagnostics WS event '{EventType}' failed to publish")]
+    partial void LogDiagnosticsWsPublishFailed(string eventType, Exception ex);
 
     private static async Task InsertEventAsync(
             SqliteConnection conn, Guid id, string eventType,
