@@ -232,7 +232,9 @@ namespace OpenAstroAra.Server.Services {
             }
         }
 
-        private async Task EmitTransitionAsync(
+        // internal (not private) so the wiring — abort → diagnostic AutoActionTaken → notifications — is
+        // directly testable with stubbed services, without needing a real low-disk volume.
+        internal async Task EmitTransitionAsync(
             DiskSpaceLevel previous, DiskSpaceLevel level, long freeBytes, string saveDir, CancellationToken ct) {
             var now = DateTimeOffset.UtcNow;
             // Close whatever issue the previous level had opened before opening the new one — keeps a single

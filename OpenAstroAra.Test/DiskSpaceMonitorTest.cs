@@ -12,12 +12,19 @@
 
 #endregion "copyright"
 
+using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
 using NUnit.Framework;
+using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
+using System;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace OpenAstroAra.Test {
 
-    /// <summary>§29 — pure logic of the disk-space monitor (level thresholds + path→volume resolution).</summary>
+    /// <summary>§29 — pure logic of the disk-space monitor (level thresholds + path→volume resolution) +
+    /// the hard-stop wiring (abort → diagnostic → notification).</summary>
     [TestFixture]
     public class DiskSpaceMonitorTest {
 
@@ -131,6 +138,76 @@ namespace OpenAstroAra.Test {
             Assert.That(
                 DiskSpaceMonitor.LongestPrefixRoot(@"d:\Astro\x.fits", WindowsRoots, System.StringComparison.OrdinalIgnoreCase),
                 Is.EqualTo(@"D:\"));
+        }
+
+        // ── §29 hard-stop wiring: Critical + abort policy → halt + auto-action diagnostic + notification ──
+
+        private static SafetyPoliciesDto SafetyWith(string onDiskSpaceCritical) =>
+            new("pause_and_park", true, 10, true, 5, true, true, "skip_target", true, "pause_and_retry", 60, true,
+                onDiskSpaceCritical);
+
+        private static NotificationsSettingsDto NotificationsWith(bool onDiskSpaceLow) =>
+            new(false, false, false, "", "", false, false, false, false, false, false, onDiskSpaceLow);
+
+        [Test]
+        public async Task EmitTransition_into_Critical_with_abort_policy_halts_and_records_auto_action() {
+            var profile = new Mock<IProfileStore>();
+            profile.Setup(p => p.GetSafetyPolicies()).Returns(SafetyWith("abort"));
+            profile.Setup(p => p.GetNotificationsSettings()).Returns(NotificationsWith(onDiskSpaceLow: true));
+
+            var sequencer = new Mock<ISequencerService>();
+            sequencer.Setup(s => s.AbortActiveRunsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(2);
+
+            DiagnosticEventDto? captured = null;
+            var diagnostics = new Mock<IDiagnosticsService>();
+            diagnostics.Setup(d => d.ClearOpenEventsByTypeAsync(It.IsAny<string>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(0);
+            diagnostics.Setup(d => d.CreateEventAsync(It.IsAny<DiagnosticEventDto>(), It.IsAny<string?>(), It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
+                .Callback<DiagnosticEventDto, string?, bool?, CancellationToken>((e, _, _, _) => captured = e)
+                .Returns(Task.CompletedTask);
+
+            var notifications = new Mock<INotificationService>();
+            notifications.Setup(n => n.CreateAsync(It.IsAny<NotificationDto>(), It.IsAny<CancellationToken>()))
+                .Returns(Task.CompletedTask);
+
+            using var monitor = new DiskSpaceMonitor(profile.Object, diagnostics.Object, notifications.Object,
+                sequencer.Object, NullLogger<DiskSpaceMonitor>.Instance);
+
+            await monitor.EmitTransitionAsync(DiskSpaceLevel.Low, DiskSpaceLevel.Critical, 1 * Gib, "/mnt/data", CancellationToken.None);
+
+            sequencer.Verify(s => s.AbortActiveRunsAsync(It.IsAny<CancellationToken>()), Times.Once);
+            Assert.That(captured, Is.Not.Null);
+            Assert.That(captured!.AutoActionTaken, Is.True, "diagnostic records that it halted the sequence");
+            Assert.That(captured.AutoActionDescription, Does.Contain("halted 2"));
+            Assert.That(captured.Severity, Is.EqualTo(DiagnosticHealth.Red));
+            // The critical "Sequence halted" notification fires (in addition to the low-disk one).
+            notifications.Verify(n => n.CreateAsync(
+                It.Is<NotificationDto>(d => d.Title.Contains("Sequence halted")), It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        [Test]
+        public async Task EmitTransition_into_Critical_with_warn_policy_does_not_abort() {
+            var profile = new Mock<IProfileStore>();
+            profile.Setup(p => p.GetSafetyPolicies()).Returns(SafetyWith("warn"));
+            profile.Setup(p => p.GetNotificationsSettings()).Returns(NotificationsWith(onDiskSpaceLow: false));
+
+            var sequencer = new Mock<ISequencerService>();
+            DiagnosticEventDto? captured = null;
+            var diagnostics = new Mock<IDiagnosticsService>();
+            diagnostics.Setup(d => d.ClearOpenEventsByTypeAsync(It.IsAny<string>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(0);
+            diagnostics.Setup(d => d.CreateEventAsync(It.IsAny<DiagnosticEventDto>(), It.IsAny<string?>(), It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
+                .Callback<DiagnosticEventDto, string?, bool?, CancellationToken>((e, _, _, _) => captured = e)
+                .Returns(Task.CompletedTask);
+            var notifications = new Mock<INotificationService>();
+
+            using var monitor = new DiskSpaceMonitor(profile.Object, diagnostics.Object, notifications.Object,
+                sequencer.Object, NullLogger<DiskSpaceMonitor>.Instance);
+
+            await monitor.EmitTransitionAsync(DiskSpaceLevel.Low, DiskSpaceLevel.Critical, 1 * Gib, "/mnt/data", CancellationToken.None);
+
+            sequencer.Verify(s => s.AbortActiveRunsAsync(It.IsAny<CancellationToken>()), Times.Never);
+            Assert.That(captured!.AutoActionTaken, Is.False);
         }
     }
 }
