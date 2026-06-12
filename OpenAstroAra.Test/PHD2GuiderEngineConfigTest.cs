@@ -77,16 +77,23 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void Build_skips_every_zeroed_numeric_pushing_only_dec_mode() {
-            // An all-zero profile must push none of the numeric params — pushing 0 would overwrite PHD2's own
-            // values harmfully (aggressiveness 0 disables guiding, minMove 0 chases noise). Only dec-mode goes.
+        public void Build_with_all_unset_values_pushes_nothing() {
+            // Every value at its unset/default sentinel (numerics 0, dec-mode "auto") → push nothing, leaving
+            // PHD2's own configuration untouched rather than overwriting it with ARA's blank defaults.
             var msgs = PHD2Guider.BuildGuiderEngineConfigMessages(
                 Settings(focal: 0, pixel: 0, ra: 0, dec: 0, minMove: 0, mode: "auto"));
+            Assert.That(msgs, Is.Empty);
+        }
 
-            Assert.That(msgs.OfType<Phd2SetProfileSetup>(), Is.Empty);
-            Assert.That(msgs.OfType<Phd2SetAlgoParam>(), Is.Empty);
-            var decMode = msgs.OfType<Phd2SetDecGuideMode>().Single();
-            Assert.That(decMode.Parameters!.Mode, Is.EqualTo("Auto"));
+        [Test]
+        public void Build_pushes_dec_mode_only_when_it_is_not_auto() {
+            // "auto" is both ARA's and PHD2's default → don't push (don't overwrite the user's PHD2 setting).
+            Assert.That(PHD2Guider.BuildGuiderEngineConfigMessages(Settings(mode: "auto"))
+                .OfType<Phd2SetDecGuideMode>(), Is.Empty);
+            // An explicit mode IS pushed.
+            var north = PHD2Guider.BuildGuiderEngineConfigMessages(Settings(mode: "north"))
+                .OfType<Phd2SetDecGuideMode>().Single();
+            Assert.That(north.Parameters!.Mode, Is.EqualTo("North"));
         }
 
         [Test]

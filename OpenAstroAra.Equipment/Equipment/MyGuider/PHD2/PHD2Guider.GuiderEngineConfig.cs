@@ -113,7 +113,14 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 messages.Add(AlgoParam("dec", "minMove", guider.MinimumMove));
             }
 
-            messages.Add(new Phd2SetDecGuideMode { Parameters = new() { Mode = MapDecGuideMode(guider.DecGuideMode) } });
+            // dec-guide-mode: "Auto" is both ARA's default and PHD2's own default, so treat it as the unset
+            // sentinel (like the numeric 0s) and don't push it — otherwise a fresh ARA profile would overwrite
+            // a user's deliberate PHD2 North/South (e.g. a backlash-sensitive mount) on every connect. Only an
+            // explicit North/South/Off is sent.
+            var decMode = MapDecGuideMode(guider.DecGuideMode);
+            if (decMode != "Auto") {
+                messages.Add(new Phd2SetDecGuideMode { Parameters = new() { Mode = decMode } });
+            }
             return messages;
         }
 
