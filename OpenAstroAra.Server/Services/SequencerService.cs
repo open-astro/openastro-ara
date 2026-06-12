@@ -189,6 +189,39 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         return PlaceholderEquipmentHelpers.Accepted("sequencer.stop", idempotencyKey);
     }
 
+    public async Task<int> AbortActiveRunsAsync(CancellationToken ct) {
+        var aborted = 0;
+        // Snapshot the keys (ConcurrentDictionary.Keys copies) so a worker removing itself mid-iteration — while
+        // we await below — can't matter; re-fetch each run by id since it may have changed by the time we reach it.
+        foreach (var id in _runs.Keys) {
+            ct.ThrowIfCancellationRequested();
+            if (!_runs.TryGetValue(id, out var run)) {
+                continue;
+            }
+            // Skip terminal AND already-Aborting runs: a re-entrant call (a fast Critical→Warn→Critical
+            // oscillation) must not re-count / re-notify a run that's already being aborted.
+            if (!IsAbortableRun(run.State)) {
+                continue;
+            }
+            // Count only runs this call actually transitioned — a run that finished naturally in the TOCTOU
+            // window between the check above and the cancel returns false and isn't counted.
+            if (await RequestCancelAsync(id, SequenceRunState.Aborting)) {
+                aborted++;
+            }
+        }
+        return aborted;
+    }
+
+    /// <summary>
+    /// Whether a run can still be aborted: not terminal (Completed/Failed/Stopped) and not already in the
+    /// transient Aborting state. The §29 disk-space monitor's "abort on critical" path uses this (via
+    /// <see cref="AbortActiveRunsAsync"/>) so a re-entrant abort doesn't double-count an in-flight abort.
+    /// Note: in-memory runs don't survive a daemon restart, so a post-restart Ok→Critical transition finds no
+    /// active runs and aborts nothing.
+    /// </summary>
+    public static bool IsAbortableRun(SequenceRunState state) =>
+        !IsTerminal(state) && state != SequenceRunState.Aborting;
+
     // IHostedService — explicit impl so it doesn't collide with the public
     // StartAsync(Guid, ...) above. On daemon shutdown, cancel every live run so
     // in-flight workers stop promptly instead of being abandoned mid-execution
@@ -251,8 +284,15 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
     /// an already-terminal run so we never touch a disposed CTS; the CancelAsync
     /// is still guarded against the narrow worker-disposes-during-abort race.
     /// </summary>
-    private async Task RequestCancelAsync(Guid id, SequenceRunState desired) {
-        if (!_runs.TryGetValue(id, out var run) || IsTerminal(run.State)) return;
+    // Returns true when this call actually transitioned the run (false when the run was missing or already
+    // terminal) — so AbortActiveRunsAsync counts only runs it really stopped, not ones that finished naturally
+    // in the TOCTOU window between the abortability check and here.
+    private async Task<bool> RequestCancelAsync(Guid id, SequenceRunState desired) {
+        // Also bail on an already-Aborting run: this closes the TOCTOU window where a concurrent abort (a user
+        // AbortAsync or a second AbortActiveRunsAsync) sets Aborting between the caller's abortability check and
+        // here — the losing writer returns false and isn't counted (no inflated "Sequence halted" tally). A
+        // run heading to a terminal state via Aborting still terminates; re-labelling it adds nothing.
+        if (!_runs.TryGetValue(id, out var run) || IsTerminal(run.State) || run.State == SequenceRunState.Aborting) return false;
         run.State = desired;
         try {
             await run.Cts.CancelAsync();
@@ -260,6 +300,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             // Worker reached terminal + disposed the CTS between the check above
             // and here — the run is already ending, nothing more to cancel.
         }
+        return true;
     }
 
     // Checkpoint ownership — only the run that currently owns active/current.json

@@ -211,6 +211,25 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task AbortActiveRunsAsync_halts_the_running_sequence_and_counts_only_real_aborts() {
+            // §29 hard-stop path: a running sequence is aborted and counted once; a re-entrant call (the disk
+            // oscillating back to Critical) finds it already Aborting/terminal and counts nothing.
+            var id = Guid.NewGuid();
+            var svc = BuildService(id, BuildBody(c => c.Items.Add(new WaitForTimeSpan { Time = 30 })));
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForStateAsync(svc, id, SequenceRunState.Running);
+
+            var aborted = await svc.AbortActiveRunsAsync(CancellationToken.None);
+            Assert.That(aborted, Is.EqualTo(1));
+
+            var second = await svc.AbortActiveRunsAsync(CancellationToken.None);
+            Assert.That(second, Is.EqualTo(0), "an already-aborting/terminal run is not re-counted");
+
+            var state = await WaitForTerminalAsync(svc, id);
+            Assert.That(state!.State, Is.EqualTo(SequenceRunState.Stopped));
+        }
+
+        [Test]
         public async Task Completed_run_emits_started_then_complete_WS_events() {
             var id = Guid.NewGuid();
             var ws = new RecordingWsBroadcaster();

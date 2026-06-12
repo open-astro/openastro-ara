@@ -566,6 +566,9 @@ class ProfileApi {
             (j['guider_retry_timeout_sec'] as num?)?.toInt() ?? 60,
         skipTargetIfRecoveryFails:
             (j['skip_target_if_recovery_fails'] as bool?) ?? true,
+        onDiskSpaceCritical: (j['on_disk_space_critical'] as String?) == 'abort'
+            ? DiskSpaceCriticalAction.abort
+            : DiskSpaceCriticalAction.warn,
       );
 
   static Map<String, dynamic> _safetyPoliciesToJson(SafetyPolicies v) => {
@@ -581,6 +584,8 @@ class ProfileApi {
         'on_guider_lost': _guiderLostActionToString(v.onGuiderLost),
         'guider_retry_timeout_sec': v.guiderRetryTimeoutSec,
         'skip_target_if_recovery_fails': v.skipTargetIfRecoveryFails,
+        // enum.name is 'warn'/'abort' — matches the server's OnDiskSpaceCritical values verbatim.
+        'on_disk_space_critical': v.onDiskSpaceCritical.name,
       };
 
   static UnsafeAction _unsafeActionFromString(String? s) {

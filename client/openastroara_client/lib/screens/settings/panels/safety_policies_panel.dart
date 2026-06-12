@@ -196,6 +196,19 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel> {
           value: s.skipTargetIfRecoveryFails,
           onChanged: n.setSkipTargetIfRecoveryFails,
         ),
+        const SettingsSectionHeader('On critically-low disk (§29)'),
+        SettingsDropdownRow<DiskSpaceCriticalAction>(
+          label: 'Action',
+          helpKey: 'safety.policies.on_disk_space_critical',
+          value: s.onDiskSpaceCritical,
+          items: const {
+            DiskSpaceCriticalAction.warn: 'Warn only (diagnostic + notification)',
+            DiskSpaceCriticalAction.abort: 'Abort the running sequence',
+          },
+          onChanged: (v) {
+            if (v != null) n.setOnDiskSpaceCritical(v);
+          },
+        ),
         const SizedBox(height: 24),
         if (_lastError != null) ...[
           Text(

@@ -81,6 +81,18 @@ const Map<String, Help> helpRegistry = {
         '* **Abort sequence**: stop the whole session.',
     relatedSettings: ['safety.policies.guider_retry_timeout', 'safety.policies.skip_target_if_recovery_fails'],
   ),
+  'safety.policies.on_disk_space_critical': Help(
+    key: 'safety.policies.on_disk_space_critical',
+    title: 'On critically-low disk',
+    body: 'What the §29 disk-space monitor does when free space on your image save volume **drops to** the **critical** threshold (set under Settings → Session → Storage).\n\n'
+        '* **Warn only** (default): raise a red diagnostic and, if enabled, a *Low disk space* notification — but keep capturing. You decide what to do.\n'
+        '* **Abort the running sequence**: also halt any in-progress sequence, so you don\'t keep filling the disk with frames that may not even save. A critical notification records that it stopped the run.\n\n'
+        'This fires on the *transition* into critical (when free space crosses the threshold going down), so it halts a sequence that\'s already running. Starting a brand-new sequence while the disk is already critical isn\'t blocked yet — a pre-capture check is a planned follow-up. Either way the monitor never deletes anything.',
+    relatedSettings: [
+      'session.storage.min_free_disk_critical_gb',
+      'session.notifications.on_disk_space_low',
+    ],
+  ),
   'safety.policies.guider_retry_timeout': Help(
     key: 'safety.policies.guider_retry_timeout',
     title: 'Guider retry timeout',

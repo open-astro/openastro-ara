@@ -128,6 +128,22 @@ public sealed class PlaceholderSequencerService : ISequencerService {
         return PlaceholderEquipmentHelpers.Accepted("sequencer.stop", idempotencyKey);
     }
 
+    public async Task<int> AbortActiveRunsAsync(CancellationToken ct) {
+        var aborted = 0;
+        foreach (var (_, run) in _runs) {
+            ct.ThrowIfCancellationRequested();
+            // Shared abortability rule (skips terminal + already-Aborting) so this can't diverge from the real
+            // SequencerService if its terminal-state set changes.
+            if (!SequencerService.IsAbortableRun(run.State)) {
+                continue;
+            }
+            run.State = SequenceRunState.Aborting;
+            await run.Cts.CancelAsync();
+            aborted++;
+        }
+        return aborted;
+    }
+
     private async Task RunWorkerAsync(Guid sequenceId, RunState run) {
         try {
             run.State = SequenceRunState.Running;

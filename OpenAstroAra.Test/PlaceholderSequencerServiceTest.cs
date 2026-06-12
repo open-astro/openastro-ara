@@ -89,5 +89,26 @@ namespace OpenAstroAra.Test {
             var state = await svc.GetRunStateAsync(id, CancellationToken.None);
             Assert.That(state!.FramesTotal, Is.EqualTo(5));
         }
+
+        [Test]
+        public void IsAbortableRun_excludes_terminal_and_already_aborting_states() {
+            // The §29 abort-active-runs guard: only Idle/Starting/Running/Paused are abortable.
+            Assert.That(SequencerService.IsAbortableRun(SequenceRunState.Idle), Is.True);
+            Assert.That(SequencerService.IsAbortableRun(SequenceRunState.Starting), Is.True);
+            Assert.That(SequencerService.IsAbortableRun(SequenceRunState.Running), Is.True);
+            Assert.That(SequencerService.IsAbortableRun(SequenceRunState.Paused), Is.True);
+            // Already aborting → not re-abortable (prevents the double count / double "Sequence halted" notify).
+            Assert.That(SequencerService.IsAbortableRun(SequenceRunState.Aborting), Is.False);
+            // Terminal states.
+            Assert.That(SequencerService.IsAbortableRun(SequenceRunState.Stopped), Is.False);
+            Assert.That(SequencerService.IsAbortableRun(SequenceRunState.Completed), Is.False);
+            Assert.That(SequencerService.IsAbortableRun(SequenceRunState.Failed), Is.False);
+        }
+
+        [Test]
+        public async Task AbortActiveRunsAsync_returns_zero_with_no_active_runs() {
+            var svc = new PlaceholderSequencerService();
+            Assert.That(await svc.AbortActiveRunsAsync(CancellationToken.None), Is.EqualTo(0));
+        }
     }
 }

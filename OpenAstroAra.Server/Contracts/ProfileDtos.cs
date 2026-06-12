@@ -120,7 +120,11 @@ public sealed record SafetyPoliciesDto(
     bool ParkIfNoMoreTargets,
     string OnGuiderLost,
     int GuiderRetryTimeoutSec,
-    bool SkipTargetIfRecoveryFails);
+    bool SkipTargetIfRecoveryFails,
+    // §29 — action when the §29 disk-space monitor hits the critical threshold: "warn" (default — the diagnostic
+    // + notification only) or "abort" (also halt any running sequence so it doesn't capture into a full disk).
+    // Optional ctor default so a profile.json predating this field still deserializes.
+    string OnDiskSpaceCritical = "warn");
 
 /// <summary>
 /// §37.11 autofocus settings — method + sweep params + filter/runtime

@@ -70,5 +70,14 @@ void main() {
       expect(s.meridianFlipAuto, isTrue);
       expect(s.meridianRecalGuider, isTrue);
     });
+
+    test('§29 on-disk-space-critical defaults to warn + sets', () {
+      final n = container.read(safetyPoliciesProvider.notifier);
+      expect(container.read(safetyPoliciesProvider).onDiskSpaceCritical,
+          DiskSpaceCriticalAction.warn);
+      n.setOnDiskSpaceCritical(DiskSpaceCriticalAction.abort);
+      expect(container.read(safetyPoliciesProvider).onDiskSpaceCritical,
+          DiskSpaceCriticalAction.abort);
+    });
   });
 }
