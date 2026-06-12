@@ -35,6 +35,10 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
 
         // A dark-library build captures frame_count frames at each matched exposure, so it can run for minutes.
         // The default 60 s SendMessage timeout would abort it mid-capture; give the blocking RPC room to finish.
+        // NOTE: SendMessage is bounded only by this socket ReceiveTimeout — it takes no CancellationToken. So the
+        // CancellationToken on BuildDarkLibraryAsync guards only the *entry* (pre-dispatch); once the send starts
+        // the build is effectively uninterruptible and ct.Cancel() will NOT abort it before the timeout. The
+        // e-4b-2 service layer must treat a dispatched build as run-to-completion-or-timeout, not cancellable.
         private const int BuildDarkLibraryTimeoutMs = 30 * 60 * 1000;
 
         /// <summary>
@@ -109,6 +113,8 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             if (!Connected) {
                 throw new InvalidOperationException("guider is not connected");
             }
+            // A status read is a quick query, so the default 60 s SendMessage timeout is fine here (unlike the
+            // long-running build above, which overrides it with BuildDarkLibraryTimeoutMs).
             var response = await SendMessage<Phd2CalibrationFilesStatusResponse>(new Phd2GetCalibrationFilesStatus());
             if (response.error != null) {
                 throw new GuiderRpcException("get_calibration_files_status", response.error.code, response.error.message);
@@ -132,6 +138,9 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             Code = code;
         }
 
+        // The three standard ctors below exist only to satisfy CA1032 (and rare serialization). They carry no
+        // RPC context, so RpcMethod/Code stay at their defaults ("" / 0) and are NOT meaningful when thrown this
+        // way — inspect them only on instances built via the 3-arg ctor above (the only one used internally).
         public GuiderRpcException() { RpcMethod = string.Empty; }
 
         public GuiderRpcException(string message) : base(message) { RpcMethod = string.Empty; }

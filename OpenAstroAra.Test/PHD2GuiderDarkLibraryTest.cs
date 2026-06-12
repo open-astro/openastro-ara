@@ -78,6 +78,14 @@ namespace OpenAstroAra.Test {
             Assert.That(req.Parameters!.MaxExposureMs, Is.EqualTo(3000));
         }
 
+        [Test]
+        public void Build_request_accepts_exposure_bound_boundaries() {
+            // Exactly 1 ms and exactly 600000 ms are in-range (the daemon's documented limits).
+            var req = PHD2Guider.BuildDarkLibraryRequest(5, 1, 600000, false, null, true);
+            Assert.That(req.Parameters!.MinExposureMs, Is.EqualTo(1));
+            Assert.That(req.Parameters!.MaxExposureMs, Is.EqualTo(600000));
+        }
+
         // ── Response deserialization ──
 
         [Test]
