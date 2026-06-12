@@ -401,10 +401,11 @@ transition, clears it on recovery via the new `IDiagnosticsService.ClearOpenEven
   (optional, back-compat defaults 10/2), surfaced under Settings → Session → Storage; the monitor reads them
   live each tick via the pure `ResolveThresholdBytes` (falls back to the 10/2 GiB defaults on a non-positive or
   inverted pair). Client + server validate critical < warn.
-- **Hard-stop option (§29.x).** The monitor is warn-only by design. A "pause/abort the sequence when the disk is
-  critically low" policy (analogous to the §35 safety actions) would prevent a guaranteed-to-fail capture from
-  even starting — but that's a behavior change that belongs with a user-set policy toggle, not an unconditional
-  block. Gate it behind a setting.
+- **Hard-stop option (§29.x).** ✅ DONE — `SafetyPoliciesDto.OnDiskSpaceCritical` (`warn` default / `abort`),
+  surfaced under Settings → Safety → Policies. On entering Critical with `abort`, the monitor calls the new
+  `ISequencerService.AbortActiveRunsAsync` to halt running sequences + fires a critical notification. ("Pause"
+  was considered but the headless engine's `PauseAsync` is still a deferred no-op, so only warn/abort ship; add
+  "pause" when the engine grows a real pause hook.)
 - **Per-frame pre-capture check.** The monitor polls on an interval (60 s); a burst of large frames could fill
   the disk between ticks. A cheap pre-capture free-space check in the capture path (warn/skip) would tighten the
   window — fold into the §42.2 capture-path hardening rather than the standalone monitor.
