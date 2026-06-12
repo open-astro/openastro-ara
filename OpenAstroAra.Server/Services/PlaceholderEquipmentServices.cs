@@ -183,6 +183,12 @@ public sealed class PlaceholderGuiderService : IGuiderService {
         Task.FromResult(PlaceholderEquipmentHelpers.Accepted("guider.defect_map.build", idempotencyKey));
     public Task<CalibrationFilesStatusDto?> GetCalibrationFilesStatusAsync(CancellationToken ct) =>
         Task.FromResult<CalibrationFilesStatusDto?>(null);
+    // Faulted Task (not a synchronous throw) so the stub faithfully honors the Task<T>-returning contract — a
+    // caller awaiting this sees a faulted task, the same as any other not-connected service path.
+    public Task<CalibrationFilesStatusDto> SetDarkLibraryEnabledAsync(bool enabled, CancellationToken ct) =>
+        Task.FromException<CalibrationFilesStatusDto>(new InvalidOperationException("guider is not connected"));
+    public Task<CalibrationFilesStatusDto> SetDefectMapEnabledAsync(bool enabled, CancellationToken ct) =>
+        Task.FromException<CalibrationFilesStatusDto>(new InvalidOperationException("guider is not connected"));
 }
 
 public sealed class PlaceholderPolarAlignService : IPolarAlignService {

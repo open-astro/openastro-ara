@@ -126,6 +126,13 @@ public interface IGuiderService {
 
     /// <summary>§63.6 — read the guider's calibration-files status. Returns null when no guider is connected.</summary>
     Task<CalibrationFilesStatusDto?> GetCalibrationFilesStatusAsync(CancellationToken ct);
+
+    /// <summary>§63.6 — enable/disable dark subtraction; returns the updated calibration status. Throws when
+    /// disconnected (→ 409) or when the daemon rejects the toggle (→ 422).</summary>
+    Task<CalibrationFilesStatusDto> SetDarkLibraryEnabledAsync(bool enabled, CancellationToken ct);
+
+    /// <summary>§63.6 — enable/disable bad-pixel (defect-map) correction; returns the updated calibration status.</summary>
+    Task<CalibrationFilesStatusDto> SetDefectMapEnabledAsync(bool enabled, CancellationToken ct);
 }
 
 public interface IPolarAlignService {

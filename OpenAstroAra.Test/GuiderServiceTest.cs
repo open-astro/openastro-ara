@@ -148,6 +148,20 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void SetDarkLibraryEnabledAsync_when_not_connected_throws_InvalidOperation() {
+            using var svc = NewService();
+            Assert.Throws<InvalidOperationException>(
+                () => { _ = svc.SetDarkLibraryEnabledAsync(true, CancellationToken.None); });
+        }
+
+        [Test]
+        public void SetDefectMapEnabledAsync_when_not_connected_throws_InvalidOperation() {
+            using var svc = NewService();
+            Assert.Throws<InvalidOperationException>(
+                () => { _ = svc.SetDefectMapEnabledAsync(false, CancellationToken.None); });
+        }
+
+        [Test]
         public void BuildDefectMapDarksAsync_validates_before_the_connection_check() {
             using var svc = NewService();
             Assert.Throws<ArgumentOutOfRangeException>(

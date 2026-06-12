@@ -57,7 +57,7 @@ namespace OpenAstroAra.Test {
 
             var result = await EquipmentEndpoints.BuildDarkLibraryAsync(Request, null, svc.Object, CancellationToken.None);
 
-            Assert.That(StatusOf(result), Is.EqualTo(StatusCodes.Status400BadRequest));
+            Assert.That(ProblemStatusOf(result), Is.EqualTo(StatusCodes.Status400BadRequest));
         }
 
         [Test]
@@ -68,7 +68,7 @@ namespace OpenAstroAra.Test {
 
             var result = await EquipmentEndpoints.BuildDarkLibraryAsync(Request, null, svc.Object, CancellationToken.None);
 
-            Assert.That(StatusOf(result), Is.EqualTo(StatusCodes.Status409Conflict));
+            Assert.That(ProblemStatusOf(result), Is.EqualTo(StatusCodes.Status409Conflict));
         }
 
         // ── §63.6 guider-e-4c-b-2: defect-map build endpoint mapping (mirrors the dark-library handler) ──
@@ -97,7 +97,7 @@ namespace OpenAstroAra.Test {
 
             var result = await EquipmentEndpoints.BuildDefectMapDarksAsync(DefectRequest, null, svc.Object, CancellationToken.None);
 
-            Assert.That(StatusOf(result), Is.EqualTo(StatusCodes.Status400BadRequest));
+            Assert.That(ProblemStatusOf(result), Is.EqualTo(StatusCodes.Status400BadRequest));
         }
 
         [Test]
@@ -108,9 +108,64 @@ namespace OpenAstroAra.Test {
 
             var result = await EquipmentEndpoints.BuildDefectMapDarksAsync(DefectRequest, null, svc.Object, CancellationToken.None);
 
-            Assert.That(StatusOf(result), Is.EqualTo(StatusCodes.Status409Conflict));
+            Assert.That(ProblemStatusOf(result), Is.EqualTo(StatusCodes.Status409Conflict));
         }
 
-        private static int? StatusOf(IResult result) => (result as ProblemHttpResult)?.StatusCode;
+        // ── §63.6 guider-e-4c-c: calibration enable/disable toggle endpoint mapping ──
+
+        private static readonly CalibrationFilesStatusDto SampleStatus = new(
+            ProfileId: 3, DarkLibraryPath: "/d.fits", DefectMapPath: null,
+            DarkLibraryExists: true, DefectMapExists: false, DarkLibraryCompatible: true, DefectMapCompatible: false,
+            DarkLibraryLoaded: true, DefectMapLoaded: false, AutoLoadDarks: true, AutoLoadDefectMap: false,
+            DarkCountLoaded: 8, DarkMinExposureSecondsLoaded: 1.0, DarkMaxExposureSecondsLoaded: 5.0);
+
+        [Test]
+        public async Task Toggle_returns_200_with_updated_status_on_success() {
+            var svc = new Mock<IGuiderService>();
+            svc.Setup(s => s.SetDarkLibraryEnabledAsync(true, It.IsAny<CancellationToken>())).ReturnsAsync(SampleStatus);
+
+            var result = await EquipmentEndpoints.SetDarkLibraryEnabledAsync(new SetCalibrationEnabledRequestDto(true), svc.Object, CancellationToken.None);
+
+            var ok = result as Ok<CalibrationFilesStatusDto>;
+            Assert.That(ok, Is.Not.Null);
+            Assert.That(ok!.Value, Is.SameAs(SampleStatus));
+        }
+
+        [Test]
+        public async Task Toggle_defect_map_returns_200_with_updated_status_on_success() {
+            var svc = new Mock<IGuiderService>();
+            svc.Setup(s => s.SetDefectMapEnabledAsync(false, It.IsAny<CancellationToken>())).ReturnsAsync(SampleStatus);
+
+            var result = await EquipmentEndpoints.SetDefectMapEnabledAsync(new SetCalibrationEnabledRequestDto(false), svc.Object, CancellationToken.None);
+
+            var ok = result as Ok<CalibrationFilesStatusDto>;
+            Assert.That(ok, Is.Not.Null);
+            Assert.That(ok!.Value, Is.SameAs(SampleStatus));
+        }
+
+        [Test]
+        public async Task Toggle_maps_not_connected_InvalidOperation_to_409() {
+            var svc = new Mock<IGuiderService>();
+            svc.Setup(s => s.SetDefectMapEnabledAsync(It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new InvalidOperationException("guider is not connected"));
+
+            var result = await EquipmentEndpoints.SetDefectMapEnabledAsync(new SetCalibrationEnabledRequestDto(true), svc.Object, CancellationToken.None);
+
+            Assert.That(ProblemStatusOf(result), Is.EqualTo(StatusCodes.Status409Conflict));
+        }
+
+        [Test]
+        public async Task Toggle_maps_daemon_GuiderRpcException_to_422() {
+            var svc = new Mock<IGuiderService>();
+            svc.Setup(s => s.SetDarkLibraryEnabledAsync(It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.GuiderRpcException(
+                    "set_dark_library_enabled", 1, "camera not connected"));
+
+            var result = await EquipmentEndpoints.SetDarkLibraryEnabledAsync(new SetCalibrationEnabledRequestDto(true), svc.Object, CancellationToken.None);
+
+            Assert.That(ProblemStatusOf(result), Is.EqualTo(StatusCodes.Status422UnprocessableEntity));
+        }
+
+        private static int? ProblemStatusOf(IResult result) => (result as ProblemHttpResult)?.StatusCode;
     }
 }

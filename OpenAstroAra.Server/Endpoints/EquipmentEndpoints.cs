@@ -216,6 +216,12 @@ public static class EquipmentEndpoints {
         guider.MapPost("/defectmap/build", async ([FromBody] BuildDefectMapDarksRequestDto request,
                 [FromHeader(Name = "Idempotency-Key")] string? key, IGuiderService svc, CancellationToken ct) =>
             await BuildDefectMapDarksAsync(request, key, svc, ct));
+        // §63.6 enable/disable the loaded calibration artifacts — synchronous (returns the updated status), not a
+        // 202 build. Disconnected → 409; the daemon rejecting the toggle (e.g. enable with no camera) → 422.
+        guider.MapPost("/darklibrary/enabled", async ([FromBody] SetCalibrationEnabledRequestDto request, IGuiderService svc, CancellationToken ct) =>
+            await SetDarkLibraryEnabledAsync(request, svc, ct));
+        guider.MapPost("/defectmap/enabled", async ([FromBody] SetCalibrationEnabledRequestDto request, IGuiderService svc, CancellationToken ct) =>
+            await SetDefectMapEnabledAsync(request, svc, ct));
 
         // ─── Polar Alignment ───
         var polar = equipment.MapGroup("/polaralign");
@@ -255,6 +261,24 @@ public static class EquipmentEndpoints {
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status400BadRequest);
         } catch (System.InvalidOperationException ex) {
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
+        }
+    }
+
+    // §63.6 calibration enable/disable handlers (extracted for the error-mapping tests). 200 with the updated
+    // status; disconnected guider → 409; daemon rejected the toggle (e.g. enable with no camera) → 422.
+    public static Task<IResult> SetDarkLibraryEnabledAsync(SetCalibrationEnabledRequestDto request, IGuiderService svc, CancellationToken ct) =>
+        ToggleCalibrationAsync(() => svc.SetDarkLibraryEnabledAsync(request.Enabled, ct));
+
+    public static Task<IResult> SetDefectMapEnabledAsync(SetCalibrationEnabledRequestDto request, IGuiderService svc, CancellationToken ct) =>
+        ToggleCalibrationAsync(() => svc.SetDefectMapEnabledAsync(request.Enabled, ct));
+
+    private static async Task<IResult> ToggleCalibrationAsync(System.Func<Task<CalibrationFilesStatusDto>> toggle) {
+        try {
+            return Results.Ok(await toggle());
+        } catch (System.InvalidOperationException ex) {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
+        } catch (OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.GuiderRpcException ex) {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
         }
     }
 }

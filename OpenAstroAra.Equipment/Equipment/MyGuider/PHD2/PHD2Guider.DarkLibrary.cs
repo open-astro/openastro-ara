@@ -204,12 +204,43 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             }
             // A status read is a quick query, so the default 60 s SendMessage timeout is fine here (unlike the
             // long-running build above, which overrides it with CalibrationBuildTimeoutMs).
-            var response = await SendMessage<Phd2CalibrationFilesStatusResponse>(new Phd2GetCalibrationFilesStatus());
+            return await SendCalibrationStatusRpcAsync(new Phd2GetCalibrationFilesStatus(), "get_calibration_files_status");
+        }
+
+        /// <summary>§63.6 — enable/disable dark subtraction for the active profile (enabling needs a connected
+        /// camera). Returns the updated calibration-files status. Requires a connected guider; throws on RPC error
+        /// (e.g. the daemon's "camera not connected" when enabling).</summary>
+        public Task<Phd2CalibrationFilesStatus> SetDarkLibraryEnabledAsync(bool enabled, CancellationToken ct) {
+            ct.ThrowIfCancellationRequested();
+            if (!Connected) {
+                throw new InvalidOperationException("guider is not connected");
+            }
+            return SendCalibrationStatusRpcAsync(
+                new Phd2SetDarkLibraryEnabled { Parameters = new() { Enabled = enabled } }, "set_dark_library_enabled");
+        }
+
+        /// <summary>§63.6 — enable/disable bad-pixel (defect-map) correction for the active profile (enabling needs
+        /// a connected camera). Returns the updated calibration-files status. Requires a connected guider; throws
+        /// on RPC error.</summary>
+        public Task<Phd2CalibrationFilesStatus> SetDefectMapEnabledAsync(bool enabled, CancellationToken ct) {
+            ct.ThrowIfCancellationRequested();
+            if (!Connected) {
+                throw new InvalidOperationException("guider is not connected");
+            }
+            return SendCalibrationStatusRpcAsync(
+                new Phd2SetDefectMapEnabled { Parameters = new() { Enabled = enabled } }, "set_defect_map_enabled");
+        }
+
+        // Shared send-and-unwrap for the three RPCs that return the calibration-files status object
+        // (get_calibration_files_status, set_dark_library_enabled, set_defect_map_enabled): one error/empty-result
+        // contract, one place.
+        private async Task<Phd2CalibrationFilesStatus> SendCalibrationStatusRpcAsync(Phd2Method msg, string method) {
+            var response = await SendMessage<Phd2CalibrationFilesStatusResponse>(msg);
             if (response.error != null) {
-                throw new GuiderRpcException("get_calibration_files_status", response.error.code, response.error.message);
+                throw new GuiderRpcException(method, response.error.code, response.error.message);
             }
             if (response.result is null) {
-                throw new GuiderRpcException("get_calibration_files_status", 0, "missing result payload");
+                throw new GuiderRpcException(method, 0, "missing result payload");
             }
             return response.result;
         }
