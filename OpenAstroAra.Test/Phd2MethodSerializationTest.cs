@@ -133,6 +133,59 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void BuildDarkLibrary_sends_explicit_count_clear_and_load_omits_unset_bounds() {
+            var json = Serialize(new Phd2BuildDarkLibrary {
+                Parameters = new() { FrameCount = 10, ClearExisting = true },
+            });
+            Assert.That(json["method"]!.Value<string>(), Is.EqualTo("build_dark_library"));
+            var p = (JObject)json["params"]!;
+            Assert.That(p["frame_count"]!.Value<int>(), Is.EqualTo(10));
+            Assert.That(p["clear_existing"]!.Value<bool>(), Is.True);
+            Assert.That(p["load_after"]!.Value<bool>(), Is.True, "default true is sent explicitly");
+            // Optional bounds + notes omitted when unset.
+            Assert.That(p.ContainsKey("min_exposure_ms"), Is.False);
+            Assert.That(p.ContainsKey("max_exposure_ms"), Is.False);
+            Assert.That(p.ContainsKey("notes"), Is.False);
+        }
+
+        [Test]
+        public void BuildDarkLibrary_emits_exposure_bounds_and_notes_when_set() {
+            var json = Serialize(new Phd2BuildDarkLibrary {
+                Parameters = new() { MinExposureMs = 1000, MaxExposureMs = 300000, Notes = "ARA wizard", LoadAfter = false },
+            });
+            var p = (JObject)json["params"]!;
+            Assert.That(p["min_exposure_ms"]!.Value<int>(), Is.EqualTo(1000));
+            Assert.That(p["max_exposure_ms"]!.Value<int>(), Is.EqualTo(300000));
+            Assert.That(p["notes"]!.Value<string>(), Is.EqualTo("ARA wizard"));
+            Assert.That(p["load_after"]!.Value<bool>(), Is.False);
+            Assert.That(p["frame_count"]!.Value<int>(), Is.EqualTo(5), "default frame_count");
+        }
+
+        [Test]
+        public void SetDarkLibraryEnabled_uses_named_enabled_param() {
+            var json = Serialize(new Phd2SetDarkLibraryEnabled { Parameters = new() { Enabled = true } });
+            Assert.That(json["method"]!.Value<string>(), Is.EqualTo("set_dark_library_enabled"));
+            Assert.That(json["params"]!["enabled"]!.Value<bool>(), Is.True);
+        }
+
+        [Test]
+        public void GetCalibrationFilesStatus_carries_method_and_id_no_params() {
+            var json = Serialize(new Phd2GetCalibrationFilesStatus());
+            Assert.That(json["method"]!.Value<string>(), Is.EqualTo("get_calibration_files_status"));
+            Assert.That(System.Guid.TryParse(json["id"]!.Value<string>(), out _), Is.True);
+            Assert.That(json.ContainsKey("params"), Is.False, "the no-param base carries no params object");
+        }
+
+        [Test]
+        public void DeleteCalibrationFiles_emits_only_the_flags_that_are_set() {
+            var json = Serialize(new Phd2DeleteCalibrationFiles { Parameters = new() { DeleteDarkLibrary = true } });
+            Assert.That(json["method"]!.Value<string>(), Is.EqualTo("delete_calibration_files"));
+            var p = (JObject)json["params"]!;
+            Assert.That(p["delete_dark_library"]!.Value<bool>(), Is.True);
+            Assert.That(p.ContainsKey("delete_defect_map"), Is.False);
+        }
+
+        [Test]
         public void SetProfileSetup_calibration_and_binning_fields_use_guider_names() {
             // Lock the calibration_* names against the authoritative guider contract
             // (openastro-guider/doc/jsonrpc_api.md: calibration_duration 50..60000, calibration_distance

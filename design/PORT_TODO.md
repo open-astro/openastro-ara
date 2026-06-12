@@ -408,3 +408,24 @@ transition, clears it on recovery via the new `IDiagnosticsService.ClearOpenEven
 - **Per-frame pre-capture check.** The monitor polls on an interval (60 s); a burst of large frames could fill
   the disk between ticks. A cheap pre-capture free-space check in the capture path (warn/skip) would tighten the
   window — fold into the §42.2 capture-path hardening rather than the standalone monitor.
+
+## §63.6 guider-e-4 — dark-library push (2026-06-12)
+**Shipped:** e-4a — named-object RPC request classes (`PHD2Methods.DarkLibrary.cs`): `build_dark_library`
+(`frame_count` 1..50 def 5, optional `min/max_exposure_ms`, `clear_existing`, optional `notes`, `load_after`
+def true), `set_dark_library_enabled {enabled}`, `get_calibration_files_status` (no params),
+`delete_calibration_files {delete_dark_library?, delete_defect_map?}` — serialization-locked (+5 tests).
+
+**e-4b (wiring) — remaining:**
+- A guider method to invoke `build_dark_library` on demand (requires connected camera + no active capture per
+  the contract) and read back the `{dark_library_path, exposure_count, exposures_ms}` result.
+- Surface it: a `GuiderService` op + REST endpoint (202-Accepted long-running, ~2 min) the client triggers, with
+  the §63.6 "cover the guide scope" modal flow.
+- **Progress streaming:** PHD2 streams build progress over its own event server (§63.8) — ARA ingests + forwards
+  to the client WS so the modal updates; on completion ARA records `calibration_state.guider.dark_library` and
+  fires the `guider.dark_library.complete` event. This is the meatiest part and the likely **v0.0.1/v0.1.0
+  boundary** (per the playbook).
+- `get_calibration_files_status` read surface (does a dark library already exist? is it loaded/compatible?) to
+  drive the wizard's "Build dark library" affordance state.
+
+**Deferred (advanced, §63.6):** the defect-map RPCs (`build_defect_map_darks`, `set_defect_map_enabled`) — add
+when defect maps are surfaced (wizard's optional "Also build defect map" checkbox, default off).
