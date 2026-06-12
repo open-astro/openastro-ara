@@ -170,7 +170,6 @@ class WsEventStream {
     _disposed = true;
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
-    _reconnectAttempt = 0; // harmless on this terminal op, but keeps state clean for any future reset()/reuse
     final sub = _sub;
     final socket = _socket;
     _sub = null; // drop references so the cancelled sub / closed socket can be GC'd promptly
