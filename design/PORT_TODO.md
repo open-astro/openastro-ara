@@ -417,7 +417,10 @@ def true), `set_dark_library_enabled {enabled}`, `get_calibration_files_status` 
 
 **e-4b (wiring) — remaining:**
 - A guider method to invoke `build_dark_library` on demand (requires connected camera + no active capture per
-  the contract) and read back the `{dark_library_path, exposure_count, exposures_ms}` result.
+  the contract) and read back the `{dark_library_path, exposure_count, exposures_ms}` result. **Validate at the
+  send site (from #382 review):** clamp/reject `FrameCount` outside 1..50, and reject `min > max` exposure when
+  both are set — the e-4a `Phd2BuildDarkLibraryParameter` is a permissive DTO by design (a bad value serializes
+  cleanly + fails at the daemon), so the service layer must guard before the first real call.
 - Surface it: a `GuiderService` op + REST endpoint (202-Accepted long-running, ~2 min) the client triggers, with
   the §63.6 "cover the guide scope" modal flow.
 - **Progress streaming:** PHD2 streams build progress over its own event server (§63.8) — ARA ingests + forwards
