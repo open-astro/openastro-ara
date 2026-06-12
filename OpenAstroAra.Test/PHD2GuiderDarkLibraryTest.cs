@@ -49,6 +49,12 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Build_request_trims_surrounding_whitespace_from_notes() {
+            var req = PHD2Guider.BuildDarkLibraryRequest(5, null, null, false, "  rig A  ", true);
+            Assert.That(req.Parameters!.Notes, Is.EqualTo("rig A"));
+        }
+
+        [Test]
         public void Build_request_accepts_frame_count_boundaries() {
             Assert.That(PHD2Guider.BuildDarkLibraryRequest(1, null, null, false, null, true).Parameters!.FrameCount, Is.EqualTo(1));
             Assert.That(PHD2Guider.BuildDarkLibraryRequest(50, null, null, false, null, true).Parameters!.FrameCount, Is.EqualTo(50));

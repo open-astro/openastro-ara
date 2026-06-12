@@ -33,13 +33,16 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         internal const int DarkLibraryMinExposureMs = 1;
         internal const int DarkLibraryMaxExposureMs = 600000;
 
-        // A dark-library build captures frame_count frames at each matched exposure, so it can run for minutes.
-        // The default 60 s SendMessage timeout would abort it mid-capture; give the blocking RPC room to finish.
+        // A dark-library build captures frame_count frames at each matched exposure, so it can run for a long
+        // time. Worst realistic case: 50 frames × ~5 matched exposure steps × a long per-frame exposure can push
+        // past an hour (50 × 5 × 20 s ≈ 83 min). The socket ReceiveTimeout must clear that ceiling, or it would
+        // fire mid-capture while the daemon keeps running, leaving the build in an unknown state — so use a
+        // generous 2 h bound. (e-4b-2 may compute a tighter, frame-count-derived bound once it owns the lifetime.)
         // NOTE: SendMessage is bounded only by this socket ReceiveTimeout — it takes no CancellationToken. So the
         // CancellationToken on BuildDarkLibraryAsync guards only the *entry* (pre-dispatch); once the send starts
         // the build is effectively uninterruptible and ct.Cancel() will NOT abort it before the timeout. The
         // e-4b-2 service layer must treat a dispatched build as run-to-completion-or-timeout, not cancellable.
-        private const int BuildDarkLibraryTimeoutMs = 30 * 60 * 1000;
+        private const int BuildDarkLibraryTimeoutMs = 120 * 60 * 1000;
 
         /// <summary>
         /// Validates the §63.6 build parameters at the send site and builds the wire request. Throws
@@ -65,7 +68,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                     MinExposureMs = minExposureMs,
                     MaxExposureMs = maxExposureMs,
                     ClearExisting = clearExisting,
-                    Notes = string.IsNullOrWhiteSpace(notes) ? null : notes,
+                    Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim(),
                     LoadAfter = loadAfter,
                 },
             };
@@ -83,6 +86,12 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         /// with a connected camera and no active capture). Returns the daemon's result (written path, frame
         /// count, captured exposure count + durations) on success; throws on a transport/protocol error.
         /// </summary>
+        /// <remarks>
+        /// WARNING: <paramref name="ct"/> is honored only at entry (before dispatch). The underlying RPC send
+        /// is bounded by a fixed socket timeout and takes no cancellation token, so cancelling after the build
+        /// starts has NO effect — the call runs to completion or the ~2 h timeout. The e-4b-2 service layer must
+        /// NOT wire a shutdown/timeout token here expecting it to abort an in-flight build.
+        /// </remarks>
         public async Task<Phd2BuildDarkLibraryResult> BuildDarkLibraryAsync(
             int frameCount, int? minExposureMs, int? maxExposureMs, bool clearExisting, string? notes, bool loadAfter,
             CancellationToken ct) {
