@@ -112,6 +112,7 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(GeneratedFlatSequenceDto))]
 [JsonSerializable(typeof(GeneratedFlatStepDto))]
 [JsonSerializable(typeof(BuildDarkLibraryRequestDto))]
+[JsonSerializable(typeof(BuildDefectMapDarksRequestDto))]
 [JsonSerializable(typeof(CalibrationFilesStatusDto))]
 [JsonSerializable(typeof(CalibrationFilesStatusResponseDto))]
 [JsonSerializable(typeof(GuiderConnectRequestDto))]

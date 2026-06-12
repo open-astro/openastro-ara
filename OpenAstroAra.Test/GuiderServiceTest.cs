@@ -138,6 +138,24 @@ namespace OpenAstroAra.Test {
             Assert.That(await svc.GetCalibrationFilesStatusAsync(CancellationToken.None), Is.Null);
         }
 
+        // ── §63.6 guider-e-4c-b-2: defect-map build dispatch (mirrors the dark-library dispatch) ──
+
+        [Test]
+        public void BuildDefectMapDarksAsync_when_not_connected_throws_InvalidOperation() {
+            using var svc = NewService();
+            Assert.Throws<InvalidOperationException>(
+                () => { _ = svc.BuildDefectMapDarksAsync(new BuildDefectMapDarksRequestDto(), null, CancellationToken.None); });
+        }
+
+        [Test]
+        public void BuildDefectMapDarksAsync_validates_before_the_connection_check() {
+            using var svc = NewService();
+            Assert.Throws<ArgumentOutOfRangeException>(
+                () => { _ = svc.BuildDefectMapDarksAsync(new BuildDefectMapDarksRequestDto(FrameCount: 0), null, CancellationToken.None); });
+            Assert.Throws<ArgumentOutOfRangeException>(
+                () => { _ = svc.BuildDefectMapDarksAsync(new BuildDefectMapDarksRequestDto(ExposureMs: 0), null, CancellationToken.None); });
+        }
+
         // The concurrent-build gate sits behind RequireConnectedGuider (needs a live daemon), so its decision is
         // factored into a pure helper that's tested here directly — the 409 / idempotent-202 / start branches.
         [Test]

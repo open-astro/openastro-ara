@@ -452,7 +452,13 @@ the shared daemon-limit constants to `Calibration*` names and extracted a shared
 both the dark-library + defect-map builders) to keep it DRY. +5 tests. (`get_calibration_files_status` already
 covers the defect-map status fields from e-4b-1.)
 
-**e-4c-b-2 (service + endpoint) — remaining:** a `GuiderService` 202-Accepted op + REST endpoint for the defect-map
-build (mirroring the dark-library e-4b-2 op: concurrent-build guard, idempotency, WS `guider.defect_map.started/
-complete/failed`) + a `set_defect_map_enabled` toggle. Can ship server-side independent of the wizard's optional
-"Also build defect map" affordance.
+**Shipped:** e-4c-b-2 — `GuiderService.BuildDefectMapDarksAsync` (202-Accepted background op) + `POST
+/equipment/guider/defectmap/build` (extracted handler → 400 on bad request / 409 disconnected-or-busy). Generalized
+the e-4b-2 build machinery: a **single shared calibration-build gate** (`_calibrationBuildInProgress` — darks and
+defect-map can't run at once on one camera) + a shared `EmitCalibrationEventAsync`; WS `guider.defect_map.started/
+complete/failed`. +6 tests (service validation/connection + endpoint 202/400/409). `GET …/darklibrary/status`
+already covers defect-map status.
+
+**e-4c remaining (deferred):** the `set_defect_map_enabled` / `set_dark_library_enabled` toggles (neither is wired
+today — no enable/disable endpoint for either calibration artifact yet) and the client "Also build defect map"
+affordance (gated on the same WS client + dark-library UI as e-4b-3).

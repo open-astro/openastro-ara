@@ -284,6 +284,15 @@ public sealed record BuildDarkLibraryRequestDto(
     string? Notes = null,
     bool LoadAfter = true);
 
+/// <summary>Request to build a defect (bad-pixel) map for the active guider profile. All fields optional with
+/// daemon-aligned defaults; bounds are validated server-side before the build is dispatched (frame_count 1..50,
+/// exposure 1..600000 ms).</summary>
+public sealed record BuildDefectMapDarksRequestDto(
+    int ExposureMs = 3000,
+    int FrameCount = 10,
+    string? Notes = null,
+    bool LoadAfter = true);
+
 /// <summary>The status read's envelope: <c>Connected</c> distinguishes "guider not connected" (Status null)
 /// from "connected, here's the status" — so a client polling to drive the "Build dark library" affordance never
 /// has to read a 404 as a missing route. Always returned with 200.</summary>

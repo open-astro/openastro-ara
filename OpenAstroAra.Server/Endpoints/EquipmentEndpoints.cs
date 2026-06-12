@@ -210,6 +210,12 @@ public static class EquipmentEndpoints {
             var dto = await svc.GetCalibrationFilesStatusAsync(ct);
             return Results.Ok(new CalibrationFilesStatusResponseDto(Connected: dto is not null, Status: dto));
         });
+        // §63.6 defect map: build (202, long-running; WS guider.defect_map.started/complete/failed). Shares the
+        // single calibration-build gate with the dark-library build; the status read above already covers the
+        // defect-map fields, so there's no separate defect-map status endpoint.
+        guider.MapPost("/defectmap/build", async ([FromBody] BuildDefectMapDarksRequestDto request,
+                [FromHeader(Name = "Idempotency-Key")] string? key, IGuiderService svc, CancellationToken ct) =>
+            await BuildDefectMapDarksAsync(request, key, svc, ct));
 
         // ─── Polar Alignment ───
         var polar = equipment.MapGroup("/polaralign");
@@ -235,6 +241,19 @@ public static class EquipmentEndpoints {
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status400BadRequest);
         } catch (System.InvalidOperationException ex) {
             // Guider not connected — can't accept a build it can't run.
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
+        }
+    }
+
+    // §63.6 defect-map twin of BuildDarkLibraryAsync — same validation/connection error mapping (400 / 409).
+    // The 409 also covers "a calibration build is already in progress" (the shared single-build gate).
+    public static async Task<IResult> BuildDefectMapDarksAsync(
+            BuildDefectMapDarksRequestDto request, string? idempotencyKey, IGuiderService svc, CancellationToken ct) {
+        try {
+            return Results.Accepted(value: await svc.BuildDefectMapDarksAsync(request, idempotencyKey, ct));
+        } catch (System.ArgumentException ex) {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status400BadRequest);
+        } catch (System.InvalidOperationException ex) {
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
         }
     }

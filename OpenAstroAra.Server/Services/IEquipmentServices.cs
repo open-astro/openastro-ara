@@ -119,6 +119,11 @@ public interface IGuiderService {
     /// disconnected guider before accepting.</summary>
     Task<OperationAcceptedDto> BuildDarkLibraryAsync(BuildDarkLibraryRequestDto request, string? idempotencyKey, CancellationToken ct);
 
+    /// <summary>§63.6 — dispatch a defect-map (bad-pixel) build (202-Accepted; shares the single calibration-build
+    /// gate with the dark-library build). Validates synchronously; throws on a bad request or a disconnected
+    /// guider before accepting.</summary>
+    Task<OperationAcceptedDto> BuildDefectMapDarksAsync(BuildDefectMapDarksRequestDto request, string? idempotencyKey, CancellationToken ct);
+
     /// <summary>§63.6 — read the guider's calibration-files status. Returns null when no guider is connected.</summary>
     Task<CalibrationFilesStatusDto?> GetCalibrationFilesStatusAsync(CancellationToken ct);
 }
