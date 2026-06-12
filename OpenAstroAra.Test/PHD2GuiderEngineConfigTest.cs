@@ -77,17 +77,16 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void Build_omits_aggressiveness_when_zero_but_still_pushes_minmove() {
-            // An all-defaults-zero profile (aggressiveness 0) must NOT push aggressiveness=0 (that would
-            // disable PHD2 corrections); minMove=0 is a valid value and is still pushed.
+        public void Build_skips_every_zeroed_numeric_pushing_only_dec_mode() {
+            // An all-zero profile must push none of the numeric params — pushing 0 would overwrite PHD2's own
+            // values harmfully (aggressiveness 0 disables guiding, minMove 0 chases noise). Only dec-mode goes.
             var msgs = PHD2Guider.BuildGuiderEngineConfigMessages(
                 Settings(focal: 0, pixel: 0, ra: 0, dec: 0, minMove: 0, mode: "auto"));
 
-            var algo = msgs.OfType<Phd2SetAlgoParam>().ToList();
-            Assert.That(algo.Any(a => a.Parameters!.Name == "aggressiveness"), Is.False);
-            var minMoves = algo.Where(a => a.Parameters!.Name == "minMove").ToList();
-            Assert.That(minMoves.Count, Is.EqualTo(2));
-            Assert.That(minMoves.All(a => a.Parameters!.Value == 0.0), Is.True);
+            Assert.That(msgs.OfType<Phd2SetProfileSetup>(), Is.Empty);
+            Assert.That(msgs.OfType<Phd2SetAlgoParam>(), Is.Empty);
+            var decMode = msgs.OfType<Phd2SetDecGuideMode>().Single();
+            Assert.That(decMode.Parameters!.Mode, Is.EqualTo("Auto"));
         }
 
         [Test]

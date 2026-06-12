@@ -66,7 +66,9 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 try {
                     var resp = await SendMessage(msg);
                     if (resp?.error != null) {
-                        Logger.Warning($"PHD2 §63.5 push - {msg.Method} rejected: {resp.error}");
+                        // SendMessage synthesizes an error on socket failure too (code -1), so this covers both
+                        // a true PHD2 rejection and a transport failure — "not applied" reads correctly for both.
+                        Logger.Warning($"PHD2 §63.5 push - {msg.Method} not applied: {resp.error}");
                     }
                 } catch (OperationCanceledException) {
                     throw; // a cancelled Connect must stop the push, not swallow it as a per-message failure
@@ -96,19 +98,20 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 messages.Add(new Phd2SetProfileSetup { Parameters = setup });
             }
 
-            // Aggressiveness 0 effectively disables corrections, so treat it as "unset" (like focal/pixel) and
-            // don't push it — leave PHD2's own value rather than zeroing the guiding. (Profiles default to 0.7,
-            // so this only skips an explicit/leaked 0.)
+            // Every numeric param treats 0 as "unset" and is skipped: pushing 0 would overwrite PHD2's own
+            // sensible value with a harmful one — aggressiveness 0 disables corrections, minMove 0 makes the
+            // mount chase noise (PHD2 defaults ~0.2px). Profiles default to non-zero (0.7 / 0.15), so this only
+            // skips an explicit/leaked 0, leaving PHD2's value in that edge case.
             if (guider.RAAggressiveness > 0) {
                 messages.Add(AlgoParam("ra", "aggressiveness", guider.RAAggressiveness));
             }
             if (guider.DecAggressiveness > 0) {
                 messages.Add(AlgoParam("dec", "aggressiveness", guider.DecAggressiveness));
             }
-            // minMove is always pushed (unlike aggressiveness/focal/pixel): 0 is a valid minimum-move
-            // ("correct on any non-zero error"), so it's a real setting to send, not an "unset" sentinel.
-            messages.Add(AlgoParam("ra", "minMove", guider.MinimumMove));
-            messages.Add(AlgoParam("dec", "minMove", guider.MinimumMove));
+            if (guider.MinimumMove > 0) {
+                messages.Add(AlgoParam("ra", "minMove", guider.MinimumMove));
+                messages.Add(AlgoParam("dec", "minMove", guider.MinimumMove));
+            }
 
             messages.Add(new Phd2SetDecGuideMode { Parameters = new() { Mode = MapDecGuideMode(guider.DecGuideMode) } });
             return messages;
