@@ -107,6 +107,15 @@ void main() {
       expect(snap.level, StatusLevel.error);
     });
 
+    test('a clear with no event_type removes nothing (unidentifiable target)', () {
+      final acc = DiagnosticsAccumulator();
+      acc.apply(_ev(DiagnosticsWsEvents.issueDetected, {'severity': 'red', 'description': 'a'}, seq: 1));
+      final snap = acc.apply(_ev(DiagnosticsWsEvents.cleared, {}, seq: 2));
+      expect(snap.level, StatusLevel.error, reason: 'the unidentifiable open issue is still open');
+      expect(snap.label, 'Diagnostics: 1 issue — critical');
+      expect(snap.events.first.message, 'Cleared');
+    });
+
     test('non-diagnostics events are ignored', () {
       final acc = DiagnosticsAccumulator();
       final snap = acc.apply(_ev('guider.dark_library.complete', {'profile_id': 'p1'}));

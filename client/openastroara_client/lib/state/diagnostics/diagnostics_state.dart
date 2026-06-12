@@ -121,12 +121,17 @@ class DiagnosticsAccumulator {
   }
 
   void _applyCleared(WsEvent event) {
-    final eventType = _string(event.payload['event_type']) ?? 'unknown';
-    _open.remove(eventType);
+    final eventType = _string(event.payload['event_type']);
+    // A clear with no event_type can't identify which open issue to drop, so it
+    // removes nothing — symmetric with _applyIssue giving each event_type-less
+    // issue a seq-unique key: an unidentifiable issue is, by design, unclearable.
+    if (eventType != null) {
+      _open.remove(eventType);
+    }
     _append(DiagnosticEvent(
       timestamp: event.ts,
       level: StatusLevel.connected,
-      source: eventType,
+      source: eventType ?? 'unknown',
       message: 'Cleared',
     ));
   }
@@ -160,7 +165,12 @@ class DiagnosticsAccumulator {
         // Worst open issue had an unknown/absent severity — still name it so the
         // a11y text isn't blank for exactly the malformed-payload case.
         return 'Diagnostics: $n issue$plural — info';
-      default:
+      case StatusLevel.connected:
+        // All open issues are green-severity — not warnings, so no suffix.
+        return 'Diagnostics: $n open issue$plural';
+      case StatusLevel.disconnected:
+        // Not reachable from _overallLevel (it never yields disconnected), but
+        // the switch is exhaustive over StatusLevel.
         return 'Diagnostics: $n open issue$plural';
     }
   }
@@ -199,6 +209,10 @@ class DiagnosticsNotifier extends Notifier<DiagnosticsSnapshot> {
       );
     }
     final acc = DiagnosticsAccumulator();
+    // The listener mutates `acc` and assigns `state`. This is safe because
+    // wsEventsProvider is a StreamProvider — it delivers asynchronously (next
+    // microtask), never synchronously inside this build(), so `state` is always
+    // assigned after build() has returned the initial snapshot below.
     // TODO: no replay on reconnect — events the server emits while the socket is
     // down (WsEventStream auto-reconnects, so the stream stays non-null) are
     // lost, so the pill can read stale-nominal until the next live event.
