@@ -13,6 +13,7 @@
 #endregion "copyright"
 
 using OpenAstroAra.Core.Enums;
+using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Equipment.Interfaces;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.PlateSolving.Interfaces;
@@ -71,8 +72,16 @@ namespace OpenAstroAra.PlateSolving {
         }
 
         public static IPlateSolver GetBlindSolver(IPlateSolveSettings plateSolveSettings) {
+            if (plateSolveSettings.BlindSolverType == BlindSolver.AstrometryNet) {
+                // The cloud astrometry.net blind solver was removed per §18.I (ARA ships local solvers only).
+                // A profile still carrying that setting previously mapped to PlateSolver.AstrometryNet and then
+                // fell through GetPlateSolver's default to ASTAP — silently. Substitute ASTAP explicitly and log
+                // it so the resolved backend isn't a surprise during a blind solve.
+                Logger.Info("Plate solve - blind solver is configured as AstrometryNet, which was removed (§18.I local-solvers-only). Using ASTAP for blind solving instead.");
+                return GetPlateSolver(plateSolveSettings, PlateSolver.ASTAP);
+            }
+
             var type = plateSolveSettings.BlindSolverType switch {
-                BlindSolver.AstrometryNet => PlateSolver.AstrometryNet,
                 BlindSolver.LOCAL => PlateSolver.LOCAL,
                 BlindSolver.PLATESOLVE3 => PlateSolver.PLATESOLVE3,
                 BlindSolver.ASPS => PlateSolver.ASPS,
