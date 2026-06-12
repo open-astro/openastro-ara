@@ -175,15 +175,15 @@ class _ImagingHeader extends ConsumerWidget {
           const Spacer(),
           // §51 Health Indicator — always visible per the playbook's
           // "always-visible" requirement. Sourced from
-          // diagnosticsStateProvider (stub today; real WS event stream
-          // in 12c.3).
+          // diagnosticsStateProvider, rolled up from the live `diagnostics.*`
+          // WS event stream (WS slice 5).
           Consumer(builder: (context, ref, _) {
             final diag = ref.watch(diagnosticsStateProvider);
             return StatusIndicator(
               level: diag.level,
               label: diag.label,
-              // Tap wires up in Phase 12c.3 (opens §51 expanded view).
-              // null here so the affordance isn't misleading until then.
+              // Tap-to-expand the §51 panel is a later follow-up; null here so
+              // the affordance isn't misleading until then.
               onTap: null,
             );
           }),
