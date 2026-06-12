@@ -143,7 +143,7 @@ namespace OpenAstroAra.PlateSolving {
                             var domeSyncMeasurement = new Measurement("DomeSync").Start();
                             progress?.Report(new ApplicationStatus() { Status = Loc.Instance["LblSynchronizingDome"] });
                             Logger.Info($"Centering Solver - Synchronize dome to scope since dome following is not enabled");
-                            if (!await domeFollower.TriggerTelescopeSync()) {
+                            if (!await domeFollower.TriggerTelescopeSync(ct)) {
                                 Notifier.ShowWarning(Loc.Instance["LblDomeSyncFailureDuringCentering"]);
                                 Logger.Warning("Centering Solver - Synchronize dome operation didn't complete successfully. Moving on");
                             }

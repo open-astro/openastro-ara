@@ -45,7 +45,7 @@ public sealed class HeadlessDomeFollower : IDomeFollower {
 
     public Task StopAsync() => Task.CompletedTask;
     public Task Start() => Task.CompletedTask;
-    public Task<bool> TriggerTelescopeSync() => Task.FromResult(false);
+    public Task<bool> TriggerTelescopeSync(CancellationToken cancellationToken) => Task.FromResult(false);
     public Task WaitForDomeSynchronization(CancellationToken cancellationToken) => Task.CompletedTask;
 
     public TopocentricCoordinates GetSynchronizedDomeCoordinates(TelescopeInfo telescopeInfo) =>

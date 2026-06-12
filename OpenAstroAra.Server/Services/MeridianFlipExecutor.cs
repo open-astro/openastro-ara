@@ -237,7 +237,7 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
                 await domeFollower.WaitForDomeSynchronization(token);
             } else {
                 Logger.Info("Meridian Flip - Synchronizing the dome to the scope (following is disabled).");
-                if (!await domeFollower.TriggerTelescopeSync()) {
+                if (!await domeFollower.TriggerTelescopeSync(token)) {
                     Logger.Warning("Meridian Flip - Dome synchronization did not complete successfully. Moving on.");
                 }
             }

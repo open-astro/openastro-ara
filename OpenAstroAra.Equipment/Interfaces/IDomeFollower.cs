@@ -29,7 +29,7 @@ namespace OpenAstroAra.Equipment.Interfaces {
 
         Task Start();
 
-        Task<bool> TriggerTelescopeSync();
+        Task<bool> TriggerTelescopeSync(CancellationToken cancellationToken);
 
         Task WaitForDomeSynchronization(CancellationToken cancellationToken);
 
