@@ -79,15 +79,21 @@ class WsEventStream {
   /// tests and diagnostics; the resume handshake uses it internally.
   int? get lastSeq => _lastSeq;
 
-  /// Open the connection. Idempotent: a second call while already open is a
-  /// no-op.
+  /// Open the connection. Idempotent: a second call while already open — or
+  /// while a reconnect is pending in the backoff window — is a no-op (so it
+  /// can't race the reconnect timer into opening a second, leaked socket).
   void connect() {
-    if (_disposed || _socket != null) return;
+    if (_disposed || _socket != null || _reconnectTimer != null) return;
     _open();
   }
 
   void _open() {
     if (_disposed) return;
+    // Defensive: a direct caller shouldn't be able to double-open alongside a
+    // pending reconnect (the connect() guard already blocks that, but keep the
+    // single-socket invariant local to _open too).
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
     final socket = _connect(_url, const {'X-Ara-WS-Version': wsVersion});
     _socket = socket;
     // On a reconnect (we have a last-seen seq) ask the server to replay what we
@@ -123,6 +129,9 @@ class WsEventStream {
     } on FormatException {
       return; // malformed envelope — skip it rather than kill the stream
     }
+    // seq is monotonically increasing per connection, and the server replays
+    // gap events in ascending order after a resume, so _lastSeq only advances —
+    // tracking the latest is sufficient for the resume token.
     _lastSeq = event.seq;
     if (!_events.isClosed) _events.add(event);
   }

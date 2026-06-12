@@ -109,6 +109,34 @@ void main() {
       await ws.dispose();
     });
 
+    test('connect() during the backoff window does not leak a second socket', () async {
+      final conn = _FakeConnector();
+      final ws = WsEventStream(server, connect: conn.connect, backoff: const [Duration(seconds: 30)]);
+      ws.connect();
+      await conn.legs.first.drop(); // drop → a reconnect is now pending (30s)
+      await pumpEventQueue();
+
+      ws.connect(); // a stray connect during backoff must be a no-op...
+      ws.connect();
+      expect(conn.legs, hasLength(1), reason: 'no extra socket opened while a reconnect is pending');
+      await ws.dispose();
+    });
+
+    test('a malformed timestamp still delivers the event (epoch fallback)', () async {
+      final conn = _FakeConnector();
+      final ws = WsEventStream(server, connect: conn.connect);
+      final received = <({int seq, DateTime ts})>[];
+      ws.events.listen((e) => received.add((seq: e.seq, ts: e.ts)));
+      ws.connect();
+      conn.legs.first.incoming
+          .add(jsonEncode({'type': 'e', 'ts': 'not-a-date', 'seq': 9, 'payload': {}}));
+      await pumpEventQueue();
+      expect(received, hasLength(1), reason: 'a bad ts does not drop an otherwise-valid event');
+      expect(received.first.seq, 9);
+      expect(received.first.ts, DateTime.fromMillisecondsSinceEpoch(0, isUtc: true));
+      await ws.dispose();
+    });
+
     test('first connect sends no resume token', () async {
       final conn = _FakeConnector();
       final ws = WsEventStream(server, connect: conn.connect);

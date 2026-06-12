@@ -35,15 +35,24 @@ class WsEvent {
     if (type is! String || seq is! int) {
       throw FormatException('WsEvent frame missing string "type" / int "seq"', json);
     }
-    final ts = json['ts'];
     return WsEvent(
       type: type,
       seq: seq,
-      ts: ts is String ? DateTime.parse(ts) : DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+      // A missing or unparseable timestamp falls back to the epoch rather than
+      // throwing — ts is cosmetic, so a bad one shouldn't drop an otherwise-valid
+      // event (only a missing type/seq, above, is fatal).
+      ts: _parseTs(json['ts']),
       payload: json['payload'] is Map<String, dynamic>
           ? json['payload'] as Map<String, dynamic>
           : const <String, dynamic>{},
     );
+  }
+
+  static DateTime _parseTs(dynamic ts) {
+    if (ts is String) {
+      return DateTime.tryParse(ts) ?? DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+    }
+    return DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
   }
 
   @override
