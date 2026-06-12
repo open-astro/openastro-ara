@@ -8,6 +8,7 @@ import '../widgets/command_palette.dart';
 import '../widgets/equipment_chip.dart';
 import '../widgets/help_dialog.dart';
 import '../widgets/status_indicator.dart';
+import '../widgets/ws_connection_indicator.dart';
 import 'library/image_library_screen.dart';
 import 'stats/stats_dashboard_screen.dart';
 import 'tabs/framing_tab.dart';
@@ -178,10 +179,7 @@ class _BottomStatusBar extends StatelessWidget {
       child: Row(
         children: [
           const SizedBox(width: 8),
-          const StatusIndicator(
-            level: StatusLevel.disconnected,
-            label: 'Disconnected',
-          ),
+          const WsConnectionIndicator(),
           const Spacer(),
           // Image Library entry (§40). Full-screen route — captured frames
           // grouped by session per 12f.1's in-memory demo; real backend in
