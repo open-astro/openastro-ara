@@ -8,6 +8,7 @@ import '../../state/imaging/last_frame_state.dart';
 import '../../state/imaging/solve_state.dart';
 import '../../state/saved_server_state.dart';
 import '../../theme/ara_colors.dart';
+import '../../util/coord_format.dart';
 
 /// §18.I — plate-solve the last captured frame and show its astrometric
 /// solution (RA / Dec / rotation / scale). Sits under the frame viewer on the
@@ -92,7 +93,8 @@ class SolvePanel extends ConsumerWidget {
           );
         }
         return Text(
-          'RA ${_ra(r.ra)}   Dec ${_dec(r.dec)}   '
+          'RA ${r.ra == null ? '—' : formatRaHms(r.ra!)}   '
+          'Dec ${r.dec == null ? '—' : formatDecDms(r.dec!)}   '
           'Rot ${_deg(r.orientation)}   Scale ${_scale(r.pixelScale)}',
           style: mono,
         );
@@ -100,30 +102,7 @@ class SolvePanel extends ConsumerWidget {
     );
   }
 
-  // RA hours → "HHh MMm SSs".
-  static String _ra(double? hours) {
-    if (hours == null) return '—';
-    final h = hours.floor();
-    final mF = (hours - h) * 60;
-    final m = mF.floor();
-    final s = ((mF - m) * 60).round();
-    return '${h}h ${_two(m)}m ${_two(s)}s';
-  }
-
-  // Dec degrees → "±DD° MM' SS\"".
-  static String _dec(double? deg) {
-    if (deg == null) return '—';
-    final sign = deg < 0 ? '-' : '+';
-    final a = deg.abs();
-    final d = a.floor();
-    final mF = (a - d) * 60;
-    final m = mF.floor();
-    final s = ((mF - m) * 60).round();
-    return '$sign$d° ${_two(m)}\' ${_two(s)}"';
-  }
-
   static String _deg(double? d) => d == null ? '—' : '${d.toStringAsFixed(1)}°';
   static String _scale(double? s) =>
       s == null ? '—' : '${s.toStringAsFixed(2)}"/px';
-  static String _two(int v) => v.toString().padLeft(2, '0');
 }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/plate_solve_result.dart';
@@ -9,16 +11,16 @@ import '../../services/plate_solve_api.dart';
 /// `AsyncData(null)` is the idle state (nothing solved yet); `AsyncLoading`
 /// while ASTAP runs; `AsyncData(result)` with the solution (which may itself be
 /// `success: false` = solver ran, no solution); `AsyncError` for a transport /
-/// configuration failure.
-class SolveResult extends Notifier<AsyncValue<PlateSolveResult?>> {
+/// configuration failure. Uses [AsyncNotifier] for consistency with the rest of
+/// the app's async state.
+class SolveResult extends AsyncNotifier<PlateSolveResult?> {
   @override
-  AsyncValue<PlateSolveResult?> build() => const AsyncData(null);
+  FutureOr<PlateSolveResult?> build() => null;
 
   Future<void> solve(AraServer server, String frameId) async {
     state = const AsyncLoading();
     try {
-      final result = await PlateSolveApi(server).solve(frameId);
-      state = AsyncData(result);
+      state = AsyncData(await PlateSolveApi(server).solve(frameId));
     } catch (e, st) {
       state = AsyncError(e, st);
     }
@@ -29,5 +31,4 @@ class SolveResult extends Notifier<AsyncValue<PlateSolveResult?>> {
 }
 
 final solveResultProvider =
-    NotifierProvider<SolveResult, AsyncValue<PlateSolveResult?>>(
-        SolveResult.new);
+    AsyncNotifierProvider<SolveResult, PlateSolveResult?>(SolveResult.new);
