@@ -120,22 +120,24 @@ void main() {
       expect(snap.label, 'Diagnostics: 1 issue — info');
     });
 
-    test('two event_type-less issues do not collide on one key', () {
+    test('event_type-less issues are logged but not tracked as open (no unbounded growth)', () {
       final acc = DiagnosticsAccumulator();
       acc.apply(_ev(DiagnosticsWsEvents.issueDetected, {'severity': 'yellow', 'description': 'a'}, seq: 1));
       final snap = acc.apply(_ev(DiagnosticsWsEvents.issueDetected, {'severity': 'red', 'description': 'b'}, seq: 2))!;
-      expect(snap.label, 'Diagnostics: 2 issues — critical',
-          reason: 'distinct malformed events stay distinct open issues');
-      expect(snap.level, StatusLevel.error);
+      expect(snap.label, 'Diagnostics: nominal',
+          reason: 'unidentifiable (unclearable) issues do not enter the open roll-up');
+      expect(snap.level, StatusLevel.connected);
+      expect(snap.events.map((e) => e.message), containsAll(<String>['a', 'b']),
+          reason: 'they are still visible in the bounded log');
     });
 
-    test('a clear with no event_type removes nothing and is a no-op (null)', () {
+    test('a clear with no event_type is a no-op and leaves open issues intact (null)', () {
       final acc = DiagnosticsAccumulator();
-      acc.apply(_ev(DiagnosticsWsEvents.issueDetected, {'severity': 'red', 'description': 'a'}, seq: 1));
+      acc.apply(_ev(DiagnosticsWsEvents.issueDetected, {'event_type': 'disk.low', 'severity': 'red'}, seq: 1));
       final result = acc.apply(_ev(DiagnosticsWsEvents.cleared, {}, seq: 2));
       expect(result, isNull, reason: 'no removal happened → no state change to publish');
       final snap = acc.snapshot;
-      expect(snap.level, StatusLevel.error, reason: 'the unidentifiable open issue is still open');
+      expect(snap.level, StatusLevel.error, reason: 'disk.low is still open');
       expect(snap.label, 'Diagnostics: 1 issue — critical');
       expect(snap.events.where((e) => e.message == 'Cleared'), isEmpty,
           reason: 'no phantom Cleared entry for a non-existent issue');
@@ -159,6 +161,16 @@ void main() {
       expect(acc.apply(_ev('guider.dark_library.complete', {'profile_id': 'p1'})), isNull);
       expect(acc.snapshot.events, isEmpty);
       expect(acc.snapshot.level, StatusLevel.connected);
+    });
+
+    test('a flood of malformed (event_type-less) issues does not grow the open roll-up', () {
+      final acc = DiagnosticsAccumulator(maxEvents: 5);
+      for (var i = 0; i < 200; i++) {
+        acc.apply(_ev(DiagnosticsWsEvents.issueDetected, {'severity': 'red', 'description': 'm$i'}, seq: i));
+      }
+      final snap = acc.snapshot;
+      expect(snap.label, 'Diagnostics: nominal', reason: 'none are tracked as open');
+      expect(snap.events, hasLength(5), reason: 'log stays bounded');
     });
 
     test('the log is bounded to maxEvents, most-recent first', () {

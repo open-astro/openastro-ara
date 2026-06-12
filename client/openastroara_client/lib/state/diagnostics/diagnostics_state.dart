@@ -104,12 +104,10 @@ class DiagnosticsAccumulator {
 
   void _applyIssue(WsEvent event) {
     final p = event.payload;
-    // event_type is the open-issue map key. A conformant server always sends it;
-    // fall back to a seq-unique token so two distinct malformed events don't
-    // collide on one key (which would under-count open issues and drop a severity).
-    final eventType = _string(p['event_type']) ?? 'unknown_${event.seq}';
+    final eventType = _string(p['event_type']);
+    final source = eventType ?? 'unknown';
     final level = severityToLevel(_string(p['severity']));
-    final description = _string(p['description']) ?? eventType;
+    final description = _string(p['description']) ?? source;
     final autoTaken = p['auto_action_taken'] == true;
     final autoDesc = _string(p['auto_action_description']);
     final recommended = _string(p['recommended_action']);
@@ -120,11 +118,17 @@ class DiagnosticsAccumulator {
         : recommended != null
             ? '$description — $recommended'
             : description;
-    _open[eventType] = level;
+    // Only identifiable issues enter the open roll-up. An event_type-less issue
+    // is unclearable (see _applyCleared), so tracking it would permanently
+    // inflate the count and grow _open without bound under a misbehaving server
+    // flooding malformed frames — log it (the _log is bounded) but don't count it.
+    if (eventType != null) {
+      _open[eventType] = level;
+    }
     _append(DiagnosticEvent(
       timestamp: event.ts,
       level: level,
-      source: eventType,
+      source: source,
       message: message,
     ));
   }
