@@ -1,5 +1,6 @@
 import 'dart:collection';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/ws_event.dart';
@@ -139,9 +140,14 @@ class DiagnosticsAccumulator {
       _open[eventType] = level;
       // Defence-in-depth: real daemons emit a small, fixed vocabulary of types,
       // but cap _open too so a server flooding many *distinct* valid types can't
-      // grow it without bound. Evict the least-recently-seen key (the head).
+      // grow it without bound. Evict the least-recently-seen key (the head), and
+      // trace it — this is unreachable under a conformant server, so the cap
+      // should never be silent if it ever fires.
       if (_open.length > maxEvents) {
-        _open.remove(_open.keys.first);
+        final evicted = _open.keys.first;
+        _open.remove(evicted);
+        debugPrint('DiagnosticsAccumulator: open-issue cap ($maxEvents) hit — '
+            'evicted least-recently-seen type "$evicted"');
       }
     }
     _append(DiagnosticEvent(
