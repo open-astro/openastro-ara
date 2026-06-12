@@ -77,6 +77,20 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Build_omits_aggressiveness_when_zero_but_still_pushes_minmove() {
+            // An all-defaults-zero profile (aggressiveness 0) must NOT push aggressiveness=0 (that would
+            // disable PHD2 corrections); minMove=0 is a valid value and is still pushed.
+            var msgs = PHD2Guider.BuildGuiderEngineConfigMessages(
+                Settings(focal: 0, pixel: 0, ra: 0, dec: 0, minMove: 0, mode: "auto"));
+
+            var algo = msgs.OfType<Phd2SetAlgoParam>().ToList();
+            Assert.That(algo.Any(a => a.Parameters!.Name == "aggressiveness"), Is.False);
+            var minMoves = algo.Where(a => a.Parameters!.Name == "minMove").ToList();
+            Assert.That(minMoves.Count, Is.EqualTo(2));
+            Assert.That(minMoves.All(a => a.Parameters!.Value == 0.0), Is.True);
+        }
+
+        [Test]
         public void Build_pushes_only_pixel_size_when_focal_is_unset() {
             var setup = PHD2Guider.BuildGuiderEngineConfigMessages(Settings(focal: 0, pixel: 3.8))
                 .OfType<Phd2SetProfileSetup>().Single();

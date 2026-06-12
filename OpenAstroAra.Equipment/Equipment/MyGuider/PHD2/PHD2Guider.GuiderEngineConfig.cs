@@ -49,7 +49,16 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             // dec-mode pushes apply at runtime and we leave an already-connected (possibly calibrated)
             // session alone.
             if (messages.OfType<Phd2SetProfileSetup>().Any()) {
-                await DisconnectPHD2Equipment();
+                // Best-effort like the sends: a socket drop here must not propagate into Connect's catch
+                // (user-visible error + aborted connect). Log + proceed — set_profile_setup will then just fail
+                // its own best-effort send if the equipment is still connected.
+                try {
+                    await DisconnectPHD2Equipment();
+                } catch (OperationCanceledException) {
+                    throw;
+                } catch (Exception ex) {
+                    Logger.Warning($"PHD2 §63.5 push - equipment disconnect for set_profile_setup failed: {ex.Message}");
+                }
             }
 
             foreach (var msg in messages) {
@@ -87,9 +96,16 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 messages.Add(new Phd2SetProfileSetup { Parameters = setup });
             }
 
-            messages.Add(AlgoParam("ra", "aggressiveness", guider.RAAggressiveness));
-            messages.Add(AlgoParam("dec", "aggressiveness", guider.DecAggressiveness));
-            // minMove is always pushed (unlike focal/pixel which guard on > 0): 0 is a valid minimum-move
+            // Aggressiveness 0 effectively disables corrections, so treat it as "unset" (like focal/pixel) and
+            // don't push it — leave PHD2's own value rather than zeroing the guiding. (Profiles default to 0.7,
+            // so this only skips an explicit/leaked 0.)
+            if (guider.RAAggressiveness > 0) {
+                messages.Add(AlgoParam("ra", "aggressiveness", guider.RAAggressiveness));
+            }
+            if (guider.DecAggressiveness > 0) {
+                messages.Add(AlgoParam("dec", "aggressiveness", guider.DecAggressiveness));
+            }
+            // minMove is always pushed (unlike aggressiveness/focal/pixel): 0 is a valid minimum-move
             // ("correct on any non-zero error"), so it's a real setting to send, not an "unset" sentinel.
             messages.Add(AlgoParam("ra", "minMove", guider.MinimumMove));
             messages.Add(AlgoParam("dec", "minMove", guider.MinimumMove));
