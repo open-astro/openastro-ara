@@ -204,8 +204,11 @@ public static class EquipmentEndpoints {
         guider.MapPost("/darklibrary/build", async ([FromBody] BuildDarkLibraryRequestDto request,
                 [FromHeader(Name = "Idempotency-Key")] string? key, IGuiderService svc, CancellationToken ct) =>
             await BuildDarkLibraryAsync(request, key, svc, ct));
+        // Always 200 with a {connected, status} envelope so a client polling to drive the build affordance can
+        // tell "guider not connected" (connected:false) apart from a missing route (404).
         guider.MapGet("/darklibrary/status", async (IGuiderService svc, CancellationToken ct) => {
-            var dto = await svc.GetCalibrationFilesStatusAsync(ct); return dto is null ? Results.NotFound() : Results.Ok(dto);
+            var dto = await svc.GetCalibrationFilesStatusAsync(ct);
+            return Results.Ok(new CalibrationFilesStatusResponseDto(Connected: dto is not null, Status: dto));
         });
 
         // ─── Polar Alignment ───

@@ -53,18 +53,35 @@ public sealed partial class GuiderService {
         // guide ops; do NOT accept a 202 we can't honor.
         var guider = RequireConnectedGuider();
         lock (_gate) {
-            if (_darkLibraryBuildInProgress) {
-                // Idempotent retry of the in-flight build → re-accept; a different build → 409.
-                if (idempotencyKey is not null && idempotencyKey == _darkLibraryBuildKey) {
+            switch (ResolveBuildAdmission(_darkLibraryBuildInProgress, _darkLibraryBuildKey, idempotencyKey)) {
+                case BuildAdmission.IdempotentAccept:
+                    // Retry of the in-flight build with the same key → re-accept (§60.5 at-least-once).
                     return Task.FromResult(Accepted("guider.dark_library.build", idempotencyKey));
-                }
-                throw new InvalidOperationException("a dark-library build is already in progress");
+                case BuildAdmission.Reject:
+                    throw new InvalidOperationException("a dark-library build is already in progress");
+                default: // Start
+                    _darkLibraryBuildInProgress = true;
+                    _darkLibraryBuildKey = idempotencyKey;
+                    break;
             }
-            _darkLibraryBuildInProgress = true;
-            _darkLibraryBuildKey = idempotencyKey;
         }
         _ = Task.Run(() => BuildDarkLibraryInBackground(guider, rpcRequest), CancellationToken.None);
         return Task.FromResult(Accepted("guider.dark_library.build", idempotencyKey));
+    }
+
+    internal enum BuildAdmission { Start, IdempotentAccept, Reject }
+
+    /// <summary>Pure decision for the concurrent-build gate (so the guard logic is unit-testable without a live
+    /// guider): no build in flight → Start; a build in flight with the same non-null key → IdempotentAccept;
+    /// any other build while one is in flight → Reject (409). A null request key never matches an in-flight key.</summary>
+    internal static BuildAdmission ResolveBuildAdmission(bool inProgress, string? inFlightKey, string? requestKey) {
+        if (!inProgress) {
+            return BuildAdmission.Start;
+        }
+        if (requestKey is not null && requestKey == inFlightKey) {
+            return BuildAdmission.IdempotentAccept;
+        }
+        return BuildAdmission.Reject;
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",

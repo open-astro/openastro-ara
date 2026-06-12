@@ -138,6 +138,29 @@ namespace OpenAstroAra.Test {
             Assert.That(await svc.GetCalibrationFilesStatusAsync(CancellationToken.None), Is.Null);
         }
 
+        // The concurrent-build gate sits behind RequireConnectedGuider (needs a live daemon), so its decision is
+        // factored into a pure helper that's tested here directly — the 409 / idempotent-202 / start branches.
+        [Test]
+        public void ResolveBuildAdmission_starts_when_no_build_in_flight() {
+            Assert.That(GuiderService.ResolveBuildAdmission(inProgress: false, inFlightKey: "k1", requestKey: "k2"),
+                Is.EqualTo(GuiderService.BuildAdmission.Start));
+        }
+
+        [Test]
+        public void ResolveBuildAdmission_idempotent_accepts_same_non_null_key() {
+            Assert.That(GuiderService.ResolveBuildAdmission(inProgress: true, inFlightKey: "k1", requestKey: "k1"),
+                Is.EqualTo(GuiderService.BuildAdmission.IdempotentAccept));
+        }
+
+        [Test]
+        public void ResolveBuildAdmission_rejects_a_different_or_keyless_concurrent_build() {
+            Assert.That(GuiderService.ResolveBuildAdmission(inProgress: true, inFlightKey: "k1", requestKey: "k2"),
+                Is.EqualTo(GuiderService.BuildAdmission.Reject));
+            // A null request key must never collapse onto an in-flight null key as "idempotent".
+            Assert.That(GuiderService.ResolveBuildAdmission(inProgress: true, inFlightKey: null, requestKey: null),
+                Is.EqualTo(GuiderService.BuildAdmission.Reject));
+        }
+
         [Test]
         public void Ops_after_Dispose_throw_ObjectDisposed() {
             var svc = NewService();

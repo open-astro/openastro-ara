@@ -284,6 +284,13 @@ public sealed record BuildDarkLibraryRequestDto(
     string? Notes = null,
     bool LoadAfter = true);
 
+/// <summary>The status read's envelope: <c>Connected</c> distinguishes "guider not connected" (Status null)
+/// from "connected, here's the status" — so a client polling to drive the "Build dark library" affordance never
+/// has to read a 404 as a missing route. Always returned with 200.</summary>
+public sealed record CalibrationFilesStatusResponseDto(
+    bool Connected,
+    CalibrationFilesStatusDto? Status);
+
 /// <summary>The guider's calibration-files status: which dark-library / defect-map files exist for the active
 /// profile, whether they're loaded/compatible, the auto-load flags, and (when a camera is connected and darks
 /// are loaded) the loaded-dark count + exposure range.</summary>
