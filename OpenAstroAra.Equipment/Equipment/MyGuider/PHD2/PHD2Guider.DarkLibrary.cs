@@ -91,6 +91,9 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         /// is bounded by a fixed socket timeout and takes no cancellation token, so cancelling after the build
         /// starts has NO effect — the call runs to completion or the ~2 h timeout. The e-4b-2 service layer must
         /// NOT wire a shutdown/timeout token here expecting it to abort an in-flight build.
+        /// The <c>Connected</c> guard is not synchronized with the send, so a disconnect in the race window
+        /// surfaces as a transport exception rather than <see cref="InvalidOperationException"/> — callers
+        /// should expect either.
         /// </remarks>
         public async Task<Phd2BuildDarkLibraryResult> BuildDarkLibraryAsync(
             int frameCount, int? minExposureMs, int? maxExposureMs, bool clearExisting, string? notes, bool loadAfter,
@@ -137,6 +140,12 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
 
     /// <summary>A guider JSON-RPC call returned an error (or an empty result). Carries the daemon's method,
     /// error code, and message so the service layer can map it to a client-visible failure.</summary>
+    // CA1032 (standard exception ctors) is suppressed rather than satisfied with boilerplate: a GuiderRpcException
+    // is meaningless without its RPC context (method + code), so the parameterless / message-only / inner-only
+    // ctors would only manufacture instances with empty RpcMethod and Code 0. Legacy binary serialization (the
+    // other reason CA1032 wants them) is obsolete in .NET 10, so the single context-carrying ctor is the whole API.
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1032:Implement standard exception constructors",
+        Justification = "This exception is meaningless without its RPC method + code; the standard ctors would only produce context-less instances. Binary serialization is obsolete in .NET 10.")]
     public sealed class GuiderRpcException : Exception {
         public string RpcMethod { get; }
         public int Code { get; }
@@ -146,15 +155,5 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             RpcMethod = rpcMethod;
             Code = code;
         }
-
-        // The three standard ctors below exist only to satisfy CA1032 (and rare serialization). They carry no
-        // RPC context, so RpcMethod/Code stay at their defaults ("" / 0) and are NOT meaningful when thrown this
-        // way — inspect them only on instances built via the 3-arg ctor above (the only one used internally).
-        public GuiderRpcException() { RpcMethod = string.Empty; }
-
-        public GuiderRpcException(string message) : base(message) { RpcMethod = string.Empty; }
-
-        public GuiderRpcException(string message, Exception innerException)
-            : base(message, innerException) { RpcMethod = string.Empty; }
     }
 }

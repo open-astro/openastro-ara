@@ -420,7 +420,8 @@ def true), `set_dark_library_enabled {enabled}`, `get_calibration_files_status` 
 and **send-site validation** (`BuildDarkLibraryRequest`: reject `FrameCount` outside 1..50, reject exposure
 bounds outside 1..600000 ms, reject `min > max`) → clear error before the socket, not the daemon's opaque
 `-32602`. `GuiderRpcException` carries the failing method/code for the service layer. +13 tests (validation +
-response deserialization). Blocking build uses a 30-min `SendMessage` timeout.
+response deserialization). Blocking build uses a 2-h `SendMessage` timeout (worst realistic build
+50 frames × ~5 exposures × long exposure ≈ 83 min, so 30 min would time out mid-capture).
 
 **SCOPE CORRECTION (e-4b-1 finding):** `build_dark_library` is a **blocking RPC with NO progress events** — the
 guider event stream (GuideStep/Settling/SettleDone/StarLost/Alert/… per §63.2) carries no dark-library-progress
