@@ -145,8 +145,13 @@ class WsEventStream {
   }
 
   void _onClosed() {
-    unawaited(_sub?.cancel()); // sync callback can't await; cancel is fire-and-forget here (awaited in dispose)
+    // Fire-and-forget cancel: this is a sync onDone/onError callback (can't
+    // await), and the stream that triggered it has already closed — so there's
+    // nothing left to deliver. dispose() does NOT await this one (it short-
+    // circuits on the null _sub below); it only awaits a cancel of a live sub.
+    final sub = _sub;
     _sub = null;
+    if (sub != null) unawaited(sub.cancel());
     _socket = null;
     if (_disposed) return;
     final i = _reconnectAttempt < _backoff.length ? _reconnectAttempt : _backoff.length - 1;
@@ -159,6 +164,8 @@ class WsEventStream {
   Future<void> dispose() async {
     _disposed = true;
     _reconnectTimer?.cancel();
+    _reconnectTimer = null;
+    _reconnectAttempt = 0;
     await _sub?.cancel();
     await _socket?.close();
     await _events.close();
