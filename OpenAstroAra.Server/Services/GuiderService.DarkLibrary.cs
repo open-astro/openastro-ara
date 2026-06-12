@@ -39,10 +39,32 @@ public sealed partial class GuiderService {
     // A calibration build (dark library OR defect-map darks) is a single blocking RPC on the daemon, so two
     // concurrent builds are undefined behavior there (and would emit ambiguous paired started/complete events) —
     // this serializes ALL calibration builds under _gate. A second build with the SAME non-null idempotency key
-    // as the in-flight one is an idempotent no-op (202, the §60.5 at-least-once contract); any other concurrent
-    // build (dark or defect-map) is rejected with 409.
+    // AND the same operation type as the in-flight one is an idempotent no-op (202, the §60.5 at-least-once
+    // contract); any other concurrent build (dark or defect-map) is rejected with 409. The operation type is
+    // tracked too so a same-key request to the *other* build endpoint doesn't falsely re-accept (it would emit
+    // the in-flight op's WS events, never the requested op's — a client would wait forever).
     private bool _calibrationBuildInProgress;
     private string? _calibrationBuildKey;
+    private string? _calibrationBuildOp;
+
+    private void ReleaseCalibrationGateLocked() {
+        _calibrationBuildInProgress = false;
+        _calibrationBuildKey = null;
+        _calibrationBuildOp = null;
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "If Task.Run fails to even queue the work (e.g. OutOfMemoryException creating a thread), the background task's finally — which releases the calibration-build gate — never runs, so the gate would stick true forever (every later build → 409). Release it here and rethrow so the failure still surfaces; the catch is a release-and-rethrow boundary, not a swallow.")]
+    private void DispatchCalibrationBuild(Func<Task> build) {
+        try {
+            _ = Task.Run(build, CancellationToken.None);
+        } catch (Exception) {
+            lock (_gate) {
+                ReleaseCalibrationGateLocked();
+            }
+            throw;
+        }
+    }
 
     public Task<OperationAcceptedDto> BuildDarkLibraryAsync(
             BuildDarkLibraryRequestDto request, string? idempotencyKey, CancellationToken ct) {
@@ -55,33 +77,38 @@ public sealed partial class GuiderService {
         // Reject up front if no guider is connected (throws InvalidOperationException → 409) — same as the other
         // guide ops; do NOT accept a 202 we can't honor.
         var guider = RequireConnectedGuider();
+        const string op = "guider.dark_library.build";
         lock (_gate) {
-            switch (ResolveBuildAdmission(_calibrationBuildInProgress, _calibrationBuildKey, idempotencyKey)) {
+            switch (ResolveBuildAdmission(_calibrationBuildInProgress, _calibrationBuildKey, _calibrationBuildOp, idempotencyKey, op)) {
                 case BuildAdmission.IdempotentAccept:
-                    // Retry of the in-flight build with the same key → re-accept (§60.5 at-least-once).
-                    return Task.FromResult(Accepted("guider.dark_library.build", idempotencyKey));
+                    // Retry of the in-flight build with the same key + op → re-accept (§60.5 at-least-once).
+                    return Task.FromResult(Accepted(op, idempotencyKey));
                 case BuildAdmission.Reject:
                     throw new InvalidOperationException("a calibration build is already in progress");
                 default: // Start
                     _calibrationBuildInProgress = true;
                     _calibrationBuildKey = idempotencyKey;
+                    _calibrationBuildOp = op;
                     break;
             }
         }
-        _ = Task.Run(() => BuildDarkLibraryInBackground(guider, rpcRequest), CancellationToken.None);
-        return Task.FromResult(Accepted("guider.dark_library.build", idempotencyKey));
+        DispatchCalibrationBuild(() => BuildDarkLibraryInBackground(guider, rpcRequest));
+        return Task.FromResult(Accepted(op, idempotencyKey));
     }
 
     internal enum BuildAdmission { Start, IdempotentAccept, Reject }
 
     /// <summary>Pure decision for the concurrent-build gate (so the guard logic is unit-testable without a live
-    /// guider): no build in flight → Start; a build in flight with the same non-null key → IdempotentAccept;
-    /// any other build while one is in flight → Reject (409). A null request key never matches an in-flight key.</summary>
-    internal static BuildAdmission ResolveBuildAdmission(bool inProgress, string? inFlightKey, string? requestKey) {
+    /// guider): no build in flight → Start; a build in flight with the same non-null key AND the same operation
+    /// type → IdempotentAccept; any other build while one is in flight → Reject (409). A null request key never
+    /// matches an in-flight key, and a same-key request for a *different* operation is rejected (not re-accepted)
+    /// so the caller never gets a 202 for an op whose WS events will never fire.</summary>
+    internal static BuildAdmission ResolveBuildAdmission(
+            bool inProgress, string? inFlightKey, string? inFlightOp, string? requestKey, string requestOp) {
         if (!inProgress) {
             return BuildAdmission.Start;
         }
-        if (requestKey is not null && requestKey == inFlightKey) {
+        if (requestKey is not null && requestKey == inFlightKey && requestOp == inFlightOp) {
             return BuildAdmission.IdempotentAccept;
         }
         return BuildAdmission.Reject;
@@ -122,8 +149,7 @@ public sealed partial class GuiderService {
         } finally {
             // Release the single-build gate whether the build completed or failed.
             lock (_gate) {
-                _calibrationBuildInProgress = false;
-                _calibrationBuildKey = null;
+                ReleaseCalibrationGateLocked();
             }
         }
     }
@@ -210,21 +236,23 @@ public sealed partial class GuiderService {
             request.ExposureMs, request.FrameCount, request.Notes, request.LoadAfter);
         // Reject if no guider is connected (→ 409) before accepting a 202 we can't honor.
         var guider = RequireConnectedGuider();
+        const string op = "guider.defect_map.build";
         lock (_gate) {
-            switch (ResolveBuildAdmission(_calibrationBuildInProgress, _calibrationBuildKey, idempotencyKey)) {
+            switch (ResolveBuildAdmission(_calibrationBuildInProgress, _calibrationBuildKey, _calibrationBuildOp, idempotencyKey, op)) {
                 case BuildAdmission.IdempotentAccept:
-                    return Task.FromResult(Accepted("guider.defect_map.build", idempotencyKey));
+                    return Task.FromResult(Accepted(op, idempotencyKey));
                 case BuildAdmission.Reject:
                     // Shared gate: a dark-library build in flight also rejects a defect-map build (one capture).
                     throw new InvalidOperationException("a calibration build is already in progress");
                 default: // Start
                     _calibrationBuildInProgress = true;
                     _calibrationBuildKey = idempotencyKey;
+                    _calibrationBuildOp = op;
                     break;
             }
         }
-        _ = Task.Run(() => BuildDefectMapDarksInBackground(guider, rpcRequest), CancellationToken.None);
-        return Task.FromResult(Accepted("guider.defect_map.build", idempotencyKey));
+        DispatchCalibrationBuild(() => BuildDefectMapDarksInBackground(guider, rpcRequest));
+        return Task.FromResult(Accepted(op, idempotencyKey));
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
@@ -254,8 +282,7 @@ public sealed partial class GuiderService {
             });
         } finally {
             lock (_gate) {
-                _calibrationBuildInProgress = false;
-                _calibrationBuildKey = null;
+                ReleaseCalibrationGateLocked();
             }
         }
     }
