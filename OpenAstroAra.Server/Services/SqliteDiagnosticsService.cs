@@ -236,6 +236,18 @@ public sealed partial class SqliteDiagnosticsService : IDiagnosticsService {
             ct: ct);
     }
 
+    public async Task<int> ClearOpenEventsByTypeAsync(string eventType, DateTimeOffset clearedUtc, CancellationToken ct) {
+        await using var conn = _db.OpenConnection();
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            UPDATE diagnostic_events SET cleared_utc = $cleared
+            WHERE event_type = $type AND cleared_utc IS NULL;
+            """;
+        cmd.Parameters.AddWithValue("$cleared", clearedUtc.ToString("O"));
+        cmd.Parameters.AddWithValue("$type", eventType);
+        return await cmd.ExecuteNonQueryAsync(ct);
+    }
+
     private static async Task InsertEventAsync(
             SqliteConnection conn, Guid id, string eventType,
             DiagnosticHealth severity, string description,

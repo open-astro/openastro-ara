@@ -334,6 +334,10 @@ public partial class Program {
         // cancels any in-flight sequence runs on daemon shutdown.
         builder.Services.AddHostedService(sp => sp.GetRequiredService<SequencerService>());
 
+        // §29 — background disk-space monitor: warns (diagnostic + OnDiskSpaceLow notification) when the image
+        // save volume runs low so an unattended session doesn't silently die on a full disk. Warn-only.
+        builder.Services.AddHostedService<DiskSpaceMonitor>();
+
         // §38.7 — disk-shipped templates under {profileDir}/sequences/templates/
         // merged on top of the 3 hardcoded built-ins. .deb install can drop
         // additional templates without a code change.

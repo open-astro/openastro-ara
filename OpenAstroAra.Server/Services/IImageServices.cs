@@ -105,4 +105,12 @@ public interface IDiagnosticsService {
         string? recommendedAction,
         bool? autoCorrectible,
         CancellationToken ct);
+
+    /// <summary>
+    /// Resolve every still-open event (cleared_utc IS NULL) of a given type by stamping
+    /// <paramref name="clearedUtc"/>. For transient-condition monitors (e.g. the §29 disk-space monitor)
+    /// that open an issue when a signal degrades and need to close it on recovery — <see cref="CreateEventAsync"/>
+    /// only inserts, so this is the matching "clear" half. Returns the number of events cleared.
+    /// </summary>
+    Task<int> ClearOpenEventsByTypeAsync(string eventType, DateTimeOffset clearedUtc, CancellationToken ct);
 }
