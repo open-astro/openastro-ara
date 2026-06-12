@@ -106,6 +106,8 @@ void main() {
       expect(conn.legs, hasLength(2), reason: 'reconnected with a fresh leg');
       expect(conn.legs[1].sent, [jsonEncode({'resume_token': '42'})],
           reason: 'first frame on reconnect resumes from the last-seen seq');
+      expect(conn.legs.first.closed, isTrue,
+          reason: 'the dropped socket is finalized on reconnect (no half-open leak)');
       await ws.dispose();
     });
 

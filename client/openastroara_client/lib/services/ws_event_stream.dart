@@ -155,9 +155,15 @@ class WsEventStream {
     // nothing left to deliver. dispose() does NOT await this one (it short-
     // circuits on the null _sub below); it only awaits a cancel of a live sub.
     final sub = _sub;
+    final socket = _socket;
     _sub = null;
-    if (sub != null) unawaited(sub.cancel());
     _socket = null;
+    if (sub != null) unawaited(sub.cancel());
+    // Finalize the old socket too — on the onError path (protocol/TLS fault, a
+    // frame that kills the channel before a clean close) the sink is otherwise
+    // never closed, leaking a half-open TCP connection across every reconnect.
+    // On the onDone path close() is a harmless no-op on the already-closed sink.
+    if (socket != null) unawaited(socket.close());
     if (_disposed) return;
     final i = _reconnectAttempt < _backoff.length ? _reconnectAttempt : _backoff.length - 1;
     final delay = _backoff[i];
