@@ -12,6 +12,7 @@
 
 #endregion "copyright"
 
+using System.Collections.Generic;
 using Newtonsoft.Json;
 
 namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
@@ -89,5 +90,85 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
 
         [JsonProperty(PropertyName = "delete_defect_map")]
         public bool DeleteDefectMap { get; set; } = true;
+    }
+
+    // ── guider-e-4b: typed responses for the dark-library / calibration-files surface ──
+
+    /// <summary>Result payload of <c>build_dark_library</c>: where the stack was written, how many frames per
+    /// exposure, how many distinct exposures were captured, and the exposure durations (ms) covered.</summary>
+    public class Phd2BuildDarkLibraryResult {
+
+        [JsonProperty(PropertyName = "profile_id")]
+        public int ProfileId { get; set; }
+
+        [JsonProperty(PropertyName = "dark_library_path")]
+        public string? DarkLibraryPath { get; set; }
+
+        [JsonProperty(PropertyName = "frame_count")]
+        public int FrameCount { get; set; }
+
+        [JsonProperty(PropertyName = "exposure_count")]
+        public int ExposureCount { get; set; }
+
+        [JsonProperty(PropertyName = "exposures_ms")]
+        public IReadOnlyList<int>? ExposuresMs { get; set; }
+    }
+
+    public class Phd2BuildDarkLibraryResponse : PhdMethodResponse {
+        public Phd2BuildDarkLibraryResult? result { get; set; }
+    }
+
+    /// <summary>The <c>get_calibration_files_status</c> status object: dark-library / defect-map existence,
+    /// compatibility, load state, auto-load flags, and (when a camera is connected and darks are loaded) the
+    /// loaded dark count + exposure range. Defect-map fields are carried for completeness even though ARA does
+    /// not yet surface defect maps (§63.6 deferred half).</summary>
+    public class Phd2CalibrationFilesStatus {
+
+        [JsonProperty(PropertyName = "profile_id")]
+        public int ProfileId { get; set; }
+
+        [JsonProperty(PropertyName = "dark_library_path")]
+        public string? DarkLibraryPath { get; set; }
+
+        [JsonProperty(PropertyName = "defect_map_path")]
+        public string? DefectMapPath { get; set; }
+
+        [JsonProperty(PropertyName = "dark_library_exists")]
+        public bool DarkLibraryExists { get; set; }
+
+        [JsonProperty(PropertyName = "defect_map_exists")]
+        public bool DefectMapExists { get; set; }
+
+        [JsonProperty(PropertyName = "dark_library_compatible")]
+        public bool DarkLibraryCompatible { get; set; }
+
+        [JsonProperty(PropertyName = "defect_map_compatible")]
+        public bool DefectMapCompatible { get; set; }
+
+        [JsonProperty(PropertyName = "dark_library_loaded")]
+        public bool DarkLibraryLoaded { get; set; }
+
+        [JsonProperty(PropertyName = "defect_map_loaded")]
+        public bool DefectMapLoaded { get; set; }
+
+        [JsonProperty(PropertyName = "auto_load_darks")]
+        public bool AutoLoadDarks { get; set; }
+
+        [JsonProperty(PropertyName = "auto_load_defect_map")]
+        public bool AutoLoadDefectMap { get; set; }
+
+        // Present only when a camera is connected and a dark library is loaded; null otherwise.
+        [JsonProperty(PropertyName = "dark_count_loaded")]
+        public int? DarkCountLoaded { get; set; }
+
+        [JsonProperty(PropertyName = "dark_min_exposure_seconds_loaded")]
+        public double? DarkMinExposureSecondsLoaded { get; set; }
+
+        [JsonProperty(PropertyName = "dark_max_exposure_seconds_loaded")]
+        public double? DarkMaxExposureSecondsLoaded { get; set; }
+    }
+
+    public class Phd2CalibrationFilesStatusResponse : PhdMethodResponse {
+        public Phd2CalibrationFilesStatus? result { get; set; }
     }
 }

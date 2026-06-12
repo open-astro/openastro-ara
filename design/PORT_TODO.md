@@ -415,20 +415,27 @@ transition, clears it on recovery via the new `IDiagnosticsService.ClearOpenEven
 def true), `set_dark_library_enabled {enabled}`, `get_calibration_files_status` (no params),
 `delete_calibration_files {delete_dark_library?, delete_defect_map?}` — serialization-locked (+5 tests).
 
-**e-4b (wiring) — remaining:**
-- A guider method to invoke `build_dark_library` on demand (requires connected camera + no active capture per
-  the contract) and read back the `{dark_library_path, exposure_count, exposures_ms}` result. **Validate at the
-  send site (from #382 review):** clamp/reject `FrameCount` outside 1..50, and reject `min > max` exposure when
-  both are set — the e-4a `Phd2BuildDarkLibraryParameter` is a permissive DTO by design (a bad value serializes
-  cleanly + fails at the daemon), so the service layer must guard before the first real call.
-- Surface it: a `GuiderService` op + REST endpoint (202-Accepted long-running, ~2 min) the client triggers, with
-  the §63.6 "cover the guide scope" modal flow.
-- **Progress streaming:** PHD2 streams build progress over its own event server (§63.8) — ARA ingests + forwards
-  to the client WS so the modal updates; on completion ARA records `calibration_state.guider.dark_library` and
-  fires the `guider.dark_library.complete` event. This is the meatiest part and the likely **v0.0.1/v0.1.0
-  boundary** (per the playbook).
-- `get_calibration_files_status` read surface (does a dark library already exist? is it loaded/compatible?) to
-  drive the wizard's "Build dark library" affordance state.
+**Shipped:** e-4b-1 — guider-client invocation (`PHD2Guider.DarkLibrary.cs`): `BuildDarkLibraryAsync` +
+`GetCalibrationFilesStatusAsync`, typed responses (`Phd2BuildDarkLibraryResult`, `Phd2CalibrationFilesStatus`),
+and **send-site validation** (`BuildDarkLibraryRequest`: reject `FrameCount` outside 1..50, reject exposure
+bounds outside 1..600000 ms, reject `min > max`) → clear error before the socket, not the daemon's opaque
+`-32602`. `GuiderRpcException` carries the failing method/code for the service layer. +13 tests (validation +
+response deserialization). Blocking build uses a 30-min `SendMessage` timeout.
+
+**SCOPE CORRECTION (e-4b-1 finding):** `build_dark_library` is a **blocking RPC with NO progress events** — the
+guider event stream (GuideStep/Settling/SettleDone/StarLost/Alert/… per §63.2) carries no dark-library-progress
+event, so the §63.8 "PHD2 streams build progress" premise below does **not** hold. Achievable design = a
+202-Accepted background build that fires **started + complete** (no granular % bar).
+
+**e-4b-2 (service + endpoint) — remaining:**
+- A `GuiderService` op (202-Accepted background `Task.Run`, per the existing connect/start pattern) + REST
+  endpoint in `EquipmentEndpoints.cs` the client triggers, plus a `get_calibration_files_status` GET read
+  surface, with the §63.6 "cover the guide scope" modal flow.
+- On start/completion fire `guider.dark_library.started` / `guider.dark_library.complete` WS events (NOT a
+  granular progress stream — see scope correction) and record `calibration_state.guider.dark_library`.
+
+**e-4b-3 (client UI) — remaining:** the cover-the-scope build modal + building/done indicator, driven by the
+`get_calibration_files_status` affordance state (dark library exists? loaded/compatible?).
 
 **Deferred (advanced, §63.6):** the defect-map RPCs (`build_defect_map_darks`, `set_defect_map_enabled`) — add
 when defect maps are surfaced (wizard's optional "Also build defect map" checkbox, default off).
