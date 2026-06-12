@@ -34,10 +34,12 @@ public sealed partial class GuiderService {
     public const string DarkLibraryCompleteEvent = "guider.dark_library.complete";
     public const string DarkLibraryFailedEvent = "guider.dark_library.failed";
 
-    // 0 = idle, 1 = a build is in flight. build_dark_library is a single blocking RPC on the daemon, so two
-    // concurrent builds are undefined behavior there (and would emit ambiguous paired started/complete events) —
-    // this sentinel serializes them, rejecting a second build with 409 until the first finishes.
-    private int _darkLibraryBuildInProgress;
+    // build_dark_library is a single blocking RPC on the daemon, so two concurrent builds are undefined behavior
+    // there (and would emit ambiguous paired started/complete events) — this serializes them under _gate. A
+    // second build with the SAME non-null idempotency key as the in-flight one is an idempotent no-op (202, the
+    // §60.5 at-least-once contract); any other concurrent build is rejected with 409.
+    private bool _darkLibraryBuildInProgress;
+    private string? _darkLibraryBuildKey;
 
     public Task<OperationAcceptedDto> BuildDarkLibraryAsync(
             BuildDarkLibraryRequestDto request, string? idempotencyKey, CancellationToken ct) {
@@ -50,9 +52,16 @@ public sealed partial class GuiderService {
         // Reject up front if no guider is connected (throws InvalidOperationException → 409) — same as the other
         // guide ops; do NOT accept a 202 we can't honor.
         var guider = RequireConnectedGuider();
-        // Reject a concurrent build (→ 409). The flag is cleared in BuildDarkLibraryInBackground's finally.
-        if (Interlocked.CompareExchange(ref _darkLibraryBuildInProgress, 1, 0) != 0) {
-            throw new InvalidOperationException("a dark-library build is already in progress");
+        lock (_gate) {
+            if (_darkLibraryBuildInProgress) {
+                // Idempotent retry of the in-flight build → re-accept; a different build → 409.
+                if (idempotencyKey is not null && idempotencyKey == _darkLibraryBuildKey) {
+                    return Task.FromResult(Accepted("guider.dark_library.build", idempotencyKey));
+                }
+                throw new InvalidOperationException("a dark-library build is already in progress");
+            }
+            _darkLibraryBuildInProgress = true;
+            _darkLibraryBuildKey = idempotencyKey;
         }
         _ = Task.Run(() => BuildDarkLibraryInBackground(guider, rpcRequest), CancellationToken.None);
         return Task.FromResult(Accepted("guider.dark_library.build", idempotencyKey));
@@ -92,7 +101,10 @@ public sealed partial class GuiderService {
             });
         } finally {
             // Release the single-build gate whether the build completed or failed.
-            Interlocked.Exchange(ref _darkLibraryBuildInProgress, 0);
+            lock (_gate) {
+                _darkLibraryBuildInProgress = false;
+                _darkLibraryBuildKey = null;
+            }
         }
     }
 
