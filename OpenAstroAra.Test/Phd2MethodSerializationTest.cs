@@ -188,6 +188,55 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void BuildDefectMapDarks_sends_explicit_exposure_frame_count_and_load_omits_unset_notes() {
+            var json = Serialize(new Phd2BuildDefectMapDarks {
+                Parameters = new() { ExposureMs = 5000, FrameCount = 20 },
+            });
+            Assert.That(json["method"]!.Value<string>(), Is.EqualTo("build_defect_map_darks"));
+            var p = (JObject)json["params"]!;
+            Assert.That(p["exposure_ms"]!.Value<int>(), Is.EqualTo(5000));
+            Assert.That(p["frame_count"]!.Value<int>(), Is.EqualTo(20));
+            Assert.That(p["load_after"]!.Value<bool>(), Is.True, "default true is sent explicitly");
+            Assert.That(p.ContainsKey("notes"), Is.False);
+        }
+
+        [Test]
+        public void BuildDefectMapDarks_defaults_match_the_daemon_and_emit_notes_when_set() {
+            var json = Serialize(new Phd2BuildDefectMapDarks {
+                Parameters = new() { Notes = "ARA wizard", LoadAfter = false },
+            });
+            var p = (JObject)json["params"]!;
+            Assert.That(p["exposure_ms"]!.Value<int>(), Is.EqualTo(3000), "default exposure_ms");
+            Assert.That(p["frame_count"]!.Value<int>(), Is.EqualTo(10), "default frame_count");
+            Assert.That(p["notes"]!.Value<string>(), Is.EqualTo("ARA wizard"));
+            Assert.That(p["load_after"]!.Value<bool>(), Is.False);
+        }
+
+        [Test]
+        public void SetDefectMapEnabled_uses_named_enabled_param() {
+            var json = Serialize(new Phd2SetDefectMapEnabled { Parameters = new() { Enabled = true } });
+            Assert.That(json["method"]!.Value<string>(), Is.EqualTo("set_defect_map_enabled"));
+            Assert.That(json["params"]!["enabled"]!.Value<bool>(), Is.True);
+        }
+
+        [Test]
+        public void BuildDefectMapDarks_result_deserializes_from_daemon_payload() {
+            const string raw = """
+                {"jsonrpc":"2.0","id":"d1","result":{"profile_id":3,"defect_map_path":"/maps/ara-rig.bpm",
+                "defect_count":142,"exposure_ms":3000,"frame_count":10}}
+                """;
+            var response = JsonConvert.DeserializeObject<Phd2BuildDefectMapDarksResponse>(raw);
+            Assert.That(response, Is.Not.Null);
+            Assert.That(response!.error, Is.Null);
+            var result = response.result!;
+            Assert.That(result.ProfileId, Is.EqualTo(3));
+            Assert.That(result.DefectMapPath, Is.EqualTo("/maps/ara-rig.bpm"));
+            Assert.That(result.DefectCount, Is.EqualTo(142));
+            Assert.That(result.ExposureMs, Is.EqualTo(3000));
+            Assert.That(result.FrameCount, Is.EqualTo(10));
+        }
+
+        [Test]
         public void SetProfileSetup_calibration_and_binning_fields_use_guider_names() {
             // Lock the calibration_* names against the authoritative guider contract
             // (openastro-guider/doc/jsonrpc_api.md: calibration_duration 50..60000, calibration_distance

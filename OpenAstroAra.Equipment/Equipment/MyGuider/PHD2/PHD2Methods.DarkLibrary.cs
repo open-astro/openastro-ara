@@ -21,7 +21,8 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
     // openastro-guider accepts named OR positional params (API_REFERENCE.md); these use the documented
     // named-object form (doc/jsonrpc_api.md). guider-e-4a ships only the request shapes (serialization-locked);
     // the on-demand build + progress wiring is guider-e-4b. The defect-map RPCs (build_defect_map_darks /
-    // set_defect_map_enabled) are the deferred "advanced" half (§63.6) — added when defect maps are surfaced.
+    // set_defect_map_enabled) are the "advanced" half (§63.6), added as guider-e-4c (request/response shapes;
+    // service + endpoint wiring is a follow-up, mirroring e-4b).
 
     /// <summary>
     /// <c>build_dark_library {frame_count, min_exposure_ms?, max_exposure_ms?, clear_existing, notes?, load_after}</c>
@@ -170,5 +171,72 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
 
     public class Phd2CalibrationFilesStatusResponse : PhdMethodResponse {
         public Phd2CalibrationFilesStatus? result { get; set; }
+    }
+
+    // ── §63.6 guider-e-4c: defect-map (bad-pixel) RPCs — the "advanced" half of the calibration surface ──
+    // The daemon's handler list (doc/jsonrpc_api.md) exposes build_defect_map_darks + set_defect_map_enabled;
+    // rebuild_defect_map appears only in the design reference (no handler yet) so it is intentionally omitted.
+
+    /// <summary>
+    /// <c>build_defect_map_darks {exposure_ms, frame_count, notes?, load_after}</c> — capture a master dark and
+    /// build a bad-pixel (defect) map for the active profile (requires a connected camera + no active capture).
+    /// Result: <c>{profile_id, defect_map_path, defect_count, exposure_ms, frame_count}</c>.
+    /// </summary>
+    public class Phd2BuildDefectMapDarks : Phd2Method<Phd2BuildDefectMapDarksParameter> {
+        public override string Method => "build_defect_map_darks";
+    }
+
+    public class Phd2BuildDefectMapDarksParameter {
+
+        // Daemon range 1..600000 ms, default 3000. Sent explicitly (default-initialized) so the wire is unambiguous.
+        [JsonProperty(PropertyName = "exposure_ms")]
+        public int ExposureMs { get; set; } = 3000;
+
+        // Daemon range 1..50, default 10.
+        [JsonProperty(PropertyName = "frame_count")]
+        public int FrameCount { get; set; } = 10;
+
+        [JsonProperty(PropertyName = "notes", NullValueHandling = NullValueHandling.Ignore)]
+        public string? Notes { get; set; }
+
+        // Daemon default true; sent explicitly so a fresh defect map is loaded for guiding right after the build.
+        [JsonProperty(PropertyName = "load_after")]
+        public bool LoadAfter { get; set; } = true;
+    }
+
+    /// <summary><c>set_defect_map_enabled {enabled}</c> — toggle bad-pixel correction (enabling needs a camera).
+    /// Result: the same object as <c>get_calibration_files_status</c>.</summary>
+    public class Phd2SetDefectMapEnabled : Phd2Method<Phd2SetDefectMapEnabledParameter> {
+        public override string Method => "set_defect_map_enabled";
+    }
+
+    public class Phd2SetDefectMapEnabledParameter {
+
+        [JsonProperty(PropertyName = "enabled")]
+        public bool Enabled { get; set; }
+    }
+
+    /// <summary>Result payload of <c>build_defect_map_darks</c>: where the map was written, how many defects it
+    /// flags, and the master-dark exposure (ms) + frame count it was built from.</summary>
+    public class Phd2BuildDefectMapDarksResult {
+
+        [JsonProperty(PropertyName = "profile_id")]
+        public int ProfileId { get; set; }
+
+        [JsonProperty(PropertyName = "defect_map_path")]
+        public string? DefectMapPath { get; set; }
+
+        [JsonProperty(PropertyName = "defect_count")]
+        public int DefectCount { get; set; }
+
+        [JsonProperty(PropertyName = "exposure_ms")]
+        public int ExposureMs { get; set; }
+
+        [JsonProperty(PropertyName = "frame_count")]
+        public int FrameCount { get; set; }
+    }
+
+    public class Phd2BuildDefectMapDarksResponse : PhdMethodResponse {
+        public Phd2BuildDefectMapDarksResult? result { get; set; }
     }
 }
