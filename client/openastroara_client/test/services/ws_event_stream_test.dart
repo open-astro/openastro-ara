@@ -158,6 +158,43 @@ void main() {
           throwsA(isA<AssertionError>()));
     });
 
+    test('reconnects on a stream error (onError path), not just a clean close', () async {
+      final conn = _FakeConnector();
+      final ws = WsEventStream(server, connect: conn.connect, backoff: const [Duration.zero]);
+      ws.events.listen((_) {});
+      ws.connect();
+      conn.legs.first.incoming.add(_envelope('e', 11));
+      await pumpEventQueue();
+      conn.legs.first.incoming.addError(Exception('half-open channel error'));
+      await pumpEventQueue();
+      expect(conn.legs, hasLength(2), reason: 'an onError teardown also triggers reconnect');
+      expect(conn.legs[1].sent, [jsonEncode({'resume_token': '11'})]);
+      await ws.dispose();
+    });
+
+    test('backoff caps at the last slot — repeated drops never index out of bounds', () async {
+      final conn = _FakeConnector();
+      final ws = WsEventStream(server, connect: conn.connect, backoff: const [Duration.zero, Duration.zero]);
+      ws.events.listen((_) {});
+      ws.connect();
+      // Drop more times than the backoff list length; the saturated counter must
+      // reuse the last slot, not walk past the end.
+      for (var i = 0; i < 4; i++) {
+        await conn.legs.last.drop();
+        await pumpEventQueue();
+      }
+      expect(conn.legs.length, greaterThanOrEqualTo(5), reason: 'kept reconnecting through the cap without error');
+      await ws.dispose();
+    });
+
+    test('dispose is idempotent — a second call does not throw', () async {
+      final conn = _FakeConnector();
+      final ws = WsEventStream(server, connect: conn.connect);
+      ws.connect();
+      await ws.dispose();
+      await ws.dispose(); // must be a no-op, not StateError on the closed controller
+    });
+
     test('first connect sends no resume token', () async {
       final conn = _FakeConnector();
       final ws = WsEventStream(server, connect: conn.connect);

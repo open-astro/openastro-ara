@@ -103,6 +103,10 @@ class WsEventStream {
     _socket = socket;
     // On a reconnect (we have a last-seen seq) ask the server to replay what we
     // missed — it answers with a resume-response frame, then replays the gap.
+    // The send buffers in the sink until the HTTP upgrade completes; if the TCP
+    // connect fails before the upgrade the buffered token is dropped and this
+    // attempt is a cold connect — but _lastSeq is retained, so the next
+    // successful reconnect still resumes from it.
     if (_lastSeq != null) {
       socket.send(jsonEncode({'resume_token': _lastSeq.toString()}));
     }
@@ -173,6 +177,7 @@ class WsEventStream {
 
   /// Close the socket, stop reconnecting, and close the [events] stream.
   Future<void> dispose() async {
+    if (_disposed) return; // idempotent — a second dispose() must not re-close the controller
     _disposed = true;
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
@@ -182,6 +187,6 @@ class WsEventStream {
     _socket = null;
     await sub?.cancel();
     await socket?.close();
-    await _events.close();
+    if (!_events.isClosed) await _events.close();
   }
 }
