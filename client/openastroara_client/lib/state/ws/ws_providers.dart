@@ -32,16 +32,30 @@ final wsEventStreamProvider = Provider.autoDispose<WsEventStream?>((ref) {
 });
 
 /// Live link state of the active server's WS stream. Emits `disconnected` when
-/// no server is saved; otherwise seeds with the current state then follows
-/// transitions (connecting → connected → reconnecting → …).
-final wsConnectionStateProvider = StreamProvider.autoDispose<WsConnectionState>((ref) async* {
+/// no server is saved; otherwise the current state immediately, then every
+/// transition (connecting → connected → reconnecting → …).
+///
+/// `connectionStates` is a non-replaying broadcast stream, so we must subscribe
+/// to it BEFORE reading the current value — otherwise a transition firing in the
+/// snapshot→subscribe gap (likely, since `connect()` runs synchronously in
+/// [wsEventStreamProvider]) would be silently dropped and the consumer could be
+/// stuck on a stale state. Subscribing first then emitting the current value
+/// (no await between them) closes that gap atomically.
+final wsConnectionStateProvider = StreamProvider.autoDispose<WsConnectionState>((ref) {
   final stream = ref.watch(wsEventStreamProvider);
-  if (stream == null) {
-    yield WsConnectionState.disconnected;
-    return;
-  }
-  yield stream.connectionState;
-  yield* stream.connectionStates;
+  if (stream == null) return Stream.value(WsConnectionState.disconnected);
+  final controller = StreamController<WsConnectionState>();
+  controller.onListen = () {
+    final sub = stream.connectionStates.listen(
+      controller.add,
+      onError: controller.addError,
+      onDone: controller.close,
+    );
+    controller.add(stream.connectionState); // current value, captured after the subscription
+    controller.onCancel = sub.cancel;
+  };
+  ref.onDispose(controller.close);
+  return controller.stream;
 });
 
 /// Broadcast of every event from the active server's stream. Feature providers

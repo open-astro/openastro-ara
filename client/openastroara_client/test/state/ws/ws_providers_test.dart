@@ -71,17 +71,25 @@ void main() {
       addTearDown(container.dispose);
       await container.read(savedServersProvider.future);
 
-      // Keep the autoDispose provider alive for the test.
+      // Keep the autoDispose providers alive for the test.
       final sub = container.listen(wsEventStreamProvider, (_, _) {});
       addTearDown(sub.close);
+      final connSub = container.listen(wsConnectionStateProvider, (_, _) {});
+      addTearDown(connSub.close);
+      await pumpEventQueue();
+
       final stream = sub.read();
       expect(stream, isNotNull);
       expect(stream!.connectionState, WsConnectionState.connecting,
           reason: 'creating the provider connects the stream');
+      // The provider must surface that state too (guards the snapshot→subscribe race).
+      expect(container.read(wsConnectionStateProvider).asData?.value, WsConnectionState.connecting);
 
       conn.legs.first.incoming.add(_envelope(1));
       await pumpEventQueue();
       expect(stream.connectionState, WsConnectionState.connected);
+      expect(container.read(wsConnectionStateProvider).asData?.value, WsConnectionState.connected,
+          reason: 'the provider follows the transition to connected (no dropped state)');
     });
   });
 }
