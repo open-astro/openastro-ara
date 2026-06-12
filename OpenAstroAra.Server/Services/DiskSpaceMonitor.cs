@@ -137,6 +137,17 @@ namespace OpenAstroAra.Server.Services {
         [SuppressMessage("Design", "CA1031:Do not catch general exception types",
             Justification = "Best-effort monitor loop: a profile read, DriveInfo probe, or diagnostics/notification write can throw arbitrary IO/driver exceptions — each tick is logged and skipped so a transient failure never tears down the daemon's hosted services.")]
         protected override async Task ExecuteAsync(CancellationToken stoppingToken) {
+            // Startup reconciliation: clear any disk-space event orphaned by a prior run. We've emitted nothing
+            // yet (_last == Ok), so this only touches a stale event — if the disk is still low, the first tick's
+            // Ok→Low transition re-opens it; if it recovered while we were down, it stays cleared.
+            try {
+                await _diagnostics.ClearOpenEventsByTypeAsync(EventType, DateTimeOffset.UtcNow, stoppingToken);
+            } catch (OperationCanceledException) {
+                return;
+            } catch (Exception ex) {
+                LogCheckFailed(ex);
+            }
+
             using var timer = new PeriodicTimer(_interval);
             while (!stoppingToken.IsCancellationRequested) {
                 try {
