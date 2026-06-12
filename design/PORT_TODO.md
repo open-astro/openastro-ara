@@ -476,3 +476,12 @@ helper (dedupes the status→DTO mapping). +7 tests. **The §63.6 guider calibra
 
 **e-4c remaining (deferred):** the client "Also build defect map" affordance + the build/toggle/status UI (gated on
 the same WS client + dark-library UI as e-4b-3).
+
+**WS slice 5 (#395) — diagnostics live updates: reconnect-replay gap (deferred, needs server-side work).** The
+client `DiagnosticsAccumulator` folds the live `diagnostics.*` stream but has no replay across a WS reconnect:
+`WsEventStream` auto-reconnects (the stream stays non-null, so the notifier's `build()` never re-runs), so any
+event the server emits while the socket is down is lost. The hazardous case is a missed `diagnostics.cleared` —
+the issue stays stuck in `_open` and the §51 pill reads amber/red indefinitely with no recovery short of a server
+switch. The fix is **server-side history-on-connect** (replay the open-diagnostics set on a new WS connection / on
+resume), then have the client reset its roll-up from that snapshot. There's an in-code `TODO` at
+`diagnostics_state.dart`'s notifier `build()`. Tracked here per #395 review.
