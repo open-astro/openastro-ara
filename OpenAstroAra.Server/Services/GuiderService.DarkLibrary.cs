@@ -138,9 +138,11 @@ public sealed partial class GuiderService {
         Phd2CalibrationFilesStatus status;
         try {
             status = await guider.GetCalibrationFilesStatusAsync(ct).ConfigureAwait(false);
-        } catch (Exception ex) when (ex is InvalidOperationException or ObjectDisposedException) {
+        } catch (Exception ex) when (ex is InvalidOperationException or ObjectDisposedException or GuiderRpcException) {
             // Raced with a disconnect/dispose after we captured the guider outside the gate — the guider went
-            // away mid-read. Treat it as the disconnected contract (null) rather than surfacing an error.
+            // away mid-read. A drop during the RPC surfaces as a transport error (GuiderRpcException) per
+            // PHD2Guider.BuildDarkLibraryAsync's remarks, not always InvalidOperationException. Treat all of
+            // these as the disconnected contract (null) rather than surfacing a 500.
             return null;
         }
         return new CalibrationFilesStatusDto(
@@ -167,6 +169,11 @@ public sealed partial class GuiderService {
             return;
         }
         try {
+            // ToJsonString()+Parse (not JsonSerializer.SerializeToElement) is deliberate: SerializeToElement on a
+            // JsonObject takes the reflection path (IL2026/IL3050), which the AOT-published Server's
+            // warnings=errors gate rejects. The string round-trip is the AOT-safe way to build a JsonElement and
+            // matches SequencerService.EmitAsync. It fires only on the per-build start/complete events (no
+            // per-progress stream), so the extra allocation is negligible.
             using var doc = JsonDocument.Parse(payload.ToJsonString());
             await _ws.PublishAsync(eventType, doc.RootElement.Clone(), CancellationToken.None).ConfigureAwait(false);
         } catch (Exception ex) {
