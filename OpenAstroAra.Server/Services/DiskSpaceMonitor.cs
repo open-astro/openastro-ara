@@ -93,12 +93,27 @@ namespace OpenAstroAra.Server.Services {
             string? best = null;
             var bestLen = -1;
             foreach (var root in driveRoots) {
-                if (root.Length > bestLen && fullPath.StartsWith(root, StringComparison.Ordinal)) {
+                if (root.Length > bestLen && IsUnderRoot(fullPath, root)) {
                     best = root;
                     bestLen = root.Length;
                 }
             }
             return best;
+        }
+
+        private static bool IsSeparator(char c) => c == '/' || c == '\\';
+
+        // A prefix match only counts on a path-component boundary, so a "/mnt/data" mount doesn't swallow a
+        // "/mnt/data2" path. A root that already ends on a separator ("/" or "D:\") bounds on its own; otherwise
+        // the char right after the matched prefix must be a separator. Both separator styles are accepted so the
+        // pure helper is deterministic across hosts (it's tested with Windows-style roots on a Unix CI box).
+        private static bool IsUnderRoot(string fullPath, string root) {
+            if (root.Length == 0 || !fullPath.StartsWith(root, StringComparison.Ordinal)) {
+                return false;
+            }
+            return fullPath.Length == root.Length
+                || IsSeparator(root[^1])
+                || IsSeparator(fullPath[root.Length]);
         }
 
         [SuppressMessage("Design", "CA1031:Do not catch general exception types",

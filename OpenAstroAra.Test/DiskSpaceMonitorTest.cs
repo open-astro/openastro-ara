@@ -25,6 +25,7 @@ namespace OpenAstroAra.Test {
         private static readonly string[] UnixRoots = { "/", "/media/openastroara" };
         private static readonly string[] DedicatedMountOnly = { "/media/openastroara" };
         private static readonly string[] WindowsRoots = { @"C:\", @"D:\" };
+        private static readonly string[] PrefixCollisionRoots = { "/mnt/data", "/mnt/data2" };
 
         [Test]
         public void Evaluate_maps_free_space_to_levels_with_inclusive_low_boundaries() {
@@ -56,6 +57,17 @@ namespace OpenAstroAra.Test {
             Assert.That(
                 DiskSpaceMonitor.LongestPrefixRoot("/mnt/other/x.fits", DedicatedMountOnly),
                 Is.Null);
+        }
+
+        [Test]
+        public void LongestPrefixRoot_respects_path_component_boundaries() {
+            // "/mnt/data2/..." must NOT match the shorter "/mnt/data" mount (string-prefix but not a path prefix).
+            Assert.That(
+                DiskSpaceMonitor.LongestPrefixRoot("/mnt/data2/images/x.fits", PrefixCollisionRoots),
+                Is.EqualTo("/mnt/data2"));
+            Assert.That(
+                DiskSpaceMonitor.LongestPrefixRoot("/mnt/data/images/x.fits", PrefixCollisionRoots),
+                Is.EqualTo("/mnt/data"));
         }
 
         [Test]
