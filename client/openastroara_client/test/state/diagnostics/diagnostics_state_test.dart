@@ -55,6 +55,28 @@ void main() {
       expect(snap.events.first.message, 'Disk full — paused sequence');
     });
 
+    test('auto_action_taken with no description falls back to the recommended action', () {
+      final snap = DiagnosticsAccumulator().apply(_ev(DiagnosticsWsEvents.autoActionTaken, {
+        'event_type': 'disk.critical',
+        'severity': 'red',
+        'description': 'Disk full',
+        'auto_action_taken': true,
+        // no auto_action_description
+        'recommended_action': 'free up space',
+      }))!;
+      expect(snap.events.first.message, 'Disk full — free up space');
+    });
+
+    test('auto_action_taken with neither description nor recommendation is the bare description', () {
+      final snap = DiagnosticsAccumulator().apply(_ev(DiagnosticsWsEvents.autoActionTaken, {
+        'event_type': 'disk.critical',
+        'severity': 'red',
+        'description': 'Disk full',
+        'auto_action_taken': true,
+      }))!;
+      expect(snap.events.first.message, 'Disk full');
+    });
+
     test('worst open severity drives the overall level', () {
       final acc = DiagnosticsAccumulator();
       acc.apply(_ev(DiagnosticsWsEvents.issueDetected, {'event_type': 'disk.low', 'severity': 'yellow'}, seq: 1));

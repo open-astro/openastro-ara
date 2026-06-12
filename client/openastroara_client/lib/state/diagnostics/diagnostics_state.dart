@@ -90,6 +90,9 @@ class DiagnosticsAccumulator {
   }
 
   /// Current roll-up. Empty state (no open issues, no log) reads as nominal.
+  /// Each call returns a fresh object — [DiagnosticsSnapshot] has reference
+  /// identity (no value `==`), so callers must not compare snapshots by value;
+  /// change is signalled by [apply] returning non-null, not by snapshot equality.
   DiagnosticsSnapshot get snapshot {
     final level = _overallLevel();
     return DiagnosticsSnapshot(
