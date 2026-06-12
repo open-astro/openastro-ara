@@ -132,7 +132,9 @@ public sealed class PlaceholderSequencerService : ISequencerService {
         var aborted = 0;
         foreach (var (_, run) in _runs) {
             ct.ThrowIfCancellationRequested();
-            if (run.State is SequenceRunState.Completed or SequenceRunState.Failed or SequenceRunState.Stopped) {
+            // Shared abortability rule (skips terminal + already-Aborting) so this can't diverge from the real
+            // SequencerService if its terminal-state set changes.
+            if (!SequencerService.IsAbortableRun(run.State)) {
                 continue;
             }
             run.State = SequenceRunState.Aborting;

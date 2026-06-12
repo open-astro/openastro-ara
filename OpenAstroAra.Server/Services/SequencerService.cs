@@ -193,16 +193,26 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         var aborted = 0;
         foreach (var (id, run) in _runs) {
             ct.ThrowIfCancellationRequested();
-            if (IsTerminal(run.State)) {
+            // Skip terminal AND already-Aborting runs: a re-entrant call (a fast Critical→Warn→Critical
+            // oscillation) must not re-count / re-notify a run that's already being aborted.
+            if (!IsAbortableRun(run.State)) {
                 continue;
             }
-            // RequestCancelAsync re-checks terminality under the same race, so a run that finished between the
-            // check above and here is a harmless no-op; the count is "runs we asked to abort".
             await RequestCancelAsync(id, SequenceRunState.Aborting);
             aborted++;
         }
         return aborted;
     }
+
+    /// <summary>
+    /// Whether a run can still be aborted: not terminal (Completed/Failed/Stopped) and not already in the
+    /// transient Aborting state. The §29 disk-space monitor's "abort on critical" path uses this (via
+    /// <see cref="AbortActiveRunsAsync"/>) so a re-entrant abort doesn't double-count an in-flight abort.
+    /// Note: in-memory runs don't survive a daemon restart, so a post-restart Ok→Critical transition finds no
+    /// active runs and aborts nothing.
+    /// </summary>
+    public static bool IsAbortableRun(SequenceRunState state) =>
+        !IsTerminal(state) && state != SequenceRunState.Aborting;
 
     // IHostedService — explicit impl so it doesn't collide with the public
     // StartAsync(Guid, ...) above. On daemon shutdown, cancel every live run so
