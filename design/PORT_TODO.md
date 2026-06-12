@@ -381,7 +381,21 @@ slug helper (`PHD2Guider.GuiderProfile.cs`). The remaining e-3b work drives them
 - **Slug-collision disambiguation.** `AraGuiderProfileName` maps by name only (per §63.4), so two ARA profiles
   differing only in punctuation/case collide on the same PHD2 name (e.g. `"C-14"`/`"C 14"` → `ara-c-14`). If
   this matters, e-3b can append a short stable disambiguator (e.g. first 6 of the ARA profile Id) on create and
-  store the resolved PHD2 name back on the ARA profile so lookups stay exact.
+  store the resolved PHD2 name back on the ARA profile so lookups stay exact. **Specifically include the
+  `ara-default` case** (all-punctuation / non-ASCII-only names all map to `ara-default`): the select-or-create
+  must handle `ara-default` already being owned by a *different* ARA profile (from #375 review).
+- **Slug length cap (from #375 review).** `AraGuiderProfileName` has no length cap. The daemon docs
+  (`doc/jsonrpc_api.md` / `design/API_REFERENCE.md`) don't state a max profile-name length, so a cap now would be
+  a guess (and truncation reintroduces the collision problem above). e-3b should find the real openastro-guider
+  limit (read the daemon source / test an over-long `create_profile`) and, if one exists, cap the slug — paired
+  with the disambiguator so truncated names stay unique.
+- **Send-time param validation (from #375 review).** The e-3a RPC request classes are permissive DTOs by design:
+  `Phd2CreateProfileParameter` lets `copy_from` + `copy_from_id` both be set (the daemon treats them as mutually
+  exclusive → would error), and `Phd2SetProfileByNameParameter.Name` defaults to `""`. ARA never populates the
+  copy-source (it creates fresh), so no guard ships in e-3a — but the e-3b send path must validate before firing:
+  reject an empty name and enforce at-most-one copy source. (A `Debug.Assert` on the DTO was considered and
+  rejected — it would throw during Newtonsoft deserialization if a stored request ever carried both; the check
+  belongs at the call site, not on the serialization target.)
 - **Profile lifecycle (§63.4 table) beyond connect-time select/create:** `delete_profile` on ARA-profile delete,
   `clone_profile` on ARA-profile clone, `rename_profile` on rename — likely v0.1.0 (need ARA profile-lifecycle
   hooks that don't exist headless yet). CHANGELOG entry lands with e-3b (the first user-visible behavior).
