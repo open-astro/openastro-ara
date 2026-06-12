@@ -205,7 +205,9 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
     }
 
     /// <summary><c>set_defect_map_enabled {enabled}</c> — toggle bad-pixel correction (enabling needs a camera).
-    /// Result: the same object as <c>get_calibration_files_status</c>.</summary>
+    /// Result: the same object as <c>get_calibration_files_status</c> — e-4c-b sends this with
+    /// <see cref="SendMessage{T}"/> typed as <see cref="Phd2CalibrationFilesStatusResponse"/> (same as
+    /// <see cref="Phd2SetDarkLibraryEnabled"/>).</summary>
     public class Phd2SetDefectMapEnabled : Phd2Method<Phd2SetDefectMapEnabledParameter> {
         public override string Method => "set_defect_map_enabled";
     }

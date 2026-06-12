@@ -220,6 +220,12 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void SetDefectMapEnabled_serializes_the_false_path_too() {
+            var json = Serialize(new Phd2SetDefectMapEnabled { Parameters = new() { Enabled = false } });
+            Assert.That(json["params"]!["enabled"]!.Value<bool>(), Is.False, "disable must serialize explicit false, not omit");
+        }
+
+        [Test]
         public void BuildDefectMapDarks_result_deserializes_from_daemon_payload() {
             const string raw = """
                 {"jsonrpc":"2.0","id":"d1","result":{"profile_id":3,"defect_map_path":"/maps/ara-rig.bpm",
