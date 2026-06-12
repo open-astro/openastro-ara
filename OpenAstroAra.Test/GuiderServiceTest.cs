@@ -111,6 +111,33 @@ namespace OpenAstroAra.Test {
             Assert.That(await svc.Dither(CancellationToken.None), Is.False);
         }
 
+        // ── §63.6 guider-e-4b-2: dark-library build dispatch ──
+
+        [Test]
+        public void BuildDarkLibraryAsync_when_not_connected_throws_InvalidOperation() {
+            using var svc = NewService();
+            // A valid request still can't be accepted with no guider connected.
+            Assert.Throws<InvalidOperationException>(
+                () => { _ = svc.BuildDarkLibraryAsync(new BuildDarkLibraryRequestDto(FrameCount: 5), null, CancellationToken.None); });
+        }
+
+        [Test]
+        public void BuildDarkLibraryAsync_validates_before_the_connection_check() {
+            using var svc = NewService();
+            // Validation runs first, so a bad request surfaces as ArgumentException even while disconnected
+            // (a 400, not a 409) — the endpoint relies on this ordering.
+            Assert.Throws<ArgumentOutOfRangeException>(
+                () => { _ = svc.BuildDarkLibraryAsync(new BuildDarkLibraryRequestDto(FrameCount: 0), null, CancellationToken.None); });
+            Assert.Throws<ArgumentException>(
+                () => { _ = svc.BuildDarkLibraryAsync(new BuildDarkLibraryRequestDto(MinExposureMs: 5000, MaxExposureMs: 1000), null, CancellationToken.None); });
+        }
+
+        [Test]
+        public async System.Threading.Tasks.Task GetCalibrationFilesStatusAsync_returns_null_before_connect() {
+            using var svc = NewService();
+            Assert.That(await svc.GetCalibrationFilesStatusAsync(CancellationToken.None), Is.Null);
+        }
+
         [Test]
         public void Ops_after_Dispose_throw_ObjectDisposed() {
             var svc = NewService();

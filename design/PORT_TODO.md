@@ -428,15 +428,19 @@ guider event stream (GuideStep/Settling/SettleDone/StarLost/Alert/… per §63.2
 event, so the §63.8 "PHD2 streams build progress" premise below does **not** hold. Achievable design = a
 202-Accepted background build that fires **started + complete** (no granular % bar).
 
-**e-4b-2 (service + endpoint) — remaining:**
-- A `GuiderService` op (202-Accepted background `Task.Run`, per the existing connect/start pattern) + REST
-  endpoint in `EquipmentEndpoints.cs` the client triggers, plus a `get_calibration_files_status` GET read
-  surface, with the §63.6 "cover the guide scope" modal flow.
-- On start/completion fire `guider.dark_library.started` / `guider.dark_library.complete` WS events (NOT a
-  granular progress stream — see scope correction) and record `calibration_state.guider.dark_library`.
+**Shipped:** e-4b-2 — service + REST surface. `GuiderService.BuildDarkLibraryAsync` (202-Accepted background
+`Task.Run`, validates synchronously → 400 on bad request / 409 when disconnected) + `GetCalibrationFilesStatusAsync`
+(→ `CalibrationFilesStatusDto`, null when disconnected). Endpoints `POST /equipment/guider/darklibrary/build` +
+`GET /equipment/guider/darklibrary/status` (`EquipmentEndpoints.cs`, extracted handler for the error mapping). WS
+events `guider.dark_library.started` / `…complete` / `…failed` via `IWsBroadcaster` (best-effort; NO granular
+progress — see scope correction). +6 tests (service validation/connection contract + endpoint status mapping).
+
+**e-4b-2 leftover (deferred):** record `calibration_state.guider.dark_library` on completion — there is no
+server-side calibration-state store yet (the §39 calibration view derives from the frame catalog, not a guider
+artifact record), so this waits until such a store exists or the client reads it live from the status endpoint.
 
 **e-4b-3 (client UI) — remaining:** the cover-the-scope build modal + building/done indicator, driven by the
-`get_calibration_files_status` affordance state (dark library exists? loaded/compatible?).
+`GET …/darklibrary/status` affordance state (dark library exists? loaded/compatible?) and the WS build events.
 
 **Deferred (advanced, §63.6):** the defect-map RPCs (`build_defect_map_darks`, `set_defect_map_enabled`) — add
 when defect maps are surfaced (wizard's optional "Also build defect map" checkbox, default off).
