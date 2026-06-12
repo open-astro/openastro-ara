@@ -14,20 +14,32 @@ import '../../services/plate_solve_api.dart';
 /// configuration failure. Uses [AsyncNotifier] for consistency with the rest of
 /// the app's async state.
 class SolveResult extends AsyncNotifier<PlateSolveResult?> {
+  // Bumped on each solve() and on clear(); a solve only writes its result if it
+  // is still the current generation, so a slow in-flight solve (up to the 120 s
+  // timeout) that was superseded by a new capture's clear() — or by a newer
+  // solve — can't overwrite the state with a result for the wrong frame.
+  int _generation = 0;
+
   @override
   FutureOr<PlateSolveResult?> build() => null;
 
   Future<void> solve(AraServer server, String frameId) async {
+    final gen = ++_generation;
     state = const AsyncLoading();
     try {
-      state = AsyncData(await PlateSolveApi(server).solve(frameId));
+      final result = await PlateSolveApi(server).solve(frameId);
+      if (gen == _generation) state = AsyncData(result);
     } catch (e, st) {
-      state = AsyncError(e, st);
+      if (gen == _generation) state = AsyncError(e, st);
     }
   }
 
-  /// Reset to idle (e.g. when a new frame is captured).
-  void clear() => state = const AsyncData(null);
+  /// Reset to idle (e.g. when a new frame is captured). Also invalidates any
+  /// in-flight solve so its late result is dropped.
+  void clear() {
+    _generation++;
+    state = const AsyncData(null);
+  }
 }
 
 final solveResultProvider =
