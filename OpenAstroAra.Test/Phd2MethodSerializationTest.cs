@@ -102,6 +102,37 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void SetProfileByName_uses_named_name_param() {
+            var json = Serialize(new Phd2SetProfileByName { Parameters = new() { Name = "ara-c14-cem120" } });
+            Assert.That(json["method"]!.Value<string>(), Is.EqualTo("set_profile_by_name"));
+            Assert.That(json["params"]!["name"]!.Value<string>(), Is.EqualTo("ara-c14-cem120"));
+        }
+
+        [Test]
+        public void CreateProfile_sends_name_and_explicit_select_true_no_clone_source() {
+            var json = Serialize(new Phd2CreateProfile { Parameters = new() { Name = "ara-redcat-heq5" } });
+            Assert.That(json["method"]!.Value<string>(), Is.EqualTo("create_profile"));
+            var p = (JObject)json["params"]!;
+            Assert.That(p["name"]!.Value<string>(), Is.EqualTo("ara-redcat-heq5"));
+            // ARA always selects the new profile (so the §63.5 push lands in it) — sent explicitly.
+            Assert.That(p["select"]!.Value<bool>(), Is.True);
+            // ARA creates fresh (no clone source); the mutually-exclusive copy_from/copy_from_id are omitted.
+            Assert.That(p.ContainsKey("copy_from"), Is.False);
+            Assert.That(p.ContainsKey("copy_from_id"), Is.False);
+        }
+
+        [Test]
+        public void CreateProfile_emits_clone_source_only_when_set() {
+            var json = Serialize(new Phd2CreateProfile {
+                Parameters = new() { Name = "ara-clone", CopyFrom = "Default", Select = false },
+            });
+            var p = (JObject)json["params"]!;
+            Assert.That(p["copy_from"]!.Value<string>(), Is.EqualTo("Default"));
+            Assert.That(p["select"]!.Value<bool>(), Is.False);
+            Assert.That(p.ContainsKey("copy_from_id"), Is.False);
+        }
+
+        [Test]
         public void SetProfileSetup_calibration_and_binning_fields_use_guider_names() {
             // Lock the calibration_* names against the authoritative guider contract
             // (openastro-guider/doc/jsonrpc_api.md: calibration_duration 50..60000, calibration_distance
