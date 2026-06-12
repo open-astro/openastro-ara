@@ -178,7 +178,14 @@ public sealed record Phd2SettingsDto(
     double SettlePixels,
     int SettleTimeSec,
     int SettleTimeoutSec,
-    bool ForceCalibrationEachSession);
+    bool ForceCalibrationEachSession,
+    // §63.5 guider-engine config — pushed to the guider daemon on connect (guider-e-2).
+    int GuideFocalLength,
+    double GuidePixelSize,
+    double RaAggressiveness,
+    double DecAggressiveness,
+    double MinimumMove,
+    string DecGuideMode);
 
 /// <summary>
 /// §52.1 connection-lifecycle defaults — which equipment device types

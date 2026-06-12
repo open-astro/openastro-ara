@@ -56,5 +56,21 @@ namespace OpenAstroAra.Profile.Interfaces {
         string GuideChartRightAscensionColor { get; set; }
         string GuideChartDeclinationColor { get; set; }
         bool GuideChartShowCorrections { get; set; }
+
+        // §63.5 guider-engine config — pushed to the guider daemon on connect (set_profile_setup /
+        // set_algo_param / set_dec_guide_mode). Stored here so ARA owns the source of truth; the guider-e-2
+        // push maps these onto the RPCs.
+        /// <summary>Guide scope focal length, mm (0 = unset).</summary>
+        int GuideFocalLength { get; set; }
+        /// <summary>Guide camera pixel size, µm (0 = unset).</summary>
+        double GuidePixelSize { get; set; }
+        /// <summary>RA hysteresis aggressiveness, 0..1.</summary>
+        double RAAggressiveness { get; set; }
+        /// <summary>Dec aggressiveness, 0..1.</summary>
+        double DecAggressiveness { get; set; }
+        /// <summary>Minimum guide move, pixels (applied to both axes).</summary>
+        double MinimumMove { get; set; }
+        /// <summary>Dec guide mode: "auto" | "north" | "south" | "off".</summary>
+        string DecGuideMode { get; set; }
     }
 }

@@ -81,6 +81,14 @@ namespace OpenAstroAra.Profile {
             guideChartRightAscensionColor = "#FF0000FF";
             guideChartDeclinationColor = "#FFFF0000";
             guideChartShowCorrections = true;
+
+            // §63.5 guider-engine config defaults (PHD2 hysteresis defaults; 0 = unset for focal/pixel).
+            guideFocalLength = 0;
+            guidePixelSize = 0;
+            rAAggressiveness = 0.7;
+            decAggressiveness = 0.7;
+            minimumMove = 0.15;
+            decGuideMode = "auto";
         }
 
         private string lastDeviceName = string.Empty;
@@ -595,6 +603,80 @@ namespace OpenAstroAra.Profile {
                 }
             }
 
+        }
+
+        // §63.5 guider-engine config (pushed to the guider daemon on connect).
+
+        private int guideFocalLength;
+        [DataMember]
+        public int GuideFocalLength {
+            get => guideFocalLength;
+            set {
+                if (guideFocalLength != value) {
+                    guideFocalLength = value;
+                    RaisePropertyChanged();
+                }
+            }
+        }
+
+        private double guidePixelSize;
+        [DataMember]
+        public double GuidePixelSize {
+            get => guidePixelSize;
+            set {
+                if (guidePixelSize != value) {
+                    guidePixelSize = value;
+                    RaisePropertyChanged();
+                }
+            }
+        }
+
+        private double rAAggressiveness;
+        [DataMember]
+        public double RAAggressiveness {
+            get => rAAggressiveness;
+            set {
+                if (rAAggressiveness != value) {
+                    rAAggressiveness = value;
+                    RaisePropertyChanged();
+                }
+            }
+        }
+
+        private double decAggressiveness;
+        [DataMember]
+        public double DecAggressiveness {
+            get => decAggressiveness;
+            set {
+                if (decAggressiveness != value) {
+                    decAggressiveness = value;
+                    RaisePropertyChanged();
+                }
+            }
+        }
+
+        private double minimumMove;
+        [DataMember]
+        public double MinimumMove {
+            get => minimumMove;
+            set {
+                if (minimumMove != value) {
+                    minimumMove = value;
+                    RaisePropertyChanged();
+                }
+            }
+        }
+
+        private string decGuideMode = "auto";
+        [DataMember]
+        public string DecGuideMode {
+            get => decGuideMode;
+            set {
+                if (decGuideMode != value) {
+                    decGuideMode = value;
+                    RaisePropertyChanged();
+                }
+            }
         }
     }
 }

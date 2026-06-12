@@ -77,7 +77,9 @@ namespace OpenAstroAra.Test {
                 Host: "astro-pi.local", Port: 4400, Phd2Profile: "main",
                 DitherEnabled: true, DitherEveryNFrames: 3, DitherPixels: 4.5,
                 SettlePixels: 1.25, SettleTimeSec: 9, SettleTimeoutSec: 77,
-                ForceCalibrationEachSession: false));
+                ForceCalibrationEachSession: false,
+                GuideFocalLength: 250, GuidePixelSize: 2.9, RaAggressiveness: 0.8,
+                DecAggressiveness: 0.65, MinimumMove: 0.2, DecGuideMode: "north"));
 
             var guider = svc.ActiveProfile.GuiderSettings;
             Assert.That(guider.PHD2ServerHost, Is.EqualTo("astro-pi.local"));
@@ -86,6 +88,13 @@ namespace OpenAstroAra.Test {
             Assert.That(guider.SettlePixels, Is.EqualTo(1.25));
             Assert.That(guider.SettleTime, Is.EqualTo(9));
             Assert.That(guider.SettleTimeout, Is.EqualTo(77));
+            // §63.5 guider-engine config.
+            Assert.That(guider.GuideFocalLength, Is.EqualTo(250));
+            Assert.That(guider.GuidePixelSize, Is.EqualTo(2.9));
+            Assert.That(guider.RAAggressiveness, Is.EqualTo(0.8));
+            Assert.That(guider.DecAggressiveness, Is.EqualTo(0.65));
+            Assert.That(guider.MinimumMove, Is.EqualTo(0.2));
+            Assert.That(guider.DecGuideMode, Is.EqualTo("north"));
         }
 
         [Test]

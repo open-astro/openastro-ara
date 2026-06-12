@@ -177,6 +177,14 @@ internal static class ProfileStoreMapper {
         guider.SettlePixels = phd2.SettlePixels;
         guider.SettleTime = phd2.SettleTimeSec;
         guider.SettleTimeout = phd2.SettleTimeoutSec;
+        // §63.5 guider-engine config — owned by ARA's profile, pushed to the guider daemon on connect
+        // (guider-e-2 maps these onto set_profile_setup / set_algo_param / set_dec_guide_mode).
+        guider.GuideFocalLength = phd2.GuideFocalLength;
+        guider.GuidePixelSize = phd2.GuidePixelSize;
+        guider.RAAggressiveness = phd2.RaAggressiveness;
+        guider.DecAggressiveness = phd2.DecAggressiveness;
+        guider.MinimumMove = phd2.MinimumMove;
+        guider.DecGuideMode = phd2.DecGuideMode;
         // DitherEnabled / DitherEveryNFrames are per-sequence concerns in NINA (the Dither
         // instruction + trigger carry them), and Phd2Profile selection is a §63 connect-time
         // concern — store-only here.
