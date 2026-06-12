@@ -373,13 +373,12 @@ UTF-8 (its copyright uses ASCII `(c)`, de-mojibaked in Phase 3); only `PHD2Metho
 needs byte-preserving edits. The connect-path swap used the Edit tool safely; md5 of line 4 verified unchanged.)
 
 **Still deferred (e-3c / v0.1.0):**
-- **Slug-collision disambiguation.** `AraGuiderProfileName` maps by name only (per §63.4), so two ARA profiles
-  differing only in punctuation/case collide on one PHD2 name (`"C-14"`/`"C 14"` → `ara-c-14`), and all
-  all-punctuation / non-ASCII-only names collapse to `ara-default` (as does a profile literally named
-  "default"). e-3b's select-or-create currently treats same-slug profiles as the *same* profile (selects the
-  existing one). To isolate them, append a short stable disambiguator (e.g. first 6 of the ARA profile Id) on
-  create and store the resolved PHD2 name back on the ARA profile so lookups stay exact — needs a new
-  `GuiderSettings.PHD2ProfileName` field, hence deferred.
+- **Slug-collision disambiguation.** ✅ DONE (guider-e-3c) — the connect path now uses the id-suffixed
+  `AraGuiderProfileName(name, profileId)` → `ara-<slug>-<id8>` (first 8 hex of the ARA profile's stable Guid),
+  so same-slug profiles (`"C-14"`/`"C 14"`, or anything collapsing to `ara-default`) get distinct PHD2 profiles.
+  Chose the deterministic id-suffix over the PORT_TODO sketch's "store the resolved `PHD2ProfileName` back on the
+  ARA profile" because the Equipment-layer guider has read-only `IProfileService` and can't persist a profile
+  mutation back through `IProfileStore` — the id-suffix needs no stored state. +tests.
 - **Slug length cap (from #375 review).** No length cap; the daemon docs don't state a max profile-name length,
   so a cap would be a guess (and truncation reintroduces the collision above). Find the real openastro-guider
   limit (read the daemon source / test an over-long `create_profile`) and cap there if one exists, paired with
