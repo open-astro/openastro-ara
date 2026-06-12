@@ -83,5 +83,40 @@ void main() {
       expect(s.ditherEnabled, isFalse);
       expect(s.forceCalibrationEachSession, isTrue);
     });
+
+    test('§63.5 guider-engine defaults', () {
+      final s = container.read(phd2SettingsProvider);
+      expect(s.guideFocalLength, 0);
+      expect(s.guidePixelSize, 0);
+      expect(s.raAggressiveness, 0.7);
+      expect(s.decAggressiveness, 0.7);
+      expect(s.minimumMove, 0.15);
+      expect(s.decGuideMode, 'auto');
+    });
+
+    test('§63.5 setters validate ranges (mirror the server)', () {
+      final n = container.read(phd2SettingsProvider.notifier);
+      // Aggressiveness rejects outside [0,1].
+      n.setRaAggressiveness(1.5);
+      n.setRaAggressiveness(-0.1);
+      expect(container.read(phd2SettingsProvider).raAggressiveness, 0.7);
+      n.setRaAggressiveness(0.85);
+      expect(container.read(phd2SettingsProvider).raAggressiveness, 0.85);
+      // Focal / pixel / min-move reject negatives.
+      n.setGuideFocalLength(-5);
+      n.setMinimumMove(-1);
+      expect(container.read(phd2SettingsProvider).guideFocalLength, 0);
+      expect(container.read(phd2SettingsProvider).minimumMove, 0.15);
+      n.setGuideFocalLength(250);
+      expect(container.read(phd2SettingsProvider).guideFocalLength, 250);
+    });
+
+    test('§63.5 setDecGuideMode normalizes + rejects unknown', () {
+      final n = container.read(phd2SettingsProvider.notifier);
+      n.setDecGuideMode('NORTH'); // case-insensitive
+      expect(container.read(phd2SettingsProvider).decGuideMode, 'north');
+      n.setDecGuideMode('sideways'); // unknown → rejected, keeps prior
+      expect(container.read(phd2SettingsProvider).decGuideMode, 'north');
+    });
   });
 }

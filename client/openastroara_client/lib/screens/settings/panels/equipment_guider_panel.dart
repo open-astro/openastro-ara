@@ -194,6 +194,76 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
           value: 'Edit in Settings → Safety → Policies',
           hint: '§35 meridian-flip behaviour',
         ),
+        const SettingsSectionHeader('Guider engine'),
+        EditableNumberRow(
+          label: 'Guide focal length (mm)',
+          helpKey: 'eq.guider.guide_focal_length',
+          currentValue: phd2.guideFocalLength.toString(),
+          getCanonical: () =>
+              ref.read(phd2SettingsProvider).guideFocalLength.toString(),
+          parse: (s) {
+            final v = int.tryParse(s);
+            if (v != null) phd2N.setGuideFocalLength(v);
+          },
+        ),
+        EditableNumberRow(
+          label: 'Guide pixel size (µm)',
+          helpKey: 'eq.guider.guide_pixel_size',
+          currentValue: phd2.guidePixelSize.toString(),
+          getCanonical: () =>
+              ref.read(phd2SettingsProvider).guidePixelSize.toString(),
+          parse: (s) {
+            final v = double.tryParse(s);
+            if (v != null) phd2N.setGuidePixelSize(v);
+          },
+        ),
+        EditableNumberRow(
+          label: 'RA aggressiveness (0–1)',
+          helpKey: 'eq.guider.ra_aggressiveness',
+          currentValue: phd2.raAggressiveness.toString(),
+          getCanonical: () =>
+              ref.read(phd2SettingsProvider).raAggressiveness.toString(),
+          parse: (s) {
+            final v = double.tryParse(s);
+            if (v != null) phd2N.setRaAggressiveness(v);
+          },
+        ),
+        EditableNumberRow(
+          label: 'Dec aggressiveness (0–1)',
+          helpKey: 'eq.guider.dec_aggressiveness',
+          currentValue: phd2.decAggressiveness.toString(),
+          getCanonical: () =>
+              ref.read(phd2SettingsProvider).decAggressiveness.toString(),
+          parse: (s) {
+            final v = double.tryParse(s);
+            if (v != null) phd2N.setDecAggressiveness(v);
+          },
+        ),
+        EditableNumberRow(
+          label: 'Minimum move (px)',
+          helpKey: 'eq.guider.minimum_move',
+          currentValue: phd2.minimumMove.toString(),
+          getCanonical: () =>
+              ref.read(phd2SettingsProvider).minimumMove.toString(),
+          parse: (s) {
+            final v = double.tryParse(s);
+            if (v != null) phd2N.setMinimumMove(v);
+          },
+        ),
+        SettingsDropdownRow<String>(
+          label: 'Dec guide mode',
+          helpKey: 'eq.guider.dec_guide_mode',
+          value: phd2.decGuideMode,
+          items: const {
+            'auto': 'Auto',
+            'north': 'North',
+            'south': 'South',
+            'off': 'Off',
+          },
+          onChanged: (v) {
+            if (v != null) phd2N.setDecGuideMode(v);
+          },
+        ),
         const SizedBox(height: 24),
         if (_lastError != null) ...[
           Text(
