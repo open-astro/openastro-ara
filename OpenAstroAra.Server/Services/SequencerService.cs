@@ -198,8 +198,11 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             if (!IsAbortableRun(run.State)) {
                 continue;
             }
-            await RequestCancelAsync(id, SequenceRunState.Aborting);
-            aborted++;
+            // Count only runs this call actually transitioned — a run that finished naturally in the TOCTOU
+            // window between the check above and the cancel returns false and isn't counted.
+            if (await RequestCancelAsync(id, SequenceRunState.Aborting)) {
+                aborted++;
+            }
         }
         return aborted;
     }
@@ -276,8 +279,11 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
     /// an already-terminal run so we never touch a disposed CTS; the CancelAsync
     /// is still guarded against the narrow worker-disposes-during-abort race.
     /// </summary>
-    private async Task RequestCancelAsync(Guid id, SequenceRunState desired) {
-        if (!_runs.TryGetValue(id, out var run) || IsTerminal(run.State)) return;
+    // Returns true when this call actually transitioned the run (false when the run was missing or already
+    // terminal) — so AbortActiveRunsAsync counts only runs it really stopped, not ones that finished naturally
+    // in the TOCTOU window between the abortability check and here.
+    private async Task<bool> RequestCancelAsync(Guid id, SequenceRunState desired) {
+        if (!_runs.TryGetValue(id, out var run) || IsTerminal(run.State)) return false;
         run.State = desired;
         try {
             await run.Cts.CancelAsync();
@@ -285,6 +291,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             // Worker reached terminal + disposed the CTS between the check above
             // and here — the run is already ending, nothing more to cancel.
         }
+        return true;
     }
 
     // Checkpoint ownership — only the run that currently owns active/current.json

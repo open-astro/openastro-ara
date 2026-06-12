@@ -89,7 +89,6 @@ const Map<String, Help> helpRegistry = {
         '* **Abort the running sequence**: also halt any in-progress sequence, so you don\'t keep filling the disk with frames that may not even save. A critical notification records that it stopped the run.\n\n'
         'Either way the monitor never deletes anything. The warning thresholds and this action are independent — tune the levels in Storage, choose the consequence here.',
     relatedSettings: [
-      'safety.policies.on_disk_space_critical',
       'session.storage.min_free_disk_critical_gb',
       'session.notifications.on_disk_space_low',
     ],
