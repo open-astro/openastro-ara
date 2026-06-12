@@ -34,6 +34,11 @@ public sealed partial class GuiderService {
     public const string DarkLibraryCompleteEvent = "guider.dark_library.complete";
     public const string DarkLibraryFailedEvent = "guider.dark_library.failed";
 
+    // 0 = idle, 1 = a build is in flight. build_dark_library is a single blocking RPC on the daemon, so two
+    // concurrent builds are undefined behavior there (and would emit ambiguous paired started/complete events) —
+    // this sentinel serializes them, rejecting a second build with 409 until the first finishes.
+    private int _darkLibraryBuildInProgress;
+
     public Task<OperationAcceptedDto> BuildDarkLibraryAsync(
             BuildDarkLibraryRequestDto request, string? idempotencyKey, CancellationToken ct) {
         ArgumentNullException.ThrowIfNull(request);
@@ -45,6 +50,10 @@ public sealed partial class GuiderService {
         // Reject up front if no guider is connected (throws InvalidOperationException → 409) — same as the other
         // guide ops; do NOT accept a 202 we can't honor.
         var guider = RequireConnectedGuider();
+        // Reject a concurrent build (→ 409). The flag is cleared in BuildDarkLibraryInBackground's finally.
+        if (Interlocked.CompareExchange(ref _darkLibraryBuildInProgress, 1, 0) != 0) {
+            throw new InvalidOperationException("a dark-library build is already in progress");
+        }
         _ = Task.Run(() => BuildDarkLibraryInBackground(guider, rpcRequest), CancellationToken.None);
         return Task.FromResult(Accepted("guider.dark_library.build", idempotencyKey));
     }
@@ -53,13 +62,13 @@ public sealed partial class GuiderService {
         Justification = "Background build boundary: guider.BuildDarkLibraryAsync can throw arbitrary socket/IO/protocol exceptions (and GuiderRpcException) over a 2-hour blocking RPC. The 202 already returned, so any escape must surface as the failed WS event and be contained — it must not become an unobserved task exception. Log-and-recover.")]
     private async Task BuildDarkLibraryInBackground(PHD2Guider guider, Phd2BuildDarkLibrary rpcRequest) {
         var p = rpcRequest.Parameters!;
-        LogDarkLibraryBuildStarted(p.FrameCount, p.ClearExisting);
-        await EmitDarkLibraryEventAsync(DarkLibraryStartedEvent, new JsonObject {
-            ["frame_count"] = p.FrameCount,
-            ["clear_existing"] = p.ClearExisting,
-            ["load_after"] = p.LoadAfter,
-        });
         try {
+            LogDarkLibraryBuildStarted(p.FrameCount, p.ClearExisting);
+            await EmitDarkLibraryEventAsync(DarkLibraryStartedEvent, new JsonObject {
+                ["frame_count"] = p.FrameCount,
+                ["clear_existing"] = p.ClearExisting,
+                ["load_after"] = p.LoadAfter,
+            });
             var result = await guider.BuildDarkLibraryAsync(
                 p.FrameCount, p.MinExposureMs, p.MaxExposureMs, p.ClearExisting, p.Notes, p.LoadAfter,
                 CancellationToken.None).ConfigureAwait(false);
@@ -81,6 +90,9 @@ public sealed partial class GuiderService {
             await EmitDarkLibraryEventAsync(DarkLibraryFailedEvent, new JsonObject {
                 ["error"] = ex.Message,
             });
+        } finally {
+            // Release the single-build gate whether the build completed or failed.
+            Interlocked.Exchange(ref _darkLibraryBuildInProgress, 0);
         }
     }
 
@@ -94,7 +106,14 @@ public sealed partial class GuiderService {
         if (guider is null) {
             return null;
         }
-        var status = await guider.GetCalibrationFilesStatusAsync(ct).ConfigureAwait(false);
+        Phd2CalibrationFilesStatus status;
+        try {
+            status = await guider.GetCalibrationFilesStatusAsync(ct).ConfigureAwait(false);
+        } catch (Exception ex) when (ex is InvalidOperationException or ObjectDisposedException) {
+            // Raced with a disconnect/dispose after we captured the guider outside the gate — the guider went
+            // away mid-read. Treat it as the disconnected contract (null) rather than surfacing an error.
+            return null;
+        }
         return new CalibrationFilesStatusDto(
             ProfileId: status.ProfileId,
             DarkLibraryPath: status.DarkLibraryPath,
@@ -121,8 +140,10 @@ public sealed partial class GuiderService {
         try {
             using var doc = JsonDocument.Parse(payload.ToJsonString());
             await _ws.PublishAsync(eventType, doc.RootElement.Clone(), CancellationToken.None).ConfigureAwait(false);
-        } catch (Exception) {
-            // best-effort; a failed publish must not affect the build.
+        } catch (Exception ex) {
+            // best-effort; a failed publish must not affect the build, but log it so a silently-dropped event is
+            // visible in production rather than invisible.
+            LogDarkLibraryWsPublishFailed(eventType, ex);
         }
     }
 
@@ -131,4 +152,7 @@ public sealed partial class GuiderService {
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Dark-library build failed")]
     partial void LogDarkLibraryBuildFailed(Exception ex);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Dark-library WS event '{EventType}' failed to publish")]
+    partial void LogDarkLibraryWsPublishFailed(string eventType, Exception ex);
 }
