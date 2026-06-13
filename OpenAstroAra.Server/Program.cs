@@ -97,6 +97,7 @@ public partial class Program {
         builder.Services.AddHttpClient(AlpacaBridgeVersionProbe.HttpClientName);
         builder.Services.AddSingleton<IAlpacaBridgeVersionProbe, AlpacaBridgeVersionProbe>();
         builder.Services.AddSingleton<IAlpacaBridgeHandshakeService, AlpacaBridgeHandshakeService>();
+        builder.Services.AddSingleton<IAlpacaBridgeGateNotifier, AlpacaBridgeGateNotifier>();
 
         // §28 SqliteFrameRepository — reads frames from the catalog with
         // sample data seeded on first init. Bulk ops still return placeholder

@@ -43,10 +43,11 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task Blocks_with_503_alpaca_bridge_outdated_when_the_bridge_is_too_old() {
             var bridge = new FakeHandshake(new AlpacaBridgeHandshake(AlpacaBridgeStatus.OutdatedBlock, "1.1.0"));
+            var notifier = new FakeNotifier();
             var connectCalled = false;
 
             var result = await EquipmentEndpoints.ConnectGatedAsync(
-                Request(), bridge,
+                Request(), bridge, notifier,
                 () => { connectCalled = true; return Task.FromResult(Accepted); },
                 CancellationToken.None);
 
@@ -57,6 +58,7 @@ namespace OpenAstroAra.Test {
                 Assert.That(problem.ProblemDetails.Extensions.TryGetValue("code", out var code) ? code : null,
                     Is.EqualTo("alpaca_bridge_outdated"));
                 Assert.That(connectCalled, Is.False, "the device must NOT be connected through a too-old bridge");
+                Assert.That(notifier.WarnCount, Is.Zero, "a block is not a warn-band event");
             });
         }
 
@@ -65,10 +67,11 @@ namespace OpenAstroAra.Test {
         [TestCase(AlpacaBridgeStatus.Missing, null)]
         public async Task Connects_when_the_bridge_is_acceptable_warn_or_missing(AlpacaBridgeStatus status, string? version) {
             var bridge = new FakeHandshake(new AlpacaBridgeHandshake(status, version));
+            var notifier = new FakeNotifier();
             var connectCalled = false;
 
             var result = await EquipmentEndpoints.ConnectGatedAsync(
-                Request(), bridge,
+                Request(), bridge, notifier,
                 () => { connectCalled = true; return Task.FromResult(Accepted); },
                 CancellationToken.None);
 
@@ -81,11 +84,31 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Emits_the_warn_band_event_only_in_the_warn_band() {
+            // OutdatedWarn → exactly one warn event carrying the bridge version; Ok → none.
+            var warnBridge = new FakeHandshake(new AlpacaBridgeHandshake(AlpacaBridgeStatus.OutdatedWarn, "1.3.0"));
+            var warnNotifier = new FakeNotifier();
+            await EquipmentEndpoints.ConnectGatedAsync(
+                Request(), warnBridge, warnNotifier, () => Task.FromResult(Accepted), CancellationToken.None);
+
+            var okBridge = new FakeHandshake(new AlpacaBridgeHandshake(AlpacaBridgeStatus.Ok, "1.6.0"));
+            var okNotifier = new FakeNotifier();
+            await EquipmentEndpoints.ConnectGatedAsync(
+                Request(), okBridge, okNotifier, () => Task.FromResult(Accepted), CancellationToken.None);
+
+            Assert.Multiple(() => {
+                Assert.That(warnNotifier.WarnCount, Is.EqualTo(1));
+                Assert.That(warnNotifier.LastWarnVersion, Is.EqualTo("1.3.0"));
+                Assert.That(okNotifier.WarnCount, Is.Zero, "an acceptable bridge must not emit the warn event");
+            });
+        }
+
+        [Test]
         public async Task Probes_the_bridge_uri_built_from_the_device() {
             var bridge = new FakeHandshake(new AlpacaBridgeHandshake(AlpacaBridgeStatus.Ok, "1.6.0"));
 
             await EquipmentEndpoints.ConnectGatedAsync(
-                Request(ip: "192.168.1.50", port: 11111), bridge,
+                Request(ip: "192.168.1.50", port: 11111), bridge, new FakeNotifier(),
                 () => Task.FromResult(Accepted), CancellationToken.None);
 
             Assert.That(bridge.LastUri, Is.EqualTo(new Uri("http://192.168.1.50:11111")));
@@ -104,6 +127,17 @@ namespace OpenAstroAra.Test {
                 Assert.That(v6.Host, Is.EqualTo("[::1]"), "a bare IPv6 literal must be bracketed so the Uri parses");
                 Assert.That(v6Bracketed.Host, Is.EqualTo("[::1]"), "an already-bracketed IPv6 literal must not be double-bracketed");
             });
+        }
+
+        private sealed class FakeNotifier : IAlpacaBridgeGateNotifier {
+            public int WarnCount { get; private set; }
+            public string? LastWarnVersion { get; private set; }
+
+            public Task NotifyOutdatedWarnAsync(string? bridgeVersion, CancellationToken ct) {
+                WarnCount++;
+                LastWarnVersion = bridgeVersion;
+                return Task.CompletedTask;
+            }
         }
 
         private sealed class FakeHandshake : IAlpacaBridgeHandshakeService {
