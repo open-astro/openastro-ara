@@ -151,6 +151,20 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task ProbeAsync_times_out_a_hung_bridge_as_missing() {
+            using var handler = new BlockingHandler();
+            // A tiny probe timeout (via the test-seam ctor) so the hung-bridge path resolves instantly.
+            var probe = new AlpacaBridgeVersionProbe(
+                new StubHttpClientFactory(handler), NullLogger<AlpacaBridgeVersionProbe>.Instance,
+                TimeSpan.FromMilliseconds(50));
+
+            var result = await probe.ProbeAsync(new Uri("http://h:1/"), CancellationToken.None);
+
+            Assert.That(result.Status, Is.EqualTo(AlpacaBridgeStatus.Missing),
+                "a bridge that never responds must resolve to Missing via the self-bounded probe timeout, not hang");
+        }
+
+        [Test]
         public void ProbeAsync_propagates_a_caller_cancellation() {
             using var handler = new StubHandler(_ => Json("{\"alpaca_bridge_version\":\"1.5.0\"}"));
             var probe = NewProbe(handler);
@@ -177,6 +191,15 @@ namespace OpenAstroAra.Test {
                 cancellationToken.ThrowIfCancellationRequested();
                 LastRequestUri = request.RequestUri;
                 return Task.FromResult(_responder(request));
+            }
+        }
+
+        // Never responds — blocks until the request's own CancellationToken fires (i.e. the probe's
+        // self-bounded timeout cancels the linked token), modelling a hung/half-open bridge socket.
+        private sealed class BlockingHandler : HttpMessageHandler {
+            protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) {
+                await Task.Delay(Timeout.Infinite, cancellationToken).ConfigureAwait(false);
+                return new HttpResponseMessage(HttpStatusCode.OK); // unreachable.
             }
         }
 

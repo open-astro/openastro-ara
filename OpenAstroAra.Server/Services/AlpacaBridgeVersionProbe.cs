@@ -54,14 +54,25 @@ namespace OpenAstroAra.Server.Services {
 
         // §68.1: a healthy Pi-local bridge answers in < 200 ms. Bound the probe well above that so a
         // wedged/half-open socket resolves to Missing in seconds rather than hanging the handshake.
-        private static readonly TimeSpan ProbeTimeout = TimeSpan.FromSeconds(3);
+        private static readonly TimeSpan DefaultProbeTimeout = TimeSpan.FromSeconds(3);
+
+        // The /version payload is a tiny JSON object; cap the buffered body so a misbehaving bridge
+        // can't drive unbounded allocation. An over-cap body surfaces as HttpRequestException → Missing.
+        private const long MaxVersionResponseBytes = 64 * 1024;
 
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly ILogger<AlpacaBridgeVersionProbe> _logger;
+        private readonly TimeSpan _probeTimeout;
 
-        public AlpacaBridgeVersionProbe(IHttpClientFactory httpClientFactory, ILogger<AlpacaBridgeVersionProbe> logger) {
+        public AlpacaBridgeVersionProbe(IHttpClientFactory httpClientFactory, ILogger<AlpacaBridgeVersionProbe> logger)
+            : this(httpClientFactory, logger, DefaultProbeTimeout) {
+        }
+
+        // Test seam: a short probe timeout so the hung-bridge path runs instantly.
+        internal AlpacaBridgeVersionProbe(IHttpClientFactory httpClientFactory, ILogger<AlpacaBridgeVersionProbe> logger, TimeSpan probeTimeout) {
             _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _probeTimeout = probeTimeout;
         }
 
         public async Task<AlpacaBridgeHandshake> ProbeAsync(Uri bridgeBaseUri, CancellationToken ct) {
@@ -72,10 +83,11 @@ namespace OpenAstroAra.Server.Services {
             // Self-bound the probe so a hung connection can't stall the handshake past ProbeTimeout,
             // while still honoring a caller cancel (which propagates as OperationCanceledException).
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            timeoutCts.CancelAfter(ProbeTimeout);
+            timeoutCts.CancelAfter(_probeTimeout);
 
             try {
                 using var client = _httpClientFactory.CreateClient(HttpClientName);
+                client.MaxResponseContentBufferSize = MaxVersionResponseBytes;
                 using var response = await client.GetAsync(versionUri, timeoutCts.Token).ConfigureAwait(false);
                 if (!response.IsSuccessStatusCode) {
                     return Missing(versionUri, $"HTTP {(int)response.StatusCode}");
@@ -86,9 +98,13 @@ namespace OpenAstroAra.Server.Services {
                 LogHandshake(versionUri, rawVersion ?? "<none>", status);
                 return new AlpacaBridgeHandshake(status, rawVersion);
             } catch (OperationCanceledException) when (ct.IsCancellationRequested) {
-                throw; // a genuine caller cancel — let it propagate.
+                // A genuine caller cancel — let it propagate. NOTE: we disambiguate on the *caller's*
+                // ct, not on oce.CancellationToken: the request runs on the LINKED token, so a thrown
+                // OCE always carries timeoutCts.Token (never ct itself), making a token-equality check
+                // useless here. If the caller cancelled, propagating wins even if the timeout also fired.
+                throw;
             } catch (OperationCanceledException) {
-                return Missing(versionUri, "timed out"); // our ProbeTimeout fired.
+                return Missing(versionUri, "timed out"); // our _probeTimeout fired, caller didn't cancel.
             } catch (HttpRequestException ex) {
                 return Missing(versionUri, ex.Message); // unreachable / connection refused.
             }
