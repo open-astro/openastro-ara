@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/calibration_status.dart';
@@ -26,6 +28,7 @@ class _FakeCalibrationClient implements GuiderCalibrationClient {
   bool? darkEnabled;
   bool? defectEnabled;
   bool throwOnBuild = false;
+  Completer<void>? buildGate;
 
   @override
   Future<CalibrationStatusResponse> getStatus() async => response;
@@ -39,6 +42,7 @@ class _FakeCalibrationClient implements GuiderCalibrationClient {
     bool loadAfter = true,
   }) async {
     darkBuilds++;
+    if (buildGate != null) await buildGate!.future;
     if (throwOnBuild) throw StateError('build failed');
   }
 
@@ -48,8 +52,10 @@ class _FakeCalibrationClient implements GuiderCalibrationClient {
     int frameCount = 10,
     String? notes,
     bool loadAfter = true,
-  }) async =>
-      defectBuilds++;
+  }) async {
+    defectBuilds++;
+    if (throwOnBuild) throw StateError('build failed');
+  }
   @override
   Future<void> setDarkLibraryEnabled(bool enabled) async => darkEnabled = enabled;
   @override
@@ -127,6 +133,22 @@ void main() {
 
       expect(api.darkEnabled, isFalse);
       expect(api.defectEnabled, isTrue);
+    });
+
+    test('a second action while one is in flight is ignored (state.isLoading guard)', () async {
+      final api = _FakeCalibrationClient(_resp())..buildGate = Completer<void>();
+      final c = _container(const [server], api);
+      await c.read(savedServersProvider.future);
+      await c.read(guiderCalibrationProvider.future);
+
+      final notifier = c.read(guiderCalibrationProvider.notifier);
+      final first = notifier.buildDarkLibrary();
+      await pumpEventQueue(); // let the first action set loading
+      final second = notifier.buildDarkLibrary(); // state.isLoading → no-op
+      api.buildGate!.complete();
+      await Future.wait<void>([first, second]);
+
+      expect(api.darkBuilds, 1, reason: 'the second action was guarded out');
     });
 
     test('a failed build surfaces as AsyncError', () async {
