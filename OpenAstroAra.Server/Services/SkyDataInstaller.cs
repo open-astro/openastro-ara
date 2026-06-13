@@ -29,7 +29,9 @@ namespace OpenAstroAra.Server.Services {
     /// "Atomically": extraction stages into a sibling temp directory and is swapped into place only once complete,
     /// and an <see cref="InstalledMarkerFileName"/> sentinel is written inside before the swap — so a reader can
     /// always tell a finished install from a torn one (a crash/cancel mid-extract leaves no install at all, not a
-    /// half-populated one).
+    /// half-populated one). A prior install is moved aside to a backup and is deleted only once the new install is
+    /// safely in place, so a failure during the swap restores it; the sole crash-unsafe instant is between the two
+    /// renames (both fast same-filesystem metadata ops), and even then the missing sentinel marks the state as bad.
     ///
     /// The caller (the §36-2 download worker) is responsible for resolving <c>targetDir</c> from a catalog-validated
     /// package id; this engine only consumes a stream + a destination and guards entry-level traversal within it.
@@ -44,8 +46,9 @@ namespace OpenAstroAra.Server.Services {
         /// <summary>
         /// Extract <paramref name="tarGz"/> (a gzip-compressed tar stream) into <paramref name="targetDir"/>,
         /// replacing any prior install. On success <paramref name="targetDir"/> contains the package files plus the
-        /// <see cref="InstalledMarkerFileName"/> sentinel; on any failure or cancellation nothing is left behind and
-        /// a pre-existing install is preserved untouched (the swap is the last step).
+        /// <see cref="InstalledMarkerFileName"/> sentinel; on any failure or cancellation nothing partial is left
+        /// behind and a pre-existing install is restored (it is moved aside, and only deleted once the new install
+        /// is in place — a failed swap moves it back).
         /// </summary>
         internal static async Task InstallFromTarGzAsync(Stream tarGz, string targetDir, CancellationToken ct) {
             ArgumentNullException.ThrowIfNull(tarGz);
@@ -57,9 +60,13 @@ namespace OpenAstroAra.Server.Services {
             Directory.CreateDirectory(parent);
 
             // Stage into a sibling temp dir so a failed/cancelled extract never leaves a half-populated targetDir,
-            // and the final reveal is a single Move rather than a slow file-by-file write into the live path.
-            var stagingDir = Path.Combine(parent, ".staging-" + Path.GetFileName(targetFull) + "-" + Guid.NewGuid().ToString("N"));
+            // and the final reveal is a Move rather than a slow file-by-file write into the live path.
+            var suffix = Path.GetFileName(targetFull) + "-" + Guid.NewGuid().ToString("N");
+            var stagingDir = Path.Combine(parent, ".staging-" + suffix);
+            var backupDir = Path.Combine(parent, ".backup-" + suffix);
             Directory.CreateDirectory(stagingDir);
+
+            var movedPriorAside = false;
             try {
                 await ExtractTarGzAsync(tarGz, stagingDir, ct).ConfigureAwait(false);
 
@@ -69,16 +76,29 @@ namespace OpenAstroAra.Server.Services {
                     DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture),
                     ct).ConfigureAwait(false);
 
-                // Reveal. Delete-then-Move isn't a single atomic syscall, but the sentinel makes a torn state
-                // detectable: a dir with no sentinel is treated as not-installed by the inventory layer.
+                // Swap. Move the prior install aside first so the destructive delete happens only AFTER the new
+                // install has landed — a failure mid-swap restores the prior install rather than losing it.
                 if (Directory.Exists(targetFull)) {
-                    Directory.Delete(targetFull, recursive: true);
+                    Directory.Move(targetFull, backupDir);
+                    movedPriorAside = true;
                 }
                 Directory.Move(stagingDir, targetFull);
             } catch {
                 TryDeleteDirectory(stagingDir);
+                // If the prior install was moved aside but the new one never landed, move it back.
+                if (movedPriorAside && !Directory.Exists(targetFull) && Directory.Exists(backupDir)) {
+                    try {
+                        Directory.Move(backupDir, targetFull);
+                    } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+                        // Restore failed — leave the backup dir in place for manual recovery rather than masking
+                        // the original failure with a restore error.
+                    }
+                }
                 throw;
             }
+
+            // New install is in place — the prior copy is now safe to discard (no-op if there was none).
+            TryDeleteDirectory(backupDir);
         }
 
         private static async Task ExtractTarGzAsync(Stream tarGz, string destDir, CancellationToken ct) {
@@ -91,7 +111,7 @@ namespace OpenAstroAra.Server.Services {
             await using var reader = new TarReader(gz, leaveOpen: true);
 
             while (await reader.GetNextEntryAsync(copyData: false, ct).ConfigureAwait(false) is { } entry) {
-                ct.ThrowIfCancellationRequested();
+                // GetNextEntryAsync and ExtractToFileAsync both honor ct, so no separate check is needed here.
                 if (string.IsNullOrEmpty(entry.Name)) {
                     continue;
                 }

@@ -102,7 +102,7 @@ namespace OpenAstroAra.Test {
 
             Assert.That(Directory.Exists(target), Is.False, "a rejected install leaves no target dir");
             Assert.That(File.Exists(Path.Combine(_root, "escaped.txt")), Is.False, "nothing is written outside the target");
-            Assert.That(StagingDirs(), Is.Empty, "the staging dir is cleaned up after the failure");
+            Assert.That(TempDirs(), Is.Empty, "the staging dir is cleaned up after the failure");
         }
 
         [Test]
@@ -120,6 +120,25 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_failed_install_preserves_the_prior_install() {
+            var target = Path.Combine(_root, "tycho-2");
+            using (var good = MakeTarGz(("catalog.dat", Bytes("original")))) {
+                await SkyDataInstaller.InstallFromTarGzAsync(good, target, CancellationToken.None);
+            }
+
+            // A second install that fails (tar-slip) must not damage the install already on disk.
+            using var poisoned = MakeTarGz(("../escaped.txt", Bytes("pwned")));
+            Assert.That(
+                async () => await SkyDataInstaller.InstallFromTarGzAsync(poisoned, target, CancellationToken.None),
+                Throws.InstanceOf<InvalidDataException>());
+
+            Assert.That(await File.ReadAllTextAsync(Path.Combine(target, "catalog.dat")), Is.EqualTo("original"),
+                "the prior install is untouched when a re-install fails");
+            Assert.That(File.Exists(Path.Combine(target, SkyDataInstaller.InstalledMarkerFileName)), Is.True);
+            Assert.That(TempDirs(), Is.Empty, "no staging/backup dirs are leaked");
+        }
+
+        [Test]
         public void A_cancelled_install_leaves_no_target_and_no_staging_leak() {
             var target = Path.Combine(_root, "gaia-edr3-bright");
             using var archive = MakeTarGz(("catalog.dat", Bytes("data")));
@@ -131,11 +150,14 @@ namespace OpenAstroAra.Test {
                 Throws.InstanceOf<OperationCanceledException>());
 
             Assert.That(Directory.Exists(target), Is.False, "a cancelled install produces no target dir");
-            Assert.That(StagingDirs(), Is.Empty, "the staging dir is cleaned up on cancellation");
+            Assert.That(TempDirs(), Is.Empty, "the staging dir is cleaned up on cancellation");
         }
 
-        // Sibling staging dirs the installer creates under _root while extracting (".staging-*").
-        private string[] StagingDirs() =>
-            Directory.EnumerateDirectories(_root, ".staging-*", SearchOption.TopDirectoryOnly).ToArray();
+        // Sibling scratch dirs the installer creates under _root during a swap (".staging-*" / ".backup-*").
+        private string[] TempDirs() =>
+            Directory.EnumerateDirectories(_root, ".*", SearchOption.TopDirectoryOnly)
+                .Where(d => Path.GetFileName(d).StartsWith(".staging-", StringComparison.Ordinal)
+                         || Path.GetFileName(d).StartsWith(".backup-", StringComparison.Ordinal))
+                .ToArray();
     }
 }
