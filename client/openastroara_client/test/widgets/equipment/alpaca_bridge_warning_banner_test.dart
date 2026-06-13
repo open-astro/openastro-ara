@@ -44,4 +44,35 @@ void main() {
 
     expect(find.textContaining('AlpacaBridge 1.3.0 detected'), findsNothing);
   });
+
+  testWidgets('dismissal survives the banner being unmounted + remounted', (tester) async {
+    // The banner is conditionally mounted on the eq.* panels, so navigating away
+    // and back recreates the widget — the dismissal (held in a provider, not widget
+    // state) must persist across that teardown.
+    const warning =
+        AlpacaBridgeWarning(version: '1.3.0', minimum: '1.2.0', recommended: '1.5.0');
+    final container = ProviderContainer(overrides: [
+      alpacaBridgeWarningProvider.overrideWith(() => _FixedWarnNotifier(warning)),
+    ]);
+    addTearDown(container.dispose);
+
+    Widget mount(bool show) => UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            home: Scaffold(body: show ? const AlpacaBridgeWarningBanner() : const SizedBox()),
+          ),
+        );
+
+    await tester.pumpWidget(mount(true));
+    await tester.tap(find.byTooltip('Dismiss'));
+    await tester.pump();
+    expect(find.textContaining('AlpacaBridge 1.3.0 detected'), findsNothing);
+
+    await tester.pumpWidget(mount(false)); // navigate away — banner unmounts
+    await tester.pumpWidget(mount(true)); // …and back — banner remounts
+    await tester.pump();
+
+    expect(find.textContaining('AlpacaBridge 1.3.0 detected'), findsNothing,
+        reason: 'a banner dismissed before navigation must stay dismissed after remount');
+  });
 }

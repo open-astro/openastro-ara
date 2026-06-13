@@ -66,3 +66,19 @@ class AlpacaBridgeWarningNotifier extends Notifier<AlpacaBridgeWarning?> {
 final alpacaBridgeWarningProvider =
     NotifierProvider<AlpacaBridgeWarningNotifier, AlpacaBridgeWarning?>(
         AlpacaBridgeWarningNotifier.new);
+
+/// Holds the bridge version the user has dismissed the §68.2 banner for (or null).
+/// Kept in a provider — NOT widget state — so the dismissal survives the banner
+/// being torn down and remounted as the user navigates between settings panels
+/// (the banner is conditionally mounted only on the `eq.*` panels). A later warn
+/// carrying a *different* version re-shows, since this only matches that one version.
+class AlpacaBridgeWarningDismissedNotifier extends Notifier<String?> {
+  @override
+  String? build() => null;
+
+  void dismiss(String version) => state = version;
+}
+
+final alpacaBridgeWarningDismissedVersionProvider =
+    NotifierProvider<AlpacaBridgeWarningDismissedNotifier, String?>(
+        AlpacaBridgeWarningDismissedNotifier.new);

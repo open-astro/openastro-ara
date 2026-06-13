@@ -10,26 +10,19 @@ import '../../theme/ara_colors.dart';
 /// [alpacaBridgeWarningProvider]. Equipment still connects — this is purely
 /// advisory.
 ///
-/// Dismiss is session-local and keyed by the bridge version (per the §30.7 silent-
-/// banner pattern): dismissing hides this version, but a later warn carrying a
-/// *different* version re-shows so the user isn't kept in the dark about a changed
-/// hub. Returns an empty box when there's no warning or it's been dismissed.
-class AlpacaBridgeWarningBanner extends ConsumerStatefulWidget {
+/// Dismiss is keyed by bridge version and held in
+/// [alpacaBridgeWarningDismissedVersionProvider] (not widget state) so it survives
+/// the banner being torn down + remounted as the user navigates between settings
+/// panels. A later warn carrying a *different* version re-shows. Returns an empty
+/// box when there's no warning or it's been dismissed.
+class AlpacaBridgeWarningBanner extends ConsumerWidget {
   const AlpacaBridgeWarningBanner({super.key});
 
   @override
-  ConsumerState<AlpacaBridgeWarningBanner> createState() =>
-      _AlpacaBridgeWarningBannerState();
-}
-
-class _AlpacaBridgeWarningBannerState
-    extends ConsumerState<AlpacaBridgeWarningBanner> {
-  String? _dismissedVersion;
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final warning = ref.watch(alpacaBridgeWarningProvider);
-    if (warning == null || warning.version == _dismissedVersion) {
+    final dismissedVersion = ref.watch(alpacaBridgeWarningDismissedVersionProvider);
+    if (warning == null || warning.version == dismissedVersion) {
       return const SizedBox.shrink();
     }
 
@@ -51,8 +44,9 @@ class _AlpacaBridgeWarningBannerState
             ),
           ),
           IconButton(
-            onPressed: () =>
-                setState(() => _dismissedVersion = warning.version),
+            onPressed: () => ref
+                .read(alpacaBridgeWarningDismissedVersionProvider.notifier)
+                .dismiss(warning.version),
             icon: const Icon(Icons.close, size: 18),
             tooltip: 'Dismiss',
           ),
