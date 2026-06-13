@@ -53,6 +53,8 @@ public sealed class AlpacaFaultProxy : IAsyncDisposable {
     // _client is disposed so a handler mid-ReadAsByteArrayAsync can't race disposal.
     private readonly ConcurrentDictionary<Task, byte> _inFlight = new();
     private volatile Exception? _lastHandlerFault;
+    // The single byte emitted before aborting a Drop — cached to avoid a per-call alloc.
+    private static readonly byte[] DropProbeByte = [(byte)'{'];
 
     private AlpacaFaultProxy(Uri upstream, int port) {
         _upstream = upstream;
@@ -275,7 +277,7 @@ public sealed class AlpacaFaultProxy : IAsyncDisposable {
     private static async Task WriteAlpacaErrorAsync(HttpListenerContext context, AlpacaErrorFault err, CancellationToken cancellationToken) {
         // Echo the client's transaction id when present so the envelope is well-formed
         // for the real ASCOM.Alpaca client (which correlates responses by it).
-        var clientTxn = await ReadClientTransactionIdAsync(context.Request).ConfigureAwait(false);
+        var clientTxn = await ReadClientTransactionIdAsync(context.Request, cancellationToken).ConfigureAwait(false);
         var envelope = new JsonObject {
             ["ClientTransactionID"] = clientTxn,
             // Fixed sentinel: the ASCOM client doesn't require a monotonic
@@ -288,16 +290,18 @@ public sealed class AlpacaFaultProxy : IAsyncDisposable {
         await WriteRawAsync(context, 200, envelope.ToJsonString(), "application/json", cancellationToken).ConfigureAwait(false);
     }
 
-    private static async Task<long> ReadClientTransactionIdAsync(HttpListenerRequest req) {
+    private static async Task<long> ReadClientTransactionIdAsync(HttpListenerRequest req, CancellationToken cancellationToken) {
         // GET carries it in the query; PUT carries it in the x-www-form-urlencoded
         // body. Best-effort: default 0. (Reads the body only for non-GET — an Alpaca
-        // error short-circuits forwarding, so the body is otherwise unconsumed.)
+        // error short-circuits forwarding, so the body is otherwise unconsumed.) The
+        // token is essential here: without it a large/malformed PUT body could block
+        // the read, hanging the DisposeAsync handler drain.
         if (long.TryParse(req.QueryString["ClientTransactionID"], out var fromQuery)) {
             return fromQuery;
         }
         if (req.HasEntityBody) {
             using var reader = new StreamReader(req.InputStream, req.ContentEncoding);
-            var body = await reader.ReadToEndAsync().ConfigureAwait(false);
+            var body = await reader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
             foreach (var pair in body.Split('&', StringSplitOptions.RemoveEmptyEntries)) {
                 var eq = pair.IndexOf('=', StringComparison.Ordinal);
                 if (eq <= 0) {
@@ -347,7 +351,7 @@ public sealed class AlpacaFaultProxy : IAsyncDisposable {
             resp.StatusCode = 200;
             resp.SendChunked = false;
             resp.ContentLength64 = 64; // promise 64 bytes…
-            await resp.OutputStream.WriteAsync(new byte[] { (byte)'{' }).ConfigureAwait(false); // …deliver 1
+            await resp.OutputStream.WriteAsync(DropProbeByte).ConfigureAwait(false); // …deliver 1
             await resp.OutputStream.FlushAsync().ConfigureAwait(false);
         } catch (HttpListenerException) {
             // Connection already gone — the drop is the point.

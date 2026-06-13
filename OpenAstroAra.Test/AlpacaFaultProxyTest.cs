@@ -300,6 +300,10 @@ namespace OpenAstroAra.Test {
             public static StubAlpaca Start(string valueLiteral) => new(FreePort(), valueLiteral);
 
             private async Task LoopAsync() {
+                // GetContextAsync blocks until DisposeAsync stops the listener, which
+                // throws HttpListener/ObjectDisposed below — that exception, not this
+                // condition, is the loop's real exit. The condition just avoids a
+                // needless extra accept if cancellation already fired.
                 while (!_cts.IsCancellationRequested) {
                     HttpListenerContext context;
                     try {
