@@ -45,16 +45,36 @@ String guiderRuntimeLabel(GuiderRuntimeState state) {
   }
 }
 
-class _GuiderDialog extends ConsumerWidget {
+class _GuiderDialog extends ConsumerStatefulWidget {
   const _GuiderDialog();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_GuiderDialog> createState() => _GuiderDialogState();
+}
+
+class _GuiderDialogState extends ConsumerState<_GuiderDialog> {
+  // Local feedback for a manual Refresh: the notifier's refresh() deliberately
+  // doesn't emit a loading state (so the body doesn't flash blank), so the
+  // button tracks its own in-flight flag to disable + spinner.
+  bool _refreshing = false;
+
+  Future<void> _refresh() async {
+    setState(() => _refreshing = true);
+    try {
+      await ref.read(guiderStatusProvider.notifier).refresh();
+    } finally {
+      if (mounted) setState(() => _refreshing = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final async = ref.watch(guiderStatusProvider);
     final notifier = ref.read(guiderStatusProvider.notifier);
     final busy = async.isLoading;
     final status = async.asData?.value;
     final connected = status?.isConnected ?? false;
+    final actionsLocked = busy || _refreshing;
 
     return AlertDialog(
       title: const Text('Guider'),
@@ -82,17 +102,17 @@ class _GuiderDialog extends ConsumerWidget {
       ),
       actions: [
         TextButton(
-          onPressed: busy ? null : () => notifier.refresh(),
-          child: const Text('Refresh'),
+          onPressed: actionsLocked ? null : _refresh,
+          child: _refreshing ? const _BusySpinner() : const Text('Refresh'),
         ),
         if (connected)
           FilledButton(
-            onPressed: busy ? null : () => notifier.disconnect(),
+            onPressed: actionsLocked ? null : () => notifier.disconnect(),
             child: busy ? const _BusySpinner() : const Text('Disconnect'),
           )
         else
           FilledButton(
-            onPressed: busy ? null : () => notifier.connect(),
+            onPressed: actionsLocked ? null : () => notifier.connect(),
             child: busy ? const _BusySpinner() : const Text('Connect'),
           ),
         TextButton(
