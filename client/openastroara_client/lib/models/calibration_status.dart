@@ -60,7 +60,7 @@ class CalibrationStatus {
   }
 
   static String? _str(dynamic v) => v is String ? v : null;
-  static bool _bool(dynamic v) => v is bool && v;
+  static bool _bool(dynamic v) => v is bool ? v : false;
   static int? _int(dynamic v) => v is int ? v : (v is num ? v.toInt() : null);
   static double? _double(dynamic v) {
     final d = v is num ? v.toDouble() : null;

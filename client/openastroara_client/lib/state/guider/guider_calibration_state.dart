@@ -30,10 +30,15 @@ final guiderCalibrationApiProvider = Provider<GuiderCalibrationClient?>((ref) {
 /// status may not yet reflect a still-running build).
 class GuiderCalibrationNotifier extends AsyncNotifier<CalibrationStatusResponse?> {
   bool _busy = false;
+  // Bumped on every build() (active-server change). Actions/refreshes capture it
+  // and only write state if it still matches, so a server switch mid-action
+  // can't land a stale read (or a spurious error from the old, now-closed Dio).
+  int _generation = 0;
 
   @override
   Future<CalibrationStatusResponse?> build() async {
     _busy = false;
+    _generation++;
     final api = ref.watch(guiderCalibrationApiProvider);
     if (api == null) return null;
     return api.getStatus();
@@ -83,27 +88,32 @@ class GuiderCalibrationNotifier extends AsyncNotifier<CalibrationStatusResponse?
     final api = ref.read(guiderCalibrationApiProvider);
     if (api == null) return;
     _busy = true;
+    final gen = _generation;
     state = const AsyncValue<CalibrationStatusResponse?>.loading();
     try {
       await action(api);
     } catch (e, st) {
-      if (ref.mounted) state = AsyncValue<CalibrationStatusResponse?>.error(e, st);
+      if (ref.mounted && gen == _generation) state = AsyncValue<CalibrationStatusResponse?>.error(e, st);
       return;
     } finally {
-      _busy = false;
+      if (gen == _generation) _busy = false;
     }
-    await refresh(api);
+    // Re-read the *current* client (not the captured one) — a server switch
+    // mid-action would have closed `api`'s Dio; the generation guard in
+    // refresh() then drops the write if it's for a superseded server.
+    await refresh();
   }
 
-  Future<void> refresh([GuiderCalibrationClient? client]) async {
+  Future<void> refresh() async {
     if (!ref.mounted) return;
-    final api = client ?? ref.read(guiderCalibrationApiProvider);
+    final gen = _generation;
+    final api = ref.read(guiderCalibrationApiProvider);
     final next = await AsyncValue.guard<CalibrationStatusResponse?>(() async {
       if (api == null) return null;
       return api.getStatus();
     });
-    // getStatus() can outlive the active server; don't write to a disposed notifier.
-    if (ref.mounted) state = next;
+    // Skip the write if disposed or rebuilt for a new server mid-flight.
+    if (ref.mounted && gen == _generation) state = next;
   }
 }
 

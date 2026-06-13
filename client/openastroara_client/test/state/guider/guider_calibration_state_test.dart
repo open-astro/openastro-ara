@@ -104,6 +104,18 @@ void main() {
       expect(c.read(guiderCalibrationProvider).value!.status!.darkLibraryExists, isTrue);
     });
 
+    test('buildDefectMap forwards to the client then refreshes', () async {
+      final api = _FakeCalibrationClient(_resp());
+      final c = _container(const [server], api);
+      await c.read(savedServersProvider.future);
+      await c.read(guiderCalibrationProvider.future);
+
+      await c.read(guiderCalibrationProvider.notifier).buildDefectMap(exposureMs: 4000);
+
+      expect(api.defectBuilds, 1);
+      expect(c.read(guiderCalibrationProvider).hasValue, isTrue);
+    });
+
     test('setDarkLibraryEnabled / setDefectMapEnabled forward the flag', () async {
       final api = _FakeCalibrationClient(_resp());
       final c = _container(const [server], api);
