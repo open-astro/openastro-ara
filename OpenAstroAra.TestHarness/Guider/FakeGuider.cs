@@ -121,6 +121,35 @@ public sealed class FakeGuider : IAsyncDisposable {
         await Task.WhenAll(_connections.Keys.Select(c => WriteAsync(c, line, _cts.Token))).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Forcibly closes every currently-open client connection while leaving the listener
+    /// accepting new ones — the bench's §42.2 "the guider daemon dropped the link" fault.
+    /// The client sees EOF on its event stream, which is exactly the signal
+    /// <c>PHD2Guider</c>'s listener turns into <c>PHD2ConnectionLost</c> / §63.3 recovery.
+    /// Returns the number of connections it tore down so a test can assert it hit a live one.
+    /// Poll <see cref="ConnectionCount"/> to wait for the client side to observe the drop.
+    /// </summary>
+    public int DropConnections() {
+        var dropped = 0;
+        foreach (var conn in _connections.Keys) {
+            // Claim the connection out of the live set first: TryRemove fails if its handler already
+            // tore it down naturally, so we only count — and only dispose — connections that were
+            // genuinely open when we ran. The handler's own finally TryRemove then no-ops on ours.
+            if (!_connections.TryRemove(conn, out _)) {
+                continue;
+            }
+            // Disposing the stream unblocks the handler's ReadLineAsync (EOF/IOException), which
+            // sends the client the EOF that PHD2Guider turns into PHD2ConnectionLost.
+            try {
+                conn.Stream.Dispose();
+            } catch (IOException) {
+            } catch (ObjectDisposedException) {
+            }
+            dropped++;
+        }
+        return dropped;
+    }
+
     private async Task AcceptLoopAsync() {
         while (!_cts.IsCancellationRequested) {
             TcpClient client;

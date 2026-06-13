@@ -486,6 +486,16 @@ switch. The fix is **server-side history-on-connect** (replay the open-diagnosti
 resume), then have the client reset its roll-up from that snapshot. There's an in-code `TODO` at
 `diagnostics_state.dart`'s notifier `build()`. Tracked here per #395 review.
 
+**Virtual-observatory bench (§42.2) — guider fault scenarios landed (bench-4, ✅).** `GuiderFakeIntegrationTest`
+now drives the real `GuiderService`/`PHD2Guider` through two device-fault paths against `FakeGuider`: a lost guide
+star (`StarLost` → `star_lost`, link stays Connected) and a dropped guider link (`FakeGuider.DropConnections` closes
+the live socket → `PHD2ConnectionLost` → `Error` + §63.3 recovery begins). The recovery *outcome* (Unsupervised
+off-systemd, Recovered/Failed on a host) stays unit-covered by `GuiderRecoveryCoordinatorTest`; the integration test
+asserts only the fault-detection transition. **Next: bench-5** — the docker-compose chassis on colima/arm64 that runs
+the proxy + fake-guider scenarios in a standing Linux lane (see the Drop-fault note below). The §42.2 *mid-sequence*
+fault flow (pause the running sequence on a mid-guiding drop, vs. notify-only) remains a sequencer-side follow-up
+(tracked separately above).
+
 **Virtual-observatory bench (§42.2) — Drop fault Linux/arm64 stability (track for bench-5).** The
 `AlpacaFaultProxy` connection-drop fault (`DropConnectionAsync`: ContentLength64=64 → write 1 byte → SafeAbort)
 relies on the managed `HttpListener` holding the connection open long enough for the client to observe the partial
