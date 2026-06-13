@@ -22,7 +22,6 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
@@ -1045,13 +1044,6 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             }
         }
 
-        private static TcpState GetState(TcpClient tcpClient) {
-            var foo = IPGlobalProperties.GetIPGlobalProperties()
-              .GetActiveTcpConnections()
-              .SingleOrDefault(x => x.LocalEndPoint.Equals(tcpClient.Client.LocalEndPoint));
-            return foo != null ? foo.State : TcpState.Unknown;
-        }
-
         private async Task GetProfiles() {
             var getProfile = new Phd2GetProfile();
             var getProfileResponse = await SendMessage<GetProfileResponse>(getProfile);
@@ -1123,36 +1115,31 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 _tcs.TrySetResult(true);
 
                 using NetworkStream s = client.GetStream();
+                using var reader = new StreamReader(s, Encoding.ASCII);
 
-                while (true) {
-                    var state = GetState(client);
-                    if (state == TcpState.CloseWait) {
-                        throw new InvalidOperationException(Loc.Instance["LblPhd2ServerConnectionLost"]);
+                // Read the PHD2 event stream line-by-line. ReadLineAsync blocks until a full line
+                // arrives, returns null at EOF (the guider closed the socket), or throws on a reset —
+                // so the read itself IS the liveness signal. This replaces the previous
+                // GetActiveTcpConnections()/DataAvailable + 500ms poll, which was a busy-loop and
+                // crashed on macOS (the TCP-table enumeration returns null/duplicate endpoints).
+                // Reaching the end (null) or an exception falls through to the finally, which fires
+                // PHD2ConnectionLost — the §63.3 recovery trigger.
+                string line;
+                while ((line = await reader.ReadLineAsync(_clientCTS.Token).ConfigureAwait(false)) != null) {
+                    if (line.Length == 0 || line[0] != '{') {
+                        continue;
                     }
-
-                    var message = string.Empty;
-                    while (s.DataAvailable) {
-                        byte[] response = new byte[1024];
-                        var bytesRead = await s.ReadAsync(response, _clientCTS.Token);
-                        message += Encoding.ASCII.GetString(response, 0, bytesRead);
+                    JObject o = JObject.Parse(line, jls);
+                    JToken t = o.GetValue("Event", StringComparison.Ordinal);
+                    if (t != null) {
+                        var phdevent = t.ToString();
+                        Logger.Trace($"PHD2 event received - {o}");
+                        await ProcessEvent(phdevent, o).ConfigureAwait(false);
                     }
-
-                    var lines = message.Split(new[] { Environment.NewLine }, StringSplitOptions.None);
-                    foreach (string line in lines) {
-                        if (!string.IsNullOrEmpty(line) && line.StartsWith('{')) {
-                            JObject o = JObject.Parse(line, jls);
-                            JToken t = o.GetValue("Event", StringComparison.Ordinal);
-                            string phdevent = "";
-                            if (t != null) {
-                                phdevent = t.ToString();
-                                Logger.Trace($"PHD2 event received - {o}");
-                                await ProcessEvent(phdevent, o);
-                            }
-                        }
-                    }
-
-                    await Task.Delay(TimeSpan.FromMilliseconds(500), _clientCTS.Token);
                 }
+
+                // EOF — the guider closed the connection.
+                throw new InvalidOperationException(Loc.Instance["LblPhd2ServerConnectionLost"]);
             } catch (OperationCanceledException) {
             } catch (Exception ex) {
                 Logger.Error(ex);

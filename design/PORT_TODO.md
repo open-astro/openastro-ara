@@ -499,15 +499,15 @@ post-`Flush()` on a future runtime, this is the first place to check. Per #401 r
 direction still only copies Content-Type; if a bench-3+ scenario ever needs the daemon to see a specific upstream
 response header, extend the forward symmetrically. Low priority (Alpaca responses are JSON-envelope-only today).
 
-**Guider connect — RunListener.GetState TCP-table probe is platform-fragile (bench-3 finding).** `PHD2Guider.RunListener`
-polls `IPGlobalProperties.GetActiveTcpConnections()` + `SingleOrDefault(x => x.LocalEndPoint.Equals(...))` each loop to
-detect a half-closed socket. On macOS this enumeration can return entries with null/duplicate endpoints (NRE /
-`SingleOrDefault` throw), so against the bench's minimal FakeGuider the listener dies right after connect and the service
-never reaches `Connected` (it speaks the RPC handshake first, which is why the bench-3 integration test asserts on the
-handshake, not full Connected/RMS). The §63.3 `PHD2ConnectionLost` path already exists; replace the TCP-table poll with a
-read-driven EOF/exception detection (the listener already reads the stream — a 0-byte/exception read IS the close signal).
-Then extend the bench-3 test (`GuiderFakeIntegrationTest`) to drive the full connect→AppState→GuideStep-RMS→StarLost
-lifecycle against FakeGuider. Surfaced 2026-06-13 by bench-3.
+**Guider connect — full connect→Connected lifecycle against a minimal guider (bench-3 finding, partially fixed).**
+✅ FIXED the `RunListener.GetState` half: replaced the per-loop `IPGlobalProperties.GetActiveTcpConnections()` +
+`SingleOrDefault(LocalEndPoint.Equals(...))` poll (a busy-loop that NRE'd on macOS from null/duplicate endpoints) with a
+read-driven `StreamReader.ReadLineAsync` loop where EOF/exception IS the close signal (fires `PHD2ConnectionLost`).
+**Still open:** against the minimal FakeGuider the service still doesn't reach `Connected` — `guider.Connect()` appears not
+to return even though `GetProfiles` throws+is-caught, so the blocker is now in the connect getter flow, not the listener.
+(The bench-3 test asserts on the handshake for this reason.) Next: instrument `PHD2Guider.Connect` to find where it stalls
+against a bare-response guider, make each connect-time getter independently best-effort (see next item), then extend
+`GuiderFakeIntegrationTest` to the full connect→AppState→GuideStep-RMS→StarLost lifecycle. Surfaced 2026-06-13 by bench-3.
 
 **Guider connect — getters hard-fail against a guider that returns bare results (bench-3 finding).** The connect handshake
 (`GetProfiles` etc.) throws `InvalidOperationException` when a getter response can't be deserialized to the expected typed
