@@ -12,6 +12,7 @@
 
 #endregion "copyright"
 
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -33,14 +34,25 @@ namespace OpenAstroAra.TestHarness.Alpaca;
 /// recovery flows under test — without any physical hardware.
 /// </summary>
 public sealed class AlpacaFaultProxy : IAsyncDisposable {
+    // The trigger counter lives here, not on the public AlpacaFaultRule, so external
+    // code can't corrupt it: each armed rule is wrapped in a private mutable RuleState.
+    private sealed class RuleState {
+        public required AlpacaFaultRule Rule { get; init; }
+        public int Fired { get; set; }
+    }
+
     private readonly HttpListener _listener;
     private readonly Uri _upstream;
     private readonly SocketsHttpHandler _handler;
     private readonly HttpClient _client;
-    private readonly List<AlpacaFaultRule> _rules = [];
+    private readonly List<RuleState> _rules = [];
     private readonly Lock _gate = new();
     private readonly CancellationTokenSource _cts = new();
     private readonly Task _acceptLoop;
+    // Spawned per-request handler tasks, removed as each completes. Drained before
+    // _client is disposed so a handler mid-ReadAsByteArrayAsync can't race disposal.
+    private readonly ConcurrentDictionary<Task, byte> _inFlight = new();
+    private volatile Exception? _lastHandlerFault;
 
     private AlpacaFaultProxy(Uri upstream, int port) {
         _upstream = upstream;
@@ -71,11 +83,11 @@ public sealed class AlpacaFaultProxy : IAsyncDisposable {
     /// internal try/catch), or <c>null</c>. Surfaced so a test can assert the proxy
     /// itself didn't crash rather than diagnosing a silent hang.
     /// </summary>
-    public Exception? LastHandlerFault { get; private set; }
+    public Exception? LastHandlerFault => _lastHandlerFault;
 
     private void RecordHandlerFault(AggregateException fault, HttpListenerContext context) {
-        LastHandlerFault = fault.InnerException ?? fault;
-        System.Diagnostics.Trace.TraceError("AlpacaFaultProxy request handler faulted: " + LastHandlerFault);
+        _lastHandlerFault = fault.InnerException ?? fault; // volatile write — visible to test readers
+        System.Diagnostics.Trace.TraceError("AlpacaFaultProxy request handler faulted: " + _lastHandlerFault);
         SafeAbort(context); // don't leave the client hanging on a handler crash
     }
 
@@ -92,7 +104,7 @@ public sealed class AlpacaFaultProxy : IAsyncDisposable {
     public void InjectFault(AlpacaFaultRule rule) {
         ArgumentNullException.ThrowIfNull(rule);
         lock (_gate) {
-            _rules.Add(rule);
+            _rules.Add(new RuleState { Rule = rule });
         }
     }
 
@@ -113,15 +125,22 @@ public sealed class AlpacaFaultProxy : IAsyncDisposable {
             } catch (ObjectDisposedException) {
                 return; // listener disposed during disposal
             }
-            // Handle each request independently so a slow/hung one (Delay fault)
-            // never blocks the accept loop or other in-flight requests. Observe the
-            // task: an unexpected handler fault would otherwise be swallowed and show
-            // up only as a client-side hang — record it and abort so a test sees a
-            // clear failure (LastHandlerFault) instead of a timeout.
-            _ = Task.Run(() => HandleAsync(context)).ContinueWith(
-                t => RecordHandlerFault(t.Exception!, context),
+            // Handle each request independently so a slow/hung one (Delay fault) never
+            // blocks the accept loop or other in-flight requests. Track the task so
+            // DisposeAsync can drain it before tearing down _client; the continuation
+            // removes it on completion and surfaces any unexpected fault (which would
+            // otherwise be swallowed and show as a client-side hang).
+            var task = Task.Run(() => HandleAsync(context));
+            _inFlight[task] = 0;
+            _ = task.ContinueWith(
+                t => {
+                    _inFlight.TryRemove(t, out _);
+                    if (t.Exception is { } fault) {
+                        RecordHandlerFault(fault, context);
+                    }
+                },
                 CancellationToken.None,
-                TaskContinuationOptions.OnlyOnFaulted,
+                TaskContinuationOptions.ExecuteSynchronously,
                 TaskScheduler.Default);
         }
     }
@@ -165,8 +184,9 @@ public sealed class AlpacaFaultProxy : IAsyncDisposable {
             // Newest-first so a test can layer a later, more specific rule over an
             // earlier blanket one.
             for (var i = _rules.Count - 1; i >= 0; i--) {
-                var rule = _rules[i];
-                if (rule.MaxTriggers is int max && rule.Fired >= max) {
+                var state = _rules[i];
+                var rule = state.Rule;
+                if (rule.MaxTriggers is int max && state.Fired >= max) {
                     continue;
                 }
                 if (rule.HttpVerb is { } v && !string.Equals(v, httpVerb, StringComparison.OrdinalIgnoreCase)) {
@@ -181,7 +201,7 @@ public sealed class AlpacaFaultProxy : IAsyncDisposable {
                 if (rule.Method is { } m && !string.Equals(m, method, StringComparison.OrdinalIgnoreCase)) {
                     continue;
                 }
-                rule.Fired++;
+                state.Fired++;
                 return rule.Fault;
             }
         }
@@ -218,6 +238,11 @@ public sealed class AlpacaFaultProxy : IAsyncDisposable {
         } catch (OperationCanceledException) {
             SafeAbort(context);
         } catch (IOException) {
+            SafeAbort(context);
+        } catch (ObjectDisposedException) {
+            // _client disposed out from under a forward that began just before
+            // teardown — drop it. (DisposeAsync drains in-flight handlers first, so
+            // this is only reachable on a hard race during shutdown.)
             SafeAbort(context);
         }
     }
@@ -365,6 +390,15 @@ public sealed class AlpacaFaultProxy : IAsyncDisposable {
             await _acceptLoop.ConfigureAwait(false);
         } catch (OperationCanceledException) {
             // Expected on shutdown.
+        }
+        // Drain in-flight request handlers BEFORE disposing _client, so none can be
+        // mid-SendAsync/ReadAsByteArrayAsync when the client goes away. Their internal
+        // try/catch (incl. ObjectDisposedException) keeps WhenAll from throwing; the
+        // snapshot tolerates handlers that finish + self-remove during the await.
+        try {
+            await Task.WhenAll(_inFlight.Keys).ConfigureAwait(false);
+        } catch (OperationCanceledException) {
+            // A handler observed cancellation during teardown — expected.
         }
         _listener.Close();
         _client.Dispose();

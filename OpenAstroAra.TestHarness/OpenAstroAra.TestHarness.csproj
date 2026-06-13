@@ -10,6 +10,11 @@
     in-process by the NUnit suite AND wrapped in a container entry point for the
     docker-compose rig that runs the same bench on linux-arm64 (Pi parity).
   -->
+  <!--
+    Analyzer escalation + TreatWarningsAsErrors are inherited from the repo-root
+    Directory.Build.props (applies to every project except Accord.Imaging), so this
+    project is held to the same warnings-as-errors gate as the rest of the solution.
+  -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>

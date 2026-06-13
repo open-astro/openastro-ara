@@ -101,7 +101,4 @@ public sealed class AlpacaFaultRule {
     /// every matching request until <see cref="AlpacaFaultProxy.ClearFaults"/>.
     /// </summary>
     public int? MaxTriggers { get; init; }
-
-    /// <summary>Live count of matches this rule has already acted on (proxy-internal).</summary>
-    internal int Fired { get; set; }
 }
