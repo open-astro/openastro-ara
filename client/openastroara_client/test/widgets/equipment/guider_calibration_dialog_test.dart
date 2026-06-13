@@ -114,6 +114,13 @@ void main() {
     expect(find.text('Connect the guider to manage calibration.'), findsOneWidget);
   });
 
+  testWidgets('connected but no status → status-unavailable (not "connect")', (tester) async {
+    await tester.pumpWidget(_host(_FakeCalibrationClient(const CalibrationStatusResponse(connected: true))));
+    await _open(tester);
+    expect(find.text('Calibration status unavailable — tap Refresh.'), findsOneWidget);
+    expect(find.text('Connect the guider to manage calibration.'), findsNothing);
+  });
+
   testWidgets('tapping Build dispatches a dark-library build', (tester) async {
     final fake = _FakeCalibrationClient(_connected());
     await tester.pumpWidget(_host(fake));

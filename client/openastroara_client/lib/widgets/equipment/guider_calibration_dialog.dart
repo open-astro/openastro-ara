@@ -18,7 +18,7 @@ class _CalibrationDialog extends ConsumerStatefulWidget {
 }
 
 class _CalibrationDialogState extends ConsumerState<_CalibrationDialog> {
-  bool _refreshing = false;
+  bool _refreshingUi = false;
 
   @override
   void initState() {
@@ -30,11 +30,11 @@ class _CalibrationDialogState extends ConsumerState<_CalibrationDialog> {
 
   Future<void> _refresh() async {
     if (!mounted) return;
-    setState(() => _refreshing = true);
+    setState(() => _refreshingUi = true);
     try {
       await ref.read(guiderCalibrationProvider.notifier).refresh();
     } finally {
-      if (mounted) setState(() => _refreshing = false);
+      if (mounted) setState(() => _refreshingUi = false);
     }
   }
 
@@ -46,7 +46,7 @@ class _CalibrationDialogState extends ConsumerState<_CalibrationDialog> {
     final status = response?.status;
     // Builds/toggles need a connected guider; lock them while any action or a
     // manual refresh is in flight.
-    final locked = busy || _refreshing;
+    final locked = busy || _refreshingUi;
 
     return AlertDialog(
       title: const Text('Guider calibration'),
@@ -62,12 +62,17 @@ class _CalibrationDialogState extends ConsumerState<_CalibrationDialog> {
                 child: Center(child: CircularProgressIndicator()),
               )
             else if (async.hasError)
+              // Neutral — hasError covers both "couldn't reach the guider" and a
+              // failed build/toggle, so don't blame the connection specifically.
               Text(
-                'Could not reach the guider. Check the connection and try again.',
+                'The last guider request failed. Tap Refresh to recheck.',
                 style: TextStyle(color: Theme.of(context).colorScheme.error),
               )
-            else if (response == null || !response.connected || status == null)
+            else if (response == null || !response.connected)
               const Text('Connect the guider to manage calibration.')
+            else if (status == null)
+              // Connected, but the daemon returned no/malformed calibration status.
+              const Text('Calibration status unavailable — tap Refresh.')
             else
               _CalibrationBody(status: status, locked: locked),
           ],
@@ -76,7 +81,7 @@ class _CalibrationDialogState extends ConsumerState<_CalibrationDialog> {
       actions: [
         TextButton(
           onPressed: locked ? null : _refresh,
-          child: _refreshing
+          child: _refreshingUi
               ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
               : const Text('Refresh'),
         ),
