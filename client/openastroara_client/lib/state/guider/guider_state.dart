@@ -97,10 +97,18 @@ class GuiderStatusNotifier extends AsyncNotifier<GuiderStatus?> {
   /// by connect/disconnect so a mid-action server switch can't redirect the
   /// follow-up read); when omitted it reads the current active client.
   Future<void> refresh([GuiderClient? client]) async {
-    // Serialize: ignore overlapping refreshes so rapid taps don't stack
-    // concurrent getStatus() calls. (Can't guard on state.isLoading — see field.)
-    if (!ref.mounted || _refreshing) return;
-    _refreshing = true;
+    if (!ref.mounted) return;
+    // A manual refresh (no pinned client) serializes so rapid taps don't stack
+    // concurrent getStatus() calls. The internal post-action call from connect/
+    // disconnect passes a pinned client and must ALWAYS proceed — otherwise its
+    // status read would be silently dropped (and state left on AsyncLoading) if a
+    // manual refresh happened to be in flight. So the flag gates only the manual
+    // path; the notifier doesn't depend on a UI lock to stay self-consistent.
+    final manual = client == null;
+    if (manual) {
+      if (_refreshing) return;
+      _refreshing = true;
+    }
     final gen = _generation;
     try {
       final api = client ?? ref.read(guiderApiProvider);
@@ -116,9 +124,10 @@ class GuiderStatusNotifier extends AsyncNotifier<GuiderStatus?> {
       // new server's status.
       if (ref.mounted && gen == _generation) state = next;
     } finally {
-      // Only clear the flag if no rebuild has happened — build() already reset it
-      // for the new generation, and a fresh refresh may have set it again.
-      if (gen == _generation) _refreshing = false;
+      // Only clear the flag if this was the manual path and no rebuild happened —
+      // build() already reset it for the new generation, and a fresh manual
+      // refresh may have set it again.
+      if (manual && gen == _generation) _refreshing = false;
     }
   }
 }

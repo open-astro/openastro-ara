@@ -6,6 +6,10 @@ import '../../state/guider/guider_state.dart';
 
 /// Opens the §63 guider connect/disconnect dialog.
 Future<void> showGuiderDialog(BuildContext context) {
+  // The builder's context is intentionally unused: `_GuiderDialog` is a
+  // ConsumerWidget that resolves `ref`/Navigator from its own subtree under the
+  // navigator + ProviderScope (which sit above MaterialApp), so it needs nothing
+  // from the caller's context.
   return showDialog<void>(context: context, builder: (_) => const _GuiderDialog());
 }
 

@@ -28,15 +28,19 @@ class _FakeSavedServerService implements SavedServerService {
 }
 
 class _FakeGuiderClient implements GuiderClient {
-  _FakeGuiderClient(this.status);
+  _FakeGuiderClient(this.status, {this.throwOnConnect = false});
   GuiderStatus? status;
+  final bool throwOnConnect;
   int connectCalls = 0;
   int disconnectCalls = 0;
   @override
   Future<GuiderStatus?> getStatus() async => status;
   @override
-  Future<void> connect({String host = kDefaultGuiderHost, int port = kDefaultGuiderPort}) async =>
-      connectCalls++;
+  Future<void> connect({String host = kDefaultGuiderHost, int port = kDefaultGuiderPort}) async {
+    connectCalls++;
+    if (throwOnConnect) throw StateError('connect failed');
+  }
+
   @override
   Future<void> disconnect() async => disconnectCalls++;
   @override
@@ -175,6 +179,19 @@ void main() {
     await tester.tap(find.text('Connect'));
     await tester.pumpAndSettle();
     expect(fake.connectCalls, 1);
+  });
+
+  testWidgets('a failed connect shows the error message in the dialog', (tester) async {
+    final fake = _FakeGuiderClient(
+        _status(GuiderConnectionState.disconnected, GuiderRuntimeState.stopped),
+        throwOnConnect: true);
+    await tester.pumpWidget(_app(fake));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(GuiderChip));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Connect'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Could not reach the guider'), findsOneWidget);
   });
 
   testWidgets('tapping Disconnect on a connected guider calls the notifier', (tester) async {
