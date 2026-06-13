@@ -84,15 +84,17 @@ namespace OpenAstroAra.Test {
             Assert.That(connected, Is.Not.Null, "the service never reached Connected against the fake guider");
 
             // Guiding state propagates from a live AppState event over the listener connection.
+            // Runtime is null-guarded: it can briefly lag the Connected transition before the
+            // first status snapshot populates it, and the predicate should poll-on rather than throw.
             await fake.BroadcastAsync(PhdEvents.AppState("Guiding")).ConfigureAwait(false);
-            Assert.That(await PollAsync(svc, d => d.Runtime.State == "guiding").ConfigureAwait(false), Is.Not.Null,
+            Assert.That(await PollAsync(svc, d => d.Runtime?.State == "guiding").ConfigureAwait(false), Is.Not.Null,
                 "an AppState=Guiding event did not reach the runtime state");
 
             // RMS accumulates from GuideStep events.
             for (var i = 0; i < 5; i++) {
                 await fake.BroadcastAsync(PhdEvents.GuideStep(raDistanceRaw: 0.4, decDistanceRaw: -0.4)).ConfigureAwait(false);
             }
-            Assert.That(await PollAsync(svc, d => d.Runtime.RmsTotal is > 0).ConfigureAwait(false), Is.Not.Null,
+            Assert.That(await PollAsync(svc, d => d.Runtime?.RmsTotal is > 0).ConfigureAwait(false), Is.Not.Null,
                 "GuideStep events did not accumulate into a non-zero RMS");
 
             await svc.DisconnectAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
@@ -104,12 +106,16 @@ namespace OpenAstroAra.Test {
 
         private static async Task<GuiderDto?> PollAsync(GuiderService svc, Func<GuiderDto, bool> predicate) {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-            while (!cts.IsCancellationRequested) {
-                var dto = await svc.GetAsync(CancellationToken.None).ConfigureAwait(false);
-                if (dto is not null && predicate(dto)) {
-                    return dto;
+            try {
+                while (!cts.IsCancellationRequested) {
+                    var dto = await svc.GetAsync(cts.Token).ConfigureAwait(false);
+                    if (dto is not null && predicate(dto)) {
+                        return dto;
+                    }
+                    await Task.Delay(100, cts.Token).ConfigureAwait(false);
                 }
-                try { await Task.Delay(100, cts.Token).ConfigureAwait(false); } catch (OperationCanceledException) { break; }
+            } catch (OperationCanceledException) {
+                // 15s deadline elapsed — fall through and let the caller's assertion report the miss.
             }
             return null;
         }
