@@ -22,7 +22,6 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
@@ -1045,13 +1044,6 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             }
         }
 
-        private static TcpState GetState(TcpClient tcpClient) {
-            var foo = IPGlobalProperties.GetIPGlobalProperties()
-              .GetActiveTcpConnections()
-              .SingleOrDefault(x => x.LocalEndPoint.Equals(tcpClient.Client.LocalEndPoint));
-            return foo != null ? foo.State : TcpState.Unknown;
-        }
-
         private async Task GetProfiles() {
             var getProfile = new Phd2GetProfile();
             var getProfileResponse = await SendMessage<GetProfileResponse>(getProfile);
@@ -1108,6 +1100,29 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             }
         }
 
+        // Enable TCP keepalive so a half-open connection (cable pull / host crash with no FIN, where
+        // the OS keeps the socket "Established") is detected and breaks the read loop into recovery,
+        // rather than blocking ReadLineAsync forever. Best-effort: the per-probe tuning options aren't
+        // supported on every platform, so each is guarded independently.
+        private static void EnableTcpKeepAlive(Socket socket) {
+            try {
+                socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
+            } catch (SocketException) {
+                return; // platform without keepalive support — nothing more to tune
+            }
+            TrySetTcpOption(socket, SocketOptionName.TcpKeepAliveTime, 30);     // start probing after 30s idle
+            TrySetTcpOption(socket, SocketOptionName.TcpKeepAliveInterval, 5);  // 5s between probes
+            TrySetTcpOption(socket, SocketOptionName.TcpKeepAliveRetryCount, 3); // 3 missed probes → dead
+        }
+
+        private static void TrySetTcpOption(Socket socket, SocketOptionName name, int value) {
+            try {
+                socket.SetSocketOption(SocketOptionLevel.Tcp, name, value);
+            } catch (Exception ex) when (ex is SocketException or PlatformNotSupportedException) {
+                // This particular keepalive knob isn't available on this OS — leave the OS default.
+            }
+        }
+
         private async Task RunListener() {
             var jls = new JsonLoadSettings() { LineInfoHandling = LineInfoHandling.Ignore, CommentHandling = CommentHandling.Ignore };
             _clientCTS?.Dispose();
@@ -1119,40 +1134,52 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 };
 
                 await client.ConnectAsync(phd2Ip, profileService.ActiveProfile.GuiderSettings.PHD2ServerPort);
+                EnableTcpKeepAlive(client.Client);
                 Connected = true;
                 _tcs.TrySetResult(true);
 
                 using NetworkStream s = client.GetStream();
+                // leaveOpen: true — the `using NetworkStream s` (and the TcpClient) own the stream's
+                // lifetime; without this the StreamReader would dispose it too (a redundant double-dispose).
+                using var reader = new StreamReader(s, Encoding.ASCII, detectEncodingFromByteOrderMarks: false, bufferSize: 4096, leaveOpen: true);
 
-                while (true) {
-                    var state = GetState(client);
-                    if (state == TcpState.CloseWait) {
-                        throw new InvalidOperationException(Loc.Instance["LblPhd2ServerConnectionLost"]);
+                // Read the PHD2 event stream line-by-line. ReadLineAsync blocks until a full line
+                // arrives, returns null at EOF (the guider closed the socket), or throws on a reset —
+                // so the read itself IS the liveness signal. This replaces the previous
+                // GetActiveTcpConnections()/DataAvailable + 500ms poll, which was a busy-loop and
+                // crashed on macOS (the TCP-table enumeration returns null/duplicate endpoints).
+                // Reaching the end (null) or an exception falls through to the finally, which fires
+                // PHD2ConnectionLost — the §63.3 recovery trigger.
+                string line;
+                while ((line = await reader.ReadLineAsync(_clientCTS.Token).ConfigureAwait(false)) != null) {
+                    if (line.Length == 0 || line[0] != '{') {
+                        continue;
                     }
-
-                    var message = string.Empty;
-                    while (s.DataAvailable) {
-                        byte[] response = new byte[1024];
-                        var bytesRead = await s.ReadAsync(response, _clientCTS.Token);
-                        message += Encoding.ASCII.GetString(response, 0, bytesRead);
+                    JObject o;
+                    try {
+                        o = JObject.Parse(line, jls);
+                    } catch (Newtonsoft.Json.JsonReaderException ex) {
+                        // A malformed/partial frame (e.g. mid-reset) shouldn't kill the whole listener —
+                        // skip the bad line and keep reading. A true close still surfaces as EOF below.
+                        // Concatenate (not interpolate into a template position) so the exception text
+                        // can't be re-parsed as a log format string.
+                        Logger.Warning("Skipping unparseable PHD2 event line: " + ex.Message);
+                        continue;
                     }
-
-                    var lines = message.Split(new[] { Environment.NewLine }, StringSplitOptions.None);
-                    foreach (string line in lines) {
-                        if (!string.IsNullOrEmpty(line) && line.StartsWith('{')) {
-                            JObject o = JObject.Parse(line, jls);
-                            JToken t = o.GetValue("Event", StringComparison.Ordinal);
-                            string phdevent = "";
-                            if (t != null) {
-                                phdevent = t.ToString();
-                                Logger.Trace($"PHD2 event received - {o}");
-                                await ProcessEvent(phdevent, o);
-                            }
-                        }
+                    JToken t = o.GetValue("Event", StringComparison.Ordinal);
+                    if (t != null) {
+                        var phdevent = t.ToString();
+                        Logger.Trace($"PHD2 event received - {o}");
+                        await ProcessEvent(phdevent, o).ConfigureAwait(false);
                     }
-
-                    await Task.Delay(TimeSpan.FromMilliseconds(500), _clientCTS.Token);
                 }
+
+                // EOF (ReadLineAsync == null): the guider closed the connection — a clean shutdown or
+                // a crash, indistinguishable at this layer. Either way it's a normal disconnect, not a
+                // user-facing error: just log it and fall out of the try so the finally fires
+                // PHD2ConnectionLost and §63.3 recovery decides whether to restart. (Only a reset /
+                // unexpected read exception below takes the error-notification path.)
+                Logger.Info("PHD2 closed the event-stream connection (EOF).");
             } catch (OperationCanceledException) {
             } catch (Exception ex) {
                 Logger.Error(ex);
