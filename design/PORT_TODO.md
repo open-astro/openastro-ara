@@ -516,6 +516,14 @@ The lane is occasional-use (pre-release / regression check, not per-commit CI), 
 now. Revisit the two-stage split when the lane runs under a BuildKit-enabled runner (the same CI move noted above).
 Surfaced 2026-06-13 by the #408 review.
 
+**bench-5 — replace the substring test filter with a `bench` category (follow-up).** The lane selects its three
+fixtures with a substring filter (`FullyQualifiedName~AlpacaFaultProxyTest|~FakeGuiderTest|~GuiderFakeIntegrationTest`)
+duplicated between `bench/Dockerfile.linux-arm64`'s ENTRYPOINT and `bench/README.md`. A substring match would silently
+pick up a future class whose name *contains* one of those (e.g. `AlpacaFaultProxyTestHelper`), and the two copies can
+drift. Cleaner: tag the three fixtures with `[Category("bench")]` and filter `--filter TestCategory=bench` — one
+source of truth, no substring fragility. Deferred off the approved #408 to avoid another review/Docker-rebuild round;
+fold into the next bench touch. Surfaced 2026-06-13 by the #408 review.
+
 **Virtual-observatory bench — request-header forwarding is in (PR #401), response-header forwarding is not.**
 `ForwardAsync` now forwards inbound request headers (minus hop-by-hop) to the upstream device. The *response*
 direction still only copies Content-Type; if a bench-3+ scenario ever needs the daemon to see a specific upstream
