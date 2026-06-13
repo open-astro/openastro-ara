@@ -849,7 +849,13 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 using var reader = new StreamReader(stream, Encoding.UTF8);
                 string line;
 
-                while ((line = await reader.ReadLineAsync()) != null) {
+                // TcpClient.ReceiveTimeout only governs *synchronous* reads — it does nothing for
+                // ReadLineAsync. Without an explicit token a guider that never returns a matching
+                // response (wrong id, or silent) would hang this call — and the connect handshake —
+                // forever. Bound the wait so a non-responsive guider fails the call instead.
+                using var cts = new CancellationTokenSource(receiveTimeout > 0 ? receiveTimeout : 60000);
+
+                while ((line = await reader.ReadLineAsync(cts.Token).ConfigureAwait(false)) != null) {
                     var o = JObject.Parse(line);
                     string phdevent = "";
                     var t = o.GetValue("id", StringComparison.Ordinal);
