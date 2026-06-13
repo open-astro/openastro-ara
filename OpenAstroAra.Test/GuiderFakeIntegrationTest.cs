@@ -66,8 +66,7 @@ namespace OpenAstroAra.Test {
             Assert.That(fake.ReceivedMethods, Does.Contain("get_profile").IgnoreCase
                 .Or.Contain("get_profiles").IgnoreCase,
                 "the connect handshake should query the guider's profiles");
-
-            await svc.DisconnectAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+            // svc is `using`-scoped — its Dispose tears the connection down; no explicit disconnect needed.
         }
 
         private static async Task<bool> WaitUntilAsync(Func<bool> condition) {

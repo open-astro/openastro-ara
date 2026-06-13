@@ -179,6 +179,10 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             // this just probes; the bench's FakeGuider is already listening and passes immediately.
             // ct is cancelled if a newer connect or a disconnect supersedes this attempt.
             await EnsureGuiderReachableAsync(ct).ConfigureAwait(false);
+            // Bail before the (potentially long, uncancellable) socket connect if a disconnect or a
+            // newer connect already superseded us — otherwise this task lingers on the OS connect
+            // timeout for an unreachable guider even though its result will be discarded.
+            ct.ThrowIfCancellationRequested();
             var ok = await guider.Connect(CancellationToken.None).ConfigureAwait(false);
             lock (_gate) {
                 if (generation != _connectGeneration) {
@@ -186,6 +190,9 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
                 }
                 SetStateLocked(ok ? EquipmentConnectionState.Connected : EquipmentConnectionState.Error);
             }
+        } catch (OperationCanceledException) {
+            // Superseded by a newer connect/disconnect — that operation already owns the state;
+            // this attempt just stops quietly (not a connect failure).
         } catch (Exception ex) {
             LogConnectFailed(ex);
             lock (_gate) {
