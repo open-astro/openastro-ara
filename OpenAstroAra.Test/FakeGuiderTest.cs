@@ -135,20 +135,26 @@ namespace OpenAstroAra.Test {
             using var client = await ConnectAsync(guider.Port).ConfigureAwait(false);
             await client.ReadEventAsync().ConfigureAwait(false);
             await client.ReadEventAsync().ConfigureAwait(false);
+            // Deterministically wait until the server has registered the connection, so
+            // we know we're exercising the broadcast-to-a-live-then-closed path.
+            await WaitForConnectionsAsync(guider, 1).ConfigureAwait(false);
 
-            // Drop the client; the server-side connection may still be in _connections
-            // momentarily. A broadcast must tolerate the half-closed/closing connection
-            // (write fails silently) rather than throwing out of BroadcastAsync. The
+            // Drop the client; the server-side connection is still in _connections until
+            // its read faults. A broadcast must tolerate the closing connection (the
+            // write fails silently) rather than throwing out of BroadcastAsync. The
             // explicit Dispose triggers the close now; the `using` (idempotent) covers
             // the remaining paths for the analyzer.
             client.Dispose();
 
-            Assert.DoesNotThrowAsync(async () => {
-                for (var i = 0; i < 5; i++) {
-                    await guider.BroadcastAsync(PhdEvents.StarLost()).ConfigureAwait(false);
-                    await Task.Delay(20).ConfigureAwait(false);
-                }
-            });
+            Assert.DoesNotThrowAsync(() => guider.BroadcastAsync(PhdEvents.StarLost()));
+        }
+
+        private static async Task WaitForConnectionsAsync(FakeGuider guider, int expected) {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            while (guider.ConnectionCount != expected) {
+                cts.Token.ThrowIfCancellationRequested();
+                await Task.Delay(10, cts.Token).ConfigureAwait(false);
+            }
         }
 
         private static async Task<TestClient> ConnectAsync(int port) {

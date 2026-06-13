@@ -65,23 +65,28 @@ public static class PhdEvents {
         return e;
     }
 
-    /// <summary>A single guide step with the RA/Dec error (arcsec-ish raw distances).</summary>
-    public static JsonObject GuideStep(double dx, double dy) {
+    /// <summary>
+    /// A single guide step. <paramref name="raDistanceRaw"/>/<paramref name="decDistanceRaw"/>
+    /// are the RA/Dec raw distances (what the ARA client folds into guiding RMS);
+    /// <paramref name="dx"/>/<paramref name="dy"/> are the pixel offsets (default 0 —
+    /// pass them when a test needs pixel-vs-arcsec separation).
+    /// </summary>
+    public static JsonObject GuideStep(double raDistanceRaw, double decDistanceRaw, double dx = 0, double dy = 0) {
         var e = Base("GuideStep");
         e["dx"] = dx;
         e["dy"] = dy;
-        e["RADistanceRaw"] = dx;
-        e["DECDistanceRaw"] = dy;
+        e["RADistanceRaw"] = raDistanceRaw;
+        e["DECDistanceRaw"] = decDistanceRaw;
         return e;
     }
 
     /// <summary>The guide star was lost (no longer trackable).</summary>
-    public static JsonObject StarLost(int frame = 1) {
+    public static JsonObject StarLost(int frame = 1, string status = "no star found") {
         var e = Base("StarLost");
         e["Frame"] = frame;
         e["StarMass"] = 0.0;
         e["SNR"] = 0.0;
-        e["Status"] = 1;
+        e["Status"] = status; // PHD2's StarLost.Status is a string (e.g. "low SNR")
         return e;
     }
 

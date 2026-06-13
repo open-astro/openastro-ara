@@ -64,6 +64,9 @@ public sealed class FakeGuider : IAsyncDisposable {
     /// <summary>The loopback TCP port the fake guider is listening on.</summary>
     public int Port { get; }
 
+    /// <summary>The number of currently-open client connections — lets a test wait deterministically for an accept/close.</summary>
+    public int ConnectionCount => _connections.Count;
+
     /// <summary>
     /// Starts a fake guider on an ephemeral loopback port (pass 4400 to mimic the real
     /// daemon's well-known port in a non-parallel rig).
@@ -121,10 +124,19 @@ public sealed class FakeGuider : IAsyncDisposable {
             } catch (SocketException) {
                 return; // listener stopped during disposal
             }
-            var task = Task.Run(() => HandleConnectionAsync(client));
+            // Gate the handler on `started` so the body (and thus its completion +
+            // the removing continuation) can't run before _inFlight[task] is set —
+            // otherwise a fast-completing task could be removed before it was added and
+            // linger in _inFlight forever.
+            var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var task = Task.Run(async () => {
+                await started.Task.ConfigureAwait(false);
+                await HandleConnectionAsync(client).ConfigureAwait(false);
+            });
             _inFlight[task] = 0;
             _ = task.ContinueWith(t => _inFlight.TryRemove(t, out _), CancellationToken.None,
                 TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+            started.SetResult();
         }
     }
 
