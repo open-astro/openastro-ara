@@ -41,6 +41,7 @@
     <ProjectReference Include="..\OpenAstroAra.Profile\OpenAstroAra.Profile.csproj" />
     <ProjectReference Include="..\OpenAstroAra.Sequencer\OpenAstroAra.Sequencer.csproj" />
     <ProjectReference Include="..\OpenAstroAra.Server\OpenAstroAra.Server.csproj" />
+    <ProjectReference Include="..\OpenAstroAra.TestHarness\OpenAstroAra.TestHarness.csproj" />
   </ItemGroup>
 
   <ItemGroup>
