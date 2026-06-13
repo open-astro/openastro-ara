@@ -92,6 +92,12 @@ public partial class Program {
         // Phase 9 — IWsBroadcaster + IWsEventChannel + dispatch worker
         builder.Services.AddSingleton<IEquipmentDiscoveryService, AlpacaEquipmentDiscoveryService>();
 
+        // §68.1 AlpacaBridge version gate: probe each bridge's /version on equipment connect and
+        // refuse (503 alpaca_bridge_outdated) if it's below the minimum supported version.
+        builder.Services.AddHttpClient(AlpacaBridgeVersionProbe.HttpClientName);
+        builder.Services.AddSingleton<IAlpacaBridgeVersionProbe, AlpacaBridgeVersionProbe>();
+        builder.Services.AddSingleton<IAlpacaBridgeHandshakeService, AlpacaBridgeHandshakeService>();
+
         // §28 SqliteFrameRepository — reads frames from the catalog with
         // sample data seeded on first init. Bulk ops still return placeholder
         // Accepted responses; next sub-PR makes them actually mutate. Preview
