@@ -103,11 +103,21 @@ class GuiderCalibrationNotifier extends AsyncNotifier<CalibrationStatusResponse?
     await _refresh();
   }
 
+  bool _refreshing = false;
+
   /// Public manual refresh. Skips when an action is in flight (state.isLoading)
-  /// so a UI Refresh tap can't race `_run`'s own trailing refresh.
+  /// or another manual refresh is already running (`_refreshing`) — so a UI
+  /// Refresh tap can't race `_run`'s trailing refresh or stack duplicate polls.
+  /// (`_refresh()` doesn't emit a loading state, so `state.isLoading` alone
+  /// wouldn't catch two overlapping manual refreshes.)
   Future<void> refresh() async {
-    if (state.isLoading) return;
-    await _refresh();
+    if (state.isLoading || _refreshing) return;
+    _refreshing = true;
+    try {
+      await _refresh();
+    } finally {
+      _refreshing = false;
+    }
   }
 
   Future<void> _refresh() async {

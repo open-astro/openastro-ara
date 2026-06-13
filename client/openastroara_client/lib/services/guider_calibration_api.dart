@@ -40,12 +40,19 @@ class GuiderCalibrationApi implements GuiderCalibrationClient {
           baseUrl: server.baseUrl,
           connectTimeout: const Duration(seconds: 3),
           sendTimeout: const Duration(seconds: 5),
+          // Base budget for the 202-Accepted build POSTs (they return fast);
+          // getStatus() overrides with a more generous read budget below.
           receiveTimeout: const Duration(seconds: 5),
         ));
 
   @override
   Future<CalibrationStatusResponse> getStatus() async {
-    final res = await _dio.get<dynamic>('/api/v1/equipment/guider/darklibrary/status');
+    final res = await _dio.get<dynamic>(
+      '/api/v1/equipment/guider/darklibrary/status',
+      // A status read on a busy daemon can take longer than the build-POST
+      // budget; give it more headroom so a slow poll doesn't flash an error.
+      options: Options(receiveTimeout: const Duration(seconds: 12)),
+    );
     final data = res.data;
     if (data is! Map<String, dynamic>) {
       return const CalibrationStatusResponse(connected: false);
