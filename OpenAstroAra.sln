@@ -1,4 +1,4 @@
-
+﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.2.32630.192
@@ -46,6 +46,8 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenAstroAra.Stretch", "OpenAstroAra.Stretch\OpenAstroAra.Stretch.csproj", "{1390BC6D-BE6B-4741-B6B5-C942CD38B496}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenAstroAra.Stretch.Tests", "OpenAstroAra.Stretch.Tests\OpenAstroAra.Stretch.Tests.csproj", "{95176ED1-63F4-4B66-96E6-4F088311C7BD}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenAstroAra.TestHarness", "OpenAstroAra.TestHarness\OpenAstroAra.TestHarness.csproj", "{EE48125C-1801-486D-9AA3-43433F1D3B9F}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -310,6 +312,24 @@ Global
 		{95176ED1-63F4-4B66-96E6-4F088311C7BD}.SignedRelease|x64.Build.0 = Debug|Any CPU
 		{95176ED1-63F4-4B66-96E6-4F088311C7BD}.SignedRelease|x86.ActiveCfg = Debug|Any CPU
 		{95176ED1-63F4-4B66-96E6-4F088311C7BD}.SignedRelease|x86.Build.0 = Debug|Any CPU
+		{EE48125C-1801-486D-9AA3-43433F1D3B9F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EE48125C-1801-486D-9AA3-43433F1D3B9F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EE48125C-1801-486D-9AA3-43433F1D3B9F}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{EE48125C-1801-486D-9AA3-43433F1D3B9F}.Debug|x64.Build.0 = Debug|Any CPU
+		{EE48125C-1801-486D-9AA3-43433F1D3B9F}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{EE48125C-1801-486D-9AA3-43433F1D3B9F}.Debug|x86.Build.0 = Debug|Any CPU
+		{EE48125C-1801-486D-9AA3-43433F1D3B9F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EE48125C-1801-486D-9AA3-43433F1D3B9F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EE48125C-1801-486D-9AA3-43433F1D3B9F}.Release|x64.ActiveCfg = Release|Any CPU
+		{EE48125C-1801-486D-9AA3-43433F1D3B9F}.Release|x64.Build.0 = Release|Any CPU
+		{EE48125C-1801-486D-9AA3-43433F1D3B9F}.Release|x86.ActiveCfg = Release|Any CPU
+		{EE48125C-1801-486D-9AA3-43433F1D3B9F}.Release|x86.Build.0 = Release|Any CPU
+		{EE48125C-1801-486D-9AA3-43433F1D3B9F}.SignedRelease|Any CPU.ActiveCfg = Debug|Any CPU
+		{EE48125C-1801-486D-9AA3-43433F1D3B9F}.SignedRelease|Any CPU.Build.0 = Debug|Any CPU
+		{EE48125C-1801-486D-9AA3-43433F1D3B9F}.SignedRelease|x64.ActiveCfg = Debug|Any CPU
+		{EE48125C-1801-486D-9AA3-43433F1D3B9F}.SignedRelease|x64.Build.0 = Debug|Any CPU
+		{EE48125C-1801-486D-9AA3-43433F1D3B9F}.SignedRelease|x86.ActiveCfg = Debug|Any CPU
+		{EE48125C-1801-486D-9AA3-43433F1D3B9F}.SignedRelease|x86.Build.0 = Debug|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

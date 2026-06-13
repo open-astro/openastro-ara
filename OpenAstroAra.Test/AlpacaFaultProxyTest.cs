@@ -1,0 +1,253 @@
+#region "copyright"
+
+/*
+    Copyright (c) 2026 Open Astro and the OpenAstro Ara contributors
+
+    This file is part of OpenAstro Ara (forked from N.I.N.A.).
+
+    This Source Code Form is subject to the terms of the Mozilla Public
+    License, v. 2.0. If a copy of the MPL was not distributed with this
+    file, You can obtain one at http://mozilla.org/MPL/2.0/.
+*/
+
+#endregion "copyright"
+
+using NUnit.Framework;
+using OpenAstroAra.TestHarness.Alpaca;
+using System;
+using System.Diagnostics;
+using System.Net;
+using System.Net.Http;
+using System.Net.Sockets;
+using System.Text;
+using System.Text.Json.Nodes;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace OpenAstroAra.Test {
+
+    /// <summary>
+    /// Unit coverage for the virtual-observatory bench's <see cref="AlpacaFaultProxy"/>.
+    /// Drives the proxy in front of a tiny in-process stub Alpaca device (no OmniSim,
+    /// no network beyond loopback), so it runs in the default CI job and pins the
+    /// fault-injection contract the §42.2 scenarios depend on.
+    /// </summary>
+    [TestFixture]
+    public class AlpacaFaultProxyTest {
+
+        private const string TelescopeConnected = "api/v1/telescope/0/connected";
+
+        [Test]
+        public async Task PassThrough_returns_the_upstream_response_body() {
+            await using var upstream = StubAlpaca.Start(valueLiteral: "false");
+            await using var proxy = AlpacaFaultProxy.Start(upstream.BaseUri);
+            using var client = new HttpClient();
+
+            var body = await client.GetStringAsync(new Uri(proxy.BaseUri, TelescopeConnected)).ConfigureAwait(false);
+
+            Assert.That(ValueOf(body), Is.EqualTo("false"));
+            Assert.That(upstream.RequestCount, Is.EqualTo(1), "a pass-through request must reach the upstream device");
+        }
+
+        [Test]
+        public async Task AlpacaError_returns_a_nonzero_errornumber_and_skips_the_upstream() {
+            await using var upstream = StubAlpaca.Start(valueLiteral: "false");
+            await using var proxy = AlpacaFaultProxy.Start(upstream.BaseUri);
+            proxy.InjectFault(new AlpacaFaultRule {
+                DeviceType = "telescope",
+                Fault = AlpacaFault.AlpacaError(0x500, "mount refused the slew"),
+            });
+            using var client = new HttpClient();
+
+            var body = await client.GetStringAsync(new Uri(proxy.BaseUri, TelescopeConnected)).ConfigureAwait(false);
+            var node = JsonNode.Parse(body)!.AsObject();
+
+            Assert.That((int)node["ErrorNumber"]!, Is.EqualTo(0x500));
+            Assert.That((string?)node["ErrorMessage"], Is.EqualTo("mount refused the slew"));
+            Assert.That(upstream.RequestCount, Is.Zero, "an injected Alpaca error must not touch the real device");
+        }
+
+        [Test]
+        public async Task HttpStatus_returns_the_raw_status_code() {
+            await using var upstream = StubAlpaca.Start(valueLiteral: "false");
+            await using var proxy = AlpacaFaultProxy.Start(upstream.BaseUri);
+            proxy.InjectFault(new AlpacaFaultRule { Fault = AlpacaFault.HttpStatus(503) });
+            using var client = new HttpClient();
+
+            using var resp = await client.GetAsync(new Uri(proxy.BaseUri, TelescopeConnected)).ConfigureAwait(false);
+
+            Assert.That((int)resp.StatusCode, Is.EqualTo(503));
+        }
+
+        [Test]
+        public async Task Drop_aborts_the_connection() {
+            await using var upstream = StubAlpaca.Start(valueLiteral: "false");
+            await using var proxy = AlpacaFaultProxy.Start(upstream.BaseUri);
+            proxy.InjectFault(new AlpacaFaultRule { Fault = AlpacaFault.Drop() });
+            using var client = new HttpClient();
+
+            Assert.ThrowsAsync<HttpRequestException>(async () =>
+                await client.GetStringAsync(new Uri(proxy.BaseUri, TelescopeConnected)).ConfigureAwait(false));
+        }
+
+        [Test]
+        public async Task RewriteValue_overwrites_the_envelope_value_after_forwarding() {
+            // The device reports Slewing=false; the "stuck" fault pins it true so a
+            // commanded slew never settles in the recovery scenarios.
+            await using var upstream = StubAlpaca.Start(valueLiteral: "false");
+            await using var proxy = AlpacaFaultProxy.Start(upstream.BaseUri);
+            proxy.InjectFault(new AlpacaFaultRule {
+                DeviceType = "telescope",
+                Method = "slewing",
+                Fault = AlpacaFault.RewriteValue("true"),
+            });
+            using var client = new HttpClient();
+
+            var body = await client.GetStringAsync(new Uri(proxy.BaseUri, "api/v1/telescope/0/slewing")).ConfigureAwait(false);
+
+            Assert.That(ValueOf(body), Is.EqualTo("true"));
+            Assert.That(upstream.RequestCount, Is.EqualTo(1), "a rewrite still forwards to the device first");
+        }
+
+        [Test]
+        public async Task MaxTriggers_expires_the_rule_after_the_given_count() {
+            await using var upstream = StubAlpaca.Start(valueLiteral: "false");
+            await using var proxy = AlpacaFaultProxy.Start(upstream.BaseUri);
+            proxy.InjectFault(new AlpacaFaultRule {
+                DeviceType = "telescope",
+                Fault = AlpacaFault.HttpStatus(500),
+                MaxTriggers = 1,
+            });
+            using var client = new HttpClient();
+
+            using var first = await client.GetAsync(new Uri(proxy.BaseUri, TelescopeConnected)).ConfigureAwait(false);
+            using var second = await client.GetAsync(new Uri(proxy.BaseUri, TelescopeConnected)).ConfigureAwait(false);
+
+            Assert.That((int)first.StatusCode, Is.EqualTo(500), "the first call should hit the one-shot fault");
+            Assert.That((int)second.StatusCode, Is.EqualTo(200), "the fault should have expired by the second call");
+            Assert.That(upstream.RequestCount, Is.EqualTo(1), "only the post-recovery call reaches the device");
+        }
+
+        [Test]
+        public async Task Delay_with_no_follow_on_still_serves_the_upstream_response() {
+            await using var upstream = StubAlpaca.Start(valueLiteral: "false");
+            await using var proxy = AlpacaFaultProxy.Start(upstream.BaseUri);
+            proxy.InjectFault(new AlpacaFaultRule {
+                Fault = AlpacaFault.Delay(TimeSpan.FromMilliseconds(200)),
+            });
+            using var client = new HttpClient();
+
+            var sw = Stopwatch.StartNew();
+            var body = await client.GetStringAsync(new Uri(proxy.BaseUri, TelescopeConnected)).ConfigureAwait(false);
+            sw.Stop();
+
+            Assert.That(ValueOf(body), Is.EqualTo("false"), "a bare Delay is a slow-but-healthy device");
+            Assert.That(sw.ElapsedMilliseconds, Is.GreaterThanOrEqualTo(150), "the response must not arrive before the delay");
+        }
+
+        [Test]
+        public async Task A_method_selector_only_faults_the_matching_method() {
+            await using var upstream = StubAlpaca.Start(valueLiteral: "false");
+            await using var proxy = AlpacaFaultProxy.Start(upstream.BaseUri);
+            proxy.InjectFault(new AlpacaFaultRule {
+                DeviceType = "telescope",
+                Method = "slewtocoordinatesasync",
+                Fault = AlpacaFault.HttpStatus(500),
+            });
+            using var client = new HttpClient();
+
+            // A different method (connected) must sail through untouched.
+            using var resp = await client.GetAsync(new Uri(proxy.BaseUri, TelescopeConnected)).ConfigureAwait(false);
+
+            Assert.That((int)resp.StatusCode, Is.EqualTo(200));
+            Assert.That(upstream.RequestCount, Is.EqualTo(1));
+        }
+
+        [Test]
+        public async Task ClearFaults_restores_clean_pass_through() {
+            await using var upstream = StubAlpaca.Start(valueLiteral: "false");
+            await using var proxy = AlpacaFaultProxy.Start(upstream.BaseUri);
+            proxy.InjectFault(new AlpacaFaultRule { Fault = AlpacaFault.Drop() });
+            proxy.ClearFaults();
+            using var client = new HttpClient();
+
+            var body = await client.GetStringAsync(new Uri(proxy.BaseUri, TelescopeConnected)).ConfigureAwait(false);
+
+            Assert.That(ValueOf(body), Is.EqualTo("false"));
+        }
+
+        private static string? ValueOf(string envelope) => JsonNode.Parse(envelope)?["Value"]?.ToJsonString();
+
+        /// <summary>
+        /// A minimal in-process Alpaca device: answers any request with a well-formed
+        /// envelope carrying a fixed <c>Value</c> and counts the requests it receives,
+        /// so a test can prove whether the proxy forwarded or short-circuited.
+        /// </summary>
+        private sealed class StubAlpaca : IAsyncDisposable {
+            private readonly HttpListener _listener;
+            private readonly string _valueLiteral;
+            private readonly CancellationTokenSource _cts = new();
+            private readonly Task _loop;
+            private int _requestCount;
+
+            private StubAlpaca(int port, string valueLiteral) {
+                _valueLiteral = valueLiteral;
+                BaseUri = new Uri($"http://127.0.0.1:{port}/");
+                _listener = new HttpListener();
+                _listener.Prefixes.Add(BaseUri.ToString());
+                _listener.Start();
+                _loop = Task.Run(LoopAsync);
+            }
+
+            public Uri BaseUri { get; }
+
+            public int RequestCount => Volatile.Read(ref _requestCount);
+
+            public static StubAlpaca Start(string valueLiteral) => new(FreePort(), valueLiteral);
+
+            private async Task LoopAsync() {
+                while (!_cts.IsCancellationRequested) {
+                    HttpListenerContext context;
+                    try {
+                        context = await _listener.GetContextAsync().ConfigureAwait(false);
+                    } catch (HttpListenerException) {
+                        return;
+                    } catch (ObjectDisposedException) {
+                        return;
+                    }
+                    Interlocked.Increment(ref _requestCount);
+                    var body = Encoding.UTF8.GetBytes(
+                        $"{{\"Value\":{_valueLiteral},\"ErrorNumber\":0,\"ErrorMessage\":\"\",\"ClientTransactionID\":0,\"ServerTransactionID\":1}}");
+                    var resp = context.Response;
+                    resp.StatusCode = 200;
+                    resp.ContentType = "application/json";
+                    resp.ContentLength64 = body.Length;
+                    await resp.OutputStream.WriteAsync(body).ConfigureAwait(false);
+                    resp.OutputStream.Close();
+                }
+            }
+
+            private static int FreePort() {
+                using var probe = new TcpListener(IPAddress.Loopback, 0);
+                probe.Start();
+                return ((IPEndPoint)probe.LocalEndpoint).Port;
+            }
+
+            public async ValueTask DisposeAsync() {
+                await _cts.CancelAsync().ConfigureAwait(false);
+                try {
+                    _listener.Stop();
+                } catch (ObjectDisposedException) {
+                    // already torn down
+                }
+                try {
+                    await _loop.ConfigureAwait(false);
+                } catch (OperationCanceledException) {
+                    // expected on shutdown
+                }
+                _listener.Close();
+                _cts.Dispose();
+            }
+        }
+    }
+}

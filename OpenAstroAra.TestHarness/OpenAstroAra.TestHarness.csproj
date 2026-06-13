@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Virtual-observatory test bench (§42.2 fault-recovery + autonomy scenarios).
+
+    A standalone harness assembly — NOT shipped in any daemon artifact — that
+    drives the real OpenAstroAra.Server against simulated equipment without
+    physical hardware. It deliberately lives outside OpenAstroAra.Test so its
+    components (the Alpaca fault proxy, later a fake guider) can be hosted both
+    in-process by the NUnit suite AND wrapped in a container entry point for the
+    docker-compose rig that runs the same bench on linux-arm64 (Pi parity).
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>preview</LangVersion>
+  </PropertyGroup>
+
+</Project>
