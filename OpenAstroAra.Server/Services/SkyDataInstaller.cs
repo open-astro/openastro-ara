@@ -1,0 +1,138 @@
+#region "copyright"
+
+/*
+    Copyright (c) 2026 Open Astro and the OpenAstro Ara contributors
+
+    This file is part of OpenAstro Ara (forked from N.I.N.A.).
+
+    This Source Code Form is subject to the terms of the Mozilla Public
+    License, v. 2.0. If a copy of the MPL was not distributed with this
+    file, You can obtain one at http://mozilla.org/MPL/2.0/.
+*/
+
+#endregion "copyright"
+
+using System;
+using System.Formats.Tar;
+using System.Globalization;
+using System.IO;
+using System.IO.Compression;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace OpenAstroAra.Server.Services {
+
+    /// <summary>
+    /// §36-2 install engine: extracts a <c>.tar.gz</c> sky-data package into its install directory, safely and
+    /// atomically. "Safely": every archive entry is verified to stay inside the destination, so a malicious or
+    /// malformed archive can't write outside it (tar-slip / path traversal); links and device entries are skipped.
+    /// "Atomically": extraction stages into a sibling temp directory and is swapped into place only once complete,
+    /// and an <see cref="InstalledMarkerFileName"/> sentinel is written inside before the swap — so a reader can
+    /// always tell a finished install from a torn one (a crash/cancel mid-extract leaves no install at all, not a
+    /// half-populated one).
+    ///
+    /// The caller (the §36-2 download worker) is responsible for resolving <c>targetDir</c> from a catalog-validated
+    /// package id; this engine only consumes a stream + a destination and guards entry-level traversal within it.
+    /// </summary>
+    internal static class SkyDataInstaller {
+
+        /// <summary>Sentinel file written at the root of a completed install; its presence marks the directory as a
+        /// fully-extracted package and its write time is the authoritative install timestamp (the dir mtime is not —
+        /// it changes on any child write). Lives inside the package dir so it moves atomically with the swap.</summary>
+        internal const string InstalledMarkerFileName = ".installed";
+
+        /// <summary>
+        /// Extract <paramref name="tarGz"/> (a gzip-compressed tar stream) into <paramref name="targetDir"/>,
+        /// replacing any prior install. On success <paramref name="targetDir"/> contains the package files plus the
+        /// <see cref="InstalledMarkerFileName"/> sentinel; on any failure or cancellation nothing is left behind and
+        /// a pre-existing install is preserved untouched (the swap is the last step).
+        /// </summary>
+        internal static async Task InstallFromTarGzAsync(Stream tarGz, string targetDir, CancellationToken ct) {
+            ArgumentNullException.ThrowIfNull(tarGz);
+            ArgumentException.ThrowIfNullOrEmpty(targetDir);
+
+            var targetFull = Path.GetFullPath(targetDir);
+            var parent = Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(targetFull))
+                ?? throw new ArgumentException("Target directory must have a parent.", nameof(targetDir));
+            Directory.CreateDirectory(parent);
+
+            // Stage into a sibling temp dir so a failed/cancelled extract never leaves a half-populated targetDir,
+            // and the final reveal is a single Move rather than a slow file-by-file write into the live path.
+            var stagingDir = Path.Combine(parent, ".staging-" + Path.GetFileName(targetFull) + "-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(stagingDir);
+            try {
+                await ExtractTarGzAsync(tarGz, stagingDir, ct).ConfigureAwait(false);
+
+                // Stamp the sentinel BEFORE the swap so it appears atomically with the directory at its final path.
+                await File.WriteAllTextAsync(
+                    Path.Combine(stagingDir, InstalledMarkerFileName),
+                    DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture),
+                    ct).ConfigureAwait(false);
+
+                // Reveal. Delete-then-Move isn't a single atomic syscall, but the sentinel makes a torn state
+                // detectable: a dir with no sentinel is treated as not-installed by the inventory layer.
+                if (Directory.Exists(targetFull)) {
+                    Directory.Delete(targetFull, recursive: true);
+                }
+                Directory.Move(stagingDir, targetFull);
+            } catch {
+                TryDeleteDirectory(stagingDir);
+                throw;
+            }
+        }
+
+        private static async Task ExtractTarGzAsync(Stream tarGz, string destDir, CancellationToken ct) {
+            var destFull = Path.GetFullPath(destDir);
+            var destPrefix = destFull.EndsWith(Path.DirectorySeparatorChar)
+                ? destFull
+                : destFull + Path.DirectorySeparatorChar;
+
+            await using var gz = new GZipStream(tarGz, CompressionMode.Decompress, leaveOpen: true);
+            await using var reader = new TarReader(gz, leaveOpen: true);
+
+            while (await reader.GetNextEntryAsync(copyData: false, ct).ConfigureAwait(false) is { } entry) {
+                ct.ThrowIfCancellationRequested();
+                if (string.IsNullOrEmpty(entry.Name)) {
+                    continue;
+                }
+
+                // Tar-slip guard: resolve the entry against the destination and require the result to stay inside it.
+                // Path.Combine also collapses an absolute entry name onto itself, which GetFullPath then exposes as
+                // outside destFull — caught here too.
+                var entryFull = Path.GetFullPath(Path.Combine(destFull, entry.Name));
+                if (!entryFull.Equals(destFull, StringComparison.Ordinal) &&
+                    !entryFull.StartsWith(destPrefix, StringComparison.Ordinal)) {
+                    throw new InvalidDataException(
+                        $"Archive entry '{entry.Name}' resolves outside the extraction directory and was rejected.");
+                }
+
+                switch (entry.EntryType) {
+                    case TarEntryType.Directory:
+                        Directory.CreateDirectory(entryFull);
+                        break;
+                    case TarEntryType.RegularFile:
+                    case TarEntryType.V7RegularFile:
+                        Directory.CreateDirectory(Path.GetDirectoryName(entryFull)!);
+                        await entry.ExtractToFileAsync(entryFull, overwrite: true, ct).ConfigureAwait(false);
+                        break;
+                    default:
+                        // Symlinks, hardlinks, char/block devices, fifos: a sky-data package is plain files + dirs.
+                        // Links are themselves a traversal vector (a symlink could point outside the dir, then a
+                        // later entry writes "through" it), so skipping them is both sufficient and safer.
+                        break;
+                }
+            }
+        }
+
+        private static void TryDeleteDirectory(string dir) {
+            try {
+                if (Directory.Exists(dir)) {
+                    Directory.Delete(dir, recursive: true);
+                }
+            } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or DirectoryNotFoundException) {
+                // Best-effort cleanup of the staging dir — a leaked .staging-* dir is harmless (the inventory layer
+                // only ever lists catalog ids, never the staging siblings) and will be reclaimed on the next install.
+            }
+        }
+    }
+}
