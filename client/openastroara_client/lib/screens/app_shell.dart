@@ -101,22 +101,30 @@ class _TabSpec {
 class _TopEquipmentBar extends StatelessWidget {
   const _TopEquipmentBar();
 
-  // Per §25.3 device-type order. Most chips are disconnected until Phase 12c
-  // wires their Alpaca chooser + connect flow; GUIDE is live (see GuiderChip)
-  // and is rendered specially in the row below.
-  static const _chips = <(IconData, String)>[
+  // Per §25.3 device-type order. These chips are disconnected until Phase 12c
+  // wires their Alpaca chooser + connect flow. GUIDE is live (GuiderChip) and is
+  // inserted explicitly between ROT and FLAT in the row below — its position is
+  // structural, not matched on a label string.
+  static const _chipsBeforeGuide = <(IconData, String)>[
     (Icons.camera_alt, 'CAM'),
     (Icons.filter_alt, 'FW'),
     (Icons.adjust, 'FOC'),
     (Icons.public, 'MOUNT'),
     (Icons.rotate_right, 'ROT'),
-    (Icons.gps_fixed, 'GUIDE'),
+  ];
+  static const _chipsAfterGuide = <(IconData, String)>[
     (Icons.wb_sunny, 'FLAT'),
     (Icons.power, 'SW'),
     (Icons.cloud_outlined, 'WX'),
     (Icons.shield_outlined, 'SAFE'),
     (Icons.home_outlined, 'DOME'),
   ];
+
+  static Widget _staticChip((IconData, String) spec) => EquipmentChip(
+        icon: spec.$1,
+        label: spec.$2,
+        status: StatusLevel.disconnected,
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -137,15 +145,9 @@ class _TopEquipmentBar extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 8),
               child: Row(
                 children: [
-                  for (final (icon, label) in _chips)
-                    if (label == 'GUIDE')
-                      const GuiderChip()
-                    else
-                      EquipmentChip(
-                        icon: icon,
-                        label: label,
-                        status: StatusLevel.disconnected,
-                      ),
+                  for (final spec in _chipsBeforeGuide) _staticChip(spec),
+                  const GuiderChip(),
+                  for (final spec in _chipsAfterGuide) _staticChip(spec),
                 ],
               ),
             ),

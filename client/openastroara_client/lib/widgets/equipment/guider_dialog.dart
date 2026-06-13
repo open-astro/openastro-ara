@@ -63,7 +63,12 @@ class _GuiderDialog extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (async.hasError)
-            Text('Failed: ${async.error}', style: TextStyle(color: Theme.of(context).colorScheme.error))
+            Text(
+              // Don't interpolate the raw error — a DioException can carry URLs/
+              // headers/stack excerpts into a user-visible string.
+              'Could not reach the guider. Check the connection and try again.',
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            )
           else if (status == null)
             const Text('No guider configured on this server.')
           else
@@ -78,15 +83,12 @@ class _GuiderDialog extends ConsumerWidget {
         if (connected)
           FilledButton(
             onPressed: busy ? null : () => notifier.disconnect(),
-            child: const Text('Disconnect'),
+            child: busy ? const _BusySpinner() : const Text('Disconnect'),
           )
         else
           FilledButton(
             onPressed: busy ? null : () => notifier.connect(),
-            child: busy
-                ? const SizedBox(
-                    width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Text('Connect'),
+            child: busy ? const _BusySpinner() : const Text('Connect'),
           ),
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
@@ -95,6 +97,13 @@ class _GuiderDialog extends ConsumerWidget {
       ],
     );
   }
+}
+
+class _BusySpinner extends StatelessWidget {
+  const _BusySpinner();
+  @override
+  Widget build(BuildContext context) =>
+      const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2));
 }
 
 class _StatusBody extends StatelessWidget {

@@ -40,7 +40,7 @@ void main() {
       );
     });
 
-    test('connected + calibrating/dithering → busy', () {
+    test('connected + calibrating/dithering/paused → busy (not actively guiding)', () {
       expect(
         guiderStatusLevel(_status(GuiderConnectionState.connected, GuiderRuntimeState.calibrating)),
         StatusLevel.busy,
@@ -48,6 +48,18 @@ void main() {
       expect(
         guiderStatusLevel(_status(GuiderConnectionState.connected, GuiderRuntimeState.dithering)),
         StatusLevel.busy,
+      );
+      expect(
+        guiderStatusLevel(_status(GuiderConnectionState.connected, GuiderRuntimeState.paused)),
+        StatusLevel.busy,
+        reason: 'a paused guider must not read as a healthy green guide',
+      );
+    });
+
+    test('connected + stopped → connected (idle but healthy)', () {
+      expect(
+        guiderStatusLevel(_status(GuiderConnectionState.connected, GuiderRuntimeState.stopped)),
+        StatusLevel.connected,
       );
     });
 

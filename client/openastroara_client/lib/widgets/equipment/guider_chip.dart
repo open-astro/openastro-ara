@@ -31,8 +31,13 @@ StatusLevel guiderStatusLevel(GuiderStatus? status) {
           return StatusLevel.error;
         case GuiderRuntimeState.calibrating:
         case GuiderRuntimeState.dithering:
+        case GuiderRuntimeState.paused:
+          // Not actively correcting — amber so a paused guider (e.g. during a
+          // plate-solve/flip) is visually distinct from a healthy green guide.
           return StatusLevel.busy;
-        default:
+        case GuiderRuntimeState.guiding:
+        case GuiderRuntimeState.stopped:
+        case GuiderRuntimeState.unknown:
           return StatusLevel.connected;
       }
     case GuiderConnectionState.connecting:
