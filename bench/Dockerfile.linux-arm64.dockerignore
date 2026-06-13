@@ -1,0 +1,15 @@
+# Per-Dockerfile ignore (BuildKit reads <dockerfile-path>.dockerignore first) so
+# the bench image build context stays small and never ships host build artifacts
+# or the Flutter client into the Linux/arm64 lane. The build context is the repo
+# root; only the .NET solution's sources are needed.
+**/bin/
+**/obj/
+**/.vs/
+.git/
+.github/
+publish/
+OpenAstroAra.Client/
+**/*.user
+docs/
+design/
+*.md

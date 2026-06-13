@@ -496,13 +496,15 @@ the proxy + fake-guider scenarios in a standing Linux lane (see the Drop-fault n
 fault flow (pause the running sequence on a mid-guiding drop, vs. notify-only) remains a sequencer-side follow-up
 (tracked separately above).
 
-**Virtual-observatory bench (§42.2) — Drop fault Linux/arm64 stability (track for bench-5).** The
+**Virtual-observatory bench (§42.2) — Drop fault Linux/arm64 stability (standing lane landed, bench-5 ✅).** The
 `AlpacaFaultProxy` connection-drop fault (`DropConnectionAsync`: ContentLength64=64 → write 1 byte → SafeAbort)
 relies on the managed `HttpListener` holding the connection open long enough for the client to observe the partial
 response before the reset. Verified passing on macOS/arm64 AND inside a `dotnet/sdk:10.0` aarch64 Linux container
-(all proxy tests green, 2026-06-12, PR #401). Kept here so the **bench-5 docker-compose chassis** keeps a standing
-Linux/arm64 lane for the Drop test — if the kernel ever delivers the byte before `Abort()` or `Abort()` no-ops
-post-`Flush()` on a future runtime, this is the first place to check. Per #401 review.
+(all proxy tests green, 2026-06-12, PR #401). **bench-5 now makes that container repeatable**: `bench/` holds a
+hermetic `docker compose` lane (`bench/run.sh`) that builds + runs the bench suite (29 tests) on `linux/arm64` and
+exits with the test code — verified green on colima/aarch64. If the kernel ever delivers the byte before `Abort()`
+or `Abort()` no-ops post-`Flush()` on a future runtime, run `bench/run.sh` to catch it. A future nicety: wire this
+lane into CI if/when a hosted arm64 Linux runner is available (GitHub's hosted runners are x64 today).
 
 **Virtual-observatory bench — request-header forwarding is in (PR #401), response-header forwarding is not.**
 `ForwardAsync` now forwards inbound request headers (minus hop-by-hop) to the upstream device. The *response*
