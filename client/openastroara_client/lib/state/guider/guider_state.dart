@@ -35,8 +35,21 @@ final guiderApiProvider = Provider<GuiderClient?>((ref) {
 /// accepts the request (connect/disconnect are 202-Accepted, so the post-action
 /// refresh may still show `connecting`).
 class GuiderStatusNotifier extends AsyncNotifier<GuiderStatus?> {
+  // Serializes refresh() without using state.isLoading — refresh deliberately
+  // doesn't emit a bare loading state (to avoid a blank flash), and connect/
+  // disconnect call refresh() *after* setting loading, so a state.isLoading
+  // guard would wrongly skip their follow-up read.
+  bool _refreshing = false;
+  // Bumped on every build() (i.e. active-server change). A refresh captures the
+  // generation at its start and only writes state if it still matches, so a
+  // refresh in flight when the server switches can't land stale data over the
+  // new server's result.
+  int _generation = 0;
+
   @override
   Future<GuiderStatus?> build() async {
+    _refreshing = false;
+    _generation++;
     final api = ref.watch(guiderApiProvider);
     if (api == null) return null;
     return api.getStatus();
@@ -85,16 +98,37 @@ class GuiderStatusNotifier extends AsyncNotifier<GuiderStatus?> {
   /// follow-up read); when omitted it reads the current active client.
   Future<void> refresh([GuiderClient? client]) async {
     if (!ref.mounted) return;
-    final api = client ?? ref.read(guiderApiProvider);
-    // Don't emit a bare loading state here — keep the prior data visible while
-    // the reload is in flight so a manual refresh / poll doesn't flash blank.
-    // (Riverpod 3.x's copyWithPrevious is internal, so we just hold the value.)
-    final next = await AsyncValue.guard<GuiderStatus?>(() async {
-      if (api == null) return null;
-      return api.getStatus();
-    });
-    // getStatus() can outlive the active server; don't write to a disposed notifier.
-    if (ref.mounted) state = next;
+    // A manual refresh (no pinned client) serializes so rapid taps don't stack
+    // concurrent getStatus() calls. The internal post-action call from connect/
+    // disconnect passes a pinned client and must ALWAYS proceed — otherwise its
+    // status read would be silently dropped (and state left on AsyncLoading) if a
+    // manual refresh happened to be in flight. So the flag gates only the manual
+    // path; the notifier doesn't depend on a UI lock to stay self-consistent.
+    final manual = client == null;
+    if (manual) {
+      if (_refreshing) return;
+      _refreshing = true;
+    }
+    final gen = _generation;
+    try {
+      final api = client ?? ref.read(guiderApiProvider);
+      // Don't emit a bare loading state here — keep the prior data visible while
+      // the reload is in flight so a manual refresh / poll doesn't flash blank.
+      // (Riverpod 3.x's copyWithPrevious is internal, so we just hold the value.)
+      final next = await AsyncValue.guard<GuiderStatus?>(() async {
+        if (api == null) return null;
+        return api.getStatus();
+      });
+      // Skip the write if the notifier was disposed or rebuilt for a new server
+      // mid-flight (gen changed) — otherwise this stale read could clobber the
+      // new server's status.
+      if (ref.mounted && gen == _generation) state = next;
+    } finally {
+      // Only clear the flag if this was the manual path and no rebuild happened —
+      // build() already reset it for the new generation, and a fresh manual
+      // refresh may have set it again.
+      if (manual && gen == _generation) _refreshing = false;
+    }
   }
 }
 
