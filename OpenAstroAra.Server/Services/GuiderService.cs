@@ -21,6 +21,7 @@ using OpenAstroAra.Server.Contracts;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -62,13 +63,22 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
     private PHD2Guider? _guider;
     private EquipmentConnectionState _state = EquipmentConnectionState.Disconnected;
     private long _connectGeneration; // this attempt's id; later attempts/disconnects bump it to supersede
+    // Cancels the in-flight background connect (incl. its systemd-start/reachability wait) when a
+    // newer connect or a disconnect supersedes it — so a rapid connect→disconnect can't leave the
+    // ensure-reachable loop polling for up to its full deadline.
+    private CancellationTokenSource? _connectCts;
     private bool _disposed;
 
+    // §63.1: ask systemd to start the guider service if it isn't already up when we connect
+    // (the §63 deployment runs openastro-guider as a systemd unit, not as an ARA child process).
+    private readonly IGuiderProcessSupervisor _supervisor;
+
     public GuiderService(IProfileService profileService, GuiderRecoveryCoordinator recovery, ILogger<GuiderService> logger,
-            IWsBroadcaster? ws = null) {
+            IGuiderProcessSupervisor supervisor, IWsBroadcaster? ws = null) {
         _profileService = profileService ?? throw new ArgumentNullException(nameof(profileService));
         _recovery = recovery ?? throw new ArgumentNullException(nameof(recovery));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
         _ws = ws;
     }
 
@@ -93,6 +103,7 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
         ArgumentNullException.ThrowIfNull(request);
         long generation;
         PHD2Guider guider;
+        CancellationToken connectToken;
         lock (_gate) {
             ObjectDisposedException.ThrowIf(_disposed, this);
             // Idempotent: connecting while already connecting/connected is a no-op accept (§60.5).
@@ -116,10 +127,13 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             _guideSteps.Clear(); // fresh session — drop the prior connection's RMS window
             _guider = guider;
             generation = ++_connectGeneration;
+            CancelConnectLocked();
+            _connectCts = new CancellationTokenSource();
+            connectToken = _connectCts.Token;
             SetStateLocked(EquipmentConnectionState.Connecting);
         }
         // 202 contract: do the blocking connect off-thread; GetAsync reports the outcome.
-        _ = Task.Run(() => ConnectInBackground(guider, generation), CancellationToken.None);
+        _ = Task.Run(() => ConnectInBackground(guider, generation, connectToken), CancellationToken.None);
         return Task.FromResult(Accepted("guider.connect", idempotencyKey));
     }
 
@@ -127,6 +141,7 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
         lock (_gate) {
             ObjectDisposedException.ThrowIf(_disposed, this);
             ++_connectGeneration; // supersede any in-flight connect
+            CancelConnectLocked(); // and cancel its ensure-reachable/start wait immediately
             CancelRecoveryLocked(); // the user gave up on the guider — stop recovering it
             DisposeGuiderLocked();
             SetStateLocked(EquipmentConnectionState.Disconnected);
@@ -156,8 +171,18 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Background connect boundary: PHD2Guider.Connect can throw arbitrary socket/IO/protocol exceptions; any escape must surface as the Error state and be contained. Log-and-recover.")]
-    private async Task ConnectInBackground(PHD2Guider guider, long generation) {
+    private async Task ConnectInBackground(PHD2Guider guider, long generation, CancellationToken ct) {
         try {
+            // §63.1: the guider runs as a systemd service. If it isn't reachable yet (e.g. it
+            // hasn't finished booting, or is stopped), ask systemd to start it and wait briefly —
+            // ARA never spawns the guider itself. Off-systemd (dev/CI) RequestStart is a no-op, so
+            // this just probes; the bench's FakeGuider is already listening and passes immediately.
+            // ct is cancelled if a newer connect or a disconnect supersedes this attempt.
+            await EnsureGuiderReachableAsync(ct).ConfigureAwait(false);
+            // Bail before the (potentially long, uncancellable) socket connect if a disconnect or a
+            // newer connect already superseded us — otherwise this task lingers on the OS connect
+            // timeout for an unreachable guider even though its result will be discarded.
+            ct.ThrowIfCancellationRequested();
             var ok = await guider.Connect(CancellationToken.None).ConfigureAwait(false);
             lock (_gate) {
                 if (generation != _connectGeneration) {
@@ -165,6 +190,9 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
                 }
                 SetStateLocked(ok ? EquipmentConnectionState.Connected : EquipmentConnectionState.Error);
             }
+        } catch (OperationCanceledException) {
+            // Superseded by a newer connect/disconnect — that operation already owns the state;
+            // this attempt just stops quietly (not a connect failure).
         } catch (Exception ex) {
             LogConnectFailed(ex);
             lock (_gate) {
@@ -172,6 +200,73 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
                     SetStateLocked(EquipmentConnectionState.Error);
                 }
             }
+        }
+    }
+
+    // Ensure the guider service is up before connecting. If it's already reachable (the normal
+    // case — it booted with the Pi), return at once; otherwise ask systemd to start it and poll
+    // for it to come up, bounded by a timeout. Off-systemd the start is a no-op, so this degrades
+    // to a probe — fine for dev/CI/bench where the guider (or FakeGuider) is started externally.
+    private async Task EnsureGuiderReachableAsync(CancellationToken ct) {
+        var settings = _profileService.ActiveProfile.GuiderSettings;
+        string host = settings.PHD2ServerHost;
+        int port = settings.PHD2ServerPort;
+        if (await IsReachableAsync(host, port, ct).ConfigureAwait(false)) {
+            return;
+        }
+        // IsReachableAsync swallows cancellation as "not reachable", so bail explicitly if the
+        // attempt was already superseded — otherwise we'd log + systemctl-start spuriously for a
+        // connect that's being torn down. The OCE is handled cleanly in ConnectInBackground.
+        ct.ThrowIfCancellationRequested();
+        LogGuiderNotReachableStarting(host, port);
+        _supervisor.RequestStart();
+        // Re-probe until the unit comes up, bounded by a ~10s wall-clock deadline (so the worst
+        // case is the deadline, not iterations × per-probe-timeout) and cancelled the moment a
+        // disconnect/reconnect supersedes this attempt.
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        deadline.CancelAfter(TimeSpan.FromSeconds(10));
+        while (!deadline.IsCancellationRequested) {
+            try {
+                await Task.Delay(TimeSpan.FromMilliseconds(500), deadline.Token).ConfigureAwait(false);
+            } catch (OperationCanceledException) {
+                // The linked token covers both the supersede (ct) and the 10s deadline. A supersede
+                // stops quietly; a deadline-during-delay should still reach the timeout log below.
+                if (ct.IsCancellationRequested) {
+                    return;
+                }
+                break;
+            }
+            if (await IsReachableAsync(host, port, deadline.Token).ConfigureAwait(false)) {
+                return;
+            }
+        }
+        // Reaching here means the 10s deadline expired (a supersede would have returned from the
+        // loop's OCE catch). Log it for ops diagnosis, then fall through and let guider.Connect()
+        // fail into the Error state — the §63.3 recovery path handles it from there.
+        if (!ct.IsCancellationRequested) {
+            LogGuiderStartTimeout(host, port);
+        }
+    }
+
+    private static async Task<bool> IsReachableAsync(string host, int port, CancellationToken ct) {
+        using var probe = new TcpClient();
+        try {
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            cts.CancelAfter(TimeSpan.FromMilliseconds(750));
+            await probe.ConnectAsync(host, port, cts.Token).ConfigureAwait(false);
+            // ConnectAsync returned without throwing ⇒ connected (reachable). Shut down gracefully
+            // (FIN, not the RST a bare Dispose sends) to be polite to a remote guider; a failure to
+            // do so doesn't change the reachable verdict.
+            try {
+                probe.Client?.Shutdown(SocketShutdown.Both);
+            } catch (Exception e) when (e is SocketException or ObjectDisposedException) {
+                // already closed / disposed by the peer — still reachable
+            }
+            return true;
+        } catch (SocketException) {
+            return false; // nothing listening / host unresolved
+        } catch (OperationCanceledException) {
+            return false; // probe timed out / superseded
         }
     }
 
@@ -270,10 +365,25 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             CancelRecoveryLocked();
             _recoveryPassCts?.Dispose();
             _recoveryPassCts = null;
+            CancelConnectLocked();
             DisposeGuiderLocked();
         }
     }
 
+    // Cancel + dispose the in-flight background connect's token (its ensure-reachable/systemd-start
+    // wait). Void so the synchronous Cancel() doesn't trip CA1849 in the Task-returning callers.
+    private void CancelConnectLocked() {
+        _connectCts?.Cancel();
+        _connectCts?.Dispose();
+        _connectCts = null;
+    }
+
     [LoggerMessage(Level = LogLevel.Error, Message = "PHD2 guider connect failed")]
     partial void LogConnectFailed(Exception ex);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Guider not reachable at {Host}:{Port} — requesting a systemd start before connecting")]
+    partial void LogGuiderNotReachableStarting(string host, int port);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Guider still not reachable at {Host}:{Port} after the start wait — proceeding to connect (it will fail into Error)")]
+    partial void LogGuiderStartTimeout(string host, int port);
 }

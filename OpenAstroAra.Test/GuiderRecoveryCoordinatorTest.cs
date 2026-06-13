@@ -51,6 +51,8 @@ namespace OpenAstroAra.Test {
             }
 
             public void RequestRestart() => RestartCount++;
+            public void RequestStart() => StartCount++;
+            public int StartCount { get; private set; }
         }
 
         private static readonly IReadOnlyList<TimeSpan> FastBackoff = new[] {
@@ -90,6 +92,7 @@ namespace OpenAstroAra.Test {
                 return GuiderProcessStatus.Active;
             }
             public void RequestRestart() { }
+            public void RequestStart() { }
         }
 
         [Test]

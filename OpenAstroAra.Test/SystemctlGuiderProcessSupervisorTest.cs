@@ -47,5 +47,11 @@ namespace OpenAstroAra.Test {
             var supervisor = NewSupervisor();
             Assert.DoesNotThrow(supervisor.RequestRestart);
         }
+
+        [Test]
+        public void RequestStart_does_not_throw_when_systemctl_is_unavailable() {
+            var supervisor = NewSupervisor();
+            Assert.DoesNotThrow(supervisor.RequestStart);
+        }
     }
 }
