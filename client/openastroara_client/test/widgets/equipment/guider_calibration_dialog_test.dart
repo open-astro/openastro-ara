@@ -151,6 +151,15 @@ void main() {
     expect(fake.darkEnabled, isFalse, reason: 'auto-load was on → toggled off');
   });
 
+  testWidgets('tapping the defect-map Build dispatches a defect-map build', (tester) async {
+    final fake = _FakeCalibrationClient(_connected()); // neither built → two "Build" buttons
+    await tester.pumpWidget(_host(fake));
+    await _open(tester);
+    await tester.tap(find.widgetWithText(TextButton, 'Build').at(1)); // defect map is the second
+    await tester.pumpAndSettle();
+    expect(fake.defectBuilds, 1);
+  });
+
   testWidgets('defect-map built-but-not-loaded shows the right state text', (tester) async {
     await tester.pumpWidget(_host(_FakeCalibrationClient(_connected(defectExists: true))));
     await _open(tester);

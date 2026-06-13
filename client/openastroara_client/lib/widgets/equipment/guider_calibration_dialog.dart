@@ -20,14 +20,13 @@ class _CalibrationDialog extends ConsumerStatefulWidget {
 }
 
 class _CalibrationDialogState extends ConsumerState<_CalibrationDialog> {
-  bool _refreshingUi = false;
+  // Starts locked: the dialog refreshes on mount (below), so a cached-data
+  // re-open can't expose actionable buttons before the first refresh lands.
+  bool _refreshingUi = true;
 
   @override
   void initState() {
     super.initState();
-    // Lock from the first frame (before the microtask fires) so a cached-data
-    // re-open can't expose actionable buttons for a frame.
-    _refreshingUi = true;
     // The provider isn't autoDispose, so a re-open would otherwise show cached
     // data silently — pull fresh status when the dialog mounts.
     Future.microtask(_refresh);
@@ -121,8 +120,10 @@ class _CalibrationBody extends ConsumerWidget {
           detail: _darkDetail(status),
           // The switch is the auto-load/enable flag, NOT the transient
           // "loaded in memory right now" state (which can stay true after
-          // disabling, bouncing the switch back).
-          enabled: status.autoLoadDarks,
+          // disabling, bouncing the switch back). Gate on exists so a server
+          // reporting auto-load=on for a not-built artifact doesn't show an
+          // interactive-looking-but-frozen ON switch.
+          enabled: status.darkLibraryExists && status.autoLoadDarks,
           onBuild: locked ? null : () => unawaited(notifier.buildDarkLibrary()),
           onToggle: (locked || !status.darkLibraryExists)
               ? null
@@ -134,7 +135,7 @@ class _CalibrationBody extends ConsumerWidget {
           exists: status.defectMapExists,
           loaded: status.defectMapLoaded,
           detail: null,
-          enabled: status.autoLoadDefectMap,
+          enabled: status.defectMapExists && status.autoLoadDefectMap,
           onBuild: locked ? null : () => unawaited(notifier.buildDefectMap()),
           onToggle: (locked || !status.defectMapExists)
               ? null
