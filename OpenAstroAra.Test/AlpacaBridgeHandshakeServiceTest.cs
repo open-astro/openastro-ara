@@ -96,16 +96,52 @@ namespace OpenAstroAra.Test {
             Assert.That(probe.Calls, Is.EqualTo(1), "two devices on one bridge (differing only by path) must share the cache");
         }
 
-        private sealed class CountingProbe : IAlpacaBridgeVersionProbe {
-            private readonly AlpacaBridgeHandshake _result;
-            public int Calls { get; private set; }
+        // Returns the supplied results in order (the last repeats once exhausted), counting calls via
+        // Interlocked so the counter is safe even if a future concurrent test exercises it.
+        [Test]
+        public async Task Missing_is_not_cached_so_a_recovered_bridge_is_seen_immediately() {
+            // First probe: the bridge is unreachable; second probe: it's back.
+            var probe = new CountingProbe(
+                new AlpacaBridgeHandshake(AlpacaBridgeStatus.Missing, null),
+                new AlpacaBridgeHandshake(AlpacaBridgeStatus.Ok, "1.6.0"));
+            var clock = new FakeTimeProvider(new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero));
+            var svc = new AlpacaBridgeHandshakeService(probe, clock);
 
-            public CountingProbe(AlpacaBridgeHandshake result) => _result = result;
+            var first = await svc.HandshakeAsync(BridgeA, CancellationToken.None);  // Missing — not cached.
+            var second = await svc.HandshakeAsync(BridgeA, CancellationToken.None); // re-probes within the TTL.
+
+            Assert.Multiple(() => {
+                Assert.That(first.Status, Is.EqualTo(AlpacaBridgeStatus.Missing));
+                Assert.That(second.Status, Is.EqualTo(AlpacaBridgeStatus.Ok),
+                    "a Missing result must not be cached, so a recovered bridge is picked up on the next call");
+                Assert.That(probe.Calls, Is.EqualTo(2));
+            });
+        }
+
+        [Test]
+        public void HandshakeAsync_rejects_a_null_uri() {
+            var svc = new AlpacaBridgeHandshakeService(
+                new CountingProbe(new AlpacaBridgeHandshake(AlpacaBridgeStatus.Ok, "1.6.0")),
+                new FakeTimeProvider(new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero)));
+
+            Assert.That(async () => await svc.HandshakeAsync(null!, CancellationToken.None),
+                Throws.ArgumentNullException);
+        }
+
+        // Returns the supplied results in order (the last repeats once exhausted), counting calls via
+        // Interlocked so the counter is safe even if a future concurrent test exercises it.
+        private sealed class CountingProbe : IAlpacaBridgeVersionProbe {
+            private readonly AlpacaBridgeHandshake[] _results;
+            private int _calls;
+
+            public CountingProbe(params AlpacaBridgeHandshake[] results) => _results = results;
+
+            public int Calls => Volatile.Read(ref _calls);
 
             public Task<AlpacaBridgeHandshake> ProbeAsync(Uri bridgeBaseUri, CancellationToken ct) {
                 ct.ThrowIfCancellationRequested();
-                Calls++;
-                return Task.FromResult(_result);
+                var index = Interlocked.Increment(ref _calls) - 1;
+                return Task.FromResult(_results[Math.Min(index, _results.Length - 1)]);
             }
         }
 

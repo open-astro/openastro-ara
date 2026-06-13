@@ -30,9 +30,11 @@ namespace OpenAstroAra.Server.Services {
         /// <summary>
         /// The §68.1 handshake for the AlpacaBridge at <paramref name="bridgeBaseUri"/>
         /// (scheme/host/port of the Alpaca server). A classification probed within the cache TTL is
-        /// returned without re-probing; otherwise the bridge's <c>/version</c> is probed and cached.
-        /// Only <paramref name="ct"/> cancellation propagates — an unreachable bridge resolves to
-        /// <see cref="AlpacaBridgeStatus.Missing"/> via the probe.
+        /// returned without re-probing; otherwise the bridge's <c>/version</c> is probed. A definitive
+        /// classification (Ok / OutdatedWarn / OutdatedBlock) is cached for the TTL; a
+        /// <see cref="AlpacaBridgeStatus.Missing"/> result is NOT cached, so a transient outage doesn't
+        /// keep a recovered bridge blocked — the next call re-probes. Only <paramref name="ct"/>
+        /// cancellation propagates.
         /// </summary>
         Task<AlpacaBridgeHandshake> HandshakeAsync(Uri bridgeBaseUri, CancellationToken ct);
     }
@@ -62,17 +64,33 @@ namespace OpenAstroAra.Server.Services {
         public async Task<AlpacaBridgeHandshake> HandshakeAsync(Uri bridgeBaseUri, CancellationToken ct) {
             ArgumentNullException.ThrowIfNull(bridgeBaseUri);
             var key = NormalizeKey(bridgeBaseUri);
-            var now = _timeProvider.GetUtcNow();
 
-            if (_cache.TryGetValue(key, out var entry) && now - entry.ProbedAt < CacheTtl) {
+            if (_cache.TryGetValue(key, out var entry) && _timeProvider.GetUtcNow() - entry.ProbedAt < CacheTtl) {
                 return entry.Result; // fresh cache hit — no re-probe.
             }
 
             // Miss or expired: probe. Two concurrent misses for the same bridge may both probe;
             // that's harmless (the /version GET is idempotent + cheap) and avoids per-key locking.
             var result = await _probe.ProbeAsync(bridgeBaseUri, ct).ConfigureAwait(false);
-            _cache[key] = new Entry(result, now);
+
+            // Cache only a definitive classification. A Missing (unreachable / no /version) is treated
+            // as transient: NOT cached, so the next connect re-probes and a bridge that just came back
+            // is seen immediately rather than staying blocked for up to the TTL. Stamp ProbedAt AFTER
+            // the probe so a slow probe doesn't eat into the cached window.
+            if (result.Status != AlpacaBridgeStatus.Missing) {
+                var probedAt = _timeProvider.GetUtcNow();
+                _cache[key] = new Entry(result, probedAt);
+                EvictExpired(probedAt); // bound the dictionary — drop entries past their TTL on each write.
+            }
             return result;
+        }
+
+        private void EvictExpired(DateTimeOffset now) {
+            foreach (var kvp in _cache) {
+                if (now - kvp.Value.ProbedAt >= CacheTtl) {
+                    _cache.TryRemove(kvp.Key, out _);
+                }
+            }
         }
 
         // Key on scheme://host:port only — Uri already lowercases the scheme + registered-name host,
