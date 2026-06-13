@@ -145,8 +145,11 @@ namespace OpenAstroAra.Test {
             Assert.That(await PollAsync(svc, d => d.State == EquipmentConnectionState.Connected).ConfigureAwait(false), Is.Not.Null,
                 "the service never reached Connected against the fake guider");
             // Connect leaves exactly the persistent event-stream connection open (per-call RPC
-            // connections close after their reply); wait for it to settle before dropping.
-            await WaitUntilAsync(() => fake.ConnectionCount >= 1).ConfigureAwait(false);
+            // connections close after their reply); wait for it to settle before dropping. Assert
+            // the wait so a slow CI box fails here ("nothing to drop") rather than later at the
+            // drop-count assert with a misleading message.
+            Assert.That(await WaitUntilAsync(() => fake.ConnectionCount >= 1).ConfigureAwait(false), Is.True,
+                "the persistent event-stream connection never settled, so there was nothing to drop");
 
             // §42.2 link fault: the guider daemon drops the socket mid-session. PHD2Guider's
             // listener sees EOF and raises PHD2ConnectionLost; GuiderService.OnConnectionLost moves
