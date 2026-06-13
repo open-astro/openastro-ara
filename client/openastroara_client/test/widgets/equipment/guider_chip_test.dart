@@ -63,6 +63,13 @@ void main() {
       );
     });
 
+    test('connected + unknown runtime → info (not a misleading green)', () {
+      expect(
+        guiderStatusLevel(_status(GuiderConnectionState.connected, GuiderRuntimeState.unknown)),
+        StatusLevel.info,
+      );
+    });
+
     test('error / unknown link → error / disconnected', () {
       expect(
         guiderStatusLevel(_status(GuiderConnectionState.error, GuiderRuntimeState.stopped)),

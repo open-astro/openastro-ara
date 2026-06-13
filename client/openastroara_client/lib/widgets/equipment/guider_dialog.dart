@@ -62,7 +62,12 @@ class _GuiderDialog extends ConsumerWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (async.hasError)
+          if (busy && status == null)
+            const Padding(
+              padding: EdgeInsets.all(8),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (async.hasError)
             Text(
               // Don't interpolate the raw error — a DioException can carry URLs/
               // headers/stack excerpts into a user-visible string.

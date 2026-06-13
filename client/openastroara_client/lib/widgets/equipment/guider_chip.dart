@@ -37,8 +37,10 @@ StatusLevel guiderStatusLevel(GuiderStatus? status) {
           return StatusLevel.busy;
         case GuiderRuntimeState.guiding:
         case GuiderRuntimeState.stopped:
-        case GuiderRuntimeState.unknown:
           return StatusLevel.connected;
+        case GuiderRuntimeState.unknown:
+          // Connected but runtime not yet polled — info, not a misleading green.
+          return StatusLevel.info;
       }
     case GuiderConnectionState.connecting:
       return StatusLevel.info;
