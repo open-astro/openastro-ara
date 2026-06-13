@@ -13,6 +13,16 @@ class _FixedWarnNotifier extends AlpacaBridgeWarningNotifier {
   AlpacaBridgeWarning? build() => _value;
 }
 
+/// Like [_FixedWarnNotifier] but lets the test push a later warning, modelling a
+/// fresh `equipment.alpaca_bridge_outdated_warn` event arriving.
+class _ControllableWarnNotifier extends AlpacaBridgeWarningNotifier {
+  _ControllableWarnNotifier(this._initial);
+  final AlpacaBridgeWarning? _initial;
+  @override
+  AlpacaBridgeWarning? build() => _initial;
+  void emit(AlpacaBridgeWarning warning) => state = warning;
+}
+
 Widget _host(AlpacaBridgeWarning? warning) => ProviderScope(
       overrides: [
         alpacaBridgeWarningProvider.overrideWith(() => _FixedWarnNotifier(warning)),
@@ -43,6 +53,31 @@ void main() {
     await tester.pump();
 
     expect(find.textContaining('AlpacaBridge 1.3.0 detected'), findsNothing);
+  });
+
+  testWidgets('a later warn carrying a different version re-shows after dismiss', (tester) async {
+    final notifier = _ControllableWarnNotifier(
+        const AlpacaBridgeWarning(version: '1.3.0', minimum: '1.2.0', recommended: '1.5.0'));
+    final container = ProviderContainer(overrides: [
+      alpacaBridgeWarningProvider.overrideWith(() => notifier),
+    ]);
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: Scaffold(body: AlpacaBridgeWarningBanner())),
+    ));
+
+    await tester.tap(find.byTooltip('Dismiss'));
+    await tester.pump();
+    expect(find.textContaining('AlpacaBridge 1.3.0 detected'), findsNothing);
+
+    // A fresh warn for a *different* bridge version must re-show (dismiss is per-version).
+    notifier.emit(
+        const AlpacaBridgeWarning(version: '1.4.0', minimum: '1.2.0', recommended: '1.5.0'));
+    await tester.pump();
+
+    expect(find.textContaining('AlpacaBridge 1.4.0 detected'), findsOneWidget);
   });
 
   testWidgets('dismissal survives the banner being unmounted + remounted', (tester) async {
