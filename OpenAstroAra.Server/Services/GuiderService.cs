@@ -214,6 +214,10 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
         if (await IsReachableAsync(host, port, ct).ConfigureAwait(false)) {
             return;
         }
+        // IsReachableAsync swallows cancellation as "not reachable", so bail explicitly if the
+        // attempt was already superseded — otherwise we'd log + systemctl-start spuriously for a
+        // connect that's being torn down. The OCE is handled cleanly in ConnectInBackground.
+        ct.ThrowIfCancellationRequested();
         LogGuiderNotReachableStarting(host, port);
         _supervisor.RequestStart();
         // Re-probe until the unit comes up, bounded by a ~10s wall-clock deadline (so the worst
@@ -231,8 +235,12 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
                 return;
             }
         }
-        // Still not up — fall through and let guider.Connect() fail into the Error state, which the
-        // §63.3 recovery path then handles. (We don't throw here: the connect attempt is the report.)
+        // Reaching here means the 10s deadline expired (a supersede would have returned from the
+        // loop's OCE catch). Log it for ops diagnosis, then fall through and let guider.Connect()
+        // fail into the Error state — the §63.3 recovery path handles it from there.
+        if (!ct.IsCancellationRequested) {
+            LogGuiderStartTimeout(host, port);
+        }
     }
 
     private static async Task<bool> IsReachableAsync(string host, int port, CancellationToken ct) {
@@ -370,4 +378,7 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Guider not reachable at {Host}:{Port} — requesting a systemd start before connecting")]
     partial void LogGuiderNotReachableStarting(string host, int port);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Guider still not reachable at {Host}:{Port} after the start wait — proceeding to connect (it will fail into Error)")]
+    partial void LogGuiderStartTimeout(string host, int port);
 }
