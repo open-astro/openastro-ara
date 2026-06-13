@@ -506,6 +506,16 @@ exits with the test code — verified green on colima/aarch64. If the kernel eve
 or `Abort()` no-ops post-`Flush()` on a future runtime, run `bench/run.sh` to catch it. A future nicety: wire this
 lane into CI if/when a hosted arm64 Linux runner is available (GitHub's hosted runners are x64 today).
 
+**bench-5 Dockerfile — restore-cache split deferred (classic-builder limitation).** `bench/Dockerfile.linux-arm64`
+uses a single `COPY . .` before `dotnet build`, so any source edit busts the implicit NuGet restore cache. The
+idiomatic fix is a two-stage copy (csproj/props/sln → `restore` → full source → `build --no-restore`), but the
+path-preserving form needs BuildKit's `COPY --parents` (`# syntax=docker/dockerfile:1.7-labs`), and the local
+`docker-compose` 5.x here drives the **classic** builder (image label `builder=classic`), where `--parents`/syntax
+directives are unavailable and a naive `COPY **/*.csproj ./` flattens the tree and breaks `dotnet restore <path>`.
+The lane is occasional-use (pre-release / regression check, not per-commit CI), so the cold restore is low-cost for
+now. Revisit the two-stage split when the lane runs under a BuildKit-enabled runner (the same CI move noted above).
+Surfaced 2026-06-13 by the #408 review.
+
 **Virtual-observatory bench — request-header forwarding is in (PR #401), response-header forwarding is not.**
 `ForwardAsync` now forwards inbound request headers (minus hop-by-hop) to the upstream device. The *response*
 direction still only copies Content-Type; if a bench-3+ scenario ever needs the daemon to see a specific upstream

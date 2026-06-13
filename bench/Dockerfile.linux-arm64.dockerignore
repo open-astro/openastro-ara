@@ -12,7 +12,7 @@ OpenAstroAra.Client/
 **/*.user
 docs/
 design/
-*.md
+**/*.md
 # The bench harness files themselves aren't needed inside the image — the
 # Dockerfile is read by the builder, not COPYed, and the test filter is baked
 # into the ENTRYPOINT.
