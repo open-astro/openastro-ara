@@ -21,6 +21,7 @@ using OpenAstroAra.Server.Contracts;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -64,11 +65,16 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
     private long _connectGeneration; // this attempt's id; later attempts/disconnects bump it to supersede
     private bool _disposed;
 
+    // §63.1: ask systemd to start the guider service if it isn't already up when we connect
+    // (the §63 deployment runs openastro-guider as a systemd unit, not as an ARA child process).
+    private readonly IGuiderProcessSupervisor _supervisor;
+
     public GuiderService(IProfileService profileService, GuiderRecoveryCoordinator recovery, ILogger<GuiderService> logger,
-            IWsBroadcaster? ws = null) {
+            IGuiderProcessSupervisor supervisor, IWsBroadcaster? ws = null) {
         _profileService = profileService ?? throw new ArgumentNullException(nameof(profileService));
         _recovery = recovery ?? throw new ArgumentNullException(nameof(recovery));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
         _ws = ws;
     }
 
@@ -158,6 +164,11 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
         Justification = "Background connect boundary: PHD2Guider.Connect can throw arbitrary socket/IO/protocol exceptions; any escape must surface as the Error state and be contained. Log-and-recover.")]
     private async Task ConnectInBackground(PHD2Guider guider, long generation) {
         try {
+            // §63.1: the guider runs as a systemd service. If it isn't reachable yet (e.g. it
+            // hasn't finished booting, or is stopped), ask systemd to start it and wait briefly —
+            // ARA never spawns the guider itself. Off-systemd (dev/CI) RequestStart is a no-op, so
+            // this just probes; the bench's FakeGuider is already listening and passes immediately.
+            await EnsureGuiderReachableAsync(CancellationToken.None).ConfigureAwait(false);
             var ok = await guider.Connect(CancellationToken.None).ConfigureAwait(false);
             lock (_gate) {
                 if (generation != _connectGeneration) {
@@ -172,6 +183,48 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
                     SetStateLocked(EquipmentConnectionState.Error);
                 }
             }
+        }
+    }
+
+    // Ensure the guider service is up before connecting. If it's already reachable (the normal
+    // case — it booted with the Pi), return at once; otherwise ask systemd to start it and poll
+    // for it to come up, bounded by a timeout. Off-systemd the start is a no-op, so this degrades
+    // to a probe — fine for dev/CI/bench where the guider (or FakeGuider) is started externally.
+    private async Task EnsureGuiderReachableAsync(CancellationToken ct) {
+        var settings = _profileService.ActiveProfile.GuiderSettings;
+        string host = settings.PHD2ServerHost;
+        int port = settings.PHD2ServerPort;
+        if (await IsReachableAsync(host, port, ct).ConfigureAwait(false)) {
+            return;
+        }
+        LogGuiderNotReachableStarting(host, port);
+        _supervisor.RequestStart();
+        // Give systemd up to ~8s to bring the unit up, re-probing periodically.
+        for (var attempt = 0; attempt < 16 && !ct.IsCancellationRequested; attempt++) {
+            try {
+                await Task.Delay(TimeSpan.FromMilliseconds(500), ct).ConfigureAwait(false);
+            } catch (OperationCanceledException) {
+                return;
+            }
+            if (await IsReachableAsync(host, port, ct).ConfigureAwait(false)) {
+                return;
+            }
+        }
+        // Still not up — fall through and let guider.Connect() fail into the Error state, which the
+        // §63.3 recovery path then handles. (We don't throw here: the connect attempt is the report.)
+    }
+
+    private static async Task<bool> IsReachableAsync(string host, int port, CancellationToken ct) {
+        try {
+            using var probe = new TcpClient();
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            cts.CancelAfter(TimeSpan.FromMilliseconds(750));
+            await probe.ConnectAsync(host, port, cts.Token).ConfigureAwait(false);
+            return probe.Connected;
+        } catch (SocketException) {
+            return false; // nothing listening / host unresolved
+        } catch (OperationCanceledException) {
+            return false; // probe timed out
         }
     }
 
@@ -276,4 +329,7 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
 
     [LoggerMessage(Level = LogLevel.Error, Message = "PHD2 guider connect failed")]
     partial void LogConnectFailed(Exception ex);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Guider not reachable at {Host}:{Port} — requesting a systemd start before connecting")]
+    partial void LogGuiderNotReachableStarting(string host, int port);
 }

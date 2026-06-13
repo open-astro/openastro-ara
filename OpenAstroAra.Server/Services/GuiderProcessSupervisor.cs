@@ -54,6 +54,11 @@ public interface IGuiderProcessSupervisor {
     /// <summary>Fire-and-forget <c>systemctl restart</c> of the guider unit. No-op (swallowed) when
     /// systemd isn't available.</summary>
     void RequestRestart();
+
+    /// <summary>Fire-and-forget <c>systemctl start</c> of the guider unit (idempotent if already
+    /// running). Used on connect to bring an inactive guider service up before connecting. No-op
+    /// (swallowed) when systemd isn't available.</summary>
+    void RequestStart();
 }
 
 /// <summary>
@@ -92,15 +97,19 @@ public sealed partial class SystemctlGuiderProcessSupervisor : IGuiderProcessSup
         };
     }
 
-    public void RequestRestart() {
-        // Mirror §13: bare `systemctl restart`, fire-and-forget. Privileged via the §63.1 NOPASSWD
+    public void RequestRestart() => RequestVerb("restart");
+
+    public void RequestStart() => RequestVerb("start");
+
+    private void RequestVerb(string verb) {
+        // Mirror §13: bare `systemctl <verb>`, fire-and-forget. Privileged via the §63.1 NOPASSWD
         // sudoers / polkit drop-in the openastro-phd2 .deb installs for the openastroara user.
         try {
-            using var _ = Process.Start(new ProcessStartInfo("systemctl", $"restart {Unit}") {
+            using var _ = Process.Start(new ProcessStartInfo("systemctl", $"{verb} {Unit}") {
                 UseShellExecute = false,
                 CreateNoWindow = true,
             });
-            LogRestartRequested();
+            LogVerbRequested(verb);
         } catch (Exception ex) when (ex is Win32Exception or InvalidOperationException
                                          or PlatformNotSupportedException or IOException) {
             // No systemctl on PATH (non-Linux dev) or no permission — nothing useful to do.
@@ -134,8 +143,8 @@ public sealed partial class SystemctlGuiderProcessSupervisor : IGuiderProcessSup
         }
     }
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Requested systemctl restart of the guider unit")]
-    partial void LogRestartRequested();
+    [LoggerMessage(Level = LogLevel.Information, Message = "Requested systemctl {Verb} of the guider unit")]
+    partial void LogVerbRequested(string verb);
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "systemctl unavailable — guider process supervision is a no-op on this host")]
     partial void LogSystemctlUnavailable(Exception ex);

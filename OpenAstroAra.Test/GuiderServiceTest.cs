@@ -31,7 +31,7 @@ namespace OpenAstroAra.Test {
     public class GuiderServiceTest {
 
         private static GuiderService NewService() =>
-            new(new HeadlessProfileService(), NewRecovery(), NullLogger<GuiderService>.Instance);
+            new(new HeadlessProfileService(), NewRecovery(), NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>());
 
         // These tests never trigger a connection drop, so recovery is wired but never runs — inert
         // mocks suffice. The recovery decision tree itself is covered by GuiderRecoveryCoordinatorTest.
