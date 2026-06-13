@@ -1,0 +1,131 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/models/calibration_status.dart';
+import 'package:openastroara/models/server.dart';
+import 'package:openastroara/services/guider_calibration_api.dart';
+import 'package:openastroara/services/saved_server_service.dart';
+import 'package:openastroara/state/guider/guider_calibration_state.dart';
+import 'package:openastroara/state/saved_server_state.dart';
+
+class _FakeSavedServerService implements SavedServerService {
+  _FakeSavedServerService(this._stored);
+  final List<AraServer> _stored;
+  @override
+  Future<List<AraServer>> loadAll() async => List.unmodifiable(_stored);
+  @override
+  Future<void> saveAll(List<AraServer> servers) async {}
+  @override
+  Future<void> add(AraServer server) async {}
+}
+
+class _FakeCalibrationClient implements GuiderCalibrationClient {
+  _FakeCalibrationClient(this.response);
+  CalibrationStatusResponse response;
+  int darkBuilds = 0;
+  int defectBuilds = 0;
+  bool? darkEnabled;
+  bool? defectEnabled;
+  bool throwOnBuild = false;
+
+  @override
+  Future<CalibrationStatusResponse> getStatus() async => response;
+  @override
+  Future<void> buildDarkLibrary({
+    int frameCount = 5,
+    int? minExposureMs,
+    int? maxExposureMs,
+    bool clearExisting = false,
+    String? notes,
+    bool loadAfter = true,
+  }) async {
+    darkBuilds++;
+    if (throwOnBuild) throw StateError('build failed');
+  }
+
+  @override
+  Future<void> buildDefectMap({
+    int exposureMs = 3000,
+    int frameCount = 10,
+    String? notes,
+    bool loadAfter = true,
+  }) async =>
+      defectBuilds++;
+  @override
+  Future<void> setDarkLibraryEnabled(bool enabled) async => darkEnabled = enabled;
+  @override
+  Future<void> setDefectMapEnabled(bool enabled) async => defectEnabled = enabled;
+  @override
+  void close() {}
+}
+
+ProviderContainer _container(List<AraServer> servers, GuiderCalibrationClient api) {
+  final c = ProviderContainer(overrides: [
+    savedServerServiceProvider.overrideWithValue(_FakeSavedServerService(servers)),
+    guiderCalibrationApiFactoryProvider.overrideWithValue((_) => api),
+  ]);
+  addTearDown(c.dispose);
+  return c;
+}
+
+CalibrationStatusResponse _resp({bool darkExists = false}) => CalibrationStatusResponse(
+      connected: true,
+      status: CalibrationStatus(profileId: 1, darkLibraryExists: darkExists),
+    );
+
+void main() {
+  const server = AraServer(hostname: 'h', port: 5555);
+
+  group('guiderCalibrationProvider', () {
+    test('no saved server → null', () async {
+      final c = _container(const [], _FakeCalibrationClient(_resp()));
+      await c.read(savedServersProvider.future);
+      expect(c.read(guiderCalibrationApiProvider), isNull);
+      expect(await c.read(guiderCalibrationProvider.future), isNull);
+    });
+
+    test('active server → exposes the calibration status', () async {
+      final c = _container(const [server], _FakeCalibrationClient(_resp(darkExists: true)));
+      await c.read(savedServersProvider.future);
+      final r = await c.read(guiderCalibrationProvider.future);
+      expect(r!.connected, isTrue);
+      expect(r.status!.darkLibraryExists, isTrue);
+    });
+
+    test('buildDarkLibrary forwards to the client then refreshes', () async {
+      final api = _FakeCalibrationClient(_resp());
+      final c = _container(const [server], api);
+      await c.read(savedServersProvider.future);
+      await c.read(guiderCalibrationProvider.future);
+
+      api.response = _resp(darkExists: true);
+      await c.read(guiderCalibrationProvider.notifier).buildDarkLibrary(frameCount: 10);
+
+      expect(api.darkBuilds, 1);
+      expect(c.read(guiderCalibrationProvider).value!.status!.darkLibraryExists, isTrue);
+    });
+
+    test('setDarkLibraryEnabled / setDefectMapEnabled forward the flag', () async {
+      final api = _FakeCalibrationClient(_resp());
+      final c = _container(const [server], api);
+      await c.read(savedServersProvider.future);
+      await c.read(guiderCalibrationProvider.future);
+
+      await c.read(guiderCalibrationProvider.notifier).setDarkLibraryEnabled(false);
+      await c.read(guiderCalibrationProvider.notifier).setDefectMapEnabled(true);
+
+      expect(api.darkEnabled, isFalse);
+      expect(api.defectEnabled, isTrue);
+    });
+
+    test('a failed build surfaces as AsyncError', () async {
+      final api = _FakeCalibrationClient(_resp())..throwOnBuild = true;
+      final c = _container(const [server], api);
+      await c.read(savedServersProvider.future);
+      await c.read(guiderCalibrationProvider.future);
+
+      await c.read(guiderCalibrationProvider.notifier).buildDarkLibrary();
+
+      expect(c.read(guiderCalibrationProvider).hasError, isTrue);
+    });
+  });
+}
