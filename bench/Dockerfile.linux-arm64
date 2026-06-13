@@ -1,0 +1,42 @@
+# bench/Dockerfile.linux-arm64 — the §42.2 virtual-observatory bench's standing
+# Linux/arm64 lane (bench-5). Builds and runs the hardware-free bench suite —
+# AlpacaFaultProxy, FakeGuider, and the real-client guider fault scenarios — on a
+# real Linux kernel + .NET runtime, the platform the §13 RPi deployment targets.
+#
+# Why a hermetic copy-in image instead of a bind-mount: the host builds for
+# osx-arm64 and this lane for linux-arm64; sharing the source tree's obj/bin
+# across the two RIDs corrupts each other's restore state. Copying the source in
+# keeps the Linux build fully isolated from the host's — run it as often as you
+# like without disturbing a local `dotnet test` on the Mac. The repo-root
+# .dockerignore keeps host bin/obj out of the build context on BOTH the classic
+# builder and BuildKit (a per-Dockerfile .dockerignore would be honored only by
+# BuildKit, missing the classic-builder path run.sh can fall back to).
+#
+# The bench tests are self-contained (in-process StubAlpaca + FakeGuider, no
+# OmniSim, no hardware), so this image needs nothing but the SDK.
+#
+# Build + run via bench/docker-compose.yml (see bench/README.md), or directly:
+#   docker build -f bench/Dockerfile.linux-arm64 --platform linux/arm64 -t ara-bench .
+#   docker run --rm --platform linux/arm64 ara-bench
+#
+# The base tag is intentionally the floating `10.0`, not a pinned digest: this
+# lane exists to catch a runtime/kernel regression in the Drop-fault mechanic, so
+# it should track the latest .NET 10 patch and surface a break when one lands —
+# pinning would freeze the very thing under test. To reproduce a specific failure
+# deterministically, pin the digest reported by `docker inspect` for that run.
+FROM --platform=linux/arm64 mcr.microsoft.com/dotnet/sdk:10.0
+
+WORKDIR /src
+COPY . .
+
+# Restore + build the bench test project graph once at image-build time so the
+# container's run command (the test pass) doesn't rebuild on every invocation.
+# Release mirrors the host gate: the analyzer globalization rules that trip a
+# Debug build are off in Release, so this stays warnings-clean.
+RUN dotnet build OpenAstroAra.Test/OpenAstroAra.Test.csproj -c Release
+
+# The bench filter — the three suites that make up the §42.2 bench. Kept in sync
+# with bench/run.sh; update both if the bench grows a new fixture.
+ENTRYPOINT ["dotnet", "test", "OpenAstroAra.Test/OpenAstroAra.Test.csproj", \
+            "-c", "Release", "--no-build", "--filter", \
+            "FullyQualifiedName~AlpacaFaultProxyTest|FullyQualifiedName~FakeGuiderTest|FullyQualifiedName~GuiderFakeIntegrationTest"]

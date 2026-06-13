@@ -496,13 +496,33 @@ the proxy + fake-guider scenarios in a standing Linux lane (see the Drop-fault n
 fault flow (pause the running sequence on a mid-guiding drop, vs. notify-only) remains a sequencer-side follow-up
 (tracked separately above).
 
-**Virtual-observatory bench (§42.2) — Drop fault Linux/arm64 stability (track for bench-5).** The
+**Virtual-observatory bench (§42.2) — Drop fault Linux/arm64 stability (standing lane landed, bench-5 ✅).** The
 `AlpacaFaultProxy` connection-drop fault (`DropConnectionAsync`: ContentLength64=64 → write 1 byte → SafeAbort)
 relies on the managed `HttpListener` holding the connection open long enough for the client to observe the partial
 response before the reset. Verified passing on macOS/arm64 AND inside a `dotnet/sdk:10.0` aarch64 Linux container
-(all proxy tests green, 2026-06-12, PR #401). Kept here so the **bench-5 docker-compose chassis** keeps a standing
-Linux/arm64 lane for the Drop test — if the kernel ever delivers the byte before `Abort()` or `Abort()` no-ops
-post-`Flush()` on a future runtime, this is the first place to check. Per #401 review.
+(all proxy tests green, 2026-06-12, PR #401). **bench-5 now makes that container repeatable**: `bench/` holds a
+hermetic `docker compose` lane (`bench/run.sh`) that builds + runs the bench suite (29 tests) on `linux/arm64` and
+exits with the test code — verified green on colima/aarch64. If the kernel ever delivers the byte before `Abort()`
+or `Abort()` no-ops post-`Flush()` on a future runtime, run `bench/run.sh` to catch it. A future nicety: wire this
+lane into CI if/when a hosted arm64 Linux runner is available (GitHub's hosted runners are x64 today).
+
+**bench-5 Dockerfile — restore-cache split deferred (classic-builder limitation).** `bench/Dockerfile.linux-arm64`
+uses a single `COPY . .` before `dotnet build`, so any source edit busts the implicit NuGet restore cache. The
+idiomatic fix is a two-stage copy (csproj/props/sln → `restore` → full source → `build --no-restore`), but the
+path-preserving form needs BuildKit's `COPY --parents` (`# syntax=docker/dockerfile:1.7-labs`), and the local
+`docker-compose` 5.x here drives the **classic** builder (image label `builder=classic`), where `--parents`/syntax
+directives are unavailable and a naive `COPY **/*.csproj ./` flattens the tree and breaks `dotnet restore <path>`.
+The lane is occasional-use (pre-release / regression check, not per-commit CI), so the cold restore is low-cost for
+now. Revisit the two-stage split when the lane runs under a BuildKit-enabled runner (the same CI move noted above).
+Surfaced 2026-06-13 by the #408 review.
+
+**bench-5 — replace the substring test filter with a `bench` category (follow-up).** The lane selects its three
+fixtures with a substring filter (`FullyQualifiedName~AlpacaFaultProxyTest|~FakeGuiderTest|~GuiderFakeIntegrationTest`)
+duplicated between `bench/Dockerfile.linux-arm64`'s ENTRYPOINT and `bench/README.md`. A substring match would silently
+pick up a future class whose name *contains* one of those (e.g. `AlpacaFaultProxyTestHelper`), and the two copies can
+drift. Cleaner: tag the three fixtures with `[Category("bench")]` and filter `--filter TestCategory=bench` — one
+source of truth, no substring fragility. Deferred off the approved #408 to avoid another review/Docker-rebuild round;
+fold into the next bench touch. Surfaced 2026-06-13 by the #408 review.
 
 **Virtual-observatory bench — request-header forwarding is in (PR #401), response-header forwarding is not.**
 `ForwardAsync` now forwards inbound request headers (minus hop-by-hop) to the upstream device. The *response*

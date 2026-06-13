@@ -1,0 +1,25 @@
+# Repo-root build-context excludes, honored by BOTH the classic builder and
+# BuildKit. Per-Dockerfile `<Dockerfile>.dockerignore` files are a BuildKit-only
+# feature, so they are silently ignored when a build runs under the classic
+# builder (e.g. the standalone `docker-compose` binary that bench/run.sh may fall
+# back to). Keeping the rules here makes them builder-independent.
+#
+# Critically for bench/Dockerfile.linux-arm64: this keeps the host's build
+# artifacts (**/bin, **/obj — restored/compiled for osx-arm64) out of the
+# linux/arm64 bench image's context on every path, so the `COPY . .` can't drag a
+# foreign-RID restore state into the container. It also trims every image build's
+# context.
+#
+# MUST NOT exclude publish/ — ./Dockerfile (the Server image) COPYs its payload
+# from publish/arm64/, so that path has to remain in the build context.
+**/bin/
+**/obj/
+**/.vs/
+**/*.user
+.git/
+.github/
+OpenAstroAra.Client/
+docs/
+design/
+**/*.md
+bench/

@@ -1,0 +1,18 @@
+# bench/docker-compose.yml — the §42.2 virtual-observatory bench's Linux/arm64
+# lane (bench-5). One service that builds the hermetic bench image and runs the
+# hardware-free bench suite on linux/arm64. See bench/README.md.
+#
+#   docker compose -f bench/docker-compose.yml run --rm bench   # or: bench/run.sh
+#
+# The build context is the repo root (one level up); the per-Dockerfile
+# .dockerignore keeps the context lean. No ports, no extra services — the bench
+# tests drive in-process stubs (StubAlpaca, FakeGuider), so nothing is exposed.
+services:
+  bench:
+    platform: linux/arm64
+    build:
+      context: ..
+      dockerfile: bench/Dockerfile.linux-arm64
+    # The image ENTRYPOINT already runs the bench filter; `run --rm bench` streams
+    # its output and exits with the test pass/fail code.
+    init: true
