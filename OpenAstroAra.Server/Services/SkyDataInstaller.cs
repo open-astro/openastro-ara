@@ -85,7 +85,10 @@ namespace OpenAstroAra.Server.Services {
                 Directory.Move(stagingDir, targetFull);
             } catch {
                 TryDeleteDirectory(stagingDir);
-                // If the prior install was moved aside but the new one never landed, move it back.
+                // If the prior install was moved aside but the new one never landed, move it back. This restore
+                // branch is correct by inspection but is not unit-tested — reaching it requires the second
+                // Directory.Move to fail after the first succeeded, which needs filesystem-level fault injection
+                // (e.g. a concurrent re-creation of targetFull between the two renames).
                 if (movedPriorAside && !Directory.Exists(targetFull) && Directory.Exists(backupDir)) {
                     try {
                         Directory.Move(backupDir, targetFull);
@@ -101,6 +104,10 @@ namespace OpenAstroAra.Server.Services {
             TryDeleteDirectory(backupDir);
         }
 
+        // TODO(§36-2b): bound the extracted size/entry count to defend against a zip-bomb / disk-exhaustion archive.
+        // Today the package id is catalog-validated by the caller and the source is our own curated host, so an
+        // adversarial archive isn't in the threat model; the download worker is the right place to cap total bytes
+        // (it already knows the advertised Content-Length) and abort extraction past it.
         private static async Task ExtractTarGzAsync(Stream tarGz, string destDir, CancellationToken ct) {
             var destFull = Path.GetFullPath(destDir);
             var destPrefix = destFull.EndsWith(Path.DirectorySeparatorChar)
@@ -118,7 +125,9 @@ namespace OpenAstroAra.Server.Services {
 
                 // Tar-slip guard: resolve the entry against the destination and require the result to stay inside it.
                 // Path.Combine also collapses an absolute entry name onto itself, which GetFullPath then exposes as
-                // outside destFull — caught here too.
+                // outside destFull — caught here too. Ordinal is intentional: both strings come from GetFullPath off
+                // the same base so casing is consistent, and an ordinal compare refuses case-confusion tricks rather
+                // than honoring them. (The server runs only on linux/arm64 — a case-insensitive FS isn't in play.)
                 var entryFull = Path.GetFullPath(Path.Combine(destFull, entry.Name));
                 if (!entryFull.Equals(destFull, StringComparison.Ordinal) &&
                     !entryFull.StartsWith(destPrefix, StringComparison.Ordinal)) {

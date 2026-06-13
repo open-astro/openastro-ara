@@ -139,7 +139,7 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void A_cancelled_install_leaves_no_target_and_no_staging_leak() {
+        public void A_pre_cancelled_install_leaves_no_target_and_no_staging_leak() {
             var target = Path.Combine(_root, "gaia-edr3-bright");
             using var archive = MakeTarGz(("catalog.dat", Bytes("data")));
             using var cts = new CancellationTokenSource();
@@ -153,11 +153,84 @@ namespace OpenAstroAra.Test {
             Assert.That(TempDirs(), Is.Empty, "the staging dir is cleaned up on cancellation");
         }
 
+        [Test]
+        public void A_mid_extraction_cancel_cleans_up_staging() {
+            var target = Path.Combine(_root, "gaia-edr3-bright");
+            // Many entries so cancellation fires while the archive is being read, after extraction has begun —
+            // exercising the cleanup of a partially-populated staging dir, not just a throw before the first read.
+            var entries = Enumerable.Range(0, 64)
+                .Select(i => ("file-" + i.ToString(CultureInfo.InvariantCulture) + ".dat", (byte[]?)new byte[4096]))
+                .ToArray();
+            using var raw = MakeTarGz(entries);
+            using var cts = new CancellationTokenSource();
+            // Cancel once a little of the compressed stream has been consumed (mid-extraction, not before it starts).
+            using var canceling = new CancelAfterBytesStream(raw, cts, thresholdBytes: 256);
+
+            Assert.That(
+                async () => await SkyDataInstaller.InstallFromTarGzAsync(canceling, target, cts.Token),
+                Throws.InstanceOf<OperationCanceledException>());
+
+            Assert.That(Directory.Exists(target), Is.False, "a mid-extraction cancel produces no target dir");
+            Assert.That(TempDirs(), Is.Empty, "the partially-populated staging dir is cleaned up");
+        }
+
         // Sibling scratch dirs the installer creates under _root during a swap (".staging-*" / ".backup-*").
         private string[] TempDirs() =>
             Directory.EnumerateDirectories(_root, ".*", SearchOption.TopDirectoryOnly)
                 .Where(d => Path.GetFileName(d).StartsWith(".staging-", StringComparison.Ordinal)
                          || Path.GetFileName(d).StartsWith(".backup-", StringComparison.Ordinal))
                 .ToArray();
+
+        // A read-through stream that cancels a token once it has yielded a byte threshold, so a consumer reading
+        // through it (here: GZipStream → TarReader) is interrupted partway rather than before the first read.
+        private sealed class CancelAfterBytesStream : Stream {
+            private readonly Stream _inner;
+            private readonly CancellationTokenSource _cts;
+            private readonly long _thresholdBytes;
+            private long _read;
+
+            public CancelAfterBytesStream(Stream inner, CancellationTokenSource cts, long thresholdBytes) {
+                _inner = inner;
+                _cts = cts;
+                _thresholdBytes = thresholdBytes;
+            }
+
+            private void Advance(int n) {
+                _read += n;
+                if (_read >= _thresholdBytes) {
+                    _cts.Cancel();
+                }
+            }
+
+            public override int Read(byte[] buffer, int offset, int count) {
+                var n = _inner.Read(buffer, offset, count);
+                Advance(n);
+                return n;
+            }
+
+            public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) {
+                var n = await _inner.ReadAsync(buffer, cancellationToken);
+                Advance(n);
+                return n;
+            }
+
+            public override bool CanRead => _inner.CanRead;
+            public override bool CanSeek => false;
+            public override bool CanWrite => false;
+            public override long Length => _inner.Length;
+            public override long Position { get => _inner.Position; set => throw new NotSupportedException(); }
+            public override void Flush() => _inner.Flush();
+            public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+            public override void SetLength(long value) => throw new NotSupportedException();
+            public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+            protected override void Dispose(bool disposing) {
+                if (disposing) {
+                    _inner.Dispose();
+                    _cts.Dispose();
+                }
+                base.Dispose(disposing);
+            }
+        }
     }
 }
