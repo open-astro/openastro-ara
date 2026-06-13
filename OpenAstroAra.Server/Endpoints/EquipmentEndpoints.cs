@@ -312,6 +312,8 @@ public static class EquipmentEndpoints {
         if (handshake.Status == AlpacaBridgeStatus.OutdatedWarn) {
             // Usable but a newer bridge is recommended — connect proceeds; the client shows a
             // dismissible §68.1 banner off this advisory WS event (best-effort; never blocks connect).
+            // Fired per warn-band connect (so a 5-device burst emits 5 events); the §68.2 client
+            // dedups/dismisses it per session — see the PORT_TODO §68 client-side follow-ups.
             await notifier.NotifyOutdatedWarnAsync(handshake.Version, ct);
         }
         return Results.Accepted(value: await connect());

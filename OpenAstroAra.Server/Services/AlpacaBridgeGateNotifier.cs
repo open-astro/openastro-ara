@@ -59,8 +59,10 @@ namespace OpenAstroAra.Server.Services {
                 // the warnings=errors gate rejects. Matches GuiderService.DarkLibrary.EmitCalibrationEventAsync.
                 using var doc = JsonDocument.Parse(payload.ToJsonString());
                 await _ws.PublishAsync(WsEventCatalog.EquipmentAlpacaBridgeOutdatedWarn, doc.RootElement.Clone(), ct).ConfigureAwait(false);
-            } catch (Exception ex) {
+            } catch (Exception ex) when (!ct.IsCancellationRequested) {
                 // Best-effort; a dropped banner must not block the connect, but log it so it's visible.
+                // A genuine caller cancel (ct) is NOT swallowed — it propagates so the cancelled connect
+                // aborts cleanly rather than continuing after the client gave up.
                 LogWarnPublishFailed(ex);
             }
         }

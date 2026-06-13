@@ -96,10 +96,16 @@ namespace OpenAstroAra.Test {
             await EquipmentEndpoints.ConnectGatedAsync(
                 Request(), okBridge, okNotifier, () => Task.FromResult(Accepted), CancellationToken.None);
 
+            var missingBridge = new FakeHandshake(new AlpacaBridgeHandshake(AlpacaBridgeStatus.Missing, null));
+            var missingNotifier = new FakeNotifier();
+            await EquipmentEndpoints.ConnectGatedAsync(
+                Request(), missingBridge, missingNotifier, () => Task.FromResult(Accepted), CancellationToken.None);
+
             Assert.Multiple(() => {
                 Assert.That(warnNotifier.WarnCount, Is.EqualTo(1));
                 Assert.That(warnNotifier.LastWarnVersion, Is.EqualTo("1.3.0"));
                 Assert.That(okNotifier.WarnCount, Is.Zero, "an acceptable bridge must not emit the warn event");
+                Assert.That(missingNotifier.WarnCount, Is.Zero, "a missing/unverifiable bridge must not emit the warn event");
             });
         }
 
