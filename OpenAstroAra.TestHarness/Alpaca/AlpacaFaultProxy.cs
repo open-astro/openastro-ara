@@ -154,7 +154,9 @@ public sealed class AlpacaFaultProxy : IAsyncDisposable {
         var (deviceType, deviceNumber, method) = ParsePath(context.Request.Url);
         var fault = MatchFault(context.Request.HttpMethod, deviceType, deviceNumber, method);
 
-        if (fault is DelayFault delay) {
+        // Loop (not a single if) so nested delays — Delay(a, Delay(b, Drop())) — each
+        // take effect rather than the inner one being silently discarded.
+        while (fault is DelayFault delay) {
             try {
                 await Task.Delay(delay.Duration, _cts.Token).ConfigureAwait(false);
             } catch (OperationCanceledException) {
@@ -169,10 +171,10 @@ public sealed class AlpacaFaultProxy : IAsyncDisposable {
                 await DropConnectionAsync(context).ConfigureAwait(false);
                 return;
             case HttpStatusFault http:
-                await WriteRawAsync(context, http.StatusCode, body: "", contentType: "text/plain").ConfigureAwait(false);
+                await WriteRawAsync(context, http.StatusCode, body: "", contentType: "text/plain", _cts.Token).ConfigureAwait(false);
                 return;
             case AlpacaErrorFault err:
-                await WriteAlpacaErrorAsync(context, err).ConfigureAwait(false);
+                await WriteAlpacaErrorAsync(context, err, _cts.Token).ConfigureAwait(false);
                 return;
             case RewriteValueFault rewrite:
                 await ForwardAsync(context, rewrite.JsonValueLiteral).ConfigureAwait(false);
@@ -192,6 +194,10 @@ public sealed class AlpacaFaultProxy : IAsyncDisposable {
                 var state = _rules[i];
                 var rule = state.Rule;
                 if (rule.MaxTriggers is int max && state.Fired >= max) {
+                    // Expired one-shot rule: drop it so a long scenario injecting many
+                    // one-shots doesn't grow _rules unboundedly. Safe under reverse
+                    // iteration — only indices <= i shift, none already visited.
+                    _rules.RemoveAt(i);
                     continue;
                 }
                 if (rule.HttpVerb is { } v && !string.Equals(v, httpVerb, StringComparison.OrdinalIgnoreCase)) {
@@ -236,10 +242,10 @@ public sealed class AlpacaFaultProxy : IAsyncDisposable {
                 bytes = RewriteEnvelopeValue(bytes, rewriteValueLiteral);
             }
             var contentType = upstream.Content.Headers.ContentType?.ToString() ?? "application/json";
-            await WriteRawBytesAsync(context, (int)upstream.StatusCode, bytes, contentType).ConfigureAwait(false);
+            await WriteRawBytesAsync(context, (int)upstream.StatusCode, bytes, contentType, _cts.Token).ConfigureAwait(false);
         } catch (HttpRequestException) {
             // Upstream device unreachable — surface a 502 rather than crashing the proxy.
-            await WriteRawAsync(context, 502, body: "upstream unreachable", contentType: "text/plain").ConfigureAwait(false);
+            await WriteRawAsync(context, 502, body: "upstream unreachable", contentType: "text/plain", _cts.Token).ConfigureAwait(false);
         } catch (OperationCanceledException) {
             SafeAbort(context);
         } catch (IOException) {
@@ -266,18 +272,20 @@ public sealed class AlpacaFaultProxy : IAsyncDisposable {
         return body;
     }
 
-    private static async Task WriteAlpacaErrorAsync(HttpListenerContext context, AlpacaErrorFault err) {
+    private static async Task WriteAlpacaErrorAsync(HttpListenerContext context, AlpacaErrorFault err, CancellationToken cancellationToken) {
         // Echo the client's transaction id when present so the envelope is well-formed
         // for the real ASCOM.Alpaca client (which correlates responses by it).
         var clientTxn = await ReadClientTransactionIdAsync(context.Request).ConfigureAwait(false);
         var envelope = new JsonObject {
             ["ClientTransactionID"] = clientTxn,
+            // Fixed sentinel: the ASCOM client doesn't require a monotonic
+            // ServerTransactionID, and the proxy issues one synthetic error at a time.
             ["ServerTransactionID"] = 1,
             ["ErrorNumber"] = err.ErrorNumber,
             ["ErrorMessage"] = err.Message,
             ["Value"] = null,
         };
-        await WriteRawAsync(context, 200, envelope.ToJsonString(), "application/json").ConfigureAwait(false);
+        await WriteRawAsync(context, 200, envelope.ToJsonString(), "application/json", cancellationToken).ConfigureAwait(false);
     }
 
     private static async Task<long> ReadClientTransactionIdAsync(HttpListenerRequest req) {
@@ -305,21 +313,23 @@ public sealed class AlpacaFaultProxy : IAsyncDisposable {
         return 0;
     }
 
-    private static async Task WriteRawAsync(HttpListenerContext context, int statusCode, string body, string contentType) =>
-        await WriteRawBytesAsync(context, statusCode, Encoding.UTF8.GetBytes(body), contentType).ConfigureAwait(false);
+    private static async Task WriteRawAsync(HttpListenerContext context, int statusCode, string body, string contentType, CancellationToken cancellationToken) =>
+        await WriteRawBytesAsync(context, statusCode, Encoding.UTF8.GetBytes(body), contentType, cancellationToken).ConfigureAwait(false);
 
-    private static async Task WriteRawBytesAsync(HttpListenerContext context, int statusCode, byte[] body, string contentType) {
+    private static async Task WriteRawBytesAsync(HttpListenerContext context, int statusCode, byte[] body, string contentType, CancellationToken cancellationToken) {
         try {
             var resp = context.Response;
             resp.StatusCode = statusCode;
             resp.ContentType = contentType;
             resp.ContentLength64 = body.Length;
-            await resp.OutputStream.WriteAsync(body).ConfigureAwait(false);
+            await resp.OutputStream.WriteAsync(body, cancellationToken).ConfigureAwait(false);
             resp.OutputStream.Close();
         } catch (HttpListenerException) {
             // Client went away mid-write; nothing to do.
         } catch (ObjectDisposedException) {
             // Response already torn down (e.g. concurrent disposal).
+        } catch (OperationCanceledException) {
+            // Proxy disposed mid-write — abandon the response.
         }
     }
 

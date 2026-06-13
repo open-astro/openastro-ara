@@ -202,6 +202,28 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Nested_Delay_applies_every_delay_before_the_terminal_fault() {
+            // Delay(a, Delay(b, Drop())) must wait a+b, then drop — not discard the inner.
+            await using var upstream = StubAlpaca.Start(valueLiteral: "false");
+            await using var proxy = AlpacaFaultProxy.Start(upstream.BaseUri);
+            proxy.InjectFault(new AlpacaFaultRule {
+                Fault = AlpacaFault.Delay(
+                    TimeSpan.FromMilliseconds(80),
+                    AlpacaFault.Delay(TimeSpan.FromMilliseconds(80), AlpacaFault.Drop())),
+            });
+            using var client = new HttpClient();
+
+            var sw = Stopwatch.StartNew();
+            var ex = Assert.ThrowsAsync<HttpRequestException>(async () =>
+                await client.GetStringAsync(new Uri(proxy.BaseUri, TelescopeConnected)).ConfigureAwait(false));
+            sw.Stop();
+
+            Assert.That(ex, Is.Not.Null);
+            Assert.That(sw.ElapsedMilliseconds, Is.GreaterThanOrEqualTo(120),
+                "both nested delays (80+80 ms) must elapse before the drop");
+        }
+
+        [Test]
         public async Task A_method_selector_only_faults_the_matching_method() {
             await using var upstream = StubAlpaca.Start(valueLiteral: "false");
             await using var proxy = AlpacaFaultProxy.Start(upstream.BaseUri);
