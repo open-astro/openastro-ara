@@ -162,17 +162,17 @@ namespace OpenAstroAra.Server.Services {
 
         public Task<OperationAcceptedDto> DownloadAsync(DownloadRequestDto request, string? idempotencyKey, CancellationToken ct) {
             ArgumentNullException.ThrowIfNull(request);
-            // Validate against the catalog up front. Return a faulted Task rather than throwing synchronously —
+            // Validate against the catalog in a single pass. Return a faulted Task rather than throwing synchronously —
             // this is a Task-returning (non-async) method, so a bare throw would surface at call time, before any
             // await, violating the TAP contract (the endpoint maps the fault to a 404).
-            if (!CatalogIds.Contains(request.PackageId)) {
+            var pkg = Catalog.FirstOrDefault(p => p.Id == request.PackageId);
+            if (pkg is null) {
                 return Task.FromException<OperationAcceptedDto>(PackageNotFoundException.ForPackageId(request.PackageId));
             }
             // NOTE: request.ForceReinstall is not yet honored — a download always runs (i.e. behaves as force).
             // Short-circuiting on "already installed" needs the sentinel-aware inventory that lands in §36-2b-2
             // (a dir is only "installed" once its .installed sentinel exists), so the skip-if-installed path is
             // wired there rather than guessing from a bare directory here. Tracked in PORT_TODO.
-            var pkg = Catalog.First(p => p.Id == request.PackageId);
             if (pkg.SourceUrl is null) {
                 // A catalog entry without a source URL is a server-config invariant violation (every curated entry
                 // has one), not a client "unknown package" — surface it as a 500, not a misleading 404.
@@ -240,14 +240,18 @@ namespace OpenAstroAra.Server.Services {
 
                 idleCts.CancelAfter(_idleTimeout); // arm once headers are in; reset below on each byte of progress.
                 var targetDir = PackageDir(pkg.Id)!; // pkg came from the catalog, so this is non-null + in-root.
-                await using var counting = new CountingStream(fetch.Content, read => {
-                    Volatile.Write(ref job.DownloadedBytes, read);
-                    // Reset the stall deadline + emit progress on the SAME throttle tick — avoids rescheduling the
-                    // idle timer on every read chunk (the throttle already gates "enough time has passed").
-                    if (MaybeEmitProgress(job)) {
-                        idleCts.CancelAfter(_idleTimeout);
-                    }
-                });
+                await using var counting = new CountingStream(fetch.Content,
+                    read => {
+                        Volatile.Write(ref job.DownloadedBytes, read);
+                        // Reset the stall deadline + emit progress on the SAME throttle tick — avoids rescheduling the
+                        // idle timer on every read chunk (the throttle already gates "enough time has passed").
+                        if (MaybeEmitProgress(job)) {
+                            idleCts.CancelAfter(_idleTimeout);
+                        }
+                    },
+                    // At end-of-stream the whole archive is fetched; disarm the read-idle watchdog so a slow local
+                    // tail (final disk flush / atomic swap of a fully-downloaded package) can't false-fire "stalled".
+                    onEof: () => idleCts.CancelAfter(Timeout.InfiniteTimeSpan));
                 await SkyDataInstaller.InstallFromTarGzAsync(counting, targetDir, ExtractionCeiling(pkg), ct).ConfigureAwait(false);
 
                 await EmitAsync(WsEventCatalog.DataManagerDownloadComplete, job, error: null).ConfigureAwait(false);
@@ -418,16 +422,23 @@ namespace OpenAstroAra.Server.Services {
         private sealed class CountingStream : Stream {
             private readonly Stream _inner;
             private readonly Action<long> _onRead;
+            private readonly Action? _onEof;
             private long _total;
+            private bool _eofSeen;
 
-            public CountingStream(Stream inner, Action<long> onRead) {
+            public CountingStream(Stream inner, Action<long> onRead, Action? onEof = null) {
                 _inner = inner;
                 _onRead = onRead;
+                _onEof = onEof;
             }
 
             private int Count(int read) {
                 if (read > 0) {
                     _onRead(Interlocked.Add(ref _total, read));
+                } else if (!_eofSeen) {
+                    // A 0-byte read is end-of-stream — the whole archive is fetched; fire once.
+                    _eofSeen = true;
+                    _onEof?.Invoke();
                 }
                 return read;
             }

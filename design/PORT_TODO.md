@@ -582,3 +582,12 @@ installed. The skip-if-installed path needs the sentinel-aware "is installed" ch
 once its `.installed` sentinel exists) that lands in §36-2b-2's Describe/Measure rework — wiring ForceReinstall there
 avoids guessing from a bare directory. Until then, every download request re-downloads. Surfaced 2026-06-13 by the
 §36-2b review.
+
+**§36-2 Data Manager — no graceful-shutdown drain for in-flight downloads (§36-2b round-9 review note).** The
+download workers run as detached `Task.Run` jobs; `DataManagerService` is a plain singleton not tied to the host
+shutdown signal. On a daemon restart mid-download the worker is abandoned, leaving the §36-2a `.staging-*`/`.backup-*`
+scratch dirs behind (harmless temp dirs, but not reclaimed) and wasting the partial transfer. Two complementary fixes
+for a follow-up: (a) a **startup sweep** that deletes stale `.staging-*`/`.backup-*` dirs under the sky-data root (robust
+even against a hard kill that a drain can't catch); (b) make `DataManagerService` `IAsyncDisposable` (or an
+`IHostedService`) that cancels all job CTSes and awaits outstanding tasks for a clean drain on graceful stop. Low
+priority for v0.1.0 (restarts are rare and the leaked dirs are inert). Surfaced 2026-06-13 by the §36-2b review.
