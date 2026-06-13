@@ -68,6 +68,8 @@ class _CalibrationDialogState extends ConsumerState<_CalibrationDialog> {
             else if (async.hasError)
               // Neutral — hasError covers both "couldn't reach the guider" and a
               // failed build/toggle, so don't blame the connection specifically.
+              // This replaces the last-known status (Riverpod 3's copyWithPrevious
+              // is internal); the error is transient and Refresh restores status.
               Text(
                 'The last guider request failed. Tap Refresh to recheck.',
                 style: TextStyle(color: Theme.of(context).colorScheme.error),
@@ -78,7 +80,11 @@ class _CalibrationDialogState extends ConsumerState<_CalibrationDialog> {
               // Connected, but the daemon returned no/malformed calibration status.
               const Text('Calibration status unavailable — tap Refresh.')
             else
-              _CalibrationBody(status: status, locked: locked),
+              _CalibrationBody(
+                status: status,
+                locked: locked,
+                notifier: ref.read(guiderCalibrationProvider.notifier),
+              ),
           ],
         ),
       ),
@@ -98,14 +104,16 @@ class _CalibrationDialogState extends ConsumerState<_CalibrationDialog> {
   }
 }
 
-class _CalibrationBody extends ConsumerWidget {
+class _CalibrationBody extends StatelessWidget {
   final CalibrationStatus status;
   final bool locked;
-  const _CalibrationBody({required this.status, required this.locked});
+  // Passed in (not read via ref in build) — the notifier is stable, and reading
+  // a provider inside build() is a Riverpod footgun the parent already avoids.
+  final GuiderCalibrationNotifier notifier;
+  const _CalibrationBody({required this.status, required this.locked, required this.notifier});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final notifier = ref.read(guiderCalibrationProvider.notifier);
+  Widget build(BuildContext context) {
     // onBuild/onToggle fire-and-forget via unawaited(). This is safe because
     // GuiderCalibrationNotifier._run wraps every action in try/catch and routes
     // failures to `state = AsyncValue.error(...)` — the returned future never
@@ -153,7 +161,9 @@ class _CalibrationBody extends ConsumerWidget {
     final lo = s.darkMinExposureSecondsLoaded;
     final hi = s.darkMaxExposureSecondsLoaded;
     if (lo != null && hi != null) {
-      return '$n darks · ${lo.toStringAsFixed(1)}–${hi.toStringAsFixed(1)} s';
+      // Collapse a single-exposure library to one value ("2.0 s", not "2.0–2.0 s").
+      final range = lo == hi ? '${lo.toStringAsFixed(1)} s' : '${lo.toStringAsFixed(1)}–${hi.toStringAsFixed(1)} s';
+      return '$n darks · $range';
     }
     return '$n darks';
   }

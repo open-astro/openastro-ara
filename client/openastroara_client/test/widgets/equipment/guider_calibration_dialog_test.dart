@@ -19,15 +19,19 @@ class _FakeSavedServerService implements SavedServerService {
 }
 
 class _FakeCalibrationClient implements GuiderCalibrationClient {
-  _FakeCalibrationClient(this.response);
+  _FakeCalibrationClient(this.response, {this.throwOnStatus = false});
   CalibrationStatusResponse response;
+  final bool throwOnStatus;
   int darkBuilds = 0;
   int defectBuilds = 0;
   bool? darkEnabled;
   bool? defectEnabled;
 
   @override
-  Future<CalibrationStatusResponse> getStatus() async => response;
+  Future<CalibrationStatusResponse> getStatus() async {
+    if (throwOnStatus) throw StateError('status failed');
+    return response;
+  }
   @override
   Future<void> buildDarkLibrary({
     int frameCount = 5,
@@ -114,6 +118,12 @@ void main() {
     await tester.pumpWidget(_host(_FakeCalibrationClient(const CalibrationStatusResponse(connected: false))));
     await _open(tester);
     expect(find.text('Connect the guider to manage calibration.'), findsOneWidget);
+  });
+
+  testWidgets('a status fetch failure renders the neutral error message', (tester) async {
+    await tester.pumpWidget(_host(_FakeCalibrationClient(_connected(), throwOnStatus: true)));
+    await _open(tester);
+    expect(find.text('The last guider request failed. Tap Refresh to recheck.'), findsOneWidget);
   });
 
   testWidgets('connected but no status → status-unavailable (not "connect")', (tester) async {
