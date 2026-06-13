@@ -287,7 +287,11 @@ public partial class Program {
         // §36 Data Manager — real disk-backed inventory under {profileDir}/sky-data (replaces the
         // placeholder). Registered here (not at the §13.10 placeholder site above) since it needs the
         // resolved profileDir. The §36-2 download engine extends this same service.
-        builder.Services.AddHttpClient(HttpSkyDataFetcher.HttpClientName);
+        // No HttpClient.Timeout: with ResponseHeadersRead it would otherwise bound the wait for response headers
+        // (default 100s), failing a download against a slow-to-start CDN. A download is bounded instead by its job's
+        // CancellationToken (POST /cancel), which the worker observes through the whole fetch + extract.
+        builder.Services.AddHttpClient(HttpSkyDataFetcher.HttpClientName)
+            .ConfigureHttpClient(c => c.Timeout = System.Threading.Timeout.InfiniteTimeSpan);
         builder.Services.AddSingleton<ISkyDataFetcher, HttpSkyDataFetcher>();
         builder.Services.AddSingleton<IDataManagerService>(sp =>
             new DataManagerService(System.IO.Path.Combine(profileDir, "sky-data"),

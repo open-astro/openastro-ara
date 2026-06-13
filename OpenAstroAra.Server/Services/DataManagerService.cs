@@ -161,8 +161,10 @@ namespace OpenAstroAra.Server.Services {
             }
             var pkg = Catalog.First(p => p.Id == request.PackageId);
             if (pkg.SourceUrl is null) {
+                // A catalog entry without a source URL is a server-config invariant violation (every curated entry
+                // has one), not a client "unknown package" — surface it as a 500, not a misleading 404.
                 return Task.FromException<OperationAcceptedDto>(
-                    new PackageNotFoundException($"Data package '{request.PackageId}' has no download source."));
+                    new InvalidOperationException($"Catalog entry '{request.PackageId}' has no source URL."));
             }
 
             // One active download per package: if another is already running, return its id (idempotent) instead
@@ -386,6 +388,11 @@ namespace OpenAstroAra.Server.Services {
 
             public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) =>
                 Count(await _inner.ReadAsync(buffer, cancellationToken).ConfigureAwait(false));
+
+            // Modern .NET routes the legacy array overload through ReadAsync(Memory<byte>); the explicit override
+            // keeps the count correct even if a consumer calls this form directly.
+            public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) =>
+                Count(await _inner.ReadAsync(buffer.AsMemory(offset, count), cancellationToken).ConfigureAwait(false));
 
             public override bool CanRead => true;
             public override bool CanSeek => false;
