@@ -73,36 +73,63 @@ License: ASCOM License (modified Creative Commons; redistribution and
 CLIENT — OpenAstroAra Flutter (Dart 3.x, Flutter pinned 3.27.x)
 ================================================================
 
-dio
----
+dio (resolved 5.9.2)
+--------------------
 Source: https://pub.dev/packages/dio
-License: MIT
+License: MIT (Copyright (c) 2018 Wen Du; Copyright (c) 2022 The CFUG Team)
 
-web_socket_channel
-------------------
+web_socket_channel (resolved 3.0.3)
+-----------------------------------
 Source: https://pub.dev/packages/web_socket_channel
-License: BSD-3-Clause
+License: BSD-3-Clause (Copyright 2016, the Dart project authors)
 
-flutter_riverpod / riverpod / riverpod_annotation
--------------------------------------------------
+flutter_riverpod / riverpod (resolved 3.3.2)
+--------------------------------------------
 Source: https://pub.dev/packages/flutter_riverpod
-License: MIT
+License: MIT (Copyright (c) 2020 Remi Rousselet)
 
-multicast_dns
--------------
+multicast_dns (resolved 0.3.3)
+------------------------------
 Source: https://pub.dev/packages/multicast_dns
-License: BSD-3-Clause
+License: BSD-3-Clause (Copyright 2013 The Flutter Authors)
 
-flutter_secure_storage
-----------------------
+flutter_secure_storage (resolved 10.3.1)
+----------------------------------------
 Source: https://pub.dev/packages/flutter_secure_storage
-License: BSD-3-Clause
+License: BSD-3-Clause (Copyright 2017 German Saprykin)
 (Reserved for v0.1.0 remote-access tokens per §67.4; not used in v0.0.1.)
 
-file_picker
------------
+file_picker (resolved 11.0.2)
+-----------------------------
 Source: https://pub.dev/packages/file_picker
-License: MIT
+License: MIT (Copyright (c) 2018 Miguel Ruivo)
+
+collection (resolved 1.19.1)
+----------------------------
+Source: https://pub.dev/packages/collection
+License: BSD-3-Clause (Copyright 2015, the Dart project authors)
+
+cupertino_icons (resolved 1.0.9)
+--------------------------------
+Source: https://pub.dev/packages/cupertino_icons
+Used via: bundled Cupertino icon font (Material/Cupertino widgets)
+License: MIT (Copyright (c) 2016 Vladimir Kharlampidi) — verified against the resolved 1.0.9 LICENSE
+
+fl_chart (resolved 1.2.0)
+-------------------------
+Source: https://pub.dev/packages/fl_chart
+Used via: §50 stats dashboard charts
+License: MIT (Copyright (c) 2022 Flutter 4 Fun)
+
+package_info_plus (resolved 9.0.1)
+----------------------------------
+Source: https://pub.dev/packages/package_info_plus
+License: BSD-3-Clause (Copyright 2017 The Chromium Authors)
+
+url_launcher (resolved 6.3.2)
+-----------------------------
+Source: https://pub.dev/packages/url_launcher
+License: BSD-3-Clause (Copyright 2013 The Flutter Authors)
 
 ================================================
 INHERITED LINEAGE — Source-level (not bundled)
