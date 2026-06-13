@@ -59,6 +59,7 @@ CalibrationStatusResponse _connected({
   bool darkLoaded = false,
   bool autoLoadDarks = false,
   bool defectExists = false,
+  bool defectLoaded = false,
   bool autoLoadDefectMap = false,
 }) =>
     CalibrationStatusResponse(
@@ -69,6 +70,7 @@ CalibrationStatusResponse _connected({
         darkLibraryLoaded: darkLoaded,
         autoLoadDarks: autoLoadDarks,
         defectMapExists: defectExists,
+        defectMapLoaded: defectLoaded,
         autoLoadDefectMap: autoLoadDefectMap,
         darkCountLoaded: darkLoaded ? 20 : null,
         darkMinExposureSecondsLoaded: darkLoaded ? 1.0 : null,
@@ -147,6 +149,14 @@ void main() {
     await tester.tap(find.byType(Switch).first);
     await tester.pumpAndSettle();
     expect(fake.darkEnabled, isFalse, reason: 'auto-load was on → toggled off');
+  });
+
+  testWidgets('defect-map built-but-not-loaded shows the right state text', (tester) async {
+    await tester.pumpWidget(_host(_FakeCalibrationClient(_connected(defectExists: true))));
+    await _open(tester);
+    // Dark library not built → "Not built"; defect map built but not loaded.
+    expect(find.text('Built (not loaded)'), findsOneWidget);
+    expect(find.text('Not built'), findsOneWidget);
   });
 
   testWidgets('toggling the defect-map switch calls setDefectMapEnabled', (tester) async {

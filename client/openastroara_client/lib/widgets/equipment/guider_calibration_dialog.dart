@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -23,6 +25,9 @@ class _CalibrationDialogState extends ConsumerState<_CalibrationDialog> {
   @override
   void initState() {
     super.initState();
+    // Lock from the first frame (before the microtask fires) so a cached-data
+    // re-open can't expose actionable buttons for a frame.
+    _refreshingUi = true;
     // The provider isn't autoDispose, so a re-open would otherwise show cached
     // data silently — pull fresh status when the dialog mounts.
     Future.microtask(_refresh);
@@ -102,9 +107,9 @@ class _CalibrationBody extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final notifier = ref.read(guiderCalibrationProvider.notifier);
-    // The onBuild/onToggle callbacks deliberately drop the returned Future
-    // (VoidCallback): the notifier surfaces any failure through the provider's
-    // AsyncError state, which this dialog renders, so there's nothing to await.
+    // onBuild/onToggle fire-and-forget via unawaited() — the notifier surfaces
+    // any failure through the provider's AsyncError state (which this dialog
+    // renders), so there's nothing for the callback to await.
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -118,10 +123,10 @@ class _CalibrationBody extends ConsumerWidget {
           // "loaded in memory right now" state (which can stay true after
           // disabling, bouncing the switch back).
           enabled: status.autoLoadDarks,
-          onBuild: locked ? null : () => notifier.buildDarkLibrary(),
+          onBuild: locked ? null : () => unawaited(notifier.buildDarkLibrary()),
           onToggle: (locked || !status.darkLibraryExists)
               ? null
-              : (v) => notifier.setDarkLibraryEnabled(v),
+              : (v) => unawaited(notifier.setDarkLibraryEnabled(v)),
         ),
         const SizedBox(height: 12),
         _Artifact(
@@ -130,10 +135,10 @@ class _CalibrationBody extends ConsumerWidget {
           loaded: status.defectMapLoaded,
           detail: null,
           enabled: status.autoLoadDefectMap,
-          onBuild: locked ? null : () => notifier.buildDefectMap(),
+          onBuild: locked ? null : () => unawaited(notifier.buildDefectMap()),
           onToggle: (locked || !status.defectMapExists)
               ? null
-              : (v) => notifier.setDefectMapEnabled(v),
+              : (v) => unawaited(notifier.setDefectMapEnabled(v)),
         ),
       ],
     );
