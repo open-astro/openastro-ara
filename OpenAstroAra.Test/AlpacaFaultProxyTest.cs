@@ -15,6 +15,7 @@
 using NUnit.Framework;
 using OpenAstroAra.TestHarness.Alpaca;
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Http;
@@ -86,8 +87,42 @@ namespace OpenAstroAra.Test {
             proxy.InjectFault(new AlpacaFaultRule { Fault = AlpacaFault.Drop() });
             using var client = new HttpClient();
 
-            Assert.ThrowsAsync<HttpRequestException>(async () =>
+            // NUnit's ThrowsAsync runs the delegate synchronously and RETURNS the
+            // exception (it is not a Task) — capture + assert non-null so the check is
+            // unmistakably exercised.
+            var ex = Assert.ThrowsAsync<HttpRequestException>(async () =>
                 await client.GetStringAsync(new Uri(proxy.BaseUri, TelescopeConnected)).ConfigureAwait(false));
+            Assert.That(ex, Is.Not.Null);
+            Assert.That(proxy.LastHandlerFault, Is.Null, "a Drop is intentional, not a handler crash");
+        }
+
+        [Test]
+        public async Task AlpacaError_on_a_PUT_echoes_the_client_transaction_id_from_the_form_body() {
+            // A PUT method (e.g. slewtocoordinatesasync) carries ClientTransactionID in
+            // the form body, not the query — the synthesized error envelope must echo it
+            // so the real ASCOM.Alpaca client can correlate the response.
+            await using var upstream = StubAlpaca.Start(valueLiteral: "false");
+            await using var proxy = AlpacaFaultProxy.Start(upstream.BaseUri);
+            proxy.InjectFault(new AlpacaFaultRule {
+                DeviceType = "telescope",
+                Method = "slewtocoordinatesasync",
+                Fault = AlpacaFault.AlpacaError(0x500, "refused"),
+            });
+            using var client = new HttpClient();
+
+            using var content = new FormUrlEncodedContent(new Dictionary<string, string> {
+                ["RightAscension"] = "6.0",
+                ["Declination"] = "45.0",
+                ["ClientTransactionID"] = "777",
+            });
+            using var resp = await client.PutAsync(
+                new Uri(proxy.BaseUri, "api/v1/telescope/0/slewtocoordinatesasync"), content).ConfigureAwait(false);
+            var body = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
+            var node = JsonNode.Parse(body)!.AsObject();
+
+            Assert.That((int)node["ErrorNumber"]!, Is.EqualTo(0x500));
+            Assert.That((long)node["ClientTransactionID"]!, Is.EqualTo(777),
+                "the error envelope must echo the PUT body's ClientTransactionID");
         }
 
         [Test]

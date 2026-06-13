@@ -67,6 +67,19 @@ public sealed class AlpacaFaultProxy : IAsyncDisposable {
     public int Port { get; }
 
     /// <summary>
+    /// The last unexpected fault thrown out of a request handler (past its own
+    /// internal try/catch), or <c>null</c>. Surfaced so a test can assert the proxy
+    /// itself didn't crash rather than diagnosing a silent hang.
+    /// </summary>
+    public Exception? LastHandlerFault { get; private set; }
+
+    private void RecordHandlerFault(AggregateException fault, HttpListenerContext context) {
+        LastHandlerFault = fault.InnerException ?? fault;
+        System.Diagnostics.Trace.TraceError("AlpacaFaultProxy request handler faulted: " + LastHandlerFault);
+        SafeAbort(context); // don't leave the client hanging on a handler crash
+    }
+
+    /// <summary>
     /// Starts a proxy forwarding to <paramref name="upstreamBaseUri"/> (the OmniSim,
     /// e.g. <c>http://127.0.0.1:32323/</c>) on an ephemeral loopback port.
     /// </summary>
@@ -101,8 +114,15 @@ public sealed class AlpacaFaultProxy : IAsyncDisposable {
                 return; // listener disposed during disposal
             }
             // Handle each request independently so a slow/hung one (Delay fault)
-            // never blocks the accept loop or other in-flight requests.
-            _ = Task.Run(() => HandleAsync(context));
+            // never blocks the accept loop or other in-flight requests. Observe the
+            // task: an unexpected handler fault would otherwise be swallowed and show
+            // up only as a client-side hang — record it and abort so a test sees a
+            // clear failure (LastHandlerFault) instead of a timeout.
+            _ = Task.Run(() => HandleAsync(context)).ContinueWith(
+                t => RecordHandlerFault(t.Exception!, context),
+                CancellationToken.None,
+                TaskContinuationOptions.OnlyOnFaulted,
+                TaskScheduler.Default);
         }
     }
 
@@ -219,7 +239,7 @@ public sealed class AlpacaFaultProxy : IAsyncDisposable {
     private static async Task WriteAlpacaErrorAsync(HttpListenerContext context, AlpacaErrorFault err) {
         // Echo the client's transaction id when present so the envelope is well-formed
         // for the real ASCOM.Alpaca client (which correlates responses by it).
-        var clientTxn = ReadClientTransactionId(context.Request);
+        var clientTxn = await ReadClientTransactionIdAsync(context.Request).ConfigureAwait(false);
         var envelope = new JsonObject {
             ["ClientTransactionID"] = clientTxn,
             ["ServerTransactionID"] = 1,
@@ -230,11 +250,27 @@ public sealed class AlpacaFaultProxy : IAsyncDisposable {
         await WriteRawAsync(context, 200, envelope.ToJsonString(), "application/json").ConfigureAwait(false);
     }
 
-    private static long ReadClientTransactionId(HttpListenerRequest req) {
-        // GET carries it in the query; PUT in the form body. Best-effort: default 0.
-        var fromQuery = req.QueryString["ClientTransactionID"];
-        if (long.TryParse(fromQuery, out var q)) {
-            return q;
+    private static async Task<long> ReadClientTransactionIdAsync(HttpListenerRequest req) {
+        // GET carries it in the query; PUT carries it in the x-www-form-urlencoded
+        // body. Best-effort: default 0. (Reads the body only for non-GET — an Alpaca
+        // error short-circuits forwarding, so the body is otherwise unconsumed.)
+        if (long.TryParse(req.QueryString["ClientTransactionID"], out var fromQuery)) {
+            return fromQuery;
+        }
+        if (req.HasEntityBody) {
+            using var reader = new StreamReader(req.InputStream, req.ContentEncoding);
+            var body = await reader.ReadToEndAsync().ConfigureAwait(false);
+            foreach (var pair in body.Split('&', StringSplitOptions.RemoveEmptyEntries)) {
+                var eq = pair.IndexOf('=', StringComparison.Ordinal);
+                if (eq <= 0) {
+                    continue;
+                }
+                var key = Uri.UnescapeDataString(pair[..eq]);
+                if (string.Equals(key, "ClientTransactionID", StringComparison.OrdinalIgnoreCase) &&
+                    long.TryParse(Uri.UnescapeDataString(pair[(eq + 1)..]), out var fromBody)) {
+                    return fromBody;
+                }
+            }
         }
         return 0;
     }
