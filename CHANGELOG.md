@@ -36,6 +36,7 @@ at the top. This happens in the same commit that pushes the release tag.
 ## [Unreleased]
 
 ### Fixed
+- **§63 — A guider RPC call can no longer hang the connect forever on a silent/misbehaving guider.** `PHD2Guider.SendMessage` read the JSON-RPC response with `ReadLineAsync()`, but `TcpClient.ReceiveTimeout` only governs *synchronous* reads — so if the guider never returned a response with the expected id (a half-broken or wrong-version guider), that call and the whole connect handshake would block indefinitely. The async read is now bounded by the request's `receiveTimeout`, so a non-responsive call fails and surfaces instead of stalling. Surfaced by the §42.2 virtual-observatory bench.
 - **§63 — Guider event listener no longer busy-polls the OS TCP table (could crash on macOS).** The guider's PHD2 event-stream reader (`PHD2Guider.RunListener`) previously detected a dropped connection by enumerating the OS active-TCP-connection table (`GetActiveTcpConnections()`) every 500 ms and also spun on `NetworkStream.DataAvailable`. That table enumeration could throw on macOS (null/duplicate local endpoints), tearing the listener down right after connect, and the 500 ms poll added latency + CPU churn. It's now a proper async line reader — events arrive as soon as the guider sends them, and end-of-stream (the guider closing the socket) is the disconnect signal that drives §63.3 crash-recovery. No behavior change against a real guider; removes a macOS-only failure path and the busy-loop.
 
 ### Changed
