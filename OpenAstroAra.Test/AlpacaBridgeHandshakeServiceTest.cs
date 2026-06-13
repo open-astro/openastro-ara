@@ -96,8 +96,6 @@ namespace OpenAstroAra.Test {
             Assert.That(probe.Calls, Is.EqualTo(1), "two devices on one bridge (differing only by path) must share the cache");
         }
 
-        // Returns the supplied results in order (the last repeats once exhausted), counting calls via
-        // Interlocked so the counter is safe even if a future concurrent test exercises it.
         [Test]
         public async Task Missing_is_not_cached_so_a_recovered_bridge_is_seen_immediately() {
             // First probe: the bridge is unreachable; second probe: it's back.
