@@ -568,12 +568,13 @@ unknown/uninstalled id and an `IOException`/`UnauthorizedAccessException` (locke
 distinct "could not delete" error so the client can retry rather than treat a locked dir as already-clear. Low priority;
 inherit the §36-1 catch shape but split the return. Surfaced 2026-06-13 by the §36-1 round-2 review.
 
-**§36-2 Data Manager — no server-side wall-clock backstop on a stalled download (§36-2b review note).** The sky-data
-HttpClient uses `Timeout.InfiniteTimeSpan` (intentional: with `ResponseHeadersRead` the default 100s would fail a
-slow-to-start CDN, and a multi-GB body must not be capped). A download is bounded only by its job's `CancellationToken`
-(`POST /cancel/{id}`). A stalled/hung connection therefore holds a worker + connection open until a client cancels. A
-future enhancement: an *idle*-progress watchdog (cancel the job's CTS if no bytes arrive for N seconds) gives a
-server-side backstop without capping a healthy long download. Low priority. Surfaced 2026-06-13 by the §36-2b review.
+**§36-2 Data Manager — stalled-download backstop (✅ RESOLVED in §36-2b round-6).** The sky-data HttpClient uses
+`Timeout.InfiniteTimeSpan` (intentional: with `ResponseHeadersRead` the default 100s would fail a slow-to-start CDN,
+and a multi-GB body must not be capped). The backstop is now an *idle*-progress watchdog in the download worker: a
+per-job `CancellationTokenSource` armed with `CancelAfter(idleTimeout)` (default 60s) and reset on every byte of
+progress, linked into the install token — so a transfer that stalls at 0 B/s is cancelled and reported
+`download.failed` with `error: "stalled"` rather than pinning a worker forever. A healthy long download keeps resetting
+the deadline and is unaffected.
 
 **§36-2 Data Manager — DownloadRequestDto.ForceReinstall not yet honored (§36-2b review note).** The download worker
 always runs (effectively force-reinstall); `ForceReinstall: false` does NOT short-circuit when the package is already

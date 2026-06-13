@@ -90,20 +90,27 @@ namespace OpenAstroAra.Server.Services {
         // Don't flood the WS channel: a long download emits at most one progress event per this interval.
         private const long ProgressThrottleMs = 500;
 
+        // Idle-progress watchdog: if no bytes arrive for this long the download is considered stalled and cancelled,
+        // so a hung connection (the infinite HttpClient timeout can't catch it) doesn't pin a worker forever.
+        private static readonly TimeSpan DefaultIdleTimeout = TimeSpan.FromSeconds(60);
+
         private readonly string _dataRoot;
         private readonly ISkyDataFetcher _fetcher;
         private readonly IWsBroadcaster _ws;
         private readonly ILogger<DataManagerService> _logger;
+        private readonly TimeSpan _idleTimeout;
 
         // In-flight downloads keyed by download id, plus a one-active-download-per-package guard.
         private readonly ConcurrentDictionary<Guid, DownloadJob> _downloads = new();
         private readonly ConcurrentDictionary<string, Guid> _activeByPackage = new(StringComparer.Ordinal);
 
-        public DataManagerService(string dataRootPath, ISkyDataFetcher fetcher, IWsBroadcaster ws, ILogger<DataManagerService> logger) {
+        public DataManagerService(string dataRootPath, ISkyDataFetcher fetcher, IWsBroadcaster ws,
+            ILogger<DataManagerService> logger, TimeSpan? idleTimeout = null) {
             _dataRoot = dataRootPath ?? throw new ArgumentNullException(nameof(dataRootPath));
             _fetcher = fetcher ?? throw new ArgumentNullException(nameof(fetcher));
             _ws = ws ?? throw new ArgumentNullException(nameof(ws));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _idleTimeout = idleTimeout ?? DefaultIdleTimeout;
         }
 
         public Task<IReadOnlyList<DataPackageDto>> ListPackagesAsync(CancellationToken ct) {
@@ -193,7 +200,9 @@ namespace OpenAstroAra.Server.Services {
         }
 
         public Task<OperationAcceptedDto> CancelAsync(Guid downloadId, CancellationToken ct) {
-            if (_downloads.TryGetValue(downloadId, out var job)) {
+            // !Completed so a download whose worker has reached its finally (done, just not yet removed from
+            // _downloads) reports 404 "nothing to cancel" rather than a misleading 202.
+            if (_downloads.TryGetValue(downloadId, out var job) && !job.Completed) {
                 try {
                     job.Cts.Cancel();
                 } catch (ObjectDisposedException) {
@@ -213,16 +222,22 @@ namespace OpenAstroAra.Server.Services {
         [SuppressMessage("Design", "CA1031:Do not catch general exception types",
             Justification = "Top-level background worker: every failure must surface as a download.failed WS event, and an unobserved exception here would otherwise be lost. It is reported and logged, not swallowed silently.")]
         private async Task RunDownloadAsync(DownloadJob job, DataPackageDto pkg) {
-            var ct = job.Cts.Token;
+            // Idle watchdog: idleCts fires if no bytes arrive within _idleTimeout; the install runs under a token
+            // linked to both the user-cancel CTS and the idle CTS, so a stalled transfer is cancelled, not hung.
+            using var idleCts = new CancellationTokenSource();
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(job.Cts.Token, idleCts.Token);
+            var ct = linked.Token;
             try {
                 await EmitAsync(WsEventCatalog.DataManagerDownloadProgress, job, error: null).ConfigureAwait(false);
 
                 await using var fetch = await _fetcher.OpenAsync(pkg.SourceUrl!, ct).ConfigureAwait(false);
                 Volatile.Write(ref job.TotalBytes, fetch.TotalBytes ?? -1);
 
+                idleCts.CancelAfter(_idleTimeout); // arm once headers are in; reset below on each byte of progress.
                 var targetDir = PackageDir(pkg.Id)!; // pkg came from the catalog, so this is non-null + in-root.
                 await using var counting = new CountingStream(fetch.Content, read => {
                     Volatile.Write(ref job.DownloadedBytes, read);
+                    idleCts.CancelAfter(_idleTimeout); // progress resets the stall deadline.
                     MaybeEmitProgress(job);
                 });
                 await SkyDataInstaller.InstallFromTarGzAsync(counting, targetDir, ExtractionCeiling(pkg), ct).ConfigureAwait(false);
@@ -230,8 +245,15 @@ namespace OpenAstroAra.Server.Services {
                 await EmitAsync(WsEventCatalog.DataManagerDownloadComplete, job, error: null).ConfigureAwait(false);
                 LogDownloadComplete(pkg.Id, job.Id);
             } catch (OperationCanceledException) {
-                await EmitAsync(WsEventCatalog.DataManagerDownloadFailed, job, error: "cancelled").ConfigureAwait(false);
-                LogDownloadCancelled(pkg.Id, job.Id);
+                // Distinguish a user cancel (job.Cts) from the idle watchdog firing (idleCts) — only the idle CTS
+                // fired means the transfer stalled.
+                var stalled = idleCts.IsCancellationRequested && !job.Cts.IsCancellationRequested;
+                await EmitAsync(WsEventCatalog.DataManagerDownloadFailed, job, error: stalled ? "stalled" : "cancelled").ConfigureAwait(false);
+                if (stalled) {
+                    LogDownloadStalled(pkg.Id, job.Id);
+                } else {
+                    LogDownloadCancelled(pkg.Id, job.Id);
+                }
             } catch (SkyDataInstallException ex) {
                 // The install failed AND the prior install couldn't be restored — genuine data loss. Surface it
                 // distinctly (error string + an error log) rather than as an ordinary failed download.
@@ -243,6 +265,9 @@ namespace OpenAstroAra.Server.Services {
                 await EmitAsync(WsEventCatalog.DataManagerDownloadFailed, job, error: ex.Message).ConfigureAwait(false);
                 LogDownloadFailed(pkg.Id, ex);
             } finally {
+                // Mark done BEFORE any removal so a concurrent CancelAsync that still finds the job in _downloads
+                // sees it's finished and 404s rather than returning a misleading 202 for a completed download.
+                job.Completed = true;
                 // Release the package claim BEFORE the registry entry. In the window between the two, a concurrent
                 // same-package DownloadAsync then finds no claim and starts a fresh download, rather than seeing the
                 // stale claim, looking up _downloads, and handing back this now-finished job's (dead) id.
@@ -370,6 +395,7 @@ namespace OpenAstroAra.Server.Services {
             public long DownloadedBytes;
             public long TotalBytes = -1;
             public long LastEmitTick;
+            public volatile bool Completed;
 
             public void Dispose() => Cts.Dispose();
         }
@@ -432,6 +458,9 @@ namespace OpenAstroAra.Server.Services {
 
         [LoggerMessage(Level = LogLevel.Information, Message = "Data package '{PackageId}' download {DownloadId} cancelled")]
         partial void LogDownloadCancelled(string packageId, Guid downloadId);
+
+        [LoggerMessage(Level = LogLevel.Warning, Message = "Data package '{PackageId}' download {DownloadId} stalled (no progress within the idle timeout)")]
+        partial void LogDownloadStalled(string packageId, Guid downloadId);
 
         [LoggerMessage(Level = LogLevel.Warning, Message = "Data package '{PackageId}' download failed")]
         partial void LogDownloadFailed(string packageId, Exception ex);

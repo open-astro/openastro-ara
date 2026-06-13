@@ -63,4 +63,35 @@ namespace OpenAstroAra.Test {
             return new SkyDataFetch(new MemoryStream(payload, writable: false), payload.LongLength);
         }
     }
+
+    // Opens a stream that never yields a byte (honoring its read token), to exercise the idle-progress watchdog.
+    internal sealed class StallingFetcher : ISkyDataFetcher {
+        public Task<SkyDataFetch> OpenAsync(Uri source, CancellationToken ct) =>
+            Task.FromResult(new SkyDataFetch(new StallStream(), totalBytes: null));
+    }
+
+    // A read stream whose async reads block forever but honor cancellation — so when the worker's idle CTS fires,
+    // the in-flight read throws OperationCanceledException.
+    internal sealed class StallStream : Stream {
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) {
+            await Task.Delay(Timeout.Infinite, cancellationToken).ConfigureAwait(false);
+            return 0;
+        }
+
+        public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) {
+            await Task.Delay(Timeout.Infinite, cancellationToken).ConfigureAwait(false);
+            return 0;
+        }
+
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException("async reads only");
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => 0; set => throw new NotSupportedException(); }
+        public override void Flush() { }
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    }
 }

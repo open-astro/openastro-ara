@@ -182,6 +182,36 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Cancel_of_a_completed_download_returns_404() {
+            var archive = TarGz(("catalog.dat", Encoding.UTF8.GetBytes("data")));
+            var ws = new CapturingBroadcaster();
+            var svc = NewService(new FakeSkyDataFetcher(archive), ws);
+
+            var accepted = await svc.DownloadAsync(new DownloadRequestDto(PackageId, ForceReinstall: false), null, CancellationToken.None);
+            await Eventually(() => ws.Events.Any(e => e.EventType == WsEventCatalog.DataManagerDownloadComplete));
+            await Eventually(() => svc.GetStateAsync(CancellationToken.None).Result.ActiveDownloads.Count == 0);
+
+            Assert.That(
+                async () => await svc.CancelAsync(accepted.OperationId, CancellationToken.None),
+                Throws.InstanceOf<DownloadNotFoundException>(), "cancelling a finished download is a 404, not a 202");
+        }
+
+        [Test]
+        public async Task A_stalled_download_is_cancelled_by_the_idle_watchdog() {
+            var ws = new CapturingBroadcaster();
+            var svc = new DataManagerService(_root, new StallingFetcher(), ws,
+                NullLogger<DataManagerService>.Instance, idleTimeout: TimeSpan.FromMilliseconds(150));
+
+            await svc.DownloadAsync(new DownloadRequestDto(PackageId, ForceReinstall: false), null, CancellationToken.None);
+
+            var stalled = await Eventually(() => ws.Events.Any(e =>
+                e.EventType == WsEventCatalog.DataManagerDownloadFailed &&
+                e.Payload.TryGetProperty("error", out var err) && err.GetString() == "stalled"));
+            Assert.That(stalled, Is.True, "a transfer with no progress within the idle timeout is cancelled as stalled");
+            Assert.That(Directory.Exists(Path.Combine(_root, PackageId)), Is.False, "a stalled download installs nothing");
+        }
+
+        [Test]
         public void Cancel_of_an_unknown_download_throws_for_a_404() {
             var svc = NewService(new UnusedFetcher(), new CapturingBroadcaster());
             Assert.That(
