@@ -104,6 +104,33 @@ file_picker
 Source: https://pub.dev/packages/file_picker
 License: MIT
 
+collection
+----------
+Source: https://pub.dev/packages/collection
+License: BSD-3-Clause (Copyright 2015, the Dart project authors)
+
+cupertino_icons
+---------------
+Source: https://pub.dev/packages/cupertino_icons
+Used via: bundled Cupertino icon font (Material/Cupertino widgets)
+License: MIT (Copyright (c) 2016 Vladimir Kharlampidi)
+
+fl_chart
+--------
+Source: https://pub.dev/packages/fl_chart
+Used via: §50 stats dashboard charts
+License: MIT (Copyright (c) 2022 Flutter 4 Fun)
+
+package_info_plus
+-----------------
+Source: https://pub.dev/packages/package_info_plus
+License: BSD-3-Clause (Copyright 2017 The Chromium Authors)
+
+url_launcher
+------------
+Source: https://pub.dev/packages/url_launcher
+License: BSD-3-Clause (Copyright 2013 The Flutter Authors)
+
 ================================================
 INHERITED LINEAGE — Source-level (not bundled)
 ================================================
