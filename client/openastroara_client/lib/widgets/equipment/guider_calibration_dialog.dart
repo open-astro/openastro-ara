@@ -97,6 +97,9 @@ class _CalibrationBody extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final notifier = ref.read(guiderCalibrationProvider.notifier);
+    // The onBuild/onToggle callbacks deliberately drop the returned Future
+    // (VoidCallback): the notifier surfaces any failure through the provider's
+    // AsyncError state, which this dialog renders, so there's nothing to await.
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
