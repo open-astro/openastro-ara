@@ -12,9 +12,9 @@
 
 #endregion "copyright"
 
+using OpenAstroAra.TestHarness.Net;
 using System.Collections.Concurrent;
 using System.Net;
-using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -56,10 +56,11 @@ public sealed class AlpacaFaultProxy : IAsyncDisposable {
     // The single byte emitted before aborting a Drop — cached to avoid a per-call alloc.
     private static readonly byte[] DropProbeByte = [(byte)'{'];
 
-    private AlpacaFaultProxy(Uri upstream, int port) {
+    private AlpacaFaultProxy(Uri upstream, HttpListener listener, int port) {
         _upstream = upstream;
         Port = port;
         BaseUri = new Uri($"http://127.0.0.1:{port}/");
+        _listener = listener; // already bound + started by BindLoopbackListener
         // No auto-redirect/proxy: we forward verbatim. A generous timeout lets the
         // Delay fault model a slow device without the proxy's own client giving up.
         // The proxy owns the handler explicitly (disposeHandler: false) so disposal
@@ -68,9 +69,6 @@ public sealed class AlpacaFaultProxy : IAsyncDisposable {
         _client = new HttpClient(_handler, disposeHandler: false) {
             Timeout = TimeSpan.FromMinutes(5),
         };
-        _listener = new HttpListener();
-        _listener.Prefixes.Add(BaseUri.ToString());
-        _listener.Start();
         _acceptLoop = Task.Run(AcceptLoopAsync);
     }
 
@@ -99,16 +97,18 @@ public sealed class AlpacaFaultProxy : IAsyncDisposable {
     /// </summary>
     public static AlpacaFaultProxy Start(Uri upstreamBaseUri) {
         ArgumentNullException.ThrowIfNull(upstreamBaseUri);
-        return new AlpacaFaultProxy(upstreamBaseUri, FreeLoopbackPort());
+        var (listener, port) = LoopbackListener.Bind();
+        return new AlpacaFaultProxy(upstreamBaseUri, listener, port);
     }
 
     /// <summary>Arms a fault rule. Rules are evaluated newest-first; the first match wins.</summary>
     public void InjectFault(AlpacaFaultRule rule) {
         ArgumentNullException.ThrowIfNull(rule);
-        if (rule.MaxTriggers is int max) {
+        if (rule.MaxTriggers is int max && max <= 0) {
             // A non-positive cap would make the rule fire 0 times (silently dormant) —
             // catch the mistake here rather than as a baffling no-op at request time.
-            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(max, nameof(rule.MaxTriggers));
+            throw new ArgumentOutOfRangeException(
+                nameof(rule), max, "AlpacaFaultRule.MaxTriggers must be positive (or null for unlimited).");
         }
         lock (_gate) {
             _rules.Add(new RuleState { Rule = rule });
@@ -170,7 +170,7 @@ public sealed class AlpacaFaultProxy : IAsyncDisposable {
 
         switch (fault) {
             case DropFault:
-                await DropConnectionAsync(context).ConfigureAwait(false);
+                await DropConnectionAsync(context, _cts.Token).ConfigureAwait(false);
                 return;
             case HttpStatusFault http:
                 await WriteRawAsync(context, http.StatusCode, body: "", contentType: "text/plain", _cts.Token).ConfigureAwait(false);
@@ -345,18 +345,20 @@ public sealed class AlpacaFaultProxy : IAsyncDisposable {
     /// read past the bytes it gets and surface a premature-end / reset error — which is
     /// what a real device losing comms looks like.
     /// </summary>
-    private static async Task DropConnectionAsync(HttpListenerContext context) {
+    private static async Task DropConnectionAsync(HttpListenerContext context, CancellationToken cancellationToken) {
         try {
             var resp = context.Response;
             resp.StatusCode = 200;
             resp.SendChunked = false;
             resp.ContentLength64 = 64; // promise 64 bytes…
-            await resp.OutputStream.WriteAsync(DropProbeByte).ConfigureAwait(false); // …deliver 1
-            await resp.OutputStream.FlushAsync().ConfigureAwait(false);
+            await resp.OutputStream.WriteAsync(DropProbeByte, cancellationToken).ConfigureAwait(false); // …deliver 1
+            await resp.OutputStream.FlushAsync(cancellationToken).ConfigureAwait(false);
         } catch (HttpListenerException) {
             // Connection already gone — the drop is the point.
         } catch (ObjectDisposedException) {
             // Response already torn down.
+        } catch (OperationCanceledException) {
+            // Proxy disposed mid-drop — abandon it.
         } catch (IOException) {
             // Stream faulted mid-write — also a drop from the client's view.
         }
@@ -387,14 +389,6 @@ public sealed class AlpacaFaultProxy : IAsyncDisposable {
         int? deviceNumber = int.TryParse(segments[3], out var n) ? n : null;
         var method = segments[4];
         return (deviceType, deviceNumber, method);
-    }
-
-    private static int FreeLoopbackPort() {
-        // Bind :0, read the OS-assigned port, release it for the HttpListener. The
-        // window between release and re-bind is a benign test-only TOCTOU.
-        using var probe = new TcpListener(IPAddress.Loopback, 0);
-        probe.Start();
-        return ((IPEndPoint)probe.LocalEndpoint).Port;
     }
 
     /// <inheritdoc />

@@ -61,12 +61,21 @@ public abstract record AlpacaFault {
         // Validate eagerly: a malformed literal would otherwise fall through the
         // proxy's body-parse guard and silently become a pass-through, so the fault
         // would appear to do nothing. Fail fast at construction instead.
+        JsonNode? parsed;
         try {
-            _ = JsonNode.Parse(jsonValueLiteral);
+            parsed = JsonNode.Parse(jsonValueLiteral);
         } catch (JsonException ex) {
             throw new ArgumentException(
                 $"'{jsonValueLiteral}' is not a valid JSON value literal (use e.g. \"true\", \"42\", \"\\\"text\\\"\").",
                 nameof(jsonValueLiteral), ex);
+        }
+        // A JSON null parses fine but would *erase* the envelope's Value field (the
+        // ASCOM client then deserializes a silent default). That's almost certainly a
+        // mistake, not an intended fault — reject it explicitly.
+        if (parsed is null) {
+            throw new ArgumentException(
+                "'null' erases the Value field rather than rewriting it — use a typed JSON literal.",
+                nameof(jsonValueLiteral));
         }
         return new RewriteValueFault(jsonValueLiteral);
     }

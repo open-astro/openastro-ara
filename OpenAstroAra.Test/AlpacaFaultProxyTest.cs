@@ -14,12 +14,12 @@
 
 using NUnit.Framework;
 using OpenAstroAra.TestHarness.Alpaca;
+using OpenAstroAra.TestHarness.Net;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Http;
-using System.Net.Sockets;
 using System.Text;
 using System.Text.Json.Nodes;
 using System.Threading;
@@ -179,7 +179,7 @@ namespace OpenAstroAra.Test {
             Assert.That(ValueOf(body), Is.EqualTo("false"), "a bare Delay is a slow-but-healthy device");
             // Lower bound well under the 200 ms delay: robust to timer-resolution undershoot
             // and slow CI (a late timer only increases elapsed). Proves the delay happened.
-            Assert.That(sw.ElapsedMilliseconds, Is.GreaterThanOrEqualTo(100), "the response must not arrive before the delay");
+            Assert.That(sw.ElapsedMilliseconds, Is.GreaterThanOrEqualTo(150), "the response must not arrive before the delay");
         }
 
         [Test]
@@ -262,6 +262,12 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void RewriteValue_rejects_a_null_literal_that_would_erase_the_field() {
+            // "null" parses but would delete the envelope's Value rather than rewrite it.
+            Assert.Throws<ArgumentException>(() => AlpacaFault.RewriteValue("null"));
+        }
+
+        [Test]
         public async Task InjectFault_rejects_a_nonpositive_MaxTriggers() {
             await using var upstream = StubAlpaca.Start(valueLiteral: "false");
             await using var proxy = AlpacaFaultProxy.Start(upstream.BaseUri);
@@ -284,12 +290,10 @@ namespace OpenAstroAra.Test {
             private readonly Task _loop;
             private int _requestCount;
 
-            private StubAlpaca(int port, string valueLiteral) {
+            private StubAlpaca(HttpListener listener, int port, string valueLiteral) {
                 _valueLiteral = valueLiteral;
                 BaseUri = new Uri($"http://127.0.0.1:{port}/");
-                _listener = new HttpListener();
-                _listener.Prefixes.Add(BaseUri.ToString());
-                _listener.Start();
+                _listener = listener; // already bound + started (with retry) by LoopbackListener
                 _loop = Task.Run(LoopAsync);
             }
 
@@ -297,7 +301,10 @@ namespace OpenAstroAra.Test {
 
             public int RequestCount => Volatile.Read(ref _requestCount);
 
-            public static StubAlpaca Start(string valueLiteral) => new(FreePort(), valueLiteral);
+            public static StubAlpaca Start(string valueLiteral) {
+                var (listener, port) = LoopbackListener.Bind();
+                return new StubAlpaca(listener, port, valueLiteral);
+            }
 
             private async Task LoopAsync() {
                 // GetContextAsync blocks until DisposeAsync stops the listener, which
@@ -323,12 +330,6 @@ namespace OpenAstroAra.Test {
                     await resp.OutputStream.WriteAsync(body).ConfigureAwait(false);
                     resp.OutputStream.Close();
                 }
-            }
-
-            private static int FreePort() {
-                using var probe = new TcpListener(IPAddress.Loopback, 0);
-                probe.Start();
-                return ((IPEndPoint)probe.LocalEndpoint).Port;
             }
 
             public async ValueTask DisposeAsync() {
