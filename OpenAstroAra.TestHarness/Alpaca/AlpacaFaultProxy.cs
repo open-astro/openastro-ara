@@ -313,6 +313,9 @@ public sealed class AlpacaFaultProxy : IAsyncDisposable {
             ["ServerTransactionID"] = 1,
             ["ErrorNumber"] = err.ErrorNumber,
             ["ErrorMessage"] = err.Message,
+            // An error response carries no value — this null is correct here, distinct
+            // from RewriteValue rejecting a "null" literal (which would erase a *success*
+            // envelope's Value).
             ["Value"] = null,
         };
         await WriteRawAsync(context, 200, envelope.ToJsonString(), "application/json", cancellationToken).ConfigureAwait(false);

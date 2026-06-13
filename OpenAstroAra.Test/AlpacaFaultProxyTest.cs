@@ -298,6 +298,9 @@ namespace OpenAstroAra.Test {
         /// A minimal in-process Alpaca device: answers any request with a well-formed
         /// envelope carrying a fixed <c>Value</c> and counts the requests it receives,
         /// so a test can prove whether the proxy forwarded or short-circuited.
+        /// Requests are handled one at a time (sequential accept loop) — sufficient for
+        /// the current sequential-request tests; a future concurrent scenario that needs
+        /// real overlap would serialize here and should fan the loop out instead.
         /// </summary>
         private sealed class StubAlpaca : IAsyncDisposable {
             private readonly HttpListener _listener;

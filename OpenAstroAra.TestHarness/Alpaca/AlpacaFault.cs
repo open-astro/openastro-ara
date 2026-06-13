@@ -81,23 +81,28 @@ public abstract record AlpacaFault {
     }
 }
 
+// The concrete fault types are INTERNAL: the validated AlpacaFault factory methods
+// are the only public way to construct a fault. This stops external code from
+// bypassing validation (e.g. `new RewriteValueFault("not json")`, which would
+// silently no-op at request time). The proxy pattern-matches them in-assembly.
+
 /// <summary>A non-zero Alpaca <c>ErrorNumber</c>/<c>ErrorMessage</c> response. See <see cref="AlpacaFault.AlpacaError"/>.</summary>
-public sealed record AlpacaErrorFault(int ErrorNumber, string Message) : AlpacaFault;
+internal sealed record AlpacaErrorFault(int ErrorNumber, string Message) : AlpacaFault;
 
 /// <summary>A raw HTTP status response. See <see cref="AlpacaFault.HttpStatus"/>.</summary>
-public sealed record HttpStatusFault(int StatusCode) : AlpacaFault;
+internal sealed record HttpStatusFault(int StatusCode) : AlpacaFault;
 
 /// <summary>An aborted connection. See <see cref="AlpacaFault.Drop"/>.</summary>
-public sealed record DropFault : AlpacaFault {
+internal sealed record DropFault : AlpacaFault {
     /// <summary>The single shared instance — <see cref="DropFault"/> carries no state.</summary>
-    public static readonly DropFault Instance = new();
+    internal static readonly DropFault Instance = new();
 }
 
 /// <summary>A pre-response delay, optionally followed by another fault. See <see cref="AlpacaFault.Delay"/>.</summary>
-public sealed record DelayFault(TimeSpan Duration, AlpacaFault? Then) : AlpacaFault;
+internal sealed record DelayFault(TimeSpan Duration, AlpacaFault? Then) : AlpacaFault;
 
 /// <summary>A forwarded response with its <c>Value</c> overwritten. See <see cref="AlpacaFault.RewriteValue"/>.</summary>
-public sealed record RewriteValueFault(string JsonValueLiteral) : AlpacaFault;
+internal sealed record RewriteValueFault(string JsonValueLiteral) : AlpacaFault;
 
 /// <summary>
 /// Arms an <see cref="AlpacaFault"/> for requests matching an Alpaca device/method
