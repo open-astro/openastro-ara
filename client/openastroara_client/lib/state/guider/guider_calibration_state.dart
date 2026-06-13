@@ -29,7 +29,6 @@ final guiderCalibrationApiProvider = Provider<GuiderCalibrationClient?>((ref) {
 /// daemon accepts the request (builds are 202-Accepted, so the post-action
 /// status may not yet reflect a still-running build).
 class GuiderCalibrationNotifier extends AsyncNotifier<CalibrationStatusResponse?> {
-  bool _busy = false;
   // Bumped on every build() (active-server change). Actions/refreshes capture it
   // and only write state if it still matches, so a server switch mid-action
   // can't land a stale read (or a spurious error from the old, now-closed Dio).
@@ -37,7 +36,6 @@ class GuiderCalibrationNotifier extends AsyncNotifier<CalibrationStatusResponse?
 
   @override
   Future<CalibrationStatusResponse?> build() async {
-    _busy = false;
     _generation++;
     final api = ref.watch(guiderCalibrationApiProvider);
     if (api == null) return null;
@@ -84,10 +82,13 @@ class GuiderCalibrationNotifier extends AsyncNotifier<CalibrationStatusResponse?
   /// overlapping calls and surfaces failures as [AsyncError] so the UI can show
   /// them rather than leaving a stale value.
   Future<void> _run(Future<void> Function(GuiderCalibrationClient api) action) async {
-    if (_busy) return;
+    // Serialize on state.isLoading (like GuiderStatusNotifier): _run sets loading
+    // up-front and only the trailing refresh() clears it, so the flag stays set
+    // across the whole action → refresh window — a second tap can't start a
+    // racing request mid-refresh.
+    if (state.isLoading) return;
     final api = ref.read(guiderCalibrationApiProvider);
     if (api == null) return;
-    _busy = true;
     final gen = _generation;
     state = const AsyncValue<CalibrationStatusResponse?>.loading();
     try {
@@ -95,8 +96,6 @@ class GuiderCalibrationNotifier extends AsyncNotifier<CalibrationStatusResponse?
     } catch (e, st) {
       if (ref.mounted && gen == _generation) state = AsyncValue<CalibrationStatusResponse?>.error(e, st);
       return;
-    } finally {
-      if (gen == _generation) _busy = false;
     }
     // Re-read the *current* client (not the captured one) — a server switch
     // mid-action would have closed `api`'s Dio; the generation guard in

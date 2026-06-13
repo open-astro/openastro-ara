@@ -39,6 +39,7 @@ class GuiderCalibrationApi implements GuiderCalibrationClient {
       : _dio = Dio(BaseOptions(
           baseUrl: server.baseUrl,
           connectTimeout: const Duration(seconds: 3),
+          sendTimeout: const Duration(seconds: 5),
           receiveTimeout: const Duration(seconds: 5),
         ));
 
