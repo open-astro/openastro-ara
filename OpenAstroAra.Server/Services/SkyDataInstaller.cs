@@ -48,11 +48,15 @@ namespace OpenAstroAra.Server.Services {
         /// replacing any prior install. On success <paramref name="targetDir"/> contains the package files plus the
         /// <see cref="InstalledMarkerFileName"/> sentinel; on any failure or cancellation nothing partial is left
         /// behind and a pre-existing install is restored (it is moved aside, and only deleted once the new install
-        /// is in place — a failed swap moves it back).
+        /// is in place — a failed swap moves it back). <paramref name="maxBytes"/>, when set, caps the total extracted
+        /// size (zip-bomb / disk-exhaustion guard); exceeding it aborts the install with an <see cref="InvalidDataException"/>.
         /// </summary>
-        internal static async Task InstallFromTarGzAsync(Stream tarGz, string targetDir, CancellationToken ct) {
+        internal static async Task InstallFromTarGzAsync(Stream tarGz, string targetDir, long? maxBytes, CancellationToken ct) {
             ArgumentNullException.ThrowIfNull(tarGz);
             ArgumentException.ThrowIfNullOrEmpty(targetDir);
+            if (maxBytes is < 0) {
+                throw new ArgumentOutOfRangeException(nameof(maxBytes));
+            }
 
             var targetFull = Path.GetFullPath(targetDir);
             var parent = Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(targetFull))
@@ -68,7 +72,7 @@ namespace OpenAstroAra.Server.Services {
 
             var movedPriorAside = false;
             try {
-                await ExtractTarGzAsync(tarGz, stagingDir, ct).ConfigureAwait(false);
+                await ExtractTarGzAsync(tarGz, stagingDir, maxBytes, ct).ConfigureAwait(false);
 
                 // Stamp the sentinel BEFORE the swap so it appears atomically with the directory at its final path.
                 await File.WriteAllTextAsync(
@@ -83,7 +87,7 @@ namespace OpenAstroAra.Server.Services {
                     movedPriorAside = true;
                 }
                 Directory.Move(stagingDir, targetFull);
-            } catch {
+            } catch (Exception primary) {
                 TryDeleteDirectory(stagingDir);
                 // If the prior install was moved aside but the new one never landed, move it back. This restore
                 // branch is correct by inspection but is not unit-tested — reaching it requires the second
@@ -92,9 +96,14 @@ namespace OpenAstroAra.Server.Services {
                 if (movedPriorAside && !Directory.Exists(targetFull) && Directory.Exists(backupDir)) {
                     try {
                         Directory.Move(backupDir, targetFull);
-                    } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
-                        // Restore failed — leave the backup dir in place for manual recovery rather than masking
-                        // the original failure with a restore error.
+                    } catch (Exception restoreEx) when (restoreEx is IOException or UnauthorizedAccessException) {
+                        // Worst case: the new install failed AND the prior install couldn't be restored. Surface
+                        // BOTH causes (and the recoverable backup location) so the caller can flag data loss rather
+                        // than seeing only the original failure. The backup dir is deliberately left in place.
+                        throw new SkyDataInstallException(
+                            $"Sky-data install failed and the prior install at '{targetFull}' could not be restored; " +
+                            $"the previous data remains at '{backupDir}' for manual recovery.",
+                            new AggregateException(primary, restoreEx));
                     }
                 }
                 throw;
@@ -104,11 +113,12 @@ namespace OpenAstroAra.Server.Services {
             TryDeleteDirectory(backupDir);
         }
 
-        // TODO(§36-2b): bound the extracted size/entry count to defend against a zip-bomb / disk-exhaustion archive.
-        // Today the package id is catalog-validated by the caller and the source is our own curated host, so an
-        // adversarial archive isn't in the threat model; the download worker is the right place to cap total bytes
-        // (it already knows the advertised Content-Length) and abort extraction past it.
-        private static async Task ExtractTarGzAsync(Stream tarGz, string destDir, CancellationToken ct) {
+        // Zip-bomb / disk-exhaustion guard: the running total of declared entry sizes is capped at maxBytes when set.
+        // The package id is catalog-validated by the caller and the source is our own curated host, so an adversarial
+        // archive isn't the primary threat — but enforcing the ceiling here (defence in depth) means a compromised
+        // download layer can't drive this engine to fill the disk. The cap is checked against each entry's declared
+        // size before extraction; the tar reader only ever writes that many bytes for a regular-file entry.
+        private static async Task ExtractTarGzAsync(Stream tarGz, string destDir, long? maxBytes, CancellationToken ct) {
             var destFull = Path.GetFullPath(destDir);
             var destPrefix = destFull.EndsWith(Path.DirectorySeparatorChar)
                 ? destFull
@@ -117,6 +127,7 @@ namespace OpenAstroAra.Server.Services {
             await using var gz = new GZipStream(tarGz, CompressionMode.Decompress, leaveOpen: true);
             await using var reader = new TarReader(gz, leaveOpen: true);
 
+            long extracted = 0;
             while (await reader.GetNextEntryAsync(copyData: false, ct).ConfigureAwait(false) is { } entry) {
                 // GetNextEntryAsync and ExtractToFileAsync both honor ct, so no separate check is needed here.
                 if (string.IsNullOrEmpty(entry.Name)) {
@@ -141,6 +152,13 @@ namespace OpenAstroAra.Server.Services {
                         break;
                     case TarEntryType.RegularFile:
                     case TarEntryType.V7RegularFile:
+                        if (maxBytes is { } cap) {
+                            extracted += Math.Max(0, entry.Length);
+                            if (extracted > cap) {
+                                throw new InvalidDataException(
+                                    $"Archive exceeds the {cap}-byte extraction limit and was rejected.");
+                            }
+                        }
                         Directory.CreateDirectory(Path.GetDirectoryName(entryFull)!);
                         await entry.ExtractToFileAsync(entryFull, overwrite: true, ct).ConfigureAwait(false);
                         break;
@@ -163,5 +181,16 @@ namespace OpenAstroAra.Server.Services {
                 // only ever lists catalog ids, never the staging siblings) and will be reclaimed on the next install.
             }
         }
+    }
+
+    /// <summary>Thrown by <see cref="SkyDataInstaller.InstallFromTarGzAsync"/> only in the worst-case swap failure:
+    /// the new install failed AND the prior install could not be restored, so the package directory is now absent and
+    /// the previous data survives only in the backup dir named in the message. Its <see cref="Exception.InnerException"/>
+    /// is an <see cref="AggregateException"/> of (original failure, restore failure). A distinct type lets the §36-2
+    /// download worker flag genuine data loss rather than reporting it as an ordinary failed download.</summary>
+    public sealed class SkyDataInstallException : Exception {
+        public SkyDataInstallException() { }
+        public SkyDataInstallException(string message) : base(message) { }
+        public SkyDataInstallException(string message, Exception innerException) : base(message, innerException) { }
     }
 }

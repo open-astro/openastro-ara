@@ -77,7 +77,7 @@ namespace OpenAstroAra.Test {
                 ("catalog.dat", Bytes("star-data")),
                 ("meta/version.txt", Bytes("v2024.10")));
 
-            await SkyDataInstaller.InstallFromTarGzAsync(archive, target, CancellationToken.None);
+            await SkyDataInstaller.InstallFromTarGzAsync(archive, target, maxBytes: null, CancellationToken.None);
 
             Assert.That(File.Exists(Path.Combine(target, "catalog.dat")), Is.True);
             Assert.That(await File.ReadAllTextAsync(Path.Combine(target, "catalog.dat")), Is.EqualTo("star-data"));
@@ -97,7 +97,7 @@ namespace OpenAstroAra.Test {
             using var archive = MakeTarGz(("../escaped.txt", Bytes("pwned")));
 
             Assert.That(
-                async () => await SkyDataInstaller.InstallFromTarGzAsync(archive, target, CancellationToken.None),
+                async () => await SkyDataInstaller.InstallFromTarGzAsync(archive, target, maxBytes: null, CancellationToken.None),
                 Throws.InstanceOf<InvalidDataException>(), "an entry resolving outside the target is rejected");
 
             Assert.That(Directory.Exists(target), Is.False, "a rejected install leaves no target dir");
@@ -112,7 +112,7 @@ namespace OpenAstroAra.Test {
             await File.WriteAllTextAsync(Path.Combine(target, "stale.txt"), "old");
 
             using var archive = MakeTarGz(("fresh.txt", Bytes("new")));
-            await SkyDataInstaller.InstallFromTarGzAsync(archive, target, CancellationToken.None);
+            await SkyDataInstaller.InstallFromTarGzAsync(archive, target, maxBytes: null, CancellationToken.None);
 
             Assert.That(File.Exists(Path.Combine(target, "stale.txt")), Is.False, "the prior install is fully replaced");
             Assert.That(File.Exists(Path.Combine(target, "fresh.txt")), Is.True);
@@ -123,13 +123,13 @@ namespace OpenAstroAra.Test {
         public async Task A_failed_install_preserves_the_prior_install() {
             var target = Path.Combine(_root, "tycho-2");
             using (var good = MakeTarGz(("catalog.dat", Bytes("original")))) {
-                await SkyDataInstaller.InstallFromTarGzAsync(good, target, CancellationToken.None);
+                await SkyDataInstaller.InstallFromTarGzAsync(good, target, maxBytes: null, CancellationToken.None);
             }
 
             // A second install that fails (tar-slip) must not damage the install already on disk.
             using var poisoned = MakeTarGz(("../escaped.txt", Bytes("pwned")));
             Assert.That(
-                async () => await SkyDataInstaller.InstallFromTarGzAsync(poisoned, target, CancellationToken.None),
+                async () => await SkyDataInstaller.InstallFromTarGzAsync(poisoned, target, maxBytes: null, CancellationToken.None),
                 Throws.InstanceOf<InvalidDataException>());
 
             Assert.That(await File.ReadAllTextAsync(Path.Combine(target, "catalog.dat")), Is.EqualTo("original"),
@@ -146,7 +146,7 @@ namespace OpenAstroAra.Test {
             cts.Cancel();
 
             Assert.That(
-                async () => await SkyDataInstaller.InstallFromTarGzAsync(archive, target, cts.Token),
+                async () => await SkyDataInstaller.InstallFromTarGzAsync(archive, target, maxBytes: null, cts.Token),
                 Throws.InstanceOf<OperationCanceledException>());
 
             Assert.That(Directory.Exists(target), Is.False, "a cancelled install produces no target dir");
@@ -161,17 +161,31 @@ namespace OpenAstroAra.Test {
             var entries = Enumerable.Range(0, 64)
                 .Select(i => ("file-" + i.ToString(CultureInfo.InvariantCulture) + ".dat", (byte[]?)new byte[4096]))
                 .ToArray();
-            using var raw = MakeTarGz(entries);
             using var cts = new CancellationTokenSource();
-            // Cancel once a little of the compressed stream has been consumed (mid-extraction, not before it starts).
-            using var canceling = new CancelAfterBytesStream(raw, cts, thresholdBytes: 256);
+            // The wrapper owns the archive stream (disposes it); cts is owned by the using above. Cancel once a
+            // little of the compressed stream has been consumed (mid-extraction, not before it starts).
+            using var canceling = new CancelAfterBytesStream(MakeTarGz(entries), cts.Cancel, thresholdBytes: 256);
 
             Assert.That(
-                async () => await SkyDataInstaller.InstallFromTarGzAsync(canceling, target, cts.Token),
+                async () => await SkyDataInstaller.InstallFromTarGzAsync(canceling, target, maxBytes: null, cts.Token),
                 Throws.InstanceOf<OperationCanceledException>());
 
             Assert.That(Directory.Exists(target), Is.False, "a mid-extraction cancel produces no target dir");
             Assert.That(TempDirs(), Is.Empty, "the partially-populated staging dir is cleaned up");
+        }
+
+        [Test]
+        public void Rejects_an_archive_exceeding_the_size_ceiling() {
+            var target = Path.Combine(_root, "gaia-edr3-bright");
+            // Two 4 KiB files = 8 KiB extracted; a 6 KiB ceiling must abort partway and leave nothing behind.
+            using var archive = MakeTarGz(("a.dat", new byte[4096]), ("b.dat", new byte[4096]));
+
+            Assert.That(
+                async () => await SkyDataInstaller.InstallFromTarGzAsync(archive, target, maxBytes: 6 * 1024, CancellationToken.None),
+                Throws.InstanceOf<InvalidDataException>(), "extraction past the byte ceiling is rejected");
+
+            Assert.That(Directory.Exists(target), Is.False, "an over-limit install produces no target dir");
+            Assert.That(TempDirs(), Is.Empty, "the staging dir is cleaned up after the limit abort");
         }
 
         // Sibling scratch dirs the installer creates under _root during a swap (".staging-*" / ".backup-*").
@@ -181,24 +195,28 @@ namespace OpenAstroAra.Test {
                          || Path.GetFileName(d).StartsWith(".backup-", StringComparison.Ordinal))
                 .ToArray();
 
-        // A read-through stream that cancels a token once it has yielded a byte threshold, so a consumer reading
-        // through it (here: GZipStream → TarReader) is interrupted partway rather than before the first read.
+        // A read-through stream that fires a callback once it has yielded a byte threshold, so a consumer reading
+        // through it (here: GZipStream → TarReader) can be interrupted partway rather than before the first read.
+        // It takes ownership of the wrapped stream (disposes it) but NOT of any cancellation source — the threshold
+        // action is supplied by the caller, who owns whatever it captures.
         private sealed class CancelAfterBytesStream : Stream {
             private readonly Stream _inner;
-            private readonly CancellationTokenSource _cts;
+            private readonly Action _onThreshold;
             private readonly long _thresholdBytes;
             private long _read;
+            private bool _fired;
 
-            public CancelAfterBytesStream(Stream inner, CancellationTokenSource cts, long thresholdBytes) {
+            public CancelAfterBytesStream(Stream inner, Action onThreshold, long thresholdBytes) {
                 _inner = inner;
-                _cts = cts;
+                _onThreshold = onThreshold;
                 _thresholdBytes = thresholdBytes;
             }
 
             private void Advance(int n) {
                 _read += n;
-                if (_read >= _thresholdBytes) {
-                    _cts.Cancel();
+                if (!_fired && _read >= _thresholdBytes) {
+                    _fired = true;
+                    _onThreshold();
                 }
             }
 
@@ -227,7 +245,6 @@ namespace OpenAstroAra.Test {
             protected override void Dispose(bool disposing) {
                 if (disposing) {
                     _inner.Dispose();
-                    _cts.Dispose();
                 }
                 base.Dispose(disposing);
             }
