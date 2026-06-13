@@ -40,10 +40,16 @@ class GuiderStatusNotifier extends AsyncNotifier<GuiderStatus?> {
   // disconnect call refresh() *after* setting loading, so a state.isLoading
   // guard would wrongly skip their follow-up read.
   bool _refreshing = false;
+  // Bumped on every build() (i.e. active-server change). A refresh captures the
+  // generation at its start and only writes state if it still matches, so a
+  // refresh in flight when the server switches can't land stale data over the
+  // new server's result.
+  int _generation = 0;
 
   @override
   Future<GuiderStatus?> build() async {
     _refreshing = false;
+    _generation++;
     final api = ref.watch(guiderApiProvider);
     if (api == null) return null;
     return api.getStatus();
@@ -95,6 +101,7 @@ class GuiderStatusNotifier extends AsyncNotifier<GuiderStatus?> {
     // concurrent getStatus() calls. (Can't guard on state.isLoading — see field.)
     if (!ref.mounted || _refreshing) return;
     _refreshing = true;
+    final gen = _generation;
     try {
       final api = client ?? ref.read(guiderApiProvider);
       // Don't emit a bare loading state here — keep the prior data visible while
@@ -104,10 +111,14 @@ class GuiderStatusNotifier extends AsyncNotifier<GuiderStatus?> {
         if (api == null) return null;
         return api.getStatus();
       });
-      // getStatus() can outlive the active server; don't write to a disposed notifier.
-      if (ref.mounted) state = next;
+      // Skip the write if the notifier was disposed or rebuilt for a new server
+      // mid-flight (gen changed) — otherwise this stale read could clobber the
+      // new server's status.
+      if (ref.mounted && gen == _generation) state = next;
     } finally {
-      _refreshing = false;
+      // Only clear the flag if no rebuild has happened — build() already reset it
+      // for the new generation, and a fresh refresh may have set it again.
+      if (gen == _generation) _refreshing = false;
     }
   }
 }
