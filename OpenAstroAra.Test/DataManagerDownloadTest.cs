@@ -159,6 +159,29 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_duplicate_request_for_an_in_flight_package_returns_the_same_id() {
+            using var release = new SemaphoreSlim(0, 1);
+            var archive = TarGz(("catalog.dat", Encoding.UTF8.GetBytes("data")));
+            var fetcher = new FakeSkyDataFetcher(async ct => {
+                await release.WaitAsync(ct);
+                return archive;
+            });
+            var svc = NewService(fetcher, new CapturingBroadcaster());
+
+            var first = await svc.DownloadAsync(new DownloadRequestDto(PackageId, ForceReinstall: false), null, CancellationToken.None);
+            await Eventually(() => svc.GetStateAsync(CancellationToken.None).Result.ActiveDownloads.Count == 1);
+
+            var second = await svc.DownloadAsync(new DownloadRequestDto(PackageId, ForceReinstall: false), null, CancellationToken.None);
+            Assert.That(second.OperationId, Is.EqualTo(first.OperationId), "a duplicate request returns the in-flight download id");
+            var state = await svc.GetStateAsync(CancellationToken.None);
+            Assert.That(state.ActiveDownloads.Count, Is.EqualTo(1), "only one job is registered per package");
+
+            release.Release();
+            var drained = await Eventually(() => svc.GetStateAsync(CancellationToken.None).Result.ActiveDownloads.Count == 0);
+            Assert.That(drained, Is.True);
+        }
+
+        [Test]
         public async Task Cancel_of_an_unknown_download_throws_for_a_404() {
             var svc = NewService(new UnusedFetcher(), new CapturingBroadcaster());
             Assert.That(

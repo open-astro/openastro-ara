@@ -47,10 +47,16 @@ namespace OpenAstroAra.Server.Services {
         public long? TotalBytes { get; }
 
         public async ValueTask DisposeAsync() {
-            await Content.DisposeAsync().ConfigureAwait(false);
-            // Dispose the response/client AFTER the stream — the stream reads through them.
-            foreach (var owned in _ownedAfterContent) {
-                owned.Dispose();
+            try {
+                await Content.DisposeAsync().ConfigureAwait(false);
+            } catch (Exception ex) when (ex is IOException or ObjectDisposedException or HttpRequestException) {
+                // A transport error tearing down the stream must not leak the response/client (disposed in the
+                // finally) nor turn an already-finished download into a failure — cleanup is best-effort.
+            } finally {
+                // Dispose the response/client AFTER the stream — the stream reads through them.
+                foreach (var owned in _ownedAfterContent) {
+                    owned.Dispose();
+                }
             }
         }
     }

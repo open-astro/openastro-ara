@@ -55,7 +55,7 @@ namespace OpenAstroAra.Test {
         }
 
         public FakeSkyDataFetcher(Func<CancellationToken, Task<byte[]>> open) {
-            _open = open;
+            _open = open ?? throw new ArgumentNullException(nameof(open));
         }
 
         public async Task<SkyDataFetch> OpenAsync(Uri source, CancellationToken ct) {

@@ -567,3 +567,10 @@ unknown/uninstalled id and an `IOException`/`UnauthorizedAccessException` (locke
 §36-1 inventory layer (the endpoint maps `false` → 404 either way), but the §36-2 download engine should surface a
 distinct "could not delete" error so the client can retry rather than treat a locked dir as already-clear. Low priority;
 inherit the §36-1 catch shape but split the return. Surfaced 2026-06-13 by the §36-1 round-2 review.
+
+**§36-2 Data Manager — no server-side wall-clock backstop on a stalled download (§36-2b review note).** The sky-data
+HttpClient uses `Timeout.InfiniteTimeSpan` (intentional: with `ResponseHeadersRead` the default 100s would fail a
+slow-to-start CDN, and a multi-GB body must not be capped). A download is bounded only by its job's `CancellationToken`
+(`POST /cancel/{id}`). A stalled/hung connection therefore holds a worker + connection open until a client cancels. A
+future enhancement: an *idle*-progress watchdog (cancel the job's CTS if no bytes arrive for N seconds) gives a
+server-side backstop without capping a healthy long download. Low priority. Surfaced 2026-06-13 by the §36-2b review.

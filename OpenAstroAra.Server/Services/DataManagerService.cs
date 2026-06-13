@@ -239,8 +239,11 @@ namespace OpenAstroAra.Server.Services {
                 await EmitAsync(WsEventCatalog.DataManagerDownloadFailed, job, error: ex.Message).ConfigureAwait(false);
                 LogDownloadFailed(pkg.Id, ex);
             } finally {
-                _downloads.TryRemove(job.Id, out _);
+                // Release the package claim BEFORE the registry entry. In the window between the two, a concurrent
+                // same-package DownloadAsync then finds no claim and starts a fresh download, rather than seeing the
+                // stale claim, looking up _downloads, and handing back this now-finished job's (dead) id.
                 _activeByPackage.TryRemove(new KeyValuePair<string, Guid>(job.PackageId, job.Id));
+                _downloads.TryRemove(job.Id, out _);
                 job.Dispose();
             }
         }
@@ -277,21 +280,23 @@ namespace OpenAstroAra.Server.Services {
         }
 
         private async Task EmitAsync(string eventType, DownloadJob job, string? error) {
-            var downloaded = Volatile.Read(ref job.DownloadedBytes);
-            var total = Volatile.Read(ref job.TotalBytes);
-            var payload = new JsonObject {
-                ["download_id"] = job.Id.ToString(),
-                ["package_id"] = job.PackageId,
-                ["downloaded_bytes"] = downloaded,
-                ["total_bytes"] = total,
-                ["percent_complete"] = Percent(downloaded, total),
-            };
-            if (error is not null) {
-                payload["error"] = error;
-            }
+            // Whole body in the try: this is also called fire-and-forget from MaybeEmitProgress, so even the payload
+            // build must not throw an unobserved exception. Publish is best-effort — a WS hiccup must not fail the download.
             try {
+                var downloaded = Volatile.Read(ref job.DownloadedBytes);
+                var total = Volatile.Read(ref job.TotalBytes);
+                var payload = new JsonObject {
+                    ["download_id"] = job.Id.ToString(),
+                    ["package_id"] = job.PackageId,
+                    ["downloaded_bytes"] = downloaded,
+                    ["total_bytes"] = total,
+                    ["percent_complete"] = Percent(downloaded, total),
+                };
+                if (error is not null) {
+                    payload["error"] = error;
+                }
                 // ToJsonString()+Parse is the AOT-safe way to a JsonElement (SerializeToElement takes the reflection
-                // path the warnings=errors gate rejects). Publish is best-effort — a WS hiccup must not fail the download.
+                // path the warnings=errors gate rejects).
                 using var doc = JsonDocument.Parse(payload.ToJsonString());
                 await _ws.PublishAsync(eventType, doc.RootElement.Clone(), CancellationToken.None).ConfigureAwait(false);
             } catch (Exception ex) when (ex is not OperationCanceledException) {
