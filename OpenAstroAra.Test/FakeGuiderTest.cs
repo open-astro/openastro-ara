@@ -88,6 +88,19 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_throwing_factory_returns_a_jsonrpc_error_not_a_dropped_connection() {
+            await using var guider = FakeGuider.Start();
+            guider.OnRpc("get_pixel_scale", _ => throw new InvalidOperationException("boom"));
+            using var client = await ConnectAsync(guider.Port).ConfigureAwait(false);
+
+            await client.SendAsync("""{"method":"get_pixel_scale","id":"4"}""").ConfigureAwait(false);
+            var response = await client.ReadResponseAsync("4").ConfigureAwait(false);
+
+            Assert.That(response["error"], Is.Not.Null, "a factory exception must come back as an RPC error");
+            Assert.That((string?)response["error"]!["message"], Is.EqualTo("boom"));
+        }
+
+        [Test]
         public async Task BroadcastAsync_pushes_an_event_to_a_connected_client() {
             await using var guider = FakeGuider.Start();
             using var client = await ConnectAsync(guider.Port).ConfigureAwait(false);

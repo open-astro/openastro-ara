@@ -73,7 +73,10 @@ public sealed class FakeGuider : IAsyncDisposable {
     /// </summary>
     public static FakeGuider Start(int port = 0) => new(port);
 
-    /// <summary>The RPC method names received so far, in order. Thread-safe snapshot.</summary>
+    /// <summary>
+    /// The RPC method names received so far, in order. Returns a fresh array snapshot on
+    /// each read (under the lock) so the caller can't observe a torn list mid-mutation.
+    /// </summary>
     public IReadOnlyList<string> ReceivedMethods {
         get { lock (_gate) { return _receivedMethods.ToArray(); } }
     }
@@ -96,7 +99,11 @@ public sealed class FakeGuider : IAsyncDisposable {
     // DeepClone per call — a JsonNode can only be parented once, so each response needs a fresh copy.
     public void OnRpc(string method, JsonNode? result) => OnRpc(method, _ => result?.DeepClone());
 
-    /// <summary>Replaces the burst of events sent to each connection on accept.</summary>
+    /// <summary>
+    /// Replaces the burst of events sent to each connection on accept. Passing no
+    /// arguments clears the greeting entirely (a connection then receives nothing until
+    /// the first <see cref="BroadcastAsync"/>) — useful for testing a silent server.
+    /// </summary>
     public void SetOnConnectEvents(params JsonObject[] events) {
         ArgumentNullException.ThrowIfNull(events);
         lock (_gate) {
@@ -207,12 +214,26 @@ public sealed class FakeGuider : IAsyncDisposable {
         }
 
         // PHD2 returns integer 0 from most successful calls; getters are overridden via OnRpc.
-        JsonNode? result = factory is null ? 0 : factory(request);
-        var response = new JsonObject {
-            ["jsonrpc"] = "2.0",
-            ["result"] = result,
-            ["id"] = id?.DeepClone(),
-        };
+        JsonObject response;
+        try {
+            JsonNode? result = factory is null ? 0 : factory(request);
+            response = new JsonObject {
+                ["jsonrpc"] = "2.0",
+                ["result"] = result,
+                ["id"] = id?.DeepClone(),
+            };
+        }
+#pragma warning disable CA1031 // a user-supplied OnRpc factory may throw anything
+        catch (Exception ex) {
+#pragma warning restore CA1031
+            // Surface a factory failure as a JSON-RPC error rather than letting it fault
+            // the connection (which the client would see as a confusing dropped socket).
+            response = new JsonObject {
+                ["jsonrpc"] = "2.0",
+                ["error"] = new JsonObject { ["code"] = -1, ["message"] = ex.Message },
+                ["id"] = id?.DeepClone(),
+            };
+        }
         await WriteAsync(conn, Frame(response), _cts.Token).ConfigureAwait(false);
     }
 
@@ -236,7 +257,10 @@ public sealed class FakeGuider : IAsyncDisposable {
         }
     }
 
-    // The ARA listener splits the event stream on Environment.NewLine, so frame with it.
+    // ASCII (not UTF-8) on purpose: the real PHD2Guider.RunListener decodes the event
+    // stream with Encoding.ASCII, so the fake mirrors that — non-ASCII would corrupt on
+    // the real client too, and matching keeps the fake faithful rather than more
+    // permissive. The ARA listener splits on Environment.NewLine, so frame with it.
     private static byte[] Frame(JsonObject message) =>
         Encoding.ASCII.GetBytes(message.ToJsonString() + Environment.NewLine);
 
@@ -249,9 +273,13 @@ public sealed class FakeGuider : IAsyncDisposable {
         } catch (OperationCanceledException) {
             // expected
         }
-        await Task.WhenAll(_inFlight.Keys)
-            .ContinueWith(static _ => { }, TaskScheduler.Default)
-            .ConfigureAwait(false);
+        // Bounded drain: handlers respond to _cts, but a user-supplied OnRpc factory
+        // could block uncancellably — cap the wait so a stuck handler makes teardown
+        // diagnosable rather than hanging the test forever.
+        var drain = Task.WhenAll(_inFlight.Keys).ContinueWith(static _ => { }, TaskScheduler.Default);
+        if (await Task.WhenAny(drain, Task.Delay(TimeSpan.FromSeconds(10))).ConfigureAwait(false) != drain) {
+            System.Diagnostics.Trace.TraceWarning("FakeGuider dispose: in-flight handler drain timed out after 10s.");
+        }
         _listener.Dispose();
         _cts.Dispose();
     }
