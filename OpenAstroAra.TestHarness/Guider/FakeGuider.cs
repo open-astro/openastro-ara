@@ -105,10 +105,10 @@ public sealed class FakeGuider : IAsyncDisposable {
     /// <summary>Pushes an event to every currently-connected client (e.g. StarLost, SettleDone).</summary>
     public async Task BroadcastAsync(JsonObject @event) {
         ArgumentNullException.ThrowIfNull(@event);
-        var line = Frame(@event);
-        foreach (var conn in _connections.Keys) {
-            await WriteAsync(conn, line).ConfigureAwait(false);
-        }
+        var line = Frame(@event); // serialized once; the same bytes go to every connection
+        // Deliver in parallel so a slow/blocked client doesn't delay the others; each
+        // connection's WriteLock serializes its own writes. WriteAsync never throws.
+        await Task.WhenAll(_connections.Keys.Select(c => WriteAsync(c, line, _cts.Token))).ConfigureAwait(false);
     }
 
     private async Task AcceptLoopAsync() {
@@ -135,14 +135,17 @@ public sealed class FakeGuider : IAsyncDisposable {
         var conn = new Connection { Stream = stream };
         _connections[conn] = 0;
         try {
-            // On-connect event burst (snapshot under lock so a concurrent SetOnConnectEvents
-            // can't mutate the list mid-iteration).
+            // On-connect event burst. Snapshot under lock so a concurrent
+            // SetOnConnectEvents can't mutate the list mid-iteration; DeepClone each
+            // event so two concurrently-accepted connections never call ToJsonString on
+            // the same JsonObject instance (System.Text.Json nodes aren't documented
+            // safe for concurrent reads).
             JsonObject[] greeting;
             lock (_gate) {
-                greeting = [.. _onConnectEvents];
+                greeting = [.. _onConnectEvents.Select(e => (JsonObject)e.DeepClone())];
             }
             foreach (var e in greeting) {
-                await WriteAsync(conn, Frame(e)).ConfigureAwait(false);
+                await WriteAsync(conn, Frame(e), _cts.Token).ConfigureAwait(false);
             }
 
             using var reader = new StreamReader(stream, Encoding.ASCII);
@@ -198,18 +201,24 @@ public sealed class FakeGuider : IAsyncDisposable {
             ["result"] = result,
             ["id"] = id?.DeepClone(),
         };
-        await WriteAsync(conn, Frame(response)).ConfigureAwait(false);
+        await WriteAsync(conn, Frame(response), _cts.Token).ConfigureAwait(false);
     }
 
-    private static async Task WriteAsync(Connection conn, byte[] line) {
-        await conn.WriteLock.WaitAsync().ConfigureAwait(false);
+    private static async Task WriteAsync(Connection conn, byte[] line, CancellationToken cancellationToken) {
         try {
-            await conn.Stream.WriteAsync(line).ConfigureAwait(false);
-            await conn.Stream.FlushAsync().ConfigureAwait(false);
+            await conn.WriteLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        } catch (OperationCanceledException) {
+            return; // disposing — don't even attempt the write (and nothing to release)
+        }
+        try {
+            await conn.Stream.WriteAsync(line, cancellationToken).ConfigureAwait(false);
+            await conn.Stream.FlushAsync(cancellationToken).ConfigureAwait(false);
         } catch (IOException) {
             // peer gone — drop
         } catch (ObjectDisposedException) {
             // connection torn down concurrently
+        } catch (OperationCanceledException) {
+            // disposed mid-write
         } finally {
             conn.WriteLock.Release();
         }
