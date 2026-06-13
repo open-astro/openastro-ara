@@ -136,6 +136,27 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_slow_but_progressing_download_does_not_false_stall_with_a_short_idle_timeout() {
+            // idleTimeout (400ms) < ProgressThrottleMs (500ms): incompressible bytes trickle in 16-byte chunks every
+            // 40ms, so the whole transfer spans well past 400ms. The watchdog reset must be independent of the emit
+            // throttle (which wouldn't open inside the deadline), or this would false-fire "stalled".
+            var blob = new byte[512];
+            System.Security.Cryptography.RandomNumberGenerator.Fill(blob); // high-entropy so gzip can't shrink it below the trickle window
+            var archive = TarGz(("catalog.dat", blob));
+            var ws = new CapturingBroadcaster();
+            var svc = new DataManagerService(_root,
+                new TricklingFetcher(archive, chunk: 16, gap: TimeSpan.FromMilliseconds(40)),
+                ws, NullLogger<DataManagerService>.Instance, idleTimeout: TimeSpan.FromMilliseconds(400));
+
+            await svc.DownloadAsync(new DownloadRequestDto(PackageId, ForceReinstall: false), null, CancellationToken.None);
+
+            var done = await Eventually(() => ws.Events.Any(e => e.EventType == WsEventCatalog.DataManagerDownloadComplete), timeoutMs: 15000);
+            Assert.That(done, Is.True, "a steadily-progressing download must not be killed by the idle watchdog");
+            Assert.That(ws.Events.Any(e => e.EventType == WsEventCatalog.DataManagerDownloadFailed), Is.False, "no stall/failure event");
+            Assert.That(File.Exists(Path.Combine(_root, PackageId, "catalog.dat")), Is.True, "the trickled package is installed");
+        }
+
+        [Test]
         public async Task A_stalled_header_wait_is_cancelled_by_the_idle_watchdog() {
             // OpenAsync never returns (no response headers) — the watchdog must bound the pre-fetch phase too.
             var ws = new CapturingBroadcaster();

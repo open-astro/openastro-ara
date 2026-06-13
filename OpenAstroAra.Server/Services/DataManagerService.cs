@@ -247,15 +247,15 @@ namespace OpenAstroAra.Server.Services {
                 await using var counting = new CountingStream(fetch.Content,
                     read => {
                         Volatile.Write(ref job.DownloadedBytes, read);
-                        // Reset the stall deadline + emit progress on the SAME throttle tick — avoids rescheduling the
-                        // idle timer on every read chunk (the throttle already gates "enough time has passed").
-                        if (MaybeEmitProgress(job)) {
-                            idleCts.CancelAfter(_idleTimeout);
-                        }
+                        MaybeEmitProgress(job);                  // WS flood control (ProgressThrottleMs)
+                        MaybeResetIdleDeadline(job, idleCts);    // watchdog reset — independent of the emit throttle
                     },
                     // At end-of-stream the whole archive is fetched; disarm the read-idle watchdog so a slow local
                     // tail (final disk flush / atomic swap of a fully-downloaded package) can't false-fire "stalled".
                     onEof: () => idleCts.CancelAfter(Timeout.InfiniteTimeSpan));
+                if (pkg.SizeBytes <= 0) {
+                    LogCatalogSizeMissing(pkg.Id);
+                }
                 await SkyDataInstaller.InstallFromTarGzAsync(counting, targetDir, ExtractionCeiling(pkg), ct).ConfigureAwait(false);
 
                 await EmitAsync(WsEventCatalog.DataManagerDownloadComplete, job, error: null).ConfigureAwait(false);
@@ -293,13 +293,19 @@ namespace OpenAstroAra.Server.Services {
             }
         }
 
+        private const long UnknownSizeCeiling = 8L * 1024 * 1024 * 1024; // 8 GiB fallback when the catalog size is unset.
+
         // Cap uncompressed extraction at the catalog's advertised installed size + 25% headroom (never below 16 MiB),
         // so a tampered archive can't expand without bound even though the package id is catalog-validated. Guard the
         // addition against long overflow (a corrupt near-MaxValue size would otherwise wrap negative and disable the cap).
         private static long ExtractionCeiling(DataPackageDto pkg) {
-            var size = Math.Max(0, pkg.SizeBytes);
-            var headroom = size / 4;
-            var ceiling = size > long.MaxValue - headroom ? long.MaxValue : size + headroom;
+            if (pkg.SizeBytes <= 0) {
+                // Unknown advertised size: fall back to a generous ceiling rather than the small-package 16 MiB floor,
+                // so a legitimate large download isn't clipped (the caller logs the missing size). Still bounded.
+                return UnknownSizeCeiling;
+            }
+            var headroom = pkg.SizeBytes / 4;
+            var ceiling = pkg.SizeBytes > long.MaxValue - headroom ? long.MaxValue : pkg.SizeBytes + headroom;
             return Math.Max(ceiling, 16L * 1024 * 1024);
         }
 
@@ -310,21 +316,34 @@ namespace OpenAstroAra.Server.Services {
         }
 
         // Throttled, fire-and-forget progress emit driven by the stream read callback (which runs on the worker).
-        // Returns true when this call passed the throttle gate (and thus emitted) — the caller piggybacks the idle
-        // watchdog reset on the same gate.
-        private bool MaybeEmitProgress(DownloadJob job) {
+        private void MaybeEmitProgress(DownloadJob job) {
             var now = Environment.TickCount64;
             var last = Interlocked.Read(ref job.LastEmitTick);
             if (now - last < ProgressThrottleMs) {
-                return false;
+                return;
             }
             // CAS so concurrent reads don't both fire for the same window (Read here is single-threaded today, but
             // this keeps the throttle correct if the stream is ever pumped from more than one thread).
             if (Interlocked.CompareExchange(ref job.LastEmitTick, now, last) != last) {
-                return false;
+                return;
             }
             _ = EmitAsync(WsEventCatalog.DataManagerDownloadProgress, job, error: null);
-            return true;
+        }
+
+        // Reset the idle-watchdog deadline on byte progress, throttled to ~4 resets per idle window so a fast stream
+        // doesn't reschedule the timer on every read. Deliberately INDEPENDENT of the WS-emit throttle: the watchdog's
+        // correctness must not couple to ProgressThrottleMs (it has to work even when idleTimeout < ProgressThrottleMs).
+        private void MaybeResetIdleDeadline(DownloadJob job, CancellationTokenSource idleCts) {
+            var now = Environment.TickCount64;
+            var last = Interlocked.Read(ref job.LastIdleResetTick);
+            var interval = Math.Max(1, (long)(_idleTimeout.TotalMilliseconds / 4));
+            if (now - last < interval) {
+                return;
+            }
+            if (Interlocked.CompareExchange(ref job.LastIdleResetTick, now, last) != last) {
+                return;
+            }
+            idleCts.CancelAfter(_idleTimeout);
         }
 
         [SuppressMessage("Design", "CA1031:Do not catch general exception types",
@@ -414,6 +433,7 @@ namespace OpenAstroAra.Server.Services {
             public long DownloadedBytes;
             public long TotalBytes = -1;
             public long LastEmitTick;
+            public long LastIdleResetTick;
             public volatile bool Completed;
 
             public void Dispose() => Cts.Dispose();
@@ -488,6 +508,9 @@ namespace OpenAstroAra.Server.Services {
 
         [LoggerMessage(Level = LogLevel.Warning, Message = "Data package '{PackageId}' download {DownloadId} stalled (no progress within the idle timeout)")]
         partial void LogDownloadStalled(string packageId, Guid downloadId);
+
+        [LoggerMessage(Level = LogLevel.Warning, Message = "Catalog entry '{PackageId}' has no advertised size — using the generous fallback extraction ceiling")]
+        partial void LogCatalogSizeMissing(string packageId);
 
         [LoggerMessage(Level = LogLevel.Warning, Message = "Data package '{PackageId}' download {DownloadId} failed")]
         partial void LogDownloadFailed(string packageId, Guid downloadId, Exception ex);

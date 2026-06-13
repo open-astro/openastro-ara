@@ -79,6 +79,60 @@ namespace OpenAstroAra.Test {
         }
     }
 
+    // Yields the payload in small chunks with a fixed delay between reads, to simulate a slow-but-steady transfer.
+    internal sealed class TricklingFetcher : ISkyDataFetcher {
+        private readonly byte[] _payload;
+        private readonly int _chunk;
+        private readonly TimeSpan _gap;
+
+        public TricklingFetcher(byte[] payload, int chunk, TimeSpan gap) {
+            _payload = payload;
+            _chunk = chunk;
+            _gap = gap;
+        }
+
+        public Task<SkyDataFetch> OpenAsync(Uri source, CancellationToken ct) =>
+            Task.FromResult(new SkyDataFetch(new TrickleStream(_payload, _chunk, _gap), _payload.LongLength));
+    }
+
+    internal sealed class TrickleStream : Stream {
+        private readonly byte[] _data;
+        private readonly int _chunk;
+        private readonly TimeSpan _gap;
+        private int _pos;
+
+        public TrickleStream(byte[] data, int chunk, TimeSpan gap) {
+            _data = data;
+            _chunk = chunk;
+            _gap = gap;
+        }
+
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) {
+            if (_pos >= _data.Length) {
+                return 0;
+            }
+            await Task.Delay(_gap, cancellationToken).ConfigureAwait(false);
+            var n = Math.Min(Math.Min(_chunk, buffer.Length), _data.Length - _pos);
+            _data.AsMemory(_pos, n).CopyTo(buffer);
+            _pos += n;
+            return n;
+        }
+
+        public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) =>
+            await ReadAsync(buffer.AsMemory(offset, count), cancellationToken).ConfigureAwait(false);
+
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException("async reads only");
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => _data.Length;
+        public override long Position { get => _pos; set => throw new NotSupportedException(); }
+        public override void Flush() { }
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    }
+
     // A read stream whose async reads block forever but honor cancellation — so when the worker's idle CTS fires,
     // the in-flight read throws OperationCanceledException.
     internal sealed class StallStream : Stream {

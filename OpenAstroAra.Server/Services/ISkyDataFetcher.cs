@@ -82,6 +82,11 @@ namespace OpenAstroAra.Server.Services {
 
         public async Task<SkyDataFetch> OpenAsync(Uri source, CancellationToken ct) {
             ArgumentNullException.ThrowIfNull(source);
+            // Defence in depth: today the catalog hardcodes https URLs, but refuse to fetch a sky-data package over
+            // cleartext if a future catalog entry ever carries an http (or other-scheme) source.
+            if (!source.IsAbsoluteUri || !string.Equals(source.Scheme, Uri.UriSchemeHttps, StringComparison.Ordinal)) {
+                throw new InvalidOperationException($"Sky-data source must be an absolute https URL, got '{source}'.");
+            }
 
             var client = _httpClientFactory.CreateClient(HttpClientName);
             try {
