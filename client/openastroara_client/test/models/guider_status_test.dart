@@ -79,6 +79,29 @@ void main() {
       expect(s.rmsTotal, 1.0);
     });
 
+    test('wrong-typed string fields degrade to null/default rather than throwing', () {
+      final s = GuiderStatus.fromJson(<String, dynamic>{
+        'device_id': 42, // not a String
+        'name': 7, // not a String
+        'state': <String, dynamic>{}, // not a String
+        'runtime': <String, dynamic>{'state': 99, 'current_profile': true},
+      });
+      expect(s.deviceId, isNull);
+      expect(s.name, 'Guider');
+      expect(s.connectionState, GuiderConnectionState.unknown);
+      expect(s.runtimeState, GuiderRuntimeState.unknown);
+      expect(s.currentProfile, isNull);
+    });
+
+    test('string-encoded RMS values are coerced to double', () {
+      final s = GuiderStatus.fromJson(<String, dynamic>{
+        'state': 'connected',
+        'runtime': <String, dynamic>{'state': 'guiding', 'rms_total': '0.42', 'rms_ra': 'nope'},
+      });
+      expect(s.rmsTotal, 0.42);
+      expect(s.rmsRa, isNull, reason: 'unparseable string → null');
+    });
+
     test('value equality — equal-content parses compare equal (no rebuild churn)', () {
       Map<String, dynamic> frame() => <String, dynamic>{
             'device_id': 'phd2',

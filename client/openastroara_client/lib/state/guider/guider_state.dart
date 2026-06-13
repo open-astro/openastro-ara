@@ -84,6 +84,7 @@ class GuiderStatusNotifier extends AsyncNotifier<GuiderStatus?> {
   /// by connect/disconnect so a mid-action server switch can't redirect the
   /// follow-up read); when omitted it reads the current active client.
   Future<void> refresh([GuiderClient? client]) async {
+    if (!ref.mounted) return;
     final api = client ?? ref.read(guiderApiProvider);
     state = const AsyncValue<GuiderStatus?>.loading();
     final next = await AsyncValue.guard<GuiderStatus?>(() async {

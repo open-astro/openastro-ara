@@ -90,19 +90,25 @@ class GuiderStatus {
     final runtime = json['runtime'];
     final runtimeMap = runtime is Map<String, dynamic> ? runtime : const <String, dynamic>{};
     return GuiderStatus(
-      deviceId: json['device_id'] as String?,
-      name: json['name'] as String? ?? 'Guider',
-      connectionState: _connectionFromWire(json['state'] as String?),
-      runtimeState: _runtimeFromWire(runtimeMap['state'] as String?),
+      deviceId: _str(json['device_id']),
+      name: _str(json['name']) ?? 'Guider',
+      connectionState: _connectionFromWire(_str(json['state'])),
+      runtimeState: _runtimeFromWire(_str(runtimeMap['state'])),
       rmsTotal: _asDouble(runtimeMap['rms_total']),
       rmsRa: _asDouble(runtimeMap['rms_ra']),
       rmsDec: _asDouble(runtimeMap['rms_dec']),
-      currentProfile: runtimeMap['current_profile'] as String?,
+      currentProfile: _str(runtimeMap['current_profile']),
     );
   }
 
+  // Type-guarded extractors so a wrong-typed field (e.g. a number where a string
+  // is expected) degrades to null rather than throwing — the factory tolerates
+  // any malformed value, not only nulls.
+  static String? _str(dynamic v) => v is String ? v : null;
+
   static double? _asDouble(dynamic v) {
     if (v is num) return v.toDouble();
+    if (v is String) return num.tryParse(v)?.toDouble();
     return null;
   }
 
