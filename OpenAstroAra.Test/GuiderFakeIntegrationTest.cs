@@ -106,6 +106,57 @@ namespace OpenAstroAra.Test {
             Assert.That(after, Is.Null, "disconnect should drop the guider so GetAsync returns null");
         }
 
+        [Test]
+        public async Task Reflects_star_lost_when_the_guide_star_is_lost() {
+            await using var fake = FakeGuider.Start();
+            fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
+            using var svc = new GuiderService(new HeadlessProfileService(), NewRecovery(),
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>());
+
+            await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None)
+                .ConfigureAwait(false);
+            Assert.That(await PollAsync(svc, d => d.State == EquipmentConnectionState.Connected).ConfigureAwait(false), Is.Not.Null,
+                "the service never reached Connected against the fake guider");
+
+            await fake.BroadcastAsync(PhdEvents.AppState("Guiding")).ConfigureAwait(false);
+            Assert.That(await PollAsync(svc, d => d.Runtime?.State == "guiding").ConfigureAwait(false), Is.Not.Null,
+                "an AppState=Guiding event did not reach the runtime state");
+
+            // §42.2 in-band fault: the guider loses the star mid-guiding. PHD2 emits a StarLost
+            // event, which PHD2Guider folds into AppState=LostLock → the §63.2 "star_lost" token.
+            // The session stays Connected (it's a guiding-quality fault, not a link drop).
+            await fake.BroadcastAsync(PhdEvents.StarLost()).ConfigureAwait(false);
+            Assert.That(await PollAsync(svc, d => d.Runtime?.State == "star_lost").ConfigureAwait(false), Is.Not.Null,
+                "a StarLost event did not surface as the star_lost runtime state");
+            var afterLost = await svc.GetAsync(CancellationToken.None).ConfigureAwait(false);
+            Assert.That(afterLost?.State, Is.EqualTo(EquipmentConnectionState.Connected),
+                "a lost star is a guiding fault, not a disconnect — the link should stay Connected");
+        }
+
+        [Test]
+        public async Task Drops_to_Error_when_the_guider_link_dies_mid_session() {
+            await using var fake = FakeGuider.Start();
+            fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
+            using var svc = new GuiderService(new HeadlessProfileService(), NewRecovery(),
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>());
+
+            await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None)
+                .ConfigureAwait(false);
+            Assert.That(await PollAsync(svc, d => d.State == EquipmentConnectionState.Connected).ConfigureAwait(false), Is.Not.Null,
+                "the service never reached Connected against the fake guider");
+            // Connect leaves exactly the persistent event-stream connection open (per-call RPC
+            // connections close after their reply); wait for it to settle before dropping.
+            await WaitUntilAsync(() => fake.ConnectionCount >= 1).ConfigureAwait(false);
+
+            // §42.2 link fault: the guider daemon drops the socket mid-session. PHD2Guider's
+            // listener sees EOF and raises PHD2ConnectionLost; GuiderService.OnConnectionLost moves
+            // the session to Error and kicks off §63.3 recovery (its outcome — Unsupervised off a
+            // systemd host — is unit-covered by GuiderRecoveryCoordinatorTest, not re-asserted here).
+            Assert.That(fake.DropConnections(), Is.GreaterThan(0), "expected at least one live connection to drop");
+            Assert.That(await PollAsync(svc, d => d.State == EquipmentConnectionState.Error).ConfigureAwait(false), Is.Not.Null,
+                "a dropped guider link did not surface as the Error state");
+        }
+
         private static async Task<GuiderDto?> PollAsync(GuiderService svc, Func<GuiderDto, bool> predicate) {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
             try {
