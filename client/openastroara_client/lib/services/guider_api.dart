@@ -40,9 +40,11 @@ class GuiderApi implements GuiderClient {
   @override
   Future<GuiderStatus?> getStatus() async {
     try {
-      final res = await _dio.get<Map<String, dynamic>>('/api/v1/equipment/guider');
+      final res = await _dio.get<dynamic>('/api/v1/equipment/guider');
       final data = res.data;
-      if (data == null) return null;
+      // Tolerate a non-object 200 body (empty/plain-text) without a TypeError
+      // escaping past the DioException catch below.
+      if (data is! Map<String, dynamic>) return null;
       return GuiderStatus.fromJson(data);
     } on DioException catch (e) {
       if (e.response?.statusCode == 404) return null;

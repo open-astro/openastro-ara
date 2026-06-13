@@ -54,9 +54,12 @@ class GuiderStatusNotifier extends AsyncNotifier<GuiderStatus?> {
     } catch (e, st) {
       // Surface a failed connect as an error state so the UI can show it; a
       // bare throw here would leave the notifier on its stale prior value.
-      state = AsyncValue<GuiderStatus?>.error(e, st);
+      if (ref.mounted) state = AsyncValue<GuiderStatus?>.error(e, st);
       return;
     }
+    // The active server may have changed during the await, disposing this
+    // notifier; don't write to a disposed notifier.
+    if (!ref.mounted) return;
     // Refresh against the SAME client we just acted on — re-reading the provider
     // could pick up a different server if the active one changed in between.
     await refresh(api);
@@ -70,9 +73,10 @@ class GuiderStatusNotifier extends AsyncNotifier<GuiderStatus?> {
     try {
       await api.disconnect();
     } catch (e, st) {
-      state = AsyncValue<GuiderStatus?>.error(e, st);
+      if (ref.mounted) state = AsyncValue<GuiderStatus?>.error(e, st);
       return;
     }
+    if (!ref.mounted) return;
     await refresh(api);
   }
 
@@ -82,10 +86,12 @@ class GuiderStatusNotifier extends AsyncNotifier<GuiderStatus?> {
   Future<void> refresh([GuiderClient? client]) async {
     final api = client ?? ref.read(guiderApiProvider);
     state = const AsyncValue<GuiderStatus?>.loading();
-    state = await AsyncValue.guard<GuiderStatus?>(() async {
+    final next = await AsyncValue.guard<GuiderStatus?>(() async {
       if (api == null) return null;
       return api.getStatus();
     });
+    // getStatus() can outlive the active server; don't write to a disposed notifier.
+    if (ref.mounted) state = next;
   }
 }
 
