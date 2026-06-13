@@ -182,12 +182,11 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task Cancel_of_an_unknown_download_throws_for_a_404() {
+        public void Cancel_of_an_unknown_download_throws_for_a_404() {
             var svc = NewService(new UnusedFetcher(), new CapturingBroadcaster());
             Assert.That(
                 async () => await svc.CancelAsync(Guid.NewGuid(), CancellationToken.None),
                 Throws.InstanceOf<DownloadNotFoundException>(), "an unknown download id is a 404, not a 202");
-            await Task.CompletedTask;
         }
 
         [Test]

@@ -159,6 +159,10 @@ namespace OpenAstroAra.Server.Services {
             if (!CatalogIds.Contains(request.PackageId)) {
                 return Task.FromException<OperationAcceptedDto>(PackageNotFoundException.ForPackageId(request.PackageId));
             }
+            // NOTE: request.ForceReinstall is not yet honored — a download always runs (i.e. behaves as force).
+            // Short-circuiting on "already installed" needs the sentinel-aware inventory that lands in §36-2b-2
+            // (a dir is only "installed" once its .installed sentinel exists), so the skip-if-installed path is
+            // wired there rather than guessing from a bare directory here. Tracked in PORT_TODO.
             var pkg = Catalog.First(p => p.Id == request.PackageId);
             if (pkg.SourceUrl is null) {
                 // A catalog entry without a source URL is a server-config invariant violation (every curated entry
@@ -279,6 +283,8 @@ namespace OpenAstroAra.Server.Services {
             _ = EmitAsync(WsEventCatalog.DataManagerDownloadProgress, job, error: null);
         }
 
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "Best-effort WS emit, also called fire-and-forget: every failure (incl. an incidental OperationCanceledException from a broadcaster) is logged and swallowed so it can neither fail the download nor surface as an unobserved task exception.")]
         private async Task EmitAsync(string eventType, DownloadJob job, string? error) {
             // Whole body in the try: this is also called fire-and-forget from MaybeEmitProgress, so even the payload
             // build must not throw an unobserved exception. Publish is best-effort — a WS hiccup must not fail the download.
@@ -299,7 +305,9 @@ namespace OpenAstroAra.Server.Services {
                 // path the warnings=errors gate rejects).
                 using var doc = JsonDocument.Parse(payload.ToJsonString());
                 await _ws.PublishAsync(eventType, doc.RootElement.Clone(), CancellationToken.None).ConfigureAwait(false);
-            } catch (Exception ex) when (ex is not OperationCanceledException) {
+            } catch (Exception ex) {
+                // Catch-all incl. OperationCanceledException: this runs fire-and-forget, so an OCE leaking here would
+                // fault an unobserved task. Log + swallow — a WS publish failure must never affect the download.
                 LogPublishFailed(eventType, ex);
             }
         }

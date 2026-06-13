@@ -574,3 +574,10 @@ slow-to-start CDN, and a multi-GB body must not be capped). A download is bounde
 (`POST /cancel/{id}`). A stalled/hung connection therefore holds a worker + connection open until a client cancels. A
 future enhancement: an *idle*-progress watchdog (cancel the job's CTS if no bytes arrive for N seconds) gives a
 server-side backstop without capping a healthy long download. Low priority. Surfaced 2026-06-13 by the §36-2b review.
+
+**§36-2 Data Manager — DownloadRequestDto.ForceReinstall not yet honored (§36-2b review note).** The download worker
+always runs (effectively force-reinstall); `ForceReinstall: false` does NOT short-circuit when the package is already
+installed. The skip-if-installed path needs the sentinel-aware "is installed" check (a dir counts as installed only
+once its `.installed` sentinel exists) that lands in §36-2b-2's Describe/Measure rework — wiring ForceReinstall there
+avoids guessing from a bare directory. Until then, every download request re-downloads. Surfaced 2026-06-13 by the
+§36-2b review.

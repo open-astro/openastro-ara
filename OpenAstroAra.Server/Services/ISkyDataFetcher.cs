@@ -13,6 +13,7 @@
 #endregion "copyright"
 
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Net.Http;
 using System.Threading;
@@ -46,12 +47,13 @@ namespace OpenAstroAra.Server.Services {
 
         public long? TotalBytes { get; }
 
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "Best-effort stream teardown: any error tearing down the content stream must not leak the response/client (disposed in the finally) nor turn an already-finished download into a failure.")]
         public async ValueTask DisposeAsync() {
             try {
                 await Content.DisposeAsync().ConfigureAwait(false);
-            } catch (Exception ex) when (ex is IOException or ObjectDisposedException or HttpRequestException) {
-                // A transport error tearing down the stream must not leak the response/client (disposed in the
-                // finally) nor turn an already-finished download into a failure — cleanup is best-effort.
+            } catch (Exception) {
+                // Swallow any teardown error — see the justification above; cleanup of the transport still runs.
             } finally {
                 // Dispose the response/client AFTER the stream — the stream reads through them.
                 foreach (var owned in _ownedAfterContent) {
