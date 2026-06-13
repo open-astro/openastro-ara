@@ -1115,7 +1115,9 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 _tcs.TrySetResult(true);
 
                 using NetworkStream s = client.GetStream();
-                using var reader = new StreamReader(s, Encoding.ASCII);
+                // leaveOpen: true — the `using NetworkStream s` (and the TcpClient) own the stream's
+                // lifetime; without this the StreamReader would dispose it too (a redundant double-dispose).
+                using var reader = new StreamReader(s, Encoding.ASCII, detectEncodingFromByteOrderMarks: false, bufferSize: 1024, leaveOpen: true);
 
                 // Read the PHD2 event stream line-by-line. ReadLineAsync blocks until a full line
                 // arrives, returns null at EOF (the guider closed the socket), or throws on a reset —
@@ -1129,7 +1131,15 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                     if (line.Length == 0 || line[0] != '{') {
                         continue;
                     }
-                    JObject o = JObject.Parse(line, jls);
+                    JObject o;
+                    try {
+                        o = JObject.Parse(line, jls);
+                    } catch (Newtonsoft.Json.JsonReaderException ex) {
+                        // A malformed/partial frame (e.g. mid-reset) shouldn't kill the whole listener —
+                        // skip the bad line and keep reading. A true close still surfaces as EOF below.
+                        Logger.Warning($"Skipping unparseable PHD2 event line: {ex.Message}");
+                        continue;
+                    }
                     JToken t = o.GetValue("Event", StringComparison.Ordinal);
                     if (t != null) {
                         var phdevent = t.ToString();
