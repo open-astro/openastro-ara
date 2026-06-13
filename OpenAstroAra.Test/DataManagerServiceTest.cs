@@ -110,6 +110,24 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Download_accepts_a_known_catalog_package() {
+            var accepted = await _svc.DownloadAsync(
+                new DownloadRequestDto(PackageId: "tycho-2", ForceReinstall: false), "idem-1", CancellationToken.None);
+
+            Assert.That(accepted.OperationType, Is.EqualTo("data-manager.download"));
+            Assert.That(accepted.IdempotencyKey, Is.EqualTo("idem-1"));
+        }
+
+        [Test]
+        public void Download_rejects_an_unknown_package_id() {
+            Assert.That(
+                async () => await _svc.DownloadAsync(
+                    new DownloadRequestDto(PackageId: "../etc/passwd", ForceReinstall: false), null, CancellationToken.None),
+                Throws.InstanceOf<System.Collections.Generic.KeyNotFoundException>(),
+                "a non-catalog id (incl. a traversal attempt) must be rejected, not silently accepted");
+        }
+
+        [Test]
         public async Task Delete_of_a_path_traversal_id_touches_nothing_outside_the_root() {
             // A sibling dir next to the data root that a traversal id would target.
             var outside = Path.Combine(Path.GetDirectoryName(_root)!, "ara-victim-" + Path.GetRandomFileName());

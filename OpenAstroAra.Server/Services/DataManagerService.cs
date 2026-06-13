@@ -24,15 +24,15 @@ using System.Threading.Tasks;
 namespace OpenAstroAra.Server.Services {
 
     /// <summary>
-    /// §36 Data Manager — the real, disk-backed inventory + management layer (replaces
-    /// <c>PlaceholderDataManagerService</c>). Tracks which curated sky-data packages (star catalogs,
-    /// horizon profiles, and — once §36-2 lands the download engine — HiPS sky-survey imagery) are
-    /// installed under the data root, reports their on-disk size, and deletes them.
+    /// §36 Data Manager — the real, disk-backed inventory + management layer (replaces the former
+    /// placeholder). Tracks which curated sky-data packages (star catalogs, horizon profiles, and —
+    /// once §36-2 lands the download engine — HiPS sky-survey imagery) are installed under the data
+    /// root, reports their on-disk size, and deletes them.
     ///
     /// This is §36-1: <see cref="ListPackagesAsync"/> / <see cref="DeleteAsync"/> / <see cref="GetStateAsync"/>
     /// are real (read from + mutate the data root). <see cref="DownloadAsync"/> / <see cref="CancelAsync"/>
     /// are the acquisition half — the fetch-archive → extract → progress-WS → cancel engine lands in §36-2;
-    /// for now they acknowledge the request without downloading (tracked in PORT_TODO).
+    /// for now they validate + acknowledge the request without downloading (tracked in PORT_TODO).
     ///
     /// Each package installs into <c>{dataRoot}/{packageId}/</c>. Only catalog ids map to a directory,
     /// so a caller-supplied <c>packageId</c> can never escape the data root (no path traversal).
@@ -77,6 +77,10 @@ namespace OpenAstroAra.Server.Services {
                 SourceUrl: new Uri("https://data.openastro.net/horizon-default/v1.tar.gz")),
         };
 
+        // O(1) membership check used by the path-safety guard (the linear Catalog list is for ordered listing).
+        private static readonly HashSet<string> CatalogIds =
+            new(Catalog.Select(p => p.Id), StringComparer.Ordinal);
+
         private readonly string _dataRoot;
         private readonly ILogger<DataManagerService> _logger;
 
@@ -98,9 +102,9 @@ namespace OpenAstroAra.Server.Services {
             long total = 0;
             foreach (var pkg in Catalog) {
                 var dir = PackageDir(pkg.Id);
-                if (dir is not null && Directory.Exists(dir)) {
+                if (dir is not null && Measure(dir) is { } m) {
                     installed++;
-                    total += DirectorySize(dir);
+                    total += m.Size;
                 }
             }
             return Task.FromResult(new DataManagerStateDto(
@@ -119,6 +123,8 @@ namespace OpenAstroAra.Server.Services {
                 Directory.Delete(dir, recursive: true);
                 LogDeleted(packageId);
                 return Task.FromResult(true);
+            } catch (DirectoryNotFoundException) {
+                return Task.FromResult(false); // raced with another delete — already gone.
             } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
                 // A locked/permission-denied delete is reported as "not deleted" rather than thrown —
                 // the client retries; the daemon must not 500 on a best-effort disk reclaim.
@@ -129,36 +135,53 @@ namespace OpenAstroAra.Server.Services {
 
         public Task<OperationAcceptedDto> DownloadAsync(DownloadRequestDto request, string? idempotencyKey, CancellationToken ct) {
             ArgumentNullException.ThrowIfNull(request);
+            // Validate against the catalog up front so the §36-2 download engine inherits the guard and an
+            // unknown id is a clean 404 (mapped at the endpoint) rather than a silently-accepted no-op.
+            if (!CatalogIds.Contains(request.PackageId)) {
+                throw new KeyNotFoundException($"Unknown data package '{request.PackageId}'.");
+            }
             // §36-2: the fetch-archive → extract → progress-WS → cancel engine. For now the request is
             // accepted (so the wire contract is stable) but no download runs yet.
             LogDownloadDeferred(request.PackageId);
             return Task.FromResult(Accepted("data-manager.download", idempotencyKey));
         }
 
-        public Task<OperationAcceptedDto> CancelAsync(Guid downloadId, CancellationToken ct) =>
-            Task.FromResult(Accepted("data-manager.cancel", null));
+        public Task<OperationAcceptedDto> CancelAsync(Guid downloadId, CancellationToken ct) {
+            LogCancelDeferred(downloadId);
+            return Task.FromResult(Accepted("data-manager.cancel", null));
+        }
 
-        // Reflect the on-disk state of a catalog package: installed dir → IsInstalled + measured size +
-        // last-write time; absent → the catalog's advertised size with IsInstalled=false.
+        // Reflect the on-disk state of a catalog package. Measure() folds the existence check into the
+        // size/time read so a concurrent DeleteAsync between "exists?" and "measure" can't throw — it just
+        // reads as not-installed.
         private DataPackageDto Describe(DataPackageDto pkg) {
             var dir = PackageDir(pkg.Id);
-            if (dir is null || !Directory.Exists(dir)) {
+            if (dir is null || Measure(dir) is not { } m) {
                 return pkg with { IsInstalled = false, InstalledUtc = null };
             }
-            return pkg with {
-                IsInstalled = true,
-                InstalledUtc = Directory.GetLastWriteTimeUtc(dir),
-                SizeBytes = DirectorySize(dir),
-            };
+            return pkg with { IsInstalled = true, InstalledUtc = m.LastWriteUtc, SizeBytes = m.Size };
         }
 
         // Per-package directory — ONLY for a known catalog id, so a caller-supplied packageId (Delete,
         // Download) can never traverse out of the data root.
         private string? PackageDir(string packageId) =>
-            Catalog.Any(p => p.Id == packageId) ? Path.Combine(_dataRoot, packageId) : null;
+            CatalogIds.Contains(packageId) ? Path.Combine(_dataRoot, packageId) : null;
 
-        private static long DirectorySize(string dir) =>
-            new DirectoryInfo(dir).EnumerateFiles("*", SearchOption.AllDirectories).Sum(f => f.Length);
+        // Measure an installed package dir, or null if it isn't there (incl. a delete that raced this read).
+        // NOTE: O(files) per call and re-walked by both ListPackages + GetState — fine for the small catalog;
+        // §36-2 can cache the size at install time if the catalog grows large.
+        private static (long Size, DateTimeOffset LastWriteUtc)? Measure(string dir) {
+            try {
+                var info = new DirectoryInfo(dir);
+                if (!info.Exists) {
+                    return null;
+                }
+                var size = info.EnumerateFiles("*", SearchOption.AllDirectories).Sum(f => f.Length);
+                return (size, info.LastWriteTimeUtc);
+            } catch (DirectoryNotFoundException) {
+                return null; // raced with a delete mid-enumeration.
+            }
+        }
 
         private static OperationAcceptedDto Accepted(string operationType, string? idempotencyKey) =>
             new(OperationId: Guid.NewGuid(),
@@ -174,5 +197,8 @@ namespace OpenAstroAra.Server.Services {
 
         [LoggerMessage(Level = LogLevel.Information, Message = "Data package '{PackageId}' download requested — deferred to the §36-2 download engine")]
         partial void LogDownloadDeferred(string packageId);
+
+        [LoggerMessage(Level = LogLevel.Information, Message = "Data download cancel requested for {DownloadId} — deferred to the §36-2 download engine")]
+        partial void LogCancelDeferred(Guid downloadId);
     }
 }
