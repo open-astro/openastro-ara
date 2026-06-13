@@ -10,14 +10,16 @@ import 'package:openastroara/state/guider/guider_calibration_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 
 class _FakeSavedServerService implements SavedServerService {
-  _FakeSavedServerService(this._stored);
+  _FakeSavedServerService(List<AraServer> stored) : _stored = [...stored];
   final List<AraServer> _stored;
   @override
   Future<List<AraServer>> loadAll() async => List.unmodifiable(_stored);
   @override
-  Future<void> saveAll(List<AraServer> servers) async {}
+  Future<void> saveAll(List<AraServer> servers) async => _stored
+    ..clear()
+    ..addAll(servers);
   @override
-  Future<void> add(AraServer server) async {}
+  Future<void> add(AraServer server) async => _stored.add(server);
 }
 
 class _FakeCalibrationClient implements GuiderCalibrationClient {
@@ -149,6 +151,36 @@ void main() {
       await Future.wait<void>([first, second]);
 
       expect(api.darkBuilds, 1, reason: 'the second action was guarded out');
+    });
+
+    test('a server switch mid-action ends on the new server status (generation guard)', () async {
+      final fakeA = _FakeCalibrationClient(_resp())..buildGate = Completer<void>();
+      final fakeB = _FakeCalibrationClient(_resp(darkExists: true));
+      const serverA = AraServer(hostname: 'a', port: 5555);
+      const serverB = AraServer(hostname: 'b', port: 5555);
+      final c = ProviderContainer(overrides: [
+        savedServerServiceProvider.overrideWithValue(_FakeSavedServerService(const [serverA])),
+        guiderCalibrationApiFactoryProvider
+            .overrideWithValue((s) => s.hostname == 'a' ? fakeA : fakeB),
+      ]);
+      addTearDown(c.dispose);
+      await c.read(savedServersProvider.future);
+      final sub = c.listen(guiderCalibrationProvider, (_, _) {});
+      addTearDown(sub.close);
+      await c.read(guiderCalibrationProvider.future);
+
+      final f = c.read(guiderCalibrationProvider.notifier).buildDarkLibrary(); // gated on fakeA
+      await pumpEventQueue();
+      // Switch the active server mid-action → build() re-runs against fakeB.
+      await c.read(savedServersProvider.notifier).add(serverB);
+      await pumpEventQueue();
+      fakeA.buildGate!.complete();
+      await f;
+      await pumpEventQueue();
+
+      final r = c.read(guiderCalibrationProvider).value;
+      expect(r!.status!.darkLibraryExists, isTrue,
+          reason: 'ends on server B status — the stale action refresh is dropped by the gen guard');
     });
 
     test('a failed build surfaces as AsyncError', () async {

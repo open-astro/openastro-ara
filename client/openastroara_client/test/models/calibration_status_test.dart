@@ -44,7 +44,7 @@ void main() {
         'dark_count_loaded': 'many',
         'dark_min_exposure_seconds_loaded': 'x',
       });
-      expect(s.profileId, 0);
+      expect(s.profileId, isNull, reason: 'wrong-typed id → null, not a coerced 0');
       expect(s.darkLibraryPath, isNull);
       expect(s.darkLibraryExists, isFalse);
       expect(s.darkCountLoaded, isNull);

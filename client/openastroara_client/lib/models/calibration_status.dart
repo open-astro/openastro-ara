@@ -8,7 +8,10 @@ library;
 /// count + exposure range when available. Defensive parse — missing/wrong-typed
 /// fields degrade rather than throw.
 class CalibrationStatus {
-  final int profileId;
+  /// Daemon profile id; `null` when the payload omitted it or it was wrong-typed
+  /// (don't coerce to 0 — that's a valid profile id, so a parse failure must not
+  /// silently target the wrong profile if this is ever sent back to the server).
+  final int? profileId;
   final String? darkLibraryPath;
   final String? defectMapPath;
   final bool darkLibraryExists;
@@ -24,7 +27,7 @@ class CalibrationStatus {
   final double? darkMaxExposureSecondsLoaded;
 
   const CalibrationStatus({
-    required this.profileId,
+    this.profileId,
     this.darkLibraryPath,
     this.defectMapPath,
     this.darkLibraryExists = false,
@@ -42,7 +45,7 @@ class CalibrationStatus {
 
   factory CalibrationStatus.fromJson(Map<String, dynamic> json) {
     return CalibrationStatus(
-      profileId: _int(json['profile_id']) ?? 0,
+      profileId: _int(json['profile_id']),
       darkLibraryPath: _str(json['dark_library_path']),
       defectMapPath: _str(json['defect_map_path']),
       darkLibraryExists: _bool(json['dark_library_exists']),
