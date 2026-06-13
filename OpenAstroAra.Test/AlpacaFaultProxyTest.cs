@@ -35,6 +35,7 @@ namespace OpenAstroAra.Test {
     /// fault-injection contract the §42.2 scenarios depend on.
     /// </summary>
     [TestFixture]
+    [Category("bench")] // §42.2 virtual-observatory bench — selected by bench/ (TestCategory=bench)
     public class AlpacaFaultProxyTest {
 
         private const string TelescopeConnected = "api/v1/telescope/0/connected";

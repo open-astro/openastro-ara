@@ -25,6 +25,16 @@ Single-page status. Updated on every phase boundary. Per PORT_PLAYBOOK.md §20.1
 
 ## Completed
 
+### Session 2026-06-13 — §42.2 virtual-observatory bench (bench-1→6, #401–#408)
+Hardware-free §42.2 test bench in `OpenAstroAra.TestHarness` + `bench/`, driving the **real** daemon services against simulated gear — no cameras, mount, or PHD2 daemon. The arc also surfaced + fixed three real guider-path production bugs.
+- ✅ **bench-1 (#401)** — `AlpacaFaultProxy`: loopback reverse proxy injecting transport faults (Alpaca error / HTTP failure / dropped connection / hang / response-value rewrite), per device/method, one-shot or sticky.
+- ✅ **bench-2 (#402)** — `FakeGuider` + `PhdEvents`: scriptable TCP fake of the PHD2 event server (greeting, canned/overridable RPC results, event broadcast).
+- ✅ **bench guider-path fixes (#403/#404/#405)** — surfaced by driving the real `GuiderService`/`PHD2Guider` against the fake: **#403** connect-as-service (retired the inherited NINA-desktop `StartPHD2Process`/`WaitForInputIdle`, which couldn't work headless and blocked connecting to a localhost guider; ARA now asks the supervisor to `systemctl start` then connects); **#404** read-driven `RunListener` (replaced a macOS-fragile OS-TCP-table busy-poll with `ReadLineAsync` + keep-alive); **#405** `SendMessage` async read bounded by `receiveTimeout` (a silent/wrong-version guider could otherwise hang the connect forever).
+- ✅ **bench-3 (#406)** — `GuiderFakeIntegrationTest`: the real client through the full connect→Connected→AppState(guiding)→GuideStep-RMS→disconnect lifecycle in ~0.5s.
+- ✅ **bench-4 (#407)** — two §42.2 device-fault scenarios: lost guide star (`StarLost`→`star_lost`, link stays Connected) and dropped guider link (new `FakeGuider.DropConnections` → `PHD2ConnectionLost` → `Error` + §63.3 recovery). Fault-detection asserted; recovery outcome stays in `GuiderRecoveryCoordinatorTest`.
+- ✅ **bench-5 (#408)** — `bench/`: a hermetic `docker compose` lane that builds + runs the 29-test bench suite on `linux/arm64`, keeping a standing Linux check on the kernel-sensitive Drop-fault mechanic. Copy-in (not bind-mount) + a **root `.dockerignore`** so the host's osx-arm64 `bin/obj` never contaminate the linux image on either the BuildKit or classic-builder path (the review caught the per-Dockerfile-ignore-is-BuildKit-only gap).
+- ✅ **bench-6** — retired the bench's substring test filter for a `[Category("bench")]` tag (`TestCategory=bench`, one source of truth) + a fixed compose `image:` tag. Off the #408 review notes.
+
 ### Session 2026-06-11 (cont.) — §59 AF curve fits, §58 flip, §63.5 guider profile push (#359–#373)
 - ✅ **#359–#361 (§59 Classic AF curve fits)** — parabolic (#359), hyperbolic + `FitBest` §59.8 selection (#360), trendline two-arm regression + intersection (#361); `FocusCurveFit` weighted LS on #358's HFR. Remaining §59: the focuser-gated live V-curve sweep + Smart Focus (v0.1.0).
 - ✅ **#362 (§58.2 `MeridianFlipTrigger`)** — re-ported the flip decision logic headless behind the `IMeridianFlipExecutor` seam (throwing placeholder keeps MEF valid).

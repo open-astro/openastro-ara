@@ -35,8 +35,8 @@ COPY . .
 # Debug build are off in Release, so this stays warnings-clean.
 RUN dotnet build OpenAstroAra.Test/OpenAstroAra.Test.csproj -c Release
 
-# The bench filter — the three suites that make up the §42.2 bench. Kept in sync
-# with bench/run.sh; update both if the bench grows a new fixture.
+# The bench suite is selected by the NUnit [Category("bench")] tag on its three
+# fixtures — one source of truth, so a new bench fixture is picked up just by
+# tagging it (no filter to keep in sync here or in README).
 ENTRYPOINT ["dotnet", "test", "OpenAstroAra.Test/OpenAstroAra.Test.csproj", \
-            "-c", "Release", "--no-build", "--filter", \
-            "FullyQualifiedName~AlpacaFaultProxyTest|FullyQualifiedName~FakeGuiderTest|FullyQualifiedName~GuiderFakeIntegrationTest"]
+            "-c", "Release", "--no-build", "--filter", "TestCategory=bench"]
