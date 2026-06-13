@@ -137,8 +137,10 @@ namespace OpenAstroAra.Server.Services {
             ArgumentNullException.ThrowIfNull(request);
             // Validate against the catalog up front so the §36-2 download engine inherits the guard and an
             // unknown id is a clean 404 (mapped at the endpoint) rather than a silently-accepted no-op.
+            // Return a faulted Task rather than throwing synchronously — this is a Task-returning (non-async)
+            // method, so a bare throw would surface at call time, before any await, violating the TAP contract.
             if (!CatalogIds.Contains(request.PackageId)) {
-                throw PackageNotFoundException.ForPackageId(request.PackageId);
+                return Task.FromException<OperationAcceptedDto>(PackageNotFoundException.ForPackageId(request.PackageId));
             }
             // §36-2: the fetch-archive → extract → progress-WS → cancel engine. For now the request is
             // accepted (so the wire contract is stable) but no download runs yet.
