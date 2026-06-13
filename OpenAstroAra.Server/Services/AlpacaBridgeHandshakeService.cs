@@ -88,7 +88,11 @@ namespace OpenAstroAra.Server.Services {
         private void EvictExpired(DateTimeOffset now) {
             foreach (var kvp in _cache) {
                 if (now - kvp.Value.ProbedAt >= CacheTtl) {
-                    _cache.TryRemove(kvp.Key, out _);
+                    // Atomic value-matched remove: only drops the entry if it's STILL the stale one we
+                    // saw. If a concurrent miss wrote a fresh Entry for this key after we read it, the
+                    // values differ (Entry is a record struct → structural equality) and we leave it —
+                    // avoids racily evicting a just-probed entry. The KeyValuePair overload is .NET 5+.
+                    _cache.TryRemove(kvp);
                 }
             }
         }
