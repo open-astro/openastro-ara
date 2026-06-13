@@ -131,7 +131,9 @@ namespace OpenAstroAra.Server.Services {
                     total += m.Size;
                 }
             }
-            var active = _downloads.Values.Select(SnapshotActive).ToList();
+            // Filter !Completed: a worker that has reached its finally (set Completed) but not yet removed itself
+            // from _downloads must not surface as an active download for the brief window in between.
+            var active = _downloads.Values.Where(j => !j.Completed).Select(SnapshotActive).ToList();
             return Task.FromResult(new DataManagerStateDto(
                 InstalledPackageCount: installed,
                 TotalInstalledBytes: total,
@@ -237,8 +239,11 @@ namespace OpenAstroAra.Server.Services {
                 var targetDir = PackageDir(pkg.Id)!; // pkg came from the catalog, so this is non-null + in-root.
                 await using var counting = new CountingStream(fetch.Content, read => {
                     Volatile.Write(ref job.DownloadedBytes, read);
-                    idleCts.CancelAfter(_idleTimeout); // progress resets the stall deadline.
-                    MaybeEmitProgress(job);
+                    // Reset the stall deadline + emit progress on the SAME throttle tick — avoids rescheduling the
+                    // idle timer on every read chunk (the throttle already gates "enough time has passed").
+                    if (MaybeEmitProgress(job)) {
+                        idleCts.CancelAfter(_idleTimeout);
+                    }
                 });
                 await SkyDataInstaller.InstallFromTarGzAsync(counting, targetDir, ExtractionCeiling(pkg), ct).ConfigureAwait(false);
 
@@ -294,18 +299,21 @@ namespace OpenAstroAra.Server.Services {
         }
 
         // Throttled, fire-and-forget progress emit driven by the stream read callback (which runs on the worker).
-        private void MaybeEmitProgress(DownloadJob job) {
+        // Returns true when this call passed the throttle gate (and thus emitted) — the caller piggybacks the idle
+        // watchdog reset on the same gate.
+        private bool MaybeEmitProgress(DownloadJob job) {
             var now = Environment.TickCount64;
             var last = Interlocked.Read(ref job.LastEmitTick);
             if (now - last < ProgressThrottleMs) {
-                return;
+                return false;
             }
             // CAS so concurrent reads don't both fire for the same window (Read here is single-threaded today, but
             // this keeps the throttle correct if the stream is ever pumped from more than one thread).
             if (Interlocked.CompareExchange(ref job.LastEmitTick, now, last) != last) {
-                return;
+                return false;
             }
             _ = EmitAsync(WsEventCatalog.DataManagerDownloadProgress, job, error: null);
+            return true;
         }
 
         [SuppressMessage("Design", "CA1031:Do not catch general exception types",
