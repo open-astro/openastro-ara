@@ -1,0 +1,231 @@
+#region "copyright"
+
+/*
+    Copyright (c) 2026 Open Astro and the OpenAstro Ara contributors
+
+    This file is part of OpenAstro Ara (forked from N.I.N.A.).
+
+    This Source Code Form is subject to the terms of the Mozilla Public
+    License, v. 2.0. If a copy of the MPL was not distributed with this
+    file, You can obtain one at http://mozilla.org/MPL/2.0/.
+*/
+
+#endregion "copyright"
+
+using System.Collections.Concurrent;
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+
+namespace OpenAstroAra.TestHarness.Guider;
+
+/// <summary>
+/// A scriptable fake of the openastro-guider / PHD2 event server for the
+/// virtual-observatory bench. It speaks the PHD2 JSON-RPC line protocol over TCP so
+/// the real ARA guider client can connect, calibrate, guide, dither, and lose the
+/// star — all without the C++ daemon.
+///
+/// Every accepted connection is symmetric (as in real PHD2): it immediately receives
+/// the on-connect event burst, then in parallel (a) answers JSON-RPC requests with
+/// canned results and (b) receives any broadcast events. The ARA client uses one
+/// persistent connection for the event stream and a fresh connection per RPC, so the
+/// fake must serve both shapes on any connection.
+/// </summary>
+public sealed class FakeGuider : IAsyncDisposable {
+    private sealed class Connection {
+        public required NetworkStream Stream { get; init; }
+        // Serializes writes to this connection's stream — broadcasts and RPC replies
+        // can race otherwise, interleaving bytes of two messages.
+        public SemaphoreSlim WriteLock { get; } = new(1, 1);
+    }
+
+    private readonly TcpListener _listener;
+    private readonly CancellationTokenSource _cts = new();
+    private readonly Task _acceptLoop;
+    private readonly ConcurrentDictionary<Connection, byte> _connections = new();
+    private readonly ConcurrentDictionary<Task, byte> _inFlight = new();
+    private readonly Lock _gate = new();
+    private readonly List<JsonObject> _onConnectEvents = [];
+    private readonly Dictionary<string, Func<JsonObject, JsonNode?>> _rpcResults = new(StringComparer.OrdinalIgnoreCase);
+    private readonly List<string> _receivedMethods = [];
+
+    private FakeGuider(int port) {
+        _listener = new TcpListener(IPAddress.Loopback, port);
+        _listener.Start();
+        Port = ((IPEndPoint)_listener.LocalEndpoint).Port;
+        // PHD2 greets every new connection with Version then an initial AppState.
+        _onConnectEvents.Add(PhdEvents.Version());
+        _onConnectEvents.Add(PhdEvents.AppState("Stopped"));
+        _acceptLoop = Task.Run(AcceptLoopAsync);
+    }
+
+    /// <summary>The loopback TCP port the fake guider is listening on.</summary>
+    public int Port { get; }
+
+    /// <summary>
+    /// Starts a fake guider on an ephemeral loopback port (pass 4400 to mimic the real
+    /// daemon's well-known port in a non-parallel rig).
+    /// </summary>
+    public static FakeGuider Start(int port = 0) => new(port);
+
+    /// <summary>The RPC method names received so far, in order. Thread-safe snapshot.</summary>
+    public IReadOnlyList<string> ReceivedMethods {
+        get { lock (_gate) { return _receivedMethods.ToArray(); } }
+    }
+
+    /// <summary>
+    /// Overrides the result returned for an RPC <paramref name="method"/>. The factory
+    /// receives the parsed request and returns the JSON <c>result</c> value (PHD2
+    /// returns <c>0</c> for most successful setters; getters return a typed value).
+    /// Unset methods default to <c>result: 0</c>.
+    /// </summary>
+    public void OnRpc(string method, Func<JsonObject, JsonNode?> resultFactory) {
+        ArgumentNullException.ThrowIfNull(method);
+        ArgumentNullException.ThrowIfNull(resultFactory);
+        lock (_gate) {
+            _rpcResults[method] = resultFactory;
+        }
+    }
+
+    /// <summary>Convenience overload: a constant result value for <paramref name="method"/>.</summary>
+    public void OnRpc(string method, JsonNode? result) => OnRpc(method, _ => result is null ? null : JsonNode.Parse(result.ToJsonString()));
+
+    /// <summary>Replaces the burst of events sent to each connection on accept.</summary>
+    public void SetOnConnectEvents(params JsonObject[] events) {
+        ArgumentNullException.ThrowIfNull(events);
+        lock (_gate) {
+            _onConnectEvents.Clear();
+            _onConnectEvents.AddRange(events);
+        }
+    }
+
+    /// <summary>Pushes an event to every currently-connected client (e.g. StarLost, SettleDone).</summary>
+    public async Task BroadcastAsync(JsonObject @event) {
+        ArgumentNullException.ThrowIfNull(@event);
+        var line = Frame(@event);
+        foreach (var conn in _connections.Keys) {
+            await WriteAsync(conn, line).ConfigureAwait(false);
+        }
+    }
+
+    private async Task AcceptLoopAsync() {
+        while (!_cts.IsCancellationRequested) {
+            TcpClient client;
+            try {
+                client = await _listener.AcceptTcpClientAsync(_cts.Token).ConfigureAwait(false);
+            } catch (OperationCanceledException) {
+                return;
+            } catch (SocketException) {
+                return; // listener stopped during disposal
+            }
+            var task = Task.Run(() => HandleConnectionAsync(client));
+            _inFlight[task] = 0;
+            _ = task.ContinueWith(t => _inFlight.TryRemove(t, out _), CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+        }
+    }
+
+    private async Task HandleConnectionAsync(TcpClient client) {
+        client.NoDelay = true;
+        using var owned = client;
+        var stream = client.GetStream();
+        var conn = new Connection { Stream = stream };
+        _connections[conn] = 0;
+        try {
+            // On-connect event burst (snapshot under lock so a concurrent SetOnConnectEvents
+            // can't mutate the list mid-iteration).
+            JsonObject[] greeting;
+            lock (_gate) {
+                greeting = [.. _onConnectEvents];
+            }
+            foreach (var e in greeting) {
+                await WriteAsync(conn, Frame(e)).ConfigureAwait(false);
+            }
+
+            using var reader = new StreamReader(stream, Encoding.ASCII);
+            string? line;
+            while ((line = await reader.ReadLineAsync(_cts.Token).ConfigureAwait(false)) is not null) {
+                if (line.Length == 0) {
+                    continue;
+                }
+                await HandleRequestAsync(conn, line).ConfigureAwait(false);
+            }
+        } catch (OperationCanceledException) {
+            // disposing
+        } catch (IOException) {
+            // client closed the connection — normal for the per-RPC connections
+        } finally {
+            _connections.TryRemove(conn, out _);
+            conn.WriteLock.Dispose();
+        }
+    }
+
+    private async Task HandleRequestAsync(Connection conn, string line) {
+        JsonObject request;
+        try {
+            if (JsonNode.Parse(line) is not JsonObject obj) {
+                return;
+            }
+            request = obj;
+        } catch (JsonException) {
+            return; // ignore non-JSON noise
+        }
+
+        var method = (string?)request["method"];
+        if (method is null) {
+            return; // not an RPC request (could be an echoed event)
+        }
+        var id = request["id"];
+
+        Func<JsonObject, JsonNode?>? factory;
+        lock (_gate) {
+            _receivedMethods.Add(method);
+            _rpcResults.TryGetValue(method, out factory);
+        }
+
+        // PHD2 returns integer 0 from most successful calls; getters are overridden via OnRpc.
+        JsonNode? result = factory is null ? 0 : factory(request);
+        var response = new JsonObject {
+            ["jsonrpc"] = "2.0",
+            ["result"] = result,
+            ["id"] = id?.DeepClone(),
+        };
+        await WriteAsync(conn, Frame(response)).ConfigureAwait(false);
+    }
+
+    private static async Task WriteAsync(Connection conn, byte[] line) {
+        await conn.WriteLock.WaitAsync().ConfigureAwait(false);
+        try {
+            await conn.Stream.WriteAsync(line).ConfigureAwait(false);
+            await conn.Stream.FlushAsync().ConfigureAwait(false);
+        } catch (IOException) {
+            // peer gone — drop
+        } catch (ObjectDisposedException) {
+            // connection torn down concurrently
+        } finally {
+            conn.WriteLock.Release();
+        }
+    }
+
+    // The ARA listener splits the event stream on Environment.NewLine, so frame with it.
+    private static byte[] Frame(JsonObject message) =>
+        Encoding.ASCII.GetBytes(message.ToJsonString() + Environment.NewLine);
+
+    /// <inheritdoc />
+    public async ValueTask DisposeAsync() {
+        await _cts.CancelAsync().ConfigureAwait(false);
+        _listener.Stop();
+        try {
+            await _acceptLoop.ConfigureAwait(false);
+        } catch (OperationCanceledException) {
+            // expected
+        }
+        await Task.WhenAll(_inFlight.Keys)
+            .ContinueWith(static _ => { }, TaskScheduler.Default)
+            .ConfigureAwait(false);
+        _listener.Dispose();
+        _cts.Dispose();
+    }
+}
