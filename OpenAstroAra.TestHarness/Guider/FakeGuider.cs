@@ -132,15 +132,20 @@ public sealed class FakeGuider : IAsyncDisposable {
     public int DropConnections() {
         var dropped = 0;
         foreach (var conn in _connections.Keys) {
+            // Claim the connection out of the live set first: TryRemove fails if its handler already
+            // tore it down naturally, so we only count — and only dispose — connections that were
+            // genuinely open when we ran. The handler's own finally TryRemove then no-ops on ours.
+            if (!_connections.TryRemove(conn, out _)) {
+                continue;
+            }
             // Disposing the stream unblocks the handler's ReadLineAsync (EOF/IOException), which
-            // removes the connection in its finally. Best-effort: a connection already tearing
-            // down may throw, which is indistinguishable from a successful drop to the client.
+            // sends the client the EOF that PHD2Guider turns into PHD2ConnectionLost.
             try {
                 conn.Stream.Dispose();
-                dropped++;
             } catch (IOException) {
             } catch (ObjectDisposedException) {
             }
+            dropped++;
         }
         return dropped;
     }
