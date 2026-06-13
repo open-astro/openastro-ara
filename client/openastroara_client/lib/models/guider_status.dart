@@ -107,9 +107,14 @@ class GuiderStatus {
   static String? _str(dynamic v) => v is String ? v : null;
 
   static double? _asDouble(dynamic v) {
-    if (v is num) return v.toDouble();
-    if (v is String) return num.tryParse(v)?.toDouble();
-    return null;
+    final d = v is num
+        ? v.toDouble()
+        : v is String
+            ? num.tryParse(v)?.toDouble()
+            : null;
+    // Filter NaN/Infinity (incl. from "NaN"/"Infinity" strings) — a non-finite
+    // RMS is meaningless and would break value equality (NaN != NaN → churn).
+    return (d != null && d.isFinite) ? d : null;
   }
 
   // Value equality so an unchanged poll result doesn't churn Riverpod listeners

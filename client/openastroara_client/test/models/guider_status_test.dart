@@ -102,6 +102,21 @@ void main() {
       expect(s.rmsRa, isNull, reason: 'unparseable string → null');
     });
 
+    test('non-finite RMS values are filtered to null', () {
+      final s = GuiderStatus.fromJson(<String, dynamic>{
+        'state': 'connected',
+        'runtime': <String, dynamic>{
+          'state': 'guiding',
+          'rms_total': 'NaN',
+          'rms_ra': 'Infinity',
+          'rms_dec': double.nan,
+        },
+      });
+      expect(s.rmsTotal, isNull);
+      expect(s.rmsRa, isNull);
+      expect(s.rmsDec, isNull);
+    });
+
     test('value equality — equal-content parses compare equal (no rebuild churn)', () {
       Map<String, dynamic> frame() => <String, dynamic>{
             'device_id': 'phd2',

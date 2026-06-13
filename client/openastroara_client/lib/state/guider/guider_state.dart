@@ -86,7 +86,9 @@ class GuiderStatusNotifier extends AsyncNotifier<GuiderStatus?> {
   Future<void> refresh([GuiderClient? client]) async {
     if (!ref.mounted) return;
     final api = client ?? ref.read(guiderApiProvider);
-    state = const AsyncValue<GuiderStatus?>.loading();
+    // Don't emit a bare loading state here — keep the prior data visible while
+    // the reload is in flight so a manual refresh / poll doesn't flash blank.
+    // (Riverpod 3.x's copyWithPrevious is internal, so we just hold the value.)
     final next = await AsyncValue.guard<GuiderStatus?>(() async {
       if (api == null) return null;
       return api.getStatus();
