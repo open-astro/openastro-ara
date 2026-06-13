@@ -97,9 +97,10 @@ class GuiderCalibrationNotifier extends AsyncNotifier<CalibrationStatusResponse?
       if (ref.mounted && gen == _generation) state = AsyncValue<CalibrationStatusResponse?>.error(e, st);
       return;
     }
-    // Re-read the *current* client (not the captured one) — a server switch
-    // mid-action would have closed `api`'s Dio; the generation guard in
-    // _refresh() then drops the write if it's for a superseded server.
+    // Re-read against the *current* client (not the captured one) — a server
+    // switch mid-action would have closed `api`'s Dio. _refresh() captures the
+    // generation when it runs; its write is dropped only if yet another switch
+    // happens while it's in flight.
     await _refresh();
   }
 

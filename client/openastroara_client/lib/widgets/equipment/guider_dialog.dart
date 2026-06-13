@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/guider_status.dart';
 import '../../state/guider/guider_state.dart';
+import 'guider_calibration_dialog.dart';
 
 /// Opens the §63 guider connect/disconnect dialog.
 Future<void> showGuiderDialog(BuildContext context) {
@@ -102,6 +103,15 @@ class _GuiderDialogState extends ConsumerState<_GuiderDialog> {
             const Text('No guider configured on this server.')
           else
             _StatusBody(status: status),
+          if (connected && !busy)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () => showGuiderCalibrationDialog(context),
+                icon: const Icon(Icons.build, size: 16),
+                label: const Text('Calibration…'),
+              ),
+            ),
         ],
       ),
       actions: [
