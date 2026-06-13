@@ -84,6 +84,8 @@ namespace OpenAstroAra.Test {
             Assert.That(connected, Is.Not.Null, "the service never reached Connected against the fake guider");
 
             // Guiding state propagates from a live AppState event over the listener connection.
+            // The fake sends the raw PHD2 token "Guiding"; GuiderService.MapGuidingState normalizes
+            // it to the lowercase §63.2 DTO token "guiding", which is what we assert here.
             // Runtime is null-guarded: it can briefly lag the Connected transition before the
             // first status snapshot populates it, and the predicate should poll-on rather than throw.
             await fake.BroadcastAsync(PhdEvents.AppState("Guiding")).ConfigureAwait(false);
@@ -114,8 +116,10 @@ namespace OpenAstroAra.Test {
                     }
                     await Task.Delay(100, cts.Token).ConfigureAwait(false);
                 }
-            } catch (OperationCanceledException) {
-                // 15s deadline elapsed — fall through and let the caller's assertion report the miss.
+            } catch (OperationCanceledException ex) when (ex.CancellationToken == cts.Token) {
+                // Our own 15s deadline elapsed — fall through and let the caller's assertion report
+                // the miss. A cancellation from a *different* token (e.g. a service-internal
+                // disconnect race) is not swallowed here; it surfaces as the real failure cause.
             }
             return null;
         }
