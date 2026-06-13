@@ -39,6 +39,7 @@ namespace OpenAstroAra.Test {
     /// timeout) are exercised end-to-end here.
     /// </summary>
     [TestFixture]
+    [Category("bench")] // §42.2 virtual-observatory bench — selected by bench/ (TestCategory=bench)
     public class GuiderFakeIntegrationTest {
 
         private static GuiderRecoveryCoordinator NewRecovery() =>

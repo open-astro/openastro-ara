@@ -10,6 +10,9 @@
 services:
   bench:
     platform: linux/arm64
+    # Fixed tag so repeated `--build` runs reuse one image instead of leaving a
+    # trail of dangling <none> images in `docker images`.
+    image: openastroara-bench:linux-arm64
     build:
       context: ..
       dockerfile: bench/Dockerfile.linux-arm64

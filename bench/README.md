@@ -56,5 +56,6 @@ pre-release check unchanged.
 
 ## Adding a fixture
 
-If the bench grows a new test fixture, add its class name to the filter in **both**
-`bench/Dockerfile.linux-arm64` (the `ENTRYPOINT`) and this README's list above.
+The lane selects its suite by the NUnit `[Category("bench")]` tag, so a new bench
+fixture is picked up automatically — just add `[Category("bench")]` to the class.
+No filter to update here or in the Dockerfile.

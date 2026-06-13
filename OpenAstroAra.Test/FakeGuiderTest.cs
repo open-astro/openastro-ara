@@ -31,6 +31,7 @@ namespace OpenAstroAra.Test {
     /// contract.
     /// </summary>
     [TestFixture]
+    [Category("bench")] // §42.2 virtual-observatory bench — selected by bench/ (TestCategory=bench)
     public class FakeGuiderTest {
 
         [Test]
