@@ -53,13 +53,18 @@ class _FakeCalibrationClient implements GuiderCalibrationClient {
   void close() {}
 }
 
-CalibrationStatusResponse _connected({bool darkExists = false, bool darkLoaded = false}) =>
+CalibrationStatusResponse _connected({
+  bool darkExists = false,
+  bool darkLoaded = false,
+  bool autoLoadDarks = false,
+}) =>
     CalibrationStatusResponse(
       connected: true,
       status: CalibrationStatus(
         profileId: 1,
         darkLibraryExists: darkExists,
         darkLibraryLoaded: darkLoaded,
+        autoLoadDarks: autoLoadDarks,
         darkCountLoaded: darkLoaded ? 20 : null,
         darkMinExposureSecondsLoaded: darkLoaded ? 1.0 : null,
         darkMaxExposureSecondsLoaded: darkLoaded ? 4.0 : null,
@@ -114,12 +119,21 @@ void main() {
     expect(fake.darkBuilds, 1);
   });
 
-  testWidgets('toggling the dark-library switch calls the notifier', (tester) async {
+  testWidgets('the enable switch reflects auto-load, not transient loaded state', (tester) async {
+    // Loaded in memory but auto-load disabled — the switch must read OFF.
     final fake = _FakeCalibrationClient(_connected(darkExists: true, darkLoaded: true));
+    await tester.pumpWidget(_host(fake));
+    await _open(tester);
+    final sw = tester.widget<Switch>(find.byType(Switch).first);
+    expect(sw.value, isFalse, reason: 'bound to autoLoadDarks (false), not darkLibraryLoaded (true)');
+  });
+
+  testWidgets('toggling the dark-library switch calls setDarkLibraryEnabled', (tester) async {
+    final fake = _FakeCalibrationClient(_connected(darkExists: true, darkLoaded: true, autoLoadDarks: true));
     await tester.pumpWidget(_host(fake));
     await _open(tester);
     await tester.tap(find.byType(Switch).first);
     await tester.pumpAndSettle();
-    expect(fake.darkEnabled, isFalse, reason: 'was loaded (on) → toggled off');
+    expect(fake.darkEnabled, isFalse, reason: 'auto-load was on → toggled off');
   });
 }

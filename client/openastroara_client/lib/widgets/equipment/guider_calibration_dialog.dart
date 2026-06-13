@@ -20,6 +20,14 @@ class _CalibrationDialog extends ConsumerStatefulWidget {
 class _CalibrationDialogState extends ConsumerState<_CalibrationDialog> {
   bool _refreshing = false;
 
+  @override
+  void initState() {
+    super.initState();
+    // The provider isn't autoDispose, so a re-open would otherwise show cached
+    // data silently — pull fresh status when the dialog mounts.
+    Future.microtask(_refresh);
+  }
+
   Future<void> _refresh() async {
     setState(() => _refreshing = true);
     try {
@@ -97,7 +105,10 @@ class _CalibrationBody extends ConsumerWidget {
           exists: status.darkLibraryExists,
           loaded: status.darkLibraryLoaded,
           detail: _darkDetail(status),
-          enabled: status.darkLibraryLoaded,
+          // The switch is the auto-load/enable flag, NOT the transient
+          // "loaded in memory right now" state (which can stay true after
+          // disabling, bouncing the switch back).
+          enabled: status.autoLoadDarks,
           onBuild: locked ? null : () => notifier.buildDarkLibrary(),
           onToggle: (locked || !status.darkLibraryExists)
               ? null
@@ -109,7 +120,7 @@ class _CalibrationBody extends ConsumerWidget {
           exists: status.defectMapExists,
           loaded: status.defectMapLoaded,
           detail: null,
-          enabled: status.defectMapLoaded,
+          enabled: status.autoLoadDefectMap,
           onBuild: locked ? null : () => notifier.buildDefectMap(),
           onToggle: (locked || !status.defectMapExists)
               ? null
@@ -164,7 +175,10 @@ class _Artifact extends StatelessWidget {
         Row(
           children: [
             Expanded(child: Text(label, style: theme.textTheme.titleSmall)),
-            Switch(value: enabled, onChanged: onToggle),
+            Semantics(
+              label: '$label auto-load',
+              child: Switch(value: enabled, onChanged: onToggle),
+            ),
           ],
         ),
         Text(state, style: theme.textTheme.bodySmall),
