@@ -74,7 +74,13 @@ final alpacaBridgeWarningProvider =
 /// carrying a *different* version re-shows, since this only matches that one version.
 class AlpacaBridgeWarningDismissedNotifier extends Notifier<String?> {
   @override
-  String? build() => null;
+  String? build() {
+    // Reset the dismissal when the active server changes — mirrors
+    // [alpacaBridgeWarningProvider], so a banner dismissed on one server doesn't
+    // stay hidden on a different server that happens to report the same version.
+    ref.watch(wsEventStreamProvider);
+    return null;
+  }
 
   void dismiss(String version) => state = version;
 }
