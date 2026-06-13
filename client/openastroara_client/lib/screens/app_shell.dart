@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../state/app_shell_state.dart';
 import '../theme/ara_colors.dart';
 import '../widgets/command_palette.dart';
+import '../widgets/equipment/guider_chip.dart';
 import '../widgets/equipment_chip.dart';
 import '../widgets/help_dialog.dart';
 import '../widgets/status_indicator.dart';
@@ -100,8 +101,9 @@ class _TabSpec {
 class _TopEquipmentBar extends StatelessWidget {
   const _TopEquipmentBar();
 
-  // Per §25.3 device-type order. Each chip is disconnected until Phase 12c
-  // wires the Alpaca chooser + connect flow.
+  // Per §25.3 device-type order. Most chips are disconnected until Phase 12c
+  // wires their Alpaca chooser + connect flow; GUIDE is live (see GuiderChip)
+  // and is rendered specially in the row below.
   static const _chips = <(IconData, String)>[
     (Icons.camera_alt, 'CAM'),
     (Icons.filter_alt, 'FW'),
@@ -136,11 +138,14 @@ class _TopEquipmentBar extends StatelessWidget {
               child: Row(
                 children: [
                   for (final (icon, label) in _chips)
-                    EquipmentChip(
-                      icon: icon,
-                      label: label,
-                      status: StatusLevel.disconnected,
-                    ),
+                    if (label == 'GUIDE')
+                      const GuiderChip()
+                    else
+                      EquipmentChip(
+                        icon: icon,
+                        label: label,
+                        status: StatusLevel.disconnected,
+                      ),
                 ],
               ),
             ),
