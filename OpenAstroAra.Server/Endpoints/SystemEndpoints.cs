@@ -64,12 +64,18 @@ public static class SystemEndpoints {
             .WithName("ListDataPackages");
 
         data.MapPost("/download",
-                async ([FromBody] DownloadRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey, IDataManagerService svc, CancellationToken ct) =>
-                    Results.Accepted(value: await svc.DownloadAsync(request, idempotencyKey, ct)))
+                async ([FromBody] DownloadRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey, IDataManagerService svc, CancellationToken ct) => {
+                    try {
+                        return Results.Accepted(value: await svc.DownloadAsync(request, idempotencyKey, ct));
+                    } catch (PackageNotFoundException ex) {
+                        // §36: PackageId isn't in the curated catalog. A dedicated type (not a bare
+                        // KeyNotFoundException) means an unrelated dictionary miss inside the §36-2 engine
+                        // can't be silently turned into a 404 here.
+                        return Results.Problem(ex.Message, statusCode: StatusCodes.Status404NotFound);
+                    }
+                })
             .Accepts<DownloadRequestDto>("application/json")
             .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
-            // Real impl will 404 if PackageId is unknown — keep the
-            // annotation visible for WILMA codegen.
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("StartDataPackageDownload");
 
