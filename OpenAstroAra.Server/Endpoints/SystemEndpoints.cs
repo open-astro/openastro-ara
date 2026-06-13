@@ -80,10 +80,15 @@ public static class SystemEndpoints {
             .WithName("StartDataPackageDownload");
 
         data.MapPost("/cancel/{downloadId:guid}",
-                async (Guid downloadId, IDataManagerService svc, CancellationToken ct) =>
-                    Results.Accepted(value: await svc.CancelAsync(downloadId, ct)))
+                async (Guid downloadId, IDataManagerService svc, CancellationToken ct) => {
+                    try {
+                        return Results.Accepted(value: await svc.CancelAsync(downloadId, ct));
+                    } catch (DownloadNotFoundException ex) {
+                        // §36-2: the download id isn't an in-flight job (unknown or already finished).
+                        return Results.Problem(ex.Message, statusCode: StatusCodes.Status404NotFound);
+                    }
+                })
             .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
-            // Real impl 404s if the download id isn't an active job.
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("CancelDataPackageDownload");
 

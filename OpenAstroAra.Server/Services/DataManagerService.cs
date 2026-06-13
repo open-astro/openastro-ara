@@ -14,10 +14,16 @@
 
 using Microsoft.Extensions.Logging;
 using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Contracts.WsEvents;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -81,11 +87,22 @@ namespace OpenAstroAra.Server.Services {
         private static readonly HashSet<string> CatalogIds =
             new(Catalog.Select(p => p.Id), StringComparer.Ordinal);
 
+        // Don't flood the WS channel: a long download emits at most one progress event per this interval.
+        private const long ProgressThrottleMs = 500;
+
         private readonly string _dataRoot;
+        private readonly ISkyDataFetcher _fetcher;
+        private readonly IWsBroadcaster _ws;
         private readonly ILogger<DataManagerService> _logger;
 
-        public DataManagerService(string dataRootPath, ILogger<DataManagerService> logger) {
+        // In-flight downloads keyed by download id, plus a one-active-download-per-package guard.
+        private readonly ConcurrentDictionary<Guid, DownloadJob> _downloads = new();
+        private readonly ConcurrentDictionary<string, Guid> _activeByPackage = new(StringComparer.Ordinal);
+
+        public DataManagerService(string dataRootPath, ISkyDataFetcher fetcher, IWsBroadcaster ws, ILogger<DataManagerService> logger) {
             _dataRoot = dataRootPath ?? throw new ArgumentNullException(nameof(dataRootPath));
+            _fetcher = fetcher ?? throw new ArgumentNullException(nameof(fetcher));
+            _ws = ws ?? throw new ArgumentNullException(nameof(ws));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -107,10 +124,11 @@ namespace OpenAstroAra.Server.Services {
                     total += m.Size;
                 }
             }
+            var active = _downloads.Values.Select(SnapshotActive).ToList();
             return Task.FromResult(new DataManagerStateDto(
                 InstalledPackageCount: installed,
                 TotalInstalledBytes: total,
-                ActiveDownloads: Array.Empty<DataManagerActiveDownloadDto>(),
+                ActiveDownloads: active,
                 LastSyncUtc: null));
         }
 
@@ -135,23 +153,133 @@ namespace OpenAstroAra.Server.Services {
 
         public Task<OperationAcceptedDto> DownloadAsync(DownloadRequestDto request, string? idempotencyKey, CancellationToken ct) {
             ArgumentNullException.ThrowIfNull(request);
-            // Validate against the catalog up front so the §36-2 download engine inherits the guard and an
-            // unknown id is a clean 404 (mapped at the endpoint) rather than a silently-accepted no-op.
-            // Return a faulted Task rather than throwing synchronously — this is a Task-returning (non-async)
-            // method, so a bare throw would surface at call time, before any await, violating the TAP contract.
+            // Validate against the catalog up front. Return a faulted Task rather than throwing synchronously —
+            // this is a Task-returning (non-async) method, so a bare throw would surface at call time, before any
+            // await, violating the TAP contract (the endpoint maps the fault to a 404).
             if (!CatalogIds.Contains(request.PackageId)) {
                 return Task.FromException<OperationAcceptedDto>(PackageNotFoundException.ForPackageId(request.PackageId));
             }
-            // §36-2: the fetch-archive → extract → progress-WS → cancel engine. For now the request is
-            // accepted (so the wire contract is stable) but no download runs yet.
-            LogDownloadDeferred(request.PackageId);
-            return Task.FromResult(Accepted("data-manager.download", idempotencyKey));
+            var pkg = Catalog.First(p => p.Id == request.PackageId);
+            if (pkg.SourceUrl is null) {
+                return Task.FromException<OperationAcceptedDto>(
+                    new PackageNotFoundException($"Data package '{request.PackageId}' has no download source."));
+            }
+
+            // One active download per package: if another is already running, return its id (idempotent) instead
+            // of racing two writers into the same install directory. TryAdd is the atomic claim.
+            var downloadId = Guid.NewGuid();
+            if (!_activeByPackage.TryAdd(pkg.Id, downloadId)) {
+                var existing = _activeByPackage.TryGetValue(pkg.Id, out var e) ? e : downloadId;
+                return Task.FromResult(Accepted("data-manager.download", idempotencyKey, existing));
+            }
+
+            var job = new DownloadJob(downloadId, pkg.Id);
+            _downloads[downloadId] = job;
+            // Fire the worker on the thread pool; it is self-contained and owns the job's lifecycle + cleanup.
+            _ = Task.Run(() => RunDownloadAsync(job, pkg), CancellationToken.None);
+            LogDownloadStarted(pkg.Id, downloadId);
+            return Task.FromResult(Accepted("data-manager.download", idempotencyKey, downloadId));
         }
 
         public Task<OperationAcceptedDto> CancelAsync(Guid downloadId, CancellationToken ct) {
-            LogCancelDeferred(downloadId);
-            return Task.FromResult(Accepted("data-manager.cancel", null));
+            if (_downloads.TryGetValue(downloadId, out var job)) {
+                job.Cts.Cancel();
+                LogCancelRequested(downloadId);
+                return Task.FromResult(Accepted("data-manager.cancel", null, downloadId));
+            }
+            // Unknown or already-finished id — surface a 404 (mapped at the endpoint) rather than a misleading 202.
+            return Task.FromException<OperationAcceptedDto>(
+                new DownloadNotFoundException($"No active download '{downloadId}'."));
         }
+
+        // The download worker: fetch the package archive, stream it through the §36-2a installer (which extracts +
+        // atomically swaps it into place), reporting progress over the WS channel, and always clean up the registry.
+        private async Task RunDownloadAsync(DownloadJob job, DataPackageDto pkg) {
+            var ct = job.Cts.Token;
+            try {
+                await EmitAsync(WsEventCatalog.DataManagerDownloadProgress, job, error: null).ConfigureAwait(false);
+
+                await using var fetch = await _fetcher.OpenAsync(pkg.SourceUrl!, ct).ConfigureAwait(false);
+                Volatile.Write(ref job.TotalBytes, fetch.TotalBytes ?? -1);
+
+                var targetDir = PackageDir(pkg.Id)!; // pkg came from the catalog, so this is non-null + in-root.
+                await using var counting = new CountingStream(fetch.Content, read => {
+                    Volatile.Write(ref job.DownloadedBytes, read);
+                    MaybeEmitProgress(job);
+                });
+                await SkyDataInstaller.InstallFromTarGzAsync(counting, targetDir, ExtractionCeiling(pkg), ct).ConfigureAwait(false);
+
+                await EmitAsync(WsEventCatalog.DataManagerDownloadComplete, job, error: null).ConfigureAwait(false);
+                LogDownloadComplete(pkg.Id, job.Id);
+            } catch (OperationCanceledException) {
+                await EmitAsync(WsEventCatalog.DataManagerDownloadFailed, job, error: "cancelled").ConfigureAwait(false);
+                LogDownloadCancelled(pkg.Id, job.Id);
+            } catch (SkyDataInstallException ex) {
+                // The install failed AND the prior install couldn't be restored — genuine data loss. Surface it
+                // distinctly (error string + an error log) rather than as an ordinary failed download.
+                await EmitAsync(WsEventCatalog.DataManagerDownloadFailed, job, error: "install failed; prior data may be lost").ConfigureAwait(false);
+                LogDownloadDataLoss(pkg.Id, ex);
+            } catch (Exception ex) when (ex is HttpRequestException or IOException or InvalidDataException) {
+                await EmitAsync(WsEventCatalog.DataManagerDownloadFailed, job, error: ex.Message).ConfigureAwait(false);
+                LogDownloadFailed(pkg.Id, ex);
+            } finally {
+                _downloads.TryRemove(job.Id, out _);
+                _activeByPackage.TryRemove(new KeyValuePair<string, Guid>(job.PackageId, job.Id));
+                job.Dispose();
+            }
+        }
+
+        // Cap uncompressed extraction at the catalog's advertised installed size + 25% headroom (never below 16 MiB),
+        // so a tampered archive can't expand without bound even though the package id is catalog-validated.
+        private static long ExtractionCeiling(DataPackageDto pkg) =>
+            Math.Max(pkg.SizeBytes + (pkg.SizeBytes / 4), 16L * 1024 * 1024);
+
+        private static DataManagerActiveDownloadDto SnapshotActive(DownloadJob job) {
+            var downloaded = Volatile.Read(ref job.DownloadedBytes);
+            var total = Volatile.Read(ref job.TotalBytes);
+            return new DataManagerActiveDownloadDto(job.Id, job.PackageId, downloaded, total, Percent(downloaded, total));
+        }
+
+        // Throttled, fire-and-forget progress emit driven by the stream read callback (which runs on the worker).
+        private void MaybeEmitProgress(DownloadJob job) {
+            var now = Environment.TickCount64;
+            var last = Interlocked.Read(ref job.LastEmitTick);
+            if (now - last < ProgressThrottleMs) {
+                return;
+            }
+            // CAS so concurrent reads don't both fire for the same window (Read here is single-threaded today, but
+            // this keeps the throttle correct if the stream is ever pumped from more than one thread).
+            if (Interlocked.CompareExchange(ref job.LastEmitTick, now, last) != last) {
+                return;
+            }
+            _ = EmitAsync(WsEventCatalog.DataManagerDownloadProgress, job, error: null);
+        }
+
+        private async Task EmitAsync(string eventType, DownloadJob job, string? error) {
+            var downloaded = Volatile.Read(ref job.DownloadedBytes);
+            var total = Volatile.Read(ref job.TotalBytes);
+            var payload = new JsonObject {
+                ["download_id"] = job.Id.ToString(),
+                ["package_id"] = job.PackageId,
+                ["downloaded_bytes"] = downloaded,
+                ["total_bytes"] = total,
+                ["percent_complete"] = Percent(downloaded, total),
+            };
+            if (error is not null) {
+                payload["error"] = error;
+            }
+            try {
+                // ToJsonString()+Parse is the AOT-safe way to a JsonElement (SerializeToElement takes the reflection
+                // path the warnings=errors gate rejects). Publish is best-effort — a WS hiccup must not fail the download.
+                using var doc = JsonDocument.Parse(payload.ToJsonString());
+                await _ws.PublishAsync(eventType, doc.RootElement.Clone(), CancellationToken.None).ConfigureAwait(false);
+            } catch (Exception ex) when (ex is not OperationCanceledException) {
+                LogPublishFailed(eventType, ex);
+            }
+        }
+
+        private static double Percent(long downloaded, long total) =>
+            total > 0 ? Math.Round(Math.Clamp((double)downloaded / total, 0, 1) * 100, 2) : 0;
 
         // Reflect the on-disk state of a catalog package. Measure() folds the existence check into the
         // size/time read so a concurrent DeleteAsync between "exists?" and "measure" can't throw — it just
@@ -188,11 +316,67 @@ namespace OpenAstroAra.Server.Services {
             }
         }
 
-        private static OperationAcceptedDto Accepted(string operationType, string? idempotencyKey) =>
-            new(OperationId: Guid.NewGuid(),
+        private static OperationAcceptedDto Accepted(string operationType, string? idempotencyKey, Guid operationId) =>
+            new(OperationId: operationId,
                 OperationType: operationType,
                 AcceptedUtc: DateTimeOffset.UtcNow,
                 IdempotencyKey: idempotencyKey);
+
+        // One in-flight download: the cancellation source the worker observes plus thread-shared progress counters
+        // (read by GetStateAsync from another thread, hence Volatile/Interlocked access).
+        private sealed class DownloadJob : IDisposable {
+            public DownloadJob(Guid id, string packageId) {
+                Id = id;
+                PackageId = packageId;
+            }
+
+            public Guid Id { get; }
+            public string PackageId { get; }
+            public CancellationTokenSource Cts { get; } = new();
+            public long DownloadedBytes;
+            public long TotalBytes = -1;
+            public long LastEmitTick;
+
+            public void Dispose() => Cts.Dispose();
+        }
+
+        // Read-through stream that reports cumulative bytes read; a leaveOpen wrapper that does NOT own the inner
+        // stream — the SkyDataFetch the worker disposes owns it.
+        [SuppressMessage("Usage", "CA2213:Disposable fields should be disposed",
+            Justification = "Borrowing wrapper: the wrapped stream is owned and disposed by the SkyDataFetch, like a leaveOpen GZipStream.")]
+        private sealed class CountingStream : Stream {
+            private readonly Stream _inner;
+            private readonly Action<long> _onRead;
+            private long _total;
+
+            public CountingStream(Stream inner, Action<long> onRead) {
+                _inner = inner;
+                _onRead = onRead;
+            }
+
+            private int Count(int read) {
+                if (read > 0) {
+                    _total += read;
+                    _onRead(_total);
+                }
+                return read;
+            }
+
+            public override int Read(byte[] buffer, int offset, int count) => Count(_inner.Read(buffer, offset, count));
+
+            public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) =>
+                Count(await _inner.ReadAsync(buffer, cancellationToken).ConfigureAwait(false));
+
+            public override bool CanRead => true;
+            public override bool CanSeek => false;
+            public override bool CanWrite => false;
+            public override long Length => throw new NotSupportedException();
+            public override long Position { get => _total; set => throw new NotSupportedException(); }
+            public override void Flush() { }
+            public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+            public override void SetLength(long value) => throw new NotSupportedException();
+            public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        }
 
         [LoggerMessage(Level = LogLevel.Information, Message = "Data package '{PackageId}' deleted from the data root")]
         partial void LogDeleted(string packageId);
@@ -200,11 +384,26 @@ namespace OpenAstroAra.Server.Services {
         [LoggerMessage(Level = LogLevel.Warning, Message = "Data package '{PackageId}' could not be deleted")]
         partial void LogDeleteFailed(string packageId, Exception ex);
 
-        [LoggerMessage(Level = LogLevel.Information, Message = "Data package '{PackageId}' download requested — deferred to the §36-2 download engine")]
-        partial void LogDownloadDeferred(string packageId);
+        [LoggerMessage(Level = LogLevel.Information, Message = "Data package '{PackageId}' download {DownloadId} started")]
+        partial void LogDownloadStarted(string packageId, Guid downloadId);
 
-        [LoggerMessage(Level = LogLevel.Information, Message = "Data download cancel requested for {DownloadId} — deferred to the §36-2 download engine")]
-        partial void LogCancelDeferred(Guid downloadId);
+        [LoggerMessage(Level = LogLevel.Information, Message = "Data package '{PackageId}' download {DownloadId} complete")]
+        partial void LogDownloadComplete(string packageId, Guid downloadId);
+
+        [LoggerMessage(Level = LogLevel.Information, Message = "Data package '{PackageId}' download {DownloadId} cancelled")]
+        partial void LogDownloadCancelled(string packageId, Guid downloadId);
+
+        [LoggerMessage(Level = LogLevel.Warning, Message = "Data package '{PackageId}' download failed")]
+        partial void LogDownloadFailed(string packageId, Exception ex);
+
+        [LoggerMessage(Level = LogLevel.Error, Message = "Data package '{PackageId}' install failed AND prior data could not be restored — possible data loss")]
+        partial void LogDownloadDataLoss(string packageId, Exception ex);
+
+        [LoggerMessage(Level = LogLevel.Information, Message = "Data download cancel requested for {DownloadId}")]
+        partial void LogCancelRequested(Guid downloadId);
+
+        [LoggerMessage(Level = LogLevel.Warning, Message = "Data manager WS publish of '{EventType}' failed")]
+        partial void LogPublishFailed(string eventType, Exception ex);
     }
 
     /// <summary>Thrown by <see cref="DataManagerService.DownloadAsync"/> when the requested package id is not in the
@@ -217,5 +416,14 @@ namespace OpenAstroAra.Server.Services {
         public PackageNotFoundException(string message, Exception innerException) : base(message, innerException) { }
         public static PackageNotFoundException ForPackageId(string packageId) =>
             new($"Unknown data package '{packageId}'.");
+    }
+
+    /// <summary>Thrown by <see cref="DataManagerService.CancelAsync"/> when the download id has no in-flight job
+    /// (unknown, or already finished). The endpoint maps it to a 404, so a cancel of a completed download is an
+    /// honest "nothing to cancel" rather than a misleading 202.</summary>
+    public sealed class DownloadNotFoundException : Exception {
+        public DownloadNotFoundException() { }
+        public DownloadNotFoundException(string message) : base(message) { }
+        public DownloadNotFoundException(string message, Exception innerException) : base(message, innerException) { }
     }
 }

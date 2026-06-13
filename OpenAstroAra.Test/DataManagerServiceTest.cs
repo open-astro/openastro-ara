@@ -37,7 +37,7 @@ namespace OpenAstroAra.Test {
         public void SetUp() {
             _root = Path.Combine(Path.GetTempPath(), "ara-datamgr-" + Path.GetRandomFileName());
             Directory.CreateDirectory(_root);
-            _svc = new DataManagerService(_root, NullLogger<DataManagerService>.Instance);
+            _svc = new DataManagerService(_root, new UnusedFetcher(), new NullBroadcaster(), NullLogger<DataManagerService>.Instance);
         }
 
         [TearDown]
