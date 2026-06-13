@@ -99,7 +99,13 @@ namespace OpenAstroAra.Server.Services {
 
         // Key on scheme://host:port only — Uri already lowercases the scheme + registered-name host,
         // so two device URIs on the same bridge (differing only by path) share one cache entry.
-        private static string NormalizeKey(Uri uri) =>
-            FormattableString.Invariant($"{uri.Scheme}://{uri.Host}:{uri.Port}");
+        private static string NormalizeKey(Uri uri) {
+            // Uri.Port already yields the scheme default (80/443) for http/https, so a portless bridge
+            // URI and its explicit-default form key the same — today's discovery URIs always carry an
+            // explicit port anyway. The fallback hardens the same for a hypothetical custom-scheme
+            // caller whose scheme has no registered default port (Uri.Port == -1).
+            var port = uri.Port >= 0 ? uri.Port : (uri.Scheme == Uri.UriSchemeHttps ? 443 : 80);
+            return FormattableString.Invariant($"{uri.Scheme}://{uri.Host}:{port}");
+        }
     }
 }
