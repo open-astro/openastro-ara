@@ -1138,8 +1138,12 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                     }
                 }
 
-                // EOF — the guider closed the connection.
-                throw new InvalidOperationException(Loc.Instance["LblPhd2ServerConnectionLost"]);
+                // EOF (ReadLineAsync == null): the guider closed the connection — a clean shutdown or
+                // a crash, indistinguishable at this layer. Either way it's a normal disconnect, not a
+                // user-facing error: just log it and fall out of the try so the finally fires
+                // PHD2ConnectionLost and §63.3 recovery decides whether to restart. (Only a reset /
+                // unexpected read exception below takes the error-notification path.)
+                Logger.Info("PHD2 closed the event-stream connection (EOF).");
             } catch (OperationCanceledException) {
             } catch (Exception ex) {
                 Logger.Error(ex);
