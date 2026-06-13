@@ -106,9 +106,11 @@ class _CalibrationBody extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final notifier = ref.read(guiderCalibrationProvider.notifier);
-    // onBuild/onToggle fire-and-forget via unawaited() — the notifier surfaces
-    // any failure through the provider's AsyncError state (which this dialog
-    // renders), so there's nothing for the callback to await.
+    // onBuild/onToggle fire-and-forget via unawaited(). This is safe because
+    // GuiderCalibrationNotifier._run wraps every action in try/catch and routes
+    // failures to `state = AsyncValue.error(...)` — the returned future never
+    // throws past the notifier, and the error renders in this dialog's hasError
+    // branch. Keep that contract if _run is ever refactored.
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
