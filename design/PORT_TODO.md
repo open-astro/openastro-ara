@@ -499,19 +499,23 @@ post-`Flush()` on a future runtime, this is the first place to check. Per #401 r
 direction still only copies Content-Type; if a bench-3+ scenario ever needs the daemon to see a specific upstream
 response header, extend the forward symmetrically. Low priority (Alpaca responses are JSON-envelope-only today).
 
-**Guider connect — full connect→Connected lifecycle against a minimal guider (bench-3 finding, partially fixed).**
-✅ FIXED the `RunListener.GetState` half: replaced the per-loop `IPGlobalProperties.GetActiveTcpConnections()` +
-`SingleOrDefault(LocalEndPoint.Equals(...))` poll (a busy-loop that NRE'd on macOS from null/duplicate endpoints) with a
-read-driven `StreamReader.ReadLineAsync` loop where EOF/exception IS the close signal (fires `PHD2ConnectionLost`).
-**Still open:** against the minimal FakeGuider the service still doesn't reach `Connected` — `guider.Connect()` appears not
-to return even though `GetProfiles` throws+is-caught, so the blocker is now in the connect getter flow, not the listener.
-(The bench-3 test asserts on the handshake for this reason.) Next: instrument `PHD2Guider.Connect` to find where it stalls
-against a bare-response guider, make each connect-time getter independently best-effort (see next item), then extend
-`GuiderFakeIntegrationTest` to the full connect→AppState→GuideStep-RMS→StarLost lifecycle. Surfaced 2026-06-13 by bench-3.
+**Guider connect — full connect→Connected lifecycle against a minimal guider (bench-3 finding, ✅ RESOLVED).**
+The combination of the §63.1 connect-as-service fix (#403), the read-driven `RunListener` (#404, replacing the macOS-fragile
+`GetActiveTcpConnections` poll), and the `SendMessage` async-read timeout (#405) means the real `GuiderService`/`PHD2Guider`
+now reaches `Connected` against the minimal FakeGuider and reflects live events. (The connect's first getter, `GetProfiles`,
+throws fast when `get_profile`'s bare `result:0` fails to deserialize — caught — so connect returns promptly; later getters
+are skipped, which is fine.) `GuiderFakeIntegrationTest.Reaches_Connected_and_reflects_live_guiding_events` now drives the
+full connect→Connected→AppState(guiding)→GuideStep-RMS→disconnect path and passes in ~0.5s. The earlier "still open"
+characterization was an artifact of testing before #405 landed.
 
 **Guider connect — getters hard-fail against a guider that returns bare results (bench-3 finding).** The connect handshake
 (`GetProfiles` etc.) throws `InvalidOperationException` when a getter response can't be deserialized to the expected typed
 shape, aborting the rest of the §63.4/.5 push (caught, logged). Fine against real PHD2, but worth making each connect-time
 getter independently best-effort so one unsupported method doesn't skip the others. Low priority. Surfaced by bench-3.
 
-**Guider connect — getters can still take up to their full timeout against a non-matching guider (bench-3 finding, partially fixed).** ✅ FIXED the indefinite hang: `SendMessage`'s `ReadLineAsync` is now bounded by `receiveTimeout` (TcpClient.ReceiveTimeout doesn't apply to async reads), so a guider that never returns a matching-id response fails the call instead of hanging the connect forever. **Still open for the bench:** the connect handshake getters call `SendMessage` with the 60s default, so against the minimal FakeGuider (which returns bare `result:0` that doesn't match the expected typed response shapes) each getter waits the full 60s — connect technically completes but slowly. To make the full bench-3 lifecycle test (`Reaches_Connected…`) practical: either (a) have FakeGuider answer the connect getters with shape-correct canned responses (get_profile→profile object, get_profiles→array, get_pixel_scale→number, get_connected→bool, etc.) via `OnRpc`, and/or (b) give the connect-time getters a shorter timeout than 60s so a non-responsive guider degrades connect quickly. Surfaced 2026-06-13 by bench-3.
+**Guider connect — SendMessage async-read timeout (bench-3 finding, ✅ RESOLVED in #405).** `SendMessage`'s `ReadLineAsync`
+is now bounded by `receiveTimeout` (TcpClient.ReceiveTimeout doesn't apply to async reads), so a guider that never returns a
+matching-id response fails the call instead of hanging the connect forever. In practice the bench connect doesn't hit the
+timeout — `get_profile`'s bare response fails deserialization and `GetProfiles` throws fast — so the full lifecycle test
+runs in ~0.5s. A future nicety: give the connect-time getters a shorter timeout than the 60s default so a genuinely
+non-responsive guider degrades connect in seconds rather than a minute. Low priority. Surfaced 2026-06-13 by bench-3.
