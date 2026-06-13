@@ -1,0 +1,125 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/models/calibration_status.dart';
+import 'package:openastroara/models/server.dart';
+import 'package:openastroara/services/guider_calibration_api.dart';
+import 'package:openastroara/services/saved_server_service.dart';
+import 'package:openastroara/state/guider/guider_calibration_state.dart';
+import 'package:openastroara/state/saved_server_state.dart';
+import 'package:openastroara/widgets/equipment/guider_calibration_dialog.dart';
+
+class _FakeSavedServerService implements SavedServerService {
+  @override
+  Future<List<AraServer>> loadAll() async => const [AraServer(hostname: 'h', port: 5555)];
+  @override
+  Future<void> saveAll(List<AraServer> servers) async {}
+  @override
+  Future<void> add(AraServer server) async {}
+}
+
+class _FakeCalibrationClient implements GuiderCalibrationClient {
+  _FakeCalibrationClient(this.response);
+  CalibrationStatusResponse response;
+  int darkBuilds = 0;
+  int defectBuilds = 0;
+  bool? darkEnabled;
+
+  @override
+  Future<CalibrationStatusResponse> getStatus() async => response;
+  @override
+  Future<void> buildDarkLibrary({
+    int frameCount = 5,
+    int? minExposureMs,
+    int? maxExposureMs,
+    bool clearExisting = false,
+    String? notes,
+    bool loadAfter = true,
+  }) async =>
+      darkBuilds++;
+  @override
+  Future<void> buildDefectMap({
+    int exposureMs = 3000,
+    int frameCount = 10,
+    String? notes,
+    bool loadAfter = true,
+  }) async =>
+      defectBuilds++;
+  @override
+  Future<void> setDarkLibraryEnabled(bool enabled) async => darkEnabled = enabled;
+  @override
+  Future<void> setDefectMapEnabled(bool enabled) async {}
+  @override
+  void close() {}
+}
+
+CalibrationStatusResponse _connected({bool darkExists = false, bool darkLoaded = false}) =>
+    CalibrationStatusResponse(
+      connected: true,
+      status: CalibrationStatus(
+        profileId: 1,
+        darkLibraryExists: darkExists,
+        darkLibraryLoaded: darkLoaded,
+        darkCountLoaded: darkLoaded ? 20 : null,
+        darkMinExposureSecondsLoaded: darkLoaded ? 1.0 : null,
+        darkMaxExposureSecondsLoaded: darkLoaded ? 4.0 : null,
+      ),
+    );
+
+Widget _host(GuiderCalibrationClient fake) => ProviderScope(
+      overrides: [
+        savedServerServiceProvider.overrideWithValue(_FakeSavedServerService()),
+        guiderCalibrationApiFactoryProvider.overrideWithValue((_) => fake),
+      ],
+      child: MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => ElevatedButton(
+              onPressed: () => showGuiderCalibrationDialog(context),
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+Future<void> _open(WidgetTester tester) async {
+  await tester.tap(find.text('open'));
+  await tester.pumpAndSettle();
+}
+
+void main() {
+  testWidgets('shows dark-library status + loaded detail when connected', (tester) async {
+    await tester.pumpWidget(_host(_FakeCalibrationClient(_connected(darkExists: true, darkLoaded: true))));
+    await _open(tester);
+    expect(find.text('Guider calibration'), findsOneWidget);
+    expect(find.text('Dark library'), findsOneWidget);
+    expect(find.text('Loaded'), findsWidgets);
+    expect(find.textContaining('20 darks'), findsOneWidget);
+  });
+
+  testWidgets('not connected → manage-calibration prompt', (tester) async {
+    await tester.pumpWidget(_host(_FakeCalibrationClient(const CalibrationStatusResponse(connected: false))));
+    await _open(tester);
+    expect(find.text('Connect the guider to manage calibration.'), findsOneWidget);
+  });
+
+  testWidgets('tapping Build dispatches a dark-library build', (tester) async {
+    final fake = _FakeCalibrationClient(_connected());
+    await tester.pumpWidget(_host(fake));
+    await _open(tester);
+    // Dark library not built → the button reads "Build".
+    await tester.tap(find.widgetWithText(TextButton, 'Build').first);
+    await tester.pumpAndSettle();
+    expect(fake.darkBuilds, 1);
+  });
+
+  testWidgets('toggling the dark-library switch calls the notifier', (tester) async {
+    final fake = _FakeCalibrationClient(_connected(darkExists: true, darkLoaded: true));
+    await tester.pumpWidget(_host(fake));
+    await _open(tester);
+    await tester.tap(find.byType(Switch).first);
+    await tester.pumpAndSettle();
+    expect(fake.darkEnabled, isFalse, reason: 'was loaded (on) → toggled off');
+  });
+}
