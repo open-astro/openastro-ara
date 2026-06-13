@@ -12,6 +12,9 @@
 
 #endregion "copyright"
 
+using System.Text.Json;
+using System.Text.Json.Nodes;
+
 namespace OpenAstroAra.TestHarness.Alpaca;
 
 /// <summary>
@@ -53,8 +56,20 @@ public abstract record AlpacaFault {
     /// "stuck" fault: rewrite a <c>Slewing</c>/<c>IsMoving</c> poll to stay <c>true</c>
     /// so a motion never settles, or pin a reported position short of its target.
     /// </summary>
-    public static AlpacaFault RewriteValue(string jsonValueLiteral) =>
-        new RewriteValueFault(jsonValueLiteral);
+    public static AlpacaFault RewriteValue(string jsonValueLiteral) {
+        ArgumentNullException.ThrowIfNull(jsonValueLiteral);
+        // Validate eagerly: a malformed literal would otherwise fall through the
+        // proxy's body-parse guard and silently become a pass-through, so the fault
+        // would appear to do nothing. Fail fast at construction instead.
+        try {
+            _ = JsonNode.Parse(jsonValueLiteral);
+        } catch (JsonException ex) {
+            throw new ArgumentException(
+                $"'{jsonValueLiteral}' is not a valid JSON value literal (use e.g. \"true\", \"42\", \"\\\"text\\\"\").",
+                nameof(jsonValueLiteral), ex);
+        }
+        return new RewriteValueFault(jsonValueLiteral);
+    }
 }
 
 /// <summary>A non-zero Alpaca <c>ErrorNumber</c>/<c>ErrorMessage</c> response. See <see cref="AlpacaFault.AlpacaError"/>.</summary>

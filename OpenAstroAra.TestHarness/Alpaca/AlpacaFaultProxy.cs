@@ -103,6 +103,11 @@ public sealed class AlpacaFaultProxy : IAsyncDisposable {
     /// <summary>Arms a fault rule. Rules are evaluated newest-first; the first match wins.</summary>
     public void InjectFault(AlpacaFaultRule rule) {
         ArgumentNullException.ThrowIfNull(rule);
+        if (rule.MaxTriggers is int max) {
+            // A non-positive cap would make the rule fire 0 times (silently dormant) —
+            // catch the mistake here rather than as a baffling no-op at request time.
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(max, nameof(rule.MaxTriggers));
+        }
         lock (_gate) {
             _rules.Add(new RuleState { Rule = rule });
         }
@@ -392,14 +397,14 @@ public sealed class AlpacaFaultProxy : IAsyncDisposable {
             // Expected on shutdown.
         }
         // Drain in-flight request handlers BEFORE disposing _client, so none can be
-        // mid-SendAsync/ReadAsByteArrayAsync when the client goes away. Their internal
-        // try/catch (incl. ObjectDisposedException) keeps WhenAll from throwing; the
-        // snapshot tolerates handlers that finish + self-remove during the await.
-        try {
-            await Task.WhenAll(_inFlight.Keys).ConfigureAwait(false);
-        } catch (OperationCanceledException) {
-            // A handler observed cancellation during teardown — expected.
-        }
+        // mid-SendAsync/ReadAsByteArrayAsync when the client goes away. Await *completion*
+        // without observing the aggregate fault — each handler's own continuation already
+        // observed + recorded its exception (LastHandlerFault), so a faulted handler must
+        // not propagate out of DisposeAsync and mask the original test failure. The
+        // ContinueWith swallow is the CA-clean way to "await all, ignore faults".
+        await Task.WhenAll(_inFlight.Keys)
+            .ContinueWith(static _ => { }, TaskScheduler.Default)
+            .ConfigureAwait(false);
         _listener.Close();
         _client.Dispose();
         _handler.Dispose();

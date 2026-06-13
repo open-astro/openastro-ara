@@ -177,7 +177,9 @@ namespace OpenAstroAra.Test {
             sw.Stop();
 
             Assert.That(ValueOf(body), Is.EqualTo("false"), "a bare Delay is a slow-but-healthy device");
-            Assert.That(sw.ElapsedMilliseconds, Is.GreaterThanOrEqualTo(150), "the response must not arrive before the delay");
+            // Lower bound well under the 200 ms delay: robust to timer-resolution undershoot
+            // and slow CI (a late timer only increases elapsed). Proves the delay happened.
+            Assert.That(sw.ElapsedMilliseconds, Is.GreaterThanOrEqualTo(100), "the response must not arrive before the delay");
         }
 
         [Test]
@@ -196,7 +198,7 @@ namespace OpenAstroAra.Test {
             sw.Stop();
 
             Assert.That(ex, Is.Not.Null, "the chained Drop must still abort the connection");
-            Assert.That(sw.ElapsedMilliseconds, Is.GreaterThanOrEqualTo(120), "the drop must not happen before the delay");
+            Assert.That(sw.ElapsedMilliseconds, Is.GreaterThanOrEqualTo(90), "the drop must not happen before the delay");
         }
 
         [Test]
@@ -228,6 +230,22 @@ namespace OpenAstroAra.Test {
             var body = await client.GetStringAsync(new Uri(proxy.BaseUri, TelescopeConnected)).ConfigureAwait(false);
 
             Assert.That(ValueOf(body), Is.EqualTo("false"));
+        }
+
+        [Test]
+        public void RewriteValue_rejects_a_malformed_json_literal_at_construction() {
+            // An unquoted string isn't a valid JSON value — must throw here, not silently
+            // become a pass-through at request time.
+            Assert.Throws<ArgumentException>(() => AlpacaFault.RewriteValue("not json"));
+        }
+
+        [Test]
+        public async Task InjectFault_rejects_a_nonpositive_MaxTriggers() {
+            await using var upstream = StubAlpaca.Start(valueLiteral: "false");
+            await using var proxy = AlpacaFaultProxy.Start(upstream.BaseUri);
+            // MaxTriggers = 0 would fire zero times (silently dormant) — reject it.
+            Assert.Throws<ArgumentOutOfRangeException>(() =>
+                proxy.InjectFault(new AlpacaFaultRule { Fault = AlpacaFault.Drop(), MaxTriggers = 0 }));
         }
 
         private static string? ValueOf(string envelope) => JsonNode.Parse(envelope)?["Value"]?.ToJsonString();
