@@ -188,7 +188,12 @@ namespace OpenAstroAra.Server.Services {
 
         public Task<OperationAcceptedDto> CancelAsync(Guid downloadId, CancellationToken ct) {
             if (_downloads.TryGetValue(downloadId, out var job)) {
-                job.Cts.Cancel();
+                try {
+                    job.Cts.Cancel();
+                } catch (ObjectDisposedException) {
+                    // The worker finished and disposed its CTS between our lookup and here — the download is already
+                    // over, so there's nothing to cancel. Report Accepted rather than 500 on a benign race.
+                }
                 LogCancelRequested(downloadId);
                 return Task.FromResult(Accepted("data-manager.cancel", null, downloadId));
             }
@@ -376,6 +381,8 @@ namespace OpenAstroAra.Server.Services {
             }
 
             public override int Read(byte[] buffer, int offset, int count) => Count(_inner.Read(buffer, offset, count));
+
+            public override int Read(Span<byte> buffer) => Count(_inner.Read(buffer));
 
             public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) =>
                 Count(await _inner.ReadAsync(buffer, cancellationToken).ConfigureAwait(false));

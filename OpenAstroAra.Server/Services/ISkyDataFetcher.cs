@@ -79,6 +79,9 @@ namespace OpenAstroAra.Server.Services {
                     var totalBytes = response.Content.Headers.ContentLength;
                     var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
                     // On success the fetch owns the stream + response + client and disposes them in that order.
+                    // Disposing an IHttpClientFactory client is documented as safe — the factory owns the pooled
+                    // message handler's lifetime separately, so this disposes only the thin client wrapper (and it
+                    // keeps the analyzer's CA2000 "dispose before losing scope" happy without a suppression).
                     return new SkyDataFetch(stream, totalBytes, response, client);
                 } catch {
                     response.Dispose();
