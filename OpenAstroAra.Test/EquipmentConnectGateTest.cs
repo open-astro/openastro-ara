@@ -46,7 +46,7 @@ namespace OpenAstroAra.Test {
             var connectCalled = false;
 
             var result = await EquipmentEndpoints.ConnectGatedAsync(
-                Request(), "idem-1", bridge,
+                Request(), bridge,
                 () => { connectCalled = true; return Task.FromResult(Accepted); },
                 CancellationToken.None);
 
@@ -68,7 +68,7 @@ namespace OpenAstroAra.Test {
             var connectCalled = false;
 
             var result = await EquipmentEndpoints.ConnectGatedAsync(
-                Request(), "idem-1", bridge,
+                Request(), bridge,
                 () => { connectCalled = true; return Task.FromResult(Accepted); },
                 CancellationToken.None);
 
@@ -85,7 +85,7 @@ namespace OpenAstroAra.Test {
             var bridge = new FakeHandshake(new AlpacaBridgeHandshake(AlpacaBridgeStatus.Ok, "1.6.0"));
 
             await EquipmentEndpoints.ConnectGatedAsync(
-                Request(ip: "192.168.1.50", port: 11111), "idem-1", bridge,
+                Request(ip: "192.168.1.50", port: 11111), bridge,
                 () => Task.FromResult(Accepted), CancellationToken.None);
 
             Assert.That(bridge.LastUri, Is.EqualTo(new Uri("http://192.168.1.50:11111")));

@@ -56,7 +56,7 @@ public static class EquipmentEndpoints {
             var dto = await svc.GetAsync(ct); return dto is null ? Results.NotFound() : Results.Ok(dto);
         });
         camera.MapPost("/connect", async ([FromBody] ConnectRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ICameraService svc, IAlpacaBridgeHandshakeService bridge, CancellationToken ct) =>
-            await ConnectGatedAsync(request, key, bridge, () => svc.ConnectAsync(request, key, ct), ct));
+            await ConnectGatedAsync(request, bridge, () => svc.ConnectAsync(request, key, ct), ct));
         camera.MapPost("/disconnect", async ([FromHeader(Name = "Idempotency-Key")] string? key, ICameraService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.DisconnectAsync(key, ct)));
         camera.MapPost("/exposure", async ([FromBody] ExposureRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ICameraService svc, CancellationToken ct) =>
@@ -71,7 +71,7 @@ public static class EquipmentEndpoints {
             var dto = await svc.GetAsync(ct); return dto is null ? Results.NotFound() : Results.Ok(dto);
         });
         telescope.MapPost("/connect", async ([FromBody] ConnectRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, IAlpacaBridgeHandshakeService bridge, CancellationToken ct) =>
-            await ConnectGatedAsync(request, key, bridge, () => svc.ConnectAsync(request, key, ct), ct));
+            await ConnectGatedAsync(request, bridge, () => svc.ConnectAsync(request, key, ct), ct));
         telescope.MapPost("/disconnect", async ([FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.DisconnectAsync(key, ct)));
         telescope.MapPost("/slew", async ([FromBody] SlewRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, CancellationToken ct) =>
@@ -90,7 +90,7 @@ public static class EquipmentEndpoints {
             var dto = await svc.GetAsync(ct); return dto is null ? Results.NotFound() : Results.Ok(dto);
         });
         focuser.MapPost("/connect", async ([FromBody] ConnectRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, IFocuserService svc, IAlpacaBridgeHandshakeService bridge, CancellationToken ct) =>
-            await ConnectGatedAsync(request, key, bridge, () => svc.ConnectAsync(request, key, ct), ct));
+            await ConnectGatedAsync(request, bridge, () => svc.ConnectAsync(request, key, ct), ct));
         focuser.MapPost("/disconnect", async ([FromHeader(Name = "Idempotency-Key")] string? key, IFocuserService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.DisconnectAsync(key, ct)));
         focuser.MapPost("/move", async ([FromBody] FocuserMoveRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, IFocuserService svc, CancellationToken ct) =>
@@ -102,7 +102,7 @@ public static class EquipmentEndpoints {
             var dto = await svc.GetAsync(ct); return dto is null ? Results.NotFound() : Results.Ok(dto);
         });
         filterwheel.MapPost("/connect", async ([FromBody] ConnectRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, IFilterWheelService svc, IAlpacaBridgeHandshakeService bridge, CancellationToken ct) =>
-            await ConnectGatedAsync(request, key, bridge, () => svc.ConnectAsync(request, key, ct), ct));
+            await ConnectGatedAsync(request, bridge, () => svc.ConnectAsync(request, key, ct), ct));
         filterwheel.MapPost("/disconnect", async ([FromHeader(Name = "Idempotency-Key")] string? key, IFilterWheelService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.DisconnectAsync(key, ct)));
         filterwheel.MapPost("/change", async ([FromBody] FilterChangeRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, IFilterWheelService svc, CancellationToken ct) =>
@@ -114,7 +114,7 @@ public static class EquipmentEndpoints {
             var dto = await svc.GetAsync(ct); return dto is null ? Results.NotFound() : Results.Ok(dto);
         });
         rotator.MapPost("/connect", async ([FromBody] ConnectRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, IRotatorService svc, IAlpacaBridgeHandshakeService bridge, CancellationToken ct) =>
-            await ConnectGatedAsync(request, key, bridge, () => svc.ConnectAsync(request, key, ct), ct));
+            await ConnectGatedAsync(request, bridge, () => svc.ConnectAsync(request, key, ct), ct));
         rotator.MapPost("/disconnect", async ([FromHeader(Name = "Idempotency-Key")] string? key, IRotatorService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.DisconnectAsync(key, ct)));
         rotator.MapPost("/move", async ([FromBody] RotatorMoveRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, IRotatorService svc, CancellationToken ct) =>
@@ -126,7 +126,7 @@ public static class EquipmentEndpoints {
             var dto = await svc.GetAsync(ct); return dto is null ? Results.NotFound() : Results.Ok(dto);
         });
         dome.MapPost("/connect", async ([FromBody] ConnectRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, IDomeService svc, IAlpacaBridgeHandshakeService bridge, CancellationToken ct) =>
-            await ConnectGatedAsync(request, key, bridge, () => svc.ConnectAsync(request, key, ct), ct));
+            await ConnectGatedAsync(request, bridge, () => svc.ConnectAsync(request, key, ct), ct));
         dome.MapPost("/disconnect", async ([FromHeader(Name = "Idempotency-Key")] string? key, IDomeService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.DisconnectAsync(key, ct)));
         dome.MapPost("/slew", async ([FromBody] DomeSlewRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, IDomeService svc, CancellationToken ct) =>
@@ -144,7 +144,7 @@ public static class EquipmentEndpoints {
             var dto = await svc.GetAsync(ct); return dto is null ? Results.NotFound() : Results.Ok(dto);
         });
         sw.MapPost("/connect", async ([FromBody] ConnectRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ISwitchService svc, IAlpacaBridgeHandshakeService bridge, CancellationToken ct) =>
-            await ConnectGatedAsync(request, key, bridge, () => svc.ConnectAsync(request, key, ct), ct));
+            await ConnectGatedAsync(request, bridge, () => svc.ConnectAsync(request, key, ct), ct));
         sw.MapPost("/disconnect", async ([FromHeader(Name = "Idempotency-Key")] string? key, ISwitchService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.DisconnectAsync(key, ct)));
         sw.MapPost("/value", async ([FromBody] SwitchValueRequestDto request, ISwitchService svc, CancellationToken ct) => {
@@ -157,7 +157,7 @@ public static class EquipmentEndpoints {
             var dto = await svc.GetAsync(ct); return dto is null ? Results.NotFound() : Results.Ok(dto);
         });
         oc.MapPost("/connect", async ([FromBody] ConnectRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, IObservingConditionsService svc, IAlpacaBridgeHandshakeService bridge, CancellationToken ct) =>
-            await ConnectGatedAsync(request, key, bridge, () => svc.ConnectAsync(request, key, ct), ct));
+            await ConnectGatedAsync(request, bridge, () => svc.ConnectAsync(request, key, ct), ct));
         oc.MapPost("/disconnect", async ([FromHeader(Name = "Idempotency-Key")] string? key, IObservingConditionsService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.DisconnectAsync(key, ct)));
 
@@ -167,7 +167,7 @@ public static class EquipmentEndpoints {
             var dto = await svc.GetAsync(ct); return dto is null ? Results.NotFound() : Results.Ok(dto);
         });
         safety.MapPost("/connect", async ([FromBody] ConnectRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ISafetyMonitorService svc, IAlpacaBridgeHandshakeService bridge, CancellationToken ct) =>
-            await ConnectGatedAsync(request, key, bridge, () => svc.ConnectAsync(request, key, ct), ct));
+            await ConnectGatedAsync(request, bridge, () => svc.ConnectAsync(request, key, ct), ct));
         safety.MapPost("/disconnect", async ([FromHeader(Name = "Idempotency-Key")] string? key, ISafetyMonitorService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.DisconnectAsync(key, ct)));
 
@@ -177,7 +177,7 @@ public static class EquipmentEndpoints {
             var dto = await svc.GetAsync(ct); return dto is null ? Results.NotFound() : Results.Ok(dto);
         });
         flat.MapPost("/connect", async ([FromBody] ConnectRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, IFlatDeviceService svc, IAlpacaBridgeHandshakeService bridge, CancellationToken ct) =>
-            await ConnectGatedAsync(request, key, bridge, () => svc.ConnectAsync(request, key, ct), ct));
+            await ConnectGatedAsync(request, bridge, () => svc.ConnectAsync(request, key, ct), ct));
         flat.MapPost("/disconnect", async ([FromHeader(Name = "Idempotency-Key")] string? key, IFlatDeviceService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.DisconnectAsync(key, ct)));
         flat.MapPost("/apply", async ([FromBody] FlatPanelRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, IFlatDeviceService svc, CancellationToken ct) =>
@@ -283,14 +283,21 @@ public static class EquipmentEndpoints {
     }
 
     // §68.1 AlpacaBridge version gate on the equipment-connect path. Before connecting an Alpaca
-    // device, probe the bridge it lives on: a bridge below the minimum supported version (1.2.0) is
-    // refused with 503 + code "alpaca_bridge_outdated", so the daemon never drives gear through an
-    // untrusted hub. A too-old bridge can't get any device connected, which transitively protects the
-    // downstream capture/mount/etc. ops. Ok / OutdatedWarn / Missing all proceed (Missing = the device
-    // was discovered, so the bridge is present; the soft warn-band banner is the §68-b-3 follow-up).
-    // Extracted for the gate tests. NOT applied to the guider — it's the PHD2 daemon, not an Alpaca device.
+    // device, probe the bridge it lives on: a bridge that AFFIRMATIVELY reports a version below the
+    // minimum supported 1.2.0 is refused with 503 + code "alpaca_bridge_outdated", so the daemon never
+    // drives gear through a known-too-old hub. A too-old bridge can't get any device connected, which
+    // transitively protects the downstream capture/mount/etc. ops.
+    //
+    // Threat model — the gate is fail-OPEN on Missing, deliberately: it blocks only a bridge that says
+    // it's too old, NOT one whose /version we couldn't read. /version is an AlpacaBridge-specific
+    // endpoint, and ARA connects *any* standard Alpaca device per §52 — a raw Alpaca device (the
+    // ASCOM OmniSim, a native Alpaca driver) has no /version at all → Missing. Blocking on Missing
+    // would break connecting to every non-AlpacaBridge Alpaca device (and the OmniSim integration
+    // tests). The trade-off: a hostile bridge that hides /version isn't blocked — acceptable on the
+    // §67 trusted-LAN model. Ok / OutdatedWarn / Missing all proceed; the soft warn-band banner is the
+    // §68-b-3 follow-up. Extracted for the gate tests. NOT applied to the guider — it's the PHD2 daemon.
     public static async Task<IResult> ConnectGatedAsync(
-            ConnectRequestDto request, string? idempotencyKey, IAlpacaBridgeHandshakeService bridge,
+            ConnectRequestDto request, IAlpacaBridgeHandshakeService bridge,
             System.Func<Task<OperationAcceptedDto>> connect, CancellationToken ct) {
         var handshake = await bridge.HandshakeAsync(BridgeUri(request.Device), ct);
         if (handshake.Status == AlpacaBridgeStatus.OutdatedBlock) {
