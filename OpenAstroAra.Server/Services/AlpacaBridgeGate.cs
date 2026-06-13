@@ -100,10 +100,10 @@ namespace OpenAstroAra.Server.Services {
             while (end < trimmed.Length && (char.IsAsciiDigit(trimmed[end]) || trimmed[end] == '.')) {
                 end++;
             }
-            var parts = trimmed[..end].Split('.', StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length == 0) {
-                return false;
-            }
+            // Split WITHOUT RemoveEmptyEntries so a malformed ".5.0" / "1..3" / "1.2." (empty
+            // components) fails the per-component int parse below → Missing, rather than silently
+            // collapsing to a bogus version.
+            var parts = trimmed[..end].Split('.');
             if (!TryParseComponent(parts[0], out var major)) {
                 return false;
             }

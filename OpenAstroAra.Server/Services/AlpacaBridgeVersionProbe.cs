@@ -91,8 +91,6 @@ namespace OpenAstroAra.Server.Services {
                 return Missing(versionUri, "timed out"); // our ProbeTimeout fired.
             } catch (HttpRequestException ex) {
                 return Missing(versionUri, ex.Message); // unreachable / connection refused.
-            } catch (UriFormatException ex) {
-                return Missing(versionUri, ex.Message);
             }
         }
 
@@ -101,10 +99,13 @@ namespace OpenAstroAra.Server.Services {
             return new AlpacaBridgeHandshake(AlpacaBridgeStatus.Missing, null);
         }
 
-        [LoggerMessage(Level = LogLevel.Information, Message = "AlpacaBridge handshake at {Uri}: version={Version} status={Status}")]
+        // Per-probe traces at Debug: this is a low-level primitive. The §68-b handshake orchestrator
+        // owns the user-facing Info/Warning + §51 diagnostic + notification, emitted only on a status
+        // *transition* — so a periodic poll against a down bridge can't spam the log.
+        [LoggerMessage(Level = LogLevel.Debug, Message = "AlpacaBridge handshake at {Uri}: version={Version} status={Status}")]
         partial void LogHandshake(Uri uri, string version, AlpacaBridgeStatus status);
 
-        [LoggerMessage(Level = LogLevel.Information, Message = "AlpacaBridge /version probe at {Uri} treated as missing: {Reason}")]
+        [LoggerMessage(Level = LogLevel.Debug, Message = "AlpacaBridge /version probe at {Uri} treated as missing: {Reason}")]
         partial void LogMissing(Uri uri, string reason);
 
         // Pull alpaca_bridge_version out of the bridge's JSON. Any shape mismatch or non-JSON body

@@ -70,6 +70,9 @@ namespace OpenAstroAra.Test {
         [TestCase("garbage")]
         [TestCase("v")]
         [TestCase("-1.2.3")]     // leading sign isn't a digit → no numeric core.
+        [TestCase(".5.0")]       // empty leading component → not collapsed to 5.0.0.
+        [TestCase("1..3")]       // empty middle component → rejected, not 1.3.0.
+        [TestCase("1.2.")]       // trailing dot → empty patch component → rejected.
         public void Classify_treats_unparseable_as_missing(string? version) {
             Assert.That(AlpacaBridgeGate.Classify(version), Is.EqualTo(AlpacaBridgeStatus.Missing));
         }
