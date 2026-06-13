@@ -104,30 +104,31 @@ file_picker
 Source: https://pub.dev/packages/file_picker
 License: MIT
 
-collection
-----------
+collection (resolved 1.19.1)
+----------------------------
 Source: https://pub.dev/packages/collection
 License: BSD-3-Clause (Copyright 2015, the Dart project authors)
 
-cupertino_icons
----------------
+cupertino_icons (resolved 1.0.9)
+--------------------------------
 Source: https://pub.dev/packages/cupertino_icons
 Used via: bundled Cupertino icon font (Material/Cupertino widgets)
-License: MIT (Copyright (c) 2016 Vladimir Kharlampidi)
+License: MIT (Copyright (c) 2016 Vladimir Kharlampidi) — verified against the
+   resolved 1.0.9 LICENSE (plain MIT; no Ionicons/Framework7 sub-terms)
 
-fl_chart
---------
+fl_chart (resolved 1.2.0)
+-------------------------
 Source: https://pub.dev/packages/fl_chart
 Used via: §50 stats dashboard charts
-License: MIT (Copyright (c) 2022 Flutter 4 Fun)
+License: MIT (Copyright (c) 2022 Flutter 4 Fun — per the resolved LICENSE)
 
-package_info_plus
------------------
+package_info_plus (resolved 9.0.1)
+----------------------------------
 Source: https://pub.dev/packages/package_info_plus
 License: BSD-3-Clause (Copyright 2017 The Chromium Authors)
 
-url_launcher
-------------
+url_launcher (resolved 6.3.2)
+-----------------------------
 Source: https://pub.dev/packages/url_launcher
 License: BSD-3-Clause (Copyright 2013 The Flutter Authors)
 
