@@ -70,6 +70,29 @@ void main() {
     });
   });
 
+  group('value equality', () {
+    Map<String, dynamic> frame() => <String, dynamic>{
+          'connected': true,
+          'status': <String, dynamic>{
+            'profile_id': 3,
+            'dark_library_exists': true,
+            'dark_count_loaded': 12,
+          },
+        };
+    test('equal-content responses compare equal (no rebuild churn)', () {
+      final a = CalibrationStatusResponse.fromJson(frame());
+      final b = CalibrationStatusResponse.fromJson(frame());
+      expect(a, equals(b));
+      expect(a.hashCode, b.hashCode);
+      expect(a.status, equals(b.status));
+    });
+    test('a changed field breaks equality', () {
+      final a = CalibrationStatusResponse.fromJson(frame());
+      final c = CalibrationStatusResponse.fromJson(frame()..['status']['dark_library_exists'] = false);
+      expect(a, isNot(equals(c)));
+    });
+  });
+
   group('CalibrationStatusResponse.fromJson', () {
     test('connected with status', () {
       final r = CalibrationStatusResponse.fromJson(<String, dynamic>{

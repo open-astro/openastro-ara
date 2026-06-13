@@ -69,6 +69,44 @@ class CalibrationStatus {
     final d = v is num ? v.toDouble() : null;
     return (d != null && d.isFinite) ? d : null;
   }
+
+  // Value equality so an unchanged poll/toggle result doesn't churn the widgets
+  // watching the provider (matches the project's other models).
+  @override
+  bool operator ==(Object other) =>
+      other is CalibrationStatus &&
+      other.profileId == profileId &&
+      other.darkLibraryPath == darkLibraryPath &&
+      other.defectMapPath == defectMapPath &&
+      other.darkLibraryExists == darkLibraryExists &&
+      other.defectMapExists == defectMapExists &&
+      other.darkLibraryCompatible == darkLibraryCompatible &&
+      other.defectMapCompatible == defectMapCompatible &&
+      other.darkLibraryLoaded == darkLibraryLoaded &&
+      other.defectMapLoaded == defectMapLoaded &&
+      other.autoLoadDarks == autoLoadDarks &&
+      other.autoLoadDefectMap == autoLoadDefectMap &&
+      other.darkCountLoaded == darkCountLoaded &&
+      other.darkMinExposureSecondsLoaded == darkMinExposureSecondsLoaded &&
+      other.darkMaxExposureSecondsLoaded == darkMaxExposureSecondsLoaded;
+
+  @override
+  int get hashCode => Object.hashAll([
+        profileId,
+        darkLibraryPath,
+        defectMapPath,
+        darkLibraryExists,
+        defectMapExists,
+        darkLibraryCompatible,
+        defectMapCompatible,
+        darkLibraryLoaded,
+        defectMapLoaded,
+        autoLoadDarks,
+        autoLoadDefectMap,
+        darkCountLoaded,
+        darkMinExposureSecondsLoaded,
+        darkMaxExposureSecondsLoaded,
+      ]);
 }
 
 /// The status read's envelope: [connected] distinguishes "guider not connected"
@@ -79,10 +117,20 @@ class CalibrationStatusResponse {
   const CalibrationStatusResponse({required this.connected, this.status});
 
   factory CalibrationStatusResponse.fromJson(Map<String, dynamic> json) {
+    final connected = json['connected'];
     final s = json['status'];
     return CalibrationStatusResponse(
-      connected: json['connected'] is bool && json['connected'] as bool,
+      connected: connected is bool && connected,
       status: s is Map<String, dynamic> ? CalibrationStatus.fromJson(s) : null,
     );
   }
+
+  @override
+  bool operator ==(Object other) =>
+      other is CalibrationStatusResponse &&
+      other.connected == connected &&
+      other.status == status;
+
+  @override
+  int get hashCode => Object.hash(connected, status);
 }

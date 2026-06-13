@@ -99,11 +99,18 @@ class GuiderCalibrationNotifier extends AsyncNotifier<CalibrationStatusResponse?
     }
     // Re-read the *current* client (not the captured one) — a server switch
     // mid-action would have closed `api`'s Dio; the generation guard in
-    // refresh() then drops the write if it's for a superseded server.
-    await refresh();
+    // _refresh() then drops the write if it's for a superseded server.
+    await _refresh();
   }
 
+  /// Public manual refresh. Skips when an action is in flight (state.isLoading)
+  /// so a UI Refresh tap can't race `_run`'s own trailing refresh.
   Future<void> refresh() async {
+    if (state.isLoading) return;
+    await _refresh();
+  }
+
+  Future<void> _refresh() async {
     if (!ref.mounted) return;
     final gen = _generation;
     final api = ref.read(guiderCalibrationApiProvider);
