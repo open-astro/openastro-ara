@@ -173,7 +173,8 @@ public partial class Program {
         // Phase 13.10 — three more system-service placeholders so the §36.2
         // Data Manager + §70 Profile Share + §44 Backup Stream surfaces are
         // testable end-to-end without the §28 catalog wired.
-        builder.Services.AddSingleton<IDataManagerService, PlaceholderDataManagerService>();
+        // §36 IDataManagerService is registered below, after profileDir is resolved (the real
+        // DataManagerService is disk-backed under {profileDir}/sky-data).
         builder.Services.AddSingleton<IProfileShareService, PlaceholderProfileShareService>();
         builder.Services.AddSingleton<IBackupStreamService, PlaceholderBackupStreamService>();
         // Phase 13.11 — placeholder IBackupService for §43 ZIP snapshots.
@@ -282,6 +283,13 @@ public partial class Program {
         var profileDir = ResolveProfileDir();
         builder.Services.AddSingleton<IProfileStore>(sp =>
             new FileProfileStore(profileDir, sp.GetService<ILogger<FileProfileStore>>()));
+
+        // §36 Data Manager — real disk-backed inventory under {profileDir}/sky-data (replaces the
+        // placeholder). Registered here (not at the §13.10 placeholder site above) since it needs the
+        // resolved profileDir. The §36-2 download engine extends this same service.
+        builder.Services.AddSingleton<IDataManagerService>(sp =>
+            new DataManagerService(System.IO.Path.Combine(profileDir, "sky-data"),
+                sp.GetRequiredService<ILogger<DataManagerService>>()));
 
         // §14e — tenth real device service and the head of the capture path: live Alpaca camera
         // (caps + cooler/state runtime) whose StartExposure runs a REAL capture — exposure →
