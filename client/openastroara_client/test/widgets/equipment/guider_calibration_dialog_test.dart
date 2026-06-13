@@ -24,6 +24,7 @@ class _FakeCalibrationClient implements GuiderCalibrationClient {
   int darkBuilds = 0;
   int defectBuilds = 0;
   bool? darkEnabled;
+  bool? defectEnabled;
 
   @override
   Future<CalibrationStatusResponse> getStatus() async => response;
@@ -48,7 +49,7 @@ class _FakeCalibrationClient implements GuiderCalibrationClient {
   @override
   Future<void> setDarkLibraryEnabled(bool enabled) async => darkEnabled = enabled;
   @override
-  Future<void> setDefectMapEnabled(bool enabled) async {}
+  Future<void> setDefectMapEnabled(bool enabled) async => defectEnabled = enabled;
   @override
   void close() {}
 }
@@ -57,6 +58,8 @@ CalibrationStatusResponse _connected({
   bool darkExists = false,
   bool darkLoaded = false,
   bool autoLoadDarks = false,
+  bool defectExists = false,
+  bool autoLoadDefectMap = false,
 }) =>
     CalibrationStatusResponse(
       connected: true,
@@ -65,6 +68,8 @@ CalibrationStatusResponse _connected({
         darkLibraryExists: darkExists,
         darkLibraryLoaded: darkLoaded,
         autoLoadDarks: autoLoadDarks,
+        defectMapExists: defectExists,
+        autoLoadDefectMap: autoLoadDefectMap,
         darkCountLoaded: darkLoaded ? 20 : null,
         darkMinExposureSecondsLoaded: darkLoaded ? 1.0 : null,
         darkMaxExposureSecondsLoaded: darkLoaded ? 4.0 : null,
@@ -135,5 +140,15 @@ void main() {
     await tester.tap(find.byType(Switch).first);
     await tester.pumpAndSettle();
     expect(fake.darkEnabled, isFalse, reason: 'auto-load was on → toggled off');
+  });
+
+  testWidgets('toggling the defect-map switch calls setDefectMapEnabled', (tester) async {
+    final fake = _FakeCalibrationClient(_connected(defectExists: true, autoLoadDefectMap: false));
+    await tester.pumpWidget(_host(fake));
+    await _open(tester);
+    // Defect map is the second artifact / second Switch.
+    await tester.tap(find.byType(Switch).at(1));
+    await tester.pumpAndSettle();
+    expect(fake.defectEnabled, isTrue, reason: 'auto-load was off → toggled on');
   });
 }

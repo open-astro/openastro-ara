@@ -29,6 +29,7 @@ class _CalibrationDialogState extends ConsumerState<_CalibrationDialog> {
   }
 
   Future<void> _refresh() async {
+    if (!mounted) return;
     setState(() => _refreshing = true);
     try {
       await ref.read(guiderCalibrationProvider.notifier).refresh();
@@ -132,7 +133,7 @@ class _CalibrationBody extends ConsumerWidget {
 
   String? _darkDetail(CalibrationStatus s) {
     if (!s.darkLibraryLoaded || s.darkCountLoaded == null) return null;
-    final n = s.darkCountLoaded;
+    final n = s.darkCountLoaded!;
     final lo = s.darkMinExposureSecondsLoaded;
     final hi = s.darkMaxExposureSecondsLoaded;
     if (lo != null && hi != null) {
