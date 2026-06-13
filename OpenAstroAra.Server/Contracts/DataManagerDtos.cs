@@ -32,6 +32,9 @@ public sealed record DataPackageDto(
     Uri? SourceUrl);
 
 /// <summary>POST /api/v1/data-manager/download body.</summary>
+/// <param name="PackageId">Catalog id of the package to download.</param>
+/// <param name="ForceReinstall">Reserved: not yet honored — a download currently always runs (behaves as force).
+/// The skip-if-installed path arrives with the §36-2b-2 sentinel-aware inventory (tracked in PORT_TODO).</param>
 public sealed record DownloadRequestDto(
     string PackageId,
     bool ForceReinstall);

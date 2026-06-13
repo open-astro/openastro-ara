@@ -224,8 +224,11 @@ namespace OpenAstroAra.Server.Services {
         [SuppressMessage("Design", "CA1031:Do not catch general exception types",
             Justification = "Top-level background worker: every failure must surface as a download.failed WS event, and an unobserved exception here would otherwise be lost. It is reported and logged, not swallowed silently.")]
         private async Task RunDownloadAsync(DownloadJob job, DataPackageDto pkg) {
-            // Idle watchdog: idleCts fires if no bytes arrive within _idleTimeout; the install runs under a token
-            // linked to both the user-cancel CTS and the idle CTS, so a stalled transfer is cancelled, not hung.
+            // Read-progress watchdog: idleCts fires if no byte is read from the package stream within _idleTimeout.
+            // It measures whole-pipeline progress (network receive paced by disk-write of each extracted chunk), so
+            // it trips on a genuine stall of either; the 60s default is far longer than any single disk-paced chunk
+            // read, so healthy extraction (even on slow RPi storage) keeps resetting it. The install runs under a
+            // token linked to both the user-cancel CTS and this one, so a stalled transfer is cancelled, not hung.
             using var idleCts = new CancellationTokenSource();
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(job.Cts.Token, idleCts.Token);
             var ct = linked.Token;
@@ -268,7 +271,7 @@ namespace OpenAstroAra.Server.Services {
                 // Catch-all so an unexpected failure (UnauthorizedAccessException, ObjectDisposedException, …) still
                 // reports a download.failed event rather than silently vanishing from ActiveDownloads.
                 await EmitAsync(WsEventCatalog.DataManagerDownloadFailed, job, error: ex.Message).ConfigureAwait(false);
-                LogDownloadFailed(pkg.Id, ex);
+                LogDownloadFailed(pkg.Id, job.Id, ex);
             } finally {
                 // Mark done BEFORE any removal so a concurrent CancelAsync that still finds the job in _downloads
                 // sees it's finished and 404s rather than returning a misleading 202 for a completed download.
@@ -470,8 +473,8 @@ namespace OpenAstroAra.Server.Services {
         [LoggerMessage(Level = LogLevel.Warning, Message = "Data package '{PackageId}' download {DownloadId} stalled (no progress within the idle timeout)")]
         partial void LogDownloadStalled(string packageId, Guid downloadId);
 
-        [LoggerMessage(Level = LogLevel.Warning, Message = "Data package '{PackageId}' download failed")]
-        partial void LogDownloadFailed(string packageId, Exception ex);
+        [LoggerMessage(Level = LogLevel.Warning, Message = "Data package '{PackageId}' download {DownloadId} failed")]
+        partial void LogDownloadFailed(string packageId, Guid downloadId, Exception ex);
 
         [LoggerMessage(Level = LogLevel.Error, Message = "Data package '{PackageId}' install failed AND prior data could not be restored — possible data loss")]
         partial void LogDownloadDataLoss(string packageId, Exception ex);

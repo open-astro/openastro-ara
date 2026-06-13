@@ -55,9 +55,14 @@ namespace OpenAstroAra.Server.Services {
             } catch (Exception) {
                 // Swallow any teardown error — see the justification above; cleanup of the transport still runs.
             } finally {
-                // Dispose the response/client AFTER the stream — the stream reads through them.
+                // Dispose the response/client AFTER the stream — the stream reads through them. Dispose each
+                // independently so a throw from one doesn't leak the rest.
                 foreach (var owned in _ownedAfterContent) {
-                    owned.Dispose();
+                    try {
+                        owned.Dispose();
+                    } catch (Exception) {
+                        // best-effort — see the method-level CA1031 justification.
+                    }
                 }
             }
         }
