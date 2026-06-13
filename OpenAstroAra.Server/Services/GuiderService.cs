@@ -229,7 +229,12 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             try {
                 await Task.Delay(TimeSpan.FromMilliseconds(500), deadline.Token).ConfigureAwait(false);
             } catch (OperationCanceledException) {
-                return;
+                // The linked token covers both the supersede (ct) and the 10s deadline. A supersede
+                // stops quietly; a deadline-during-delay should still reach the timeout log below.
+                if (ct.IsCancellationRequested) {
+                    return;
+                }
+                break;
             }
             if (await IsReachableAsync(host, port, deadline.Token).ConfigureAwait(false)) {
                 return;
@@ -254,8 +259,8 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             // do so doesn't change the reachable verdict.
             try {
                 probe.Client?.Shutdown(SocketShutdown.Both);
-            } catch (SocketException) {
-                // already closed by the peer — still reachable
+            } catch (Exception e) when (e is SocketException or ObjectDisposedException) {
+                // already closed / disposed by the peer — still reachable
             }
             return true;
         } catch (SocketException) {
