@@ -51,6 +51,11 @@ void main() {
       expect(s.darkMinExposureSecondsLoaded, isNull);
     });
 
+    test('a fractional profile_id degrades to null (no silent truncation)', () {
+      final s = CalibrationStatus.fromJson(<String, dynamic>{'profile_id': 1.9});
+      expect(s.profileId, isNull, reason: 'a fractional id must not become a valid-looking 1');
+    });
+
     test('non-finite exposures are filtered to null', () {
       final s = CalibrationStatus.fromJson(<String, dynamic>{
         'profile_id': 1,

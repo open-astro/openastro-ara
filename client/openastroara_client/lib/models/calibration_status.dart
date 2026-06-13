@@ -45,7 +45,10 @@ class CalibrationStatus {
 
   factory CalibrationStatus.fromJson(Map<String, dynamic> json) {
     return CalibrationStatus(
-      profileId: _int(json['profile_id']),
+      // Strict int (no num→toInt truncation): a fractional profile_id is
+      // malformed, and silently truncating it to a valid-looking id could target
+      // the wrong profile — so degrade to null, same rationale as not coercing to 0.
+      profileId: json['profile_id'] is int ? json['profile_id'] as int : null,
       darkLibraryPath: _str(json['dark_library_path']),
       defectMapPath: _str(json['defect_map_path']),
       darkLibraryExists: _bool(json['dark_library_exists']),
