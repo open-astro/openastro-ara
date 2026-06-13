@@ -121,6 +121,21 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_corrupt_archive_emits_failed_and_installs_nothing() {
+            // Not a gzip stream — the installer throws while decoding; the worker must still report failed.
+            var ws = new CapturingBroadcaster();
+            var svc = NewService(new FakeSkyDataFetcher(Encoding.UTF8.GetBytes("definitely not a tar.gz")), ws);
+
+            await svc.DownloadAsync(new DownloadRequestDto(PackageId, ForceReinstall: false), null, CancellationToken.None);
+
+            var failed = await Eventually(() => ws.Events.Any(e => e.EventType == WsEventCatalog.DataManagerDownloadFailed));
+            Assert.That(failed, Is.True, "a corrupt archive surfaces a failed event");
+            Assert.That(Directory.Exists(Path.Combine(_root, PackageId)), Is.False, "nothing is installed from a corrupt archive");
+            var cleared = await Eventually(() => svc.GetStateAsync(CancellationToken.None).Result.ActiveDownloads.Count == 0);
+            Assert.That(cleared, Is.True, "the failed download is removed from active state");
+        }
+
+        [Test]
         public async Task State_reflects_an_in_flight_download() {
             // A fetch that blocks until released keeps the download in-flight so GetState can observe it.
             using var release = new SemaphoreSlim(0, 1);

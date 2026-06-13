@@ -166,19 +166,24 @@ namespace OpenAstroAra.Server.Services {
             }
 
             // One active download per package: if another is already running, return its id (idempotent) instead
-            // of racing two writers into the same install directory. TryAdd is the atomic claim.
-            var downloadId = Guid.NewGuid();
-            if (!_activeByPackage.TryAdd(pkg.Id, downloadId)) {
-                var existing = _activeByPackage.TryGetValue(pkg.Id, out var e) ? e : downloadId;
-                return Task.FromResult(Accepted("data-manager.download", idempotencyKey, existing));
+            // of racing two writers into the same install directory. TryAdd is the atomic claim; the loop closes a
+            // race where an existing job finishes (and removes its entry) between our failed TryAdd and the lookup —
+            // we'd otherwise hand back an id that was never registered. Re-attempting the claim resolves it.
+            while (true) {
+                var downloadId = Guid.NewGuid();
+                if (_activeByPackage.TryAdd(pkg.Id, downloadId)) {
+                    var job = new DownloadJob(downloadId, pkg.Id);
+                    _downloads[downloadId] = job;
+                    // Fire the worker on the thread pool; it owns the job's lifecycle + cleanup.
+                    _ = Task.Run(() => RunDownloadAsync(job, pkg), CancellationToken.None);
+                    LogDownloadStarted(pkg.Id, downloadId);
+                    return Task.FromResult(Accepted("data-manager.download", idempotencyKey, downloadId));
+                }
+                if (_activeByPackage.TryGetValue(pkg.Id, out var existing)) {
+                    return Task.FromResult(Accepted("data-manager.download", idempotencyKey, existing));
+                }
+                // The other job vanished in the window — loop and re-claim.
             }
-
-            var job = new DownloadJob(downloadId, pkg.Id);
-            _downloads[downloadId] = job;
-            // Fire the worker on the thread pool; it is self-contained and owns the job's lifecycle + cleanup.
-            _ = Task.Run(() => RunDownloadAsync(job, pkg), CancellationToken.None);
-            LogDownloadStarted(pkg.Id, downloadId);
-            return Task.FromResult(Accepted("data-manager.download", idempotencyKey, downloadId));
         }
 
         public Task<OperationAcceptedDto> CancelAsync(Guid downloadId, CancellationToken ct) {
@@ -194,6 +199,8 @@ namespace OpenAstroAra.Server.Services {
 
         // The download worker: fetch the package archive, stream it through the §36-2a installer (which extracts +
         // atomically swaps it into place), reporting progress over the WS channel, and always clean up the registry.
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "Top-level background worker: every failure must surface as a download.failed WS event, and an unobserved exception here would otherwise be lost. It is reported and logged, not swallowed silently.")]
         private async Task RunDownloadAsync(DownloadJob job, DataPackageDto pkg) {
             var ct = job.Cts.Token;
             try {
@@ -219,7 +226,9 @@ namespace OpenAstroAra.Server.Services {
                 // distinctly (error string + an error log) rather than as an ordinary failed download.
                 await EmitAsync(WsEventCatalog.DataManagerDownloadFailed, job, error: "install failed; prior data may be lost").ConfigureAwait(false);
                 LogDownloadDataLoss(pkg.Id, ex);
-            } catch (Exception ex) when (ex is HttpRequestException or IOException or InvalidDataException) {
+            } catch (Exception ex) {
+                // Catch-all so an unexpected failure (UnauthorizedAccessException, ObjectDisposedException, …) still
+                // reports a download.failed event rather than silently vanishing from ActiveDownloads.
                 await EmitAsync(WsEventCatalog.DataManagerDownloadFailed, job, error: ex.Message).ConfigureAwait(false);
                 LogDownloadFailed(pkg.Id, ex);
             } finally {
@@ -230,9 +239,14 @@ namespace OpenAstroAra.Server.Services {
         }
 
         // Cap uncompressed extraction at the catalog's advertised installed size + 25% headroom (never below 16 MiB),
-        // so a tampered archive can't expand without bound even though the package id is catalog-validated.
-        private static long ExtractionCeiling(DataPackageDto pkg) =>
-            Math.Max(pkg.SizeBytes + (pkg.SizeBytes / 4), 16L * 1024 * 1024);
+        // so a tampered archive can't expand without bound even though the package id is catalog-validated. Guard the
+        // addition against long overflow (a corrupt near-MaxValue size would otherwise wrap negative and disable the cap).
+        private static long ExtractionCeiling(DataPackageDto pkg) {
+            var size = Math.Max(0, pkg.SizeBytes);
+            var headroom = size / 4;
+            var ceiling = size > long.MaxValue - headroom ? long.MaxValue : size + headroom;
+            return Math.Max(ceiling, 16L * 1024 * 1024);
+        }
 
         private static DataManagerActiveDownloadDto SnapshotActive(DownloadJob job) {
             var downloaded = Volatile.Read(ref job.DownloadedBytes);
@@ -356,8 +370,7 @@ namespace OpenAstroAra.Server.Services {
 
             private int Count(int read) {
                 if (read > 0) {
-                    _total += read;
-                    _onRead(_total);
+                    _onRead(Interlocked.Add(ref _total, read));
                 }
                 return read;
             }
@@ -371,7 +384,7 @@ namespace OpenAstroAra.Server.Services {
             public override bool CanSeek => false;
             public override bool CanWrite => false;
             public override long Length => throw new NotSupportedException();
-            public override long Position { get => _total; set => throw new NotSupportedException(); }
+            public override long Position { get => Interlocked.Read(ref _total); set => throw new NotSupportedException(); }
             public override void Flush() { }
             public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
             public override void SetLength(long value) => throw new NotSupportedException();
