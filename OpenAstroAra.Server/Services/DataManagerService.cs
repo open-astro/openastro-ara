@@ -178,10 +178,10 @@ namespace OpenAstroAra.Server.Services {
                 }
                 var size = info.EnumerateFiles("*", SearchOption.AllDirectories).Sum(f => f.Length);
                 return (size, info.LastWriteTimeUtc);
-            } catch (Exception ex) when (ex is DirectoryNotFoundException or IOException or UnauthorizedAccessException) {
-                // DirectoryNotFoundException: raced with a delete mid-enumeration. IOException /
-                // UnauthorizedAccessException: a restricted or device-faulted child dir — read as
-                // not-installed rather than 500 every ListPackages/GetState (matches DeleteAsync).
+            } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+                // IOException (incl. its DirectoryNotFoundException subclass — a delete that raced this
+                // read mid-enumeration) or a restricted / device-faulted child dir: read as not-installed
+                // rather than 500 every ListPackages/GetState. DeleteAsync catches the same family.
                 return null;
             }
         }
