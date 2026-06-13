@@ -8,6 +8,15 @@ Per §0 rule 6 + §15 step 7 + COMMIT-PR-RULES.md CodeRabbit rule "out-of-scope 
 
 ---
 
+## §68 AlpacaBridge integration — client-side follow-ups (server complete)
+
+**§68 server-side is done** (gate core #410, 30s cache #411, connect-block 503 #412, warn-band WS event §68-b-3). The remaining §68 work is **client-side (Flutter)**, tracked here:
+
+- **§68.2 — dismissible "newer AlpacaBridge recommended" banner.** Consume the `equipment.alpaca_bridge_outdated_warn` WS event (payload `{version, minimum, recommended}`) and show a non-modal, per-session-dismissible banner on the Equipment screen. Also surface the **503 `alpaca_bridge_outdated`** connect failure as the §68.2 modal ("AlpacaBridge too old — requires 1.2.0+").
+- **§68.2 — wizard Screen 2 missing-bridge UX.** When no AlpacaBridge/Alpaca devices are discoverable, show the install command (`sudo apt install alpaca-bridge`) + [Retry detection]; block [Next] until a device is discovered. (Server already returns the discovery list; this is wizard UI.)
+- **§68.4 — §61 search-registry entries.** `equipment.alpacabridge.version` + `equipment.alpacabridge.troubleshoot` keyword entries in the client settings/search registry.
+- **§68.5 — wizard-advance integration test** (`alpacabridge_missing_blocks_wizard_advance`) is client-side; the server-side §68.5 cases (version-below-minimum → 503, warn-band → event) are covered by `EquipmentConnectGateTest` + `AlpacaBridgeGateNotifierTest`.
+
 ## Phase 0.5a — Fork hygiene / WPF demolition
 
 ### Cascade scrubs
