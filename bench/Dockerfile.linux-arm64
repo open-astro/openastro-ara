@@ -7,7 +7,10 @@
 # osx-arm64 and this lane for linux-arm64; sharing the source tree's obj/bin
 # across the two RIDs corrupts each other's restore state. Copying the source in
 # keeps the Linux build fully isolated from the host's — run it as often as you
-# like without disturbing a local `dotnet test` on the Mac.
+# like without disturbing a local `dotnet test` on the Mac. The repo-root
+# .dockerignore keeps host bin/obj out of the build context on BOTH the classic
+# builder and BuildKit (a per-Dockerfile .dockerignore would be honored only by
+# BuildKit, missing the classic-builder path run.sh can fall back to).
 #
 # The bench tests are self-contained (in-process StubAlpaca + FakeGuider, no
 # OmniSim, no hardware), so this image needs nothing but the SDK.

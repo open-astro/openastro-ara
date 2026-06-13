@@ -30,6 +30,10 @@ The image is **copy-in, not bind-mount**: the host builds for `osx-arm64` and th
 lane for `linux-arm64`, and sharing the source tree's `obj/`/`bin/` across the two
 RIDs corrupts each other's restore state. Copying the source into the image keeps
 the Linux build fully isolated — run it without disturbing a local `dotnet test`.
+The repo-root `.dockerignore` keeps those host `bin/`/`obj/` artifacts out of the
+build context regardless of builder — it's honored by both BuildKit and the classic
+builder that `run.sh` falls back to (a per-Dockerfile `.dockerignore` would be
+BuildKit-only and silently skipped on that fallback path).
 
 ## Running it
 
