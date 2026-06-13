@@ -90,7 +90,8 @@ public sealed class FakeGuider : IAsyncDisposable {
     }
 
     /// <summary>Convenience overload: a constant result value for <paramref name="method"/>.</summary>
-    public void OnRpc(string method, JsonNode? result) => OnRpc(method, _ => result is null ? null : JsonNode.Parse(result.ToJsonString()));
+    // DeepClone per call — a JsonNode can only be parented once, so each response needs a fresh copy.
+    public void OnRpc(string method, JsonNode? result) => OnRpc(method, _ => result?.DeepClone());
 
     /// <summary>Replaces the burst of events sent to each connection on accept.</summary>
     public void SetOnConnectEvents(params JsonObject[] events) {
@@ -157,8 +158,13 @@ public sealed class FakeGuider : IAsyncDisposable {
         } catch (IOException) {
             // client closed the connection — normal for the per-RPC connections
         } finally {
+            // Deliberately do NOT dispose conn.WriteLock: BroadcastAsync enumerates the
+            // live _connections, so it can hold a Connection that's being removed here.
+            // A SemaphoreSlim used only for Wait/Release (never AvailableWaitHandle) needs
+            // no disposal, so leaving it intact removes the WaitAsync→ObjectDisposed race
+            // entirely — a write to the now-closed stream just fails inside WriteAsync's
+            // own guarded try.
             _connections.TryRemove(conn, out _);
-            conn.WriteLock.Dispose();
         }
     }
 

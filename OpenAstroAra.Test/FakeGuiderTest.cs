@@ -129,6 +129,28 @@ namespace OpenAstroAra.Test {
             Assert.That((string?)(await b.ReadEventAsync().ConfigureAwait(false))["Event"], Is.EqualTo("SettleDone"));
         }
 
+        [Test]
+        public async Task BroadcastAsync_does_not_throw_when_a_connection_has_just_closed() {
+            await using var guider = FakeGuider.Start();
+            using var client = await ConnectAsync(guider.Port).ConfigureAwait(false);
+            await client.ReadEventAsync().ConfigureAwait(false);
+            await client.ReadEventAsync().ConfigureAwait(false);
+
+            // Drop the client; the server-side connection may still be in _connections
+            // momentarily. A broadcast must tolerate the half-closed/closing connection
+            // (write fails silently) rather than throwing out of BroadcastAsync. The
+            // explicit Dispose triggers the close now; the `using` (idempotent) covers
+            // the remaining paths for the analyzer.
+            client.Dispose();
+
+            Assert.DoesNotThrowAsync(async () => {
+                for (var i = 0; i < 5; i++) {
+                    await guider.BroadcastAsync(PhdEvents.StarLost()).ConfigureAwait(false);
+                    await Task.Delay(20).ConfigureAwait(false);
+                }
+            });
+        }
+
         private static async Task<TestClient> ConnectAsync(int port) {
             var tcp = new TcpClient();
             await tcp.ConnectAsync(IPAddress.Loopback, port).ConfigureAwait(false);
