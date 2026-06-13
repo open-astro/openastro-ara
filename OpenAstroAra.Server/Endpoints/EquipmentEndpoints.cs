@@ -316,7 +316,10 @@ public static class EquipmentEndpoints {
     // honoring the device's UseHttps. IPv6 literals are bracketed so the Uri parses.
     internal static Uri BridgeUri(DiscoveredDeviceDto device) {
         var scheme = device.UseHttps ? Uri.UriSchemeHttps : Uri.UriSchemeHttp;
-        var host = device.IpAddress.Contains(':') ? $"[{device.IpAddress}]" : device.IpAddress;
+        var raw = device.IpAddress;
+        // Bracket an IPv6 literal so the Uri parses — but only if it isn't already bracketed (some
+        // discovery sources hand back "[::1]"), so we never double-bracket into "[[::1]]".
+        var host = raw.Contains(':') && !raw.StartsWith('[') ? $"[{raw}]" : raw;
         return new Uri(FormattableString.Invariant($"{scheme}://{host}:{device.IpPort}"));
     }
 }

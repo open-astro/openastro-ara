@@ -96,11 +96,13 @@ namespace OpenAstroAra.Test {
             var v4 = EquipmentEndpoints.BridgeUri(Request(ip: "10.0.0.4", port: 11111).Device);
             var https = EquipmentEndpoints.BridgeUri(Request(ip: "10.0.0.4", port: 443, https: true).Device);
             var v6 = EquipmentEndpoints.BridgeUri(Request(ip: "::1", port: 11111).Device);
+            var v6Bracketed = EquipmentEndpoints.BridgeUri(Request(ip: "[::1]", port: 11111).Device);
 
             Assert.Multiple(() => {
                 Assert.That(v4, Is.EqualTo(new Uri("http://10.0.0.4:11111")));
                 Assert.That(https, Is.EqualTo(new Uri("https://10.0.0.4:443")));
-                Assert.That(v6.Host, Is.EqualTo("[::1]"), "an IPv6 literal must be bracketed so the Uri parses");
+                Assert.That(v6.Host, Is.EqualTo("[::1]"), "a bare IPv6 literal must be bracketed so the Uri parses");
+                Assert.That(v6Bracketed.Host, Is.EqualTo("[::1]"), "an already-bracketed IPv6 literal must not be double-bracketed");
             });
         }
 
