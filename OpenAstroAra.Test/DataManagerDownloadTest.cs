@@ -136,6 +136,21 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_stalled_header_wait_is_cancelled_by_the_idle_watchdog() {
+            // OpenAsync never returns (no response headers) — the watchdog must bound the pre-fetch phase too.
+            var ws = new CapturingBroadcaster();
+            var svc = new DataManagerService(_root, new StallingHeaderFetcher(), ws,
+                NullLogger<DataManagerService>.Instance, idleTimeout: TimeSpan.FromMilliseconds(150));
+
+            await svc.DownloadAsync(new DownloadRequestDto(PackageId, ForceReinstall: false), null, CancellationToken.None);
+
+            var stalled = await Eventually(() => ws.Events.Any(e =>
+                e.EventType == WsEventCatalog.DataManagerDownloadFailed &&
+                e.Payload.TryGetProperty("error", out var err) && err.GetString() == "stalled"));
+            Assert.That(stalled, Is.True, "a fetch whose headers never arrive is cancelled as stalled");
+        }
+
+        [Test]
         public async Task State_reflects_an_in_flight_download() {
             // A fetch that blocks until released keeps the download in-flight so GetState can observe it.
             using var release = new SemaphoreSlim(0, 1);

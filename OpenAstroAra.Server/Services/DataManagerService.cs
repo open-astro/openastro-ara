@@ -235,10 +235,14 @@ namespace OpenAstroAra.Server.Services {
             try {
                 await EmitAsync(WsEventCatalog.DataManagerDownloadProgress, job, error: null).ConfigureAwait(false);
 
+                // Arm BEFORE OpenAsync so the header-wait phase is bounded too — the infinite HttpClient.Timeout
+                // removes the header-receipt deadline, so a CDN that accepts the connection but never sends headers
+                // would otherwise hang forever (escapable only by POST /cancel). OpenAsync gets the linked token.
+                idleCts.CancelAfter(_idleTimeout);
                 await using var fetch = await _fetcher.OpenAsync(pkg.SourceUrl!, ct).ConfigureAwait(false);
                 Volatile.Write(ref job.TotalBytes, fetch.TotalBytes ?? -1);
 
-                idleCts.CancelAfter(_idleTimeout); // arm once headers are in; reset below on each byte of progress.
+                idleCts.CancelAfter(_idleTimeout); // fresh deadline for the body; reset below on each byte of progress.
                 var targetDir = PackageDir(pkg.Id)!; // pkg came from the catalog, so this is non-null + in-root.
                 await using var counting = new CountingStream(fetch.Content,
                     read => {
@@ -432,28 +436,29 @@ namespace OpenAstroAra.Server.Services {
                 _onEof = onEof;
             }
 
-            private int Count(int read) {
+            // `requested` is the size of the read request: a 0-byte read of a non-empty request is genuine EOF, but a
+            // 0-byte read of a 0-length request (legal, unusual) is NOT — don't let it falsely disarm the watchdog.
+            private int Count(int read, int requested) {
                 if (read > 0) {
                     _onRead(Interlocked.Add(ref _total, read));
-                } else if (!_eofSeen) {
-                    // A 0-byte read is end-of-stream — the whole archive is fetched; fire once.
+                } else if (requested > 0 && !_eofSeen) {
                     _eofSeen = true;
                     _onEof?.Invoke();
                 }
                 return read;
             }
 
-            public override int Read(byte[] buffer, int offset, int count) => Count(_inner.Read(buffer, offset, count));
+            public override int Read(byte[] buffer, int offset, int count) => Count(_inner.Read(buffer, offset, count), count);
 
-            public override int Read(Span<byte> buffer) => Count(_inner.Read(buffer));
+            public override int Read(Span<byte> buffer) => Count(_inner.Read(buffer), buffer.Length);
 
             public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) =>
-                Count(await _inner.ReadAsync(buffer, cancellationToken).ConfigureAwait(false));
+                Count(await _inner.ReadAsync(buffer, cancellationToken).ConfigureAwait(false), buffer.Length);
 
             // Modern .NET routes the legacy array overload through ReadAsync(Memory<byte>); the explicit override
             // keeps the count correct even if a consumer calls this form directly.
             public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) =>
-                Count(await _inner.ReadAsync(buffer.AsMemory(offset, count), cancellationToken).ConfigureAwait(false));
+                Count(await _inner.ReadAsync(buffer.AsMemory(offset, count), cancellationToken).ConfigureAwait(false), count);
 
             public override bool CanRead => true;
             public override bool CanSeek => false;

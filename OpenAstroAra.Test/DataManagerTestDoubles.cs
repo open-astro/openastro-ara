@@ -70,6 +70,15 @@ namespace OpenAstroAra.Test {
             Task.FromResult(new SkyDataFetch(new StallStream(), totalBytes: null));
     }
 
+    // OpenAsync itself never returns (honoring its token) — a CDN that accepts the connection but never sends
+    // headers. Exercises the watchdog arming the header-wait phase.
+    internal sealed class StallingHeaderFetcher : ISkyDataFetcher {
+        public async Task<SkyDataFetch> OpenAsync(Uri source, CancellationToken ct) {
+            await Task.Delay(Timeout.Infinite, ct).ConfigureAwait(false);
+            return new SkyDataFetch(Stream.Null, totalBytes: null); // unreachable
+        }
+    }
+
     // A read stream whose async reads block forever but honor cancellation — so when the worker's idle CTS fires,
     // the in-flight read throws OperationCanceledException.
     internal sealed class StallStream : Stream {
