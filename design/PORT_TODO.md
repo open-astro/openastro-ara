@@ -560,3 +560,10 @@ matching-id response fails the call instead of hanging the connect forever. In p
 timeout — `get_profile`'s bare response fails deserialization and `GetProfiles` throws fast — so the full lifecycle test
 runs in ~0.5s. A future nicety: give the connect-time getters a shorter timeout than the 60s default so a genuinely
 non-responsive guider degrades connect in seconds rather than a minute. Low priority. Surfaced 2026-06-13 by bench-3.
+
+**§36 Data Manager — DeleteAsync conflates "not installed" and "permission denied" (§36-1 review note).** Both an
+unknown/uninstalled id and an `IOException`/`UnauthorizedAccessException` (locked or permission-denied dir) return
+`false` from `DeleteAsync`, so the caller can't tell "give up, it's gone" from "retry later, it's locked". Fine for the
+§36-1 inventory layer (the endpoint maps `false` → 404 either way), but the §36-2 download engine should surface a
+distinct "could not delete" error so the client can retry rather than treat a locked dir as already-clear. Low priority;
+inherit the §36-1 catch shape but split the return. Surfaced 2026-06-13 by the §36-1 round-2 review.

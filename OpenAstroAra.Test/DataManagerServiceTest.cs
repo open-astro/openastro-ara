@@ -123,7 +123,7 @@ namespace OpenAstroAra.Test {
             Assert.That(
                 async () => await _svc.DownloadAsync(
                     new DownloadRequestDto(PackageId: "../etc/passwd", ForceReinstall: false), null, CancellationToken.None),
-                Throws.InstanceOf<System.Collections.Generic.KeyNotFoundException>(),
+                Throws.InstanceOf<PackageNotFoundException>(),
                 "a non-catalog id (incl. a traversal attempt) must be rejected, not silently accepted");
         }
 

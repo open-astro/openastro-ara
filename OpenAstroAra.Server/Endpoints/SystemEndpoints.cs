@@ -67,8 +67,10 @@ public static class SystemEndpoints {
                 async ([FromBody] DownloadRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey, IDataManagerService svc, CancellationToken ct) => {
                     try {
                         return Results.Accepted(value: await svc.DownloadAsync(request, idempotencyKey, ct));
-                    } catch (KeyNotFoundException ex) {
-                        // §36: PackageId isn't in the curated catalog.
+                    } catch (PackageNotFoundException ex) {
+                        // §36: PackageId isn't in the curated catalog. A dedicated type (not a bare
+                        // KeyNotFoundException) means an unrelated dictionary miss inside the §36-2 engine
+                        // can't be silently turned into a 404 here.
                         return Results.Problem(ex.Message, statusCode: StatusCodes.Status404NotFound);
                     }
                 })

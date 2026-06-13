@@ -138,7 +138,7 @@ namespace OpenAstroAra.Server.Services {
             // Validate against the catalog up front so the §36-2 download engine inherits the guard and an
             // unknown id is a clean 404 (mapped at the endpoint) rather than a silently-accepted no-op.
             if (!CatalogIds.Contains(request.PackageId)) {
-                throw new KeyNotFoundException($"Unknown data package '{request.PackageId}'.");
+                throw PackageNotFoundException.ForPackageId(request.PackageId);
             }
             // §36-2: the fetch-archive → extract → progress-WS → cancel engine. For now the request is
             // accepted (so the wire contract is stable) but no download runs yet.
@@ -178,8 +178,11 @@ namespace OpenAstroAra.Server.Services {
                 }
                 var size = info.EnumerateFiles("*", SearchOption.AllDirectories).Sum(f => f.Length);
                 return (size, info.LastWriteTimeUtc);
-            } catch (DirectoryNotFoundException) {
-                return null; // raced with a delete mid-enumeration.
+            } catch (Exception ex) when (ex is DirectoryNotFoundException or IOException or UnauthorizedAccessException) {
+                // DirectoryNotFoundException: raced with a delete mid-enumeration. IOException /
+                // UnauthorizedAccessException: a restricted or device-faulted child dir — read as
+                // not-installed rather than 500 every ListPackages/GetState (matches DeleteAsync).
+                return null;
             }
         }
 
@@ -200,5 +203,17 @@ namespace OpenAstroAra.Server.Services {
 
         [LoggerMessage(Level = LogLevel.Information, Message = "Data download cancel requested for {DownloadId} — deferred to the §36-2 download engine")]
         partial void LogCancelDeferred(Guid downloadId);
+    }
+
+    /// <summary>Thrown by <see cref="DataManagerService.DownloadAsync"/> when the requested package id is not in the
+    /// curated catalog (incl. a path-traversal attempt). The endpoint maps it to a 404. A dedicated type keeps the
+    /// "unknown package" semantic from being conflated with an unrelated <see cref="KeyNotFoundException"/> that a
+    /// future dictionary lookup inside the §36-2 download engine might throw.</summary>
+    public sealed class PackageNotFoundException : Exception {
+        public PackageNotFoundException() { }
+        public PackageNotFoundException(string message) : base(message) { }
+        public PackageNotFoundException(string message, Exception innerException) : base(message, innerException) { }
+        public static PackageNotFoundException ForPackageId(string packageId) =>
+            new($"Unknown data package '{packageId}'.");
     }
 }
