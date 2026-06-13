@@ -17,6 +17,7 @@ using OpenAstroAra.TestHarness.Alpaca;
 using OpenAstroAra.TestHarness.Net;
 using System;
 using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Http;
@@ -48,6 +49,21 @@ namespace OpenAstroAra.Test {
 
             Assert.That(ValueOf(body), Is.EqualTo("false"));
             Assert.That(upstream.RequestCount, Is.EqualTo(1), "a pass-through request must reach the upstream device");
+        }
+
+        [Test]
+        public async Task PassThrough_forwards_inbound_request_headers_to_the_upstream() {
+            await using var upstream = StubAlpaca.Start(valueLiteral: "false");
+            await using var proxy = AlpacaFaultProxy.Start(upstream.BaseUri);
+            using var client = new HttpClient();
+            using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(proxy.BaseUri, TelescopeConnected));
+            request.Headers.Add("X-Ara-Test", "abc123");
+
+            using var resp = await client.SendAsync(request).ConfigureAwait(false);
+
+            Assert.That(upstream.LastRequestHeaders, Is.Not.Null);
+            Assert.That(upstream.LastRequestHeaders!["X-Ara-Test"], Is.EqualTo("abc123"),
+                "a custom inbound header must reach the upstream device, not be dropped by the proxy");
         }
 
         [Test]
@@ -289,6 +305,7 @@ namespace OpenAstroAra.Test {
             private readonly CancellationTokenSource _cts = new();
             private readonly Task _loop;
             private int _requestCount;
+            private volatile NameValueCollection? _lastRequestHeaders;
 
             private StubAlpaca(HttpListener listener, int port, string valueLiteral) {
                 _valueLiteral = valueLiteral;
@@ -300,6 +317,8 @@ namespace OpenAstroAra.Test {
             public Uri BaseUri { get; }
 
             public int RequestCount => Volatile.Read(ref _requestCount);
+
+            public NameValueCollection? LastRequestHeaders => _lastRequestHeaders;
 
             public static StubAlpaca Start(string valueLiteral) {
                 var (listener, port) = LoopbackListener.Bind();
@@ -321,6 +340,7 @@ namespace OpenAstroAra.Test {
                         return;
                     }
                     Interlocked.Increment(ref _requestCount);
+                    _lastRequestHeaders = context.Request.Headers;
                     var body = Encoding.UTF8.GetBytes(
                         $"{{\"Value\":{_valueLiteral},\"ErrorNumber\":0,\"ErrorMessage\":\"\",\"ClientTransactionID\":0,\"ServerTransactionID\":1}}");
                     var resp = context.Response;

@@ -485,3 +485,16 @@ the issue stays stuck in `_open` and the §51 pill reads amber/red indefinitely 
 switch. The fix is **server-side history-on-connect** (replay the open-diagnostics set on a new WS connection / on
 resume), then have the client reset its roll-up from that snapshot. There's an in-code `TODO` at
 `diagnostics_state.dart`'s notifier `build()`. Tracked here per #395 review.
+
+**Virtual-observatory bench (§42.2) — Drop fault Linux/arm64 stability (track for bench-5).** The
+`AlpacaFaultProxy` connection-drop fault (`DropConnectionAsync`: ContentLength64=64 → write 1 byte → SafeAbort)
+relies on the managed `HttpListener` holding the connection open long enough for the client to observe the partial
+response before the reset. Verified passing on macOS/arm64 AND inside a `dotnet/sdk:10.0` aarch64 Linux container
+(all proxy tests green, 2026-06-12, PR #401). Kept here so the **bench-5 docker-compose chassis** keeps a standing
+Linux/arm64 lane for the Drop test — if the kernel ever delivers the byte before `Abort()` or `Abort()` no-ops
+post-`Flush()` on a future runtime, this is the first place to check. Per #401 review.
+
+**Virtual-observatory bench — request-header forwarding is in (PR #401), response-header forwarding is not.**
+`ForwardAsync` now forwards inbound request headers (minus hop-by-hop) to the upstream device. The *response*
+direction still only copies Content-Type; if a bench-3+ scenario ever needs the daemon to see a specific upstream
+response header, extend the forward symmetrically. Low priority (Alpaca responses are JSON-envelope-only today).

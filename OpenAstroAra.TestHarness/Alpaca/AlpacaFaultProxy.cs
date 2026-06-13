@@ -237,6 +237,24 @@ public sealed class AlpacaFaultProxy : IAsyncDisposable {
             forward.Content = content;
         }
 
+        // Forward the inbound headers verbatim (minus hop-by-hop + the ones the
+        // transport sets itself) so the proxy is a faithful pass-through — once the
+        // bench drives the real daemon, an Accept/auth/custom Alpaca header must reach
+        // the device, not be silently dropped. Request vs content headers are routed by
+        // trying the request collection first and falling back to the content's.
+        foreach (string? name in req.Headers) {
+            if (name is null || IsSkippedForwardHeader(name)) {
+                continue;
+            }
+            var values = req.Headers.GetValues(name);
+            if (values is null) {
+                continue;
+            }
+            if (!forward.Headers.TryAddWithoutValidation(name, values)) {
+                forward.Content?.Headers.TryAddWithoutValidation(name, values);
+            }
+        }
+
         try {
             using var upstream = await _client.SendAsync(forward, HttpCompletionOption.ResponseHeadersRead, _cts.Token).ConfigureAwait(false);
             var bytes = await upstream.Content.ReadAsByteArrayAsync(_cts.Token).ConfigureAwait(false);
@@ -259,6 +277,16 @@ public sealed class AlpacaFaultProxy : IAsyncDisposable {
             SafeAbort(context);
         }
     }
+
+    // Hop-by-hop headers (RFC 7230 §6.1) plus the ones the transport/content layer
+    // owns — never forwarded end-to-end through a proxy.
+    private static readonly HashSet<string> SkippedForwardHeaders = new(StringComparer.OrdinalIgnoreCase) {
+        "Connection", "Keep-Alive", "Proxy-Authenticate", "Proxy-Authorization",
+        "TE", "Trailer", "Transfer-Encoding", "Upgrade",
+        "Host", "Content-Length", "Content-Type",
+    };
+
+    private static bool IsSkippedForwardHeader(string name) => SkippedForwardHeaders.Contains(name);
 
     /// <summary>Replaces the <c>Value</c> field of an Alpaca JSON envelope; passes the body through unchanged if it isn't parseable JSON.</summary>
     private static byte[] RewriteEnvelopeValue(byte[] body, string jsonValueLiteral) {
