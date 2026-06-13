@@ -107,8 +107,9 @@ class _CalibrationDialogState extends ConsumerState<_CalibrationDialog> {
 class _CalibrationBody extends StatelessWidget {
   final CalibrationStatus status;
   final bool locked;
-  // Passed in (not read via ref in build) — the notifier is stable, and reading
-  // a provider inside build() is a Riverpod footgun the parent already avoids.
+  // Passed in rather than read here: the parent already holds the stable notifier
+  // reference, so this widget needn't read any provider in build() (reading
+  // provider *state* in build is the footgun; the notifier itself is stable).
   final GuiderCalibrationNotifier notifier;
   const _CalibrationBody({required this.status, required this.locked, required this.notifier});
 
@@ -161,8 +162,13 @@ class _CalibrationBody extends StatelessWidget {
     final lo = s.darkMinExposureSecondsLoaded;
     final hi = s.darkMaxExposureSecondsLoaded;
     if (lo != null && hi != null) {
-      // Collapse a single-exposure library to one value ("2.0 s", not "2.0–2.0 s").
-      final range = lo == hi ? '${lo.toStringAsFixed(1)} s' : '${lo.toStringAsFixed(1)}–${hi.toStringAsFixed(1)} s';
+      // Order defensively (a malformed min>max from the daemon shouldn't render
+      // a reversed range) and collapse a single exposure to one value.
+      final low = lo <= hi ? lo : hi;
+      final high = lo <= hi ? hi : lo;
+      final range = low == high
+          ? '${low.toStringAsFixed(1)} s'
+          : '${low.toStringAsFixed(1)}–${high.toStringAsFixed(1)} s';
       return '$n darks · $range';
     }
     return '$n darks';

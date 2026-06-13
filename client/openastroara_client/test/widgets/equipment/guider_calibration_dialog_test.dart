@@ -170,6 +170,16 @@ void main() {
     expect(fake.defectBuilds, 1);
   });
 
+  testWidgets('an already-built dark library shows Rebuild and dispatches a build', (tester) async {
+    final fake = _FakeCalibrationClient(_connected(darkExists: true, darkLoaded: true));
+    await tester.pumpWidget(_host(fake));
+    await _open(tester);
+    expect(find.widgetWithText(TextButton, 'Rebuild'), findsWidgets);
+    await tester.tap(find.widgetWithText(TextButton, 'Rebuild').first);
+    await tester.pumpAndSettle();
+    expect(fake.darkBuilds, 1);
+  });
+
   testWidgets('defect-map built-but-not-loaded shows the right state text', (tester) async {
     await tester.pumpWidget(_host(_FakeCalibrationClient(_connected(defectExists: true))));
     await _open(tester);
