@@ -15,6 +15,12 @@
 # Build + run via bench/docker-compose.yml (see bench/README.md), or directly:
 #   docker build -f bench/Dockerfile.linux-arm64 --platform linux/arm64 -t ara-bench .
 #   docker run --rm --platform linux/arm64 ara-bench
+#
+# The base tag is intentionally the floating `10.0`, not a pinned digest: this
+# lane exists to catch a runtime/kernel regression in the Drop-fault mechanic, so
+# it should track the latest .NET 10 patch and surface a break when one lands —
+# pinning would freeze the very thing under test. To reproduce a specific failure
+# deterministically, pin the digest reported by `docker inspect` for that run.
 FROM --platform=linux/arm64 mcr.microsoft.com/dotnet/sdk:10.0
 
 WORKDIR /src

@@ -6,6 +6,10 @@
 #
 # Requires a running arm64 Docker engine (e.g. colima on Apple Silicon:
 # `colima start --arch aarch64`). Exits with the test pass/fail code.
+#
+# `--build` is passed so a source edit is always picked up. When you're only
+# re-running the same suite (no source change), drop it for a cached image:
+#   docker compose -f bench/docker-compose.yml run --rm bench
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
