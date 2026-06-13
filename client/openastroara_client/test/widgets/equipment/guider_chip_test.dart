@@ -2,6 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/guider_status.dart';
+import 'package:openastroara/models/server.dart';
+import 'package:openastroara/services/guider_api.dart';
+import 'package:openastroara/services/saved_server_service.dart';
+import 'package:openastroara/state/guider/guider_state.dart';
+import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/widgets/equipment/guider_chip.dart';
 import 'package:openastroara/widgets/equipment/guider_dialog.dart';
 import 'package:openastroara/widgets/status_indicator.dart';
@@ -11,6 +16,39 @@ GuiderStatus _status(GuiderConnectionState c, GuiderRuntimeState r) => GuiderSta
       name: 'PHD2',
       connectionState: c,
       runtimeState: r,
+    );
+
+class _FakeSavedServerService implements SavedServerService {
+  @override
+  Future<List<AraServer>> loadAll() async => const [AraServer(hostname: 'h', port: 5555)];
+  @override
+  Future<void> saveAll(List<AraServer> servers) async {}
+  @override
+  Future<void> add(AraServer server) async {}
+}
+
+class _FakeGuiderClient implements GuiderClient {
+  _FakeGuiderClient(this.status);
+  GuiderStatus? status;
+  int connectCalls = 0;
+  int disconnectCalls = 0;
+  @override
+  Future<GuiderStatus?> getStatus() async => status;
+  @override
+  Future<void> connect({String host = kDefaultGuiderHost, int port = kDefaultGuiderPort}) async =>
+      connectCalls++;
+  @override
+  Future<void> disconnect() async => disconnectCalls++;
+  @override
+  void close() {}
+}
+
+Widget _app(GuiderClient fake) => ProviderScope(
+      overrides: [
+        savedServerServiceProvider.overrideWithValue(_FakeSavedServerService()),
+        guiderApiFactoryProvider.overrideWithValue((_) => fake),
+      ],
+      child: const MaterialApp(home: Scaffold(body: GuiderChip())),
     );
 
 void main() {
@@ -125,5 +163,30 @@ void main() {
     expect(find.text('Guider'), findsOneWidget); // dialog title
     expect(find.text('No guider configured on this server.'), findsOneWidget);
     expect(find.text('Connect'), findsOneWidget);
+  });
+
+  testWidgets('tapping Connect on a disconnected guider calls the notifier', (tester) async {
+    final fake = _FakeGuiderClient(
+        _status(GuiderConnectionState.disconnected, GuiderRuntimeState.stopped));
+    await tester.pumpWidget(_app(fake));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(GuiderChip));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Connect'));
+    await tester.pumpAndSettle();
+    expect(fake.connectCalls, 1);
+  });
+
+  testWidgets('tapping Disconnect on a connected guider calls the notifier', (tester) async {
+    final fake = _FakeGuiderClient(
+        _status(GuiderConnectionState.connected, GuiderRuntimeState.guiding));
+    await tester.pumpWidget(_app(fake));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(GuiderChip));
+    await tester.pumpAndSettle();
+    expect(find.text('Disconnect'), findsOneWidget);
+    await tester.tap(find.text('Disconnect'));
+    await tester.pumpAndSettle();
+    expect(fake.disconnectCalls, 1);
   });
 }
