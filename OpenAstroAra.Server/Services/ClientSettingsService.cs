@@ -67,7 +67,8 @@ public sealed partial class ClientSettingsService : IClientSettingsService, IDis
         DateTimeOffset updated;
         // Read content + timestamp under the same gate that writes hold, so the pair is a consistent snapshot — a
         // concurrent ReplaceAsync can't slip a new timestamp onto the old content (which would mislead a client's
-        // "is my state current?" check).
+        // "is my state current?" check). Conscious tradeoff: this also serializes concurrent reads, which is fine for
+        // the read-once-on-connect access pattern this store targets (not a hot polling path).
         await _writeGate.WaitAsync(ct).ConfigureAwait(false);
         try {
             text = await File.ReadAllTextAsync(_path, ct).ConfigureAwait(false);
@@ -122,15 +123,20 @@ public sealed partial class ClientSettingsService : IClientSettingsService, IDis
                 try { File.Delete(tmp); } catch (IOException) { } catch (UnauthorizedAccessException) { }
                 throw;
             }
-            // Read the timestamp INSIDE the gate, so a concurrent write that wins the gate next can't stamp this
-            // caller's response with the other write's time.
-            updated = new DateTimeOffset(File.GetLastWriteTimeUtc(_path), TimeSpan.Zero);
+            // Stamp the mtime explicitly INSIDE the gate: rename() doesn't reliably bump the destination mtime on
+            // Linux (it reflects the temp-file write, not the swap), and reading it inside the gate keeps a concurrent
+            // write from stamping this caller's response with the other write's time. The returned timestamp then
+            // matches exactly what GetAsync reads back.
+            var now = DateTime.UtcNow;
+            File.SetLastWriteTimeUtc(_path, now);
+            updated = new DateTimeOffset(now, TimeSpan.Zero);
         } finally {
             _writeGate.Release();
         }
 
-        using var doc = JsonDocument.Parse(json);
-        return new ClientSettingsDto(doc.RootElement.Clone(), updated);
+        // Clone the already-validated argument instead of re-parsing the json string — `settings` is still backed by
+        // the live request JsonDocument here, and Clone() detaches an independent copy that outlives it.
+        return new ClientSettingsDto(settings.Clone(), updated);
     }
 
     private static JsonElement EmptyObject() {
