@@ -1,0 +1,156 @@
+#region "copyright"
+
+/*
+    Copyright (c) 2026 Open Astro and the OpenAstro Ara contributors
+
+    This file is part of OpenAstro Ara (forked from N.I.N.A.).
+
+    This Source Code Form is subject to the terms of the Mozilla Public
+    License, v. 2.0. If a copy of the MPL was not distributed with this
+    file, You can obtain one at http://mozilla.org/MPL/2.0/.
+*/
+
+#endregion "copyright"
+
+using Microsoft.Data.Sqlite;
+using NUnit.Framework;
+using OpenAstroAra.Server.Services;
+using System;
+using System.Globalization;
+using System.IO;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace OpenAstroAra.Test {
+
+    /// <summary>
+    /// §50.19 Stats Achievements: cumulative records + imaging-night streaks + milestone badges,
+    /// aggregated over the light-frame catalog (dark/flat frames are excluded).
+    /// </summary>
+    [TestFixture]
+    public class SqliteStatsAchievementsTest {
+
+        private string _dir = null!;
+        private SqliteAraDatabase _db = null!;
+        private SqliteStatsService _svc = null!;
+        private static readonly Guid Session = Guid.Parse("44444444-4444-4444-4444-444444444441");
+
+        [SetUp]
+        public async Task SetUp() {
+            _dir = Path.Combine(Path.GetTempPath(), $"oara-stats-{Guid.NewGuid():N}");
+            Directory.CreateDirectory(_dir);
+            _db = new SqliteAraDatabase(_dir, logger: null);
+            await _db.InitializeAsync(CancellationToken.None);
+            _svc = new SqliteStatsService(_db);
+            await InsertSessionAsync(Session);
+        }
+
+        [TearDown]
+        public void TearDown() {
+            SqliteConnection.ClearAllPools();
+            try { Directory.Delete(_dir, recursive: true); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+        }
+
+        [Test]
+        public async Task Empty_catalog_returns_zeroed_achievements() {
+            var a = await _svc.GetAchievementsAsync(CancellationToken.None);
+            Assert.That(a.TotalNightsImaged, Is.EqualTo(0));
+            Assert.That(a.TotalLightFrames, Is.EqualTo(0));
+            Assert.That(a.TotalIntegrationHours, Is.EqualTo(0));
+            Assert.That(a.LongestStreakNights, Is.EqualTo(0));
+            Assert.That(a.CurrentStreakNights, Is.EqualTo(0));
+            Assert.That(a.FirstLightUtc, Is.Null);
+            Assert.That(a.Milestones.Any(m => m.Achieved), Is.False, "nothing is unlocked on an empty catalog");
+        }
+
+        [Test]
+        public async Task Aggregates_nights_hours_targets_and_unlocks_milestones() {
+            // 3 consecutive nights; a 10h night + two 1h nights = 12h over 2 targets. A dark frame is ignored.
+            await InsertLightAsync("M31", 36000, new DateTimeOffset(2026, 1, 1, 22, 0, 0, TimeSpan.Zero));
+            await InsertLightAsync("M42", 3600, new DateTimeOffset(2026, 1, 2, 22, 0, 0, TimeSpan.Zero));
+            await InsertLightAsync("M31", 3600, new DateTimeOffset(2026, 1, 3, 22, 0, 0, TimeSpan.Zero));
+            await InsertFrameAsync("dark", "M31", 600, new DateTimeOffset(2026, 1, 1, 21, 0, 0, TimeSpan.Zero));
+
+            var a = await _svc.GetAchievementsAsync(CancellationToken.None);
+
+            Assert.That(a.TotalNightsImaged, Is.EqualTo(3));
+            Assert.That(a.TotalLightFrames, Is.EqualTo(3), "dark frame excluded");
+            Assert.That(a.TotalIntegrationHours, Is.EqualTo(12).Within(1e-6));
+            Assert.That(a.LongestNightHours, Is.EqualTo(10).Within(1e-6));
+            Assert.That(a.UniqueTargetsImaged, Is.EqualTo(2));
+            Assert.That(a.LongestStreakNights, Is.EqualTo(3));
+            Assert.That(a.CurrentStreakNights, Is.EqualTo(3), "all nights consecutive, ending at the latest");
+            Assert.That(a.FirstLightUtc, Is.EqualTo(new DateTimeOffset(2026, 1, 1, 22, 0, 0, TimeSpan.Zero)));
+
+            var hours10 = a.Milestones.Single(m => m.Id == "hours_10");
+            Assert.That(hours10.Achieved, Is.True, "12h ≥ 10h threshold");
+            Assert.That(hours10.Current, Is.EqualTo(12).Within(1e-6));
+            Assert.That(a.Milestones.Single(m => m.Id == "hours_50").Achieved, Is.False);
+            Assert.That(a.Milestones.Single(m => m.Id == "targets_10").Achieved, Is.False, "only 2 targets");
+        }
+
+        [Test]
+        public async Task Current_streak_resets_after_a_gap_but_longest_is_retained() {
+            await InsertLightAsync("M31", 3600, new DateTimeOffset(2026, 2, 1, 22, 0, 0, TimeSpan.Zero));
+            await InsertLightAsync("M31", 3600, new DateTimeOffset(2026, 2, 2, 22, 0, 0, TimeSpan.Zero));
+            // gap on 02-03/04
+            await InsertLightAsync("M31", 3600, new DateTimeOffset(2026, 2, 5, 22, 0, 0, TimeSpan.Zero));
+
+            var a = await _svc.GetAchievementsAsync(CancellationToken.None);
+
+            Assert.That(a.TotalNightsImaged, Is.EqualTo(3));
+            Assert.That(a.LongestStreakNights, Is.EqualTo(2), "the 02-01→02-02 run");
+            Assert.That(a.CurrentStreakNights, Is.EqualTo(1), "the run ending at 02-05 is just that night");
+        }
+
+        [Test]
+        public async Task Multiple_frames_on_one_night_count_as_a_single_night() {
+            await InsertLightAsync("M31", 1800, new DateTimeOffset(2026, 3, 1, 22, 0, 0, TimeSpan.Zero));
+            await InsertLightAsync("M31", 1800, new DateTimeOffset(2026, 3, 1, 23, 0, 0, TimeSpan.Zero));
+
+            var a = await _svc.GetAchievementsAsync(CancellationToken.None);
+            Assert.That(a.TotalNightsImaged, Is.EqualTo(1));
+            Assert.That(a.TotalLightFrames, Is.EqualTo(2));
+            Assert.That(a.LongestNightHours, Is.EqualTo(1).Within(1e-6), "1800+1800s = 1h that night");
+        }
+
+        // ── helpers ────────────────────────────────────────────────────────────
+
+        private Task InsertLightAsync(string target, int exposureSeconds, DateTimeOffset capturedUtc) =>
+            InsertFrameAsync("light", target, exposureSeconds, capturedUtc);
+
+        private async Task InsertSessionAsync(Guid id) {
+            await using var conn = _db.OpenConnection();
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = """
+                INSERT INTO sessions (id, profile_id, sequence_json, started_at, ended_at,
+                    recovery_needed, last_completed_instruction_id, current_target_id, frame_count)
+                VALUES ($id, NULL, NULL, $t, $t, 0, NULL, NULL, 0);
+                """;
+            cmd.Parameters.AddWithValue("$id", id.ToString());
+            cmd.Parameters.AddWithValue("$t", DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture));
+            await cmd.ExecuteNonQueryAsync(CancellationToken.None);
+        }
+
+        private async Task InsertFrameAsync(string frameType, string target, int exposureSeconds, DateTimeOffset capturedUtc) {
+            await using var conn = _db.OpenConnection();
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = """
+                INSERT INTO frames (id, session_id, target_name, frame_type, filter_name,
+                    exposure_seconds, gain, temperature_c, captured_utc, file_path,
+                    file_size_bytes, width, height, bit_depth)
+                VALUES ($id, $sid, $target, $type, NULL, $exp, 100, -10.0, $utc,
+                    $path, 1000, 16, 16, 16);
+                """;
+            cmd.Parameters.AddWithValue("$id", Guid.NewGuid().ToString());
+            cmd.Parameters.AddWithValue("$sid", Session.ToString());
+            cmd.Parameters.AddWithValue("$target", target);
+            cmd.Parameters.AddWithValue("$type", frameType);
+            cmd.Parameters.AddWithValue("$exp", exposureSeconds);
+            cmd.Parameters.AddWithValue("$utc", capturedUtc.ToString("O", CultureInfo.InvariantCulture));
+            cmd.Parameters.AddWithValue("$path", $"/tmp/{Guid.NewGuid():N}.fits");
+            await cmd.ExecuteNonQueryAsync(CancellationToken.None);
+        }
+    }
+}

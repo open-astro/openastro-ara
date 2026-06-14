@@ -288,6 +288,97 @@ public sealed class SqliteStatsService : IStatsService {
         return new StatsCalendarDto(days);
     }
 
+    public async Task<StatsAchievementsDto> GetAchievementsAsync(CancellationToken ct) {
+        await using var conn = _db.OpenConnection();
+
+        // Headline aggregates over light frames.
+        await using var aggCmd = conn.CreateCommand();
+        aggCmd.CommandText = """
+            SELECT
+                COUNT(*) AS light_frames,
+                CAST(IFNULL(SUM(exposure_seconds), 0) AS REAL) / 3600.0 AS integration_hours,
+                COUNT(DISTINCT target_name) AS unique_targets,
+                MIN(captured_utc) AS first_light
+            FROM frames WHERE frame_type = 'light';
+            """;
+        var totalLightFrames = 0;
+        var totalHours = 0.0;
+        var uniqueTargets = 0;
+        DateTimeOffset? firstLight = null;
+        await using (var r = await aggCmd.ExecuteReaderAsync(ct)) {
+            if (await r.ReadAsync(ct)) {
+                totalLightFrames = r.GetInt32(0);
+                totalHours = r.GetDouble(1);
+                uniqueTargets = r.GetInt32(2);
+                if (!await r.IsDBNullAsync(3, ct) &&
+                    DateTimeOffset.TryParse(r.GetString(3), CultureInfo.InvariantCulture,
+                        DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var fl)) {
+                    firstLight = fl;
+                }
+            }
+        }
+
+        // Per-night integration (distinct capture days, same date() basis as the calendar view).
+        await using var nightsCmd = conn.CreateCommand();
+        nightsCmd.CommandText = """
+            SELECT date(captured_utc) AS day,
+                   CAST(IFNULL(SUM(exposure_seconds), 0) AS REAL) / 3600.0 AS hours
+            FROM frames WHERE frame_type = 'light'
+            GROUP BY day ORDER BY day ASC;
+            """;
+        var nights = new List<DateOnly>();
+        var longestNightHours = 0.0;
+        await using (var r = await nightsCmd.ExecuteReaderAsync(ct)) {
+            while (await r.ReadAsync(ct)) {
+                nights.Add(DateOnly.Parse(r.GetString(0), CultureInfo.InvariantCulture));
+                longestNightHours = Math.Max(longestNightHours, r.GetDouble(1));
+            }
+        }
+
+        var (longestStreak, currentStreak) = ComputeStreaks(nights);
+
+        return new StatsAchievementsDto(
+            TotalNightsImaged: nights.Count,
+            LongestStreakNights: longestStreak,
+            CurrentStreakNights: currentStreak,
+            LongestNightHours: longestNightHours,
+            TotalIntegrationHours: totalHours,
+            UniqueTargetsImaged: uniqueTargets,
+            TotalLightFrames: totalLightFrames,
+            FirstLightUtc: firstLight,
+            Milestones: BuildMilestones(totalHours, uniqueTargets, nights.Count, totalLightFrames));
+    }
+
+    // Longest run of consecutive calendar days, and the run ending at the most recent night
+    // (the "current" streak). `nights` is ascending + de-duplicated by the GROUP BY.
+    private static (int Longest, int Current) ComputeStreaks(List<DateOnly> nights) {
+        if (nights.Count == 0) {
+            return (0, 0);
+        }
+        var longest = 1;
+        var run = 1;
+        for (var i = 1; i < nights.Count; i++) {
+            run = nights[i] == nights[i - 1].AddDays(1) ? run + 1 : 1;
+            longest = Math.Max(longest, run);
+        }
+        return (longest, run);
+    }
+
+    private static StatsMilestoneDto[] BuildMilestones(double hours, int targets, int nights, int frames) {
+        static StatsMilestoneDto M(string id, string title, string desc, double threshold, double current) =>
+            new(id, title, desc, current >= threshold, threshold, current);
+        return new[] {
+            M("hours_10", "Getting started", "10 hours of integration", 10, hours),
+            M("hours_50", "Seasoned imager", "50 hours of integration", 50, hours),
+            M("hours_100", "Centurion", "100 hours of integration", 100, hours),
+            M("targets_10", "Explorer", "10 unique targets imaged", 10, targets),
+            M("targets_25", "Cartographer", "25 unique targets imaged", 25, targets),
+            M("nights_10", "Night owl", "10 nights under the stars", 10, nights),
+            M("nights_50", "Dark-sky devotee", "50 nights under the stars", 50, nights),
+            M("frames_1000", "Light collector", "1000 light frames captured", 1000, frames),
+        };
+    }
+
     public async Task<(Stream Stream, string FileName)?> OpenCsvExportAsync(string scope, CancellationToken ct) {
         // v0.0.1: scope is informational; we always dump the full frames
         // table. Filter-by-scope queries (per-session, per-target) land
