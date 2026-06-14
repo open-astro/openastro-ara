@@ -34,6 +34,7 @@ class _FakeDataManagerClient implements DataManagerClient {
   bool? lastForce;
   final List<String> cancelled = <String>[];
   final List<String> deleted = <String>[];
+  bool throwOnDelete = false;
 
   @override
   Future<List<DataPackage>> listPackages() async {
@@ -55,6 +56,7 @@ class _FakeDataManagerClient implements DataManagerClient {
   @override
   Future<bool> delete(String packageId) async {
     deleted.add(packageId);
+    if (throwOnDelete) throw StateError('delete failed');
     packages = packages.where((p) => p.id != packageId).toList();
     return true;
   }
@@ -137,6 +139,20 @@ void main() {
       expect(api.deleted, ['tycho-2']);
       final pkgs = c.read(dataManagerPackagesProvider).value!;
       expect(pkgs.map((p) => p.id), ['gaia-edr3-bright'], reason: 'the catalog re-reads after delete');
+    });
+
+    test('delete re-reads the catalog even when the delete call throws', () async {
+      final api = _FakeDataManagerClient(const [DataPackage(id: 'tycho-2')])..throwOnDelete = true;
+      final c = _container(const [_server], api);
+      await c.read(savedServersProvider.future);
+      await c.read(dataManagerPackagesProvider.future);
+      final listsBefore = api.lists;
+
+      await expectLater(
+        c.read(dataManagerPackagesProvider.notifier).delete('tycho-2'),
+        throwsA(isA<StateError>()),
+      );
+      expect(api.lists, greaterThan(listsBefore), reason: 'refresh runs in the finally even on a failed delete');
     });
   });
 

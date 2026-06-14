@@ -71,16 +71,22 @@ class DataManagerApi implements DataManagerClient {
 
   @override
   Future<void> cancel(String downloadId) async {
-    await _dio.post<void>('/api/v1/data-manager/cancel/$downloadId');
+    await _dio.post<void>('/api/v1/data-manager/cancel/${Uri.encodeComponent(downloadId)}');
   }
 
   @override
   Future<bool> delete(String packageId) async {
-    final res = await _dio.delete<void>('/api/v1/data-manager/$packageId');
-    // 204 No Content → freed; 404 → nothing to delete (Dio throws on 404, caught
-    // by the caller). Treat any 2xx as success.
-    final code = res.statusCode ?? 0;
-    return code >= 200 && code < 300;
+    try {
+      final res = await _dio.delete<void>('/api/v1/data-manager/${Uri.encodeComponent(packageId)}');
+      // 204 No Content → freed. Any 2xx is success.
+      final code = res.statusCode ?? 0;
+      return code >= 200 && code < 300;
+    } on DioException catch (e) {
+      // 404 → already gone (another client removed it). Delete is idempotent, so
+      // a missing package is a no-op success, not an error; anything else propagates.
+      if (e.response?.statusCode == 404) return false;
+      rethrow;
+    }
   }
 
   @override

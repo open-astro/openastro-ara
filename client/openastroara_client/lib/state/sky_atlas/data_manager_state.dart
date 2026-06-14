@@ -64,25 +64,40 @@ class DataManagerPackagesNotifier extends AsyncNotifier<List<DataPackage>?> {
   Future<void> delete(String packageId) async {
     final api = ref.read(dataManagerApiProvider);
     if (api == null) return;
-    await api.delete(packageId);
-    await refresh();
+    try {
+      await api.delete(packageId);
+    } finally {
+      // Always refresh so the catalog reflects reality even if delete errored — a
+      // 404 (already gone) is swallowed in the API, and on any other failure the
+      // list should still re-read rather than stay stale showing it installed.
+      await refresh();
+    }
   }
 
   bool _refreshing = false;
+  bool _refreshPending = false;
 
-  /// Manual / on-complete refresh. Skips when one is already running.
+  /// Manual / on-complete refresh. If one is already running, coalesce: flag a
+  /// pending re-read so a refresh triggered mid-flight (e.g. a download.complete
+  /// landing during a prior poll) isn't silently dropped — it runs once more.
   Future<void> refresh() async {
-    if (_refreshing) return;
+    if (_refreshing) {
+      _refreshPending = true;
+      return;
+    }
     _refreshing = true;
     try {
-      if (!ref.mounted) return;
-      final gen = _generation;
-      final api = ref.read(dataManagerApiProvider);
-      final next = await AsyncValue.guard<List<DataPackage>?>(() async {
-        if (api == null) return null;
-        return api.listPackages();
-      });
-      if (ref.mounted && gen == _generation) state = next;
+      do {
+        _refreshPending = false;
+        if (!ref.mounted) return;
+        final gen = _generation;
+        final api = ref.read(dataManagerApiProvider);
+        final next = await AsyncValue.guard<List<DataPackage>?>(() async {
+          if (api == null) return null;
+          return api.listPackages();
+        });
+        if (ref.mounted && gen == _generation) state = next;
+      } while (_refreshPending);
     } finally {
       _refreshing = false;
     }
@@ -97,6 +112,10 @@ final dataManagerPackagesProvider =
 /// from the `data_manager.download.{progress,complete,failed}` WS stream. Reads
 /// as empty when no server is connected. A `.complete` event also pokes the
 /// packages provider to re-read install state.
+///
+/// Terminal entries (`complete` / `failed`) stay in the map until the server
+/// reconnects (which rebuilds this notifier with a fresh empty map) — the slice-2
+/// UI decides how to surface or dismiss a finished row.
 class DataManagerDownloadsNotifier extends Notifier<Map<String, DownloadProgress>> {
   @override
   Map<String, DownloadProgress> build() {
