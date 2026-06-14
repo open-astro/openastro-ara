@@ -62,8 +62,9 @@ class BackupApi implements BackupClient {
     return data
         .whereType<Map<String, dynamic>>()
         .map(BackupSnapshot.fromJson)
-        // Drop an id-less (malformed) entry — the id keys download/restore.
-        .where((s) => s.backupId.isNotEmpty)
+        // Drop a malformed entry — id keys the row, and downloadUrl is required to
+        // download or restore it, so an entry missing either is unusable.
+        .where((s) => s.backupId.isNotEmpty && s.downloadUrl.isNotEmpty)
         .toList(growable: false);
   }
 
@@ -79,7 +80,11 @@ class BackupApi implements BackupClient {
     required bool profiles,
     required bool sequences,
   }) async {
-    assert(sourceUrl.isNotEmpty, 'sourceUrl must not be empty');
+    // A real guard (not a release-stripped assert): an empty source would otherwise
+    // reach the daemon as a confusing 422 that doesn't reflect the client mistake.
+    if (sourceUrl.isEmpty) {
+      throw ArgumentError.value(sourceUrl, 'sourceUrl', 'must not be empty');
+    }
     final res = await _dio.post<dynamic>(
       '/api/v1/backup/restore-zip',
       data: <String, dynamic>{
@@ -90,6 +95,9 @@ class BackupApi implements BackupClient {
         'restore_frame_metadata': false,
         'restore_logs': false,
       },
+      // Restore does the atomic swap + rollback over the sequences/ tree — give it
+      // more headroom than the default read timeout for a larger tree on Pi hardware.
+      options: Options(receiveTimeout: const Duration(seconds: 60)),
     );
     return _operationId(res.data, 'restore-zip');
   }

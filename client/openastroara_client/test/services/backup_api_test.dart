@@ -38,10 +38,11 @@ BackupApi _api(_FakeAdapter adapter) => BackupApi(_server, dio: Dio()..httpClien
 
 void main() {
   group('BackupApi.listSnapshots', () {
-    test('parses an array body and drops id-less entries', () async {
+    test('parses an array body and drops unusable entries (no id or no download url)', () async {
       final api = _api(_FakeAdapter((_) => _json(<dynamic>[
-            {'backup_id': 'b1', 'size_bytes': 10, 'included_areas': ['profiles']},
+            {'backup_id': 'b1', 'download_url': '/dl/b1', 'size_bytes': 10, 'included_areas': ['profiles']},
             {'size_bytes': 99}, // id-less → dropped
+            {'backup_id': 'b2'}, // no download_url → dropped
           ])));
       final list = await api.listSnapshots();
       expect(list, hasLength(1));

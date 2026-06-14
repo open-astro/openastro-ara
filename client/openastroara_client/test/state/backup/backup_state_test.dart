@@ -151,7 +151,13 @@ void main() {
       final c = _container(const [], _FakeBackupClient(const []));
       await c.read(savedServersProvider.future);
       await c.read(backupSnapshotsProvider.future);
-      expect(await c.read(backupSnapshotsProvider.notifier).createBackup(), isNull);
+      final notifier = c.read(backupSnapshotsProvider.notifier);
+      expect(await notifier.createBackup(), isNull);
+      expect(
+        await notifier.restore(const BackupSnapshot(backupId: 'b1', downloadUrl: '/dl/b1'),
+            profiles: true, sequences: true),
+        isNull,
+      );
     });
   });
 }
