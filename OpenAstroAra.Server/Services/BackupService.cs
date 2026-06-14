@@ -111,7 +111,10 @@ namespace OpenAstroAra.Server.Services {
                 using (var zipStream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None))
                 using (var archive = new ZipArchive(zipStream, ZipArchiveMode.Create)) {
                     var profilePath = Path.Combine(_profileDir, ProfileFileName);
-                    if (File.Exists(profilePath)) {
+                    if (File.Exists(profilePath) && !IsReparsePoint(profilePath)) {
+                        // Skip a symlinked profile.json for the same reason AddDirectory skips links in sequences/ —
+                        // CreateEntryFromFile would follow it and bundle whatever it points at, possibly outside the
+                        // profile root. A real profile.json is a plain file.
                         archive.CreateEntryFromFile(profilePath, ProfileFileName, CompressionLevel.Optimal);
                         areas.Add("profiles");
                     }
@@ -163,6 +166,9 @@ namespace OpenAstroAra.Server.Services {
             }
             return added;
         }
+
+        private static bool IsReparsePoint(string path) =>
+            (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0;
 
         private static string HashFile(string path) {
             using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
@@ -243,6 +249,7 @@ namespace OpenAstroAra.Server.Services {
             } catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException or UnauthorizedAccessException) {
                 // Vanished or became inaccessible between the scan and the open (deleted, or perms revoked) — report
                 // not-found rather than a torn 500, consistent with how TryReadSnapshot treats an unreadable archive.
+                LogSnapshotVanished(path, ex);
                 return null;
             }
         }
@@ -319,6 +326,9 @@ namespace OpenAstroAra.Server.Services {
         [LoggerMessage(Level = LogLevel.Warning,
             Message = "Backup restore requested but not yet implemented (§43-2); request accepted as a no-op — no config was rolled back")]
         partial void LogRestoreNotImplemented();
+
+        [LoggerMessage(Level = LogLevel.Warning, Message = "Backup archive {ArchivePath} vanished between resolve and open — serving 404")]
+        partial void LogSnapshotVanished(string archivePath, Exception ex);
     }
 
     /// <summary>On-disk backup manifest (sidecar <c>.meta.json</c>). The download URL in <see cref="BackupZipDto"/>

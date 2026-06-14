@@ -146,6 +146,34 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Create_does_not_follow_a_symlinked_profile_json() {
+            WriteSequence("real.json", "{}");
+            var outside = Path.Combine(Path.GetTempPath(), "ara-backup-outside-" + Path.GetRandomFileName());
+            Directory.CreateDirectory(outside);
+            try {
+                var secret = Path.Combine(outside, "creds.json");
+                await File.WriteAllTextAsync(secret, "{\"password\":\"do-not-leak\"}");
+                try {
+                    File.CreateSymbolicLink(Path.Combine(_profileDir, "profile.json"), secret);
+                } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or PlatformNotSupportedException) {
+                    Assert.Ignore("symlink creation not permitted on this platform/runner");
+                }
+
+                await _svc.CreateZipAsync(idempotencyKey: null, CancellationToken.None);
+                var snap = (await _svc.ListSnapshotsAsync(CancellationToken.None)).Single();
+                var entries = ZipEntryNames(Directory.GetFiles(_backupsDir, "backup-*.zip").Single());
+
+                Assert.That(entries, Has.None.EqualTo("profile.json"), "a symlinked profile.json isn't archived");
+                Assert.That(snap.IncludedAreas, Has.None.EqualTo("profiles"), "the profiles area isn't claimed");
+                Assert.That(snap.IncludedAreas, Does.Contain("sequences"), "real areas are still backed up");
+            } finally {
+                if (Directory.Exists(outside)) {
+                    Directory.Delete(outside, recursive: true);
+                }
+            }
+        }
+
+        [Test]
         public async Task Create_only_claims_areas_that_exist() {
             WriteProfile();
             // No sequences/ dir.
@@ -201,12 +229,15 @@ namespace OpenAstroAra.Test {
         public async Task List_orders_snapshots_newest_first() {
             WriteProfile();
             await _svc.CreateZipAsync(idempotencyKey: null, CancellationToken.None);
+            // Guarantee distinct CreatedUtc stamps so the ordering assert is meaningful, not trivially true on a
+            // tie — DateTimeOffset.UtcNow resolution can be ~15ms on Windows, enough to tie two back-to-back creates.
+            await Task.Delay(25);
             await _svc.CreateZipAsync(idempotencyKey: null, CancellationToken.None);
 
             var snapshots = await _svc.ListSnapshotsAsync(CancellationToken.None);
 
             Assert.That(snapshots, Has.Count.EqualTo(2));
-            Assert.That(snapshots[0].CreatedUtc, Is.GreaterThanOrEqualTo(snapshots[1].CreatedUtc),
+            Assert.That(snapshots[0].CreatedUtc, Is.GreaterThan(snapshots[1].CreatedUtc),
                 "the most recent snapshot is listed first");
         }
 
