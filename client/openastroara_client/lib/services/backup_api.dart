@@ -92,6 +92,8 @@ class BackupApi implements BackupClient {
         'restore_profiles': profiles,
         'restore_sequences': sequences,
         // §43-1 backups don't carry these areas yet; send false explicitly.
+        // TODO(§43-2b): parameterize restore_frame_metadata / restore_logs once create captures those areas
+        // (interface + this impl + the notifier action all gain the flags).
         'restore_frame_metadata': false,
         'restore_logs': false,
       },

@@ -80,6 +80,14 @@ void main() {
       expect(body['restore_frame_metadata'], isFalse);
       expect(body['restore_logs'], isFalse);
     });
+
+    test('rejects an empty source url before hitting the network', () async {
+      final api = _api(_FakeAdapter((_) => _json(<String, dynamic>{'operation_id': 'unused'})));
+      await expectLater(
+        api.restore(sourceUrl: '', profiles: true, sequences: true),
+        throwsA(isA<ArgumentError>()),
+      );
+    });
   });
 
   group('BackupApi.absoluteDownloadUrl', () {
