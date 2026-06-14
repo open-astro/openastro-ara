@@ -7,21 +7,51 @@ import '../../../models/stats/calendar_stats.dart';
 import '../../../state/stats/calendar_state.dart';
 import '../../../theme/ara_colors.dart';
 import 'chart_card.dart';
+import 'chart_stale_chip.dart';
 
 /// §50.6 GitHub-style calendar heatmap — one cell per day in a rolling
 /// [_daysShown]-day window, shaded by that night's integration minutes, from
 /// the live daemon (`GET /api/v1/stats/calendar`). Replaces the Phase-12g demo
 /// that summed integration from the in-memory library. fl_chart has no native
 /// heatmap, so this is a Wrap of square tiles.
-class CalendarHeatmap extends ConsumerWidget {
+class CalendarHeatmap extends ConsumerStatefulWidget {
   const CalendarHeatmap({super.key});
 
+  @override
+  ConsumerState<CalendarHeatmap> createState() => _CalendarHeatmapState();
+}
+
+class _CalendarHeatmapState extends ConsumerState<CalendarHeatmap> {
   static const int _daysShown = 49;
 
+  // Local spinner/banner flags so the heatmap stays on screen during and after
+  // a manual refresh (refresh() holds the old data). See StatsRefreshMixin.
+  bool _refreshing = false;
+  bool _staleError = false;
+
+  Future<void> _refresh() async {
+    if (_refreshing) return;
+    setState(() => _refreshing = true);
+    try {
+      await ref.read(calendarProvider.notifier).refresh();
+      if (mounted) setState(() => _staleError = false);
+    } catch (_) {
+      if (mounted) setState(() => _staleError = true);
+    } finally {
+      if (mounted) setState(() => _refreshing = false);
+    }
+  }
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
+    ref.listen(calendarProvider, (_, next) {
+      if (_staleError && next.hasValue && !next.isLoading) {
+        setState(() => _staleError = false);
+      }
+    });
     final async = ref.watch(calendarProvider);
     final stats = async.asData?.value;
+    final spinning = _refreshing || (async.isLoading && stats == null);
 
     // Real wall-clock — the rolling window advances as time moves.
     final now = DateTime.now();
@@ -50,7 +80,15 @@ class CalendarHeatmap extends ConsumerWidget {
       height: 200,
       child: Stack(
         children: [
-          _body(context, ref, async, stats, start, today, perDay, maxMins),
+          _body(async, stats, start, perDay, maxMins),
+          if (_staleError && stats != null)
+            const Positioned(
+              top: 0,
+              left: 4,
+              child: ChartStaleChip(
+                tooltip: 'Couldn’t refresh — showing the last loaded calendar.',
+              ),
+            ),
           Positioned(
             top: 0,
             right: 4,
@@ -58,11 +96,8 @@ class CalendarHeatmap extends ConsumerWidget {
               tooltip: 'Refresh',
               iconSize: 18,
               visualDensity: VisualDensity.compact,
-              onPressed: async.isLoading
-                  ? null
-                  : () =>
-                      unawaited(ref.read(calendarProvider.notifier).refresh()),
-              icon: async.isLoading
+              onPressed: spinning ? null : () => unawaited(_refresh()),
+              icon: spinning
                   ? const SizedBox(
                       width: 16,
                       height: 16,
@@ -76,12 +111,9 @@ class CalendarHeatmap extends ConsumerWidget {
   }
 
   Widget _body(
-    BuildContext context,
-    WidgetRef ref,
     AsyncValue<CalendarStats?> async,
     CalendarStats? stats,
     DateTime start,
-    DateTime today,
     Map<String, int> perDay,
     int maxMins,
   ) {
@@ -91,7 +123,7 @@ class CalendarHeatmap extends ConsumerWidget {
     if (async.hasError && stats == null) {
       return _Hint(
         'Could not load the calendar.',
-        onRetry: () => unawaited(ref.read(calendarProvider.notifier).refresh()),
+        onRetry: () => unawaited(_refresh()),
       );
     }
     if (stats == null) {
@@ -146,11 +178,13 @@ class CalendarHeatmap extends ConsumerWidget {
     );
   }
 
-  static Color _shade(double t) {
-    if (t <= 0) return AraColors.bgPanel;
-    final base = AraColors.selectionBg;
-    return Color.lerp(AraColors.border, base, t.clamp(0.05, 1.0)) ?? base;
-  }
+}
+
+// Cell shade scales with that day's integration vs the window peak.
+Color _shade(double t) {
+  if (t <= 0) return AraColors.bgPanel;
+  final base = AraColors.selectionBg;
+  return Color.lerp(AraColors.border, base, t.clamp(0.05, 1.0)) ?? base;
 }
 
 class _Cell extends StatelessWidget {
@@ -173,7 +207,7 @@ class _Cell extends StatelessWidget {
         width: 16,
         height: 16,
         decoration: BoxDecoration(
-          color: CalendarHeatmap._shade(t),
+          color: _shade(t),
           borderRadius: BorderRadius.circular(3),
           border: Border.all(color: AraColors.border, width: 0.5),
         ),

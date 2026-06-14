@@ -665,24 +665,15 @@ Deferred to **§43-2**:
   caught exception, not a SIGKILL). Tiny + harmless, but with no startup sweep they'd accumulate. A boot-time sweep of
   `{profileDir}/client-settings.json.tmp-*` (mirroring §36-2c `SweepStaleScratch`) would reclaim them. Low priority
   under the trust model. Surfaced 2026-06-14 by the §55.1 round-3 review.
-- **Stats sections: finish the persist-through-refresh migration (low priority, §50). IN PROGRESS.** A shared
-  `StatsRefreshMixin<T>` (`lib/state/stats/stats_refresh_mixin.dart`) now provides the Achievements-style refresh:
-  swap-on-success-only (no `AsyncValue.loading()` flash), keep last-good data + rethrow on failure (widget shows a stale
-  banner via a local flag), `ref.mounted` guard, and a build-generation guard for server-switch. **Overview**, **Targets**,
-  **Best Frames**, **Frame Quality** (chart), and **Guiding RMS** (chart) are converted (notifier +
-  `ConsumerStatefulWidget` widget + tests; charts use the shared `ChartStaleChip` overlay in place of the tile sections'
-  banner). **Remaining to convert the same way:** Calendar (chart) — the last one, still on the older
-  `loading()`-then-guard refresh.
-  One small PR per section/chart. This also subsumes the earlier separate "post-await `ref.mounted` guard" item for these
-  notifiers. Surfaced 2026-06-14 by the #434 review; mixin + Overview landed in the refresh-overview slice.
-- **Stats refresh notifiers: add a post-await `ref.mounted` guard (defensive, §50).** The live §50 stats
-  `AsyncNotifier`s (Overview, Targets, Best Frames, Frame Quality) write `state = next` after the awaited fetch in
-  `refresh()` without checking `ref.mounted`. Today this is unreachable — the providers are non-autoDispose (so they
-  aren't disposed on nav-away) and a server switch re-runs `build()` which bumps the generation guard and discards the
-  stale refresh — so `state =` can't land on a disposed notifier. But if any of these later become autoDispose, the
-  reviewer-flagged "Notifier already disposed" StateError becomes reachable. A one-line `if (!ref.mounted) return;`
-  before the final `state = next` in each refresh() (or a shared `RefreshableStatsNotifier` mixin) would make it
-  correct-by-construction. Cross-cutting (4 notifiers), so its own consistency slice. Surfaced 2026-06-14 by the #436 review.
+- **Stats sections: persist-through-refresh migration — DONE (§50).** A shared `StatsRefreshMixin<T>`
+  (`lib/state/stats/stats_refresh_mixin.dart`) provides the Achievements-style refresh: swap-on-success-only (no
+  `AsyncValue.loading()` flash), keep last-good data + rethrow on failure (widget shows a stale banner/chip via a local
+  flag), `ref.mounted` guard, and a build-generation guard for server-switch (including the error path). **All six live
+  Stats sections** — Overview, Targets, Best Frames, and the Frame Quality / Guiding RMS / Calendar charts — are converted
+  (notifier + `ConsumerStatefulWidget` widget + tests; charts use the shared `ChartStaleChip` overlay in place of the tile
+  sections' banner). The §50.19 Achievements section was already on this pattern (the original template). Landed across the
+  refresh-* slices 2026-06-14; subsumes the earlier separate "post-await `ref.mounted` guard" item (the mixin's
+  `refreshUsing` includes the `ref.mounted` guard for every section).
 - **Best Frames: validate `frame_id` rather than degrading to '' (§50).** `BestFrame.fromJson` degrades a missing/wrong-typed
   `frame_id` to an empty string. Harmless today (the tile never reads `frameId`), but when per-frame detail drill-down lands,
   an empty id would silently misbehave rather than surfacing a parse error. Tighten when the drill-down navigation is built.

@@ -99,7 +99,7 @@ void main() {
       expect(api.fetches, 2);
     });
 
-    test('a fetch failure lands in the provider error state', () async {
+    test('an initial-load failure lands in the provider error state', () async {
       final api = _FakeCalendarClient(const CalendarStats())..throwOnFetch = true;
       final c = _container(const [_server], api);
       await c.read(savedServersProvider.future);
@@ -107,7 +107,34 @@ void main() {
       expect(c.read(calendarProvider).hasError, isTrue);
     });
 
-    test('a slow earlier refresh cannot clobber a newer one (generation guard)', () async {
+    test('a failed refresh keeps the prior calendar and rethrows (no blanking)', () async {
+      final api = _FakeCalendarClient(_stats(7));
+      final c = _container(const [_server], api);
+      await c.read(savedServersProvider.future);
+      await c.read(calendarProvider.future);
+
+      api.throwOnFetch = true;
+      await expectLater(
+          c.read(calendarProvider.notifier).refresh(), throwsA(isA<StateError>()));
+      expect(c.read(calendarProvider).hasError, isFalse);
+      expect(c.read(calendarProvider).value!.days.single.frameCount, 7);
+    });
+
+    test('a successful refresh swaps the new calendar in without a loading flash', () async {
+      final api = _FakeCalendarClient(_stats(1));
+      final c = _container(const [_server], api);
+      await c.read(savedServersProvider.future);
+      await c.read(calendarProvider.future);
+
+      api.value = _stats(9);
+      final future = c.read(calendarProvider.notifier).refresh();
+      expect(c.read(calendarProvider).isLoading, isFalse);
+      expect(c.read(calendarProvider).value!.days.single.frameCount, 1);
+      await future;
+      expect(c.read(calendarProvider).value!.days.single.frameCount, 9);
+    });
+
+    test('a server switch mid-refresh discards the stale result (generation guard)', () async {
       final api = _GatedCalendarClient();
       final c = _container(const [_server], api);
       await c.read(savedServersProvider.future);
@@ -115,15 +142,13 @@ void main() {
       api.calls[0].complete(_stats(1));
       await built;
 
-      final first = c.read(calendarProvider.notifier).refresh();
-      final second = c.read(calendarProvider.notifier).refresh();
-      expect(api.calls.length, 3);
+      final notifier = c.read(calendarProvider.notifier);
+      final refreshing = notifier.refresh(); // captures generation; calls[1] pending
+      notifier.markBuild(); // stand in for a server-switch build() re-run
+      api.calls[1].complete(_stats(99)); // now stale
+      await refreshing;
 
-      api.calls[2].complete(_stats(9));
-      api.calls[1].complete(_stats(5));
-      await Future.wait([first, second]);
-
-      expect(c.read(calendarProvider).value!.days.single.frameCount, 9);
+      expect(c.read(calendarProvider).value!.days.single.frameCount, 1);
     });
   });
 }
