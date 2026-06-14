@@ -79,6 +79,9 @@ namespace OpenAstroAra.Server.Services {
         }
 
         public async Task<OperationAcceptedDto> CreateZipAsync(string? idempotencyKey, CancellationToken ct) {
+            // idempotencyKey is echoed back but NOT enforced in §43-1: a retried POST with the same key produces a new
+            // archive each time. De-dup (key → already-created snapshot id) lands with the §43-2 worker rework; tracked
+            // in PORT_TODO. Harmless for now beyond extra archives (no retention pruning yet — also §43-2).
             var id = Guid.NewGuid();
             var createdUtc = DateTimeOffset.UtcNow;
 
@@ -122,7 +125,7 @@ namespace OpenAstroAra.Server.Services {
                     }
 
                     var sequencesDir = Path.Combine(_profileDir, SequencesDirName);
-                    if (Directory.Exists(sequencesDir) && AddDirectory(archive, sequencesDir, SequencesDirName)) {
+                    if (Directory.Exists(sequencesDir) && AddDirectory(archive, sequencesDir, SequencesDirName, ct)) {
                         areas.Add("sequences");
                     }
                 }
@@ -160,15 +163,18 @@ namespace OpenAstroAra.Server.Services {
         // Symlinks (file and directory) are skipped: Directory.EnumerateFiles(AllDirectories) would follow a directory
         // symlink and bundle whatever it points at — including a target outside _profileDir — so the walk is manual
         // and refuses to descend into or capture any reparse point.
-        private static bool AddDirectory(ZipArchive archive, string sourceDir, string entryRoot) {
+        private static bool AddDirectory(ZipArchive archive, string sourceDir, string entryRoot, CancellationToken ct) {
             var added = false;
             var dir = new DirectoryInfo(sourceDir);
             foreach (var entry in dir.EnumerateFileSystemInfos("*", SearchOption.TopDirectoryOnly)) {
+                // Cancellation checkpoint per entry so a large sequences/ tree aborts promptly rather than only at the
+                // outer checks before/after the whole archive is assembled (matters once §43-2 areas grow the payload).
+                ct.ThrowIfCancellationRequested();
                 if ((entry.Attributes & FileAttributes.ReparsePoint) != 0) {
                     continue; // symlink / junction — don't follow it out of the backup root.
                 }
                 if (entry is DirectoryInfo sub) {
-                    added |= AddDirectory(archive, sub.FullName, entryRoot + "/" + sub.Name);
+                    added |= AddDirectory(archive, sub.FullName, entryRoot + "/" + sub.Name, ct);
                 } else {
                     archive.CreateEntryFromFile(entry.FullName, entryRoot + "/" + entry.Name, CompressionLevel.Optimal);
                     added = true;
@@ -291,20 +297,15 @@ namespace OpenAstroAra.Server.Services {
         private static Uri SnapshotDownloadUrl(Guid id) =>
             new("/api/v1/backup/snapshot/" + id.ToString("D", CultureInfo.InvariantCulture) + "/download", UriKind.Relative);
 
-        public Task<OperationAcceptedDto> RestoreZipAsync(RestoreRequestDto request, string? idempotencyKey, CancellationToken ct) {
+        public Task RestoreZipAsync(RestoreRequestDto request, string? idempotencyKey, CancellationToken ct) {
             ArgumentNullException.ThrowIfNull(request);
             // §43-2: restore overwrites live config (profile.json / sequences) and is destructive — it lands with the
-            // staged-swap + restore-progress state machine. Until then it does nothing, and the endpoint signals that
-            // honestly with 501 Not Implemented rather than a 202 that a client would read as a successful rollback
-            // (an earlier revision accept-and-no-op'd at 202, which was deceptive). The DTO returned here is unused by
-            // the §43-1 endpoint; when §43-2 makes restore a real async job, the endpoint flips back to 202 + this id.
-            // The Warning log records that an operator attempted a restore.
+            // staged-swap + restore-progress state machine. Until then it does nothing; the endpoint responds 501 Not
+            // Implemented rather than a 202 a client would read as a successful rollback. Nothing is started, so this
+            // returns no operation id (an earlier revision allocated a discarded DTO) — §43-2 reintroduces it. We only
+            // log that an operator attempted a restore; idempotencyKey is irrelevant until there's an op to dedup.
             LogRestoreNotImplemented();
-            return Task.FromResult(new OperationAcceptedDto(
-                OperationId: Guid.NewGuid(),
-                OperationType: "backup.restore-zip",
-                AcceptedUtc: DateTimeOffset.UtcNow,
-                IdempotencyKey: idempotencyKey));
+            return Task.CompletedTask;
         }
 
         public Task<JsonElement> GetCloneStatusAsync(CancellationToken ct) {
