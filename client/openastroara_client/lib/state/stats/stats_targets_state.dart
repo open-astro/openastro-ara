@@ -4,6 +4,7 @@ import '../../models/server.dart';
 import '../../models/stats/stats_target.dart';
 import '../../services/stats_export_api.dart';
 import '../saved_server_state.dart';
+import 'stats_refresh_mixin.dart';
 
 /// Builds a [StatsExportClient] for a server. Overridable in tests.
 final statsExportApiFactoryProvider =
@@ -26,35 +27,22 @@ final statsExportApiProvider = Provider<StatsExportClient?>((ref) {
 
 /// The active server's imaged targets (busiest first). `null` data means no
 /// server is saved. Read-only; [refresh] re-reads on demand.
-class StatsTargetsNotifier extends AsyncNotifier<List<StatsTarget>?> {
-  // Bumped on every build() and refresh(); a refresh only writes its result if
-  // the token is still current, so a second refresh tap or a server switch that
-  // rebuilds mid-fetch discards the stale result instead of clobbering state.
-  // build() bumps the token but doesn't gate its own return on it — Riverpod
-  // already discards a superseded build's future, and the refresh button is
-  // disabled while a build is in flight (`async.isLoading`), so there's no
-  // refresh-outlives-build race to guard against from the UI.
-  int _generation = 0;
-
+class StatsTargetsNotifier extends AsyncNotifier<List<StatsTarget>?>
+    with StatsRefreshMixin<List<StatsTarget>> {
   @override
   Future<List<StatsTarget>?> build() async {
-    _generation++;
+    markBuild();
     final api = ref.watch(statsExportApiProvider);
     if (api == null) return null;
     return api.fetchTargets();
   }
 
-  Future<void> refresh() async {
-    final token = ++_generation;
-    state = const AsyncValue.loading();
-    final next = await AsyncValue.guard<List<StatsTarget>?>(() async {
-      final api = ref.read(statsExportApiProvider);
-      if (api == null) return null;
-      return api.fetchTargets();
-    });
-    if (token != _generation) return;
-    state = next;
-  }
+  /// Re-reads the targets, keeping the previous list on screen if the read
+  /// fails (the section shows a stale banner). See [StatsRefreshMixin].
+  Future<void> refresh() => refreshUsing(() async {
+        final api = ref.read(statsExportApiProvider);
+        return api?.fetchTargets();
+      });
 }
 
 final statsTargetsProvider =

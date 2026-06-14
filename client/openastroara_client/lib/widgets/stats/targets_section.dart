@@ -11,13 +11,43 @@ import 'stats_format.dart';
 /// §50 Stats dashboard Targets section — per-target imaging rollups from the
 /// live daemon (`GET /api/v1/stats/targets`), replacing the Phase 12g.1 demo
 /// rollups derived from the in-memory library.
-class TargetsSection extends ConsumerWidget {
+class TargetsSection extends ConsumerStatefulWidget {
   const TargetsSection({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<TargetsSection> createState() => _TargetsSectionState();
+}
+
+class _TargetsSectionState extends ConsumerState<TargetsSection> {
+  // Local spinner/banner flags so the list stays on screen during and after a
+  // manual refresh (refresh() holds the old data instead of dropping to
+  // loading). See StatsRefreshMixin.
+  bool _refreshing = false;
+  bool _staleError = false;
+
+  Future<void> _refresh() async {
+    if (_refreshing) return;
+    setState(() => _refreshing = true);
+    try {
+      await ref.read(statsTargetsProvider.notifier).refresh();
+      if (mounted) setState(() => _staleError = false);
+    } catch (_) {
+      if (mounted) setState(() => _staleError = true);
+    } finally {
+      if (mounted) setState(() => _refreshing = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    ref.listen(statsTargetsProvider, (_, next) {
+      if (_staleError && next.hasValue && !next.isLoading) {
+        setState(() => _staleError = false);
+      }
+    });
     final async = ref.watch(statsTargetsProvider);
     final targets = async.asData?.value;
+    final spinning = _refreshing || (async.isLoading && targets == null);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -32,11 +62,8 @@ class TargetsSection extends ConsumerWidget {
               tooltip: 'Refresh',
               iconSize: 18,
               visualDensity: VisualDensity.compact,
-              onPressed: async.isLoading
-                  ? null
-                  : () => unawaited(
-                      ref.read(statsTargetsProvider.notifier).refresh()),
-              icon: async.isLoading
+              onPressed: spinning ? null : () => unawaited(_refresh()),
+              icon: spinning
                   ? const SizedBox(
                       width: 16,
                       height: 16,
@@ -46,13 +73,13 @@ class TargetsSection extends ConsumerWidget {
           ],
         ),
         const SizedBox(height: 8),
-        _body(ref, async, targets),
+        if (_staleError && targets != null) const _StaleBanner(),
+        _body(async, targets),
       ],
     );
   }
 
   Widget _body(
-    WidgetRef ref,
     AsyncValue<List<StatsTarget>?> async,
     List<StatsTarget>? targets,
   ) {
@@ -64,8 +91,7 @@ class TargetsSection extends ConsumerWidget {
         children: [
           const Expanded(child: _Hint('Could not load targets.')),
           TextButton(
-            onPressed: () =>
-                unawaited(ref.read(statsTargetsProvider.notifier).refresh()),
+            onPressed: () => unawaited(_refresh()),
             child: const Text('Retry'),
           ),
         ],
@@ -79,6 +105,30 @@ class TargetsSection extends ConsumerWidget {
     }
     return Column(
       children: [for (final t in targets) _TargetTile(target: t)],
+    );
+  }
+}
+
+/// Shown above the stale list when a manual refresh failed but data remains.
+class _StaleBanner extends StatelessWidget {
+  const _StaleBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          const Icon(Icons.sync_problem, size: 14, color: AraColors.accentBusy),
+          const SizedBox(width: 6),
+          Text(
+            'Couldn’t refresh — showing the last loaded targets.',
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: AraColors.accentBusy,
+                ),
+          ),
+        ],
+      ),
     );
   }
 }

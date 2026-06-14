@@ -668,8 +668,8 @@ Deferred to **§43-2**:
 - **Stats sections: finish the persist-through-refresh migration (low priority, §50). IN PROGRESS.** A shared
   `StatsRefreshMixin<T>` (`lib/state/stats/stats_refresh_mixin.dart`) now provides the Achievements-style refresh:
   swap-on-success-only (no `AsyncValue.loading()` flash), keep last-good data + rethrow on failure (widget shows a stale
-  banner via a local flag), `ref.mounted` guard, and a build-generation guard for server-switch. **Overview** is converted
-  to it (notifier + `ConsumerStatefulWidget` widget + tests). **Remaining to convert the same way:** Targets, Best Frames,
+  banner via a local flag), `ref.mounted` guard, and a build-generation guard for server-switch. **Overview** and **Targets** are
+  converted (notifier + `ConsumerStatefulWidget` widget + tests). **Remaining to convert the same way:** Best Frames,
   Frame Quality (chart), Guiding RMS (chart), Calendar (chart) — each still uses the older `loading()`-then-guard refresh.
   One small PR per section/chart. This also subsumes the earlier separate "post-await `ref.mounted` guard" item for these
   notifiers. Surfaced 2026-06-14 by the #434 review; mixin + Overview landed in the refresh-overview slice.
