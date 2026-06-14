@@ -96,11 +96,12 @@ class _TargetTile extends StatelessWidget {
     final integration =
         '${formatIntegrationHours(target.integrationHours)} integration';
     final score = target.compositeQualityScore;
+    final lastImaged = target.lastImagedUtc;
     final subtitle = [
       frames,
       integration,
       if (score != null) 'Quality ${score.toStringAsFixed(2)}',
-      'Last ${formatStatsDate(target.lastImagedUtc)}',
+      if (lastImaged != null) 'Last ${formatStatsDate(lastImaged)}',
     ].join(' · ');
 
     return Card(
