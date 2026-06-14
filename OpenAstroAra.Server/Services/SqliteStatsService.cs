@@ -135,6 +135,9 @@ public sealed class SqliteStatsService : IStatsService {
         // how strongly the focus point tracks temperature (the temp-comp slope).
         await using var conn = _db.OpenConnection();
         await using var cmd = conn.CreateCommand();
+        // focuser_position is the nullable axis (frames captured without a
+        // focuser have none); temperature_c is REAL NOT NULL in the schema, so
+        // every row that survives this filter has both plotted values.
         var sql = """
             SELECT temperature_c, focuser_position, captured_utc
             FROM frames
@@ -184,7 +187,9 @@ public sealed class SqliteStatsService : IStatsService {
         }
         if (vx <= 0 || vy <= 0) return null;
         var r = cov / Math.Sqrt(vx * vy);
-        return r * r;
+        // Floating-point rounding can nudge r just past ±1 (e.g. 1.0000000002),
+        // so clamp to keep the reported r² in [0, 1].
+        return Math.Min(r * r, 1.0);
     }
 
     public async Task<StatsGuidingDto> GetGuidingAsync(DateTimeOffset? since, CancellationToken ct) {

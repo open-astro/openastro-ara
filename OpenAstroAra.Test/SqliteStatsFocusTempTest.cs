@@ -97,6 +97,20 @@ namespace OpenAstroAra.Test {
             Assert.That(dto.CorrelationR2, Is.Null);
         }
 
+        [Test]
+        public async Task The_since_filter_excludes_frames_captured_before_the_cutoff() {
+            await InsertFrameAsync(temp: 5.0, focuserPos: 1000, minutesAgo: 120); // before cutoff
+            await InsertFrameAsync(temp: 4.0, focuserPos: 1100, minutesAgo: 30);
+            await InsertFrameAsync(temp: 3.0, focuserPos: 1200, minutesAgo: 10);
+
+            var since = DateTimeOffset.UtcNow.AddMinutes(-60);
+            var dto = await _svc.GetFocusTempAsync(since, CancellationToken.None);
+            Assert.That(dto.Samples.Count, Is.EqualTo(2));
+            Assert.That(dto.Samples.Select(s => s.FocuserPosition), Is.EquivalentTo(InWindowPositions));
+        }
+
+        private static readonly int[] InWindowPositions = { 1100, 1200 };
+
         private async Task InsertSessionAsync(Guid id) {
             await using var conn = _db.OpenConnection();
             await using var cmd = conn.CreateCommand();
