@@ -360,7 +360,9 @@ namespace OpenAstroAra.Server.Services {
             }
             LogRestored(id, string.Join(",", restored));
             return new OperationAcceptedDto(
-                OperationId: id,
+                // A fresh operation id per restore — the snapshot id (`id`) identifies the source, not the operation,
+                // so restoring the same snapshot twice yields distinct operation ids (matters for §43-2b dedup).
+                OperationId: Guid.NewGuid(),
                 OperationType: "backup.restore-zip",
                 AcceptedUtc: DateTimeOffset.UtcNow,
                 IdempotencyKey: idempotencyKey);
@@ -484,6 +486,17 @@ namespace OpenAstroAra.Server.Services {
         public BackupCorruptException() { }
         public BackupCorruptException(string message) : base(message) { }
         public BackupCorruptException(string message, Exception innerException) : base(message, innerException) { }
+    }
+
+    /// <summary>Thrown by the §43-2 restore engine in the worst case — a swap failed AND the prior copy could not be
+    /// rolled back, so an area may be in a mixed state and the previous copy survives only in the backup dir named in
+    /// the message. <see cref="Exception.InnerException"/> is an <see cref="AggregateException"/> of (original
+    /// failure, rollback failure). A dedicated type (not the sky-data installer's) so it isn't caught cross-subsystem;
+    /// the restore endpoint leaves it uncaught → <c>500</c>, the correct status for genuine data loss.</summary>
+    public sealed class BackupRestoreException : Exception {
+        public BackupRestoreException() { }
+        public BackupRestoreException(string message) : base(message) { }
+        public BackupRestoreException(string message, Exception innerException) : base(message, innerException) { }
     }
 
     /// <summary>On-disk backup manifest (sidecar <c>.meta.json</c>). The download URL in <see cref="BackupZipDto"/>

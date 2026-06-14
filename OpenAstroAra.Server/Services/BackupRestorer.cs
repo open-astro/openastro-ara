@@ -110,7 +110,7 @@ namespace OpenAstroAra.Server.Services {
                     } catch (Exception recoverEx) {
                         // The new area didn't land AND the original couldn't be restored — surface both and name the
                         // backup location, rather than letting the recovery failure escape and hide the placement error.
-                        throw new SkyDataInstallException(
+                        throw new BackupRestoreException(
                             $"Backup restore failed to place '{livePath}' and could not restore the previous copy; " +
                             $"it remains at '{backupPath}' for manual recovery.",
                             new AggregateException(placeEx, recoverEx));
@@ -128,18 +128,21 @@ namespace OpenAstroAra.Server.Services {
                 var swap = swaps[i];
                 try {
                     if (swap.HadExisting) {
-                        // Drop the just-swapped-in copy, then move the original back.
-                        TryDeletePath(swap.LivePath, swap.IsDirectory);
+                        // Drop the just-swapped-in copy, then move the original back. Delete is throwing here so a
+                        // failed delete surfaces (the move would also throw, dest still present) → caught below.
+                        DeletePath(swap.LivePath, swap.IsDirectory);
                         MovePath(swap.BackupPath, swap.LivePath, swap.IsDirectory);
                     } else {
-                        // There was no original — the area didn't exist before, so removing what we placed restores that.
-                        TryDeletePath(swap.LivePath, swap.IsDirectory);
+                        // There was no original — removing what we placed restores "absent". Throwing delete (NOT the
+                        // best-effort TryDeletePath) so a cleanup failure surfaces as data loss rather than silently
+                        // leaving the failed restore's just-placed area in the live profile.
+                        DeletePath(swap.LivePath, swap.IsDirectory);
                     }
                 } catch (Exception rollbackEx) {
                     // ANY failure to roll an area back is the data-loss case — wrap it together with the original
                     // failure (never let an unexpected rollback exception escape and discard `primary`) and name the
                     // backup location for manual recovery.
-                    throw new SkyDataInstallException(
+                    throw new BackupRestoreException(
                         $"Backup restore failed and the area at '{swap.LivePath}' could not be rolled back; the previous " +
                         $"copy remains at '{swap.BackupPath}' for manual recovery.",
                         new AggregateException(primary, rollbackEx));
@@ -152,6 +155,18 @@ namespace OpenAstroAra.Server.Services {
                 Directory.Move(source, dest);
             } else {
                 File.Move(source, dest, overwrite: false);
+            }
+        }
+
+        // Throwing delete (vs the best-effort TryDeletePath) — used on the rollback path where a cleanup failure must
+        // surface as data loss, not be swallowed.
+        private static void DeletePath(string path, bool isDirectory) {
+            if (isDirectory) {
+                if (Directory.Exists(path)) {
+                    Directory.Delete(path, recursive: true);
+                }
+            } else if (File.Exists(path)) {
+                File.Delete(path);
             }
         }
 
