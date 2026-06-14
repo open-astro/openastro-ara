@@ -279,9 +279,11 @@ namespace OpenAstroAra.Server.Services {
                 // FileStream owned by the response pipeline — ASP.NET Core disposes it once the response is sent.
                 var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 81920, useAsync: true);
                 return (stream, Path.GetFileName(path));
-            } catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException or UnauthorizedAccessException) {
-                // Vanished or became inaccessible between the scan and the open (deleted, or perms revoked) — report
-                // not-found rather than a torn 500, consistent with how TryReadSnapshot treats an unreadable archive.
+            } catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException or UnauthorizedAccessException or IOException) {
+                // Vanished or became inaccessible between the scan and the open (deleted, perms revoked, or a transient
+                // sharing-lock) — report not-found rather than a torn 500, symmetric with how TryReadSnapshot treats an
+                // unreadable archive. (FileNotFoundException/DirectoryNotFoundException derive from IOException but are
+                // listed explicitly for clarity.)
                 LogSnapshotVanished(path, ex);
                 return null;
             }

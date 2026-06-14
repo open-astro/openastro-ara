@@ -229,9 +229,9 @@ namespace OpenAstroAra.Test {
         public async Task List_orders_snapshots_newest_first() {
             WriteProfile();
             await _svc.CreateZipAsync(idempotencyKey: null, CancellationToken.None);
-            // Guarantee distinct CreatedUtc stamps so the ordering assert is meaningful, not trivially true on a
-            // tie — DateTimeOffset.UtcNow resolution can be ~15ms on Windows, enough to tie two back-to-back creates.
-            await Task.Delay(25);
+            // Guarantee distinct CreatedUtc stamps so the ordering assert is meaningful, not trivially true on a tie —
+            // DateTimeOffset.UtcNow resolution can be ~15ms on Windows; 100ms is unambiguous even on a loaded runner.
+            await Task.Delay(100);
             await _svc.CreateZipAsync(idempotencyKey: null, CancellationToken.None);
 
             var snapshots = await _svc.ListSnapshotsAsync(CancellationToken.None);
