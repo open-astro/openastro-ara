@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/server.dart';
@@ -31,6 +33,23 @@ class _FakeStatsOverviewClient implements StatsOverviewClient {
     fetches++;
     if (throwOnFetch) throw StateError('boom');
     return value;
+  }
+
+  @override
+  void close() {}
+}
+
+/// A fake whose `fetch()` resolves only when the test completes it, so the
+/// generation-guard test can hold a refresh open while a (simulated) server
+/// switch re-runs build().
+class _GatedStatsOverviewClient implements StatsOverviewClient {
+  final List<Completer<StatsOverview>> calls = [];
+
+  @override
+  Future<StatsOverview> fetch() {
+    final c = Completer<StatsOverview>();
+    calls.add(c);
+    return c.future;
   }
 
   @override
@@ -116,6 +135,26 @@ void main() {
       expect(c.read(statsOverviewProvider).value!.totalFrames, 1);
       await future;
       expect(c.read(statsOverviewProvider).value!.totalFrames, 9);
+    });
+
+    test('a server switch mid-refresh discards the stale result (generation guard)', () async {
+      final api = _GatedStatsOverviewClient();
+      final c = _container(const [_server], api);
+      await c.read(savedServersProvider.future);
+      final built = c.read(statsOverviewProvider.future);
+      api.calls[0].complete(const StatsOverview(totalFrames: 1));
+      await built;
+
+      final notifier = c.read(statsOverviewProvider.notifier);
+      final refreshing = notifier.refresh(); // captures generation; calls[1] pending
+      // Stand in for the active server changing: build() re-runs and bumps the
+      // generation via markBuild(), invalidating the in-flight refresh.
+      notifier.markBuild();
+      api.calls[1].complete(const StatsOverview(totalFrames: 99)); // now stale
+      await refreshing;
+
+      // The stale refresh is dropped; the pre-refresh value is retained.
+      expect(c.read(statsOverviewProvider).value!.totalFrames, 1);
     });
   });
 }

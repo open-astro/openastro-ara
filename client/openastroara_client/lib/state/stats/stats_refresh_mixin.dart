@@ -34,6 +34,12 @@ mixin StatsRefreshMixin<T> on AsyncNotifier<T?> {
   /// non-autoDispose provider stays mounted for the app's life, so it's
   /// effectively unreachable), at which point there's no live widget left to
   /// observe the result anyway.
+  ///
+  /// Neither early-return (unmounted, or a server-switch generation mismatch)
+  /// throws, so a caller can't distinguish "discarded" from "succeeded". That's
+  /// intentional and harmless: a server switch re-runs `build()`, which loads
+  /// fresh data and (via the widget's `ref.listen`) clears any stale-error flag,
+  /// so there's nothing the caller needs to do differently in the discard case.
   Future<void> refreshUsing(Future<T?> Function() fetch) async {
     if (!ref.mounted) return;
     final gen = _generation;
