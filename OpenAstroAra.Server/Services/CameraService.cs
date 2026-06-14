@@ -92,7 +92,20 @@ public sealed partial class CameraService : ICameraService, IDisposable {
 
     private readonly IFocuserMediator? _focuser;
 
-    private int? ReadFocuserPosition() => FocuserPositionFrom(_focuser?.GetInfo());
+    // Snapshotted just after pixel readout (the focuser is stationary during an
+    // exposure, so post-readout == shutter-open for this metadata). A focuser
+    // fault must never abort a capture whose pixels are already in hand, so a
+    // throwing GetInfo() degrades to "no position recorded".
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Recording focuser position is best-effort metadata; a mediator/transport fault must not fail a capture whose image is already downloaded. Log-and-recover boundary.")]
+    private int? ReadFocuserPosition() {
+        try {
+            return FocuserPositionFrom(_focuser?.GetInfo());
+        } catch (Exception ex) {
+            LogFocuserSnapshotFailed(ex);
+            return null;
+        }
+    }
 
     // §38: the connected focuser's step position at capture, for the §50.4
     // focus-vs-temperature view. Null when no focuser is connected (or absent),
@@ -861,6 +874,9 @@ public sealed partial class CameraService : ICameraService, IDisposable {
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Camera runtime read failed")]
     private partial void LogRuntimeReadFailed(Exception ex);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Focuser position snapshot failed; recording the frame without a focuser position")]
+    private partial void LogFocuserSnapshotFailed(Exception ex);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Camera connected: {Name} at {Host}:{Port}/{Device}")]
     private partial void LogConnected(string name, string host, int port, int device);
