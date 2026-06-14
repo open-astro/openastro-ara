@@ -12,13 +12,37 @@ import 'stat_tile.dart';
 /// Overview/Targets sections, this is wired to the live daemon
 /// (`GET /api/v1/stats/achievements`) — cumulative records + imaging-night
 /// streaks + milestone badges. Degrades gracefully when no server is connected.
-class AchievementsSection extends ConsumerWidget {
+class AchievementsSection extends ConsumerStatefulWidget {
   const AchievementsSection({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AchievementsSection> createState() =>
+      _AchievementsSectionState();
+}
+
+class _AchievementsSectionState extends ConsumerState<AchievementsSection> {
+  // Drives the header spinner during a manual refresh. Kept local (not derived
+  // from the provider's isLoading) so the records stay on screen while it spins
+  // — refresh() deliberately holds the old data instead of dropping to loading.
+  bool _refreshing = false;
+
+  Future<void> _refresh() async {
+    if (_refreshing) return;
+    setState(() => _refreshing = true);
+    try {
+      await ref.read(achievementsProvider.notifier).refresh();
+    } finally {
+      if (mounted) setState(() => _refreshing = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final async = ref.watch(achievementsProvider);
     final data = async.asData?.value;
+    // First load (no data yet) spins via the provider; a manual refresh spins
+    // via the local flag while the previous records remain visible.
+    final spinning = _refreshing || (async.isLoading && data == null);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -33,11 +57,8 @@ class AchievementsSection extends ConsumerWidget {
               tooltip: 'Refresh',
               iconSize: 18,
               visualDensity: VisualDensity.compact,
-              onPressed: async.isLoading
-                  ? null
-                  : () =>
-                      unawaited(ref.read(achievementsProvider.notifier).refresh()),
-              icon: async.isLoading
+              onPressed: spinning ? null : () => unawaited(_refresh()),
+              icon: spinning
                   ? const SizedBox(
                       width: 16,
                       height: 16,
@@ -47,14 +68,13 @@ class AchievementsSection extends ConsumerWidget {
           ],
         ),
         const SizedBox(height: 8),
-        _body(context, ref, async, data),
+        _body(context, async, data),
       ],
     );
   }
 
   Widget _body(
     BuildContext context,
-    WidgetRef ref,
     AsyncValue<StatsAchievements?> async,
     StatsAchievements? data,
   ) {
@@ -66,8 +86,7 @@ class AchievementsSection extends ConsumerWidget {
         children: [
           const Expanded(child: _Hint('Could not load achievements.')),
           TextButton(
-            onPressed: () =>
-                unawaited(ref.read(achievementsProvider.notifier).refresh()),
+            onPressed: _refreshing ? null : () => unawaited(_refresh()),
             child: const Text('Retry'),
           ),
         ],
@@ -170,8 +189,10 @@ class _Achievements extends StatelessWidget {
   }
 
   // Whole-hour metrics read as "12h"; fractional ones add minutes ("12h 30m").
+  // Clamp at zero so an unexpected negative from the server can't drive the
+  // modulo arithmetic into a nonsense "0h 54m".
   static String _hours(double hours) {
-    final totalMinutes = (hours * 60).round();
+    final totalMinutes = (hours.clamp(0.0, double.infinity) * 60).round();
     final h = totalMinutes ~/ 60;
     final m = totalMinutes % 60;
     return m == 0 ? '${h}h' : '${h}h ${m.toString().padLeft(2, '0')}m';

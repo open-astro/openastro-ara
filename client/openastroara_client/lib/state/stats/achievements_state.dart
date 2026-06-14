@@ -41,12 +41,17 @@ class AchievementsNotifier extends AsyncNotifier<StatsAchievements?> {
     return api.fetch();
   }
 
-  /// Re-read the achievements. Drops into the loading state, then resolves to
-  /// data or error. A server switch mid-flight discards the stale result.
+  /// Re-read the achievements, then swap the result in. Deliberately does NOT
+  /// drop into a bare loading state first: that would blank `asData?.value` and
+  /// flip the view back to its loading placeholder mid-refresh. Holding the old
+  /// data until the new value (or error) lands keeps the records on screen —
+  /// the view drives its own refresh spinner. (RP3 has no public
+  /// copyWithPrevious/valueOrNull to preserve data *through* a loading state, so
+  /// this matches the backup notifier's convention.) A server switch mid-flight
+  /// discards the stale result via the generation guard.
   Future<void> refresh() async {
     if (!ref.mounted) return;
     final gen = _generation;
-    state = const AsyncValue.loading();
     final next = await AsyncValue.guard<StatsAchievements?>(() async {
       final api = ref.read(achievementsApiProvider);
       if (api == null) return null;
