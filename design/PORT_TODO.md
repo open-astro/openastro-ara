@@ -702,3 +702,13 @@ Deferred to **§43-2**:
   already converted to UTC — so the `if (_explicitZone.hasMatch(v)) return parsed.toUtc();` branch (and the regex) is
   unreachable. `focus_temp.dart` dropped it in #449; `guiding_rms.dart` still carries the dead branch. Fold into the
   shared `parseStatsUtc()` helper proposed in the entry above. Surfaced 2026-06-14 by the #449 review.
+- **Stats `since` filter assumes a UTC `DateTimeOffset` (§50).** Every stats query that takes a `since` cutoff
+  (`GetFocusTempAsync`, `GetGuidingAsync`, …) formats it with `since.Value.ToString("O", InvariantCulture)` and relies
+  on SQLite's lexicographic comparison against the stored UTC `captured_utc` strings. A caller passing a non-UTC offset
+  would silently filter against the wrong instant. Not a live bug — all current callers pass UTC — but normalising with
+  `.ToUniversalTime()` before formatting (ideally in a shared helper) would harden every `since`-taking query at once.
+  Surfaced 2026-06-14 by the #448 re-review.
+- **§50.4 focuser position is narrowed `(int)GetInt64` (§50.4).** `GetFocusTempAsync` reads `focuser_position` as a
+  64-bit SQLite INTEGER and narrows to the `int` DTO field; a value above `Int32.MaxValue` (~2.1B steps — no real
+  focuser) would wrap silently. If a wider range is ever needed, widen `FocuserPositionDto`/`FocusTempPoint` to `long`
+  end-to-end (wire + client model) rather than casting. Low priority. Surfaced 2026-06-14 by the #448 re-review.
