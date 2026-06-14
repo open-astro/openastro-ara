@@ -1,130 +1,107 @@
-import 'package:flutter/material.dart';
+import 'dart:async';
 
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../models/data_package.dart';
+import '../../state/sky_atlas/data_manager_state.dart';
 import '../../theme/ara_colors.dart';
 
-/// §36.2 Data Manager — 4-tab modal. Phase 12e.1 ships placeholder content
-/// per tab (lists the asset categories + sizes from §36.2.1–§36.2.4).
-/// Phase 12e.2 wires real download/pause/resume/cancel/remove controls
-/// against `/api/v1/data-manager/*` once those endpoints come online.
-class DataManagerModal extends StatelessWidget {
+/// §36 Data Manager — the real sky-data package manager. Lists the curated
+/// catalog from the active server (`/api/v1/data-manager/*`), shows on-disk
+/// install state and live download progress (folded from the
+/// `data_manager.download.*` WS stream), and wires download / cancel / remove.
+class DataManagerModal extends ConsumerStatefulWidget {
   const DataManagerModal({super.key});
 
   @override
+  ConsumerState<DataManagerModal> createState() => _DataManagerModalState();
+}
+
+class _DataManagerModalState extends ConsumerState<DataManagerModal> {
+  @override
+  void initState() {
+    super.initState();
+    // Re-read the catalog on open so a package installed/removed elsewhere shows fresh.
+    Future.microtask(() {
+      if (mounted) {
+        unawaited(ref.read(dataManagerPackagesProvider.notifier).refresh());
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 4,
-      child: Dialog.fullscreen(
-        child: Scaffold(
-          appBar: AppBar(
-            title: const Text('Data Manager'),
-            leading: IconButton(
-              icon: const Icon(Icons.close),
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-            bottom: const TabBar(
-              tabs: [
-                Tab(icon: Icon(Icons.photo_library_outlined), text: 'Sky Imagery'),
-                Tab(icon: Icon(Icons.star_outline), text: 'Star Catalogs'),
-                Tab(icon: Icon(Icons.image_outlined), text: 'Thumbnails'),
-                Tab(icon: Icon(Icons.public), text: 'Solar System'),
-              ],
-            ),
-            actions: [
+    final async = ref.watch(dataManagerPackagesProvider);
+    final packages = async.asData?.value;
+    final usedBytes = (packages ?? const <DataPackage>[])
+        .where((p) => p.isInstalled)
+        .fold<int>(0, (sum, p) => sum + p.sizeBytes);
+
+    return Dialog.fullscreen(
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Data Manager'),
+          leading: IconButton(
+            icon: const Icon(Icons.close),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+          actions: [
+            if (packages != null)
               Center(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Text(
-                    '0 GB used / 1.2 TB',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AraColors.textSecondary,
-                        ),
+                    '${formatBytes(usedBytes)} installed',
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodySmall
+                        ?.copyWith(color: AraColors.textSecondary),
                   ),
                 ),
               ),
-            ],
-          ),
-          body: const TabBarView(
-            children: [
-              _SkyImageryTab(),
-              _StarCatalogsTab(),
-              _ThumbnailsTab(),
-              _SolarSystemTab(),
-            ],
-          ),
+          ],
         ),
+        body: _body(context, async, packages),
       ),
     );
   }
-}
 
-class _SkyImageryTab extends StatelessWidget {
-  const _SkyImageryTab();
+  Widget _body(
+    BuildContext context,
+    AsyncValue<List<DataPackage>?> async,
+    List<DataPackage>? packages,
+  ) {
+    if (async.isLoading && packages == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (async.hasError) {
+      return _Centered(
+        message: 'Could not load the data catalog.',
+        onRetry: () => unawaited(ref.read(dataManagerPackagesProvider.notifier).refresh()),
+      );
+    }
+    if (packages == null) {
+      return const _Centered(message: 'Connect to a server to manage sky-data packages.');
+    }
+    if (packages.isEmpty) {
+      return const _Centered(message: 'No sky-data packages are available.');
+    }
 
-  // §36.2.1 — 21 surveys grouped by wavelength. Sizes from the playbook.
-  static const List<({String group, List<({String name, String size})> entries})>
-      _surveys = [
-    (
-      group: 'Optical (broadband)',
-      entries: [
-        (name: 'DSS2 (color)', size: '~47 GB'),
-        (name: 'DSS2 blue', size: '~30 GB'),
-        (name: 'DSS2 red', size: '~30 GB'),
-        (name: 'Mellinger (color)', size: '~4 GB'),
-        (name: 'SDSS9', size: '~120 GB'),
-        (name: 'PanSTARRS DR1 color', size: '~280 GB'),
-        (name: 'DECaPS DR2', size: '~150 GB'),
-        (name: 'DESI Legacy DR10', size: '~290 GB'),
-      ],
-    ),
-    (
-      group: 'Hα',
-      entries: [
-        (name: 'Finkbeiner Hα', size: '~8 GB'),
-        (name: 'VTSS Hα', size: '~6 GB'),
-      ],
-    ),
-    (
-      group: 'Infrared',
-      entries: [
-        (name: '2MASS (J+H+K)', size: '~38 GB'),
-        (name: 'GLIMPSE360', size: '~52 GB'),
-        (name: 'Spitzer', size: '~58 GB'),
-        (name: 'allWISE', size: '~64 GB'),
-        (name: 'IRIS', size: '~7 GB'),
-        (name: 'AKARI FIS', size: '~14 GB'),
-      ],
-    ),
-    (
-      group: 'Ultraviolet',
-      entries: [(name: 'GALEX GR6/7', size: '~16 GB')],
-    ),
-    (
-      group: 'X-ray',
-      entries: [
-        (name: 'eROSITA DR1', size: '~8 GB'),
-        (name: 'XMM-Newton (PN)', size: '~7 GB'),
-        (name: 'Chandra', size: '~5 GB'),
-      ],
-    ),
-    (
-      group: 'Gamma-ray',
-      entries: [(name: 'Fermi', size: '~3 GB')],
-    ),
-    (
-      group: 'Extras',
-      entries: [(name: 'Nebula contour vectors', size: '~20 MB')],
-    ),
-  ];
+    // Group by category so related packages cluster (star catalogs, horizons, …).
+    final byCategory = <String, List<DataPackage>>{};
+    for (final p in packages) {
+      (byCategory[p.category] ??= <DataPackage>[]).add(p);
+    }
+    final categories = byCategory.keys.toList()..sort();
 
-  @override
-  Widget build(BuildContext context) {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        for (final group in _surveys) ...[
-          Text(group.group, style: Theme.of(context).textTheme.titleSmall),
+        for (final cat in categories) ...[
+          Text(_categoryLabel(cat), style: Theme.of(context).textTheme.titleSmall),
           const SizedBox(height: 4),
-          ...group.entries.map((s) => _AssetRow(name: s.name, size: s.size)),
+          ...byCategory[cat]!.map((p) => _PackageRow(package: p)),
           const SizedBox(height: 16),
         ],
       ],
@@ -132,130 +109,138 @@ class _SkyImageryTab extends StatelessWidget {
   }
 }
 
-class _StarCatalogsTab extends StatelessWidget {
-  const _StarCatalogsTab();
+String _categoryLabel(String c) => switch (c) {
+      'catalog' => 'Star catalogs',
+      'horizon' => 'Horizon profiles',
+      '' => 'Other',
+      _ => c[0].toUpperCase() + c.substring(1),
+    };
 
-  // §36.2.2 — SkySafari-style on-demand catalog downloader.
-  static const _entries = [
-    (name: 'Tycho-2 brightest subset (~2.5M stars)', size: '~30–50 MB'),
-    (name: 'GAIA DR3 brightest subset (~10M stars)', size: '~80–100 MB'),
-    (name: 'UCAC4 brightest', size: '~15–25 MB'),
-    (name: 'HD designation index', size: '~5 MB'),
-    (name: 'HIP designation index', size: '~3 MB'),
-    (name: 'Bayer + Flamsteed extensions', size: '~2 MB'),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: _entries
-          .map((e) => _AssetRow(name: e.name, size: e.size))
-          .toList(),
-    );
+/// Human-readable byte size (binary units). Public so widget tests can assert it.
+String formatBytes(int bytes) {
+  if (bytes <= 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  var value = bytes.toDouble();
+  var unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit++;
   }
+  if (unit == 0) return '$bytes B';
+  return '${value.toStringAsFixed(value >= 100 ? 0 : 1)} ${units[unit]}';
 }
 
-class _ThumbnailsTab extends StatelessWidget {
-  const _ThumbnailsTab();
+class _PackageRow extends ConsumerWidget {
+  final DataPackage package;
+  const _PackageRow({required this.package});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final progress = ref.watch(
+      dataManagerDownloadsProvider.select((m) => m[package.id]),
+    );
+    final theme = Theme.of(context);
+
     return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: const [
-          _AssetRow(
-            name: 'Famous Targets Pack (~500 popular DSOs)',
-            size: '~150 MB',
-          ),
-          SizedBox(height: 16),
-          Text(
-            'Per-target download — search any DSO and download just that one '
-            'preview. Useful for niche or obscure targets the famous pack '
-            'doesn\'t include. Wired in Phase 12e.2.',
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SolarSystemTab extends StatelessWidget {
-  const _SolarSystemTab();
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: const [
-        _AssetRow(
-          name: 'Full DE440 ephemerides',
-          size: '~50 MB',
-          recommendedNote:
-              'Required for accurate planet positions in Tonight\'s Sky + '
-              'comet motion trails + occultation events.',
-        ),
-        SizedBox(height: 12),
-        _AssetRow(
-          name: 'MPC asteroid catalog (bulk)',
-          size: 'TBD',
-          recommendedNote: 'Deferred to v0.1.0 per §36.8.',
-        ),
-      ],
-    );
-  }
-}
-
-class _AssetRow extends StatelessWidget {
-  final String name;
-  final String size;
-  final String? recommendedNote;
-
-  const _AssetRow({
-    required this.name,
-    required this.size,
-    this.recommendedNote,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          const Icon(Icons.check_box_outline_blank,
-              size: 18, color: AraColors.textSecondary),
-          const SizedBox(width: 8),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(name, style: Theme.of(context).textTheme.bodyMedium),
-                if (recommendedNote != null)
+                Text(package.name.isEmpty ? package.id : package.name,
+                    style: theme.textTheme.bodyMedium),
+                if (package.description.isNotEmpty)
+                  Text(package.description,
+                      style: theme.textTheme.bodySmall
+                          ?.copyWith(color: AraColors.textSecondary)),
+                if (progress != null && progress.phase == DownloadPhase.failed)
                   Text(
-                    recommendedNote!,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AraColors.textSecondary,
-                        ),
+                    'Download ${progress.error ?? 'failed'}',
+                    style: theme.textTheme.bodySmall
+                        ?.copyWith(color: theme.colorScheme.error),
                   ),
+                if (progress != null && progress.isActive) ...[
+                  const SizedBox(height: 6),
+                  LinearProgressIndicator(
+                    // Indeterminate until the server reports a total; otherwise the fraction.
+                    value: progress.totalBytes > 0 ? progress.fraction : null,
+                  ),
+                ],
               ],
             ),
           ),
           const SizedBox(width: 12),
           Text(
-            size,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AraColors.textDisabled,
-                ),
+            formatBytes(package.sizeBytes),
+            style: theme.textTheme.bodySmall?.copyWith(color: AraColors.textDisabled),
           ),
           const SizedBox(width: 12),
-          TextButton(
-            onPressed: null,
-            child: const Text('Download'),
-          ),
+          _action(context, ref, progress),
+        ],
+      ),
+    );
+  }
+
+  Widget _action(BuildContext context, WidgetRef ref, DownloadProgress? progress) {
+    if (progress != null && progress.isActive) {
+      return TextButton(
+        onPressed: () => unawaited(_cancel(context, ref, progress.downloadId)),
+        child: const Text('Cancel'),
+      );
+    }
+    if (package.isInstalled) {
+      return TextButton(
+        onPressed: () => unawaited(_delete(context, ref)),
+        child: const Text('Remove'),
+      );
+    }
+    return FilledButton.tonal(
+      onPressed: () => unawaited(_download(context, ref)),
+      child: const Text('Download'),
+    );
+  }
+
+  Future<void> _download(BuildContext context, WidgetRef ref) => _guarded(
+      context, () => ref.read(dataManagerPackagesProvider.notifier).download(package.id), 'Download failed');
+
+  Future<void> _cancel(BuildContext context, WidgetRef ref, String downloadId) => _guarded(
+      context, () => ref.read(dataManagerPackagesProvider.notifier).cancel(downloadId), 'Cancel failed');
+
+  Future<void> _delete(BuildContext context, WidgetRef ref) => _guarded(
+      context, () => ref.read(dataManagerPackagesProvider.notifier).delete(package.id), 'Remove failed');
+
+  // Run an action and surface any failure as a SnackBar (download throws a 409 for an
+  // already-installed package, or a transport error — the failure isn't in provider state).
+  Future<void> _guarded(BuildContext context, Future<void> Function() action, String label) async {
+    try {
+      await action();
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$label: $e')));
+      }
+    }
+  }
+}
+
+class _Centered extends StatelessWidget {
+  final String message;
+  final VoidCallback? onRetry;
+  const _Centered({required this.message, this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(message, textAlign: TextAlign.center),
+          if (onRetry != null) ...[
+            const SizedBox(height: 12),
+            TextButton(onPressed: onRetry, child: const Text('Retry')),
+          ],
         ],
       ),
     );
