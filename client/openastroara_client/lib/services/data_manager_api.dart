@@ -1,5 +1,4 @@
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
 
 import '../models/data_package.dart';
 import '../models/server.dart';
@@ -48,10 +47,10 @@ class DataManagerApi implements DataManagerClient {
     final data = res.data;
     if (data is! List) {
       // A 2xx with a non-array body means the wire contract changed (or an error
-      // envelope slipped through). Surface it rather than silently showing an
-      // empty catalog. Dio already throws on 4xx/5xx, so this is the 200-wrong-shape case.
-      debugPrint('DataManagerApi.listPackages: expected a JSON array, got ${data.runtimeType}');
-      return const <DataPackage>[];
+      // envelope slipped through). Throw rather than return [] — the AsyncNotifier
+      // surfaces this as an error state the UI can show, instead of a silently-empty
+      // catalog. (Dio already throws on 4xx/5xx; this is the 200-wrong-shape case.)
+      throw FormatException('data-manager/packages returned a non-array body (${data.runtimeType})');
     }
     return data
         .whereType<Map<String, dynamic>>()
@@ -97,6 +96,10 @@ class DataManagerApi implements DataManagerClient {
   Future<bool> delete(String packageId) async {
     assert(packageId.isNotEmpty, 'packageId must not be empty');
     try {
+      // Route is `/api/v1/data-manager/{packageId}` — verified against the server:
+      // `data.MapDelete("/{packageId}")` under `MapGroup("/api/v1/data-manager")`
+      // (SystemEndpoints.cs). It is intentionally NOT `/packages/{id}`: `/packages`
+      // is only the GET collection route; the delete item route sits at the group root.
       final res = await _dio.delete<void>('/api/v1/data-manager/${Uri.encodeComponent(packageId)}');
       // 204 No Content → freed. Any 2xx is success.
       final code = res.statusCode ?? 0;
