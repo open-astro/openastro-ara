@@ -28,6 +28,8 @@ class StatsOverview {
   });
 
   /// True when the catalog holds no frames yet — the view shows an empty state.
+  /// Keyed on frames, not sessions: a session that exists but has written no
+  /// frames has nothing to summarize, so the empty state is the right view.
   bool get isEmpty => totalFrames == 0;
 
   factory StatsOverview.fromJson(Map<String, dynamic> json) => StatsOverview(

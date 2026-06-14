@@ -87,5 +87,23 @@ void main() {
       await expectLater(c.read(statsOverviewProvider.future), throwsA(isA<StateError>()));
       expect(c.read(statsOverviewProvider).hasError, isTrue);
     });
+
+    test('concurrent refreshes: only the latest result is written', () async {
+      final api = _FakeStatsOverviewClient(const StatsOverview(totalFrames: 1));
+      final c = _container(const [_server], api);
+      await c.read(savedServersProvider.future);
+      await c.read(statsOverviewProvider.future);
+
+      // Fire two refreshes back-to-back. The second's value must win even if the
+      // first's future were to resolve afterward — the generation guard drops
+      // the stale write.
+      api.value = const StatsOverview(totalFrames: 5);
+      final first = c.read(statsOverviewProvider.notifier).refresh();
+      api.value = const StatsOverview(totalFrames: 9);
+      final second = c.read(statsOverviewProvider.notifier).refresh();
+      await Future.wait([first, second]);
+
+      expect(c.read(statsOverviewProvider).value!.totalFrames, 9);
+    });
   });
 }
