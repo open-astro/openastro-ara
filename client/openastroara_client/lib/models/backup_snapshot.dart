@@ -7,6 +7,13 @@ String? _str(dynamic v) => v is String ? v : null;
 int _int(dynamic v) => v is int ? v : (v is num ? v.toInt() : 0);
 DateTime? _dt(dynamic v) => v is String ? DateTime.tryParse(v)?.toUtc() : null;
 
+/// The config-area tokens the daemon uses in `included_areas` and the restore
+/// flags. Centralized so the UI doesn't duplicate the magic strings.
+abstract final class BackupAreas {
+  static const String profiles = 'profiles';
+  static const String sequences = 'sequences';
+}
+
 /// One backup ZIP snapshot — client mirror of the daemon's `BackupZipDto`.
 class BackupSnapshot {
   final String backupId;
