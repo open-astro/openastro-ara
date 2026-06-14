@@ -599,15 +599,21 @@ and a partial transfer just re-downloads). Surfaced 2026-06-13 by the §36-2b re
 sha256), `ListSnapshotsAsync` (read the manifests, newest-first), and `GET /api/v1/backup/snapshot/{id}/download`.
 Deferred to **§43-2**:
 
-- **Restore is not implemented (endpoint returns 501).** `RestoreZipAsync` overwrites live config (profile.json /
-  sequences) and is destructive, so it lands with the staged-swap + restore-progress state machine in §43-2. Until
-  then the `POST /restore-zip` endpoint honestly returns **501 Not Implemented** with a problem-detail (an earlier
-  revision returned a no-op `202`, which a client would read as a successful rollback — corrected after the round-7
-  review). `GetCloneStatusAsync` likewise reports a fixed `idle` until there's a real restore worth reporting progress
-  on. **§43-2** should: stage the incoming zip aside, validate its manifest/sha256, swap each selected area into place
-  atomically (mirroring the §36-2a installer's backup-aside→swap→restore-on-fail pattern), drive `clone-status` from
-  the worker's real state, and flip the endpoint back to `202 Accepted` + the operation id (the service already
-  returns the DTO shape for this). Surfaced 2026-06-13 by the §43-1 round-4/6/7 reviews.
+- **Restore — §43-2a DONE (synchronous, local snapshot); §43-2b OPEN (async worker + progress + remote source).**
+  `POST /restore-zip` now restores for real: `BackupRestorer` extracts the chosen local snapshot and swaps the
+  selected areas (profile.json / sequences) into place **atomically with all-or-nothing rollback** (mirrors the
+  §36-2a installer's backup-aside→swap pattern, extended to multiple areas), gated by a manifest-sha256 integrity
+  check. The endpoint returns `202` on success, `404` for an unknown snapshot, `422` for a non-local source / no area
+  / corrupt archive. STILL OPEN for **§43-2b**: (a) run the restore on a background worker and drive
+  `GetCloneStatusAsync` from its real state (today it completes synchronously in-request and clone-status stays
+  `idle`); (b) accept a **remote/cloud** `BackupSourceUrl` (re-download then restore) — currently only a local
+  snapshot-download URL is accepted; (c) the frame-metadata / logs areas (`RestoreFrameMetadata` / `RestoreLogs`
+  flags) once §43-1 create captures them. §43-2a landed in the restore PR (2026-06-14).
+- **Restore sha-256 gate is bypassable by deleting the manifest (low priority).** `RestoreCore` validates the
+  archive against its `.meta.json` sha-256 before touching live config, but a missing/unreadable manifest skips the
+  gate (logged at Warning via `LogManifestSkipped`, so it's visible; the restore proceeds unvalidated). Anyone able to
+  delete the sidecar bypasses integrity validation. Fine for a local single-user daemon; when §44 cloud/remote restore
+  lands, require the manifest (or carry the checksum out-of-band). Surfaced 2026-06-14 by the §43-2a review.
 - **No disk-space pre-flight on create (low priority).** `CreateZipAsync` packaging on a full disk fails mid-zip with
   an `IOException`; the catch reclaims the temp and the caller gets a generic 500. A pre-flight free-space check or
   mapping the disk-full `IOException` to **507 Insufficient Storage** would give a clearer operator signal. Low
