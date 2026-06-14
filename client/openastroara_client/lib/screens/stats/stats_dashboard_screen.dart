@@ -9,6 +9,7 @@ import '../../theme/ara_colors.dart';
 import '../../widgets/stats/charts/calendar_heatmap.dart';
 import '../../widgets/stats/charts/focus_temp_scatter.dart';
 import '../../widgets/stats/charts/frame_quality_chart.dart';
+import '../../widgets/stats/achievements_section.dart';
 import '../../widgets/stats/charts/guiding_rms_chart.dart';
 import '../../widgets/stats/stat_tile.dart';
 
@@ -131,6 +132,8 @@ class StatsDashboardScreen extends ConsumerWidget {
                   ),
                 ),
               ),
+          const SizedBox(height: 24),
+          const AchievementsSection(),
           const SizedBox(height: 24),
           _SectionTitle(title: 'Visualizations', context: context),
           const FocusTempScatterChart(),
