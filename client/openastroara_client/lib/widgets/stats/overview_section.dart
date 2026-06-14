@@ -11,13 +11,51 @@ import 'stats_format.dart';
 
 /// §50 Stats Overview section — headline catalog totals from the live daemon
 /// (`GET /api/v1/stats/overview`), replacing the Phase 12g.1 demo-data tiles.
-class OverviewSection extends ConsumerWidget {
+class OverviewSection extends ConsumerStatefulWidget {
   const OverviewSection({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<OverviewSection> createState() => _OverviewSectionState();
+}
+
+class _OverviewSectionState extends ConsumerState<OverviewSection> {
+  // Drives the header spinner during a manual refresh. Kept local (not derived
+  // from the provider's isLoading) so the tiles stay on screen while it spins —
+  // refresh() deliberately holds the old data instead of dropping to loading.
+  bool _refreshing = false;
+
+  // Set when a manual refresh fails while tiles are still shown — refresh()
+  // leaves state untouched on failure, so the failure can't be read off the
+  // provider's AsyncValue; this local flag drives the stale banner.
+  bool _staleError = false;
+
+  Future<void> _refresh() async {
+    if (_refreshing) return;
+    setState(() => _refreshing = true);
+    try {
+      await ref.read(statsOverviewProvider.notifier).refresh();
+      if (mounted) setState(() => _staleError = false);
+    } catch (_) {
+      if (mounted) setState(() => _staleError = true);
+    } finally {
+      if (mounted) setState(() => _refreshing = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // A fresh load from the provider (e.g. a server switch re-running build)
+    // clears a stale flag left by an earlier failed refresh.
+    ref.listen(statsOverviewProvider, (_, next) {
+      if (_staleError && next.hasValue && !next.isLoading) {
+        setState(() => _staleError = false);
+      }
+    });
     final async = ref.watch(statsOverviewProvider);
     final data = async.asData?.value;
+    // First load (no data yet) spins via the provider; a manual refresh spins
+    // via the local flag while the previous tiles remain visible.
+    final spinning = _refreshing || (async.isLoading && data == null);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -32,11 +70,8 @@ class OverviewSection extends ConsumerWidget {
               tooltip: 'Refresh',
               iconSize: 18,
               visualDensity: VisualDensity.compact,
-              onPressed: async.isLoading
-                  ? null
-                  : () => unawaited(
-                      ref.read(statsOverviewProvider.notifier).refresh()),
-              icon: async.isLoading
+              onPressed: spinning ? null : () => unawaited(_refresh()),
+              icon: spinning
                   ? const SizedBox(
                       width: 16,
                       height: 16,
@@ -46,14 +81,14 @@ class OverviewSection extends ConsumerWidget {
           ],
         ),
         const SizedBox(height: 8),
-        _body(context, ref, async, data),
+        if (_staleError && data != null) const _StaleBanner(),
+        _body(context, async, data),
       ],
     );
   }
 
   Widget _body(
     BuildContext context,
-    WidgetRef ref,
     AsyncValue<StatsOverview?> async,
     StatsOverview? data,
   ) {
@@ -65,8 +100,7 @@ class OverviewSection extends ConsumerWidget {
         children: [
           const Expanded(child: _Hint('Could not load the overview.')),
           TextButton(
-            onPressed: () =>
-                unawaited(ref.read(statsOverviewProvider.notifier).refresh()),
+            onPressed: () => unawaited(_refresh()),
             child: const Text('Retry'),
           ),
         ],
@@ -113,6 +147,30 @@ class OverviewSection extends ConsumerWidget {
           label: 'Last imaged',
         ),
       ],
+    );
+  }
+}
+
+/// Shown above stale tiles when a manual refresh failed but prior data remains.
+class _StaleBanner extends StatelessWidget {
+  const _StaleBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          const Icon(Icons.sync_problem, size: 14, color: AraColors.accentBusy),
+          const SizedBox(width: 6),
+          Text(
+            'Couldn’t refresh — showing the last loaded totals.',
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: AraColors.accentBusy,
+                ),
+          ),
+        ],
+      ),
     );
   }
 }
