@@ -43,6 +43,43 @@ namespace OpenAstroAra.Server.Services {
         /// it changes on any child write). Lives inside the package dir so it moves atomically with the swap.</summary>
         internal const string InstalledMarkerFileName = ".installed";
 
+        private const string StagingPrefix = ".staging-";
+        private const string BackupPrefix = ".backup-";
+
+        /// <summary>
+        /// Delete any leftover <c>.staging-*</c> / <c>.backup-*</c> scratch directories directly under
+        /// <paramref name="dataRoot"/>. A normally-finishing install removes its own scratch, so these only linger
+        /// when a worker was hard-killed mid-extract (a daemon crash); sweeping them at startup reclaims the space a
+        /// graceful drain can't. Returns the count removed. Best-effort: a locked/permission-denied dir is skipped.
+        /// Real package directories (catalog ids never start with '.') are never touched.
+        /// </summary>
+        internal static int SweepStaleScratch(string dataRoot) {
+            DirectoryInfo[] dirs;
+            try {
+                var root = new DirectoryInfo(dataRoot);
+                if (!root.Exists) {
+                    return 0;
+                }
+                dirs = root.GetDirectories("*", SearchOption.TopDirectoryOnly);
+            } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+                return 0;
+            }
+            var removed = 0;
+            foreach (var dir in dirs) {
+                if (!dir.Name.StartsWith(StagingPrefix, StringComparison.Ordinal) &&
+                    !dir.Name.StartsWith(BackupPrefix, StringComparison.Ordinal)) {
+                    continue;
+                }
+                try {
+                    dir.Delete(recursive: true);
+                    removed++;
+                } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or DirectoryNotFoundException) {
+                    // best-effort — leave it; the next sweep retries.
+                }
+            }
+            return removed;
+        }
+
         /// <summary>
         /// Extract <paramref name="tarGz"/> (a gzip-compressed tar stream) into <paramref name="targetDir"/>,
         /// replacing any prior install. On success <paramref name="targetDir"/> contains the package files plus the
@@ -66,8 +103,8 @@ namespace OpenAstroAra.Server.Services {
             // Stage into a sibling temp dir so a failed/cancelled extract never leaves a half-populated targetDir,
             // and the final reveal is a Move rather than a slow file-by-file write into the live path.
             var suffix = Path.GetFileName(targetFull) + "-" + Guid.NewGuid().ToString("N");
-            var stagingDir = Path.Combine(parent, ".staging-" + suffix);
-            var backupDir = Path.Combine(parent, ".backup-" + suffix);
+            var stagingDir = Path.Combine(parent, StagingPrefix + suffix);
+            var backupDir = Path.Combine(parent, BackupPrefix + suffix);
             Directory.CreateDirectory(stagingDir);
 
             var movedPriorAside = false;

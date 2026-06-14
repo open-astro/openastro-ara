@@ -139,6 +139,29 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void SweepStaleScratch_removes_orphaned_scratch_dirs_but_keeps_packages() {
+            // Simulate a crash aftermath: orphaned scratch dirs alongside a real installed package.
+            Directory.CreateDirectory(Path.Combine(_root, ".staging-tycho-2-abc"));
+            Directory.CreateDirectory(Path.Combine(_root, ".backup-tycho-2-def"));
+            var pkg = Path.Combine(_root, "tycho-2");
+            Directory.CreateDirectory(pkg);
+            File.WriteAllText(Path.Combine(pkg, "data.bin"), "x");
+
+            var removed = SkyDataInstaller.SweepStaleScratch(_root);
+
+            Assert.That(removed, Is.EqualTo(2));
+            Assert.That(Directory.Exists(Path.Combine(_root, ".staging-tycho-2-abc")), Is.False);
+            Assert.That(Directory.Exists(Path.Combine(_root, ".backup-tycho-2-def")), Is.False);
+            Assert.That(Directory.Exists(pkg), Is.True, "a real package dir is never swept");
+            Assert.That(File.Exists(Path.Combine(pkg, "data.bin")), Is.True);
+        }
+
+        [Test]
+        public void SweepStaleScratch_is_a_no_op_on_a_missing_root() {
+            Assert.That(SkyDataInstaller.SweepStaleScratch(Path.Combine(_root, "does-not-exist")), Is.EqualTo(0));
+        }
+
+        [Test]
         public void A_pre_cancelled_install_leaves_no_target_and_no_staging_leak() {
             var target = Path.Combine(_root, "gaia-edr3-bright");
             using var archive = MakeTarGz(("catalog.dat", Bytes("data")));
