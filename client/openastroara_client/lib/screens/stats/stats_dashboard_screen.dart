@@ -10,6 +10,7 @@ import '../../widgets/stats/charts/calendar_heatmap.dart';
 import '../../widgets/stats/charts/focus_temp_scatter.dart';
 import '../../widgets/stats/charts/frame_quality_chart.dart';
 import '../../widgets/stats/achievements_section.dart';
+import '../../widgets/stats/astrobin_export_dialog.dart';
 import '../../widgets/stats/charts/guiding_rms_chart.dart';
 import '../../widgets/stats/stat_tile.dart';
 
@@ -43,6 +44,10 @@ class StatsDashboardScreen extends ConsumerWidget {
                 PopupMenuItem(
                   value: 'frames',
                   child: Text('Per-frame details'),
+                ),
+                PopupMenuItem(
+                  value: 'astrobin',
+                  child: Text('AstroBin (per target)…'),
                 ),
               ],
               child: const Padding(
@@ -155,6 +160,15 @@ class StatsDashboardScreen extends ConsumerWidget {
     WidgetRef ref,
     String key,
   ) async {
+    // AstroBin export is per-target and server-backed — open the picker dialog
+    // rather than copying a whole-catalog CSV to the clipboard.
+    if (key == 'astrobin') {
+      await showDialog<void>(
+        context: context,
+        builder: (_) => const AstrobinExportDialog(),
+      );
+      return;
+    }
     final sessions = ref.read(librarySessionsProvider);
     // Count rows from the source data, not by splitting the CSV — quoted
     // fields with embedded newlines (rare but legal per RFC-4180) would
