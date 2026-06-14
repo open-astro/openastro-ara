@@ -162,6 +162,9 @@ namespace OpenAstroAra.Server.Services {
 
         public Task<OperationAcceptedDto> DownloadAsync(DownloadRequestDto request, string? idempotencyKey, CancellationToken ct) {
             ArgumentNullException.ThrowIfNull(request);
+            if (ct.IsCancellationRequested) {
+                return Task.FromCanceled<OperationAcceptedDto>(ct); // honor a request cancelled before we start.
+            }
             // Validate against the catalog in a single pass. Return a faulted Task rather than throwing synchronously —
             // this is a Task-returning (non-async) method, so a bare throw would surface at call time, before any
             // await, violating the TAP contract (the endpoint maps the fault to a 404).
@@ -197,6 +200,9 @@ namespace OpenAstroAra.Server.Services {
                     return Task.FromResult(Accepted("data-manager.download", idempotencyKey, downloadId));
                 }
                 if (_activeByPackage.TryGetValue(pkg.Id, out var existing)) {
+                    // A download for this package is already running — join it (return its id) regardless of the
+                    // ForceReinstall flag: the in-flight job installs the same package, so a concurrent force request
+                    // would be redundant. If that job fails, the caller can resubmit with force.
                     return Task.FromResult(Accepted("data-manager.download", idempotencyKey, existing));
                 }
                 // The other job vanished in the window — loop and re-claim.
@@ -204,6 +210,9 @@ namespace OpenAstroAra.Server.Services {
         }
 
         public Task<OperationAcceptedDto> CancelAsync(Guid downloadId, CancellationToken ct) {
+            if (ct.IsCancellationRequested) {
+                return Task.FromCanceled<OperationAcceptedDto>(ct);
+            }
             // !Completed so a download whose worker has reached its finally (done, just not yet removed from
             // _downloads) reports 404 "nothing to cancel" rather than a misleading 202.
             if (_downloads.TryGetValue(downloadId, out var job) && !job.Completed) {
@@ -457,7 +466,7 @@ namespace OpenAstroAra.Server.Services {
             private readonly Action<long> _onRead;
             private readonly Action? _onEof;
             private long _total;
-            private bool _eofSeen;
+            private volatile bool _eofSeen;
 
             public CountingStream(Stream inner, Action<long> onRead, Action? onEof = null) {
                 _inner = inner;
