@@ -691,3 +691,9 @@ Deferred to **§43-2**:
   Quality (#437) now uses a gated fake that forces the *earlier* refresh to resolve *after* the newer one (the only
   ordering that exercises the guard); port that pattern to the three sibling tests. Low risk, mechanical. Surfaced
   2026-06-14 by the #437 review.
+- **Unify the stats models' `_dt` UTC parser (robustness, §50).** Guiding RMS (#438) hardened its `_dt` so a
+  zone-less wire timestamp (no `Z`/offset) is reinterpreted as UTC instead of being parsed as local and shifted by the
+  client offset. The sibling stats models (`stats_overview.dart`, `stats_target.dart`, `best_frame.dart`) still use the
+  plain `DateTime.tryParse(v)?.toUtc()` form. The daemon always emits offset-bearing `DateTimeOffset`s, so this is
+  latent-only, but a shared `parseStatsUtc()` helper (in `stats_format.dart` or a small models util) used by all four
+  would make them uniformly drift-proof. Surfaced 2026-06-14 by the #438 review.
