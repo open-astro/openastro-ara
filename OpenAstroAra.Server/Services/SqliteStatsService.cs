@@ -129,12 +129,63 @@ public sealed class SqliteStatsService : IStatsService {
         return new StatsTargetsDto(rows);
     }
 
-    public Task<StatsFocusTempDto> GetFocusTempAsync(DateTimeOffset? since, CancellationToken ct) =>
-        // Focuser position isn't a column on the frames table yet — the
-        // §38 sequence orchestrator will start persisting it (focuser
-        // mediator events plus per-frame snapshot). Until then this view
-        // is empty + correlation null. WILMA's chart renders "no data".
-        Task.FromResult(new StatsFocusTempDto(Array.Empty<FocusTempPointDto>(), CorrelationR2: null));
+    public async Task<StatsFocusTempDto> GetFocusTempAsync(DateTimeOffset? since, CancellationToken ct) {
+        // §38/§50.4: focuser position vs sensor temperature. Each captured frame
+        // that recorded a focuser position is a point; the correlation R² gauges
+        // how strongly the focus point tracks temperature (the temp-comp slope).
+        await using var conn = _db.OpenConnection();
+        await using var cmd = conn.CreateCommand();
+        var sql = """
+            SELECT temperature_c, focuser_position, captured_utc
+            FROM frames
+            WHERE focuser_position IS NOT NULL
+            """;
+        if (since.HasValue) {
+            sql += " AND captured_utc >= $since";
+            cmd.Parameters.AddWithValue("$since", since.Value.ToString("O", CultureInfo.InvariantCulture));
+        }
+        sql += " ORDER BY captured_utc ASC;";
+        cmd.CommandText = sql;
+
+        var samples = new List<FocusTempPointDto>();
+        var temps = new List<double>();
+        var positions = new List<double>();
+        await using (var reader = await cmd.ExecuteReaderAsync(ct)) {
+            while (await reader.ReadAsync(ct)) {
+                var temp = reader.GetDouble(0);
+                var pos = reader.GetInt32(1);
+                var ts = DateTimeOffset.Parse(reader.GetString(2), CultureInfo.InvariantCulture);
+                samples.Add(new FocusTempPointDto(TemperatureC: temp, FocuserPosition: pos, Timestamp: ts));
+                temps.Add(temp);
+                positions.Add(pos);
+            }
+        }
+
+        return new StatsFocusTempDto(samples, CorrelationR2: PearsonR2(temps, positions));
+    }
+
+    /// <summary>Coefficient of determination (Pearson r²) between two equal-length
+    /// series, or null when it isn't defined (&lt; 2 points, or zero variance in
+    /// either series — a vertical/horizontal scatter has no meaningful slope).</summary>
+    private static double? PearsonR2(List<double> xs, List<double> ys) {
+        var n = xs.Count;
+        if (n < 2) return null;
+        double sx = 0, sy = 0;
+        for (var i = 0; i < n; i++) { sx += xs[i]; sy += ys[i]; }
+        var mx = sx / n;
+        var my = sy / n;
+        double cov = 0, vx = 0, vy = 0;
+        for (var i = 0; i < n; i++) {
+            var dx = xs[i] - mx;
+            var dy = ys[i] - my;
+            cov += dx * dy;
+            vx += dx * dx;
+            vy += dy * dy;
+        }
+        if (vx <= 0 || vy <= 0) return null;
+        var r = cov / Math.Sqrt(vx * vy);
+        return r * r;
+    }
 
     public async Task<StatsGuidingDto> GetGuidingAsync(DateTimeOffset? since, CancellationToken ct) {
         // Guiding RMS per frame is captured (guiding_rms_arcsec column),
