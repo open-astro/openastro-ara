@@ -434,6 +434,77 @@ public sealed class SqliteStatsService : IStatsService {
         return (ms, $"openastroara-frames-{DateTime.UtcNow:yyyyMMdd-HHmmss}.csv");
     }
 
+    public async Task<(Stream Stream, string FileName)?> OpenAstrobinExportAsync(string targetName, CancellationToken ct) {
+        // AstroBin's long-exposure acquisition CSV import: one row per distinct
+        // (night, filter, sub-length, gain, cooling) combination, with `number`
+        // the count of subs. Only light frames count — darks/flats/bias are left
+        // for the user to fill in AstroBin (we can't attribute a calibration set
+        // to a specific filter/sub-length row). Returns null when the target has
+        // no light frames, so the endpoint can answer 404.
+        await using var conn = _db.OpenConnection();
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            SELECT date(captured_utc) AS day,
+                   filter_name,
+                   exposure_seconds,
+                   gain,
+                   CAST(ROUND(temperature_c) AS INTEGER) AS cooling,
+                   COUNT(*) AS number
+            FROM frames
+            WHERE frame_type = 'light' AND target_name = $target
+            GROUP BY day, filter_name, exposure_seconds, gain, cooling
+            ORDER BY day ASC, filter_name ASC, exposure_seconds ASC;
+            """;
+        cmd.Parameters.AddWithValue("$target", targetName);
+
+        var ms = new MemoryStream();
+        await using var writer = new StreamWriter(ms, new UTF8Encoding(false), leaveOpen: true);
+        // AstroBin's documented acquisition header — extra columns are left blank
+        // (we don't capture optical/site data); AstroBin ignores empties on import.
+        await writer.WriteLineAsync(
+            "date,filter,number,duration,binning,gain,sensorCooling,fNumber,darks,flats,flatDarks,bias,bortle,meanSqm,meanFwhm,temperature");
+        var rows = 0;
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct)) {
+            rows++;
+            var filter = await reader.IsDBNullAsync(1, ct) ? "" : reader.GetString(1);
+            await writer.WriteLineAsync(string.Join(',',
+                reader.GetString(0),
+                CsvEscape(filter),
+                reader.GetInt32(5).ToString(CultureInfo.InvariantCulture),
+                reader.GetInt32(2).ToString(CultureInfo.InvariantCulture),
+                "",
+                reader.GetInt32(3).ToString(CultureInfo.InvariantCulture),
+                reader.GetInt32(4).ToString(CultureInfo.InvariantCulture),
+                "", "", "", "", "", "", "", "", ""));
+        }
+        if (rows == 0) {
+            return null;
+        }
+        await writer.FlushAsync(ct);
+        ms.Position = 0;
+        var slug = TargetSlug(targetName);
+        return (ms, $"astrobin-{slug}-{DateTime.UtcNow:yyyyMMdd-HHmmss}.csv");
+    }
+
+    // A filesystem-safe slug for the download filename: lowercase, alphanumerics
+    // kept, everything else collapsed to a single '-'. Falls back to "target".
+    private static string TargetSlug(string name) {
+        var sb = new System.Text.StringBuilder(name.Length);
+        var lastDash = false;
+        foreach (var c in name) {
+            if (char.IsAsciiLetterOrDigit(c)) {
+                sb.Append(char.ToLowerInvariant(c));
+                lastDash = false;
+            } else if (!lastDash) {
+                sb.Append('-');
+                lastDash = true;
+            }
+        }
+        var slug = sb.ToString().Trim('-');
+        return slug.Length == 0 ? "target" : slug;
+    }
+
     private static readonly System.Buffers.SearchValues<char> CsvSpecialChars =
         System.Buffers.SearchValues.Create(",\"\n");
 
