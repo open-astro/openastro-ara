@@ -665,3 +665,11 @@ Deferred to **§43-2**:
   caught exception, not a SIGKILL). Tiny + harmless, but with no startup sweep they'd accumulate. A boot-time sweep of
   `{profileDir}/client-settings.json.tmp-*` (mirroring §36-2c `SweepStaleScratch`) would reclaim them. Low priority
   under the trust model. Surfaced 2026-06-14 by the §55.1 round-3 review.
+- **Stats sections lose data during refresh (no persist-through-refresh banner) (low priority, §50).** The §50 dashboard
+  sections (Overview, Targets) use a `refresh()` that sets `AsyncValue.loading()` then a generation-guarded `guard()`, so
+  while a manual refresh is in flight the tiles vanish behind a "Loading…" hint and a failed refresh shows the full
+  error/retry state rather than keeping the prior numbers with a subtle "couldn't refresh" banner. The §50.19 Achievements
+  section uses the nicer persist-through-refresh + stale-banner pattern (refresh swaps data only on success, surfaces
+  failure via a local flag). Unifying the two — ideally a shared `RefreshableStatsSection` scaffold or a mixin that the
+  Overview/Targets/Achievements sections all use — would make refresh UX consistent. Decision-free but a cross-section
+  refactor, so it belongs in its own slice rather than bolted onto one section. Surfaced 2026-06-14 by the #434 review.

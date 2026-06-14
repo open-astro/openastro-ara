@@ -93,5 +93,20 @@ void main() {
       await expectLater(c.read(statsTargetsProvider.future), throwsA(isA<StateError>()));
       expect(c.read(statsTargetsProvider).hasError, isTrue);
     });
+
+    test('concurrent refreshes: only the latest result is written', () async {
+      final api = _FakeStatsExportClient(const [StatsTarget(targetName: 'M31')]);
+      final c = _container(const [_server], api);
+      await c.read(savedServersProvider.future);
+      await c.read(statsTargetsProvider.future);
+
+      api.targets = const [StatsTarget(targetName: 'M31'), StatsTarget(targetName: 'M42')];
+      final first = c.read(statsTargetsProvider.notifier).refresh();
+      api.targets = const [StatsTarget(targetName: 'M81')];
+      final second = c.read(statsTargetsProvider.notifier).refresh();
+      await Future.wait([first, second]);
+
+      expect(c.read(statsTargetsProvider).value!.map((t) => t.targetName), ['M81']);
+    });
   });
 }

@@ -14,8 +14,17 @@ void main() {
       expect(t.targetName, 'M31');
       expect(t.frameCount, 142);
       expect(t.integrationHours, 11.75);
+      expect(t.compositeQualityScore, isNull);
       expect(t.lastImagedUtc, DateTime.utc(2026, 1, 15, 22));
       expect(t.lastImagedUtc!.isUtc, isTrue);
+    });
+
+    test('parses a composite quality score when present', () {
+      final t = StatsTarget.fromJson(const {
+        'target_name': 'M42',
+        'composite_quality_score': 0.87,
+      });
+      expect(t.compositeQualityScore, 0.87);
     });
 
     test('degrades on missing / wrong-typed fields', () {
@@ -23,6 +32,7 @@ void main() {
       expect(t.targetName, '');
       expect(t.frameCount, 0);
       expect(t.integrationHours, 0.0);
+      expect(t.compositeQualityScore, isNull);
       expect(t.lastImagedUtc, isNull);
     });
 
