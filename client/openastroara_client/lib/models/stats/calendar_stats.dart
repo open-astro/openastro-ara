@@ -7,8 +7,10 @@ library;
 int _int(dynamic v) => v is int ? v : (v is num ? v.toInt() : 0);
 double _dbl(dynamic v) => v is num ? v.toDouble() : 0.0;
 
-/// A `DateOnly` wire value ("yyyy-MM-dd") as a date-only [DateTime] (midnight,
-/// no zone shift — it's a calendar label, not an instant).
+/// A `DateOnly` wire value ("yyyy-MM-dd") as a date-only [DateTime]. The daemon
+/// sends a bare date (the calendar day), so we keep its y/m/d fields verbatim.
+/// Were a full timestamp ever sent, `tryParse` yields the parsed fields and we
+/// still take its y/m/d — which for the daemon's UTC days is the intended day.
 DateTime? _date(dynamic v) {
   if (v is! String || v.isEmpty) return null;
   final d = DateTime.tryParse(v);
@@ -60,8 +62,10 @@ class CalendarStats {
         for (final d in days) dayKey(d.date): d.integrationMinutes,
       };
 
+  /// Canonical `yyyy-MM-dd` key — also the wire format `CalendarApi` sends for
+  /// the `fromDate`/`toDate` query, so both sides format dates identically.
   static String dayKey(DateTime d) =>
-      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+      '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
   factory CalendarStats.fromJson(Map<String, dynamic> json) {
     final raw = json['days'];

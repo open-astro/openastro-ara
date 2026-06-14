@@ -29,17 +29,19 @@ class CalendarApi implements CalendarClient {
               receiveTimeout: const Duration(seconds: 10),
             ));
 
-  static String _ymd(DateTime d) =>
-      '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-
   @override
   Future<CalendarStats> fetch({int days = 49}) async {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final from = today.subtract(Duration(days: days - 1));
+    // Same `yyyy-MM-dd` formatter the model keys cells by, so query bounds and
+    // cell keys never diverge.
     final res = await _dio.get<dynamic>(
       '/api/v1/stats/calendar',
-      queryParameters: {'fromDate': _ymd(from), 'toDate': _ymd(today)},
+      queryParameters: {
+        'fromDate': CalendarStats.dayKey(from),
+        'toDate': CalendarStats.dayKey(today),
+      },
     );
     final data = res.data;
     if (data is! Map<String, dynamic>) {
