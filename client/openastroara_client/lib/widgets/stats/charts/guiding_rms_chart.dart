@@ -1,123 +1,207 @@
+import 'dart:async';
+
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../state/library/library_state.dart';
+import '../../../models/stats/guiding_rms.dart';
+import '../../../state/stats/guiding_rms_state.dart';
 import '../../../theme/ara_colors.dart';
 import 'chart_card.dart';
 
-/// §50.7 per-session guiding RMS trend. Two lines (RA + Dec) plotted in
-/// session-date order. Sessions without guider data are skipped.
+/// §50.7 guiding RMS trend — per-frame total guiding RMS (arcsec) over time
+/// from the live daemon (`GET /api/v1/stats/guiding`), with mean + p95 summary
+/// stats. Replaces the Phase-12g demo that plotted per-session RA/Dec from the
+/// in-memory library. (The daemon nulls the RA/Dec breakdown until separated
+/// columns exist, so today this is a single total-RMS line.)
 class GuidingRmsChart extends ConsumerWidget {
   const GuidingRmsChart({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final sessions = [...ref.watch(librarySessionsProvider)]
-      ..sort((a, b) => a.date.compareTo(b.date));
-    final withRms = sessions
-        .where((s) => s.guidingRmsRa != null && s.guidingRmsDec != null)
-        .toList();
+    final async = ref.watch(guidingRmsProvider);
+    final series = async.asData?.value;
 
-    final raSpots = <FlSpot>[];
-    final decSpots = <FlSpot>[];
+    final summary = series == null || series.isEmpty
+        ? null
+        : [
+            if (series.meanRmsArcsec != null)
+              'mean ${series.meanRmsArcsec!.toStringAsFixed(2)}″',
+            if (series.p95RmsArcsec != null)
+              'p95 ${series.p95RmsArcsec!.toStringAsFixed(2)}″',
+          ].join(' · ');
+
+    return ChartCard(
+      title: 'Guiding RMS Trend',
+      subtitle: summary == null || summary.isEmpty
+          ? 'Per-frame total guiding RMS (arcsec), chronological — lower is better.'
+          : 'Per-frame total guiding RMS (arcsec), chronological — $summary.',
+      child: Stack(
+        children: [
+          _body(context, ref, async, series),
+          Positioned(
+            top: 0,
+            right: 4,
+            child: IconButton(
+              tooltip: 'Refresh',
+              iconSize: 18,
+              visualDensity: VisualDensity.compact,
+              onPressed: async.isLoading
+                  ? null
+                  : () =>
+                      unawaited(ref.read(guidingRmsProvider.notifier).refresh()),
+              icon: async.isLoading
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.refresh),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _body(
+    BuildContext context,
+    WidgetRef ref,
+    AsyncValue<GuidingRmsSeries?> async,
+    GuidingRmsSeries? series,
+  ) {
+    if (async.isLoading && series == null) {
+      return const _Hint('Loading guiding RMS…');
+    }
+    if (async.hasError && series == null) {
+      return _Hint(
+        'Could not load guiding RMS.',
+        onRetry: () => unawaited(ref.read(guidingRmsProvider.notifier).refresh()),
+      );
+    }
+    if (series == null) {
+      return const _Hint('Connect to a server to see guiding RMS.');
+    }
+    if (series.isEmpty) {
+      return const _Hint('No guiding data yet — RMS appears here once guided frames are captured.');
+    }
+
+    final spots = <FlSpot>[];
     var observedMax = 0.0;
-    for (var i = 0; i < withRms.length; i++) {
-      final ra = withRms[i].guidingRmsRa!;
-      final dec = withRms[i].guidingRmsDec!;
-      raSpots.add(FlSpot(i.toDouble(), ra));
-      decSpots.add(FlSpot(i.toDouble(), dec));
-      if (ra > observedMax) observedMax = ra;
-      if (dec > observedMax) observedMax = dec;
+    for (var i = 0; i < series.samples.length; i++) {
+      final rms = series.samples[i].rmsArcsec;
+      spots.add(FlSpot(i.toDouble(), rms));
+      if (rms > observedMax) observedMax = rms;
     }
     // Floor at 1.5″ (a healthy mount stays well under) and ceil at 5.0″ so a
     // single bad-seeing outlier doesn't squash the rest of the trend.
     final yMax = (observedMax + 0.2).clamp(1.5, 5.0).toDouble();
+    final lastIdx = (series.samples.length - 1).clamp(0, double.infinity).toInt();
 
-    return ChartCard(
-      title: 'Guiding RMS Trends',
-      subtitle: 'Per-session RA + Dec RMS in arcseconds, chronological',
-      child: raSpots.isEmpty
-          ? Center(
-              child: Text(
-                'No sessions with guider data yet.',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AraColors.textDisabled,
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 16, 8),
+      child: LineChart(
+        LineChartData(
+          minX: 0,
+          maxX: lastIdx == 0 ? 1 : lastIdx.toDouble(),
+          minY: 0,
+          maxY: yMax,
+          borderData: FlBorderData(
+            show: true,
+            border: Border.all(color: AraColors.border),
+          ),
+          gridData: FlGridData(
+            show: true,
+            getDrawingHorizontalLine: (_) => const FlLine(
+              color: AraColors.border,
+              strokeWidth: 0.5,
+            ),
+            getDrawingVerticalLine: (_) => const FlLine(
+              color: AraColors.border,
+              strokeWidth: 0.5,
+            ),
+          ),
+          titlesData: FlTitlesData(
+            leftTitles: const AxisTitles(
+              axisNameWidget: Text('arcsec'),
+              sideTitles: SideTitles(showTitles: true, reservedSize: 36),
+            ),
+            bottomTitles: AxisTitles(
+              axisNameWidget: const Text('Capture time'),
+              sideTitles: SideTitles(
+                showTitles: true,
+                reservedSize: 28,
+                // Label a handful of points by date to avoid crowding a dense
+                // per-frame series.
+                interval: _labelInterval(series.samples.length),
+                getTitlesWidget: (v, _) {
+                  final i = v.toInt();
+                  if (i < 0 || i >= series.samples.length) {
+                    return const SizedBox.shrink();
+                  }
+                  final ts = series.samples[i].timestamp;
+                  if (ts == null) return const SizedBox.shrink();
+                  final d = ts.toLocal();
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      '${d.month}/${d.day}',
+                      style: Theme.of(context).textTheme.labelSmall,
                     ),
-              ),
-            )
-          : Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 16, 8),
-              child: LineChart(
-                LineChartData(
-                  minX: 0,
-                  maxX: (withRms.length - 1).toDouble(),
-                  minY: 0,
-                  maxY: yMax,
-                  borderData: FlBorderData(
-                    show: true,
-                    border: Border.all(color: AraColors.border),
-                  ),
-                  gridData: FlGridData(
-                    show: true,
-                    getDrawingHorizontalLine: (_) => const FlLine(
-                      color: AraColors.border,
-                      strokeWidth: 0.5,
-                    ),
-                    getDrawingVerticalLine: (_) => const FlLine(
-                      color: AraColors.border,
-                      strokeWidth: 0.5,
-                    ),
-                  ),
-                  titlesData: FlTitlesData(
-                    leftTitles: const AxisTitles(
-                      axisNameWidget: Text('arcsec'),
-                      sideTitles: SideTitles(showTitles: true, reservedSize: 36),
-                    ),
-                    bottomTitles: AxisTitles(
-                      axisNameWidget: const Text('Session date'),
-                      sideTitles: SideTitles(
-                        showTitles: true,
-                        reservedSize: 28,
-                        interval: 1,
-                        getTitlesWidget: (v, _) {
-                          final i = v.toInt();
-                          if (i < 0 || i >= withRms.length) {
-                            return const SizedBox.shrink();
-                          }
-                          final d = withRms[i].date;
-                          return Padding(
-                            padding: const EdgeInsets.only(top: 4),
-                            child: Text(
-                              '${d.month}/${d.day}',
-                              style: Theme.of(context).textTheme.labelSmall,
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                    topTitles: const AxisTitles(),
-                    rightTitles: const AxisTitles(),
-                  ),
-                  lineBarsData: [
-                    LineChartBarData(
-                      spots: raSpots,
-                      isCurved: false,
-                      color: AraColors.selectionBg,
-                      barWidth: 2,
-                      dotData: const FlDotData(show: true),
-                    ),
-                    LineChartBarData(
-                      spots: decSpots,
-                      isCurved: false,
-                      color: AraColors.accentBusy,
-                      barWidth: 2,
-                      dotData: const FlDotData(show: true),
-                    ),
-                  ],
-                ),
+                  );
+                },
               ),
             ),
+            topTitles: const AxisTitles(),
+            rightTitles: const AxisTitles(),
+          ),
+          lineBarsData: [
+            LineChartBarData(
+              spots: spots,
+              isCurved: false,
+              color: AraColors.selectionBg,
+              barWidth: 2,
+              // A dense series reads better as a line; show dots only when sparse.
+              dotData: FlDotData(show: series.samples.length <= 30),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Aim for ~6 x-axis labels regardless of series length.
+  static double _labelInterval(int count) {
+    if (count <= 6) return 1;
+    return (count / 6).ceilToDouble();
+  }
+}
+
+class _Hint extends StatelessWidget {
+  const _Hint(this.message, {this.onRetry});
+
+  final String message;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Text(
+              message,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AraColors.textDisabled,
+                  ),
+            ),
+          ),
+          if (onRetry != null)
+            TextButton(onPressed: onRetry, child: const Text('Retry')),
+        ],
+      ),
     );
   }
 }
