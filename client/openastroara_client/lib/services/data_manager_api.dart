@@ -71,7 +71,14 @@ class DataManagerApi implements DataManagerClient {
 
   @override
   Future<void> cancel(String downloadId) async {
-    await _dio.post<void>('/api/v1/data-manager/cancel/${Uri.encodeComponent(downloadId)}');
+    try {
+      await _dio.post<void>('/api/v1/data-manager/cancel/${Uri.encodeComponent(downloadId)}');
+    } on DioException catch (e) {
+      // 404 → the download already finished/was removed between the user tapping
+      // Cancel and the request landing. Nothing to cancel — a no-op, not an error.
+      if (e.response?.statusCode == 404) return;
+      rethrow;
+    }
   }
 
   @override

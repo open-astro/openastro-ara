@@ -129,6 +129,16 @@ void main() {
       expect(id, 'dl-tycho-2');
     });
 
+    test('cancel forwards the download id to the client', () async {
+      final api = _FakeDataManagerClient(const [DataPackage(id: 'tycho-2')]);
+      final c = _container(const [_server], api);
+      await c.read(savedServersProvider.future);
+      await c.read(dataManagerPackagesProvider.future);
+
+      await c.read(dataManagerPackagesProvider.notifier).cancel('dl-1');
+      expect(api.cancelled, ['dl-1']);
+    });
+
     test('delete forwards then refreshes the catalog', () async {
       final api = _FakeDataManagerClient(const [DataPackage(id: 'tycho-2'), DataPackage(id: 'gaia-edr3-bright')]);
       final c = _container(const [_server], api);

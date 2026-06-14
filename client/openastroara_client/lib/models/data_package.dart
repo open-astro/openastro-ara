@@ -4,6 +4,16 @@
 /// parse — missing/wrong-typed fields degrade rather than throw.
 library;
 
+// File-level defensive extractors shared by both models below.
+String? _str(dynamic v) => v is String ? v : null;
+bool _bool(dynamic v) => v is bool ? v : false;
+int? _int(dynamic v) => v is int ? v : (v is num ? v.toInt() : null);
+DateTime? _dt(dynamic v) => v is String ? DateTime.tryParse(v)?.toUtc() : null;
+double? _double(dynamic v) {
+  final d = v is num ? v.toDouble() : null;
+  return (d != null && d.isFinite) ? d : null;
+}
+
 /// One curated sky-data package — client mirror of the daemon's `DataPackageDto`.
 class DataPackage {
   final String id;
@@ -41,11 +51,6 @@ class DataPackage {
       sourceUrl: _str(json['source_url']),
     );
   }
-
-  static String? _str(dynamic v) => v is String ? v : null;
-  static bool _bool(dynamic v) => v is bool ? v : false;
-  static int? _int(dynamic v) => v is int ? v : (v is num ? v.toInt() : null);
-  static DateTime? _dt(dynamic v) => v is String ? DateTime.tryParse(v)?.toUtc() : null;
 
   @override
   bool operator ==(Object other) =>
@@ -113,13 +118,6 @@ class DownloadProgress {
       phase: phase,
       error: _str(payload['error']),
     );
-  }
-
-  static String? _str(dynamic v) => v is String ? v : null;
-  static int? _int(dynamic v) => v is int ? v : (v is num ? v.toInt() : null);
-  static double? _double(dynamic v) {
-    final d = v is num ? v.toDouble() : null;
-    return (d != null && d.isFinite) ? d : null;
   }
 
   @override
