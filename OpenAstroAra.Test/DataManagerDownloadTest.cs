@@ -45,8 +45,19 @@ namespace OpenAstroAra.Test {
 
         [TearDown]
         public void TearDown() {
-            if (Directory.Exists(_root)) {
-                Directory.Delete(_root, recursive: true);
+            // A background download worker may still be writing under _root as the test ends; retry the cleanup a
+            // few times so a momentary "in use" race doesn't fail the test on its teardown.
+            for (var attempt = 0; ; attempt++) {
+                try {
+                    if (Directory.Exists(_root)) {
+                        Directory.Delete(_root, recursive: true);
+                    }
+                    return;
+                } catch (IOException) when (attempt < 20) {
+                    Thread.Sleep(25);
+                } catch (UnauthorizedAccessException) when (attempt < 20) {
+                    Thread.Sleep(25);
+                }
             }
         }
 
@@ -121,6 +132,8 @@ namespace OpenAstroAra.Test {
             // ForceReinstall: true re-downloads.
             var forced = await svc.DownloadAsync(new DownloadRequestDto(PackageId, ForceReinstall: true), null, CancellationToken.None);
             Assert.That(forced.OperationType, Is.EqualTo("data-manager.download"), "forceReinstall=true re-downloads");
+            // Let the re-download worker finish before teardown so it isn't writing under _root as it's deleted.
+            await Eventually(() => svc.GetStateAsync(CancellationToken.None).Result.ActiveDownloads.Count == 0);
         }
 
         [Test]
