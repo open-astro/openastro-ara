@@ -16,6 +16,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
 using OpenAstroAra.Server.Services;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using System.Text.Json;
@@ -75,6 +76,22 @@ namespace OpenAstroAra.Test {
             await _svc.ReplaceAsync(Obj("""{"v":2}"""), CancellationToken.None);
             var got = await _svc.GetAsync(CancellationToken.None);
             Assert.That(got.Settings.GetProperty("v").GetInt32(), Is.EqualTo(2));
+        }
+
+        [Test]
+        public async Task Concurrent_writes_serialize_to_one_winner_without_tearing() {
+            // Fire many overlapping replaces; the semaphore serializes them, last-write-wins, and the file is never
+            // torn — the final state is exactly one of the written values and re-reads as a valid object.
+            var writes = new List<Task<OpenAstroAra.Server.Contracts.ClientSettingsDto>>();
+            for (var i = 0; i < 20; i++) {
+                writes.Add(_svc.ReplaceAsync(Obj($"{{\"v\":{i}}}"), CancellationToken.None));
+            }
+            await Task.WhenAll(writes);
+
+            var got = await _svc.GetAsync(CancellationToken.None);
+            Assert.That(got.Settings.ValueKind, Is.EqualTo(JsonValueKind.Object), "the file is valid (not torn)");
+            Assert.That(got.Settings.GetProperty("v").GetInt32(), Is.InRange(0, 19),
+                "the final state is one of the concurrent writes");
         }
 
         [Test]

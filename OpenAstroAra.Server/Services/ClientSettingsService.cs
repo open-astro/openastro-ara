@@ -104,6 +104,9 @@ public sealed partial class ClientSettingsService : IClientSettingsService, IDis
         if (settings.ValueKind != JsonValueKind.Object) {
             throw new ArgumentException("Client settings must be a JSON object.", nameof(settings));
         }
+        // Measure the exact bytes we'll persist (GetRawText preserves the client's formatting) — the cap is on what
+        // lands on disk, so a pretty-printed body hits it sooner than a minified one with identical content. That's
+        // intentional; the cap is generous enough that real preferences blobs never approach it either way.
         var json = settings.GetRawText();
         if (Encoding.UTF8.GetByteCount(json) > MaxBytes) {
             throw new ArgumentException($"Client settings exceed the {MaxBytes}-byte limit.", nameof(settings));
