@@ -49,10 +49,15 @@ class GuidingRmsSeries {
 
   factory GuidingRmsSeries.fromJson(Map<String, dynamic> json) {
     final raw = json['samples'];
+    // Drop any sample without a numeric `rms_arcsec`: it's the only plotted
+    // value, and degrading a missing one to 0.0 would render an indistinguishable
+    // "perfect guiding" spike. The daemon never sends null here (its query
+    // filters `guiding_rms_arcsec IS NOT NULL`), so this only guards schema drift.
     final samples = raw is List
         ? [
             for (final e in raw)
-              if (e is Map<String, dynamic>) GuidingRmsPoint.fromJson(e),
+              if (e is Map<String, dynamic> && e['rms_arcsec'] is num)
+                GuidingRmsPoint.fromJson(e),
           ]
         : const <GuidingRmsPoint>[];
     return GuidingRmsSeries(

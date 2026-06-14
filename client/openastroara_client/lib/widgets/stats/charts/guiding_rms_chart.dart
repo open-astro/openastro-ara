@@ -17,11 +17,18 @@ import 'chart_card.dart';
 class GuidingRmsChart extends ConsumerWidget {
   const GuidingRmsChart({super.key});
 
+  // Plot at most the most-recent N samples so a very long capture history can't
+  // hand fl_chart a huge spot list. Granularity is per captured frame (not per
+  // guide pulse), so this is generous headroom; mean/p95 in the subtitle stay
+  // full-history (computed server-side over every sample).
+  static const int _maxPlotted = 500;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(guidingRmsProvider);
     final series = async.asData?.value;
 
+    final total = series?.samples.length ?? 0;
     final summary = series == null || series.isEmpty
         ? null
         : [
@@ -29,6 +36,7 @@ class GuidingRmsChart extends ConsumerWidget {
               'mean ${series.meanRmsArcsec!.toStringAsFixed(2)}″',
             if (series.p95RmsArcsec != null)
               'p95 ${series.p95RmsArcsec!.toStringAsFixed(2)}″',
+            if (total > _maxPlotted) 'latest $_maxPlotted of $total',
           ].join(' · ');
 
     return ChartCard(
@@ -85,17 +93,22 @@ class GuidingRmsChart extends ConsumerWidget {
       return const _Hint('No guiding data yet — RMS appears here once guided frames are captured.');
     }
 
+    // Plot only the most-recent _maxPlotted samples on a long history.
+    final shown = series.samples.length > _maxPlotted
+        ? series.samples.sublist(series.samples.length - _maxPlotted)
+        : series.samples;
+
     final spots = <FlSpot>[];
     var observedMax = 0.0;
-    for (var i = 0; i < series.samples.length; i++) {
-      final rms = series.samples[i].rmsArcsec;
+    for (var i = 0; i < shown.length; i++) {
+      final rms = shown[i].rmsArcsec;
       spots.add(FlSpot(i.toDouble(), rms));
       if (rms > observedMax) observedMax = rms;
     }
     // Floor at 1.5″ (a healthy mount stays well under) and ceil at 5.0″ so a
     // single bad-seeing outlier doesn't squash the rest of the trend.
     final yMax = (observedMax + 0.2).clamp(1.5, 5.0).toDouble();
-    final lastIdx = (series.samples.length - 1).clamp(0, double.infinity).toInt();
+    final lastIdx = (shown.length - 1).clamp(0, double.infinity).toInt();
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 16, 8),
@@ -132,13 +145,13 @@ class GuidingRmsChart extends ConsumerWidget {
                 reservedSize: 28,
                 // Label a handful of points by date to avoid crowding a dense
                 // per-frame series.
-                interval: _labelInterval(series.samples.length),
+                interval: _labelInterval(shown.length),
                 getTitlesWidget: (v, _) {
                   final i = v.toInt();
-                  if (i < 0 || i >= series.samples.length) {
+                  if (i < 0 || i >= shown.length) {
                     return const SizedBox.shrink();
                   }
-                  final ts = series.samples[i].timestamp;
+                  final ts = shown[i].timestamp;
                   if (ts == null) return const SizedBox.shrink();
                   final d = ts.toLocal();
                   return Padding(
@@ -161,7 +174,7 @@ class GuidingRmsChart extends ConsumerWidget {
               color: AraColors.selectionBg,
               barWidth: 2,
               // A dense series reads better as a line; show dots only when sparse.
-              dotData: FlDotData(show: series.samples.length <= 30),
+              dotData: FlDotData(show: shown.length <= 30),
             ),
           ],
         ),

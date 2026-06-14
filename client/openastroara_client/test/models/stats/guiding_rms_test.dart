@@ -39,16 +39,18 @@ void main() {
       expect(s.p95RmsArcsec, isNull);
     });
 
-    test('degrades on wrong-typed fields and drops non-object samples', () {
+    test('drops samples without a numeric rms_arcsec, and non-object rows', () {
       final s = GuidingRmsSeries.fromJson(const {
         'samples': [
-          {'rms_arcsec': 'oops'},
-          'garbage',
+          {'rms_arcsec': 'oops'}, // non-numeric → dropped (no spurious 0 spike)
+          {'timestamp': '2026-01-15T22:00:00Z'}, // missing rms_arcsec → dropped
+          'garbage', // non-object → dropped
+          {'rms_arcsec': 1.3}, // valid → kept
         ],
         'mean_rms_arcsec': 'nope',
       });
       expect(s.samples.length, 1);
-      expect(s.samples.single.rmsArcsec, 0.0);
+      expect(s.samples.single.rmsArcsec, 1.3);
       expect(s.meanRmsArcsec, isNull);
     });
   });
