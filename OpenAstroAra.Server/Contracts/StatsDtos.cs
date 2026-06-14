@@ -100,3 +100,28 @@ public sealed record StatsCalendarDayDto(
     int FrameCount,
     double IntegrationHours,
     IReadOnlyList<string> TargetsImaged);
+
+/// <summary>GET /api/v1/stats/achievements (§50.19) — light-gamification headline
+/// records + milestone badges, aggregated from the existing light-frame catalog
+/// (no extra instrumentation). "Nights" are distinct local-capture calendar days.</summary>
+public sealed record StatsAchievementsDto(
+    int TotalNightsImaged,
+    int LongestStreakNights,
+    int CurrentStreakNights,
+    double LongestNightHours,
+    double TotalIntegrationHours,
+    int UniqueTargetsImaged,
+    int TotalLightFrames,
+    DateTimeOffset? FirstLightUtc,
+    IReadOnlyList<StatsMilestoneDto> Milestones);
+
+/// <summary>One milestone badge: a fixed threshold against a cumulative metric.
+/// <see cref="Current"/> is the live value, <see cref="Achieved"/> = it met
+/// <see cref="Threshold"/>.</summary>
+public sealed record StatsMilestoneDto(
+    string Id,
+    string Title,
+    string Description,
+    bool Achieved,
+    double Threshold,
+    double Current);

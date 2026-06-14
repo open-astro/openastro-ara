@@ -76,6 +76,12 @@ public static class StatsEndpoints {
             .Produces<StatsCalendarDto>(StatusCodes.Status200OK)
             .WithName("GetStatsCalendar");
 
+        stats.MapGet("/achievements",
+                async (IStatsService svc, CancellationToken ct) =>
+                    Results.Ok(await svc.GetAchievementsAsync(ct)))
+            .Produces<StatsAchievementsDto>(StatusCodes.Status200OK)
+            .WithName("GetStatsAchievements");
+
         // CSV export remains 404 until the §28 frame catalog backs it —
         // null from the service signals "feature unavailable" rather than
         // 501-stubbing the whole route. Real impl streams the result.

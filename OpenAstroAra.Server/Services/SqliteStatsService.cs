@@ -288,6 +288,113 @@ public sealed class SqliteStatsService : IStatsService {
         return new StatsCalendarDto(days);
     }
 
+    public async Task<StatsAchievementsDto> GetAchievementsAsync(CancellationToken ct) {
+        await using var conn = _db.OpenConnection();
+        // Both queries run inside one transaction so the headline aggregates and the per-night
+        // breakdown reflect a single consistent snapshot — a frame inserted between them can't make
+        // TotalLightFrames and TotalNightsImaged disagree.
+        await using var tx = (SqliteTransaction)await conn.BeginTransactionAsync(ct);
+
+        // Headline aggregates over light frames.
+        await using var aggCmd = conn.CreateCommand();
+        aggCmd.Transaction = tx;
+        // COUNT(DISTINCT target_name) excludes NULL per SQL standard — intentional here: a frame with no
+        // target name isn't a "target imaged", so it shouldn't inflate the unique-targets record.
+        aggCmd.CommandText = """
+            SELECT
+                COUNT(*) AS light_frames,
+                CAST(IFNULL(SUM(exposure_seconds), 0) AS REAL) / 3600.0 AS integration_hours,
+                COUNT(DISTINCT target_name) AS unique_targets,
+                MIN(captured_utc) AS first_light
+            FROM frames WHERE frame_type = 'light';
+            """;
+        var totalLightFrames = 0;
+        var totalHours = 0.0;
+        var uniqueTargets = 0;
+        DateTimeOffset? firstLight = null;
+        await using (var r = await aggCmd.ExecuteReaderAsync(ct)) {
+            if (await r.ReadAsync(ct)) {
+                totalLightFrames = r.GetInt32(0);
+                totalHours = r.GetDouble(1);
+                uniqueTargets = r.GetInt32(2);
+                if (!await r.IsDBNullAsync(3, ct) &&
+                    DateTimeOffset.TryParse(r.GetString(3), CultureInfo.InvariantCulture,
+                        DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var fl)) {
+                    firstLight = fl;
+                }
+            }
+        }
+
+        // Per-night integration (distinct capture days, same date() basis as the calendar view).
+        await using var nightsCmd = conn.CreateCommand();
+        nightsCmd.Transaction = tx;
+        nightsCmd.CommandText = """
+            SELECT date(captured_utc) AS day,
+                   CAST(IFNULL(SUM(exposure_seconds), 0) AS REAL) / 3600.0 AS hours
+            FROM frames WHERE frame_type = 'light'
+            GROUP BY day ORDER BY day ASC;
+            """;
+        var nights = new List<DateOnly>();
+        var longestNightHours = 0.0;
+        await using (var r = await nightsCmd.ExecuteReaderAsync(ct)) {
+            while (await r.ReadAsync(ct)) {
+                nights.Add(DateOnly.Parse(r.GetString(0), CultureInfo.InvariantCulture));
+                longestNightHours = Math.Max(longestNightHours, r.GetDouble(1));
+            }
+        }
+
+        // Both reads are done — commit to release the WAL read lock now rather than holding it until dispose.
+        await tx.CommitAsync(ct);
+
+        var (longestStreak, currentStreak) = ComputeStreaks(nights, DateOnly.FromDateTime(DateTime.UtcNow));
+
+        return new StatsAchievementsDto(
+            TotalNightsImaged: nights.Count,
+            LongestStreakNights: longestStreak,
+            CurrentStreakNights: currentStreak,
+            LongestNightHours: longestNightHours,
+            TotalIntegrationHours: totalHours,
+            UniqueTargetsImaged: uniqueTargets,
+            TotalLightFrames: totalLightFrames,
+            FirstLightUtc: firstLight,
+            Milestones: BuildMilestones(totalHours, uniqueTargets, nights.Count, totalLightFrames));
+    }
+
+    // Longest run of consecutive calendar days, and the *current* streak — the run ending at the most recent
+    // night, but only if that night is still "live" (today or yesterday; a 1-day grace so an in-progress night
+    // isn't dropped before midnight UTC). A run that ended days ago is stale → current streak is 0, even though
+    // longest is retained. `nights` is ascending + de-duplicated by the GROUP BY.
+    private static (int Longest, int Current) ComputeStreaks(List<DateOnly> nights, DateOnly today) {
+        if (nights.Count == 0) {
+            return (0, 0);
+        }
+        // Seed both at 1 to account for nights[0]; the loop extends from index 1. The empty-list guard
+        // above guarantees at least one element, so a single-night catalog correctly yields (1, …).
+        var longest = 1;
+        var run = 1;
+        for (var i = 1; i < nights.Count; i++) {
+            run = nights[i] == nights[i - 1].AddDays(1) ? run + 1 : 1;
+            longest = Math.Max(longest, run);
+        }
+        var current = nights[^1] >= today.AddDays(-1) ? run : 0;
+        return (longest, current);
+    }
+
+    private static StatsMilestoneDto[] BuildMilestones(double hours, int targets, int nights, int frames) {
+        static StatsMilestoneDto M(string id, string title, string desc, double threshold, double current) =>
+            new(id, title, desc, current >= threshold, threshold, current);
+        return new[] {
+            M("hours_10", "Getting started", "10 hours of integration", 10, hours),
+            M("hours_50", "Seasoned imager", "50 hours of integration", 50, hours),
+            M("hours_100", "Centurion", "100 hours of integration", 100, hours),
+            M("targets_10", "Explorer", "10 unique targets imaged", 10, targets),
+            M("targets_25", "Cartographer", "25 unique targets imaged", 25, targets),
+            M("nights_10", "Night owl", "10 nights under the stars", 10, nights),
+            M("nights_50", "Dark-sky devotee", "50 nights under the stars", 50, nights),
+            M("frames_1000", "Light collector", "1000 light frames captured", 1000, frames),
+        };
+    }
+
     public async Task<(Stream Stream, string FileName)?> OpenCsvExportAsync(string scope, CancellationToken ct) {
         // v0.0.1: scope is informational; we always dump the full frames
         // table. Filter-by-scope queries (per-session, per-target) land
