@@ -34,8 +34,32 @@ public static class ClientSettingsEndpoints {
             .Produces<ClientSettingsDto>(StatusCodes.Status200OK)
             .WithName("GetClientSettings");
 
+        // Body is read manually from HttpContext (not a bound parameter) so an oversized request can be rejected by
+        // its declared Content-Length BEFORE the body is buffered/deserialized — minimal APIs don't honour MVC's
+        // RequestSizeLimit attribute, so this is the reliable pre-allocation guard. The precise 256 KiB-on-the-object
+        // check still lives in the service for chunked bodies that omit Content-Length.
         group.MapPut("",
-                async (ClientSettingsUpdateDto body, IClientSettingsService svc, CancellationToken ct) => {
+                async (HttpContext http, IClientSettingsService svc, CancellationToken ct) => {
+                    if (!http.Request.HasJsonContentType()) {
+                        return Results.Problem(detail: "Expected a JSON request body.",
+                            statusCode: StatusCodes.Status415UnsupportedMediaType);
+                    }
+                    if (http.Request.ContentLength is long len && len > ClientSettingsService.MaxRequestBytes) {
+                        return Results.Problem(detail: "Request body exceeds the size limit.",
+                            statusCode: StatusCodes.Status413PayloadTooLarge);
+                    }
+                    ClientSettingsUpdateDto? body;
+                    try {
+                        body = await http.Request.ReadFromJsonAsync(
+                            AraJsonSerializerContext.Default.ClientSettingsUpdateDto, ct);
+                    } catch (System.Text.Json.JsonException) {
+                        return Results.Problem(detail: "Request body is not valid JSON.",
+                            statusCode: StatusCodes.Status400BadRequest);
+                    }
+                    if (body is null) {
+                        return Results.Problem(detail: "A request body is required.",
+                            statusCode: StatusCodes.Status400BadRequest);
+                    }
                     try {
                         return Results.Ok(await svc.ReplaceAsync(body.Settings, ct));
                     } catch (System.ArgumentException ex) {
@@ -45,9 +69,8 @@ public static class ClientSettingsEndpoints {
                 })
             .Produces<ClientSettingsDto>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest)
-            // Reject an oversized body at the transport layer (before deserialization) as defence-in-depth; the precise
-            // 256 KiB-on-the-settings-object check still lives in the service.
-            .WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(ClientSettingsService.MaxRequestBytes))
+            .ProducesProblem(StatusCodes.Status413PayloadTooLarge)
+            .ProducesProblem(StatusCodes.Status415UnsupportedMediaType)
             .WithName("ReplaceClientSettings");
 
         return app;

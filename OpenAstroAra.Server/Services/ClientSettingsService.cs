@@ -111,6 +111,9 @@ public sealed partial class ClientSettingsService : IClientSettingsService, IDis
         if (Encoding.UTF8.GetByteCount(json) > MaxBytes) {
             throw new ArgumentException($"Client settings exceed the {MaxBytes}-byte limit.", nameof(settings));
         }
+        // Clone eagerly, before the first await: detaches an independent copy of the element so the returned DTO never
+        // depends on the caller's request JsonDocument still being alive past the await boundary.
+        var stored = settings.Clone();
 
         DateTimeOffset updated;
         await _writeGate.WaitAsync(ct).ConfigureAwait(false);
@@ -137,9 +140,7 @@ public sealed partial class ClientSettingsService : IClientSettingsService, IDis
             _writeGate.Release();
         }
 
-        // Clone the already-validated argument instead of re-parsing the json string — `settings` is still backed by
-        // the live request JsonDocument here, and Clone() detaches an independent copy that outlives it.
-        return new ClientSettingsDto(settings.Clone(), updated);
+        return new ClientSettingsDto(stored, updated);
     }
 
     private static JsonElement EmptyObject() {
