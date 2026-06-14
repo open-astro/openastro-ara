@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 
 import '../models/data_package.dart';
 import '../models/server.dart';
@@ -46,16 +47,24 @@ class DataManagerApi implements DataManagerClient {
     final res = await _dio.get<dynamic>('/api/v1/data-manager/packages');
     final data = res.data;
     if (data is! List) {
+      // A 2xx with a non-array body means the wire contract changed (or an error
+      // envelope slipped through). Surface it rather than silently showing an
+      // empty catalog. Dio already throws on 4xx/5xx, so this is the 200-wrong-shape case.
+      debugPrint('DataManagerApi.listPackages: expected a JSON array, got ${data.runtimeType}');
       return const <DataPackage>[];
     }
     return data
         .whereType<Map<String, dynamic>>()
         .map(DataPackage.fromJson)
+        // Drop an id-less (malformed) entry — id is a URL path segment for delete
+        // and the key the daemon downloads by, so an empty one is unusable.
+        .where((p) => p.id.isNotEmpty)
         .toList(growable: false);
   }
 
   @override
   Future<String> download(String packageId, {bool forceReinstall = false}) async {
+    assert(packageId.isNotEmpty, 'packageId must not be empty');
     final res = await _dio.post<dynamic>(
       '/api/v1/data-manager/download',
       data: <String, dynamic>{
@@ -73,6 +82,7 @@ class DataManagerApi implements DataManagerClient {
 
   @override
   Future<void> cancel(String downloadId) async {
+    assert(downloadId.isNotEmpty, 'downloadId must not be empty');
     try {
       await _dio.post<void>('/api/v1/data-manager/cancel/${Uri.encodeComponent(downloadId)}');
     } on DioException catch (e) {
@@ -85,6 +95,7 @@ class DataManagerApi implements DataManagerClient {
 
   @override
   Future<bool> delete(String packageId) async {
+    assert(packageId.isNotEmpty, 'packageId must not be empty');
     try {
       final res = await _dio.delete<void>('/api/v1/data-manager/${Uri.encodeComponent(packageId)}');
       // 204 No Content → freed. Any 2xx is success.
