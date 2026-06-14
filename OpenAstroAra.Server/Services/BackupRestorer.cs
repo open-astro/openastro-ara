@@ -122,31 +122,37 @@ namespace OpenAstroAra.Server.Services {
         }
 
         // Restore every already-swapped area from its backup, in reverse order, so a mid-restore failure leaves the
-        // profile as it was rather than a mix of old and new areas.
+        // profile as it was rather than a mix of old and new areas. Every area is attempted even if an earlier one
+        // fails — a single failing rollback must not abandon the remaining areas — and ALL failures are collected so
+        // the surfaced error names every unrecovered backup, not just the first.
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "Each area's rollback failure is collected (not swallowed) and re-surfaced together in a " +
+                "BackupRestoreException after the loop; catching broadly is required to attempt every area's rollback " +
+                "rather than bail on the first failure.")]
         private static void RollBack(List<AreaSwap> swaps, Exception primary) {
+            var failures = new List<Exception> { primary };
+            var unrecovered = new List<string>();
             for (var i = swaps.Count - 1; i >= 0; i--) {
                 var swap = swaps[i];
                 try {
+                    // Drop the just-swapped-in copy (throwing delete, so a failure surfaces as data loss rather than
+                    // being swallowed), then — if there was an original — move it back.
+                    DeletePath(swap.LivePath, swap.IsDirectory);
                     if (swap.HadExisting) {
-                        // Drop the just-swapped-in copy, then move the original back. Delete is throwing here so a
-                        // failed delete surfaces (the move would also throw, dest still present) → caught below.
-                        DeletePath(swap.LivePath, swap.IsDirectory);
                         MovePath(swap.BackupPath, swap.LivePath, swap.IsDirectory);
-                    } else {
-                        // There was no original — removing what we placed restores "absent". Throwing delete (NOT the
-                        // best-effort TryDeletePath) so a cleanup failure surfaces as data loss rather than silently
-                        // leaving the failed restore's just-placed area in the live profile.
-                        DeletePath(swap.LivePath, swap.IsDirectory);
                     }
                 } catch (Exception rollbackEx) {
-                    // ANY failure to roll an area back is the data-loss case — wrap it together with the original
-                    // failure (never let an unexpected rollback exception escape and discard `primary`) and name the
-                    // backup location for manual recovery.
-                    throw new BackupRestoreException(
-                        $"Backup restore failed and the area at '{swap.LivePath}' could not be rolled back; the previous " +
-                        $"copy remains at '{swap.BackupPath}' for manual recovery.",
-                        new AggregateException(primary, rollbackEx));
+                    failures.Add(rollbackEx);
+                    unrecovered.Add(swap.BackupPath);
                 }
+            }
+            if (unrecovered.Count > 0) {
+                // Data-loss case: surface the original failure AND every rollback failure together, naming each
+                // unrecovered backup so an operator can recover manually.
+                throw new BackupRestoreException(
+                    $"Backup restore failed and {unrecovered.Count} area(s) could not be rolled back; the previous " +
+                    $"copies remain for manual recovery at: {string.Join("; ", unrecovered)}.",
+                    new AggregateException(failures));
             }
         }
 
@@ -170,10 +176,9 @@ namespace OpenAstroAra.Server.Services {
             }
         }
 
-        // Zip-slip-guarded extraction: every entry must resolve inside destDir.
-        [SuppressMessage("Security", "CA5389:Do not add archive item's path to the target file system path",
-            Justification = "The destination is validated to stay inside the staging dir (the zip-slip guard below " +
-                "rejects any entry that resolves outside destDir) before ExtractToFile is ever called.")]
+        // Zip-slip-guarded extraction: every entry must resolve inside destDir. The file-extraction sink is guarded
+        // immediately by a pure `!StartsWith(destPrefix) → throw` barrier — the exact form CodeQL's cs/zipslip query
+        // recognises as a sanitizer (a compound `Equals || StartsWith` guard is not recognised and reads as a flow).
         private static void ExtractZip(string zipPath, string destDir, CancellationToken ct) {
             var destFull = Path.GetFullPath(destDir);
             var destPrefix = destFull.EndsWith(Path.DirectorySeparatorChar)
@@ -183,15 +188,24 @@ namespace OpenAstroAra.Server.Services {
             using var archive = ZipFile.OpenRead(zipPath);
             foreach (var entry in archive.Entries) {
                 ct.ThrowIfCancellationRequested();
+
+                if (entry.FullName.EndsWith('/')) {
+                    // Directory entry — a benign one may resolve to destDir itself, which doesn't start with the
+                    // separator-suffixed prefix; allow that, reject anything that escapes. (Not the cs/zipslip sink.)
+                    var dirFull = Path.GetFullPath(Path.Combine(destFull, entry.FullName));
+                    if (!dirFull.Equals(destFull, StringComparison.Ordinal) &&
+                        !dirFull.StartsWith(destPrefix, StringComparison.Ordinal)) {
+                        throw new InvalidDataException(
+                            $"Backup entry '{entry.FullName}' resolves outside the restore staging directory and was rejected.");
+                    }
+                    Directory.CreateDirectory(dirFull);
+                    continue;
+                }
+
                 var entryFull = Path.GetFullPath(Path.Combine(destFull, entry.FullName));
-                if (!entryFull.Equals(destFull, StringComparison.Ordinal) &&
-                    !entryFull.StartsWith(destPrefix, StringComparison.Ordinal)) {
+                if (!entryFull.StartsWith(destPrefix, StringComparison.Ordinal)) {
                     throw new InvalidDataException(
                         $"Backup entry '{entry.FullName}' resolves outside the restore staging directory and was rejected.");
-                }
-                if (entry.FullName.EndsWith('/')) {
-                    Directory.CreateDirectory(entryFull);
-                    continue;
                 }
                 Directory.CreateDirectory(Path.GetDirectoryName(entryFull)!);
                 entry.ExtractToFile(entryFull, overwrite: true);

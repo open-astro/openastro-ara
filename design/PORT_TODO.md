@@ -609,6 +609,11 @@ Deferred to **§43-2**:
   `idle`); (b) accept a **remote/cloud** `BackupSourceUrl` (re-download then restore) — currently only a local
   snapshot-download URL is accepted; (c) the frame-metadata / logs areas (`RestoreFrameMetadata` / `RestoreLogs`
   flags) once §43-1 create captures them. §43-2a landed in the restore PR (2026-06-14).
+- **Restore sha-256 gate is bypassable by deleting the manifest (low priority).** `RestoreCore` validates the
+  archive against its `.meta.json` sha-256 before touching live config, but a missing/unreadable manifest skips the
+  gate (logged at Warning via `LogManifestSkipped`, so it's visible; the restore proceeds unvalidated). Anyone able to
+  delete the sidecar bypasses integrity validation. Fine for a local single-user daemon; when §44 cloud/remote restore
+  lands, require the manifest (or carry the checksum out-of-band). Surfaced 2026-06-14 by the §43-2a review.
 - **No disk-space pre-flight on create (low priority).** `CreateZipAsync` packaging on a full disk fails mid-zip with
   an `IOException`; the catch reclaims the temp and the caller gets a generic 500. A pre-flight free-space check or
   mapping the disk-full `IOException` to **507 Insufficient Storage** would give a clearer operator signal. Low

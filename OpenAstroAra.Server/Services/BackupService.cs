@@ -344,7 +344,7 @@ namespace OpenAstroAra.Server.Services {
             // §43-1 backups carry the two config areas; frame-metadata/logs aren't captured yet, so those flags are
             // honoured only insofar as the archive contains them (it won't) — they're no-ops, not errors.
             if (!request.RestoreProfiles && !request.RestoreSequences) {
-                throw new BackupRestoreSourceUnsupportedException(
+                throw new BackupRestoreNoAreaSelectedException(
                     "No restorable area selected — set restore_profiles and/or restore_sequences.");
             }
 
@@ -386,20 +386,20 @@ namespace OpenAstroAra.Server.Services {
             return BackupRestorer.Restore(zipPath, _profileDir, request.RestoreProfiles, request.RestoreSequences, ct);
         }
 
-        // A restore source is supported only when it points at our own snapshot-download route; the id is the
-        // segment between "snapshot" and "download". Accepts absolute or relative URLs.
+        // A restore source is supported only when its path is EXACTLY our snapshot-download route —
+        // api/v1/backup/snapshot/{guid}/download — not merely "snapshot/{guid}/download" appearing somewhere in an
+        // arbitrary (e.g. external-host) URL. The guid is resolved against on-disk snapshots regardless of host.
         private static Guid? ParseLocalSnapshotId(Uri? url) {
             if (url is null) {
                 return null;
             }
             var path = url.IsAbsoluteUri ? url.AbsolutePath : url.OriginalString;
             var segs = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
-            for (var i = 0; i + 2 < segs.Length; i++) {
-                if (string.Equals(segs[i], "snapshot", StringComparison.Ordinal) &&
-                    string.Equals(segs[i + 2], "download", StringComparison.Ordinal) &&
-                    Guid.TryParse(segs[i + 1], out var id)) {
-                    return id;
-                }
+            if (segs.Length == 6 &&
+                segs[0] == "api" && segs[1] == "v1" && segs[2] == "backup" &&
+                segs[3] == "snapshot" && segs[5] == "download" &&
+                Guid.TryParse(segs[4], out var id)) {
+                return id;
             }
             return null;
         }
@@ -473,11 +473,19 @@ namespace OpenAstroAra.Server.Services {
     }
 
     /// <summary>Thrown by <see cref="BackupService.RestoreZipAsync"/> when the restore source isn't a supported
-    /// local snapshot URL, or no area was selected. The restore endpoint maps it to <c>422 Unprocessable Entity</c>.</summary>
+    /// local snapshot URL. The restore endpoint maps it to <c>422 Unprocessable Entity</c>.</summary>
     public sealed class BackupRestoreSourceUnsupportedException : Exception {
         public BackupRestoreSourceUnsupportedException() { }
         public BackupRestoreSourceUnsupportedException(string message) : base(message) { }
         public BackupRestoreSourceUnsupportedException(string message, Exception innerException) : base(message, innerException) { }
+    }
+
+    /// <summary>Thrown by <see cref="BackupService.RestoreZipAsync"/> when the request selects no restorable area —
+    /// a distinct validation failure from an unsupported source. The restore endpoint maps it to <c>422</c>.</summary>
+    public sealed class BackupRestoreNoAreaSelectedException : Exception {
+        public BackupRestoreNoAreaSelectedException() { }
+        public BackupRestoreNoAreaSelectedException(string message) : base(message) { }
+        public BackupRestoreNoAreaSelectedException(string message, Exception innerException) : base(message, innerException) { }
     }
 
     /// <summary>Thrown by <see cref="BackupService.RestoreZipAsync"/> when the archive fails its manifest checksum,

@@ -134,6 +134,8 @@ public static class SystemEndpoints {
                         return Results.Problem(ex.Message, statusCode: StatusCodes.Status404NotFound);
                     } catch (BackupRestoreSourceUnsupportedException ex) {
                         return Results.Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
+                    } catch (BackupRestoreNoAreaSelectedException ex) {
+                        return Results.Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
                     } catch (BackupCorruptException ex) {
                         return Results.Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
                     }

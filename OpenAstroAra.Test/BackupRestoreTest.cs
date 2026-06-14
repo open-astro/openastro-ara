@@ -132,7 +132,7 @@ namespace OpenAstroAra.Test {
             var url = await CreateSnapshotAsync();
 
             Assert.That(async () => await _svc.RestoreZipAsync(Req(url, profiles: false, sequences: false), null, CancellationToken.None),
-                Throws.InstanceOf<BackupRestoreSourceUnsupportedException>());
+                Throws.InstanceOf<BackupRestoreNoAreaSelectedException>());
         }
 
         [Test]
