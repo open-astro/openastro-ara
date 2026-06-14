@@ -3,38 +3,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/state/stats/stats_state.dart';
 
 void main() {
-  group('statsOverviewProvider', () {
-    late ProviderContainer container;
-    setUp(() => container = ProviderContainer());
-    tearDown(() => container.dispose());
-
-    test('demo data → 7 sessions, 7 targets, 7 nights', () {
-      // Library demo seeds 7 distinct sessions for distinct targets+dates
-      // (see _demoSessions in library_state.dart).
-      final overview = container.read(statsOverviewProvider);
-      expect(overview.totalSessions, 7);
-      expect(overview.totalTargets, 7);
-      expect(overview.totalNights, 7);
-    });
-
-    test('totalFrames matches sum across all sessions', () {
-      final overview = container.read(statsOverviewProvider);
-      // 6 + 9 + 12 + 12 + 10 + 6 + 5 = 60 demo frames.
-      expect(overview.totalFrames, 60);
-    });
-
-    test('totalIntegration is non-zero (lights only)', () {
-      final overview = container.read(statsOverviewProvider);
-      expect(overview.totalIntegration.inMinutes, greaterThan(0));
-    });
-
-    test('averageHfr is in a reasonable astrophotography range', () {
-      final overview = container.read(statsOverviewProvider);
-      expect(overview.averageHfr, greaterThan(1.0));
-      expect(overview.averageHfr, lessThan(3.0));
-    });
-  });
-
+  // The Overview section is now backed by the live `/api/v1/stats/overview`
+  // endpoint (see stats_overview_state_test.dart); the demo `statsOverviewProvider`
+  // was removed. Targets + Best Frames still derive from the library demo data.
   group('targetRollupsProvider', () {
     late ProviderContainer container;
     setUp(() => container = ProviderContainer());
