@@ -126,9 +126,9 @@ namespace OpenAstroAra.Server.Services {
             long total = 0;
             foreach (var pkg in Catalog) {
                 var dir = PackageDir(pkg.Id);
-                if (dir is not null && Measure(dir) is { } m) {
+                if (dir is not null && ReadInstall(dir) is { } info) {
                     installed++;
-                    total += m.Size;
+                    total += info.Size;
                 }
             }
             // Filter !Completed: a worker that has reached its finally (set Completed) but not yet removed itself
@@ -412,15 +412,15 @@ namespace OpenAstroAra.Server.Services {
         private static double Percent(long downloaded, long total) =>
             total > 0 ? Math.Round(Math.Clamp((double)downloaded / total, 0, 1) * 100, 2) : 0;
 
-        // Reflect the on-disk state of a catalog package. Measure() folds the existence check into the
-        // size/time read so a concurrent DeleteAsync between "exists?" and "measure" can't throw — it just
-        // reads as not-installed.
+        // Reflect the on-disk state of a catalog package. A package is "installed" only when §36-2a's .installed
+        // sentinel is present (a bare dir from a torn/interrupted install reads as not-installed); InstalledUtc comes
+        // from the sentinel's write time (the install-complete stamp), not the dir mtime which moves on any child write.
         private DataPackageDto Describe(DataPackageDto pkg) {
             var dir = PackageDir(pkg.Id);
-            if (dir is null || Measure(dir) is not { } m) {
+            if (dir is null || ReadInstall(dir) is not { } info) {
                 return pkg with { IsInstalled = false, InstalledUtc = null };
             }
-            return pkg with { IsInstalled = true, InstalledUtc = m.LastWriteUtc, SizeBytes = m.Size };
+            return pkg with { IsInstalled = true, InstalledUtc = info.InstalledUtc, SizeBytes = info.Size };
         }
 
         // Per-package directory — ONLY for a known catalog id, so a caller-supplied packageId (Delete,
@@ -429,23 +429,30 @@ namespace OpenAstroAra.Server.Services {
             CatalogIds.Contains(packageId) ? Path.Combine(_dataRoot, packageId) : null;
 
         // A package counts as installed once §36-2a's .installed sentinel is present (a bare dir from a torn install
-        // does not). Used by the ForceReinstall skip; the inventory layer's sentinel-awareness is §36-2b-2.
+        // does not). Used by the ForceReinstall skip.
         private bool IsInstalled(string packageId) {
             var dir = PackageDir(packageId);
             return dir is not null && File.Exists(Path.Combine(dir, SkyDataInstaller.InstalledMarkerFileName));
         }
 
-        // Measure an installed package dir, or null if it isn't there (incl. a delete that raced this read).
+        // Read a completed install's (size, install-stamp), or null if the package dir has no .installed sentinel
+        // (absent, or a torn install) — folding the sentinel check into the read so a concurrent DeleteAsync can't
+        // throw, it just reads as not-installed. Size excludes the sentinel file itself (package data only).
         // NOTE: O(files) per call and re-walked by both ListPackages + GetState — fine for the small catalog;
         // §36-2 can cache the size at install time if the catalog grows large.
-        private static (long Size, DateTimeOffset LastWriteUtc)? Measure(string dir) {
+        private static (long Size, DateTimeOffset InstalledUtc)? ReadInstall(string dir) {
             try {
-                var info = new DirectoryInfo(dir);
-                if (!info.Exists) {
-                    return null;
+                var sentinel = new FileInfo(Path.Combine(dir, SkyDataInstaller.InstalledMarkerFileName));
+                if (!sentinel.Exists) {
+                    return null; // no sentinel → not a completed install
                 }
-                var size = info.EnumerateFiles("*", SearchOption.AllDirectories).Sum(f => f.Length);
-                return (size, info.LastWriteTimeUtc);
+                var info = new DirectoryInfo(dir);
+                var size = info.EnumerateFiles("*", SearchOption.AllDirectories)
+                    // Exclude the root sentinel by full path, not name — so a package that legitimately ships a file
+                    // named ".installed" in a subdirectory still has its bytes counted.
+                    .Where(f => !string.Equals(f.FullName, sentinel.FullName, StringComparison.Ordinal))
+                    .Sum(f => f.Length);
+                return (size, sentinel.LastWriteTimeUtc);
             } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
                 // IOException (incl. its DirectoryNotFoundException subclass — a delete that raced this
                 // read mid-enumeration) or a restricted / device-faulted child dir: read as not-installed

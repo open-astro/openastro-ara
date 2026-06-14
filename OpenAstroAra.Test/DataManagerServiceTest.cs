@@ -47,12 +47,13 @@ namespace OpenAstroAra.Test {
             }
         }
 
-        // Install a package by writing a file of `bytes` length into {root}/{id}/.
+        // Install a package by writing a file of `bytes` length into {root}/{id}/ plus the .installed sentinel that
+        // marks a completed install (the inventory layer reads the sentinel, not a bare dir).
         private long InstallPackage(string id, int bytes) {
             var dir = Path.Combine(_root, id);
             Directory.CreateDirectory(dir);
-            var payload = new byte[bytes];
-            File.WriteAllBytes(Path.Combine(dir, "data.bin"), payload);
+            File.WriteAllBytes(Path.Combine(dir, "data.bin"), new byte[bytes]);
+            File.WriteAllText(Path.Combine(dir, SkyDataInstaller.InstalledMarkerFileName), "stamp");
             return bytes;
         }
 
@@ -84,6 +85,35 @@ namespace OpenAstroAra.Test {
                 Assert.That(gaia.IsInstalled, Is.False, "an absent package is not installed");
                 Assert.That(gaia.InstalledUtc, Is.Null);
             });
+        }
+
+        [Test]
+        public async Task A_dir_without_the_sentinel_reads_as_not_installed() {
+            // A torn/interrupted install (files present, no .installed sentinel) must NOT count as installed.
+            var dir = Path.Combine(_root, "tycho-2");
+            Directory.CreateDirectory(dir);
+            await File.WriteAllBytesAsync(Path.Combine(dir, "data.bin"), new byte[1024]);
+
+            var listed = await _svc.ListPackagesAsync(CancellationToken.None);
+            Assert.That(listed.Single(p => p.Id == "tycho-2").IsInstalled, Is.False, "no sentinel → not installed");
+
+            var state = await _svc.GetStateAsync(CancellationToken.None);
+            Assert.That(state.InstalledPackageCount, Is.EqualTo(0), "a torn install isn't counted");
+            Assert.That(state.TotalInstalledBytes, Is.EqualTo(0));
+        }
+
+        [Test]
+        public async Task InstalledUtc_and_size_come_from_the_sentinel_not_the_dir() {
+            InstallPackage("tycho-2", 2048);
+            var sentinel = Path.Combine(_root, "tycho-2", SkyDataInstaller.InstalledMarkerFileName);
+            var stamp = new System.DateTime(2025, 1, 2, 3, 4, 5, System.DateTimeKind.Utc);
+            File.SetLastWriteTimeUtc(sentinel, stamp);
+
+            var tycho = (await _svc.ListPackagesAsync(CancellationToken.None)).Single(p => p.Id == "tycho-2");
+
+            Assert.That(tycho.IsInstalled, Is.True);
+            Assert.That(tycho.InstalledUtc!.Value.UtcDateTime, Is.EqualTo(stamp), "InstalledUtc is the sentinel's write time");
+            Assert.That(tycho.SizeBytes, Is.EqualTo(2048), "the sentinel file itself is excluded from the measured size");
         }
 
         [Test]
