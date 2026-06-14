@@ -22,6 +22,25 @@ void main() {
       expect(s.isEmpty, isFalse);
     });
 
+    test('a zone-less timestamp is read as UTC, not shifted to local', () {
+      final s = GuidingRmsSeries.fromJson(const {
+        'samples': [
+          {'rms_arcsec': 1.0, 'timestamp': '2026-01-15T22:00:00'},
+        ],
+      });
+      expect(s.samples.single.timestamp, DateTime.utc(2026, 1, 15, 22));
+      expect(s.samples.single.timestamp!.isUtc, isTrue);
+    });
+
+    test('a numeric-offset timestamp converts to the correct UTC instant', () {
+      final s = GuidingRmsSeries.fromJson(const {
+        'samples': [
+          {'rms_arcsec': 1.0, 'timestamp': '2026-01-15T22:00:00-05:00'},
+        ],
+      });
+      expect(s.samples.single.timestamp, DateTime.utc(2026, 1, 16, 3));
+    });
+
     test('parses an optional RA/Dec breakdown when present', () {
       final s = GuidingRmsSeries.fromJson(const {
         'samples': [
