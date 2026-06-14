@@ -72,18 +72,27 @@ public static class SystemEndpoints {
                         // KeyNotFoundException) means an unrelated dictionary miss inside the §36-2 engine
                         // can't be silently turned into a 404 here.
                         return Results.Problem(ex.Message, statusCode: StatusCodes.Status404NotFound);
+                    } catch (PackageAlreadyInstalledException ex) {
+                        // §36: a non-force request for an already-installed package — it did NOT re-download.
+                        return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
                     }
                 })
             .Accepts<DownloadRequestDto>("application/json")
             .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
             .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
             .WithName("StartDataPackageDownload");
 
         data.MapPost("/cancel/{downloadId:guid}",
-                async (Guid downloadId, IDataManagerService svc, CancellationToken ct) =>
-                    Results.Accepted(value: await svc.CancelAsync(downloadId, ct)))
+                async (Guid downloadId, IDataManagerService svc, CancellationToken ct) => {
+                    try {
+                        return Results.Accepted(value: await svc.CancelAsync(downloadId, ct));
+                    } catch (DownloadNotFoundException ex) {
+                        // §36-2: the download id isn't an in-flight job (unknown or already finished).
+                        return Results.Problem(ex.Message, statusCode: StatusCodes.Status404NotFound);
+                    }
+                })
             .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
-            // Real impl 404s if the download id isn't an active job.
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("CancelDataPackageDownload");
 

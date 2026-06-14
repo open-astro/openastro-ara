@@ -567,3 +567,26 @@ unknown/uninstalled id and an `IOException`/`UnauthorizedAccessException` (locke
 §36-1 inventory layer (the endpoint maps `false` → 404 either way), but the §36-2 download engine should surface a
 distinct "could not delete" error so the client can retry rather than treat a locked dir as already-clear. Low priority;
 inherit the §36-1 catch shape but split the return. Surfaced 2026-06-13 by the §36-1 round-2 review.
+
+**§36-2 Data Manager — stalled-download backstop (✅ RESOLVED in §36-2b round-6).** The sky-data HttpClient uses
+`Timeout.InfiniteTimeSpan` (intentional: with `ResponseHeadersRead` the default 100s would fail a slow-to-start CDN,
+and a multi-GB body must not be capped). The backstop is now an *idle*-progress watchdog in the download worker: a
+per-job `CancellationTokenSource` armed with `CancelAfter(idleTimeout)` (default 60s) and reset on every byte of
+progress, linked into the install token — so a transfer that stalls at 0 B/s is cancelled and reported
+`download.failed` with `error: "stalled"` rather than pinning a worker forever. A healthy long download keeps resetting
+the deadline and is unaffected.
+
+**§36-2 Data Manager — DownloadRequestDto.ForceReinstall (✅ RESOLVED in §36-2b round-12).** `ForceReinstall: false`
+now short-circuits when the package is already installed: `DownloadAsync` checks the §36-2a `.installed` sentinel and,
+if present, throws `PackageAlreadyInstalledException` → the endpoint returns **409 Conflict** (no re-download).
+`ForceReinstall: true` bypasses the check and re-downloads. (This is distinct from §36-2b-2's inventory rework, which
+makes ListPackages/GetState read the sentinel for `InstalledUtc` — still pending.)
+
+**§36-2 Data Manager — no graceful-shutdown drain for in-flight downloads (§36-2b round-9 review note).** The
+download workers run as detached `Task.Run` jobs; `DataManagerService` is a plain singleton not tied to the host
+shutdown signal. On a daemon restart mid-download the worker is abandoned, leaving the §36-2a `.staging-*`/`.backup-*`
+scratch dirs behind (harmless temp dirs, but not reclaimed) and wasting the partial transfer. Two complementary fixes
+for a follow-up: (a) a **startup sweep** that deletes stale `.staging-*`/`.backup-*` dirs under the sky-data root (robust
+even against a hard kill that a drain can't catch); (b) make `DataManagerService` `IAsyncDisposable` (or an
+`IHostedService`) that cancels all job CTSes and awaits outstanding tasks for a clean drain on graceful stop. Low
+priority for v0.1.0 (restarts are rare and the leaked dirs are inert). Surfaced 2026-06-13 by the §36-2b review.

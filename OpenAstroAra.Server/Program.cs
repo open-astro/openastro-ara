@@ -287,8 +287,21 @@ public partial class Program {
         // §36 Data Manager — real disk-backed inventory under {profileDir}/sky-data (replaces the
         // placeholder). Registered here (not at the §13.10 placeholder site above) since it needs the
         // resolved profileDir. The §36-2 download engine extends this same service.
+        // No HttpClient.Timeout: with ResponseHeadersRead it would otherwise bound the wait for response headers
+        // (default 100s), failing a download against a slow-to-start CDN. A download is bounded instead by its job's
+        // CancellationToken (POST /cancel), which the worker observes through the whole fetch + extract.
+        builder.Services.AddHttpClient(HttpSkyDataFetcher.HttpClientName)
+            .ConfigureHttpClient(c => c.Timeout = System.Threading.Timeout.InfiniteTimeSpan)
+            // Don't auto-follow redirects: the HTTPS scheme guard only checks the initial URL, so a CDN
+            // HTTPS→HTTP downgrade redirect would otherwise serve the body in cleartext. Our catalog URLs are
+            // direct, so a redirect is unexpected — let it surface as a non-success status (→ failed download)
+            // rather than silently following it. If redirects are ever needed, re-validate the Location scheme.
+            .ConfigurePrimaryHttpMessageHandler(() => new System.Net.Http.SocketsHttpHandler { AllowAutoRedirect = false });
+        builder.Services.AddSingleton<ISkyDataFetcher, HttpSkyDataFetcher>();
         builder.Services.AddSingleton<IDataManagerService>(sp =>
             new DataManagerService(System.IO.Path.Combine(profileDir, "sky-data"),
+                sp.GetRequiredService<ISkyDataFetcher>(),
+                sp.GetRequiredService<IWsBroadcaster>(),
                 sp.GetRequiredService<ILogger<DataManagerService>>()));
 
         // §14e — tenth real device service and the head of the capture path: live Alpaca camera

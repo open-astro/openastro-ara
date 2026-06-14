@@ -32,6 +32,9 @@ public sealed record DataPackageDto(
     Uri? SourceUrl);
 
 /// <summary>POST /api/v1/data-manager/download body.</summary>
+/// <param name="PackageId">Catalog id of the package to download.</param>
+/// <param name="ForceReinstall">When false, a request for a package that is already fully installed is a no-op —
+/// the endpoint returns 409 Conflict instead of re-downloading. When true, the package is re-downloaded regardless.</param>
 public sealed record DownloadRequestDto(
     string PackageId,
     bool ForceReinstall);
