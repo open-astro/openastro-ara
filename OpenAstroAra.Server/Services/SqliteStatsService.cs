@@ -156,7 +156,9 @@ public sealed class SqliteStatsService : IStatsService {
         await using (var reader = await cmd.ExecuteReaderAsync(ct)) {
             while (await reader.ReadAsync(ct)) {
                 var temp = reader.GetDouble(0);
-                var pos = reader.GetInt32(1);
+                // SQLite stores INTEGER as 64-bit; narrow explicitly so a focuser
+                // position above Int32.MaxValue can't throw InvalidCastException.
+                var pos = (int)reader.GetInt64(1);
                 var ts = DateTimeOffset.Parse(reader.GetString(2), CultureInfo.InvariantCulture);
                 samples.Add(new FocusTempPointDto(TemperatureC: temp, FocuserPosition: pos, Timestamp: ts));
                 temps.Add(temp);
