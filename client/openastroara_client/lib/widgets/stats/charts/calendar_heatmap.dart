@@ -1,102 +1,149 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../state/library/library_state.dart';
+import '../../../models/stats/calendar_stats.dart';
+import '../../../state/stats/calendar_state.dart';
 import '../../../theme/ara_colors.dart';
 import 'chart_card.dart';
 
 /// §50.6 GitHub-style calendar heatmap — one cell per day in a rolling
-/// 49-day window. Cell shade scales with integration minutes (lights only)
-/// for that day. fl_chart has no native heatmap, so this is a CustomPaint
-/// over a Wrap of square tiles.
+/// [_daysShown]-day window, shaded by that night's integration minutes, from
+/// the live daemon (`GET /api/v1/stats/calendar`). Replaces the Phase-12g demo
+/// that summed integration from the in-memory library. fl_chart has no native
+/// heatmap, so this is a Wrap of square tiles.
 class CalendarHeatmap extends ConsumerWidget {
   const CalendarHeatmap({super.key});
 
+  static const int _daysShown = 49;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final sessions = ref.watch(librarySessionsProvider);
-    // Real wall-clock — the rolling window advances as real time moves.
-    // Demo sessions land on 2026-04/05 dates which the wall-clock-anchored
-    // window captures naturally.
+    final async = ref.watch(calendarProvider);
+    final stats = async.asData?.value;
+
+    // Real wall-clock — the rolling window advances as time moves.
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    const daysShown = 49;
-    final start = today.subtract(const Duration(days: daysShown - 1));
+    final start = today.subtract(const Duration(days: _daysShown - 1));
 
-    // Sum integration minutes per date, but only for dates that actually
-    // fall in the rendered 49-day window — sessions outside the window
-    // would otherwise inflate `maxMins` and wash out visible contrast.
+    // Integration minutes per day within the rendered window. Days outside it
+    // (the server may return a slightly wider range) are ignored so they don't
+    // inflate `maxMins` and wash out contrast.
     final perDay = <String, int>{};
-    for (final s in sessions) {
-      final day = DateTime(s.date.year, s.date.month, s.date.day);
-      if (day.isBefore(start) || day.isAfter(today)) continue;
-      final mins = s.totalIntegration.inMinutes;
-      final key = _dayKey(day);
-      perDay[key] = (perDay[key] ?? 0) + mins;
+    if (stats != null) {
+      stats.minutesByDay.forEach((key, mins) {
+        final d = DateTime.tryParse(key);
+        if (d == null || d.isBefore(start) || d.isAfter(today)) return;
+        perDay[key] = (perDay[key] ?? 0) + mins;
+      });
     }
-    final maxMins = perDay.values.isEmpty
-        ? 0
-        : perDay.values.reduce((a, b) => a > b ? a : b);
+    final maxMins =
+        perDay.values.isEmpty ? 0 : perDay.values.reduce((a, b) => a > b ? a : b);
 
     return ChartCard(
       title: 'Calendar Heatmap',
       subtitle:
-          'Integration minutes per night, last $daysShown days (peak: ${maxMins}m)',
+          'Integration minutes per night, last $_daysShown days (peak: ${maxMins}m)',
       height: 200,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Wrap(
-                spacing: 4,
-                runSpacing: 4,
-                children: [
-                  for (var i = 0; i < daysShown; i++)
-                    _Cell(
-                      date: start.add(Duration(days: i)),
-                      minutes: perDay[_dayKey(start.add(Duration(days: i)))] ?? 0,
-                      maxMinutes: maxMins,
-                    ),
-                ],
-              ),
+      child: Stack(
+        children: [
+          _body(context, ref, async, stats, start, today, perDay, maxMins),
+          Positioned(
+            top: 0,
+            right: 4,
+            child: IconButton(
+              tooltip: 'Refresh',
+              iconSize: 18,
+              visualDensity: VisualDensity.compact,
+              onPressed: async.isLoading
+                  ? null
+                  : () =>
+                      unawaited(ref.read(calendarProvider.notifier).refresh()),
+              icon: async.isLoading
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.refresh),
             ),
-            const SizedBox(height: 6),
-            Row(children: [
-              Text(
-                'Less',
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: AraColors.textDisabled,
-                    ),
-              ),
-              const SizedBox(width: 6),
-              for (final s in [0.15, 0.3, 0.6, 0.85, 1.0])
-                Container(
-                  margin: const EdgeInsets.only(right: 3),
-                  width: 12,
-                  height: 12,
-                  decoration: BoxDecoration(
-                    color: _shade(s),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              const SizedBox(width: 4),
-              Text(
-                'More',
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: AraColors.textDisabled,
-                    ),
-              ),
-            ]),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
-  static String _dayKey(DateTime d) =>
-      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+  Widget _body(
+    BuildContext context,
+    WidgetRef ref,
+    AsyncValue<CalendarStats?> async,
+    CalendarStats? stats,
+    DateTime start,
+    DateTime today,
+    Map<String, int> perDay,
+    int maxMins,
+  ) {
+    if (async.isLoading && stats == null) {
+      return const _Hint('Loading calendar…');
+    }
+    if (async.hasError && stats == null) {
+      return _Hint(
+        'Could not load the calendar.',
+        onRetry: () => unawaited(ref.read(calendarProvider.notifier).refresh()),
+      );
+    }
+    if (stats == null) {
+      return const _Hint('Connect to a server to see your capture calendar.');
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Wrap(
+              spacing: 4,
+              runSpacing: 4,
+              children: [
+                for (var i = 0; i < _daysShown; i++)
+                  _Cell(
+                    date: start.add(Duration(days: i)),
+                    minutes:
+                        perDay[CalendarStats.dayKey(start.add(Duration(days: i)))] ?? 0,
+                    maxMinutes: maxMins,
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 6),
+          Row(children: [
+            Text('Less',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: AraColors.textDisabled,
+                    )),
+            const SizedBox(width: 6),
+            for (final s in [0.15, 0.3, 0.6, 0.85, 1.0])
+              Container(
+                margin: const EdgeInsets.only(right: 3),
+                width: 12,
+                height: 12,
+                decoration: BoxDecoration(
+                  color: _shade(s),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            const SizedBox(width: 4),
+            Text('More',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: AraColors.textDisabled,
+                    )),
+          ]),
+        ],
+      ),
+    );
+  }
 
   static Color _shade(double t) {
     if (t <= 0) return AraColors.bgPanel;
@@ -129,6 +176,36 @@ class _Cell extends StatelessWidget {
           borderRadius: BorderRadius.circular(3),
           border: Border.all(color: AraColors.border, width: 0.5),
         ),
+      ),
+    );
+  }
+}
+
+class _Hint extends StatelessWidget {
+  const _Hint(this.message, {this.onRetry});
+
+  final String message;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Text(
+              message,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AraColors.textDisabled,
+                  ),
+            ),
+          ),
+          if (onRetry != null)
+            TextButton(onPressed: onRetry, child: const Text('Retry')),
+        ],
       ),
     );
   }

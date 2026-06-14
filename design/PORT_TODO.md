@@ -697,3 +697,12 @@ Deferred to **§43-2**:
   plain `DateTime.tryParse(v)?.toUtc()` form. The daemon always emits offset-bearing `DateTimeOffset`s, so this is
   latent-only, but a shared `parseStatsUtc()` helper (in `stats_format.dart` or a small models util) used by all four
   would make them uniformly drift-proof. Surfaced 2026-06-14 by the #438 review.
+- **Focus-Temp scatter chart: blocked on §38 focuser-position persistence (§50.4).** The remaining §50 Visualizations
+  chart (`focus_temp_scatter.dart`) still renders from the in-memory library demo. Its live endpoint
+  `GET /api/v1/stats/focus-temp` is a deliberate server stub — `SqliteStatsService.GetFocusTempAsync` always returns
+  empty + null correlation because focuser position isn't a column on the `frames` table yet (the §38 sequence
+  orchestrator will start persisting per-frame focuser position via focuser-mediator snapshots). Wiring the client to
+  the live endpoint now would make the chart permanently show "no data" until that lands, so it's deferred. Two steps:
+  (1) server — add a `focuser_position` column + persist it in the capture path, then implement the real
+  GetFocusTempAsync query (position vs sensor temp, with the correlation R²); (2) client — wire the chart like the other
+  live charts. Surfaced 2026-06-14 while wiring the §50 Visualizations charts.
