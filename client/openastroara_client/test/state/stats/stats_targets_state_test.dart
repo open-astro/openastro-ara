@@ -106,6 +106,10 @@ void main() {
       final second = c.read(statsTargetsProvider.notifier).refresh();
       await Future.wait([first, second]);
 
+      // The fake's fetchTargets() has no interior await, so both continuations
+      // run after the synchronous mutation and read ['M81']; this asserts the
+      // generation guard lets the latest (second) refresh win and discards the
+      // first's now-stale-token write, rather than asserting the first read M42.
       expect(c.read(statsTargetsProvider).value!.map((t) => t.targetName), ['M81']);
     });
   });

@@ -30,6 +30,10 @@ class StatsTargetsNotifier extends AsyncNotifier<List<StatsTarget>?> {
   // Bumped on every build() and refresh(); a refresh only writes its result if
   // the token is still current, so a second refresh tap or a server switch that
   // rebuilds mid-fetch discards the stale result instead of clobbering state.
+  // build() bumps the token but doesn't gate its own return on it — Riverpod
+  // already discards a superseded build's future, and the refresh button is
+  // disabled while a build is in flight (`async.isLoading`), so there's no
+  // refresh-outlives-build race to guard against from the UI.
   int _generation = 0;
 
   @override

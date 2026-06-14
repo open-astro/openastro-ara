@@ -46,13 +46,12 @@ class TargetsSection extends ConsumerWidget {
           ],
         ),
         const SizedBox(height: 8),
-        _body(context, ref, async, targets),
+        _body(ref, async, targets),
       ],
     );
   }
 
   Widget _body(
-    BuildContext context,
     WidgetRef ref,
     AsyncValue<List<StatsTarget>?> async,
     List<StatsTarget>? targets,
