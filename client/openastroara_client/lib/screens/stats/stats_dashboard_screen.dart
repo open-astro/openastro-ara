@@ -4,29 +4,26 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../services/stats_csv_export.dart';
 import '../../state/library/library_state.dart';
-import '../../state/stats/stats_state.dart';
-import '../../theme/ara_colors.dart';
 import '../../widgets/stats/charts/calendar_heatmap.dart';
 import '../../widgets/stats/charts/focus_temp_scatter.dart';
 import '../../widgets/stats/charts/frame_quality_chart.dart';
 import '../../widgets/stats/achievements_section.dart';
+import '../../widgets/stats/best_frames_section.dart';
 import '../../widgets/stats/overview_section.dart';
 import '../../widgets/stats/targets_section.dart';
 import '../../widgets/stats/astrobin_export_dialog.dart';
 import '../../widgets/stats/charts/guiding_rms_chart.dart';
 
-/// Stats dashboard per playbook §50. Phase 12g.1 wires the Overview tiles +
-/// Targets rollup + Best Frames list over `librarySessionsProvider` demo
-/// data. 12g.2 adds chart visualizations (Focus & Temperature scatter,
-/// Guiding RMS trends, Frame Quality composite, Calendar heatmap) via
-/// fl_chart. 12g.3 wires `/api/v1/stats/*` + per-target detail drill-down.
+/// Stats dashboard per playbook §50. The Overview, Targets, Best Frames, and
+/// Achievements sections are wired to the live daemon (`/api/v1/stats/*`); the
+/// chart visualizations (Focus & Temperature scatter, Guiding RMS trends, Frame
+/// Quality composite, Calendar heatmap) render via fl_chart. CSV export +
+/// per-target detail drill-down remain follow-ups.
 class StatsDashboardScreen extends ConsumerWidget {
   const StatsDashboardScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final bestFrames = ref.watch(bestFramesProvider);
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Stats'),
@@ -71,33 +68,7 @@ class StatsDashboardScreen extends ConsumerWidget {
           const SizedBox(height: 24),
           const TargetsSection(),
           const SizedBox(height: 24),
-          _SectionTitle(title: 'Best Frames (by HFR)', context: context),
-          ...bestFrames.asMap().entries.map(
-                (entry) => ListTile(
-                  dense: true,
-                  leading: CircleAvatar(
-                    radius: 12,
-                    backgroundColor: AraColors.selectionBg,
-                    child: Text('${entry.key + 1}',
-                        style: Theme.of(context).textTheme.labelSmall),
-                  ),
-                  title: Text(entry.value.filename,
-                      style: Theme.of(context).textTheme.bodySmall),
-                  subtitle: Text(
-                    'HFR ${entry.value.hfr.toStringAsFixed(2)} · '
-                    '${entry.value.starCount} stars · '
-                    '${entry.value.filter}',
-                  ),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      for (var i = 0; i < entry.value.rating; i++)
-                        const Icon(Icons.star,
-                            size: 12, color: AraColors.accentBusy),
-                    ],
-                  ),
-                ),
-              ),
+          const BestFramesSection(),
           const SizedBox(height: 24),
           const AchievementsSection(),
           const SizedBox(height: 24),
