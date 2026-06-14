@@ -100,10 +100,9 @@ class DataManagerApi implements DataManagerClient {
       // `data.MapDelete("/{packageId}")` under `MapGroup("/api/v1/data-manager")`
       // (SystemEndpoints.cs). It is intentionally NOT `/packages/{id}`: `/packages`
       // is only the GET collection route; the delete item route sits at the group root.
-      final res = await _dio.delete<void>('/api/v1/data-manager/${Uri.encodeComponent(packageId)}');
-      // 204 No Content → freed. Any 2xx is success.
-      final code = res.statusCode ?? 0;
-      return code >= 200 && code < 300;
+      await _dio.delete<void>('/api/v1/data-manager/${Uri.encodeComponent(packageId)}');
+      // Dio throws on any non-2xx, so reaching here means the delete succeeded (files freed).
+      return true;
     } on DioException catch (e) {
       // 404 → already gone (another client removed it). Idempotent: report "nothing
       // freed" (false), not an error; anything else propagates.

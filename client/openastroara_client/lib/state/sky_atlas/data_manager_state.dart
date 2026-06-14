@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/data_package.dart';
@@ -154,12 +156,15 @@ class DataManagerDownloadsNotifier extends Notifier<Map<String, DownloadProgress
       if (progress == null) return;
 
       acc[progress.packageId] = progress;
+      // Map.unmodifiable COPIES acc's entries into a new immutable map (it is NOT
+      // a live UnmodifiableMapView), so each assigned `state` is an independent
+      // snapshot — later acc mutations don't alter a previously-emitted state.
       state = Map<String, DownloadProgress>.unmodifiable(acc);
 
       // A finished download flips the package's install state — re-read the
       // catalog so the row updates from "downloading" to installed/failed.
       if (phase == DownloadPhase.complete) {
-        ref.read(dataManagerPackagesProvider.notifier).refresh();
+        unawaited(ref.read(dataManagerPackagesProvider.notifier).refresh());
       }
     });
     return const <String, DownloadProgress>{};

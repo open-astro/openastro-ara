@@ -219,6 +219,35 @@ void main() {
       expect(api.lists, greaterThan(listsBefore), reason: 'a complete event re-reads the catalog');
     });
 
+    test('each emitted state is an independent snapshot (a later event does not mutate a prior one)', () async {
+      final conn = _FakeConnector();
+      final c = ProviderContainer(overrides: [
+        savedServerServiceProvider.overrideWithValue(_FakeSavedServerService(const [_server])),
+        dataManagerApiFactoryProvider.overrideWithValue((_) => _FakeDataManagerClient(const [])),
+        wsEventStreamFactoryProvider.overrideWithValue((s) => WsEventStream(s, connect: conn.connect)),
+      ]);
+      addTearDown(c.dispose);
+      await c.read(savedServersProvider.future);
+      final sub = c.listen(dataManagerDownloadsProvider, (_, _) {});
+      addTearDown(sub.close);
+      c.read(dataManagerDownloadsProvider);
+      await pumpEventQueue();
+
+      final leg = conn.legs.single;
+      leg.incoming.add(_frame('data_manager.download.progress',
+          {'download_id': 'd1', 'package_id': 'tycho-2', 'percent_complete': 25.0}, 1));
+      await pumpEventQueue();
+      final firstSnapshot = c.read(dataManagerDownloadsProvider); // captured at 25%
+
+      leg.incoming.add(_frame('data_manager.download.progress',
+          {'download_id': 'd1', 'package_id': 'tycho-2', 'percent_complete': 75.0}, 2));
+      await pumpEventQueue();
+
+      expect(firstSnapshot['tycho-2']!.percentComplete, 25.0,
+          reason: 'the earlier snapshot is unchanged — Map.unmodifiable copied, not a live view');
+      expect(c.read(dataManagerDownloadsProvider)['tycho-2']!.percentComplete, 75.0);
+    });
+
     test('a failed event carries the error', () async {
       final conn = _FakeConnector();
       final c = ProviderContainer(overrides: [
