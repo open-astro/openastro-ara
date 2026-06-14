@@ -63,6 +63,8 @@ class BackupSnapshotsNotifier extends AsyncNotifier<List<BackupSnapshot>?> {
   }) async {
     final api = ref.read(backupApiProvider);
     if (api == null) return null;
+    // Pass the snapshot's own (relative) download URL straight through — the daemon's restore-source parser
+    // round-trips exactly this value (`/api/v1/backup/snapshot/{id}/download`); verified by the §43-2a server tests.
     return api.restore(
       sourceUrl: snapshot.downloadUrl,
       profiles: profiles,

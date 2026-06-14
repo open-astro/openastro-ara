@@ -37,14 +37,17 @@ class BackupApi implements BackupClient {
   final Dio _dio;
   final String _baseUrl;
 
-  BackupApi(AraServer server)
+  /// [dio] is injectable so tests can supply a mock `HttpClientAdapter`; production
+  /// passes nothing and a server-bound Dio is built.
+  BackupApi(AraServer server, {Dio? dio})
       : _baseUrl = server.baseUrl,
-        _dio = Dio(BaseOptions(
-          baseUrl: server.baseUrl,
-          connectTimeout: const Duration(seconds: 3),
-          sendTimeout: const Duration(seconds: 5),
-          receiveTimeout: const Duration(seconds: 30),
-        ));
+        _dio = dio ??
+            Dio(BaseOptions(
+              baseUrl: server.baseUrl,
+              connectTimeout: const Duration(seconds: 3),
+              sendTimeout: const Duration(seconds: 5),
+              receiveTimeout: const Duration(seconds: 30),
+            ));
 
   @override
   Future<List<BackupSnapshot>> listSnapshots() async {
@@ -92,12 +95,10 @@ class BackupApi implements BackupClient {
   }
 
   @override
-  String absoluteDownloadUrl(BackupSnapshot snapshot) {
-    // downloadUrl is a server-relative path ("/api/v1/backup/snapshot/{id}/download").
-    final base = _baseUrl.endsWith('/') ? _baseUrl.substring(0, _baseUrl.length - 1) : _baseUrl;
-    final path = snapshot.downloadUrl.startsWith('/') ? snapshot.downloadUrl : '/${snapshot.downloadUrl}';
-    return '$base$path';
-  }
+  String absoluteDownloadUrl(BackupSnapshot snapshot) =>
+      // downloadUrl is a server-relative path ("/api/v1/backup/snapshot/{id}/download"); resolve it against the
+      // base URL via Uri so an origin/port (and any base path) is handled correctly rather than string-spliced.
+      Uri.parse(_baseUrl).resolve(snapshot.downloadUrl).toString();
 
   static String _operationId(dynamic data, String op) {
     final id = data is Map<String, dynamic> ? data['operation_id'] : null;
