@@ -4,6 +4,7 @@ import '../../models/server.dart';
 import '../../models/stats/stats_overview.dart';
 import '../../services/stats_overview_api.dart';
 import '../saved_server_state.dart';
+import 'stats_refresh_mixin.dart';
 
 /// Builds a [StatsOverviewClient] for a server. Overridable in tests.
 final statsOverviewApiFactoryProvider =
@@ -26,32 +27,22 @@ final statsOverviewApiProvider = Provider<StatsOverviewClient?>((ref) {
 
 /// The active server's §50 catalog overview. `null` data means no server is
 /// saved. Read-only; [refresh] re-reads on demand.
-class StatsOverviewNotifier extends AsyncNotifier<StatsOverview?> {
-  // Bumped on every build() and refresh(). A refresh captures the token before
-  // awaiting and only writes state if it's still current — so a second refresh
-  // tap, or a server switch that rebuilds mid-fetch, discards the stale result
-  // instead of clobbering the live state with it.
-  int _generation = 0;
-
+class StatsOverviewNotifier extends AsyncNotifier<StatsOverview?>
+    with StatsRefreshMixin<StatsOverview> {
   @override
   Future<StatsOverview?> build() async {
-    _generation++;
+    markBuild();
     final api = ref.watch(statsOverviewApiProvider);
     if (api == null) return null;
     return api.fetch();
   }
 
-  Future<void> refresh() async {
-    final token = ++_generation;
-    state = const AsyncValue.loading();
-    final next = await AsyncValue.guard<StatsOverview?>(() async {
-      final api = ref.read(statsOverviewApiProvider);
-      if (api == null) return null;
-      return api.fetch();
-    });
-    if (token != _generation) return;
-    state = next;
-  }
+  /// Re-reads the overview, keeping the previous totals on screen if the read
+  /// fails (the section shows a stale banner). See [StatsRefreshMixin].
+  Future<void> refresh() => refreshUsing(() async {
+        final api = ref.read(statsOverviewApiProvider);
+        return api?.fetch();
+      });
 }
 
 final statsOverviewProvider =

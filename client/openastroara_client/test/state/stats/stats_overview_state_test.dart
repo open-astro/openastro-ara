@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/server.dart';
@@ -31,6 +33,23 @@ class _FakeStatsOverviewClient implements StatsOverviewClient {
     fetches++;
     if (throwOnFetch) throw StateError('boom');
     return value;
+  }
+
+  @override
+  void close() {}
+}
+
+/// A fake whose `fetch()` resolves only when the test completes it, so the
+/// generation-guard test can hold a refresh open while a (simulated) server
+/// switch re-runs build().
+class _GatedStatsOverviewClient implements StatsOverviewClient {
+  final List<Completer<StatsOverview>> calls = [];
+
+  @override
+  Future<StatsOverview> fetch() {
+    final c = Completer<StatsOverview>();
+    calls.add(c);
+    return c.future;
   }
 
   @override
@@ -80,7 +99,7 @@ void main() {
       expect(api.fetches, 2);
     });
 
-    test('a fetch failure lands in the provider error state', () async {
+    test('an initial-load failure lands in the provider error state', () async {
       final api = _FakeStatsOverviewClient(const StatsOverview())..throwOnFetch = true;
       final c = _container(const [_server], api);
       await c.read(savedServersProvider.future);
@@ -88,22 +107,54 @@ void main() {
       expect(c.read(statsOverviewProvider).hasError, isTrue);
     });
 
-    test('concurrent refreshes: only the latest result is written', () async {
+    test('a failed refresh keeps the prior data and rethrows (no blanking)', () async {
+      final api = _FakeStatsOverviewClient(const StatsOverview(totalFrames: 7));
+      final c = _container(const [_server], api);
+      await c.read(savedServersProvider.future);
+      await c.read(statsOverviewProvider.future);
+
+      api.throwOnFetch = true;
+      await expectLater(
+          c.read(statsOverviewProvider.notifier).refresh(), throwsA(isA<StateError>()));
+      // State still holds the last-good totals (the widget shows a stale banner).
+      expect(c.read(statsOverviewProvider).hasError, isFalse);
+      expect(c.read(statsOverviewProvider).value!.totalFrames, 7);
+    });
+
+    test('a successful refresh swaps the new totals in without a loading flash', () async {
       final api = _FakeStatsOverviewClient(const StatsOverview(totalFrames: 1));
       final c = _container(const [_server], api);
       await c.read(savedServersProvider.future);
       await c.read(statsOverviewProvider.future);
 
-      // Fire two refreshes back-to-back. The second's value must win even if the
-      // first's future were to resolve afterward — the generation guard drops
-      // the stale write.
-      api.value = const StatsOverview(totalFrames: 5);
-      final first = c.read(statsOverviewProvider.notifier).refresh();
       api.value = const StatsOverview(totalFrames: 9);
-      final second = c.read(statsOverviewProvider.notifier).refresh();
-      await Future.wait([first, second]);
-
+      final future = c.read(statsOverviewProvider.notifier).refresh();
+      // refresh() never drops to a loading state — the prior data stays readable
+      // throughout, then the new value swaps in.
+      expect(c.read(statsOverviewProvider).isLoading, isFalse);
+      expect(c.read(statsOverviewProvider).value!.totalFrames, 1);
+      await future;
       expect(c.read(statsOverviewProvider).value!.totalFrames, 9);
+    });
+
+    test('a server switch mid-refresh discards the stale result (generation guard)', () async {
+      final api = _GatedStatsOverviewClient();
+      final c = _container(const [_server], api);
+      await c.read(savedServersProvider.future);
+      final built = c.read(statsOverviewProvider.future);
+      api.calls[0].complete(const StatsOverview(totalFrames: 1));
+      await built;
+
+      final notifier = c.read(statsOverviewProvider.notifier);
+      final refreshing = notifier.refresh(); // captures generation; calls[1] pending
+      // Stand in for the active server changing: build() re-runs and bumps the
+      // generation via markBuild(), invalidating the in-flight refresh.
+      notifier.markBuild();
+      api.calls[1].complete(const StatsOverview(totalFrames: 99)); // now stale
+      await refreshing;
+
+      // The stale refresh is dropped; the pre-refresh value is retained.
+      expect(c.read(statsOverviewProvider).value!.totalFrames, 1);
     });
   });
 }
