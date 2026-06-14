@@ -87,6 +87,7 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public void Replace_rejects_an_oversized_blob() {
+            // The value alone is MaxBytes chars, so the full JSON (key + quotes + braces) is deliberately over the cap.
             var big = "{\"blob\":\"" + new string('x', ClientSettingsService.MaxBytes) + "\"}";
             Assert.That(async () => await _svc.ReplaceAsync(Obj(big), CancellationToken.None),
                 Throws.InstanceOf<ArgumentException>());

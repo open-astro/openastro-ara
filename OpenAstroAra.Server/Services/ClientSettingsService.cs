@@ -47,6 +47,11 @@ public sealed partial class ClientSettingsService : IClientSettingsService, IDis
     // misbehaving client can't fill the disk through this path.
     internal const int MaxBytes = 256 * 1024;
 
+    // Coarse HTTP-layer body cap, applied before the request is even buffered/deserialized so a misbehaving client
+    // can't force a large allocation ahead of the precise per-object check below. Set above MaxBytes to leave room for
+    // the {"settings":…} envelope, so a valid near-cap settings object isn't rejected at the transport layer.
+    internal const long MaxRequestBytes = (MaxBytes * 2L) + 1024;
+
     private readonly string _path;
     private readonly ILogger<ClientSettingsService> _logger;
     private readonly SemaphoreSlim _writeGate = new(1, 1);
@@ -60,6 +65,10 @@ public sealed partial class ClientSettingsService : IClientSettingsService, IDis
     public async Task<ClientSettingsDto> GetAsync(CancellationToken ct) {
         string text;
         DateTimeOffset updated;
+        // Read content + timestamp under the same gate that writes hold, so the pair is a consistent snapshot — a
+        // concurrent ReplaceAsync can't slip a new timestamp onto the old content (which would mislead a client's
+        // "is my state current?" check).
+        await _writeGate.WaitAsync(ct).ConfigureAwait(false);
         try {
             text = await File.ReadAllTextAsync(_path, ct).ConfigureAwait(false);
             updated = new DateTimeOffset(File.GetLastWriteTimeUtc(_path), TimeSpan.Zero);
@@ -67,6 +76,8 @@ public sealed partial class ClientSettingsService : IClientSettingsService, IDis
             return new ClientSettingsDto(EmptyObject(), null);
         } catch (DirectoryNotFoundException) {
             return new ClientSettingsDto(EmptyObject(), null);
+        } finally {
+            _writeGate.Release();
         }
 
         try {
@@ -95,8 +106,14 @@ public sealed partial class ClientSettingsService : IClientSettingsService, IDis
             // Atomic publish: write a sibling temp file then rename over the target, so a reader never sees a
             // half-written file and a crash mid-write leaves the prior settings intact.
             var tmp = _path + ".tmp-" + Guid.NewGuid().ToString("N");
-            await File.WriteAllTextAsync(tmp, json, ct).ConfigureAwait(false);
-            File.Move(tmp, _path, overwrite: true);
+            try {
+                await File.WriteAllTextAsync(tmp, json, ct).ConfigureAwait(false);
+                File.Move(tmp, _path, overwrite: true);
+            } catch {
+                // A cancelled/failed write would otherwise leave the temp file behind — best-effort cleanup.
+                try { File.Delete(tmp); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+                throw;
+            }
         } finally {
             _writeGate.Release();
         }

@@ -45,6 +45,9 @@ public static class ClientSettingsEndpoints {
                 })
             .Produces<ClientSettingsDto>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest)
+            // Reject an oversized body at the transport layer (before deserialization) as defence-in-depth; the precise
+            // 256 KiB-on-the-settings-object check still lives in the service.
+            .WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(ClientSettingsService.MaxRequestBytes))
             .WithName("ReplaceClientSettings");
 
         return app;
