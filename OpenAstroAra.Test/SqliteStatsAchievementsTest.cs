@@ -66,11 +66,11 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task Aggregates_nights_hours_targets_and_unlocks_milestones() {
-            // 3 consecutive nights; a 10h night + two 1h nights = 12h over 2 targets. A dark frame is ignored.
-            await InsertLightAsync("M31", 36000, new DateTimeOffset(2026, 1, 1, 22, 0, 0, TimeSpan.Zero));
-            await InsertLightAsync("M42", 3600, new DateTimeOffset(2026, 1, 2, 22, 0, 0, TimeSpan.Zero));
-            await InsertLightAsync("M31", 3600, new DateTimeOffset(2026, 1, 3, 22, 0, 0, TimeSpan.Zero));
-            await InsertFrameAsync("dark", "M31", 600, new DateTimeOffset(2026, 1, 1, 21, 0, 0, TimeSpan.Zero));
+            // 3 consecutive nights ending tonight; a 10h night + two 1h nights = 12h over 2 targets. Dark is ignored.
+            await InsertLightAsync("M31", 36000, NightUtc(2));
+            await InsertLightAsync("M42", 3600, NightUtc(1));
+            await InsertLightAsync("M31", 3600, NightUtc(0));
+            await InsertFrameAsync("dark", "M31", 600, NightUtc(2));
 
             var a = await _svc.GetAchievementsAsync(CancellationToken.None);
 
@@ -80,8 +80,8 @@ namespace OpenAstroAra.Test {
             Assert.That(a.LongestNightHours, Is.EqualTo(10).Within(1e-6));
             Assert.That(a.UniqueTargetsImaged, Is.EqualTo(2));
             Assert.That(a.LongestStreakNights, Is.EqualTo(3));
-            Assert.That(a.CurrentStreakNights, Is.EqualTo(3), "all nights consecutive, ending at the latest");
-            Assert.That(a.FirstLightUtc, Is.EqualTo(new DateTimeOffset(2026, 1, 1, 22, 0, 0, TimeSpan.Zero)));
+            Assert.That(a.CurrentStreakNights, Is.EqualTo(3), "3 consecutive nights ending tonight");
+            Assert.That(a.FirstLightUtc, Is.EqualTo(NightUtc(2)));
 
             var hours10 = a.Milestones.Single(m => m.Id == "hours_10");
             Assert.That(hours10.Achieved, Is.True, "12h ≥ 10h threshold");
@@ -92,22 +92,35 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task Current_streak_resets_after_a_gap_but_longest_is_retained() {
-            await InsertLightAsync("M31", 3600, new DateTimeOffset(2026, 2, 1, 22, 0, 0, TimeSpan.Zero));
-            await InsertLightAsync("M31", 3600, new DateTimeOffset(2026, 2, 2, 22, 0, 0, TimeSpan.Zero));
-            // gap on 02-03/04
-            await InsertLightAsync("M31", 3600, new DateTimeOffset(2026, 2, 5, 22, 0, 0, TimeSpan.Zero));
+            await InsertLightAsync("M31", 3600, NightUtc(4));
+            await InsertLightAsync("M31", 3600, NightUtc(3));
+            // gap on day-2 / day-1
+            await InsertLightAsync("M31", 3600, NightUtc(0)); // tonight
 
             var a = await _svc.GetAchievementsAsync(CancellationToken.None);
 
             Assert.That(a.TotalNightsImaged, Is.EqualTo(3));
-            Assert.That(a.LongestStreakNights, Is.EqualTo(2), "the 02-01→02-02 run");
-            Assert.That(a.CurrentStreakNights, Is.EqualTo(1), "the run ending at 02-05 is just that night");
+            Assert.That(a.LongestStreakNights, Is.EqualTo(2), "the two consecutive early nights");
+            Assert.That(a.CurrentStreakNights, Is.EqualTo(1), "only tonight — the prior night had a gap");
+        }
+
+        [Test]
+        public async Task Current_streak_is_zero_when_the_last_night_is_stale() {
+            // A long streak entirely in the distant past: longest is retained, current is 0 (not imaged recently).
+            await InsertLightAsync("M31", 3600, NightUtc(100));
+            await InsertLightAsync("M31", 3600, NightUtc(99));
+            await InsertLightAsync("M31", 3600, NightUtc(98));
+
+            var a = await _svc.GetAchievementsAsync(CancellationToken.None);
+
+            Assert.That(a.LongestStreakNights, Is.EqualTo(3));
+            Assert.That(a.CurrentStreakNights, Is.EqualTo(0), "the last night was 98 days ago");
         }
 
         [Test]
         public async Task Multiple_frames_on_one_night_count_as_a_single_night() {
-            await InsertLightAsync("M31", 1800, new DateTimeOffset(2026, 3, 1, 22, 0, 0, TimeSpan.Zero));
-            await InsertLightAsync("M31", 1800, new DateTimeOffset(2026, 3, 1, 23, 0, 0, TimeSpan.Zero));
+            await InsertLightAsync("M31", 1800, NightUtc(0));
+            await InsertFrameAsync("light", "M31", 1800, NightUtc(0).AddHours(1));
 
             var a = await _svc.GetAchievementsAsync(CancellationToken.None);
             Assert.That(a.TotalNightsImaged, Is.EqualTo(1));
@@ -116,6 +129,11 @@ namespace OpenAstroAra.Test {
         }
 
         // ── helpers ────────────────────────────────────────────────────────────
+
+        // A capture time on the night `daysAgo` days before today (22:00 UTC), so streak/staleness logic is
+        // evaluated relative to the real current date.
+        private static DateTimeOffset NightUtc(int daysAgo) =>
+            new(DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-daysAgo).ToDateTime(new TimeOnly(22, 0)), TimeSpan.Zero);
 
         private Task InsertLightAsync(string target, int exposureSeconds, DateTimeOffset capturedUtc) =>
             InsertFrameAsync("light", target, exposureSeconds, capturedUtc);

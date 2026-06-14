@@ -293,6 +293,8 @@ public sealed class SqliteStatsService : IStatsService {
 
         // Headline aggregates over light frames.
         await using var aggCmd = conn.CreateCommand();
+        // COUNT(DISTINCT target_name) excludes NULL per SQL standard — intentional here: a frame with no
+        // target name isn't a "target imaged", so it shouldn't inflate the unique-targets record.
         aggCmd.CommandText = """
             SELECT
                 COUNT(*) AS light_frames,
@@ -335,7 +337,7 @@ public sealed class SqliteStatsService : IStatsService {
             }
         }
 
-        var (longestStreak, currentStreak) = ComputeStreaks(nights);
+        var (longestStreak, currentStreak) = ComputeStreaks(nights, DateOnly.FromDateTime(DateTime.UtcNow));
 
         return new StatsAchievementsDto(
             TotalNightsImaged: nights.Count,
@@ -349,9 +351,11 @@ public sealed class SqliteStatsService : IStatsService {
             Milestones: BuildMilestones(totalHours, uniqueTargets, nights.Count, totalLightFrames));
     }
 
-    // Longest run of consecutive calendar days, and the run ending at the most recent night
-    // (the "current" streak). `nights` is ascending + de-duplicated by the GROUP BY.
-    private static (int Longest, int Current) ComputeStreaks(List<DateOnly> nights) {
+    // Longest run of consecutive calendar days, and the *current* streak — the run ending at the most recent
+    // night, but only if that night is still "live" (today or yesterday; a 1-day grace so an in-progress night
+    // isn't dropped before midnight UTC). A run that ended days ago is stale → current streak is 0, even though
+    // longest is retained. `nights` is ascending + de-duplicated by the GROUP BY.
+    private static (int Longest, int Current) ComputeStreaks(List<DateOnly> nights, DateOnly today) {
         if (nights.Count == 0) {
             return (0, 0);
         }
@@ -361,7 +365,8 @@ public sealed class SqliteStatsService : IStatsService {
             run = nights[i] == nights[i - 1].AddDays(1) ? run + 1 : 1;
             longest = Math.Max(longest, run);
         }
-        return (longest, run);
+        var current = nights[^1] >= today.AddDays(-1) ? run : 0;
+        return (longest, current);
     }
 
     private static StatsMilestoneDto[] BuildMilestones(double hours, int targets, int nights, int frames) {
