@@ -672,17 +672,8 @@ Deferred to **§43-2**:
   Stats sections** — Overview, Targets, Best Frames, and the Frame Quality / Guiding RMS / Calendar charts — are converted
   (notifier + `ConsumerStatefulWidget` widget + tests; charts use the shared `ChartStaleChip` overlay in place of the tile
   sections' banner). The §50.19 Achievements section was already on this pattern (the original template). Landed across the
-  refresh-* slices 2026-06-14; subsumes the earlier separate "post-await `ref.mounted` guard" item.
-  One small PR per section/chart. This also subsumes the earlier separate "post-await `ref.mounted` guard" item for these
-  notifiers. Surfaced 2026-06-14 by the #434 review; mixin + Overview landed in the refresh-overview slice.
-- **Stats refresh notifiers: add a post-await `ref.mounted` guard (defensive, §50).** The live §50 stats
-  `AsyncNotifier`s (Overview, Targets, Best Frames, Frame Quality) write `state = next` after the awaited fetch in
-  `refresh()` without checking `ref.mounted`. Today this is unreachable — the providers are non-autoDispose (so they
-  aren't disposed on nav-away) and a server switch re-runs `build()` which bumps the generation guard and discards the
-  stale refresh — so `state =` can't land on a disposed notifier. But if any of these later become autoDispose, the
-  reviewer-flagged "Notifier already disposed" StateError becomes reachable. A one-line `if (!ref.mounted) return;`
-  before the final `state = next` in each refresh() (or a shared `RefreshableStatsNotifier` mixin) would make it
-  correct-by-construction. Cross-cutting (4 notifiers), so its own consistency slice. Surfaced 2026-06-14 by the #436 review.
+  refresh-* slices 2026-06-14; subsumes the earlier separate "post-await `ref.mounted` guard" item (the mixin's
+  `refreshUsing` includes the `ref.mounted` guard for every section).
 - **Best Frames: validate `frame_id` rather than degrading to '' (§50).** `BestFrame.fromJson` degrades a missing/wrong-typed
   `frame_id` to an empty string. Harmless today (the tile never reads `frameId`), but when per-frame detail drill-down lands,
   an empty id would silently misbehave rather than surfacing a parse error. Tighten when the drill-down navigation is built.
