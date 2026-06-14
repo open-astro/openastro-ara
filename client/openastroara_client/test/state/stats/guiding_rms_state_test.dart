@@ -152,5 +152,24 @@ void main() {
 
       expect(c.read(guidingRmsProvider).value!.meanRmsArcsec, 0.9);
     });
+
+    test('a refresh that FAILS after a server switch is swallowed, not rethrown', () async {
+      final api = _GatedGuidingRmsClient();
+      final c = _container(const [_server], api);
+      await c.read(savedServersProvider.future);
+      final built = c.read(guidingRmsProvider.future);
+      api.calls[0].complete(_series(0.9));
+      await built;
+
+      final notifier = c.read(guidingRmsProvider.notifier);
+      final refreshing = notifier.refresh(); // calls[1] pending
+      notifier.markBuild(); // server switch bumps the generation
+      api.calls[1].completeError(StateError('boom')); // stale failure
+
+      // The generation mismatch means the stale error is discarded, not
+      // rethrown — so the widget can't flash a stale chip over the new data.
+      await expectLater(refreshing, completes);
+      expect(c.read(guidingRmsProvider).value!.meanRmsArcsec, 0.9);
+    });
   });
 }

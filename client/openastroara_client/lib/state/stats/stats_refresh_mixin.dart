@@ -26,8 +26,9 @@ mixin StatsRefreshMixin<T> on AsyncNotifier<T?> {
   void markBuild() => _generation++;
 
   /// Run [fetch] and, on success, swap its result into `state`. Leaves `state`
-  /// untouched (and rethrows) on failure, and discards the result if the active
-  /// server changed while the fetch was in flight.
+  /// untouched on failure and rethrows — **unless** the active server changed
+  /// while the fetch was in flight, in which case both a successful result and a
+  /// failure are discarded (the rebuild owns the fresh load).
   ///
   /// The `!ref.mounted` early-return is a no-op safety valve, not a success
   /// signal: it only fires when the notifier is already being torn down (a
@@ -35,15 +36,22 @@ mixin StatsRefreshMixin<T> on AsyncNotifier<T?> {
   /// effectively unreachable), at which point there's no live widget left to
   /// observe the result anyway.
   ///
-  /// Neither early-return (unmounted, or a server-switch generation mismatch)
-  /// throws, so a caller can't distinguish "discarded" from "succeeded". That's
-  /// intentional and harmless: a server switch re-runs `build()`, which loads
-  /// fresh data and (via the widget's `ref.listen`) clears any stale-error flag,
-  /// so there's nothing the caller needs to do differently in the discard case.
+  /// On a server-switch generation mismatch neither the success nor the failure
+  /// path surfaces anything: a `build()` re-runs for the new server (loading
+  /// fresh data and, via the widget's `ref.listen`, clearing any stale-error
+  /// flag), so a stale failure must NOT be rethrown — otherwise the widget would
+  /// flash a "stale" indicator over the new server's data. A failure whose
+  /// generation still matches (a genuine same-server refresh error) does rethrow
+  /// so the widget can show the stale banner over the prior data.
   Future<void> refreshUsing(Future<T?> Function() fetch) async {
     if (!ref.mounted) return;
     final gen = _generation;
-    final result = await fetch();
-    if (ref.mounted && gen == _generation) state = AsyncData(result);
+    try {
+      final result = await fetch();
+      if (ref.mounted && gen == _generation) state = AsyncData(result);
+    } catch (_) {
+      if (gen != _generation) return; // server switched mid-fetch — discard
+      rethrow;
+    }
   }
 }
