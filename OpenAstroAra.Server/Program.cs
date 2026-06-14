@@ -333,7 +333,10 @@ public partial class Program {
                 sp.GetRequiredService<ILogger<CameraService>>(),
                 sp.GetRequiredService<IFrameRepository>(),
                 sp.GetRequiredService<IProfileStore>(),
-                fallbackFramesDir: System.IO.Path.Combine(profileDir, "frames")));
+                fallbackFramesDir: System.IO.Path.Combine(profileDir, "frames"),
+                // §38: snapshot the connected focuser's position at capture so the
+                // FITS FOCUSPOS header + catalog column feed the §50.4 view.
+                focuser: sp.GetService<OpenAstroAra.Equipment.Interfaces.Mediator.IFocuserMediator>()));
         builder.Services.AddSingleton<ICameraService>(sp => sp.GetRequiredService<CameraService>());
 
         // Phase 38a — §38.2 filesystem-backed sequence library at

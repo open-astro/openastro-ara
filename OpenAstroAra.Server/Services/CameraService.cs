@@ -17,6 +17,8 @@ using ASCOM.Common.Alpaca;
 using ASCOM.Common.DeviceInterfaces;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using OpenAstroAra.Equipment.Equipment.MyFocuser;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Fits;
 using OpenAstroAra.Server.Contracts;
 using System;
@@ -78,13 +80,25 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         ILogger<CameraService>? logger = null,
         IFrameRepository? frames = null,
         IProfileStore? profileStore = null,
-        string? fallbackFramesDir = null) {
+        string? fallbackFramesDir = null,
+        IFocuserMediator? focuser = null) {
         _logger = logger ?? NullLogger<CameraService>.Instance;
         _frames = frames;
         _profileStore = profileStore;
         _fallbackFramesDir = fallbackFramesDir;
+        _focuser = focuser;
         _refreshTimer = new Timer(RefreshTick, state: null, dueTime: RefreshInterval, period: RefreshInterval);
     }
+
+    private readonly IFocuserMediator? _focuser;
+
+    private int? ReadFocuserPosition() => FocuserPositionFrom(_focuser?.GetInfo());
+
+    // §38: the connected focuser's step position at capture, for the §50.4
+    // focus-vs-temperature view. Null when no focuser is connected (or absent),
+    // so FOCUSPOS is simply omitted and the catalog column stays null.
+    internal static int? FocuserPositionFrom(FocuserInfo? info) =>
+        info is { Connected: true } ? info.Position : null;
 
     public Task<CameraDto?> GetAsync(CancellationToken ct) {
         lock (_gate) {
@@ -318,9 +332,10 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         // silently coerce a setting TrySet appeared to accept (e.g. symmetric-binning
         // enforcement), and XBINNING/GAIN feed plate-solving + calibration matching.
         var applied = ReadAppliedSettings(client, request);
-        var filePath = WriteFits(frameId, pixels, width, height, applied, imageType, capturedAt);
+        var focuserPos = ReadFocuserPosition();
+        var filePath = WriteFits(frameId, pixels, width, height, applied, imageType, capturedAt, focuserPos);
         try {
-            await RegisterFrameAsync(frameId, request, frameType, targetName, capturedAt, filePath, width, height).ConfigureAwait(false);
+            await RegisterFrameAsync(frameId, request, frameType, targetName, capturedAt, filePath, width, height, focuserPos).ConfigureAwait(false);
         } catch (Exception ex) {
             // The FITS is on disk but invisible to the catalog; name the path so an operator can
             // recover it — and the §28.8 startup orphan scan re-registers it on the next boot.
@@ -477,7 +492,7 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         return request with { BinX = binX, BinY = binY, Gain = gain, CameraOffset = cameraOffset };
     }
 
-    private string WriteFits(Guid frameId, ushort[] pixels, int width, int height, ExposureRequestDto request, string imageType, DateTimeOffset capturedAt) {
+    private string WriteFits(Guid frameId, ushort[] pixels, int width, int height, ExposureRequestDto request, string imageType, DateTimeOffset capturedAt, int? focuserPosition = null) {
         var dir = ResolveFramesDir();
         Directory.CreateDirectory(dir);
         var path = Path.Combine(dir, $"{frameId}.fits");
@@ -498,6 +513,11 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         fits.SetHeader("DATE-OBS", capturedAt.UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ss.fff", CultureInfo.InvariantCulture), "capture start UTC");
         if (!string.IsNullOrWhiteSpace(request.FilterName)) {
             fits.SetHeader("FILTER", request.FilterName!, "filter name");
+        }
+        // §38: focuser step position (when a focuser is connected) for the §50.4
+        // focus-vs-temperature view; the §28.8 scanner reads it back as FOCUSPOS.
+        if (focuserPosition is int focPos) {
+            fits.SetHeader("FOCUSPOS", focPos, "focuser position (steps)");
         }
         // OSC sensors: record the Bayer pattern so downstream stackers (and ARA's §65 color preview)
         // can debayer the raw mosaic. The effective pattern is at the origin, so the offsets are 0.
@@ -540,7 +560,7 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         }
     }
 
-    private async Task RegisterFrameAsync(Guid frameId, ExposureRequestDto request, FrameType frameType, string targetName, DateTimeOffset capturedAt, string filePath, int width, int height) {
+    private async Task RegisterFrameAsync(Guid frameId, ExposureRequestDto request, FrameType frameType, string targetName, DateTimeOffset capturedAt, string filePath, int width, int height, int? focuserPosition = null) {
         var sessionId = await _frames!.EnsureManualCaptureSessionAsync(CancellationToken.None).ConfigureAwait(false);
         var fileSize = new FileInfo(filePath).Length;
         double ccdTemp;
@@ -569,7 +589,8 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             Hfr: null, StarCount: null, Eccentricity: null, GuidingRmsArcsec: null, SnrEstimate: null,
             QualityScore: null,
             Rating: 0,
-            Tags: Array.Empty<string>()), CancellationToken.None).ConfigureAwait(false);
+            Tags: Array.Empty<string>(),
+            FocuserPosition: focuserPosition), CancellationToken.None).ConfigureAwait(false);
     }
 
     // ── §32.4 cache (single-flight with coalescing, mirrors TelescopeService) ────────────────────
