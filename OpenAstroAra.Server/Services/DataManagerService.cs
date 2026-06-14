@@ -448,7 +448,9 @@ namespace OpenAstroAra.Server.Services {
                 }
                 var info = new DirectoryInfo(dir);
                 var size = info.EnumerateFiles("*", SearchOption.AllDirectories)
-                    .Where(f => !string.Equals(f.Name, SkyDataInstaller.InstalledMarkerFileName, StringComparison.Ordinal))
+                    // Exclude the root sentinel by full path, not name — so a package that legitimately ships a file
+                    // named ".installed" in a subdirectory still has its bytes counted.
+                    .Where(f => !string.Equals(f.FullName, sentinel.FullName, StringComparison.Ordinal))
                     .Sum(f => f.Length);
                 return (size, sentinel.LastWriteTimeUtc);
             } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
