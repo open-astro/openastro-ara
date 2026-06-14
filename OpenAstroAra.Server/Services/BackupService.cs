@@ -240,8 +240,9 @@ namespace OpenAstroAra.Server.Services {
                 // FileStream owned by the response pipeline — ASP.NET Core disposes it once the response is sent.
                 var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 81920, useAsync: true);
                 return (stream, Path.GetFileName(path));
-            } catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException) {
-                // Deleted between the scan and the open — report not-found rather than a torn 500.
+            } catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException or UnauthorizedAccessException) {
+                // Vanished or became inaccessible between the scan and the open (deleted, or perms revoked) — report
+                // not-found rather than a torn 500, consistent with how TryReadSnapshot treats an unreadable archive.
                 return null;
             }
         }
@@ -277,7 +278,9 @@ namespace OpenAstroAra.Server.Services {
             ArgumentNullException.ThrowIfNull(request);
             // §43-2: restore overwrites live config (profile.json / sequences) and is destructive, so it stays a
             // no-op accept until the staged-swap + restore-progress state machine lands. Accepting (not 501) keeps
-            // the client's restore flow wired end-to-end against the real service.
+            // the client's restore flow wired end-to-end against the real service. Logged at Warning so an operator
+            // who triggers a restore isn't misled by the 202 into thinking config was actually rolled back.
+            LogRestoreNotImplemented();
             return Task.FromResult(new OperationAcceptedDto(
                 OperationId: Guid.NewGuid(),
                 OperationType: "backup.restore-zip",
@@ -312,6 +315,10 @@ namespace OpenAstroAra.Server.Services {
 
         [LoggerMessage(Level = LogLevel.Warning, Message = "Skipping unreadable backup manifest {ManifestPath}")]
         partial void LogManifestSkipped(string manifestPath, Exception ex);
+
+        [LoggerMessage(Level = LogLevel.Warning,
+            Message = "Backup restore requested but not yet implemented (§43-2); request accepted as a no-op — no config was rolled back")]
+        partial void LogRestoreNotImplemented();
     }
 
     /// <summary>On-disk backup manifest (sidecar <c>.meta.json</c>). The download URL in <see cref="BackupZipDto"/>

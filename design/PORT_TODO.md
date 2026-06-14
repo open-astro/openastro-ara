@@ -614,6 +614,19 @@ Deferred to **§43-2**:
   restore work in §43-2.
 - **No retention/pruning.** Backups accumulate under `{profileDir}/backups/` indefinitely; there's no cap or
   age-based prune. Low priority — add a retention policy (keep-N / keep-days) if disk growth becomes a concern.
-- **Orphan `.tmp-*.zip` sweep.** A create that crashes mid-zip leaves a `.tmp-{id:N}.zip` (ignored by ListSnapshots,
-  which keys off `*.meta.json`); the create path deletes its own temp on failure, but a hard kill can still leak one.
-  A boot-time sweep (mirroring §36-2c `SweepStaleScratch`) would reclaim it. Low priority — harmless temp file.
+- **Orphan-archive boot sweep.** Two crash-only leaks under `{profileDir}/backups/`, both ignored by ListSnapshots
+  (it keys off `*.meta.json`) but never reclaimed: (a) a `.tmp-{id:N}.zip` from a create that crashed mid-zip (the
+  create path deletes its own temp on an *exception*, but a hard kill can't run that), and (b) a fully-named
+  `backup-{ts}-{id:N}.zip` with **no matching `*.meta.json`** — a SIGKILL in the window between the `File.Move` reveal
+  and the manifest write. A boot-time sweep (mirroring §36-2c `SweepStaleScratch`) should remove **both**: every
+  `.tmp-*` archive, and every `backup-*.zip` whose `{base}.meta.json` sidecar is absent. Low priority — harmless
+  orphans, just disk. Surfaced 2026-06-13 by the §43-1 round-4 review.
+- **Daemon-wide API auth is unaddressed (cross-cutting, not §43).** The server binds `ListenAnyIP` (default :5555)
+  with **no authentication/authorization middleware** — the whole REST surface is open on whatever interface it's
+  reachable on, matching the §13 trusted-LAN headless deployment model. The §43-1 backup-download endpoint inherits
+  this posture; it adds no *new* exposure (`profile.json` content is already served by the no-auth `/api/v1/profile/*`
+  GET endpoints, and `frames/{id}/download` already streams files), but a backup zip does bundle the full profile,
+  which may hold device credentials. Bolting auth onto one route would be inconsistent and ineffective (the same data
+  leaks via `/api/v1/profile/*`). If the daemon is ever exposed beyond a trusted LAN, API auth must be a **cross-cutting
+  middleware** decision (PRODUCT-SCOPE / user-authoritative), not per-endpoint. Surfaced 2026-06-13 by the §43-1
+  round-4 review.
