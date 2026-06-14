@@ -48,9 +48,9 @@ public sealed partial class ClientSettingsService : IClientSettingsService, IDis
     internal const int MaxBytes = 256 * 1024;
 
     // Coarse HTTP-layer body cap, applied before the request is even buffered/deserialized so a misbehaving client
-    // can't force a large allocation ahead of the precise per-object check below. Set above MaxBytes to leave room for
-    // the {"settings":…} envelope, so a valid near-cap settings object isn't rejected at the transport layer.
-    internal const long MaxRequestBytes = (MaxBytes * 2L) + 1024;
+    // can't force a large allocation ahead of the precise per-object check below. Just above MaxBytes — enough for the
+    // {"settings":…} envelope around a near-cap object, without false-rejecting it at the transport layer.
+    internal const long MaxRequestBytes = MaxBytes + 1024;
 
     private readonly string _path;
     private readonly ILogger<ClientSettingsService> _logger;
@@ -101,6 +101,7 @@ public sealed partial class ClientSettingsService : IClientSettingsService, IDis
             throw new ArgumentException($"Client settings exceed the {MaxBytes}-byte limit.", nameof(settings));
         }
 
+        DateTimeOffset updated;
         await _writeGate.WaitAsync(ct).ConfigureAwait(false);
         try {
             // Atomic publish: write a sibling temp file then rename over the target, so a reader never sees a
@@ -114,11 +115,13 @@ public sealed partial class ClientSettingsService : IClientSettingsService, IDis
                 try { File.Delete(tmp); } catch (IOException) { } catch (UnauthorizedAccessException) { }
                 throw;
             }
+            // Read the timestamp INSIDE the gate, so a concurrent write that wins the gate next can't stamp this
+            // caller's response with the other write's time.
+            updated = new DateTimeOffset(File.GetLastWriteTimeUtc(_path), TimeSpan.Zero);
         } finally {
             _writeGate.Release();
         }
 
-        var updated = new DateTimeOffset(File.GetLastWriteTimeUtc(_path), TimeSpan.Zero);
         using var doc = JsonDocument.Parse(json);
         return new ClientSettingsDto(doc.RootElement.Clone(), updated);
     }
