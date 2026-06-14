@@ -56,8 +56,8 @@ class _BackupRestoreModalState extends ConsumerState<BackupRestoreModal> {
 
   @override
   Widget build(BuildContext context) {
-    final async = ref.watch(backupSnapshotsProvider);
-    final snapshots = async.asData?.value;
+    final asyncValue = ref.watch(backupSnapshotsProvider);
+    final snapshots = asyncValue.asData?.value;
 
     return Dialog.fullscreen(
       child: Scaffold(
@@ -80,16 +80,16 @@ class _BackupRestoreModalState extends ConsumerState<BackupRestoreModal> {
             ),
           ],
         ),
-        body: _body(context, async, snapshots),
+        body: _body(context, asyncValue, snapshots),
       ),
     );
   }
 
-  Widget _body(BuildContext context, AsyncValue<List<BackupSnapshot>?> async, List<BackupSnapshot>? snapshots) {
-    if (async.isLoading && snapshots == null) {
+  Widget _body(BuildContext context, AsyncValue<List<BackupSnapshot>?> asyncValue, List<BackupSnapshot>? snapshots) {
+    if (asyncValue.isLoading && snapshots == null) {
       return const Center(child: CircularProgressIndicator());
     }
-    if (async.hasError) {
+    if (asyncValue.hasError) {
       return _Centered(
         message: 'Could not load backups.',
         onRetry: () => unawaited(ref.read(backupSnapshotsProvider.notifier).refresh()),
@@ -122,25 +122,32 @@ class _SnapshotRowState extends ConsumerState<_SnapshotRow> {
   // overwrite of live config; the daemon already serializes create+restore, but
   // blocking re-tap here avoids a pointless duplicate and gives in-progress feedback.
   bool _restoring = false;
+  bool _downloading = false;
 
   BackupSnapshot get snapshot => widget.snapshot;
 
   Future<void> _download() async {
+    if (_downloading) return;
     final api = ref.read(backupApiProvider);
     if (api == null) return;
-    final uri = Uri.tryParse(api.absoluteDownloadUrl(snapshot));
-    var ok = false;
-    if (uri != null) {
-      try {
-        ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
-      } catch (_) {
-        // launchUrl can throw (e.g. PlatformException when no handler is registered);
-        // since this is fire-and-forget, swallow it and fall through to the snackbar.
-        ok = false;
+    setState(() => _downloading = true);
+    try {
+      final uri = Uri.tryParse(api.absoluteDownloadUrl(snapshot));
+      var ok = false;
+      if (uri != null) {
+        try {
+          ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+        } catch (_) {
+          // launchUrl can throw (e.g. PlatformException when no handler is registered);
+          // swallow it and fall through to the snackbar.
+          ok = false;
+        }
       }
-    }
-    if (!ok && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not open the download.')));
+      if (!ok && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not open the download.')));
+      }
+    } finally {
+      if (mounted) setState(() => _downloading = false);
     }
   }
 
@@ -191,10 +198,10 @@ class _SnapshotRowState extends ConsumerState<_SnapshotRow> {
             IconButton(
               tooltip: 'Download',
               icon: const Icon(Icons.download),
-              onPressed: _restoring ? null : () => unawaited(_download()),
+              onPressed: (_restoring || _downloading) ? null : () => unawaited(_download()),
             ),
             TextButton(
-              onPressed: _restoring ? null : () => unawaited(_restore()),
+              onPressed: (_restoring || _downloading) ? null : () => unawaited(_restore()),
               child: _restoring
                   ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
                   : const Text('Restore'),
@@ -295,9 +302,10 @@ String _message(Object e) {
   // Friendly-ish text for the snackbar: HTTP errors carry a status; otherwise strip
   // the generic 'Exception: ' prefix. Avoids dumping a raw DioException toString().
   if (e is DioException) {
+    // Don't surface DioException.message on the no-response path — it embeds the raw
+    // request URL (host:port/path), which is noise in a snackbar.
     final code = e.response?.statusCode;
-    if (code != null) return 'server returned $code';
-    return e.message ?? 'network error';
+    return code != null ? 'server returned $code' : 'network error';
   }
   return e.toString().replaceFirst('Exception: ', '');
 }
