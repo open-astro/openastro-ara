@@ -100,8 +100,11 @@ class FrameQualityChart extends ConsumerWidget {
       ]));
     }
     // ~10% headroom so the tallest bar doesn't touch the chart border; ceil
-    // keeps at least 1 frame of clearance for small counts.
-    final yMax = (maxCount * 1.1).ceilToDouble();
+    // keeps at least 1 frame of clearance for small counts. The `maxCount == 0`
+    // floor is defensive — the `dist.isEmpty` early-return above already
+    // prevents an all-zero distribution from reaching here, but it keeps
+    // `BarChart(maxY:)` valid if that guard is ever refactored.
+    final yMax = maxCount == 0 ? 1.0 : (maxCount * 1.1).ceilToDouble();
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 16, 8),
