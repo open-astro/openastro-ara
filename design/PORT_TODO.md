@@ -644,3 +644,10 @@ Deferred to **§43-2**:
   leaks via `/api/v1/profile/*`). If the daemon is ever exposed beyond a trusted LAN, API auth must be a **cross-cutting
   middleware** decision (PRODUCT-SCOPE / user-authoritative), not per-endpoint. Surfaced 2026-06-13 by the §43-1
   round-4 review.
+- **Stats catalog: composite `(frame_type, captured_utc)` index (cross-cutting, not §50.19).** Every stats query
+  (overview, calendar, targets, achievements) filters `frame_type = 'light'` and orders/groups by `date(captured_utc)`.
+  Today only `idx_frames_captured_utc` exists, so the `frame_type` predicate is a residual filter over the
+  captured_utc-ordered scan. As the frame catalog grows a partial/covering index — e.g.
+  `CREATE INDEX idx_frames_light_captured ON frames(captured_utc) WHERE frame_type = 'light'` — would tighten all of
+  them at once. Schema change touching the shared `frames` table, so it belongs in its own stats-perf sub-PR rather
+  than bolted onto a single view. Low priority until the catalog is large. Surfaced 2026-06-14 by the §50.19 round-3 review.

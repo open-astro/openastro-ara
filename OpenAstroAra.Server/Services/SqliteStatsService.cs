@@ -343,6 +343,9 @@ public sealed class SqliteStatsService : IStatsService {
             }
         }
 
+        // Both reads are done — commit to release the WAL read lock now rather than holding it until dispose.
+        await tx.CommitAsync(ct);
+
         var (longestStreak, currentStreak) = ComputeStreaks(nights, DateOnly.FromDateTime(DateTime.UtcNow));
 
         return new StatsAchievementsDto(
@@ -365,6 +368,8 @@ public sealed class SqliteStatsService : IStatsService {
         if (nights.Count == 0) {
             return (0, 0);
         }
+        // Seed both at 1 to account for nights[0]; the loop extends from index 1. The empty-list guard
+        // above guarantees at least one element, so a single-night catalog correctly yields (1, …).
         var longest = 1;
         var run = 1;
         for (var i = 1; i < nights.Count; i++) {
