@@ -85,10 +85,11 @@ public interface IDataManagerService {
 public interface IBackupService {
     Task<OperationAcceptedDto> CreateZipAsync(string? idempotencyKey, CancellationToken ct);
 
-    /// <summary>§43-1: a no-op (restore is destructive and lands in §43-2); the endpoint responds 501. Returns
-    /// <see cref="Task"/> rather than an operation DTO since nothing is started — §43-2 reintroduces the
-    /// <c>OperationAcceptedDto</c> return when restore becomes a real async job.</summary>
-    Task RestoreZipAsync(RestoreRequestDto request, string? idempotencyKey, CancellationToken ct);
+    /// <summary>§43-2: restore the selected config areas from a local snapshot (the request's source URL must be a
+    /// snapshot-download URL). Validates the archive against its manifest checksum, then swaps the areas in
+    /// atomically with rollback. Throws for an unknown snapshot, an unsupported source, or a checksum mismatch —
+    /// the endpoint maps those to 404 / 422.</summary>
+    Task<OperationAcceptedDto> RestoreZipAsync(RestoreRequestDto request, string? idempotencyKey, CancellationToken ct);
     Task<IReadOnlyList<BackupZipDto>> ListSnapshotsAsync(CancellationToken ct);
     Task<System.Text.Json.JsonElement> GetCloneStatusAsync(CancellationToken ct);
 

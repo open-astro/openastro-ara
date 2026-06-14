@@ -316,19 +316,83 @@ namespace OpenAstroAra.Server.Services {
         private static Uri SnapshotDownloadUrl(Guid id) =>
             new("/api/v1/backup/snapshot/" + id.ToString("D", CultureInfo.InvariantCulture) + "/download", UriKind.Relative);
 
-        public Task RestoreZipAsync(RestoreRequestDto request, string? idempotencyKey, CancellationToken ct) {
+        [SuppressMessage("Performance", "CA1873:Avoid potentially expensive logging",
+            Justification = "The joined argument is at most two short area names ('profiles','sequences') — the join " +
+                "is trivial and runs once per restore, not on a hot path.")]
+        public async Task<OperationAcceptedDto> RestoreZipAsync(RestoreRequestDto request, string? idempotencyKey, CancellationToken ct) {
             ArgumentNullException.ThrowIfNull(request);
-            // §43-2: restore overwrites live config (profile.json / sequences) and is destructive — it lands with the
-            // staged-swap + restore-progress state machine. Until then it does nothing; the endpoint responds 501 Not
-            // Implemented rather than a 202 a client would read as a successful rollback. Nothing is started, so this
-            // returns no operation id (an earlier revision allocated a discarded DTO) — §43-2 reintroduces it. We only
-            // log that an operator attempted a restore; idempotencyKey is irrelevant until there's an op to dedup.
-            LogRestoreNotImplemented();
-            return Task.CompletedTask;
+
+            // §43-2a: restore from a LOCAL snapshot only — the source URL must be our own snapshot-download route.
+            // Restoring from an arbitrary/remote URL (e.g. §44 cloud backup) is a separate slice.
+            var id = ParseLocalSnapshotId(request.BackupSourceUrl)
+                ?? throw new BackupRestoreSourceUnsupportedException(
+                    "Restore source must be a local snapshot URL (/api/v1/backup/snapshot/{id}/download).");
+
+            // §43-1 backups carry the two config areas; frame-metadata/logs aren't captured yet, so those flags are
+            // honoured only insofar as the archive contains them (it won't) — they're no-ops, not errors.
+            if (!request.RestoreProfiles && !request.RestoreSequences) {
+                throw new BackupRestoreSourceUnsupportedException(
+                    "No restorable area selected — set restore_profiles and/or restore_sequences.");
+            }
+
+            // Synchronous file IO off the request thread (matches CreateZipAsync); §43-2b adds a background worker +
+            // live clone-status progress. The 202 contract is already in place so the wire shape won't change then.
+            var restored = await Task.Run(() => RestoreCore(id, request, ct), ct).ConfigureAwait(false);
+            LogRestored(id, string.Join(",", restored));
+            return new OperationAcceptedDto(
+                OperationId: id,
+                OperationType: "backup.restore-zip",
+                AcceptedUtc: DateTimeOffset.UtcNow,
+                IdempotencyKey: idempotencyKey);
+        }
+
+        private IReadOnlyList<string> RestoreCore(Guid id, RestoreRequestDto request, CancellationToken ct) {
+            var zipPath = FindZipPath(id)
+                ?? throw new BackupSnapshotNotFoundException($"No backup snapshot {id} to restore from.");
+
+            // Integrity gate before touching live config: a corrupt archive must not half-overwrite the profile.
+            var manifestPath = zipPath[..^ZipExtension.Length] + ManifestExtension;
+            var expectedSha = TryReadManifestSha(manifestPath);
+            if (expectedSha is not null &&
+                !string.Equals(HashFile(zipPath), expectedSha, StringComparison.OrdinalIgnoreCase)) {
+                throw new BackupCorruptException($"Backup snapshot {id} failed its checksum and was not restored.");
+            }
+
+            return BackupRestorer.Restore(zipPath, _profileDir, request.RestoreProfiles, request.RestoreSequences, ct);
+        }
+
+        // A restore source is supported only when it points at our own snapshot-download route; the id is the
+        // segment between "snapshot" and "download". Accepts absolute or relative URLs.
+        private static Guid? ParseLocalSnapshotId(Uri? url) {
+            if (url is null) {
+                return null;
+            }
+            var path = url.IsAbsoluteUri ? url.AbsolutePath : url.OriginalString;
+            var segs = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+            for (var i = 0; i + 2 < segs.Length; i++) {
+                if (string.Equals(segs[i], "snapshot", StringComparison.Ordinal) &&
+                    string.Equals(segs[i + 2], "download", StringComparison.Ordinal) &&
+                    Guid.TryParse(segs[i + 1], out var id)) {
+                    return id;
+                }
+            }
+            return null;
+        }
+
+        private static string? TryReadManifestSha(string manifestPath) {
+            try {
+                var manifest = JsonSerializer.Deserialize(
+                    File.ReadAllText(manifestPath), AraJsonSerializerContext.Default.BackupManifest);
+                return manifest?.Sha256;
+            } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) {
+                // No readable manifest → skip the checksum gate rather than block a restore on a missing sidecar.
+                return null;
+            }
         }
 
         public Task<JsonElement> GetCloneStatusAsync(CancellationToken ct) {
-            // §43-2: idle until RestoreZipAsync runs a real restore worth reporting progress on. Parsed per call
+            // §43-2b: still idle — §43-2a restore completes synchronously within the request, so there's no in-flight
+            // state to report; the live progress state machine arrives with the §43-2b background worker. Parsed per call
             // (cheap, polled rarely) and the document disposed once cloned — no long-lived static JsonDocument.
             using var doc = JsonDocument.Parse(IdleCloneStatusJson);
             return Task.FromResult(doc.RootElement.Clone());
@@ -355,9 +419,8 @@ namespace OpenAstroAra.Server.Services {
         [LoggerMessage(Level = LogLevel.Warning, Message = "Skipping unreadable backup manifest {ManifestPath}")]
         partial void LogManifestSkipped(string manifestPath, Exception ex);
 
-        [LoggerMessage(Level = LogLevel.Warning,
-            Message = "Backup restore requested but not yet implemented (§43-2); responding 501 — no config was rolled back")]
-        partial void LogRestoreNotImplemented();
+        [LoggerMessage(Level = LogLevel.Information, Message = "Backup snapshot {BackupId} restored areas [{Areas}]")]
+        partial void LogRestored(Guid backupId, string areas);
 
         [LoggerMessage(Level = LogLevel.Warning, Message = "Backup archive {ArchivePath} vanished between resolve and open — serving 404")]
         partial void LogSnapshotVanished(string archivePath, Exception ex);
@@ -374,6 +437,30 @@ namespace OpenAstroAra.Server.Services {
         public BackupNothingToArchiveException() { }
         public BackupNothingToArchiveException(string message) : base(message) { }
         public BackupNothingToArchiveException(string message, Exception innerException) : base(message, innerException) { }
+    }
+
+    /// <summary>Thrown by <see cref="BackupService.RestoreZipAsync"/> when the requested snapshot doesn't exist on
+    /// disk. The restore endpoint maps it to <c>404 Not Found</c>.</summary>
+    public sealed class BackupSnapshotNotFoundException : Exception {
+        public BackupSnapshotNotFoundException() { }
+        public BackupSnapshotNotFoundException(string message) : base(message) { }
+        public BackupSnapshotNotFoundException(string message, Exception innerException) : base(message, innerException) { }
+    }
+
+    /// <summary>Thrown by <see cref="BackupService.RestoreZipAsync"/> when the restore source isn't a supported
+    /// local snapshot URL, or no area was selected. The restore endpoint maps it to <c>422 Unprocessable Entity</c>.</summary>
+    public sealed class BackupRestoreSourceUnsupportedException : Exception {
+        public BackupRestoreSourceUnsupportedException() { }
+        public BackupRestoreSourceUnsupportedException(string message) : base(message) { }
+        public BackupRestoreSourceUnsupportedException(string message, Exception innerException) : base(message, innerException) { }
+    }
+
+    /// <summary>Thrown by <see cref="BackupService.RestoreZipAsync"/> when the archive fails its manifest checksum,
+    /// so it is refused before any live config is touched. The restore endpoint maps it to <c>422</c>.</summary>
+    public sealed class BackupCorruptException : Exception {
+        public BackupCorruptException() { }
+        public BackupCorruptException(string message) : base(message) { }
+        public BackupCorruptException(string message, Exception innerException) : base(message, innerException) { }
     }
 
     /// <summary>On-disk backup manifest (sidecar <c>.meta.json</c>). The download URL in <see cref="BackupZipDto"/>
