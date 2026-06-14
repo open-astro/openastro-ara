@@ -101,18 +101,16 @@ namespace OpenAstroAra.Test {
             // bundle the secret — Directory.EnumerateFiles(AllDirectories) would have followed the link.
             var outside = Path.Combine(Path.GetTempPath(), "ara-backup-outside-" + Path.GetRandomFileName());
             Directory.CreateDirectory(outside);
-            var secret = Path.Combine(outside, "secret.txt");
-            await File.WriteAllTextAsync(secret, "do-not-back-me-up");
-            var link = Path.Combine(_profileDir, "sequences", "linked.txt");
             try {
-                File.CreateSymbolicLink(link, secret);
-            } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or PlatformNotSupportedException) {
-                Assert.Ignore("symlink creation not permitted on this platform/runner");
-            } finally {
-                // cleanup happens below regardless
-            }
+                var secret = Path.Combine(outside, "secret.txt");
+                await File.WriteAllTextAsync(secret, "do-not-back-me-up");
+                var link = Path.Combine(_profileDir, "sequences", "linked.txt");
+                try {
+                    File.CreateSymbolicLink(link, secret);
+                } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or PlatformNotSupportedException) {
+                    Assert.Ignore("symlink creation not permitted on this platform/runner");
+                }
 
-            try {
                 await _svc.CreateZipAsync(idempotencyKey: null, CancellationToken.None);
                 var entries = ZipEntryNames(Directory.GetFiles(_backupsDir, "backup-*.zip").Single());
                 Assert.That(entries, Does.Contain("sequences/real.json"), "real files are still backed up");
@@ -120,6 +118,7 @@ namespace OpenAstroAra.Test {
                 Assert.That(entries.Any(e => e.Contains("secret", StringComparison.Ordinal)), Is.False,
                     "the symlink target is never followed");
             } finally {
+                // Covers the Assert.Ignore path too — the outside dir is reclaimed however the body exits.
                 if (Directory.Exists(outside)) {
                     Directory.Delete(outside, recursive: true);
                 }
@@ -212,6 +211,20 @@ namespace OpenAstroAra.Test {
         public async Task List_on_a_fresh_profile_with_no_backups_is_empty() {
             var snapshots = await _svc.ListSnapshotsAsync(CancellationToken.None);
             Assert.That(snapshots, Is.Empty, "no backups dir yet → empty list, not an error");
+        }
+
+        [Test]
+        public void Create_with_a_cancelled_token_throws_and_leaves_no_artifacts() {
+            WriteProfile();
+            using var cts = new CancellationTokenSource();
+            cts.Cancel();
+
+            Assert.That(async () => await _svc.CreateZipAsync(idempotencyKey: null, cts.Token),
+                Throws.InstanceOf<OperationCanceledException>());
+
+            // A cancelled create reclaims whatever it started — no zip, no temp, no manifest orphaned.
+            Assert.That(Directory.Exists(_backupsDir) ? Directory.GetFiles(_backupsDir) : Array.Empty<string>(),
+                Is.Empty, "a cancelled create leaves the backups dir clean");
         }
     }
 }

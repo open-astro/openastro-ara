@@ -61,8 +61,9 @@ namespace OpenAstroAra.Server.Services {
         private const string ManifestExtension = ".meta.json";
         private const string TempPrefix = ".tmp-";
 
-        private static readonly JsonDocument _idleStatus = JsonDocument.Parse(
-            "{\"state\":\"idle\",\"progress_pct\":null,\"current_area\":null,\"message\":null}");
+        // §43-2: a real restore will report progress here; until then clone-status is a fixed idle blob.
+        private const string IdleCloneStatusJson =
+            "{\"state\":\"idle\",\"progress_pct\":null,\"current_area\":null,\"message\":null}";
 
         private readonly string _profileDir;
         private readonly string _backupsDir;
@@ -81,8 +82,10 @@ namespace OpenAstroAra.Server.Services {
             var createdUtc = DateTimeOffset.UtcNow;
 
             // All file IO is synchronous (ZipArchive has no async write path); run it off the request thread so a
-            // larger sequences/ tree doesn't tie up the connection's thread-pool slot while it packages.
-            await Task.Run(() => CreateBackupCore(id, createdUtc), ct).ConfigureAwait(false);
+            // larger sequences/ tree doesn't tie up the connection's thread-pool slot while it packages. ct is
+            // threaded in so a cancellation between checkpoints aborts the work and reclaims its artifacts, rather
+            // than only making the await throw while the zip finishes writing in the background.
+            await Task.Run(() => CreateBackupCore(id, createdUtc, ct), ct).ConfigureAwait(false);
 
             LogCreated(id, _backupsDir);
             return new OperationAcceptedDto(
@@ -92,7 +95,7 @@ namespace OpenAstroAra.Server.Services {
                 IdempotencyKey: idempotencyKey);
         }
 
-        private void CreateBackupCore(Guid id, DateTimeOffset createdUtc) {
+        private void CreateBackupCore(Guid id, DateTimeOffset createdUtc, CancellationToken ct) {
             Directory.CreateDirectory(_backupsDir);
 
             var baseName = ZipPrefix + createdUtc.ToString("yyyyMMddTHHmmssZ", CultureInfo.InvariantCulture)
@@ -103,6 +106,7 @@ namespace OpenAstroAra.Server.Services {
 
             var areas = new List<string>();
             try {
+                ct.ThrowIfCancellationRequested();
                 using (var zipStream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None))
                 using (var archive = new ZipArchive(zipStream, ZipArchiveMode.Create)) {
                     var profilePath = Path.Combine(_profileDir, ProfileFileName);
@@ -117,6 +121,7 @@ namespace OpenAstroAra.Server.Services {
                     }
                 }
 
+                ct.ThrowIfCancellationRequested();
                 var sha256 = HashFile(tempPath);
                 var sizeBytes = new FileInfo(tempPath).Length;
 
@@ -169,10 +174,21 @@ namespace OpenAstroAra.Server.Services {
                 return Task.FromResult<IReadOnlyList<BackupZipDto>>(Array.Empty<BackupZipDto>());
             }
 
+            // Enumerate the archives once into a set of present backup ids, so confirming each manifest has a matching
+            // zip is an O(1) lookup rather than a fresh directory scan per manifest (which made listing n snapshots
+            // O(n^2) — and snapshots accumulate with no retention policy yet).
+            var presentZipIds = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var path in Directory.EnumerateFiles(_backupsDir, ZipPrefix + "*" + ZipExtension, SearchOption.TopDirectoryOnly)) {
+                var idN = ExtractIdSuffix(Path.GetFileNameWithoutExtension(path));
+                if (idN is not null) {
+                    presentZipIds.Add(idN);
+                }
+            }
+
             var snapshots = new List<BackupZipDto>();
             foreach (var manifestPath in Directory.EnumerateFiles(_backupsDir, "*" + ManifestExtension, SearchOption.TopDirectoryOnly)) {
                 ct.ThrowIfCancellationRequested();
-                var dto = TryReadSnapshot(manifestPath);
+                var dto = TryReadSnapshot(manifestPath, presentZipIds);
                 if (dto is not null) {
                     snapshots.Add(dto);
                 }
@@ -183,7 +199,7 @@ namespace OpenAstroAra.Server.Services {
             return Task.FromResult<IReadOnlyList<BackupZipDto>>(snapshots);
         }
 
-        private BackupZipDto? TryReadSnapshot(string manifestPath) {
+        private BackupZipDto? TryReadSnapshot(string manifestPath, HashSet<string> presentZipIds) {
             try {
                 var manifest = JsonSerializer.Deserialize(
                     File.ReadAllText(manifestPath), AraJsonSerializerContext.Default.BackupManifest);
@@ -192,7 +208,7 @@ namespace OpenAstroAra.Server.Services {
                 }
                 // The manifest is authoritative, but only list a backup whose archive is actually present — a
                 // manifest orphaned by a half-deleted backup shouldn't surface a snapshot that can't be downloaded.
-                if (FindZipPath(manifest.BackupId) is null) {
+                if (!presentZipIds.Contains(manifest.BackupId.ToString("N", CultureInfo.InvariantCulture))) {
                     return null;
                 }
                 return new BackupZipDto(
@@ -227,6 +243,15 @@ namespace OpenAstroAra.Server.Services {
             return null;
         }
 
+        // The id is the trailing dash-delimited segment of a "backup-{ts}-{id:N}" name (N-format, no dashes of its
+        // own), so the last '-' splits it cleanly. Returns null for a name with no '-' (not one of ours).
+        private static string? ExtractIdSuffix(string fileNameWithoutExtension) {
+            var dash = fileNameWithoutExtension.LastIndexOf('-');
+            return dash >= 0 && dash < fileNameWithoutExtension.Length - 1
+                ? fileNameWithoutExtension[(dash + 1)..]
+                : null;
+        }
+
         private static Uri SnapshotDownloadUrl(Guid id) =>
             new("/api/v1/backup/snapshot/" + id.ToString("D", CultureInfo.InvariantCulture) + "/download", UriKind.Relative);
 
@@ -242,9 +267,12 @@ namespace OpenAstroAra.Server.Services {
                 IdempotencyKey: idempotencyKey));
         }
 
-        public Task<JsonElement> GetCloneStatusAsync(CancellationToken ct) =>
-            // §43-2: idle until RestoreZipAsync runs a real restore worth reporting progress on.
-            Task.FromResult(_idleStatus.RootElement.Clone());
+        public Task<JsonElement> GetCloneStatusAsync(CancellationToken ct) {
+            // §43-2: idle until RestoreZipAsync runs a real restore worth reporting progress on. Parsed per call
+            // (cheap, polled rarely) and the document disposed once cloned — no long-lived static JsonDocument.
+            using var doc = JsonDocument.Parse(IdleCloneStatusJson);
+            return Task.FromResult(doc.RootElement.Clone());
+        }
 
         private static void TryDelete(string path) {
             try {
