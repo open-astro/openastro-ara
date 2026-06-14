@@ -114,7 +114,9 @@ class DownloadProgress {
       packageId: packageId,
       downloadedBytes: _int(payload['downloaded_bytes']) ?? 0,
       totalBytes: _int(payload['total_bytes']) ?? -1,
-      percentComplete: _double(payload['percent_complete']) ?? 0,
+      // Clamp to [0,100]: a malformed server value (e.g. 150 / -1) would otherwise
+      // flow into the slice-2 progress bar, which asserts on a fraction outside [0,1].
+      percentComplete: (_double(payload['percent_complete']) ?? 0).clamp(0.0, 100.0),
       phase: phase,
       error: _str(payload['error']),
     );

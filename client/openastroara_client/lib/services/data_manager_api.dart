@@ -18,7 +18,9 @@ abstract interface class DataManagerClient {
   /// Cancel an in-flight download by its id.
   Future<void> cancel(String downloadId);
 
-  /// Delete an installed package's files. Returns true if something was freed.
+  /// Delete an installed package's files. Returns true if files were freed, false
+  /// if there was nothing to delete (the package wasn't present / already gone) —
+  /// false is NOT a failure (a real error throws). Idempotent.
   Future<bool> delete(String packageId);
 
   void close();
@@ -89,8 +91,8 @@ class DataManagerApi implements DataManagerClient {
       final code = res.statusCode ?? 0;
       return code >= 200 && code < 300;
     } on DioException catch (e) {
-      // 404 → already gone (another client removed it). Delete is idempotent, so
-      // a missing package is a no-op success, not an error; anything else propagates.
+      // 404 → already gone (another client removed it). Idempotent: report "nothing
+      // freed" (false), not an error; anything else propagates.
       if (e.response?.statusCode == 404) return false;
       rethrow;
     }

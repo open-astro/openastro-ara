@@ -45,6 +45,9 @@ class DataManagerPackagesNotifier extends AsyncNotifier<List<DataPackage>?> {
   }
 
   /// Start a download. Returns the download id, or null when no server is bound.
+  /// THROWS on failure (the daemon's 409 for an already-installed package, or a
+  /// transport error) — the failure does NOT land in this provider's state, so the
+  /// caller (the slice-2 modal) must `try/catch` to surface it.
   Future<String?> download(String packageId, {bool forceReinstall = false}) async {
     final api = ref.read(dataManagerApiProvider);
     if (api == null) return null;

@@ -63,6 +63,15 @@ void main() {
       expect(p.isActive, isFalse);
     });
 
+    test('clamps an out-of-range percent into [0, 100]', () {
+      final over = DownloadProgress.fromPayload(
+          const {'download_id': 'd', 'package_id': 'p', 'percent_complete': 150.0}, DownloadPhase.downloading);
+      final under = DownloadProgress.fromPayload(
+          const {'download_id': 'd', 'package_id': 'p', 'percent_complete': -5.0}, DownloadPhase.downloading);
+      expect(over!.percentComplete, 100.0);
+      expect(under!.percentComplete, 0.0);
+    });
+
     test('returns null when the package/download id is missing', () {
       expect(DownloadProgress.fromPayload(const <String, dynamic>{'package_id': 'x'}, DownloadPhase.downloading),
           isNull);
