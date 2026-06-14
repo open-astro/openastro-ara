@@ -257,12 +257,25 @@ namespace OpenAstroAra.Server.Services {
                 // Arm BEFORE OpenAsync so the header-wait phase is bounded too — the infinite HttpClient.Timeout
                 // removes the header-receipt deadline, so a CDN that accepts the connection but never sends headers
                 // would otherwise hang forever (escapable only by POST /cancel). OpenAsync gets the linked token.
+                var targetDir = PackageDir(pkg.Id)!; // pkg came from the catalog, so this is non-null + in-root.
+                // §36 incremental update: when re-fetching an already-installed package (a force reinstall), make the
+                // GET conditional on the validator the prior install recorded. A 304 means nothing changed → keep the
+                // install untouched. Null for a fresh install, so the GET is unconditional.
+                var knownValidator = SkyDataInstaller.ReadRemoteLastModified(targetDir);
+
                 idleCts.CancelAfter(_idleTimeout);
-                await using var fetch = await _fetcher.OpenAsync(pkg.SourceUrl!, ct).ConfigureAwait(false);
+                await using var fetch = await _fetcher.OpenAsync(pkg.SourceUrl!, knownValidator, ct).ConfigureAwait(false);
+
+                if (fetch.NotModified) {
+                    // The remote package is unchanged since the last install — there's nothing to download or extract,
+                    // and the existing install stays in place. Report it as a completed (up-to-date) download.
+                    await EmitAsync(WsEventCatalog.DataManagerDownloadComplete, job, error: null).ConfigureAwait(false);
+                    LogDownloadUpToDate(pkg.Id, job.Id);
+                    return;
+                }
                 Volatile.Write(ref job.TotalBytes, fetch.TotalBytes ?? -1);
 
                 idleCts.CancelAfter(_idleTimeout); // fresh deadline for the body; reset below on each byte of progress.
-                var targetDir = PackageDir(pkg.Id)!; // pkg came from the catalog, so this is non-null + in-root.
                 await using var counting = new CountingStream(fetch.Content,
                     read => {
                         Volatile.Write(ref job.DownloadedBytes, read);
@@ -275,7 +288,7 @@ namespace OpenAstroAra.Server.Services {
                 if (pkg.SizeBytes <= 0) {
                     LogCatalogSizeMissing(pkg.Id);
                 }
-                await SkyDataInstaller.InstallFromTarGzAsync(counting, targetDir, ExtractionCeiling(pkg), ct).ConfigureAwait(false);
+                await SkyDataInstaller.InstallFromTarGzAsync(counting, targetDir, ExtractionCeiling(pkg), fetch.LastModified, ct).ConfigureAwait(false);
 
                 await EmitAsync(WsEventCatalog.DataManagerDownloadComplete, job, error: null).ConfigureAwait(false);
                 LogDownloadComplete(pkg.Id, job.Id);
@@ -550,6 +563,9 @@ namespace OpenAstroAra.Server.Services {
 
         [LoggerMessage(Level = LogLevel.Information, Message = "Data package '{PackageId}' download {DownloadId} complete")]
         partial void LogDownloadComplete(string packageId, Guid downloadId);
+
+        [LoggerMessage(Level = LogLevel.Information, Message = "Data package '{PackageId}' download {DownloadId} already up to date (304 Not Modified) — install kept")]
+        partial void LogDownloadUpToDate(string packageId, Guid downloadId);
 
         [LoggerMessage(Level = LogLevel.Information, Message = "Data package '{PackageId}' download {DownloadId} cancelled")]
         partial void LogDownloadCancelled(string packageId, Guid downloadId);

@@ -77,7 +77,7 @@ namespace OpenAstroAra.Test {
                 ("catalog.dat", Bytes("star-data")),
                 ("meta/version.txt", Bytes("v2024.10")));
 
-            await SkyDataInstaller.InstallFromTarGzAsync(archive, target, maxBytes: null, CancellationToken.None);
+            await SkyDataInstaller.InstallFromTarGzAsync(archive, target, maxBytes: null, remoteLastModified: null, CancellationToken.None);
 
             Assert.That(File.Exists(Path.Combine(target, "catalog.dat")), Is.True);
             Assert.That(await File.ReadAllTextAsync(Path.Combine(target, "catalog.dat")), Is.EqualTo("star-data"));
@@ -97,7 +97,7 @@ namespace OpenAstroAra.Test {
             using var archive = MakeTarGz(("../escaped.txt", Bytes("pwned")));
 
             Assert.That(
-                async () => await SkyDataInstaller.InstallFromTarGzAsync(archive, target, maxBytes: null, CancellationToken.None),
+                async () => await SkyDataInstaller.InstallFromTarGzAsync(archive, target, maxBytes: null, remoteLastModified: null, CancellationToken.None),
                 Throws.InstanceOf<InvalidDataException>(), "an entry resolving outside the target is rejected");
 
             Assert.That(Directory.Exists(target), Is.False, "a rejected install leaves no target dir");
@@ -112,7 +112,7 @@ namespace OpenAstroAra.Test {
             await File.WriteAllTextAsync(Path.Combine(target, "stale.txt"), "old");
 
             using var archive = MakeTarGz(("fresh.txt", Bytes("new")));
-            await SkyDataInstaller.InstallFromTarGzAsync(archive, target, maxBytes: null, CancellationToken.None);
+            await SkyDataInstaller.InstallFromTarGzAsync(archive, target, maxBytes: null, remoteLastModified: null, CancellationToken.None);
 
             Assert.That(File.Exists(Path.Combine(target, "stale.txt")), Is.False, "the prior install is fully replaced");
             Assert.That(File.Exists(Path.Combine(target, "fresh.txt")), Is.True);
@@ -123,13 +123,13 @@ namespace OpenAstroAra.Test {
         public async Task A_failed_install_preserves_the_prior_install() {
             var target = Path.Combine(_root, "tycho-2");
             using (var good = MakeTarGz(("catalog.dat", Bytes("original")))) {
-                await SkyDataInstaller.InstallFromTarGzAsync(good, target, maxBytes: null, CancellationToken.None);
+                await SkyDataInstaller.InstallFromTarGzAsync(good, target, maxBytes: null, remoteLastModified: null, CancellationToken.None);
             }
 
             // A second install that fails (tar-slip) must not damage the install already on disk.
             using var poisoned = MakeTarGz(("../escaped.txt", Bytes("pwned")));
             Assert.That(
-                async () => await SkyDataInstaller.InstallFromTarGzAsync(poisoned, target, maxBytes: null, CancellationToken.None),
+                async () => await SkyDataInstaller.InstallFromTarGzAsync(poisoned, target, maxBytes: null, remoteLastModified: null, CancellationToken.None),
                 Throws.InstanceOf<InvalidDataException>());
 
             Assert.That(await File.ReadAllTextAsync(Path.Combine(target, "catalog.dat")), Is.EqualTo("original"),
@@ -169,7 +169,7 @@ namespace OpenAstroAra.Test {
             cts.Cancel();
 
             Assert.That(
-                async () => await SkyDataInstaller.InstallFromTarGzAsync(archive, target, maxBytes: null, cts.Token),
+                async () => await SkyDataInstaller.InstallFromTarGzAsync(archive, target, maxBytes: null, remoteLastModified: null, cts.Token),
                 Throws.InstanceOf<OperationCanceledException>());
 
             Assert.That(Directory.Exists(target), Is.False, "a cancelled install produces no target dir");
@@ -190,7 +190,7 @@ namespace OpenAstroAra.Test {
             using var canceling = new CancelAfterBytesStream(MakeTarGz(entries), cts.Cancel, thresholdBytes: 256);
 
             Assert.That(
-                async () => await SkyDataInstaller.InstallFromTarGzAsync(canceling, target, maxBytes: null, cts.Token),
+                async () => await SkyDataInstaller.InstallFromTarGzAsync(canceling, target, maxBytes: null, remoteLastModified: null, cts.Token),
                 Throws.InstanceOf<OperationCanceledException>());
 
             Assert.That(Directory.Exists(target), Is.False, "a mid-extraction cancel produces no target dir");
@@ -204,7 +204,7 @@ namespace OpenAstroAra.Test {
             using var archive = MakeTarGz(("a.dat", new byte[4096]), ("b.dat", new byte[4096]));
 
             Assert.That(
-                async () => await SkyDataInstaller.InstallFromTarGzAsync(archive, target, maxBytes: 6 * 1024, CancellationToken.None),
+                async () => await SkyDataInstaller.InstallFromTarGzAsync(archive, target, maxBytes: 6 * 1024, remoteLastModified: null, CancellationToken.None),
                 Throws.InstanceOf<InvalidDataException>(), "extraction past the byte ceiling is rejected");
 
             Assert.That(Directory.Exists(target), Is.False, "an over-limit install produces no target dir");

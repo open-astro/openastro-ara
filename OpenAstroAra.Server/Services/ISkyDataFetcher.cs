@@ -28,8 +28,12 @@ namespace OpenAstroAra.Server.Services {
     /// </summary>
     public interface ISkyDataFetcher {
         /// <summary>Open a read stream for <paramref name="source"/>. The returned <see cref="SkyDataFetch"/> owns the
-        /// underlying transport and must be disposed by the caller once the stream is consumed.</summary>
-        Task<SkyDataFetch> OpenAsync(Uri source, CancellationToken ct);
+        /// underlying transport and must be disposed by the caller once the stream is consumed.
+        /// When <paramref name="ifModifiedSince"/> is set, the fetch is conditional (§36 incremental update): if the
+        /// remote package hasn't changed since that time the server answers 304 and the result has
+        /// <see cref="SkyDataFetch.NotModified"/> set with an empty body — the caller must check that flag before
+        /// reading <see cref="SkyDataFetch.Content"/>.</summary>
+        Task<SkyDataFetch> OpenAsync(Uri source, DateTimeOffset? ifModifiedSince, CancellationToken ct);
     }
 
     /// <summary>An open sky-data byte stream plus its advertised length (null if the server didn't send one). Disposing
@@ -46,6 +50,15 @@ namespace OpenAstroAra.Server.Services {
         public Stream Content { get; }
 
         public long? TotalBytes { get; }
+
+        /// <summary>True when a conditional fetch got 304 Not Modified — the remote package is unchanged since the
+        /// caller's <c>ifModifiedSince</c>, <see cref="Content"/> is empty, and the caller should keep the existing
+        /// install rather than re-extract.</summary>
+        public bool NotModified { get; init; }
+
+        /// <summary>The remote <c>Last-Modified</c> for this package, when the server sent one — persisted alongside the
+        /// install so a later fetch can be made conditional. Null when the server didn't advertise it.</summary>
+        public DateTimeOffset? LastModified { get; init; }
 
         [SuppressMessage("Design", "CA1031:Do not catch general exception types",
             Justification = "Best-effort stream teardown: any error tearing down the content stream must not leak the response/client (disposed in the finally) nor turn an already-finished download into a failure.")]
@@ -80,7 +93,7 @@ namespace OpenAstroAra.Server.Services {
             _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
         }
 
-        public async Task<SkyDataFetch> OpenAsync(Uri source, CancellationToken ct) {
+        public async Task<SkyDataFetch> OpenAsync(Uri source, DateTimeOffset? ifModifiedSince, CancellationToken ct) {
             ArgumentNullException.ThrowIfNull(source);
             // Defence in depth: today the catalog hardcodes https URLs, but refuse to fetch a sky-data package over
             // cleartext if a future catalog entry ever carries an http (or other-scheme) source.
@@ -90,17 +103,32 @@ namespace OpenAstroAra.Server.Services {
 
             var client = _httpClientFactory.CreateClient(HttpClientName);
             try {
+                using var request = new HttpRequestMessage(HttpMethod.Get, source);
+                if (ifModifiedSince is { } since) {
+                    // §36 incremental update: ask the CDN to answer 304 if the package is unchanged.
+                    request.Headers.IfModifiedSince = since;
+                }
                 // ResponseHeadersRead so the (potentially multi-GB) body streams rather than buffering in memory.
-                var response = await client.GetAsync(source, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+                var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
                 try {
+                    if (response.StatusCode == System.Net.HttpStatusCode.NotModified) {
+                        // 304: nothing to download. Capture the validator (if echoed) and return an empty,
+                        // not-modified result whose body is Stream.Null — so dispose the transport here, since
+                        // unlike the success path no streamed body keeps it alive.
+                        var validator = response.Content.Headers.LastModified ?? ifModifiedSince;
+                        response.Dispose();
+                        client.Dispose();
+                        return new SkyDataFetch(Stream.Null, 0) { NotModified = true, LastModified = validator };
+                    }
                     response.EnsureSuccessStatusCode();
                     var totalBytes = response.Content.Headers.ContentLength;
+                    var lastModified = response.Content.Headers.LastModified;
                     var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
                     // On success the fetch owns the stream + response + client and disposes them in that order.
                     // Disposing an IHttpClientFactory client is documented as safe — the factory owns the pooled
                     // message handler's lifetime separately, so this disposes only the thin client wrapper (and it
                     // keeps the analyzer's CA2000 "dispose before losing scope" happy without a suppression).
-                    return new SkyDataFetch(stream, totalBytes, response, client);
+                    return new SkyDataFetch(stream, totalBytes, response, client) { LastModified = lastModified };
                 } catch {
                     response.Dispose();
                     throw;
