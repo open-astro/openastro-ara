@@ -56,10 +56,18 @@ class ClientSettingsNotifier extends AsyncNotifier<ClientSettings?> {
 
   /// Update [patch] keys over the current blob (last-write-wins per key),
   /// leaving the rest untouched. Returns the stored view, or null when no server
-  /// is bound. Throws on failure.
+  /// is bound. Throws on failure — and, critically, throws rather than merging
+  /// onto an empty baseline when the current settings aren't loaded (the initial
+  /// fetch errored or is still in flight): merging then would send only [patch]
+  /// and wipe every other key the server has stored.
   Future<ClientSettings?> merge(Map<String, dynamic> patch) async {
-    final current = state.asData?.value?.settings ?? const <String, dynamic>{};
-    return save(<String, dynamic>{...current, ...patch});
+    if (ref.read(clientSettingsApiProvider) == null) return null;
+    final current = state.asData?.value;
+    if (current == null) {
+      throw StateError('Cannot merge client settings before they have loaded — '
+          'merging now would overwrite the server-stored blob with only the patch.');
+    }
+    return save(<String, dynamic>{...current.settings, ...patch});
   }
 }
 

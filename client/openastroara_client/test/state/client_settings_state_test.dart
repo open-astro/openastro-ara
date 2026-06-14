@@ -101,6 +101,30 @@ void main() {
       expect(api.lastReplaced, {'theme': 'dark', 'zoom': 3}, reason: 'theme preserved, zoom updated');
     });
 
+    test('merge throws (no clobber) when settings have not loaded', () async {
+      // Initial fetch errors → provider has no known-good snapshot. A merge must refuse rather than send only the
+      // patch and wipe the server-stored keys.
+      final api = _FakeClientSettingsClient(const {'theme': 'dark', 'zoom': 1})..throwOnFetch = true;
+      final c = _container(const [_server], api);
+      await c.read(savedServersProvider.future);
+      await expectLater(c.read(clientSettingsProvider.future), throwsA(isA<StateError>()));
+
+      await expectLater(
+        c.read(clientSettingsProvider.notifier).merge({'zoom': 3}),
+        throwsA(isA<StateError>()),
+      );
+      expect(api.lastReplaced, isNull, reason: 'no replace fired — server keys are not clobbered');
+    });
+
+    test('merge is a no-op (null) when no server is bound', () async {
+      final api = _FakeClientSettingsClient(const {});
+      final c = _container(const [], api);
+      await c.read(savedServersProvider.future);
+      await c.read(clientSettingsProvider.future);
+      expect(await c.read(clientSettingsProvider.notifier).merge({'a': 1}), isNull);
+      expect(api.lastReplaced, isNull);
+    });
+
     test('actions are no-ops (null) when no server is bound', () async {
       final api = _FakeClientSettingsClient(const {});
       final c = _container(const [], api);
