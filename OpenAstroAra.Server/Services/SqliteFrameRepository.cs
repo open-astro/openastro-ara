@@ -236,13 +236,13 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
                  exposure_seconds, gain, "offset", temperature_c, captured_utc,
                  file_path, file_size_bytes, width, height, bit_depth,
                  hfr, star_count, eccentricity, guiding_rms_arcsec, snr_estimate,
-                 quality_score_json, rating, tags_json)
+                 quality_score_json, rating, tags_json, focuser_position)
             VALUES
                 ($id, $session_id, $target_name, $frame_type, $filter_name,
                  $exposure_seconds, $gain, $offset, $temperature_c, $captured_utc,
                  $file_path, $file_size_bytes, $width, $height, $bit_depth,
                  $hfr, $star_count, $eccentricity, $guiding_rms_arcsec, $snr_estimate,
-                 $quality_score_json, $rating, $tags_json);
+                 $quality_score_json, $rating, $tags_json, $focuser_position);
             """;
         cmd.Parameters.AddWithValue("$id", f.Id.ToString());
         cmd.Parameters.AddWithValue("$session_id", f.SessionId.ToString());
@@ -270,6 +270,7 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         cmd.Parameters.AddWithValue("$rating", f.Rating);
         cmd.Parameters.AddWithValue("$tags_json",
             JsonSerializer.Serialize(f.Tags, AraJsonSerializerContext.Default.IReadOnlyListString));
+        cmd.Parameters.AddWithValue("$focuser_position", DbValue(f.FocuserPosition));
         await cmd.ExecuteNonQueryAsync(ct);
     }
 
@@ -344,7 +345,7 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
                    exposure_seconds, gain, "offset", temperature_c, captured_utc,
                    file_path, file_size_bytes, width, height, bit_depth,
                    hfr, star_count, eccentricity, guiding_rms_arcsec, snr_estimate,
-                   quality_score_json, rating, tags_json
+                   quality_score_json, rating, tags_json, focuser_position
             FROM frames WHERE id = $id LIMIT 1;
             """;
         cmd.Parameters.AddWithValue("$id", id.ToString());
@@ -388,7 +389,8 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
             SnrEstimate: await reader.IsDBNullAsync(19, ct) ? null : reader.GetDouble(19),
             QualityScore: quality,
             Rating: reader.GetInt32(21),
-            Tags: tags);
+            Tags: tags,
+            FocuserPosition: await reader.IsDBNullAsync(23, ct) ? null : reader.GetInt32(23));
     }
 
     public async Task<(byte[] Bytes, string ContentType)?> GetPreviewAsync(Guid id, FramePreviewRequestDto request, CancellationToken ct) {
