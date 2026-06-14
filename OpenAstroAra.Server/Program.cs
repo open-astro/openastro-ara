@@ -315,6 +315,11 @@ public partial class Program {
         builder.Services.AddSingleton<IBackupService>(sp =>
             new BackupService(profileDir, sp.GetRequiredService<ILogger<BackupService>>()));
 
+        // §55.1 multi-device WILMA settings sync — opaque UI-preferences blob under {profileDir}/client-settings.json.
+        // profileDir-scoped, so registered here alongside the other profile-dir-backed services.
+        builder.Services.AddSingleton<IClientSettingsService>(sp =>
+            new ClientSettingsService(profileDir, sp.GetRequiredService<ILogger<ClientSettingsService>>()));
+
         // §14e — tenth real device service and the head of the capture path: live Alpaca camera
         // (caps + cooler/state runtime) whose StartExposure runs a REAL capture — exposure →
         // ImageReady → ImageArray download → §72 FITS write (atomic §28.7) → §28 catalog insert —
@@ -552,6 +557,7 @@ public partial class Program {
         app.MapServerStateEndpoints();
         app.MapNotificationEndpoints();
         app.MapStatsEndpoints();
+        app.MapClientSettingsEndpoints();
         app.MapSystemEndpoints();
         app.MapWebSocketEndpoints();
 
