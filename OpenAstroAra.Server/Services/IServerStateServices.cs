@@ -65,6 +65,7 @@ public interface IStatsService {
     Task<StatsCalendarDto> GetCalendarAsync(DateOnly fromDate, DateOnly toDate, CancellationToken ct);
     Task<StatsAchievementsDto> GetAchievementsAsync(CancellationToken ct);
     Task<(Stream Stream, string FileName)?> OpenCsvExportAsync(string scope, CancellationToken ct);
+    Task<(Stream Stream, string FileName)?> OpenAstrobinExportAsync(string targetName, CancellationToken ct);
 }
 
 /// <summary>Bug-report bundle preparation (§54).</summary>

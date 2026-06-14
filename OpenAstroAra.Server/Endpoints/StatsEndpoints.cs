@@ -95,6 +95,24 @@ public static class StatsEndpoints {
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("ExportStatsCsv");
 
+        // AstroBin acquisition CSV for one target: 400 when no target is given,
+        // 404 when the target has no light frames to export.
+        stats.MapGet("/export/astrobin",
+                async (string? target, IStatsService svc, CancellationToken ct) => {
+                    if (string.IsNullOrWhiteSpace(target)) {
+                        return Results.Problem(
+                            detail: "A 'target' query parameter is required.",
+                            statusCode: StatusCodes.Status400BadRequest);
+                    }
+                    var result = await svc.OpenAstrobinExportAsync(target, ct);
+                    if (result is null) return Results.NotFound();
+                    return Results.Stream(result.Value.Stream, "text/csv", result.Value.FileName);
+                })
+            .Produces<byte[]>(StatusCodes.Status200OK, "text/csv")
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("ExportStatsAstrobin");
+
         return app;
     }
 }
