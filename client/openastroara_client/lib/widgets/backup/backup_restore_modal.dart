@@ -103,13 +103,16 @@ class _BackupRestoreModalState extends ConsumerState<BackupRestoreModal> {
     }
     return ListView(
       padding: const EdgeInsets.all(16),
-      children: [for (final s in snapshots) _SnapshotRow(snapshot: s)],
+      // Keyed by id: _SnapshotRow is stateful (_restoring/_downloading), so without a
+      // key its State would re-associate with the wrong snapshot when the list shifts
+      // (a new backup prepends after createBackup).
+      children: [for (final s in snapshots) _SnapshotRow(key: ValueKey(s.backupId), snapshot: s)],
     );
   }
 }
 
 class _SnapshotRow extends ConsumerStatefulWidget {
-  const _SnapshotRow({required this.snapshot});
+  const _SnapshotRow({super.key, required this.snapshot});
 
   final BackupSnapshot snapshot;
 
@@ -129,12 +132,17 @@ class _SnapshotRowState extends ConsumerState<_SnapshotRow> {
   Future<void> _download() async {
     if (_downloading) return;
     final api = ref.read(backupApiProvider);
-    if (api == null) return;
+    if (api == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No server connected.')));
+      return;
+    }
     setState(() => _downloading = true);
     try {
       final uri = Uri.tryParse(api.absoluteDownloadUrl(snapshot));
       var ok = false;
-      if (uri != null) {
+      // Only ever launch http(s) — the URL is derived from a server-supplied path, so an
+      // allowlist stops a rogue server steering us into a javascript:/data: scheme.
+      if (uri != null && (uri.isScheme('http') || uri.isScheme('https'))) {
         try {
           ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
         } catch (_) {
@@ -153,6 +161,17 @@ class _SnapshotRowState extends ConsumerState<_SnapshotRow> {
 
   Future<void> _restore() async {
     if (_restoring) return;
+    // A snapshot with no captured areas would open a confirm dialog the user can never
+    // confirm (no checkboxes → Restore permanently disabled); refuse it up front.
+    if (snapshot.includedAreas.isEmpty) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('This snapshot has no restorable areas.')));
+      return;
+    }
+    if (ref.read(backupApiProvider) == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No server connected.')));
+      return;
+    }
     final choice = await showDialog<_RestoreChoice>(
       context: context,
       builder: (_) => _RestoreDialog(snapshot: snapshot),

@@ -138,6 +138,17 @@ void main() {
     expect(find.textContaining('Could not open the download'), findsOneWidget);
   });
 
+  testWidgets('Restore on a snapshot with no areas refuses with a snackbar', (tester) async {
+    final api = _FakeBackupClient([const BackupSnapshot(backupId: 'b1', downloadUrl: '/dl/b1', includedAreas: [])]);
+    await tester.pumpWidget(_host(api));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Restore'));
+    await tester.pump();
+    expect(find.text('Restore backup'), findsNothing, reason: 'no confirm dialog opens');
+    expect(find.textContaining('no restorable areas'), findsOneWidget);
+  });
+
   testWidgets('Restore opens a destructive confirm dialog with area checkboxes', (tester) async {
     final api = _FakeBackupClient([
       const BackupSnapshot(backupId: 'b1', downloadUrl: '/dl/b1', includedAreas: ['profiles', 'sequences']),
