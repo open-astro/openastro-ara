@@ -137,6 +137,46 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_fresh_install_fetches_unconditionally_and_records_the_validator() {
+            var lastMod = new DateTimeOffset(2026, 3, 1, 12, 0, 0, TimeSpan.Zero);
+            var archive = TarGz(("catalog.dat", Encoding.UTF8.GetBytes("data")));
+            var ws = new CapturingBroadcaster();
+            var cond = new ConditionalFetcher(archive, lastMod);
+            var svc = NewService(cond, ws);
+
+            await svc.DownloadAsync(new DownloadRequestDto(PackageId, ForceReinstall: false), null, CancellationToken.None);
+            await Eventually(() => ws.Events.Any(e => e.EventType == WsEventCatalog.DataManagerDownloadComplete));
+
+            Assert.That(cond.LastIfModifiedSince, Is.Null, "a fresh install has no stored validator → unconditional GET");
+            Assert.That(SkyDataInstaller.ReadRemoteLastModified(Path.Combine(_root, PackageId)), Is.EqualTo(lastMod),
+                "the install records the remote Last-Modified for a later conditional GET");
+        }
+
+        [Test]
+        public async Task A_force_reinstall_sends_the_stored_validator_and_a_304_keeps_the_install() {
+            var lastMod = new DateTimeOffset(2026, 3, 1, 12, 0, 0, TimeSpan.Zero);
+            var archive = TarGz(("catalog.dat", Encoding.UTF8.GetBytes("v1")));
+
+            // First install records the remote validator in the sentinel.
+            var ws1 = new CapturingBroadcaster();
+            var svc1 = NewService(new ConditionalFetcher(archive, lastMod), ws1);
+            await svc1.DownloadAsync(new DownloadRequestDto(PackageId, ForceReinstall: false), null, CancellationToken.None);
+            await Eventually(() => ws1.Events.Any(e => e.EventType == WsEventCatalog.DataManagerDownloadComplete));
+
+            // A force reinstall issues a conditional GET; the fake answers 304 Not Modified.
+            var ws2 = new CapturingBroadcaster();
+            var cond = ConditionalFetcher.NotModified();
+            var svc2 = NewService(cond, ws2);
+            await svc2.DownloadAsync(new DownloadRequestDto(PackageId, ForceReinstall: true), null, CancellationToken.None);
+            await Eventually(() => ws2.Events.Any(e => e.EventType == WsEventCatalog.DataManagerDownloadComplete));
+
+            Assert.That(cond.LastIfModifiedSince, Is.EqualTo(lastMod), "the stored validator drives the conditional GET");
+            Assert.That(await File.ReadAllTextAsync(Path.Combine(_root, PackageId, "catalog.dat")), Is.EqualTo("v1"),
+                "a 304 leaves the existing install untouched");
+            await Eventually(() => svc2.GetStateAsync(CancellationToken.None).Result.ActiveDownloads.Count == 0);
+        }
+
+        [Test]
         public async Task A_failed_fetch_emits_failed_and_installs_nothing() {
             var ws = new CapturingBroadcaster();
             var fetcher = new FakeSkyDataFetcher(_ => throw new System.Net.Http.HttpRequestException("boom"));

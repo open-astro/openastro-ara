@@ -47,6 +47,29 @@ namespace OpenAstroAra.Server.Services {
         private const string BackupPrefix = ".backup-";
 
         /// <summary>
+        /// Read the remote <c>Last-Modified</c> validator a completed install recorded (sentinel line 2), or null when
+        /// the package isn't installed, the sentinel is absent/torn, or no validator was stored (e.g. installed before
+        /// the server sent one). Used by the §36 incremental-update path to issue a conditional GET. Best-effort: any
+        /// read/parse failure reads as "no validator", so the caller just does an unconditional re-download.
+        /// </summary>
+        internal static DateTimeOffset? ReadRemoteLastModified(string packageDir) {
+            try {
+                var sentinel = Path.Combine(packageDir, InstalledMarkerFileName);
+                if (!File.Exists(sentinel)) {
+                    return null;
+                }
+                var lines = File.ReadAllLines(sentinel);
+                if (lines.Length < 2 || string.IsNullOrWhiteSpace(lines[1])) {
+                    return null;
+                }
+                return DateTimeOffset.TryParse(lines[1], CultureInfo.InvariantCulture,
+                    DateTimeStyles.RoundtripKind, out var parsed) ? parsed : null;
+            } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+                return null;
+            }
+        }
+
+        /// <summary>
         /// Delete any leftover <c>.staging-*</c> / <c>.backup-*</c> scratch directories directly under
         /// <paramref name="dataRoot"/>. A normally-finishing install removes its own scratch, so these only linger
         /// when a worker was hard-killed mid-extract (a daemon crash); sweeping them at startup reclaims the space a
@@ -88,7 +111,8 @@ namespace OpenAstroAra.Server.Services {
         /// is in place — a failed swap moves it back). <paramref name="maxBytes"/>, when set, caps the total extracted
         /// size (zip-bomb / disk-exhaustion guard); exceeding it aborts the install with an <see cref="InvalidDataException"/>.
         /// </summary>
-        internal static async Task InstallFromTarGzAsync(Stream tarGz, string targetDir, long? maxBytes, CancellationToken ct) {
+        internal static async Task InstallFromTarGzAsync(Stream tarGz, string targetDir, long? maxBytes,
+                DateTimeOffset? remoteLastModified, CancellationToken ct) {
             ArgumentNullException.ThrowIfNull(tarGz);
             ArgumentException.ThrowIfNullOrEmpty(targetDir);
             if (maxBytes is < 0) {
@@ -112,9 +136,16 @@ namespace OpenAstroAra.Server.Services {
                 await ExtractTarGzAsync(tarGz, stagingDir, maxBytes, ct).ConfigureAwait(false);
 
                 // Stamp the sentinel BEFORE the swap so it appears atomically with the directory at its final path.
+                // Line 1 is the install timestamp (kept for documentation; InstalledUtc is read from the file's
+                // mtime, not its content); line 2, when present, is the remote Last-Modified validator so a later
+                // §36 incremental update can issue a conditional GET. An absent line 2 = no validator known.
+                var sentinelBody = DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture);
+                if (remoteLastModified is { } lastMod) {
+                    sentinelBody += "\n" + lastMod.ToString("O", CultureInfo.InvariantCulture);
+                }
                 await File.WriteAllTextAsync(
                     Path.Combine(stagingDir, InstalledMarkerFileName),
-                    DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture),
+                    sentinelBody,
                     ct).ConfigureAwait(false);
 
                 // Swap. Move the prior install aside first so the destructive delete happens only AFTER the new

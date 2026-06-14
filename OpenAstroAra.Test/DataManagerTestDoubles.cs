@@ -41,7 +41,7 @@ namespace OpenAstroAra.Test {
 
     // A fetcher that should never be called (for inventory-only tests).
     internal sealed class UnusedFetcher : ISkyDataFetcher {
-        public Task<SkyDataFetch> OpenAsync(Uri source, CancellationToken ct) =>
+        public Task<SkyDataFetch> OpenAsync(Uri source, DateTimeOffset? ifModifiedSince, CancellationToken ct) =>
             throw new InvalidOperationException("fetch not expected in this test");
     }
 
@@ -58,22 +58,56 @@ namespace OpenAstroAra.Test {
             _open = open ?? throw new ArgumentNullException(nameof(open));
         }
 
-        public async Task<SkyDataFetch> OpenAsync(Uri source, CancellationToken ct) {
+        public async Task<SkyDataFetch> OpenAsync(Uri source, DateTimeOffset? ifModifiedSince, CancellationToken ct) {
             var payload = await _open(ct).ConfigureAwait(false);
             return new SkyDataFetch(new MemoryStream(payload, writable: false), payload.LongLength);
         }
     }
 
+    // Records the conditional validator it was called with and returns either a 304 NotModified result or a payload
+    // carrying a Last-Modified — to exercise the §36 incremental-update path.
+    internal sealed class ConditionalFetcher : ISkyDataFetcher {
+        private readonly byte[] _payload;
+        private readonly bool _notModified;
+        private readonly DateTimeOffset? _lastModified;
+
+        public ConditionalFetcher(byte[] payload, DateTimeOffset? lastModified) {
+            _payload = payload;
+            _lastModified = lastModified;
+            _notModified = false;
+        }
+
+        private ConditionalFetcher() {
+            _payload = Array.Empty<byte>();
+            _notModified = true;
+        }
+
+        public static ConditionalFetcher NotModified() => new();
+
+        public int Calls { get; private set; }
+        public DateTimeOffset? LastIfModifiedSince { get; private set; }
+
+        public Task<SkyDataFetch> OpenAsync(Uri source, DateTimeOffset? ifModifiedSince, CancellationToken ct) {
+            Calls++;
+            LastIfModifiedSince = ifModifiedSince;
+            if (_notModified) {
+                return Task.FromResult(new SkyDataFetch(Stream.Null, 0) { NotModified = true, LastModified = ifModifiedSince });
+            }
+            return Task.FromResult(
+                new SkyDataFetch(new MemoryStream(_payload, writable: false), _payload.LongLength) { LastModified = _lastModified });
+        }
+    }
+
     // Opens a stream that never yields a byte (honoring its read token), to exercise the idle-progress watchdog.
     internal sealed class StallingFetcher : ISkyDataFetcher {
-        public Task<SkyDataFetch> OpenAsync(Uri source, CancellationToken ct) =>
+        public Task<SkyDataFetch> OpenAsync(Uri source, DateTimeOffset? ifModifiedSince, CancellationToken ct) =>
             Task.FromResult(new SkyDataFetch(new StallStream(), totalBytes: null));
     }
 
     // OpenAsync itself never returns (honoring its token) — a CDN that accepts the connection but never sends
     // headers. Exercises the watchdog arming the header-wait phase.
     internal sealed class StallingHeaderFetcher : ISkyDataFetcher {
-        public async Task<SkyDataFetch> OpenAsync(Uri source, CancellationToken ct) {
+        public async Task<SkyDataFetch> OpenAsync(Uri source, DateTimeOffset? ifModifiedSince, CancellationToken ct) {
             await Task.Delay(Timeout.Infinite, ct).ConfigureAwait(false);
             return new SkyDataFetch(Stream.Null, totalBytes: null); // unreachable
         }
@@ -91,7 +125,7 @@ namespace OpenAstroAra.Test {
             _gap = gap;
         }
 
-        public Task<SkyDataFetch> OpenAsync(Uri source, CancellationToken ct) =>
+        public Task<SkyDataFetch> OpenAsync(Uri source, DateTimeOffset? ifModifiedSince, CancellationToken ct) =>
             Task.FromResult(new SkyDataFetch(new TrickleStream(_payload, _chunk, _gap), _payload.LongLength));
     }
 
