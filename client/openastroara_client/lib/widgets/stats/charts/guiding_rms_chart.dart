@@ -23,12 +23,20 @@ class GuidingRmsChart extends ConsumerWidget {
   // full-history (computed server-side over every sample).
   static const int _maxPlotted = 500;
 
+  // Y-axis band: floor so the color/grid stays legible on calm sessions, ceiling
+  // so one bad-seeing outlier doesn't squash the trend. Samples above the ceiling
+  // are clipped by fl_chart, so the subtitle calls out how many.
+  static const double _yFloor = 1.5;
+  static const double _yCeiling = 5.0;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(guidingRmsProvider);
     final series = async.asData?.value;
 
     final total = series?.samples.length ?? 0;
+    final shown = _plotted(series);
+    final overCeiling = shown.where((s) => s.rmsArcsec > _yCeiling).length;
     final summary = series == null || series.isEmpty
         ? null
         : [
@@ -37,6 +45,8 @@ class GuidingRmsChart extends ConsumerWidget {
             if (series.p95RmsArcsec != null)
               'p95 ${series.p95RmsArcsec!.toStringAsFixed(2)}″',
             if (total > _maxPlotted) 'latest $_maxPlotted of $total',
+            if (overCeiling > 0)
+              '$overCeiling above ${_yCeiling.toStringAsFixed(0)}″ (clipped)',
           ].join(' · ');
 
     return ChartCard(
@@ -46,7 +56,7 @@ class GuidingRmsChart extends ConsumerWidget {
           : 'Per-frame total guiding RMS (arcsec), chronological — $summary.',
       child: Stack(
         children: [
-          _body(context, ref, async, series),
+          _body(context, ref, async, series, shown),
           Positioned(
             top: 0,
             right: 4,
@@ -71,11 +81,19 @@ class GuidingRmsChart extends ConsumerWidget {
     );
   }
 
+  // The most-recent _maxPlotted samples (the full list when shorter).
+  static List<GuidingRmsPoint> _plotted(GuidingRmsSeries? series) {
+    if (series == null) return const [];
+    final s = series.samples;
+    return s.length > _maxPlotted ? s.sublist(s.length - _maxPlotted) : s;
+  }
+
   Widget _body(
     BuildContext context,
     WidgetRef ref,
     AsyncValue<GuidingRmsSeries?> async,
     GuidingRmsSeries? series,
+    List<GuidingRmsPoint> shown,
   ) {
     if (async.isLoading && series == null) {
       return const _Hint('Loading guiding RMS…');
@@ -93,11 +111,6 @@ class GuidingRmsChart extends ConsumerWidget {
       return const _Hint('No guiding data yet — RMS appears here once guided frames are captured.');
     }
 
-    // Plot only the most-recent _maxPlotted samples on a long history.
-    final shown = series.samples.length > _maxPlotted
-        ? series.samples.sublist(series.samples.length - _maxPlotted)
-        : series.samples;
-
     final spots = <FlSpot>[];
     var observedMax = 0.0;
     for (var i = 0; i < shown.length; i++) {
@@ -105,10 +118,9 @@ class GuidingRmsChart extends ConsumerWidget {
       spots.add(FlSpot(i.toDouble(), rms));
       if (rms > observedMax) observedMax = rms;
     }
-    // Floor at 1.5″ (a healthy mount stays well under) and ceil at 5.0″ so a
-    // single bad-seeing outlier doesn't squash the rest of the trend.
-    final yMax = (observedMax + 0.2).clamp(1.5, 5.0).toDouble();
-    final lastIdx = (shown.length - 1).clamp(0, double.infinity).toInt();
+    final yMax = (observedMax + 0.2).clamp(_yFloor, _yCeiling).toDouble();
+    // `shown` is non-empty here (the isEmpty guard above), so length - 1 >= 0.
+    final lastIdx = shown.length - 1;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 16, 8),
