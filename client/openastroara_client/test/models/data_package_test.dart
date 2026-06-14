@@ -69,6 +69,7 @@ void main() {
       final under = DownloadProgress.fromPayload(
           const {'download_id': 'd', 'package_id': 'p', 'percent_complete': -5.0}, DownloadPhase.downloading);
       expect(over!.percentComplete, 100.0);
+      expect(over.fraction, 1.0, reason: 'fraction is the [0,1] form for a progress bar');
       expect(under!.percentComplete, 0.0);
     });
 

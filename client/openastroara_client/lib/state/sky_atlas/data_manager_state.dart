@@ -39,6 +39,13 @@ class DataManagerPackagesNotifier extends AsyncNotifier<List<DataPackage>?> {
   @override
   Future<List<DataPackage>?> build() async {
     _generation++;
+    // Clear a stale deferred refresh — this build() already loads the new server
+    // fresh, so any pending re-read is redundant. _refreshing is intentionally NOT
+    // reset: an in-flight refresh loop from the old server self-heals (it re-reads
+    // _generation + the API each iteration, so its write is dropped and the next
+    // iteration uses the new server), whereas clearing it mid-flight could let a
+    // concurrent refresh loop start.
+    _refreshPending = false;
     final api = ref.watch(dataManagerApiProvider);
     if (api == null) return null;
     return api.listPackages();
