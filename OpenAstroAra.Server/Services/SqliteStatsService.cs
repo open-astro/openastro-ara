@@ -290,9 +290,14 @@ public sealed class SqliteStatsService : IStatsService {
 
     public async Task<StatsAchievementsDto> GetAchievementsAsync(CancellationToken ct) {
         await using var conn = _db.OpenConnection();
+        // Both queries run inside one transaction so the headline aggregates and the per-night
+        // breakdown reflect a single consistent snapshot — a frame inserted between them can't make
+        // TotalLightFrames and TotalNightsImaged disagree.
+        await using var tx = (SqliteTransaction)await conn.BeginTransactionAsync(ct);
 
         // Headline aggregates over light frames.
         await using var aggCmd = conn.CreateCommand();
+        aggCmd.Transaction = tx;
         // COUNT(DISTINCT target_name) excludes NULL per SQL standard — intentional here: a frame with no
         // target name isn't a "target imaged", so it shouldn't inflate the unique-targets record.
         aggCmd.CommandText = """
@@ -322,6 +327,7 @@ public sealed class SqliteStatsService : IStatsService {
 
         // Per-night integration (distinct capture days, same date() basis as the calendar view).
         await using var nightsCmd = conn.CreateCommand();
+        nightsCmd.Transaction = tx;
         nightsCmd.CommandText = """
             SELECT date(captured_utc) AS day,
                    CAST(IFNULL(SUM(exposure_seconds), 0) AS REAL) / 3600.0 AS hours

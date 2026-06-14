@@ -118,6 +118,31 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Current_streak_survives_when_the_last_night_was_yesterday() {
+            // The 1-day grace branch: most-recent night is yesterday (an in-progress night before midnight UTC
+            // would land here), so the streak is still "live".
+            await InsertLightAsync("M31", 3600, NightUtc(2));
+            await InsertLightAsync("M31", 3600, NightUtc(1));
+
+            var a = await _svc.GetAchievementsAsync(CancellationToken.None);
+
+            Assert.That(a.LongestStreakNights, Is.EqualTo(2));
+            Assert.That(a.CurrentStreakNights, Is.EqualTo(2), "yesterday is within the 1-day grace");
+        }
+
+        [Test]
+        public async Task Current_streak_is_zero_when_the_last_night_was_two_days_ago() {
+            // The boundary just past the grace: most-recent night is the day before yesterday → stale.
+            await InsertLightAsync("M31", 3600, NightUtc(3));
+            await InsertLightAsync("M31", 3600, NightUtc(2));
+
+            var a = await _svc.GetAchievementsAsync(CancellationToken.None);
+
+            Assert.That(a.LongestStreakNights, Is.EqualTo(2));
+            Assert.That(a.CurrentStreakNights, Is.EqualTo(0), "two days ago is past the 1-day grace");
+        }
+
+        [Test]
         public async Task Multiple_frames_on_one_night_count_as_a_single_night() {
             await InsertLightAsync("M31", 1800, NightUtc(0));
             await InsertFrameAsync("light", "M31", 1800, NightUtc(0).AddHours(1));
