@@ -659,3 +659,9 @@ Deferred to **§43-2**:
   fix is a dashboard-wide pass (e.g. a shared responsive `BoxConstraints(minWidth: 160, maxWidth: 220)` applied to
   `StatTile` and the badges together). Low priority until a narrow-viewport target exists. Surfaced 2026-06-14 across the
   §50.19 client-view review rounds.
+- **client-settings: orphaned `.tmp-*` on a mid-write crash (low priority, §55.1).** `ClientSettingsService.ReplaceAsync`
+  writes `client-settings.json.tmp-{guid}` then renames it into place; a hard kill in the window between the write
+  completing and the `File.Move` leaves the uniquely-named temp behind (the in-process catch only cleans up on a
+  caught exception, not a SIGKILL). Tiny + harmless, but with no startup sweep they'd accumulate. A boot-time sweep of
+  `{profileDir}/client-settings.json.tmp-*` (mirroring §36-2c `SweepStaleScratch`) would reclaim them. Low priority
+  under the trust model. Surfaced 2026-06-14 by the §55.1 round-3 review.
