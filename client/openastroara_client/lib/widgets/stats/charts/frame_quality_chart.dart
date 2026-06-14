@@ -13,13 +13,42 @@ import 'chart_card.dart';
 /// (0–1, higher = better) over the catalog's scored frames, from the live
 /// daemon (`GET /api/v1/stats/frame-quality`). Replaces the Phase 12g.2 demo
 /// that approximated quality with per-session average HFR.
-class FrameQualityChart extends ConsumerWidget {
+class FrameQualityChart extends ConsumerStatefulWidget {
   const FrameQualityChart({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<FrameQualityChart> createState() => _FrameQualityChartState();
+}
+
+class _FrameQualityChartState extends ConsumerState<FrameQualityChart> {
+  // Local spinner/banner flags so the histogram stays on screen during and
+  // after a manual refresh (refresh() holds the old data). See StatsRefreshMixin.
+  bool _refreshing = false;
+  bool _staleError = false;
+
+  Future<void> _refresh() async {
+    if (_refreshing) return;
+    setState(() => _refreshing = true);
+    try {
+      await ref.read(frameQualityProvider.notifier).refresh();
+      if (mounted) setState(() => _staleError = false);
+    } catch (_) {
+      if (mounted) setState(() => _staleError = true);
+    } finally {
+      if (mounted) setState(() => _refreshing = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    ref.listen(frameQualityProvider, (_, next) {
+      if (_staleError && next.hasValue && !next.isLoading) {
+        setState(() => _staleError = false);
+      }
+    });
     final async = ref.watch(frameQualityProvider);
     final dist = async.asData?.value;
+    final spinning = _refreshing || (async.isLoading && dist == null);
 
     final mean = dist == null || dist.isEmpty
         ? null
@@ -31,7 +60,9 @@ class FrameQualityChart extends ConsumerWidget {
           : 'Higher = better — $mean. Composite of HFR, star count, and background.',
       child: Stack(
         children: [
-          _body(context, ref, async, dist),
+          _body(async, dist),
+          if (_staleError && dist != null)
+            const Positioned(top: 0, left: 4, child: _StaleChip()),
           Positioned(
             top: 0,
             right: 4,
@@ -39,11 +70,8 @@ class FrameQualityChart extends ConsumerWidget {
               tooltip: 'Refresh',
               iconSize: 18,
               visualDensity: VisualDensity.compact,
-              onPressed: async.isLoading
-                  ? null
-                  : () => unawaited(
-                      ref.read(frameQualityProvider.notifier).refresh()),
-              icon: async.isLoading
+              onPressed: spinning ? null : () => unawaited(_refresh()),
+              icon: spinning
                   ? const SizedBox(
                       width: 16,
                       height: 16,
@@ -57,8 +85,6 @@ class FrameQualityChart extends ConsumerWidget {
   }
 
   Widget _body(
-    BuildContext context,
-    WidgetRef ref,
     AsyncValue<FrameQualityDistribution?> async,
     FrameQualityDistribution? dist,
   ) {
@@ -68,8 +94,7 @@ class FrameQualityChart extends ConsumerWidget {
     if (async.hasError && dist == null) {
       return _Hint(
         'Could not load frame quality.',
-        onRetry: () =>
-            unawaited(ref.read(frameQualityProvider.notifier).refresh()),
+        onRetry: () => unawaited(_refresh()),
       );
     }
     if (dist == null) {
@@ -155,6 +180,36 @@ class FrameQualityChart extends ConsumerWidget {
             rightTitles: const AxisTitles(),
           ),
           barGroups: bars,
+        ),
+      ),
+    );
+  }
+}
+
+/// Compact "stale" indicator overlaid on the chart when a manual refresh failed
+/// but the previous histogram is still shown.
+class _StaleChip extends StatelessWidget {
+  const _StaleChip();
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: 'Couldn’t refresh — showing the last loaded distribution.',
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(
+          color: AraColors.bgPanel,
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: AraColors.accentBusy, width: 0.5),
+        ),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.sync_problem, size: 12, color: AraColors.accentBusy),
+            SizedBox(width: 4),
+            Text('Stale',
+                style: TextStyle(fontSize: 10, color: AraColors.accentBusy)),
+          ],
         ),
       ),
     );
