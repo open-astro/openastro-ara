@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/server.dart';
@@ -35,6 +37,23 @@ class _FakeStatsExportClient implements StatsExportClient {
 
   @override
   String astrobinExportUrl(String target) => 'http://h:5555/api/v1/stats/export/astrobin?target=$target';
+
+  @override
+  void close() {}
+}
+
+class _GatedStatsExportClient implements StatsExportClient {
+  final List<Completer<List<StatsTarget>>> calls = [];
+
+  @override
+  Future<List<StatsTarget>> fetchTargets() {
+    final c = Completer<List<StatsTarget>>();
+    calls.add(c);
+    return c.future;
+  }
+
+  @override
+  String astrobinExportUrl(String target) => 'http://h:5555/x?target=$target';
 
   @override
   void close() {}
@@ -86,7 +105,7 @@ void main() {
       expect(api.fetches, 2);
     });
 
-    test('a fetch failure lands in the provider error state', () async {
+    test('an initial-load failure lands in the provider error state', () async {
       final api = _FakeStatsExportClient(const [])..throwOnFetch = true;
       final c = _container(const [_server], api);
       await c.read(savedServersProvider.future);
@@ -94,23 +113,48 @@ void main() {
       expect(c.read(statsTargetsProvider).hasError, isTrue);
     });
 
-    test('concurrent refreshes: only the latest result is written', () async {
+    test('a failed refresh keeps the prior list and rethrows (no blanking)', () async {
       final api = _FakeStatsExportClient(const [StatsTarget(targetName: 'M31')]);
       final c = _container(const [_server], api);
       await c.read(savedServersProvider.future);
       await c.read(statsTargetsProvider.future);
 
-      api.targets = const [StatsTarget(targetName: 'M31'), StatsTarget(targetName: 'M42')];
-      final first = c.read(statsTargetsProvider.notifier).refresh();
-      api.targets = const [StatsTarget(targetName: 'M81')];
-      final second = c.read(statsTargetsProvider.notifier).refresh();
-      await Future.wait([first, second]);
+      api.throwOnFetch = true;
+      await expectLater(
+          c.read(statsTargetsProvider.notifier).refresh(), throwsA(isA<StateError>()));
+      expect(c.read(statsTargetsProvider).hasError, isFalse);
+      expect(c.read(statsTargetsProvider).value!.map((t) => t.targetName), ['M31']);
+    });
 
-      // The fake's fetchTargets() has no interior await, so both continuations
-      // run after the synchronous mutation and read ['M81']; this asserts the
-      // generation guard lets the latest (second) refresh win and discards the
-      // first's now-stale-token write, rather than asserting the first read M42.
-      expect(c.read(statsTargetsProvider).value!.map((t) => t.targetName), ['M81']);
+    test('a successful refresh swaps the new list in without a loading flash', () async {
+      final api = _FakeStatsExportClient(const [StatsTarget(targetName: 'M31')]);
+      final c = _container(const [_server], api);
+      await c.read(savedServersProvider.future);
+      await c.read(statsTargetsProvider.future);
+
+      api.targets = const [StatsTarget(targetName: 'M81'), StatsTarget(targetName: 'M82')];
+      final future = c.read(statsTargetsProvider.notifier).refresh();
+      expect(c.read(statsTargetsProvider).isLoading, isFalse);
+      expect(c.read(statsTargetsProvider).value!.map((t) => t.targetName), ['M31']);
+      await future;
+      expect(c.read(statsTargetsProvider).value!.map((t) => t.targetName), ['M81', 'M82']);
+    });
+
+    test('a server switch mid-refresh discards the stale result (generation guard)', () async {
+      final api = _GatedStatsExportClient();
+      final c = _container(const [_server], api);
+      await c.read(savedServersProvider.future);
+      final built = c.read(statsTargetsProvider.future);
+      api.calls[0].complete(const [StatsTarget(targetName: 'M31')]);
+      await built;
+
+      final notifier = c.read(statsTargetsProvider.notifier);
+      final refreshing = notifier.refresh(); // captures generation; calls[1] pending
+      notifier.markBuild(); // stand in for a server-switch build() re-run
+      api.calls[1].complete(const [StatsTarget(targetName: 'STALE')]); // now stale
+      await refreshing;
+
+      expect(c.read(statsTargetsProvider).value!.map((t) => t.targetName), ['M31']);
     });
   });
 }
