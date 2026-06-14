@@ -591,3 +591,29 @@ scratch dirs behind (harmless temp dirs, but not reclaimed) and wasting the part
 catch); (b) **STILL OPEN** — make `DataManagerService` `IAsyncDisposable` (or an `IHostedService`) that cancels all job
 CTSes and awaits outstanding tasks for a clean drain on graceful stop. (b) is low priority for v0.1.0 (restarts are rare
 and a partial transfer just re-downloads). Surfaced 2026-06-13 by the §36-2b review; (a) resolved 2026-06-14.
+
+## §43 backup — §43-2 deferrals (2026-06-13, after the §43-1 create/list PR)
+
+§43-1 shipped the non-destructive half of the §43 backup feature — `BackupService.CreateZipAsync` (package
+`profile.json` + `sequences/` into `{profileDir}/backups/backup-{utc}-{id:N}.zip` + a `.meta.json` manifest with
+sha256), `ListSnapshotsAsync` (read the manifests, newest-first), and `GET /api/v1/backup/snapshot/{id}/download`.
+Deferred to **§43-2**:
+
+- **Restore is still an accept-and-no-op.** `RestoreZipAsync` overwrites live config (profile.json / sequences) and is
+  destructive, so it stays a no-op `202 Accepted` (not 501 — keeps the client restore flow wired against the real
+  service) until the staged-swap + restore-progress state machine lands. `GetCloneStatusAsync` likewise reports a fixed
+  `idle` until there's a real restore worth reporting progress on. **§43-2** should: stage the incoming zip aside,
+  validate its manifest/sha256, swap each selected area into place atomically (mirroring the §36-2a installer's
+  backup-aside→swap→restore-on-fail pattern), and drive `clone-status` from the worker's real state.
+- **Async packaging + progress WS.** `CreateZipAsync` completes the zip within the request (the payload is config-sized
+  — kilobytes, not the frame library) rather than on a background worker emitting `backup.*` progress events. The
+  202/operation-id contract is already in place so the wire shape won't change when it becomes truly async; add the
+  worker + WS progress if a future area (e.g. frame-metadata) makes the payload large enough to warrant it.
+- **Area selectors beyond profiles+sequences.** §43-1 captures the two config areas only. The frame-metadata and log
+  areas from the §43 selector set (and the `RestoreRequestDto.RestoreFrameMetadata`/`RestoreLogs` flags) arrive with the
+  restore work in §43-2.
+- **No retention/pruning.** Backups accumulate under `{profileDir}/backups/` indefinitely; there's no cap or
+  age-based prune. Low priority — add a retention policy (keep-N / keep-days) if disk growth becomes a concern.
+- **Orphan `.tmp-*.zip` sweep.** A create that crashes mid-zip leaves a `.tmp-{id:N}.zip` (ignored by ListSnapshots,
+  which keys off `*.meta.json`); the create path deletes its own temp on failure, but a hard kill can still leak one.
+  A boot-time sweep (mirroring §36-2c `SweepStaleScratch`) would reclaim it. Low priority — harmless temp file.

@@ -177,8 +177,8 @@ public partial class Program {
         // DataManagerService is disk-backed under {profileDir}/sky-data).
         builder.Services.AddSingleton<IProfileShareService, PlaceholderProfileShareService>();
         builder.Services.AddSingleton<IBackupStreamService, PlaceholderBackupStreamService>();
-        // Phase 13.11 — placeholder IBackupService for §43 ZIP snapshots.
-        builder.Services.AddSingleton<IBackupService, PlaceholderBackupService>();
+        // §43 IBackupService is registered below, after profileDir is resolved (the real BackupService is
+        // disk-backed: snapshots live under {profileDir}/backups).
         // Phase 13.12 — placeholder equipment services for all 12 device
         // types (§52). All Gets return null → 404; Connects/Disconnects/
         // Actions return 202 OperationAccepted. Real ASCOM Alpaca drivers
@@ -308,6 +308,12 @@ public partial class Program {
                 sp.GetRequiredService<ISkyDataFetcher>(),
                 sp.GetRequiredService<IWsBroadcaster>(),
                 sp.GetRequiredService<ILogger<DataManagerService>>()));
+
+        // §43-1 backup — real disk-backed ZIP snapshots under {profileDir}/backups (replaces the placeholder).
+        // Registered here (not at the §13.11 placeholder site) since it needs the resolved profileDir. The §43-2
+        // restore worker + progress state machine extend this same service.
+        builder.Services.AddSingleton<IBackupService>(sp =>
+            new BackupService(profileDir, sp.GetRequiredService<ILogger<BackupService>>()));
 
         // §14e — tenth real device service and the head of the capture path: live Alpaca camera
         // (caps + cooler/state runtime) whose StartExposure runs a REAL capture — exposure →

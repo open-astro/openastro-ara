@@ -140,6 +140,17 @@ public static class SystemEndpoints {
               .Produces<System.Text.Json.JsonElement>(StatusCodes.Status200OK)
               .WithName("GetBackupCloneStatus");
 
+        backup.MapGet("/snapshot/{id:guid}/download",
+                async (Guid id, IBackupService svc, CancellationToken ct) => {
+                    var path = await svc.ResolveSnapshotFilePathAsync(id, ct);
+                    return path is null
+                        ? Results.NotFound()
+                        : Results.File(path, "application/zip", System.IO.Path.GetFileName(path));
+                })
+              .Produces(StatusCodes.Status200OK, contentType: "application/zip")
+              .ProducesProblem(StatusCodes.Status404NotFound)
+              .WithName("DownloadBackupSnapshot");
+
         // ─── Profile sharing (§70) — Phase 13.10 wired to IProfileShareService ───
         var profiles = app.MapGroup("/api/v1/profiles").WithTags("ProfileShare");
 

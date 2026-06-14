@@ -87,6 +87,11 @@ public interface IBackupService {
     Task<OperationAcceptedDto> RestoreZipAsync(RestoreRequestDto request, string? idempotencyKey, CancellationToken ct);
     Task<IReadOnlyList<BackupZipDto>> ListSnapshotsAsync(CancellationToken ct);
     Task<System.Text.Json.JsonElement> GetCloneStatusAsync(CancellationToken ct);
+
+    /// <summary>Resolve a snapshot id to the absolute path of its on-disk <c>.zip</c>, or <c>null</c> if no
+    /// such snapshot exists. Backs <c>GET /api/v1/backup/snapshot/{id}/download</c>. The id is a guid, so the
+    /// resolved filename is derived from it (no caller-controlled path component → no traversal).</summary>
+    Task<string?> ResolveSnapshotFilePathAsync(Guid id, CancellationToken ct);
 }
 
 /// <summary>Profile sharing (§70).</summary>
