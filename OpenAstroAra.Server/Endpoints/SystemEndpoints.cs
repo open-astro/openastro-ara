@@ -72,11 +72,15 @@ public static class SystemEndpoints {
                         // KeyNotFoundException) means an unrelated dictionary miss inside the §36-2 engine
                         // can't be silently turned into a 404 here.
                         return Results.Problem(ex.Message, statusCode: StatusCodes.Status404NotFound);
+                    } catch (PackageAlreadyInstalledException ex) {
+                        // §36: a non-force request for an already-installed package — it did NOT re-download.
+                        return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
                     }
                 })
             .Accepts<DownloadRequestDto>("application/json")
             .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
             .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
             .WithName("StartDataPackageDownload");
 
         data.MapPost("/cancel/{downloadId:guid}",

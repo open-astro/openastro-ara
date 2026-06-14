@@ -169,15 +169,17 @@ namespace OpenAstroAra.Server.Services {
             if (pkg is null) {
                 return Task.FromException<OperationAcceptedDto>(PackageNotFoundException.ForPackageId(request.PackageId));
             }
-            // NOTE: request.ForceReinstall is not yet honored — a download always runs (i.e. behaves as force).
-            // Short-circuiting on "already installed" needs the sentinel-aware inventory that lands in §36-2b-2
-            // (a dir is only "installed" once its .installed sentinel exists), so the skip-if-installed path is
-            // wired there rather than guessing from a bare directory here. Tracked in PORT_TODO.
             if (pkg.SourceUrl is null) {
                 // A catalog entry without a source URL is a server-config invariant violation (every curated entry
                 // has one), not a client "unknown package" — surface it as a 500, not a misleading 404.
                 return Task.FromException<OperationAcceptedDto>(
                     new InvalidOperationException($"Catalog entry '{request.PackageId}' has no source URL."));
+            }
+            // Honor ForceReinstall: a non-force request for a package that's already fully installed (its .installed
+            // sentinel exists) is a no-op — surfaced as a 409 so the caller knows it didn't re-download, rather than
+            // silently re-fetching a multi-GB package. ForceReinstall=true skips this and re-downloads.
+            if (!request.ForceReinstall && IsInstalled(pkg.Id)) {
+                return Task.FromException<OperationAcceptedDto>(PackageAlreadyInstalledException.ForPackageId(pkg.Id));
             }
 
             // One active download per package: if another is already running, return its id (idempotent) instead
@@ -394,6 +396,13 @@ namespace OpenAstroAra.Server.Services {
         private string? PackageDir(string packageId) =>
             CatalogIds.Contains(packageId) ? Path.Combine(_dataRoot, packageId) : null;
 
+        // A package counts as installed once §36-2a's .installed sentinel is present (a bare dir from a torn install
+        // does not). Used by the ForceReinstall skip; the inventory layer's sentinel-awareness is §36-2b-2.
+        private bool IsInstalled(string packageId) {
+            var dir = PackageDir(packageId);
+            return dir is not null && File.Exists(Path.Combine(dir, SkyDataInstaller.InstalledMarkerFileName));
+        }
+
         // Measure an installed package dir, or null if it isn't there (incl. a delete that raced this read).
         // NOTE: O(files) per call and re-walked by both ListPackages + GetState — fine for the small catalog;
         // §36-2 can cache the size at install time if the catalog grows large.
@@ -535,6 +544,17 @@ namespace OpenAstroAra.Server.Services {
         public PackageNotFoundException(string message, Exception innerException) : base(message, innerException) { }
         public static PackageNotFoundException ForPackageId(string packageId) =>
             new($"Unknown data package '{packageId}'.");
+    }
+
+    /// <summary>Thrown by <see cref="DataManagerService.DownloadAsync"/> when a non-force request targets a package
+    /// that is already fully installed. The endpoint maps it to a 409 so the caller learns it did NOT re-download
+    /// (and can retry with forceReinstall=true), rather than the request silently re-fetching the package.</summary>
+    public sealed class PackageAlreadyInstalledException : Exception {
+        public PackageAlreadyInstalledException() { }
+        public PackageAlreadyInstalledException(string message) : base(message) { }
+        public PackageAlreadyInstalledException(string message, Exception innerException) : base(message, innerException) { }
+        public static PackageAlreadyInstalledException ForPackageId(string packageId) =>
+            new($"Data package '{packageId}' is already installed; pass forceReinstall=true to re-download.");
     }
 
     /// <summary>Thrown by <see cref="DataManagerService.CancelAsync"/> when the download id has no in-flight job

@@ -576,12 +576,11 @@ progress, linked into the install token — so a transfer that stalls at 0 B/s i
 `download.failed` with `error: "stalled"` rather than pinning a worker forever. A healthy long download keeps resetting
 the deadline and is unaffected.
 
-**§36-2 Data Manager — DownloadRequestDto.ForceReinstall not yet honored (§36-2b review note).** The download worker
-always runs (effectively force-reinstall); `ForceReinstall: false` does NOT short-circuit when the package is already
-installed. The skip-if-installed path needs the sentinel-aware "is installed" check (a dir counts as installed only
-once its `.installed` sentinel exists) that lands in §36-2b-2's Describe/Measure rework — wiring ForceReinstall there
-avoids guessing from a bare directory. Until then, every download request re-downloads. Surfaced 2026-06-13 by the
-§36-2b review.
+**§36-2 Data Manager — DownloadRequestDto.ForceReinstall (✅ RESOLVED in §36-2b round-12).** `ForceReinstall: false`
+now short-circuits when the package is already installed: `DownloadAsync` checks the §36-2a `.installed` sentinel and,
+if present, throws `PackageAlreadyInstalledException` → the endpoint returns **409 Conflict** (no re-download).
+`ForceReinstall: true` bypasses the check and re-downloads. (This is distinct from §36-2b-2's inventory rework, which
+makes ListPackages/GetState read the sentinel for `InstalledUtc` — still pending.)
 
 **§36-2 Data Manager — no graceful-shutdown drain for in-flight downloads (§36-2b round-9 review note).** The
 download workers run as detached `Task.Run` jobs; `DataManagerService` is a plain singleton not tied to the host

@@ -291,7 +291,12 @@ public partial class Program {
         // (default 100s), failing a download against a slow-to-start CDN. A download is bounded instead by its job's
         // CancellationToken (POST /cancel), which the worker observes through the whole fetch + extract.
         builder.Services.AddHttpClient(HttpSkyDataFetcher.HttpClientName)
-            .ConfigureHttpClient(c => c.Timeout = System.Threading.Timeout.InfiniteTimeSpan);
+            .ConfigureHttpClient(c => c.Timeout = System.Threading.Timeout.InfiniteTimeSpan)
+            // Don't auto-follow redirects: the HTTPS scheme guard only checks the initial URL, so a CDN
+            // HTTPS→HTTP downgrade redirect would otherwise serve the body in cleartext. Our catalog URLs are
+            // direct, so a redirect is unexpected — let it surface as a non-success status (→ failed download)
+            // rather than silently following it. If redirects are ever needed, re-validate the Location scheme.
+            .ConfigurePrimaryHttpMessageHandler(() => new System.Net.Http.SocketsHttpHandler { AllowAutoRedirect = false });
         builder.Services.AddSingleton<ISkyDataFetcher, HttpSkyDataFetcher>();
         builder.Services.AddSingleton<IDataManagerService>(sp =>
             new DataManagerService(System.IO.Path.Combine(profileDir, "sky-data"),

@@ -104,6 +104,26 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task ForceReinstall_false_skips_an_already_installed_package() {
+            var archive = TarGz(("catalog.dat", Encoding.UTF8.GetBytes("data")));
+            var ws = new CapturingBroadcaster();
+            var svc = NewService(new FakeSkyDataFetcher(archive), ws);
+
+            // First install writes the .installed sentinel.
+            await svc.DownloadAsync(new DownloadRequestDto(PackageId, ForceReinstall: false), null, CancellationToken.None);
+            await Eventually(() => ws.Events.Any(e => e.EventType == WsEventCatalog.DataManagerDownloadComplete));
+
+            // A second non-force request is rejected (409) rather than silently re-downloading.
+            Assert.That(
+                async () => await svc.DownloadAsync(new DownloadRequestDto(PackageId, ForceReinstall: false), null, CancellationToken.None),
+                Throws.InstanceOf<PackageAlreadyInstalledException>(), "a non-force re-download of an installed package is a 409");
+
+            // ForceReinstall: true re-downloads.
+            var forced = await svc.DownloadAsync(new DownloadRequestDto(PackageId, ForceReinstall: true), null, CancellationToken.None);
+            Assert.That(forced.OperationType, Is.EqualTo("data-manager.download"), "forceReinstall=true re-downloads");
+        }
+
+        [Test]
         public async Task A_failed_fetch_emits_failed_and_installs_nothing() {
             var ws = new CapturingBroadcaster();
             var fetcher = new FakeSkyDataFetcher(_ => throw new System.Net.Http.HttpRequestException("boom"));
