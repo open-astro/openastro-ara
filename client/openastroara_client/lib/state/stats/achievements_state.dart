@@ -44,23 +44,21 @@ class AchievementsNotifier extends AsyncNotifier<StatsAchievements?> {
     return api.fetch();
   }
 
-  /// Re-read the achievements, then swap the result in. Deliberately does NOT
-  /// drop into a bare loading state first: that would blank `asData?.value` and
-  /// flip the view back to its loading placeholder mid-refresh. Holding the old
-  /// data until the new value (or error) lands keeps the records on screen —
-  /// the view drives its own refresh spinner. (RP3 has no public
-  /// copyWithPrevious/valueOrNull to preserve data *through* a loading state, so
-  /// this matches the backup notifier's convention.) A server switch mid-flight
-  /// discards the stale result via the generation guard.
+  /// Re-read the achievements and swap the result in **only on success**. On
+  /// failure the exception propagates to the caller and `state` is left
+  /// untouched, so the last-good records stay on screen (the view shows a stale
+  /// banner) rather than blanking to an error. This is deliberate: RP3 has no
+  /// public copyWithPrevious to carry the previous value *through* an
+  /// `AsyncError`, so an error state here would drop `asData?.value` to null and
+  /// the records would vanish. The initial no-data error is still owned by
+  /// [build]. A server switch mid-flight discards the result via the generation
+  /// guard.
   Future<void> refresh() async {
     if (!ref.mounted) return;
     final gen = _generation;
-    final next = await AsyncValue.guard<StatsAchievements?>(() async {
-      final api = ref.read(achievementsApiProvider);
-      if (api == null) return null;
-      return api.fetch();
-    });
-    if (ref.mounted && gen == _generation) state = next;
+    final api = ref.read(achievementsApiProvider);
+    final result = api == null ? null : await api.fetch();
+    if (ref.mounted && gen == _generation) state = AsyncData(result);
   }
 }
 

@@ -26,11 +26,19 @@ class _AchievementsSectionState extends ConsumerState<AchievementsSection> {
   // — refresh() deliberately holds the old data instead of dropping to loading.
   bool _refreshing = false;
 
+  // Set when a manual refresh fails while records are still shown — refresh()
+  // leaves state untouched on failure (records stay), so the failure can't be
+  // read off the provider's AsyncValue; this local flag drives the stale banner.
+  bool _staleError = false;
+
   Future<void> _refresh() async {
     if (_refreshing) return;
     setState(() => _refreshing = true);
     try {
       await ref.read(achievementsProvider.notifier).refresh();
+      if (mounted) setState(() => _staleError = false);
+    } catch (_) {
+      if (mounted) setState(() => _staleError = true);
     } finally {
       if (mounted) setState(() => _refreshing = false);
     }
@@ -38,6 +46,13 @@ class _AchievementsSectionState extends ConsumerState<AchievementsSection> {
 
   @override
   Widget build(BuildContext context) {
+    // A fresh load from the provider (e.g. a server switch re-running build)
+    // clears a stale flag left by an earlier failed refresh.
+    ref.listen(achievementsProvider, (_, next) {
+      if (_staleError && next.hasValue && !next.isLoading) {
+        setState(() => _staleError = false);
+      }
+    });
     final async = ref.watch(achievementsProvider);
     final data = async.asData?.value;
     // First load (no data yet) spins via the provider; a manual refresh spins
@@ -105,7 +120,7 @@ class _AchievementsSectionState extends ConsumerState<AchievementsSection> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (async.hasError) const _StaleBanner(),
+        if (_staleError) const _StaleBanner(),
         _Achievements(data: data),
       ],
     );
@@ -318,8 +333,11 @@ class _MilestoneBadge extends StatelessWidget {
   }
 
   // Drop a trailing ".0" so "10.0" reads as "10", but keep a real fraction.
-  static String _trim(double v) =>
-      v == v.roundToDouble() ? v.toInt().toString() : v.toStringAsFixed(1);
+  // Epsilon compare rather than exact float equality so 10.0000000001 still
+  // reads as "10".
+  static String _trim(double v) => (v - v.roundToDouble()).abs() < 1e-9
+      ? v.round().toString()
+      : v.toStringAsFixed(1);
 }
 
 class _Hint extends StatelessWidget {

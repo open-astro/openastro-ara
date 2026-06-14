@@ -34,11 +34,14 @@ class StatTile extends StatelessWidget {
             children: [
               Icon(icon, size: 18, color: AraColors.textSecondary),
               const SizedBox(width: 8),
-              Text(
-                label,
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: AraColors.textSecondary,
-                    ),
+              Expanded(
+                child: Text(
+                  label,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: AraColors.textSecondary,
+                      ),
+                ),
               ),
             ],
           ),

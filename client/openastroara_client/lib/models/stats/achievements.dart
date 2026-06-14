@@ -29,11 +29,12 @@ class StatsMilestone {
     required this.current,
   });
 
-  /// Progress toward the threshold, clamped to [0, 1]. Returns 1.0 for a
-  /// non-positive threshold so a degenerate badge reads as complete rather than
-  /// dividing by zero.
+  /// Progress toward the threshold, clamped to [0, 1]. The server-authoritative
+  /// [achieved] flag wins — an achieved badge is always full even if the server
+  /// sends a `current` that hasn't caught up — and a non-positive threshold
+  /// reads as complete rather than dividing by zero.
   double get progress {
-    if (threshold <= 0) return 1.0;
+    if (achieved || threshold <= 0) return 1.0;
     return (current / threshold).clamp(0.0, 1.0);
   }
 
@@ -72,7 +73,9 @@ class StatsAchievements {
   });
 
   /// True when the catalog has no light frames — the view shows an empty state
-  /// rather than a wall of zeros.
+  /// rather than a wall of zeros. Light frames only: a profile whose sessions
+  /// are all darks/flats reads as "no imaging yet", matching the server's
+  /// dark/flat exclusion from every achievement metric.
   bool get isEmpty => totalLightFrames == 0;
 
   factory StatsAchievements.fromJson(Map<String, dynamic> json) {

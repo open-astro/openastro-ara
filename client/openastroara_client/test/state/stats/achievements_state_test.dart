@@ -82,12 +82,28 @@ void main() {
       expect(api.fetches, 2);
     });
 
-    test('a fetch failure lands in the provider error state', () async {
+    test('an initial fetch failure lands in the provider error state', () async {
       final api = _FakeAchievementsClient(const StatsAchievements())..throwOnFetch = true;
       final c = _container(const [_server], api);
       await c.read(savedServersProvider.future);
       await expectLater(c.read(achievementsProvider.future), throwsA(isA<StateError>()));
       expect(c.read(achievementsProvider).hasError, isTrue);
+    });
+
+    test('a refresh failure rethrows and keeps the last-good data on screen', () async {
+      final api = _FakeAchievementsClient(const StatsAchievements(totalLightFrames: 4));
+      final c = _container(const [_server], api);
+      await c.read(savedServersProvider.future);
+      await c.read(achievementsProvider.future);
+
+      api.throwOnFetch = true;
+      await expectLater(
+        c.read(achievementsProvider.notifier).refresh(),
+        throwsA(isA<StateError>()),
+      );
+      final state = c.read(achievementsProvider);
+      expect(state.hasError, isFalse, reason: 'refresh failure must not blank the records');
+      expect(state.value!.totalLightFrames, 4, reason: 'last-good data is retained');
     });
   });
 }
