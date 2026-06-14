@@ -651,6 +651,8 @@ Deferred to **§43-2**:
   `CREATE INDEX idx_frames_light_captured ON frames(captured_utc) WHERE frame_type = 'light'` — would tighten all of
   them at once. Schema change touching the shared `frames` table, so it belongs in its own stats-perf sub-PR rather
   than bolted onto a single view. Low priority until the catalog is large. Surfaced 2026-06-14 by the §50.19 round-3 review.
+  Also covers §50.4 focus-temp: its `WHERE focuser_position IS NOT NULL` predicate is an unindexed residual filter over
+  the captured_utc scan — a covering index would tighten it too. Noted 2026-06-14 by the #448 re-review.
 - **Dashboard tiles aren't responsive to narrow viewports (cross-cutting client UI, not §50.19).** Every Stats-dashboard
   tile — the shared `StatTile` (width 200) and the §50.19 milestone badges (width 200) — uses a fixed width inside a
   `Wrap`. Text wraps vertically so there's no horizontal clip, and on the desktop/tablet target the viewport is always
