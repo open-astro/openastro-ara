@@ -591,3 +591,50 @@ scratch dirs behind (harmless temp dirs, but not reclaimed) and wasting the part
 catch); (b) **STILL OPEN** — make `DataManagerService` `IAsyncDisposable` (or an `IHostedService`) that cancels all job
 CTSes and awaits outstanding tasks for a clean drain on graceful stop. (b) is low priority for v0.1.0 (restarts are rare
 and a partial transfer just re-downloads). Surfaced 2026-06-13 by the §36-2b review; (a) resolved 2026-06-14.
+
+## §43 backup — §43-2 deferrals (2026-06-13, after the §43-1 create/list PR)
+
+§43-1 shipped the non-destructive half of the §43 backup feature — `BackupService.CreateZipAsync` (package
+`profile.json` + `sequences/` into `{profileDir}/backups/backup-{utc}-{id:N}.zip` + a `.meta.json` manifest with
+sha256), `ListSnapshotsAsync` (read the manifests, newest-first), and `GET /api/v1/backup/snapshot/{id}/download`.
+Deferred to **§43-2**:
+
+- **Restore is not implemented (endpoint returns 501).** `RestoreZipAsync` overwrites live config (profile.json /
+  sequences) and is destructive, so it lands with the staged-swap + restore-progress state machine in §43-2. Until
+  then the `POST /restore-zip` endpoint honestly returns **501 Not Implemented** with a problem-detail (an earlier
+  revision returned a no-op `202`, which a client would read as a successful rollback — corrected after the round-7
+  review). `GetCloneStatusAsync` likewise reports a fixed `idle` until there's a real restore worth reporting progress
+  on. **§43-2** should: stage the incoming zip aside, validate its manifest/sha256, swap each selected area into place
+  atomically (mirroring the §36-2a installer's backup-aside→swap→restore-on-fail pattern), drive `clone-status` from
+  the worker's real state, and flip the endpoint back to `202 Accepted` + the operation id (the service already
+  returns the DTO shape for this). Surfaced 2026-06-13 by the §43-1 round-4/6/7 reviews.
+- **No disk-space pre-flight on create (low priority).** `CreateZipAsync` packaging on a full disk fails mid-zip with
+  an `IOException`; the catch reclaims the temp and the caller gets a generic 500. A pre-flight free-space check or
+  mapping the disk-full `IOException` to **507 Insufficient Storage** would give a clearer operator signal. Low
+  priority — §43-1 payloads are config-sized (KB), so disk-full during packaging is unlikely. Surfaced 2026-06-13 by
+  the §43-1 round-7 review.
+- **Async packaging + progress WS.** `CreateZipAsync` completes the zip within the request (the payload is config-sized
+  — kilobytes, not the frame library) rather than on a background worker emitting `backup.*` progress events. The
+  202/operation-id contract is already in place so the wire shape won't change when it becomes truly async; add the
+  worker + WS progress if a future area (e.g. frame-metadata) makes the payload large enough to warrant it.
+- **Area selectors beyond profiles+sequences.** §43-1 captures the two config areas only. The frame-metadata and log
+  areas from the §43 selector set (and the `RestoreRequestDto.RestoreFrameMetadata`/`RestoreLogs` flags) arrive with the
+  restore work in §43-2.
+- **No retention/pruning.** Backups accumulate under `{profileDir}/backups/` indefinitely; there's no cap or
+  age-based prune. Low priority — add a retention policy (keep-N / keep-days) if disk growth becomes a concern.
+- **Orphan-archive boot sweep.** Two crash-only leaks under `{profileDir}/backups/`, both ignored by ListSnapshots
+  (it keys off `*.meta.json`) but never reclaimed: (a) a `.tmp-{id:N}.zip` from a create that crashed mid-zip (the
+  create path deletes its own temp on an *exception*, but a hard kill can't run that), and (b) a fully-named
+  `backup-{ts}-{id:N}.zip` with **no matching `*.meta.json`** — a SIGKILL in the window between the `File.Move` reveal
+  and the manifest write. A boot-time sweep (mirroring §36-2c `SweepStaleScratch`) should remove **both**: every
+  `.tmp-*` archive, and every `backup-*.zip` whose `{base}.meta.json` sidecar is absent. Low priority — harmless
+  orphans, just disk. Surfaced 2026-06-13 by the §43-1 round-4 review.
+- **Daemon-wide API auth is unaddressed (cross-cutting, not §43).** The server binds `ListenAnyIP` (default :5555)
+  with **no authentication/authorization middleware** — the whole REST surface is open on whatever interface it's
+  reachable on, matching the §13 trusted-LAN headless deployment model. The §43-1 backup-download endpoint inherits
+  this posture; it adds no *new* exposure (`profile.json` content is already served by the no-auth `/api/v1/profile/*`
+  GET endpoints, and `frames/{id}/download` already streams files), but a backup zip does bundle the full profile,
+  which may hold device credentials. Bolting auth onto one route would be inconsistent and ineffective (the same data
+  leaks via `/api/v1/profile/*`). If the daemon is ever exposed beyond a trusted LAN, API auth must be a **cross-cutting
+  middleware** decision (PRODUCT-SCOPE / user-authoritative), not per-endpoint. Surfaced 2026-06-13 by the §43-1
+  round-4 review.

@@ -84,9 +84,21 @@ public interface IDataManagerService {
 /// <summary>Backup (§43).</summary>
 public interface IBackupService {
     Task<OperationAcceptedDto> CreateZipAsync(string? idempotencyKey, CancellationToken ct);
-    Task<OperationAcceptedDto> RestoreZipAsync(RestoreRequestDto request, string? idempotencyKey, CancellationToken ct);
+
+    /// <summary>§43-1: a no-op (restore is destructive and lands in §43-2); the endpoint responds 501. Returns
+    /// <see cref="Task"/> rather than an operation DTO since nothing is started — §43-2 reintroduces the
+    /// <c>OperationAcceptedDto</c> return when restore becomes a real async job.</summary>
+    Task RestoreZipAsync(RestoreRequestDto request, string? idempotencyKey, CancellationToken ct);
     Task<IReadOnlyList<BackupZipDto>> ListSnapshotsAsync(CancellationToken ct);
     Task<System.Text.Json.JsonElement> GetCloneStatusAsync(CancellationToken ct);
+
+    /// <summary>Open a snapshot's on-disk <c>.zip</c> for download, returning the read stream + its filename, or
+    /// <c>null</c> if no such snapshot exists (or it vanished between resolve and open). Backs
+    /// <c>GET /api/v1/backup/snapshot/{id}/download</c>. The id is a guid, so the resolved filename is derived from
+    /// it (no caller-controlled path component → no traversal). The returned stream is owned by the response
+    /// pipeline (disposed when the response finishes); opening the handle here closes the resolve→serve TOCTOU
+    /// window (a delete after this returns can't turn the send into a 500).</summary>
+    Task<(System.IO.Stream Stream, string FileName)?> OpenSnapshotAsync(Guid id, CancellationToken ct);
 }
 
 /// <summary>Profile sharing (§70).</summary>

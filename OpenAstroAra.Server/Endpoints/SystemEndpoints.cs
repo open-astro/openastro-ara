@@ -115,17 +115,29 @@ public static class SystemEndpoints {
         var backup = app.MapGroup("/api/v1/backup").WithTags("Backup");
 
         backup.MapPost("/create-zip",
-                async ([FromHeader(Name = "Idempotency-Key")] string? idempotencyKey, IBackupService svc, CancellationToken ct) =>
-                    Results.Accepted(value: await svc.CreateZipAsync(idempotencyKey, ct)))
+                async ([FromHeader(Name = "Idempotency-Key")] string? idempotencyKey, IBackupService svc, CancellationToken ct) => {
+                    try {
+                        return Results.Accepted(value: await svc.CreateZipAsync(idempotencyKey, ct));
+                    } catch (BackupNothingToArchiveException ex) {
+                        return Results.Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
+                    }
+                })
               .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
+              .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
               .WithName("CreateBackupZip");
 
         backup.MapPost("/restore-zip",
-                async ([FromBody] RestoreRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey, IBackupService svc, CancellationToken ct) =>
-                    Results.Accepted(value: await svc.RestoreZipAsync(request, idempotencyKey, ct)))
+                async ([FromBody] RestoreRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey, IBackupService svc, CancellationToken ct) => {
+                    // §43-2: restore is not implemented yet. Call the service for its operator Warning log + forward-
+                    // compat shape, but respond 501 Not Implemented (not a 202 that a client would read as a completed
+                    // rollback). When §43-2 lands the real async restore, this flips back to Results.Accepted(value: dto).
+                    await svc.RestoreZipAsync(request, idempotencyKey, ct);
+                    return Results.Problem(
+                        detail: "Backup restore is not yet implemented (lands in §43-2); no configuration was changed.",
+                        statusCode: StatusCodes.Status501NotImplemented);
+                })
             .Accepts<RestoreRequestDto>("application/json")
-            .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
-            .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+            .ProducesProblem(StatusCodes.Status501NotImplemented)
             .WithName("RestoreBackupZip");
 
         backup.MapGet("/snapshots",
@@ -139,6 +151,17 @@ public static class SystemEndpoints {
                     Results.Ok(await svc.GetCloneStatusAsync(ct)))
               .Produces<System.Text.Json.JsonElement>(StatusCodes.Status200OK)
               .WithName("GetBackupCloneStatus");
+
+        backup.MapGet("/snapshot/{id:guid}/download",
+                async (Guid id, IBackupService svc, CancellationToken ct) => {
+                    var snapshot = await svc.OpenSnapshotAsync(id, ct);
+                    return snapshot is null
+                        ? Results.NotFound()
+                        : Results.File(snapshot.Value.Stream, "application/zip", snapshot.Value.FileName);
+                })
+              .Produces(StatusCodes.Status200OK, contentType: "application/zip")
+              .ProducesProblem(StatusCodes.Status404NotFound)
+              .WithName("DownloadBackupSnapshot");
 
         // ─── Profile sharing (§70) — Phase 13.10 wired to IProfileShareService ───
         var profiles = app.MapGroup("/api/v1/profiles").WithTags("ProfileShare");
