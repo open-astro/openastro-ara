@@ -99,7 +99,47 @@ class _AchievementsSectionState extends ConsumerState<AchievementsSection> {
       return const _Hint(
           'No light frames yet — your records and badges appear here once you start imaging.');
     }
-    return _Achievements(data: data);
+    // Records are held through a failed refresh (so they don't blank), but a
+    // silent stale view would read as live — surface the failure inline above
+    // the still-shown tiles.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (async.hasError) const _StaleBanner(),
+        _Achievements(data: data),
+      ],
+    );
+  }
+}
+
+/// Shown above the records when the last refresh failed but cached data is still
+/// on screen — the tiles look live, so the staleness has to be made explicit.
+class _StaleBanner extends StatelessWidget {
+  const _StaleBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: AraColors.bgPanel,
+        border: Border.all(color: AraColors.accentError),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        children: const [
+          Icon(Icons.warning_amber, size: 16, color: AraColors.accentError),
+          SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Couldn’t refresh — showing the last loaded data.',
+              style: TextStyle(fontSize: 12, color: AraColors.textSecondary),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
