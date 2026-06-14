@@ -599,16 +599,20 @@ and a partial transfer just re-downloads). Surfaced 2026-06-13 by the §36-2b re
 sha256), `ListSnapshotsAsync` (read the manifests, newest-first), and `GET /api/v1/backup/snapshot/{id}/download`.
 Deferred to **§43-2**:
 
-- **Restore is still an accept-and-no-op.** `RestoreZipAsync` overwrites live config (profile.json / sequences) and is
-  destructive, so it stays a no-op `202 Accepted` (not 501 — keeps the client restore flow wired against the real
-  service) until the staged-swap + restore-progress state machine lands. `GetCloneStatusAsync` likewise reports a fixed
-  `idle` until there's a real restore worth reporting progress on. **§43-2** should: stage the incoming zip aside,
-  validate its manifest/sha256, swap each selected area into place atomically (mirroring the §36-2a installer's
-  backup-aside→swap→restore-on-fail pattern), and drive `clone-status` from the worker's real state.
-  **Client caveat until then:** restore returns `202` but does nothing (only a server-side Warning log records it),
-  so the §43-2 client restore flow must show the restore as pending/unimplemented rather than presenting the `202`
-  as success — otherwise an operator believes config was rolled back when it wasn't. Surfaced 2026-06-13 by the
-  §43-1 round-6 review.
+- **Restore is not implemented (endpoint returns 501).** `RestoreZipAsync` overwrites live config (profile.json /
+  sequences) and is destructive, so it lands with the staged-swap + restore-progress state machine in §43-2. Until
+  then the `POST /restore-zip` endpoint honestly returns **501 Not Implemented** with a problem-detail (an earlier
+  revision returned a no-op `202`, which a client would read as a successful rollback — corrected after the round-7
+  review). `GetCloneStatusAsync` likewise reports a fixed `idle` until there's a real restore worth reporting progress
+  on. **§43-2** should: stage the incoming zip aside, validate its manifest/sha256, swap each selected area into place
+  atomically (mirroring the §36-2a installer's backup-aside→swap→restore-on-fail pattern), drive `clone-status` from
+  the worker's real state, and flip the endpoint back to `202 Accepted` + the operation id (the service already
+  returns the DTO shape for this). Surfaced 2026-06-13 by the §43-1 round-4/6/7 reviews.
+- **No disk-space pre-flight on create (low priority).** `CreateZipAsync` packaging on a full disk fails mid-zip with
+  an `IOException`; the catch reclaims the temp and the caller gets a generic 500. A pre-flight free-space check or
+  mapping the disk-full `IOException` to **507 Insufficient Storage** would give a clearer operator signal. Low
+  priority — §43-1 payloads are config-sized (KB), so disk-full during packaging is unlikely. Surfaced 2026-06-13 by
+  the §43-1 round-7 review.
 - **Async packaging + progress WS.** `CreateZipAsync` completes the zip within the request (the payload is config-sized
   — kilobytes, not the frame library) rather than on a background worker emitting `backup.*` progress events. The
   202/operation-id contract is already in place so the wire shape won't change when it becomes truly async; add the

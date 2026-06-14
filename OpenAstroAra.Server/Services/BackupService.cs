@@ -293,10 +293,12 @@ namespace OpenAstroAra.Server.Services {
 
         public Task<OperationAcceptedDto> RestoreZipAsync(RestoreRequestDto request, string? idempotencyKey, CancellationToken ct) {
             ArgumentNullException.ThrowIfNull(request);
-            // §43-2: restore overwrites live config (profile.json / sequences) and is destructive, so it stays a
-            // no-op accept until the staged-swap + restore-progress state machine lands. Accepting (not 501) keeps
-            // the client's restore flow wired end-to-end against the real service. Logged at Warning so an operator
-            // who triggers a restore isn't misled by the 202 into thinking config was actually rolled back.
+            // §43-2: restore overwrites live config (profile.json / sequences) and is destructive — it lands with the
+            // staged-swap + restore-progress state machine. Until then it does nothing, and the endpoint signals that
+            // honestly with 501 Not Implemented rather than a 202 that a client would read as a successful rollback
+            // (an earlier revision accept-and-no-op'd at 202, which was deceptive). The DTO returned here is unused by
+            // the §43-1 endpoint; when §43-2 makes restore a real async job, the endpoint flips back to 202 + this id.
+            // The Warning log records that an operator attempted a restore.
             LogRestoreNotImplemented();
             return Task.FromResult(new OperationAcceptedDto(
                 OperationId: Guid.NewGuid(),
@@ -334,7 +336,7 @@ namespace OpenAstroAra.Server.Services {
         partial void LogManifestSkipped(string manifestPath, Exception ex);
 
         [LoggerMessage(Level = LogLevel.Warning,
-            Message = "Backup restore requested but not yet implemented (§43-2); request accepted as a no-op — no config was rolled back")]
+            Message = "Backup restore requested but not yet implemented (§43-2); responding 501 — no config was rolled back")]
         partial void LogRestoreNotImplemented();
 
         [LoggerMessage(Level = LogLevel.Warning, Message = "Backup archive {ArchivePath} vanished between resolve and open — serving 404")]
