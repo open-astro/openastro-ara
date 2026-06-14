@@ -101,8 +101,10 @@ class DownloadProgress {
   bool get isActive => phase == DownloadPhase.downloading;
 
   /// [percentComplete] as a [0,1] fraction — the form a `LinearProgressIndicator`
-  /// expects, so the UI never has to remember to divide by 100.
-  double get fraction => percentComplete / 100.0;
+  /// expects, so the UI never has to remember to divide by 100. Self-clamps, so it
+  /// stays in range even if a [DownloadProgress] is built directly (the `const`
+  /// constructor doesn't clamp; only [fromPayload] does).
+  double get fraction => (percentComplete / 100.0).clamp(0.0, 1.0);
 
   /// Parse a `data_manager.download.*` WS payload into progress for the given
   /// [phase] (derived from the event subtype). Returns null if the payload has

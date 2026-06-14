@@ -32,6 +32,7 @@ class _FakeDataManagerClient implements DataManagerClient {
   int downloads = 0;
   String? lastDownloadId;
   bool? lastForce;
+  bool throwOnDownload = false;
   final List<String> cancelled = <String>[];
   final List<String> deleted = <String>[];
   bool throwOnDelete = false;
@@ -47,6 +48,7 @@ class _FakeDataManagerClient implements DataManagerClient {
     downloads++;
     lastDownloadId = packageId;
     lastForce = forceReinstall;
+    if (throwOnDownload) throw StateError('conflict');
     return 'dl-$packageId';
   }
 
@@ -127,6 +129,19 @@ void main() {
       expect(api.lastDownloadId, 'tycho-2');
       expect(api.lastForce, isTrue);
       expect(id, 'dl-tycho-2');
+    });
+
+    test('download propagates a failure to the caller (the 409/error contract)', () async {
+      final api = _FakeDataManagerClient(const [DataPackage(id: 'tycho-2')])..throwOnDownload = true;
+      final c = _container(const [_server], api);
+      await c.read(savedServersProvider.future);
+      await c.read(dataManagerPackagesProvider.future);
+
+      await expectLater(
+        c.read(dataManagerPackagesProvider.notifier).download('tycho-2'),
+        throwsA(isA<StateError>()),
+        reason: 'a download failure throws to the caller — it does not land in provider state',
+      );
     });
 
     test('cancel forwards the download id to the client', () async {
