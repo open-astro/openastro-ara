@@ -39,10 +39,9 @@ class _FakeFrameQualityClient implements FrameQualityClient {
   void close() {}
 }
 
-/// A fake whose `fetch()` calls resolve only when the test completes them, in
-/// whatever order it chooses — so the concurrent-refresh test can force the
-/// *earlier* refresh to resolve *after* the newer one (the only ordering that
-/// actually exercises the generation guard).
+/// A fake whose `fetch()` resolves only when the test completes it, so the
+/// generation-guard test can hold a refresh open while a (simulated) server
+/// switch re-runs build().
 class _GatedFrameQualityClient implements FrameQualityClient {
   final List<Completer<FrameQualityDistribution>> calls = [];
 
@@ -104,7 +103,7 @@ void main() {
       expect(api.fetches, 2);
     });
 
-    test('a fetch failure lands in the provider error state', () async {
+    test('an initial-load failure lands in the provider error state', () async {
       final api = _FakeFrameQualityClient(_dist(0))..throwOnFetch = true;
       final c = _container(const [_server], api);
       await c.read(savedServersProvider.future);
@@ -112,28 +111,48 @@ void main() {
       expect(c.read(frameQualityProvider).hasError, isTrue);
     });
 
-    test('a slow earlier refresh cannot clobber a newer one (generation guard)', () async {
+    test('a failed refresh keeps the prior distribution and rethrows (no blanking)', () async {
+      final api = _FakeFrameQualityClient(_dist(7));
+      final c = _container(const [_server], api);
+      await c.read(savedServersProvider.future);
+      await c.read(frameQualityProvider.future);
+
+      api.throwOnFetch = true;
+      await expectLater(
+          c.read(frameQualityProvider.notifier).refresh(), throwsA(isA<StateError>()));
+      expect(c.read(frameQualityProvider).hasError, isFalse);
+      expect(c.read(frameQualityProvider).value!.buckets.single.count, 7);
+    });
+
+    test('a successful refresh swaps the new distribution in without a loading flash', () async {
+      final api = _FakeFrameQualityClient(_dist(1));
+      final c = _container(const [_server], api);
+      await c.read(savedServersProvider.future);
+      await c.read(frameQualityProvider.future);
+
+      api.value = _dist(9);
+      final future = c.read(frameQualityProvider.notifier).refresh();
+      expect(c.read(frameQualityProvider).isLoading, isFalse);
+      expect(c.read(frameQualityProvider).value!.buckets.single.count, 1);
+      await future;
+      expect(c.read(frameQualityProvider).value!.buckets.single.count, 9);
+    });
+
+    test('a server switch mid-refresh discards the stale result (generation guard)', () async {
       final api = _GatedFrameQualityClient();
       final c = _container(const [_server], api);
       await c.read(savedServersProvider.future);
-      // Settle the initial build() fetch (calls[0]) so we start from data.
       final built = c.read(frameQualityProvider.future);
       api.calls[0].complete(_dist(1));
       await built;
 
-      // Two overlapping refreshes: calls[1] is the older one, calls[2] the newer.
-      final first = c.read(frameQualityProvider.notifier).refresh();
-      final second = c.read(frameQualityProvider.notifier).refresh();
-      expect(api.calls.length, 3);
+      final notifier = c.read(frameQualityProvider.notifier);
+      final refreshing = notifier.refresh(); // captures generation; calls[1] pending
+      notifier.markBuild(); // stand in for a server-switch build() re-run
+      api.calls[1].complete(_dist(99)); // now stale
+      await refreshing;
 
-      // Resolve the NEWER refresh first, then let the OLDER one resolve after.
-      // Without the generation guard the late older write would clobber state
-      // with the stale value; with it, the older write is dropped.
-      api.calls[2].complete(_dist(9));
-      api.calls[1].complete(_dist(5));
-      await Future.wait([first, second]);
-
-      expect(c.read(frameQualityProvider).value!.buckets.single.count, 9);
+      expect(c.read(frameQualityProvider).value!.buckets.single.count, 1);
     });
   });
 }
