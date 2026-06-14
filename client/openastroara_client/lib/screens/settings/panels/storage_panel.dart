@@ -225,7 +225,7 @@ class _StoragePanelState extends ConsumerState<StoragePanel> {
           ],
         ),
         const SizedBox(height: 24),
-        const SettingsSectionHeader('Backup & Restore (§43)'),
+        const SettingsSectionHeader('Backup & Restore'),
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 8),
           child: Text(
