@@ -116,7 +116,16 @@ class _SnapshotRow extends ConsumerWidget {
     final api = ref.read(backupApiProvider);
     if (api == null) return;
     final uri = Uri.tryParse(api.absoluteDownloadUrl(snapshot));
-    final ok = uri != null && await launchUrl(uri, mode: LaunchMode.externalApplication);
+    var ok = false;
+    if (uri != null) {
+      try {
+        ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } catch (_) {
+        // launchUrl can throw (e.g. PlatformException when no handler is registered);
+        // since this is fire-and-forget, swallow it and fall through to the snackbar.
+        ok = false;
+      }
+    }
     if (!ok && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not open the download.')));
     }
@@ -195,11 +204,11 @@ class _RestoreDialog extends StatefulWidget {
 }
 
 class _RestoreDialogState extends State<_RestoreDialog> {
-  late bool _profiles = widget.snapshot.includedAreas.contains('profiles');
-  late bool _sequences = widget.snapshot.includedAreas.contains('sequences');
+  late bool _profiles = _hasProfiles;
+  late bool _sequences = _hasSequences;
 
-  bool get _hasProfiles => widget.snapshot.includedAreas.contains('profiles');
-  bool get _hasSequences => widget.snapshot.includedAreas.contains('sequences');
+  bool get _hasProfiles => widget.snapshot.includedAreas.contains(BackupAreas.profiles);
+  bool get _hasSequences => widget.snapshot.includedAreas.contains(BackupAreas.sequences);
 
   @override
   Widget build(BuildContext context) {

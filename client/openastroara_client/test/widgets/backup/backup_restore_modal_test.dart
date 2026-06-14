@@ -1,4 +1,8 @@
+// url_launcher_platform_interface / plugin_platform_interface are transitive deps of
+// url_launcher, imported here only to mock the launch platform channel in tests.
+// ignore_for_file: depend_on_referenced_packages
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/backup_snapshot.dart';
@@ -8,6 +12,8 @@ import 'package:openastroara/services/saved_server_service.dart';
 import 'package:openastroara/state/backup/backup_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/widgets/backup/backup_restore_modal.dart';
+import 'package:plugin_platform_interface/plugin_platform_interface.dart';
+import 'package:url_launcher_platform_interface/url_launcher_platform_interface.dart';
 
 class _FakeSavedServerService implements SavedServerService {
   _FakeSavedServerService(List<AraServer> stored) : _stored = [...stored];
@@ -42,6 +48,18 @@ class _FakeBackupClient implements BackupClient {
   String absoluteDownloadUrl(BackupSnapshot snapshot) => 'http://h:5555${snapshot.downloadUrl}';
   @override
   void close() {}
+}
+
+class _FakeUrlLauncher extends Fake with MockPlatformInterfaceMixin implements UrlLauncherPlatform {
+  String? launched;
+  bool throwOnLaunch = false;
+
+  @override
+  Future<bool> launchUrl(String url, LaunchOptions options) async {
+    if (throwOnLaunch) throw PlatformException(code: 'no_handler');
+    launched = url;
+    return true;
+  }
 }
 
 const _server = AraServer(hostname: 'h', port: 5555);
@@ -93,6 +111,31 @@ void main() {
     await tester.tap(find.text('Create backup'));
     await tester.pumpAndSettle();
     expect(api.creates, 1);
+  });
+
+  testWidgets('Download launches the snapshot URL', (tester) async {
+    final launcher = _FakeUrlLauncher();
+    UrlLauncherPlatform.instance = launcher;
+    final api = _FakeBackupClient([
+      const BackupSnapshot(backupId: 'b1', downloadUrl: '/api/v1/backup/snapshot/b1/download'),
+    ]);
+    await tester.pumpWidget(_host(api));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Download'));
+    await tester.pumpAndSettle();
+    expect(launcher.launched, contains('/api/v1/backup/snapshot/b1/download'));
+  });
+
+  testWidgets('Download failure surfaces a snackbar instead of swallowing the error', (tester) async {
+    UrlLauncherPlatform.instance = _FakeUrlLauncher()..throwOnLaunch = true;
+    final api = _FakeBackupClient([const BackupSnapshot(backupId: 'b1', downloadUrl: '/dl/b1')]);
+    await tester.pumpWidget(_host(api));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Download'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Could not open the download'), findsOneWidget);
   });
 
   testWidgets('Restore opens a destructive confirm dialog with area checkboxes', (tester) async {
