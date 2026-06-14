@@ -93,6 +93,40 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Create_does_not_follow_a_symlink_out_of_the_backup_root() {
+            WriteProfile();
+            WriteSequence("real.json", "{}");
+
+            // A secret outside the profile dir, and a symlink inside sequences/ pointing at it. The backup must not
+            // bundle the secret — Directory.EnumerateFiles(AllDirectories) would have followed the link.
+            var outside = Path.Combine(Path.GetTempPath(), "ara-backup-outside-" + Path.GetRandomFileName());
+            Directory.CreateDirectory(outside);
+            var secret = Path.Combine(outside, "secret.txt");
+            await File.WriteAllTextAsync(secret, "do-not-back-me-up");
+            var link = Path.Combine(_profileDir, "sequences", "linked.txt");
+            try {
+                File.CreateSymbolicLink(link, secret);
+            } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or PlatformNotSupportedException) {
+                Assert.Ignore("symlink creation not permitted on this platform/runner");
+            } finally {
+                // cleanup happens below regardless
+            }
+
+            try {
+                await _svc.CreateZipAsync(idempotencyKey: null, CancellationToken.None);
+                var entries = ZipEntryNames(Directory.GetFiles(_backupsDir, "backup-*.zip").Single());
+                Assert.That(entries, Does.Contain("sequences/real.json"), "real files are still backed up");
+                Assert.That(entries, Has.None.Contains("linked"), "the symlink itself isn't archived");
+                Assert.That(entries.Any(e => e.Contains("secret", StringComparison.Ordinal)), Is.False,
+                    "the symlink target is never followed");
+            } finally {
+                if (Directory.Exists(outside)) {
+                    Directory.Delete(outside, recursive: true);
+                }
+            }
+        }
+
+        [Test]
         public async Task List_reports_the_created_snapshot_with_a_matching_sha256_and_areas() {
             WriteProfile();
             WriteSequence("active.json", "{}");

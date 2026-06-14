@@ -126,21 +126,34 @@ namespace OpenAstroAra.Server.Services {
                 var manifest = new BackupManifest(id, createdUtc, sizeBytes, sha256, areas);
                 File.WriteAllText(manifestPath, JsonSerializer.Serialize(manifest, AraJsonSerializerContext.Default.BackupManifest));
             } catch {
+                // Reclaim every artifact this attempt may have created, whichever step failed: the temp archive (if
+                // the rename hadn't happened yet), the revealed zip (if the manifest write threw after the rename —
+                // otherwise an unlisted orphan nothing reclaims), and any half-written manifest.
                 TryDelete(tempPath);
+                TryDelete(zipPath);
+                TryDelete(manifestPath);
                 throw;
             }
         }
 
-        // Add every file under sourceDir to the archive under entryRoot/, preserving relative structure. Returns
-        // true if at least one file was added (an empty sequences/ tree shouldn't claim the "sequences" area).
+        // Add every regular file under sourceDir to the archive under entryRoot/, preserving relative structure.
+        // Returns true if at least one file was added (an empty sequences/ tree shouldn't claim the "sequences" area).
+        // Symlinks (file and directory) are skipped: Directory.EnumerateFiles(AllDirectories) would follow a directory
+        // symlink and bundle whatever it points at — including a target outside _profileDir — so the walk is manual
+        // and refuses to descend into or capture any reparse point.
         private static bool AddDirectory(ZipArchive archive, string sourceDir, string entryRoot) {
             var added = false;
-            foreach (var file in Directory.EnumerateFiles(sourceDir, "*", SearchOption.AllDirectories)) {
-                var relative = Path.GetRelativePath(sourceDir, file);
-                // Zip entry separators are always '/', regardless of the host OS path separator.
-                var entryName = entryRoot + "/" + relative.Replace(Path.DirectorySeparatorChar, '/');
-                archive.CreateEntryFromFile(file, entryName, CompressionLevel.Optimal);
-                added = true;
+            var dir = new DirectoryInfo(sourceDir);
+            foreach (var entry in dir.EnumerateFileSystemInfos("*", SearchOption.TopDirectoryOnly)) {
+                if ((entry.Attributes & FileAttributes.ReparsePoint) != 0) {
+                    continue; // symlink / junction — don't follow it out of the backup root.
+                }
+                if (entry is DirectoryInfo sub) {
+                    added |= AddDirectory(archive, sub.FullName, entryRoot + "/" + sub.Name);
+                } else {
+                    archive.CreateEntryFromFile(entry.FullName, entryRoot + "/" + entry.Name, CompressionLevel.Optimal);
+                    added = true;
+                }
             }
             return added;
         }
