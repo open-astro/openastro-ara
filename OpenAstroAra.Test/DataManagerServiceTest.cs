@@ -57,6 +57,17 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Every_catalog_entry_advertises_a_positive_size_and_an_https_source() {
+            // Build gate: a 0-size entry would fall back to the generous unknown-size extraction ceiling, and a
+            // non-https source would be refused at fetch — catch either as soon as a catalog entry is added.
+            foreach (var pkg in DataManagerService.Catalog) {
+                Assert.That(pkg.SizeBytes, Is.GreaterThan(0), $"catalog entry '{pkg.Id}' must advertise a positive size");
+                Assert.That(pkg.SourceUrl, Is.Not.Null, $"catalog entry '{pkg.Id}' must have a source URL");
+                Assert.That(pkg.SourceUrl!.Scheme, Is.EqualTo("https"), $"catalog entry '{pkg.Id}' source must be https");
+            }
+        }
+
+        [Test]
         public async Task Lists_the_catalog_with_install_state_read_from_disk() {
             var installedBytes = InstallPackage("tycho-2", 2048);
 

@@ -192,6 +192,13 @@ namespace OpenAstroAra.Server.Services {
             while (true) {
                 var downloadId = Guid.NewGuid();
                 if (_activeByPackage.TryAdd(pkg.Id, downloadId)) {
+                    // Re-check under the claim: a concurrent download may have finished installing the package in the
+                    // IsInstalled→TryAdd window. If so, release the claim and report already-installed rather than
+                    // spuriously re-downloading what's now on disk.
+                    if (!request.ForceReinstall && IsInstalled(pkg.Id)) {
+                        _activeByPackage.TryRemove(new KeyValuePair<string, Guid>(pkg.Id, downloadId));
+                        return Task.FromException<OperationAcceptedDto>(PackageAlreadyInstalledException.ForPackageId(pkg.Id));
+                    }
                     var job = new DownloadJob(downloadId, pkg.Id);
                     _downloads[downloadId] = job;
                     // Fire the worker on the thread pool; it owns the job's lifecycle + cleanup.
@@ -219,15 +226,16 @@ namespace OpenAstroAra.Server.Services {
                 try {
                     job.Cts.Cancel();
                 } catch (ObjectDisposedException) {
-                    // The worker finished and disposed its CTS between our lookup and here — the download is already
-                    // over, so there's nothing to cancel. Report Accepted rather than 500 on a benign race.
+                    // The worker finished and disposed its CTS between our check and here — the download is already
+                    // over, so it's "nothing to cancel": a 404, consistent with the unknown-id contract (not a 202
+                    // that would imply we interrupted something).
+                    return Task.FromException<OperationAcceptedDto>(NoActiveDownload(downloadId));
                 }
                 LogCancelRequested(downloadId);
                 return Task.FromResult(Accepted("data-manager.cancel", null, downloadId));
             }
             // Unknown or already-finished id — surface a 404 (mapped at the endpoint) rather than a misleading 202.
-            return Task.FromException<OperationAcceptedDto>(
-                new DownloadNotFoundException($"No active download '{downloadId}'."));
+            return Task.FromException<OperationAcceptedDto>(NoActiveDownload(downloadId));
         }
 
         // The download worker: fetch the package archive, stream it through the §36-2a installer (which extracts +
@@ -304,7 +312,19 @@ namespace OpenAstroAra.Server.Services {
             }
         }
 
-        private const long UnknownSizeCeiling = 8L * 1024 * 1024 * 1024; // 8 GiB fallback when the catalog size is unset.
+        // Fallback extraction cap for a catalog entry missing its size: the largest advertised package + 25% headroom
+        // (≥16 MiB), so an unsized entry can't open a wider window than our biggest real package.
+        private static readonly long UnknownSizeCeiling = ComputeUnknownSizeCeiling();
+
+        private static long ComputeUnknownSizeCeiling() {
+            var max = Catalog.Max(p => p.SizeBytes);
+            if (max <= 0) {
+                return 16L * 1024 * 1024;
+            }
+            var headroom = max / 4;
+            var ceiling = max > long.MaxValue - headroom ? long.MaxValue : max + headroom;
+            return Math.Max(ceiling, 16L * 1024 * 1024);
+        }
 
         // Cap uncompressed extraction at the catalog's advertised installed size + 25% headroom (never below 16 MiB),
         // so a tampered archive can't expand without bound even though the package id is catalog-validated. Guard the
@@ -385,6 +405,9 @@ namespace OpenAstroAra.Server.Services {
                 LogPublishFailed(eventType, ex);
             }
         }
+
+        private static DownloadNotFoundException NoActiveDownload(Guid downloadId) =>
+            new($"No active download '{downloadId}'.");
 
         private static double Percent(long downloaded, long total) =>
             total > 0 ? Math.Round(Math.Clamp((double)downloaded / total, 0, 1) * 100, 2) : 0;
