@@ -102,10 +102,19 @@ namespace OpenAstroAra.Server.Services {
             }
             try {
                 MovePath(stagedPath, livePath, isDirectory);
-            } catch {
+            } catch (Exception placeEx) {
                 // Couldn't place the new area — put the original back before surfacing, so this area is untouched.
                 if (hadExisting) {
-                    MovePath(backupPath, livePath, isDirectory);
+                    try {
+                        MovePath(backupPath, livePath, isDirectory);
+                    } catch (Exception recoverEx) {
+                        // The new area didn't land AND the original couldn't be restored — surface both and name the
+                        // backup location, rather than letting the recovery failure escape and hide the placement error.
+                        throw new SkyDataInstallException(
+                            $"Backup restore failed to place '{livePath}' and could not restore the previous copy; " +
+                            $"it remains at '{backupPath}' for manual recovery.",
+                            new AggregateException(placeEx, recoverEx));
+                    }
                 }
                 throw;
             }
@@ -126,7 +135,10 @@ namespace OpenAstroAra.Server.Services {
                         // There was no original — the area didn't exist before, so removing what we placed restores that.
                         TryDeletePath(swap.LivePath, swap.IsDirectory);
                     }
-                } catch (Exception rollbackEx) when (rollbackEx is IOException or UnauthorizedAccessException) {
+                } catch (Exception rollbackEx) {
+                    // ANY failure to roll an area back is the data-loss case — wrap it together with the original
+                    // failure (never let an unexpected rollback exception escape and discard `primary`) and name the
+                    // backup location for manual recovery.
                     throw new SkyDataInstallException(
                         $"Backup restore failed and the area at '{swap.LivePath}' could not be rolled back; the previous " +
                         $"copy remains at '{swap.BackupPath}' for manual recovery.",

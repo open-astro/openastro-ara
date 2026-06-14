@@ -44,6 +44,7 @@ namespace OpenAstroAra.Test {
 
         [TearDown]
         public void TearDown() {
+            _svc.Dispose();
             if (Directory.Exists(_profileDir)) {
                 Directory.Delete(_profileDir, recursive: true);
             }

@@ -49,7 +49,7 @@ namespace OpenAstroAra.Server.Services {
     /// caller-controlled path component (no traversal). Packaging writes to a hidden <c>.tmp-</c> file and renames
     /// it into place, so a crash mid-zip never leaves a half-written archive a reader could list.
     /// </summary>
-    public sealed partial class BackupService : IBackupService {
+    public sealed partial class BackupService : IBackupService, IDisposable {
 
         // Areas captured by a §43-1 backup, relative to profileDir. "profiles" = the single profile.json document;
         // "sequences" = the whole sequences/ tree (library + active + templates + imported). Both are config-sized.
@@ -74,6 +74,11 @@ namespace OpenAstroAra.Server.Services {
         private readonly string _backupsDir;
         private readonly ILogger<BackupService> _logger;
 
+        // Serializes create + restore against each other: both touch the live profile (create reads it, restore
+        // swaps it), so a concurrent pair could otherwise zip a torn state or interleave two area-swaps into a
+        // mixed old/new profile. One backup operation at a time — the daemon is single-user and these are infrequent.
+        private readonly SemaphoreSlim _gate = new(1, 1);
+
         public BackupService(string profileDir, ILogger<BackupService> logger) {
             ArgumentException.ThrowIfNullOrEmpty(profileDir);
             ArgumentNullException.ThrowIfNull(logger);
@@ -81,6 +86,9 @@ namespace OpenAstroAra.Server.Services {
             _backupsDir = Path.Combine(profileDir, BackupsDirName);
             _logger = logger;
         }
+
+        // Registered as a DI singleton, so the container disposes this on host shutdown.
+        public void Dispose() => _gate.Dispose();
 
         public async Task<OperationAcceptedDto> CreateZipAsync(string? idempotencyKey, CancellationToken ct) {
             // idempotencyKey is echoed back but NOT enforced in §43-1: a retried POST with the same key produces a new
@@ -97,7 +105,12 @@ namespace OpenAstroAra.Server.Services {
             // larger sequences/ tree doesn't tie up the connection's thread-pool slot while it packages. ct is
             // threaded in so a cancellation between checkpoints aborts the work and reclaims its artifacts, rather
             // than only making the await throw while the zip finishes writing in the background.
-            await Task.Run(() => CreateBackupCore(id, createdUtc, ct), ct).ConfigureAwait(false);
+            await _gate.WaitAsync(ct).ConfigureAwait(false);
+            try {
+                await Task.Run(() => CreateBackupCore(id, createdUtc, ct), ct).ConfigureAwait(false);
+            } finally {
+                _gate.Release();
+            }
 
             LogCreated(id, _backupsDir);
             return new OperationAcceptedDto(
@@ -337,7 +350,14 @@ namespace OpenAstroAra.Server.Services {
 
             // Synchronous file IO off the request thread (matches CreateZipAsync); §43-2b adds a background worker +
             // live clone-status progress. The 202 contract is already in place so the wire shape won't change then.
-            var restored = await Task.Run(() => RestoreCore(id, request, ct), ct).ConfigureAwait(false);
+            // Serialized against create + other restores so two operations can't interleave on the live profile.
+            await _gate.WaitAsync(ct).ConfigureAwait(false);
+            IReadOnlyList<string> restored;
+            try {
+                restored = await Task.Run(() => RestoreCore(id, request, ct), ct).ConfigureAwait(false);
+            } finally {
+                _gate.Release();
+            }
             LogRestored(id, string.Join(",", restored));
             return new OperationAcceptedDto(
                 OperationId: id,
@@ -353,8 +373,11 @@ namespace OpenAstroAra.Server.Services {
             // Integrity gate before touching live config: a corrupt archive must not half-overwrite the profile.
             var manifestPath = zipPath[..^ZipExtension.Length] + ManifestExtension;
             var expectedSha = TryReadManifestSha(manifestPath);
-            if (expectedSha is not null &&
-                !string.Equals(HashFile(zipPath), expectedSha, StringComparison.OrdinalIgnoreCase)) {
+            if (expectedSha is null) {
+                // No readable manifest → the checksum gate is bypassed. Surface it so an operator can see a restore
+                // ran unvalidated (a listed snapshot always has a manifest; a missing one means a torn/edited backup).
+                LogManifestSkipped(manifestPath, new FileNotFoundException("backup manifest missing or unreadable", manifestPath));
+            } else if (!string.Equals(HashFile(zipPath), expectedSha, StringComparison.OrdinalIgnoreCase)) {
                 throw new BackupCorruptException($"Backup snapshot {id} failed its checksum and was not restored.");
             }
 
