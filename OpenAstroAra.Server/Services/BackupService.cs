@@ -16,6 +16,7 @@ using Microsoft.Extensions.Logging;
 using OpenAstroAra.Server.Contracts;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.IO;
 using System.IO.Compression;
@@ -169,35 +170,38 @@ namespace OpenAstroAra.Server.Services {
             return Convert.ToHexStringLower(hash);
         }
 
-        public Task<IReadOnlyList<BackupZipDto>> ListSnapshotsAsync(CancellationToken ct) {
-            if (!Directory.Exists(_backupsDir)) {
-                return Task.FromResult<IReadOnlyList<BackupZipDto>>(Array.Empty<BackupZipDto>());
-            }
-
-            // Enumerate the archives once into a set of present backup ids, so confirming each manifest has a matching
-            // zip is an O(1) lookup rather than a fresh directory scan per manifest (which made listing n snapshots
-            // O(n^2) — and snapshots accumulate with no retention policy yet).
-            var presentZipIds = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var path in Directory.EnumerateFiles(_backupsDir, ZipPrefix + "*" + ZipExtension, SearchOption.TopDirectoryOnly)) {
-                var idN = ExtractIdSuffix(Path.GetFileNameWithoutExtension(path));
-                if (idN is not null) {
-                    presentZipIds.Add(idN);
+        public Task<IReadOnlyList<BackupZipDto>> ListSnapshotsAsync(CancellationToken ct) =>
+            // Offloaded: the manifest reads + directory scans are synchronous file IO, so run them off the request
+            // thread rather than blocking a thread-pool thread through the whole enumeration on a slow/large dir.
+            Task.Run<IReadOnlyList<BackupZipDto>>(() => {
+                if (!Directory.Exists(_backupsDir)) {
+                    return Array.Empty<BackupZipDto>();
                 }
-            }
 
-            var snapshots = new List<BackupZipDto>();
-            foreach (var manifestPath in Directory.EnumerateFiles(_backupsDir, "*" + ManifestExtension, SearchOption.TopDirectoryOnly)) {
-                ct.ThrowIfCancellationRequested();
-                var dto = TryReadSnapshot(manifestPath, presentZipIds);
-                if (dto is not null) {
-                    snapshots.Add(dto);
+                // Enumerate the archives once into a set of present backup ids, so confirming each manifest has a
+                // matching zip is an O(1) lookup rather than a fresh directory scan per manifest (which made listing
+                // n snapshots O(n^2) — and snapshots accumulate with no retention policy yet).
+                var presentZipIds = new HashSet<string>(StringComparer.Ordinal);
+                foreach (var path in Directory.EnumerateFiles(_backupsDir, ZipPrefix + "*" + ZipExtension, SearchOption.TopDirectoryOnly)) {
+                    var idN = ExtractIdSuffix(Path.GetFileNameWithoutExtension(path));
+                    if (idN is not null) {
+                        presentZipIds.Add(idN);
+                    }
                 }
-            }
 
-            // Newest first — the §43 "Past backups" UI lists most-recent at the top.
-            snapshots.Sort((a, b) => b.CreatedUtc.CompareTo(a.CreatedUtc));
-            return Task.FromResult<IReadOnlyList<BackupZipDto>>(snapshots);
-        }
+                var snapshots = new List<BackupZipDto>();
+                foreach (var manifestPath in Directory.EnumerateFiles(_backupsDir, "*" + ManifestExtension, SearchOption.TopDirectoryOnly)) {
+                    ct.ThrowIfCancellationRequested();
+                    var dto = TryReadSnapshot(manifestPath, presentZipIds);
+                    if (dto is not null) {
+                        snapshots.Add(dto);
+                    }
+                }
+
+                // Newest first — the §43 "Past backups" UI lists most-recent at the top.
+                snapshots.Sort((a, b) => b.CreatedUtc.CompareTo(a.CreatedUtc));
+                return snapshots;
+            }, ct);
 
         private BackupZipDto? TryReadSnapshot(string manifestPath, HashSet<string> presentZipIds) {
             try {
@@ -225,8 +229,22 @@ namespace OpenAstroAra.Server.Services {
             }
         }
 
-        public Task<string?> ResolveSnapshotFilePathAsync(Guid id, CancellationToken ct) =>
-            Task.FromResult(FindZipPath(id));
+        public async Task<(Stream Stream, string FileName)?> OpenSnapshotAsync(Guid id, CancellationToken ct) {
+            // Offload the directory scan off the request thread, then open the handle here: holding the open stream
+            // closes the resolve→serve TOCTOU window (a delete after this point can't turn Results.File into a 500).
+            var path = await Task.Run(() => FindZipPath(id), ct).ConfigureAwait(false);
+            if (path is null) {
+                return null;
+            }
+            try {
+                // FileStream owned by the response pipeline — ASP.NET Core disposes it once the response is sent.
+                var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 81920, useAsync: true);
+                return (stream, Path.GetFileName(path));
+            } catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException) {
+                // Deleted between the scan and the open — report not-found rather than a torn 500.
+                return null;
+            }
+        }
 
         // Resolve a backup id to its archive path by matching the id-suffixed name. The id is a guid, so the glob
         // pattern contains no caller-controlled wildcard surface beyond the 32-hex id itself.
@@ -274,14 +292,18 @@ namespace OpenAstroAra.Server.Services {
             return Task.FromResult(doc.RootElement.Clone());
         }
 
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "Best-effort cleanup running inside a catch block before a re-throw: any exception from " +
+                "Delete (incl. SecurityException/PathTooLongException) must be swallowed so it can't mask the " +
+                "original failure being re-thrown. A leaked scratch file is harmless — ListSnapshots keys off " +
+                "*.meta.json and ignores it.")]
         private static void TryDelete(string path) {
             try {
                 if (File.Exists(path)) {
                     File.Delete(path);
                 }
-            } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
-                // Best-effort cleanup of the temp archive; a leaked .tmp-*.zip is ignored by ListSnapshots (it keys
-                // off *.meta.json) and reclaimed on the next create with the same id (never — ids are unique).
+            } catch (Exception) {
+                // Best-effort cleanup; never let a cleanup failure replace the exception we're unwinding.
             }
         }
 

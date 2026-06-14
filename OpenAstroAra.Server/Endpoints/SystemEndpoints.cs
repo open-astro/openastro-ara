@@ -142,10 +142,10 @@ public static class SystemEndpoints {
 
         backup.MapGet("/snapshot/{id:guid}/download",
                 async (Guid id, IBackupService svc, CancellationToken ct) => {
-                    var path = await svc.ResolveSnapshotFilePathAsync(id, ct);
-                    return path is null
+                    var snapshot = await svc.OpenSnapshotAsync(id, ct);
+                    return snapshot is null
                         ? Results.NotFound()
-                        : Results.File(path, "application/zip", System.IO.Path.GetFileName(path));
+                        : Results.File(snapshot.Value.Stream, "application/zip", snapshot.Value.FileName);
                 })
               .Produces(StatusCodes.Status200OK, contentType: "application/zip")
               .ProducesProblem(StatusCodes.Status404NotFound)

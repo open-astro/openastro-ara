@@ -158,17 +158,20 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task Resolve_returns_the_archive_for_a_known_id_and_null_otherwise() {
+        public async Task Open_returns_a_readable_stream_for_a_known_id_and_null_otherwise() {
             WriteProfile();
             var op = await _svc.CreateZipAsync(idempotencyKey: null, CancellationToken.None);
 
-            var path = await _svc.ResolveSnapshotFilePathAsync(op.OperationId, CancellationToken.None);
-            Assert.That(path, Is.Not.Null);
-            Assert.That(File.Exists(path!), Is.True);
-            Assert.That(Path.GetExtension(path), Is.EqualTo(".zip"));
+            var snapshot = await _svc.OpenSnapshotAsync(op.OperationId, CancellationToken.None);
+            Assert.That(snapshot, Is.Not.Null);
+            await using (var stream = snapshot!.Value.Stream) {
+                Assert.That(stream.CanRead, Is.True);
+                Assert.That(stream.Length, Is.GreaterThan(0), "the opened archive has content");
+            }
+            Assert.That(Path.GetExtension(snapshot.Value.FileName), Is.EqualTo(".zip"));
 
-            var missing = await _svc.ResolveSnapshotFilePathAsync(Guid.NewGuid(), CancellationToken.None);
-            Assert.That(missing, Is.Null, "an unknown id resolves to null (→ 404 at the endpoint)");
+            var missing = await _svc.OpenSnapshotAsync(Guid.NewGuid(), CancellationToken.None);
+            Assert.That(missing, Is.Null, "an unknown id opens to null (→ 404 at the endpoint)");
         }
 
         [Test]
