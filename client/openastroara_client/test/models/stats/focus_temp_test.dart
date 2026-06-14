@@ -30,6 +30,15 @@ void main() {
       expect(s.samples.single.timestamp!.isUtc, isTrue);
     });
 
+    test('a numeric-offset timestamp converts to the correct UTC instant', () {
+      final s = FocusTempSeries.fromJson(const {
+        'samples': [
+          {'temperature_c': 1.0, 'focuser_position': 500, 'timestamp': '2026-01-15T22:00:00-05:00'},
+        ],
+      });
+      expect(s.samples.single.timestamp, DateTime.utc(2026, 1, 16, 3));
+    });
+
     test('empty / missing samples → isEmpty, null correlation', () {
       final s = FocusTempSeries.fromJson(const {'samples': []});
       expect(s.isEmpty, isTrue);

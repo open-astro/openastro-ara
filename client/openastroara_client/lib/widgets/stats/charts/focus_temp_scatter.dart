@@ -60,12 +60,16 @@ class _FocusTempScatterChartState extends ConsumerState<FocusTempScatterChart> {
 
     final total = series?.samples.length ?? 0;
     final shown = _plotted(series);
+    final truncated = total > _maxPlotted;
     final summary = series == null || series.isEmpty
         ? null
         : [
             if (series.correlationR2 != null)
-              'r² ${series.correlationR2!.toStringAsFixed(2)}',
-            if (total > _maxPlotted) 'latest $_maxPlotted of $total',
+              // The r² is server-computed over all samples; when the scatter is
+              // truncated, say so, so a high r² over points the user can't all
+              // see doesn't read as a mismatch.
+              'r² ${series.correlationR2!.toStringAsFixed(2)}${truncated ? ' (all $total)' : ''}',
+            if (truncated) 'latest $_maxPlotted plotted',
           ].join(' · ');
 
     return ChartCard(
@@ -145,6 +149,14 @@ class _FocusTempScatterChartState extends ConsumerState<FocusTempScatterChart> {
           ),
         ),
     ];
+    // `series.isEmpty` is guarded above and `_plotted` preserves a non-empty
+    // series, so this can't fire today — but it keeps the `reduce`-based bounds
+    // helpers self-contained against a future filtering step between samples
+    // and spots, which would otherwise throw UnsupportedError on an empty list.
+    if (spots.isEmpty) {
+      return const _Hint(
+          'No frames with a focuser position yet — this chart fills in as positioned frames are captured.');
+    }
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 16, 8),
