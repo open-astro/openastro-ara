@@ -229,10 +229,11 @@ class _Achievements extends StatelessWidget {
   }
 
   // Whole-hour metrics read as "12h"; fractional ones add minutes ("12h 30m").
-  // Clamp at zero so an unexpected negative from the server can't drive the
-  // modulo arithmetic into a nonsense "0h 54m".
+  // Guard non-finite / negative server values: a negative would drive the modulo
+  // into a nonsense "0h 54m", and `(infinity * 60).round()` throws in Dart.
   static String _hours(double hours) {
-    final totalMinutes = (hours.clamp(0.0, double.infinity) * 60).round();
+    if (!hours.isFinite || hours < 0) return '—';
+    final totalMinutes = (hours * 60).round();
     final h = totalMinutes ~/ 60;
     final m = totalMinutes % 60;
     return m == 0 ? '${h}h' : '${h}h ${m.toString().padLeft(2, '0')}m';

@@ -20,6 +20,9 @@ final achievementsApiProvider = Provider<AchievementsClient?>((ref) {
       )));
   if (server == null) return null;
   final api = ref.watch(achievementsApiFactoryProvider)(server);
+  // On a server change this disposes the old client, force-aborting any fetch()
+  // still in flight. Riverpod cancels the superseded build() future at the same
+  // time, so the resulting DioException is discarded rather than surfaced.
   ref.onDispose(api.close);
   return api;
 });

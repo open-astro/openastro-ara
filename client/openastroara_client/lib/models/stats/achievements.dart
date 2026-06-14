@@ -34,8 +34,7 @@ class StatsMilestone {
   /// dividing by zero.
   double get progress {
     if (threshold <= 0) return 1.0;
-    final p = current / threshold;
-    return p.isNaN ? 0.0 : p.clamp(0.0, 1.0);
+    return (current / threshold).clamp(0.0, 1.0);
   }
 
   factory StatsMilestone.fromJson(Map<String, dynamic> json) => StatsMilestone(
