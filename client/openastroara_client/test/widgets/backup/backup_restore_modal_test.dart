@@ -73,6 +73,11 @@ Widget _host(_FakeBackupClient api, {List<AraServer> servers = const [_server]})
     );
 
 void main() {
+  // The download tests overwrite the global UrlLauncherPlatform.instance; restore it
+  // so a later test file calling launchUrl doesn't hit a leftover fake.
+  final original = UrlLauncherPlatform.instance;
+  tearDown(() => UrlLauncherPlatform.instance = original);
+
   testWidgets('empty list shows the no-backups message', (tester) async {
     await tester.pumpWidget(_host(_FakeBackupClient(const [])));
     await tester.pumpAndSettle();

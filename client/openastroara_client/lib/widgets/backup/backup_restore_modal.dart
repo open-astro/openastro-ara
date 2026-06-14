@@ -103,9 +103,9 @@ class _BackupRestoreModalState extends ConsumerState<BackupRestoreModal> {
     }
     return ListView(
       padding: const EdgeInsets.all(16),
-      // Keyed by id: _SnapshotRow is stateful (_restoring/_downloading), so without a
-      // key its State would re-associate with the wrong snapshot when the list shifts
-      // (a new backup prepends after createBackup).
+      // Keyed by id: _SnapshotRow is stateful (_restoring/_downloading), so without a key
+      // its State would re-associate with the wrong snapshot when the list shifts (a new
+      // backup prepends after createBackup).
       children: [for (final s in snapshots) _SnapshotRow(key: ValueKey(s.backupId), snapshot: s)],
     );
   }

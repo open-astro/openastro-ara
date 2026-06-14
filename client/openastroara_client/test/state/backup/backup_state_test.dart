@@ -26,6 +26,7 @@ class _FakeBackupClient implements BackupClient {
   int lists = 0;
   int creates = 0;
   bool throwOnCreate = false;
+  bool throwOnList = false;
   String? lastRestoreSource;
   bool? lastRestoreProfiles;
   bool? lastRestoreSequences;
@@ -34,6 +35,7 @@ class _FakeBackupClient implements BackupClient {
   @override
   Future<List<BackupSnapshot>> listSnapshots() async {
     lists++;
+    if (throwOnList) throw StateError('list failed');
     return snapshots;
   }
 
