@@ -685,3 +685,9 @@ Deferred to **§43-2**:
   `frame_id` to an empty string. Harmless today (the tile never reads `frameId`), but when per-frame detail drill-down lands,
   an empty id would silently misbehave rather than surfacing a parse error. Tighten when the drill-down navigation is built.
   Surfaced 2026-06-14 by the #436 review.
+- **Strengthen the sibling concurrent-refresh tests (test-quality, §50).** The Overview / Targets / Best-Frames state
+  tests assert "concurrent refreshes → latest wins" using a synchronous fake, so both refreshes resolve in call order
+  and the second writes last regardless of the generation guard — the test passes even if the guard is deleted. Frame
+  Quality (#437) now uses a gated fake that forces the *earlier* refresh to resolve *after* the newer one (the only
+  ordering that exercises the guard); port that pattern to the three sibling tests. Low risk, mechanical. Surfaced
+  2026-06-14 by the #437 review.

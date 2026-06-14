@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/server.dart';
@@ -31,6 +33,24 @@ class _FakeFrameQualityClient implements FrameQualityClient {
     fetches++;
     if (throwOnFetch) throw StateError('boom');
     return value;
+  }
+
+  @override
+  void close() {}
+}
+
+/// A fake whose `fetch()` calls resolve only when the test completes them, in
+/// whatever order it chooses — so the concurrent-refresh test can force the
+/// *earlier* refresh to resolve *after* the newer one (the only ordering that
+/// actually exercises the generation guard).
+class _GatedFrameQualityClient implements FrameQualityClient {
+  final List<Completer<FrameQualityDistribution>> calls = [];
+
+  @override
+  Future<FrameQualityDistribution> fetch({String? filter}) {
+    final c = Completer<FrameQualityDistribution>();
+    calls.add(c);
+    return c.future;
   }
 
   @override
@@ -92,20 +112,27 @@ void main() {
       expect(c.read(frameQualityProvider).hasError, isTrue);
     });
 
-    test('concurrent refreshes: only the latest result is written', () async {
-      final api = _FakeFrameQualityClient(_dist(1));
+    test('a slow earlier refresh cannot clobber a newer one (generation guard)', () async {
+      final api = _GatedFrameQualityClient();
       final c = _container(const [_server], api);
       await c.read(savedServersProvider.future);
-      await c.read(frameQualityProvider.future);
+      // Settle the initial build() fetch (calls[0]) so we start from data.
+      final built = c.read(frameQualityProvider.future);
+      api.calls[0].complete(_dist(1));
+      await built;
 
-      api.value = _dist(5);
+      // Two overlapping refreshes: calls[1] is the older one, calls[2] the newer.
       final first = c.read(frameQualityProvider.notifier).refresh();
-      api.value = _dist(9);
       final second = c.read(frameQualityProvider.notifier).refresh();
+      expect(api.calls.length, 3);
+
+      // Resolve the NEWER refresh first, then let the OLDER one resolve after.
+      // Without the generation guard the late older write would clobber state
+      // with the stale value; with it, the older write is dropped.
+      api.calls[2].complete(_dist(9));
+      api.calls[1].complete(_dist(5));
       await Future.wait([first, second]);
 
-      // The fake has no interior await, so both reads see the second value;
-      // this asserts the generation guard lets the latest refresh win.
       expect(c.read(frameQualityProvider).value!.buckets.single.count, 9);
     });
   });
