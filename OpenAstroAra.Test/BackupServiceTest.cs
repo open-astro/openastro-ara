@@ -258,6 +258,25 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Create_with_a_pathologically_deep_tree_throws_instead_of_overflowing() {
+            WriteProfile();
+            // Build a sequences/ tree deeper than the 64-level cap. Without the depth guard the recursive walk would
+            // risk a StackOverflowException (uncatchable, crashes the process); with it, an ordinary catchable throw.
+            var deep = Path.Combine(_profileDir, "sequences");
+            for (var i = 0; i < 80; i++) {
+                deep = Path.Combine(deep, "d");
+            }
+            Directory.CreateDirectory(deep);
+            File.WriteAllText(Path.Combine(deep, "leaf.json"), "{}");
+
+            Assert.That(async () => await _svc.CreateZipAsync(idempotencyKey: null, CancellationToken.None),
+                Throws.InstanceOf<InvalidDataException>());
+
+            Assert.That(Directory.Exists(_backupsDir) ? Directory.GetFiles(_backupsDir) : Array.Empty<string>(),
+                Is.Empty, "the staged temp is reclaimed; no partial snapshot is left");
+        }
+
+        [Test]
         public void Create_with_a_cancelled_token_throws_and_leaves_no_artifacts() {
             WriteProfile();
             using var cts = new CancellationTokenSource();

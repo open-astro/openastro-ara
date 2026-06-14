@@ -56,6 +56,10 @@ namespace OpenAstroAra.Server.Services {
         private const string ProfileFileName = "profile.json";
         private const string SequencesDirName = "sequences";
 
+        // Hard cap on sequences/ nesting depth — guards the recursive AddDirectory against a stack-overflowing
+        // (uncatchable) pathological tree. Real trees are a handful of levels; 64 only trips on a corrupt/adversarial one.
+        private const int MaxBackupTreeDepth = 64;
+
         private const string BackupsDirName = "backups";
         private const string ZipPrefix = "backup-";
         private const string ZipExtension = ".zip";
@@ -129,7 +133,7 @@ namespace OpenAstroAra.Server.Services {
                     }
 
                     var sequencesDir = Path.Combine(_profileDir, SequencesDirName);
-                    if (Directory.Exists(sequencesDir) && AddDirectory(archive, sequencesDir, SequencesDirName, ct)) {
+                    if (Directory.Exists(sequencesDir) && AddDirectory(archive, sequencesDir, SequencesDirName, depth: 0, ct)) {
                         areas.Add("sequences");
                     }
                 }
@@ -167,7 +171,15 @@ namespace OpenAstroAra.Server.Services {
         // Symlinks (file and directory) are skipped: Directory.EnumerateFiles(AllDirectories) would follow a directory
         // symlink and bundle whatever it points at — including a target outside _profileDir — so the walk is manual
         // and refuses to descend into or capture any reparse point.
-        private static bool AddDirectory(ZipArchive archive, string sourceDir, string entryRoot, CancellationToken ct) {
+        private static bool AddDirectory(ZipArchive archive, string sourceDir, string entryRoot, int depth, CancellationToken ct) {
+            // Depth cap: this recurses per directory level, so a pathologically deep (but symlink-free, hence
+            // acyclic) tree could otherwise blow the stack — and a StackOverflowException is uncatchable and crashes
+            // the daemon. Convert that into an ordinary catchable failure the create path's catch can reclaim from.
+            // A real sequences/ tree is a handful of levels deep; 64 only trips on an adversarial/corrupt tree.
+            if (depth > MaxBackupTreeDepth) {
+                throw new InvalidDataException(
+                    $"Backup source tree exceeds the {MaxBackupTreeDepth}-level nesting limit at '{entryRoot}'.");
+            }
             var added = false;
             var dir = new DirectoryInfo(sourceDir);
             foreach (var entry in dir.EnumerateFileSystemInfos("*", SearchOption.TopDirectoryOnly)) {
@@ -178,7 +190,7 @@ namespace OpenAstroAra.Server.Services {
                     continue; // symlink / junction — don't follow it out of the backup root.
                 }
                 if (entry is DirectoryInfo sub) {
-                    added |= AddDirectory(archive, sub.FullName, entryRoot + "/" + sub.Name, ct);
+                    added |= AddDirectory(archive, sub.FullName, entryRoot + "/" + sub.Name, depth + 1, ct);
                 } else {
                     archive.CreateEntryFromFile(entry.FullName, entryRoot + "/" + entry.Name, CompressionLevel.Optimal);
                     added = true;
