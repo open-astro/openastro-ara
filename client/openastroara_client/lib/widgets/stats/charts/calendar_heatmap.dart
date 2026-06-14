@@ -29,14 +29,15 @@ class CalendarHeatmap extends ConsumerWidget {
     final start = today.subtract(const Duration(days: _daysShown - 1));
 
     // Integration minutes per day within the rendered window. Days outside it
-    // (the server may return a slightly wider range) are ignored so they don't
-    // inflate `maxMins` and wash out contrast.
+    // (the server may return a slightly wider range) are dropped so they don't
+    // inflate `maxMins` and wash out contrast. `minutesByDay` already has one
+    // entry per day, so this is a straight copy of the in-window entries.
     final perDay = <String, int>{};
     if (stats != null) {
       stats.minutesByDay.forEach((key, mins) {
         final d = DateTime.tryParse(key);
         if (d == null || d.isBefore(start) || d.isAfter(today)) return;
-        perDay[key] = (perDay[key] ?? 0) + mins;
+        perDay[key] = mins;
       });
     }
     final maxMins =
