@@ -8,15 +8,21 @@ import '../../../models/stats/guiding_rms.dart';
 import '../../../state/stats/guiding_rms_state.dart';
 import '../../../theme/ara_colors.dart';
 import 'chart_card.dart';
+import 'chart_stale_chip.dart';
 
 /// §50.7 guiding RMS trend — per-frame total guiding RMS (arcsec) over time
 /// from the live daemon (`GET /api/v1/stats/guiding`), with mean + p95 summary
 /// stats. Replaces the Phase-12g demo that plotted per-session RA/Dec from the
 /// in-memory library. (The daemon nulls the RA/Dec breakdown until separated
 /// columns exist, so today this is a single total-RMS line.)
-class GuidingRmsChart extends ConsumerWidget {
+class GuidingRmsChart extends ConsumerStatefulWidget {
   const GuidingRmsChart({super.key});
 
+  @override
+  ConsumerState<GuidingRmsChart> createState() => _GuidingRmsChartState();
+}
+
+class _GuidingRmsChartState extends ConsumerState<GuidingRmsChart> {
   // Plot at most the most-recent N samples so a very long capture history can't
   // hand fl_chart a huge spot list. Granularity is per captured frame (not per
   // guide pulse), so this is generous headroom; mean/p95 in the subtitle stay
@@ -29,10 +35,34 @@ class GuidingRmsChart extends ConsumerWidget {
   static const double _yFloor = 1.5;
   static const double _yCeiling = 5.0;
 
+  // Local spinner/banner flags so the trend stays on screen during and after a
+  // manual refresh (refresh() holds the old data). See StatsRefreshMixin.
+  bool _refreshing = false;
+  bool _staleError = false;
+
+  Future<void> _refresh() async {
+    if (_refreshing) return;
+    setState(() => _refreshing = true);
+    try {
+      await ref.read(guidingRmsProvider.notifier).refresh();
+      if (mounted) setState(() => _staleError = false);
+    } catch (_) {
+      if (mounted) setState(() => _staleError = true);
+    } finally {
+      if (mounted) setState(() => _refreshing = false);
+    }
+  }
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
+    ref.listen(guidingRmsProvider, (_, next) {
+      if (_staleError && next.hasValue && !next.isLoading) {
+        setState(() => _staleError = false);
+      }
+    });
     final async = ref.watch(guidingRmsProvider);
     final series = async.asData?.value;
+    final spinning = _refreshing || (async.isLoading && series == null);
 
     final total = series?.samples.length ?? 0;
     final shown = _plotted(series);
@@ -56,7 +86,15 @@ class GuidingRmsChart extends ConsumerWidget {
           : 'Per-frame total guiding RMS (arcsec), chronological — $summary.',
       child: Stack(
         children: [
-          _body(context, ref, async, series, shown),
+          _body(async, series, shown),
+          if (_staleError && series != null)
+            const Positioned(
+              top: 0,
+              left: 4,
+              child: ChartStaleChip(
+                tooltip: 'Couldn’t refresh — showing the last loaded trend.',
+              ),
+            ),
           Positioned(
             top: 0,
             right: 4,
@@ -64,11 +102,8 @@ class GuidingRmsChart extends ConsumerWidget {
               tooltip: 'Refresh',
               iconSize: 18,
               visualDensity: VisualDensity.compact,
-              onPressed: async.isLoading
-                  ? null
-                  : () =>
-                      unawaited(ref.read(guidingRmsProvider.notifier).refresh()),
-              icon: async.isLoading
+              onPressed: spinning ? null : () => unawaited(_refresh()),
+              icon: spinning
                   ? const SizedBox(
                       width: 16,
                       height: 16,
@@ -89,8 +124,6 @@ class GuidingRmsChart extends ConsumerWidget {
   }
 
   Widget _body(
-    BuildContext context,
-    WidgetRef ref,
     AsyncValue<GuidingRmsSeries?> async,
     GuidingRmsSeries? series,
     List<GuidingRmsPoint> shown,
@@ -101,7 +134,7 @@ class GuidingRmsChart extends ConsumerWidget {
     if (async.hasError && series == null) {
       return _Hint(
         'Could not load guiding RMS.',
-        onRetry: () => unawaited(ref.read(guidingRmsProvider.notifier).refresh()),
+        onRetry: () => unawaited(_refresh()),
       );
     }
     if (series == null) {

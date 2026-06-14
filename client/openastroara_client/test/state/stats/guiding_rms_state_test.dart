@@ -39,10 +39,9 @@ class _FakeGuidingRmsClient implements GuidingRmsClient {
   void close() {}
 }
 
-/// A fake whose `fetch()` resolves only when the test completes it, in whatever
-/// order it chooses — so the concurrent-refresh test can force the *earlier*
-/// refresh to resolve *after* the newer one (the only ordering that actually
-/// exercises the generation guard).
+/// A fake whose `fetch()` resolves only when the test completes it, so the
+/// generation-guard test can hold a refresh open while a (simulated) server
+/// switch re-runs build().
 class _GatedGuidingRmsClient implements GuidingRmsClient {
   final List<Completer<GuidingRmsSeries>> calls = [];
 
@@ -102,7 +101,7 @@ void main() {
       expect(api.fetches, 2);
     });
 
-    test('a fetch failure lands in the provider error state', () async {
+    test('an initial-load failure lands in the provider error state', () async {
       final api = _FakeGuidingRmsClient(_series(0))..throwOnFetch = true;
       final c = _container(const [_server], api);
       await c.read(savedServersProvider.future);
@@ -110,7 +109,34 @@ void main() {
       expect(c.read(guidingRmsProvider).hasError, isTrue);
     });
 
-    test('a slow earlier refresh cannot clobber a newer one (generation guard)', () async {
+    test('a failed refresh keeps the prior series and rethrows (no blanking)', () async {
+      final api = _FakeGuidingRmsClient(_series(0.7));
+      final c = _container(const [_server], api);
+      await c.read(savedServersProvider.future);
+      await c.read(guidingRmsProvider.future);
+
+      api.throwOnFetch = true;
+      await expectLater(
+          c.read(guidingRmsProvider.notifier).refresh(), throwsA(isA<StateError>()));
+      expect(c.read(guidingRmsProvider).hasError, isFalse);
+      expect(c.read(guidingRmsProvider).value!.meanRmsArcsec, 0.7);
+    });
+
+    test('a successful refresh swaps the new series in without a loading flash', () async {
+      final api = _FakeGuidingRmsClient(_series(0.7));
+      final c = _container(const [_server], api);
+      await c.read(savedServersProvider.future);
+      await c.read(guidingRmsProvider.future);
+
+      api.value = _series(1.4);
+      final future = c.read(guidingRmsProvider.notifier).refresh();
+      expect(c.read(guidingRmsProvider).isLoading, isFalse);
+      expect(c.read(guidingRmsProvider).value!.meanRmsArcsec, 0.7);
+      await future;
+      expect(c.read(guidingRmsProvider).value!.meanRmsArcsec, 1.4);
+    });
+
+    test('a server switch mid-refresh discards the stale result (generation guard)', () async {
       final api = _GatedGuidingRmsClient();
       final c = _container(const [_server], api);
       await c.read(savedServersProvider.future);
@@ -118,17 +144,32 @@ void main() {
       api.calls[0].complete(_series(0.9));
       await built;
 
-      final first = c.read(guidingRmsProvider.notifier).refresh();
-      final second = c.read(guidingRmsProvider.notifier).refresh();
-      expect(api.calls.length, 3);
+      final notifier = c.read(guidingRmsProvider.notifier);
+      final refreshing = notifier.refresh(); // captures generation; calls[1] pending
+      notifier.markBuild(); // stand in for a server-switch build() re-run
+      api.calls[1].complete(_series(9.0)); // now stale
+      await refreshing;
 
-      // Resolve the NEWER refresh first, then the OLDER one after — without the
-      // guard the late older write would clobber state with the stale value.
-      api.calls[2].complete(_series(2.0));
-      api.calls[1].complete(_series(1.0));
-      await Future.wait([first, second]);
+      expect(c.read(guidingRmsProvider).value!.meanRmsArcsec, 0.9);
+    });
 
-      expect(c.read(guidingRmsProvider).value!.meanRmsArcsec, 2.0);
+    test('a refresh that FAILS after a server switch is swallowed, not rethrown', () async {
+      final api = _GatedGuidingRmsClient();
+      final c = _container(const [_server], api);
+      await c.read(savedServersProvider.future);
+      final built = c.read(guidingRmsProvider.future);
+      api.calls[0].complete(_series(0.9));
+      await built;
+
+      final notifier = c.read(guidingRmsProvider.notifier);
+      final refreshing = notifier.refresh(); // calls[1] pending
+      notifier.markBuild(); // server switch bumps the generation
+      api.calls[1].completeError(StateError('boom')); // stale failure
+
+      // The generation mismatch means the stale error is discarded, not
+      // rethrown — so the widget can't flash a stale chip over the new data.
+      await expectLater(refreshing, completes);
+      expect(c.read(guidingRmsProvider).value!.meanRmsArcsec, 0.9);
     });
   });
 }
