@@ -10,9 +10,9 @@ import '../../widgets/stats/charts/calendar_heatmap.dart';
 import '../../widgets/stats/charts/focus_temp_scatter.dart';
 import '../../widgets/stats/charts/frame_quality_chart.dart';
 import '../../widgets/stats/achievements_section.dart';
+import '../../widgets/stats/overview_section.dart';
 import '../../widgets/stats/astrobin_export_dialog.dart';
 import '../../widgets/stats/charts/guiding_rms_chart.dart';
-import '../../widgets/stats/stat_tile.dart';
 
 /// Stats dashboard per playbook §50. Phase 12g.1 wires the Overview tiles +
 /// Targets rollup + Best Frames list over `librarySessionsProvider` demo
@@ -24,7 +24,6 @@ class StatsDashboardScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final overview = ref.watch(statsOverviewProvider);
     final rollups = ref.watch(targetRollupsProvider);
     final bestFrames = ref.watch(bestFramesProvider);
 
@@ -68,44 +67,7 @@ class StatsDashboardScreen extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          _SectionTitle(title: 'Overview', context: context),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              StatTile(
-                icon: Icons.calendar_month,
-                value: '${overview.totalNights}',
-                label: 'Nights',
-              ),
-              StatTile(
-                icon: Icons.gps_fixed,
-                value: '${overview.totalTargets}',
-                label: 'Targets',
-              ),
-              StatTile(
-                icon: Icons.list_alt,
-                value: '${overview.totalSessions}',
-                label: 'Sessions',
-              ),
-              StatTile(
-                icon: Icons.image_outlined,
-                value: '${overview.totalFrames}',
-                label: 'Frames',
-              ),
-              StatTile(
-                icon: Icons.timelapse,
-                value: _formatHours(overview.totalIntegration),
-                label: 'Total integration',
-              ),
-              StatTile(
-                icon: Icons.star_border,
-                value: overview.averageHfr.toStringAsFixed(2),
-                label: 'Avg HFR',
-                subtitle: 'lights only',
-              ),
-            ],
-          ),
+          const OverviewSection(),
           const SizedBox(height: 24),
           _SectionTitle(title: 'Targets', context: context),
           ...rollups.map((r) => _TargetRollupTile(rollup: r)),
@@ -148,11 +110,6 @@ class StatsDashboardScreen extends ConsumerWidget {
         ],
       ),
     );
-  }
-
-  String _formatHours(Duration d) {
-    final mins = d.inMinutes;
-    return '${mins ~/ 60}h ${(mins % 60).toString().padLeft(2, '0')}m';
   }
 
   Future<void> _exportCsv(
