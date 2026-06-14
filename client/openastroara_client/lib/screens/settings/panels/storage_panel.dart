@@ -5,6 +5,7 @@ import '../../../services/profile_api.dart';
 import '../../../state/saved_server_state.dart';
 import '../../../state/settings/storage_settings_state.dart';
 import '../../../theme/ara_colors.dart';
+import '../../../widgets/backup/backup_restore_modal.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
 
@@ -222,6 +223,27 @@ class _StoragePanelState extends ConsumerState<StoragePanel> {
               label: Text(_saving ? 'Saving…' : 'Save'),
             ),
           ],
+        ),
+        const SizedBox(height: 24),
+        const SettingsSectionHeader('Backup & Restore (§43)'),
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Text(
+            'Back up your profile configuration (settings + sequences) to a ZIP '
+            'snapshot on the daemon, download a snapshot, or restore one.',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AraColors.textSecondary),
+          ),
+        ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: FilledButton.icon(
+            onPressed: () => showDialog<void>(
+              context: context,
+              builder: (_) => const BackupRestoreModal(),
+            ),
+            icon: const Icon(Icons.backup, size: 16),
+            label: const Text('Open Backup & Restore'),
+          ),
         ),
       ],
     );
