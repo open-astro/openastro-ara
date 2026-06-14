@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/server.dart';
@@ -31,6 +33,20 @@ class _FakeBestFramesClient implements BestFramesClient {
     fetches++;
     if (throwOnFetch) throw StateError('boom');
     return frames;
+  }
+
+  @override
+  void close() {}
+}
+
+class _GatedBestFramesClient implements BestFramesClient {
+  final List<Completer<List<BestFrame>>> calls = [];
+
+  @override
+  Future<List<BestFrame>> fetch() {
+    final c = Completer<List<BestFrame>>();
+    calls.add(c);
+    return c.future;
   }
 
   @override
@@ -82,7 +98,7 @@ void main() {
       expect(api.fetches, 2);
     });
 
-    test('a fetch failure lands in the provider error state', () async {
+    test('an initial-load failure lands in the provider error state', () async {
       final api = _FakeBestFramesClient(const [])..throwOnFetch = true;
       final c = _container(const [_server], api);
       await c.read(savedServersProvider.future);
@@ -90,22 +106,48 @@ void main() {
       expect(c.read(bestFramesProvider).hasError, isTrue);
     });
 
-    test('concurrent refreshes: only the latest result is written', () async {
+    test('a failed refresh keeps the prior list and rethrows (no blanking)', () async {
       final api = _FakeBestFramesClient(const [BestFrame(frameId: 'a')]);
       final c = _container(const [_server], api);
       await c.read(savedServersProvider.future);
       await c.read(bestFramesProvider.future);
 
-      api.frames = const [BestFrame(frameId: 'a'), BestFrame(frameId: 'b')];
-      final first = c.read(bestFramesProvider.notifier).refresh();
-      api.frames = const [BestFrame(frameId: 'z')];
-      final second = c.read(bestFramesProvider.notifier).refresh();
-      await Future.wait([first, second]);
+      api.throwOnFetch = true;
+      await expectLater(
+          c.read(bestFramesProvider.notifier).refresh(), throwsA(isA<StateError>()));
+      expect(c.read(bestFramesProvider).hasError, isFalse);
+      expect(c.read(bestFramesProvider).value!.map((f) => f.frameId), ['a']);
+    });
 
-      // The fake has no interior await, so both reads see ['z']; this asserts
-      // the generation guard lets the latest refresh win and discards the
-      // first's now-stale-token write.
-      expect(c.read(bestFramesProvider).value!.map((f) => f.frameId), ['z']);
+    test('a successful refresh swaps the new list in without a loading flash', () async {
+      final api = _FakeBestFramesClient(const [BestFrame(frameId: 'a')]);
+      final c = _container(const [_server], api);
+      await c.read(savedServersProvider.future);
+      await c.read(bestFramesProvider.future);
+
+      api.frames = const [BestFrame(frameId: 'x'), BestFrame(frameId: 'y')];
+      final future = c.read(bestFramesProvider.notifier).refresh();
+      expect(c.read(bestFramesProvider).isLoading, isFalse);
+      expect(c.read(bestFramesProvider).value!.map((f) => f.frameId), ['a']);
+      await future;
+      expect(c.read(bestFramesProvider).value!.map((f) => f.frameId), ['x', 'y']);
+    });
+
+    test('a server switch mid-refresh discards the stale result (generation guard)', () async {
+      final api = _GatedBestFramesClient();
+      final c = _container(const [_server], api);
+      await c.read(savedServersProvider.future);
+      final built = c.read(bestFramesProvider.future);
+      api.calls[0].complete(const [BestFrame(frameId: 'a')]);
+      await built;
+
+      final notifier = c.read(bestFramesProvider.notifier);
+      final refreshing = notifier.refresh(); // captures generation; calls[1] pending
+      notifier.markBuild(); // stand in for a server-switch build() re-run
+      api.calls[1].complete(const [BestFrame(frameId: 'STALE')]); // now stale
+      await refreshing;
+
+      expect(c.read(bestFramesProvider).value!.map((f) => f.frameId), ['a']);
     });
   });
 }

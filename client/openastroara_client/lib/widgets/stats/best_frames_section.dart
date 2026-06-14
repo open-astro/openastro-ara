@@ -11,13 +11,43 @@ import 'stats_format.dart';
 /// §50 Stats dashboard Best Frames section — the catalog's top-ranked frames
 /// (best composite quality first) from the live daemon
 /// (`GET /api/v1/stats/best-frames`), replacing the Phase 12g.1 demo list.
-class BestFramesSection extends ConsumerWidget {
+class BestFramesSection extends ConsumerStatefulWidget {
   const BestFramesSection({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<BestFramesSection> createState() => _BestFramesSectionState();
+}
+
+class _BestFramesSectionState extends ConsumerState<BestFramesSection> {
+  // Local spinner/banner flags so the list stays on screen during and after a
+  // manual refresh (refresh() holds the old data instead of dropping to
+  // loading). See StatsRefreshMixin.
+  bool _refreshing = false;
+  bool _staleError = false;
+
+  Future<void> _refresh() async {
+    if (_refreshing) return;
+    setState(() => _refreshing = true);
+    try {
+      await ref.read(bestFramesProvider.notifier).refresh();
+      if (mounted) setState(() => _staleError = false);
+    } catch (_) {
+      if (mounted) setState(() => _staleError = true);
+    } finally {
+      if (mounted) setState(() => _refreshing = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    ref.listen(bestFramesProvider, (_, next) {
+      if (_staleError && next.hasValue && !next.isLoading) {
+        setState(() => _staleError = false);
+      }
+    });
     final async = ref.watch(bestFramesProvider);
     final frames = async.asData?.value;
+    final spinning = _refreshing || (async.isLoading && frames == null);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -32,11 +62,8 @@ class BestFramesSection extends ConsumerWidget {
               tooltip: 'Refresh',
               iconSize: 18,
               visualDensity: VisualDensity.compact,
-              onPressed: async.isLoading
-                  ? null
-                  : () => unawaited(
-                      ref.read(bestFramesProvider.notifier).refresh()),
-              icon: async.isLoading
+              onPressed: spinning ? null : () => unawaited(_refresh()),
+              icon: spinning
                   ? const SizedBox(
                       width: 16,
                       height: 16,
@@ -46,13 +73,13 @@ class BestFramesSection extends ConsumerWidget {
           ],
         ),
         const SizedBox(height: 8),
-        _body(ref, async, frames),
+        if (_staleError && frames != null) const _StaleBanner(),
+        _body(async, frames),
       ],
     );
   }
 
   Widget _body(
-    WidgetRef ref,
     AsyncValue<List<BestFrame>?> async,
     List<BestFrame>? frames,
   ) {
@@ -64,8 +91,7 @@ class BestFramesSection extends ConsumerWidget {
         children: [
           const Expanded(child: _Hint('Could not load best frames.')),
           TextButton(
-            onPressed: () =>
-                unawaited(ref.read(bestFramesProvider.notifier).refresh()),
+            onPressed: () => unawaited(_refresh()),
             child: const Text('Retry'),
           ),
         ],
@@ -82,6 +108,30 @@ class BestFramesSection extends ConsumerWidget {
         for (final entry in frames.asMap().entries)
           _BestFrameTile(rank: entry.key + 1, frame: entry.value),
       ],
+    );
+  }
+}
+
+/// Shown above the stale list when a manual refresh failed but data remains.
+class _StaleBanner extends StatelessWidget {
+  const _StaleBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          const Icon(Icons.sync_problem, size: 14, color: AraColors.accentBusy),
+          const SizedBox(width: 6),
+          Text(
+            'Couldn’t refresh — showing the last loaded frames.',
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: AraColors.accentBusy,
+                ),
+          ),
+        ],
+      ),
     );
   }
 }
