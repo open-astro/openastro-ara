@@ -605,6 +605,10 @@ Deferred to **§43-2**:
   `idle` until there's a real restore worth reporting progress on. **§43-2** should: stage the incoming zip aside,
   validate its manifest/sha256, swap each selected area into place atomically (mirroring the §36-2a installer's
   backup-aside→swap→restore-on-fail pattern), and drive `clone-status` from the worker's real state.
+  **Client caveat until then:** restore returns `202` but does nothing (only a server-side Warning log records it),
+  so the §43-2 client restore flow must show the restore as pending/unimplemented rather than presenting the `202`
+  as success — otherwise an operator believes config was rolled back when it wasn't. Surfaced 2026-06-13 by the
+  §43-1 round-6 review.
 - **Async packaging + progress WS.** `CreateZipAsync` completes the zip within the request (the payload is config-sized
   — kilobytes, not the frame library) rather than on a background worker emitting `backup.*` progress events. The
   202/operation-id contract is already in place so the wire shape won't change when it becomes truly async; add the

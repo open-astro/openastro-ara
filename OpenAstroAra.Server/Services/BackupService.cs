@@ -97,6 +97,9 @@ namespace OpenAstroAra.Server.Services {
         }
 
         private void CreateBackupCore(Guid id, DateTimeOffset createdUtc, CancellationToken ct) {
+            // Check before any side effect (incl. creating backups/) so a cancellation that fires after the task
+            // starts but before the first write truly leaves nothing behind, matching the documented behaviour.
+            ct.ThrowIfCancellationRequested();
             Directory.CreateDirectory(_backupsDir);
 
             var baseName = ZipPrefix + createdUtc.ToString("yyyyMMddTHHmmssZ", CultureInfo.InvariantCulture)
@@ -107,7 +110,6 @@ namespace OpenAstroAra.Server.Services {
 
             var areas = new List<string>();
             try {
-                ct.ThrowIfCancellationRequested();
                 using (var zipStream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None))
                 using (var archive = new ZipArchive(zipStream, ZipArchiveMode.Create)) {
                     var profilePath = Path.Combine(_profileDir, ProfileFileName);
@@ -123,6 +125,14 @@ namespace OpenAstroAra.Server.Services {
                     if (Directory.Exists(sequencesDir) && AddDirectory(archive, sequencesDir, SequencesDirName)) {
                         areas.Add("sequences");
                     }
+                }
+
+                // Nothing to back up (no profile.json, no sequences/) — don't reveal a content-free zip that would
+                // list as a real-but-useless snapshot. The catch reclaims the staged temp; the endpoint maps this
+                // to 422. (Near-unreachable in practice: the daemon writes a default profile.json.)
+                if (areas.Count == 0) {
+                    throw new BackupNothingToArchiveException(
+                        "Nothing to back up: neither profile.json nor a sequences/ tree is present.");
                 }
 
                 ct.ThrowIfCancellationRequested();
@@ -329,6 +339,15 @@ namespace OpenAstroAra.Server.Services {
 
         [LoggerMessage(Level = LogLevel.Warning, Message = "Backup archive {ArchivePath} vanished between resolve and open — serving 404")]
         partial void LogSnapshotVanished(string archivePath, Exception ex);
+    }
+
+    /// <summary>Thrown by <see cref="BackupService.CreateZipAsync"/> when there is nothing to back up — neither a
+    /// <c>profile.json</c> nor a <c>sequences/</c> tree exists — so a content-free zip would otherwise list as a
+    /// real-but-useless snapshot. The create endpoint maps it to <c>422 Unprocessable Entity</c>.</summary>
+    public sealed class BackupNothingToArchiveException : Exception {
+        public BackupNothingToArchiveException() { }
+        public BackupNothingToArchiveException(string message) : base(message) { }
+        public BackupNothingToArchiveException(string message, Exception innerException) : base(message, innerException) { }
     }
 
     /// <summary>On-disk backup manifest (sidecar <c>.meta.json</c>). The download URL in <see cref="BackupZipDto"/>

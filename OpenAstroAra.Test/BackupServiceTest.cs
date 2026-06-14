@@ -248,6 +248,16 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Create_with_nothing_to_archive_throws_and_leaves_no_snapshot() {
+            // No profile.json, no sequences/ — a content-free zip would otherwise list as a phantom snapshot.
+            Assert.That(async () => await _svc.CreateZipAsync(idempotencyKey: null, CancellationToken.None),
+                Throws.InstanceOf<BackupNothingToArchiveException>());
+
+            Assert.That(Directory.Exists(_backupsDir) ? Directory.GetFiles(_backupsDir) : Array.Empty<string>(),
+                Is.Empty, "the staged temp is reclaimed; no zip or manifest is left");
+        }
+
+        [Test]
         public void Create_with_a_cancelled_token_throws_and_leaves_no_artifacts() {
             WriteProfile();
             using var cts = new CancellationTokenSource();

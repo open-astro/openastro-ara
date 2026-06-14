@@ -115,9 +115,15 @@ public static class SystemEndpoints {
         var backup = app.MapGroup("/api/v1/backup").WithTags("Backup");
 
         backup.MapPost("/create-zip",
-                async ([FromHeader(Name = "Idempotency-Key")] string? idempotencyKey, IBackupService svc, CancellationToken ct) =>
-                    Results.Accepted(value: await svc.CreateZipAsync(idempotencyKey, ct)))
+                async ([FromHeader(Name = "Idempotency-Key")] string? idempotencyKey, IBackupService svc, CancellationToken ct) => {
+                    try {
+                        return Results.Accepted(value: await svc.CreateZipAsync(idempotencyKey, ct));
+                    } catch (BackupNothingToArchiveException ex) {
+                        return Results.Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
+                    }
+                })
               .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
+              .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
               .WithName("CreateBackupZip");
 
         backup.MapPost("/restore-zip",
