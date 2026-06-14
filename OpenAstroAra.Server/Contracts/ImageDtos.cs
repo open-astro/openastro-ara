@@ -62,7 +62,10 @@ public sealed record FrameDto(
     double? SnrEstimate,
     QualityScoreBreakdownDto? QualityScore,
     int Rating,
-    IReadOnlyList<string> Tags);
+    IReadOnlyList<string> Tags,
+    // §38: focuser step position at capture (for the §50.4 focus-vs-temperature
+    // view). Optional + last so existing constructions stay source-compatible.
+    int? FocuserPosition = null);
 
 /// <summary>List item used by /api/v1/frames (paginated). Excludes the heavy quality breakdown.</summary>
 public sealed record FrameListItemDto(

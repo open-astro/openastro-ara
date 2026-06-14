@@ -174,6 +174,10 @@ public sealed partial class CaptureScanService {
             ?? (LookupHeader(headers, "BSCALE") != null ? 16 : 16);
         var hfr = ParseDouble(LookupHeader(headers, "HFR"));
         var stars = ParseInt(LookupHeader(headers, "STARS"));
+        // §38: focuser step position for the §50.4 focus-vs-temperature view.
+        // FOCUSPOS is the NINA/ARA write keyword; FOCPOS is the legacy alias.
+        var focuserPos = ParseInt(LookupHeader(headers, "FOCUSPOS"))
+            ?? ParseInt(LookupHeader(headers, "FOCPOS"));
 
         // Synthetic recovered session — one bucket for all orphans recovered
         // in this scan. Real session tracking lands when §38 orchestrator
@@ -189,13 +193,13 @@ public sealed partial class CaptureScanService {
                  exposure_seconds, gain, "offset", temperature_c, captured_utc,
                  file_path, file_size_bytes, width, height, bit_depth,
                  hfr, star_count, eccentricity, guiding_rms_arcsec, snr_estimate,
-                 quality_score_json, rating, tags_json)
+                 quality_score_json, rating, tags_json, focuser_position)
             VALUES
                 ($id, $session_id, $target, $frame_type, $filter,
                  $exposure, $gain, $offset, $temp, $captured_utc,
                  $file_path, $file_size, $width, $height, $bit_depth,
                  $hfr, $stars, NULL, NULL, NULL,
-                 NULL, 0, '[]');
+                 NULL, 0, '[]', $focuser_position);
             """;
         insert.Parameters.AddWithValue("$id", frameId.ToString());
         insert.Parameters.AddWithValue("$session_id", sessionId.ToString());
@@ -214,6 +218,7 @@ public sealed partial class CaptureScanService {
         insert.Parameters.AddWithValue("$bit_depth", Math.Abs(bitDepth));
         insert.Parameters.AddWithValue("$hfr", DbValue(hfr));
         insert.Parameters.AddWithValue("$stars", DbValue(stars));
+        insert.Parameters.AddWithValue("$focuser_position", DbValue(focuserPos));
         await insert.ExecuteNonQueryAsync(ct);
 
         LogRecoveredOrphan(fitsPath, target, frameType, exposureSec);
