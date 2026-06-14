@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -107,12 +108,24 @@ class _BackupRestoreModalState extends ConsumerState<BackupRestoreModal> {
   }
 }
 
-class _SnapshotRow extends ConsumerWidget {
+class _SnapshotRow extends ConsumerStatefulWidget {
   const _SnapshotRow({required this.snapshot});
 
   final BackupSnapshot snapshot;
 
-  Future<void> _download(BuildContext context, WidgetRef ref) async {
+  @override
+  ConsumerState<_SnapshotRow> createState() => _SnapshotRowState();
+}
+
+class _SnapshotRowState extends ConsumerState<_SnapshotRow> {
+  // Guards a second Restore tap while one is running. Restore is a destructive
+  // overwrite of live config; the daemon already serializes create+restore, but
+  // blocking re-tap here avoids a pointless duplicate and gives in-progress feedback.
+  bool _restoring = false;
+
+  BackupSnapshot get snapshot => widget.snapshot;
+
+  Future<void> _download() async {
     final api = ref.read(backupApiProvider);
     if (api == null) return;
     final uri = Uri.tryParse(api.absoluteDownloadUrl(snapshot));
@@ -126,36 +139,40 @@ class _SnapshotRow extends ConsumerWidget {
         ok = false;
       }
     }
-    if (!ok && context.mounted) {
+    if (!ok && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not open the download.')));
     }
   }
 
-  Future<void> _restore(BuildContext context, WidgetRef ref) async {
+  Future<void> _restore() async {
+    if (_restoring) return;
     final choice = await showDialog<_RestoreChoice>(
       context: context,
       builder: (_) => _RestoreDialog(snapshot: snapshot),
     );
-    if (choice == null || !context.mounted) return;
+    if (choice == null || !mounted) return;
+    setState(() => _restoring = true);
     try {
       await ref.read(backupSnapshotsProvider.notifier).restore(
             snapshot,
             profiles: choice.profiles,
             sequences: choice.sequences,
           );
-      if (context.mounted) {
+      if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(const SnackBar(content: Text('Restore complete. Reconnect equipment if needed.')));
       }
     } catch (e) {
-      if (context.mounted) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Restore failed: ${_message(e)}')));
       }
+    } finally {
+      if (mounted) setState(() => _restoring = false);
     }
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final created = snapshot.createdUtc;
     return Card(
       child: ListTile(
@@ -174,11 +191,13 @@ class _SnapshotRow extends ConsumerWidget {
             IconButton(
               tooltip: 'Download',
               icon: const Icon(Icons.download),
-              onPressed: () => unawaited(_download(context, ref)),
+              onPressed: _restoring ? null : () => unawaited(_download()),
             ),
             TextButton(
-              onPressed: () => unawaited(_restore(context, ref)),
-              child: const Text('Restore'),
+              onPressed: _restoring ? null : () => unawaited(_restore()),
+              child: _restoring
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Text('Restore'),
             ),
           ],
         ),
@@ -272,7 +291,16 @@ class _Centered extends StatelessWidget {
   }
 }
 
-String _message(Object e) => e.toString().replaceFirst('Exception: ', '');
+String _message(Object e) {
+  // Friendly-ish text for the snackbar: HTTP errors carry a status; otherwise strip
+  // the generic 'Exception: ' prefix. Avoids dumping a raw DioException toString().
+  if (e is DioException) {
+    final code = e.response?.statusCode;
+    if (code != null) return 'server returned $code';
+    return e.message ?? 'network error';
+  }
+  return e.toString().replaceFirst('Exception: ', '');
+}
 
 String _formatDate(DateTime utc) {
   final l = utc.toLocal();
