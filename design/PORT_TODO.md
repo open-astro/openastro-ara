@@ -665,14 +665,14 @@ Deferred to **§43-2**:
   caught exception, not a SIGKILL). Tiny + harmless, but with no startup sweep they'd accumulate. A boot-time sweep of
   `{profileDir}/client-settings.json.tmp-*` (mirroring §36-2c `SweepStaleScratch`) would reclaim them. Low priority
   under the trust model. Surfaced 2026-06-14 by the §55.1 round-3 review.
-- **Stats sections: finish the persist-through-refresh migration (low priority, §50). IN PROGRESS.** A shared
-  `StatsRefreshMixin<T>` (`lib/state/stats/stats_refresh_mixin.dart`) now provides the Achievements-style refresh:
-  swap-on-success-only (no `AsyncValue.loading()` flash), keep last-good data + rethrow on failure (widget shows a stale
-  banner via a local flag), `ref.mounted` guard, and a build-generation guard for server-switch. **Overview**, **Targets**,
-  **Best Frames**, **Frame Quality** (chart), and **Guiding RMS** (chart) are converted (notifier +
-  `ConsumerStatefulWidget` widget + tests; charts use the shared `ChartStaleChip` overlay in place of the tile sections'
-  banner). **Remaining to convert the same way:** Calendar (chart) — the last one, still on the older
-  `loading()`-then-guard refresh.
+- **Stats sections: persist-through-refresh migration — DONE (§50).** A shared `StatsRefreshMixin<T>`
+  (`lib/state/stats/stats_refresh_mixin.dart`) provides the Achievements-style refresh: swap-on-success-only (no
+  `AsyncValue.loading()` flash), keep last-good data + rethrow on failure (widget shows a stale banner/chip via a local
+  flag), `ref.mounted` guard, and a build-generation guard for server-switch (including the error path). **All six live
+  Stats sections** — Overview, Targets, Best Frames, and the Frame Quality / Guiding RMS / Calendar charts — are converted
+  (notifier + `ConsumerStatefulWidget` widget + tests; charts use the shared `ChartStaleChip` overlay in place of the tile
+  sections' banner). The §50.19 Achievements section was already on this pattern (the original template). Landed across the
+  refresh-* slices 2026-06-14; subsumes the earlier separate "post-await `ref.mounted` guard" item.
   One small PR per section/chart. This also subsumes the earlier separate "post-await `ref.mounted` guard" item for these
   notifiers. Surfaced 2026-06-14 by the #434 review; mixin + Overview landed in the refresh-overview slice.
 - **Stats refresh notifiers: add a post-await `ref.mounted` guard (defensive, §50).** The live §50 stats

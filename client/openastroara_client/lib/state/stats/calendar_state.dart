@@ -4,6 +4,7 @@ import '../../models/server.dart';
 import '../../models/stats/calendar_stats.dart';
 import '../../services/calendar_api.dart';
 import '../saved_server_state.dart';
+import 'stats_refresh_mixin.dart';
 
 /// Builds a [CalendarClient] for a server. Overridable in tests.
 final calendarApiFactoryProvider =
@@ -26,35 +27,22 @@ final calendarApiProvider = Provider<CalendarClient?>((ref) {
 
 /// The active server's §50.6 capture calendar. `null` data means no server is
 /// saved. Read-only; [refresh] re-reads on demand.
-class CalendarNotifier extends AsyncNotifier<CalendarStats?> {
-  // Bumped on every build() and refresh(); a refresh only writes its result if
-  // the token is still current, so a second refresh tap or a server switch that
-  // rebuilds mid-fetch discards the stale result instead of clobbering state.
-  // build() bumps the token but doesn't gate its own return on it — Riverpod
-  // already discards a superseded build's future, and the refresh button is
-  // disabled while a build is in flight, so there's no refresh-outlives-build
-  // race to guard against from the UI.
-  int _generation = 0;
-
+class CalendarNotifier extends AsyncNotifier<CalendarStats?>
+    with StatsRefreshMixin<CalendarStats> {
   @override
   Future<CalendarStats?> build() async {
-    _generation++;
+    markBuild();
     final api = ref.watch(calendarApiProvider);
     if (api == null) return null;
     return api.fetch();
   }
 
-  Future<void> refresh() async {
-    final token = ++_generation;
-    state = const AsyncValue.loading();
-    final next = await AsyncValue.guard<CalendarStats?>(() async {
-      final api = ref.read(calendarApiProvider);
-      if (api == null) return null;
-      return api.fetch();
-    });
-    if (token != _generation) return;
-    state = next;
-  }
+  /// Re-reads the calendar, keeping the previous heatmap on screen if the read
+  /// fails (the chart shows a stale chip). See [StatsRefreshMixin].
+  Future<void> refresh() => refreshUsing(() async {
+        final api = ref.read(calendarApiProvider);
+        return api?.fetch();
+      });
 }
 
 final calendarProvider =
