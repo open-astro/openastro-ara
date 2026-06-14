@@ -94,6 +94,17 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_valid_but_non_object_file_serves_an_empty_object() {
+            // A hand-edited file that's valid JSON but not an object must still degrade to {} (the PUT path can't
+            // produce this, but a manual edit can).
+            await File.WriteAllTextAsync(Path.Combine(_dir, ClientSettingsService.FileName), "[1,2,3]", Encoding.UTF8);
+            var dto = await _svc.GetAsync(CancellationToken.None);
+            Assert.That(dto.Settings.ValueKind, Is.EqualTo(JsonValueKind.Object));
+            Assert.That(dto.Settings.EnumerateObject().GetEnumerator().MoveNext(), Is.False);
+            Assert.That(dto.UpdatedUtc, Is.Null);
+        }
+
+        [Test]
         public async Task A_corrupt_file_serves_an_empty_object() {
             await File.WriteAllTextAsync(Path.Combine(_dir, ClientSettingsService.FileName), "{ not valid json", Encoding.UTF8);
             var dto = await _svc.GetAsync(CancellationToken.None);

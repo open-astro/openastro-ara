@@ -82,6 +82,13 @@ public sealed partial class ClientSettingsService : IClientSettingsService, IDis
 
         try {
             using var doc = JsonDocument.Parse(text);
+            // A hand-edited file can be valid JSON yet not an object (an array, a bare string). The store's contract is
+            // an object — and the PUT path enforces it — so degrade a non-object file to empty rather than handing the
+            // client something its `Settings.ValueKind == Object` assumption doesn't expect.
+            if (doc.RootElement.ValueKind != JsonValueKind.Object) {
+                LogCorruptSettings(new JsonException("Root element is not a JSON object."));
+                return new ClientSettingsDto(EmptyObject(), null);
+            }
             // Clone so the element outlives the JsonDocument we dispose here.
             return new ClientSettingsDto(doc.RootElement.Clone(), updated);
         } catch (JsonException ex) {
