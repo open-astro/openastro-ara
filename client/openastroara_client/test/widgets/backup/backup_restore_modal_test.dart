@@ -32,6 +32,7 @@ class _FakeBackupClient implements BackupClient {
   _FakeBackupClient(this.snapshots);
   List<BackupSnapshot> snapshots;
   int creates = 0;
+  bool throwOnRestore = false;
 
   @override
   Future<List<BackupSnapshot>> listSnapshots() async => snapshots;
@@ -43,7 +44,10 @@ class _FakeBackupClient implements BackupClient {
   }
 
   @override
-  Future<String> restore({required String sourceUrl, required bool profiles, required bool sequences}) async => 'op-r';
+  Future<String> restore({required String sourceUrl, required bool profiles, required bool sequences}) async {
+    if (throwOnRestore) throw StateError('restore failed');
+    return 'op-r';
+  }
   @override
   String absoluteDownloadUrl(BackupSnapshot snapshot) => 'http://h:5555${snapshot.downloadUrl}';
   @override
@@ -166,5 +170,20 @@ void main() {
     expect(find.textContaining('overwrites the selected areas'), findsOneWidget);
     expect(find.text('Profile settings'), findsOneWidget);
     expect(find.text('Sequences'), findsOneWidget);
+  });
+
+  testWidgets('a failed restore surfaces a snackbar', (tester) async {
+    final api = _FakeBackupClient([
+      const BackupSnapshot(backupId: 'b1', downloadUrl: '/dl/b1', includedAreas: ['profiles', 'sequences']),
+    ])
+      ..throwOnRestore = true;
+    await tester.pumpWidget(_host(api));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Restore')); // row action → opens the confirm dialog
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Restore')); // confirm
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Restore failed'), findsOneWidget);
   });
 }

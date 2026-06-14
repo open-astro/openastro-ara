@@ -161,9 +161,12 @@ class _SnapshotRowState extends ConsumerState<_SnapshotRow> {
 
   Future<void> _restore() async {
     if (_restoring) return;
-    // A snapshot with no captured areas would open a confirm dialog the user can never
-    // confirm (no checkboxes → Restore permanently disabled); refuse it up front.
-    if (snapshot.includedAreas.isEmpty) {
+    // Refuse if the snapshot has no area this client can restore — empty, OR only tokens
+    // we don't recognise (e.g. a future daemon area). Otherwise the dialog would open with
+    // no checkboxes and a permanently-disabled Restore button the user can't act on.
+    final hasRestorable = snapshot.includedAreas.contains(BackupAreas.profiles) ||
+        snapshot.includedAreas.contains(BackupAreas.sequences);
+    if (!hasRestorable) {
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('This snapshot has no restorable areas.')));
       return;
