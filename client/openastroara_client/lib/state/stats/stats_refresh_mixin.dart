@@ -14,9 +14,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 /// The generation counter discards a result whose active server was switched out
 /// mid-fetch: call [markBuild] at the top of `build()` (which re-runs on a server
 /// change), and [refreshUsing] only writes when the captured generation still
-/// matches. Concurrent refreshes are prevented at the widget layer (the refresh
-/// button is disabled while one is in flight), so there's no refresh-vs-refresh
-/// race to guard here.
+/// matches. **The counter guards server switches only, NOT concurrent refreshes**
+/// — two overlapping [refreshUsing] calls are last-writer-wins. Callers must gate
+/// concurrency themselves (the widgets disable the refresh button while one is in
+/// flight), so there's no refresh-vs-refresh race in practice.
 mixin StatsRefreshMixin<T> on AsyncNotifier<T?> {
   int _generation = 0;
 
@@ -27,6 +28,12 @@ mixin StatsRefreshMixin<T> on AsyncNotifier<T?> {
   /// Run [fetch] and, on success, swap its result into `state`. Leaves `state`
   /// untouched (and rethrows) on failure, and discards the result if the active
   /// server changed while the fetch was in flight.
+  ///
+  /// The `!ref.mounted` early-return is a no-op safety valve, not a success
+  /// signal: it only fires when the notifier is already being torn down (a
+  /// non-autoDispose provider stays mounted for the app's life, so it's
+  /// effectively unreachable), at which point there's no live widget left to
+  /// observe the result anyway.
   Future<void> refreshUsing(Future<T?> Function() fetch) async {
     if (!ref.mounted) return;
     final gen = _generation;
