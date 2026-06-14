@@ -673,3 +673,21 @@ Deferred to **§43-2**:
   failure via a local flag). Unifying the two — ideally a shared `RefreshableStatsSection` scaffold or a mixin that the
   Overview/Targets/Achievements sections all use — would make refresh UX consistent. Decision-free but a cross-section
   refactor, so it belongs in its own slice rather than bolted onto one section. Surfaced 2026-06-14 by the #434 review.
+- **Stats refresh notifiers: add a post-await `ref.mounted` guard (defensive, §50).** The live §50 stats
+  `AsyncNotifier`s (Overview, Targets, Best Frames, Frame Quality) write `state = next` after the awaited fetch in
+  `refresh()` without checking `ref.mounted`. Today this is unreachable — the providers are non-autoDispose (so they
+  aren't disposed on nav-away) and a server switch re-runs `build()` which bumps the generation guard and discards the
+  stale refresh — so `state =` can't land on a disposed notifier. But if any of these later become autoDispose, the
+  reviewer-flagged "Notifier already disposed" StateError becomes reachable. A one-line `if (!ref.mounted) return;`
+  before the final `state = next` in each refresh() (or a shared `RefreshableStatsNotifier` mixin) would make it
+  correct-by-construction. Cross-cutting (4 notifiers), so its own consistency slice. Surfaced 2026-06-14 by the #436 review.
+- **Best Frames: validate `frame_id` rather than degrading to '' (§50).** `BestFrame.fromJson` degrades a missing/wrong-typed
+  `frame_id` to an empty string. Harmless today (the tile never reads `frameId`), but when per-frame detail drill-down lands,
+  an empty id would silently misbehave rather than surfacing a parse error. Tighten when the drill-down navigation is built.
+  Surfaced 2026-06-14 by the #436 review.
+- **Strengthen the sibling concurrent-refresh tests (test-quality, §50).** The Overview / Targets / Best-Frames state
+  tests assert "concurrent refreshes → latest wins" using a synchronous fake, so both refreshes resolve in call order
+  and the second writes last regardless of the generation guard — the test passes even if the guard is deleted. Frame
+  Quality (#437) now uses a gated fake that forces the *earlier* refresh to resolve *after* the newer one (the only
+  ordering that exercises the guard); port that pattern to the three sibling tests. Low risk, mechanical. Surfaced
+  2026-06-14 by the #437 review.
