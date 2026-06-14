@@ -8,6 +8,7 @@ import '../../../models/stats/frame_quality.dart';
 import '../../../state/stats/frame_quality_state.dart';
 import '../../../theme/ara_colors.dart';
 import 'chart_card.dart';
+import 'chart_stale_chip.dart';
 
 /// §50.10 frame-quality composite — a histogram of composite quality scores
 /// (0–1, higher = better) over the catalog's scored frames, from the live
@@ -62,7 +63,13 @@ class _FrameQualityChartState extends ConsumerState<FrameQualityChart> {
         children: [
           _body(async, dist),
           if (_staleError && dist != null)
-            const Positioned(top: 0, left: 4, child: _StaleChip()),
+            const Positioned(
+              top: 0,
+              left: 4,
+              child: ChartStaleChip(
+                tooltip: 'Couldn’t refresh — showing the last loaded distribution.',
+              ),
+            ),
           Positioned(
             top: 0,
             right: 4,
@@ -180,36 +187,6 @@ class _FrameQualityChartState extends ConsumerState<FrameQualityChart> {
             rightTitles: const AxisTitles(),
           ),
           barGroups: bars,
-        ),
-      ),
-    );
-  }
-}
-
-/// Compact "stale" indicator overlaid on the chart when a manual refresh failed
-/// but the previous histogram is still shown.
-class _StaleChip extends StatelessWidget {
-  const _StaleChip();
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: 'Couldn’t refresh — showing the last loaded distribution.',
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-        decoration: BoxDecoration(
-          color: AraColors.bgPanel,
-          borderRadius: BorderRadius.circular(4),
-          border: Border.all(color: AraColors.accentBusy, width: 0.5),
-        ),
-        child: const Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.sync_problem, size: 12, color: AraColors.accentBusy),
-            SizedBox(width: 4),
-            Text('Stale',
-                style: TextStyle(fontSize: 10, color: AraColors.accentBusy)),
-          ],
         ),
       ),
     );
