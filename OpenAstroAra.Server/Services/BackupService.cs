@@ -81,7 +81,11 @@ namespace OpenAstroAra.Server.Services {
         public async Task<OperationAcceptedDto> CreateZipAsync(string? idempotencyKey, CancellationToken ct) {
             // idempotencyKey is echoed back but NOT enforced in §43-1: a retried POST with the same key produces a new
             // archive each time. De-dup (key → already-created snapshot id) lands with the §43-2 worker rework; tracked
-            // in PORT_TODO. Harmless for now beyond extra archives (no retention pruning yet — also §43-2).
+            // in PORT_TODO. Harmless for now beyond extra archives (no retention pruning yet — also §43-2). When a key
+            // is actually supplied, log it so an operator retrying a timed-out POST has a signal that dedup is off.
+            if (!string.IsNullOrEmpty(idempotencyKey)) {
+                LogDeduplicationNotImplemented();
+            }
             var id = Guid.NewGuid();
             var createdUtc = DateTimeOffset.UtcNow;
 
@@ -205,6 +209,7 @@ namespace OpenAstroAra.Server.Services {
                 // n snapshots O(n^2) — and snapshots accumulate with no retention policy yet).
                 var presentZipIds = new HashSet<string>(StringComparer.Ordinal);
                 foreach (var path in Directory.EnumerateFiles(_backupsDir, ZipPrefix + "*" + ZipExtension, SearchOption.TopDirectoryOnly)) {
+                    ct.ThrowIfCancellationRequested();
                     var idN = ExtractIdSuffix(Path.GetFileNameWithoutExtension(path));
                     if (idN is not null) {
                         presentZipIds.Add(idN);
@@ -342,6 +347,10 @@ namespace OpenAstroAra.Server.Services {
 
         [LoggerMessage(Level = LogLevel.Warning, Message = "Backup archive {ArchivePath} vanished between resolve and open — serving 404")]
         partial void LogSnapshotVanished(string archivePath, Exception ex);
+
+        [LoggerMessage(Level = LogLevel.Warning,
+            Message = "Backup create-zip received an Idempotency-Key but dedup is not implemented (§43-2) — a retry will create another archive")]
+        partial void LogDeduplicationNotImplemented();
     }
 
     /// <summary>Thrown by <see cref="BackupService.CreateZipAsync"/> when there is nothing to back up — neither a
