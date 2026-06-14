@@ -11,6 +11,7 @@ import '../../widgets/stats/charts/focus_temp_scatter.dart';
 import '../../widgets/stats/charts/frame_quality_chart.dart';
 import '../../widgets/stats/achievements_section.dart';
 import '../../widgets/stats/overview_section.dart';
+import '../../widgets/stats/targets_section.dart';
 import '../../widgets/stats/astrobin_export_dialog.dart';
 import '../../widgets/stats/charts/guiding_rms_chart.dart';
 
@@ -24,7 +25,6 @@ class StatsDashboardScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final rollups = ref.watch(targetRollupsProvider);
     final bestFrames = ref.watch(bestFramesProvider);
 
     return Scaffold(
@@ -69,8 +69,7 @@ class StatsDashboardScreen extends ConsumerWidget {
         children: [
           const OverviewSection(),
           const SizedBox(height: 24),
-          _SectionTitle(title: 'Targets', context: context),
-          ...rollups.map((r) => _TargetRollupTile(rollup: r)),
+          const TargetsSection(),
           const SizedBox(height: 24),
           _SectionTitle(title: 'Best Frames (by HFR)', context: context),
           ...bestFrames.asMap().entries.map(
@@ -175,35 +174,6 @@ class _SectionTitle extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Text(title, style: Theme.of(context).textTheme.titleMedium),
-    );
-  }
-}
-
-class _TargetRollupTile extends StatelessWidget {
-  final TargetRollup rollup;
-  const _TargetRollupTile({required this.rollup});
-
-  String _formatHours(Duration d) {
-    final mins = d.inMinutes;
-    return '${mins ~/ 60}h ${(mins % 60).toString().padLeft(2, '0')}m';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      child: ListTile(
-        leading: const Icon(Icons.gps_fixed, color: AraColors.textSecondary),
-        title: Text(rollup.targetName),
-        subtitle: Text(
-          '${rollup.sessionCount} session${rollup.sessionCount == 1 ? '' : 's'} · '
-          '${rollup.frameCount} frames · '
-          '${_formatHours(rollup.integration)} integration · '
-          'Avg HFR ${rollup.averageHfr.toStringAsFixed(2)}',
-        ),
-        trailing: const Icon(Icons.chevron_right, color: AraColors.textDisabled),
-        onTap: null, // per-target detail drill-down lands in 12g.3
-      ),
     );
   }
 }

@@ -7,6 +7,7 @@ import '../../models/stats/stats_overview.dart';
 import '../../state/stats/stats_overview_state.dart';
 import '../../theme/ara_colors.dart';
 import 'stat_tile.dart';
+import 'stats_format.dart';
 
 /// §50 Stats Overview section — headline catalog totals from the live daemon
 /// (`GET /api/v1/stats/overview`), replacing the Phase 12g.1 demo-data tiles.
@@ -98,7 +99,7 @@ class OverviewSection extends ConsumerWidget {
         ),
         StatTile(
           icon: Icons.timelapse,
-          value: _hours(data.totalIntegrationHours),
+          value: formatIntegrationHours(data.totalIntegrationHours),
           label: 'Total integration',
         ),
         StatTile(
@@ -108,30 +109,11 @@ class OverviewSection extends ConsumerWidget {
         ),
         StatTile(
           icon: Icons.event_available,
-          value: _date(data.lastImageUtc),
+          value: formatStatsDate(data.lastImageUtc),
           label: 'Last imaged',
         ),
       ],
     );
-  }
-
-  // Whole-hour metrics read as "12h"; fractional ones add minutes ("12h 30m").
-  static String _hours(double hours) {
-    if (!hours.isFinite || hours < 0) return '—';
-    final totalMinutes = (hours * 60).round();
-    final h = totalMinutes ~/ 60;
-    final m = totalMinutes % 60;
-    return m == 0 ? '${h}h' : '${h}h ${m.toString().padLeft(2, '0')}m';
-  }
-
-  static String _date(DateTime? utc) {
-    if (utc == null) return '—';
-    final d = utc.toLocal();
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-    ];
-    return '${d.day} ${months[d.month - 1]} ${d.year}';
   }
 }
 

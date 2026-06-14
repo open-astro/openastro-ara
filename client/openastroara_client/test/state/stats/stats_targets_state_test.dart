@@ -93,5 +93,24 @@ void main() {
       await expectLater(c.read(statsTargetsProvider.future), throwsA(isA<StateError>()));
       expect(c.read(statsTargetsProvider).hasError, isTrue);
     });
+
+    test('concurrent refreshes: only the latest result is written', () async {
+      final api = _FakeStatsExportClient(const [StatsTarget(targetName: 'M31')]);
+      final c = _container(const [_server], api);
+      await c.read(savedServersProvider.future);
+      await c.read(statsTargetsProvider.future);
+
+      api.targets = const [StatsTarget(targetName: 'M31'), StatsTarget(targetName: 'M42')];
+      final first = c.read(statsTargetsProvider.notifier).refresh();
+      api.targets = const [StatsTarget(targetName: 'M81')];
+      final second = c.read(statsTargetsProvider.notifier).refresh();
+      await Future.wait([first, second]);
+
+      // The fake's fetchTargets() has no interior await, so both continuations
+      // run after the synchronous mutation and read ['M81']; this asserts the
+      // generation guard lets the latest (second) refresh win and discards the
+      // first's now-stale-token write, rather than asserting the first read M42.
+      expect(c.read(statsTargetsProvider).value!.map((t) => t.targetName), ['M81']);
+    });
   });
 }
