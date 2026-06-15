@@ -104,6 +104,9 @@ public sealed partial class FileProfileStore : IProfileStore {
     public EquipmentConnectionDto GetEquipmentConnection() { lock (_lock) { return _snapshot.EquipmentConnection; } }
     public void PutEquipmentConnection(EquipmentConnectionDto value) => UpdateAndPersist(s => s with { EquipmentConnection = value });
 
+    public OpticsSettingsDto GetOpticsSettings() { lock (_lock) { return _snapshot.Optics; } }
+    public void PutOpticsSettings(OpticsSettingsDto value) => UpdateAndPersist(s => s with { Optics = value });
+
     public event EventHandler? Changed;
 
     private void UpdateAndPersist(Func<ProfileSnapshotDto, ProfileSnapshotDto> mutate) {
@@ -219,7 +222,12 @@ public sealed partial class FileProfileStore : IProfileStore {
             ManualDefaultParams: new(Blackpoint: 0.02, Midpoint: 0.5, Whitepoint: 0.98),
             AsinhDefaultBeta: 3.0,
             LinearClipPercentilesLow: 0.005,
-            LinearClipPercentilesHigh: 0.995));
+            LinearClipPercentilesHigh: 0.995),
+        // §36 optics — 0s mean "not yet configured"; ReducerFactor 1.0 so
+        // it's never a zero multiplier in the framing math.
+        Optics: new(
+            FocalLengthMm: 0, ReducerFactor: 1.0,
+            SensorWidthPx: 0, SensorHeightPx: 0, PixelSizeUm: 0));
 
     #region LoggerMessage delegates (CA1848)
 

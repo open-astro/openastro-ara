@@ -434,6 +434,35 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Phd2Settings' }
 
+  /profile/optics:
+    get:
+      summary: Get active profile's optics settings
+      description: |
+        §36 imaging-train optics + sensor geometry. The Sky Atlas Planning
+        tab's Frame mode reads this to draw the field-of-view box (works with
+        the camera offline since sensor dimensions are cached here).
+      tags: [Profile]
+      responses:
+        '200':
+          description: Current optics-settings state
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OpticsSettings' }
+    put:
+      summary: Replace active profile's optics settings
+      tags: [Profile]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OpticsSettings' }
+      responses:
+        '200':
+          description: New state (echo of input)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OpticsSettings' }
+
   /profile/diagnostics-mode:
     get:
       summary: Get active profile's diagnostics mode
@@ -1007,6 +1036,24 @@ components:
       required: [mode]
       properties:
         mode: { type: string, enum: [notify_only, pause_on_critical, abort_on_critical] }
+
+    OpticsSettings:
+      type: object
+      description: |
+        §36 imaging-train optics + sensor geometry — the inputs the Planning
+        tab's Frame mode needs to draw the FOV box. Pixel scale =
+        206.265 × `pixel_size_um` ÷ (`focal_length_mm` × `reducer_factor`);
+        FOV = sensor_px × pixel scale. `reducer_factor` is 1.0 for none,
+        0.8 for a 0.8× reducer, 2.0 for a 2× barlow. 0 values mean
+        "unset/unknown" — sensor dimensions are cached on first camera
+        connect so framing works with the camera offline.
+      required: [focal_length_mm, reducer_factor, sensor_width_px, sensor_height_px, pixel_size_um]
+      properties:
+        focal_length_mm:  { type: number, format: double, minimum: 0 }
+        reducer_factor:   { type: number, format: double, minimum: 0 }
+        sensor_width_px:  { type: integer, minimum: 0 }
+        sensor_height_px: { type: integer, minimum: 0 }
+        pixel_size_um:    { type: number, format: double, minimum: 0 }
 
     PlateSolveSettings:
       type: object

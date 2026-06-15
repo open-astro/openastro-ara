@@ -141,6 +141,7 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(OperationAcceptedDto))]
 [JsonSerializable(typeof(ParkRequestDto))]
 [JsonSerializable(typeof(PendingRestartDto))]
+[JsonSerializable(typeof(OpticsSettingsDto))]
 [JsonSerializable(typeof(Phd2SettingsDto))]
 [JsonSerializable(typeof(PlateSolveSettingsDto))]
 [JsonSerializable(typeof(PolarAlignFrameDto))]

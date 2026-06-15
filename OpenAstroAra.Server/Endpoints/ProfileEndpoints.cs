@@ -194,6 +194,21 @@ public static class ProfileEndpoints {
             .WithName("PutPhd2Settings")
             .WithSummary("Replace the active profile's PHD2 settings.");
 
+        profile.MapGet("/optics", (IProfileStore store) =>
+                Results.Ok(store.GetOpticsSettings()))
+            .Produces<OpticsSettingsDto>(StatusCodes.Status200OK)
+            .WithName("GetOpticsSettings")
+            .WithSummary("Get the active profile's optics settings.");
+
+        profile.MapPut("/optics", (OpticsSettingsDto body, IProfileStore store) => {
+            store.PutOpticsSettings(body);
+            return Results.Ok(body);
+        })
+            .Accepts<OpticsSettingsDto>("application/json")
+            .Produces<OpticsSettingsDto>(StatusCodes.Status200OK)
+            .WithName("PutOpticsSettings")
+            .WithSummary("Replace the active profile's optics settings.");
+
         profile.MapGet("/equipment-connection", (IProfileStore store) =>
                 Results.Ok(store.GetEquipmentConnection()))
             .Produces<EquipmentConnectionDto>(StatusCodes.Status200OK)
