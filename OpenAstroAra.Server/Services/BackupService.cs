@@ -376,6 +376,14 @@ namespace OpenAstroAra.Server.Services {
             // already in place for exactly this.
             var zipPath = FindZipPath(id)
                 ?? throw new BackupSnapshotNotFoundException($"No backup snapshot {id} to restore from.");
+
+            // Fast-fail a concurrent restore BEFORE the (relatively) expensive checksum hash: a restore already in
+            // flight can't proceed regardless of this archive's validity, so 409 wins over a would-be 422 and we skip
+            // hashing the archive for nothing. The authoritative claim under the lock below re-checks to close the
+            // peek→claim race.
+            if (RestoreInProgress()) {
+                throw new BackupRestoreInProgressException("A restore is already in progress.");
+            }
             ValidateChecksum(id, zipPath);
 
             // Claim the single clone slot. Only one restore at a time — a second while one runs is a 409, not a
@@ -456,6 +464,12 @@ namespace OpenAstroAra.Server.Services {
         private void SetClone(CloneState s) {
             lock (_cloneLock) {
                 _clone = s;
+            }
+        }
+
+        private bool RestoreInProgress() {
+            lock (_cloneLock) {
+                return _clone.State == RunningState;
             }
         }
 
