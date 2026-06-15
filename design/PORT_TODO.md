@@ -711,10 +711,11 @@ Deferred to **§43-2**:
 - **`captured_utc` is stored in two ISO formats (`Z` vs `+00:00`) (§50/§28).** The frame catalog's `captured_utc` is
   written as a UTC round-trip (`"O"`) string by two paths that produce different suffixes: `SqliteFrameRepository`
   formats a `DateTimeOffset` (zero offset) → `…+00:00`, while `CaptureScanService` formats a `DateTime` (UTC kind) →
-  `…Z`. So the column holds a mix. This is **safe for the `>=` `since` bound** (`Z` 0x5A > `+` 0x2B lexicographically, so
-  a row at exactly the cutoff instant is still included) and sub-second `"O"` precision makes a same-instant collision
-  between the two formats essentially impossible — but it's a latent inconsistency that would matter for a strict
-  `ORDER BY captured_utc` tiebreak or an equality/dedup on the raw string. Fix = normalize both write paths to one format
+  `…Z`. So the column holds a mix. This is **safe for the `>=` `since` bound** because the bound is now always normalized
+  to `+00:00` (via `SqliteUtcBound`, so it never takes the `…Z` form) and `"O"`'s 100 ns precision makes a same-instant
+  collision between a row and the bound essentially impossible — but it's a latent inconsistency that would matter for a
+  strict `ORDER BY captured_utc` tiebreak or an equality/dedup on the raw string (where two rows for the same instant in
+  different formats sort/compare unequal). Fix = normalize both write paths to one format
   (prefer `…Z` via `DateTime`/`DateTimeOffset.UtcDateTime.ToString("O")`), plus a one-time backfill of existing rows
   (there's no migration runner, so a guarded idempotent startup `UPDATE` or a §38-style additive step). Low priority —
   no observed bug. Surfaced 2026-06-15 by the #456 review.
