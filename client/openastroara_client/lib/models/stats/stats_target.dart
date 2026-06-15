@@ -3,11 +3,12 @@
 /// wrong-typed fields degrade rather than throw.
 library;
 
+import 'stats_time.dart';
+
 int _int(dynamic v) => v is int ? v : (v is num ? v.toInt() : 0);
 double _dbl(dynamic v) => v is num ? v.toDouble() : 0.0;
 double? _dblOrNull(dynamic v) => v is num ? v.toDouble() : null;
 String _str(dynamic v) => v is String ? v : '';
-DateTime? _dt(dynamic v) => v is String ? DateTime.tryParse(v)?.toUtc() : null;
 
 /// A target the catalog has frames for, with its frame count + total
 /// integration. Drives both the AstroBin per-target export picker and the §50
@@ -35,6 +36,6 @@ class StatsTarget {
         frameCount: _int(json['frame_count']),
         integrationHours: _dbl(json['integration_hours']),
         compositeQualityScore: _dblOrNull(json['composite_quality_score']),
-        lastImagedUtc: _dt(json['last_imaged_utc']),
+        lastImagedUtc: parseStatsUtc(json['last_imaged_utc']),
       );
 }

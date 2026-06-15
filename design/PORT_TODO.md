@@ -686,22 +686,21 @@ Deferred to **§43-2**:
   Quality (#437) now uses a gated fake that forces the *earlier* refresh to resolve *after* the newer one (the only
   ordering that exercises the guard); port that pattern to the three sibling tests. Low risk, mechanical. Surfaced
   2026-06-14 by the #437 review.
-- **Unify the stats models' `_dt` UTC parser (robustness, §50).** Guiding RMS (#438) hardened its `_dt` so a
-  zone-less wire timestamp (no `Z`/offset) is reinterpreted as UTC instead of being parsed as local and shifted by the
-  client offset. The sibling stats models (`stats_overview.dart`, `stats_target.dart`, `best_frame.dart`) still use the
-  plain `DateTime.tryParse(v)?.toUtc()` form. The daemon always emits offset-bearing `DateTimeOffset`s, so this is
-  latent-only, but a shared `parseStatsUtc()` helper (in `stats_format.dart` or a small models util) used by all four
-  would make them uniformly drift-proof. Surfaced 2026-06-14 by the #438 review.
+- **Unify the stats models' `_dt` UTC parser (robustness, §50). — RESOLVED 2026-06-15.** Extracted a single
+  `parseStatsUtc()` helper (`lib/models/stats/stats_time.dart`) and pointed all six stats timestamp parsers at it —
+  `stats_overview`, `stats_target`, `best_frame`, `achievements` (which used the weak `DateTime.tryParse(v)?.toUtc()`
+  form that mis-shifted a zone-less timestamp), plus `guiding_rms` and `focus_temp` (which had their own correct copies).
+  Now uniformly drift-proof; +4 helper tests (Z / zone-less→UTC / numeric-offset→UTC / null). `calendar_stats._date` is
+  intentionally left out (date-only `yyyy-MM-dd` semantics, not an instant). Surfaced 2026-06-14 by the #438 review.
 - **Focus-Temp scatter chart: blocked on §38 focuser-position persistence (§50.4). — RESOLVED 2026-06-14.** Done across
   four slices: `focuser_position` column (#446), capture stamps FOCUSPOS (#447), real `GetFocusTempAsync` query +
   Pearson r² (#448), and the client scatter wired to the live endpoint (#449). The chart is now live like the other five
   §50 visualizations. Original note retained for history: the live endpoint was a deliberate server stub until the column
   landed, so wiring the client early would have shown permanent "no data".
-- **Drop the dead `_explicitZone` regex branch in the remaining `_dt` copies (§50).** Confirmed 2026-06-14 that Dart's
-  `DateTime.tryParse` parses any timezone designator (`Z` *or* a numeric offset like `-05:00`) with `isUtc == true`,
-  already converted to UTC — so the `if (_explicitZone.hasMatch(v)) return parsed.toUtc();` branch (and the regex) is
-  unreachable. `focus_temp.dart` dropped it in #449; `guiding_rms.dart` still carries the dead branch. Fold into the
-  shared `parseStatsUtc()` helper proposed in the entry above. Surfaced 2026-06-14 by the #449 review.
+- **Drop the dead `_explicitZone` regex branch in the remaining `_dt` copies (§50). — RESOLVED 2026-06-15.** The shared
+  `parseStatsUtc()` helper (entry above) has no `_explicitZone` branch — `DateTime.tryParse` already parses any timezone
+  designator (`Z` or a numeric offset) with `isUtc == true`, so it was unreachable. Removing `guiding_rms`'s local `_dt`
+  in favor of the helper dropped the last copy of the dead branch + the regex. Surfaced 2026-06-14 by the #449 review.
 - **Stats `since` filter assumes a UTC `DateTimeOffset` (§50).** Every stats query that takes a `since` cutoff
   (`GetFocusTempAsync`, `GetGuidingAsync`, …) formats it with `since.Value.ToString("O", InvariantCulture)` and relies
   on SQLite's lexicographic comparison against the stored UTC `captured_utc` strings. A caller passing a non-UTC offset
