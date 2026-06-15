@@ -159,13 +159,12 @@ if [ ! -d "$framework/Versions" ]; then
   # calls would orphan at the flat root — fail clearly now rather than letting
   # Xcode's versioned-layout validation surface it as a cryptic build error.
   # (Runs before the mkdir below so it only sees the flat payload, not Versions/.)
-  while IFS= read -r entry; do
-    case "$entry" in
+  while IFS= read -r -d '' path; do
+    case "$(basename "$path")" in
       "Chromium Embedded Framework"|"Resources"|"Libraries") ;;
-      "") ;;
-      *) die "unexpected top-level entry in flat CEF framework: '$entry' — update the restructure payload list in $(basename "$0")" ;;
+      *) die "unexpected top-level entry in flat CEF framework: '$(basename "$path")' — update the restructure payload list in $(basename "$0")" ;;
     esac
-  done < <(ls "$framework")
+  done < <(find "$framework" -mindepth 1 -maxdepth 1 -print0)
   mkdir -p "$framework/Versions/A"
   mv "$framework/Chromium Embedded Framework" "$framework/Versions/A/Chromium Embedded Framework"
   mv "$framework/Resources" "$framework/Versions/A/Resources"
