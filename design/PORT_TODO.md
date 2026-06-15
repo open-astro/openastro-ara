@@ -718,3 +718,10 @@ Deferred to **§43-2**:
   the lock file the first time the macOS app is built locally/in a build slice, for reproducible pod resolution. Also
   fold in the Windows `windows/runner/main.cpp` CEF multi-process/IME tweak when the Windows build is first exercised.
   Surfaced 2026-06-14 by the #450 review.
+- **Verify §36 Aladin HiPS tile rendering on-device (§36).** The Aladin embed (#450) loads from a `data:` URL (null
+  origin in Chromium). The Aladin Lite `<script src>` isn't CORS-subject, and the CDS HiPS tile servers were verified to
+  return `access-control-allow-origin: *` (`curl -I alasky.cds.unistra.fr/DSS/...` → `200` + `ACAO: *`), so null-origin
+  tile fetches should succeed — but this needs an actual on-device run (macOS first) to confirm tiles render, not just
+  the overlay UI. If a survey ever serves tiles without permissive CORS, the fallback is serving the bootstrap HTML from
+  a localhost HTTP server (proper origin) instead of a `data:` URL. Fold this into the first on-device Sky Atlas check.
+  Surfaced 2026-06-14 by the #450 re-review.

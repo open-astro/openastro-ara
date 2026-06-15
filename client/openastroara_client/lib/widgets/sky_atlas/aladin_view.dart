@@ -48,15 +48,22 @@ class _AladinViewState extends State<AladinView> {
     // leaves the successfully-initialized manager in place.
     try {
       await _ensureManagerInitialized();
-    } on Exception catch (e, st) {
+    } catch (e, st) {
       // Native CEF couldn't start — an unsupported host, a missing Chromium
       // runtime, or the headless `flutter test` environment (no plugin
-      // registrant). Clear the cache so a later mount retries, log, and degrade.
+      // registrant). Catch ALL throwables (not just Exception): a native
+      // plugin layer can surface Error subtypes (StateError/UnsupportedError),
+      // and the guarantee here is "never crash the tab" — but it's logged, not
+      // silently swallowed. Clear the cache so a later mount retries, degrade.
       _managerInit = null;
       debugPrint('AladinView: CEF manager init failed: $e\n$st');
       if (mounted) setState(() => _unavailable = true);
       return;
     }
+    // Bail before allocating a native browser if the tab was disposed during
+    // manager init (the dispose guard after controller init still cleans up,
+    // but this avoids the wasted allocation entirely).
+    if (!mounted) return;
     try {
       final controller = WebviewManager().createWebView(loading: const _Loading());
       await controller.initialize(_aladinDataUrl);
@@ -66,7 +73,8 @@ class _AladinViewState extends State<AladinView> {
         return;
       }
       setState(() => _controller = controller);
-    } on Exception catch (e, st) {
+    } catch (e, st) {
+      // Same rationale as above: degrade-not-crash, but logged.
       debugPrint('AladinView: Aladin browser init failed: $e\n$st');
       if (mounted) setState(() => _unavailable = true);
     }
