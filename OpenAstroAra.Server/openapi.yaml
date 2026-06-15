@@ -462,6 +462,11 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/OpticsSettings' }
+        '400':
+          description: reducer_factor <= 0, or a geometry field is negative
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Problem' }
 
   /profile/diagnostics-mode:
     get:
