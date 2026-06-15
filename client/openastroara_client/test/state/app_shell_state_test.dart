@@ -13,9 +13,9 @@ void main() {
       expect(container.read(selectedTabIndexProvider), 0);
     });
 
-    test('select accepts valid indices 0..4', () {
+    test('select accepts valid indices 0..3', () {
       final notifier = container.read(selectedTabIndexProvider.notifier);
-      for (var i = 0; i < 5; i++) {
+      for (var i = 0; i < 4; i++) {
         notifier.select(i);
         expect(container.read(selectedTabIndexProvider), i,
             reason: 'failed for index $i');
@@ -28,8 +28,8 @@ void main() {
       // Negative.
       notifier.select(-1);
       expect(container.read(selectedTabIndexProvider), 2);
-      // Out of upper bound (only 5 tabs).
-      notifier.select(5);
+      // Out of upper bound (only 4 tabs after the Planning merge — §36/§25.5).
+      notifier.select(4);
       expect(container.read(selectedTabIndexProvider), 2);
       notifier.select(100);
       expect(container.read(selectedTabIndexProvider), 2);

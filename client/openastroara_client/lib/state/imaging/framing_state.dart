@@ -1,10 +1,12 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-/// Framing Assistant state (§25.5.2). Phase 12c.1 scopes to:
-///   - the search query string
-///   - the framing parameters (FOV, rotation, mosaic panel grid)
-/// Real target catalog lookups (Messier/NGC/IC/by name or coords) + sky-chart
-/// rendering land in Phase 12c.2 alongside the bundled-catalog service.
+/// Framing state for the merged **Planning** tab (§25.5 + §36,
+/// PORT_DECISIONS §36/§25.5):
+///   - the framing parameters (rotation, mosaic panel grid)
+///   - the Frame-toggle on/off flag
+/// Target search now flows through the Planning tab's universal search
+/// (`skyAtlasSearchProvider`). The profile-derived FOV (camera + scope) +
+/// "Build Sequence" output land in the FOV slice.
 
 class FramingParams {
   final double rotationDeg;
@@ -47,14 +49,16 @@ final framingControllerProvider =
     NotifierProvider<FramingController, FramingParams>(
         FramingController.new);
 
-/// Riverpod 3.x removed `StateProvider`; use a thin Notifier for the search
-/// box's debounced query.
-class TargetSearchQueryNotifier extends Notifier<String> {
+/// Whether the Planning tab's **Frame** toggle is on — when true the framing
+/// controls (and, in the FOV slice, the camera/scope FOV overlay) appear over
+/// the atlas. Orthogonal to the Explore/Tonight's-Sky view mode
+/// (`skyAtlasModeProvider`). See PORT_DECISIONS §36/§25.5.
+class FrameModeNotifier extends Notifier<bool> {
   @override
-  String build() => '';
-  void set(String s) => state = s;
+  bool build() => false;
+  void set(bool v) => state = v;
+  void toggle() => state = !state;
 }
 
-final targetSearchQueryProvider =
-    NotifierProvider<TargetSearchQueryNotifier, String>(
-        TargetSearchQueryNotifier.new);
+final frameModeEnabledProvider =
+    NotifierProvider<FrameModeNotifier, bool>(FrameModeNotifier.new);
