@@ -52,15 +52,10 @@ void main() {
     });
 
     test('set updates the flag', () {
-      container.read(frameModeEnabledProvider.notifier).set(true);
-      expect(container.read(frameModeEnabledProvider), true);
-    });
-
-    test('toggle flips the flag', () {
       final n = container.read(frameModeEnabledProvider.notifier);
-      n.toggle();
+      n.set(true);
       expect(container.read(frameModeEnabledProvider), true);
-      n.toggle();
+      n.set(false);
       expect(container.read(frameModeEnabledProvider), false);
     });
   });

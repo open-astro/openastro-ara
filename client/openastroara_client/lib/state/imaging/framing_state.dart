@@ -57,7 +57,6 @@ class FrameModeNotifier extends Notifier<bool> {
   @override
   bool build() => false;
   void set(bool v) => state = v;
-  void toggle() => state = !state;
 }
 
 final frameModeEnabledProvider =
