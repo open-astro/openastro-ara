@@ -667,12 +667,12 @@ Deferred to **§43-2**:
   fix is a dashboard-wide pass (e.g. a shared responsive `BoxConstraints(minWidth: 160, maxWidth: 220)` applied to
   `StatTile` and the badges together). Low priority until a narrow-viewport target exists. Surfaced 2026-06-14 across the
   §50.19 client-view review rounds.
-- **client-settings: orphaned `.tmp-*` on a mid-write crash (low priority, §55.1).** `ClientSettingsService.ReplaceAsync`
-  writes `client-settings.json.tmp-{guid}` then renames it into place; a hard kill in the window between the write
-  completing and the `File.Move` leaves the uniquely-named temp behind (the in-process catch only cleans up on a
-  caught exception, not a SIGKILL). Tiny + harmless, but with no startup sweep they'd accumulate. A boot-time sweep of
-  `{profileDir}/client-settings.json.tmp-*` (mirroring §36-2c `SweepStaleScratch`) would reclaim them. Low priority
-  under the trust model. Surfaced 2026-06-14 by the §55.1 round-3 review.
+- **client-settings: orphaned `.tmp-*` on a mid-write crash — RESOLVED 2026-06-15.** `ClientSettingsService.SweepOrphans(profileDir)`
+  runs at startup in `Program.cs` (in the post-build block beside the §43-2 backup sweep, before request acceptance)
+  and reclaims any `{profileDir}/client-settings.json.tmp-*` left when a `ReplaceAsync` was hard-killed between the temp
+  write and its `File.Move` rename. Best-effort per file; the live `client-settings.json` is untouched; logs a Warning
+  when it reclaims any. Covered by 5 `ClientSettingsServiceTest` cases. Mirrors §43-2 `BackupService.SweepOrphans` /
+  §36-2c `SweepStaleScratch`. Original entry surfaced 2026-06-14 by the §55.1 round-3 review.
 - **Stats sections: persist-through-refresh migration — DONE (§50).** A shared `StatsRefreshMixin<T>`
   (`lib/state/stats/stats_refresh_mixin.dart`) provides the Achievements-style refresh: swap-on-success-only (no
   `AsyncValue.loading()` flash), keep last-good data + rethrow on failure (widget shows a stale banner/chip via a local

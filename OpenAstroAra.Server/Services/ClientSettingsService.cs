@@ -15,6 +15,7 @@
 using Microsoft.Extensions.Logging;
 using OpenAstroAra.Server.Contracts;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using System.Text.Json;
@@ -143,6 +144,42 @@ public sealed partial class ClientSettingsService : IClientSettingsService, IDis
         return new ClientSettingsDto(stored, updated);
     }
 
+    /// <summary>
+    /// Reclaim crash-only orphan temp files under <paramref name="profileDir"/> — <c>client-settings.json.tmp-*</c>
+    /// siblings left when a <see cref="ReplaceAsync"/> was hard-killed in the window between the temp write and the
+    /// <c>File.Move</c> rename. The in-process catch only cleans up on a caught exception, not a SIGKILL, so a startup
+    /// sweep reclaims them. Returns the count removed; best-effort per file (a locked/denied one is skipped, the next
+    /// boot retries). Logs a Warning when it reclaims any — a non-empty sweep means the daemon died mid-write. Mirrors
+    /// §43-2 <see cref="BackupService.SweepOrphans"/> / §36-2c <see cref="SkyDataInstaller.SweepStaleScratch"/>. Called
+    /// at startup before request acceptance, so no concurrent write can race a temp into the sweep.
+    /// </summary>
+    internal static int SweepOrphans(string profileDir, ILogger? logger = null) {
+        ArgumentException.ThrowIfNullOrEmpty(profileDir);
+        string[] temps;
+        try {
+            if (!Directory.Exists(profileDir)) {
+                return 0;
+            }
+            temps = Directory.GetFiles(profileDir, FileName + ".tmp-*", SearchOption.TopDirectoryOnly);
+        } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+            return 0;
+        }
+
+        var removedNames = new List<string>();
+        foreach (var path in temps) {
+            try {
+                File.Delete(path);
+                removedNames.Add(Path.GetFileName(path));
+            } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+                // best-effort — leave it; the next boot retries.
+            }
+        }
+        if (removedNames.Count > 0 && logger is not null) {
+            LogOrphansSwept(logger, removedNames.Count, string.Join(", ", removedNames));
+        }
+        return removedNames.Count;
+    }
+
     private static JsonElement EmptyObject() {
         using var doc = JsonDocument.Parse("{}");
         return doc.RootElement.Clone();
@@ -152,4 +189,9 @@ public sealed partial class ClientSettingsService : IClientSettingsService, IDis
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "client-settings.json was unreadable JSON; serving an empty object")]
     partial void LogCorruptSettings(Exception ex);
+
+    // Static (the sweep runs at startup before the service instance exists), so it takes the logger explicitly.
+    [LoggerMessage(Level = LogLevel.Warning,
+        Message = "Reclaimed {Count} crash-orphaned client-settings temp file(s) at startup (daemon died mid-write): {Files}")]
+    private static partial void LogOrphansSwept(ILogger logger, int count, string files);
 }

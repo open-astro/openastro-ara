@@ -128,5 +128,70 @@ namespace OpenAstroAra.Test {
             Assert.That(dto.Settings.ValueKind, Is.EqualTo(JsonValueKind.Object));
             Assert.That(dto.Settings.EnumerateObject().GetEnumerator().MoveNext(), Is.False, "corrupt file → empty object");
         }
+
+        // §55.1 orphan-temp boot sweep.
+
+        private string TempPath(string suffix) => Path.Combine(_dir, ClientSettingsService.FileName + ".tmp-" + suffix);
+
+        [Test]
+        public void SweepOrphans_removes_temp_files_left_by_a_killed_write() {
+            File.WriteAllText(TempPath("deadbeef"), "partial");
+            File.WriteAllText(TempPath("cafef00d"), "partial");
+
+            var removed = ClientSettingsService.SweepOrphans(_dir);
+
+            Assert.That(removed, Is.EqualTo(2));
+            Assert.That(Directory.GetFiles(_dir, ClientSettingsService.FileName + ".tmp-*"), Is.Empty);
+        }
+
+        [Test]
+        public void SweepOrphans_keeps_the_real_settings_file() {
+            File.WriteAllText(Path.Combine(_dir, ClientSettingsService.FileName), "{\"theme\":\"dark\"}");
+            File.WriteAllText(TempPath("deadbeef"), "partial");
+
+            var removed = ClientSettingsService.SweepOrphans(_dir);
+
+            Assert.That(removed, Is.EqualTo(1));
+            Assert.That(File.Exists(Path.Combine(_dir, ClientSettingsService.FileName)), Is.True,
+                "the live settings file is not a temp orphan");
+        }
+
+        [Test]
+        public void SweepOrphans_on_a_missing_dir_is_a_no_op() =>
+            Assert.That(ClientSettingsService.SweepOrphans(Path.Combine(_dir, "nope")), Is.EqualTo(0));
+
+        [Test]
+        public async Task SweepOrphans_after_a_real_write_leaves_no_temp() {
+            await _svc.ReplaceAsync(Obj("{\"theme\":\"dark\"}"), CancellationToken.None);
+
+            var removed = ClientSettingsService.SweepOrphans(_dir);
+
+            Assert.That(removed, Is.EqualTo(0), "a completed write renames its temp away — nothing to reclaim");
+        }
+
+        [Test]
+        public void SweepOrphans_logs_a_warning_only_when_it_reclaims_something() {
+            var clean = new RecordingLogger();
+            ClientSettingsService.SweepOrphans(_dir, clean);
+            Assert.That(clean.Warnings, Is.Empty);
+
+            File.WriteAllText(TempPath("deadbeef"), "partial");
+            var swept = new RecordingLogger();
+            ClientSettingsService.SweepOrphans(_dir, swept);
+            Assert.That(swept.Warnings, Has.Count.EqualTo(1));
+            Assert.That(swept.Warnings[0], Does.Contain(".tmp-deadbeef"), "the warning names the reclaimed file");
+        }
+
+        private sealed class RecordingLogger : Microsoft.Extensions.Logging.ILogger {
+            public List<string> Warnings { get; } = new();
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+            public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
+            public void Log<TState>(Microsoft.Extensions.Logging.LogLevel logLevel, Microsoft.Extensions.Logging.EventId eventId,
+                TState state, Exception? exception, Func<TState, Exception?, string> formatter) {
+                if (logLevel == Microsoft.Extensions.Logging.LogLevel.Warning) {
+                    Warnings.Add(formatter(state, exception));
+                }
+            }
+        }
     }
 }
