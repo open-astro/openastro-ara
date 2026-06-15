@@ -271,6 +271,32 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Optics_missing_from_an_older_profile_backfills_to_default() {
+            var dir = Path.Combine(Path.GetTempPath(), "openastroara-optics-bf-" + Path.GetRandomFileName());
+            try {
+                // Simulate a profile.json written before §36 optics existed: take a
+                // full snapshot's JSON and strip the "optics" key.
+                _ = new FileProfileStore(dir); // writes defaults (incl. optics)
+                var path = Path.Combine(dir, "profile.json");
+                var root = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(path))!.AsObject();
+                root.Remove("optics");
+                File.WriteAllText(path, root.ToJsonString());
+
+                // Reopen: optics must back-fill to the default, not deserialize to
+                // null (which would surface as a null GET body on upgrade).
+                var store = new FileProfileStore(dir);
+                var optics = store.GetOpticsSettings();
+                Assert.That(optics, Is.Not.Null);
+                Assert.That(optics.ReducerFactor, Is.EqualTo(1.0));
+                Assert.That(optics.FocalLengthMm, Is.EqualTo(0));
+            } finally {
+                if (Directory.Exists(dir)) {
+                    Directory.Delete(dir, recursive: true);
+                }
+            }
+        }
+
+        [Test]
         public void MapFileType_falls_back_to_FITS_for_fits_variants() {
             Assert.That(ProfileStoreMapper.MapFileType("xisf"), Is.EqualTo(FileType.XISF));
             Assert.That(ProfileStoreMapper.MapFileType("XISF"), Is.EqualTo(FileType.XISF));

@@ -201,11 +201,21 @@ public static class ProfileEndpoints {
             .WithSummary("Get the active profile's optics settings.");
 
         profile.MapPut("/optics", (OpticsSettingsDto body, IProfileStore store) => {
+            // reducer_factor multiplies focal length in the pixel-scale formula, so
+            // 0 (or negative) would divide-by-zero / invert the FOV. The other
+            // fields use 0 = "unset"; reducer must stay strictly positive (1.0 = no
+            // reducer/barlow).
+            if (body.ReducerFactor <= 0) {
+                return Results.Problem(
+                    detail: "reducer_factor must be > 0 (1.0 = no reducer/barlow).",
+                    statusCode: StatusCodes.Status400BadRequest);
+            }
             store.PutOpticsSettings(body);
             return Results.Ok(body);
         })
             .Accepts<OpticsSettingsDto>("application/json")
             .Produces<OpticsSettingsDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
             .WithName("PutOpticsSettings")
             .WithSummary("Replace the active profile's optics settings.");
 

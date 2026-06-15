@@ -1050,7 +1050,7 @@ components:
       required: [focal_length_mm, reducer_factor, sensor_width_px, sensor_height_px, pixel_size_um]
       properties:
         focal_length_mm:  { type: number, format: double, minimum: 0 }
-        reducer_factor:   { type: number, format: double, minimum: 0 }
+        reducer_factor:   { type: number, format: double, exclusiveMinimum: 0 }
         sensor_width_px:  { type: integer, minimum: 0 }
         sensor_height_px: { type: integer, minimum: 0 }
         pixel_size_um:    { type: number, format: double, minimum: 0 }

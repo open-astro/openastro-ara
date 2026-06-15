@@ -152,7 +152,14 @@ public sealed partial class FileProfileStore : IProfileStore {
                 LogDeserializedNull(_profilePath);
                 return defaults;
             }
-            return loaded;
+            // Back-fill sections added after a profile.json was first written: a key
+            // missing from an older file deserializes the (non-nullable) record
+            // parameter to null rather than throwing, which would surface as a null
+            // GET body on upgrade. §36 optics is the first such section. The nullable
+            // cast sidesteps the "left operand is never null" NRT warning — the
+            // runtime value genuinely can be null here.
+            var optics = (OpticsSettingsDto?)loaded.Optics ?? defaults.Optics;
+            return loaded with { Optics = optics };
         } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) {
             LogParseFailed(ex, _profilePath);
             return defaults;
