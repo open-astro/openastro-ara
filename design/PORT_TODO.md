@@ -763,7 +763,10 @@ Deferred to **§43-2**:
   (3) **Profile-cached camera geometry:** on the first successful camera connect for a profile, persist sensor W/H px +
   pixel size + effective focal length (incl. reducer/barlow) into the profile so Frame works with the camera disconnected /
   offline; manual override in Settings → Camera/Telescope. (Inputs exist: `CameraSettings.PixelSize`,
-  `TelescopeSettings.FocalLength`, `EquipmentDtos.SensorWidth/Height`.)
+  `TelescopeSettings.FocalLength`, `EquipmentDtos.SensorWidth/Height`.) **Invalidate the cache** so a swapped camera /
+  changed reducer doesn't yield stale framing: re-cache when a connect reports different sensor dims (auto + one-time notice),
+  fold into the §30.7 equipment-change check (already covers telescope/focal-length → framing), and add a "Refresh from
+  connected camera" affordance by the FOV readout.
   (4) Tonight's Sky = location-aware "best objects tonight" from profile site lat/long + date, ranked by altitude/visibility.
   (5) reconcile prose in §36 / §47 / §25.5 / §61 search registry (map "framing"/"FOV"/"mosaic"/"tonight"/"sky atlas" → Planning);
   update `COMMIT-PR-RULES.md` Phase 12 split (12c drops Framing; 12e becomes "Planning"). Server unaffected.
