@@ -32,6 +32,7 @@ dependencies:
   collection: ^1.19.1
   url_launcher: ^6.3.1
   package_info_plus: ^9.0.1
+  webview_cef: ^0.2.2
 
 dev_dependencies:
   flutter_test:

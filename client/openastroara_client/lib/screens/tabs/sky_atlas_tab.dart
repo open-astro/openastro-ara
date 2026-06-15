@@ -3,15 +3,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../state/sky_atlas/sky_atlas_state.dart';
 import '../../theme/ara_colors.dart';
+import '../../widgets/sky_atlas/aladin_view.dart';
 import '../../widgets/sky_atlas/data_manager_modal.dart';
 import '../../widgets/sky_atlas/sky_data_missing_banner.dart';
 
 /// Sky Atlas per §25.5.4 + §36. Two modes (Catalog View / Tonight's Sky)
 /// toggled at the top, universal search next to the mode toggle, then the
-/// Aladin Lite area below. Phase 12e.1 ships the layout + the §36.13
-/// sky-data-missing banner + the §36.2 Data Manager modal stub. Phase
-/// 12e.2 embeds the real Aladin Lite via `webview_flutter` and wires the
-/// universal search backend.
+/// embedded Aladin Lite atlas below. The atlas is a `webview_cef` Chromium
+/// texture (see [AladinView] + PORT_DECISIONS.md) composited in-tab. Universal
+/// search "goto" and the Tonight's-Sky projection wiring layer on in later §36
+/// slices.
 class SkyAtlasTab extends ConsumerWidget {
   const SkyAtlasTab({super.key});
 
@@ -30,7 +31,7 @@ class SkyAtlasTab extends ConsumerWidget {
           onOpenDataManager: () => _openDataManager(context),
         ),
         const _SearchBar(),
-        const Expanded(child: _AladinPlaceholder()),
+        const Expanded(child: AladinView()),
       ],
     );
   }
@@ -143,46 +144,3 @@ class _SearchBarState extends ConsumerState<_SearchBar> {
   }
 }
 
-class _AladinPlaceholder extends ConsumerWidget {
-  const _AladinPlaceholder();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final mode = ref.watch(skyAtlasModeProvider);
-    final query = ref.watch(skyAtlasSearchProvider);
-
-    return Container(
-      color: AraColors.bgPrimary,
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              mode == SkyAtlasMode.catalogView
-                  ? Icons.public
-                  : Icons.nights_stay_outlined,
-              size: 96,
-              color: AraColors.textDisabled,
-            ),
-            const SizedBox(height: 12),
-            Text(
-              mode == SkyAtlasMode.catalogView
-                  ? 'Catalog View — Aladin Lite (CDS) embedding here'
-                  : 'Tonight\'s Sky — zenith-centered planetarium view',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 6),
-            Text(
-              query.isEmpty
-                  ? 'webview_flutter Aladin Lite embed lands in Phase 12e.2'
-                  : 'Search query: "$query" — backend lookup in Phase 12e.2',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AraColors.textSecondary,
-                  ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
