@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/backup_snapshot.dart';
+import 'package:openastroara/models/clone_status.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/services/backup_api.dart';
 import 'package:openastroara/services/saved_server_service.dart';
@@ -48,6 +49,12 @@ class _FakeBackupClient implements BackupClient {
     if (throwOnRestore) throw StateError('restore failed');
     return 'op-r';
   }
+
+  // §43-2b: the restore worker's terminal state the modal polls for after the POST.
+  CloneStatus cloneStatusResult = const CloneStatus(state: 'done', progressPct: 100);
+  @override
+  Future<CloneStatus> cloneStatus() async => cloneStatusResult;
+
   @override
   String absoluteDownloadUrl(BackupSnapshot snapshot) => 'http://h:5555${snapshot.downloadUrl}';
   @override
@@ -185,5 +192,22 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Restore')); // confirm
     await tester.pumpAndSettle();
     expect(find.textContaining('Restore failed'), findsOneWidget);
+  });
+
+  testWidgets('a worker-side restore failure (clone-status failed) surfaces a snackbar', (tester) async {
+    // §43-2b: the POST succeeds (202), but the background worker fails — the modal
+    // now polls clone-status and must surface that, not a premature "complete".
+    final api = _FakeBackupClient([
+      const BackupSnapshot(backupId: 'b1', downloadUrl: '/dl/b1', includedAreas: ['profiles', 'sequences']),
+    ])
+      ..cloneStatusResult = const CloneStatus(state: 'failed', message: 'disk gone');
+    await tester.pumpWidget(_host(api));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Restore'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Restore'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('disk gone'), findsOneWidget);
   });
 }

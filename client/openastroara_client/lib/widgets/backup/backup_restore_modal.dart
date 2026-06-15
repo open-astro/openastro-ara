@@ -182,12 +182,21 @@ class _SnapshotRowState extends ConsumerState<_SnapshotRow> {
     if (choice == null || !mounted) return;
     setState(() => _restoring = true);
     try {
-      await ref.read(backupSnapshotsProvider.notifier).restore(
+      final notifier = ref.read(backupSnapshotsProvider.notifier);
+      await notifier.restore(
             snapshot,
             profiles: choice.profiles,
             sequences: choice.sequences,
           );
-      if (mounted) {
+      // §43-2b: the restore runs on a background worker, so the 202 doesn't mean
+      // it's done — poll clone-status to the real outcome (a worker-side failure
+      // wouldn't surface from the POST otherwise).
+      final status = await notifier.awaitRestoreTerminal();
+      if (!mounted) return;
+      if (status.isFailed) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Restore failed: ${status.message ?? 'unknown error'}')));
+      } else {
         ScaffoldMessenger.of(context)
             .showSnackBar(const SnackBar(content: Text('Restore complete. Reconnect equipment if needed.')));
       }
