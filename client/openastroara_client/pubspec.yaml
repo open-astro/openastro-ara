@@ -32,7 +32,13 @@ dependencies:
   collection: ^1.19.1
   url_launcher: ^6.3.1
   package_info_plus: ^9.0.1
-  webview_cef: ^0.2.2
+  # open-astro fork of webview_cef: upstream 0.2.2 (and its main) no longer
+  # compile against Flutter 3.44+ (missing TextInputClient.onFocusReceived).
+  # Pinned to a fork SHA for reproducibility. See PORT_DECISIONS.md.
+  webview_cef:
+    git:
+      url: https://github.com/open-astro/webview_cef.git
+      ref: 3a824edb5a50b11cd11601c2e5ce07984d21c7df
 
 dev_dependencies:
   flutter_test:

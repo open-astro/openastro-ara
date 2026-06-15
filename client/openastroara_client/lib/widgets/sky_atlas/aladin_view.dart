@@ -2,8 +2,10 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:webview_cef/webview_cef.dart';
 
+import '../../state/sky_atlas/sky_atlas_state.dart';
 import '../../theme/ara_colors.dart';
 
 /// §36 Sky Atlas — the embedded Aladin Lite (CDS) sky atlas.
@@ -14,14 +16,22 @@ import '../../theme/ara_colors.dart';
 /// renders identically in-tab on macOS, Windows, and Linux — one code path.
 ///
 /// This widget owns the CEF browser lifecycle and surfaces loading / unavailable
-/// states. The §36 universal-search "goto" and the Tonight's-Sky projection
-/// wiring layer on top in later slices.
-class AladinView extends StatefulWidget {
+/// states, and drives the §36 universal-search "goto" (a submitted target name
+/// or coordinates moves the atlas via Aladin's `gotoObject`). The Tonight's-Sky
+/// projection wiring layers on in a later slice.
+class AladinView extends ConsumerStatefulWidget {
   const AladinView({super.key});
 
   @override
-  State<AladinView> createState() => _AladinViewState();
+  ConsumerState<AladinView> createState() => _AladinViewState();
 }
+
+/// Builds the JS that moves the atlas to [target]. The target is JSON-encoded so
+/// a name containing quotes/backslashes (or anything else) can't break out of
+/// the string literal or inject script — it's always a single string argument
+/// to the page's `araGoto` helper. Exposed for testing.
+@visibleForTesting
+String gotoScript(String target) => 'window.araGoto && window.araGoto(${jsonEncode(target)});';
 
 // CEF's manager is a process-wide singleton; initialize it at most once so a
 // tab rebuild (switch away + back) can't re-run native init. A FAILED init is
@@ -32,14 +42,40 @@ Future<void>? _managerInit;
 Future<void> _ensureManagerInitialized() =>
     _managerInit ??= WebviewManager().initialize();
 
-class _AladinViewState extends State<AladinView> {
+class _AladinViewState extends ConsumerState<AladinView> {
   WebViewController? _controller;
   bool _unavailable = false;
+
+  // A target submitted before the browser finished initializing is held here
+  // and applied once the controller is ready, so an early search isn't dropped.
+  String? _pendingGoto;
 
   @override
   void initState() {
     super.initState();
     unawaited(_init());
+  }
+
+  // Move the atlas to a submitted target. If the browser isn't ready yet, stash
+  // the target and apply it when init completes.
+  void _goto(String target) {
+    if (target.isEmpty) return;
+    final controller = _controller;
+    if (controller == null) {
+      _pendingGoto = target;
+      return;
+    }
+    unawaited(_runGoto(controller, target));
+  }
+
+  Future<void> _runGoto(WebViewController controller, String target) async {
+    try {
+      await controller.executeJavaScript(gotoScript(target));
+    } catch (e, st) {
+      // A goto failure (browser torn down mid-call, JS bridge hiccup) must not
+      // crash the tab — the atlas simply stays where it was.
+      debugPrint('AladinView: goto "$target" failed: $e\n$st');
+    }
   }
 
   Future<void> _init() async {
@@ -73,6 +109,12 @@ class _AladinViewState extends State<AladinView> {
         return;
       }
       setState(() => _controller = controller);
+      // Apply a target the user searched for before the browser was ready.
+      final pending = _pendingGoto;
+      if (pending != null) {
+        _pendingGoto = null;
+        unawaited(_runGoto(controller, pending));
+      }
     } catch (e, st) {
       // Same rationale as above: degrade-not-crash, but logged.
       debugPrint('AladinView: Aladin browser init failed: $e\n$st');
@@ -88,6 +130,10 @@ class _AladinViewState extends State<AladinView> {
 
   @override
   Widget build(BuildContext context) {
+    // A newly-submitted search target (the provider holds the last one) moves
+    // the atlas. Empty (initial) state is ignored by _goto.
+    ref.listen<String>(skyAtlasSearchProvider, (_, next) => _goto(next));
+
     if (_unavailable) return const _Unavailable();
     final controller = _controller;
     if (controller == null) return const _Loading();
@@ -136,11 +182,19 @@ const String _aladinBootstrapHtml = '''
 <div id="aladin-lite-div"></div>
 <div id="atlas-error">Could not load the sky atlas.<br>Check your internet connection, then reopen the Sky Atlas.</div>
 <script>
+  // The Aladin instance + a goto helper, exposed on window so the Dart side can
+  // drive it via executeJavaScript (see AladinView.gotoScript). araGoto resolves
+  // a target name (Simbad/Sesame) or coordinates and recenters the atlas.
+  var araAladin = null;
+  function araGoto(target) {
+    if (!araAladin || !target) return;
+    araAladin.gotoObject(target, { error: function () { /* name not resolved — leave the view put */ } });
+  }
   // A normal (non-async) external script blocks parsing until it loads or
   // errors, so by here `A` is defined on success and undefined on failure.
   if (typeof A !== 'undefined') {
     A.init.then(function () {
-      A.aladin('#aladin-lite-div', {
+      araAladin = A.aladin('#aladin-lite-div', {
         survey: 'P/DSS2/color',
         fov: 60,
         target: 'M31',
@@ -187,7 +241,8 @@ class _Unavailable extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 child: Text(
                   'The embedded Aladin Lite renderer could not start on this host. '
-                  'A Chromium runtime is required for the in-app sky atlas.',
+                  'A Chromium runtime is required for the in-app sky atlas — '
+                  'install it, then close and reopen the app.',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: AraColors.textSecondary,
