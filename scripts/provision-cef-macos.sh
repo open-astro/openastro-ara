@@ -153,11 +153,20 @@ if [ ! -d "$framework/Versions" ]; then
   # build re-signs embedded frameworks at `flutter build macos` time. (If a future
   # Gatekeeper/Xcode policy needs a valid signature pre-build, codesign here.)
   rm -rf "$framework/_CodeSignature"
-  mkdir -p "$framework/Versions/A"
   # The flat CEF 103.0.12 bundle contains exactly these three payload entries at
-  # the framework root; verified for this pinned release. If a future pinned CEF
-  # ships additional top-level dirs (e.g. a Headers/), add them here too — Xcode
-  # validates the versioned layout, not the leftover flat-root files.
+  # the framework root; verified for this pinned release. Guard against a future
+  # pin bump silently adding top-level dirs (e.g. a Headers/) that the three `mv`
+  # calls would orphan at the flat root — fail clearly now rather than letting
+  # Xcode's versioned-layout validation surface it as a cryptic build error.
+  # (Runs before the mkdir below so it only sees the flat payload, not Versions/.)
+  while IFS= read -r entry; do
+    case "$entry" in
+      "Chromium Embedded Framework"|"Resources"|"Libraries") ;;
+      "") ;;
+      *) die "unexpected top-level entry in flat CEF framework: '$entry' — update the restructure payload list in $(basename "$0")" ;;
+    esac
+  done < <(ls "$framework")
+  mkdir -p "$framework/Versions/A"
   mv "$framework/Chromium Embedded Framework" "$framework/Versions/A/Chromium Embedded Framework"
   mv "$framework/Resources" "$framework/Versions/A/Resources"
   mv "$framework/Libraries" "$framework/Versions/A/Libraries"

@@ -731,6 +731,10 @@ Deferred to **§43-2**:
   64-bit SQLite INTEGER and narrows to the `int` DTO field; a value above `Int32.MaxValue` (~2.1B steps — no real
   focuser) would wrap silently. If a wider range is ever needed, widen `FocuserPositionDto`/`FocusTempPoint` to `long`
   end-to-end (wire + client model) rather than casting. Low priority. Surfaced 2026-06-14 by the #448 re-review.
+- **Build-time guard for un-provisioned macOS CEF (§36, DX nicety).** If a developer runs `flutter build macos` without
+  first running `scripts/provision-cef-macos.sh`, the failure is a cryptic linker error (missing CEF framework symbols).
+  A short pre-build phase (or a check in the Podfile `post_install`) that detects an un-provisioned `macos/third/cef` and
+  emits a human-readable `error:` pointing at the script would improve DX. Low priority. Surfaced 2026-06-15 by the #463 review.
 - **Windows `windows/runner/main.cpp` CEF multi-process/IME tweak (§36).** When the Windows build is first exercised,
   fold in the `windows/runner/main.cpp` CEF multi-process + IME tweak that `webview_cef` requires on Windows (the Linux
   and Windows builds auto-download CEF via the plugin's `third/download.cmake`, so no binary-placement step is needed
