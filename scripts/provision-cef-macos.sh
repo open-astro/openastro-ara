@@ -34,6 +34,17 @@
 #
 # License note: CEF is BSD-licensed; we download (not redistribute) the prebuilt
 # binaries from the upstream webview_cef release assets.
+#
+# Supply-chain / provenance (accepted trust decision): these prebuilt CEF bundles
+# come from the hlwhl/webview_cef GitHub release assets — a third-party fork's
+# rebuild of upstream Chromium/CEF, NOT an official Chromium release, so build
+# provenance is not independently verifiable. This is the SAME source the
+# webview_cef plugin already trusts to auto-download CEF on Linux/Windows (see the
+# URLs in <plugin>/third/download.cmake); pinning macOS to it keeps all three
+# desktops on one CEF supply chain. The pinned SHA-256s prevent silent asset
+# swaps / MITM. The trade-off (an embedded browser engine from an unofficial
+# rebuild) is accepted for the §36 Aladin embed; revisit if upstream CEF ships
+# official macOS framework bundles we can point at directly.
 
 set -euo pipefail
 
