@@ -725,3 +725,11 @@ Deferred to **§43-2**:
   the overlay UI. If a survey ever serves tiles without permissive CORS, the fallback is serving the bootstrap HTML from
   a localhost HTTP server (proper origin) instead of a `data:` URL. Fold this into the first on-device Sky Atlas check.
   Surfaced 2026-06-14 by the #450 re-review.
+- **Re-shim the open-astro/webview_cef fork on Flutter upgrades (§36).** The §36 Aladin embed depends on the
+  [open-astro/webview_cef](https://github.com/open-astro/webview_cef) fork (SHA-pinned), which carries a one-line shim:
+  `bool TextInputClient.onFocusReceived() => false;` in `lib/src/webview_textinput.dart` (upstream predates that Flutter
+  API). On each Flutter SDK bump, re-verify the fork compiles — Flutter periodically adds abstract members to
+  `TextInputClient` / `State`, each of which needs another no-op override in the fork. The client CI job is analyze+test
+  (it never compiles the WebView widget unless a test imports `aladin_view.dart`, which `aladin_view_test.dart` now does),
+  so a fork/SDK mismatch surfaces as a client-test compile failure. Update the pinned SHA in `pubspec.yaml` after
+  re-shimming. Surfaced 2026-06-14 by the #451 review (fork-maintenance dependency).
