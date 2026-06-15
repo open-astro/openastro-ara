@@ -186,9 +186,17 @@ const String _aladinBootstrapHtml = '''
   // drive it via executeJavaScript (see AladinView.gotoScript). araGoto resolves
   // a target name (Simbad/Sesame) or coordinates and recenters the atlas.
   var araAladin = null;
+  var araPendingTarget = null;
   function araGoto(target) {
-    if (!araAladin || !target) return;
-    araAladin.gotoObject(target, { error: function () { /* name not resolved — leave the view put */ } });
+    if (!target) return;
+    if (araAladin) {
+      araAladin.gotoObject(target, { error: function () { /* name not resolved — leave the view put */ } });
+    } else {
+      // Aladin's async init (A.init + WASM load) hasn't resolved yet — a goto
+      // fired now would be dropped, so remember the latest target and apply it
+      // from the A.init.then callback once araAladin exists.
+      araPendingTarget = target;
+    }
   }
   // A normal (non-async) external script blocks parsing until it loads or
   // errors, so by here `A` is defined on success and undefined on failure.
@@ -201,6 +209,12 @@ const String _aladinBootstrapHtml = '''
         showCooGrid: true,
         showSimbadPointerControl: true,
       });
+      // Apply a target searched for during Aladin's init window.
+      if (araPendingTarget) {
+        var t = araPendingTarget;
+        araPendingTarget = null;
+        araGoto(t);
+      }
     });
   } else {
     aladinLoadFailed();
