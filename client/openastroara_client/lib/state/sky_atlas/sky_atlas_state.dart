@@ -26,6 +26,13 @@ class SkyAtlasSearchNotifier extends Notifier<String> {
   @override
   String build() => '';
   void set(String q) => state = q;
+
+  // Re-emit even when the submitted target is unchanged, so resubmitting the
+  // same name (e.g. after panning away) still recenters the atlas. Only
+  // AladinView.listen consumes this — nothing watches it for a rebuild — so
+  // always notifying has no rebuild cost.
+  @override
+  bool updateShouldNotify(String previous, String next) => true;
 }
 
 final skyAtlasSearchProvider =
