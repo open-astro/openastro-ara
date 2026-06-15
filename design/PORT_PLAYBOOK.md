@@ -383,8 +383,9 @@ Phase 10  — Server smoke test on Linux x64 + ARM64
             §11, gate checks for all server-side endpoints + linux-arm64 publish
 Phase 11  — Flutter client scaffold + first-run + server connect + handshake + a11y baseline
             §12, §30, §53 (a11y from the start; StatusIndicator widget)
-Phase 12  — Flutter views: app shell + all main tabs (Imaging, Framing, Sequencer, Sky Atlas, Image Library, Stats, Settings)
-            §25, §36 (Sky Atlas/Aladin + Data Manager), §37 (wizard), §40 (image library UI), §50 (Stats dashboard UI),
+Phase 12  — Flutter views: app shell + all main tabs (Imaging, Planning, Sequencer, Image Library, Stats, Settings)
+            — Planning = merged Sky Atlas + Framing (PORT_DECISIONS §36/§25.5, 2026-06-15)
+            §25, §36 (Planning: Sky Atlas/Aladin + Framing + Data Manager), §37 (wizard), §40 (image library UI), §50 (Stats dashboard UI),
             §51 (Health Indicator + Diagnostic Panel UI), §41 (mobile companion shell selection),
             §32 (disconnect modal), §35 (safety UI), §54 (bug report flow), §61 (smart settings search),
             §63 (PHD2 settings), §64 (Live View UI), §65 (stretch picker + manual sliders)
@@ -1033,9 +1034,8 @@ The client UX deliberately mirrors NINA so existing users feel at home. **See §
 - **Left panel** (collapsible) — profile selector + active equipment chooser dropdowns + manual control widgets per connected device.
 - **Center workspace** — tabbed:
   - **Imaging** — main image viewer, live preview, exposure controls, histogram overlay, plate-solve overlay
-  - **Framing Assistant** — target search + sky chart + rotation preview
+  - **Planning** — one Aladin Lite surface: find a target (browse / search / Tonight's Sky) + frame it for capture (profile-derived FOV + rotation + mosaic) → Build Sequence. Merges the old Framing Assistant + Sky Atlas (PORT_DECISIONS §36/§25.5)
   - **Sequencer** — tree-based instruction editor (Areas → Targets → Instructions)
-  - **Sky Atlas** — DSO catalog browser
   - **Options** — settings tree (Equipment, Imaging, Plate Solving, Astrometry, etc.)
 - **Right panel** (collapsible) — histogram + image statistics, plate solve results, log tail.
 - **Bottom status bar** — clock (local + sidereal), current sequence operation, progress bar, connection state to server.
@@ -2109,23 +2109,19 @@ Five tabs along the top of the center area:
    - Overlay (toggle-able): plate-solve results (RA/Dec, rotation, pixel scale)
    - Right-side controls: exposure/gain/offset, "Take One" button, "Live View" toggle, sequence shortcut to start
    - Bottom: thumbnail strip of recent frames in the current session
-2. **Framing Assistant**
-   - Top: target search (DSO catalog query — Messier, NGC, IC, by name or coords)
-   - Center: sky chart preview (basic for v0.0.1 — just a labeled scatter of stars from a small star catalog)
-   - Right: framing parameters (FOV, rotation, mosaic panel grid)
-   - "Set as Target" button → adds to sequence
+2. **Planning** — **one embedded Aladin Lite (CDS) surface that merges target-finding (old Sky Atlas) + framing (old Framing Assistant)**. See §36 for full spec; PORT_DECISIONS §36/§25.5 for the merge rationale. Find a target, then frame it for capture, without leaving the tab.
+   - **Explore** (default) — Aladin Lite equatorial mode, free pan/zoom, full HiPS survey browsing (21 surveys, see §36), universal search (Simbad online + bundled name index offline)
+   - **Tonight's Sky** — same Aladin instance, location-aware "best objects tonight" from the profile's site lat/long + date (ranked by altitude/visibility), zenith-centered, horizon-aware, time-controlled, Sun/Moon/planets + comets overlaid, planetarium-style. Replaces NINA's external-planetarium integration (Cartes du Ciel, Stellarium) — ARA is the planetarium.
+   - **Frame (toggle)** — overlays the **profile-derived FOV** (camera sensor + pixel size + telescope effective focal length → the exact field rectangle this rig captures), plus rotation + mosaic panel grid (§47). Output: **"Add to Sequence" / "Build Mosaic Sequence."** Sensor geometry is cached in the profile on first camera connect, so framing works without the camera connected / offline (see Camera/Telescope settings + PORT_DECISIONS §36/§25.5).
+   - Tap an object → details panel + Frame / Add-to-Sequence actions (no cross-tab "Set as Target" handoff — it's all here)
+   - Aladin logo + CDS attribution preserved at bottom-right per Aladin's GPLv3 license terms (see §17 + §36)
 3. **Sequencer**
    - Tree view of: Areas → Targets → Instructions (NINA's hierarchy)
    - Drag-and-drop reordering within a level
    - Per-instruction editor pane on the right when selected
    - Top toolbar: New / Load / Save / Validate / Run / Pause / Abort
    - Below toolbar: progress bar + currently-executing instruction label
-4. **Sky Atlas** — **embedded Aladin Lite (CDS) with bundled catalogs + Tonight's Sky planetarium view**. See §36 for full spec. Two sub-modes:
-   - **Catalog View** — Aladin Lite in standard equatorial mode, free pan/zoom, full HiPS survey browsing (21 surveys, see §36), universal search (Simbad online + bundled name index offline)
-   - **Tonight's Sky** — same Aladin instance, zenith-centered, horizon-aware, time-controlled, solar system (Sun/Moon/planets) + comets overlaid, planetarium-style. Replaces NINA's external-planetarium integration (Cartes du Ciel, Stellarium) — ARA is the planetarium.
-   - Tap an object → details panel + "Set as Target in Framing Assistant" CTA
-   - Aladin logo + CDS attribution preserved at bottom-right per Aladin's GPLv3 license terms (see §17 + §36)
-5. **Options**
+4. **Options**
    - Tree-based settings: Equipment (per device type), Imaging, Plate Solving, Astrometry, File Saving, Telescope, Astronomy, Sequence, Application
    - Right pane: settings for selected node
    - "Save Profile" / "Save Profile As..." buttons in the toolbar
