@@ -342,6 +342,65 @@ namespace OpenAstroAra.Server.Services {
             return null;
         }
 
+        /// <summary>
+        /// Reclaim crash-only orphan archives under <c>{profileDir}/backups/</c> that <see cref="ListSnapshotsAsync"/>
+        /// already ignores but never deletes: (a) a <c>.tmp-*.zip</c> staged by a create that was hard-killed before
+        /// its <c>File.Move</c> reveal, and (b) a fully-named <c>backup-*.zip</c> with no matching <c>.meta.json</c>
+        /// sidecar — a SIGKILL in the window between the reveal and the manifest write. A graceful create reclaims its
+        /// own temp on an exception, so these only linger after a hard kill. Returns the count removed. Best-effort +
+        /// synchronous (a handful of files); a locked/permission-denied file is skipped (the next boot retries). Mirrors
+        /// §36-2c <see cref="SkyDataInstaller.SweepStaleScratch"/>. Called at startup before the daemon accepts
+        /// requests, so no concurrent create can race a half-written archive into the sweep.
+        /// </summary>
+        internal static int SweepOrphans(string profileDir, ILogger? logger = null) {
+            ArgumentException.ThrowIfNullOrEmpty(profileDir);
+            var backupsDir = Path.Combine(profileDir, BackupsDirName);
+            string[] zips;
+            try {
+                if (!Directory.Exists(backupsDir)) {
+                    return 0;
+                }
+                // GetFiles (materialized), not EnumerateFiles: we delete during the loop, and removing entries from a
+                // directory mid lazy-enumeration can skip or repeat names. The read-only instance methods can stream.
+                zips = Directory.GetFiles(backupsDir, "*" + ZipExtension, SearchOption.TopDirectoryOnly);
+            } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+                return 0;
+            }
+
+            var removedNames = new List<string>();
+            foreach (var path in zips) {
+                var name = Path.GetFileName(path);
+                bool orphan;
+                if (name.StartsWith(TempPrefix, StringComparison.Ordinal)) {
+                    // (a) staged temp from a create hard-killed before its File.Move reveal.
+                    orphan = true;
+                } else if (name.StartsWith(ZipPrefix, StringComparison.Ordinal)) {
+                    // (b) a revealed archive whose manifest write never landed.
+                    var manifestPath = Path.Combine(backupsDir, Path.GetFileNameWithoutExtension(path) + ManifestExtension);
+                    orphan = !File.Exists(manifestPath);
+                } else {
+                    // A foreign .zip we didn't write — leave it untouched.
+                    continue;
+                }
+                if (!orphan) {
+                    continue;
+                }
+                try {
+                    File.Delete(path);
+                    removedNames.Add(name);
+                } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+                    // best-effort — leave it; the next boot retries.
+                }
+            }
+
+            // Surface a hard-kill to the operator: a non-empty sweep means the daemon died mid-backup last run. Silent
+            // deletion would leave a missing backup unexplained. Only logs when something was actually reclaimed.
+            if (removedNames.Count > 0 && logger is not null) {
+                LogOrphansSwept(logger, removedNames.Count, string.Join(", ", removedNames));
+            }
+            return removedNames.Count;
+        }
+
         // The id is the trailing dash-delimited segment of a "backup-{ts}-{id:N}" name (N-format, no dashes of its
         // own), so the last '-' splits it cleanly. Returns null for a name with no '-' (not one of ours).
         private static string? ExtractIdSuffix(string fileNameWithoutExtension) {
@@ -542,6 +601,11 @@ namespace OpenAstroAra.Server.Services {
 
         [LoggerMessage(Level = LogLevel.Information, Message = "Backup restore {OperationId} restored areas [{Areas}]")]
         partial void LogRestored(Guid operationId, string areas);
+
+        // Static (the sweep runs at startup before the service instance exists), so it takes the logger explicitly.
+        [LoggerMessage(Level = LogLevel.Warning,
+            Message = "Reclaimed {Count} crash-orphaned backup archive(s) at startup (daemon died mid-backup): {Files}")]
+        private static partial void LogOrphansSwept(ILogger logger, int count, string files);
 
         [LoggerMessage(Level = LogLevel.Information, Message = "Backup restore {OperationId} started from snapshot {BackupId}")]
         partial void LogRestoreStarted(Guid operationId, Guid backupId);

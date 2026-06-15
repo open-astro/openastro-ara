@@ -659,6 +659,14 @@ public partial class Program {
             app.Services.GetService<ILogger<CaptureScanService>>());
         captureScan.RunAsync(CancellationToken.None).GetAwaiter().GetResult();
 
+        // §43-2 startup polish: reclaim crash-only orphan archives under backups/ — a .tmp-*.zip from a create
+        // hard-killed before its File.Move reveal, or a backup-*.zip whose .meta.json never got written (SIGKILL
+        // between the reveal and the manifest write). ListSnapshots ignores both but never deletes them; a graceful
+        // create reclaims its own temp, so these only linger after a hard kill. Runs before app.Run() (request
+        // acceptance), so no concurrent create can race it. Logs a Warning when it actually reclaims something — a
+        // non-empty sweep means the daemon died mid-backup. Mirrors §36-2c SweepStaleScratch.
+        BackupService.SweepOrphans(profileDir, app.Services.GetService<ILogger<BackupService>>());
+
         LogListening(app.Logger, port);
         app.Run();
     }
