@@ -88,9 +88,11 @@ public interface IBackupService {
     Task<OperationAcceptedDto> CreateZipAsync(string? idempotencyKey, CancellationToken ct);
 
     /// <summary>§43-2: restore the selected config areas from a local snapshot (the request's source URL must be a
-    /// snapshot-download URL). Validates the archive against its manifest checksum, then swaps the areas in
-    /// atomically with rollback. Throws for an unknown snapshot, an unsupported source, or a checksum mismatch —
-    /// the endpoint maps those to 404 / 422.</summary>
+    /// snapshot-download URL). §43-2b: validates synchronously (snapshot-exists, manifest checksum) then runs the
+    /// extract + atomic swap on a background worker, returning <c>202</c> immediately; poll <see cref="GetCloneStatusAsync"/>
+    /// for progress. NOTE: the validation failures throw <em>synchronously</em> (not via a faulted task) — an unknown
+    /// snapshot, unsupported source, no selected area, checksum mismatch, or a restore already in progress — which the
+    /// endpoint maps to 404 / 422 / 409. A caller awaiting this inside a try/catch handles them either way.</summary>
     Task<OperationAcceptedDto> RestoreZipAsync(RestoreRequestDto request, string? idempotencyKey, CancellationToken ct);
     Task<IReadOnlyList<BackupZipDto>> ListSnapshotsAsync(CancellationToken ct);
     Task<System.Text.Json.JsonElement> GetCloneStatusAsync(CancellationToken ct);

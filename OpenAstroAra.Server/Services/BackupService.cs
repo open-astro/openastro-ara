@@ -424,7 +424,13 @@ namespace OpenAstroAra.Server.Services {
                         restored.Count == 0 ? "Nothing to restore" : "Restored: " + string.Join(", ", restored));
                     LogRestored(opId, string.Join(",", restored));
                 } finally {
-                    _gate.Release();
+                    // A host-shutdown Dispose() can race this Release after _gate is disposed. Swallow that specific
+                    // race so the ObjectDisposedException can't bubble to the outer catch and overwrite an
+                    // already-successful 'done' terminal with a misleading 'failed'.
+                    try {
+                        _gate.Release();
+                    } catch (ObjectDisposedException) {
+                    }
                 }
             } catch (Exception ex) {
                 terminal = new CloneState(FailedState, null, null, ex.Message);
