@@ -712,3 +712,16 @@ Deferred to **§43-2**:
   64-bit SQLite INTEGER and narrows to the `int` DTO field; a value above `Int32.MaxValue` (~2.1B steps — no real
   focuser) would wrap silently. If a wider range is ever needed, widen `FocuserPositionDto`/`FocusTempPoint` to `long`
   end-to-end (wire + client model) rather than casting. Low priority. Surfaced 2026-06-14 by the #448 re-review.
+- **Commit macOS `Podfile.lock` for the webview_cef build (§36).** Adding `webview_cef` (#450) generated `macos/Podfile`
+  but not `Podfile.lock` — that's only produced by `pod install`, which pulls the heavy CEF/Chromium framework and runs
+  during a real `flutter build macos` (the client CI job is analyze+test only, so its absence doesn't break CI). Commit
+  the lock file the first time the macOS app is built locally/in a build slice, for reproducible pod resolution. Also
+  fold in the Windows `windows/runner/main.cpp` CEF multi-process/IME tweak when the Windows build is first exercised.
+  Surfaced 2026-06-14 by the #450 review.
+- **Verify §36 Aladin HiPS tile rendering on-device (§36).** The Aladin embed (#450) loads from a `data:` URL (null
+  origin in Chromium). The Aladin Lite `<script src>` isn't CORS-subject, and the CDS HiPS tile servers were verified to
+  return `access-control-allow-origin: *` (`curl -I alasky.cds.unistra.fr/DSS/...` → `200` + `ACAO: *`), so null-origin
+  tile fetches should succeed — but this needs an actual on-device run (macOS first) to confirm tiles render, not just
+  the overlay UI. If a survey ever serves tiles without permissive CORS, the fallback is serving the bootstrap HTML from
+  a localhost HTTP server (proper origin) instead of a `data:` URL. Fold this into the first on-device Sky Atlas check.
+  Surfaced 2026-06-14 by the #450 re-review.
