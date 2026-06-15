@@ -667,6 +667,10 @@ public partial class Program {
         // non-empty sweep means the daemon died mid-backup. Mirrors §36-2c SweepStaleScratch.
         BackupService.SweepOrphans(profileDir, app.Services.GetService<ILogger<BackupService>>());
 
+        // §55.1 settings-sync analogue: reclaim any client-settings.json.tmp-* orphaned by a settings write killed
+        // between the temp write and its File.Move rename. Same boot-time, pre-request-acceptance, best-effort sweep.
+        ClientSettingsService.SweepOrphans(profileDir, app.Services.GetService<ILogger<ClientSettingsService>>());
+
         LogListening(app.Logger, port);
         app.Run();
     }
