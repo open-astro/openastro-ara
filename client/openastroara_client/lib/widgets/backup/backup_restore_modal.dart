@@ -13,7 +13,16 @@ import '../../theme/ara_colors.dart';
 /// (`/api/v1/backup/*`), creates a new backup, downloads a snapshot, and
 /// restores selected areas (a confirmed, destructive overwrite of live config).
 class BackupRestoreModal extends ConsumerStatefulWidget {
-  const BackupRestoreModal({super.key});
+  const BackupRestoreModal({
+    super.key,
+    this.restorePollInterval = const Duration(milliseconds: 500),
+    this.restorePollTimeout = const Duration(minutes: 5),
+  });
+
+  /// §43-2b restore-progress poll cadence + deadline. Overridable so tests don't
+  /// wall-clock wait (production uses the defaults).
+  final Duration restorePollInterval;
+  final Duration restorePollTimeout;
 
   @override
   ConsumerState<BackupRestoreModal> createState() => _BackupRestoreModalState();
@@ -106,15 +115,30 @@ class _BackupRestoreModalState extends ConsumerState<BackupRestoreModal> {
       // Keyed by id: _SnapshotRow is stateful (_restoring/_downloading), so without a key
       // its State would re-associate with the wrong snapshot when the list shifts (a new
       // backup prepends after createBackup).
-      children: [for (final s in snapshots) _SnapshotRow(key: ValueKey(s.backupId), snapshot: s)],
+      children: [
+        for (final s in snapshots)
+          _SnapshotRow(
+            key: ValueKey(s.backupId),
+            snapshot: s,
+            restorePollInterval: widget.restorePollInterval,
+            restorePollTimeout: widget.restorePollTimeout,
+          ),
+      ],
     );
   }
 }
 
 class _SnapshotRow extends ConsumerStatefulWidget {
-  const _SnapshotRow({super.key, required this.snapshot});
+  const _SnapshotRow({
+    super.key,
+    required this.snapshot,
+    required this.restorePollInterval,
+    required this.restorePollTimeout,
+  });
 
   final BackupSnapshot snapshot;
+  final Duration restorePollInterval;
+  final Duration restorePollTimeout;
 
   @override
   ConsumerState<_SnapshotRow> createState() => _SnapshotRowState();
@@ -190,15 +214,26 @@ class _SnapshotRowState extends ConsumerState<_SnapshotRow> {
           );
       // §43-2b: the restore runs on a background worker, so the 202 doesn't mean
       // it's done — poll clone-status to the real outcome (a worker-side failure
-      // wouldn't surface from the POST otherwise).
-      final status = await notifier.awaitRestoreTerminal();
-      if (!mounted) return;
+      // wouldn't surface from the POST otherwise). Cancel the poll if this modal
+      // is dismissed mid-restore so it stops hitting the daemon.
+      final status = await notifier.awaitRestoreTerminal(
+        interval: widget.restorePollInterval,
+        timeout: widget.restorePollTimeout,
+        isCancelled: () => !mounted,
+      );
+      if (!mounted || status == null) return;
       if (status.isFailed) {
         ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Restore failed: ${status.message ?? 'unknown error'}')));
       } else {
         ScaffoldMessenger.of(context)
             .showSnackBar(const SnackBar(content: Text('Restore complete. Reconnect equipment if needed.')));
+      }
+    } on TimeoutException {
+      // The restore may still be running on the daemon — don't imply it failed.
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Restore is taking longer than expected — check the server.')));
       }
     } catch (e) {
       if (mounted) {

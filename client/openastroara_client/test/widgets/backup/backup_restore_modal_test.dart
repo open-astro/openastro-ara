@@ -75,12 +75,23 @@ class _FakeUrlLauncher extends Fake with MockPlatformInterfaceMixin implements U
 
 const _server = AraServer(hostname: 'h', port: 5555);
 
-Widget _host(_FakeBackupClient api, {List<AraServer> servers = const [_server]}) => ProviderScope(
+Widget _host(
+  _FakeBackupClient api, {
+  List<AraServer> servers = const [_server],
+  Duration pollInterval = const Duration(milliseconds: 1),
+  Duration pollTimeout = const Duration(seconds: 5),
+}) =>
+    ProviderScope(
       overrides: [
         savedServerServiceProvider.overrideWithValue(_FakeSavedServerService(servers)),
         backupApiFactoryProvider.overrideWithValue((_) => api),
       ],
-      child: const MaterialApp(home: BackupRestoreModal()),
+      child: MaterialApp(
+        home: BackupRestoreModal(
+          restorePollInterval: pollInterval,
+          restorePollTimeout: pollTimeout,
+        ),
+      ),
     );
 
 void main() {
@@ -209,5 +220,26 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Restore'));
     await tester.pumpAndSettle();
     expect(find.textContaining('disk gone'), findsOneWidget);
+  });
+
+  testWidgets('a restore that never reaches a terminal state surfaces the timeout snackbar', (tester) async {
+    // §43-2b: the worker stays `running` past the poll deadline — the modal must
+    // surface a "taking longer" message via the on TimeoutException branch, not hang.
+    final api = _FakeBackupClient([
+      const BackupSnapshot(backupId: 'b1', downloadUrl: '/dl/b1', includedAreas: ['profiles', 'sequences']),
+    ])
+      ..cloneStatusResult = const CloneStatus(state: 'running', progressPct: 10);
+    await tester.pumpWidget(_host(
+      api,
+      pollInterval: const Duration(milliseconds: 1),
+      pollTimeout: const Duration(milliseconds: 30),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Restore'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Restore'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('taking longer'), findsOneWidget);
   });
 }

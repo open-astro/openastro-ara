@@ -181,9 +181,9 @@ void main() {
       await c.read(savedServersProvider.future);
       await c.read(backupSnapshotsProvider.future);
 
-      final status = await c.read(backupSnapshotsProvider.notifier).awaitRestoreTerminal(
+      final status = (await c.read(backupSnapshotsProvider.notifier).awaitRestoreTerminal(
             interval: const Duration(milliseconds: 1),
-          );
+          ))!;
       expect(status.state, 'done');
       expect(status.isFailed, isFalse);
       expect(api.cloneStatusCalls, 3);
@@ -199,9 +199,9 @@ void main() {
       await c.read(savedServersProvider.future);
       await c.read(backupSnapshotsProvider.future);
 
-      final status = await c.read(backupSnapshotsProvider.notifier).awaitRestoreTerminal(
+      final status = (await c.read(backupSnapshotsProvider.notifier).awaitRestoreTerminal(
             interval: const Duration(milliseconds: 1),
-          );
+          ))!;
       expect(status.isFailed, isTrue);
       expect(status.message, 'disk gone');
     });
@@ -219,6 +219,38 @@ void main() {
               timeout: const Duration(milliseconds: 30),
             ),
         throwsA(isA<TimeoutException>()),
+      );
+    });
+
+    test('awaitRestoreTerminal stops polling and returns null once cancelled', () async {
+      final api = _FakeBackupClient(const [BackupSnapshot(backupId: 'b1')])
+        ..cloneStatusSequence = const [CloneStatus(state: 'running')]; // never terminal
+      final c = _container(const [_server], api);
+      await c.read(savedServersProvider.future);
+      await c.read(backupSnapshotsProvider.future);
+
+      var cancelled = false;
+      final status = await c.read(backupSnapshotsProvider.notifier).awaitRestoreTerminal(
+            interval: const Duration(milliseconds: 1),
+            isCancelled: () {
+              // Cancel after the first poll so we exercise the in-loop check.
+              final c = cancelled;
+              cancelled = true;
+              return c;
+            },
+          );
+      expect(status, isNull, reason: 'cancellation returns null instead of running to the deadline');
+      expect(api.cloneStatusCalls, 1, reason: 'polling stops once cancelled');
+    });
+
+    test('awaitRestoreTerminal throws StateError when no server is bound', () async {
+      final c = _container(const [], _FakeBackupClient(const []));
+      await c.read(savedServersProvider.future);
+      await c.read(backupSnapshotsProvider.future);
+
+      await expectLater(
+        c.read(backupSnapshotsProvider.notifier).awaitRestoreTerminal(),
+        throwsA(isA<StateError>()),
       );
     });
 
