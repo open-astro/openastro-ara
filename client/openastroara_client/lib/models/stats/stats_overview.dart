@@ -3,9 +3,10 @@
 /// wrong-typed fields degrade rather than throw.
 library;
 
+import 'stats_time.dart';
+
 int _int(dynamic v) => v is int ? v : (v is num ? v.toInt() : 0);
 double _dbl(dynamic v) => v is num ? v.toDouble() : 0.0;
-DateTime? _dt(dynamic v) => v is String ? DateTime.tryParse(v)?.toUtc() : null;
 
 /// Headline catalog totals for the active profile.
 class StatsOverview {
@@ -38,7 +39,7 @@ class StatsOverview {
         totalLightFrames: _int(json['total_light_frames']),
         totalIntegrationHours: _dbl(json['total_integration_hours']),
         uniqueTargetsImaged: _int(json['unique_targets_imaged']),
-        firstImageUtc: _dt(json['first_image_utc']),
-        lastImageUtc: _dt(json['last_image_utc']),
+        firstImageUtc: parseStatsUtc(json['first_image_utc']),
+        lastImageUtc: parseStatsUtc(json['last_image_utc']),
       );
 }

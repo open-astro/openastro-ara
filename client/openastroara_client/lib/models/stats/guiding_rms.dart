@@ -5,24 +5,10 @@
 /// wire; defensive parse.
 library;
 
+import 'stats_time.dart';
+
 double _dbl(dynamic v) => v is num ? v.toDouble() : 0.0;
 double? _dblOrNull(dynamic v) => v is num ? v.toDouble() : null;
-
-final _explicitZone = RegExp(r'[+-]\d\d:?\d\d$');
-
-/// Parses a wire timestamp to UTC. A string with an explicit zone (`Z` or
-/// `±HH:MM`) converts cleanly; one WITHOUT a zone is parsed by Dart as local
-/// time, which would shift it by the client's offset — the daemon emits UTC, so
-/// reinterpret the wall-clock fields as UTC instead of trusting the local parse.
-DateTime? _dt(dynamic v) {
-  if (v is! String || v.isEmpty) return null;
-  final parsed = DateTime.tryParse(v);
-  if (parsed == null) return null;
-  if (parsed.isUtc) return parsed; // had a `Z` suffix
-  if (_explicitZone.hasMatch(v)) return parsed.toUtc(); // had a numeric offset
-  return DateTime.utc(parsed.year, parsed.month, parsed.day, parsed.hour,
-      parsed.minute, parsed.second, parsed.millisecond, parsed.microsecond);
-}
 
 /// One guiding sample: the capture instant and the total RMS, with optional
 /// RA/Dec breakdown when the daemon provides it.
@@ -40,7 +26,7 @@ class GuidingRmsPoint {
   });
 
   factory GuidingRmsPoint.fromJson(Map<String, dynamic> json) => GuidingRmsPoint(
-        timestamp: _dt(json['timestamp']),
+        timestamp: parseStatsUtc(json['timestamp']),
         rmsArcsec: _dbl(json['rms_arcsec']),
         raRms: _dblOrNull(json['ra_rms']),
         decRms: _dblOrNull(json['dec_rms']),

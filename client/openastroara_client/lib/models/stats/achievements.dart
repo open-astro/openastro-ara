@@ -4,11 +4,12 @@
 /// missing/wrong-typed fields degrade rather than throw.
 library;
 
+import 'stats_time.dart';
+
 int _int(dynamic v) => v is int ? v : (v is num ? v.toInt() : 0);
 double _dbl(dynamic v) => v is num ? v.toDouble() : 0.0;
 bool _bool(dynamic v) => v is bool ? v : false;
 String _str(dynamic v) => v is String ? v : '';
-DateTime? _dt(dynamic v) => v is String ? DateTime.tryParse(v)?.toUtc() : null;
 
 /// One milestone badge — a fixed [threshold] against a cumulative metric, with
 /// the user's [current] value and whether it's been [achieved].
@@ -88,7 +89,7 @@ class StatsAchievements {
       totalIntegrationHours: _dbl(json['total_integration_hours']),
       uniqueTargetsImaged: _int(json['unique_targets_imaged']),
       totalLightFrames: _int(json['total_light_frames']),
-      firstLightUtc: _dt(json['first_light_utc']),
+      firstLightUtc: parseStatsUtc(json['first_light_utc']),
       milestones: raw is List
           ? raw
               .whereType<Map<String, dynamic>>()
