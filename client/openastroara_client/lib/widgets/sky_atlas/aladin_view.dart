@@ -68,6 +68,12 @@ class _AladinViewState extends ConsumerState<AladinView> {
     unawaited(_runGoto(controller, target));
   }
 
+  // The provider's current target, or null when no search has been made.
+  String? _currentSearch() {
+    final q = ref.read(skyAtlasSearchProvider);
+    return q.isEmpty ? null : q;
+  }
+
   Future<void> _runGoto(WebViewController controller, String target) async {
     try {
       await controller.executeJavaScript(gotoScript(target));
@@ -109,8 +115,11 @@ class _AladinViewState extends ConsumerState<AladinView> {
         return;
       }
       setState(() => _controller = controller);
-      // Apply a target the user searched for before the browser was ready.
-      final pending = _pendingGoto;
+      // Apply a target the user searched for before the browser was ready —
+      // or, since this tab unmounts on switch, the last search the provider
+      // still holds, so returning to the atlas restores it instead of resetting
+      // to the default target.
+      final pending = _pendingGoto ?? _currentSearch();
       if (pending != null) {
         _pendingGoto = null;
         unawaited(_runGoto(controller, pending));
