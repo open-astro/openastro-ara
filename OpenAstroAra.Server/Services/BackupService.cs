@@ -77,6 +77,9 @@ namespace OpenAstroAra.Server.Services {
         private const string FailedState = "failed";
         private sealed record CloneState(string State, double? ProgressPct, string? CurrentArea, string? Message);
         private static readonly CloneState IdleClone = new(IdleState, null, null, null);
+        // Pre-allocated terminal for the worker's last-resort finally — used only if building the real failed-state
+        // (or anything else in the catch) itself throws, so clone-status can never strand at "running".
+        private static readonly CloneState FailedFallback = new(FailedState, null, null, "Restore failed.");
         private readonly object _cloneLock = new();
         private CloneState _clone = IdleClone;
 
@@ -90,6 +93,11 @@ namespace OpenAstroAra.Server.Services {
         // mixed old/new profile. One backup operation at a time — the daemon is single-user and these are infrequent.
         private readonly SemaphoreSlim _gate = new(1, 1);
 
+        // Cancelled on Dispose (this is a DI singleton, so dispose == host shutdown), so a restore worker blocked on
+        // the gate or inside the restorer unblocks instead of hanging the host. The request token can't serve this —
+        // it's cancelled the moment the 202 response is sent, before the worker has done anything.
+        private readonly CancellationTokenSource _shutdown = new();
+
         public BackupService(string profileDir, ILogger<BackupService> logger, IBackupRestorer? restorer = null) {
             ArgumentException.ThrowIfNullOrEmpty(profileDir);
             ArgumentNullException.ThrowIfNull(logger);
@@ -100,7 +108,12 @@ namespace OpenAstroAra.Server.Services {
         }
 
         // Registered as a DI singleton, so the container disposes this on host shutdown.
-        public void Dispose() => _gate.Dispose();
+        public void Dispose() {
+            // Cancel first so any in-flight restore worker unblocks (gate wait / restorer) before we dispose the gate.
+            _shutdown.Cancel();
+            _shutdown.Dispose();
+            _gate.Dispose();
+        }
 
         public async Task<OperationAcceptedDto> CreateZipAsync(string? idempotencyKey, CancellationToken ct) {
             // idempotencyKey is echoed back but NOT enforced in §43-1: a retried POST with the same key produces a new
@@ -395,21 +408,29 @@ namespace OpenAstroAra.Server.Services {
             Justification = "The joined argument is at most two short area names ('profiles','sequences') — trivial, " +
                 "once per restore, not a hot path.")]
         private async Task RunRestoreAsync(Guid opId, string zipPath, RestoreRequestDto request) {
+            // Default terminal — if the body somehow exits without assigning one (e.g. an OOM while building the
+            // success/failure state), the finally still drives clone-status off "running" so it can't 409 every
+            // future restore. SetClone runs in the finally so a throw in the catch can't strand the state machine.
+            var terminal = FailedFallback;
             try {
-                // Serialize against create (and defensively any other restore): both touch the live profile.
-                await _gate.WaitAsync().ConfigureAwait(false);
+                // _shutdown lets a graceful host shutdown unblock this worker: the request token is cancelled once
+                // the 202 is sent, so it can't be used; without a token a shutdown during an in-flight create would
+                // block this WaitAsync (and the restorer) forever. Serialize against create + any other restore.
+                await _gate.WaitAsync(_shutdown.Token).ConfigureAwait(false);
                 try {
                     var restored = _restorer.Restore(
-                        zipPath, _profileDir, request.RestoreProfiles, request.RestoreSequences, CancellationToken.None);
-                    SetClone(new CloneState(DoneState, 100, null,
-                        restored.Count == 0 ? "Nothing to restore" : "Restored: " + string.Join(", ", restored)));
+                        zipPath, _profileDir, request.RestoreProfiles, request.RestoreSequences, _shutdown.Token);
+                    terminal = new CloneState(DoneState, 100, null,
+                        restored.Count == 0 ? "Nothing to restore" : "Restored: " + string.Join(", ", restored));
                     LogRestored(opId, string.Join(",", restored));
                 } finally {
                     _gate.Release();
                 }
             } catch (Exception ex) {
-                SetClone(new CloneState(FailedState, null, null, ex.Message));
+                terminal = new CloneState(FailedState, null, null, ex.Message);
                 LogRestoreFailed(opId, ex);
+            } finally {
+                SetClone(terminal);
             }
         }
 

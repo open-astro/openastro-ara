@@ -122,15 +122,20 @@ namespace OpenAstroAra.Test {
             using (svc) {
                 // First restore: the worker enters the fake and blocks, so clone-status is "running".
                 await svc.RestoreZipAsync(Req(url), idempotencyKey: null, CancellationToken.None);
-                Assert.That(await gated.Started.WaitAsync(TimeSpan.FromSeconds(5)), Is.True, "worker should have started");
-                Assert.That(await StateAsync(svc), Is.EqualTo("running"));
+                try {
+                    Assert.That(await gated.Started.WaitAsync(TimeSpan.FromSeconds(5)), Is.True, "worker should have started");
+                    Assert.That(await StateAsync(svc), Is.EqualTo("running"));
 
-                // Second restore while the first is in flight → 409.
-                Assert.That(
-                    async () => await svc.RestoreZipAsync(Req(url), idempotencyKey: null, CancellationToken.None),
-                    Throws.InstanceOf<BackupRestoreInProgressException>());
+                    // Second restore while the first is in flight → 409.
+                    Assert.That(
+                        async () => await svc.RestoreZipAsync(Req(url), idempotencyKey: null, CancellationToken.None),
+                        Throws.InstanceOf<BackupRestoreInProgressException>());
+                } finally {
+                    // Always unblock the worker — even if an assertion above failed — so the test fails fast instead
+                    // of leaving the worker parked on Release.Wait while teardown disposes the semaphores.
+                    gated.Release.Release();
+                }
 
-                gated.Release.Release(); // let the first finish so teardown is clean
                 await WaitForTerminalAsync(svc);
                 Assert.That(await StateAsync(svc), Is.EqualTo("done"));
             }
