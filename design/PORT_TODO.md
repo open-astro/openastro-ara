@@ -746,13 +746,12 @@ Deferred to **§43-2**:
   space-containing "Chromium Embedded Framework" name; (3) `macos/Podfile.lock` + the CocoaPods integration in
   `Runner.xcodeproj`/`Runner.xcworkspace` are now committed for reproducible pod resolution. The CEF binaries themselves
   stay uncommitted (gitignored in the plugin / shared pub-cache) — run the script once after `flutter pub get`.
-- **Verify §36 Aladin HiPS tile rendering on-device (§36).** The Aladin embed (#450) loads from a `data:` URL (null
-  origin in Chromium). The Aladin Lite `<script src>` isn't CORS-subject, and the CDS HiPS tile servers were verified to
-  return `access-control-allow-origin: *` (`curl -I alasky.cds.unistra.fr/DSS/...` → `200` + `ACAO: *`), so null-origin
-  tile fetches should succeed — but this needs an actual on-device run (macOS first) to confirm tiles render, not just
-  the overlay UI. If a survey ever serves tiles without permissive CORS, the fallback is serving the bootstrap HTML from
-  a localhost HTTP server (proper origin) instead of a `data:` URL. Fold this into the first on-device Sky Atlas check.
-  Surfaced 2026-06-14 by the #450 re-review.
+- **DONE (2026-06-15) — §36 Aladin HiPS tile rendering verified on-device (macOS).** First on-device `flutter run -d macos`
+  confirmed the embed renders: CEF logged the Aladin Lite JS loading from the CDN and switching to the DSS2 HiPS survey
+  (`Change url of P/DSS2/color to https://irsa.ipac.caltech.edu/data/hips/CDS/DSS2/color`), i.e. null-origin tile fetches
+  succeed as predicted — no CORS fallback (localhost bootstrap server) needed. Getting here required a second fork fix (see
+  PORT_DECISIONS §36): `createWebView()` threw `Null is not a subtype of InjectUserScripts` on a null `injectUserScripts`,
+  which `AladinView` caught and surfaced as the misleading "Sky atlas unavailable / Chromium runtime required" fallback.
 - **Re-shim the open-astro/webview_cef fork on Flutter upgrades (§36).** The §36 Aladin embed depends on the
   [open-astro/webview_cef](https://github.com/open-astro/webview_cef) fork (SHA-pinned), which carries a one-line shim:
   `bool TextInputClient.onFocusReceived() => false;` in `lib/src/webview_textinput.dart` (upstream predates that Flutter

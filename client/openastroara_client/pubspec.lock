@@ -857,8 +857,8 @@ packages:
     dependency: "direct main"
     description:
       path: "."
-      ref: "3a824edb5a50b11cd11601c2e5ce07984d21c7df"
-      resolved-ref: "3a824edb5a50b11cd11601c2e5ce07984d21c7df"
+      ref: "2cbb28bc1bd4e12e794652e4187f4c5d04ad0ec7"
+      resolved-ref: "2cbb28bc1bd4e12e794652e4187f4c5d04ad0ec7"
       url: "https://github.com/open-astro/webview_cef.git"
     source: git
     version: "0.2.2"
