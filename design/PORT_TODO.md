@@ -752,6 +752,30 @@ Deferred to **§43-2**:
   succeed as predicted — no CORS fallback (localhost bootstrap server) needed. Getting here required a second fork fix (see
   PORT_DECISIONS §36): `createWebView()` threw `Null is not a subtype of InjectUserScripts` on a null `injectUserScripts`,
   which `AladinView` caught and surfaced as the misleading "Sky atlas unavailable / Chromium runtime required" fallback.
+- **Implement the merged Planning tab (§36/§25.5, decided 2026-06-15 — see PORT_DECISIONS).** Collapse the separate
+  Framing + Sky Atlas tabs into ONE **Planning** tab on the existing Aladin embed — do this BEFORE Phase 12c.2 stands up a
+  second `webview_cef` instance (two Chromium textures = ~2× RAM + duplicated offline plumbing). Work items:
+  (1) client: replace the two `_TabSpec`s in `app_shell.dart` with one "Planning" tab; fold `framing_tab`/`framing_state`
+  into the `sky_atlas` surface; add an Explore / Tonight's-Sky / Frame mode model (Frame is a toggle, not a separate tab).
+  (2) Frame mode: draw the **profile-derived FOV** rectangle on the Aladin view —
+  `pixelScale = 206.265 × pixelSize_µm ÷ focalLength_mm`, FOV = `sensor_px × pixelScale` — + rotation + mosaic grid (§47),
+  with "Add to Sequence" / "Build Mosaic Sequence" output.
+  (3) **Profile-cached camera geometry:** on the first successful camera connect for a profile, persist sensor W/H px +
+  pixel size + effective focal length (incl. reducer/barlow) into the profile so Frame works with the camera disconnected /
+  offline; manual override in Settings → Camera/Telescope. (Inputs exist: `CameraSettings.PixelSize`,
+  `TelescopeSettings.FocalLength`, `EquipmentDtos.SensorWidth/Height`.) **Invalidate the cache** so a swapped camera /
+  changed reducer doesn't yield stale framing: re-cache when a connect reports different sensor dims (auto + one-time notice),
+  fold into the §30.7 equipment-change check (already covers telescope/focal-length → framing), and add a "Refresh from
+  connected camera" affordance by the FOV readout.
+  (4) Tonight's Sky = location-aware "best objects tonight" from profile site lat/long + date, ranked by altitude/visibility.
+  (5) reconcile prose in §36 / §47 / §25.5 / §61 search registry (map "framing"/"FOV"/"mosaic"/"tonight"/"sky atlas" → Planning);
+  update `COMMIT-PR-RULES.md` Phase 12 split (12c drops Framing; 12e becomes "Planning"). Server unaffected.
+  Three spec details to pin during implementation (flagged by the #465 review): (i) **one-time-notice scope** for the
+  connect-diff re-cache — define it as "once per detected sensor-geometry change" (not per session), so a second camera swap
+  still notifies; (ii) **reducer/barlow** swaps don't change sensor dims, so they rely on the §30.7 path — *verify* §30.7's
+  invalidation matrix explicitly recomputes framing on effective-focal-length change, don't just assume it; (iii) the §25.5
+  walkthrough numbers only 4 tabs (Image Library + Stats absent) and the NINA-control-labels list (~PORT_PLAYBOOK line 2021)
+  still says "Framing Assistant"/"Sky Atlas" — fold both into the prose sweep so they don't slip.
 - **Re-shim the open-astro/webview_cef fork on Flutter upgrades (§36).** The §36 Aladin embed depends on the
   [open-astro/webview_cef](https://github.com/open-astro/webview_cef) fork (SHA-pinned), which carries a one-line shim:
   `bool TextInputClient.onFocusReceived() => false;` in `lib/src/webview_textinput.dart` (upstream predates that Flutter
