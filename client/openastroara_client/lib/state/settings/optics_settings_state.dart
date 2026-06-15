@@ -89,6 +89,9 @@ class OpticsSettingsNotifier extends Notifier<OpticsSettings> {
   // Setters validate at the boundary so the daemon never sees a physically
   // impossible value. 0 is allowed (it means "unset") except for the reducer,
   // which multiplies the focal length in the pixel-scale denominator.
+  // NOTE: a rejection here is silent (the setter no-ops), so the future Settings
+  // UI must mirror these guards in its own input validation — otherwise a rejected
+  // value leaves the text field and the stored state showing different numbers.
   void setFocalLengthMm(double v) {
     if (v < 0) return;
     state = state.copyWith(focalLengthMm: v);

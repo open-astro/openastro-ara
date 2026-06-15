@@ -285,13 +285,21 @@ class ProfileApi {
 
   // ── Storage settings JSON mapping ──────────────────────────────────────
 
-  static OpticsSettings _opticsFromJson(Map<String, dynamic> j) => OpticsSettings(
-        focalLengthMm: (j['focal_length_mm'] as num?)?.toDouble() ?? 0,
-        reducerFactor: (j['reducer_factor'] as num?)?.toDouble() ?? 1.0,
-        sensorWidthPx: (j['sensor_width_px'] as num?)?.toInt() ?? 0,
-        sensorHeightPx: (j['sensor_height_px'] as num?)?.toInt() ?? 0,
-        pixelSizeUm: (j['pixel_size_um'] as num?)?.toDouble() ?? 0,
-      );
+  static OpticsSettings _opticsFromJson(Map<String, dynamic> j) {
+    // The daemon defaults reducer_factor to 1.0, back-fills it on upgrade, and PUT
+    // rejects ≤ 0 (#467), so the wire value is always positive in practice. Coalesce
+    // a missing OR non-positive value (e.g. a hand-edited profile.json) to 1.0 = "no
+    // reducer" — a 0 would otherwise multiply the focal length to 0 and silently mark
+    // an otherwise-complete rig unconfigured (no FOV box).
+    final reducer = (j['reducer_factor'] as num?)?.toDouble() ?? 1.0;
+    return OpticsSettings(
+      focalLengthMm: (j['focal_length_mm'] as num?)?.toDouble() ?? 0,
+      reducerFactor: reducer > 0 ? reducer : 1.0,
+      sensorWidthPx: (j['sensor_width_px'] as num?)?.toInt() ?? 0,
+      sensorHeightPx: (j['sensor_height_px'] as num?)?.toInt() ?? 0,
+      pixelSizeUm: (j['pixel_size_um'] as num?)?.toDouble() ?? 0,
+    );
+  }
 
   static Map<String, dynamic> _opticsToJson(OpticsSettings v) => {
         'focal_length_mm': v.focalLengthMm,
