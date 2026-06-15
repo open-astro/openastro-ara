@@ -32,7 +32,8 @@ namespace OpenAstroAra.Server.Contracts;
 ///   "plate_solve":           { ... },
 ///   "diagnostics_mode":      { ... },
 ///   "phd2":                  { ... },
-///   "equipment_connection":  { ... }
+///   "equipment_connection":  { ... },
+///   "optics":                { ... }
 /// }
 /// </code>
 ///
@@ -52,4 +53,5 @@ public sealed record ProfileSnapshotDto(
     DiagnosticsModeDto DiagnosticsMode,
     Phd2SettingsDto Phd2,
     EquipmentConnectionDto EquipmentConnection,
-    StretchDefaultsDto StretchDefaults);
+    StretchDefaultsDto StretchDefaults,
+    OpticsSettingsDto Optics);

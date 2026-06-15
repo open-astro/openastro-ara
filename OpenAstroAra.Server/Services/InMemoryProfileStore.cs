@@ -251,6 +251,25 @@ public sealed class InMemoryProfileStore : IProfileStore {
         RaiseChanged();
     }
 
+    // §36 imaging-train optics. 0s mean "not yet configured — populated by
+    // the wizard, Settings, or first camera connect"; ReducerFactor starts
+    // at 1.0 so it's never a zero multiplier in the framing math.
+    private OpticsSettingsDto _optics = new(
+        FocalLengthMm: 0,
+        ReducerFactor: 1.0,
+        SensorWidthPx: 0,
+        SensorHeightPx: 0,
+        PixelSizeUm: 0);
+
+    public OpticsSettingsDto GetOpticsSettings() {
+        lock (_lock) { return _optics; }
+    }
+
+    public void PutOpticsSettings(OpticsSettingsDto value) {
+        lock (_lock) { _optics = value; }
+        RaiseChanged();
+    }
+
     // Defaults match EquipmentConnectionSettings() constructor: camera +
     // mount + focuser + filter wheel + rotator + flat + safety on by
     // default; dome + weather + guider off (manual connect — dome

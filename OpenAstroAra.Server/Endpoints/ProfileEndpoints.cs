@@ -194,6 +194,38 @@ public static class ProfileEndpoints {
             .WithName("PutPhd2Settings")
             .WithSummary("Replace the active profile's PHD2 settings.");
 
+        profile.MapGet("/optics", (IProfileStore store) =>
+                Results.Ok(store.GetOpticsSettings()))
+            .Produces<OpticsSettingsDto>(StatusCodes.Status200OK)
+            .WithName("GetOpticsSettings")
+            .WithSummary("Get the active profile's optics settings.");
+
+        profile.MapPut("/optics", (OpticsSettingsDto body, IProfileStore store) => {
+            // reducer_factor multiplies focal length in the pixel-scale formula, so
+            // 0 (or negative) would divide-by-zero / invert the FOV. It must stay
+            // strictly positive (1.0 = no reducer/barlow).
+            if (body.ReducerFactor <= 0) {
+                return Results.Problem(
+                    detail: "reducer_factor must be > 0 (1.0 = no reducer/barlow).",
+                    statusCode: StatusCodes.Status400BadRequest);
+            }
+            // The remaining geometry fields use 0 = "unset"; negatives are
+            // meaningless (and produce garbage FOV math) — reject rather than store.
+            if (body.FocalLengthMm < 0 || body.PixelSizeUm < 0 ||
+                body.SensorWidthPx < 0 || body.SensorHeightPx < 0) {
+                return Results.Problem(
+                    detail: "focal_length_mm, pixel_size_um and sensor dimensions must be >= 0 (0 = unset).",
+                    statusCode: StatusCodes.Status400BadRequest);
+            }
+            store.PutOpticsSettings(body);
+            return Results.Ok(body);
+        })
+            .Accepts<OpticsSettingsDto>("application/json")
+            .Produces<OpticsSettingsDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .WithName("PutOpticsSettings")
+            .WithSummary("Replace the active profile's optics settings.");
+
         profile.MapGet("/equipment-connection", (IProfileStore store) =>
                 Results.Ok(store.GetEquipmentConnection()))
             .Produces<EquipmentConnectionDto>(StatusCodes.Status200OK)

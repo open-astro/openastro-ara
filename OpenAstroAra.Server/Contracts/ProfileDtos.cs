@@ -201,6 +201,25 @@ public sealed record Phd2SettingsDto(
     string DecGuideMode = "auto");
 
 /// <summary>
+/// §36 imaging-train optics + sensor geometry — the inputs the Planning
+/// tab's Frame mode needs to draw the field-of-view box. The framing math
+/// is: pixel scale = 206.265 × <c>PixelSizeUm</c> ÷ (<c>FocalLengthMm</c> ×
+/// <c>ReducerFactor</c>); FOV = sensor_px × pixel scale.
+/// <c>ReducerFactor</c> is 1.0 for none, 0.8 for a 0.8× reducer, 2.0 for a
+/// 2× barlow. Sensor dimensions are cached here on first camera connect
+/// (PORT_DECISIONS §36/§25.5) so framing works with the camera
+/// disconnected/offline; the user can override in Settings. NOTE: the
+/// on-first-connect auto-population is a FUTURE slice — this section is the
+/// storage + API foundation only.
+/// </summary>
+public sealed record OpticsSettingsDto(
+    double FocalLengthMm,
+    double ReducerFactor,
+    int SensorWidthPx,
+    int SensorHeightPx,
+    double PixelSizeUm);
+
+/// <summary>
 /// §52.1 connection-lifecycle defaults — which equipment device types
 /// auto-connect when the daemon boots. One bool per device type. Wire
 /// shape uses snake_case for compound names: `filter_wheel`,

@@ -17,6 +17,7 @@ using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Server;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
+using System.IO;
 using System.Text.Json;
 
 namespace OpenAstroAra.Test {
@@ -214,6 +215,85 @@ namespace OpenAstroAra.Test {
             var meridian = svc.ActiveProfile.MeridianFlipSettings;
             Assert.That(meridian.PauseTimeBeforeMeridian, Is.EqualTo(6));
             Assert.That(meridian.Recenter, Is.True);
+        }
+
+        [Test]
+        public void Optics_default_is_the_unset_zero_values_InMemory() {
+            var store = new InMemoryProfileStore();
+
+            var optics = store.GetOpticsSettings();
+
+            // 0 = "not yet configured"; ReducerFactor 1.0 so it's never a zero multiplier.
+            Assert.That(optics.FocalLengthMm, Is.EqualTo(0));
+            Assert.That(optics.ReducerFactor, Is.EqualTo(1.0));
+            Assert.That(optics.SensorWidthPx, Is.EqualTo(0));
+            Assert.That(optics.SensorHeightPx, Is.EqualTo(0));
+            Assert.That(optics.PixelSizeUm, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void Optics_round_trips_through_InMemoryProfileStore() {
+            var store = new InMemoryProfileStore();
+
+            var put = new OpticsSettingsDto(
+                FocalLengthMm: 530, ReducerFactor: 0.8,
+                SensorWidthPx: 6248, SensorHeightPx: 4176, PixelSizeUm: 3.76);
+            store.PutOpticsSettings(put);
+
+            Assert.That(store.GetOpticsSettings(), Is.EqualTo(put));
+        }
+
+        [Test]
+        public void Optics_round_trips_and_persists_through_FileProfileStore() {
+            var dir = Path.Combine(Path.GetTempPath(), "openastroara-optics-test-" + Path.GetRandomFileName());
+            try {
+                var put = new OpticsSettingsDto(
+                    FocalLengthMm: 2000, ReducerFactor: 2.0,
+                    SensorWidthPx: 9576, SensorHeightPx: 6388, PixelSizeUm: 3.76);
+
+                var store = new FileProfileStore(dir);
+                // Default before any Put is the unset-zero / 1.0 reducer state.
+                var def = store.GetOpticsSettings();
+                Assert.That(def.FocalLengthMm, Is.EqualTo(0));
+                Assert.That(def.ReducerFactor, Is.EqualTo(1.0));
+
+                store.PutOpticsSettings(put);
+                Assert.That(store.GetOpticsSettings(), Is.EqualTo(put));
+
+                // A fresh store over the same dir reads the persisted value back.
+                var reopened = new FileProfileStore(dir);
+                Assert.That(reopened.GetOpticsSettings(), Is.EqualTo(put));
+            } finally {
+                if (Directory.Exists(dir)) {
+                    Directory.Delete(dir, recursive: true);
+                }
+            }
+        }
+
+        [Test]
+        public void Optics_missing_from_an_older_profile_backfills_to_default() {
+            var dir = Path.Combine(Path.GetTempPath(), "openastroara-optics-bf-" + Path.GetRandomFileName());
+            try {
+                // Simulate a profile.json written before §36 optics existed: take a
+                // full snapshot's JSON and strip the "optics" key.
+                _ = new FileProfileStore(dir); // writes defaults (incl. optics)
+                var path = Path.Combine(dir, "profile.json");
+                var root = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(path))!.AsObject();
+                root.Remove("optics");
+                File.WriteAllText(path, root.ToJsonString());
+
+                // Reopen: optics must back-fill to the default, not deserialize to
+                // null (which would surface as a null GET body on upgrade).
+                var store = new FileProfileStore(dir);
+                var optics = store.GetOpticsSettings();
+                Assert.That(optics, Is.Not.Null);
+                Assert.That(optics.ReducerFactor, Is.EqualTo(1.0));
+                Assert.That(optics.FocalLengthMm, Is.EqualTo(0));
+            } finally {
+                if (Directory.Exists(dir)) {
+                    Directory.Delete(dir, recursive: true);
+                }
+            }
         }
 
         [Test]
