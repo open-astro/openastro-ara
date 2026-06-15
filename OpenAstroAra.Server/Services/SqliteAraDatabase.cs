@@ -118,6 +118,14 @@ public sealed partial class SqliteAraDatabase : IAraDatabase {
 
         await ExecAsync(conn, "CREATE INDEX IF NOT EXISTS idx_frames_session_id ON frames(session_id);", ct);
         await ExecAsync(conn, "CREATE INDEX IF NOT EXISTS idx_frames_captured_utc ON frames(captured_utc);", ct);
+        // §50 stats-perf: most stats queries restrict to light frames and
+        // order/group by captured_utc (targets, calendar, frame-quality,
+        // best-frames, focus-temp). A partial covering index keeps the
+        // `frame_type = 'light'` predicate from being a residual filter over the
+        // full captured_utc scan. Additive + idempotent like the others — a
+        // database from an earlier build gets it on next startup. (Same
+        // partial-index shape as idx_diag_open below.)
+        await ExecAsync(conn, "CREATE INDEX IF NOT EXISTS idx_frames_light_captured ON frames(captured_utc) WHERE frame_type = 'light';", ct);
 
         // §46.5 notifications log. Indexes on posted_utc (most lookups
         // are time-ordered) + read (unread-only filter is the hot path
