@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 
 import '../models/backup_snapshot.dart';
+import '../models/clone_status.dart';
 import '../models/server.dart';
 
 /// The §43 backup operations the state layer depends on. An interface so tests
@@ -24,15 +25,21 @@ abstract interface class BackupClient {
     required bool sequences,
   });
 
+  /// The restore worker's live state (§43-2b) — poll after [restore] until it
+  /// reaches a terminal state (`done`/`failed`). Throws on a transport error or
+  /// a non-object body.
+  Future<CloneStatus> cloneStatus();
+
   /// Absolute URL to download [snapshot], for opening in a browser / save dialog.
   String absoluteDownloadUrl(BackupSnapshot snapshot);
 
   void close();
 }
 
-/// Dio wrapper over `/api/v1/backup/*`. Create + restore are 202-Accepted; in
-/// §43-1/§43-2a both complete within the request (the payload is config-sized),
-/// so the accepted response means the operation is done, not merely queued.
+/// Dio wrapper over `/api/v1/backup/*`. Create is 202-Accepted and completes
+/// within the request (config-sized payload). Restore is also 202 but runs on a
+/// background worker (§43-2b) — poll [cloneStatus] for its `running`→`done`/
+/// `failed` outcome.
 class BackupApi implements BackupClient {
   final Dio _dio;
   final String _baseUrl;
@@ -102,6 +109,16 @@ class BackupApi implements BackupClient {
       options: Options(receiveTimeout: const Duration(seconds: 60)),
     );
     return _operationId(res.data, 'restore-zip');
+  }
+
+  @override
+  Future<CloneStatus> cloneStatus() async {
+    final res = await _dio.get<dynamic>('/api/v1/backup/clone-status');
+    final data = res.data;
+    if (data is! Map<String, dynamic>) {
+      throw FormatException('backup/clone-status returned a non-object body (${data.runtimeType})');
+    }
+    return CloneStatus.fromJson(data);
   }
 
   @override

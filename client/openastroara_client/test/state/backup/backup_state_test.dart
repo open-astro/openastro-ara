@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/backup_snapshot.dart';
+import 'package:openastroara/models/clone_status.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/services/backup_api.dart';
 import 'package:openastroara/services/saved_server_service.dart';
@@ -55,6 +58,24 @@ class _FakeBackupClient implements BackupClient {
     lastRestoreSequences = sequences;
     if (throwOnRestore) throw StateError('unknown snapshot');
     return 'op-restore';
+  }
+
+  // Returned in order by cloneStatus(), holding the last element once exhausted.
+  List<CloneStatus> cloneStatusSequence = const [];
+  int _cloneIdx = 0;
+  int cloneStatusCalls = 0;
+
+  @override
+  Future<CloneStatus> cloneStatus() async {
+    cloneStatusCalls++;
+    if (cloneStatusSequence.isEmpty) {
+      return const CloneStatus(state: 'idle');
+    }
+    final s = cloneStatusSequence[_cloneIdx];
+    if (_cloneIdx < cloneStatusSequence.length - 1) {
+      _cloneIdx++;
+    }
+    return s;
   }
 
   @override
@@ -147,6 +168,90 @@ void main() {
         throwsA(isA<StateError>()),
       );
       expect(api.lists, listsBefore, reason: 'restore does not refresh the snapshot list');
+    });
+
+    test('awaitRestoreTerminal polls past running to a done status', () async {
+      final api = _FakeBackupClient(const [BackupSnapshot(backupId: 'b1')])
+        ..cloneStatusSequence = const [
+          CloneStatus(state: 'running'),
+          CloneStatus(state: 'running'),
+          CloneStatus(state: 'done', progressPct: 100, message: 'Restored: profiles'),
+        ];
+      final c = _container(const [_server], api);
+      await c.read(savedServersProvider.future);
+      await c.read(backupSnapshotsProvider.future);
+
+      final status = (await c.read(backupSnapshotsProvider.notifier).awaitRestoreTerminal(
+            interval: const Duration(milliseconds: 1),
+          ))!;
+      expect(status.state, 'done');
+      expect(status.isFailed, isFalse);
+      expect(api.cloneStatusCalls, 3);
+    });
+
+    test('awaitRestoreTerminal surfaces a failed status with its message', () async {
+      final api = _FakeBackupClient(const [BackupSnapshot(backupId: 'b1')])
+        ..cloneStatusSequence = const [
+          CloneStatus(state: 'running'),
+          CloneStatus(state: 'failed', message: 'disk gone'),
+        ];
+      final c = _container(const [_server], api);
+      await c.read(savedServersProvider.future);
+      await c.read(backupSnapshotsProvider.future);
+
+      final status = (await c.read(backupSnapshotsProvider.notifier).awaitRestoreTerminal(
+            interval: const Duration(milliseconds: 1),
+          ))!;
+      expect(status.isFailed, isTrue);
+      expect(status.message, 'disk gone');
+    });
+
+    test('awaitRestoreTerminal times out if the restore never finishes', () async {
+      final api = _FakeBackupClient(const [BackupSnapshot(backupId: 'b1')])
+        ..cloneStatusSequence = const [CloneStatus(state: 'running')]; // held forever
+      final c = _container(const [_server], api);
+      await c.read(savedServersProvider.future);
+      await c.read(backupSnapshotsProvider.future);
+
+      await expectLater(
+        c.read(backupSnapshotsProvider.notifier).awaitRestoreTerminal(
+              interval: const Duration(milliseconds: 1),
+              timeout: const Duration(milliseconds: 30),
+            ),
+        throwsA(isA<TimeoutException>()),
+      );
+    });
+
+    test('awaitRestoreTerminal stops polling and returns null once cancelled', () async {
+      final api = _FakeBackupClient(const [BackupSnapshot(backupId: 'b1')])
+        ..cloneStatusSequence = const [CloneStatus(state: 'running')]; // never terminal
+      final c = _container(const [_server], api);
+      await c.read(savedServersProvider.future);
+      await c.read(backupSnapshotsProvider.future);
+
+      var cancelled = false;
+      final status = await c.read(backupSnapshotsProvider.notifier).awaitRestoreTerminal(
+            interval: const Duration(milliseconds: 1),
+            isCancelled: () {
+              // Cancel after the first poll so we exercise the in-loop check.
+              final c = cancelled;
+              cancelled = true;
+              return c;
+            },
+          );
+      expect(status, isNull, reason: 'cancellation returns null instead of running to the deadline');
+      expect(api.cloneStatusCalls, 1, reason: 'polling stops once cancelled');
+    });
+
+    test('awaitRestoreTerminal throws StateError when no server is bound', () async {
+      final c = _container(const [], _FakeBackupClient(const []));
+      await c.read(savedServersProvider.future);
+      await c.read(backupSnapshotsProvider.future);
+
+      await expectLater(
+        c.read(backupSnapshotsProvider.notifier).awaitRestoreTerminal(),
+        throwsA(isA<StateError>()),
+      );
     });
 
     test('actions are no-ops (return null) when no server is bound', () async {

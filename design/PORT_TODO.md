@@ -610,9 +610,12 @@ Deferred to **§43-2**:
   refused **409**. An `IBackupRestorer` seam makes the worker states testable (block/throw). STILL OPEN for **§43-2b**:
   (b) accept a **remote/cloud** `BackupSourceUrl` (re-download then restore) — currently only a local snapshot-download
   URL is accepted; (c) the frame-metadata / logs areas (`RestoreFrameMetadata` / `RestoreLogs` flags) once §43-1 create
-  captures them; (d) **client**: the §43 Backup screen should poll `clone-status` for restore progress now that it's
-  real (today the restore completes in ~ms for config-sized payloads, so a poll-less client is racy-but-fine).
-  §43-2a landed in the restore PR (2026-06-14).
+  captures them. **§43-2b(d) DONE 2026-06-15:** the client Backup screen now polls `clone-status` after the restore POST
+  (`CloneStatus` model + `cloneStatus()` API + `awaitRestoreTerminal()`) and shows the real terminal outcome — including
+  a worker-side failure the 202 couldn't reveal — instead of a premature "complete". §43-2a landed in the restore PR
+  (2026-06-14). **Future (with (c)):** when large areas land, move `ValidateChecksum`'s SHA-256 off the request thread
+  onto the worker — it currently hashes synchronously before the 202 (negligible for config-sized payloads). Flagged by
+  the #458 review.
 - **Restore sha-256 gate is bypassable by deleting the manifest (low priority).** `RestoreCore` validates the
   archive against its `.meta.json` sha-256 before touching live config, but a missing/unreadable manifest skips the
   gate (logged at Warning via `LogManifestSkipped`, so it's visible; the restore proceeds unvalidated). Anyone able to

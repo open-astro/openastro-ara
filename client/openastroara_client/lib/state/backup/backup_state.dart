@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/backup_snapshot.dart';
+import '../../models/clone_status.dart';
 import '../../models/server.dart';
 import '../../services/backup_api.dart';
 import '../saved_server_state.dart';
@@ -70,6 +73,40 @@ class BackupSnapshotsNotifier extends AsyncNotifier<List<BackupSnapshot>?> {
       profiles: profiles,
       sequences: sequences,
     );
+  }
+
+  /// §43-2b: poll clone-status until the restore worker reaches a terminal state
+  /// (`done`/`failed`), returning that status — or `null` if [isCancelled] starts
+  /// returning true (e.g. the caller's widget was disposed), so the poll stops
+  /// making requests instead of running to the deadline. Call right after
+  /// [restore] (the daemon sets `running` synchronously on the POST, so there's
+  /// no stale-`done` race against a prior restore). Throws [TimeoutException] if
+  /// it doesn't finish within [timeout], [StateError] if no server is bound, or a
+  /// transport error from the poll. [interval] is injectable so tests don't
+  /// wall-clock wait.
+  Future<CloneStatus?> awaitRestoreTerminal({
+    Duration interval = const Duration(milliseconds: 500),
+    Duration timeout = const Duration(minutes: 5),
+    bool Function()? isCancelled,
+  }) async {
+    final api = ref.read(backupApiProvider);
+    if (api == null) {
+      throw StateError('No server connected.');
+    }
+    final deadline = DateTime.now().add(timeout);
+    while (true) {
+      if (isCancelled?.call() ?? false) {
+        return null;
+      }
+      final status = await api.cloneStatus();
+      if (status.isTerminal) {
+        return status;
+      }
+      if (!DateTime.now().isBefore(deadline)) {
+        throw TimeoutException('Restore did not finish within ${timeout.inSeconds}s.');
+      }
+      await Future<void>.delayed(interval);
+    }
   }
 
   bool _refreshing = false;
