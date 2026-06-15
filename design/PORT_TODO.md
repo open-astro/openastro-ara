@@ -770,6 +770,12 @@ Deferred to **§43-2**:
   (4) Tonight's Sky = location-aware "best objects tonight" from profile site lat/long + date, ranked by altitude/visibility.
   (5) reconcile prose in §36 / §47 / §25.5 / §61 search registry (map "framing"/"FOV"/"mosaic"/"tonight"/"sky atlas" → Planning);
   update `COMMIT-PR-RULES.md` Phase 12 split (12c drops Framing; 12e becomes "Planning"). Server unaffected.
+  Three spec details to pin during implementation (flagged by the #465 review): (i) **one-time-notice scope** for the
+  connect-diff re-cache — define it as "once per detected sensor-geometry change" (not per session), so a second camera swap
+  still notifies; (ii) **reducer/barlow** swaps don't change sensor dims, so they rely on the §30.7 path — *verify* §30.7's
+  invalidation matrix explicitly recomputes framing on effective-focal-length change, don't just assume it; (iii) the §25.5
+  walkthrough numbers only 4 tabs (Image Library + Stats absent) and the NINA-control-labels list (~PORT_PLAYBOOK line 2021)
+  still says "Framing Assistant"/"Sky Atlas" — fold both into the prose sweep so they don't slip.
 - **Re-shim the open-astro/webview_cef fork on Flutter upgrades (§36).** The §36 Aladin embed depends on the
   [open-astro/webview_cef](https://github.com/open-astro/webview_cef) fork (SHA-pinned), which carries a one-line shim:
   `bool TextInputClient.onFocusReceived() => false;` in `lib/src/webview_textinput.dart` (upstream predates that Flutter
