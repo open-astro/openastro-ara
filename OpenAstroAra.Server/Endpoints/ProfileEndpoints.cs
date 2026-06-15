@@ -202,12 +202,19 @@ public static class ProfileEndpoints {
 
         profile.MapPut("/optics", (OpticsSettingsDto body, IProfileStore store) => {
             // reducer_factor multiplies focal length in the pixel-scale formula, so
-            // 0 (or negative) would divide-by-zero / invert the FOV. The other
-            // fields use 0 = "unset"; reducer must stay strictly positive (1.0 = no
-            // reducer/barlow).
+            // 0 (or negative) would divide-by-zero / invert the FOV. It must stay
+            // strictly positive (1.0 = no reducer/barlow).
             if (body.ReducerFactor <= 0) {
                 return Results.Problem(
                     detail: "reducer_factor must be > 0 (1.0 = no reducer/barlow).",
+                    statusCode: StatusCodes.Status400BadRequest);
+            }
+            // The remaining geometry fields use 0 = "unset"; negatives are
+            // meaningless (and produce garbage FOV math) — reject rather than store.
+            if (body.FocalLengthMm < 0 || body.PixelSizeUm < 0 ||
+                body.SensorWidthPx < 0 || body.SensorHeightPx < 0) {
+                return Results.Problem(
+                    detail: "focal_length_mm, pixel_size_um and sensor dimensions must be >= 0 (0 = unset).",
                     statusCode: StatusCodes.Status400BadRequest);
             }
             store.PutOpticsSettings(body);
