@@ -42,18 +42,21 @@ void main() {
     });
   });
 
-  group('TargetSearchQueryNotifier', () {
+  group('FrameModeNotifier', () {
     late ProviderContainer container;
     setUp(() => container = ProviderContainer());
     tearDown(() => container.dispose());
 
-    test('defaults to empty', () {
-      expect(container.read(targetSearchQueryProvider), '');
+    test('defaults to false (Frame toggle off)', () {
+      expect(container.read(frameModeEnabledProvider), false);
     });
 
-    test('set updates query', () {
-      container.read(targetSearchQueryProvider.notifier).set('M42');
-      expect(container.read(targetSearchQueryProvider), 'M42');
+    test('set updates the flag', () {
+      final n = container.read(frameModeEnabledProvider.notifier);
+      n.set(true);
+      expect(container.read(frameModeEnabledProvider), true);
+      n.set(false);
+      expect(container.read(frameModeEnabledProvider), false);
     });
   });
 }

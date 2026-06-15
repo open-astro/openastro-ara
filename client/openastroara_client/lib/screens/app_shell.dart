@@ -12,16 +12,17 @@ import '../widgets/status_indicator.dart';
 import '../widgets/ws_connection_indicator.dart';
 import 'library/image_library_screen.dart';
 import 'stats/stats_dashboard_screen.dart';
-import 'tabs/framing_tab.dart';
 import 'tabs/imaging_tab.dart';
 import 'tabs/options_tab.dart';
+import 'tabs/planning_tab.dart';
 import 'tabs/sequencer_tab.dart';
-import 'tabs/sky_atlas_tab.dart';
 import 'wizard/wizard_shell.dart';
 
 /// Main app shell — replaces the first-run screen once a server is saved
 /// (playbook §25 layout: nav rail on left, top equipment bar, center
-/// workspace, bottom status). Per-area content lives in the 5 tab widgets.
+/// workspace, bottom status). Per-area content lives in the 4 tab widgets
+/// (Imaging / Planning / Sequencer / Options — Planning merges the old Sky
+/// Atlas + Framing tabs, PORT_DECISIONS §36/§25.5).
 /// Equipment chips along the top are placeholder until Phase 12c wires the
 /// chooser bottom-sheet + Alpaca discovery flow per §25.3.
 class AppShell extends ConsumerStatefulWidget {
@@ -34,9 +35,8 @@ class AppShell extends ConsumerStatefulWidget {
 class _AppShellState extends ConsumerState<AppShell> {
   static const _tabs = <_TabSpec>[
     _TabSpec(icon: Icons.camera_alt, label: 'Imaging', body: ImagingTab()),
-    _TabSpec(icon: Icons.crop_free, label: 'Framing', body: FramingTab()),
+    _TabSpec(icon: Icons.public, label: 'Planning', body: PlanningTab()),
     _TabSpec(icon: Icons.list_alt, label: 'Sequencer', body: SequencerTab()),
-    _TabSpec(icon: Icons.public, label: 'Sky Atlas', body: SkyAtlasTab()),
     _TabSpec(icon: Icons.settings, label: 'Options', body: OptionsTab()),
   ];
 

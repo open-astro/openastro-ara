@@ -1,0 +1,76 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/screens/tabs/planning_tab.dart';
+
+// Widget tests for the merged Planning tab (PORT_DECISIONS §36/§25.5). The
+// embedded AladinView can't start a webview in the headless test env, so it
+// degrades to its "atlas unavailable" panel — these tests exercise the shell
+// around it (header modes + the Frame toggle), not the atlas itself. We pump
+// fixed frames rather than `pumpAndSettle` because AladinView shows a brief
+// animating loading spinner before it settles to the unavailable panel.
+void main() {
+  // Render at a desktop width — Planning is a desktop-first tab and its header
+  // toolbar assumes room to lay out (it scrolls if narrower, but the controls
+  // should be on-screen for tap tests).
+  setUp(() {
+    final view = TestWidgetsFlutterBinding.ensureInitialized()
+        .platformDispatcher
+        .views
+        .first;
+    view.physicalSize = const Size(1280, 800);
+    view.devicePixelRatio = 1.0;
+  });
+  tearDown(() {
+    final view = TestWidgetsFlutterBinding.ensureInitialized()
+        .platformDispatcher
+        .views
+        .first;
+    view.resetPhysicalSize();
+    view.resetDevicePixelRatio();
+  });
+
+  Future<void> pumpTab(WidgetTester tester) async {
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MaterialApp(home: Scaffold(body: PlanningTab())),
+      ),
+    );
+    await tester.pump(); // build + let the webview-init future reject
+  }
+
+  testWidgets('header shows Planning title + Explore/Tonight\'s + Frame toggle',
+      (tester) async {
+    await pumpTab(tester);
+
+    expect(find.text('Planning'), findsOneWidget);
+    expect(find.text('Explore'), findsOneWidget);
+    expect(find.text("Tonight's Sky"), findsOneWidget);
+    expect(find.widgetWithText(FilterChip, 'Frame'), findsOneWidget);
+    expect(find.text('Data Manager'), findsOneWidget);
+  });
+
+  testWidgets('Frame toggle reveals the framing panel; off by default',
+      (tester) async {
+    await pumpTab(tester);
+
+    // Frame off → no framing controls.
+    expect(find.textContaining('Rotation:'), findsNothing);
+    expect(find.text('Add to Sequence'), findsNothing);
+
+    // Toggle Frame on.
+    await tester.tap(find.widgetWithText(FilterChip, 'Frame'));
+    await tester.pump();
+
+    expect(find.textContaining('Rotation:'), findsOneWidget);
+    expect(find.text('Mosaic'), findsOneWidget);
+    // Sequence output is wired in the FOV slice — disabled for now.
+    final addBtn = tester.widget<FilledButton>(
+      find.ancestor(
+        of: find.text('Add to Sequence'),
+        matching: find.byType(FilledButton),
+      ),
+    );
+    expect(addBtn.onPressed, isNull);
+  });
+}
