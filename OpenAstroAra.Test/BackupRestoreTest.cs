@@ -70,6 +70,24 @@ namespace OpenAstroAra.Test {
         private static RestoreRequestDto Req(Uri src, bool profiles, bool sequences) =>
             new(src, RestoreSequences: sequences, RestoreProfiles: profiles, RestoreFrameMetadata: false, RestoreLogs: false);
 
+        // §43-2b: restore runs on a background worker (RestoreZipAsync returns 202 before it finishes), so poll
+        // clone-status to its terminal state before asserting on the restored files.
+        private async Task WaitForRestoreDoneAsync() {
+            var deadline = DateTime.UtcNow.AddSeconds(10);
+            while (DateTime.UtcNow < deadline) {
+                var status = await _svc.GetCloneStatusAsync(CancellationToken.None);
+                var state = status.GetProperty("state").GetString();
+                if (state == "done") {
+                    return;
+                }
+                if (state == "failed") {
+                    Assert.Fail("restore failed: " + status.GetProperty("message").GetString());
+                }
+                await Task.Delay(20);
+            }
+            Assert.Fail("restore did not reach a terminal clone-status within the timeout");
+        }
+
         [Test]
         public async Task Restore_rolls_both_areas_back_to_the_snapshot() {
             WriteProfile("{\"v\":1}");
@@ -82,6 +100,7 @@ namespace OpenAstroAra.Test {
             WriteSequence("library/new.json", "ADDED-AFTER");
 
             var op = await _svc.RestoreZipAsync(Req(url, profiles: true, sequences: true), idempotencyKey: null, CancellationToken.None);
+            await WaitForRestoreDoneAsync();
 
             Assert.That(op.OperationType, Is.EqualTo("backup.restore-zip"));
             Assert.That(await File.ReadAllTextAsync(ProfilePath), Is.EqualTo("{\"v\":1}"), "profile.json rolled back");
@@ -102,6 +121,7 @@ namespace OpenAstroAra.Test {
 
             // Restore sequences only — profile.json must stay at its post-snapshot value.
             await _svc.RestoreZipAsync(Req(url, profiles: false, sequences: true), idempotencyKey: null, CancellationToken.None);
+            await WaitForRestoreDoneAsync();
 
             Assert.That(await File.ReadAllTextAsync(ProfilePath), Is.EqualTo("{\"v\":2}"), "profile untouched");
             Assert.That(await File.ReadAllTextAsync(SeqPath("a.json")), Is.EqualTo("SEQ-ORIGINAL"), "sequences restored");

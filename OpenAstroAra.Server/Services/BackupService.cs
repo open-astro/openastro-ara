@@ -23,6 +23,7 @@ using System.IO.Compression;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -66,25 +67,36 @@ namespace OpenAstroAra.Server.Services {
         private const string ManifestExtension = ".meta.json";
         private const string TempPrefix = ".tmp-";
 
-        // §43-2: a real restore will report progress here; until then clone-status is a fixed idle blob.
-        private const string IdleCloneStatusJson =
-            "{\"state\":\"idle\",\"progress_pct\":null,\"current_area\":null,\"message\":null}";
+        // §43-2b clone-status state machine. A restore runs on a background worker (RestoreZipAsync returns 202
+        // immediately), so the poll-able clone-status reports the worker's live state. "idle" until the first
+        // restore; then "running" → terminal "done"/"failed" (the last terminal stays visible until the next
+        // restore overwrites it). State strings match the wire contract the client polls.
+        private const string IdleState = "idle";
+        private const string RunningState = "running";
+        private const string DoneState = "done";
+        private const string FailedState = "failed";
+        private sealed record CloneState(string State, double? ProgressPct, string? CurrentArea, string? Message);
+        private static readonly CloneState IdleClone = new(IdleState, null, null, null);
+        private readonly object _cloneLock = new();
+        private CloneState _clone = IdleClone;
 
         private readonly string _profileDir;
         private readonly string _backupsDir;
         private readonly ILogger<BackupService> _logger;
+        private readonly IBackupRestorer _restorer;
 
         // Serializes create + restore against each other: both touch the live profile (create reads it, restore
         // swaps it), so a concurrent pair could otherwise zip a torn state or interleave two area-swaps into a
         // mixed old/new profile. One backup operation at a time — the daemon is single-user and these are infrequent.
         private readonly SemaphoreSlim _gate = new(1, 1);
 
-        public BackupService(string profileDir, ILogger<BackupService> logger) {
+        public BackupService(string profileDir, ILogger<BackupService> logger, IBackupRestorer? restorer = null) {
             ArgumentException.ThrowIfNullOrEmpty(profileDir);
             ArgumentNullException.ThrowIfNull(logger);
             _profileDir = profileDir;
             _backupsDir = Path.Combine(profileDir, BackupsDirName);
             _logger = logger;
+            _restorer = restorer ?? new DefaultBackupRestorer();
         }
 
         // Registered as a DI singleton, so the container disposes this on host shutdown.
@@ -329,10 +341,7 @@ namespace OpenAstroAra.Server.Services {
         private static Uri SnapshotDownloadUrl(Guid id) =>
             new("/api/v1/backup/snapshot/" + id.ToString("D", CultureInfo.InvariantCulture) + "/download", UriKind.Relative);
 
-        [SuppressMessage("Performance", "CA1873:Avoid potentially expensive logging",
-            Justification = "The joined argument is at most two short area names ('profiles','sequences') — the join " +
-                "is trivial and runs once per restore, not on a hot path.")]
-        public async Task<OperationAcceptedDto> RestoreZipAsync(RestoreRequestDto request, string? idempotencyKey, CancellationToken ct) {
+        public Task<OperationAcceptedDto> RestoreZipAsync(RestoreRequestDto request, string? idempotencyKey, CancellationToken ct) {
             ArgumentNullException.ThrowIfNull(request);
 
             // §43-2a: restore from a LOCAL snapshot only — the source URL must be our own snapshot-download route.
@@ -348,31 +357,64 @@ namespace OpenAstroAra.Server.Services {
                     "No restorable area selected — set restore_profiles and/or restore_sequences.");
             }
 
-            // Synchronous file IO off the request thread (matches CreateZipAsync); §43-2b adds a background worker +
-            // live clone-status progress. The 202 contract is already in place so the wire shape won't change then.
-            // Serialized against create + other restores so two operations can't interleave on the live profile.
-            await _gate.WaitAsync(ct).ConfigureAwait(false);
-            IReadOnlyList<string> restored;
-            try {
-                restored = await Task.Run(() => RestoreCore(id, request, ct), ct).ConfigureAwait(false);
-            } finally {
-                _gate.Release();
-            }
-            LogRestored(id, string.Join(",", restored));
-            return new OperationAcceptedDto(
-                // A fresh operation id per restore — the snapshot id (`id`) identifies the source, not the operation,
-                // so restoring the same snapshot twice yields distinct operation ids (matters for §43-2b dedup).
-                OperationId: Guid.NewGuid(),
-                OperationType: "backup.restore-zip",
-                AcceptedUtc: DateTimeOffset.UtcNow,
-                IdempotencyKey: idempotencyKey);
-        }
-
-        private IReadOnlyList<string> RestoreCore(Guid id, RestoreRequestDto request, CancellationToken ct) {
+            // §43-2b: validate cheaply + SYNCHRONOUSLY (so unknown-snapshot 404 and corrupt-archive 422 still surface
+            // as HTTP errors before the 202), then run the slow, live-config-mutating extract+swap on a background
+            // worker and report its progress via the poll-able clone-status. The 202/operation-id wire contract was
+            // already in place for exactly this.
             var zipPath = FindZipPath(id)
                 ?? throw new BackupSnapshotNotFoundException($"No backup snapshot {id} to restore from.");
+            ValidateChecksum(id, zipPath);
 
-            // Integrity gate before touching live config: a corrupt archive must not half-overwrite the profile.
+            // Claim the single clone slot. Only one restore at a time — a second while one runs is a 409, not a
+            // queued op (both mutate the same live profile). Atomic under the lock so two requests can't both claim.
+            var opId = Guid.NewGuid();
+            lock (_cloneLock) {
+                if (_clone.State == RunningState) {
+                    throw new BackupRestoreInProgressException("A restore is already in progress.");
+                }
+                _clone = new CloneState(RunningState, null, null, "Restoring…");
+            }
+
+            // Fire-and-forget on the thread pool; the worker owns the gate + the terminal clone-status. ct is the
+            // request token — it's cancelled once the 202 response completes, so the worker must NOT observe it.
+            _ = Task.Run(() => RunRestoreAsync(opId, zipPath, request), CancellationToken.None);
+            LogRestoreStarted(id, opId);
+            return Task.FromResult(new OperationAcceptedDto(
+                OperationId: opId,
+                OperationType: "backup.restore-zip",
+                AcceptedUtc: DateTimeOffset.UtcNow,
+                IdempotencyKey: idempotencyKey));
+        }
+
+        // The restore worker: extract + atomically swap the validated archive into the live profile, driving the
+        // clone-status from idle→running (set by the caller) → done/failed here.
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "Top-level fire-and-forget worker: every failure must land in the 'failed' clone-status " +
+                "(and be logged) rather than escaping as an unobserved task exception. It is reported, not swallowed.")]
+        [SuppressMessage("Performance", "CA1873:Avoid potentially expensive logging",
+            Justification = "The joined argument is at most two short area names ('profiles','sequences') — trivial, " +
+                "once per restore, not a hot path.")]
+        private async Task RunRestoreAsync(Guid opId, string zipPath, RestoreRequestDto request) {
+            try {
+                // Serialize against create (and defensively any other restore): both touch the live profile.
+                await _gate.WaitAsync().ConfigureAwait(false);
+                try {
+                    var restored = _restorer.Restore(
+                        zipPath, _profileDir, request.RestoreProfiles, request.RestoreSequences, CancellationToken.None);
+                    SetClone(new CloneState(DoneState, 100, null,
+                        restored.Count == 0 ? "Nothing to restore" : "Restored: " + string.Join(", ", restored)));
+                    LogRestored(opId, string.Join(",", restored));
+                } finally {
+                    _gate.Release();
+                }
+            } catch (Exception ex) {
+                SetClone(new CloneState(FailedState, null, null, ex.Message));
+                LogRestoreFailed(opId, ex);
+            }
+        }
+
+        // Integrity gate before any live-config mutation: a corrupt archive must not reach the worker's swap.
+        private void ValidateChecksum(Guid id, string zipPath) {
             var manifestPath = zipPath[..^ZipExtension.Length] + ManifestExtension;
             var expectedSha = TryReadManifestSha(manifestPath);
             if (expectedSha is null) {
@@ -382,8 +424,12 @@ namespace OpenAstroAra.Server.Services {
             } else if (!string.Equals(HashFile(zipPath), expectedSha, StringComparison.OrdinalIgnoreCase)) {
                 throw new BackupCorruptException($"Backup snapshot {id} failed its checksum and was not restored.");
             }
+        }
 
-            return BackupRestorer.Restore(zipPath, _profileDir, request.RestoreProfiles, request.RestoreSequences, ct);
+        private void SetClone(CloneState s) {
+            lock (_cloneLock) {
+                _clone = s;
+            }
         }
 
         // A restore source is supported only when its path is EXACTLY our snapshot-download route —
@@ -416,10 +462,19 @@ namespace OpenAstroAra.Server.Services {
         }
 
         public Task<JsonElement> GetCloneStatusAsync(CancellationToken ct) {
-            // §43-2b: still idle — §43-2a restore completes synchronously within the request, so there's no in-flight
-            // state to report; the live progress state machine arrives with the §43-2b background worker. Parsed per call
-            // (cheap, polled rarely) and the document disposed once cloned — no long-lived static JsonDocument.
-            using var doc = JsonDocument.Parse(IdleCloneStatusJson);
+            // §43-2b: report the restore worker's live state. Snapshot under the lock, then build the wire object.
+            // (ToJsonString()+Parse is the AOT-safe path to a JsonElement; the doc is disposed once cloned.)
+            CloneState s;
+            lock (_cloneLock) {
+                s = _clone;
+            }
+            var obj = new JsonObject {
+                ["state"] = s.State,
+                ["progress_pct"] = s.ProgressPct,
+                ["current_area"] = s.CurrentArea,
+                ["message"] = s.Message,
+            };
+            using var doc = JsonDocument.Parse(obj.ToJsonString());
             return Task.FromResult(doc.RootElement.Clone());
         }
 
@@ -444,8 +499,14 @@ namespace OpenAstroAra.Server.Services {
         [LoggerMessage(Level = LogLevel.Warning, Message = "Skipping unreadable backup manifest {ManifestPath}")]
         partial void LogManifestSkipped(string manifestPath, Exception ex);
 
-        [LoggerMessage(Level = LogLevel.Information, Message = "Backup snapshot {BackupId} restored areas [{Areas}]")]
-        partial void LogRestored(Guid backupId, string areas);
+        [LoggerMessage(Level = LogLevel.Information, Message = "Backup restore {OperationId} restored areas [{Areas}]")]
+        partial void LogRestored(Guid operationId, string areas);
+
+        [LoggerMessage(Level = LogLevel.Information, Message = "Backup restore {OperationId} started from snapshot {BackupId}")]
+        partial void LogRestoreStarted(Guid backupId, Guid operationId);
+
+        [LoggerMessage(Level = LogLevel.Error, Message = "Backup restore {OperationId} failed")]
+        partial void LogRestoreFailed(Guid operationId, Exception ex);
 
         [LoggerMessage(Level = LogLevel.Warning, Message = "Backup archive {ArchivePath} vanished between resolve and open — serving 404")]
         partial void LogSnapshotVanished(string archivePath, Exception ex);
@@ -470,6 +531,14 @@ namespace OpenAstroAra.Server.Services {
         public BackupSnapshotNotFoundException() { }
         public BackupSnapshotNotFoundException(string message) : base(message) { }
         public BackupSnapshotNotFoundException(string message, Exception innerException) : base(message, innerException) { }
+    }
+
+    /// <summary>Thrown by <see cref="BackupService.RestoreZipAsync"/> when a restore is already running (only one at a
+    /// time — both mutate the live profile). The restore endpoint maps it to <c>409 Conflict</c>.</summary>
+    public sealed class BackupRestoreInProgressException : Exception {
+        public BackupRestoreInProgressException() { }
+        public BackupRestoreInProgressException(string message) : base(message) { }
+        public BackupRestoreInProgressException(string message, Exception innerException) : base(message, innerException) { }
     }
 
     /// <summary>Thrown by <see cref="BackupService.RestoreZipAsync"/> when the restore source isn't a supported

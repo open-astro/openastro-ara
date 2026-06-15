@@ -604,11 +604,15 @@ Deferred to **§43-2**:
   selected areas (profile.json / sequences) into place **atomically with all-or-nothing rollback** (mirrors the
   §36-2a installer's backup-aside→swap pattern, extended to multiple areas), gated by a manifest-sha256 integrity
   check. The endpoint returns `202` on success, `404` for an unknown snapshot, `422` for a non-local source / no area
-  / corrupt archive. STILL OPEN for **§43-2b**: (a) run the restore on a background worker and drive
-  `GetCloneStatusAsync` from its real state (today it completes synchronously in-request and clone-status stays
-  `idle`); (b) accept a **remote/cloud** `BackupSourceUrl` (re-download then restore) — currently only a local
-  snapshot-download URL is accepted; (c) the frame-metadata / logs areas (`RestoreFrameMetadata` / `RestoreLogs`
-  flags) once §43-1 create captures them. §43-2a landed in the restore PR (2026-06-14).
+  / corrupt archive. **§43-2b(a) DONE 2026-06-15:** the restore now runs on a background worker (202 returns
+  immediately; cheap validation — source/area/snapshot-exists/checksum — stays synchronous so 404/422 surface before
+  the 202), `GetCloneStatusAsync` drives a real `idle→running→done/failed` state machine, and a concurrent restore is
+  refused **409**. An `IBackupRestorer` seam makes the worker states testable (block/throw). STILL OPEN for **§43-2b**:
+  (b) accept a **remote/cloud** `BackupSourceUrl` (re-download then restore) — currently only a local snapshot-download
+  URL is accepted; (c) the frame-metadata / logs areas (`RestoreFrameMetadata` / `RestoreLogs` flags) once §43-1 create
+  captures them; (d) **client**: the §43 Backup screen should poll `clone-status` for restore progress now that it's
+  real (today the restore completes in ~ms for config-sized payloads, so a poll-less client is racy-but-fine).
+  §43-2a landed in the restore PR (2026-06-14).
 - **Restore sha-256 gate is bypassable by deleting the manifest (low priority).** `RestoreCore` validates the
   archive against its `.meta.json` sha-256 before touching live config, but a missing/unreadable manifest skips the
   gate (logged at Warning via `LogManifestSkipped`, so it's visible; the restore proceeds unvalidated). Anyone able to

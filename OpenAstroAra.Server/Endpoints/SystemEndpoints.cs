@@ -138,11 +138,14 @@ public static class SystemEndpoints {
                         return Results.Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
                     } catch (BackupCorruptException ex) {
                         return Results.Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
+                    } catch (BackupRestoreInProgressException ex) {
+                        return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
                     }
                 })
             .Accepts<RestoreRequestDto>("application/json")
             .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
             .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
             .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
             .WithName("RestoreBackupZip");
 
