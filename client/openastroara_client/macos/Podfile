@@ -46,28 +46,33 @@ post_install do |installer|
   # sees bare `Embedded`/`Framework` input files and the link fails. Rewrite the
   # generated Pods-Runner xcconfigs to the correctly-quoted single flag. This
   # runs after CocoaPods writes the files, and re-runs on every `pod install`.
-  broken = 'Embedded Framework -framework "Chromium"'
-  correct = '-framework "Chromium Embedded Framework"'
-  support_dir = File.join(installer.sandbox.root, 'Target Support Files', 'Pods-Runner')
-  xcconfigs = Dir.glob(File.join(support_dir, 'Pods-Runner.*.xcconfig'))
-  applied = 0
-  already_ok = 0
-  xcconfigs.each do |xcconfig|
-    contents = File.read(xcconfig)
-    if contents.include?(broken)
-      File.write(xcconfig, contents.gsub(broken, correct))
-      applied += 1
-    elsif contents.include?(correct)
-      already_ok += 1
+  # Guarded on webview_cef actually being a resolved pod so the block (and its
+  # "matched nothing" warning below) goes silent if the plugin is ever removed.
+  cef_present = installer.pods_project.targets.any? { |t| t.name == 'webview_cef' }
+  if cef_present
+    broken = 'Embedded Framework -framework "Chromium"'
+    correct = '-framework "Chromium Embedded Framework"'
+    support_dir = File.join(installer.sandbox.root, 'Target Support Files', 'Pods-Runner')
+    xcconfigs = Dir.glob(File.join(support_dir, 'Pods-Runner.*.xcconfig'))
+    applied = 0
+    already_ok = 0
+    xcconfigs.each do |xcconfig|
+      contents = File.read(xcconfig)
+      if contents.include?(broken)
+        File.write(xcconfig, contents.gsub(broken, correct))
+        applied += 1
+      elsif contents.include?(correct)
+        already_ok += 1
+      end
     end
-  end
-  # Fail loudly if the fix matched nothing: a future CocoaPods version may tokenize
-  # the space-containing framework name differently, in which case the link breaks
-  # with a cryptic clang error and no hint that this hook silently no-op'd.
-  if applied.zero? && already_ok.zero? && !xcconfigs.empty?
-    warn "WARNING: §36 webview_cef CEF link-flag fix matched nothing in " \
-         "#{xcconfigs.length} Pods-Runner xcconfig(s). CocoaPods may have changed " \
-         "its OTHER_LDFLAGS tokenization — the macOS build will likely fail to link " \
-         "\"Chromium Embedded Framework\". Update the post_install hook in macos/Podfile."
+    # Fail loudly if the fix matched nothing: a future CocoaPods version may tokenize
+    # the space-containing framework name differently, in which case the link breaks
+    # with a cryptic clang error and no hint that this hook silently no-op'd.
+    if applied.zero? && already_ok.zero? && !xcconfigs.empty?
+      warn "WARNING: §36 webview_cef CEF link-flag fix matched nothing in " \
+           "#{xcconfigs.length} Pods-Runner xcconfig(s). CocoaPods may have changed " \
+           "its OTHER_LDFLAGS tokenization — the macOS build will likely fail to link " \
+           "\"Chromium Embedded Framework\". Update the post_install hook in macos/Podfile."
+    end
   end
 end

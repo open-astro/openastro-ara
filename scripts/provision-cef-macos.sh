@@ -46,6 +46,10 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 client_dir="$repo_root/client/openastroara_client"
 
 # CEF pin (matches the webview_cef fork's bundled headers + the upstream README).
+# The sha256 values below are of the release assets at each `cef_url` — computed
+# by downloading the actual hlwhl/webview_cef prebuilt zips (tags
+# prebuilt_cef_bin_mac_arm64 / prebuilt_cef_bin_mac_intel). Re-pin if the version
+# is bumped: download the new asset and `shasum -a 256` it.
 cef_version="103.0.12"
 arch="$(uname -m)"
 case "$arch" in
@@ -134,7 +138,10 @@ done
 if [ ! -d "$framework/Versions" ]; then
   log "Restructuring framework into a versioned bundle…"
   rm -f "$framework/Info.plist"          # remove any stray root plist
-  rm -rf "$framework/_CodeSignature"     # flat-style signature; re-signed on copy
+  # Drop the flat-layout signature; we deliberately don't re-sign here — Flutter's
+  # build re-signs embedded frameworks at `flutter build macos` time. (If a future
+  # Gatekeeper/Xcode policy needs a valid signature pre-build, codesign here.)
+  rm -rf "$framework/_CodeSignature"
   mkdir -p "$framework/Versions/A"
   # The flat CEF 103.0.12 bundle contains exactly these three payload entries at
   # the framework root; verified for this pinned release. If a future pinned CEF
