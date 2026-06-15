@@ -77,20 +77,36 @@ case "$arch" in
     ;;
 esac
 
-# 1. Resolve the webview_cef plugin dir.
-plugin_link="$client_dir/macos/Flutter/ephemeral/.symlinks/plugins/webview_cef"
-if [ -e "$plugin_link" ]; then
-  plugin_dir="$(cd "$plugin_link" && pwd -P)"
-else
-  log "Flutter symlink not found ($plugin_link); scanning pub-cache…"
-  log "  (run 'flutter pub get' in $client_dir first for the most reliable resolution)"
-  shopt -s nullglob
-  candidates=("$HOME/.pub-cache/git/webview_cef-"*/)
-  shopt -u nullglob
-  [ "${#candidates[@]}" -ge 1 ] || die "no webview_cef checkout in pub-cache; run 'flutter pub get' first"
-  [ "${#candidates[@]}" -eq 1 ] || die "multiple webview_cef checkouts in pub-cache; run 'flutter pub get' to pick the pinned one"
-  plugin_dir="$(cd "${candidates[0]}" && pwd -P)"
+# 1. Resolve the webview_cef plugin dir — the ACTIVE checkout, authoritatively.
+# Prefer pubspec.lock's resolved-ref (the exact git SHA pub resolved): after a
+# fork re-pin there are multiple webview_cef-<sha> dirs in pub-cache and the
+# Flutter .symlinks symlink lags until the next build, so neither a scan nor the
+# symlink reliably points at the right one. Fall back to the symlink, then a
+# single-checkout scan.
+plugin_dir=""
+lockfile="$client_dir/pubspec.lock"
+if [ -f "$lockfile" ]; then
+  resolved_ref="$(grep -A8 '^  webview_cef:' "$lockfile" | grep 'resolved-ref:' | head -1 | sed -E 's/.*"([0-9a-f]+)".*/\1/')"
+  if [ -n "$resolved_ref" ] && [ -d "$HOME/.pub-cache/git/webview_cef-$resolved_ref" ]; then
+    plugin_dir="$HOME/.pub-cache/git/webview_cef-$resolved_ref"
+  fi
 fi
+if [ -z "$plugin_dir" ]; then
+  plugin_link="$client_dir/macos/Flutter/ephemeral/.symlinks/plugins/webview_cef"
+  if [ -e "$plugin_link" ]; then
+    plugin_dir="$(cd "$plugin_link" && pwd -P)"
+  else
+    log "Couldn't resolve via pubspec.lock or symlink; scanning pub-cache…"
+    log "  (run 'flutter pub get' in $client_dir first for reliable resolution)"
+    shopt -s nullglob
+    candidates=("$HOME/.pub-cache/git/webview_cef-"*/)
+    shopt -u nullglob
+    [ "${#candidates[@]}" -ge 1 ] || die "no webview_cef checkout in pub-cache; run 'flutter pub get' first"
+    [ "${#candidates[@]}" -eq 1 ] || die "multiple webview_cef checkouts in pub-cache; run 'flutter pub get' so pubspec.lock pins the active one"
+    plugin_dir="$(cd "${candidates[0]}" && pwd -P)"
+  fi
+fi
+plugin_dir="$(cd "$plugin_dir" && pwd -P)"
 
 cef_dir="$plugin_dir/macos/third/cef"
 framework="$cef_dir/Chromium Embedded Framework.framework"
