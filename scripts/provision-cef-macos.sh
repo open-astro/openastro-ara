@@ -97,14 +97,12 @@ zip_path="$tmp_dir/cef.zip"
 log "Downloading $cef_url"
 curl -fL --retry 3 -o "$zip_path" "$cef_url" || die "download failed"
 
-if [ -n "$cef_sha256" ]; then
-  got="$(shasum -a 256 "$zip_path" | awk '{print $1}')"
-  [ "$got" = "$cef_sha256" ] || die "sha256 mismatch: expected $cef_sha256, got $got"
-  log "sha256 verified."
-else
-  log "WARNING: no pinned sha256 for $arch — skipping verification."
-  log "  got sha256: $(shasum -a 256 "$zip_path" | awk '{print $1}')  (pin this in the script)"
-fi
+# Every supported arch above pins a checksum; an empty pin means a new arch was
+# added without one, which must hard-fail rather than download unverified.
+[ -n "$cef_sha256" ] || die "no pinned sha256 for arch '$arch' — add one to the case block above"
+got="$(shasum -a 256 "$zip_path" | awk '{print $1}')"
+[ "$got" = "$cef_sha256" ] || die "sha256 mismatch: expected $cef_sha256, got $got"
+log "sha256 verified."
 
 log "Extracting…"
 unzip -q "$zip_path" -d "$tmp_dir/extract"
@@ -127,11 +125,19 @@ for app in "$src_dir"/*.app; do
 done
 
 # 3. Restructure flat framework → versioned bundle (if not already versioned).
+# Note on partial-run recovery: if the script is killed mid-restructure, the
+# idempotency check above (Versions/Current/Resources/Info.plist) still fails on
+# the next run, so it re-downloads and the `rm -rf "$framework"` below wipes the
+# half-built bundle before rebuilding it cleanly. No manual cleanup needed.
 if [ ! -d "$framework/Versions" ]; then
   log "Restructuring framework into a versioned bundle…"
   rm -f "$framework/Info.plist"          # remove any stray root plist
   rm -rf "$framework/_CodeSignature"     # flat-style signature; re-signed on copy
   mkdir -p "$framework/Versions/A"
+  # The flat CEF 103.0.12 bundle contains exactly these three payload entries at
+  # the framework root; verified for this pinned release. If a future pinned CEF
+  # ships additional top-level dirs (e.g. a Headers/), add them here too — Xcode
+  # validates the versioned layout, not the leftover flat-root files.
   mv "$framework/Chromium Embedded Framework" "$framework/Versions/A/Chromium Embedded Framework"
   mv "$framework/Resources" "$framework/Versions/A/Resources"
   mv "$framework/Libraries" "$framework/Versions/A/Libraries"
