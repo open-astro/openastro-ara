@@ -24,7 +24,10 @@ class AladinView extends StatefulWidget {
 }
 
 // CEF's manager is a process-wide singleton; initialize it at most once so a
-// tab rebuild (switch away + back) can't re-run native init.
+// tab rebuild (switch away + back) can't re-run native init. A FAILED init is
+// not cached: _init() clears this on a manager-init failure so a later mount
+// (e.g. after the user installs a missing runtime) can retry rather than being
+// stuck "unavailable" for the whole process lifetime.
 Future<void>? _managerInit;
 Future<void> _ensureManagerInitialized() =>
     _managerInit ??= WebviewManager().initialize();
@@ -40,8 +43,21 @@ class _AladinViewState extends State<AladinView> {
   }
 
   Future<void> _init() async {
+    // Manager init is separated from browser init so only a manager-init failure
+    // resets the memoized future (allowing a retry); a browser-init failure
+    // leaves the successfully-initialized manager in place.
     try {
       await _ensureManagerInitialized();
+    } on Exception catch (e, st) {
+      // Native CEF couldn't start — an unsupported host, a missing Chromium
+      // runtime, or the headless `flutter test` environment (no plugin
+      // registrant). Clear the cache so a later mount retries, log, and degrade.
+      _managerInit = null;
+      debugPrint('AladinView: CEF manager init failed: $e\n$st');
+      if (mounted) setState(() => _unavailable = true);
+      return;
+    }
+    try {
       final controller = WebviewManager().createWebView(loading: const _Loading());
       await controller.initialize(_aladinDataUrl);
       if (!mounted) {
@@ -50,10 +66,8 @@ class _AladinViewState extends State<AladinView> {
         return;
       }
       setState(() => _controller = controller);
-    } catch (_) {
-      // Native CEF isn't available — an unsupported host, a missing Chromium
-      // runtime, or the headless `flutter test` environment (no plugin
-      // registrant). Degrade to an informative panel instead of crashing the tab.
+    } on Exception catch (e, st) {
+      debugPrint('AladinView: Aladin browser init failed: $e\n$st');
       if (mounted) setState(() => _unavailable = true);
     }
   }
@@ -75,8 +89,11 @@ class _AladinViewState extends State<AladinView> {
 
 // The Aladin Lite bootstrap, handed to CEF as a base64 `data:` URL so no temp
 // file or local HTTP server is needed. The page pulls Aladin Lite v3 from the
-// CDS CDN; bundling the ~5 MB JS for offline use (per §36.1) is a later slice.
-// The CDS logo + attribution Aladin renders bottom-right satisfies §36/§17.
+// CDS CDN, pinned to a specific version (NOT `/latest/`) so a remote breaking
+// change can't silently alter the production atlas. Bundling the ~5 MB JS for
+// offline use — which also removes the runtime CDN trust + reachability
+// dependency entirely — is the next §36 slice (per §36.1). The CDS logo +
+// attribution Aladin renders bottom-right satisfies §36/§17.
 final String _aladinDataUrl =
     'data:text/html;base64,${base64Encode(utf8.encode(_aladinBootstrapHtml))}';
 
@@ -89,21 +106,43 @@ const String _aladinBootstrapHtml = '''
 <style>
   html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; overflow: hidden; }
   #aladin-lite-div { width: 100%; height: 100%; }
+  #atlas-error {
+    display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    box-sizing: border-box; padding: 0 24px; color: #9aa0a6; background: #000;
+    font: 14px/1.5 sans-serif; text-align: center;
+    align-items: center; justify-content: center; flex-direction: column;
+  }
 </style>
-<script src="https://aladin.cds.unistra.fr/AladinLite/api/v3/latest/aladin.js" charset="utf-8"></script>
+<script>
+  // Shown if the Aladin Lite script can't be fetched (no internet, DNS, CDN
+  // outage). Without this the data: page loads fine but the atlas is a blank
+  // black rectangle with no feedback.
+  function aladinLoadFailed() {
+    var el = document.getElementById('atlas-error');
+    if (el) el.style.display = 'flex';
+  }
+</script>
+<script src="https://aladin.cds.unistra.fr/AladinLite/api/v3/3.6.1/aladin.js" charset="utf-8" onerror="aladinLoadFailed()"></script>
 </head>
 <body>
 <div id="aladin-lite-div"></div>
+<div id="atlas-error">Could not load the sky atlas.<br>Check your internet connection, then reopen the Sky Atlas.</div>
 <script>
-  A.init.then(function () {
-    A.aladin('#aladin-lite-div', {
-      survey: 'P/DSS2/color',
-      fov: 60,
-      target: 'M31',
-      showCooGrid: true,
-      showSimbadPointerControl: true,
+  // A normal (non-async) external script blocks parsing until it loads or
+  // errors, so by here `A` is defined on success and undefined on failure.
+  if (typeof A !== 'undefined') {
+    A.init.then(function () {
+      A.aladin('#aladin-lite-div', {
+        survey: 'P/DSS2/color',
+        fov: 60,
+        target: 'M31',
+        showCooGrid: true,
+        showSimbadPointerControl: true,
+      });
     });
-  });
+  } else {
+    aladinLoadFailed();
+  }
 </script>
 </body>
 </html>

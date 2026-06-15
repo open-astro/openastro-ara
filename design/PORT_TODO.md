@@ -712,3 +712,9 @@ Deferred to **§43-2**:
   64-bit SQLite INTEGER and narrows to the `int` DTO field; a value above `Int32.MaxValue` (~2.1B steps — no real
   focuser) would wrap silently. If a wider range is ever needed, widen `FocuserPositionDto`/`FocusTempPoint` to `long`
   end-to-end (wire + client model) rather than casting. Low priority. Surfaced 2026-06-14 by the #448 re-review.
+- **Commit macOS `Podfile.lock` for the webview_cef build (§36).** Adding `webview_cef` (#450) generated `macos/Podfile`
+  but not `Podfile.lock` — that's only produced by `pod install`, which pulls the heavy CEF/Chromium framework and runs
+  during a real `flutter build macos` (the client CI job is analyze+test only, so its absence doesn't break CI). Commit
+  the lock file the first time the macOS app is built locally/in a build slice, for reproducible pod resolution. Also
+  fold in the Windows `windows/runner/main.cpp` CEF multi-process/IME tweak when the Windows build is first exercised.
+  Surfaced 2026-06-14 by the #450 review.
