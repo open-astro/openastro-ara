@@ -265,10 +265,21 @@ public sealed partial class CaptureScanService {
     private static string? LookupHeader(IReadOnlyDictionary<string, string> headers, string key) =>
         headers.TryGetValue(key, out var v) && !string.IsNullOrWhiteSpace(v) ? v : null;
 
-    private static DateTimeOffset? ParseDateObs(IReadOnlyDictionary<string, string> headers) {
+    // internal (not private) so the §50/§28 DATE-OBS→UTC contract is unit-tested directly; see CaptureScanDateObsTest.
+    internal static DateTimeOffset? ParseDateObs(IReadOnlyDictionary<string, string> headers) {
         var raw = LookupHeader(headers, "DATE-OBS");
         if (raw is null) return null;
-        return DateTimeOffset.TryParse(raw, out var dt) ? dt : null;
+        // FITS defines DATE-OBS as UTC, but the value is usually written without a zone designator. A bare
+        // DateTimeOffset.TryParse assumes *local* for a zoneless value — that both mis-shifts the instant (the
+        // recovered frame's captured_utc would be off by this machine's UTC offset) and stores a non-UTC offset
+        // suffix that breaks the lexicographic captured_utc comparisons (the `since` bound, ORDER BY). AssumeUniversal
+        // reads a zoneless value as UTC; AdjustToUniversal normalizes an explicitly-offset one (e.g. `…-07:00`) to UTC
+        // — so captured_utc is always written as `…+00:00`, matching the SqliteFrameRepository path.
+        return DateTimeOffset.TryParse(raw, System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.AssumeUniversal | System.Globalization.DateTimeStyles.AdjustToUniversal,
+                out var dt)
+            ? dt
+            : null;
     }
 
     private static int? ParseExposure(IReadOnlyDictionary<string, string> headers) =>
