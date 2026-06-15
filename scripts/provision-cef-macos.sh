@@ -109,7 +109,9 @@ unzip -q "$zip_path" -d "$tmp_dir/extract"
 rm -rf "$tmp_dir/extract/__MACOSX"  # drop AppleDouble shadow tree (./_* mirrors)
 
 # Locate the dir that actually contains the framework (bundle subdir name varies by arch).
-src_fw="$(find "$tmp_dir/extract" -maxdepth 3 -type d -name "Chromium Embedded Framework.framework" -not -path "*__MACOSX*" | head -1)"
+# -print -quit stops at the first match in-process: avoids a `… | head -1` pipe that,
+# under `set -o pipefail`, would SIGPIPE find (exit 141) and abort the script.
+src_fw="$(find "$tmp_dir/extract" -maxdepth 3 -type d -name "Chromium Embedded Framework.framework" -not -path "*__MACOSX*" -print -quit)"
 [ -n "$src_fw" ] || die "framework not found in archive"
 src_dir="$(dirname "$src_fw")"
 [ -f "$src_dir/libcef_dll_wrapper.a" ] || die "libcef_dll_wrapper.a not found alongside framework"
