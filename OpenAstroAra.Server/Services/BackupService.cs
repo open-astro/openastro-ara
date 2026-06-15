@@ -378,7 +378,7 @@ namespace OpenAstroAra.Server.Services {
             // Fire-and-forget on the thread pool; the worker owns the gate + the terminal clone-status. ct is the
             // request token — it's cancelled once the 202 response completes, so the worker must NOT observe it.
             _ = Task.Run(() => RunRestoreAsync(opId, zipPath, request), CancellationToken.None);
-            LogRestoreStarted(id, opId);
+            LogRestoreStarted(opId, id);
             return Task.FromResult(new OperationAcceptedDto(
                 OperationId: opId,
                 OperationType: "backup.restore-zip",
@@ -503,7 +503,7 @@ namespace OpenAstroAra.Server.Services {
         partial void LogRestored(Guid operationId, string areas);
 
         [LoggerMessage(Level = LogLevel.Information, Message = "Backup restore {OperationId} started from snapshot {BackupId}")]
-        partial void LogRestoreStarted(Guid backupId, Guid operationId);
+        partial void LogRestoreStarted(Guid operationId, Guid backupId);
 
         [LoggerMessage(Level = LogLevel.Error, Message = "Backup restore {OperationId} failed")]
         partial void LogRestoreFailed(Guid operationId, Exception ex);
