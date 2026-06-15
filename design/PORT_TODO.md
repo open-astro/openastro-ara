@@ -702,11 +702,11 @@ Deferred to **§43-2**:
   `parseStatsUtc()` helper (entry above) has no `_explicitZone` branch — `DateTime.tryParse` already parses any timezone
   designator (`Z` or a numeric offset) with `isUtc == true`, so it was unreachable. Removing `guiding_rms`'s local `_dt`
   in favor of the helper dropped the last copy of the dead branch + the regex. Surfaced 2026-06-14 by the #449 review.
-- **Stats `since` filter assumes a UTC `DateTimeOffset` (§50).** Every stats query that takes a `since` cutoff
-  (`GetFocusTempAsync`, `GetGuidingAsync`, …) formats it with `since.Value.ToString("O", InvariantCulture)` and relies
-  on SQLite's lexicographic comparison against the stored UTC `captured_utc` strings. A caller passing a non-UTC offset
-  would silently filter against the wrong instant. Not a live bug — all current callers pass UTC — but normalising with
-  `.ToUniversalTime()` before formatting (ideally in a shared helper) would harden every `since`-taking query at once.
+- **Stats `since` filter assumes a UTC `DateTimeOffset` (§50). — RESOLVED 2026-06-15.** Added a shared
+  `SqliteUtcBound(DateTimeOffset)` helper (`v.ToUniversalTime().ToString("O", InvariantCulture)`) and routed all three
+  `captured_utc` comparison bounds through it (`GetCalendarAsync`'s 30-day spark window, `GetFocusTempAsync`,
+  `GetGuidingAsync`) — a non-UTC `since` is now normalized to UTC before the lexicographic comparison against the stored
+  UTC strings. +1 test (a `-05:00`-offset cutoff representing the same instant filters identically to the UTC cutoff).
   Surfaced 2026-06-14 by the #448 re-review.
 - **§50.4 focuser position is narrowed `(int)GetInt64` (§50.4).** `GetFocusTempAsync` reads `focuser_position` as a
   64-bit SQLite INTEGER and narrows to the `int` DTO field; a value above `Int32.MaxValue` (~2.1B steps — no real

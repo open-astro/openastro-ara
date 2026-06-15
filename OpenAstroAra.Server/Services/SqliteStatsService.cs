@@ -78,7 +78,7 @@ public sealed class SqliteStatsService : IStatsService {
             GROUP BY day
             ORDER BY day ASC;
             """;
-        sparkCmd.Parameters.AddWithValue("$since", thirty.ToString("O"));
+        sparkCmd.Parameters.AddWithValue("$since", SqliteUtcBound(thirty));
         var sparkX = new List<DateTimeOffset>();
         var sparkY = new List<double>();
         await using (var reader = await sparkCmd.ExecuteReaderAsync(ct)) {
@@ -145,7 +145,7 @@ public sealed class SqliteStatsService : IStatsService {
             """;
         if (since.HasValue) {
             sql += " AND captured_utc >= $since";
-            cmd.Parameters.AddWithValue("$since", since.Value.ToString("O", CultureInfo.InvariantCulture));
+            cmd.Parameters.AddWithValue("$since", SqliteUtcBound(since.Value));
         }
         sql += " ORDER BY captured_utc ASC;";
         cmd.CommandText = sql;
@@ -168,6 +168,15 @@ public sealed class SqliteStatsService : IStatsService {
 
         return new StatsFocusTempDto(samples, CorrelationR2: PearsonR2(temps, positions));
     }
+
+    /// <summary>Formats a timestamp bound for a <c>captured_utc</c> SQL comparison.
+    /// <c>captured_utc</c> is stored as UTC round-trip ("O") strings, and the
+    /// comparison is lexicographic — so the bound MUST be normalized to UTC first,
+    /// otherwise a caller passing a non-UTC <see cref="DateTimeOffset"/> (e.g. a
+    /// local-offset value) would compare against the wrong instant (its offset
+    /// suffix + shifted wall-clock break the string ordering).</summary>
+    private static string SqliteUtcBound(DateTimeOffset v) =>
+        v.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture);
 
     /// <summary>Coefficient of determination (Pearson r²) between two equal-length
     /// series, or null when it isn't defined (&lt; 2 points, or zero variance in
@@ -207,7 +216,7 @@ public sealed class SqliteStatsService : IStatsService {
             """;
         if (since.HasValue) {
             sql += " AND captured_utc >= $since";
-            cmd.Parameters.AddWithValue("$since", since.Value.ToString("O"));
+            cmd.Parameters.AddWithValue("$since", SqliteUtcBound(since.Value));
         }
         sql += " ORDER BY captured_utc ASC;";
         cmd.CommandText = sql;

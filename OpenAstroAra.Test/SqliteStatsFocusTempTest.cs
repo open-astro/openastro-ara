@@ -109,6 +109,22 @@ namespace OpenAstroAra.Test {
             Assert.That(dto.Samples.Select(s => s.FocuserPosition), Is.EquivalentTo(InWindowPositions));
         }
 
+        [Test]
+        public async Task The_since_cutoff_filters_by_instant_even_when_expressed_in_a_non_UTC_offset() {
+            await InsertFrameAsync(temp: 5.0, focuserPos: 1000, minutesAgo: 120); // before cutoff
+            await InsertFrameAsync(temp: 4.0, focuserPos: 1100, minutesAgo: 30);
+            await InsertFrameAsync(temp: 3.0, focuserPos: 1200, minutesAgo: 10);
+
+            // The SAME instant as a 60-min-ago UTC cutoff, but expressed in a -05:00
+            // offset. captured_utc is stored as UTC "O" strings and compared
+            // lexicographically, so without normalizing the bound to UTC this would
+            // compare the wrong wall-clock + offset suffix and filter incorrectly.
+            var since = DateTimeOffset.UtcNow.AddMinutes(-60).ToOffset(TimeSpan.FromHours(-5));
+            var dto = await _svc.GetFocusTempAsync(since, CancellationToken.None);
+            Assert.That(dto.Samples.Count, Is.EqualTo(2));
+            Assert.That(dto.Samples.Select(s => s.FocuserPosition), Is.EquivalentTo(InWindowPositions));
+        }
+
         private static readonly int[] InWindowPositions = { 1100, 1200 };
 
         private async Task InsertSessionAsync(Guid id) {
