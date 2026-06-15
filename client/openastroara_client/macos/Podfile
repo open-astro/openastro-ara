@@ -39,4 +39,20 @@ post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_macos_build_settings(target)
   end
+
+  # §36 webview_cef: the vendored CEF binary is named "Chromium Embedded
+  # Framework.framework" (spaces in the name). CocoaPods mis-tokenizes that
+  # into OTHER_LDFLAGS as `Embedded Framework -framework "Chromium"`, so clang
+  # sees bare `Embedded`/`Framework` input files and the link fails. Rewrite the
+  # generated Pods-Runner xcconfigs to the correctly-quoted single flag. This
+  # runs after CocoaPods writes the files, and re-runs on every `pod install`.
+  support_dir = File.join(installer.sandbox.root, 'Target Support Files', 'Pods-Runner')
+  Dir.glob(File.join(support_dir, 'Pods-Runner.*.xcconfig')).each do |xcconfig|
+    contents = File.read(xcconfig)
+    fixed = contents.gsub(
+      'Embedded Framework -framework "Chromium"',
+      '-framework "Chromium Embedded Framework"'
+    )
+    File.write(xcconfig, fixed) if fixed != contents
+  end
 end

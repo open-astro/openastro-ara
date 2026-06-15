@@ -731,12 +731,17 @@ Deferred to **§43-2**:
   64-bit SQLite INTEGER and narrows to the `int` DTO field; a value above `Int32.MaxValue` (~2.1B steps — no real
   focuser) would wrap silently. If a wider range is ever needed, widen `FocuserPositionDto`/`FocusTempPoint` to `long`
   end-to-end (wire + client model) rather than casting. Low priority. Surfaced 2026-06-14 by the #448 re-review.
-- **Commit macOS `Podfile.lock` for the webview_cef build (§36).** Adding `webview_cef` (#450) generated `macos/Podfile`
-  but not `Podfile.lock` — that's only produced by `pod install`, which pulls the heavy CEF/Chromium framework and runs
-  during a real `flutter build macos` (the client CI job is analyze+test only, so its absence doesn't break CI). Commit
-  the lock file the first time the macOS app is built locally/in a build slice, for reproducible pod resolution. Also
-  fold in the Windows `windows/runner/main.cpp` CEF multi-process/IME tweak when the Windows build is first exercised.
-  Surfaced 2026-06-14 by the #450 review.
+- **Windows `windows/runner/main.cpp` CEF multi-process/IME tweak (§36).** When the Windows build is first exercised,
+  fold in the `windows/runner/main.cpp` CEF multi-process + IME tweak that `webview_cef` requires on Windows (the Linux
+  and Windows builds auto-download CEF via the plugin's `third/download.cmake`, so no binary-placement step is needed
+  there — unlike macOS). Surfaced 2026-06-14 by the #450 review.
+- **DONE (2026-06-15) — macOS webview_cef build wired up (§36).** The first real `flutter build macos` was completed.
+  macOS (unlike Linux/Windows) does not auto-download CEF, so: (1) `scripts/provision-cef-macos.sh` fetches + SHA-verifies
+  the pinned arch-matched CEF bundle and restructures the flat framework into a versioned bundle (macOS Xcode rejects the
+  flat layout); (2) `macos/Podfile`'s `post_install` hook repairs the `OTHER_LDFLAGS` that CocoaPods mis-tokenizes for the
+  space-containing "Chromium Embedded Framework" name; (3) `macos/Podfile.lock` + the CocoaPods integration in
+  `Runner.xcodeproj`/`Runner.xcworkspace` are now committed for reproducible pod resolution. The CEF binaries themselves
+  stay uncommitted (gitignored in the plugin / shared pub-cache) — run the script once after `flutter pub get`.
 - **Verify §36 Aladin HiPS tile rendering on-device (§36).** The Aladin embed (#450) loads from a `data:` URL (null
   origin in Chromium). The Aladin Lite `<script src>` isn't CORS-subject, and the CDS HiPS tile servers were verified to
   return `access-control-allow-origin: *` (`curl -I alasky.cds.unistra.fr/DSS/...` → `200` + `ACAO: *`), so null-origin
