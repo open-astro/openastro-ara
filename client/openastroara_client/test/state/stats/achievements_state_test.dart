@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/server.dart';
@@ -31,6 +33,23 @@ class _FakeAchievementsClient implements AchievementsClient {
     fetches++;
     if (throwOnFetch) throw StateError('boom');
     return value;
+  }
+
+  @override
+  void close() {}
+}
+
+/// A fake whose `fetch()` resolves only when the test completes it, so the
+/// generation-guard test can hold a refresh open while a (simulated) server
+/// switch re-runs build().
+class _GatedAchievementsClient implements AchievementsClient {
+  final List<Completer<StatsAchievements>> calls = [];
+
+  @override
+  Future<StatsAchievements> fetch() {
+    final c = Completer<StatsAchievements>();
+    calls.add(c);
+    return c.future;
   }
 
   @override
@@ -104,6 +123,42 @@ void main() {
       final state = c.read(achievementsProvider);
       expect(state.hasError, isFalse, reason: 'refresh failure must not blank the records');
       expect(state.value!.totalLightFrames, 4, reason: 'last-good data is retained');
+    });
+
+    test('a server switch mid-refresh discards the stale result (generation guard)', () async {
+      final api = _GatedAchievementsClient();
+      final c = _container(const [_server], api);
+      await c.read(savedServersProvider.future);
+      final built = c.read(achievementsProvider.future);
+      api.calls[0].complete(const StatsAchievements(totalLightFrames: 1));
+      await built;
+
+      final notifier = c.read(achievementsProvider.notifier);
+      final refreshing = notifier.refresh(); // captures generation; calls[1] pending
+      notifier.markBuild(); // stand in for a server-switch build() re-run
+      api.calls[1].complete(const StatsAchievements(totalLightFrames: 9)); // now stale
+      await refreshing;
+
+      expect(c.read(achievementsProvider).value!.totalLightFrames, 1);
+    });
+
+    test('a refresh that FAILS after a server switch is swallowed, not rethrown', () async {
+      final api = _GatedAchievementsClient();
+      final c = _container(const [_server], api);
+      await c.read(savedServersProvider.future);
+      final built = c.read(achievementsProvider.future);
+      api.calls[0].complete(const StatsAchievements(totalLightFrames: 1));
+      await built;
+
+      final notifier = c.read(achievementsProvider.notifier);
+      final refreshing = notifier.refresh(); // calls[1] pending
+      notifier.markBuild(); // server switch bumps the generation
+      api.calls[1].completeError(StateError('boom')); // stale failure
+
+      // The generation mismatch means the stale error is discarded, not
+      // rethrown — so the widget can't flash a stale banner over the new data.
+      await expectLater(refreshing, completes);
+      expect(c.read(achievementsProvider).value!.totalLightFrames, 1);
     });
   });
 }

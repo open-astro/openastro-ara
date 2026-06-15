@@ -4,6 +4,7 @@ import '../../models/server.dart';
 import '../../models/stats/achievements.dart';
 import '../../services/achievements_api.dart';
 import '../saved_server_state.dart';
+import 'stats_refresh_mixin.dart';
 
 /// Builds an [AchievementsClient] for a server. Overridable in tests.
 final achievementsApiFactoryProvider =
@@ -30,36 +31,24 @@ final achievementsApiProvider = Provider<AchievementsClient?>((ref) {
 /// The active server's §50.19 achievements. `null` data means no server is
 /// saved (the view shows a connect prompt); an error state surfaces a transport
 /// failure with a retry. Read-only — [refresh] re-reads on demand.
-class AchievementsNotifier extends AsyncNotifier<StatsAchievements?> {
-  // Bumped on every build() (active-server change); a refresh captures it and
-  // only writes state if it still matches, so a server switch mid-refresh can't
-  // land a stale read from the old, now-closed Dio.
-  int _generation = 0;
-
+class AchievementsNotifier extends AsyncNotifier<StatsAchievements?>
+    with StatsRefreshMixin<StatsAchievements> {
   @override
   Future<StatsAchievements?> build() async {
-    _generation++;
+    markBuild();
     final api = ref.watch(achievementsApiProvider);
     if (api == null) return null;
     return api.fetch();
   }
 
-  /// Re-read the achievements and swap the result in **only on success**. On
-  /// failure the exception propagates to the caller and `state` is left
-  /// untouched, so the last-good records stay on screen (the view shows a stale
-  /// banner) rather than blanking to an error. This is deliberate: RP3 has no
-  /// public copyWithPrevious to carry the previous value *through* an
-  /// `AsyncError`, so an error state here would drop `asData?.value` to null and
-  /// the records would vanish. The initial no-data error is still owned by
-  /// [build]. A server switch mid-flight discards the result via the generation
-  /// guard.
-  Future<void> refresh() async {
-    if (!ref.mounted) return;
-    final gen = _generation;
-    final api = ref.read(achievementsApiProvider);
-    final result = api == null ? null : await api.fetch();
-    if (ref.mounted && gen == _generation) state = AsyncData(result);
-  }
+  /// Re-reads the achievements, keeping the previous records on screen if the
+  /// read fails (the view shows a stale banner) rather than blanking to an
+  /// error. A server switch mid-refresh discards the result — success or
+  /// failure — via the generation guard. See [StatsRefreshMixin].
+  Future<void> refresh() => refreshUsing(() async {
+        final api = ref.read(achievementsApiProvider);
+        return api?.fetch();
+      });
 }
 
 final achievementsProvider =
