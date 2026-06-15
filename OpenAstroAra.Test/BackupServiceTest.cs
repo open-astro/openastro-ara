@@ -339,6 +339,33 @@ namespace OpenAstroAra.Test {
             Assert.That(BackupService.SweepOrphans(_profileDir), Is.EqualTo(0));
 
         [Test]
+        public void SweepOrphans_logs_a_warning_only_when_it_reclaims_something() {
+            Directory.CreateDirectory(_backupsDir);
+            var clean = new RecordingLogger();
+            // Nothing to reclaim → no warning.
+            BackupService.SweepOrphans(_profileDir, clean);
+            Assert.That(clean.Warnings, Is.Empty);
+
+            File.WriteAllText(Path.Combine(_backupsDir, ".tmp-deadbeef.zip"), "partial");
+            var swept = new RecordingLogger();
+            BackupService.SweepOrphans(_profileDir, swept);
+            Assert.That(swept.Warnings, Has.Count.EqualTo(1), "a non-empty sweep surfaces one operator warning");
+            Assert.That(swept.Warnings[0], Does.Contain(".tmp-deadbeef.zip"), "the warning names the reclaimed file");
+        }
+
+        private sealed class RecordingLogger : Microsoft.Extensions.Logging.ILogger {
+            public System.Collections.Generic.List<string> Warnings { get; } = new();
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+            public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
+            public void Log<TState>(Microsoft.Extensions.Logging.LogLevel logLevel, Microsoft.Extensions.Logging.EventId eventId,
+                TState state, Exception? exception, Func<TState, Exception?, string> formatter) {
+                if (logLevel == Microsoft.Extensions.Logging.LogLevel.Warning) {
+                    Warnings.Add(formatter(state, exception));
+                }
+            }
+        }
+
+        [Test]
         public async Task SweepOrphans_after_a_real_create_leaves_the_snapshot() {
             WriteProfile();
             await _svc.CreateZipAsync(idempotencyKey: null, CancellationToken.None);
