@@ -635,13 +635,12 @@ Deferred to **§43-2**:
   restore work in §43-2.
 - **No retention/pruning.** Backups accumulate under `{profileDir}/backups/` indefinitely; there's no cap or
   age-based prune. Low priority — add a retention policy (keep-N / keep-days) if disk growth becomes a concern.
-- **Orphan-archive boot sweep.** Two crash-only leaks under `{profileDir}/backups/`, both ignored by ListSnapshots
-  (it keys off `*.meta.json`) but never reclaimed: (a) a `.tmp-{id:N}.zip` from a create that crashed mid-zip (the
-  create path deletes its own temp on an *exception*, but a hard kill can't run that), and (b) a fully-named
-  `backup-{ts}-{id:N}.zip` with **no matching `*.meta.json`** — a SIGKILL in the window between the `File.Move` reveal
-  and the manifest write. A boot-time sweep (mirroring §36-2c `SweepStaleScratch`) should remove **both**: every
-  `.tmp-*` archive, and every `backup-*.zip` whose `{base}.meta.json` sidecar is absent. Low priority — harmless
-  orphans, just disk. Surfaced 2026-06-13 by the §43-1 round-4 review.
+- **Orphan-archive boot sweep — RESOLVED 2026-06-15.** `BackupService.SweepOrphans(profileDir)` runs at startup in
+  `Program.cs` (mirroring §36-2c `SweepStaleScratch`, before the daemon accepts requests so no create can race it) and
+  reclaims **both** crash-only leaks under `{profileDir}/backups/`: every `.tmp-*.zip` from a create hard-killed before
+  its `File.Move` reveal, and every `backup-*.zip` whose `{base}.meta.json` sidecar is absent (SIGKILL between the
+  reveal and the manifest write). Best-effort per file; manifest-backed snapshots + foreign `.zip`s are untouched.
+  Covered by 5 `BackupServiceTest` cases. Original entry surfaced 2026-06-13 by the §43-1 round-4 review.
 - **Daemon-wide API auth is unaddressed (cross-cutting, not §43).** The server binds `ListenAnyIP` (default :5555)
   with **no authentication/authorization middleware** — the whole REST surface is open on whatever interface it's
   reachable on, matching the §13 trusted-LAN headless deployment model. The §43-1 backup-download endpoint inherits

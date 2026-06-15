@@ -309,6 +309,13 @@ public partial class Program {
                 sp.GetRequiredService<IWsBroadcaster>(),
                 sp.GetRequiredService<ILogger<DataManagerService>>()));
 
+        // §43-2 startup polish: reclaim crash-only orphan archives under backups/ — a .tmp-*.zip from a create
+        // hard-killed before its File.Move reveal, or a backup-*.zip whose .meta.json never got written (SIGKILL
+        // between the reveal and the manifest write). ListSnapshots ignores both but never deletes them; a graceful
+        // create reclaims its own temp, so these only linger after a hard kill. Best-effort + synchronous (a handful
+        // of files); real snapshots (manifest present) are untouched. Mirrors §36-2c SweepStaleScratch.
+        BackupService.SweepOrphans(profileDir);
+
         // §43-1 backup — real disk-backed ZIP snapshots under {profileDir}/backups (replaces the placeholder).
         // Registered here (not at the §13.11 placeholder site) since it needs the resolved profileDir. The §43-2
         // restore worker + progress state machine extend this same service.

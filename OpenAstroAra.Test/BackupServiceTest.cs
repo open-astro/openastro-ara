@@ -290,5 +290,64 @@ namespace OpenAstroAra.Test {
             Assert.That(Directory.Exists(_backupsDir) ? Directory.GetFiles(_backupsDir) : Array.Empty<string>(),
                 Is.Empty, "a cancelled create leaves the backups dir clean");
         }
+
+        // §43-2 orphan-archive boot sweep.
+
+        [Test]
+        public void SweepOrphans_removes_a_tmp_archive_left_by_a_killed_create() {
+            Directory.CreateDirectory(_backupsDir);
+            var temp = Path.Combine(_backupsDir, ".tmp-deadbeef.zip");
+            File.WriteAllText(temp, "partial");
+
+            var removed = BackupService.SweepOrphans(_profileDir);
+
+            Assert.That(removed, Is.EqualTo(1));
+            Assert.That(File.Exists(temp), Is.False, "the staged temp from a hard-killed create is reclaimed");
+        }
+
+        [Test]
+        public void SweepOrphans_removes_an_archive_whose_manifest_never_landed() {
+            Directory.CreateDirectory(_backupsDir);
+            var zip = Path.Combine(_backupsDir, "backup-20260615T000000Z-deadbeef.zip");
+            File.WriteAllText(zip, "revealed-but-unmanifested");
+
+            var removed = BackupService.SweepOrphans(_profileDir);
+
+            Assert.That(removed, Is.EqualTo(1));
+            Assert.That(File.Exists(zip), Is.False, "a backup-*.zip with no .meta.json sidecar is reclaimed");
+        }
+
+        [Test]
+        public void SweepOrphans_keeps_a_complete_snapshot_and_foreign_files() {
+            Directory.CreateDirectory(_backupsDir);
+            var zip = Path.Combine(_backupsDir, "backup-20260615T000000Z-cafef00d.zip");
+            var manifest = Path.Combine(_backupsDir, "backup-20260615T000000Z-cafef00d.meta.json");
+            File.WriteAllText(zip, "real");
+            File.WriteAllText(manifest, "{}");
+            var foreign = Path.Combine(_backupsDir, "notes.zip");
+            File.WriteAllText(foreign, "not ours");
+
+            var removed = BackupService.SweepOrphans(_profileDir);
+
+            Assert.That(removed, Is.EqualTo(0));
+            Assert.That(File.Exists(zip), Is.True, "a manifest-backed snapshot is left intact");
+            Assert.That(File.Exists(foreign), Is.True, "a .zip we didn't write is left untouched");
+        }
+
+        [Test]
+        public void SweepOrphans_on_a_missing_backups_dir_is_a_no_op() =>
+            Assert.That(BackupService.SweepOrphans(_profileDir), Is.EqualTo(0));
+
+        [Test]
+        public async Task SweepOrphans_after_a_real_create_leaves_the_snapshot() {
+            WriteProfile();
+            await _svc.CreateZipAsync(idempotencyKey: null, CancellationToken.None);
+            var before = Directory.GetFiles(_backupsDir).Length;
+
+            var removed = BackupService.SweepOrphans(_profileDir);
+
+            Assert.That(removed, Is.EqualTo(0), "a cleanly-created snapshot is not an orphan");
+            Assert.That(Directory.GetFiles(_backupsDir), Has.Length.EqualTo(before));
+        }
     }
 }
