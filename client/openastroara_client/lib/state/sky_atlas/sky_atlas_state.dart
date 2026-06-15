@@ -31,6 +31,9 @@ class SkyAtlasSearchNotifier extends Notifier<String> {
   // same name (e.g. after panning away) still recenters the atlas. Only
   // AladinView.listen consumes this — nothing watches it for a rebuild — so
   // always notifying has no rebuild cost.
+  // WARNING: because this always notifies, do NOT `ref.watch` this provider for
+  // a rebuild — every search submission (incl. duplicates) would rebuild the
+  // watcher. Consume it with `ref.listen` (a side-effect) instead.
   @override
   bool updateShouldNotify(String previous, String next) => true;
 }
