@@ -644,15 +644,15 @@ Deferred to **§43-2**:
   leaks via `/api/v1/profile/*`). If the daemon is ever exposed beyond a trusted LAN, API auth must be a **cross-cutting
   middleware** decision (PRODUCT-SCOPE / user-authoritative), not per-endpoint. Surfaced 2026-06-13 by the §43-1
   round-4 review.
-- **Stats catalog: composite `(frame_type, captured_utc)` index (cross-cutting, not §50.19).** Every stats query
-  (overview, calendar, targets, achievements) filters `frame_type = 'light'` and orders/groups by `date(captured_utc)`.
-  Today only `idx_frames_captured_utc` exists, so the `frame_type` predicate is a residual filter over the
-  captured_utc-ordered scan. As the frame catalog grows a partial/covering index — e.g.
-  `CREATE INDEX idx_frames_light_captured ON frames(captured_utc) WHERE frame_type = 'light'` — would tighten all of
-  them at once. Schema change touching the shared `frames` table, so it belongs in its own stats-perf sub-PR rather
-  than bolted onto a single view. Low priority until the catalog is large. Surfaced 2026-06-14 by the §50.19 round-3 review.
-  Also covers §50.4 focus-temp: its `WHERE focuser_position IS NOT NULL` predicate is an unindexed residual filter over
-  the captured_utc scan — a covering index would tighten it too. Noted 2026-06-14 by the #448 re-review.
+- **Stats catalog: light-frame partial index — RESOLVED 2026-06-15.** Added `idx_frames_light_captured` on
+  `frames(captured_utc) WHERE frame_type = 'light'` (additive + idempotent in `SqliteAraDatabase.InitializeAsync`), with
+  an EXPLAIN-QUERY-PLAN test asserting the planner uses it for the light-frame, captured_utc-ordered queries. This covers
+  the `WHERE frame_type = 'light'`-filtered stats queries (targets, calendar, frame-quality, best-frames, focus-temp).
+  Residual follow-up (low priority): the `SUM(CASE WHEN frame_type = 'light' …)` aggregations in overview/calendar scan
+  all rows regardless of the partial index (the CASE evaluates per row), and §50.4 focus-temp's
+  `WHERE focuser_position IS NOT NULL` predicate is still an unindexed residual filter — a separate covering index on
+  `(focuser_position, captured_utc)` would tighten that one if the catalog grows large. Original entry surfaced
+  2026-06-14 by the §50.19 round-3 review + #448 re-review.
 - **Dashboard tiles aren't responsive to narrow viewports (cross-cutting client UI, not §50.19).** Every Stats-dashboard
   tile — the shared `StatTile` (width 200) and the §50.19 milestone badges (width 200) — uses a fixed width inside a
   `Wrap`. Text wraps vertically so there's no horizontal clip, and on the desktop/tablet target the viewport is always
