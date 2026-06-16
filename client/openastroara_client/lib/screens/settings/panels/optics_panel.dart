@@ -104,10 +104,9 @@ class _OpticsPanelState extends ConsumerState<OpticsPanel> {
         messenger.showSnackBar(const SnackBar(content: Text('Filled sensor size from the connected camera.')));
       }
     } catch (e) {
-      if (mounted) {
-        setState(() => _lastError = 'Could not read the camera: $e');
-        messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
-      }
+      // Set the field without its own setState; the finally's setState rebuilds with it.
+      _lastError = 'Could not read the camera: $e';
+      if (mounted) messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
     } finally {
       if (mounted) setState(() => _refreshing = false);
     }

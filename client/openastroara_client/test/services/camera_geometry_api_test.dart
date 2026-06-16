@@ -43,5 +43,16 @@ void main() {
         reason: 'a missing pixel size can\'t drive the FOV',
       );
     });
+
+    test('a wrong-typed field returns null instead of throwing', () {
+      expect(
+        CameraGeometry.fromCameraJson(body(capabilities: const {
+          'sensor_width': '6248', // stringified — must not throw a TypeError
+          'sensor_height': 4176,
+          'pixel_size_um': 3.76,
+        })),
+        isNull,
+      );
+    });
   });
 }

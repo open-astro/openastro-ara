@@ -24,9 +24,15 @@ class CameraGeometry {
     if (json['state'] != 'connected') return null;
     final caps = json['capabilities'];
     if (caps is! Map<String, dynamic>) return null;
-    final w = (caps['sensor_width'] as num?)?.toInt() ?? 0;
-    final h = (caps['sensor_height'] as num?)?.toInt() ?? 0;
-    final px = (caps['pixel_size_um'] as num?)?.toDouble() ?? 0;
+    // Tolerant casts: a wrong-typed field (e.g. a stringified number) yields 0 →
+    // fails the positivity guard below → null, matching this parser's "null on
+    // anything unexpected" contract rather than throwing a TypeError.
+    final ws = caps['sensor_width'];
+    final hs = caps['sensor_height'];
+    final ps = caps['pixel_size_um'];
+    final w = ws is num ? ws.toInt() : 0;
+    final h = hs is num ? hs.toInt() : 0;
+    final px = ps is num ? ps.toDouble() : 0.0;
     if (w <= 0 || h <= 0 || px <= 0) return null;
     return CameraGeometry(sensorWidthPx: w, sensorHeightPx: h, pixelSizeUm: px);
   }
@@ -45,8 +51,13 @@ class CameraGeometryApi {
   /// The connected camera's sensor geometry, or null when none is connected /
   /// it reports no usable sensor. Throws `DioException` on transport failure.
   Future<CameraGeometry?> read() async {
-    final res = await _dio.get<Map<String, dynamic>>('/api/v1/equipment/camera');
-    final data = res.data;
-    return data is Map<String, dynamic> ? CameraGeometry.fromCameraJson(data) : null;
+    try {
+      final res = await _dio.get<Map<String, dynamic>>('/api/v1/equipment/camera');
+      final data = res.data;
+      return data is Map<String, dynamic> ? CameraGeometry.fromCameraJson(data) : null;
+    } finally {
+      // One-shot client: close the Dio so its HttpClient connection pool isn't leaked per button press.
+      _dio.close();
+    }
   }
 }
