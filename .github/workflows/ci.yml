@@ -676,6 +676,9 @@ jobs:
         with:
           lfs: false
           persist-credentials: false
+          # webview_cef is vendored as a submodule (packages/webview_cef); the
+          # client's path dependency needs it checked out for `flutter pub get`.
+          submodules: recursive
 
       - name: Read pinned Flutter version
         id: flutter-version
