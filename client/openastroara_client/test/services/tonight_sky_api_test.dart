@@ -1,5 +1,40 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/models/server.dart';
 import 'package:openastroara/services/tonight_sky_api.dart';
+
+/// Stubs Dio's transport with a canned 200 body so `fetch()` can be exercised
+/// without a live server.
+class _StubAdapter implements HttpClientAdapter {
+  _StubAdapter(this.jsonBody);
+  final Object jsonBody;
+
+  @override
+  void close({bool force = false}) {}
+
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) async {
+    return ResponseBody.fromString(
+      jsonEncode(jsonBody),
+      200,
+      headers: {
+        Headers.contentTypeHeader: [Headers.jsonContentType],
+      },
+    );
+  }
+}
+
+TonightSkyApi _apiReturning(Object body) {
+  final dio = Dio()..httpClientAdapter = _StubAdapter(body);
+  return TonightSkyApi(const AraServer(hostname: 'x', port: 80), dio: dio);
+}
 
 void main() {
   group('TonightSkyObject.fromJson', () {
@@ -46,10 +81,38 @@ void main() {
       expect(TonightSkyObject.fromJson(body()..['magnitude'] = 0.0)!.magnitude, 0.0);
     });
 
-    test('a wrong-typed numeric field falls back to 0, not a throw', () {
-      final o = TonightSkyObject.fromJson(body()..['altitude_deg'] = 'high');
-      expect(o, isNotNull);
-      expect(o!.altitudeDeg, 0.0);
+    test('missing/wrong-typed altitude → null (no misleading 0° on the horizon)', () {
+      expect(TonightSkyObject.fromJson(body()..['altitude_deg'] = 'high'), isNull);
+      expect(TonightSkyObject.fromJson(body()..remove('altitude_deg')), isNull);
+      expect(TonightSkyObject.fromJson(body()..['max_altitude_deg'] = 'high'), isNull);
+    });
+  });
+
+  group('TonightSkyApi.fetch', () {
+    Map<String, dynamic> row(String id) => {
+          'id': id,
+          'name': id,
+          'type': 'galaxy',
+          'magnitude': 5.0,
+          'ra_deg': 1.0,
+          'dec_deg': 2.0,
+          'altitude_deg': 50.0,
+          'max_altitude_deg': 80.0,
+        };
+
+    test('parses a JSON array, dropping malformed rows', () async {
+      final api = _apiReturning([
+        row('M31'),
+        row('M42')..remove('ra_deg'), // malformed → skipped
+        row('M81'),
+      ]);
+      final out = await api.fetch();
+      expect(out.map((o) => o.id), ['M31', 'M81']);
+    });
+
+    test('a non-array 200 body yields an empty list, not a throw', () async {
+      final api = _apiReturning({'error': 'no site configured'});
+      expect(await api.fetch(), isEmpty);
     });
   });
 }
