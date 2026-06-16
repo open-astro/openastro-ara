@@ -59,7 +59,7 @@ void main() {
       expect(box.overlapPct, 15);
     });
 
-    test('defaults to a single 1×1 panel with no overlap', () {
+    test('defaults to a 1×1 panel with the FramingParams default 10% overlap', () {
       c.read(frameModeEnabledProvider.notifier).set(true);
       configureOptics();
       final box = c.read(frameFovBoxProvider)!;
@@ -84,11 +84,13 @@ void main() {
       const b = FovBox(widthDeg: 1, heightDeg: 2, rotationDeg: 3, cols: 2, rows: 2, overlapPct: 10);
       const rotDiff = FovBox(widthDeg: 1, heightDeg: 2, rotationDeg: 4, cols: 2, rows: 2, overlapPct: 10);
       const colsDiff = FovBox(widthDeg: 1, heightDeg: 2, rotationDeg: 3, cols: 3, rows: 2, overlapPct: 10);
+      const rowsDiff = FovBox(widthDeg: 1, heightDeg: 2, rotationDeg: 3, cols: 2, rows: 3, overlapPct: 10);
       const overlapDiff = FovBox(widthDeg: 1, heightDeg: 2, rotationDeg: 3, cols: 2, rows: 2, overlapPct: 5);
       expect(a, b);
       expect(a.hashCode, b.hashCode);
       expect(a == rotDiff, isFalse);
       expect(a == colsDiff, isFalse);
+      expect(a == rowsDiff, isFalse);
       expect(a == overlapDiff, isFalse);
     });
   });
