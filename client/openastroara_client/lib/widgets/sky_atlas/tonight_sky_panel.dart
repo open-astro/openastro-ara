@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../services/tonight_sky_api.dart';
+import '../../state/saved_server_state.dart';
 import '../../state/sky_atlas/sky_atlas_state.dart';
 import '../../state/sky_atlas/tonight_sky_state.dart';
 import '../../theme/ara_colors.dart';
@@ -51,9 +52,17 @@ class TonightSkyPanel extends ConsumerWidget {
               ),
               data: (objects) {
                 if (objects.isEmpty) {
-                  return const _Message(
-                    message: 'Nothing to show. Connect to a server and set your site location in '
-                        'Settings → Safety → Site, then refresh.',
+                  // Distinguish "no server" (the provider returns [] immediately) from
+                  // "connected, but nothing's up / no site set" — the advice differs.
+                  final hasServer = ref.watch(savedServersProvider).maybeWhen(
+                        data: (list) => list.isNotEmpty,
+                        orElse: () => false,
+                      );
+                  return _Message(
+                    message: hasServer
+                        ? 'Nothing well-placed right now. Set your site location in '
+                            'Settings → Safety → Site, then refresh.'
+                        : 'Connect to a server to see Tonight\'s Sky.',
                   );
                 }
                 return ListView.builder(
@@ -77,7 +86,9 @@ class _ObjectRow extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final subtitle = '${_typeLabel(object.type)} · mag ${object.magnitude.toStringAsFixed(1)}';
+    final mag = object.magnitude;
+    final magText = mag == null ? 'mag —' : 'mag ${mag.toStringAsFixed(1)}';
+    final subtitle = '${_typeLabel(object.type)} · $magText';
     return ListTile(
       dense: true,
       title: Text(object.name, style: theme.textTheme.bodyMedium),

@@ -19,5 +19,9 @@ final tonightSkyProvider =
   // Most-recently-saved server is the de-facto active one (same convention as
   // the other server-bound providers; a dedicated active-server provider lands
   // with §55.1 multi-server switching).
-  return TonightSkyApi(servers.last).fetch();
+  final api = TonightSkyApi(servers.last);
+  // Force-close on dispose so navigating away from the panel cancels an in-flight
+  // fetch instead of leaving the socket open until the receive timeout.
+  ref.onDispose(api.close);
+  return api.fetch();
 });
