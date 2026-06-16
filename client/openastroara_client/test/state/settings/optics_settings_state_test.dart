@@ -7,6 +7,7 @@ void main() {
     test('an unset profile is not configured and yields null geometry', () {
       const o = OpticsSettings();
       expect(o.isConfigured, isFalse);
+      expect(o.effectiveFocalLengthMm, isNull);
       expect(o.pixelScaleArcsecPerPx, isNull);
       expect(o.fovWidthArcmin, isNull);
       expect(o.fovHeightArcmin, isNull);

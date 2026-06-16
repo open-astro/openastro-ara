@@ -46,13 +46,18 @@ class OpticsSettings {
       sensorHeightPx > 0 &&
       pixelSizeUm > 0;
 
-  /// Effective focal length after the reducer/barlow, in mm.
-  double get effectiveFocalLengthMm => focalLengthMm * reducerFactor;
+  /// Effective focal length after the reducer/barlow, in mm — or null when the
+  /// rig isn't fully configured. Nullable (not 0-when-unset) so a caller can't
+  /// silently divide by an unset focal length; the whole geometry API is
+  /// uniformly null until [isConfigured].
+  double? get effectiveFocalLengthMm =>
+      isConfigured ? focalLengthMm * reducerFactor : null;
 
   /// Image scale in arcseconds per pixel, or null when [isConfigured] is false.
-  double? get pixelScaleArcsecPerPx => isConfigured
-      ? 206.265 * pixelSizeUm / effectiveFocalLengthMm
-      : null;
+  double? get pixelScaleArcsecPerPx {
+    final efl = effectiveFocalLengthMm;
+    return efl == null ? null : 206.265 * pixelSizeUm / efl;
+  }
 
   /// Field-of-view width in arcminutes, or null when not configured.
   double? get fovWidthArcmin {
