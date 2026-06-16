@@ -7,6 +7,7 @@ import '../../theme/ara_colors.dart';
 import '../../widgets/sky_atlas/aladin_view.dart';
 import '../../widgets/sky_atlas/data_manager_modal.dart';
 import '../../widgets/sky_atlas/sky_data_missing_banner.dart';
+import '../../widgets/sky_atlas/tonight_sky_panel.dart';
 
 /// Planning tab (§25.5 + §36) — the merged Sky Atlas + Framing Assistant
 /// surface decided 2026-06-15 (PORT_DECISIONS §36/§25.5). One embedded Aladin
@@ -42,6 +43,8 @@ class PlanningTab extends ConsumerWidget {
         Expanded(
           child: Row(
             children: [
+              // Tonight's Sky view: a ranked side list; tapping an object recentres the atlas.
+              if (mode == SkyAtlasMode.tonightsSky) const TonightSkyPanel(),
               const Expanded(child: AladinView()),
               // Frame mode slides the framing controls in beside the atlas.
               if (frameMode)
