@@ -21,6 +21,8 @@ void main() {
       expect(o.name, 'Andromeda Galaxy');
       expect(o.type, 'galaxy');
       expect(o.magnitude, 3.4);
+      expect(o.raDeg, 10.685);
+      expect(o.decDeg, 41.269);
       expect(o.altitudeDeg, 62.5);
       expect(o.maxAltitudeDeg, 89.0);
     });
@@ -28,6 +30,11 @@ void main() {
     test('missing/wrong-typed required string field → null (skip the row)', () {
       expect(TonightSkyObject.fromJson(body()..remove('id')), isNull);
       expect(TonightSkyObject.fromJson(body()..['name'] = 42), isNull);
+    });
+
+    test('missing/wrong-typed ra_deg or dec_deg → null (no (0,0) phantom)', () {
+      expect(TonightSkyObject.fromJson(body()..remove('ra_deg')), isNull);
+      expect(TonightSkyObject.fromJson(body()..['dec_deg'] = 'north'), isNull);
     });
 
     test('a wrong-typed numeric field falls back to 0, not a throw', () {

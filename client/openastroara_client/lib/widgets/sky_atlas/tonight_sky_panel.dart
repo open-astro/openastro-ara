@@ -52,8 +52,8 @@ class TonightSkyPanel extends ConsumerWidget {
               data: (objects) {
                 if (objects.isEmpty) {
                   return const _Message(
-                    message: 'Nothing well-placed right now — set your site location in '
-                        'Settings → Safety → Site, and make sure a server is connected.',
+                    message: 'Nothing to show. Connect to a server and set your site location in '
+                        'Settings → Safety → Site, then refresh.',
                   );
                 }
                 return ListView.builder(
