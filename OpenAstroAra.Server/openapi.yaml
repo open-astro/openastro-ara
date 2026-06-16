@@ -696,6 +696,39 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/StorageSettings' }
 
+# ─── Endpoint group: Planning (§36/§25.5) ─────────────────────────────────────
+
+  /planning/tonight:
+    get:
+      summary: Tonight's Sky — curated objects ranked by altitude for the active site
+      description: |
+        §36/§25.5. Ranks a curated deep-sky list by current altitude above the
+        active profile's site horizon (site lat/long + `default_horizon_altitude_deg`
+        from `/profile/site`), highest first. `at` is optional (ISO 8601, default
+        "now"); `limit` caps the count (default 10).
+      tags: [Planning]
+      parameters:
+        - name: at
+          in: query
+          schema: { type: string, format: date-time }
+          description: Instant to evaluate (UTC). Defaults to the server's current time.
+        - name: limit
+          in: query
+          schema: { type: integer, default: 10, minimum: 1 }
+      responses:
+        '200':
+          description: Objects above the horizon, altitude-descending
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/TonightSkyObject' }
+        '400':
+          description: '`at` is not a valid ISO-8601 date-time, or `limit` < 1'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
 # ─── Endpoint group: Stream (Phase 9 — WebSocket) ─────────────────────────────
 # WebSocket endpoints aren't expressible in OpenAPI 3.1 paths; the full
 # wire-level invariants are documented here. See §60.9 for the canonical
@@ -1059,6 +1092,24 @@ components:
         sensor_width_px:  { type: integer, minimum: 0 }
         sensor_height_px: { type: integer, minimum: 0 }
         pixel_size_um:    { type: number, format: double, minimum: 0 }
+
+    TonightSkyObject:
+      type: object
+      description: |
+        §36/§25.5 one Tonight's Sky entry. `altitude_deg` is the object's current
+        altitude above the site horizon (the ranking key); `max_altitude_deg` is
+        its transit (highest-possible) altitude from this latitude. `ra_deg`/`dec_deg`
+        are J2000, for recentring the atlas.
+      required: [id, name, type, magnitude, ra_deg, dec_deg, altitude_deg, max_altitude_deg]
+      properties:
+        id:               { type: string }
+        name:             { type: string }
+        type:             { type: string }
+        magnitude:        { type: number, format: double }
+        ra_deg:           { type: number, format: double }
+        dec_deg:          { type: number, format: double }
+        altitude_deg:     { type: number, format: double }
+        max_altitude_deg: { type: number, format: double }
 
     PlateSolveSettings:
       type: object

@@ -111,6 +111,36 @@ public static class SystemEndpoints {
             .Produces<DataManagerStateDto>(StatusCodes.Status200OK)
             .WithName("GetDataManagerState");
 
+        // ─── Planning (§36/§25.5) — Tonight's Sky ───
+        var planning = app.MapGroup("/api/v1/planning").WithTags("Planning");
+        planning.MapGet("/tonight",
+                (ITonightSkyService svc, [FromQuery] int? limit, [FromQuery(Name = "at")] string? at) => {
+                    // `at` (ISO 8601) is optional → "now". A PRESENT-but-unparseable value is a client
+                    // error (400), not a silent "now" that the caller can't distinguish from a real one.
+                    System.DateTimeOffset atUtc;
+                    if (at is null) {
+                        atUtc = System.DateTimeOffset.UtcNow;
+                    } else if (System.DateTimeOffset.TryParse(at,
+                            System.Globalization.CultureInfo.InvariantCulture,
+                            System.Globalization.DateTimeStyles.AssumeUniversal | System.Globalization.DateTimeStyles.AdjustToUniversal,
+                            out var parsed)) {
+                        atUtc = parsed;
+                    } else {
+                        return Results.Problem("Query parameter 'at' must be an ISO-8601 date-time.",
+                            statusCode: StatusCodes.Status400BadRequest);
+                    }
+                    // The service treats limit <= 0 as "return all" internally; don't expose that through the
+                    // endpoint (the spec says limit >= 1) — a client passing 0 is a request error.
+                    if (limit is < 1) {
+                        return Results.Problem("Query parameter 'limit' must be >= 1.",
+                            statusCode: StatusCodes.Status400BadRequest);
+                    }
+                    return Results.Ok(svc.GetTonight(atUtc, limit ?? 10));
+                })
+            .Produces<IReadOnlyList<TonightSkyObjectDto>>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .WithName("GetTonightSky");
+
         // ─── Backup (§43) — Phase 13.11 wired to IBackupService ───
         var backup = app.MapGroup("/api/v1/backup").WithTags("Backup");
 

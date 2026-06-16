@@ -315,6 +315,10 @@ public partial class Program {
         builder.Services.AddSingleton<IBackupService>(sp =>
             new BackupService(profileDir, sp.GetRequiredService<ILogger<BackupService>>()));
 
+        // §36/§25.5 Tonight's Sky — ranks a curated DSO list by altitude for the active profile's site.
+        builder.Services.AddSingleton<ITonightSkyService>(sp =>
+            new TonightSkyService(sp.GetRequiredService<IProfileStore>()));
+
         // §55.1 multi-device WILMA settings sync — opaque UI-preferences blob under {profileDir}/client-settings.json.
         // profileDir-scoped, so registered here alongside the other profile-dir-backed services.
         builder.Services.AddSingleton<IClientSettingsService>(sp =>
