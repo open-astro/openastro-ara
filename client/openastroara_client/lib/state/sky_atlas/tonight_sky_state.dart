@@ -1,6 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../models/server.dart';
 import '../../services/tonight_sky_api.dart';
 import '../saved_server_state.dart';
 
@@ -11,10 +10,11 @@ import '../saved_server_state.dart';
 /// a manual refresh.
 final tonightSkyProvider =
     FutureProvider.autoDispose<List<TonightSkyObject>>((ref) async {
-  final servers = ref.watch(savedServersProvider).maybeWhen(
-        data: (list) => list,
-        orElse: () => const <AraServer>[],
-      );
+  // Await the saved-server list rather than collapsing a still-loading state to
+  // []: that would resolve this provider to data([]) before the servers finished
+  // loading and flash the "connect a server" empty state for a user who does have
+  // one saved. Awaiting keeps Tonight's Sky in `loading` until the list is known.
+  final servers = await ref.watch(savedServersProvider.future);
   if (servers.isEmpty) return const <TonightSkyObject>[];
   // Most-recently-saved server is the de-facto active one (same convention as
   // the other server-bound providers; a dedicated active-server provider lands
