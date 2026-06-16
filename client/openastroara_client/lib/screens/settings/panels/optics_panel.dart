@@ -88,18 +88,23 @@ class _OpticsPanelState extends ConsumerState<OpticsPanel> {
     });
     try {
       final geometry = await CameraGeometryApi(servers.last).read();
+      // ref.read on a disposed WidgetRef throws; bail if the panel went away mid-request.
+      if (!mounted) return;
       if (geometry == null) {
-        if (mounted) {
-          messenger.showSnackBar(const SnackBar(
-              content: Text('Connect a camera that reports its sensor size first.')));
-        }
+        messenger.showSnackBar(const SnackBar(
+            content: Text('Connect a camera that reports its sensor size first.')));
         return;
       }
       final n = ref.read(opticsSettingsProvider.notifier);
       n.setSensorWidthPx(geometry.sensorWidthPx);
       n.setSensorHeightPx(geometry.sensorHeightPx);
       n.setPixelSizeUm(geometry.pixelSizeUm);
-      await n.persistToServer(ProfileApi(servers.last));
+      // Re-resolve the active server at the persist site (centralised in _api()) rather than reusing
+      // the pre-await capture — the saved-server list may have changed during the camera read.
+      final api = _api();
+      if (api != null) {
+        await n.persistToServer(api);
+      }
       if (mounted) {
         messenger.showSnackBar(const SnackBar(content: Text('Filled sensor size from the connected camera.')));
       }
@@ -180,7 +185,7 @@ class _OpticsPanelState extends ConsumerState<OpticsPanel> {
         Align(
           alignment: Alignment.centerLeft,
           child: TextButton.icon(
-            onPressed: _refreshing ? null : () => _refreshFromCamera(),
+            onPressed: (_refreshing || _saving) ? null : () => _refreshFromCamera(),
             icon: _refreshing
                 ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
                 : const Icon(Icons.camera_alt_outlined, size: 16),
@@ -198,7 +203,7 @@ class _OpticsPanelState extends ConsumerState<OpticsPanel> {
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
             FilledButton.icon(
-              onPressed: _saving ? null : _save,
+              onPressed: (_saving || _refreshing) ? null : _save,
               icon: _saving
                   ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
                   : const Icon(Icons.save, size: 16),
