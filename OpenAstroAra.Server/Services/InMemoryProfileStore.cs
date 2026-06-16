@@ -270,6 +270,21 @@ public sealed class InMemoryProfileStore : IProfileStore {
         RaiseChanged();
     }
 
+    public OpticsSettingsDto UpdateOpticsSettings(Func<OpticsSettingsDto, OpticsSettingsDto?> update) {
+        OpticsSettingsDto next;
+        lock (_lock) {
+            var current = _optics;
+            var candidate = update(current);
+            if (candidate is null || candidate == current) {
+                return current; // no change — no event
+            }
+            next = candidate;
+            _optics = next;
+        }
+        RaiseChanged();
+        return next;
+    }
+
     // Defaults match EquipmentConnectionSettings() constructor: camera +
     // mount + focuser + filter wheel + rotator + flat + safety on by
     // default; dome + weather + guider off (manual connect — dome

@@ -673,13 +673,18 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             return;
         }
         try {
-            var current = _profileStore.GetOpticsSettings();
-            var updated = AutoPopulatedOptics(current, caps);
-            if (updated is null) {
-                return; // camera reports no geometry, or the stored geometry already matches
+            // Atomic read-modify-write so a concurrent PUT /optics (the user editing focal length while
+            // this connect-time populate runs) can't be lost to a stale-snapshot overwrite — the decision
+            // runs under the store lock against the live value. The flag tells us whether it actually wrote.
+            var populated = false;
+            _profileStore.UpdateOpticsSettings(current => {
+                var next = AutoPopulatedOptics(current, caps);
+                populated = next is not null;
+                return next;
+            });
+            if (populated) {
+                LogOpticsAutoPopulated(caps.SensorWidth, caps.SensorHeight, caps.PixelSizeUm);
             }
-            _profileStore.PutOpticsSettings(updated);
-            LogOpticsAutoPopulated(caps.SensorWidth, caps.SensorHeight, caps.PixelSizeUm);
         } catch (Exception ex) {
             LogOpticsAutoPopulateFailed(ex);
         }

@@ -81,5 +81,28 @@ namespace OpenAstroAra.Test {
             Assert.That(CameraService.AutoPopulatedOptics(current, Caps(6248, 4176, 0)), Is.Null,
                 "a missing pixel size can't drive the FOV, so don't half-populate");
         }
+
+        // The atomic read-modify-write the auto-populate uses (closes the TOCTOU vs a concurrent PUT).
+
+        [Test]
+        public void UpdateOpticsSettings_applies_a_change_under_the_lock_and_returns_it() {
+            var store = new InMemoryProfileStore();
+            store.PutOpticsSettings(Optics(fl: 1000));
+            var result = store.UpdateOpticsSettings(cur => cur with { SensorWidthPx = 6248, SensorHeightPx = 4176, PixelSizeUm = 3.76 });
+            Assert.That(result.SensorWidthPx, Is.EqualTo(6248));
+            Assert.That(store.GetOpticsSettings().SensorWidthPx, Is.EqualTo(6248), "persisted");
+            Assert.That(store.GetOpticsSettings().FocalLengthMm, Is.EqualTo(1000), "untouched fields preserved");
+        }
+
+        [Test]
+        public void UpdateOpticsSettings_returning_null_leaves_the_value_unchanged() {
+            var store = new InMemoryProfileStore();
+            store.PutOpticsSettings(Optics(w: 6248, h: 4176, px: 3.76, fl: 1000));
+            var changed = false;
+            store.Changed += (_, _) => changed = true;
+            var result = store.UpdateOpticsSettings(_ => null);
+            Assert.That(result.SensorWidthPx, Is.EqualTo(6248));
+            Assert.That(changed, Is.False, "no write means no change event");
+        }
     }
 }

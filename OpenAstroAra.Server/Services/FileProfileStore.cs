@@ -107,6 +107,23 @@ public sealed partial class FileProfileStore : IProfileStore {
     public OpticsSettingsDto GetOpticsSettings() { lock (_lock) { return _snapshot.Optics; } }
     public void PutOpticsSettings(OpticsSettingsDto value) => UpdateAndPersist(s => s with { Optics = value });
 
+    public OpticsSettingsDto UpdateOpticsSettings(Func<OpticsSettingsDto, OpticsSettingsDto?> update) {
+        OpticsSettingsDto next;
+        lock (_lock) {
+            var current = _snapshot.Optics;
+            var candidate = update(current);
+            if (candidate is null || candidate == current) {
+                return current; // no change — no persist, no event
+            }
+            next = candidate;
+            _snapshot = _snapshot with { Optics = next };
+            Persist(_snapshot);
+        }
+        // Outside _lock, mirroring UpdateAndPersist, so a Changed subscriber that reads back can't deadlock.
+        Changed?.Invoke(this, EventArgs.Empty);
+        return next;
+    }
+
     public event EventHandler? Changed;
 
     private void UpdateAndPersist(Func<ProfileSnapshotDto, ProfileSnapshotDto> mutate) {
