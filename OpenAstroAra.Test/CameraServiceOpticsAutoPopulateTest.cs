@@ -15,6 +15,7 @@
 using NUnit.Framework;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
+using System.IO;
 
 namespace OpenAstroAra.Test {
 
@@ -103,6 +104,29 @@ namespace OpenAstroAra.Test {
             var result = store.UpdateOpticsSettings(_ => null);
             Assert.That(result.SensorWidthPx, Is.EqualTo(6248));
             Assert.That(changed, Is.False, "no write means no change event");
+        }
+
+        [Test]
+        public void FileProfileStore_UpdateOpticsSettings_persists_to_disk() {
+            var dir = Path.Combine(Path.GetTempPath(), "ara-optics-" + Path.GetRandomFileName());
+            Directory.CreateDirectory(dir);
+            try {
+                var store = new FileProfileStore(dir);
+                store.PutOpticsSettings(Optics(fl: 1000));
+                var result = store.UpdateOpticsSettings(cur =>
+                    cur with { SensorWidthPx = 6248, SensorHeightPx = 4176, PixelSizeUm = 3.76 });
+                Assert.That(result.SensorWidthPx, Is.EqualTo(6248));
+
+                // Reopen from disk: the update was persisted under the lock, focal length preserved.
+                var reopened = new FileProfileStore(dir);
+                Assert.That(reopened.GetOpticsSettings().SensorWidthPx, Is.EqualTo(6248), "persisted to disk");
+                Assert.That(reopened.GetOpticsSettings().FocalLengthMm, Is.EqualTo(1000));
+
+                Assert.That(store.UpdateOpticsSettings(_ => null).SensorWidthPx, Is.EqualTo(6248),
+                    "a null updater leaves the persisted value unchanged");
+            } finally {
+                Directory.Delete(dir, recursive: true);
+            }
         }
     }
 }
