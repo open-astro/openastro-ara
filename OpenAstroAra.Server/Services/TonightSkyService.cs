@@ -22,8 +22,10 @@ namespace OpenAstroAra.Server.Services;
 /// sits above the active profile's site horizon at a given instant.</summary>
 public interface ITonightSkyService {
     /// <summary>The curated objects above the site horizon at <paramref name="atUtc"/>, highest
-    /// first, capped at <paramref name="limit"/> (≤ 0 = all). Reads the site lat/long + horizon
-    /// from the active profile.</summary>
+    /// first, capped at <paramref name="limit"/>. As an internal convenience a non-positive
+    /// <paramref name="limit"/> returns all of them — but the public <c>GET /planning/tonight</c>
+    /// endpoint rejects <c>limit &lt; 1</c> with a 400, so that path only applies to direct callers.
+    /// Reads the site lat/long + horizon from the active profile.</summary>
     IReadOnlyList<TonightSkyObjectDto> GetTonight(DateTimeOffset atUtc, int limit);
 }
 
@@ -71,23 +73,31 @@ public sealed class TonightSkyService : ITonightSkyService {
     internal static IReadOnlyList<TonightSkyObjectDto> Rank(SiteSettingsDto site, DateTimeOffset atUtc, int limit) {
         var horizon = site.DefaultHorizonAltitudeDeg;
         var lst = LocalSiderealTimeDeg(atUtc, site.LongitudeDeg);
-        var visible = new List<TonightSkyObjectDto>(Catalog.Count);
+        // Keep the unrounded altitude alongside the DTO so the sort orders by the TRUE altitude — the
+        // displayed value is only rounded when the DTO is built, so two objects that round to the same
+        // 0.1° don't lose their real order to the id tie-break.
+        var visible = new List<(double Alt, TonightSkyObjectDto Dto)>(Catalog.Count);
         foreach (var o in Catalog) {
             var alt = AltitudeFromHourAngleDeg(o.DecDeg, site.LatitudeDeg, Mod360(lst - o.RaDeg));
             if (alt < horizon) {
                 continue;
             }
             var maxAlt = MaxAltitudeDeg(o.DecDeg, site.LatitudeDeg);
-            visible.Add(new TonightSkyObjectDto(
+            visible.Add((alt, new TonightSkyObjectDto(
                 o.Id, o.Name, o.Type, o.Magnitude, o.RaDeg, o.DecDeg,
-                Math.Round(alt, 1), Math.Round(maxAlt, 1)));
+                Math.Round(alt, 1), Math.Round(maxAlt, 1))));
         }
-        // Highest first; the catalog id is a stable tie-break so equal-altitude rows don't reorder.
+        // Highest (true altitude) first; the catalog id is a stable tie-break for a genuine exact tie.
         visible.Sort((a, b) => {
-            var c = b.AltitudeDeg.CompareTo(a.AltitudeDeg);
-            return c != 0 ? c : string.CompareOrdinal(a.Id, b.Id);
+            var c = b.Alt.CompareTo(a.Alt);
+            return c != 0 ? c : string.CompareOrdinal(a.Dto.Id, b.Dto.Id);
         });
-        return limit > 0 && visible.Count > limit ? visible.GetRange(0, limit) : visible;
+        var capped = limit > 0 && visible.Count > limit ? visible.GetRange(0, limit) : visible;
+        var result = new List<TonightSkyObjectDto>(capped.Count);
+        foreach (var v in capped) {
+            result.Add(v.Dto);
+        }
+        return result;
     }
 
     /// <summary>Local apparent sidereal time in degrees (Meeus low-precision GMST + east-positive
