@@ -102,9 +102,13 @@ class _OpticsPanelState extends ConsumerState<OpticsPanel> {
       // Re-resolve the active server at the persist site (centralised in _api()) rather than reusing
       // the pre-await capture — the saved-server list may have changed during the camera read.
       final api = _api();
-      if (api != null) {
-        await n.persistToServer(api);
+      if (api == null) {
+        // The values are in the form, but the server vanished mid-read — be honest that nothing saved.
+        messenger.showSnackBar(const SnackBar(
+            content: Text('Read the camera, but no server is connected to save to.')));
+        return;
       }
+      await n.persistToServer(api);
       if (mounted) {
         messenger.showSnackBar(const SnackBar(content: Text('Filled sensor size from the connected camera.')));
       }
