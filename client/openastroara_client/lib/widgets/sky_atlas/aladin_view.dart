@@ -269,7 +269,7 @@ const String _aladinBootstrapHtml = '''
   // araClearFovBox removes it. A 'positionChanged' handler redraws on pan/zoom so
   // the box tracks the centre. Driven from Dart via AladinView.fovBoxScript.
   var araFovOverlay = null;
-  var araFovBox = null; // { w, h, rot } in degrees, or null
+  var araFovBox = null; // { w, h, rot (deg), cols, rows, overlap (%) }, or null
   function araEnsureFovOverlay() {
     if (!araAladin) return null;
     if (!araFovOverlay) {
@@ -288,11 +288,17 @@ const String _aladinBootstrapHtml = '''
     var w = araFovBox.w, h = araFovBox.h;
     var cols = araFovBox.cols > 0 ? araFovBox.cols : 1;
     var rows = araFovBox.rows > 0 ? araFovBox.rows : 1;
-    var step = 1 - (araFovBox.overlap || 0) / 100; // centre-to-centre spacing fraction
-    var stepW = w * step, stepH = h * step;
+    // Centre-to-centre spacing fraction. Overlap is clamped to [0, 0.95] so a
+    // pathological value (the UI slider caps at 50%, but be defensive) can't
+    // collapse every panel onto one point (overlap=100) or invert the grid.
+    var ovFrac = Math.min(0.95, Math.max(0, (araFovBox.overlap || 0) / 100));
+    var stepW = w * (1 - ovFrac), stepH = h * (1 - ovFrac);
     var th = araFovBox.rot * Math.PI / 180;
     var cosT = Math.cos(th), sinT = Math.sin(th);
     // RA degrees compress by cos(dec) near the poles; guard the singularity.
+    // The correction is taken at the view centre and reused for every panel — a
+    // flat-sky approximation that drifts at the edges of a large mosaic /
+    // near the poles, which is acceptable for a planning overlay.
     var cosd = Math.cos(dec0 * Math.PI / 180);
     if (Math.abs(cosd) < 1e-6) cosd = (cosd < 0 ? -1e-6 : 1e-6);
     var hw = w / 2, hh = h / 2;
