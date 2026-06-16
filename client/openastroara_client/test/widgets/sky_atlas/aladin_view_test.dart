@@ -8,17 +8,25 @@ void main() {
       expect(fovBoxScript(null), 'window.araClearFovBox && window.araClearFovBox();');
     });
 
-    test('a box becomes a numeric araSetFovBox call (no injection surface)', () {
+    test('a single box becomes a 1×1 numeric araSetFovBox call (no injection surface)', () {
       expect(
         fovBoxScript(const FovBox(widthDeg: 1.346, heightDeg: 0.9, rotationDeg: 45)),
-        'window.araSetFovBox && window.araSetFovBox(1.346000, 0.900000, 45.000000);',
+        'window.araSetFovBox && window.araSetFovBox(1.346000, 0.900000, 45.000000, 1, 1, 0.000000);',
       );
     });
 
     test('a negative rotation formats correctly', () {
       expect(
         fovBoxScript(const FovBox(widthDeg: 2, heightDeg: 1, rotationDeg: -30)),
-        'window.araSetFovBox && window.araSetFovBox(2.000000, 1.000000, -30.000000);',
+        'window.araSetFovBox && window.araSetFovBox(2.000000, 1.000000, -30.000000, 1, 1, 0.000000);',
+      );
+    });
+
+    test('a mosaic passes cols/rows/overlap through', () {
+      expect(
+        fovBoxScript(const FovBox(
+            widthDeg: 1, heightDeg: 1, rotationDeg: 0, cols: 2, rows: 3, overlapPct: 10)),
+        'window.araSetFovBox && window.araSetFovBox(1.000000, 1.000000, 0.000000, 2, 3, 10.000000);',
       );
     });
   });

@@ -34,18 +34,19 @@ class AladinView extends ConsumerStatefulWidget {
 @visibleForTesting
 String gotoScript(String target) => 'window.araGoto && window.araGoto(${jsonEncode(target)});';
 
-/// Builds the JS that draws (or clears) the §36 Frame-mode FOV rectangle. A null
-/// [box] clears it; otherwise the page's `araSetFovBox` draws a rotated rectangle
-/// of [FovBox.widthDeg] × [FovBox.heightDeg] degrees at [FovBox.rotationDeg]°,
-/// centred on (and tracking) the current view centre. All three args are plain
-/// numbers, so there's no injection surface (unlike a name string). Exposed for
-/// testing.
+/// Builds the JS that draws (or clears) the §36 Frame-mode framing overlay. A
+/// null [box] clears it; otherwise the page's `araSetFovBox` draws a
+/// [FovBox.cols]×[FovBox.rows] mosaic of [FovBox.widthDeg] × [FovBox.heightDeg]
+/// degree panels at [FovBox.rotationDeg]° with [FovBox.overlapPct] overlap,
+/// centred on (and tracking) the current view centre. All args are plain numbers,
+/// so there's no injection surface (unlike a name string). Exposed for testing.
 @visibleForTesting
 String fovBoxScript(FovBox? box) {
   if (box == null) return 'window.araClearFovBox && window.araClearFovBox();';
   String n(double v) => v.toStringAsFixed(6);
   return 'window.araSetFovBox && window.araSetFovBox('
-      '${n(box.widthDeg)}, ${n(box.heightDeg)}, ${n(box.rotationDeg)});';
+      '${n(box.widthDeg)}, ${n(box.heightDeg)}, ${n(box.rotationDeg)}, '
+      '${box.cols}, ${box.rows}, ${n(box.overlapPct)});';
 }
 
 // CEF's manager is a process-wide singleton; initialize it at most once so a
@@ -284,21 +285,36 @@ const String _aladinBootstrapHtml = '''
     if (!araFovBox || !araAladin) return;
     var c = araAladin.getRaDec(); // [raDeg, decDeg] of the current centre
     var ra0 = c[0], dec0 = c[1];
-    var hw = araFovBox.w / 2, hh = araFovBox.h / 2;
+    var w = araFovBox.w, h = araFovBox.h;
+    var cols = araFovBox.cols > 0 ? araFovBox.cols : 1;
+    var rows = araFovBox.rows > 0 ? araFovBox.rows : 1;
+    var step = 1 - (araFovBox.overlap || 0) / 100; // centre-to-centre spacing fraction
+    var stepW = w * step, stepH = h * step;
     var th = araFovBox.rot * Math.PI / 180;
+    var cosT = Math.cos(th), sinT = Math.sin(th);
     // RA degrees compress by cos(dec) near the poles; guard the singularity.
     var cosd = Math.cos(dec0 * Math.PI / 180);
     if (Math.abs(cosd) < 1e-6) cosd = (cosd < 0 ? -1e-6 : 1e-6);
-    var pts = [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]];
-    var corners = pts.map(function (p) {
-      var dx = p[0] * Math.cos(th) - p[1] * Math.sin(th);
-      var dy = p[0] * Math.sin(th) + p[1] * Math.cos(th);
-      return [ra0 + dx / cosd, dec0 + dy];
-    });
-    ov.add(A.polygon(corners));
+    var hw = w / 2, hh = h / 2;
+    var corners = [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]];
+    // Draw cols×rows panels, the whole grid rotated by the position angle about
+    // the view centre. cols=rows=1 → a single FOV box (gx=gy=0).
+    for (var iy = 0; iy < rows; iy++) {
+      for (var ix = 0; ix < cols; ix++) {
+        var gx = (ix - (cols - 1) / 2) * stepW; // panel-centre offset in the grid frame
+        var gy = (iy - (rows - 1) / 2) * stepH;
+        var poly = corners.map(function (p) {
+          var lx = p[0] + gx, ly = p[1] + gy;
+          var dx = lx * cosT - ly * sinT;
+          var dy = lx * sinT + ly * cosT;
+          return [ra0 + dx / cosd, dec0 + dy];
+        });
+        ov.add(A.polygon(poly));
+      }
+    }
   }
-  function araSetFovBox(widthDeg, heightDeg, rotationDeg) {
-    araFovBox = { w: widthDeg, h: heightDeg, rot: rotationDeg };
+  function araSetFovBox(widthDeg, heightDeg, rotationDeg, cols, rows, overlapPct) {
+    araFovBox = { w: widthDeg, h: heightDeg, rot: rotationDeg, cols: cols, rows: rows, overlap: overlapPct };
     araRedrawFovBox();
   }
   function araClearFovBox() {
