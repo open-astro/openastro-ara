@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:webview_cef/webview_cef.dart';
 
+import '../../state/imaging/fov_box.dart';
 import '../../state/sky_atlas/sky_atlas_state.dart';
 import '../../theme/ara_colors.dart';
 
@@ -33,6 +34,20 @@ class AladinView extends ConsumerStatefulWidget {
 @visibleForTesting
 String gotoScript(String target) => 'window.araGoto && window.araGoto(${jsonEncode(target)});';
 
+/// Builds the JS that draws (or clears) the §36 Frame-mode FOV rectangle. A null
+/// [box] clears it; otherwise the page's `araSetFovBox` draws a rotated rectangle
+/// of [FovBox.widthDeg] × [FovBox.heightDeg] degrees at [FovBox.rotationDeg]°,
+/// centred on (and tracking) the current view centre. All three args are plain
+/// numbers, so there's no injection surface (unlike a name string). Exposed for
+/// testing.
+@visibleForTesting
+String fovBoxScript(FovBox? box) {
+  if (box == null) return 'window.araClearFovBox && window.araClearFovBox();';
+  String n(double v) => v.toStringAsFixed(6);
+  return 'window.araSetFovBox && window.araSetFovBox('
+      '${n(box.widthDeg)}, ${n(box.heightDeg)}, ${n(box.rotationDeg)});';
+}
+
 // CEF's manager is a process-wide singleton; initialize it at most once so a
 // tab rebuild (switch away + back) can't re-run native init. A FAILED init is
 // not cached: _init() clears this on a manager-init failure so a later mount
@@ -49,6 +64,13 @@ class _AladinViewState extends ConsumerState<AladinView> {
   // A target submitted before the browser finished initializing is held here
   // and applied once the controller is ready, so an early search isn't dropped.
   String? _pendingGoto;
+
+  // Same idea for the Frame-mode FOV box: a box set before the browser is ready
+  // is stashed and drawn once the controller exists. `false` means "no box set
+  // yet" (distinct from a deliberate null = clear), so we only push an initial
+  // clear if Frame mode was toggled before init.
+  FovBox? _pendingFovBox;
+  bool _hasPendingFovBox = false;
 
   @override
   void initState() {
@@ -81,6 +103,27 @@ class _AladinViewState extends ConsumerState<AladinView> {
       // A goto failure (browser torn down mid-call, JS bridge hiccup) must not
       // crash the tab — the atlas simply stays where it was.
       debugPrint('AladinView: goto "$target" failed: $e\n$st');
+    }
+  }
+
+  // Draw or clear the Frame-mode FOV box. Stashed until the browser is ready.
+  void _setFovBox(FovBox? box) {
+    final controller = _controller;
+    if (controller == null) {
+      _pendingFovBox = box;
+      _hasPendingFovBox = true;
+      return;
+    }
+    unawaited(_runFovBox(controller, box));
+  }
+
+  Future<void> _runFovBox(WebViewController controller, FovBox? box) async {
+    try {
+      await controller.executeJavaScript(fovBoxScript(box));
+    } catch (e, st) {
+      // Same degrade-not-crash contract as _runGoto: a JS-bridge hiccup leaves
+      // the overlay as-is rather than tearing down the tab.
+      debugPrint('AladinView: FOV box update failed: $e\n$st');
     }
   }
 
@@ -124,6 +167,15 @@ class _AladinViewState extends ConsumerState<AladinView> {
         _pendingGoto = null;
         unawaited(_runGoto(controller, pending));
       }
+      // Restore the Frame-mode overlay: a box toggled before the browser was
+      // ready, or — since this tab unmounts on switch — the box the provider
+      // still holds, so returning to Planning re-draws it.
+      final box = _hasPendingFovBox ? _pendingFovBox : ref.read(frameFovBoxProvider);
+      _hasPendingFovBox = false;
+      _pendingFovBox = null;
+      if (box != null) {
+        unawaited(_runFovBox(controller, box));
+      }
     } catch (e, st) {
       // Same rationale as above: degrade-not-crash, but logged.
       debugPrint('AladinView: Aladin browser init failed: $e\n$st');
@@ -142,6 +194,9 @@ class _AladinViewState extends ConsumerState<AladinView> {
     // A newly-submitted search target (the provider holds the last one) moves
     // the atlas. Empty (initial) state is ignored by _goto.
     ref.listen<String>(skyAtlasSearchProvider, (_, next) => _goto(next));
+    // The Frame-mode FOV box (null when Frame is off or optics are unset) → draw
+    // or clear the overlay.
+    ref.listen<FovBox?>(frameFovBoxProvider, (_, next) => _setFovBox(next));
 
     if (_unavailable) return const _Unavailable();
     final controller = _controller;
@@ -207,6 +262,50 @@ const String _aladinBootstrapHtml = '''
       araPendingTarget = target;
     }
   }
+
+  // §36/§25.5 Frame-mode FOV overlay. araSetFovBox stores the rectangle (W/H in
+  // degrees + position angle) and draws it centred on the current view centre;
+  // araClearFovBox removes it. A 'positionChanged' handler redraws on pan/zoom so
+  // the box tracks the centre. Driven from Dart via AladinView.fovBoxScript.
+  var araFovOverlay = null;
+  var araFovBox = null; // { w, h, rot } in degrees, or null
+  function araEnsureFovOverlay() {
+    if (!araAladin) return null;
+    if (!araFovOverlay) {
+      araFovOverlay = A.graphicOverlay({ color: '#4fc3f7', lineWidth: 2 });
+      araAladin.addOverlay(araFovOverlay);
+    }
+    return araFovOverlay;
+  }
+  function araRedrawFovBox() {
+    var ov = araEnsureFovOverlay();
+    if (!ov) return;
+    ov.removeAll();
+    if (!araFovBox || !araAladin) return;
+    var c = araAladin.getRaDec(); // [raDeg, decDeg] of the current centre
+    var ra0 = c[0], dec0 = c[1];
+    var hw = araFovBox.w / 2, hh = araFovBox.h / 2;
+    var th = araFovBox.rot * Math.PI / 180;
+    // RA degrees compress by cos(dec) near the poles; guard the singularity.
+    var cosd = Math.cos(dec0 * Math.PI / 180);
+    if (Math.abs(cosd) < 1e-6) cosd = (cosd < 0 ? -1e-6 : 1e-6);
+    var pts = [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]];
+    var corners = pts.map(function (p) {
+      var dx = p[0] * Math.cos(th) - p[1] * Math.sin(th);
+      var dy = p[0] * Math.sin(th) + p[1] * Math.cos(th);
+      return [ra0 + dx / cosd, dec0 + dy];
+    });
+    ov.add(A.polygon(corners));
+  }
+  function araSetFovBox(widthDeg, heightDeg, rotationDeg) {
+    araFovBox = { w: widthDeg, h: heightDeg, rot: rotationDeg };
+    araRedrawFovBox();
+  }
+  function araClearFovBox() {
+    araFovBox = null;
+    if (araFovOverlay) araFovOverlay.removeAll();
+  }
+
   // A normal (non-async) external script blocks parsing until it loads or
   // errors, so by here `A` is defined on success and undefined on failure.
   if (typeof A !== 'undefined') {
@@ -224,6 +323,11 @@ const String _aladinBootstrapHtml = '''
         araPendingTarget = null;
         araGoto(t);
       }
+      // Keep the FOV box centred as the user pans/zooms, and draw any box that
+      // Dart pushed before Aladin finished initializing.
+      araAladin.on('positionChanged', function () { araRedrawFovBox(); });
+      araAladin.on('zoomChanged', function () { araRedrawFovBox(); });
+      araRedrawFovBox();
     });
   } else {
     aladinLoadFailed();
