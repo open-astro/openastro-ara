@@ -645,17 +645,76 @@ public sealed partial class CameraService : ICameraService, IDisposable {
             }
             var runtime = ReadRuntime(client);
             var caps = needCaps ? ReadCapabilities(client) : null;
+            var capsCommitted = false;
             lock (_gate) {
                 if (_state == EquipmentConnectionState.Connected && ReferenceEquals(_client, client)) {
                     _runtime = runtime;
                     if (caps is not null) {
                         _capabilities = caps;
+                        capsCommitted = true;
                     }
                 }
+            }
+            // §36/§25.5: the first caps read after a connect carries the camera's sensor geometry —
+            // cache it into the profile's optics section so the Planning Frame FOV works without the
+            // user typing it (and re-cache on a swapped camera). Outside the lock: it does profile IO.
+            if (capsCommitted && caps is not null) {
+                MaybeAutoPopulateOptics(caps);
             }
         } catch (Exception ex) {
             LogRuntimeReadFailed(ex);
         }
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Runs on the status-refresh timer: a profile read/write failure (IO/serialization) must not crash the timer or fail the camera connect — log and skip; the user can still set optics manually. CA1031's log-and-recover boundary applies.")]
+    private void MaybeAutoPopulateOptics(CameraCapabilitiesDto caps) {
+        if (_profileStore is null) {
+            return;
+        }
+        try {
+            // Atomic read-modify-write so a concurrent PUT /optics (the user editing focal length while
+            // this connect-time populate runs) can't be lost to a stale-snapshot overwrite — the decision
+            // runs under the store lock against the live value. The flag tells us whether it actually wrote.
+            var populated = false;
+            _profileStore.UpdateOpticsSettings(current => {
+                var next = AutoPopulatedOptics(current, caps);
+                populated = next is not null;
+                return next;
+            });
+            if (populated) {
+                LogOpticsAutoPopulated(caps.SensorWidth, caps.SensorHeight, caps.PixelSizeUm);
+            }
+        } catch (Exception ex) {
+            LogOpticsAutoPopulateFailed(ex);
+        }
+    }
+
+    /// <summary>
+    /// §36/§25.5 + §30.7 — the optics to persist given the connected camera's caps, or null when no
+    /// change is warranted: the camera reports no sensor geometry (zeros), or the stored geometry
+    /// already matches. Updates only the camera-owned fields (sensor W/H + pixel size); focal length
+    /// and reducer come from the telescope / manual entry and are preserved. A mismatch covers both
+    /// "unset → populate" (first connect) and "differs → re-cache" (a swapped camera).
+    /// </summary>
+    internal static OpticsSettingsDto? AutoPopulatedOptics(OpticsSettingsDto current, CameraCapabilitiesDto caps) {
+        if (caps.SensorWidth <= 0 || caps.SensorHeight <= 0 || caps.PixelSizeUm <= 0) {
+            return null;
+        }
+        // Pixel size is a double that round-trips through profile.json; compare with an epsilon so a
+        // serialization artefact (3.76 → 3.7599999999998) doesn't spuriously miss the "no change" case
+        // and re-write + raise Changed on every reconnect with the same camera. Sub-micron pixels make
+        // 1e-9 µm a safe threshold (no real sensor is that close).
+        if (current.SensorWidthPx == caps.SensorWidth
+            && current.SensorHeightPx == caps.SensorHeight
+            && Math.Abs(current.PixelSizeUm - caps.PixelSizeUm) < 1e-9) {
+            return null;
+        }
+        return current with {
+            SensorWidthPx = caps.SensorWidth,
+            SensorHeightPx = caps.SensorHeight,
+            PixelSizeUm = caps.PixelSizeUm,
+        };
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
@@ -874,6 +933,12 @@ public sealed partial class CameraService : ICameraService, IDisposable {
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Camera runtime read failed")]
     private partial void LogRuntimeReadFailed(Exception ex);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Auto-populated optics sensor geometry from the connected camera: {Width}×{Height} px, {PixelSizeUm} µm")]
+    private partial void LogOpticsAutoPopulated(int width, int height, double pixelSizeUm);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Could not auto-populate optics from the camera; set them manually in Settings → Optics")]
+    private partial void LogOpticsAutoPopulateFailed(Exception ex);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Focuser position snapshot failed; recording the frame without a focuser position")]
     private partial void LogFocuserSnapshotFailed(Exception ex);

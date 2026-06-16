@@ -63,6 +63,17 @@ public interface IProfileStore {
     OpticsSettingsDto GetOpticsSettings();
     void PutOpticsSettings(OpticsSettingsDto value);
 
+    /// <summary>
+    /// Atomically read-modify-write the optics section under the store lock, so a concurrent
+    /// <see cref="PutOpticsSettings"/> (e.g. the user editing focal length while a camera connect
+    /// auto-populates the sensor geometry) can't be lost to a stale-snapshot overwrite.
+    /// <paramref name="update"/> receives the current optics and returns the value to persist, or
+    /// <c>null</c> to leave it unchanged (no write, no change event). Returns the resulting optics.
+    /// <para><paramref name="update"/> runs while the store's internal lock is held — keep it a pure,
+    /// fast transform: do not call back into the store, acquire other locks, or do IO, or it may deadlock.</para>
+    /// </summary>
+    OpticsSettingsDto UpdateOpticsSettings(Func<OpticsSettingsDto, OpticsSettingsDto?> update);
+
     EquipmentConnectionDto GetEquipmentConnection();
     void PutEquipmentConnection(EquipmentConnectionDto value);
 
