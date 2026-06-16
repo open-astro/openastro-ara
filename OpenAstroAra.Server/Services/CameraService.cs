@@ -701,9 +701,13 @@ public sealed partial class CameraService : ICameraService, IDisposable {
         if (caps.SensorWidth <= 0 || caps.SensorHeight <= 0 || caps.PixelSizeUm <= 0) {
             return null;
         }
+        // Pixel size is a double that round-trips through profile.json; compare with an epsilon so a
+        // serialization artefact (3.76 → 3.7599999999998) doesn't spuriously miss the "no change" case
+        // and re-write + raise Changed on every reconnect with the same camera. Sub-micron pixels make
+        // 1e-9 µm a safe threshold (no real sensor is that close).
         if (current.SensorWidthPx == caps.SensorWidth
             && current.SensorHeightPx == caps.SensorHeight
-            && current.PixelSizeUm == caps.PixelSizeUm) {
+            && Math.Abs(current.PixelSizeUm - caps.PixelSizeUm) < 1e-9) {
             return null;
         }
         return current with {

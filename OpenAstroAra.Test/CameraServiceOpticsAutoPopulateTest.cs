@@ -68,6 +68,13 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void A_sub_epsilon_pixel_size_difference_is_treated_as_no_change() {
+            var current = Optics(w: 6248, h: 4176, px: 3.76);
+            Assert.That(CameraService.AutoPopulatedOptics(current, Caps(6248, 4176, 3.76 + 1e-12)), Is.Null,
+                "a float round-trip epsilon must not spuriously re-cache on every reconnect");
+        }
+
+        [Test]
         public void A_pixel_size_change_alone_re_caches() {
             var current = Optics(w: 6248, h: 4176, px: 3.76);
             var result = CameraService.AutoPopulatedOptics(current, Caps(6248, 4176, 2.4));
