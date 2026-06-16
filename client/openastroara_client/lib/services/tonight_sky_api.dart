@@ -67,20 +67,24 @@ class TonightSkyApi {
       : _dio = Dio(BaseOptions(
           baseUrl: server.baseUrl,
           connectTimeout: const Duration(seconds: 3),
-          receiveTimeout: const Duration(seconds: 5),
+          receiveTimeout: const Duration(seconds: 10),
         ));
 
   /// The curated objects above the active profile's site horizon right now,
   /// highest first (server-ranked). Throws `DioException` on transport failure.
   /// The owning provider holds the lifecycle — call [close] when done with it.
   Future<List<TonightSkyObject>> fetch({int limit = 12}) async {
-    final res = await _dio.get<List<dynamic>>(
+    final res = await _dio.get<dynamic>(
       '/api/v1/planning/tonight',
       queryParameters: <String, dynamic>{'limit': limit},
     );
-    final data = res.data ?? const <dynamic>[];
+    // A well-behaved server returns a JSON array; anything else (an error object,
+    // an HTML body, null) is not iterable — treat it as "nothing to show" rather
+    // than throwing a TypeError out of the provider.
+    final raw = res.data;
+    if (raw is! List) return const <TonightSkyObject>[];
     final out = <TonightSkyObject>[];
-    for (final e in data) {
+    for (final e in raw) {
       if (e is Map<String, dynamic>) {
         final o = TonightSkyObject.fromJson(e);
         if (o != null) out.add(o);

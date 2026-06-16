@@ -42,6 +42,10 @@ void main() {
       expect(TonightSkyObject.fromJson(body()..['magnitude'] = 'bright')!.magnitude, isNull);
     });
 
+    test('a genuine magnitude of 0.0 is preserved, not treated as missing', () {
+      expect(TonightSkyObject.fromJson(body()..['magnitude'] = 0.0)!.magnitude, 0.0);
+    });
+
     test('a wrong-typed numeric field falls back to 0, not a throw', () {
       final o = TonightSkyObject.fromJson(body()..['altitude_deg'] = 'high');
       expect(o, isNotNull);

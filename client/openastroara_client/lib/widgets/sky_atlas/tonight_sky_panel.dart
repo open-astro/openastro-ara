@@ -20,6 +20,14 @@ class TonightSkyPanel extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(tonightSkyProvider);
+    // Read once, before the async.when: if tonightSkyProvider settles (empty)
+    // while savedServersProvider is still loading, reading it inside the data
+    // callback would briefly mis-report "no server". Watching it here makes the
+    // empty-state advice deterministic.
+    final hasServer = ref.watch(savedServersProvider).maybeWhen(
+          data: (list) => list.isNotEmpty,
+          orElse: () => false,
+        );
     final theme = Theme.of(context);
 
     return Container(
@@ -54,10 +62,6 @@ class TonightSkyPanel extends ConsumerWidget {
                 if (objects.isEmpty) {
                   // Distinguish "no server" (the provider returns [] immediately) from
                   // "connected, but nothing's up / no site set" — the advice differs.
-                  final hasServer = ref.watch(savedServersProvider).maybeWhen(
-                        data: (list) => list.isNotEmpty,
-                        orElse: () => false,
-                      );
                   return _Message(
                     message: hasServer
                         ? 'Nothing well-placed right now. Set your site location in '
