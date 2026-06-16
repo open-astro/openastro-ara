@@ -292,6 +292,59 @@ const List<Setting> settingsRegistry = [
     profilePath: 'imaging.warmup_at_session_end',
   ),
 
+  // §36/§25.5 Optics — 5 fields driving the Planning Frame-mode FOV box.
+  // State lives in `opticsSettingsProvider`; profile section is `optics` (#467).
+  Setting(
+    id: 'img.optics.focal_length_mm',
+    label: 'Focal length (mm)',
+    description: 'Telescope focal length before any reducer or barlow. Sets the image scale and field of view shown in the Planning Frame overlay.',
+    keywords: ['optics', 'focal length', 'telescope', 'fov', 'field of view', 'framing', 'scale'],
+    path: ['Settings', 'Imaging', 'Optics'],
+    type: SettingType.doubleRange(min: 0, max: 10000, step: 1),
+    defaultValue: 0.0,
+    profilePath: 'optics.focal_length_mm',
+  ),
+  Setting(
+    id: 'img.optics.reducer_factor',
+    label: 'Reducer / barlow factor (×)',
+    description: 'Multiplier on the focal length: 1.0 for none, 0.8 for a 0.8× reducer, 2.0 for a 2× barlow. Must be greater than 0.',
+    keywords: ['optics', 'reducer', 'barlow', 'focal reducer', 'fov', 'framing'],
+    path: ['Settings', 'Imaging', 'Optics'],
+    type: SettingType.doubleRange(min: 0.1, max: 5, step: 0.1),
+    defaultValue: 1.0,
+    profilePath: 'optics.reducer_factor',
+  ),
+  Setting(
+    id: 'img.optics.sensor_width_px',
+    label: 'Sensor width (px)',
+    description: 'Camera sensor width in pixels. Combined with the pixel size and focal length to draw the field-of-view rectangle on the atlas.',
+    keywords: ['optics', 'sensor', 'width', 'pixels', 'camera', 'fov', 'framing'],
+    path: ['Settings', 'Imaging', 'Optics'],
+    type: SettingType.intRange(min: 0, max: 100000),
+    defaultValue: 0,
+    profilePath: 'optics.sensor_width_px',
+  ),
+  Setting(
+    id: 'img.optics.sensor_height_px',
+    label: 'Sensor height (px)',
+    description: 'Camera sensor height in pixels. Combined with the pixel size and focal length to draw the field-of-view rectangle on the atlas.',
+    keywords: ['optics', 'sensor', 'height', 'pixels', 'camera', 'fov', 'framing'],
+    path: ['Settings', 'Imaging', 'Optics'],
+    type: SettingType.intRange(min: 0, max: 100000),
+    defaultValue: 0,
+    profilePath: 'optics.sensor_height_px',
+  ),
+  Setting(
+    id: 'img.optics.pixel_size_um',
+    label: 'Pixel size (µm)',
+    description: 'Sensor pixel pitch in microns. Sets the per-pixel image scale (206.265 × pixel size ÷ focal length) used by the Planning Frame overlay.',
+    keywords: ['optics', 'pixel size', 'pitch', 'microns', 'camera', 'scale', 'fov'],
+    path: ['Settings', 'Imaging', 'Optics'],
+    type: SettingType.doubleRange(min: 0, max: 50, step: 0.1),
+    defaultValue: 0.0,
+    profilePath: 'optics.pixel_size_um',
+  ),
+
   // §29 Storage — 4 fields. State lives in `storageSettingsProvider`.
   Setting(
     id: 'session.storage.save_directory',
