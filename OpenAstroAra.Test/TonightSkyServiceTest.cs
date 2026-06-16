@@ -56,6 +56,8 @@ namespace OpenAstroAra.Test {
             const double lat = 47.6;
             foreach (var hours in new[] { 0.0, 6.0, 13.3, 21.7 }) {
                 var utc = new DateTimeOffset(2026, 6, 16, 0, 0, 0, TimeSpan.Zero).AddHours(hours);
+                // RA is irrelevant at δ=90 (the cos H term is multiplied by cos δ = 0), so any hour angle
+                // works — using LST − 0 here just exercises the full LST→hour-angle path.
                 var alt = TonightSkyService.AltitudeFromHourAngleDeg(
                     decDeg: 90, latDeg: lat,
                     hourAngleDeg: TonightSkyService.LocalSiderealTimeDeg(utc, longitudeDeg: -122.3) - 0);

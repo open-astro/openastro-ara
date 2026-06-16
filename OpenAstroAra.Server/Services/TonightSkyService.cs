@@ -110,8 +110,9 @@ public sealed class TonightSkyService : ITonightSkyService {
         return Rad2Deg(Math.Asin(Math.Clamp(sinAlt, -1.0, 1.0)));
     }
 
-    /// <summary>The object's highest possible altitude from this latitude (upper culmination on the
-    /// meridian): 90 − |φ − δ|, clamped to [−90, 90].</summary>
+    /// <summary>The object's highest possible altitude from this latitude — geometric upper culmination
+    /// on the meridian: 90 − |φ − δ|, clamped to [−90, 90]. Ignores atmospheric refraction and the
+    /// lower-transit altitude of circumpolar objects; sufficient as a ranking hint, not a precise rise.</summary>
     internal static double MaxAltitudeDeg(double decDeg, double latDeg) =>
         Math.Clamp(90.0 - Math.Abs(latDeg - decDeg), -90.0, 90.0);
 

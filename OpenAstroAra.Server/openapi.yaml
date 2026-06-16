@@ -723,6 +723,11 @@ paths:
               schema:
                 type: array
                 items: { $ref: '#/components/schemas/TonightSkyObject' }
+        '400':
+          description: '`at` is not a valid ISO-8601 date-time, or `limit` < 1'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Problem' }
 
 # ─── Endpoint group: Stream (Phase 9 — WebSocket) ─────────────────────────────
 # WebSocket endpoints aren't expressible in OpenAPI 3.1 paths; the full
