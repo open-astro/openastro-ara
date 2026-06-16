@@ -46,6 +46,28 @@ void main() {
       expect(c.read(frameFovBoxProvider)!.rotationDeg, 45);
     });
 
+    test('mosaic cols/rows/overlap flow from the framing controller', () {
+      c.read(frameModeEnabledProvider.notifier).set(true);
+      configureOptics();
+      final fc = c.read(framingControllerProvider.notifier);
+      fc.setMosaicCols(3);
+      fc.setMosaicRows(2);
+      fc.setOverlapPct(15);
+      final box = c.read(frameFovBoxProvider)!;
+      expect(box.cols, 3);
+      expect(box.rows, 2);
+      expect(box.overlapPct, 15);
+    });
+
+    test('defaults to a 1×1 panel with the FramingParams default 10% overlap', () {
+      c.read(frameModeEnabledProvider.notifier).set(true);
+      configureOptics();
+      final box = c.read(frameFovBoxProvider)!;
+      expect(box.cols, 1);
+      expect(box.rows, 1);
+      expect(box.overlapPct, 10, reason: 'FramingParams default overlap is 10%');
+    });
+
     test('turning Frame mode back off clears the box', () {
       final notifier = c.read(frameModeEnabledProvider.notifier);
       configureOptics();
@@ -58,12 +80,18 @@ void main() {
 
   group('FovBox', () {
     test('value-equality (drives the redundant-redraw guard)', () {
-      const a = FovBox(widthDeg: 1, heightDeg: 2, rotationDeg: 3);
-      const b = FovBox(widthDeg: 1, heightDeg: 2, rotationDeg: 3);
-      const different = FovBox(widthDeg: 1, heightDeg: 2, rotationDeg: 4);
+      const a = FovBox(widthDeg: 1, heightDeg: 2, rotationDeg: 3, cols: 2, rows: 2, overlapPct: 10);
+      const b = FovBox(widthDeg: 1, heightDeg: 2, rotationDeg: 3, cols: 2, rows: 2, overlapPct: 10);
+      const rotDiff = FovBox(widthDeg: 1, heightDeg: 2, rotationDeg: 4, cols: 2, rows: 2, overlapPct: 10);
+      const colsDiff = FovBox(widthDeg: 1, heightDeg: 2, rotationDeg: 3, cols: 3, rows: 2, overlapPct: 10);
+      const rowsDiff = FovBox(widthDeg: 1, heightDeg: 2, rotationDeg: 3, cols: 2, rows: 3, overlapPct: 10);
+      const overlapDiff = FovBox(widthDeg: 1, heightDeg: 2, rotationDeg: 3, cols: 2, rows: 2, overlapPct: 5);
       expect(a, b);
       expect(a.hashCode, b.hashCode);
-      expect(a == different, isFalse);
+      expect(a == rotDiff, isFalse);
+      expect(a == colsDiff, isFalse);
+      expect(a == rowsDiff, isFalse);
+      expect(a == overlapDiff, isFalse);
     });
   });
 }
