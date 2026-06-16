@@ -20,6 +20,7 @@ import 'panels/generic_placeholder_panel.dart';
 import 'panels/imaging_autofocus_panel.dart';
 import 'panels/imaging_defaults_panel.dart';
 import 'panels/imaging_plate_solve_panel.dart';
+import 'panels/optics_panel.dart';
 import 'panels/profile_active_panel.dart';
 import 'panels/profile_wizard_panel.dart';
 import 'panels/safety_policies_panel.dart';
@@ -205,6 +206,7 @@ class _PanelBody extends StatelessWidget {
       'eq.weather' => const EquipmentWeatherPanel(),
       'eq.safety' => const EquipmentSafetyMonitorPanel(),
       'img.defaults' => const ImagingDefaultsPanel(),
+      'img.optics' => const OpticsPanel(),
       'img.autofocus' => const ImagingAutofocusPanel(),
       'img.platesolve' => const ImagingPlateSolvePanel(),
       'session.storage' => const StoragePanel(),
