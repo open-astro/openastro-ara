@@ -32,15 +32,13 @@ dependencies:
   collection: ^1.19.1
   url_launcher: ^6.3.1
   package_info_plus: ^9.0.1
-  # open-astro fork of webview_cef: upstream 0.2.2 (and its main) no longer
-  # compile against Flutter 3.44+ (missing TextInputClient.onFocusReceived), and
-  # createWebView() threw on a null injectUserScripts (nullable-declared maps built
-  # with non-nullable literals). Pinned to a fork SHA for reproducibility. See
-  # PORT_DECISIONS.md.
+  # open-astro fork of webview_cef (CEF 130 + Swift Package Manager support),
+  # vendored as a git submodule at packages/webview_cef and pinned by that
+  # submodule's commit. The CEF binaries are git-ignored in the fork — run
+  # `packages/webview_cef/macos/setup_cef.sh` once before a macOS build to stage
+  # them. See PORT_DECISIONS.md.
   webview_cef:
-    git:
-      url: https://github.com/open-astro/webview_cef.git
-      ref: 2cbb28bc1bd4e12e794652e4187f4c5d04ad0ec7
+    path: packages/webview_cef
 
 dev_dependencies:
   flutter_test:
