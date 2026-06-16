@@ -8,6 +8,7 @@ import '../state/settings/equipment_connection_state.dart';
 import '../state/settings/filenames_settings_state.dart';
 import '../state/settings/imaging_defaults_state.dart';
 import '../state/settings/notifications_settings_state.dart';
+import '../state/settings/optics_settings_state.dart';
 import '../state/settings/phd2_settings_state.dart';
 import '../state/settings/plate_solve_settings_state.dart';
 import '../state/settings/safety_policies_state.dart';
@@ -47,6 +48,24 @@ class ProfileApi {
       data: _imagingDefaultsToJson(value),
     );
     return _imagingDefaultsFromJson(res.data ?? const {});
+  }
+
+  /// GET the active profile's optics section (§36 — FOV geometry inputs).
+  Future<OpticsSettings> getOptics() async {
+    final res = await _dio.get<Map<String, dynamic>>(
+      '/api/v1/profile/optics',
+    );
+    return _opticsFromJson(res.data ?? const {});
+  }
+
+  /// PUT the active profile's optics section. Returns the daemon's echo (it may
+  /// normalize fields — e.g. it rejects reducer_factor ≤ 0).
+  Future<OpticsSettings> putOptics(OpticsSettings value) async {
+    final res = await _dio.put<Map<String, dynamic>>(
+      '/api/v1/profile/optics',
+      data: _opticsToJson(value),
+    );
+    return _opticsFromJson(res.data ?? const {});
   }
 
   /// GET the active profile's storage-settings section.
@@ -265,6 +284,30 @@ class ProfileApi {
   }
 
   // ── Storage settings JSON mapping ──────────────────────────────────────
+
+  static OpticsSettings _opticsFromJson(Map<String, dynamic> j) {
+    // The daemon defaults reducer_factor to 1.0, back-fills it on upgrade, and PUT
+    // rejects ≤ 0 (#467), so the wire value is always positive in practice. Coalesce
+    // a missing OR non-positive value (e.g. a hand-edited profile.json) to 1.0 = "no
+    // reducer" — a 0 would otherwise multiply the focal length to 0 and silently mark
+    // an otherwise-complete rig unconfigured (no FOV box).
+    final reducer = (j['reducer_factor'] as num?)?.toDouble();
+    return OpticsSettings(
+      focalLengthMm: (j['focal_length_mm'] as num?)?.toDouble() ?? 0,
+      reducerFactor: (reducer != null && reducer > 0) ? reducer : 1.0,
+      sensorWidthPx: (j['sensor_width_px'] as num?)?.toInt() ?? 0,
+      sensorHeightPx: (j['sensor_height_px'] as num?)?.toInt() ?? 0,
+      pixelSizeUm: (j['pixel_size_um'] as num?)?.toDouble() ?? 0,
+    );
+  }
+
+  static Map<String, dynamic> _opticsToJson(OpticsSettings v) => {
+        'focal_length_mm': v.focalLengthMm,
+        'reducer_factor': v.reducerFactor,
+        'sensor_width_px': v.sensorWidthPx,
+        'sensor_height_px': v.sensorHeightPx,
+        'pixel_size_um': v.pixelSizeUm,
+      };
 
   static StorageSettings _storageSettingsFromJson(Map<String, dynamic> j) =>
       StorageSettings(
