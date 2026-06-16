@@ -4877,7 +4877,7 @@ lands on the right surface:
 - `planning.explore` — keywords: `explore, browse sky, hips surveys, search target, sesame, simbad`
 - `planning.tonights_sky` — keywords: `tonight's sky, tonight, best objects, what's up, well placed, altitude, transit`
 - `planning.frame` — keywords: `frame, framing, fov, field of view, sensor field, rotation, mosaic, panel grid, build mosaic`
-- `planning.optics` — keywords: `optics, focal length, reducer, pixel scale, sensor geometry, refresh from camera` (the Settings → Optics section that feeds the FOV overlay; see §30.7 invalidation)
+- `settings.optics` — keywords: `optics, focal length, reducer, pixel scale, sensor geometry, refresh from camera, fov, field of view` — note this routes to **Settings → Optics**, not the Planning tab; it lives in the `settings.*` namespace (so 12h's routing isn't surprised by a `planning.*` key that opens Settings) but carries FOV keywords because that section feeds the Planning Frame overlay (see §30.7 invalidation).
 
 ---
 
