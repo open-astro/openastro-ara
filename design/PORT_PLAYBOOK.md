@@ -4693,9 +4693,22 @@ Once an asset is downloaded:
 
 ### 36.7 Tonight's Sky (planetarium mode)
 
-The Sky Atlas tab has a sub-mode toggle: **[Catalog View]** ↔ **[Tonight's Sky]**.
+The **Planning tab** (the merged Sky Atlas + Framing surface, §25.5) has a view-mode
+toggle: **[Explore]** ↔ **[Tonight's Sky]** (plus the orthogonal **Frame** overlay
+toggle). Tonight's Sky is the planetarium mode.
 
-**Tonight's Sky implementation:**
+> **Implementation status (v0.1.0).** What shipped is the **altitude-ranked
+> best-objects side panel**: the server (`ITonightSkyService`, `GET
+> /api/v1/planning/tonight`) ranks a curated catalog by current altitude above the
+> profile's site horizon (self-contained Meeus GMST→LST→hour-angle→altitude, no
+> ephemeris dependency — AOT-clean), and the client `TonightSkyPanel` lists them
+> with current/transit altitude; tapping one recentres the Aladin atlas. This
+> realizes the "best transit tonight" sort (last bullet below). The full
+> planetarium overlays — horizon polyline, below-horizon shading, Sun/Moon/planet
+> + comet catalogs, the time slider — remain a **deferred peak-over-night
+> refinement** (needs the §36.2.4 Full DE440 ephemeris + the overlay JS bridge).
+
+**Tonight's Sky implementation (full design, overlays deferred):**
 - Aladin Lite driven by WILMA — view centered programmatically on current zenith RA/Dec, stereographic projection
 - WILMA computes (Dart, using inherited Astrometry library):
   - Current zenith RA/Dec from profile lat/long + UTC
@@ -4713,7 +4726,7 @@ The Sky Atlas tab has a sub-mode toggle: **[Catalog View]** ↔ **[Tonight's Sky
 
 ### 36.8 Universal search
 
-Search bar at the top of the Sky Atlas tab:
+Search bar at the top of the Planning tab (Explore mode):
 
 - **Online** (WILMA has internet): query Aladin's Simbad integration. Type "wolf" → resolves to Wolf 359, Wolf-Rayet stars, candidate matches. Type "M31" / "NGC 6188" / "Andromeda Galaxy" / coordinates → resolves.
 - **Offline**: fall back to bundled name resolver index (HYG common names + NGC/IC/M/HD/HIP/Tycho-2 designations + Bayer/Flamsteed + bundled comets). ~5-10 MB index, ~50-100k entries.
@@ -4747,7 +4760,7 @@ Recommendations are *suggestions*, not enforced. User can accept, customize, or 
 
 Flutter's desktop WebView story on Linux is patchy across packages (`webview_flutter`, `flutter_inappwebview`, `desktop_webview_window`). ARA uses `webview_flutter` (Google-official, best long-term support) for the embedded Sky Atlas WebView, but a fallback path exists for Linux desktops where the WebView fails to initialize.
 
-**Phase 11 verification step:** before declaring Phase 11 complete, the AI runs `flutter build linux --release` and exercises the Sky Atlas tab. If the WebView loads Aladin Lite + renders the bundled DSO catalog overlay, primary path is green. If it fails (missing system library, package incompatibility, etc.), the fallback path activates.
+**Phase 11 verification step:** before declaring Phase 11 complete, the AI runs `flutter build linux --release` and exercises the Planning tab (the Aladin Lite surface, §25.5/§36). If the WebView loads Aladin Lite + renders the bundled DSO catalog overlay, primary path is green. If it fails (missing system library, package incompatibility, etc.), the fallback path activates.
 
 **Fallback UX when WebView fails on Linux desktop:**
 
@@ -4855,6 +4868,16 @@ Same pattern as §30.7.3's equipment-change banner. Non-blocking. Dismissible. R
 - `data_manager.open` — keywords: `download surveys, sky imagery, star catalogs, hips, dss2, panstarrs, gaia, tycho, ucac, thumbnails, de440, ephemerides, data manager, downloads`
 - `data_manager.recommendations` — keywords: `recommended downloads, what surveys do i need, focal length recommendations`
 - `data_manager.banner_dismiss` — keywords: `sky data banner, hide download suggestions, don't suggest again`
+
+**Planning tab (merged Sky Atlas + Framing, §25.5).** The old "Framing Assistant"
+and "Sky Atlas" names still resolve as search aliases so a NINA user's vocabulary
+lands on the right surface:
+
+- `planning.open` — keywords: `planning, sky atlas, framing assistant, find a target, atlas, planetarium, aladin`
+- `planning.explore` — keywords: `explore, browse sky, hips surveys, search target, sesame, simbad`
+- `planning.tonights_sky` — keywords: `tonight's sky, tonight, best objects, what's up, well placed, altitude, transit`
+- `planning.frame` — keywords: `frame, framing, fov, field of view, sensor field, rotation, mosaic, panel grid, build mosaic`
+- `planning.optics` — keywords: `optics, focal length, reducer, pixel scale, sensor geometry, refresh from camera` (the Settings → Optics section that feeds the FOV overlay; see §30.7 invalidation)
 
 ---
 
@@ -6733,22 +6756,30 @@ The user said it best: "user may not have internet." In-app-only means:
 
 ## 47. Mosaic imaging (multi-panel)
 
-Astrophotographers shoot multi-panel mosaics when a target is too large for one frame at their focal length — Andromeda at 2000mm, the Veil Nebula, Heart-and-Soul region, etc. NINA's Framing Assistant supports this; ARA preserves and modernizes the workflow with Aladin Lite integration + mosaic-aware tracking.
+Astrophotographers shoot multi-panel mosaics when a target is too large for one frame at their focal length — Andromeda at 2000mm, the Veil Nebula, Heart-and-Soul region, etc. NINA's Framing Assistant supports this; ARA preserves and modernizes the workflow in the **Planning tab's Frame mode** (the merged Sky Atlas + Framing surface, §25.5) with Aladin Lite integration + mosaic-aware tracking.
 
 ### 47.1 What mosaic mode does
 
 User defines an N×M grid of overlapping panels centered on a target. Each panel becomes a sub-target with a computed RA/Dec offset. The sequencer captures all panels (light + calibration). Stitching happens later in post-processing (PixInsight, Siril, AstroPixelProcessor — ARA does not stitch).
 
-### 47.2 Building a mosaic in WILMA's Framing Assistant
+### 47.2 Building a mosaic in the Planning tab's Frame mode
 
 UI flow:
 
-1. User searches for a target in Framing Assistant (Aladin Lite — §25.5)
-2. Sets **Mosaic** mode: defines grid cols × rows (e.g., 3 × 2)
+1. User searches for / picks a target in the Planning tab (Aladin Lite — §25.5)
+2. Enables **Frame** and sets **Mosaic**: defines grid cols × rows (e.g., 3 × 2)
 3. Sets overlap percentage (default **10%**; configurable 5-25%)
 4. Optionally sets rotation angle (defaults to 0 if no rotator; else profile default)
 5. Aladin Lite overlay renders the panel grid as colored rectangles on the sky map — user sees exactly which areas each panel covers, can drag the whole mosaic to recenter, can rotate
 6. User confirms → mosaic saved as a single logical entity with N×M panels
+
+> **Implementation status (v0.1.0).** The Frame-mode FOV overlay and the **mosaic
+> panel-grid preview** (cols × rows × overlap, profile-derived field rectangle)
+> shipped. **"Build Mosaic Sequence"** — turning the previewed grid into N×M
+> sequencer sub-targets — is **deferred (1e)**: it needs the server-side
+> `IMosaicService` to compute and persist the per-panel RA/Dec offsets (§47.3
+> math). Until then Frame mode is a planning/preview surface, not a sequence
+> generator.
 
 ### 47.3 Panel math (computed server-side)
 
@@ -8155,7 +8186,7 @@ For existing NINA users coming to ARA, here's what's different and how to bring 
 | What | How |
 |---|---|
 | Your sequence `.json` files | Import via WILMA → Sequencer → "Import from NINA" (§38.4). Server remaps equipment IDs to your current Alpaca devices; flags any unsupported instruction types for review. |
-| Your imaging targets | Re-add manually in WILMA's Framing Assistant (Aladin Lite); search by name or coords; save as a target template. Existing FITS files keep their RA/Dec metadata, so old captures still align via §40.6 Resume Target. |
+| Your imaging targets | Re-add manually in WILMA's Planning tab (Aladin Lite — the merged Sky Atlas + Framing surface); search by name or coords; save as a target template. Existing FITS files keep their RA/Dec metadata, so old captures still align via §40.6 Resume Target. |
 | Your imaging style (filters, exposures, gain/offset) | Configured fresh in the §37 wizard. Takes ~10 minutes for a standard rig. |
 | Your existing FITS files | Drop them on the Pi's USB drive under any session folder; ARA's library scanner picks them up. Or process them externally in PixInsight/Siril unchanged. |
 | Your bias/dark/flat libraries | Manually copy to `/media/openastroara/calibration/` matching the layout from §39.9. Or just re-capture fresh — for many users this is easier than migrating. |
@@ -9993,7 +10024,7 @@ Tapping [Open on desktop] copies an `araapp://settings/guider/dither_pixels` dee
 Same `⌘K` / `Ctrl+K` shortcut, registry expands to include:
 
 - **Actions** — "park mount", "run autofocus on L", "start sequence M42 LRGB"
-- **Targets** — "M42" jumps to that target in Image Library or Framing Assistant
+- **Targets** — "M42" jumps to that target in Image Library or the Planning tab
 - **Sessions** — "last week" jumps to recent sessions in the library
 - **Help** — "how do I import a NINA sequence" surfaces relevant docs / wizard re-entry
 - **Equipment** — "camera temp" jumps to live equipment panel with that reading highlighted
