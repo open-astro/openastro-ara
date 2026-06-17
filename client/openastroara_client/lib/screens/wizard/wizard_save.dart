@@ -80,14 +80,21 @@ Future<void> saveWizardProfile(ProfileApi api, ProfileDraft d) async {
   // each attempt.
   if (d.savedProfileId == null) {
     final meta = await api.createProfile(name);
+    if (meta.id.isEmpty) {
+      // Guard the empty-string case: storing "" is non-null, so a retry would
+      // skip create and PUT sections against an unknown active profile.
+      throw const FormatException('createProfile returned an empty profile id');
+    }
     d.savedProfileId = meta.id;
   }
 
-  // GET each section (now the new active profile's defaults), overlay the
-  // wizard's values, PUT it back.
-  await api.putSiteSettings(applyDraftToSite(await api.getSiteSettings(), d));
-  await api.putOptics(applyDraftToOptics(await api.getOptics(), d));
-  await api.putImagingDefaults(
-      applyDraftToImaging(await api.getImagingDefaults(), d));
-  await api.putPhd2Settings(applyDraftToPhd2(await api.getPhd2Settings(), d));
+  // Each section is an independent GET-overlay-PUT against the active profile, so
+  // run them concurrently rather than serially (4 round-trips → ~1 round-trip of
+  // latency). Future.wait surfaces the first failure to the caller.
+  await Future.wait([
+    api.getSiteSettings().then((s) => api.putSiteSettings(applyDraftToSite(s, d))),
+    api.getOptics().then((s) => api.putOptics(applyDraftToOptics(s, d))),
+    api.getImagingDefaults().then((s) => api.putImagingDefaults(applyDraftToImaging(s, d))),
+    api.getPhd2Settings().then((s) => api.putPhd2Settings(applyDraftToPhd2(s, d))),
+  ]);
 }
