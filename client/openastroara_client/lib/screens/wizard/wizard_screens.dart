@@ -3,21 +3,34 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../state/wizard_state.dart';
 import '../../theme/ara_colors.dart';
+import 'screens/screen_device_setup.dart';
+import 'screens/screen_equipment_discovery.dart';
+import 'screens/screen_profile_basics.dart';
 
-/// Phase 12b first cut — every wizard screen is a placeholder body for now.
-/// The shell + navigation + ProfileDraft state are real; per-screen forms
-/// land in 12b follow-up PRs (one screen at a time keeps each PR small and
-/// reviewable).
+/// Step → screen builder. Steps 1-10 (the §37.1–37.3 "gear setup" screens)
+/// are real forms bound to [ProfileDraft]; steps 11-18 (imaging tools, safety,
+/// sky data, review) are still placeholders pending follow-up work.
 ///
-/// To wire a real screen later: replace the entry in [wizardScreenBuilders]
-/// for that step number with a custom ConsumerStatefulWidget that reads
-/// `ref.read(wizardControllerProvider.notifier).state.draft` and mutates
-/// the matching section.
+/// To wire a remaining screen: add a real ConsumerStatefulWidget under
+/// `screens/` that reads `ref.read(wizardControllerProvider).draft` and
+/// mutates the matching section, then register it here.
 
 typedef WizardScreenBuilder = Widget Function(BuildContext);
 
-final Map<int, WizardScreenBuilder> wizardScreenBuilders = <int, WizardScreenBuilder>{
-  for (int step = 1; step <= ProfileWizard.totalSteps; step++)
+final Map<int, WizardScreenBuilder> wizardScreenBuilders =
+    <int, WizardScreenBuilder>{
+  1: (_) => const ScreenProfileBasics(),
+  2: (_) => const ScreenAlpacaConnect(),
+  3: (_) => const ScreenEquipmentAssign(),
+  4: (_) => const ScreenTelescope(),
+  5: (_) => const ScreenCamera(),
+  6: (_) => const ScreenFilterWheel(),
+  7: (_) => const ScreenFocuser(),
+  8: (_) => const ScreenMount(),
+  9: (_) => const ScreenRotator(),
+  10: (_) => const ScreenGuider(),
+  // Steps 11-18 remain placeholders until their forms land.
+  for (int step = 11; step <= ProfileWizard.totalSteps; step++)
     step: (ctx) => _PlaceholderScreen(step: step),
 };
 
