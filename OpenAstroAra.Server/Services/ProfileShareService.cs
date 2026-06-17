@@ -64,7 +64,10 @@ public sealed class ProfileShareService : IProfileShareService {
             ProfileName: stored.Meta.Name,
             Manifest: manifestElement,
             PayloadBytes: utf8.Length,
-            DownloadUrl: new Uri($"/api/v1/profiles/share/{profileId}/payload", UriKind.Relative));
+            // The manifest is returned inline (the client writes it straight to the
+            // chosen file); there is no separate payload route to download, so this
+            // stays null rather than pointing at an unmapped URL.
+            DownloadUrl: null);
         return Task.FromResult<ProfileShareDto?>(dto);
     }
 
@@ -136,8 +139,6 @@ public sealed class ProfileShareService : IProfileShareService {
 
     // ─── §70.4 import (preview + commit) — placeholder until the import sub-PR ───
 
-    private static readonly JsonDocument _emptyManifest = JsonDocument.Parse("{}");
-
     public Task<ProfileShareImportPreviewDto> ImportPreviewAsync(JsonElement manifest, CancellationToken ct) {
         _ = manifest;
         return Task.FromResult(new ProfileShareImportPreviewDto(
@@ -150,7 +151,6 @@ public sealed class ProfileShareService : IProfileShareService {
 
     public Task<Guid> ImportCommitAsync(Guid importToken, CancellationToken ct) {
         _ = importToken;
-        _ = _emptyManifest;
         return Task.FromResult(Guid.NewGuid());
     }
 }

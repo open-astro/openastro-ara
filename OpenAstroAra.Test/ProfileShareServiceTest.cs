@@ -127,6 +127,7 @@ public class ProfileShareServiceTest {
         phd2.GetProperty("phd2_profile").GetString().Should().BeEmpty();
         phd2.GetProperty("port").GetInt32().Should().Be(4400);
         phd2.GetProperty("guide_focal_length").GetInt32().Should().Be(0);
+        phd2.GetProperty("guide_pixel_size").GetDouble().Should().Be(0);
 
         var optics = settings.GetProperty("optics");
         optics.GetProperty("focal_length_mm").GetDouble().Should().Be(0);

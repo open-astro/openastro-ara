@@ -86,7 +86,9 @@ public sealed record ProfileShareDto(
     string ProfileName,
     System.Text.Json.JsonElement Manifest,
     long PayloadBytes,
-    Uri DownloadUrl);
+    // Null in v0.0.1: the share JSON is returned inline in Manifest (the client
+    // writes it straight to the chosen file), so there is no payload route to GET.
+    Uri? DownloadUrl);
 
 public sealed record ProfileShareImportPreviewDto(
     Guid ImportToken,
