@@ -67,6 +67,12 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
     // newer connect or a disconnect supersedes it — so a rapid connect→disconnect can't leave the
     // ensure-reachable loop polling for up to its full deadline.
     private CancellationTokenSource? _connectCts;
+    // Service-lifetime token for the fire-and-forget calibration builds (dark library / defect map).
+    // PHD2's build RPC is a long blocking call that isn't itself cancellable, but linking the
+    // background Task.Run to this token + passing it into the build gives those builds a shutdown
+    // signal and avoids leaving an orphaned, unobservable task behind a CancellationToken.None on
+    // Dispose. Cancelled + disposed in Dispose.
+    private readonly CancellationTokenSource _shutdownCts = new();
     private bool _disposed;
 
     // §63.1: ask systemd to start the guider service if it isn't already up when we connect
@@ -366,6 +372,11 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             _recoveryPassCts?.Dispose();
             _recoveryPassCts = null;
             CancelConnectLocked();
+            // Signal any in-flight calibration build to wind down. Its background task observes the
+            // token where it can and its finally releases the gate; no new build can start
+            // (BuildDarkLibraryAsync/BuildDefectMapDarksAsync check _disposed at entry).
+            _shutdownCts.Cancel();
+            _shutdownCts.Dispose();
             DisposeGuiderLocked();
         }
     }

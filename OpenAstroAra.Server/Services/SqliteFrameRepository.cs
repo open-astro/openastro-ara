@@ -419,10 +419,10 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         byte[] jpeg;
         if (OpenAstroAra.Stretch.Debayer.TryParse(bayerPat, out var pattern)) {
             var (rgb, ow, oh) = DebayerAndStretch(pixels, width, height, pattern, algorithm, stretchParams);
-            jpeg = OpenAstroAra.Stretch.JpegEncoder.EncodeColor(rgb, ow, oh);
+            jpeg = OpenAstroAra.Stretch.JpegEncoder.EncodeColor(rgb, ow, oh, maxDim: PreviewMaxDim);
         } else {
             var stretched = OpenAstroAra.Stretch.Stretcher.Apply(algorithm, pixels, stretchParams);
-            jpeg = OpenAstroAra.Stretch.JpegEncoder.EncodeGray(stretched, width, height);
+            jpeg = OpenAstroAra.Stretch.JpegEncoder.EncodeGray(stretched, width, height, maxDim: PreviewMaxDim);
         }
         TryWriteCache(cachePath, jpeg);
         EvictVariantsIfNeeded(filePath);
@@ -704,6 +704,12 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
     // = seven total. Settings → Image Processing → Preview Cache will expose
     // this knob (range 1-20) in a future sub-PR; for now it's a const.
     private const int MaxVariantsPerFrame = 6;
+
+    // §65 preview payload cap. The full preview is a viewer aid, not the full-res download, so
+    // cap its longest edge — a 60 MP OSC frame would otherwise debayer to a ~15 MP JPEG. 2048 px
+    // keeps it crisp on any display while bounding payload/encode time; the FITS + the eventual
+    // full-res export are unaffected. (Settings → Image Processing could expose this later.)
+    private const int PreviewMaxDim = 2048;
 
     // §29 storage-pressure threshold. When the captures volume free space
     // drops below this, the §65.4 variant-eviction path nukes all alt-

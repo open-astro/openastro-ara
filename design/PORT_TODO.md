@@ -45,6 +45,18 @@ Per §0 rule 6 + §15 step 7 + COMMIT-PR-RULES.md CodeRabbit rule "out-of-scope 
 
 ---
 
+## Merge-gate audit follow-ups (2026-06-17)
+
+A retrospective audit of merged PRs (the bot's verdict-at-merge vs. the §19.1 gate) found **no unaddressed high-severity defect** — the recall-biased reviewer's near-permanent "⚠️ Issues found" sign-off is not itself a defect signal, and every high-severity keyword in a final verdict was negated / avoided-by-design / an explicit non-blocker. It did surface these **low-severity, bot-acknowledged-non-blocker** hardening items, logged here and being remediated as focused follow-up PRs (each driven to the bot's ✅ Approved before merge):
+
+- **#384 — dark-library build service: disposal/cancellation gap.** The §63.6 guider dark-library build op has a disposal/cancellation gap "worth addressing before a live hardware test exposes it." Observe cancellation + dispose resources cleanly on abort. (low–med)
+- **#390 — WS event-stream: faulted/slow TCP drain silently drops the error.** In the §60.9 client WS transport, a slow or faulted TCP drain surfaces a future error that is silently dropped rather than logged/surfaced. (low)
+- **#425 — backup `listSnapshots` silently drops malformed entries.** `whereType<Map<String,dynamic>>()` skips a malformed snapshot entry with no log line, making it invisible. Log when an entry is skipped. (low)
+- **#349 — image preview guards.** Add the `GetPixels` guard + a full-preview max-dimension resize alongside the grayscale-thumbnail guard in the §65 render path. (low)
+- **#399 — latent dialog error-drop.** The guider calibration dialog's error contract is correct today, but if `_run` is ever refactored to rethrow, errors would be silently dropped. Make it robust to that. (very low / latent)
+
+---
+
 ## Phase 15 sweep candidates
 
 - ✅ **Consolidate `_SwitchRow` into shared editable-field widget set.** Resolved in PR #104 (Phase 12h.2-switch) — lifted into `lib/widgets/settings/editable_field.dart` as `SettingsSwitchRow` with optional `hint` slot. All 6 panel copies removed.
