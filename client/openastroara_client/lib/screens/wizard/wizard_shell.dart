@@ -97,6 +97,13 @@ class _WizardShellState extends ConsumerState<WizardShell> {
     showDialog<void>(
       context: context,
       barrierDismissible: false,
+      // Push the spinner onto the SAME navigator we captured in `nav`
+      // (Navigator.of(context), the nearest one the wizard route lives on).
+      // showDialog defaults to useRootNavigator:true, which would put the
+      // spinner on the root navigator while nav.pop() targets the nearest —
+      // leaving the (canPop:false, barrierDismissible:false) spinner stuck if
+      // the wizard ever runs inside a nested navigator.
+      useRootNavigator: false,
       // PopScope(canPop: false) also blocks the Android system-back button from
       // dismissing the spinner; otherwise a back press mid-save would pop the
       // spinner early and the nav.pop() calls below would pop the wizard (and the
@@ -121,8 +128,13 @@ class _WizardShellState extends ConsumerState<WizardShell> {
     }
 
     if (nav.mounted) nav.pop(); // close the spinner — independent of widget mount state
-    _isSaving = false; // always clear the guard; only the rebuild needs a mount check
-    if (mounted) setState(() {});
+    // Clear the guard inside setState when still mounted (Flutter contract for
+    // state mutations); fall back to a bare assignment if the widget is gone.
+    if (mounted) {
+      setState(() => _isSaving = false);
+    } else {
+      _isSaving = false;
+    }
 
     if (error != null) {
       _showError(messenger, error);
