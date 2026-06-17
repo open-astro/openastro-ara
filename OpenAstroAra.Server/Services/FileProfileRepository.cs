@@ -54,10 +54,13 @@ public sealed partial class FileProfileRepository : IProfileRepository, IDisposa
     // per-section Changed notifications don't each rewrite the active file; the final
     // state is written once at the end. Reentrant-safe: the live store raises Changed
     // synchronously on the same thread that holds _lock here.
-    private bool _suppressMirror;
+    // volatile: read in OnLiveChanged, which can run on a different thread than the writer if a
+    // store ever violates the sync-dispatch contract — volatile guarantees the handler sees the
+    // current values rather than a stale cached copy (so the gate + assert are trustworthy).
+    private volatile bool _suppressMirror;
     // Managed thread id of an in-progress ApplyToLive (0 = none); lets OnLiveChanged assert the
     // IProfileStore.Changed sync-dispatch contract that _suppressMirror depends on.
-    private int _applyingThreadId;
+    private volatile int _applyingThreadId;
     private int _disposed; // 0 = live, 1 = disposed; flipped via Interlocked so Dispose is single-shot
 
     private static readonly AraJsonSerializerContext _indented =
