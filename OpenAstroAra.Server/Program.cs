@@ -283,6 +283,12 @@ public partial class Program {
         var profileDir = ResolveProfileDir();
         builder.Services.AddSingleton<IProfileStore>(sp =>
             new FileProfileStore(profileDir, sp.GetService<ILogger<FileProfileStore>>()));
+        // §37 multi-profile repository — the known-profiles set (§30) layered over the
+        // active-profile store. Seeds the legacy single profile.json as the initial
+        // profile on first run and loads the active profile into the live store at boot.
+        builder.Services.AddSingleton<IProfileRepository>(sp =>
+            new FileProfileRepository(profileDir, sp.GetRequiredService<IProfileStore>(),
+                sp.GetService<ILogger<FileProfileRepository>>()));
 
         // §36 Data Manager — real disk-backed inventory under {profileDir}/sky-data (replaces the
         // placeholder). Registered here (not at the §13.10 placeholder site above) since it needs the
@@ -573,6 +579,9 @@ public partial class Program {
         // section-specific endpoint pairs on top of the same IProfileStore.
         app.MapProfileEndpoints();
 
+        // §37/§30 multi-profile management — CRUD over the known-profiles set.
+        app.MapProfilesEndpoints();
+
         // §65.5 / §60.5 background-job status endpoints.
         app.MapJobsEndpoints();
 
@@ -674,6 +683,11 @@ public partial class Program {
         // §55.1 settings-sync analogue: reclaim any client-settings.json.tmp-* orphaned by a settings write killed
         // between the temp write and its File.Move rename. Same boot-time, pre-request-acceptance, best-effort sweep.
         ClientSettingsService.SweepOrphans(profileDir, app.Services.GetService<ILogger<ClientSettingsService>>());
+
+        // §37: eagerly construct the multi-profile repository at boot (not on first request) so it
+        // migrates the legacy profile.json into the profiles/ set and loads the active profile into
+        // the live store before any request is served.
+        _ = app.Services.GetRequiredService<IProfileRepository>();
 
         LogListening(app.Logger, port);
         app.Run();
