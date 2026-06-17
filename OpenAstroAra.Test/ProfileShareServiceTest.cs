@@ -150,6 +150,15 @@ public class ProfileShareServiceTest {
         settings.GetProperty("safety_policies").GetProperty("on_unsafe").GetString().Should().Be("pause_and_park");
         settings.GetProperty("phd2").GetProperty("ra_aggressiveness").GetDouble().Should().Be(0.9);
 
+        // Site sky-quality judgement is KEPT (only the precise location is stripped) —
+        // assert it survives so an accidental widening of the Site `with {}` strip
+        // block is caught.
+        var site = settings.GetProperty("site");
+        site.GetProperty("bortle_class").GetInt32().Should().Be(4);
+        site.GetProperty("typical_seeing_arcsec").GetDouble().Should().Be(2.5);
+        site.GetProperty("twilight_definition").GetString().Should().Be("astronomical");
+        site.GetProperty("default_horizon_altitude_deg").GetDouble().Should().Be(20.0);
+
         // Rig geometry is lifted into rig_description so the recipient can judge fit.
         var rig = manifest.GetProperty("rig_description");
         rig.GetProperty("focal_length_mm").GetDouble().Should().Be(2032);
