@@ -32,12 +32,19 @@ public static class JpegEncoder {
     /// <param name="width">Image width in pixels.</param>
     /// <param name="height">Image height in pixels.</param>
     /// <param name="quality">JPEG quality 1–100; default 85.</param>
-    public static byte[] EncodeGray(ReadOnlySpan<byte> pixels, int width, int height, int quality = 85) {
+    /// <param name="maxDim">When &gt; 0 and the image exceeds it on either axis, the output is
+    /// downscaled to fit (aspect-preserving) before encoding — caps the preview payload for very
+    /// large sensors. 0 (default) keeps the full resolution, so existing callers are unaffected.</param>
+    public static byte[] EncodeGray(ReadOnlySpan<byte> pixels, int width, int height, int quality = 85, int maxDim = 0) {
         if (width <= 0 || height <= 0) throw new ArgumentException("Dimensions must be positive");
         if (pixels.Length != width * height) {
             throw new ArgumentException(
                 $"pixel buffer length ({pixels.Length}) doesn't match dimensions ({width}×{height} = {width * height})",
                 nameof(pixels));
+        }
+        // Downscale-and-encode reuses the tested thumbnail resize path.
+        if (maxDim > 0 && (width > maxDim || height > maxDim)) {
+            return EncodeThumbnail(pixels, width, height, maxDim, quality);
         }
 
         // Skia's Gray8 format encodes single-channel byte buffers directly
@@ -95,12 +102,17 @@ public static class JpegEncoder {
     /// debayered §65 color preview of OSC frames.
     /// </summary>
     /// <param name="rgb">Row-major interleaved R,G,B bytes; length must equal width × height × 3.</param>
-    public static byte[] EncodeColor(ReadOnlySpan<byte> rgb, int width, int height, int quality = 85) {
+    /// <param name="maxDim">When &gt; 0 and the image exceeds it on either axis, the output is
+    /// downscaled to fit (aspect-preserving) before encoding. 0 (default) keeps full resolution.</param>
+    public static byte[] EncodeColor(ReadOnlySpan<byte> rgb, int width, int height, int quality = 85, int maxDim = 0) {
         if (width <= 0 || height <= 0) throw new ArgumentException("Dimensions must be positive");
         if (rgb.Length != width * height * 3) {
             throw new ArgumentException(
                 $"RGB buffer length ({rgb.Length}) doesn't match {width}×{height}×3 = {width * height * 3}",
                 nameof(rgb));
+        }
+        if (maxDim > 0 && (width > maxDim || height > maxDim)) {
+            return EncodeColorThumbnail(rgb, width, height, maxDim, quality);
         }
         using var bitmap = RgbToBitmap(rgb, width, height);
         using var image = SKImage.FromBitmap(bitmap);

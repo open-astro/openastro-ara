@@ -57,7 +57,7 @@ public sealed partial class GuiderService {
         Justification = "If Task.Run fails to even queue the work (e.g. OutOfMemoryException creating a thread), the background task's finally — which releases the calibration-build gate — never runs, so the gate would stick true forever (every later build → 409). Release it here and rethrow so the failure still surfaces; the catch is a release-and-rethrow boundary, not a swallow.")]
     private void DispatchCalibrationBuild(Func<Task> build) {
         try {
-            _ = Task.Run(build, CancellationToken.None);
+            _ = Task.Run(build, _shutdownCts.Token);
         } catch (Exception) {
             lock (_gate) {
                 ReleaseCalibrationGateLocked();
@@ -92,7 +92,7 @@ public sealed partial class GuiderService {
                     break;
             }
         }
-        DispatchCalibrationBuild(() => BuildDarkLibraryInBackground(guider, rpcRequest));
+        DispatchCalibrationBuild(() => BuildDarkLibraryInBackground(guider, rpcRequest, _shutdownCts.Token));
         return Task.FromResult(Accepted(op, idempotencyKey));
     }
 
@@ -116,7 +116,7 @@ public sealed partial class GuiderService {
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Background build boundary: guider.BuildDarkLibraryAsync can throw arbitrary socket/IO/protocol exceptions (and GuiderRpcException) over a 2-hour blocking RPC. The 202 already returned, so any escape must surface as the failed WS event and be contained — it must not become an unobserved task exception. Log-and-recover.")]
-    private async Task BuildDarkLibraryInBackground(PHD2Guider guider, Phd2BuildDarkLibrary rpcRequest) {
+    private async Task BuildDarkLibraryInBackground(PHD2Guider guider, Phd2BuildDarkLibrary rpcRequest, CancellationToken ct) {
         var p = rpcRequest.Parameters!;
         try {
             LogDarkLibraryBuildStarted(p.FrameCount, p.ClearExisting);
@@ -127,7 +127,7 @@ public sealed partial class GuiderService {
             });
             var result = await guider.BuildDarkLibraryAsync(
                 p.FrameCount, p.MinExposureMs, p.MaxExposureMs, p.ClearExisting, p.Notes, p.LoadAfter,
-                CancellationToken.None).ConfigureAwait(false);
+                ct).ConfigureAwait(false);
             var exposures = new JsonArray();
             if (result.ExposuresMs is not null) {
                 foreach (var ms in result.ExposuresMs) {
@@ -273,13 +273,13 @@ public sealed partial class GuiderService {
                     break;
             }
         }
-        DispatchCalibrationBuild(() => BuildDefectMapDarksInBackground(guider, rpcRequest));
+        DispatchCalibrationBuild(() => BuildDefectMapDarksInBackground(guider, rpcRequest, _shutdownCts.Token));
         return Task.FromResult(Accepted(op, idempotencyKey));
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Background build boundary: guider.BuildDefectMapDarksAsync can throw arbitrary socket/IO/protocol exceptions (and GuiderRpcException) over a long blocking RPC. The 202 already returned, so any escape must surface as the failed WS event and be contained — it must not become an unobserved task exception. Log-and-recover.")]
-    private async Task BuildDefectMapDarksInBackground(PHD2Guider guider, Phd2BuildDefectMapDarks rpcRequest) {
+    private async Task BuildDefectMapDarksInBackground(PHD2Guider guider, Phd2BuildDefectMapDarks rpcRequest, CancellationToken ct) {
         var p = rpcRequest.Parameters!;
         try {
             LogDefectMapBuildStarted(p.ExposureMs, p.FrameCount);
@@ -289,7 +289,7 @@ public sealed partial class GuiderService {
                 ["load_after"] = p.LoadAfter,
             });
             var result = await guider.BuildDefectMapDarksAsync(
-                p.ExposureMs, p.FrameCount, p.Notes, p.LoadAfter, CancellationToken.None).ConfigureAwait(false);
+                p.ExposureMs, p.FrameCount, p.Notes, p.LoadAfter, ct).ConfigureAwait(false);
             await EmitCalibrationEventAsync(DefectMapCompleteEvent, new JsonObject {
                 ["profile_id"] = result.ProfileId,
                 ["defect_map_path"] = result.DefectMapPath,
