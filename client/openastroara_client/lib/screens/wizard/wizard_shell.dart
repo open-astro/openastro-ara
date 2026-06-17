@@ -66,6 +66,10 @@ class WizardShell extends ConsumerWidget {
   // user doesn't lose their entries.
   Future<void> _saveAndExit(
       BuildContext context, WidgetRef ref, WizardController controller) async {
+    // snapshot() must return the live draft object: saveWizardProfile stamps
+    // draft.savedProfileId on the first attempt so a retry re-uses the same
+    // profile instead of orphaning a new one. If snapshot() is ever changed to
+    // return a copy, that idempotency guard silently breaks.
     final draft = controller.snapshot();
     // Capture the Navigator + Messenger BEFORE the async gap so a pop/snackbar is
     // safe even if the widget unmounts mid-save (otherwise an early

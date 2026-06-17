@@ -15,12 +15,15 @@ class ProfileMeta {
   });
 
   factory ProfileMeta.fromJson(Map<String, dynamic> json) {
-    // Daemon serializes with SnakeCaseLower (see Program.cs).
+    // Daemon serializes with SnakeCaseLower (see Program.cs). Coerce via
+    // toString() rather than `as String?` so a non-string field (e.g. a
+    // numeric id) degrades to a parseable value instead of throwing a
+    // TypeError during deserialization.
     return ProfileMeta(
-      id: json['id'] as String? ?? '',
-      name: json['name'] as String? ?? '',
-      createdUtc: DateTime.tryParse(json['created_utc'] as String? ?? ''),
-      updatedUtc: DateTime.tryParse(json['updated_utc'] as String? ?? ''),
+      id: json['id']?.toString() ?? '',
+      name: json['name']?.toString() ?? '',
+      createdUtc: DateTime.tryParse(json['created_utc']?.toString() ?? ''),
+      updatedUtc: DateTime.tryParse(json['updated_utc']?.toString() ?? ''),
     );
   }
 }
