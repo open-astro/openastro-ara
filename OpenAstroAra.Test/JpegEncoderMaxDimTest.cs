@@ -57,4 +57,12 @@ public class JpegEncoderMaxDimTest {
         var capped = JpegEncoder.EncodeColor(rgb, W, H, maxDim: 400);
         capped.Length.Should().BeLessThan(full.Length);
     }
+
+    [Test]
+    public void EncodeColor_maxDim_at_or_above_size_is_a_noop() {
+        var rgb = Gradient(W * H * 3);
+        var full = JpegEncoder.EncodeColor(rgb, W, H);
+        var uncapped = JpegEncoder.EncodeColor(rgb, W, H, maxDim: 5000); // larger than the image
+        uncapped.Should().Equal(full);
+    }
 }
