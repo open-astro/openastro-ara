@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../models/server.dart';
 import '../../services/profile_api.dart';
 import '../../state/saved_server_state.dart';
 import '../../state/wizard_state.dart';
@@ -15,7 +16,13 @@ import 'wizard_screens.dart';
 /// user hits Save Profile on Screen 18 (or Save & Exit at any point).
 class WizardShell extends ConsumerStatefulWidget {
   final void Function(ProfileDraftSnapshot snapshot)? onComplete;
-  const WizardShell({super.key, this.onComplete});
+
+  /// Builds the [ProfileApi] used to persist the profile. Defaults to the real
+  /// `ProfileApi.new`; widget tests inject a fake so the Save flow (spinner,
+  /// double-tap guard, navigation) can be exercised without a live daemon.
+  final ProfileApi Function(AraServer server)? createApi;
+
+  const WizardShell({super.key, this.onComplete, this.createApi});
 
   @override
   ConsumerState<WizardShell> createState() => _WizardShellState();
@@ -91,7 +98,7 @@ class _WizardShellState extends ConsumerState<WizardShell> {
       _showError(messenger, 'No active server — connect to a daemon before saving the profile.');
       return; // keep the wizard open; nothing to save against
     }
-    final api = ProfileApi(server);
+    final api = (widget.createApi ?? ProfileApi.new)(server);
 
     setState(() => _isSaving = true);
     showDialog<void>(
