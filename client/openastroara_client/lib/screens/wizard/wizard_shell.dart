@@ -67,9 +67,15 @@ class WizardShell extends ConsumerWidget {
   Future<void> _saveAndExit(
       BuildContext context, WidgetRef ref, WizardController controller) async {
     final draft = controller.snapshot();
+    // Capture the Navigator + Messenger BEFORE the async gap so a pop/snackbar is
+    // safe even if the widget unmounts mid-save (otherwise an early
+    // `!context.mounted` return would strand the non-dismissible spinner forever).
+    final nav = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+
     final server = ref.read(activeServerProvider);
     if (server == null) {
-      _showError(context, 'No active server — connect to a daemon before saving the profile.');
+      _showError(messenger, 'No active server — connect to a daemon before saving the profile.');
       return; // keep the wizard open; nothing to save against
     }
     final api = ProfileApi(server);
@@ -90,22 +96,19 @@ class WizardShell extends ConsumerWidget {
       error = 'Couldn\'t save the profile: $e';
     }
 
-    if (!context.mounted) return;
-    Navigator.of(context).pop(); // close the spinner
+    if (nav.mounted) nav.pop(); // close the spinner — independent of widget mount state
 
     if (error != null) {
-      // Still mounted here — the `if (!context.mounted) return` above guarantees it and
-      // there's no await in between, so no extra guard is needed.
-      _showError(context, error);
+      _showError(messenger, error);
       return; // keep the wizard open so the user can retry
     }
 
     onComplete?.call(ProfileDraftSnapshot(draft));
-    if (context.mounted) Navigator.of(context).pop(); // exit the wizard
+    if (nav.mounted) nav.pop(); // exit the wizard
   }
 
-  void _showError(BuildContext context, String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
+  void _showError(ScaffoldMessengerState messenger, String message) {
+    messenger.showSnackBar(
       SnackBar(content: Text(message), backgroundColor: AraColors.accentError),
     );
   }
