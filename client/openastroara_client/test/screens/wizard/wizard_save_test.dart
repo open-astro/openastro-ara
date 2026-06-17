@@ -94,5 +94,22 @@ void main() {
       final out = applyDraftToPhd2(const Phd2Settings(), d);
       expect(out.forceCalibrationEachSession, isTrue);
     });
+
+    test('applyDraftToPhd2 keeps a bracketed IPv6 host intact (last-colon split)', () {
+      final d = ProfileDraft();
+      d.guider.hostPort = '[::1]:4401';
+      final out = applyDraftToPhd2(const Phd2Settings(), d);
+      expect(out.host, '[::1]');
+      expect(out.port, 4401);
+    });
+
+    test('applyDraftToPhd2 with a bare host (no colon) keeps the base port', () {
+      final d = ProfileDraft();
+      d.guider.hostPort = 'guidepi';
+      const base = Phd2Settings(port: 4400);
+      final out = applyDraftToPhd2(base, d);
+      expect(out.host, 'guidepi');
+      expect(out.port, 4400);
+    });
   });
 }
