@@ -97,7 +97,9 @@ class WizardShell extends ConsumerWidget {
     Navigator.of(context).pop(); // close the spinner
 
     if (error != null) {
-      if (context.mounted) _showError(context, error);
+      // Still mounted here — the `if (!context.mounted) return` above guarantees it and
+      // there's no await in between, so no extra guard is needed.
+      _showError(context, error);
       return; // keep the wizard open so the user can retry
     }
 
