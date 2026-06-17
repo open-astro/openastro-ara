@@ -103,8 +103,10 @@ class WizardShell extends ConsumerWidget {
       return; // keep the wizard open so the user can retry
     }
 
-    onComplete?.call(ProfileDraftSnapshot(draft));
+    // Exit the wizard first, THEN notify — so if onComplete routes/pops, it can't
+    // race our pop into popping an unintended route.
     if (nav.mounted) nav.pop(); // exit the wizard
+    onComplete?.call(ProfileDraftSnapshot(draft));
   }
 
   void _showError(ScaffoldMessengerState messenger, String message) {

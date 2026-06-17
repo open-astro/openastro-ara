@@ -103,6 +103,15 @@ void main() {
       expect(out.port, 4401);
     });
 
+    test('applyDraftToPhd2 keeps a bracketed IPv6 host with no port intact', () {
+      final d = ProfileDraft();
+      d.guider.hostPort = '[::1]';
+      const base = Phd2Settings(port: 4400);
+      final out = applyDraftToPhd2(base, d);
+      expect(out.host, '[::1]');
+      expect(out.port, 4400, reason: 'no port appended → keep the base port');
+    });
+
     test('applyDraftToPhd2 with a bare host (no colon) keeps the base port', () {
       final d = ProfileDraft();
       d.guider.hostPort = 'guidepi';

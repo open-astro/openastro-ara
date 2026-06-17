@@ -16,6 +16,10 @@ import '../../state/settings/site_settings_state.dart';
 /// defaults for everything else (and for the screens 11–18 not built yet).
 
 SiteSettings applyDraftToSite(SiteSettings base, ProfileDraft d) {
+  // copyWith uses `?? base.field`, so a null override (an unset draft field, or a
+  // blanked string) preserves the base value. The string fields get an explicit
+  // trim/empty→null guard; the numeric fields are already nullable so a null is
+  // passed straight through to the same preserve-on-null behavior.
   return base.copyWith(
     siteName: (d.siteName?.trim().isNotEmpty ?? false) ? d.siteName!.trim() : null,
     latitudeDeg: d.latitudeDeg,
@@ -49,12 +53,23 @@ ImagingDefaults applyDraftToImaging(ImagingDefaults base, ProfileDraft d) {
 
 Phd2Settings applyDraftToPhd2(Phd2Settings base, ProfileDraft d) {
   final g = d.guider;
-  // Split on the LAST colon so a bracketed IPv6 literal ([::1]:4400) keeps its host
-  // intact; "host" (no colon) keeps the base port.
+  // Parse host[:port], handling bracketed IPv6:
+  //  - "[::1]"        → host only, no port (ends with ']')
+  //  - "[::1]:4400"   → split on the LAST colon (after the closing bracket)
+  //  - "localhost"    → host only
+  //  - "localhost:4400" → split on the colon
   final hp = g.hostPort.trim();
-  final idx = hp.lastIndexOf(':');
-  final hostPart = idx > 0 ? hp.substring(0, idx).trim() : hp;
-  final portPart = idx > 0 ? hp.substring(idx + 1).trim() : '';
+  final String hostPart;
+  final String portPart;
+  if (hp.endsWith(']')) {
+    // A bracketed IPv6 literal with no port — the colons are all inside the brackets.
+    hostPart = hp;
+    portPart = '';
+  } else {
+    final idx = hp.lastIndexOf(':');
+    hostPart = idx > 0 ? hp.substring(0, idx).trim() : hp;
+    portPart = idx > 0 ? hp.substring(idx + 1).trim() : '';
+  }
   final host = hostPart.isNotEmpty ? hostPart : base.host;
   final port = portPart.isNotEmpty ? (int.tryParse(portPart) ?? base.port) : base.port;
   return base.copyWith(
@@ -70,6 +85,10 @@ Phd2Settings applyDraftToPhd2(Phd2Settings base, ProfileDraft d) {
 
 /// Create a new active profile from the wizard draft and layer the configured
 /// sections on top. Throws on transport failure — the caller surfaces it.
+///
+/// Pass the **live** draft (not a copy): a successful create stamps its id onto
+/// `d.savedProfileId`, which a retry after a mid-save failure reads to re-use the
+/// same profile instead of orphaning a new one.
 Future<void> saveWizardProfile(ProfileApi api, ProfileDraft d) async {
   final name = (d.profileName?.trim().isNotEmpty ?? false)
       ? d.profileName!.trim()
