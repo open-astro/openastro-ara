@@ -133,6 +133,35 @@ public class FileProfileRepositoryTest {
     }
 
     [Test]
+    public void Load_ignores_foreign_and_misnamed_json_files() {
+        var profilesDir = Path.Combine(_dir, "profiles");
+        // A non-GUID-named JSON a future feature might drop alongside the profiles.
+        File.WriteAllText(Path.Combine(profilesDir, "index.json"), "{\"some\":\"thing\"}");
+        // A GUID-named file whose contents don't parse as a StoredProfileDto.
+        File.WriteAllText(
+            Path.Combine(profilesDir, Guid.NewGuid().ToString("N") + ".json"), "not json");
+
+        using var repo2 = new FileProfileRepository(_dir, _store);
+        // Only the seeded "Default" profile is recognized; the stray files are ignored.
+        repo2.List().Profiles.Should().ContainSingle().Which.Name.Should().Be("Default");
+    }
+
+    [Test]
+    public void Load_ignores_a_file_whose_name_mismatches_its_meta_id() {
+        // Create a real profile, then rename its file to a different GUID so the filename
+        // no longer matches the stored Meta.Id — Load must skip it (the guard against a
+        // foreign file that happens to deserialize).
+        var extra = _repo.Create("Extra", settings: null, makeActive: false);
+        var profilesDir = Path.Combine(_dir, "profiles");
+        File.Move(
+            Path.Combine(profilesDir, extra.Id.ToString("N") + ".json"),
+            Path.Combine(profilesDir, Guid.NewGuid().ToString("N") + ".json"));
+
+        using var repo2 = new FileProfileRepository(_dir, _store);
+        repo2.List().Profiles.Should().ContainSingle().Which.Name.Should().Be("Default");
+    }
+
+    [Test]
     public void Live_put_mirrors_into_the_active_profile_file() {
         SetLatitude(33);
         var id = _repo.ActiveId!.Value;
