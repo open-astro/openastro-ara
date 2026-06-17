@@ -67,15 +67,12 @@ class WizardShell extends ConsumerWidget {
   Future<void> _saveAndExit(
       BuildContext context, WidgetRef ref, WizardController controller) async {
     final draft = controller.snapshot();
-    final servers = ref.read(savedServersProvider).maybeWhen(
-          data: (list) => list,
-          orElse: () => const [],
-        );
-    if (servers.isEmpty) {
+    final server = ref.read(activeServerProvider);
+    if (server == null) {
       _showError(context, 'No active server — connect to a daemon before saving the profile.');
       return; // keep the wizard open; nothing to save against
     }
-    final api = ProfileApi(servers.last);
+    final api = ProfileApi(server);
 
     showDialog<void>(
       context: context,
