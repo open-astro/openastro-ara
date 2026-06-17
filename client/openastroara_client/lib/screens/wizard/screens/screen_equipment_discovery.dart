@@ -354,6 +354,19 @@ class _DiscoverySheetState extends State<_DiscoverySheet> {
 
   void _rescan() => setState(() => _future = _run());
 
+  // Height for the discovered-device list: cap at 300 but shrink on short
+  // screens (e.g. a phone in landscape) so the sheet never overflows. Returns
+  // a double directly — no clamp()/toDouble() round-trip.
+  static const double _minListHeight = 180;
+  static const double _maxListHeight = 300;
+
+  double _listHeight(BuildContext context) {
+    final desired = MediaQuery.of(context).size.height * 0.45;
+    if (desired < _minListHeight) return _minListHeight;
+    if (desired > _maxListHeight) return _maxListHeight;
+    return desired;
+  }
+
   @override
   Widget build(BuildContext context) {
     return SafeArea(
@@ -384,11 +397,7 @@ class _DiscoverySheetState extends State<_DiscoverySheet> {
             ),
             const Divider(height: 1, color: AraColors.border),
             SizedBox(
-              // Adaptive: cap at 300 but shrink on short screens so the sheet
-              // never overflows (e.g. a phone in landscape).
-              height: (MediaQuery.of(context).size.height * 0.45)
-                  .clamp(180, 300)
-                  .toDouble(),
+              height: _listHeight(context),
               child: FutureBuilder<List<DiscoveredDevice>>(
                 future: _future,
                 builder: (context, snap) {
