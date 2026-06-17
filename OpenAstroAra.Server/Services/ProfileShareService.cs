@@ -53,7 +53,7 @@ public sealed class ProfileShareService : IProfileShareService {
         var manifest = new ProfileShareManifest(
             SchemaVersion: ProfileShareManifest.CurrentSchemaVersion,
             SharedAt: DateTimeOffset.UtcNow,
-            SourceAraVersion: SourceAraVersion(),
+            SourceAraVersion: SourceAraVersion,
             // §70.3 donor attribution is opt-in at export time; the toggle + comment
             // arrive with the export-options request body in a follow-up. For now the
             // profile name is the only attribution and the donor block is omitted.
@@ -61,6 +61,11 @@ public sealed class ProfileShareService : IProfileShareService {
             RigDescription: rig,
             Settings: stripped);
 
+        // Serialize once to UTF-8 (source-gen, AOT-safe), then parse back to a
+        // JsonElement: ProfileShareDto.Manifest is typed as JsonElement (returned
+        // inline), and this is the AOT-safe way to get one from a typed object
+        // without reflection. The same byte[] also gives the true PayloadBytes, so
+        // the round-trip isn't redundant — don't "optimize" it into a single step.
         var utf8 = JsonSerializer.SerializeToUtf8Bytes(
             manifest, AraJsonSerializerContext.Default.ProfileShareManifest);
         using var doc = JsonDocument.Parse(utf8);
@@ -158,8 +163,12 @@ public sealed class ProfileShareService : IProfileShareService {
     private const int DefaultPhd2Port = 4400;
 
     /// <summary>The assembly version (the part before any <c>+gitSha</c> suffix in
-    /// the informational version), e.g. <c>0.0.1-ara.6</c>; <c>unknown</c> if absent.</summary>
-    private static string SourceAraVersion() {
+    /// the informational version), e.g. <c>0.0.1-ara.6</c>; <c>unknown</c> if absent.
+    /// Computed once at class load — the value never changes at runtime, so this
+    /// avoids reflecting on every export.</summary>
+    private static readonly string SourceAraVersion = ComputeSourceAraVersion();
+
+    private static string ComputeSourceAraVersion() {
         var info = typeof(ProfileShareService).Assembly
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
         if (string.IsNullOrEmpty(info)) return "unknown";

@@ -181,14 +181,15 @@ public class ProfileShareServiceTest {
         using var repo = new FakeRepo(DonorSnapshot());
         var share = await new ProfileShareService(repo).ExportAsync(ProfileId, CancellationToken.None);
         var raw = share!.Manifest.GetRawText();
+        // Only distinctive STRING sentinels here — numeric donor values (lat/long,
+        // PHD2 port) are asserted field-by-field in Export_strips_paths_... instead,
+        // since a bare substring scan for a number like "4401" would false-positive
+        // on any future field that happens to contain those digits.
         string[] mustNotAppear = {
             PushSecret, TelegramSecret,
             @"C:\Astro\Captures", @"C:\Program Files\astap\astap.exe", @"C:\astap\db",
             "Joey's backyard", "America/Los_Angeles",
             "guidepi.local", "Donor PHD2 profile",
-            // Numeric donor identity: latitude / longitude (stripped to 0) and the
-            // donor's PHD2 port 4401 (reset to the 4400 default).
-            "45.52", "-122.68", "4401",
         };
         foreach (var sentinel in mustNotAppear) {
             raw.Should().NotContain(sentinel, "'{0}' is host/identity-specific and must be stripped", sentinel);
