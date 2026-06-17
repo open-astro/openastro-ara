@@ -90,11 +90,30 @@ Future<void> saveWizardProfile(ProfileApi api, ProfileDraft d) async {
 
   // Each section is an independent GET-overlay-PUT against the active profile, so
   // run them concurrently rather than serially (4 round-trips → ~1 round-trip of
-  // latency). Future.wait surfaces the first failure to the caller.
-  await Future.wait([
-    api.getSiteSettings().then((s) => api.putSiteSettings(applyDraftToSite(s, d))),
-    api.getOptics().then((s) => api.putOptics(applyDraftToOptics(s, d))),
-    api.getImagingDefaults().then((s) => api.putImagingDefaults(applyDraftToImaging(s, d))),
-    api.getPhd2Settings().then((s) => api.putPhd2Settings(applyDraftToPhd2(s, d))),
-  ]);
+  // latency). Collect every failure (rather than letting Future.wait drop all but
+  // the first) so a partial save reports exactly which sections didn't apply.
+  final errors = (await Future.wait([
+    _trySave(() async => api.putSiteSettings(applyDraftToSite(await api.getSiteSettings(), d))),
+    _trySave(() async => api.putOptics(applyDraftToOptics(await api.getOptics(), d))),
+    _trySave(() async =>
+        api.putImagingDefaults(applyDraftToImaging(await api.getImagingDefaults(), d))),
+    _trySave(() async => api.putPhd2Settings(applyDraftToPhd2(await api.getPhd2Settings(), d))),
+  ]))
+      .whereType<Object>()
+      .toList();
+  if (errors.isNotEmpty) {
+    throw Exception('Failed to save ${errors.length} profile section(s): '
+        '${errors.map((e) => e.toString()).join('; ')}');
+  }
+}
+
+/// Runs a section save and captures its error (null = success) so a concurrent
+/// batch can report every failure instead of only the first.
+Future<Object?> _trySave(Future<void> Function() body) async {
+  try {
+    await body();
+    return null;
+  } catch (e) {
+    return e;
+  }
 }
