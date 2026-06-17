@@ -384,7 +384,11 @@ class _DiscoverySheetState extends State<_DiscoverySheet> {
             ),
             const Divider(height: 1, color: AraColors.border),
             SizedBox(
-              height: 300,
+              // Adaptive: cap at 300 but shrink on short screens so the sheet
+              // never overflows (e.g. a phone in landscape).
+              height: (MediaQuery.of(context).size.height * 0.45)
+                  .clamp(180, 300)
+                  .toDouble(),
               child: FutureBuilder<List<DiscoveredDevice>>(
                 future: _future,
                 builder: (context, snap) {

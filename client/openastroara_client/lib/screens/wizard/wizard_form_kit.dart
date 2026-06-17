@@ -30,6 +30,7 @@ class WizardScreenScaffold extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    assert(ProfileWizard.steps.containsKey(step), 'Unknown wizard step $step');
     final info = ProfileWizard.steps[step]!;
     // Watch only the skipped-set membership so the banner appears/clears when
     // the user toggles Skip, without rebuilding on unrelated draft edits.

@@ -64,6 +64,17 @@ void main() {
     expect(find.textContaining('1.09'), findsOneWidget);
   });
 
+  testWidgets('signed field keeps prior value on a partial "-" keystroke',
+      (tester) async {
+    final container = await pump(tester, const ScreenRotator());
+    final minAngle = find.byType(TextField).first; // Min angle is first field.
+    await tester.enterText(minAngle, '5');
+    await tester.enterText(minAngle, '-'); // mid-typing a negative number
+    final r = container.read(wizardControllerProvider).draft.rotator;
+    // The bare "-" must not wipe the field back to null.
+    expect(r.minAngleDeg, 5);
+  });
+
   testWidgets('builders map wires the real gear screens for steps 1-10',
       (tester) async {
     late BuildContext ctx;

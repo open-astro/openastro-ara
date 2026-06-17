@@ -8,14 +8,23 @@ import '../wizard_form_kit.dart';
 
 // ── shared parse helpers ────────────────────────────────────────────────────
 
-double? _toDouble(String raw) {
-  final t = raw.trim();
-  return t.isEmpty ? null : double.tryParse(t);
-}
-
 int? _toInt(String raw) {
   final t = raw.trim();
   return t.isEmpty ? null : int.tryParse(t);
+}
+
+/// Assign a parsed double to the draft: clear on empty, but KEEP the prior
+/// value on partial/invalid input (a lone "-" or "1." mid-keystroke) instead
+/// of nulling it — otherwise typing a negative number transiently wipes the
+/// field. Mirrors the guard in screen_profile_basics.dart.
+void _assignDouble(String raw, void Function(double?) set) {
+  final t = raw.trim();
+  if (t.isEmpty) {
+    set(null);
+    return;
+  }
+  final v = double.tryParse(t);
+  if (v != null) set(v);
 }
 
 ProfileDraft _draftOf(WidgetRef ref) =>
@@ -57,7 +66,8 @@ class _ScreenTelescopeState extends ConsumerState<ScreenTelescope> {
           initialValue: _t.focalLengthMm?.toString(),
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           inputFormatters: WizardInput.unsignedDecimal,
-          onChanged: (v) => setState(() => _t.focalLengthMm = _toDouble(v)),
+          onChanged: (v) =>
+              setState(() => _assignDouble(v, (d) => _t.focalLengthMm = d)),
         ),
         WizardTextField(
           label: 'Aperture (mm)',
@@ -65,7 +75,8 @@ class _ScreenTelescopeState extends ConsumerState<ScreenTelescope> {
           initialValue: _t.apertureMm?.toString(),
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           inputFormatters: WizardInput.unsignedDecimal,
-          onChanged: (v) => setState(() => _t.apertureMm = _toDouble(v)),
+          onChanged: (v) =>
+              setState(() => _assignDouble(v, (d) => _t.apertureMm = d)),
         ),
         WizardDerivedValue(label: 'Focal ratio', value: _focalRatio),
       ],
@@ -113,7 +124,7 @@ class _ScreenCameraState extends ConsumerState<ScreenCamera> {
           keyboardType:
               const TextInputType.numberWithOptions(signed: true, decimal: true),
           inputFormatters: WizardInput.signedDecimal,
-          onChanged: (v) => _c.coolingTargetC = _toDouble(v),
+          onChanged: (v) => _assignDouble(v, (d) => _c.coolingTargetC = d),
         ),
         WizardTextField(
           label: 'Cooler ramp rate (°C/min)',
@@ -121,7 +132,8 @@ class _ScreenCameraState extends ConsumerState<ScreenCamera> {
           hint: 'default 1',
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           inputFormatters: WizardInput.unsignedDecimal,
-          onChanged: (v) => _c.coolerRampRateCPerMin = _toDouble(v),
+          onChanged: (v) =>
+              _assignDouble(v, (d) => _c.coolerRampRateCPerMin = d),
         ),
         WizardDropdown<CoolerWarmupMode>(
           label: 'Warmup at session end',
@@ -165,7 +177,8 @@ class _ScreenCameraState extends ConsumerState<ScreenCamera> {
           helperText: 'Auto-filled from Alpaca when connected; editable.',
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           inputFormatters: WizardInput.unsignedDecimal,
-          onChanged: (v) => setState(() => _c.pixelSizeMicrons = _toDouble(v)),
+          onChanged: (v) =>
+              setState(() => _assignDouble(v, (d) => _c.pixelSizeMicrons = d)),
         ),
         WizardDerivedValue(label: 'Image scale', value: _imageScale),
       ],
@@ -304,7 +317,7 @@ class _ScreenFocuserState extends ConsumerState<ScreenFocuser> {
           initialValue: _f.stepSizeMicrons?.toString(),
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           inputFormatters: WizardInput.unsignedDecimal,
-          onChanged: (v) => _f.stepSizeMicrons = _toDouble(v),
+          onChanged: (v) => _assignDouble(v, (d) => _f.stepSizeMicrons = d),
         ),
         const WizardSectionHeader('Backlash compensation'),
         WizardTextField(
@@ -336,7 +349,8 @@ class _ScreenFocuserState extends ConsumerState<ScreenFocuser> {
             keyboardType: const TextInputType.numberWithOptions(
                 signed: true, decimal: true),
             inputFormatters: WizardInput.signedDecimal,
-            onChanged: (v) => _f.temperatureCompensationSlope = _toDouble(v),
+            onChanged: (v) =>
+                _assignDouble(v, (d) => _f.temperatureCompensationSlope = d),
           ),
       ],
     );
@@ -371,7 +385,7 @@ class _ScreenMountState extends ConsumerState<ScreenMount> {
           initialValue: _m.slewRateDegPerSec?.toString(),
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           inputFormatters: WizardInput.unsignedDecimal,
-          onChanged: (v) => _m.slewRateDegPerSec = _toDouble(v),
+          onChanged: (v) => _assignDouble(v, (d) => _m.slewRateDegPerSec = d),
         ),
         WizardDropdown<ParkPositionMode>(
           label: 'Park position',
@@ -438,7 +452,7 @@ class _ScreenRotatorState extends ConsumerState<ScreenRotator> {
           keyboardType:
               const TextInputType.numberWithOptions(signed: true, decimal: true),
           inputFormatters: WizardInput.signedDecimal,
-          onChanged: (v) => _r.minAngleDeg = _toDouble(v),
+          onChanged: (v) => _assignDouble(v, (d) => _r.minAngleDeg = d),
         ),
         WizardTextField(
           label: 'Max angle (°)',
@@ -446,14 +460,14 @@ class _ScreenRotatorState extends ConsumerState<ScreenRotator> {
           keyboardType:
               const TextInputType.numberWithOptions(signed: true, decimal: true),
           inputFormatters: WizardInput.signedDecimal,
-          onChanged: (v) => _r.maxAngleDeg = _toDouble(v),
+          onChanged: (v) => _assignDouble(v, (d) => _r.maxAngleDeg = d),
         ),
         WizardTextField(
           label: 'Angle step (°)',
           initialValue: _r.stepDeg?.toString(),
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           inputFormatters: WizardInput.unsignedDecimal,
-          onChanged: (v) => _r.stepDeg = _toDouble(v),
+          onChanged: (v) => _assignDouble(v, (d) => _r.stepDeg = d),
         ),
         SwitchListTile.adaptive(
           contentPadding: EdgeInsets.zero,
@@ -495,20 +509,18 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
           initialValue: _g.ditherPixels.toString(),
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           inputFormatters: WizardInput.unsignedDecimal,
-          onChanged: (v) {
-            final d = _toDouble(v);
+          onChanged: (v) => _assignDouble(v, (d) {
             if (d != null) _g.ditherPixels = d;
-          },
+          }),
         ),
         WizardTextField(
           label: 'Settle threshold (px)',
           initialValue: _g.settleThresholdPx.toString(),
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           inputFormatters: WizardInput.unsignedDecimal,
-          onChanged: (v) {
-            final d = _toDouble(v);
+          onChanged: (v) => _assignDouble(v, (d) {
             if (d != null) _g.settleThresholdPx = d;
-          },
+          }),
         ),
         WizardTextField(
           label: 'Settle time (s)',
