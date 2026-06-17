@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/io.dart';
 
 import '../models/server.dart';
@@ -190,12 +191,20 @@ class WsEventStream {
     final socket = _socket;
     _sub = null;
     _socket = null;
-    if (sub != null) unawaited(sub.cancel());
+    // Surface (don't silently drop) a teardown failure: a faulted drain can make
+    // cancel()/close() reject, and a bare unawaited would swallow it.
+    if (sub != null) {
+      unawaited(sub.cancel().catchError(
+          (Object e) => debugPrint('[ws] subscription cancel during teardown failed: $e')));
+    }
     // Finalize the old socket too — on the onError path (protocol/TLS fault, a
     // frame that kills the channel before a clean close) the sink is otherwise
     // never closed, leaking a half-open TCP connection across every reconnect.
     // On the onDone path close() is a harmless no-op on the already-closed sink.
-    if (socket != null) unawaited(socket.close());
+    if (socket != null) {
+      unawaited(socket.close().catchError(
+          (Object e) => debugPrint('[ws] socket close during teardown failed: $e')));
+    }
     if (_disposed) return;
     _setConnState(WsConnectionState.reconnecting);
     final i = _reconnectAttempt < _backoff.length ? _reconnectAttempt : _backoff.length - 1;
