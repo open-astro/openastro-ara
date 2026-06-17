@@ -222,16 +222,16 @@ public static class SystemEndpoints {
         profiles.MapPost("/share-import", () =>
                 Results.Problem(
                     statusCode: StatusCodes.Status501NotImplemented,
-                    title: "Profile share import is not implemented yet",
-                    detail: "§70.4 import preview lands in a follow-up sub-PR."))
+                    title: "Profile share import is not available yet",
+                    detail: "Importing a shared profile isn't supported in this version."))
             .Produces(StatusCodes.Status501NotImplemented)
             .WithName("PreviewProfileShareImport");
 
         profiles.MapPost("/share-import/commit", () =>
                 Results.Problem(
                     statusCode: StatusCodes.Status501NotImplemented,
-                    title: "Profile share import is not implemented yet",
-                    detail: "§70.4 import commit lands in a follow-up sub-PR."))
+                    title: "Profile share import is not available yet",
+                    detail: "Importing a shared profile isn't supported in this version."))
             .Produces(StatusCodes.Status501NotImplemented)
             .WithName("CommitProfileShareImport");
 

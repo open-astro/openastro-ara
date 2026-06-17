@@ -186,6 +186,9 @@ public class ProfileShareServiceTest {
             @"C:\Astro\Captures", @"C:\Program Files\astap\astap.exe", @"C:\astap\db",
             "Joey's backyard", "America/Los_Angeles",
             "guidepi.local", "Donor PHD2 profile",
+            // Numeric donor identity: latitude / longitude (stripped to 0) and the
+            // donor's PHD2 port 4401 (reset to the 4400 default).
+            "45.52", "-122.68", "4401",
         };
         foreach (var sentinel in mustNotAppear) {
             raw.Should().NotContain(sentinel, "'{0}' is host/identity-specific and must be stripped", sentinel);
