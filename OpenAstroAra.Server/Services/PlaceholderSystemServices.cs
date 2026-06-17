@@ -13,41 +13,8 @@
 #endregion "copyright"
 
 using OpenAstroAra.Server.Contracts;
-using System.Text.Json;
 
 namespace OpenAstroAra.Server.Services;
-
-/// <summary>
-/// Phase 13.10 — placeholder <see cref="IProfileShareService"/>. Export
-/// returns a synthetic share record pointing at a non-existent download
-/// URL; import preview returns a synthetic token that import-commit
-/// resolves to a fresh GUID. Real §70 share-protocol manifest validation +
-/// section-by-section merge land alongside multi-profile support.
-/// </summary>
-public sealed class PlaceholderProfileShareService : IProfileShareService {
-    private static readonly JsonDocument _emptyManifest = JsonDocument.Parse("{}");
-
-    public Task<ProfileShareDto> ExportAsync(Guid profileId, CancellationToken ct) =>
-        Task.FromResult(new ProfileShareDto(
-            ProfileId: profileId,
-            ProfileName: "Sample profile",
-            Manifest: _emptyManifest.RootElement.Clone(),
-            PayloadBytes: 4_096,
-            DownloadUrl: new Uri($"/api/v1/profiles/share/{profileId}/payload", UriKind.Relative)));
-
-    public Task<ProfileShareImportPreviewDto> ImportPreviewAsync(JsonElement manifest, CancellationToken ct) =>
-        Task.FromResult(new ProfileShareImportPreviewDto(
-            ImportToken: Guid.NewGuid(),
-            ProfileName: "Imported profile (placeholder)",
-            Warnings: Array.Empty<string>(),
-            DroppedFields: Array.Empty<string>(),
-            ExpiresUtc: DateTimeOffset.UtcNow.AddMinutes(15)));
-
-    public Task<Guid> ImportCommitAsync(Guid importToken, CancellationToken ct) =>
-        // Real impl resolves the import-token → manifest, applies it,
-        // returns the new profile's id. Placeholder mints one.
-        Task.FromResult(Guid.NewGuid());
-}
 
 /// <summary>
 /// Phase 13.10 — placeholder <see cref="IBackupStreamService"/>. Subscribe

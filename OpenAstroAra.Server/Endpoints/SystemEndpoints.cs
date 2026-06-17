@@ -206,8 +206,10 @@ public static class SystemEndpoints {
         var profiles = app.MapGroup("/api/v1/profiles").WithTags("ProfileShare");
 
         profiles.MapPost("/{id:guid}/share-export",
-                async (Guid id, IProfileShareService svc, CancellationToken ct) =>
-                    Results.Ok(await svc.ExportAsync(id, ct)))
+                async (Guid id, IProfileShareService svc, CancellationToken ct) => {
+                    var share = await svc.ExportAsync(id, ct);
+                    return share is null ? Results.NotFound() : Results.Ok(share);
+                })
             .Produces<ProfileShareDto>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("ExportProfileShare");
