@@ -47,9 +47,10 @@ final savedServersProvider =
 /// names that rule in one place so it's explicit and can evolve (e.g. into an
 /// explicit "default-on-launch" selection) without hunting down `.last` usages.
 final activeServerProvider = Provider<AraServer?>((ref) {
-  final servers = ref.watch(savedServersProvider).maybeWhen(
-        data: (list) => list,
-        orElse: () => const <AraServer>[],
-      );
-  return servers.isEmpty ? null : servers.last;
+  // asData?.value is null while the saved-servers list is still loading (initial
+  // async storage read) or on error, and the list once it's data — so a null
+  // here means "no active server yet", whether not-yet-loaded or genuinely empty.
+  // Both collapse to the same safe, retryable outcome at the call site.
+  final servers = ref.watch(savedServersProvider).asData?.value;
+  return (servers == null || servers.isEmpty) ? null : servers.last;
 });

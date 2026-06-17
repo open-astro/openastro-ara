@@ -72,6 +72,11 @@ Phd2Settings applyDraftToPhd2(Phd2Settings base, ProfileDraft d) {
     hostPart = hp;
     portPart = '';
   } else {
+    // Reached only by `[ipv6]:port`, `host:port`, `host`, or `:port` — the
+    // bracketed-no-port and bare-IPv6 cases are handled above. So for a
+    // bracketed address here (`[::1]:4401`) lastIndexOf(':') lands on the colon
+    // *after* the `]`, i.e. the real port separator; the in-bracket colons never
+    // win because a value with a port can't also end in `]`.
     final idx = hp.lastIndexOf(':');
     // >= 0 (not > 0): a leading-colon ":4400" yields an empty host (→ base host)
     // and port 4400, rather than a nonsense "host = ':4400'".

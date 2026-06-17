@@ -121,7 +121,8 @@ class _WizardShellState extends ConsumerState<WizardShell> {
     }
 
     if (nav.mounted) nav.pop(); // close the spinner — independent of widget mount state
-    if (mounted) setState(() => _isSaving = false);
+    _isSaving = false; // always clear the guard; only the rebuild needs a mount check
+    if (mounted) setState(() {});
 
     if (error != null) {
       _showError(messenger, error);
