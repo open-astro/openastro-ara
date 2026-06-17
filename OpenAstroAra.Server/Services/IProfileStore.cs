@@ -27,6 +27,10 @@ public interface IProfileStore {
     /// Raised after any section is replaced via a Put. Subscribers (the §14e store-backed
     /// <c>IProfileService</c>) re-read through the Get methods; implementations raise outside their
     /// internal lock so a read-back can't deadlock.
+    /// <para>Implementations MUST raise this <b>synchronously</b> on the thread that performed the
+    /// Put — do not marshal it to a thread pool / <c>Task.Run</c>. <see cref="FileProfileRepository"/>
+    /// relies on synchronous dispatch to suppress its active-file mirror while it applies a
+    /// multi-section snapshot during profile-select.</para>
     /// </summary>
     event System.EventHandler? Changed;
 

@@ -17,6 +17,15 @@ using OpenAstroAra.Server.Contracts;
 
 namespace OpenAstroAra.Server.Services;
 
+/// <summary>Outcome of <see cref="IProfileRepository.Delete"/>, decided atomically under the
+/// repository lock so the caller can map a status code without a racy pre-read.</summary>
+public enum ProfileDeleteResult {
+    Deleted,
+    NotFound,
+    RefusedActive,
+    RefusedLastRemaining,
+}
+
 /// <summary>
 /// §37 multi-profile management — the known-profiles set (§30) backed by
 /// <c>{profileDir}/profiles/{id}.json</c>. The active profile's live settings flow
@@ -24,7 +33,7 @@ namespace OpenAstroAra.Server.Services;
 /// named profiles and which one is active, and keeps the active profile's file in
 /// sync with the live store.
 /// </summary>
-public interface IProfileRepository {
+public interface IProfileRepository : IDisposable {
     /// <summary>The known profiles + which is active.</summary>
     ProfileListDto List();
 
@@ -46,11 +55,11 @@ public interface IProfileRepository {
     bool Rename(Guid id, string name);
 
     /// <summary>
-    /// Delete a profile. Refused (returns false) for an unknown id, the active profile,
-    /// or the last remaining profile — there must always be an active profile to fall
-    /// back to.
+    /// Delete a profile. Refused for the active profile or the last remaining profile —
+    /// there must always be an active profile to fall back to. The decision is made
+    /// atomically; see <see cref="ProfileDeleteResult"/>.
     /// </summary>
-    bool Delete(Guid id);
+    ProfileDeleteResult Delete(Guid id);
 
     /// <summary>
     /// Make <paramref name="id"/> active: load its settings into the live store and

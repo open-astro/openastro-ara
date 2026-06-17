@@ -98,7 +98,10 @@ public sealed partial class FileProfileRepository : IProfileRepository, IDisposa
             var now = DateTimeOffset.UtcNow;
             var meta = new ProfileMetaDto(Guid.NewGuid(), NormalizeName(name), now, now);
             var snap = settings ?? ProfileStoreSnapshot.Capture(_liveStore);
-            WriteFile(new StoredProfileDto(meta, snap));
+            if (!WriteFile(new StoredProfileDto(meta, snap))) {
+                // Don't register a profile we couldn't persist — it would vanish on restart.
+                throw new IOException($"Failed to write profile file for '{meta.Name}'.");
+            }
             _metas[meta.Id] = meta;
 
             // The very first profile must be active; otherwise honor the caller.
@@ -117,20 +120,20 @@ public sealed partial class FileProfileRepository : IProfileRepository, IDisposa
             var stored = ReadFile(id);
             if (stored is null) return false;
             var updated = meta with { Name = NormalizeName(name), UpdatedUtc = DateTimeOffset.UtcNow };
-            WriteFile(stored with { Meta = updated });
+            if (!WriteFile(stored with { Meta = updated })) return false;
             _metas[id] = updated;
             return true;
         }
     }
 
-    public bool Delete(Guid id) {
+    public ProfileDeleteResult Delete(Guid id) {
         lock (_lock) {
-            if (!_metas.ContainsKey(id)) return false;
-            if (_activeId == id) return false;       // can't delete the active profile
-            if (_metas.Count <= 1) return false;     // always keep at least one
+            if (!_metas.ContainsKey(id)) return ProfileDeleteResult.NotFound;
+            if (_activeId == id) return ProfileDeleteResult.RefusedActive;
+            if (_metas.Count <= 1) return ProfileDeleteResult.RefusedLastRemaining;
             TryDeleteFile(id);
             _metas.Remove(id);
-            return true;
+            return ProfileDeleteResult.Deleted;
         }
     }
 
@@ -175,11 +178,16 @@ public sealed partial class FileProfileRepository : IProfileRepository, IDisposa
     private void PersistActiveFile(Guid id, ProfileSnapshotDto snap) {
         if (!_metas.TryGetValue(id, out var meta)) return;
         var updated = meta with { UpdatedUtc = DateTimeOffset.UtcNow };
-        WriteFile(new StoredProfileDto(updated, snap));
-        _metas[id] = updated;
+        // Only advance the in-memory meta if the file actually persisted, so the cache can't
+        // claim an UpdatedUtc the disk doesn't have.
+        if (WriteFile(new StoredProfileDto(updated, snap))) _metas[id] = updated;
     }
 
     private void Load() {
+        // Reclaim any *.tmp orphaned by a write hard-killed between WriteAllText and Move
+        // (the {id}.json.tmp / active.id.tmp siblings). They don't match the *.json glob so
+        // they're harmless, but they'd accumulate — same boot sweep as §43-2 / §55.1.
+        SweepTempFiles();
         foreach (var path in SafeEnumerateProfileFiles()) {
             try {
                 var json = File.ReadAllText(path);
@@ -216,6 +224,20 @@ public sealed partial class FileProfileRepository : IProfileRepository, IDisposa
         }
     }
 
+    private void SweepTempFiles() {
+        try {
+            foreach (var tmp in Directory.EnumerateFiles(_dir, "*.tmp")) {
+                try {
+                    File.Delete(tmp);
+                } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+                    LogPersistFailed(ex, tmp);
+                }
+            }
+        } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+            LogLoadFailed(ex, _dir);
+        }
+    }
+
     private IEnumerable<string> SafeEnumerateProfileFiles() {
         try {
             return Directory.EnumerateFiles(_dir, "*.json").ToList();
@@ -237,15 +259,19 @@ public sealed partial class FileProfileRepository : IProfileRepository, IDisposa
         }
     }
 
-    private void WriteFile(StoredProfileDto stored) {
+    // True on success. Callers must not mutate the in-memory _metas unless this returns
+    // true, or the cache would diverge from disk (and silently lose the profile on restart).
+    private bool WriteFile(StoredProfileDto stored) {
         var path = FilePath(stored.Meta.Id);
         var tmp = path + ".tmp";
         try {
             var json = JsonSerializer.Serialize(stored, _indented.StoredProfileDto);
             File.WriteAllText(tmp, json);
             File.Move(tmp, path, overwrite: true);
+            return true;
         } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
             LogPersistFailed(ex, path);
+            return false;
         }
     }
 
@@ -280,9 +306,15 @@ public sealed partial class FileProfileRepository : IProfileRepository, IDisposa
         }
     }
 
+    // Profile names are user-facing labels, not free-form blobs — trim, default when empty,
+    // and cap the length so a pathological caller can't store a multi-MB name to disk and
+    // echo it in every List() response.
+    private const int MaxNameLength = 120;
+
     private static string NormalizeName(string name) {
         var trimmed = (name ?? string.Empty).Trim();
-        return string.IsNullOrEmpty(trimmed) ? "Untitled profile" : trimmed;
+        if (string.IsNullOrEmpty(trimmed)) return "Untitled profile";
+        return trimmed.Length > MaxNameLength ? trimmed[..MaxNameLength] : trimmed;
     }
 
     public void Dispose() {

@@ -106,13 +106,17 @@ public class FileProfileRepositoryTest {
     [Test]
     public void Delete_refuses_active_and_last_but_removes_an_extra() {
         var activeId = _repo.ActiveId!.Value;
-        _repo.Delete(activeId).Should().BeFalse("can't delete the active profile");
+        _repo.Delete(activeId).Should().Be(ProfileDeleteResult.RefusedActive);
+        _repo.Delete(Guid.NewGuid()).Should().Be(ProfileDeleteResult.NotFound);
 
         var b = _repo.Create("B", settings: null, makeActive: false);
-        _repo.Delete(b.Id).Should().BeTrue();
+        _repo.Delete(b.Id).Should().Be(ProfileDeleteResult.Deleted);
         _repo.List().Profiles.Should().ContainSingle().Which.Id.Should().Be(activeId);
 
-        _repo.Delete(activeId).Should().BeFalse("can't delete the last remaining profile");
+        // The last remaining profile is also the active one, so the active guard fires first;
+        // RefusedLastRemaining is the defensive fallback for the (normally impossible) case of
+        // a populated set with no active profile.
+        _repo.Delete(activeId).Should().Be(ProfileDeleteResult.RefusedActive);
     }
 
     [Test]
@@ -120,6 +124,12 @@ public class FileProfileRepositoryTest {
         var id = _repo.ActiveId!.Value;
         _repo.Rename(id, "  Backyard  ").Should().BeTrue();
         _repo.List().Profiles.Single(p => p.Id == id).Name.Should().Be("Backyard");
+    }
+
+    [Test]
+    public void Create_caps_an_overlong_name() {
+        var meta = _repo.Create(new string('x', 500), settings: null, makeActive: false);
+        meta.Name.Length.Should().BeLessThanOrEqualTo(120);
     }
 
     [Test]

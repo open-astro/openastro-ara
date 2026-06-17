@@ -13,7 +13,6 @@
 #endregion "copyright"
 
 using System;
-using System.Linq;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -65,21 +64,20 @@ public static class ProfilesEndpoints {
             .WithName("RenameProfile")
             .WithSummary("Rename a profile.");
 
-        profiles.MapDelete("/{id:guid}", (Guid id, IProfileRepository repo) => {
-                var list = repo.List();
-                if (list.Profiles.All(p => p.Id != id)) return Results.NotFound();
-                if (list.ActiveId == id) {
-                    return Results.Problem(
+        profiles.MapDelete("/{id:guid}", (Guid id, IProfileRepository repo) =>
+                // The repository decides atomically under its lock, so a concurrent select
+                // can't slip between an existence pre-check and the delete (TOCTOU).
+                repo.Delete(id) switch {
+                    ProfileDeleteResult.Deleted => Results.NoContent(),
+                    ProfileDeleteResult.NotFound => Results.NotFound(),
+                    ProfileDeleteResult.RefusedActive => Results.Problem(
                         detail: "Cannot delete the active profile — select another profile first.",
-                        statusCode: StatusCodes.Status409Conflict);
-                }
-                if (list.Profiles.Count <= 1) {
-                    return Results.Problem(
+                        statusCode: StatusCodes.Status409Conflict),
+                    ProfileDeleteResult.RefusedLastRemaining => Results.Problem(
                         detail: "Cannot delete the last remaining profile.",
-                        statusCode: StatusCodes.Status409Conflict);
-                }
-                return repo.Delete(id) ? Results.NoContent() : Results.NotFound();
-            })
+                        statusCode: StatusCodes.Status409Conflict),
+                    _ => Results.Problem(statusCode: StatusCodes.Status500InternalServerError),
+                })
             .Produces(StatusCodes.Status204NoContent)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status409Conflict)
