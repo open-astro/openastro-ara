@@ -132,6 +132,9 @@ public class ProfileShareServiceTest {
         var optics = settings.GetProperty("optics");
         optics.GetProperty("focal_length_mm").GetDouble().Should().Be(0);
         optics.GetProperty("pixel_size_um").GetDouble().Should().Be(0);
+        optics.GetProperty("sensor_width_px").GetInt32().Should().Be(0);
+        optics.GetProperty("sensor_height_px").GetInt32().Should().Be(0);
+        optics.GetProperty("reducer_factor").GetDouble().Should().Be(1.0, "stripped optics resets the reducer to the neutral 1.0 multiplier");
     }
 
     [Test]

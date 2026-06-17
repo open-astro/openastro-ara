@@ -214,24 +214,25 @@ public static class SystemEndpoints {
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("ExportProfileShare");
 
-        profiles.MapPost("/share-import",
-                async ([FromBody] System.Text.Json.JsonElement manifest, IProfileShareService svc, CancellationToken ct) =>
-                    Results.Ok(await svc.ImportPreviewAsync(manifest, ct)))
-            .Accepts<System.Text.Json.JsonElement>("application/json")
-            .Produces<ProfileShareImportPreviewDto>(StatusCodes.Status200OK)
-            .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+        // §70.4 import (preview + commit) is not implemented yet — it lands in a
+        // follow-up sub-PR. Return a clean 501 rather than wiring the not-yet-built
+        // service (whose methods throw, which would surface as an unhandled 500 since
+        // there's no global exception handler) — a caller gets an unambiguous "not
+        // implemented" instead of a fake success or an opaque 500.
+        profiles.MapPost("/share-import", () =>
+                Results.Problem(
+                    statusCode: StatusCodes.Status501NotImplemented,
+                    title: "Profile share import is not implemented yet",
+                    detail: "§70.4 import preview lands in a follow-up sub-PR."))
+            .Produces(StatusCodes.Status501NotImplemented)
             .WithName("PreviewProfileShareImport");
 
-        profiles.MapPost("/share-import/commit",
-                async (Guid importToken, IProfileShareService svc, CancellationToken ct) => {
-                    // Body must be the new profile's GUID so WILMA can
-                    // navigate to it; the import token has already done
-                    // its job at this point.
-                    var newProfileId = await svc.ImportCommitAsync(importToken, ct);
-                    return Results.Created($"/api/v1/profiles/{newProfileId}", value: newProfileId);
-                })
-            .Produces<Guid>(StatusCodes.Status201Created)
-            .ProducesProblem(StatusCodes.Status404NotFound)
+        profiles.MapPost("/share-import/commit", () =>
+                Results.Problem(
+                    statusCode: StatusCodes.Status501NotImplemented,
+                    title: "Profile share import is not implemented yet",
+                    detail: "§70.4 import commit lands in a follow-up sub-PR."))
+            .Produces(StatusCodes.Status501NotImplemented)
             .WithName("CommitProfileShareImport");
 
         // Phase 13.16 — sky-data-recommendations wired to IDataManagerService.
