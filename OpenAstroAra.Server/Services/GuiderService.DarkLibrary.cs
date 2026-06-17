@@ -92,7 +92,11 @@ public sealed partial class GuiderService {
                     break;
             }
         }
-        DispatchCalibrationBuild(() => BuildDarkLibraryInBackground(guider, rpcRequest, _shutdownCts.Token));
+        // Capture the token NOW (struct, safe to hold past CTS dispose) — evaluating
+        // _shutdownCts.Token inside the deferred lambda would race a concurrent Dispose
+        // and throw ObjectDisposedException in the background task, leaking the gate.
+        var darkToken = _shutdownCts.Token;
+        DispatchCalibrationBuild(() => BuildDarkLibraryInBackground(guider, rpcRequest, darkToken));
         return Task.FromResult(Accepted(op, idempotencyKey));
     }
 
@@ -273,7 +277,10 @@ public sealed partial class GuiderService {
                     break;
             }
         }
-        DispatchCalibrationBuild(() => BuildDefectMapDarksInBackground(guider, rpcRequest, _shutdownCts.Token));
+        // Capture the token NOW (see BuildDarkLibraryAsync) so the deferred lambda can't
+        // race Dispose and throw ObjectDisposedException reading _shutdownCts.Token.
+        var defectToken = _shutdownCts.Token;
+        DispatchCalibrationBuild(() => BuildDefectMapDarksInBackground(guider, rpcRequest, defectToken));
         return Task.FromResult(Accepted(op, idempotencyKey));
     }
 
