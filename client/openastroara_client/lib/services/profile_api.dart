@@ -42,7 +42,14 @@ class ProfileApi {
       '/api/v1/profiles',
       data: {'name': name},
     );
-    return ProfileMeta.fromJson(res.data ?? const {});
+    final meta = ProfileMeta.fromJson(res.data ?? const {});
+    if (meta.id.isEmpty) {
+      // A 2xx with no usable id (empty/garbled body) — fail loudly with the
+      // status code rather than returning a profile whose id we can't address.
+      throw StateError(
+          'createProfile got HTTP ${res.statusCode} with no profile id in the response body');
+    }
+    return meta;
   }
 
   /// GET the active profile's imaging-defaults section.

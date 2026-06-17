@@ -67,8 +67,10 @@ Phd2Settings applyDraftToPhd2(Phd2Settings base, ProfileDraft d) {
     portPart = '';
   } else {
     final idx = hp.lastIndexOf(':');
-    hostPart = idx > 0 ? hp.substring(0, idx).trim() : hp;
-    portPart = idx > 0 ? hp.substring(idx + 1).trim() : '';
+    // >= 0 (not > 0): a leading-colon ":4400" yields an empty host (→ base host)
+    // and port 4400, rather than a nonsense "host = ':4400'".
+    hostPart = idx >= 0 ? hp.substring(0, idx).trim() : hp;
+    portPart = idx >= 0 ? hp.substring(idx + 1).trim() : '';
   }
   final host = hostPart.isNotEmpty ? hostPart : base.host;
   final port = portPart.isNotEmpty ? (int.tryParse(portPart) ?? base.port) : base.port;
@@ -98,12 +100,9 @@ Future<void> saveWizardProfile(ProfileApi api, ProfileDraft d) async {
   // a retry re-applies the sections onto it rather than orphaning a new profile
   // each attempt.
   if (d.savedProfileId == null) {
+    // createProfile throws on an empty/garbled id, so savedProfileId is always a
+    // real id here — a retry then re-uses it rather than orphaning a new profile.
     final meta = await api.createProfile(name);
-    if (meta.id.isEmpty) {
-      // Guard the empty-string case: storing "" is non-null, so a retry would
-      // skip create and PUT sections against an unknown active profile.
-      throw const FormatException('createProfile returned an empty profile id');
-    }
     d.savedProfileId = meta.id;
   }
 
