@@ -120,5 +120,23 @@ void main() {
       expect(out.host, 'guidepi');
       expect(out.port, 4400);
     });
+
+    test('applyDraftToPhd2 treats a bare (unbracketed) IPv6 as host-only', () {
+      final d = ProfileDraft();
+      d.guider.hostPort = '::1';
+      const base = Phd2Settings(port: 4400);
+      final out = applyDraftToPhd2(base, d);
+      expect(out.host, '::1', reason: '2+ colons, no brackets → whole value is the IPv6 host');
+      expect(out.port, 4400, reason: 'IPv6 ports require brackets, so no port to split → base port');
+    });
+
+    test('applyDraftToPhd2 keeps a longer bare IPv6 literal intact', () {
+      final d = ProfileDraft();
+      d.guider.hostPort = 'fe80::1';
+      const base = Phd2Settings(port: 4400);
+      final out = applyDraftToPhd2(base, d);
+      expect(out.host, 'fe80::1');
+      expect(out.port, 4400);
+    });
   });
 }

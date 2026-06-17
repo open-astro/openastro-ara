@@ -53,16 +53,20 @@ ImagingDefaults applyDraftToImaging(ImagingDefaults base, ProfileDraft d) {
 
 Phd2Settings applyDraftToPhd2(Phd2Settings base, ProfileDraft d) {
   final g = d.guider;
-  // Parse host[:port], handling bracketed IPv6:
-  //  - "[::1]"        → host only, no port (ends with ']')
-  //  - "[::1]:4400"   → split on the LAST colon (after the closing bracket)
-  //  - "localhost"    → host only
+  // Parse host[:port], handling IPv6 literals:
+  //  - "[::1]"          → host only, no port (ends with ']')
+  //  - "[::1]:4400"     → split on the LAST colon (after the closing bracket)
+  //  - "::1" / "fe80::1" → bare (unbracketed) IPv6, host only — a value with 2+
+  //                        colons and no brackets is an IPv6 address, since a
+  //                        port on IPv6 requires [brackets] (RFC 3986 §3.2.2)
+  //  - "localhost"      → host only
   //  - "localhost:4400" → split on the colon
   final hp = g.hostPort.trim();
   final String hostPart;
   final String portPart;
-  if (hp.endsWith(']')) {
-    // A bracketed IPv6 literal with no port — the colons are all inside the brackets.
+  if (hp.endsWith(']') ||
+      (!hp.contains(']') && ':'.allMatches(hp).length >= 2)) {
+    // Bracketed IPv6 with no port, OR a bare IPv6 literal: no port to split off.
     hostPart = hp;
     portPart = '';
   } else {
@@ -110,6 +114,9 @@ Future<void> saveWizardProfile(ProfileApi api, ProfileDraft d) async {
   // run them concurrently rather than serially (4 round-trips → ~1 round-trip of
   // latency). Collect every failure (rather than letting Future.wait drop all but
   // the first) so a partial save reports exactly which sections didn't apply.
+  // The four sections are disjoint (no section's GET reads another's PUT target),
+  // and the caller (_saveAndExit) runs this under a non-dismissible spinner that
+  // blocks a second Save, so there is no GET-after-PUT overlap to worry about.
   final errors = (await Future.wait([
     _trySave(() async => api.putSiteSettings(applyDraftToSite(await api.getSiteSettings(), d))),
     _trySave(() async => api.putOptics(applyDraftToOptics(await api.getOptics(), d))),
