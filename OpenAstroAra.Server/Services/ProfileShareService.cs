@@ -45,6 +45,9 @@ public sealed class ProfileShareService : IProfileShareService {
             return Task.FromResult<ProfileShareDto?>(null);
         }
 
+        // Order matters: capture the rig description from the ORIGINAL settings
+        // before stripping zeros out optics + guide geometry. Reversing these two
+        // lines would publish an all-zero rig_description.
         var rig = BuildRigDescription(stored.Settings);
         var stripped = StripForShare(stored.Settings);
         var manifest = new ProfileShareManifest(
@@ -173,9 +176,12 @@ public sealed class ProfileShareService : IProfileShareService {
     private const string ImportNotImplemented =
         "Profile share import (§70.4) is not implemented yet — it lands in a follow-up sub-PR.";
 
+    // Task.FromException (not a synchronous `throw`) so the not-implemented error
+    // surfaces at the caller's await — the correct async contract — rather than
+    // throwing before the Task is even returned.
     public Task<ProfileShareImportPreviewDto> ImportPreviewAsync(JsonElement manifest, CancellationToken ct) =>
-        throw new NotImplementedException(ImportNotImplemented);
+        Task.FromException<ProfileShareImportPreviewDto>(new NotImplementedException(ImportNotImplemented));
 
     public Task<Guid> ImportCommitAsync(Guid importToken, CancellationToken ct) =>
-        throw new NotImplementedException(ImportNotImplemented);
+        Task.FromException<Guid>(new NotImplementedException(ImportNotImplemented));
 }
