@@ -93,7 +93,10 @@ class WizardShell extends ConsumerWidget {
       error = 'Couldn\'t save the profile: ${e.message ?? 'network error'} '
           '(${e.response?.statusCode ?? 'no response'}).';
     } catch (e) {
-      error = 'Couldn\'t save the profile: $e';
+      // Keep the raw detail in the logs; show the user a clean message (no
+      // "Exception:" prefix / internal section text) — Save is retryable.
+      debugPrint('[wizard] profile save failed: $e');
+      error = 'Couldn\'t save the profile. Please try again.';
     }
 
     if (nav.mounted) nav.pop(); // close the spinner — independent of widget mount state
