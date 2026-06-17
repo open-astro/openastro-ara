@@ -36,6 +36,10 @@ public sealed class ProfileShareService : IProfileShareService {
     public ProfileShareService(IProfileRepository repo) => _repo = repo;
 
     public Task<ProfileShareDto?> ExportAsync(Guid profileId, CancellationToken ct) {
+        // GetProfile is synchronous today (in-memory under a lock), so there is
+        // nothing to cancel mid-flight; honor ct up front so the contract holds and
+        // it's already threaded when the repo grows async disk I/O.
+        ct.ThrowIfCancellationRequested();
         var stored = _repo.GetProfile(profileId);
         if (stored is null) {
             return Task.FromResult<ProfileShareDto?>(null);
@@ -76,6 +80,29 @@ public sealed class ProfileShareService : IProfileShareService {
     /// judgement; drops paths (§decision), secrets, donor location + network,
     /// and rig geometry (lifted into the rig description instead).
     /// </summary>
+    /// <remarks>
+    /// SECURITY — keep/strip ledger for ALL 13 sections. This is an allowlist by
+    /// omission (a section is shared verbatim unless a <c>with</c>-clause below
+    /// strips fields), so adding a field to any section DTO ships it in the share
+    /// file by default. When you add a field, decide here and update
+    /// <c>ProfileShareServiceTest</c> (a sentinel-scan test asserts no path/identity
+    /// value leaks into the payload):
+    /// <list type="bullet">
+    ///   <item>ImagingDefaults — KEEP (exposure/gain/cooler tuning, no PII)</item>
+    ///   <item>Storage — STRIP save_directory + filename_template (paths); keep format/compression/disk-thresholds</item>
+    ///   <item>Notifications — STRIP pushover_token + telegram_bot_token (SECRETS); keep channel/trigger toggles</item>
+    ///   <item>Site — STRIP name/lat/long/elevation/timezone (location); keep bortle/seeing/twilight/horizon</item>
+    ///   <item>Filenames — KEEP (date-separator enum + compress toggle, not a path)</item>
+    ///   <item>SafetyPolicies — KEEP (tuning judgement)</item>
+    ///   <item>Autofocus — KEEP (method/sweep/trigger judgement; af_filter is a harmless name)</item>
+    ///   <item>PlateSolve — STRIP path_or_endpoint + index_download_path (paths); keep engine/knobs</item>
+    ///   <item>DiagnosticsMode — KEEP (single enum)</item>
+    ///   <item>Phd2 — STRIP host/port/profile (network) + guide geometry (→ rig desc); keep dither/settle/aggressiveness</item>
+    ///   <item>EquipmentConnection — KEEP (auto-connect bools per device type, no PII)</item>
+    ///   <item>StretchDefaults — KEEP (display judgement)</item>
+    ///   <item>Optics — STRIP all (rig geometry → rig description)</item>
+    /// </list>
+    /// </remarks>
     internal static ProfileSnapshotDto StripForShare(ProfileSnapshotDto s) => s with {
         // Strip all host/OS-specific paths — un-remappable across OSes, so the
         // recipient sets save dir + filename template themselves in the wizard.
@@ -137,20 +164,18 @@ public sealed class ProfileShareService : IProfileShareService {
         return plus >= 0 ? info[..plus] : info;
     }
 
-    // ─── §70.4 import (preview + commit) — placeholder until the import sub-PR ───
+    // ─── §70.4 import (preview + commit) — not implemented until the import sub-PR ───
+    // These throw rather than returning fabricated data: in the production service a
+    // fake "success" (a random token / GUID for any input) is indistinguishable from
+    // a real import to a caller. NotImplementedException surfaces as a clear server
+    // error instead of silently pretending the import worked.
 
-    public Task<ProfileShareImportPreviewDto> ImportPreviewAsync(JsonElement manifest, CancellationToken ct) {
-        _ = manifest;
-        return Task.FromResult(new ProfileShareImportPreviewDto(
-            ImportToken: Guid.NewGuid(),
-            ProfileName: "Imported profile (placeholder)",
-            Warnings: Array.Empty<string>(),
-            DroppedFields: Array.Empty<string>(),
-            ExpiresUtc: DateTimeOffset.UtcNow.AddMinutes(15)));
-    }
+    private const string ImportNotImplemented =
+        "Profile share import (§70.4) is not implemented yet — it lands in a follow-up sub-PR.";
 
-    public Task<Guid> ImportCommitAsync(Guid importToken, CancellationToken ct) {
-        _ = importToken;
-        return Task.FromResult(Guid.NewGuid());
-    }
+    public Task<ProfileShareImportPreviewDto> ImportPreviewAsync(JsonElement manifest, CancellationToken ct) =>
+        throw new NotImplementedException(ImportNotImplemented);
+
+    public Task<Guid> ImportCommitAsync(Guid importToken, CancellationToken ct) =>
+        throw new NotImplementedException(ImportNotImplemented);
 }

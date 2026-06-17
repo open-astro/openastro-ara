@@ -170,6 +170,36 @@ public class ProfileShareServiceTest {
     }
 
     [Test]
+    public async Task Export_payload_contains_no_stripped_value_at_all() {
+        // Defense in depth against the allowlist-by-omission design: every
+        // path/identity/secret sentinel set in DonorSnapshot must be absent from the
+        // whole rendered payload. If a future field carries one of these through, this
+        // fails — forcing a keep/strip decision (see StripForShare's ledger).
+        using var repo = new FakeRepo(DonorSnapshot());
+        var share = await new ProfileShareService(repo).ExportAsync(ProfileId, CancellationToken.None);
+        var raw = share!.Manifest.GetRawText();
+        string[] mustNotAppear = {
+            PushSecret, TelegramSecret,
+            @"C:\Astro\Captures", @"C:\Program Files\astap\astap.exe", @"C:\astap\db",
+            "Joey's backyard", "America/Los_Angeles",
+            "guidepi.local", "Donor PHD2 profile",
+        };
+        foreach (var sentinel in mustNotAppear) {
+            raw.Should().NotContain(sentinel, "'{0}' is host/identity-specific and must be stripped", sentinel);
+        }
+    }
+
+    [Test]
+    public void Import_preview_and_commit_throw_until_implemented() {
+        using var repo = new FakeRepo(DonorSnapshot());
+        var svc = new ProfileShareService(repo);
+        using var doc = JsonDocument.Parse("{}");
+        var noManifest = doc.RootElement;
+        Assert.ThrowsAsync<NotImplementedException>(() => svc.ImportPreviewAsync(noManifest, CancellationToken.None));
+        Assert.ThrowsAsync<NotImplementedException>(() => svc.ImportCommitAsync(Guid.NewGuid(), CancellationToken.None));
+    }
+
+    [Test]
     public async Task Export_unknown_profile_returns_null() {
         using var repo = new FakeRepo(null);
         var share = await new ProfileShareService(repo).ExportAsync(ProfileId, CancellationToken.None);
