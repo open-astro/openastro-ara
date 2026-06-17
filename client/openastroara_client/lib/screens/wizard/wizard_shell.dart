@@ -1,8 +1,12 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../services/profile_api.dart';
+import '../../state/saved_server_state.dart';
 import '../../state/wizard_state.dart';
 import '../../theme/ara_colors.dart';
+import 'wizard_save.dart';
 import 'wizard_screens.dart';
 
 /// §37 wizard host. Renders progress bar + current screen + nav bar.
@@ -26,7 +30,7 @@ class WizardShell extends ConsumerWidget {
         title: Text('Set up profile · Step ${state.step} of ${ProfileWizard.totalSteps}'),
         actions: [
           TextButton.icon(
-            onPressed: () => _saveAndExit(context, controller),
+            onPressed: () => _saveAndExit(context, ref, controller),
             icon: const Icon(Icons.logout, size: 18),
             label: const Text('Save & Exit'),
           ),
@@ -48,7 +52,7 @@ class WizardShell extends ConsumerWidget {
             onSkip: controller.skipCurrent,
             onNext: state.step < ProfileWizard.totalSteps
                 ? controller.next
-                : () => _saveAndExit(context, controller),
+                : () => _saveAndExit(context, ref, controller),
             isLast: state.step == ProfileWizard.totalSteps,
           ),
         ],
@@ -56,19 +60,55 @@ class WizardShell extends ConsumerWidget {
     );
   }
 
-  void _saveAndExit(BuildContext context, WizardController controller) {
+  // Persist the draft as a new profile (§37 Save / Save & Exit — both paths save
+  // partial-or-complete state per §37.8), then exit the wizard. Shows a blocking
+  // spinner during the round-trip and keeps the wizard open on failure so the
+  // user doesn't lose their entries.
+  Future<void> _saveAndExit(
+      BuildContext context, WidgetRef ref, WizardController controller) async {
     final draft = controller.snapshot();
-    final cb = onComplete;
-    if (cb != null) {
-      cb(ProfileDraftSnapshot(draft));
+    final servers = ref.read(savedServersProvider).maybeWhen(
+          data: (list) => list,
+          orElse: () => const [],
+        );
+    if (servers.isEmpty) {
+      _showError(context, 'No active server — connect to a daemon before saving the profile.');
+      return; // keep the wizard open; nothing to save against
     }
-    // Always dismiss the wizard route — "Save & Exit" should exit
-    // regardless of whether a persistence callback was wired. The
-    // callback handles persistence; this handles route dismissal so
-    // the button label matches its behavior. Profile persistence to
-    // ~/.config/openastroara/profiles/ lands with the first per-screen
-    // form follow-up PR (§30.4).
-    Navigator.of(context).pop();
+    final api = ProfileApi(servers.last);
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
+    String? error;
+    try {
+      await saveWizardProfile(api, draft);
+    } on DioException catch (e) {
+      error = 'Couldn\'t save the profile: ${e.message ?? 'network error'} '
+          '(${e.response?.statusCode ?? 'no response'}).';
+    } catch (e) {
+      error = 'Couldn\'t save the profile: $e';
+    }
+
+    if (!context.mounted) return;
+    Navigator.of(context).pop(); // close the spinner
+
+    if (error != null) {
+      if (context.mounted) _showError(context, error);
+      return; // keep the wizard open so the user can retry
+    }
+
+    onComplete?.call(ProfileDraftSnapshot(draft));
+    if (context.mounted) Navigator.of(context).pop(); // exit the wizard
+  }
+
+  void _showError(BuildContext context, String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: AraColors.accentError),
+    );
   }
 }
 

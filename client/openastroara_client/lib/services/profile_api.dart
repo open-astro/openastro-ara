@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 
+import '../models/profile_meta.dart';
 import '../models/server.dart';
 import '../state/imaging/exposure_state.dart' show FrameKind;
 import '../state/settings/autofocus_settings_state.dart';
@@ -31,6 +32,18 @@ class ProfileApi {
           connectTimeout: const Duration(seconds: 3),
           receiveTimeout: const Duration(seconds: 5),
         ));
+
+  /// §37 multi-profile — create a new profile and make it active. The daemon
+  /// clones the current active profile's settings as the starting point (the
+  /// wizard then PUTs the sections the user configured on top). Returns the
+  /// new profile's metadata.
+  Future<ProfileMeta> createProfile(String name) async {
+    final res = await _dio.post<Map<String, dynamic>>(
+      '/api/v1/profiles',
+      data: {'name': name},
+    );
+    return ProfileMeta.fromJson(res.data ?? const {});
+  }
 
   /// GET the active profile's imaging-defaults section.
   Future<ImagingDefaults> getImagingDefaults() async {
