@@ -61,4 +61,7 @@ public sealed record ProfileShareRigDescriptionDto(
     int SensorWidthPx,
     int SensorHeightPx,
     double PixelSizeUm,
+    // int (not double) to mirror its source, Phd2SettingsDto.GuideFocalLength,
+    // which is an int (guide-scope focal lengths are whole millimetres in §63).
+    // If that source is ever widened to double, widen this in lockstep.
     int GuideScopeFocalLengthMm);
