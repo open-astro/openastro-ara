@@ -134,7 +134,7 @@ class _CalibrationBody extends StatelessWidget {
           // disabling, bouncing the switch back). Gate on exists so a server
           // reporting auto-load=on for a not-built artifact doesn't show an
           // interactive-looking-but-frozen ON switch.
-          enabled: status.darkLibraryExists && status.autoLoadDarks,
+          switchValue: status.darkLibraryExists && status.autoLoadDarks,
           onBuild: locked ? null : () => unawaited(notifier.buildDarkLibrary()),
           onToggle: (locked || !status.darkLibraryExists)
               ? null
@@ -146,7 +146,7 @@ class _CalibrationBody extends StatelessWidget {
           exists: status.defectMapExists,
           loaded: status.defectMapLoaded,
           detail: null,
-          enabled: status.defectMapExists && status.autoLoadDefectMap,
+          switchValue: status.defectMapExists && status.autoLoadDefectMap,
           onBuild: locked ? null : () => unawaited(notifier.buildDefectMap()),
           onToggle: (locked || !status.defectMapExists)
               ? null
@@ -180,7 +180,9 @@ class _Artifact extends StatelessWidget {
   final bool exists;
   final bool loaded;
   final String? detail;
-  final bool enabled;
+  // The on/off value shown by the auto-load Switch — NOT whether the Switch is
+  // interactive (that's governed by onToggle being null).
+  final bool switchValue;
   final VoidCallback? onBuild;
   final ValueChanged<bool>? onToggle;
 
@@ -189,7 +191,7 @@ class _Artifact extends StatelessWidget {
     required this.exists,
     required this.loaded,
     required this.detail,
-    required this.enabled,
+    required this.switchValue,
     required this.onBuild,
     required this.onToggle,
   });
@@ -210,7 +212,7 @@ class _Artifact extends StatelessWidget {
             Expanded(child: Text(label, style: theme.textTheme.titleSmall)),
             Semantics(
               label: '$label auto-load',
-              child: Switch(value: enabled, onChanged: onToggle),
+              child: Switch(value: switchValue, onChanged: onToggle),
             ),
           ],
         ),

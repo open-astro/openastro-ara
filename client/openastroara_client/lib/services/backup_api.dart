@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 
 import '../models/backup_snapshot.dart';
 import '../models/clone_status.dart';
@@ -66,13 +67,21 @@ class BackupApi implements BackupClient {
       // surfaces an error state instead of a silently-empty list.
       throw FormatException('backup/snapshots returned a non-array body (${data.runtimeType})');
     }
-    return data
+    final snapshots = data
         .whereType<Map<String, dynamic>>()
         .map(BackupSnapshot.fromJson)
         // Drop a malformed entry — id keys the row, and downloadUrl is required to
         // download or restore it, so an entry missing either is unusable.
         .where((s) => s.backupId.isNotEmpty && s.downloadUrl.isNotEmpty)
         .toList(growable: false);
+    // A silently-dropped row would otherwise be invisible; log when the wire list
+    // had entries we couldn't use so a malformed snapshot is diagnosable.
+    final dropped = data.length - snapshots.length;
+    if (dropped > 0) {
+      debugPrint('[backup] listSnapshots dropped $dropped malformed/unusable '
+          'snapshot entr${dropped == 1 ? 'y' : 'ies'} of ${data.length}');
+    }
+    return snapshots;
   }
 
   @override
