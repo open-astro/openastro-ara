@@ -20,6 +20,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Threading;
 
 namespace OpenAstroAra.Server.Services;
 
@@ -53,7 +54,7 @@ public sealed partial class FileProfileRepository : IProfileRepository, IDisposa
     // state is written once at the end. Reentrant-safe: the live store raises Changed
     // synchronously on the same thread that holds _lock here.
     private bool _suppressMirror;
-    private bool _disposed;
+    private int _disposed; // 0 = live, 1 = disposed; flipped via Interlocked so Dispose is single-shot
 
     private static readonly AraJsonSerializerContext _indented =
         new(new JsonSerializerOptions(AraJsonSerializerContext.Default.Options) {
@@ -318,8 +319,9 @@ public sealed partial class FileProfileRepository : IProfileRepository, IDisposa
     }
 
     public void Dispose() {
-        if (_disposed) return;
-        _disposed = true;
+        // Single-shot even if the DI container (which makes no formal single-caller guarantee)
+        // disposes twice — otherwise we'd double-unsubscribe.
+        if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
         _liveStore.Changed -= OnLiveChanged;
     }
 
