@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 // The draft declares its own `ImagingDefaults` (Stage-4 bag); we map onto the profile
 // *section* ImagingDefaults from imaging_defaults_state, so hide the draft's to disambiguate.
 import '../../models/profile_draft.dart' hide ImagingDefaults;
@@ -138,7 +140,10 @@ Future<Object?> _trySave(Future<void> Function() body) async {
   try {
     await body();
     return null;
-  } catch (e) {
+  } catch (e, st) {
+    // Log the full error + stack now; the aggregated Exception the caller throws
+    // only carries the joined messages, so this keeps each section's trace.
+    debugPrint('[wizard] profile section save failed: $e\n$st');
     return e;
   }
 }

@@ -13,12 +13,22 @@ import 'wizard_screens.dart';
 /// Launched from "Add a Profile" / "Run Wizard Again" or first-run when no
 /// profile exists. Calls `onComplete` with the final ProfileDraft when the
 /// user hits Save Profile on Screen 18 (or Save & Exit at any point).
-class WizardShell extends ConsumerWidget {
+class WizardShell extends ConsumerStatefulWidget {
   final void Function(ProfileDraftSnapshot snapshot)? onComplete;
   const WizardShell({super.key, this.onComplete});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<WizardShell> createState() => _WizardShellState();
+}
+
+class _WizardShellState extends ConsumerState<WizardShell> {
+  // Guards the brief async window between the Save tap and the blocking spinner
+  // mounting: without it a rapid double-tap launches two concurrent saves that
+  // race-write all four sections. Stays true until the save settles.
+  bool _isSaving = false;
+
+  @override
+  Widget build(BuildContext context) {
     final state = ref.watch(wizardControllerProvider);
     final controller = ref.read(wizardControllerProvider.notifier);
     final info = ProfileWizard.steps[state.step]!;
@@ -30,7 +40,7 @@ class WizardShell extends ConsumerWidget {
         title: Text('Set up profile · Step ${state.step} of ${ProfileWizard.totalSteps}'),
         actions: [
           TextButton.icon(
-            onPressed: () => _saveAndExit(context, ref, controller),
+            onPressed: () => _saveAndExit(controller),
             icon: const Icon(Icons.logout, size: 18),
             label: const Text('Save & Exit'),
           ),
@@ -52,7 +62,7 @@ class WizardShell extends ConsumerWidget {
             onSkip: controller.skipCurrent,
             onNext: state.step < ProfileWizard.totalSteps
                 ? controller.next
-                : () => _saveAndExit(context, ref, controller),
+                : () => _saveAndExit(controller),
             isLast: state.step == ProfileWizard.totalSteps,
           ),
         ],
@@ -64,13 +74,12 @@ class WizardShell extends ConsumerWidget {
   // partial-or-complete state per §37.8), then exit the wizard. Shows a blocking
   // spinner during the round-trip and keeps the wizard open on failure so the
   // user doesn't lose their entries.
-  Future<void> _saveAndExit(
-      BuildContext context, WidgetRef ref, WizardController controller) async {
-    // snapshot() must return the live draft object: saveWizardProfile stamps
+  Future<void> _saveAndExit(WizardController controller) async {
+    if (_isSaving) return; // double-tap guard until the spinner blocks input
+    // liveDraft() returns the live draft object: saveWizardProfile stamps
     // draft.savedProfileId on the first attempt so a retry re-uses the same
-    // profile instead of orphaning a new one. If snapshot() is ever changed to
-    // return a copy, that idempotency guard silently breaks.
-    final draft = controller.snapshot();
+    // profile instead of orphaning a new one.
+    final draft = controller.liveDraft();
     // Capture the Navigator + Messenger BEFORE the async gap so a pop/snackbar is
     // safe even if the widget unmounts mid-save (otherwise an early
     // `!context.mounted` return would strand the non-dismissible spinner forever).
@@ -84,10 +93,18 @@ class WizardShell extends ConsumerWidget {
     }
     final api = ProfileApi(server);
 
+    setState(() => _isSaving = true);
     showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => const Center(child: CircularProgressIndicator()),
+      // PopScope(canPop: false) also blocks the Android system-back button from
+      // dismissing the spinner; otherwise a back press mid-save would pop the
+      // spinner early and the nav.pop() calls below would pop the wizard (and the
+      // route under it) instead of the spinner.
+      builder: (_) => const PopScope(
+        canPop: false,
+        child: Center(child: CircularProgressIndicator()),
+      ),
     );
 
     String? error;
@@ -104,6 +121,7 @@ class WizardShell extends ConsumerWidget {
     }
 
     if (nav.mounted) nav.pop(); // close the spinner — independent of widget mount state
+    if (mounted) setState(() => _isSaving = false);
 
     if (error != null) {
       _showError(messenger, error);
@@ -113,7 +131,7 @@ class WizardShell extends ConsumerWidget {
     // Exit the wizard first, THEN notify — so if onComplete routes/pops, it can't
     // race our pop into popping an unintended route.
     if (nav.mounted) nav.pop(); // exit the wizard
-    onComplete?.call(ProfileDraftSnapshot(draft));
+    widget.onComplete?.call(ProfileDraftSnapshot(draft));
   }
 
   void _showError(ScaffoldMessengerState messenger, String message) {
