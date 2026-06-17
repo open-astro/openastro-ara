@@ -42,7 +42,7 @@ class ProfileApi {
       '/api/v1/profiles',
       data: {'name': name},
     );
-    final meta = ProfileMeta.fromJson(res.data ?? const {});
+    final meta = ProfileMeta.fromJson(res.data ?? const <String, dynamic>{});
     if (meta.id.isEmpty) {
       // A 2xx with no usable id (empty/garbled body) — fail loudly with the
       // status code rather than returning a profile whose id we can't address.
