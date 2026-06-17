@@ -17,6 +17,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using OpenAstroAra.Server.Contracts;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
@@ -54,6 +55,9 @@ public sealed partial class FileProfileRepository : IProfileRepository, IDisposa
     // state is written once at the end. Reentrant-safe: the live store raises Changed
     // synchronously on the same thread that holds _lock here.
     private bool _suppressMirror;
+    // Managed thread id of an in-progress ApplyToLive (0 = none); lets OnLiveChanged assert the
+    // IProfileStore.Changed sync-dispatch contract that _suppressMirror depends on.
+    private int _applyingThreadId;
     private int _disposed; // 0 = live, 1 = disposed; flipped via Interlocked so Dispose is single-shot
 
     private static readonly AraJsonSerializerContext _indented =
@@ -89,9 +93,13 @@ public sealed partial class FileProfileRepository : IProfileRepository, IDisposa
     }
 
     public StoredProfileDto? GetProfile(Guid id) {
-        lock (_lock) {
-            return _metas.ContainsKey(id) ? ReadFile(id) : null;
-        }
+        // Only the membership check needs the lock; the disk read is done outside it so a
+        // GET doesn't block other repository operations for the duration of the I/O. Reads
+        // are race-safe: files are written atomically (tmp + Move), and a concurrent delete
+        // just yields a null read, which ReadFile already handles.
+        bool known;
+        lock (_lock) { known = _metas.ContainsKey(id); }
+        return known ? ReadFile(id) : null;
     }
 
     public ProfileMetaDto Create(string name, ProfileSnapshotDto? settings, bool makeActive) {
@@ -157,9 +165,11 @@ public sealed partial class FileProfileRepository : IProfileRepository, IDisposa
     // rewriting the (about-to-be-)active file; mirror the final state once.
     private void ApplyToLive(Guid id, ProfileSnapshotDto snap) {
         _suppressMirror = true;
+        _applyingThreadId = Environment.CurrentManagedThreadId;
         try {
             ProfileStoreSnapshot.Apply(_liveStore, snap);
         } finally {
+            _applyingThreadId = 0;
             _suppressMirror = false;
         }
         // Persist the active file from the just-applied snapshot (bump UpdatedUtc).
@@ -167,6 +177,15 @@ public sealed partial class FileProfileRepository : IProfileRepository, IDisposa
     }
 
     private void OnLiveChanged(object? sender, EventArgs e) {
+        // The _suppressMirror gate only works if IProfileStore raises Changed synchronously
+        // on the thread doing the Put (the documented contract). If an apply is in progress
+        // but this fired on a different thread, the store dispatched asynchronously and the
+        // gate can't be trusted — catch that in debug rather than silently writing 13 extra
+        // mirror files per select. (Not data-corrupting, hence assert not throw.)
+        Debug.Assert(
+            _applyingThreadId == 0 || _applyingThreadId == Environment.CurrentManagedThreadId,
+            "IProfileStore.Changed must be raised synchronously on the Put thread; see its doc.");
+
         // A live section PUT happened — mirror it into the active profile's file so the
         // saved set never drifts from what the user is editing.
         lock (_lock) {
@@ -190,10 +209,15 @@ public sealed partial class FileProfileRepository : IProfileRepository, IDisposa
         // they're harmless, but they'd accumulate — same boot sweep as §43-2 / §55.1.
         SweepTempFiles();
         foreach (var path in SafeEnumerateProfileFiles()) {
+            // Only our own "{id:N}.json" files — ignore any other *.json a future feature
+            // might drop in profiles/, and ignore a file whose contents disagree with its name.
+            if (!Guid.TryParseExact(Path.GetFileNameWithoutExtension(path), "N", out var fileId)) {
+                continue;
+            }
             try {
                 var json = File.ReadAllText(path);
                 var stored = JsonSerializer.Deserialize(json, AraJsonSerializerContext.Default.StoredProfileDto);
-                if (stored is not null) _metas[stored.Meta.Id] = stored.Meta;
+                if (stored is not null && stored.Meta.Id == fileId) _metas[stored.Meta.Id] = stored.Meta;
             } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) {
                 LogLoadFailed(ex, path);
             }

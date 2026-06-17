@@ -46,8 +46,10 @@ public interface IProfileRepository : IDisposable {
     /// <summary>
     /// Create a new saved profile. When <paramref name="settings"/> is null the current
     /// active profile's live settings are cloned. When <paramref name="makeActive"/> is
-    /// true (or this is the first profile) it also becomes active (its settings are loaded
-    /// into the live store).
+    /// true it also becomes active (its settings are loaded into the live store).
+    /// <para>Note: if there is no active profile yet (the very first create, or a recovered
+    /// empty set), the new profile is made active <b>regardless</b> of
+    /// <paramref name="makeActive"/> — there must always be an active profile.</para>
     /// </summary>
     ProfileMetaDto Create(string name, ProfileSnapshotDto? settings, bool makeActive);
 
