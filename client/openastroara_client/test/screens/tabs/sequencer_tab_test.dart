@@ -49,6 +49,13 @@ class _ControllableClient extends _FakeClient {
   }
 }
 
+/// getSequence always throws, to exercise the load-failure path.
+class _ThrowingClient extends _FakeClient {
+  @override
+  Future<SequenceNode> getSequence(String id) async =>
+      throw Exception('boom');
+}
+
 SequenceNode _root(String name) =>
     SequenceNode(id: 'root', kind: SequenceNodeKind.root, displayName: name);
 
@@ -100,5 +107,39 @@ void main() {
 
     // seq-1 is stale (no longer selected) and must not overwrite seq-2.
     expect(container.read(sequenceControllerProvider).displayName, 'Loaded seq-2');
+  });
+
+  testWidgets('loads a sequence already selected when the tab mounts',
+      (tester) async {
+    final container = ProviderContainer(overrides: [
+      sequenceApiProvider.overrideWithValue(_FakeClient()),
+    ]);
+    addTearDown(container.dispose);
+    // Selection exists BEFORE the tab is built — ref.listen won't fire for it, so
+    // this exercises the initState pickup.
+    container.read(selectedSequenceIdProvider.notifier).select('seq-7');
+
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: Scaffold(body: SequencerTab())),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(container.read(sequenceControllerProvider).displayName, 'Loaded seq-7');
+  });
+
+  testWidgets('a load failure shows a SnackBar and keeps the tree', (tester) async {
+    final container = ProviderContainer(overrides: [
+      sequenceApiProvider.overrideWithValue(_ThrowingClient()),
+    ]);
+    addTearDown(container.dispose);
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: Scaffold(body: SequencerTab())),
+    ));
+    container.read(selectedSequenceIdProvider.notifier).select('seq-x');
+    await tester.pump(); // run the async load + catch
+    await tester.pump(const Duration(milliseconds: 400)); // SnackBar entrance
+    expect(find.textContaining("Couldn't load the sequence"), findsOneWidget);
   });
 }
