@@ -125,6 +125,11 @@ void main() {
       final api = _api((_) => [1, 2, 3]); // array, not a CursorPage object
       expect(api.list(), throwsA(isA<FormatException>()));
     });
+
+    test('a 5xx propagates as DioException', () async {
+      final api = _api((_) => {'error': 'boom'}, statusCode: 500);
+      expect(api.list(), throwsA(isA<DioException>()));
+    });
   });
 
   group('SequenceApi lifecycle', () {

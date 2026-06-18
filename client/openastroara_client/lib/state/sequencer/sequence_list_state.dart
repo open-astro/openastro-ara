@@ -34,6 +34,11 @@ class SequenceListNotifier extends AsyncNotifier<List<SequenceListItem>?> {
 
   @override
   Future<List<SequenceListItem>?> build() async {
+    // Invalidate any in-flight refresh: Riverpod re-runs build() (e.g. on a
+    // server change) on the SAME notifier instance, then sets fresh AsyncData.
+    // Bumping the generation here means a refresh() awaiting the old (now-closed)
+    // server loses the write race and can't clobber that fresh state.
+    _refreshGen++;
     final api = ref.watch(sequenceApiProvider);
     if (api == null) return null;
     return api.list();
