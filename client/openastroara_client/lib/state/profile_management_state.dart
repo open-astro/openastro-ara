@@ -4,15 +4,23 @@ import '../models/profile_list.dart';
 import '../services/profile_api.dart';
 import 'saved_server_state.dart';
 
+/// The [ProfileApi] for the active server, or null if none is connected. A
+/// provider (not built inline) so it's a single seam: it rebuilds when the
+/// active server changes, shares one Dio/connection pool, and can be overridden
+/// with a fake in tests.
+final profileApiProvider = Provider<ProfileApi?>((ref) {
+  final server = ref.watch(activeServerProvider);
+  return server == null ? null : ProfileApi(server);
+});
+
 /// §37/§30 multi-profile management — loads the known-profiles list from the
 /// active daemon and exposes select / rename / delete actions. Each mutating
 /// action calls the daemon then refreshes the list, so the active-profile badge
 /// and membership stay in sync. Errors (e.g. the daemon's 409 when deleting the
 /// active or last-remaining profile) propagate to the caller to surface.
 class ProfileManagementNotifier extends AsyncNotifier<ProfileList> {
-  /// The ProfileApi for the active server, built once per [build] (i.e. whenever
-  /// the active server changes) rather than re-instantiated on every call — so
-  /// it stays current with the active daemon yet shares one Dio/connection pool.
+  /// The active server's ProfileApi, captured each [build]. Mutations snapshot
+  /// this locally so a server switch mid-operation can't redirect their refresh.
   late ProfileApi _api;
 
   /// Guards against overlapping mutations: a slow network + a rapid second
@@ -22,47 +30,47 @@ class ProfileManagementNotifier extends AsyncNotifier<ProfileList> {
 
   @override
   Future<ProfileList> build() {
-    // watch (not read) so a server switch rebuilds the api + re-fetches. A null
-    // server throws here → the AsyncError surfaces "connect first" in the UI
+    // Reset the guard on every (re)build — a server switch while an action was
+    // in flight must not leave new actions wedged behind a stale _busy.
+    _busy = false;
+    // watch (via profileApiProvider) so a server switch rebuilds + re-fetches. A
+    // null server throws here → the AsyncError surfaces "connect first" in the UI
     // (rather than escaping a later guard and spinning on AsyncLoading forever).
-    final server = ref.watch(activeServerProvider);
-    if (server == null) {
+    final api = ref.watch(profileApiProvider);
+    if (api == null) {
       throw StateError('No active server — connect to a daemon to manage profiles.');
     }
-    _api = ProfileApi(server);
-    return _api.listProfiles();
+    _api = api;
+    return api.listProfiles();
   }
 
   /// Re-fetch the list, surfacing transport errors through the AsyncValue. Keeps
-  /// the current list visible during the fetch (no AsyncLoading flash after each
-  /// mutation) — the initial load already shows a spinner via build()'s pending
-  /// state. The fetch is wrapped in a closure so any throw is caught by guard
-  /// rather than escaping and stranding state on AsyncLoading.
+  /// the current list visible during the fetch (no AsyncLoading flash) — the
+  /// initial load already shows a spinner via build()'s pending state.
   Future<void> refresh() async {
     state = await AsyncValue.guard(() => _api.listProfiles());
   }
 
-  /// Run a mutation then refresh, under the [_busy] guard. Errors (notably the
-  /// daemon's 409 on deleting the active/last profile) propagate to the caller.
-  Future<void> _mutate(Future<void> Function() op) async {
+  /// Run a mutation then refresh, under the [_busy] guard. The ProfileApi is
+  /// snapshotted up front so the post-mutation refresh always targets the same
+  /// instance even if a server switch reassigns [_api] mid-flight. Errors
+  /// (notably the daemon's 409) propagate to the caller.
+  Future<void> _mutate(Future<void> Function(ProfileApi api) op) async {
     // Reject (don't silently drop) an overlapping action so the UI can tell the
-    // user, rather than discarding their tap with no feedback. Throwing before
-    // setting _busy leaves the in-flight action untouched.
+    // user, rather than discarding their tap with no feedback.
     if (_busy) {
       throw StateError('Another profile action is still in progress.');
     }
+    final api = _api; // snapshot — the finally refreshes against this instance
     _busy = true;
     try {
-      await op();
+      await op(api);
     } finally {
-      // Reconcile with server truth whether op succeeded OR threw — so an
-      // unexpected failure can't leave the list showing pre-mutation data.
-      // refresh() routes its own errors into `state`, so it can't throw here and
-      // mask op's original exception (which still propagates to the UI snackbar).
-      // Hold _busy until the refresh also settles, so a second action can't start
-      // mid-refresh and race the reload (the very stale-overwrite this guards).
+      // Reconcile with server truth on success OR failure (guard routes its own
+      // errors into `state`, so it can't throw here and mask op's exception).
+      // Hold _busy until the refresh settles so a second action can't race it.
       try {
-        await refresh();
+        state = await AsyncValue.guard(() => api.listProfiles());
       } finally {
         _busy = false;
       }
@@ -70,14 +78,14 @@ class ProfileManagementNotifier extends AsyncNotifier<ProfileList> {
   }
 
   /// Make [id] the active profile, then refresh. Throws on transport failure.
-  Future<void> select(String id) => _mutate(() => _api.selectProfile(id));
+  Future<void> select(String id) => _mutate((api) => api.selectProfile(id));
 
   /// Rename [id], then refresh. Throws on transport failure.
-  Future<void> rename(String id, String name) => _mutate(() => _api.renameProfile(id, name));
+  Future<void> rename(String id, String name) => _mutate((api) => api.renameProfile(id, name));
 
   /// Delete [id], then refresh. Throws on transport failure — notably the
   /// daemon's 409 when [id] is the active or last-remaining profile.
-  Future<void> delete(String id) => _mutate(() => _api.deleteProfile(id));
+  Future<void> delete(String id) => _mutate((api) => api.deleteProfile(id));
 }
 
 final profileManagementProvider =
