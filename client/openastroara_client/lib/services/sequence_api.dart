@@ -20,6 +20,16 @@ abstract interface class SequenceClient {
   /// nextCursor is a later slice.
   Future<SequencePage> list({int limit});
 
+  /// Import a NINA sequence file (§38.4). [ninaFile] is the parsed NINA JSON
+  /// object; the daemon translates it, stores it as a new sequence, and returns
+  /// what (if anything) the translation dropped. With [treatWarningsAsErrors] the
+  /// daemon answers 422 (a DioException here) if the import would be lossy.
+  Future<SequenceImportResult> importNina(
+    String newName,
+    Map<String, dynamic> ninaFile, {
+    bool treatWarningsAsErrors,
+  });
+
   /// Fetch a sequence's full detail and parse its body into the editor tree.
   /// Returns the root [SequenceNode] (an empty named root if the body has no
   /// recognizable tree). Throws on transport failure / unknown id (404).
@@ -84,6 +94,28 @@ class SequenceApi implements SequenceClient {
       hasMore: data['has_more'] == true,
       nextCursor: nextCursor is String ? nextCursor : null,
     );
+  }
+
+  @override
+  Future<SequenceImportResult> importNina(
+    String newName,
+    Map<String, dynamic> ninaFile, {
+    bool treatWarningsAsErrors = false,
+  }) async {
+    final res = await _dio.post<dynamic>(
+      '/api/v1/sequences/import',
+      data: <String, dynamic>{
+        'new_name': newName,
+        'nina_sequence_file': ninaFile,
+        'treat_warnings_as_errors': treatWarningsAsErrors,
+      },
+    );
+    final data = res.data;
+    if (data is! Map<String, dynamic>) {
+      throw FormatException(
+          'sequence import returned an unexpected body (${data.runtimeType})');
+    }
+    return SequenceImportResult.fromJson(data);
   }
 
   @override

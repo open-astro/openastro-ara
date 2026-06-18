@@ -79,6 +79,38 @@ class SequencePage {
   int get hashCode => Object.hash(hasMore, nextCursor, Object.hashAll(items));
 }
 
+/// Result of a NINA sequence-file import (`POST /api/v1/sequences/import`) —
+/// daemon's `SequenceImportResultDto` (§38.4). [warnings] /
+/// [droppedInstructionTypes] explain what the translation couldn't carry over;
+/// [lossyTranslation] is true when anything was dropped or approximated.
+class SequenceImportResult {
+  final String createdSequenceId;
+  final String name;
+  final List<String> warnings;
+  final List<String> droppedInstructionTypes;
+  final bool lossyTranslation;
+
+  const SequenceImportResult({
+    this.createdSequenceId = '',
+    this.name = '',
+    this.warnings = const [],
+    this.droppedInstructionTypes = const [],
+    this.lossyTranslation = false,
+  });
+
+  factory SequenceImportResult.fromJson(Map<String, dynamic> json) {
+    List<String> strings(dynamic v) =>
+        v is List ? v.whereType<String>().toList(growable: false) : const [];
+    return SequenceImportResult(
+      createdSequenceId: _str(json['created_sequence_id']) ?? '',
+      name: _str(json['name']) ?? '',
+      warnings: strings(json['warnings']),
+      droppedInstructionTypes: strings(json['dropped_instruction_types']),
+      lossyTranslation: json['lossy_translation'] == true,
+    );
+  }
+}
+
 /// Live run state of an active sequence — daemon's `SequenceRunStateDto`
 /// (`GET /api/v1/sequences/{id}/state`). null from the API means no active run.
 class SequenceRunStateInfo {
