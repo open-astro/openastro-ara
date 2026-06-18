@@ -80,11 +80,22 @@ class ProfileManagementScreen extends ConsumerWidget {
 
     // Pick metadata only (no withData) so we can size-check before reading the
     // file in — a profile share is a few KB of JSON, so anything large is a
-    // mis-pick and we refuse rather than slurp it into memory.
-    final picked = await FilePicker.pickFiles(
-      type: FileType.any,
-      dialogTitle: 'Choose a shared profile file',
-    );
+    // mis-pick and we refuse rather than slurp it into memory. The picker itself
+    // can throw (e.g. a macOS sandbox / denied-permission PlatformException), not
+    // just return null — catch it so it can't become a silent unhandled rejection
+    // under unawaited().
+    final FilePickerResult? picked;
+    try {
+      picked = await FilePicker.pickFiles(
+        type: FileType.any,
+        dialogTitle: 'Choose a shared profile file',
+      );
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(
+          content: Text(_friendly(e, fallback: "Couldn't open the file picker")),
+          backgroundColor: AraColors.accentError));
+      return;
+    }
     if (picked == null || picked.files.isEmpty) return; // user cancelled
     final file = picked.files.single;
     const maxShareBytes = 1024 * 1024; // 1 MB ceiling — shares are a few KB
