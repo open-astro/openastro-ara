@@ -18,6 +18,10 @@ abstract interface class SequenceClient {
   /// nextCursor is a later slice.
   Future<SequencePage> list({int limit});
 
+  /// Live run state of a sequence, or null when there's no active run (the
+  /// daemon answers 404). Polled by the run controls / status line.
+  Future<SequenceRunStateInfo?> getRunState(String id);
+
   Future<String> start(String id);
   Future<String> pause(String id);
   Future<String> resume(String id);
@@ -73,6 +77,27 @@ class SequenceApi implements SequenceClient {
       hasMore: data['has_more'] == true,
       nextCursor: nextCursor is String ? nextCursor : null,
     );
+  }
+
+  @override
+  Future<SequenceRunStateInfo?> getRunState(String id) async {
+    if (id.isEmpty) {
+      throw ArgumentError.value(id, 'id', 'sequence id must not be empty');
+    }
+    try {
+      final res = await _dio.get<dynamic>(
+          '/api/v1/sequences/${Uri.encodeComponent(id)}/state');
+      final data = res.data;
+      if (data is! Map<String, dynamic>) {
+        throw FormatException(
+            'sequence state returned an unexpected body (${data.runtimeType})');
+      }
+      return SequenceRunStateInfo.fromJson(data);
+    } on DioException catch (e) {
+      // 404 = no active run for this sequence (idle); not an error — return null.
+      if (e.response?.statusCode == 404) return null;
+      rethrow;
+    }
   }
 
   @override

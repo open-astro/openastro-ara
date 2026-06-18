@@ -148,6 +148,53 @@ void main() {
     });
   });
 
+  group('SequenceApi.getRunState', () {
+    test('parses an active run state', () async {
+      final api = _api((_) => {
+            'sequence_id': 'seq-1',
+            'run_id': 'run-9',
+            'state': 'running',
+            'current_instruction_index': 4,
+            'current_target_name': 'M31',
+            'started_utc': '2026-06-18T09:00:00Z',
+            'completed_utc': null,
+            'frames_completed': 12,
+            'frames_total': 60,
+            'current_instruction_description': 'Take exposure',
+          });
+      final info = await api.getRunState('seq-1');
+      expect(info, isNotNull);
+      expect(info!.state, SequenceRunState.running);
+      expect(info.currentInstructionIndex, 4);
+      expect(info.currentTargetName, 'M31');
+      expect(info.startedUtc, DateTime.utc(2026, 6, 18, 9));
+      expect(info.completedUtc, isNull);
+      expect(info.framesCompleted, 12);
+      expect(info.framesTotal, 60);
+    });
+
+    test('an unknown/absent state surfaces as null (not idle)', () async {
+      final api = _api((_) => {'run_id': 'r', 'state': 'warp_speed'});
+      final info = await api.getRunState('seq-1');
+      expect(info!.state, isNull);
+    });
+
+    test('returns null when there is no active run (404)', () async {
+      final api = _api((_) => {'error': 'no run'}, statusCode: 404);
+      expect(await api.getRunState('seq-1'), isNull);
+    });
+
+    test('rejects an empty id before any request', () async {
+      final api = _api((_) => const {});
+      expect(() => api.getRunState(''), throwsA(isA<ArgumentError>()));
+    });
+
+    test('throws on a non-object 200 body', () async {
+      final api = _api((_) => [1, 2, 3]); // array, not the state object
+      expect(api.getRunState('seq-1'), throwsA(isA<FormatException>()));
+    });
+  });
+
   group('SequenceApi lifecycle', () {
     test('start returns the accepted operation id', () async {
       final api = _api((_) =>
