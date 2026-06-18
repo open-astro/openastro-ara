@@ -188,7 +188,12 @@ Future<String?> createSequenceFromTemplate(
   required String newName,
 }) async {
   final api = ref.read(sequenceApiProvider);
-  if (api == null) return null;
+  if (api == null) {
+    // The New button is gated on `connected`, so this shouldn't be reachable;
+    // log it (rather than silently no-op) in case that gating ever regresses.
+    debugPrint('[sequencer] createSequenceFromTemplate: no API (disconnected)');
+    return null;
+  }
   final messenger = ScaffoldMessenger.of(context);
 
   String id;
