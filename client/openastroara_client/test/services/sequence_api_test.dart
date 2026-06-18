@@ -118,6 +118,20 @@ void main() {
       expect(await api.start('seq-1'), 'op-123');
     });
 
+    test('start omits start_from_instruction_index (sends no explicit null)',
+        () async {
+      RequestOptions? captured;
+      final api = _api((opts) {
+        captured = opts;
+        return {'operation_id': 'op-1', 'operation_type': 'sequence_start'};
+      });
+      await api.start('seq-1');
+      final body = captured!.data as Map;
+      expect(body.containsKey('start_from_instruction_index'), isFalse);
+      expect(body['dry_run'], false);
+      expect(body['continue_on_recoverable_errors'], false);
+    });
+
     test('abort throws when no operation_id comes back', () async {
       final api = _api((_) => {'unexpected': true});
       expect(api.abort('seq-1'), throwsA(isA<FormatException>()));

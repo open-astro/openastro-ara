@@ -64,8 +64,11 @@ class SequenceApi implements SequenceClient {
 
   @override
   Future<String> start(String id) => _lifecycle(id, 'start', body: const {
+        // start_from_instruction_index is omitted, not sent as null: the daemon's
+        // SequenceStartRequestDto field is `int?`, so a missing key deserializes
+        // to null ("start from the beginning") — the intent here — without
+        // relying on the server accepting an explicit JSON null for an int field.
         'dry_run': false,
-        'start_from_instruction_index': null,
         'continue_on_recoverable_errors': false,
       });
 
