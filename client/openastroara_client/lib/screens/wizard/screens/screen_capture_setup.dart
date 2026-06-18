@@ -5,6 +5,8 @@ import '../../../models/profile_draft.dart';
 import '../../../state/wizard_state.dart';
 import '../wizard_form_kit.dart';
 
+// Read once: the wizard controller reuses a single ProfileDraft instance for the
+// whole run (it's never replaced), so caching it as `late final` can't go stale.
 ProfileDraft _draftOf(WidgetRef ref) =>
     ref.read(wizardControllerProvider).draft;
 
@@ -21,6 +23,7 @@ class ScreenPlateSolve extends ConsumerStatefulWidget {
 
 class _ScreenPlateSolveState extends ConsumerState<ScreenPlateSolve> {
   late final PlateSolveSettings _ps = _draftOf(ref).plateSolve;
+  String? _radiusError;
 
   @override
   Widget build(BuildContext context) {
@@ -50,34 +53,43 @@ class _ScreenPlateSolveState extends ConsumerState<ScreenPlateSolve> {
           hint: 'default 30',
           helperText: 'How far from the expected position ASTAP searches '
               '(0–180°). Leave blank to keep the profile default.',
+          errorText: _radiusError,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           inputFormatters: WizardInput.unsignedDecimal,
-          // Blank → null (preserve base on Save). Only accept the same range the
-          // settings notifier enforces (0 < v ≤ 180); an out-of-range or partial
-          // entry keeps the prior value rather than pushing junk to the daemon.
+          // Blank → null (preserve base on Save). Out of the notifier's 0 < v ≤ 180
+          // range → surface an error and don't write, so an invalid value isn't
+          // silently dropped (and never reaches the daemon to fail late).
           onChanged: (v) {
             final t = v.trim();
             if (t.isEmpty) {
+              setState(() => _radiusError = null);
               _ps.searchRadiusDeg = null;
               return;
             }
             final d = double.tryParse(t);
-            if (d != null && d > 0 && d <= 180) _ps.searchRadiusDeg = d;
+            if (d != null && d > 0 && d <= 180) {
+              setState(() => _radiusError = null);
+              _ps.searchRadiusDeg = d;
+            } else if (d != null) {
+              setState(() => _radiusError = 'Enter a value between 0 and 180°.');
+            }
           },
         ),
-        WizardDropdown<int>(
+        // Nullable so the selected entry communicates "not set" the way a blank
+        // text field does: null shows "Keep profile default" and Save preserves
+        // the base; picking 1/2/4 overrides it (no misleading visual fallback).
+        WizardDropdown<int?>(
           label: 'Downsample factor',
-          value: _ps.downsampleFactor ?? 2, // visual default; null keeps base on Save
-          helperText: 'Bin the image before solving — faster on large sensors. '
-              'Shows 2 by default; pick a value to override the profile setting.',
+          value: _ps.downsampleFactor,
+          helperText:
+              'Bin the image before solving — faster on large sensors.',
           entries: const [
+            DropdownMenuEntry(value: null, label: 'Keep profile default'),
             DropdownMenuEntry(value: 1, label: '1 — none'),
             DropdownMenuEntry(value: 2, label: '2 — recommended'),
             DropdownMenuEntry(value: 4, label: '4 — large sensors'),
           ],
-          onChanged: (v) {
-            if (v != null) setState(() => _ps.downsampleFactor = v);
-          },
+          onChanged: (v) => setState(() => _ps.downsampleFactor = v),
         ),
       ],
     );

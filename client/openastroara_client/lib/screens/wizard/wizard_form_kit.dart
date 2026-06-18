@@ -114,6 +114,7 @@ class WizardTextField extends StatefulWidget {
   final String label;
   final String? hint;
   final String? helperText;
+  final String? errorText;
   final String? initialValue;
   final bool required;
   final TextInputType? keyboardType;
@@ -126,6 +127,7 @@ class WizardTextField extends StatefulWidget {
     required this.onChanged,
     this.hint,
     this.helperText,
+    this.errorText,
     this.initialValue,
     this.required = false,
     this.keyboardType,
@@ -165,6 +167,7 @@ class _WizardTextFieldState extends State<WizardTextField> {
           labelText: widget.required ? '${widget.label} *' : widget.label,
           hintText: widget.hint,
           helperText: widget.helperText,
+          errorText: widget.errorText,
           helperMaxLines: 3,
           filled: true,
           fillColor: AraColors.bgInput,
