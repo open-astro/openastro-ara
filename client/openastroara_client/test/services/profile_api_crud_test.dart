@@ -130,6 +130,24 @@ void main() {
     });
   });
 
+  group('ProfileApi §70 share export', () {
+    test('exportProfile POSTs to /share-export and parses the manifest',
+        () async {
+      final a = _RecordingAdapter(body: {
+        'profile_id': 'id-9',
+        'profile_name': "Joey's C8",
+        'manifest': {'schema_version': 'profile-share-v1', 'settings': {}},
+        'payload_bytes': 1234,
+      });
+      final share = await _api(a).exportProfile('id-9');
+      expect(a.method, 'POST');
+      expect(a.path, '/api/v1/profiles/id-9/share-export');
+      expect(share.profileName, "Joey's C8");
+      expect(share.manifest['schema_version'], 'profile-share-v1');
+      expect(share.payloadBytes, 1234);
+    });
+  });
+
   group('ProfileApi §70 share import', () {
     test('importPreview POSTs the manifest and parses the preview', () async {
       final a = _RecordingAdapter(body: {

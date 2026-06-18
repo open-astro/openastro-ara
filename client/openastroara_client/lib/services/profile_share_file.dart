@@ -23,6 +23,21 @@ Map<String, dynamic> parseShareManifest(List<int> bytes) {
   return decoded;
 }
 
+/// A safe suggested filename for an exported profile share, derived from the
+/// profile's [name]. Strips characters that are illegal in filenames on any of
+/// the desktop targets (`/ \ : * ? " < > |` + control chars), collapses runs of
+/// whitespace/dashes, and falls back to "profile" when nothing usable is left —
+/// then appends the `.araprofile.json` suffix so shares are recognizable.
+String shareFileName(String name) {
+  final cleaned = name
+      .replaceAll(RegExp(r'[\/\\:*?"<>|\x00-\x1f]'), '-')
+      .replaceAll(RegExp(r'\s+'), '-')
+      .replaceAll(RegExp(r'-+'), '-')
+      .replaceAll(RegExp(r'^-+|-+$'), '');
+  final base = cleaned.isEmpty ? 'profile' : cleaned;
+  return '$base.araprofile.json';
+}
+
 /// A relative "import within ~N minutes" note for the import confirm dialog, or
 /// null when there's no expiry. Relative (computed against the current instant)
 /// rather than a wall-clock time, so it sidesteps date / timezone ambiguity and

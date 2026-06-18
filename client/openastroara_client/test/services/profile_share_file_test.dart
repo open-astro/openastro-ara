@@ -32,6 +32,19 @@ void main() {
     });
   });
 
+  group('shareFileName', () {
+    test('sanitizes illegal characters and appends the suffix', () {
+      expect(shareFileName('My Rig'), 'My-Rig.araprofile.json');
+      expect(shareFileName('a/b:c*d?'), 'a-b-c-d.araprofile.json');
+      expect(shareFileName('  spaced  out  '), 'spaced-out.araprofile.json');
+    });
+
+    test('falls back to "profile" when nothing usable remains', () {
+      expect(shareFileName('///'), 'profile.araprofile.json');
+      expect(shareFileName(''), 'profile.araprofile.json');
+    });
+  });
+
   group('shareExpiryNote', () {
     final now = DateTime.utc(2026, 6, 18, 4, 0, 0);
 
