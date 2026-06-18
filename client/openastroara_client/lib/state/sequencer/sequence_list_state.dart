@@ -160,25 +160,37 @@ class SequenceRunStateNotifier extends AsyncNotifier<SequenceRunStateInfo?> {
   void _applyWsEvent(WsEvent event, String? selectedId) {
     if (selectedId == null) return;
     if (!event.type.startsWith(SequenceWsEvents.prefix)) return;
-    // Skip while the initial REST read is still in flight (or errored): applying
-    // now would be clobbered by build()'s resolving future, silently dropping
-    // this frame. Once there's a value (incl. a null "no active run"), apply.
+    // Skip only while there's no value at all — the initial REST read still in
+    // flight. Once there's ever been a value (incl. a null "no active run", or a
+    // refresh error that kept its previous value), keep applying so live
+    // tracking survives a transient REST failure.
     if (!state.hasValue) return;
     // Ignore a frame that names a different sequence; a missing or non-String
     // id is treated as absent and applied (best-effort).
     final payloadId = event.payload['sequence_id'];
     if (payloadId is String && payloadId != selectedId) return;
-    final current = state.asData?.value ?? const SequenceRunStateInfo();
+    // `state.value` (not `asData?.value`): after a refresh error the state is an
+    // AsyncError that still carries the previous value (copyWithPrevious below).
+    final current = state.value ?? const SequenceRunStateInfo();
     state = AsyncData(current.applyWsProgress(event.payload));
   }
 
-  /// Re-read the run state (after a lifecycle transition). Surfaces transport
-  /// errors as an AsyncError rather than leaving stale state.
+  /// Re-read the run state (after a lifecycle transition). On failure the last
+  /// good value is retained (the error is logged, not promoted to a value-less
+  /// AsyncError) so `state.hasValue` stays true and the live WS stream keeps
+  /// updating the status line instead of freezing on a transient REST hiccup.
+  /// A real transport failure of the action itself is surfaced by the toolbar's
+  /// own SnackBar, not here.
   Future<void> refresh() async {
     final next = await AsyncValue.guard(_read);
     // Guard against disposal during the await (autoDispose + tab switch): writing
     // `state` after the notifier is gone throws StateError.
-    if (ref.mounted) state = next;
+    if (!ref.mounted) return;
+    if (next.hasError) {
+      debugPrint('[sequencer] run-state refresh failed: ${next.error}');
+    } else {
+      state = next;
+    }
   }
 }
 

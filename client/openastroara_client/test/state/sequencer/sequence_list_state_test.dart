@@ -25,9 +25,13 @@ class _FakeSeqClient implements SequenceClient {
   // When set, getRunState awaits this gate so a test can hold the initial REST
   // read in flight (to exercise the "skip WS while loading" path).
   Completer<SequenceRunStateInfo?>? runStateGate;
+  // When true, getRunState throws — to exercise the refresh-failure path.
+  bool throwOnRead = false;
   @override
-  Future<SequenceRunStateInfo?> getRunState(String id) =>
-      runStateGate?.future ?? Future.value(runState);
+  Future<SequenceRunStateInfo?> getRunState(String id) {
+    if (throwOnRead) return Future.error(Exception('transient'));
+    return runStateGate?.future ?? Future.value(runState);
+  }
   @override
   Future<SequenceImportResult> importNina(String n, Map<String, dynamic> f, {bool treatWarningsAsErrors = false}) async => const SequenceImportResult(createdSequenceId: 'new');
   @override
@@ -181,6 +185,29 @@ void main() {
       expect(info?.state, SequenceRunState.running);
       expect(info?.framesCompleted, 9);
       expect(info?.framesTotal, 30);
+    });
+
+    test('a refresh() failure does not freeze live WS tracking', () async {
+      final (container, controller, fake) = await setup('seq-1');
+      // A refresh fails (e.g. a network hiccup after pressing Pause). The last
+      // good value is retained (error logged, not promoted to a value-less
+      // AsyncError), so hasValue stays true and the WS guard keeps applying.
+      fake.throwOnRead = true;
+      await container.read(sequenceRunStateProvider.notifier).refresh();
+      expect(container.read(sequenceRunStateProvider).hasValue, isTrue);
+
+      // A subsequent WS frame must still apply (not be dropped by the guard).
+      controller.add(event(SequenceWsEvents.progress, const {
+        'sequence_id': 'seq-1',
+        'state': 'running',
+        'frames_completed': 21,
+        'frames_total': 60,
+      }));
+      await pumpEventQueue();
+
+      final info = container.read(sequenceRunStateProvider).value;
+      expect(info?.state, SequenceRunState.running);
+      expect(info?.framesCompleted, 21);
     });
   });
 }
