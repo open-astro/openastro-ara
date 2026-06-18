@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart';
 // settings-state files, so hide the draft's to disambiguate (the draft
 // sub-objects are still reached via `d.<field>`).
 import '../../models/profile_draft.dart'
-    hide ImagingDefaults, PlateSolveSettings, AutofocusSettings;
+    hide ImagingDefaults, PlateSolveSettings, AutofocusSettings, SafetyPolicies;
 import '../../services/profile_api.dart';
 import '../../state/imaging/exposure_state.dart' show FrameKind;
 import '../../state/settings/autofocus_settings_state.dart';
@@ -13,6 +13,7 @@ import '../../state/settings/imaging_defaults_state.dart';
 import '../../state/settings/optics_settings_state.dart';
 import '../../state/settings/phd2_settings_state.dart';
 import '../../state/settings/plate_solve_settings_state.dart';
+import '../../state/settings/safety_policies_state.dart';
 import '../../state/settings/site_settings_state.dart';
 import '../../state/settings/storage_settings_state.dart';
 
@@ -162,6 +163,24 @@ StorageSettings applyDraftToStorage(StorageSettings base, ProfileDraft d) {
   );
 }
 
+/// §37.5 screen 15 — map the draft's compact safety choices onto the safety
+/// section. Every field is nullable (null keeps base). The §37.5 weather-granular
+/// + alarm bits aren't section-backed (see design/PORT_TODO.md).
+SafetyPolicies applyDraftToSafety(SafetyPolicies base, ProfileDraft d) {
+  final s = d.safety;
+  return base.copyWith(
+    onUnsafe: switch (s.onUnsafe) {
+      UnsafeConditionAction.pauseAndPark => UnsafeAction.pauseAndPark,
+      UnsafeConditionAction.parkOnly => UnsafeAction.parkOnly,
+      UnsafeConditionAction.abortAndPark => UnsafeAction.abortAndPark,
+      UnsafeConditionAction.ignore => UnsafeAction.ignore,
+      null => null,
+    },
+    autoResumeWhenSafe: s.autoResumeWhenSafe,
+    resumeDelayMin: s.resumeDelayMin,
+  );
+}
+
 /// Create a new active profile from the wizard draft and layer the configured
 /// sections on top. Throws on transport failure — the caller surfaces it.
 ///
@@ -202,6 +221,8 @@ Future<void> saveWizardProfile(ProfileApi api, ProfileDraft d) async {
         applyDraftToAutofocus(await api.getAutofocusSettings(), d))),
     _trySave(() async => api.putStorageSettings(
         applyDraftToStorage(await api.getStorageSettings(), d))),
+    _trySave(() async => api.putSafetyPolicies(
+        applyDraftToSafety(await api.getSafetyPolicies(), d))),
   ]))
       .whereType<Object>()
       .toList();

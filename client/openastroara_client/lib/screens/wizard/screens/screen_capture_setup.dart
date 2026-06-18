@@ -349,3 +349,88 @@ class _ScreenImagingDefaultsState
     );
   }
 }
+
+// ── Screen 15 — Safety ──────────────────────────────────────────────────────
+
+/// §37.5 — the compact safety setup: what ARA does when the safety monitor
+/// reports unsafe conditions, and whether it auto-resumes. Binds to the draft's
+/// [SafetyPolicies] bag; the wizard Save maps it onto the profile's safety
+/// section. (Weather-type-granular actions + alarms live in Settings → Safety.)
+class ScreenSafety extends ConsumerStatefulWidget {
+  const ScreenSafety({super.key});
+  @override
+  ConsumerState<ScreenSafety> createState() => _ScreenSafetyState();
+}
+
+class _ScreenSafetyState extends ConsumerState<ScreenSafety> {
+  late final SafetyPolicies _sp = _draftOf(ref).safety;
+  String? _delayError;
+
+  @override
+  Widget build(BuildContext context) {
+    return WizardScreenScaffold(
+      step: 15,
+      intro: 'What ARA does when conditions become unsafe (clouds, wind, rain, '
+          'or a safety monitor tripping). Fine-grained policies live in '
+          'Settings → Safety.',
+      children: [
+        WizardDropdown<UnsafeConditionAction?>(
+          label: 'When conditions are unsafe',
+          value: _sp.onUnsafe,
+          helperText: 'How the running sequence reacts to an unsafe report.',
+          entries: const [
+            DropdownMenuEntry(value: null, label: 'Keep profile default'),
+            DropdownMenuEntry(
+                value: UnsafeConditionAction.pauseAndPark,
+                label: 'Pause & park'),
+            DropdownMenuEntry(
+                value: UnsafeConditionAction.parkOnly, label: 'Park only'),
+            DropdownMenuEntry(
+                value: UnsafeConditionAction.abortAndPark,
+                label: 'Abort & park'),
+            DropdownMenuEntry(
+                value: UnsafeConditionAction.ignore, label: 'Ignore'),
+          ],
+          onChanged: (v) => setState(() => _sp.onUnsafe = v),
+        ),
+        WizardDropdown<bool?>(
+          label: 'Auto-resume when safe again',
+          value: _sp.autoResumeWhenSafe,
+          helperText: 'Resume a paused sequence once conditions clear.',
+          entries: const [
+            DropdownMenuEntry(value: null, label: 'Keep profile default'),
+            DropdownMenuEntry(value: true, label: 'Yes'),
+            DropdownMenuEntry(value: false, label: 'No'),
+          ],
+          onChanged: (v) => setState(() => _sp.autoResumeWhenSafe = v),
+        ),
+        WizardTextField(
+          label: 'Resume delay (minutes)',
+          initialValue: _sp.resumeDelayMin?.toString(),
+          hint: 'default 10',
+          helperText: 'Wait this long after conditions clear before resuming. '
+              'Leave blank to keep the profile default.',
+          errorText: _delayError,
+          keyboardType: const TextInputType.numberWithOptions(decimal: false),
+          inputFormatters: WizardInput.unsignedInt,
+          onChanged: (v) {
+            final t = v.trim();
+            if (t.isEmpty) {
+              setState(() => _delayError = null);
+              _sp.resumeDelayMin = null;
+              return;
+            }
+            final n = int.tryParse(t);
+            // 0 is valid (resume immediately); only a non-parse fails here.
+            if (n != null && n >= 0) {
+              setState(() => _delayError = null);
+              _sp.resumeDelayMin = n;
+            } else {
+              setState(() => _delayError = 'Enter a whole number of minutes.');
+            }
+          },
+        ),
+      ],
+    );
+  }
+}

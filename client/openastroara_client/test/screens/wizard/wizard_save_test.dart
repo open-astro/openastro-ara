@@ -2,10 +2,11 @@ import 'package:flutter_test/flutter_test.dart';
 // Hide the draft's ImagingDefaults; the section model of the same name comes from
 // imaging_defaults_state below.
 import 'package:openastroara/models/profile_draft.dart'
-    hide ImagingDefaults, PlateSolveSettings, AutofocusSettings;
+    hide ImagingDefaults, PlateSolveSettings, AutofocusSettings, SafetyPolicies;
 import 'package:openastroara/screens/wizard/wizard_save.dart';
 import 'package:openastroara/state/imaging/exposure_state.dart' show FrameKind;
 import 'package:openastroara/state/settings/autofocus_settings_state.dart';
+import 'package:openastroara/state/settings/safety_policies_state.dart';
 import 'package:openastroara/state/settings/imaging_defaults_state.dart';
 import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
@@ -190,6 +191,26 @@ void main() {
       expect(out.saveDirectory, '/keep/dir');
       expect(out.fileFormat, base.fileFormat);
       expect(out.compression, base.compression);
+    });
+
+    test('applyDraftToSafety maps the unsafe-conditions subset', () {
+      final d = ProfileDraft();
+      d.safety
+        ..onUnsafe = UnsafeConditionAction.abortAndPark
+        ..autoResumeWhenSafe = false
+        ..resumeDelayMin = 3;
+      final out = applyDraftToSafety(const SafetyPolicies(), d);
+      expect(out.onUnsafe, UnsafeAction.abortAndPark);
+      expect(out.autoResumeWhenSafe, isFalse);
+      expect(out.resumeDelayMin, 3);
+    });
+
+    test('applyDraftToSafety preserves base on a blank draft', () {
+      final base = const SafetyPolicies()
+          .copyWith(onUnsafe: UnsafeAction.ignore, resumeDelayMin: 20);
+      final out = applyDraftToSafety(base, ProfileDraft());
+      expect(out.onUnsafe, UnsafeAction.ignore);
+      expect(out.resumeDelayMin, 20);
     });
 
     test('applyDraftToPhd2 sets forceCalibrationEachSession for each-session', () {

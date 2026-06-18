@@ -13,6 +13,7 @@ import 'package:openastroara/state/settings/imaging_defaults_state.dart';
 import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
 import 'package:openastroara/state/settings/plate_solve_settings_state.dart';
+import 'package:openastroara/state/settings/safety_policies_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/state/settings/storage_settings_state.dart';
 
@@ -65,6 +66,10 @@ class _FakeProfileApi extends ProfileApi {
   Future<StorageSettings> getStorageSettings() async => const StorageSettings();
   @override
   Future<StorageSettings> putStorageSettings(StorageSettings v) async => v;
+  @override
+  Future<SafetyPolicies> getSafetyPolicies() async => const SafetyPolicies();
+  @override
+  Future<SafetyPolicies> putSafetyPolicies(SafetyPolicies v) async => v;
 }
 
 Widget _host(_FakeProfileApi api, {required void Function() onComplete}) {
