@@ -22,9 +22,18 @@ class ProfileShareImportPreview {
 
   factory ProfileShareImportPreview.fromJson(Map<String, dynamic> json) {
     // Daemon serializes with SnakeCaseLower (see Program.cs). Coerce defensively
-    // so a missing/garbled field degrades to an empty value rather than throwing.
+    // so a missing/garbled descriptive field degrades to an empty value.
+    final token = json['import_token']?.toString() ?? '';
+    if (token.isEmpty) {
+      // The token is the credential carried to commit — a preview without one
+      // (version mismatch / unexpected DTO) is unusable. Fail loudly here rather
+      // than let an empty token 404 at commit with a misleading "couldn't import"
+      // message; the import flow's FormatException catch surfaces this instead.
+      throw const FormatException(
+          'Profile-share preview response is missing its import token.');
+    }
     return ProfileShareImportPreview(
-      importToken: json['import_token']?.toString() ?? '',
+      importToken: token,
       profileName: json['profile_name']?.toString() ?? '',
       warnings: _stringList(json['warnings']),
       droppedFields: _stringList(json['dropped_fields']),

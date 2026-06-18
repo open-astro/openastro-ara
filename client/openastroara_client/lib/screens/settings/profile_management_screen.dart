@@ -106,7 +106,10 @@ class ProfileManagementScreen extends ConsumerWidget {
 
     if (!context.mounted) return;
     final confirmed = await _confirmImport(context, preview);
-    if (!confirmed) return;
+    // Re-check after the dialog's async gap: the screen may have been popped
+    // while it was open, which would make the post-commit ref.read/refresh run
+    // against a disposed WidgetRef.
+    if (!confirmed || !context.mounted) return;
 
     try {
       await api.importCommit(preview.importToken);

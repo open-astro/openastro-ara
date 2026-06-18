@@ -151,6 +151,17 @@ void main() {
       expect(preview.expiresUtc, isNotNull);
     });
 
+    test('importPreview throws if the preview response has no import token',
+        () async {
+      // A version-mismatch / unexpected DTO without import_token must fail loudly
+      // rather than carry an empty token to commit (which would 404 misleadingly).
+      final a = _RecordingAdapter(body: {'profile_name': 'X'});
+      expect(
+        () => _api(a).importPreview({'schema_version': 'profile-share-v1'}),
+        throwsA(isA<FormatException>()),
+      );
+    });
+
     test('importCommit POSTs the token in the body and returns the new id',
         () async {
       // The daemon returns the new Guid as a bare JSON string (201 Created).
@@ -160,6 +171,15 @@ void main() {
       expect(a.path, '/api/v1/profiles/share-import/commit');
       expect((a.requestData as Map)['import_token'], 'tok-1');
       expect(id, 'new-profile-id');
+    });
+
+    test('importCommit throws if the response carries no profile id', () async {
+      // Empty/garbled 2xx body — fail loudly rather than return an unaddressable id.
+      final a = _RecordingAdapter(body: '');
+      expect(
+        () => _api(a).importCommit('tok-1'),
+        throwsA(isA<StateError>()),
+      );
     });
   });
 }
