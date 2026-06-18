@@ -237,7 +237,10 @@ public static class SystemEndpoints {
                             statusCode: StatusCodes.Status429TooManyRequests);
                     }
                 })
-            .Accepts<System.Text.Json.JsonElement>("application/json")
+            // Document the body as the typed manifest so the OpenAPI spec surfaces the
+            // expected profile-share-v1 shape, even though the handler binds a raw
+            // JsonElement to keep validation tolerant (garbled input → 422, not 400).
+            .Accepts<ProfileShareManifest>("application/json")
             .Produces<ProfileShareImportPreviewDto>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
             .ProducesProblem(StatusCodes.Status429TooManyRequests)
