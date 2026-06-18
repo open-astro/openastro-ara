@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -169,8 +171,8 @@ class SequenceRunStateNotifier extends AsyncNotifier<SequenceRunStateInfo?> {
     // id is treated as absent and applied (best-effort).
     final payloadId = event.payload['sequence_id'];
     if (payloadId is String && payloadId != selectedId) return;
-    // `state.value` (not `asData?.value`): after a refresh error the state is an
-    // AsyncError that still carries the previous value (copyWithPrevious below).
+    // Use whatever value we currently hold: a refresh failure leaves the prior
+    // AsyncData in place (see refresh()), so this is the last good snapshot.
     final current = state.value ?? const SequenceRunStateInfo();
     state = AsyncData(current.applyWsProgress(event.payload));
   }
@@ -187,7 +189,10 @@ class SequenceRunStateNotifier extends AsyncNotifier<SequenceRunStateInfo?> {
     // `state` after the notifier is gone throws StateError.
     if (!ref.mounted) return;
     if (next.hasError) {
-      debugPrint('[sequencer] run-state refresh failed: ${next.error}');
+      // developer.log (not debugPrint) so the failure survives release builds —
+      // it can be the only signal that e.g. completedUtc never reloaded.
+      developer.log('run-state refresh failed',
+          name: 'sequencer', error: next.error, stackTrace: next.stackTrace);
     } else {
       state = next;
     }

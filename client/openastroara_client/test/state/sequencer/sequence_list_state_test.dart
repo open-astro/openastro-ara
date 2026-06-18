@@ -154,7 +154,7 @@ void main() {
       expect(container.read(sequenceRunStateProvider).value, isNull);
     });
 
-    test('a frame arriving while the initial read is in flight is not lost',
+    test('a frame arriving while loading is skipped; tracking resumes once loaded',
         () async {
       // Hold the initial getRunState open so the provider stays loading.
       final gate = Completer<SequenceRunStateInfo?>();
