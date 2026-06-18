@@ -307,21 +307,26 @@ Future<String?> _promptName(BuildContext context, {required String initial}) {
 /// the caller handles success/failure.
 Future<T> _runWithSpinner<T>(
     BuildContext context, Future<T> Function() op) async {
-  showDialog<void>(
+  final navigator = Navigator.of(context, rootNavigator: false);
+  // Push an explicit spinner route we hold a handle to, then remove exactly that
+  // route when done. showDialog()'s push is deferred a frame, so a synchronously
+  // completing op could otherwise reach a bare Navigator.pop() before the spinner
+  // is on the stack and pop the screen itself. removeRoute(spinner) targets the
+  // specific route, so it's safe regardless of frame timing.
+  final spinner = DialogRoute<void>(
     context: context,
     barrierDismissible: false,
-    useRootNavigator: false,
     builder: (_) => const PopScope(
       canPop: false,
       child: Center(child: CircularProgressIndicator()),
     ),
   );
+  unawaited(navigator.push(spinner));
   try {
     return await op();
   } finally {
-    // Pop the spinner off the same (nearest) navigator it was pushed onto. Guard
-    // mounted so a screen popped mid-RPC doesn't pop a disposed navigator.
-    if (context.mounted) Navigator.of(context, rootNavigator: false).pop();
+    // Guard mounted so a screen popped mid-RPC doesn't touch a disposed navigator.
+    if (context.mounted) navigator.removeRoute(spinner);
   }
 }
 
