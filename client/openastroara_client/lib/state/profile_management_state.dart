@@ -48,9 +48,13 @@ class ProfileManagementNotifier extends AsyncNotifier<ProfileList> {
     _busy = true;
     try {
       await op();
-      await refresh();
     } finally {
       _busy = false;
+      // Reconcile with server truth whether op succeeded OR threw — so an
+      // unexpected failure can't leave the list showing pre-mutation data.
+      // refresh() routes its own errors into `state`, so it can't throw here and
+      // mask op's original exception (which still propagates to the UI snackbar).
+      await refresh();
     }
   }
 

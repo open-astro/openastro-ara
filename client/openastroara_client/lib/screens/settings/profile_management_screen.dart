@@ -42,12 +42,16 @@ class ProfileManagementScreen extends ConsumerWidget {
   }
 
   Future<void> _addProfile(BuildContext context, WidgetRef ref) async {
+    // The wizard fires onComplete only on Save (not on a back/cancel); refresh
+    // only then, so a cancelled wizard doesn't trigger a needless list re-fetch.
+    var created = false;
     await Navigator.of(context).push<void>(
-      MaterialPageRoute(builder: (_) => const WizardShell()),
+      MaterialPageRoute(
+        builder: (_) => WizardShell(onComplete: (_) => created = true)),
     );
-    // The wizard creates + activates the profile on Save; refresh either way so
-    // a new (or unchanged) list re-renders with the right active badge.
-    await ref.read(profileManagementProvider.notifier).refresh();
+    if (created) {
+      await ref.read(profileManagementProvider.notifier).refresh();
+    }
   }
 }
 
