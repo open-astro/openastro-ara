@@ -1,13 +1,17 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../models/sequence/sequence_summary.dart';
+import '../../services/sequence_api.dart';
 import '../../state/sequencer/sequence_list_state.dart';
 import '../../theme/ara_colors.dart';
 import 'sequence_load_dialog.dart';
 
-/// §25.5.3 sequencer toolbar. Load is wired to the §38 sequence list (opens the
-/// picker once a server is connected). Save / Validate / Run / Pause / Abort
-/// remain disabled pending later slices (body→tree load, then lifecycle).
+/// §25.5.3 sequencer toolbar. Load opens the §38 sequence picker; Run / Pause /
+/// Abort drive the lifecycle endpoints on the selected sequence, gated by its
+/// live run state. Save / Validate stay disabled pending later slices (the
+/// editor body→tree load + validation path).
 class SequencerToolbar extends ConsumerWidget {
   const SequencerToolbar({super.key});
 
@@ -15,6 +19,9 @@ class SequencerToolbar extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final connected = ref.watch(sequenceApiProvider) != null;
     final selectedId = ref.watch(selectedSequenceIdProvider);
+    final runInfo = ref.watch(sequenceRunStateProvider).asData?.value;
+    final runState = runInfo?.state;
+
     // Resolve the picked sequence's name from the loaded list so the status line
     // can confirm WHICH sequence is selected (not just "one is").
     String? selectedName;
@@ -29,6 +36,22 @@ class SequencerToolbar extends ConsumerWidget {
         }
       }
     }
+
+    // A command in flight disables all controls so a double-tap can't fire two
+    // concurrent lifecycle calls.
+    final busy = ref.watch(sequenceCommandBusyProvider);
+    final hasSelection = connected && selectedId != null && !busy;
+    final isRunning = runState == SequenceRunState.running;
+    final isPaused = runState == SequenceRunState.paused;
+    final isActive = runState?.isActive ?? false;
+    // Run = start when there's no active run; resume when paused. Disabled only
+    // while running/starting/aborting. Pause only while running; Abort while any
+    // run is active. A null run state (no active run / unknown) → Run only.
+    final isAborting = runState == SequenceRunState.aborting;
+    final canRunOrResume = hasSelection && (!isActive || isPaused);
+    final canPause = hasSelection && isRunning;
+    // Abort while a run is active, but not when it's already aborting.
+    final canAbort = hasSelection && isActive && !isAborting;
 
     return Container(
       height: 44,
@@ -62,22 +85,34 @@ class SequencerToolbar extends ConsumerWidget {
                     label: 'Validate',
                     onPressed: null),
                 const VerticalDivider(width: 16, indent: 8, endIndent: 8),
-                const _ToolButton(
-                    icon: Icons.play_arrow, label: 'Run', onPressed: null),
-                const _ToolButton(
-                    icon: Icons.pause, label: 'Pause', onPressed: null),
-                const _ToolButton(
-                    icon: Icons.stop, label: 'Abort', onPressed: null),
+                _ToolButton(
+                  icon: Icons.play_arrow,
+                  label: isPaused ? 'Resume' : 'Run',
+                  onPressed: canRunOrResume
+                      ? () => _lifecycle(context, ref,
+                          (api, id) => isPaused ? api.resume(id) : api.start(id))
+                      : null,
+                ),
+                _ToolButton(
+                  icon: Icons.pause,
+                  label: 'Pause',
+                  onPressed: canPause
+                      ? () => _lifecycle(context, ref, (api, id) => api.pause(id))
+                      : null,
+                ),
+                _ToolButton(
+                  icon: Icons.stop,
+                  label: 'Abort',
+                  onPressed: canAbort
+                      ? () => _lifecycle(context, ref, (api, id) => api.abort(id))
+                      : null,
+                ),
               ]),
             ),
           ),
           Expanded(
             child: Text(
-              !connected
-                  ? 'Idle — connect to a server to load saved sequences'
-                  : selectedId != null
-                      ? 'Selected: ${selectedName ?? selectedId}'
-                      : 'Idle — Load a saved sequence',
+              _statusLine(connected, selectedId, selectedName, runInfo),
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: AraColors.textDisabled,
                   ),
@@ -91,6 +126,78 @@ class SequencerToolbar extends ConsumerWidget {
     );
   }
 }
+
+/// Run a lifecycle transition on the selected sequence, surface a transport
+/// failure as a SnackBar, then re-read the run state so the buttons re-gate.
+Future<void> _lifecycle(
+  BuildContext context,
+  WidgetRef ref,
+  Future<String> Function(SequenceClient api, String id) op,
+) async {
+  // Re-entrancy guard: ignore a second command while one is already running.
+  if (ref.read(sequenceCommandBusyProvider)) return;
+  final id = ref.read(selectedSequenceIdProvider);
+  final api = ref.read(sequenceApiProvider);
+  if (id == null || api == null) return;
+  // Capture refs/messenger before the await — usable even if the widget unmounts.
+  final messenger = ScaffoldMessenger.of(context);
+  final busy = ref.read(sequenceCommandBusyProvider.notifier);
+  final runState = ref.read(sequenceRunStateProvider.notifier);
+
+  busy.setBusy(true);
+  try {
+    try {
+      await op(api, id);
+    } on DioException catch (e) {
+      final code = e.response?.statusCode;
+      // 409 is an expected business error (the run already moved past this
+      // action), so give it a clearer message than a raw status code.
+      messenger.showSnackBar(SnackBar(
+        content: Text(code == 409
+            ? "Command not valid in the sequence's current state."
+            : 'Sequence command failed (${code ?? e.message ?? 'network error'}).'),
+        backgroundColor: AraColors.accentError,
+      ));
+    } catch (e) {
+      // e.g. a FormatException if the 202 lacked an operation_id — still surface
+      // it rather than let it propagate as an unhandled exception.
+      messenger.showSnackBar(const SnackBar(
+        content: Text('Sequence command failed.'),
+        backgroundColor: AraColors.accentError,
+      ));
+    }
+    // Re-read run state BEFORE re-enabling the controls (the busy flag drops in
+    // the finally below), so a fast re-click can't act on the stale pre-command
+    // state. refresh() swallows its own errors, so this won't throw.
+    await runState.refresh();
+  } finally {
+    busy.setBusy(false);
+  }
+}
+
+String _statusLine(bool connected, String? selectedId, String? selectedName,
+    SequenceRunStateInfo? runInfo) {
+  if (!connected) return 'Idle — connect to a server to load saved sequences';
+  if (selectedId == null) return 'Idle — Load a saved sequence';
+  final name = selectedName ?? selectedId;
+  final state = runInfo?.state;
+  if (state == null) return 'Selected: $name';
+  final frames = runInfo!.framesTotal > 0
+      ? ' — ${runInfo.framesCompleted}/${runInfo.framesTotal} frames'
+      : '';
+  return '$name — ${_runStateLabel(state)}$frames';
+}
+
+String _runStateLabel(SequenceRunState s) => switch (s) {
+      SequenceRunState.idle => 'Idle',
+      SequenceRunState.starting => 'Starting',
+      SequenceRunState.running => 'Running',
+      SequenceRunState.paused => 'Paused',
+      SequenceRunState.aborting => 'Aborting',
+      SequenceRunState.stopped => 'Stopped',
+      SequenceRunState.completed => 'Completed',
+      SequenceRunState.failed => 'Failed',
+    };
 
 class _ToolButton extends StatelessWidget {
   final IconData icon;
