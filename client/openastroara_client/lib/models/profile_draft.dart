@@ -38,7 +38,12 @@ class ProfileDraft {
   final SafetyPolicies safety = SafetyPolicies();
   final SitePreferences site = SitePreferences();
 
-  // Stage 6 — Sky data downloads (download IDs to fetch)
+  // Stage 6 — Sky data downloads (package IDs to fetch).
+  // NOTE: screen 17 mutates this set IN PLACE (add/remove/clear under setState)
+  // rather than replacing the draft, matching the other wizard screens. Because
+  // the set reference never changes, a Riverpod consumer that diffs by identity
+  // won't see element changes — read it directly (via `ref.watch(...).draft`)
+  // and rely on the mutating widget's setState for repaints, as screen 17 does.
   final Set<String> skyDataDownloadIds = <String>{};
 
   // Per-screen "skipped" flags so the profile knows to surface "Default —

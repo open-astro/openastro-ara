@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/server.dart';
 import '../../services/profile_api.dart';
 import '../../state/saved_server_state.dart';
+import '../../state/sky_atlas/data_manager_state.dart';
+import '../../models/profile_draft.dart';
 import '../../state/wizard_state.dart';
 import '../../theme/ara_colors.dart';
 import 'wizard_save.dart';
@@ -81,6 +83,27 @@ class _WizardShellState extends ConsumerState<WizardShell> {
   // partial-or-complete state per §37.8), then exit the wizard. Shows a blocking
   // spinner during the round-trip and keeps the wizard open on failure so the
   // user doesn't lose their entries.
+  /// Queue the sky-data packages the user ticked on screen 17. Best-effort: each
+  /// download is an independent 202-accepted request, and a failure here is
+  /// non-fatal (the profile is already saved) — so per-id errors are logged, not
+  /// thrown, and never block the wizard from finishing.
+  Future<void> _queueSkyDataDownloads(ProfileDraft draft) async {
+    if (draft.skyDataDownloadIds.isEmpty) return;
+    if (!mounted) return; // widget disposed between save and queue — ref is dead
+    final dm = ref.read(dataManagerApiProvider);
+    if (dm == null) return; // no active server — nothing to queue against
+    // Fire the 202-accepted queue requests concurrently; each is independent and
+    // its failure is non-fatal (logged, not thrown), so one bad id never blocks
+    // the others or the wizard from finishing.
+    await Future.wait(draft.skyDataDownloadIds.map((id) async {
+      try {
+        await dm.download(id);
+      } catch (e) {
+        debugPrint('[wizard] sky-data download queue failed for $id: $e');
+      }
+    }));
+  }
+
   Future<void> _saveAndExit(WizardController controller) async {
     if (_isSaving) return; // double-tap guard until the spinner blocks input
     // liveDraft() returns the live draft object: saveWizardProfile stamps
@@ -132,6 +155,23 @@ class _WizardShellState extends ConsumerState<WizardShell> {
       // "Exception:" prefix / internal section text) — Save is retryable.
       debugPrint('[wizard] profile save failed: $e');
       error = 'Couldn\'t save the profile. Please try again.';
+    }
+
+    // Screen 17 — on a successful save, queue the user's chosen sky-data
+    // downloads while the blocking spinner is STILL up, so the (fast, best-effort
+    // 202) queue requests show a busy indicator instead of a momentarily-static
+    // wizard. Kept OUTSIDE the save try/catch with its own swallow-all catch: any
+    // error escaping the per-id catches inside must NOT turn a successful save
+    // into a failure (downloads are fire-and-forget, visible in Settings → Data).
+    // It runs here — before the wizard pops and while the widget is still mounted
+    // — so the method's `!mounted` guard never skips queuing (firing it after the
+    // wizard exit would race disposal and silently drop the downloads).
+    if (error == null) {
+      try {
+        await _queueSkyDataDownloads(draft);
+      } catch (_) {
+        // truly best-effort — per-id failures are already logged inside the method
+      }
     }
 
     if (nav.mounted) nav.pop(); // close the spinner — independent of widget mount state

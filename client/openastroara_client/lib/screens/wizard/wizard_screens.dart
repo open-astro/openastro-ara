@@ -4,13 +4,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../state/wizard_state.dart';
 import '../../theme/ara_colors.dart';
 import 'screens/screen_capture_setup.dart';
+import 'screens/screen_data_and_review.dart';
 import 'screens/screen_device_setup.dart';
 import 'screens/screen_equipment_discovery.dart';
 import 'screens/screen_profile_basics.dart';
 
-/// Step → screen builder. Steps 1-16 (the §37.1–37.5 gear setup … site &
-/// altitude screens) are real forms bound to [ProfileDraft]; steps 17-18 (sky
-/// data, review) are still placeholders pending follow-up work.
+/// Step → screen builder. Steps 1-17 (the §37.1–37.6 gear setup … sky-data
+/// screens) are real forms bound to [ProfileDraft]; step 18 (review + save) is
+/// still a placeholder pending follow-up work.
 ///
 /// To wire a remaining screen: add a real ConsumerStatefulWidget under
 /// `screens/` that reads `ref.read(wizardControllerProvider).draft` and
@@ -36,8 +37,9 @@ final Map<int, WizardScreenBuilder> wizardScreenBuilders =
   14: (_) => const ScreenImagingDefaults(),
   15: (_) => const ScreenSafety(),
   16: (_) => const ScreenSiteAltitude(),
-  // Steps 17-18 remain placeholders until their forms land.
-  for (int step = 17; step <= ProfileWizard.totalSteps; step++)
+  17: (_) => const ScreenSkyData(),
+  // Step 18 (review + save) remains a placeholder until its form lands.
+  for (int step = 18; step <= ProfileWizard.totalSteps; step++)
     step: (ctx) => _PlaceholderScreen(step: step),
 };
 
@@ -125,9 +127,6 @@ class _PlaceholderScreen extends ConsumerWidget {
             '(pulled from Alpaca SlewSettleTime). (§37.3)',
       9 => 'Rotator min/max angle + step size + reverse direction toggle. (§37.3)',
       10 => 'PHD2 host:port + dither pixels + settle threshold + calibration cadence. (§37.3)',
-      17 => 'Recommended Sky Data downloads (default-checked: Famous Targets + Star Catalogs '
-            'preset, plus rig-specific surveys per §36.10). Open full Data Manager for granular '
-            'control. Internet-aware — queues if offline. (§37.6)',
       18 => 'Single-page summary of every setting, with "Make Changes — jump to any screen" + '
             'Save Profile. Saving navigates to the main app shell. (§37.7)',
       _ => 'Placeholder for step $step.',
