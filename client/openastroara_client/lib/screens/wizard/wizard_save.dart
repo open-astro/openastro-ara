@@ -99,17 +99,14 @@ Phd2Settings applyDraftToPhd2(Phd2Settings base, ProfileDraft d) {
 }
 
 /// §37.4 screen 11 — map the draft's ASTAP paths + search tuning onto the
-/// plate-solve section. Paths are trimmed/empty→null so a blank field preserves
-/// the base (copyWith treats null as "keep"); the numeric tuning always carries.
+/// plate-solve section. The screen stores trimmed-or-null values, so every field
+/// passes straight through: copyWith treats null as "keep", so a blank/untouched
+/// field preserves the base profile's value.
 PlateSolveSettings applyDraftToPlateSolve(PlateSolveSettings base, ProfileDraft d) {
   final ps = d.plateSolve;
   return base.copyWith(
-    pathOrEndpoint: (ps.astapBinaryPath?.trim().isNotEmpty ?? false)
-        ? ps.astapBinaryPath!.trim()
-        : null,
-    indexDownloadPath: (ps.starDatabasePath?.trim().isNotEmpty ?? false)
-        ? ps.starDatabasePath!.trim()
-        : null,
+    pathOrEndpoint: ps.astapBinaryPath,
+    indexDownloadPath: ps.starDatabasePath,
     searchRadiusDeg: ps.searchRadiusDeg,
     downsampleFactor: ps.downsampleFactor,
   );

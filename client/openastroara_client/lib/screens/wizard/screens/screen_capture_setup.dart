@@ -32,7 +32,7 @@ class _ScreenPlateSolveState extends ConsumerState<ScreenPlateSolve> {
         WizardTextField(
           label: 'ASTAP binary path',
           initialValue: _ps.astapBinaryPath,
-          hint: r'/usr/local/bin/astap  ·  C:\Program Files\astap\astap.exe',
+          hint: r'/usr/bin/astap  ·  C:\Program Files\astap\astap.exe',
           onChanged: (v) =>
               _ps.astapBinaryPath = v.trim().isEmpty ? null : v.trim(),
         ),
@@ -66,7 +66,7 @@ class _ScreenPlateSolveState extends ConsumerState<ScreenPlateSolve> {
         ),
         WizardDropdown<int>(
           label: 'Downsample factor',
-          value: _ps.downsampleFactor,
+          value: _ps.downsampleFactor ?? 2, // visual default; null keeps base on Save
           helperText:
               'Bin the image before solving — faster on large sensors. Default 2.',
           entries: const [

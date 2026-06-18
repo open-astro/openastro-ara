@@ -137,11 +137,11 @@ enum CalibrationCadence { eachSession, onceReuse, neverRecalibrate }
 class PlateSolveSettings {
   String? astapBinaryPath;
   String? starDatabasePath;
-  // Nullable so a blank field preserves the base profile's value on Save (the
-  // wizard draft starts fresh; null = "not set by the user"). The screen shows
-  // 30 as the hint. downsampleFactor is a dropdown that always carries a value.
+  // Nullable so a blank/untouched field preserves the base profile's value on
+  // Save (the wizard draft starts fresh; null = "not set by the user"). The
+  // screen shows 30 / 2 as defaults but only writes on user input.
   double? searchRadiusDeg;
-  int downsampleFactor = 2;
+  int? downsampleFactor;
 }
 
 class AutofocusSettings {

@@ -110,12 +110,14 @@ void main() {
         pathOrEndpoint: '/keep/astap',
         indexDownloadPath: '/keep/db',
         searchRadiusDeg: 12,
+        downsampleFactor: 4,
       );
       final out = applyDraftToPlateSolve(base, ProfileDraft());
-      // A blank draft (null paths + null search radius) keeps every base value.
+      // A blank draft (all-null) keeps every base value, including the numerics.
       expect(out.pathOrEndpoint, '/keep/astap');
       expect(out.indexDownloadPath, '/keep/db');
       expect(out.searchRadiusDeg, 12);
+      expect(out.downsampleFactor, 4);
     });
 
     test('applyDraftToPhd2 sets forceCalibrationEachSession for each-session', () {
