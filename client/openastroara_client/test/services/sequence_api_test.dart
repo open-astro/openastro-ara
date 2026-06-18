@@ -148,6 +148,45 @@ void main() {
     });
   });
 
+  group('SequenceApi.getSequence', () {
+    test('parses the NINA body into a tree', () async {
+      final api = _api((_) => {
+            'id': 's1',
+            'name': 'M42',
+            'body': {
+              r'$type':
+                  'NINA.Sequencer.Container.SequenceRootContainer, NINA.Sequencer',
+              'Name': 'M42',
+              'Items': {
+                r'$values': [
+                  {
+                    r'$type':
+                        'NINA.Sequencer.Container.StartAreaContainer, NINA.Sequencer',
+                    'Name': 'Start',
+                    'Items': {r'$values': []}
+                  }
+                ]
+              }
+            }
+          });
+      final root = await api.getSequence('s1');
+      expect(root.displayName, 'M42');
+      expect(root.children.single.displayName, 'Start');
+    });
+
+    test('a detail with no body object → empty root named from the DTO', () async {
+      final api = _api((_) => {'id': 's1', 'name': 'Bare'});
+      final root = await api.getSequence('s1');
+      expect(root.displayName, 'Bare');
+      expect(root.children, isEmpty);
+    });
+
+    test('rejects an empty id before any request', () async {
+      final api = _api((_) => const {});
+      expect(() => api.getSequence(''), throwsA(isA<ArgumentError>()));
+    });
+  });
+
   group('SequenceApi.getRunState', () {
     test('parses an active run state', () async {
       final api = _api((_) => {

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/models/sequence/sequence_node.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/services/sequence_api.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
@@ -20,6 +21,9 @@ class _FakeSeqClient implements SequenceClient {
 
   @override
   Future<SequenceRunStateInfo?> getRunState(String id) async => null;
+  @override
+  Future<SequenceNode> getSequence(String id) async => SequenceNode(
+      id: 'root', kind: SequenceNodeKind.root, displayName: 'fake');
   @override
   Future<String> start(String id) async => 'op';
   @override

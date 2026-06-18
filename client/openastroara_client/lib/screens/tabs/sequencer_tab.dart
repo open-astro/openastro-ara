@@ -1,20 +1,98 @@
-import 'package:flutter/material.dart';
+import 'dart:async';
 
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../state/sequencer/sequence_list_state.dart';
+import '../../state/sequencer/sequence_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../widgets/sequencer/instruction_editor.dart';
 import '../../widgets/sequencer/sequence_tree.dart';
 import '../../widgets/sequencer/sequencer_toolbar.dart';
 
-/// Sequencer tab per playbook §25.5.3. Phase 12d.1 wires the layout
-/// (toolbar + tree view + selected-node editor pane) over the in-memory
-/// demo sequence in `SequenceController._demoSequence()`. Phase 12d.2
-/// connects to `/api/v1/sequences` for Load / Save / Run. Phase 12d.3 adds
-/// NINA import + conditional/loop UI + template instantiation.
-class SequencerTab extends StatelessWidget {
+/// Sequencer tab per playbook §25.5.3: toolbar + tree view + selected-node
+/// editor pane. Selecting a sequence in the Load picker loads its body into the
+/// editor tree (via [_loadSelectedBody]); Run/Pause/Abort live on the toolbar.
+class SequencerTab extends ConsumerStatefulWidget {
   const SequencerTab({super.key});
 
   @override
+  ConsumerState<SequencerTab> createState() => _SequencerTabState();
+}
+
+class _SequencerTabState extends ConsumerState<SequencerTab> {
+  // The sequence id whose body is currently loaded into the tree — guards
+  // against re-fetching the same sequence on rebuilds and lets us detect an
+  // already-selected sequence on (re)mount. Reset to null on a failed load so
+  // the same sequence can be retried.
+  String? _loadedId;
+
+  @override
+  void initState() {
+    super.initState();
+    // ref.listen only fires on *changes*, so an already-selected sequence (e.g.
+    // the tab was navigated away from and back) wouldn't load. Pick it up here.
+    final id = ref.read(selectedSequenceIdProvider);
+    if (id != null) _load(id);
+  }
+
+  void _load(String id) {
+    _loadedId = id;
+    unawaited(_loadSelectedBody(id));
+  }
+
+  /// Fetch the sequence's body and load the parsed tree. Best-effort: a missing
+  /// client / transport / parse failure surfaces a SnackBar, leaves the current
+  /// tree in place, and clears [_loadedId] so the sequence can be retried.
+  Future<void> _loadSelectedBody(String id) async {
+    final api = ref.read(sequenceApiProvider);
+    if (api == null) {
+      _onLoadFailed(id);
+      return;
+    }
+    try {
+      final root = await api.getSequence(id);
+      if (!mounted) return;
+      // Drop a stale response: a newer selection landed while this was in flight,
+      // so loading now would clobber the tree with the wrong (older) sequence.
+      if (ref.read(selectedSequenceIdProvider) != id) return;
+      ref.read(sequenceControllerProvider.notifier).load(root);
+    } catch (e) {
+      debugPrint('[sequencer] failed to load sequence body for $id: $e');
+      _onLoadFailed(id);
+    }
+  }
+
+  void _onLoadFailed(String id) {
+    if (!mounted) return;
+    // Ignore a superseded load entirely: if `id` is no longer the one we last
+    // kicked off, the user has already moved to another sequence (which may have
+    // loaded fine), so neither clear their selection nor nag them with an error.
+    // (The success path uses the provider value for the same race; here the field
+    // is authoritative because a failed load never reaches the provider read.)
+    if (_loadedId != id) return;
+    _loadedId = null;
+    // Clear the selection: nothing actually loaded, so it shouldn't claim a
+    // sequence. This also makes retry work — re-picking the same sequence then
+    // emits a fresh change (null → id), which a same-value `select(id)` alone
+    // would not (Riverpod skips equal values).
+    ref.read(selectedSequenceIdProvider.notifier).select(null);
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(const SnackBar(
+      content: Text(
+          "Couldn't load the sequence. Check the connection and try again."),
+      backgroundColor: AraColors.accentError,
+    ));
+  }
+
+  @override
   Widget build(BuildContext context) {
+    // When the picked sequence changes, fetch + parse its body into the tree.
+    // Deselecting (next == null) intentionally leaves the current tree in place
+    // — this slice is load-only; clearing the editor is a later slice.
+    ref.listen<String?>(selectedSequenceIdProvider, (prev, next) {
+      if (next != null && next != _loadedId) _load(next);
+    });
+
     return Column(
       children: [
         const SequencerToolbar(),
