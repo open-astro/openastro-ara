@@ -47,7 +47,15 @@ class _ImportClient implements SequenceClient {
 }
 
 void main() {
+  // Captures importSequenceFromJson's return value (the created id, or null on
+  // failure) so tests can assert the contract the Load dialog relies on to
+  // decide whether to close.
+  late String? returnedId;
+  late bool returned;
+
   Future<ProviderContainer> pump(WidgetTester tester, _ImportClient client) async {
+    returnedId = null;
+    returned = false;
     final container = ProviderContainer(overrides: [
       sequenceApiProvider.overrideWithValue(client),
     ]);
@@ -58,8 +66,12 @@ void main() {
         home: Scaffold(
           body: Consumer(builder: (context, ref, _) {
             return ElevatedButton(
-              onPressed: () => importSequenceFromJson(context, ref,
-                  name: 'M42', ninaJson: const {'Name': 'M42'}),
+              onPressed: () async {
+                final id = await importSequenceFromJson(context, ref,
+                    name: 'M42', ninaJson: const {'Name': 'M42'});
+                returnedId = id;
+                returned = true;
+              },
               child: const Text('import'),
             );
           }),
@@ -78,6 +90,10 @@ void main() {
 
     expect(container.read(selectedSequenceIdProvider), 'imp-9');
     expect(find.textContaining('Imported "M42 imported"'), findsOneWidget); // SnackBar
+    // Returns the created id so the caller knows the import succeeded (→ closes
+    // the Load dialog).
+    expect(returned, isTrue);
+    expect(returnedId, 'imp-9');
   });
 
   testWidgets('a lossy import shows the warnings dialog', (tester) async {
@@ -108,6 +124,9 @@ void main() {
 
     expect(find.textContaining("Couldn't import the sequence"), findsOneWidget);
     expect(container.read(selectedSequenceIdProvider), isNull);
+    // Returns null on failure so the caller keeps the Load dialog open.
+    expect(returned, isTrue);
+    expect(returnedId, isNull);
   });
 
   testWidgets('sends the NINA body + name to the API', (tester) async {

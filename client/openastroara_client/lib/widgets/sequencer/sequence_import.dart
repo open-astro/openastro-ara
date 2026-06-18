@@ -12,14 +12,17 @@ import '../../theme/ara_colors.dart';
 /// §38.4 — let the user pick a NINA sequence `.json` and import it. A cancelled
 /// pick is a no-op; an unreadable / non-JSON file surfaces a SnackBar. On a valid
 /// file it delegates to [importSequenceFromJson].
-Future<void> pickAndImportSequence(BuildContext context, WidgetRef ref) async {
+///
+/// Returns true only when a sequence was actually imported, so the caller can
+/// keep the Load dialog open on a cancel/error (and close it only on success).
+Future<bool> pickAndImportSequence(BuildContext context, WidgetRef ref) async {
   final messenger = ScaffoldMessenger.of(context);
   final picked = await FilePicker.pickFiles(
     type: FileType.custom,
     allowedExtensions: ['json'],
   );
   final path = picked?.files.single.path;
-  if (path == null) return; // cancelled
+  if (path == null) return false; // cancelled
 
   Map<String, dynamic> nina;
   String fileName;
@@ -33,23 +36,25 @@ Future<void> pickAndImportSequence(BuildContext context, WidgetRef ref) async {
     fileName = base.toLowerCase().endsWith('.json')
         ? base.substring(0, base.length - 5)
         : base;
-  } catch (_) {
+  } catch (e, st) {
+    debugPrint('[sequencer] NINA file read/parse failed: $e\n$st');
     if (context.mounted) {
       messenger.showSnackBar(const SnackBar(
         content: Text("That file isn't a valid sequence JSON."),
         backgroundColor: AraColors.accentError,
       ));
     }
-    return;
+    return false;
   }
 
-  if (!context.mounted) return;
+  if (!context.mounted) return false;
   // Prefer the NINA root's own name; fall back to the file name.
   final rootName = nina['Name'];
   final name = (rootName is String && rootName.trim().isNotEmpty)
       ? rootName.trim()
       : fileName;
-  await importSequenceFromJson(context, ref, name: name, ninaJson: nina);
+  final id = await importSequenceFromJson(context, ref, name: name, ninaJson: nina);
+  return id != null;
 }
 
 /// Import an already-decoded NINA sequence body. On success: refresh the list so

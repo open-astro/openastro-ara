@@ -75,14 +75,16 @@ class SequenceLoadDialog extends ConsumerWidget {
       ),
       actions: [
         // Import a NINA sequence file; on success it selects the new sequence
-        // (loaded into the tree), so close this picker afterwards.
+        // (loaded into the tree), so close this picker afterwards. On a
+        // cancel/error keep the dialog open so the user can retry or pick from
+        // the list.
         TextButton.icon(
           icon: const Icon(Icons.upload_file, size: 18),
           label: const Text('Import NINA…'),
           onPressed: () async {
             final navigator = Navigator.of(context);
-            await pickAndImportSequence(context, ref);
-            if (navigator.mounted) navigator.pop();
+            final imported = await pickAndImportSequence(context, ref);
+            if (imported && navigator.mounted) navigator.pop();
           },
         ),
         TextButton(
