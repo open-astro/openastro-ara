@@ -49,7 +49,7 @@ class ProfileManagementScreen extends ConsumerWidget {
       MaterialPageRoute(
         builder: (_) => WizardShell(onComplete: (_) => created = true)),
     );
-    if (created) {
+    if (created && context.mounted) {
       await ref.read(profileManagementProvider.notifier).refresh();
     }
   }
