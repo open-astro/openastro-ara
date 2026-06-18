@@ -42,8 +42,9 @@ class ProfileShareImportPreview {
   }
 
   static List<String> _stringList(Object? value) => value is List
-      // Drop null elements rather than coercing them to '' (which would render as
-      // a blank bullet in the confirm dialog).
-      ? value.whereType<Object>().map((e) => e.toString()).toList(growable: false)
+      // whereType<String> keeps only genuine strings — dropping nulls (which would
+      // render as blank bullets) and any non-string element (a future DTO change
+      // surfaces as a missing bullet rather than a coerced "123"/"true" string).
+      ? value.whereType<String>().toList(growable: false)
       : const <String>[];
 }
