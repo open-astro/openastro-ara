@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 
 import '../models/profile_list.dart';
 import '../models/profile_meta.dart';
+import '../models/profile_share_export.dart';
 import '../models/profile_share_import_preview.dart';
 import '../models/server.dart';
 import '../state/imaging/exposure_state.dart' show FrameKind;
@@ -79,6 +80,17 @@ class ProfileApi {
           'createProfile got HTTP ${res.statusCode} with no profile id in the response body');
     }
     return meta;
+  }
+
+  /// §70 profile-share export — render a profile into a shareable
+  /// `profile-share-v1` template (`POST /api/v1/profiles/{id}/share-export`). The
+  /// daemon strips all paths / secrets / location / network (§70.1); the client
+  /// writes the returned manifest to a file. An unknown id surfaces as a Dio 404.
+  Future<ProfileShareExport> exportProfile(String id) async {
+    final res = await _dio.post<Map<String, dynamic>>(
+      '/api/v1/profiles/${Uri.encodeComponent(id)}/share-export',
+    );
+    return ProfileShareExport.fromJson(res.data ?? const <String, dynamic>{});
   }
 
   /// §70 profile-share import — preview a `profile-share-v1` template

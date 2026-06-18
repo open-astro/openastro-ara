@@ -32,6 +32,26 @@ void main() {
     });
   });
 
+  group('shareFileName', () {
+    test('sanitizes illegal characters and appends the suffix', () {
+      expect(shareFileName('My Rig'), 'My-Rig.araprofile.json');
+      expect(shareFileName('a/b:c*d?'), 'a-b-c-d.araprofile.json');
+      expect(shareFileName('  spaced  out  '), 'spaced-out.araprofile.json');
+    });
+
+    test('falls back to "profile" when nothing usable remains', () {
+      expect(shareFileName('///'), 'profile.araprofile.json');
+      expect(shareFileName(''), 'profile.araprofile.json');
+    });
+
+    test('prefixes Windows reserved device names', () {
+      expect(shareFileName('NUL'), '_NUL.araprofile.json');
+      expect(shareFileName('com1'), '_com1.araprofile.json');
+      // A name only *containing* a reserved word is fine.
+      expect(shareFileName('nullarbor'), 'nullarbor.araprofile.json');
+    });
+  });
+
   group('shareExpiryNote', () {
     final now = DateTime.utc(2026, 6, 18, 4, 0, 0);
 

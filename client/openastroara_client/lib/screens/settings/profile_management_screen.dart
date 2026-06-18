@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
@@ -8,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/profile_list.dart';
 import '../../models/profile_meta.dart';
+import '../../models/profile_share_export.dart';
 import '../../models/profile_share_import_preview.dart';
 import '../../services/profile_share_file.dart';
 import '../../state/profile_management_state.dart';
@@ -217,6 +220,11 @@ class _ProfileListView extends ConsumerWidget {
               if (!isActive)
                 const PopupMenuItem(value: 'select', child: Text('Make active')),
               const PopupMenuItem(value: 'rename', child: Text('Rename')),
+              // Export writes via FilePicker.saveFile(bytes:), which is only
+              // reliable on the desktop targets — hide it elsewhere rather than
+              // offer an action that would silently no-op.
+              if (Platform.isMacOS || Platform.isLinux || Platform.isWindows)
+                const PopupMenuItem(value: 'export', child: Text('Export…')),
               PopupMenuItem(
                 value: 'delete',
                 // The daemon refuses deleting the active or last-remaining
@@ -245,6 +253,9 @@ class _ProfileListView extends ConsumerWidget {
           await _run(messenger, () => notifier.rename(p.id, name), 'Couldn\'t rename profile');
         }
         break;
+      case 'export':
+        await _exportProfile(context, ref, p);
+        break;
       case 'delete':
         final ok = await _confirmDelete(context, p.name);
         if (ok) {
@@ -252,6 +263,58 @@ class _ProfileListView extends ConsumerWidget {
         }
         break;
     }
+  }
+
+  /// §70 export — render the profile into a `profile-share-v1` template (paths /
+  /// secrets / location / network already stripped by the daemon) and write it to
+  /// a file the user picks. The recipient imports it as a starting template.
+  Future<void> _exportProfile(
+      BuildContext context, WidgetRef ref, ProfileMeta p) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final api = ref.read(profileApiProvider);
+    if (api == null) {
+      messenger.showSnackBar(const SnackBar(
+          content: Text('Connect to a daemon first to export a profile.')));
+      return;
+    }
+
+    ProfileShareExport share;
+    try {
+      share = await _runWithSpinner(context, () => api.exportProfile(p.id));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(
+          content: Text(_friendly(e, fallback: "Couldn't export that profile")),
+          backgroundColor: AraColors.accentError));
+      return;
+    }
+
+    if (!context.mounted) return;
+    // Pretty-print so a shared file is human-readable. The manifest is already
+    // stripped of paths / secrets / location / network by the daemon. saveFile
+    // writes the bytes itself on the desktop targets and returns the saved path
+    // (null if the user cancels).
+    final jsonBytes = Uint8List.fromList(
+        utf8.encode(const JsonEncoder.withIndent('  ').convert(share.manifest)));
+    final String? saved;
+    try {
+      saved = await FilePicker.saveFile(
+        dialogTitle: 'Save profile share',
+        fileName: shareFileName(
+            share.profileName.isEmpty ? p.name : share.profileName),
+        type: FileType.any,
+        bytes: jsonBytes,
+      );
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(
+          content: Text(_friendly(e, fallback: "Couldn't save the file")),
+          backgroundColor: AraColors.accentError));
+      return;
+    }
+    if (saved == null || !context.mounted) return; // cancelled / screen gone
+
+    messenger.showSnackBar(SnackBar(
+        content: Text('Exported "${p.name}" — share this file; the recipient '
+            'imports it as a starting template.')));
   }
 
   Future<void> _run(ScaffoldMessengerState messenger, Future<void> Function() op,
