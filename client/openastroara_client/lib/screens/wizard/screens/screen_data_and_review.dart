@@ -128,14 +128,32 @@ class _Message extends StatelessWidget {
 const String _notSet = 'Not set';
 
 /// Render a scalar draft value for the review summary: null / blank → "Not set",
-/// bool → Yes/No, everything else via toString. Keeps the section row builders
-/// terse and gives one consistent "unset → default applies" wording (§37.8).
+/// bool → Yes/No, double via [formatNumber] (no float noise), everything else
+/// via toString. Keeps the section row builders terse and gives one consistent
+/// "unset → default applies" wording (§37.8).
 String reviewValue(Object? v) {
   if (v == null) return _notSet;
   if (v is String) return v.trim().isEmpty ? _notSet : v.trim();
   if (v is bool) return v ? 'Yes' : 'No';
+  if (v is double) return formatNumber(v);
   return v.toString();
 }
+
+/// Format a double for display without floating-point noise: round to
+/// [decimals] places then strip trailing zeros (`51.50000001` → `51.5`,
+/// `45.0` → `45`). Used for every inline numeric field so a GPS- or
+/// user-typed value never renders as `31.200000000000003`.
+String formatNumber(double v, {int decimals = 4}) {
+  var s = v.toStringAsFixed(decimals);
+  if (s.contains('.')) {
+    s = s.replaceAll(RegExp(r'0+$'), '').replaceAll(RegExp(r'\.$'), '');
+  }
+  return s;
+}
+
+/// A double with a unit suffix (`102 mm`, `-10 °C`), or "Not set" when null.
+String _unit(double? v, String unit, {int decimals = 4}) =>
+    v == null ? _notSet : '${formatNumber(v, decimals: decimals)} $unit';
 
 /// A duration as the user thinks of it: whole minutes when it divides evenly
 /// (`5 min`), otherwise seconds (`90 s`); null → "Not set".
@@ -147,7 +165,7 @@ String formatDuration(Duration? d) {
 }
 
 /// A degrees value with the unit appended (`31.2°`), or "Not set" when null.
-String _deg(double? v) => v == null ? _notSet : '$v°';
+String _deg(double? v) => v == null ? _notSet : '${formatNumber(v)}°';
 
 /// The equipment slots the user assigned, as a comma-joined label list, or
 /// "None assigned" when every slot is left empty.
@@ -211,9 +229,7 @@ class ScreenReview extends ConsumerWidget {
           ('Site name', reviewValue(draft.siteName)),
           ('Latitude', _deg(draft.latitudeDeg)),
           ('Longitude', _deg(draft.longitudeDeg)),
-          ('Altitude', draft.altitudeMeters == null
-              ? _notSet
-              : '${draft.altitudeMeters} m'),
+          ('Altitude', _unit(draft.altitudeMeters, 'm')),
           ('Time zone', reviewValue(draft.timezone)),
         ]),
         // AlpacaBridge address is set on step 2 (connect); device assignment on
@@ -227,16 +243,12 @@ class ScreenReview extends ConsumerWidget {
         ]),
         _ReviewSection(title: 'Telescope', step: 4, onEdit: edit, rows: [
           ('Name', reviewValue(t.name)),
-          ('Focal length', t.focalLengthMm == null
-              ? _notSet
-              : '${t.focalLengthMm} mm'),
-          ('Aperture', t.apertureMm == null ? _notSet : '${t.apertureMm} mm'),
+          ('Focal length', _unit(t.focalLengthMm, 'mm')),
+          ('Aperture', _unit(t.apertureMm, 'mm')),
           ('Focal ratio', fr),
         ]),
         _ReviewSection(title: 'Camera', step: 5, onEdit: edit, rows: [
-          ('Cooling target', c.coolingTargetC == null
-              ? _notSet
-              : '${c.coolingTargetC} °C'),
+          ('Cooling target', _unit(c.coolingTargetC, '°C')),
           ('Warmup', switch (c.warmupMode) {
             CoolerWarmupMode.off => 'Off',
             CoolerWarmupMode.ramp => 'Ramp',
@@ -245,9 +257,7 @@ class ScreenReview extends ConsumerWidget {
           ('Gain / Offset', '${reviewValue(c.defaultGain)} / '
               '${reviewValue(c.defaultOffset)}'),
           ('Binning', reviewValue(c.defaultBin)),
-          ('Pixel size', c.pixelSizeMicrons == null
-              ? _notSet
-              : '${c.pixelSizeMicrons} µm'),
+          ('Pixel size', _unit(c.pixelSizeMicrons, 'µm')),
         ]),
         _ReviewSection(title: 'Filter wheel', step: 6, onEdit: edit, rows: [
           ('Filters', draft.filterWheel.filters.isEmpty
@@ -255,18 +265,14 @@ class ScreenReview extends ConsumerWidget {
               : '${draft.filterWheel.filters.length} defined'),
         ]),
         _ReviewSection(title: 'Focuser', step: 7, onEdit: edit, rows: [
-          ('Step size', f.stepSizeMicrons == null
-              ? _notSet
-              : '${f.stepSizeMicrons} µm'),
+          ('Step size', _unit(f.stepSizeMicrons, 'µm')),
           ('Backlash in/out',
               '${reviewValue(f.backlashInSteps)} / ${reviewValue(f.backlashOutSteps)}'),
           ('Temp. compensation', reviewValue(f.temperatureCompensationEnabled)),
         ]),
         _ReviewSection(title: 'Mount', step: 8, onEdit: edit, rows: [
           ('Name', reviewValue(m.name)),
-          ('Slew rate', m.slewRateDegPerSec == null
-              ? _notSet
-              : '${m.slewRateDegPerSec} °/s'),
+          ('Slew rate', _unit(m.slewRateDegPerSec, '°/s')),
           ('Meridian flip', switch (m.meridianFlip) {
             MeridianFlipBehavior.auto => 'Auto',
             MeridianFlipBehavior.prompt => 'Prompt',
@@ -283,10 +289,14 @@ class ScreenReview extends ConsumerWidget {
           ('Step', _deg(r.stepDeg)),
           ('Reversed', reviewValue(r.reverse)),
         ]),
+        // PHD2 fields are non-nullable with sensible defaults, so they always
+        // show a value (never "Not set"); routing them through the same
+        // formatters as every other row keeps display consistent. The section's
+        // skipped banner conveys when the user didn't customise them.
         _ReviewSection(title: 'Guider (PHD2)', step: 10, onEdit: edit, rows: [
-          ('Host:port', g.hostPort),
-          ('Dither', '${g.ditherPixels} px'),
-          ('Settle threshold', '${g.settleThresholdPx} px'),
+          ('Host:port', reviewValue(g.hostPort)),
+          ('Dither', _unit(g.ditherPixels, 'px')),
+          ('Settle threshold', _unit(g.settleThresholdPx, 'px')),
           ('Calibration', switch (g.calibrationCadence) {
             CalibrationCadence.eachSession => 'Each session',
             CalibrationCadence.onceReuse => 'Once, then reuse',
@@ -296,9 +306,7 @@ class ScreenReview extends ConsumerWidget {
         _ReviewSection(title: 'Plate solving', step: 11, onEdit: edit, rows: [
           ('ASTAP binary', reviewValue(ps.astapBinaryPath)),
           ('Star database', reviewValue(ps.starDatabasePath)),
-          ('Search radius', ps.searchRadiusDeg == null
-              ? _notSet
-              : '${ps.searchRadiusDeg}°'),
+          ('Search radius', _deg(ps.searchRadiusDeg)),
           ('Downsample', reviewValue(ps.downsampleFactor)),
         ]),
         _ReviewSection(title: 'Autofocus', step: 12, onEdit: edit, rows: [

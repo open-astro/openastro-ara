@@ -24,6 +24,22 @@ void main() {
     });
   });
 
+  group('formatNumber', () {
+    test('rounds away float noise and strips trailing zeros', () {
+      expect(formatNumber(45.0), '45');
+      expect(formatNumber(31.2), '31.2');
+      expect(formatNumber(51.50000000000001), '51.5');
+      expect(formatNumber(31.123456, decimals: 4), '31.1235');
+      expect(formatNumber(-10.0), '-10');
+    });
+  });
+
+  group('reviewValue formats doubles without float noise', () {
+    test('a noisy double reads cleanly', () {
+      expect(reviewValue(51.50000000000001), '51.5');
+    });
+  });
+
   group('formatDuration', () {
     test('whole minutes collapse; otherwise seconds; null is "Not set"', () {
       expect(formatDuration(null), 'Not set');
