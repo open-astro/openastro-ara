@@ -10,43 +10,59 @@ import 'saved_server_state.dart';
 /// and membership stay in sync. Errors (e.g. the daemon's 409 when deleting the
 /// active or last-remaining profile) propagate to the caller to surface.
 class ProfileManagementNotifier extends AsyncNotifier<ProfileList> {
-  /// Builds a ProfileApi for the active server, or throws if none is connected
-  /// (so the UI can show a "connect first" state rather than a silent no-op).
-  ProfileApi _api() {
-    final server = ref.read(activeServerProvider);
+  /// The ProfileApi for the active server, built once per [build] (i.e. whenever
+  /// the active server changes) rather than re-instantiated on every call — so
+  /// it stays current with the active daemon yet shares one Dio/connection pool.
+  late ProfileApi _api;
+
+  /// Guards against overlapping mutations: a slow network + a rapid second
+  /// action would otherwise race two refreshes, and the later HTTP response
+  /// could clobber the newer list.
+  bool _busy = false;
+
+  @override
+  Future<ProfileList> build() {
+    // watch (not read) so a server switch rebuilds the api + re-fetches. A null
+    // server throws here → the AsyncError surfaces "connect first" in the UI
+    // (rather than escaping a later guard and spinning on AsyncLoading forever).
+    final server = ref.watch(activeServerProvider);
     if (server == null) {
       throw StateError('No active server — connect to a daemon to manage profiles.');
     }
-    return ProfileApi(server);
+    _api = ProfileApi(server);
+    return _api.listProfiles();
   }
 
-  @override
-  Future<ProfileList> build() => _api().listProfiles();
-
-  /// Re-fetch the list, surfacing transport errors through the AsyncValue.
+  /// Re-fetch the list, surfacing transport errors through the AsyncValue. The
+  /// fetch is wrapped in a closure so any throw (incl. building the request) is
+  /// caught by guard rather than escaping and stranding state on AsyncLoading.
   Future<void> refresh() async {
     state = const AsyncLoading();
-    state = await AsyncValue.guard(_api().listProfiles);
+    state = await AsyncValue.guard(() => _api.listProfiles());
+  }
+
+  /// Run a mutation then refresh, under the [_busy] guard. Errors (notably the
+  /// daemon's 409 on deleting the active/last profile) propagate to the caller.
+  Future<void> _mutate(Future<void> Function() op) async {
+    if (_busy) return; // drop the overlapping action rather than racing refreshes
+    _busy = true;
+    try {
+      await op();
+      await refresh();
+    } finally {
+      _busy = false;
+    }
   }
 
   /// Make [id] the active profile, then refresh. Throws on transport failure.
-  Future<void> select(String id) async {
-    await _api().selectProfile(id);
-    await refresh();
-  }
+  Future<void> select(String id) => _mutate(() => _api.selectProfile(id));
 
   /// Rename [id], then refresh. Throws on transport failure.
-  Future<void> rename(String id, String name) async {
-    await _api().renameProfile(id, name);
-    await refresh();
-  }
+  Future<void> rename(String id, String name) => _mutate(() => _api.renameProfile(id, name));
 
   /// Delete [id], then refresh. Throws on transport failure — notably the
   /// daemon's 409 when [id] is the active or last-remaining profile.
-  Future<void> delete(String id) async {
-    await _api().deleteProfile(id);
-    await refresh();
-  }
+  Future<void> delete(String id) => _mutate(() => _api.deleteProfile(id));
 }
 
 final profileManagementProvider =
