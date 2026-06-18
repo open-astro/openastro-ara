@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/sequence/sequence_summary.dart';
 import '../../state/sequencer/sequence_list_state.dart';
 import '../../theme/ara_colors.dart';
+import 'sequence_import.dart';
 
 /// §38 "Load sequence" picker. Lists the active server's saved sequences
 /// (newest-first) from [sequenceListProvider]; tapping one records it as the
@@ -73,6 +74,17 @@ class SequenceLoadDialog extends ConsumerWidget {
         ),
       ),
       actions: [
+        // Import a NINA sequence file; on success it selects the new sequence
+        // (loaded into the tree), so close this picker afterwards.
+        TextButton.icon(
+          icon: const Icon(Icons.upload_file, size: 18),
+          label: const Text('Import NINA…'),
+          onPressed: () async {
+            final navigator = Navigator.of(context);
+            await pickAndImportSequence(context, ref);
+            if (navigator.mounted) navigator.pop();
+          },
+        ),
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Cancel'),
