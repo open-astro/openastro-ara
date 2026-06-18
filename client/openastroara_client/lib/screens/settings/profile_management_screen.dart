@@ -130,21 +130,27 @@ class ProfileManagementScreen extends ConsumerWidget {
     // against a disposed WidgetRef.
     if (!confirmed || !context.mounted) return;
 
+    // Only a commit failure means the import didn't happen — keep it in its own
+    // try so a later list-refresh failure can't masquerade as "couldn't import".
     try {
       await api.importCommit(preview.importToken);
-      // The commit is another async gap — only refresh if still mounted so the
-      // ref.read doesn't run against a disposed WidgetRef. The snackbar uses the
-      // pre-captured messenger, so it's safe to confirm either way.
-      if (context.mounted) {
-        await ref.read(profileManagementProvider.notifier).refresh();
-      }
-      messenger.showSnackBar(SnackBar(
-          content: Text('Imported "${preview.profileName}" — make it active, '
-              'then set up your equipment in the wizard.')));
     } catch (e) {
       messenger.showSnackBar(SnackBar(
           content: Text(_friendly(e, fallback: "Couldn't import that profile")),
           backgroundColor: AraColors.accentError));
+      return;
+    }
+    // The profile now exists on the daemon — confirm success regardless of the
+    // refresh outcome (messenger is pre-captured, so safe even if unmounted).
+    messenger.showSnackBar(SnackBar(
+        content: Text('Imported "${preview.profileName}" — make it active, '
+            'then set up your equipment in the wizard.')));
+    // Best-effort reconcile of the list; only if still mounted (the commit was
+    // another async gap), and a refresh failure is non-critical here.
+    if (context.mounted) {
+      try {
+        await ref.read(profileManagementProvider.notifier).refresh();
+      } catch (_) {}
     }
   }
 }
