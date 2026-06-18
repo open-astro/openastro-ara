@@ -27,7 +27,7 @@ abstract interface class SequenceClient {
   Future<SequenceImportResult> importNina(
     String newName,
     Map<String, dynamic> ninaFile, {
-    bool treatWarningsAsErrors,
+    bool treatWarningsAsErrors = false,
   });
 
   /// Fetch a sequence's full detail and parse its body into the editor tree.

@@ -111,6 +111,19 @@ class SequenceImportResult {
       lossyTranslation: json['lossy_translation'] == true,
     );
   }
+
+  @override
+  bool operator ==(Object other) =>
+      other is SequenceImportResult &&
+      other.createdSequenceId == createdSequenceId &&
+      other.name == name &&
+      other.lossyTranslation == lossyTranslation &&
+      listEquals(other.warnings, warnings) &&
+      listEquals(other.droppedInstructionTypes, droppedInstructionTypes);
+
+  @override
+  int get hashCode => Object.hash(createdSequenceId, name, lossyTranslation,
+      Object.hashAll(warnings), Object.hashAll(droppedInstructionTypes));
 }
 
 /// Live run state of an active sequence — daemon's `SequenceRunStateDto`
