@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/server.dart';
 import '../../services/profile_api.dart';
 import '../../state/saved_server_state.dart';
+import '../../state/sky_atlas/data_manager_state.dart';
+import '../../models/profile_draft.dart';
 import '../../state/wizard_state.dart';
 import '../../theme/ara_colors.dart';
 import 'wizard_save.dart';
@@ -81,6 +83,23 @@ class _WizardShellState extends ConsumerState<WizardShell> {
   // partial-or-complete state per §37.8), then exit the wizard. Shows a blocking
   // spinner during the round-trip and keeps the wizard open on failure so the
   // user doesn't lose their entries.
+  /// Queue the sky-data packages the user ticked on screen 17. Best-effort: each
+  /// download is an independent 202-accepted request, and a failure here is
+  /// non-fatal (the profile is already saved) — so per-id errors are logged, not
+  /// thrown, and never block the wizard from finishing.
+  Future<void> _queueSkyDataDownloads(ProfileDraft draft) async {
+    if (draft.skyDataDownloadIds.isEmpty) return;
+    final dm = ref.read(dataManagerApiProvider);
+    if (dm == null) return; // no active server — nothing to queue against
+    for (final id in draft.skyDataDownloadIds) {
+      try {
+        await dm.download(id);
+      } catch (e) {
+        debugPrint('[wizard] sky-data download queue failed for $id: $e');
+      }
+    }
+  }
+
   Future<void> _saveAndExit(WizardController controller) async {
     if (_isSaving) return; // double-tap guard until the spinner blocks input
     // liveDraft() returns the live draft object: saveWizardProfile stamps
@@ -124,6 +143,11 @@ class _WizardShellState extends ConsumerState<WizardShell> {
     String? error;
     try {
       await saveWizardProfile(api, draft);
+      // Screen 17 — queue the user's chosen sky-data downloads now that the
+      // profile exists. Best-effort + after the profile is saved: a failed
+      // queue request must NOT turn a successful save into an error (downloads
+      // are 202/fire-and-forget and visible in Settings → Data).
+      await _queueSkyDataDownloads(draft);
     } on DioException catch (e) {
       error = 'Couldn\'t save the profile: ${e.message ?? 'network error'} '
           '(${e.response?.statusCode ?? 'no response'}).';
