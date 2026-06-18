@@ -225,6 +225,46 @@ void main() {
     });
   });
 
+  group('SequenceRunStateInfo.applyWsProgress', () {
+    test('folds live WS fields on, preserving the slower REST-only fields', () {
+      final base = SequenceRunStateInfo(
+        sequenceId: 'seq-1',
+        runId: 'run-1',
+        state: SequenceRunState.running,
+        currentInstructionIndex: 2,
+        currentTargetName: 'M31',
+        startedUtc: DateTime.utc(2026, 6, 18, 9),
+        framesCompleted: 5,
+        framesTotal: 60,
+        currentInstructionDescription: 'Take exposure',
+      );
+      final next = base.applyWsProgress(const {
+        'sequence_id': 'seq-1',
+        'run_id': 'run-1',
+        'state': 'paused',
+        'current_instruction_index': 4,
+        'frames_completed': 18,
+        'frames_total': 60,
+      });
+      // Fast fields updated from the WS frame…
+      expect(next.state, SequenceRunState.paused);
+      expect(next.currentInstructionIndex, 4);
+      expect(next.framesCompleted, 18);
+      // …slower fields the WS frame doesn't carry are preserved.
+      expect(next.currentTargetName, 'M31');
+      expect(next.startedUtc, DateTime.utc(2026, 6, 18, 9));
+      expect(next.currentInstructionDescription, 'Take exposure');
+    });
+
+    test('an absent/unknown state keeps the current state, not null', () {
+      const base = SequenceRunStateInfo(state: SequenceRunState.running);
+      expect(base.applyWsProgress(const {'frames_completed': 1}).state,
+          SequenceRunState.running);
+      expect(base.applyWsProgress(const {'state': 'warp_speed'}).state,
+          SequenceRunState.running);
+    });
+  });
+
   group('SequenceApi.getRunState', () {
     test('parses an active run state', () async {
       final api = _api((_) => {

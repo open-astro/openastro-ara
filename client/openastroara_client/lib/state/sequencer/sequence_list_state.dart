@@ -1,10 +1,30 @@
+import 'dart:async';
+import 'dart:developer' as developer;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/sequence/sequence_summary.dart';
 import '../../models/server.dart';
+import '../../models/ws_event.dart';
 import '../../services/sequence_api.dart';
 import '../saved_server_state.dart';
+import '../ws/ws_providers.dart';
+
+/// §28.12 `sequence.*` WS event-type tokens the run-state notifier consumes to
+/// track a run live (mirrors `WsEventCatalog` on the server). Routing is by the
+/// shared `sequence.` prefix; the specific tokens are listed for reference.
+abstract final class SequenceWsEvents {
+  static const prefix = 'sequence.';
+  static const started = 'sequence.started';
+  static const progress = 'sequence.progress';
+  static const paused = 'sequence.paused';
+  static const resumed = 'sequence.resumed';
+  static const aborted = 'sequence.aborted';
+  static const stopped = 'sequence.stopped';
+  static const complete = 'sequence.complete';
+  static const failed = 'sequence.failed';
+}
 
 /// Builds a [SequenceClient] for a server. Overridable in tests.
 final sequenceApiFactoryProvider =
@@ -123,18 +143,80 @@ class SequenceRunStateNotifier extends AsyncNotifier<SequenceRunStateInfo?> {
   @override
   Future<SequenceRunStateInfo?> build() {
     // watch (not read) so a selection/server change rebuilds the run state.
-    ref.watch(selectedSequenceIdProvider);
+    final selectedId = ref.watch(selectedSequenceIdProvider);
     ref.watch(sequenceApiProvider);
+
+    // Live updates: fold `sequence.*` WS frames for the selected sequence onto
+    // the current run state so the toolbar/status line track a run in real time
+    // (previously the state only refreshed on selection or a lifecycle action).
+    ref.listen(wsEventsProvider, (prev, next) {
+      final event = next.asData?.value;
+      if (event != null) _applyWsEvent(event, selectedId);
+    });
+
     return _read();
   }
 
-  /// Re-read the run state (after a lifecycle transition). Surfaces transport
-  /// errors as an AsyncError rather than leaving stale state.
+  /// Fold one WS frame into [state] when it's a `sequence.*` event for the
+  /// selected sequence. Synchronous (called from a ref.listen callback while the
+  /// notifier is alive), so writing `state` here is safe without a mounted guard.
+  void _applyWsEvent(WsEvent event, String? selectedId) {
+    if (selectedId == null) return;
+    if (!event.type.startsWith(SequenceWsEvents.prefix)) return;
+    // Apply only when settled on a value (AsyncData). This skips both the
+    // initial in-flight read AND the AsyncLoading-with-previous-value window
+    // when build() re-runs on a selection change — applying then could flash the
+    // outgoing sequence's data. A refresh failure deliberately keeps the prior
+    // AsyncData (see refresh()), so live tracking still survives a REST hiccup.
+    if (state is! AsyncData) return;
+    // Require the frame to name the selected sequence. The daemon stamps
+    // sequence_id on every sequence.* event, so a missing/non-String id is
+    // treated as "not for us" and dropped — defensive against ever applying a
+    // stray frame to the wrong sequence's displayed state.
+    if (event.payload['sequence_id'] != selectedId) return;
+    // Use whatever value we currently hold: a refresh failure leaves the prior
+    // AsyncData in place (see refresh()), so this is the last good snapshot.
+    final current = state.value ?? const SequenceRunStateInfo();
+    state = AsyncData(current.applyWsProgress(event.payload));
+    // A start/terminal frame carries only the state flip; re-read once to
+    // backfill the REST-only fields it omits — startedUtc + target name on
+    // `started` (so an externally-started run shows them), completedUtc on a
+    // terminal event. The daemon keeps active and (retained) terminal runs, so
+    // getRunState returns the full DTO rather than null in both cases.
+    if (_backfillsRestFields(event.type)) unawaited(refresh());
+  }
+
+  static bool _backfillsRestFields(String type) =>
+      type == SequenceWsEvents.started ||
+      type == SequenceWsEvents.complete ||
+      type == SequenceWsEvents.failed ||
+      type == SequenceWsEvents.stopped ||
+      type == SequenceWsEvents.aborted;
+
+  /// Re-read the run state (after a lifecycle transition). On failure the last
+  /// good value is retained (the error is logged, not promoted to a value-less
+  /// AsyncError) so `state.hasValue` stays true and the live WS stream keeps
+  /// updating the status line instead of freezing on a transient REST hiccup.
+  /// A real transport failure of the action itself is surfaced by the toolbar's
+  /// own SnackBar, not here.
   Future<void> refresh() async {
+    final forId = ref.read(selectedSequenceIdProvider);
     final next = await AsyncValue.guard(_read);
     // Guard against disposal during the await (autoDispose + tab switch): writing
     // `state` after the notifier is gone throws StateError.
-    if (ref.mounted) state = next;
+    if (!ref.mounted) return;
+    // Drop a stale write: the selection changed while this read was in flight
+    // (the same notifier instance survives a selection change), so applying it
+    // would flash the old sequence's state over the newly-selected one.
+    if (ref.read(selectedSequenceIdProvider) != forId) return;
+    if (next.hasError) {
+      // developer.log (not debugPrint) so the failure survives release builds —
+      // it can be the only signal that e.g. completedUtc never reloaded.
+      developer.log('run-state refresh failed',
+          name: 'sequencer', error: next.error, stackTrace: next.stackTrace);
+    } else {
+      state = next;
+    }
   }
 }
 

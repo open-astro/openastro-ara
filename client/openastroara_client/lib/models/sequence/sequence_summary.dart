@@ -171,6 +171,32 @@ class SequenceRunStateInfo {
     );
   }
 
+  /// Fold a live `sequence.*` WS frame onto this snapshot. The WS payload carries
+  /// only the fast-changing fields (state, instruction index, frame counts, run
+  /// id); the slower fields the REST `getRunState` provides — target name,
+  /// start/complete times, instruction description — are preserved so a live
+  /// update doesn't blank them. An unparseable/absent `state` keeps the current
+  /// one rather than degrading a running sequence to "no state".
+  SequenceRunStateInfo applyWsProgress(Map<String, dynamic> payload) {
+    return SequenceRunStateInfo(
+      sequenceId: _str(payload['sequence_id']) ?? sequenceId,
+      runId: _str(payload['run_id']) ?? runId,
+      state: SequenceRunState.fromWire(payload['state']) ?? state,
+      // `?? <current>` (not `_int`'s 0-fallback) so a present-but-unparseable
+      // count preserves the last-known value instead of flashing 0/0.
+      currentInstructionIndex:
+          _intOrNull(payload['current_instruction_index']) ??
+              currentInstructionIndex,
+      currentTargetName: currentTargetName,
+      startedUtc: startedUtc,
+      completedUtc: completedUtc,
+      framesCompleted:
+          _intOrNull(payload['frames_completed']) ?? framesCompleted,
+      framesTotal: _intOrNull(payload['frames_total']) ?? framesTotal,
+      currentInstructionDescription: currentInstructionDescription,
+    );
+  }
+
   // Value equality so a poll that returns identical state doesn't churn rebuilds
   // (the run controls/status line watch this) — matches the other models here.
   @override
