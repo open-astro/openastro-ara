@@ -48,16 +48,25 @@ class SequencerTab extends ConsumerWidget {
 }
 
 /// Fetch the selected sequence's body and load the parsed tree into the editor.
-/// Best-effort: a transport/parse failure is logged and leaves the current tree
-/// in place rather than throwing.
+/// Best-effort: a transport/parse failure leaves the current tree in place and
+/// surfaces a SnackBar rather than throwing.
 Future<void> _loadSelectedBody(WidgetRef ref, String id) async {
   final api = ref.read(sequenceApiProvider);
   if (api == null) return;
   try {
     final root = await api.getSequence(id);
     if (!ref.context.mounted) return;
+    // Drop a stale response: a newer selection was made while this was in flight,
+    // so loading now would clobber the tree with the wrong (older) sequence.
+    if (ref.read(selectedSequenceIdProvider) != id) return;
     ref.read(sequenceControllerProvider.notifier).load(root);
   } catch (e) {
     debugPrint('[sequencer] failed to load sequence body for $id: $e');
+    if (!ref.context.mounted) return;
+    ScaffoldMessenger.maybeOf(ref.context)?.showSnackBar(const SnackBar(
+      content: Text(
+          "Couldn't load the sequence. Check the connection and try again."),
+      backgroundColor: AraColors.accentError,
+    ));
   }
 }
