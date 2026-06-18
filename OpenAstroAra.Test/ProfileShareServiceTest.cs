@@ -206,13 +206,123 @@ public class ProfileShareServiceTest {
     }
 
     [Test]
-    public void Import_preview_and_commit_throw_until_implemented() {
+    public async Task Import_preview_then_commit_creates_a_profile_from_the_template() {
         using var repo = new FakeRepo(DonorSnapshot());
         var svc = new ProfileShareService(repo);
-        using var doc = JsonDocument.Parse("{}");
-        var noManifest = doc.RootElement;
-        Assert.ThrowsAsync<NotImplementedException>(() => svc.ImportPreviewAsync(noManifest, CancellationToken.None));
-        Assert.ThrowsAsync<NotImplementedException>(() => svc.ImportCommitAsync(Guid.NewGuid(), CancellationToken.None));
+        // Round-trip: export produces a valid profile-share-v1 manifest; feed it back.
+        var share = await svc.ExportAsync(ProfileId, CancellationToken.None);
+
+        var preview = await svc.ImportPreviewAsync(share!.Manifest, CancellationToken.None);
+        preview.ImportToken.Should().NotBe(Guid.Empty);
+        preview.DroppedFields.Should().NotBeEmpty();
+        preview.ProfileName.Should().Be("Imported profile"); // donor block was omitted on export
+
+        var newId = await svc.ImportCommitAsync(preview.ImportToken, CancellationToken.None);
+        newId.Should().Be(repo.CreatedId);
+        repo.CreatedSettings.Should().NotBeNull(); // built from the template's (stripped) settings
+        repo.CreatedMakeActive.Should().BeFalse(); // imported as non-active; user wizards + selects it
+    }
+
+    [Test]
+    public async Task Import_preview_rejects_a_non_share_manifest() {
+        using var repo = new FakeRepo(DonorSnapshot());
+        var svc = new ProfileShareService(repo);
+        using var wrongSchema = JsonDocument.Parse("{\"schema_version\":\"something-else\"}");
+        using var empty = JsonDocument.Parse("{}");
+        // Right schema but no settings/rig_description — non-nullable on the record,
+        // but source-gen JSON leaves them null, so the guard (not an NPE) must reject.
+        using var noBody = JsonDocument.Parse("{\"schema_version\":\"profile-share-v1\"}");
+        Assert.ThrowsAsync<InvalidProfileShareException>(
+            () => svc.ImportPreviewAsync(wrongSchema.RootElement, CancellationToken.None));
+        Assert.ThrowsAsync<InvalidProfileShareException>(
+            () => svc.ImportPreviewAsync(empty.RootElement, CancellationToken.None));
+        Assert.ThrowsAsync<InvalidProfileShareException>(
+            () => svc.ImportPreviewAsync(noBody.RootElement, CancellationToken.None));
+    }
+
+    [Test]
+    public void Import_commit_with_unknown_token_throws() {
+        using var repo = new FakeRepo(DonorSnapshot());
+        var svc = new ProfileShareService(repo);
+        Assert.ThrowsAsync<ProfileShareImportTokenException>(
+            () => svc.ImportCommitAsync(Guid.NewGuid(), CancellationToken.None));
+    }
+
+    [Test]
+    public async Task Import_commit_is_single_use() {
+        using var repo = new FakeRepo(DonorSnapshot());
+        var svc = new ProfileShareService(repo);
+        var share = await svc.ExportAsync(ProfileId, CancellationToken.None);
+        var preview = await svc.ImportPreviewAsync(share!.Manifest, CancellationToken.None);
+
+        await svc.ImportCommitAsync(preview.ImportToken, CancellationToken.None);
+        // The token is consumed on first commit — a second use can't duplicate.
+        Assert.ThrowsAsync<ProfileShareImportTokenException>(
+            () => svc.ImportCommitAsync(preview.ImportToken, CancellationToken.None));
+    }
+
+    [Test]
+    public async Task Import_commit_rejects_a_token_past_its_ttl() {
+        // Drive the clock so the 15-min TTL deterministically lapses between preview
+        // and commit — exercises the expiry guard in ImportCommitAsync (not the
+        // prune sweep), so a flipped `<`/`>` in that comparison would fail here.
+        var clock = new MutableTimeProvider(DateTimeOffset.UnixEpoch);
+        using var repo = new FakeRepo(DonorSnapshot());
+        var svc = new ProfileShareService(repo, clock);
+        var share = await svc.ExportAsync(ProfileId, CancellationToken.None);
+        var preview = await svc.ImportPreviewAsync(share!.Manifest, CancellationToken.None);
+
+        clock.Advance(TimeSpan.FromMinutes(16)); // past the 15-min window
+        Assert.ThrowsAsync<ProfileShareImportTokenException>(
+            () => svc.ImportCommitAsync(preview.ImportToken, CancellationToken.None));
+    }
+
+    [Test]
+    public async Task Import_preview_caps_the_pending_set() {
+        // A caller that floods preview without committing is capped so the in-memory
+        // store can't grow unboundedly — the (cap+1)th preview is refused.
+        using var repo = new FakeRepo(DonorSnapshot());
+        var svc = new ProfileShareService(repo);
+        var share = await svc.ExportAsync(ProfileId, CancellationToken.None);
+        // Reference the constant (not a literal 32) so the test tracks the cap.
+        for (var i = 0; i < ProfileShareService.MaxPendingImports; i++) {
+            await svc.ImportPreviewAsync(share!.Manifest, CancellationToken.None);
+        }
+        Assert.ThrowsAsync<ProfileShareImportThrottledException>(
+            () => svc.ImportPreviewAsync(share!.Manifest, CancellationToken.None));
+    }
+
+    [Test]
+    public async Task Dropped_fields_advisory_matches_what_the_export_actually_strips() {
+        // Self-enforcing guard against drift: every category the import advertises as
+        // "you must re-enter this" must correspond to a field the export really emptied.
+        // If the export ever stops stripping one of these, this fails rather than
+        // silently showing the recipient a misleading list. (The reverse direction —
+        // a newly-stripped field nobody added to the advisory — is tracked in PORT_TODO.)
+        using var repo = new FakeRepo(DonorSnapshot());
+        var svc = new ProfileShareService(repo);
+        var share = await svc.ExportAsync(ProfileId, CancellationToken.None);
+        var preview = await svc.ImportPreviewAsync(share!.Manifest, CancellationToken.None);
+        var settings = share.Manifest.GetProperty("settings");
+
+        var categories = new (string advisoryKeyword, Func<bool> stripped)[] {
+            ("Save directory", () =>
+                settings.GetProperty("storage").GetProperty("save_directory").GetString()!.Length == 0),
+            ("ASTAP", () =>
+                settings.GetProperty("plate_solve").GetProperty("path_or_endpoint").GetString()!.Length == 0),
+            ("Site location", () =>
+                settings.GetProperty("site").GetProperty("latitude_deg").GetDouble() == 0),
+            ("PHD2", () =>
+                settings.GetProperty("phd2").GetProperty("host").GetString()!.Length == 0),
+            ("Notification", () =>
+                settings.GetProperty("notifications").GetProperty("pushover_token").GetString()!.Length == 0),
+        };
+        foreach (var (keyword, stripped) in categories) {
+            preview.DroppedFields.Should().Contain(
+                s => s.Contains(keyword, StringComparison.OrdinalIgnoreCase),
+                $"the dropped-fields advisory should name the stripped '{keyword}' category");
+            stripped().Should().BeTrue($"the export must actually strip '{keyword}'");
+        }
     }
 
     [Test]
@@ -230,7 +340,17 @@ public class ProfileShareServiceTest {
         share.PayloadBytes.Should().BeGreaterThan(0);
     }
 
-    /// Minimal IProfileRepository double — only GetProfile is exercised by export.
+    /// A TimeProvider whose clock only moves when the test advances it — lets the
+    /// import-expiry test step past the TTL deterministically.
+    private sealed class MutableTimeProvider : TimeProvider {
+        private DateTimeOffset _now;
+        public MutableTimeProvider(DateTimeOffset start) => _now = start;
+        public override DateTimeOffset GetUtcNow() => _now;
+        public void Advance(TimeSpan by) => _now += by;
+    }
+
+    /// Minimal IProfileRepository double — GetProfile feeds export; Create records
+    /// its arguments so the import tests can assert what the commit handed back.
     private sealed class FakeRepo : IProfileRepository {
         private readonly StoredProfileDto? _stored;
 
@@ -243,10 +363,20 @@ public class ProfileShareServiceTest {
 
         public StoredProfileDto? GetProfile(Guid id) => id == ProfileId ? _stored : null;
 
+        /// The Guid a successful Create hands back — import asserts the committed id matches.
+        public Guid CreatedId { get; } = Guid.Parse("99999999-9999-9999-9999-999999999999");
+        public string? CreatedName { get; private set; }
+        public ProfileSnapshotDto? CreatedSettings { get; private set; }
+        public bool CreatedMakeActive { get; private set; }
+
         public ProfileListDto List() => new(null, Array.Empty<ProfileMetaDto>());
         public Guid? ActiveId => null;
-        public ProfileMetaDto Create(string name, ProfileSnapshotDto? settings, bool makeActive) =>
-            throw new NotSupportedException();
+        public ProfileMetaDto Create(string name, ProfileSnapshotDto? settings, bool makeActive) {
+            CreatedName = name;
+            CreatedSettings = settings;
+            CreatedMakeActive = makeActive;
+            return new ProfileMetaDto(CreatedId, name, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch);
+        }
         public bool Rename(Guid id, string name) => throw new NotSupportedException();
         public ProfileDeleteResult Delete(Guid id) => throw new NotSupportedException();
         public bool SelectProfile(Guid id) => throw new NotSupportedException();

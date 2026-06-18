@@ -96,3 +96,8 @@ public sealed record ProfileShareImportPreviewDto(
     IReadOnlyList<string> Warnings,
     IReadOnlyList<string> DroppedFields,
     DateTimeOffset ExpiresUtc);
+
+// Token travels in the request body (not the query string) so it can't leak into
+// web-server / proxy access logs — it authorizes profile creation within its TTL.
+public sealed record ProfileShareImportCommitRequest(
+    Guid ImportToken);

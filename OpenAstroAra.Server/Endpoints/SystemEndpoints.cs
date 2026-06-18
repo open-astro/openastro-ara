@@ -214,25 +214,56 @@ public static class SystemEndpoints {
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("ExportProfileShare");
 
-        // §70.4 import (preview + commit) is not implemented yet — it lands in a
-        // follow-up sub-PR. Return a clean 501 rather than wiring the not-yet-built
-        // service (whose methods throw, which would surface as an unhandled 500 since
-        // there's no global exception handler) — a caller gets an unambiguous "not
-        // implemented" instead of a fake success or an opaque 500.
-        profiles.MapPost("/share-import", () =>
-                Results.Problem(
-                    statusCode: StatusCodes.Status501NotImplemented,
-                    title: "Profile share import is not available yet",
-                    detail: "Importing a shared profile isn't supported in this version."))
-            .Produces(StatusCodes.Status501NotImplemented)
+        // §70.4 import — preview parses + validates the uploaded profile-share-v1
+        // file and returns a short-lived token; commit creates the profile from it.
+        profiles.MapPost("/share-import",
+                async ([FromBody] System.Text.Json.JsonElement manifest, IProfileShareService svc, HttpResponse response, CancellationToken ct) => {
+                    try {
+                        return Results.Ok(await svc.ImportPreviewAsync(manifest, ct));
+                    } catch (InvalidProfileShareException) {
+                        // Not a recognized share file (bad JSON / wrong schema / no settings).
+                        // Fixed wire detail — the exception message stays internal so it
+                        // isn't pinned into the public API contract.
+                        return Results.Problem(
+                            detail: "The uploaded file is not a recognized profile share (expected a profile-share-v1 file).",
+                            statusCode: StatusCodes.Status422UnprocessableEntity);
+                    } catch (ProfileShareImportThrottledException) {
+                        // Pending-import cap hit — ask the caller to back off. RFC 6585: a
+                        // slot is guaranteed free within the 15-min preview TTL, so advertise
+                        // that as the Retry-After upper bound (seconds).
+                        response.Headers.RetryAfter = "900";
+                        return Results.Problem(
+                            detail: "Too many pending profile-share imports — commit or wait for one to expire, then retry.",
+                            statusCode: StatusCodes.Status429TooManyRequests);
+                    }
+                })
+            // Document the body as the typed manifest so the OpenAPI spec surfaces the
+            // expected profile-share-v1 shape, even though the handler binds a raw
+            // JsonElement to keep validation tolerant (garbled input → 422, not 400).
+            .Accepts<ProfileShareManifest>("application/json")
+            .Produces<ProfileShareImportPreviewDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+            .ProducesProblem(StatusCodes.Status429TooManyRequests)
             .WithName("PreviewProfileShareImport");
 
-        profiles.MapPost("/share-import/commit", () =>
-                Results.Problem(
-                    statusCode: StatusCodes.Status501NotImplemented,
-                    title: "Profile share import is not available yet",
-                    detail: "Importing a shared profile isn't supported in this version."))
-            .Produces(StatusCodes.Status501NotImplemented)
+        // Token travels in the request body (not the query string) so it never lands
+        // in web-server / proxy access logs — it authorizes profile creation in-TTL.
+        profiles.MapPost("/share-import/commit",
+                async ([FromBody] ProfileShareImportCommitRequest req, IProfileShareService svc, CancellationToken ct) => {
+                    try {
+                        var newProfileId = await svc.ImportCommitAsync(req.ImportToken, ct);
+                        return Results.Created($"/api/v1/profiles/{newProfileId}", value: newProfileId);
+                    } catch (ProfileShareImportTokenException) {
+                        // Unknown / expired / already-committed token. Fixed wire detail
+                        // (exception message stays internal, off the public API contract).
+                        return Results.Problem(
+                            detail: "Import token is unknown or expired — preview the share file again.",
+                            statusCode: StatusCodes.Status404NotFound);
+                    }
+                })
+            .Accepts<ProfileShareImportCommitRequest>("application/json")
+            .Produces<Guid>(StatusCodes.Status201Created)
+            .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("CommitProfileShareImport");
 
         // Phase 13.16 — sky-data-recommendations wired to IDataManagerService.

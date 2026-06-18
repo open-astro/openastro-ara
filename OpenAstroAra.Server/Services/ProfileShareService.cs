@@ -13,6 +13,8 @@
 #endregion "copyright"
 
 using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Reflection;
 using System.Text.Json;
 using OpenAstroAra.Server.Contracts;
@@ -27,13 +29,35 @@ namespace OpenAstroAra.Server.Services;
 /// own gear (§70.4); only the donor's tuning judgement survives, alongside a
 /// rig description of what the template targeted.
 ///
-/// Import preview/commit (§70.4) land in a follow-up sub-PR; they retain the
-/// placeholder behavior here so the endpoints stay wired.
+/// Import (§70.4) is the mirror: preview parses + validates a profile-share-v1
+/// file and returns a short-lived token; commit creates a new (non-active)
+/// profile from the template's settings, which the recipient then wizards their
+/// own equipment into.
 /// </summary>
 public sealed class ProfileShareService : IProfileShareService {
     private readonly IProfileRepository _repo;
+    private readonly TimeProvider _clock;
 
-    public ProfileShareService(IProfileRepository repo) => _repo = repo;
+    /// Parsed manifests awaiting a commit, keyed by the preview's import token.
+    /// In-memory + short-lived (§70.7): a preview the user never commits expires.
+    private readonly ConcurrentDictionary<Guid, PendingImport> _pending = new();
+    // Serializes prune + cap-check + insert so two concurrent previews can't both
+    // pass the cap and overfill the store (the check and insert aren't otherwise atomic).
+    private readonly object _previewGate = new();
+    private static readonly TimeSpan ImportTtl = TimeSpan.FromMinutes(15);
+
+    /// Cap on un-committed previews held at once. The store is pruned on every
+    /// preview, but a caller that floods previews without committing could still
+    /// grow it unboundedly within the TTL window — this bounds the blast radius
+    /// (e.g. if the daemon is ever exposed to the LAN without auth).
+    internal const int MaxPendingImports = 32;
+
+    private sealed record PendingImport(ProfileShareManifest Manifest, DateTimeOffset ExpiresUtc);
+
+    public ProfileShareService(IProfileRepository repo, TimeProvider? clock = null) {
+        _repo = repo;
+        _clock = clock ?? TimeProvider.System;
+    }
 
     public Task<ProfileShareDto?> ExportAsync(Guid profileId, CancellationToken ct) {
         // GetProfile is synchronous today (in-memory under a lock), so there is
@@ -176,21 +200,130 @@ public sealed class ProfileShareService : IProfileShareService {
         return plus >= 0 ? info[..plus] : info;
     }
 
-    // ─── §70.4 import (preview + commit) — not implemented until the import sub-PR ───
-    // These throw rather than returning fabricated data: in the production service a
-    // fake "success" (a random token / GUID for any input) is indistinguishable from
-    // a real import to a caller. NotImplementedException surfaces as a clear server
-    // error instead of silently pretending the import worked.
+    // ─── §70.4 import (preview + commit) ───
 
-    private const string ImportNotImplemented =
-        "Profile share import (§70.4) is not implemented yet — it lands in a follow-up sub-PR.";
+    /// The categories the export strips (§70.1) — surfaced to the importer so they
+    /// know what they must supply themselves after importing the template. This is a
+    /// hand-maintained mirror of what ExportAsync actually strips; keep the two in
+    /// step if the strip set changes (drift risk tracked in design/PORT_TODO.md).
+    private static readonly IReadOnlyList<string> DroppedFields = new[] {
+        "Equipment (camera / mount / focuser / …) — re-select in the wizard",
+        "Save directory + filename template",
+        "ASTAP executable + index paths",
+        "Site location (latitude / longitude / elevation / timezone)",
+        "PHD2 host / port / profile",
+        "Notification tokens",
+    };
 
-    // Task.FromException (not a synchronous `throw`) so the not-implemented error
-    // surfaces at the caller's await — the correct async contract — rather than
-    // throwing before the Task is even returned.
-    public Task<ProfileShareImportPreviewDto> ImportPreviewAsync(JsonElement manifest, CancellationToken ct) =>
-        Task.FromException<ProfileShareImportPreviewDto>(new NotImplementedException(ImportNotImplemented));
+    // Returns Task.FromException (never throws synchronously) so every exit — including
+    // validation/throttle failures — surfaces through the returned Task, honouring the
+    // async contract for any non-awaiting caller (.Result, .ContinueWith, …).
+    public Task<ProfileShareImportPreviewDto> ImportPreviewAsync(JsonElement manifest, CancellationToken ct) {
+        if (ct.IsCancellationRequested) {
+            return Task.FromCanceled<ProfileShareImportPreviewDto>(ct);
+        }
+        ProfileShareManifest? parsed;
+        try {
+            parsed = manifest.Deserialize(AraJsonSerializerContext.Default.ProfileShareManifest);
+        } catch (JsonException) {
+            parsed = null;
+        }
+        // Reject anything that isn't a profile-share-v1 file with settings + a rig
+        // description (→ 422), so a wrong/garbled upload fails clearly instead of
+        // creating junk. Both are non-nullable on the record, but source-gen JSON
+        // won't enforce that — a file omitting either deserializes them to null.
+        if (parsed is null ||
+            parsed.SchemaVersion != ProfileShareManifest.CurrentSchemaVersion ||
+            parsed.Settings is null ||
+            parsed.RigDescription is null) {
+            return Task.FromException<ProfileShareImportPreviewDto>(new InvalidProfileShareException(
+                $"Not a recognized profile share file (expected schema_version '{ProfileShareManifest.CurrentSchemaVersion}')."));
+        }
 
-    public Task<Guid> ImportCommitAsync(Guid importToken, CancellationToken ct) =>
-        Task.FromException<Guid>(new NotImplementedException(ImportNotImplemented));
+        var token = Guid.NewGuid();
+        var expires = _clock.GetUtcNow().Add(ImportTtl);
+        // Prune + cap-check + insert under one gate so concurrent previews can't both
+        // pass the cap and overfill the store. Pruning first means expired entries
+        // don't count against the cap.
+        lock (_previewGate) {
+            PruneExpired();
+            if (_pending.Count >= MaxPendingImports) {
+                return Task.FromException<ProfileShareImportPreviewDto>(new ProfileShareImportThrottledException(
+                    "Too many pending profile-share imports — commit or wait for one to expire, then retry."));
+            }
+            _pending[token] = new PendingImport(parsed, expires);
+        }
+
+        var rig = parsed.RigDescription;
+        var warnings = new List<string> {
+            "This is a template, not a complete profile — you'll set up your own equipment after importing.",
+            $"Designed for ~{rig.EffectiveFocalLengthMm:0} mm effective focal length"
+                + (rig.PixelSizeUm > 0 ? $" with a {rig.PixelSizeUm:0.##} µm sensor." : "."),
+        };
+
+        return Task.FromResult(new ProfileShareImportPreviewDto(
+            ImportToken: token,
+            ProfileName: ImportedName(parsed),
+            Warnings: warnings,
+            DroppedFields: DroppedFields,
+            ExpiresUtc: expires));
+    }
+
+    // Likewise returns Task.FromException rather than throwing synchronously.
+    public Task<Guid> ImportCommitAsync(Guid importToken, CancellationToken ct) {
+        if (ct.IsCancellationRequested) {
+            return Task.FromCanceled<Guid>(ct);
+        }
+        // Single-use: TryRemove atomically claims the token (only one caller wins).
+        // Expiry is enforced here on the claimed entry — not via PruneExpired — so an
+        // expired token is rejected deterministically rather than racing the sweep.
+        if (!_pending.TryRemove(importToken, out var pending) ||
+            pending.ExpiresUtc < _clock.GetUtcNow()) {
+            return Task.FromException<Guid>(new ProfileShareImportTokenException(
+                "Import token is unknown or expired — preview the share file again."));
+        }
+        // Create as a NON-active profile from the template's (already-stripped)
+        // settings; the recipient selects it and wizards their own equipment in.
+        var meta = _repo.Create(ImportedName(pending.Manifest), pending.Manifest.Settings, makeActive: false);
+        return Task.FromResult(meta.Id);
+    }
+
+    // Donor attribution (§70.3) is opt-in, and the current export always omits the
+    // donor block (Donor: null), so today this falls through to the neutral default.
+    // The DisplayName branch is reserved for a future opt-in export mode (or a
+    // hand-authored manifest) that carries the donor's chosen label — it is not yet
+    // reachable via the shipped export path.
+    private static string ImportedName(ProfileShareManifest m) =>
+        m.Donor?.DisplayName is { Length: > 0 } name ? name : "Imported profile";
+
+    private void PruneExpired() {
+        var now = _clock.GetUtcNow();
+        foreach (var kv in _pending) {
+            if (kv.Value.ExpiresUtc < now) _pending.TryRemove(kv.Key, out _);
+        }
+    }
+}
+
+/// <summary>The uploaded bytes aren't a recognized <c>profile-share-v1</c> file
+/// (bad JSON / wrong schema version / missing settings) — maps to 422.</summary>
+public sealed class InvalidProfileShareException : Exception {
+    public InvalidProfileShareException() { }
+    public InvalidProfileShareException(string message) : base(message) { }
+    public InvalidProfileShareException(string message, Exception innerException) : base(message, innerException) { }
+}
+
+/// <summary>The import token is unknown or expired (already committed, or the
+/// 15-minute preview window lapsed) — maps to 404.</summary>
+public sealed class ProfileShareImportTokenException : Exception {
+    public ProfileShareImportTokenException() { }
+    public ProfileShareImportTokenException(string message) : base(message) { }
+    public ProfileShareImportTokenException(string message, Exception innerException) : base(message, innerException) { }
+}
+
+/// <summary>Too many un-committed previews are held at once (the pending-import
+/// cap) — maps to 429 so the caller backs off rather than growing the store.</summary>
+public sealed class ProfileShareImportThrottledException : Exception {
+    public ProfileShareImportThrottledException() { }
+    public ProfileShareImportThrottledException(string message) : base(message) { }
+    public ProfileShareImportThrottledException(string message, Exception innerException) : base(message, innerException) { }
 }
