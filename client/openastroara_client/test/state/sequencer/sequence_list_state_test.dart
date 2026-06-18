@@ -187,6 +187,34 @@ void main() {
       expect(info?.framesTotal, 30);
     });
 
+    test('a terminal frame re-reads to backfill REST-only fields', () async {
+      final (container, controller, fake) = await setup('seq-1');
+      // The retained terminal DTO the post-event refresh() will fetch — it
+      // carries completedUtc + target name that the WS frame omits.
+      fake.runState = SequenceRunStateInfo(
+        sequenceId: 'seq-1',
+        runId: 'run-9',
+        state: SequenceRunState.completed,
+        currentTargetName: 'M31',
+        completedUtc: DateTime.utc(2026, 6, 18, 10),
+        framesCompleted: 60,
+        framesTotal: 60,
+      );
+      controller.add(event(SequenceWsEvents.complete, const {
+        'sequence_id': 'seq-1',
+        'state': 'completed',
+        'frames_completed': 60,
+        'frames_total': 60,
+      }));
+      await pumpEventQueue();
+
+      final info = container.read(sequenceRunStateProvider).value;
+      expect(info?.state, SequenceRunState.completed);
+      // Backfilled by the one-shot refresh, not present on the WS frame.
+      expect(info?.completedUtc, DateTime.utc(2026, 6, 18, 10));
+      expect(info?.currentTargetName, 'M31');
+    });
+
     test('a refresh() failure does not freeze live WS tracking', () async {
       final (container, controller, fake) = await setup('seq-1');
       // A refresh fails (e.g. a network hiccup after pressing Pause). The last

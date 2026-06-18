@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:flutter/foundation.dart';
@@ -167,15 +168,27 @@ class SequenceRunStateNotifier extends AsyncNotifier<SequenceRunStateInfo?> {
     // refresh error that kept its previous value), keep applying so live
     // tracking survives a transient REST failure.
     if (!state.hasValue) return;
-    // Ignore a frame that names a different sequence; a missing or non-String
-    // id is treated as absent and applied (best-effort).
-    final payloadId = event.payload['sequence_id'];
-    if (payloadId is String && payloadId != selectedId) return;
+    // Require the frame to name the selected sequence. The daemon stamps
+    // sequence_id on every sequence.* event, so a missing/non-String id is
+    // treated as "not for us" and dropped — defensive against ever applying a
+    // stray frame to the wrong sequence's displayed state.
+    if (event.payload['sequence_id'] != selectedId) return;
     // Use whatever value we currently hold: a refresh failure leaves the prior
     // AsyncData in place (see refresh()), so this is the last good snapshot.
     final current = state.value ?? const SequenceRunStateInfo();
     state = AsyncData(current.applyWsProgress(event.payload));
+    // A terminal frame carries only the state flip; re-read once to backfill the
+    // REST-only fields it omits (completedUtc, target name, start time). The
+    // daemon retains terminal runs, so getRunState returns the full terminal DTO
+    // (not null) right after completion.
+    if (_isTerminalEvent(event.type)) unawaited(refresh());
   }
+
+  static bool _isTerminalEvent(String type) =>
+      type == SequenceWsEvents.complete ||
+      type == SequenceWsEvents.failed ||
+      type == SequenceWsEvents.stopped ||
+      type == SequenceWsEvents.aborted;
 
   /// Re-read the run state (after a lifecycle transition). On failure the last
   /// good value is retained (the error is logged, not promoted to a value-less
