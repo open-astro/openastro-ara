@@ -156,7 +156,10 @@ void main() {
       // A version-mismatch / unexpected DTO without import_token must fail loudly
       // rather than carry an empty token to commit (which would 404 misleadingly).
       final a = _RecordingAdapter(body: {'profile_name': 'X'});
-      expect(
+      // await expectLater: the matcher is async (the callback returns a Future),
+      // so a bare expect() would let the test exit before the assertion resolves
+      // and pass vacuously.
+      await expectLater(
         () => _api(a).importPreview({'schema_version': 'profile-share-v1'}),
         throwsA(isA<FormatException>()),
       );
@@ -176,7 +179,7 @@ void main() {
     test('importCommit throws if the response carries no profile id', () async {
       // Empty/garbled 2xx body — fail loudly rather than return an unaddressable id.
       final a = _RecordingAdapter(body: '');
-      expect(
+      await expectLater(
         () => _api(a).importCommit('tok-1'),
         throwsA(isA<StateError>()),
       );
