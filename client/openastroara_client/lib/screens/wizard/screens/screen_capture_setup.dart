@@ -46,16 +46,22 @@ class _ScreenPlateSolveState extends ConsumerState<ScreenPlateSolve> {
         ),
         WizardTextField(
           label: 'Search radius (°)',
-          initialValue: _ps.searchRadiusDeg.toString(),
-          helperText:
-              'How far from the expected position ASTAP searches. Default 30.',
+          initialValue: _ps.searchRadiusDeg?.toString(),
+          hint: 'default 30',
+          helperText: 'How far from the expected position ASTAP searches. '
+              'Leave blank to keep the profile default.',
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           inputFormatters: WizardInput.unsignedDecimal,
-          // Non-nullable in the draft — keep the prior value on a blank/partial
-          // keystroke rather than resetting to a default.
+          // Blank → null (preserve base on Save); a partial keystroke (lone "."
+          // → tryParse null) keeps the prior value rather than nulling it.
           onChanged: (v) {
-            final d = double.tryParse(v.trim());
-            if (d != null) _ps.searchRadiusDeg = d;
+            final t = v.trim();
+            if (t.isEmpty) {
+              _ps.searchRadiusDeg = null;
+            } else {
+              final d = double.tryParse(t);
+              if (d != null) _ps.searchRadiusDeg = d;
+            }
           },
         ),
         WizardDropdown<int>(

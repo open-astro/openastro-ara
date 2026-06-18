@@ -137,7 +137,10 @@ enum CalibrationCadence { eachSession, onceReuse, neverRecalibrate }
 class PlateSolveSettings {
   String? astapBinaryPath;
   String? starDatabasePath;
-  double searchRadiusDeg = 30;
+  // Nullable so a blank field preserves the base profile's value on Save (the
+  // wizard draft starts fresh; null = "not set by the user"). The screen shows
+  // 30 as the hint. downsampleFactor is a dropdown that always carries a value.
+  double? searchRadiusDeg;
   int downsampleFactor = 2;
 }
 

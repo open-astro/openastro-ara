@@ -104,11 +104,18 @@ void main() {
       expect(out.downsampleFactor, 4);
     });
 
-    test('applyDraftToPlateSolve preserves base paths when draft paths blank', () {
-      final base =
-          const PlateSolveSettings().copyWith(pathOrEndpoint: '/keep/astap');
+    test('applyDraftToPlateSolve preserves base values when the draft is blank',
+        () {
+      final base = const PlateSolveSettings().copyWith(
+        pathOrEndpoint: '/keep/astap',
+        indexDownloadPath: '/keep/db',
+        searchRadiusDeg: 12,
+      );
       final out = applyDraftToPlateSolve(base, ProfileDraft());
-      expect(out.pathOrEndpoint, '/keep/astap'); // blank draft → keep base
+      // A blank draft (null paths + null search radius) keeps every base value.
+      expect(out.pathOrEndpoint, '/keep/astap');
+      expect(out.indexDownloadPath, '/keep/db');
+      expect(out.searchRadiusDeg, 12);
     });
 
     test('applyDraftToPhd2 sets forceCalibrationEachSession for each-session', () {
