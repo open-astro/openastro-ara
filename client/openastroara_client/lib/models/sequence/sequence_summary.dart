@@ -84,14 +84,16 @@ class SequencePage {
 /// [droppedInstructionTypes] explain what the translation couldn't carry over;
 /// [lossyTranslation] is true when anything was dropped or approximated.
 class SequenceImportResult {
-  final String createdSequenceId;
+  /// Null when the daemon didn't return an id — distinct from an empty string so
+  /// the UI never treats an absent id as a real, selectable sequence.
+  final String? createdSequenceId;
   final String name;
   final List<String> warnings;
   final List<String> droppedInstructionTypes;
   final bool lossyTranslation;
 
   const SequenceImportResult({
-    this.createdSequenceId = '',
+    this.createdSequenceId,
     this.name = '',
     this.warnings = const [],
     this.droppedInstructionTypes = const [],
@@ -102,7 +104,7 @@ class SequenceImportResult {
     List<String> strings(dynamic v) =>
         v is List ? v.whereType<String>().toList(growable: false) : const [];
     return SequenceImportResult(
-      createdSequenceId: _str(json['created_sequence_id']) ?? '',
+      createdSequenceId: _str(json['created_sequence_id']),
       name: _str(json['name']) ?? '',
       warnings: strings(json['warnings']),
       droppedInstructionTypes: strings(json['dropped_instruction_types']),

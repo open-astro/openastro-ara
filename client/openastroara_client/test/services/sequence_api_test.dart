@@ -175,10 +175,14 @@ void main() {
       expect((body['nina_sequence_file'] as Map)['Name'], 'M42');
     });
 
-    test('a 422 (treat-warnings-as-errors) propagates as DioException', () async {
+    test('a 422 (treat-warnings-as-errors) propagates as DioException(422)',
+        () async {
       final api = _api((_) => {'error': 'lossy'}, statusCode: 422);
-      expect(api.importNina('x', const {}, treatWarningsAsErrors: true),
-          throwsA(isA<DioException>()));
+      expect(
+        api.importNina('x', const {}, treatWarningsAsErrors: true),
+        throwsA(isA<DioException>().having(
+            (e) => e.response?.statusCode, 'statusCode', 422)),
+      );
     });
   });
 
