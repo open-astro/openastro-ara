@@ -148,6 +148,38 @@ void main() {
     });
   });
 
+  group('SequenceApi.getRunState', () {
+    test('parses an active run state', () async {
+      final api = _api((_) => {
+            'sequence_id': 'seq-1',
+            'run_id': 'run-9',
+            'state': 'running',
+            'current_instruction_index': 4,
+            'current_target_name': 'M31',
+            'frames_completed': 12,
+            'frames_total': 60,
+            'current_instruction_description': 'Take exposure',
+          });
+      final info = await api.getRunState('seq-1');
+      expect(info, isNotNull);
+      expect(info!.state, SequenceRunState.running);
+      expect(info.currentInstructionIndex, 4);
+      expect(info.currentTargetName, 'M31');
+      expect(info.framesCompleted, 12);
+      expect(info.framesTotal, 60);
+    });
+
+    test('returns null when there is no active run (404)', () async {
+      final api = _api((_) => {'error': 'no run'}, statusCode: 404);
+      expect(await api.getRunState('seq-1'), isNull);
+    });
+
+    test('rejects an empty id before any request', () async {
+      final api = _api((_) => const {});
+      expect(() => api.getRunState(''), throwsA(isA<ArgumentError>()));
+    });
+  });
+
   group('SequenceApi lifecycle', () {
     test('start returns the accepted operation id', () async {
       final api = _api((_) =>

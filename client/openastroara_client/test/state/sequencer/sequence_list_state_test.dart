@@ -19,6 +19,8 @@ class _FakeSeqClient implements SequenceClient {
   }
 
   @override
+  Future<SequenceRunStateInfo?> getRunState(String id) async => null;
+  @override
   Future<String> start(String id) async => 'op';
   @override
   Future<String> pause(String id) async => 'op';

@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart' show listEquals;
 
 String? _str(dynamic v) => v is String ? v : null;
 int _int(dynamic v) => v is int ? v : (v is num ? v.toInt() : 0);
+int? _intOrNull(dynamic v) => v is int ? v : (v is num ? v.toInt() : null);
 DateTime? _dt(dynamic v) => v is String ? DateTime.tryParse(v)?.toUtc() : null;
 
 /// §28.12 sequence lifecycle state machine — mirrors the daemon's
@@ -76,6 +77,49 @@ class SequencePage {
 
   @override
   int get hashCode => Object.hash(hasMore, nextCursor, Object.hashAll(items));
+}
+
+/// Live run state of an active sequence — daemon's `SequenceRunStateDto`
+/// (`GET /api/v1/sequences/{id}/state`). null from the API means no active run.
+class SequenceRunStateInfo {
+  final String sequenceId;
+  final String runId;
+  final SequenceRunState state;
+  final int? currentInstructionIndex;
+  final String? currentTargetName;
+  final DateTime? startedUtc;
+  final DateTime? completedUtc;
+  final int framesCompleted;
+  final int framesTotal;
+  final String? currentInstructionDescription;
+
+  const SequenceRunStateInfo({
+    this.sequenceId = '',
+    this.runId = '',
+    this.state = SequenceRunState.idle,
+    this.currentInstructionIndex,
+    this.currentTargetName,
+    this.startedUtc,
+    this.completedUtc,
+    this.framesCompleted = 0,
+    this.framesTotal = 0,
+    this.currentInstructionDescription,
+  });
+
+  factory SequenceRunStateInfo.fromJson(Map<String, dynamic> json) {
+    return SequenceRunStateInfo(
+      sequenceId: _str(json['sequence_id']) ?? '',
+      runId: _str(json['run_id']) ?? '',
+      state: SequenceRunState.fromWire(json['state']) ?? SequenceRunState.idle,
+      currentInstructionIndex: _intOrNull(json['current_instruction_index']),
+      currentTargetName: _str(json['current_target_name']),
+      startedUtc: _dt(json['started_utc']),
+      completedUtc: _dt(json['completed_utc']),
+      framesCompleted: _int(json['frames_completed']),
+      framesTotal: _int(json['frames_total']),
+      currentInstructionDescription: _str(json['current_instruction_description']),
+    );
+  }
 }
 
 /// One row in the sequence list — daemon's `SequenceListItemDto`.

@@ -23,6 +23,8 @@ class _FakeClient implements SequenceClient {
   @override
   Future<SequencePage> list({int limit = 50}) async => const SequencePage(items: []);
   @override
+  Future<SequenceRunStateInfo?> getRunState(String id) async => null;
+  @override
   Future<String> start(String id) async => 'op';
   @override
   Future<String> pause(String id) async => 'op';
