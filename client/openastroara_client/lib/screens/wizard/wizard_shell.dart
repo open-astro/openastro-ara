@@ -89,15 +89,19 @@ class _WizardShellState extends ConsumerState<WizardShell> {
   /// thrown, and never block the wizard from finishing.
   Future<void> _queueSkyDataDownloads(ProfileDraft draft) async {
     if (draft.skyDataDownloadIds.isEmpty) return;
+    if (!mounted) return; // widget disposed between save and queue — ref is dead
     final dm = ref.read(dataManagerApiProvider);
     if (dm == null) return; // no active server — nothing to queue against
-    for (final id in draft.skyDataDownloadIds) {
+    // Fire the 202-accepted queue requests concurrently; each is independent and
+    // its failure is non-fatal (logged, not thrown), so one bad id never blocks
+    // the others or the wizard from finishing.
+    await Future.wait(draft.skyDataDownloadIds.map((id) async {
       try {
         await dm.download(id);
       } catch (e) {
         debugPrint('[wizard] sky-data download queue failed for $id: $e');
       }
-    }
+    }));
   }
 
   Future<void> _saveAndExit(WizardController controller) async {
