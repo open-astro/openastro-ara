@@ -156,7 +156,7 @@ class SequenceApi implements SequenceClient {
           newName, 'newName', 'new sequence name must not be empty');
     }
     final res = await _dio.post<dynamic>(
-      '/api/v1/sequences/templates/${Uri.encodeComponent(templateName)}/instantiate',
+      '/api/v1/sequences/templates/${Uri.encodeComponent(templateName.trim())}/instantiate',
       data: <String, dynamic>{'new_sequence_name': newName.trim()},
     );
     final data = res.data;

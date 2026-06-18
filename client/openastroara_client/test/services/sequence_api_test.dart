@@ -216,10 +216,11 @@ void main() {
         captured = opts;
         return {'id': 'seq-new', 'name': 'My LRGB'};
       });
-      final id = await api.instantiateTemplate('Deep-sky LRGB', '  My LRGB  ');
+      final id = await api.instantiateTemplate('  Deep-sky LRGB  ', '  My LRGB  ');
       expect(id, 'seq-new');
+      // Both the path name and the body name are trimmed before sending.
       expect(captured!.path, contains('/templates/Deep-sky%20LRGB/instantiate'));
-      expect((captured!.data as Map)['new_sequence_name'], 'My LRGB'); // trimmed
+      expect((captured!.data as Map)['new_sequence_name'], 'My LRGB');
     });
 
     test('instantiateTemplate rejects empty template name / new name', () async {
