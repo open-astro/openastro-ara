@@ -84,7 +84,10 @@ class SequencePage {
 class SequenceRunStateInfo {
   final String sequenceId;
   final String runId;
-  final SequenceRunState state;
+  /// Nullable on purpose: an unrecognized/absent wire state stays `null` rather
+  /// than silently degrading to `idle` (which would wrongly enable Start on a
+  /// running sequence). Mirrors [SequenceListItem.currentRunState].
+  final SequenceRunState? state;
   final int? currentInstructionIndex;
   final String? currentTargetName;
   final DateTime? startedUtc;
@@ -96,7 +99,7 @@ class SequenceRunStateInfo {
   const SequenceRunStateInfo({
     this.sequenceId = '',
     this.runId = '',
-    this.state = SequenceRunState.idle,
+    this.state,
     this.currentInstructionIndex,
     this.currentTargetName,
     this.startedUtc,
@@ -110,7 +113,7 @@ class SequenceRunStateInfo {
     return SequenceRunStateInfo(
       sequenceId: _str(json['sequence_id']) ?? '',
       runId: _str(json['run_id']) ?? '',
-      state: SequenceRunState.fromWire(json['state']) ?? SequenceRunState.idle,
+      state: SequenceRunState.fromWire(json['state']),
       currentInstructionIndex: _intOrNull(json['current_instruction_index']),
       currentTargetName: _str(json['current_target_name']),
       startedUtc: _dt(json['started_utc']),
