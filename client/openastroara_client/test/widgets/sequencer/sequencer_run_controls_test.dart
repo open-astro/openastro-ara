@@ -18,6 +18,8 @@ class _FakeClient implements SequenceClient {
   @override
   Future<SequenceRunStateInfo?> getRunState(String id) async => runState;
   @override
+  Future<SequenceImportResult> importNina(String n, Map<String, dynamic> f, {bool treatWarningsAsErrors = false}) async => const SequenceImportResult(createdSequenceId: 'new');
+  @override
   Future<SequenceNode> getSequence(String id) async => SequenceNode(
       id: 'root', kind: SequenceNodeKind.root, displayName: 'fake');
   @override

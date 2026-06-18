@@ -14,6 +14,10 @@ import 'package:openastroara/state/sequencer/sequence_state.dart';
 /// the tab loaded the right body into the controller.
 class _FakeClient implements SequenceClient {
   @override
+  Future<SequenceImportResult> importNina(String n, Map<String, dynamic> f,
+          {bool treatWarningsAsErrors = false}) async =>
+      const SequenceImportResult(createdSequenceId: 'new');
+  @override
   Future<SequenceNode> getSequence(String id) async => SequenceNode(
         id: 'root',
         kind: SequenceNodeKind.root,
