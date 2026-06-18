@@ -156,10 +156,15 @@ class AutofocusSettings {
 }
 
 class FileSavingSettings {
+  // All nullable so a blank/untouched field preserves the base profile's value on
+  // Save (null = "not set"), mapped onto the profile's storage section in
+  // wizard_save.applyDraftToStorage. [compress] is a wizard simplification of the
+  // section's 3-way compression (true → Rice, false → Off; gzip stays a
+  // Settings-only choice).
   String? saveDirectory;
-  ImageFormat format = ImageFormat.fits;
-  bool compress = true;
-  String filenameTemplate = r'$$DATEMINUS12$$\$$IMAGETYPE$$\$$DATETIME$$_$$FILTER$$_$$SENSORTEMP$$_$$EXPOSURETIME$$s_$$FRAMENR$$';
+  ImageFormat? format;
+  bool? compress;
+  String? filenameTemplate;
 }
 
 enum ImageFormat { fits, xisf }

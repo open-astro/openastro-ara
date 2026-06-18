@@ -13,6 +13,7 @@ import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
 import 'package:openastroara/state/settings/plate_solve_settings_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
+import 'package:openastroara/state/settings/storage_settings_state.dart';
 
 /// In-memory ProfileApi double — overrides only the methods saveWizardProfile
 /// calls. The inherited Dio is never used (all calls are overridden), so the
@@ -65,6 +66,11 @@ class _FakeProfileApi extends ProfileApi {
   @override
   Future<AutofocusSettings> putAutofocusSettings(AutofocusSettings v) =>
       _put('autofocus', v);
+  @override
+  Future<StorageSettings> getStorageSettings() async => const StorageSettings();
+  @override
+  Future<StorageSettings> putStorageSettings(StorageSettings v) =>
+      _put('storage', v);
 }
 
 void main() {
@@ -77,8 +83,15 @@ void main() {
       expect(api.createCalls, 1);
       expect(
           api.putCalls,
-          containsAll(
-              ['site', 'optics', 'imaging', 'phd2', 'platesolve', 'autofocus']));
+          containsAll([
+            'site',
+            'optics',
+            'imaging',
+            'phd2',
+            'platesolve',
+            'autofocus',
+            'storage'
+          ]));
       expect(draft.savedProfileId, 'profile-1');
     });
 

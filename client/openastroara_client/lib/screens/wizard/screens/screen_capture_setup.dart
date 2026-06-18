@@ -215,3 +215,69 @@ class _ScreenAutofocusState extends ConsumerState<ScreenAutofocus> {
     );
   }
 }
+
+// ── Screen 13 — File saving ─────────────────────────────────────────────────
+
+/// §37.4 — where captures are written and in what shape. Binds to the draft's
+/// [FileSavingSettings] bag; the wizard Save maps it onto the profile's storage
+/// section.
+class ScreenFileSaving extends ConsumerStatefulWidget {
+  const ScreenFileSaving({super.key});
+  @override
+  ConsumerState<ScreenFileSaving> createState() => _ScreenFileSavingState();
+}
+
+class _ScreenFileSavingState extends ConsumerState<ScreenFileSaving> {
+  late final FileSavingSettings _fs = _draftOf(ref).fileSaving;
+
+  @override
+  Widget build(BuildContext context) {
+    return WizardScreenScaffold(
+      step: 13,
+      intro: 'Where ARA saves captured frames and how it names them. A USB drive '
+          'is recommended (§29) so a full system disk can\'t stall a session.',
+      children: [
+        WizardTextField(
+          label: 'Save directory',
+          initialValue: _fs.saveDirectory,
+          hint: r'/media/usb/astro  ·  D:\Astro\Captures',
+          helperText: 'Leave blank to keep the profile default.',
+          onChanged: (v) =>
+              _fs.saveDirectory = v.trim().isEmpty ? null : v.trim(),
+        ),
+        WizardDropdown<ImageFormat?>(
+          label: 'File format',
+          value: _fs.format,
+          helperText: 'FITS is the broadly-compatible default; XISF is '
+              'PixInsight-native.',
+          entries: const [
+            DropdownMenuEntry(value: null, label: 'Keep profile default'),
+            DropdownMenuEntry(value: ImageFormat.fits, label: 'FITS'),
+            DropdownMenuEntry(value: ImageFormat.xisf, label: 'XISF'),
+          ],
+          onChanged: (v) => setState(() => _fs.format = v),
+        ),
+        WizardDropdown<bool?>(
+          label: 'Compress files',
+          value: _fs.compress,
+          helperText: 'Lossless Rice compression — smaller files, no quality '
+              'loss. (Choose Gzip later in Settings → Storage.)',
+          entries: const [
+            DropdownMenuEntry(value: null, label: 'Keep profile default'),
+            DropdownMenuEntry(value: true, label: 'Yes (Rice)'),
+            DropdownMenuEntry(value: false, label: 'No'),
+          ],
+          onChanged: (v) => setState(() => _fs.compress = v),
+        ),
+        WizardTextField(
+          label: 'Filename template',
+          initialValue: _fs.filenameTemplate,
+          helperText: r'Tokens like $$DATETIME$$, $$FILTER$$, $$EXPOSURETIME$$. '
+              'Leave blank to keep the profile default.',
+          onChanged: (v) =>
+              _fs.filenameTemplate = v.trim().isEmpty ? null : v.trim(),
+        ),
+      ],
+    );
+  }
+}
