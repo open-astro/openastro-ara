@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/sequence/sequence_summary.dart';
 import '../../state/sequencer/sequence_list_state.dart';
 import '../../theme/ara_colors.dart';
+import 'sequence_import.dart';
 
 /// §38 "Load sequence" picker. Lists the active server's saved sequences
 /// (newest-first) from [sequenceListProvider]; tapping one records it as the
@@ -73,11 +74,73 @@ class SequenceLoadDialog extends ConsumerWidget {
         ),
       ),
       actions: [
+        // Import a NINA sequence file; on success it selects the new sequence
+        // (loaded into the tree) and closes this picker. On a cancel/error the
+        // dialog stays open so the user can retry or pick from the list.
+        const _ImportNinaButton(),
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Cancel'),
         ),
       ],
+    );
+  }
+}
+
+/// The "Import NINA…" action. Stateful so it can disable itself for the whole
+/// async flow (picker → upload → warnings dialog) — without the busy guard a
+/// second tap on a slow connection would open a second picker and fire a second
+/// concurrent import. On a successful import it pops the Load dialog.
+class _ImportNinaButton extends ConsumerStatefulWidget {
+  const _ImportNinaButton();
+
+  @override
+  ConsumerState<_ImportNinaButton> createState() => _ImportNinaButtonState();
+}
+
+class _ImportNinaButtonState extends ConsumerState<_ImportNinaButton> {
+  bool _busy = false;
+
+  Future<void> _run() async {
+    final navigator = Navigator.of(context);
+    setState(() => _busy = true);
+    var popped = false;
+    try {
+      final imported = await pickAndImportSequence(context, ref);
+      // Gate on this State's `mounted`, not navigator.mounted: the dialog is
+      // barrierDismissible, so the user can tap it away mid-import. Once the
+      // dialog route is gone this State is disposed (mounted == false), but the
+      // app-level navigator is still alive — popping it here would pop the wrong
+      // route (the tab beneath). `mounted` false ⇒ skip the pop.
+      if (imported && mounted) {
+        navigator.pop();
+        popped = true;
+      }
+    } catch (e, st) {
+      // The inner flow already shows a SnackBar for expected failures; this is a
+      // backstop so an unexpected error (e.g. a platform file-picker exception)
+      // is logged rather than vanishing into Flutter's global handler.
+      debugPrint('[sequencer] import error: $e\n$st');
+    } finally {
+      // Only clear the busy flag when we kept the dialog open; if we popped, the
+      // dialog is gone and there's no state to reset (explicit flag rather than
+      // relying on `mounted` flipping as a side-effect of pop()).
+      if (!popped && mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return TextButton.icon(
+      icon: _busy
+          ? const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.upload_file, size: 18),
+      label: const Text('Import NINA…'),
+      onPressed: _busy ? null : _run,
     );
   }
 }
