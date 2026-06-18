@@ -160,8 +160,12 @@ class SequenceRunStateNotifier extends AsyncNotifier<SequenceRunStateInfo?> {
   void _applyWsEvent(WsEvent event, String? selectedId) {
     if (selectedId == null) return;
     if (!event.type.startsWith(SequenceWsEvents.prefix)) return;
-    // Ignore a frame that names a different sequence; apply when it matches or
-    // carries no id (best-effort).
+    // Skip while the initial REST read is still in flight (or errored): applying
+    // now would be clobbered by build()'s resolving future, silently dropping
+    // this frame. Once there's a value (incl. a null "no active run"), apply.
+    if (!state.hasValue) return;
+    // Ignore a frame that names a different sequence; a missing or non-String
+    // id is treated as absent and applied (best-effort).
     final payloadId = event.payload['sequence_id'];
     if (payloadId is String && payloadId != selectedId) return;
     final current = state.asData?.value ?? const SequenceRunStateInfo();

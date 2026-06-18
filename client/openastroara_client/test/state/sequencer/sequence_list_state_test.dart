@@ -22,8 +22,12 @@ class _FakeSeqClient implements SequenceClient {
   }
 
   SequenceRunStateInfo? runState;
+  // When set, getRunState awaits this gate so a test can hold the initial REST
+  // read in flight (to exercise the "skip WS while loading" path).
+  Completer<SequenceRunStateInfo?>? runStateGate;
   @override
-  Future<SequenceRunStateInfo?> getRunState(String id) async => runState;
+  Future<SequenceRunStateInfo?> getRunState(String id) =>
+      runStateGate?.future ?? Future.value(runState);
   @override
   Future<SequenceImportResult> importNina(String n, Map<String, dynamic> f, {bool treatWarningsAsErrors = false}) async => const SequenceImportResult(createdSequenceId: 'new');
   @override
@@ -82,25 +86,30 @@ void main() {
     WsEvent event(String type, Map<String, dynamic> payload) =>
         WsEvent(type: type, ts: DateTime.utc(2026), seq: 1, payload: payload);
 
-    Future<(ProviderContainer, StreamController<WsEvent>)> setup(
-        String selectId) async {
+    Future<(ProviderContainer, StreamController<WsEvent>, _FakeSeqClient)> setup(
+        String selectId,
+        {bool awaitInitial = true,
+        Completer<SequenceRunStateInfo?>? gate}) async {
       final controller = StreamController<WsEvent>.broadcast();
       addTearDown(controller.close);
+      final fake = _FakeSeqClient()..runStateGate = gate;
       final container = ProviderContainer(overrides: [
-        sequenceApiProvider.overrideWithValue(_FakeSeqClient()),
+        sequenceApiProvider.overrideWithValue(fake),
         wsEventsProvider.overrideWith((ref) => controller.stream),
       ]);
       addTearDown(container.dispose);
       container.read(selectedSequenceIdProvider.notifier).select(selectId);
       final sub = container.listen(sequenceRunStateProvider, (_, _) {});
       addTearDown(sub.close);
-      await container.read(sequenceRunStateProvider.future); // initial (null)
-      return (container, controller);
+      if (awaitInitial) {
+        await container.read(sequenceRunStateProvider.future); // initial (null)
+      }
+      return (container, controller, fake);
     }
 
     test('a sequence.progress frame for the selected sequence updates run state',
         () async {
-      final (container, controller) = await setup('seq-1');
+      final (container, controller, _) = await setup('seq-1');
       controller.add(event(SequenceWsEvents.progress, const {
         'sequence_id': 'seq-1',
         'run_id': 'run-9',
@@ -109,7 +118,7 @@ void main() {
         'frames_completed': 12,
         'frames_total': 60,
       }));
-      await Future<void>.delayed(Duration.zero); // let the stream deliver
+      await pumpEventQueue();
 
       final info = container.read(sequenceRunStateProvider).value;
       expect(info?.state, SequenceRunState.running);
@@ -119,26 +128,59 @@ void main() {
     });
 
     test('a frame naming a different sequence is ignored', () async {
-      final (container, controller) = await setup('seq-1');
+      final (container, controller, _) = await setup('seq-1');
       controller.add(event(SequenceWsEvents.progress, const {
         'sequence_id': 'other',
         'state': 'running',
         'frames_completed': 7,
       }));
-      await Future<void>.delayed(Duration.zero);
+      await pumpEventQueue();
 
       expect(container.read(sequenceRunStateProvider).value, isNull);
     });
 
     test('a non-sequence event is ignored', () async {
-      final (container, controller) = await setup('seq-1');
+      final (container, controller, _) = await setup('seq-1');
       controller.add(event('diagnostics.issue_detected', const {
         'sequence_id': 'seq-1',
         'state': 'running',
       }));
-      await Future<void>.delayed(Duration.zero);
+      await pumpEventQueue();
 
       expect(container.read(sequenceRunStateProvider).value, isNull);
+    });
+
+    test('a frame arriving while the initial read is in flight is not lost',
+        () async {
+      // Hold the initial getRunState open so the provider stays loading.
+      final gate = Completer<SequenceRunStateInfo?>();
+      final (container, controller, _) =
+          await setup('seq-1', awaitInitial: false, gate: gate);
+      // First WS frame lands DURING loading — must be skipped (it would be
+      // clobbered by the resolving build() future).
+      controller.add(event(SequenceWsEvents.progress, const {
+        'sequence_id': 'seq-1',
+        'state': 'running',
+        'frames_completed': 5,
+      }));
+      await pumpEventQueue();
+      expect(container.read(sequenceRunStateProvider).isLoading, isTrue);
+
+      // Initial read resolves (no active run yet), THEN a fresh frame applies.
+      gate.complete(null);
+      await container.read(sequenceRunStateProvider.future);
+      controller.add(event(SequenceWsEvents.progress, const {
+        'sequence_id': 'seq-1',
+        'state': 'running',
+        'frames_completed': 9,
+        'frames_total': 30,
+      }));
+      await pumpEventQueue();
+
+      final info = container.read(sequenceRunStateProvider).value;
+      expect(info?.state, SequenceRunState.running);
+      expect(info?.framesCompleted, 9);
+      expect(info?.framesTotal, 30);
     });
   });
 }

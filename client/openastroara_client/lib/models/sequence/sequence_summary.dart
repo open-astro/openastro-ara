@@ -182,18 +182,17 @@ class SequenceRunStateInfo {
       sequenceId: _str(payload['sequence_id']) ?? sequenceId,
       runId: _str(payload['run_id']) ?? runId,
       state: SequenceRunState.fromWire(payload['state']) ?? state,
-      currentInstructionIndex: payload.containsKey('current_instruction_index')
-          ? _intOrNull(payload['current_instruction_index'])
-          : currentInstructionIndex,
+      // `?? <current>` (not `_int`'s 0-fallback) so a present-but-unparseable
+      // count preserves the last-known value instead of flashing 0/0.
+      currentInstructionIndex:
+          _intOrNull(payload['current_instruction_index']) ??
+              currentInstructionIndex,
       currentTargetName: currentTargetName,
       startedUtc: startedUtc,
       completedUtc: completedUtc,
-      framesCompleted: payload.containsKey('frames_completed')
-          ? _int(payload['frames_completed'])
-          : framesCompleted,
-      framesTotal: payload.containsKey('frames_total')
-          ? _int(payload['frames_total'])
-          : framesTotal,
+      framesCompleted:
+          _intOrNull(payload['frames_completed']) ?? framesCompleted,
+      framesTotal: _intOrNull(payload['frames_total']) ?? framesTotal,
       currentInstructionDescription: currentInstructionDescription,
     );
   }
