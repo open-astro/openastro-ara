@@ -184,5 +184,14 @@ void main() {
         throwsA(isA<StateError>()),
       );
     });
+
+    test('importCommit throws if the body is a non-string JSON value', () async {
+      // A Map/int body (version skew) must not toString() into a bogus id.
+      final a = _RecordingAdapter(body: {'unexpected': 'shape'});
+      await expectLater(
+        () => _api(a).importCommit('tok-1'),
+        throwsA(isA<StateError>()),
+      );
+    });
   });
 }

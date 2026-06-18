@@ -106,8 +106,10 @@ class ProfileApi {
       '/api/v1/profiles/share-import/commit',
       data: {'import_token': importToken},
     );
-    // The daemon returns the new Guid as a bare JSON string (201 Created).
-    final id = res.data?.toString() ?? '';
+    // The daemon returns the new Guid as a bare JSON string (201 Created). Require
+    // a String specifically — a non-string body (Map/int from a version skew)
+    // would otherwise toString() into a bogus, unaddressable id past the guard.
+    final id = res.data is String ? res.data as String : '';
     if (id.isEmpty) {
       throw StateError(
           'importCommit got HTTP ${res.statusCode} with no profile id in the response body');
