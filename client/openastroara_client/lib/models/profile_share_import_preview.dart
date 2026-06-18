@@ -42,6 +42,8 @@ class ProfileShareImportPreview {
   }
 
   static List<String> _stringList(Object? value) => value is List
-      ? value.map((e) => e?.toString() ?? '').toList(growable: false)
+      // Drop null elements rather than coercing them to '' (which would render as
+      // a blank bullet in the confirm dialog).
+      ? value.whereType<Object>().map((e) => e.toString()).toList(growable: false)
       : const <String>[];
 }

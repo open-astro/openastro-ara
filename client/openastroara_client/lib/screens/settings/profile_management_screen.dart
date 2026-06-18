@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
@@ -77,14 +78,32 @@ class ProfileManagementScreen extends ConsumerWidget {
       return;
     }
 
+    // Pick metadata only (no withData) so we can size-check before reading the
+    // file in — a profile share is a few KB of JSON, so anything large is a
+    // mis-pick and we refuse rather than slurp it into memory.
     final picked = await FilePicker.pickFiles(
-      withData: true, // read bytes in-memory so this works the same on every desktop
       type: FileType.any,
       dialogTitle: 'Choose a shared profile file',
     );
     if (picked == null || picked.files.isEmpty) return; // user cancelled
-    final bytes = picked.files.single.bytes;
-    if (bytes == null) {
+    final file = picked.files.single;
+    const maxShareBytes = 1024 * 1024; // 1 MB ceiling — shares are a few KB
+    if (file.size > maxShareBytes) {
+      messenger.showSnackBar(const SnackBar(
+          content: Text("That file is too large to be a profile share."),
+          backgroundColor: AraColors.accentError));
+      return;
+    }
+    final path = file.path;
+    if (path == null) {
+      messenger.showSnackBar(const SnackBar(
+          content: Text("Couldn't read the selected file.")));
+      return;
+    }
+    final List<int> bytes;
+    try {
+      bytes = await File(path).readAsBytes();
+    } catch (_) {
       messenger.showSnackBar(const SnackBar(
           content: Text("Couldn't read the selected file.")));
       return;
@@ -255,6 +274,10 @@ Future<bool> _confirmImport(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Fallback so the dialog is never blank (the daemon normally sends at
+            // least one warning, but a sparse preview shouldn't show an empty box).
+            if (preview.warnings.isEmpty && preview.droppedFields.isEmpty)
+              const Text('Import this shared profile as a new template?'),
             for (final w in preview.warnings) ...[
               Text(w),
               const SizedBox(height: 8),
@@ -269,6 +292,18 @@ Future<bool> _confirmImport(
                   child: Text('• $d',
                       style: const TextStyle(color: AraColors.textSecondary)),
                 ),
+            ],
+            if (preview.expiresUtc != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                'This preview expires at '
+                '${TimeOfDay.fromDateTime(preview.expiresUtc!.toLocal()).format(ctx)} '
+                '— import before then, or pick the file again.',
+                style: const TextStyle(
+                    color: AraColors.textSecondary,
+                    fontStyle: FontStyle.italic,
+                    fontSize: 12),
+              ),
             ],
           ],
         ),
