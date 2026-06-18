@@ -107,7 +107,12 @@ class _ImportNinaButtonState extends ConsumerState<_ImportNinaButton> {
     var popped = false;
     try {
       final imported = await pickAndImportSequence(context, ref);
-      if (imported && navigator.mounted) {
+      // Gate on this State's `mounted`, not navigator.mounted: the dialog is
+      // barrierDismissible, so the user can tap it away mid-import. Once the
+      // dialog route is gone this State is disposed (mounted == false), but the
+      // app-level navigator is still alive — popping it here would pop the wrong
+      // route (the tab beneath). `mounted` false ⇒ skip the pop.
+      if (imported && mounted) {
         navigator.pop();
         popped = true;
       }

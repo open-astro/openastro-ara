@@ -17,8 +17,8 @@ import '../../theme/ara_colors.dart';
 const int _maxSequenceFileBytes = 32 * 1024 * 1024;
 
 /// Why reading a picked sequence file failed — drives a specific user message
-/// (a too-large file and an unparseable one need different wording).
-enum NinaFileError { tooLarge, notJson }
+/// (too-large, can't-read, and unparseable each need different wording).
+enum NinaFileError { tooLarge, readError, notJson }
 
 /// Outcome of [readNinaSequenceFile]: on success [nina] + [name] are set and
 /// [error] is null; on failure [error] says which message to show.
@@ -41,16 +41,24 @@ class NinaFileReadResult {
 /// object-shape check) without touching the UI, so the size/non-object paths
 /// are unit-testable. The caller maps [NinaFileReadResult.error] to a message.
 Future<NinaFileReadResult> readNinaSequenceFile(String path) async {
+  String contents;
+  // I/O phase — a too-large file, a revoked permission, or an unplugged drive
+  // is a read failure, distinct from a file we read fine but couldn't parse.
+  // NINA sequences are KBs; cap before reading so an accidental huge file can't
+  // spike memory in jsonDecode.
   try {
     final file = File(path);
-    // NINA sequences are KBs; cap before reading so an accidental huge file
-    // can't spike memory in jsonDecode. Inside the try so an unreadable file
-    // (revoked permission, unplugged drive) degrades to a SnackBar rather than
-    // escaping as an unhandled async exception.
     if (await file.length() > _maxSequenceFileBytes) {
       return const NinaFileReadResult.failure(NinaFileError.tooLarge);
     }
-    final decoded = jsonDecode(await file.readAsString());
+    contents = await file.readAsString();
+  } on FileSystemException catch (e, st) {
+    debugPrint('[sequencer] NINA file read failed: $e\n$st');
+    return const NinaFileReadResult.failure(NinaFileError.readError);
+  }
+  // Parse phase — bad bytes / wrong shape is a "not a sequence" problem.
+  try {
+    final decoded = jsonDecode(contents);
     if (decoded is! Map<String, dynamic>) {
       return const NinaFileReadResult.failure(NinaFileError.notJson);
     }
@@ -62,11 +70,20 @@ Future<NinaFileReadResult> readNinaSequenceFile(String path) async {
         ? base.substring(0, base.length - 5)
         : base;
     return NinaFileReadResult.success(decoded, name);
-  } catch (e, st) {
-    debugPrint('[sequencer] NINA file read/parse failed: $e\n$st');
+  } on FormatException catch (e, st) {
+    debugPrint('[sequencer] NINA file parse failed: $e\n$st');
     return const NinaFileReadResult.failure(NinaFileError.notJson);
   }
 }
+
+/// The user-facing message for a [NinaFileError].
+String _messageFor(NinaFileError error) => switch (error) {
+      NinaFileError.tooLarge =>
+        'That sequence file is too large to import (32 MiB limit).',
+      NinaFileError.readError =>
+        "Couldn't read that file — check it still exists and you have access.",
+      NinaFileError.notJson => "That file isn't a valid sequence JSON.",
+    };
 
 /// §38.4 — let the user pick a NINA sequence `.json` and import it. A cancelled
 /// pick is a no-op; an oversized / unreadable / non-JSON file surfaces a
@@ -91,9 +108,7 @@ Future<bool> pickAndImportSequence(BuildContext context, WidgetRef ref) async {
     // (it survived the picker await), so we never reach for a disposed Scaffold.
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(read.error == NinaFileError.tooLarge
-            ? 'That sequence file is too large to import (32 MiB limit).'
-            : "That file isn't a valid sequence JSON."),
+        content: Text(_messageFor(read.error!)),
         backgroundColor: AraColors.accentError,
       ));
     }
