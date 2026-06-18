@@ -81,9 +81,27 @@ final sequenceListProvider = AsyncNotifierProvider.autoDispose<
 /// Id of the sequence the user picked in the Load dialog (null = none loaded).
 /// The tab's tree/run controls key off this. Riverpod 3.x removed
 /// `StateProvider`, so this is a thin Notifier (matching [selectedNodeIdProvider]).
+///
+/// Clears itself when the active server changes or disconnects: an id from one
+/// server must never stay live and drive `getSequence`/lifecycle calls against a
+/// different one. We listen to the active-server selector (the keep-alive
+/// `savedServersProvider`, NOT the autoDispose `sequenceApiProvider`) so this
+/// keep-alive notifier doesn't pin an autoDispose provider open.
 class SelectedSequenceIdNotifier extends Notifier<String?> {
   @override
-  String? build() => null;
+  String? build() {
+    ref.listen(
+      savedServersProvider.select((async) => async.maybeWhen(
+            data: (list) => list.isEmpty ? null : list.last,
+            orElse: () => null,
+          )),
+      (prev, next) {
+        if (prev != next) state = null;
+      },
+    );
+    return null;
+  }
+
   void select(String? id) => state = id;
 }
 

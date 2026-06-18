@@ -80,15 +80,38 @@ void main() {
       expect(find.textContaining('No saved sequences'), findsOneWidget);
     });
 
-    testWidgets('lists sequences; tapping one selects it', (tester) async {
-      final container = await pumpDialog(tester,
-          build: () async => [_item('s1', 'M31 LRGB'), _item('s2', 'Orion')]);
+    testWidgets('lists sequences; tapping one selects it and dismisses',
+        (tester) async {
+      // Launch via show() (not mounted directly) so the onTap pop has a route to
+      // dismiss — this verifies the dialog actually closes on selection.
+      final container = ProviderContainer(overrides: [
+        sequenceListProvider.overrideWith(() => _FakeListNotifier(
+            () async => [_item('s1', 'M31 LRGB'), _item('s2', 'Orion')])),
+      ]);
+      addTearDown(container.dispose);
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => ElevatedButton(
+                onPressed: () => SequenceLoadDialog.show(context),
+                child: const Text('open'),
+              ),
+            ),
+          ),
+        ),
+      ));
+      await tester.tap(find.text('open'));
       await tester.pumpAndSettle();
       expect(find.text('M31 LRGB'), findsOneWidget);
       expect(find.text('Orion'), findsOneWidget);
+
       await tester.tap(find.text('Orion'));
       await tester.pumpAndSettle();
       expect(container.read(selectedSequenceIdProvider), 's2');
+      // Dialog dismissed — its content is gone.
+      expect(find.text('Load sequence'), findsNothing);
     });
   });
 

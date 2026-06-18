@@ -38,7 +38,11 @@ class SequenceLoadDialog extends ConsumerWidget {
             if (list.isEmpty) {
               return const _Message('No saved sequences yet.');
             }
-            return ListView.builder(
+            // Cap the height so a server with dozens of sequences can't grow the
+            // dialog past the screen; the list scrolls within the cap.
+            return ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 360),
+              child: ListView.builder(
               shrinkWrap: true,
               itemCount: list.length,
               itemBuilder: (context, i) {
@@ -57,6 +61,7 @@ class SequenceLoadDialog extends ConsumerWidget {
                   },
                 );
               },
+              ),
             );
           },
         ),
