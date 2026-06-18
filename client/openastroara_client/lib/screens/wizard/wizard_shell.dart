@@ -147,11 +147,6 @@ class _WizardShellState extends ConsumerState<WizardShell> {
     String? error;
     try {
       await saveWizardProfile(api, draft);
-      // Screen 17 — queue the user's chosen sky-data downloads now that the
-      // profile exists. Best-effort + after the profile is saved: a failed
-      // queue request must NOT turn a successful save into an error (downloads
-      // are 202/fire-and-forget and visible in Settings → Data).
-      await _queueSkyDataDownloads(draft);
     } on DioException catch (e) {
       error = 'Couldn\'t save the profile: ${e.message ?? 'network error'} '
           '(${e.response?.statusCode ?? 'no response'}).';
@@ -174,6 +169,16 @@ class _WizardShellState extends ConsumerState<WizardShell> {
     if (error != null) {
       _showError(messenger, error);
       return; // keep the wizard open so the user can retry
+    }
+
+    // Screen 17 — queue the user's chosen sky-data downloads now that the profile
+    // exists. Deliberately OUTSIDE the save try/catch: these are 202/fire-and-
+    // forget requests (visible later in Settings → Data), so any error escaping
+    // the per-id catches inside must NOT turn a successful save into a failure.
+    try {
+      await _queueSkyDataDownloads(draft);
+    } catch (_) {
+      // truly best-effort — per-id failures are already logged inside the method
     }
 
     // Exit the wizard first, THEN notify — so if onComplete routes/pops, it can't

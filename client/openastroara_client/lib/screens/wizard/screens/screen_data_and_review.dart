@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../models/profile_draft.dart';
 import '../../../state/sky_atlas/data_manager_state.dart';
 import '../../../state/wizard_state.dart';
 import '../../../theme/ara_colors.dart';
@@ -28,10 +27,12 @@ class ScreenSkyData extends ConsumerStatefulWidget {
 }
 
 class _ScreenSkyDataState extends ConsumerState<ScreenSkyData> {
-  Set<String> get _selected => _draftOf(ref).skyDataDownloadIds;
-
   @override
   Widget build(BuildContext context) {
+    // Watch (not read) the controller so this screen rebuilds if the draft object
+    // is ever replaced (e.g. a future reset-to-defaults); `selected` is the live
+    // mutable set on the draft, and our setState calls repaint after we mutate it.
+    final selected = ref.watch(wizardControllerProvider).draft.skyDataDownloadIds;
     final async = ref.watch(dataManagerPackagesProvider);
     return WizardScreenScaffold(
       step: 17,
@@ -65,22 +66,22 @@ class _ScreenSkyDataState extends ConsumerState<ScreenSkyData> {
                   children: [
                     TextButton(
                       onPressed: () => setState(() =>
-                          _selected.addAll(available.map((p) => p.id))),
+                          selected.addAll(available.map((p) => p.id))),
                       child: const Text('Select all'),
                     ),
                     TextButton(
-                      onPressed: _selected.isEmpty
+                      onPressed: selected.isEmpty
                           ? null
-                          : () => setState(_selected.clear),
+                          : () => setState(() => selected.clear()),
                       child: const Text('Clear'),
                     ),
                   ],
                 ),
                 ...available.map((p) => CheckboxListTile(
-                      value: _selected.contains(p.id),
+                      value: selected.contains(p.id),
                       onChanged: (v) => setState(() => v == true
-                          ? _selected.add(p.id)
-                          : _selected.remove(p.id)),
+                          ? selected.add(p.id)
+                          : selected.remove(p.id)),
                       title: Text(p.name),
                       subtitle: Text(
                         '${p.description}  ·  ${formatBytes(p.sizeBytes)}',
@@ -99,9 +100,6 @@ class _ScreenSkyDataState extends ConsumerState<ScreenSkyData> {
     );
   }
 }
-
-ProfileDraft _draftOf(WidgetRef ref) =>
-    ref.read(wizardControllerProvider).draft;
 
 class _Message extends StatelessWidget {
   const _Message(this.text);
