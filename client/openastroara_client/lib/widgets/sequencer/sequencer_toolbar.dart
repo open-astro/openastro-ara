@@ -7,11 +7,12 @@ import '../../services/sequence_api.dart';
 import '../../state/sequencer/sequence_list_state.dart';
 import '../../theme/ara_colors.dart';
 import 'sequence_load_dialog.dart';
+import 'sequence_new_dialog.dart';
 
-/// §25.5.3 sequencer toolbar. Load opens the §38 sequence picker; Run / Pause /
-/// Abort drive the lifecycle endpoints on the selected sequence, gated by its
-/// live run state. Save / Validate stay disabled pending later slices (the
-/// editor body→tree load + validation path).
+/// §25.5.3 sequencer toolbar. New opens the §38.7 template picker; Load opens
+/// the §38 sequence picker; Run / Pause / Abort drive the lifecycle endpoints on
+/// the selected sequence, gated by its live run state. Save / Validate stay
+/// disabled pending later slices (the tree-editing + serialization path).
 class SequencerToolbar extends ConsumerWidget {
   const SequencerToolbar({super.key});
 
@@ -69,8 +70,13 @@ class SequencerToolbar extends ConsumerWidget {
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(children: [
-                const _ToolButton(
-                    icon: Icons.note_add_outlined, label: 'New', onPressed: null),
+                _ToolButton(
+                  icon: Icons.note_add_outlined,
+                  label: 'New',
+                  // Enabled once connected; opens the template picker.
+                  onPressed:
+                      connected ? () => SequenceNewDialog.show(context) : null,
+                ),
                 _ToolButton(
                   icon: Icons.folder_open_outlined,
                   label: 'Load',
