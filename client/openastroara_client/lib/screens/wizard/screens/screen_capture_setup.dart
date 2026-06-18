@@ -48,27 +48,28 @@ class _ScreenPlateSolveState extends ConsumerState<ScreenPlateSolve> {
           label: 'Search radius (°)',
           initialValue: _ps.searchRadiusDeg?.toString(),
           hint: 'default 30',
-          helperText: 'How far from the expected position ASTAP searches. '
-              'Leave blank to keep the profile default.',
+          helperText: 'How far from the expected position ASTAP searches '
+              '(0–180°). Leave blank to keep the profile default.',
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           inputFormatters: WizardInput.unsignedDecimal,
-          // Blank → null (preserve base on Save); a partial keystroke (lone "."
-          // → tryParse null) keeps the prior value rather than nulling it.
+          // Blank → null (preserve base on Save). Only accept the same range the
+          // settings notifier enforces (0 < v ≤ 180); an out-of-range or partial
+          // entry keeps the prior value rather than pushing junk to the daemon.
           onChanged: (v) {
             final t = v.trim();
             if (t.isEmpty) {
               _ps.searchRadiusDeg = null;
-            } else {
-              final d = double.tryParse(t);
-              if (d != null) _ps.searchRadiusDeg = d;
+              return;
             }
+            final d = double.tryParse(t);
+            if (d != null && d > 0 && d <= 180) _ps.searchRadiusDeg = d;
           },
         ),
         WizardDropdown<int>(
           label: 'Downsample factor',
           value: _ps.downsampleFactor ?? 2, // visual default; null keeps base on Save
-          helperText:
-              'Bin the image before solving — faster on large sensors. Default 2.',
+          helperText: 'Bin the image before solving — faster on large sensors. '
+              'Shows 2 by default; pick a value to override the profile setting.',
           entries: const [
             DropdownMenuEntry(value: 1, label: '1 — none'),
             DropdownMenuEntry(value: 2, label: '2 — recommended'),
