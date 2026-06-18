@@ -217,7 +217,7 @@ public static class SystemEndpoints {
         // §70.4 import — preview parses + validates the uploaded profile-share-v1
         // file and returns a short-lived token; commit creates the profile from it.
         profiles.MapPost("/share-import",
-                async ([FromBody] System.Text.Json.JsonElement manifest, IProfileShareService svc, CancellationToken ct) => {
+                async ([FromBody] System.Text.Json.JsonElement manifest, IProfileShareService svc, HttpResponse response, CancellationToken ct) => {
                     try {
                         return Results.Ok(await svc.ImportPreviewAsync(manifest, ct));
                     } catch (InvalidProfileShareException) {
@@ -228,7 +228,10 @@ public static class SystemEndpoints {
                             detail: "The uploaded file is not a recognized profile share (expected a profile-share-v1 file).",
                             statusCode: StatusCodes.Status422UnprocessableEntity);
                     } catch (ProfileShareImportThrottledException) {
-                        // Pending-import cap hit — ask the caller to back off.
+                        // Pending-import cap hit — ask the caller to back off. RFC 6585: a
+                        // slot is guaranteed free within the 15-min preview TTL, so advertise
+                        // that as the Retry-After upper bound (seconds).
+                        response.Headers.RetryAfter = "900";
                         return Results.Problem(
                             detail: "Too many pending profile-share imports — commit or wait for one to expire, then retry.",
                             statusCode: StatusCodes.Status429TooManyRequests);
