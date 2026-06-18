@@ -32,7 +32,9 @@ class SequenceApi implements SequenceClient {
   final Dio _dio;
 
   /// [receiveTimeout] is widenable by callers without forking the class — the
-  /// list endpoint can be slow on a cold daemon / NFS-backed storage.
+  /// list endpoint can be slow on a cold daemon / NFS-backed storage. It applies
+  /// only to the internally-constructed Dio; when a [dio] is injected (tests),
+  /// its own options govern and [receiveTimeout] is ignored.
   SequenceApi(AraServer server,
       {Dio? dio, Duration receiveTimeout = const Duration(seconds: 12)})
       : _dio = dio ??
@@ -124,6 +126,13 @@ class SequenceApi implements SequenceClient {
     return opId;
   }
 
+  /// force: true cancels in-flight requests immediately — intentional on a
+  /// server change so a stale response can't land against the switched-away
+  /// server. The trade-off: a lifecycle call (start/pause/abort) in flight when
+  /// the provider disposes throws a DioException with an ambiguous outcome (the
+  /// daemon may or may not have received it). The UI-wiring slice handles that
+  /// DioException on lifecycle calls; the operation's true state is the WS
+  /// `sequence.*` stream, not this Future.
   @override
   void close() => _dio.close(force: true);
 }

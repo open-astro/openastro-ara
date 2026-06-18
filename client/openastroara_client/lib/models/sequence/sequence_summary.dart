@@ -4,6 +4,8 @@
 /// §38.1 JSON DOM) is fetched separately and parsed by the tree layer.
 library;
 
+import 'package:flutter/foundation.dart' show listEquals;
+
 String? _str(dynamic v) => v is String ? v : null;
 int _int(dynamic v) => v is int ? v : (v is num ? v.toInt() : 0);
 DateTime? _dt(dynamic v) => v is String ? DateTime.tryParse(v)?.toUtc() : null;
@@ -66,18 +68,11 @@ class SequencePage {
   });
 
   @override
-  bool operator ==(Object other) {
-    if (other is! SequencePage ||
-        other.hasMore != hasMore ||
-        other.nextCursor != nextCursor ||
-        other.items.length != items.length) {
-      return false;
-    }
-    for (var i = 0; i < items.length; i++) {
-      if (other.items[i] != items[i]) return false;
-    }
-    return true;
-  }
+  bool operator ==(Object other) =>
+      other is SequencePage &&
+      other.hasMore == hasMore &&
+      other.nextCursor == nextCursor &&
+      listEquals(other.items, items);
 
   @override
   int get hashCode => Object.hash(hasMore, nextCursor, Object.hashAll(items));
