@@ -325,8 +325,12 @@ Future<T> _runWithSpinner<T>(
   try {
     return await op();
   } finally {
-    // Guard mounted so a screen popped mid-RPC doesn't touch a disposed navigator.
-    if (context.mounted) navigator.removeRoute(spinner);
+    // Guard on the NAVIGATOR's mounted state, not the screen's context: if the
+    // screen is popped mid-RPC but its parent navigator lives on, context.mounted
+    // would be false and leave the (canPop:false) spinner stranded on that
+    // navigator with no way to dismiss it. navigator.mounted removes the spinner
+    // whenever the navigator survives, and skips only when it's truly disposed.
+    if (navigator.mounted) navigator.removeRoute(spinner);
   }
 }
 
