@@ -145,6 +145,15 @@ void main() {
       expect(share.profileName, "Joey's C8");
       expect(share.manifest['schema_version'], 'profile-share-v1');
     });
+
+    test('exportProfile throws if the response has no manifest', () async {
+      // A null/garbled body must fail loudly, not write an empty {} share file.
+      final a = _RecordingAdapter(body: {'profile_name': 'X'});
+      await expectLater(
+        () => _api(a).exportProfile('id-9'),
+        throwsA(isA<FormatException>()),
+      );
+    });
   });
 
   group('ProfileApi §70 share import', () {

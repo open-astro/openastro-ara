@@ -310,7 +310,7 @@ class _ProfileListView extends ConsumerWidget {
           backgroundColor: AraColors.accentError));
       return;
     }
-    if (saved == null) return; // user cancelled
+    if (saved == null || !context.mounted) return; // cancelled / screen gone
 
     messenger.showSnackBar(SnackBar(
         content: Text('Exported "${p.name}" — share this file; the recipient '

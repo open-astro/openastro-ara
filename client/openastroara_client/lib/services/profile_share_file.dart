@@ -30,13 +30,22 @@ Map<String, dynamic> parseShareManifest(List<int> bytes) {
 /// then appends the `.araprofile.json` suffix so shares are recognizable.
 String shareFileName(String name) {
   final cleaned = name
+      // filename-illegal chars + control chars (incl. tab/LF/CR) → dash.
       .replaceAll(RegExp(r'[\/\\:*?"<>|\x00-\x1f]'), '-')
+      // remaining whitespace (spaces, NBSP, …) → dash, then collapse runs.
       .replaceAll(RegExp(r'\s+'), '-')
       .replaceAll(RegExp(r'-+'), '-')
       .replaceAll(RegExp(r'^-+|-+$'), '');
-  final base = cleaned.isEmpty ? 'profile' : cleaned;
+  var base = cleaned.isEmpty ? 'profile' : cleaned;
+  // A profile literally named after a Windows reserved device (CON, NUL, COM1…)
+  // would otherwise yield e.g. NUL.araprofile.json, which Windows redirects to
+  // the device. Prefix an underscore so the name is always a real file.
+  if (_windowsReserved.hasMatch(base)) base = '_$base';
   return '$base.araprofile.json';
 }
+
+final RegExp _windowsReserved =
+    RegExp(r'^(con|prn|aux|nul|com[1-9]|lpt[1-9])$', caseSensitive: false);
 
 /// A relative "import within ~N minutes" note for the import confirm dialog, or
 /// null when there's no expiry. Relative (computed against the current instant)

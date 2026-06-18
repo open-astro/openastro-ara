@@ -17,14 +17,17 @@ class ProfileShareExport {
   });
 
   factory ProfileShareExport.fromJson(Map<String, dynamic> json) {
-    // Daemon serializes with SnakeCaseLower (see Program.cs). The manifest is a
-    // nested object; coerce defensively so a non-Map degrades to an empty map.
+    // Daemon serializes with SnakeCaseLower (see Program.cs). Fail loudly if the
+    // manifest is absent/empty (null body, undecodable response, unexpected DTO)
+    // rather than write an empty `{}` to disk and report a bogus success.
     final rawManifest = json['manifest'];
+    if (rawManifest is! Map || rawManifest.isEmpty) {
+      throw const FormatException(
+          'Export response did not include a profile-share manifest.');
+    }
     return ProfileShareExport(
       profileName: json['profile_name']?.toString() ?? '',
-      manifest: rawManifest is Map
-          ? Map<String, dynamic>.from(rawManifest)
-          : const <String, dynamic>{},
+      manifest: Map<String, dynamic>.from(rawManifest),
     );
   }
 }

@@ -43,6 +43,13 @@ void main() {
       expect(shareFileName('///'), 'profile.araprofile.json');
       expect(shareFileName(''), 'profile.araprofile.json');
     });
+
+    test('prefixes Windows reserved device names', () {
+      expect(shareFileName('NUL'), '_NUL.araprofile.json');
+      expect(shareFileName('com1'), '_com1.araprofile.json');
+      // A name only *containing* a reserved word is fine.
+      expect(shareFileName('nullarbor'), 'nullarbor.araprofile.json');
+    });
   });
 
   group('shareExpiryNote', () {
