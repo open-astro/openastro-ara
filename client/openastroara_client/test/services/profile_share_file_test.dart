@@ -45,6 +45,12 @@ void main() {
       expect(note, contains('about 14 minutes'));
     });
 
+    test('under a minute remaining reads "less than a minute"', () {
+      final note =
+          shareExpiryNote(now.add(const Duration(seconds: 30)), now: now);
+      expect(note, contains('less than a minute'));
+    });
+
     test('says expired once the deadline has passed', () {
       final note =
           shareExpiryNote(now.subtract(const Duration(seconds: 1)), now: now);

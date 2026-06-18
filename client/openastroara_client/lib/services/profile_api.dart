@@ -113,7 +113,9 @@ class ProfileApi {
     // a String specifically — a non-string body (Map/int from a version skew)
     // would otherwise toString() into a bogus, unaddressable id past the guard.
     final id = res.data is String ? res.data as String : '';
-    if (id.isEmpty) {
+    if (id.trim().isEmpty) {
+      // trim() so a whitespace-only body (version skew) is rejected too, not just
+      // an empty string — both are unaddressable ids.
       throw StateError(
           'importCommit got HTTP ${res.statusCode} with no profile id in the response body');
     }
