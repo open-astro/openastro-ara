@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 
 import '../models/profile_list.dart';
 import '../models/profile_meta.dart';
+import '../models/profile_share_import_preview.dart';
 import '../models/server.dart';
 import '../state/imaging/exposure_state.dart' show FrameKind;
 import '../state/settings/autofocus_settings_state.dart';
@@ -78,6 +79,40 @@ class ProfileApi {
           'createProfile got HTTP ${res.statusCode} with no profile id in the response body');
     }
     return meta;
+  }
+
+  /// §70 profile-share import — preview a `profile-share-v1` template
+  /// (`POST /api/v1/profiles/share-import`). [manifest] is the parsed JSON of
+  /// the share file; the daemon validates it, parks it under a single-use token,
+  /// and returns what it'll create + what the recipient must re-enter. A file
+  /// that isn't a recognized share surfaces as a Dio 422.
+  Future<ProfileShareImportPreview> importPreview(
+      Map<String, dynamic> manifest) async {
+    final res = await _dio.post<Map<String, dynamic>>(
+      '/api/v1/profiles/share-import',
+      data: manifest,
+    );
+    return ProfileShareImportPreview.fromJson(
+        res.data ?? const <String, dynamic>{});
+  }
+
+  /// §70 profile-share import — commit a previewed template into a new,
+  /// non-active profile (`POST /api/v1/profiles/share-import/commit`). The token
+  /// travels in the body (never the query string, so it can't leak into access
+  /// logs). Returns the new profile's id; an unknown/expired token surfaces as a
+  /// Dio 404.
+  Future<String> importCommit(String importToken) async {
+    final res = await _dio.post<dynamic>(
+      '/api/v1/profiles/share-import/commit',
+      data: {'import_token': importToken},
+    );
+    // The daemon returns the new Guid as a bare JSON string (201 Created).
+    final id = res.data?.toString() ?? '';
+    if (id.isEmpty) {
+      throw StateError(
+          'importCommit got HTTP ${res.statusCode} with no profile id in the response body');
+    }
+    return id;
   }
 
   /// GET the active profile's imaging-defaults section.

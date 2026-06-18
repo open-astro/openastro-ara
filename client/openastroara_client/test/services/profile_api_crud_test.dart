@@ -129,4 +129,37 @@ void main() {
       expect(a.path, '/api/v1/profiles/id-9');
     });
   });
+
+  group('ProfileApi §70 share import', () {
+    test('importPreview POSTs the manifest and parses the preview', () async {
+      final a = _RecordingAdapter(body: {
+        'import_token': 'tok-1',
+        'profile_name': 'Imported profile',
+        'warnings': ['This is a template, not a complete profile'],
+        'dropped_fields': ['Site location', 'PHD2 host / port / profile'],
+        'expires_utc': '2026-06-18T04:00:00Z',
+      });
+      final manifest = {'schema_version': 'profile-share-v1', 'settings': {}};
+      final preview = await _api(a).importPreview(manifest);
+      expect(a.method, 'POST');
+      expect(a.path, '/api/v1/profiles/share-import');
+      // The raw manifest is the request body.
+      expect((a.requestData as Map)['schema_version'], 'profile-share-v1');
+      expect(preview.importToken, 'tok-1');
+      expect(preview.profileName, 'Imported profile');
+      expect(preview.droppedFields, hasLength(2));
+      expect(preview.expiresUtc, isNotNull);
+    });
+
+    test('importCommit POSTs the token in the body and returns the new id',
+        () async {
+      // The daemon returns the new Guid as a bare JSON string (201 Created).
+      final a = _RecordingAdapter(body: 'new-profile-id');
+      final id = await _api(a).importCommit('tok-1');
+      expect(a.method, 'POST');
+      expect(a.path, '/api/v1/profiles/share-import/commit');
+      expect((a.requestData as Map)['import_token'], 'tok-1');
+      expect(id, 'new-profile-id');
+    });
+  });
 }
