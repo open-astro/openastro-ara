@@ -243,8 +243,11 @@ public sealed class ProfileShareService : IProfileShareService {
     public Task<Guid> ImportCommitAsync(Guid importToken, CancellationToken ct) {
         ct.ThrowIfCancellationRequested();
         PruneExpired();
-        // Single-use: remove on commit so a token can't create duplicates.
-        if (!_pending.TryRemove(importToken, out var pending)) {
+        // Single-use: remove on commit so a token can't create duplicates. Re-check
+        // expiry on the removed entry — PruneExpired() and TryRemove aren't atomic,
+        // so a token whose TTL lapses between them would otherwise commit stale.
+        if (!_pending.TryRemove(importToken, out var pending) ||
+            pending.ExpiresUtc < DateTimeOffset.UtcNow) {
             throw new ProfileShareImportTokenException(
                 "Import token is unknown or expired — preview the share file again.");
         }

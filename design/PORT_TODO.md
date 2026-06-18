@@ -796,3 +796,10 @@ Deferred to **§43-2**:
   (it never compiles the WebView widget unless a test imports `aladin_view.dart`, which `aladin_view_test.dart` now does),
   so a fork/SDK mismatch surfaces as a client-test compile failure. Update the pinned SHA in `pubspec.yaml` after
   re-shimming. Surfaced 2026-06-14 by the #451 review (fork-maintenance dependency).
+- **§70 import — distinguish repeated-import profile names.** D-2 (#489) names every imported profile "Imported profile"
+  because the export deliberately strips the donor block (including any donor-chosen `display_name`) per the strip-all
+  privacy policy ([[project-profile-share-path-policy]]) — so the manifest carries no profile name to reuse. Result: two
+  imports of the same template land as two profiles both named "Imported profile". The recipient can rename via the §37/§30
+  management UI (PR C, #488), so this isn't blocking, but the default could be friendlier — e.g. derive a non-identifying
+  label from the `rig_description` ("Imported — 2032 mm rig") and/or auto-suffix a counter when the name already exists in
+  the repo. Flagged by the #489 review (minor / follow-up).

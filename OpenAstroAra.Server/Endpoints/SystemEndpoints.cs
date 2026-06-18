@@ -231,7 +231,7 @@ public static class SystemEndpoints {
             .WithName("PreviewProfileShareImport");
 
         profiles.MapPost("/share-import/commit",
-                async (Guid importToken, IProfileShareService svc, CancellationToken ct) => {
+                async ([FromQuery] Guid importToken, IProfileShareService svc, CancellationToken ct) => {
                     try {
                         var newProfileId = await svc.ImportCommitAsync(importToken, ct);
                         return Results.Created($"/api/v1/profiles/{newProfileId}", value: newProfileId);
