@@ -152,7 +152,12 @@ Future<String?> _promptName(BuildContext context, {required String initial}) {
         controller: controller,
         autofocus: true,
         decoration: const InputDecoration(labelText: 'Profile name'),
-        onSubmitted: (v) => Navigator.of(ctx).pop(v.trim()),
+        // Match the Rename button: an empty value returns null (no rename), so a
+        // cleared field + Enter can't push an empty name to the daemon.
+        onSubmitted: (v) {
+          final t = v.trim();
+          Navigator.of(ctx).pop(t.isEmpty ? null : t);
+        },
       ),
       actions: [
         TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Cancel')),

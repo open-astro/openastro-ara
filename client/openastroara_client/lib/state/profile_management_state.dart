@@ -33,18 +33,24 @@ class ProfileManagementNotifier extends AsyncNotifier<ProfileList> {
     return _api.listProfiles();
   }
 
-  /// Re-fetch the list, surfacing transport errors through the AsyncValue. The
-  /// fetch is wrapped in a closure so any throw (incl. building the request) is
-  /// caught by guard rather than escaping and stranding state on AsyncLoading.
+  /// Re-fetch the list, surfacing transport errors through the AsyncValue. Keeps
+  /// the current list visible during the fetch (no AsyncLoading flash after each
+  /// mutation) — the initial load already shows a spinner via build()'s pending
+  /// state. The fetch is wrapped in a closure so any throw is caught by guard
+  /// rather than escaping and stranding state on AsyncLoading.
   Future<void> refresh() async {
-    state = const AsyncLoading();
     state = await AsyncValue.guard(() => _api.listProfiles());
   }
 
   /// Run a mutation then refresh, under the [_busy] guard. Errors (notably the
   /// daemon's 409 on deleting the active/last profile) propagate to the caller.
   Future<void> _mutate(Future<void> Function() op) async {
-    if (_busy) return; // drop the overlapping action rather than racing refreshes
+    // Reject (don't silently drop) an overlapping action so the UI can tell the
+    // user, rather than discarding their tap with no feedback. Throwing before
+    // setting _busy leaves the in-flight action untouched.
+    if (_busy) {
+      throw StateError('Another profile action is still in progress.');
+    }
     _busy = true;
     try {
       await op();
