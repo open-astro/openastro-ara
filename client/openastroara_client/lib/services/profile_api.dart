@@ -92,6 +92,9 @@ class ProfileApi {
       '/api/v1/profiles/share-import',
       data: manifest,
     );
+    // A null body (Dio's empty-response case) becomes an empty map, which
+    // fromJson rejects as "missing import token" — the right surfaced error even
+    // though it can't distinguish a null body from a token-less DTO.
     return ProfileShareImportPreview.fromJson(
         res.data ?? const <String, dynamic>{});
   }

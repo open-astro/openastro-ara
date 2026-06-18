@@ -113,6 +113,9 @@ class ProfileManagementScreen extends ConsumerWidget {
     }
     final List<int> bytes;
     try {
+      // dart:io read — fine for the desktop targets (macOS / Linux / Windows);
+      // this screen isn't built for web, where file.path is null and this branch
+      // wouldn't be reached anyway.
       bytes = await File(path).readAsBytes();
     } catch (_) {
       messenger.showSnackBar(const SnackBar(
@@ -129,9 +132,12 @@ class ProfileManagementScreen extends ConsumerWidget {
       return;
     }
 
+    if (!context.mounted) return;
     ProfileShareImportPreview preview;
     try {
-      preview = await api.importPreview(parseShareManifest(bytes));
+      // Spinner over the preview RPC so a slow daemon doesn't look like a no-op.
+      preview = await _runWithSpinner(
+          context, () => api.importPreview(parseShareManifest(bytes)));
     } on FormatException catch (e) {
       messenger.showSnackBar(SnackBar(
           content: Text(e.message), backgroundColor: AraColors.accentError));
@@ -153,7 +159,7 @@ class ProfileManagementScreen extends ConsumerWidget {
     // Only a commit failure means the import didn't happen — keep it in its own
     // try so a later list-refresh failure can't masquerade as "couldn't import".
     try {
-      await api.importCommit(preview.importToken);
+      await _runWithSpinner(context, () => api.importCommit(preview.importToken));
     } catch (e) {
       messenger.showSnackBar(SnackBar(
           content: Text(_friendly(e, fallback: "Couldn't import that profile")),
@@ -292,6 +298,31 @@ Future<String?> _promptName(BuildContext context, {required String initial}) {
       ],
     ),
   ).whenComplete(controller.dispose);
+}
+
+/// Runs [op] behind a blocking, non-dismissible spinner so the import RPCs give
+/// feedback instead of a silent hang on a slow daemon. Mirrors the wizard's
+/// save-spinner pattern (same navigator via useRootNavigator:false; PopScope
+/// blocks the system-back button). Always removes the spinner, then rethrows so
+/// the caller handles success/failure.
+Future<T> _runWithSpinner<T>(
+    BuildContext context, Future<T> Function() op) async {
+  showDialog<void>(
+    context: context,
+    barrierDismissible: false,
+    useRootNavigator: false,
+    builder: (_) => const PopScope(
+      canPop: false,
+      child: Center(child: CircularProgressIndicator()),
+    ),
+  );
+  try {
+    return await op();
+  } finally {
+    // Pop the spinner off the same (nearest) navigator it was pushed onto. Guard
+    // mounted so a screen popped mid-RPC doesn't pop a disposed navigator.
+    if (context.mounted) Navigator.of(context, rootNavigator: false).pop();
+  }
 }
 
 Future<bool> _confirmImport(
