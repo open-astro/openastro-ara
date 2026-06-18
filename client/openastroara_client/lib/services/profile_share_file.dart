@@ -22,3 +22,24 @@ Map<String, dynamic> parseShareManifest(List<int> bytes) {
   }
   return decoded;
 }
+
+/// A relative "import within ~N minutes" note for the import confirm dialog, or
+/// null when there's no expiry. Relative (computed against the current instant)
+/// rather than a wall-clock time, so it sidesteps date / timezone ambiguity and
+/// reads naturally for the daemon's short (15-min) TTL tokens. [now] is injectable
+/// for tests; both sides are normalized to UTC before comparing.
+String? shareExpiryNote(DateTime? expiresUtc, {DateTime? now}) {
+  if (expiresUtc == null) return null;
+  final remaining =
+      expiresUtc.toUtc().difference((now ?? DateTime.now()).toUtc());
+  if (remaining.inSeconds <= 0) {
+    return 'This preview has expired — pick the file again to import.';
+  }
+  final mins = remaining.inMinutes;
+  final label = mins < 1
+      ? 'less than a minute'
+      : mins == 1
+          ? 'about a minute'
+          : 'about $mins minutes';
+  return 'Import within $label — this preview expires after that.';
+}

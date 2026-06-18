@@ -31,4 +31,30 @@ void main() {
       );
     });
   });
+
+  group('shareExpiryNote', () {
+    final now = DateTime.utc(2026, 6, 18, 4, 0, 0);
+
+    test('returns null when there is no expiry', () {
+      expect(shareExpiryNote(null, now: now), isNull);
+    });
+
+    test('shows minutes remaining for a future expiry', () {
+      final note =
+          shareExpiryNote(now.add(const Duration(minutes: 14)), now: now);
+      expect(note, contains('about 14 minutes'));
+    });
+
+    test('says expired once the deadline has passed', () {
+      final note =
+          shareExpiryNote(now.subtract(const Duration(seconds: 1)), now: now);
+      expect(note, contains('expired'));
+    });
+
+    test('normalizes a local-time expiry to UTC before comparing', () {
+      // A non-UTC DateTime must still compare correctly (both sides → UTC).
+      final localExpiry = now.add(const Duration(minutes: 10)).toLocal();
+      expect(shareExpiryNote(localExpiry, now: now), contains('about 10'));
+    });
+  });
 }

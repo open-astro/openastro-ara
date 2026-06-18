@@ -132,7 +132,12 @@ class ProfileManagementScreen extends ConsumerWidget {
 
     try {
       await api.importCommit(preview.importToken);
-      await ref.read(profileManagementProvider.notifier).refresh();
+      // The commit is another async gap — only refresh if still mounted so the
+      // ref.read doesn't run against a disposed WidgetRef. The snackbar uses the
+      // pre-captured messenger, so it's safe to confirm either way.
+      if (context.mounted) {
+        await ref.read(profileManagementProvider.notifier).refresh();
+      }
       messenger.showSnackBar(SnackBar(
           content: Text('Imported "${preview.profileName}" — make it active, '
               'then set up your equipment in the wizard.')));
@@ -293,17 +298,13 @@ Future<bool> _confirmImport(
                       style: const TextStyle(color: AraColors.textSecondary)),
                 ),
             ],
-            if (preview.expiresUtc != null) ...[
+            if (shareExpiryNote(preview.expiresUtc) case final note?) ...[
               const SizedBox(height: 12),
-              Text(
-                'This preview expires at '
-                '${TimeOfDay.fromDateTime(preview.expiresUtc!.toLocal()).format(ctx)} '
-                '— import before then, or pick the file again.',
-                style: const TextStyle(
-                    color: AraColors.textSecondary,
-                    fontStyle: FontStyle.italic,
-                    fontSize: 12),
-              ),
+              Text(note,
+                  style: const TextStyle(
+                      color: AraColors.textSecondary,
+                      fontStyle: FontStyle.italic,
+                      fontSize: 12)),
             ],
           ],
         ),
