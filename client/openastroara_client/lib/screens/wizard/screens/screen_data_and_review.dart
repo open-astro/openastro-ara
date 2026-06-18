@@ -6,11 +6,13 @@ import '../../../state/wizard_state.dart';
 import '../../../theme/ara_colors.dart';
 import '../wizard_form_kit.dart';
 
-/// Human-readable size for a package (`1.2 GB`, `340 MB`, `512 KB`).
+/// Human-readable size for a package (`1.2 GB`, `340.0 MB`, `1.5 KB`). One
+/// decimal place for every scaled unit (KB/MB/GB) so sizes round consistently —
+/// raw bytes stay whole.
 String formatBytes(int bytes) {
   if (bytes >= 1 << 30) return '${(bytes / (1 << 30)).toStringAsFixed(1)} GB';
-  if (bytes >= 1 << 20) return '${(bytes / (1 << 20)).toStringAsFixed(0)} MB';
-  if (bytes >= 1 << 10) return '${(bytes / (1 << 10)).toStringAsFixed(0)} KB';
+  if (bytes >= 1 << 20) return '${(bytes / (1 << 20)).toStringAsFixed(1)} MB';
+  if (bytes >= 1 << 10) return '${(bytes / (1 << 10)).toStringAsFixed(1)} KB';
   return '$bytes B';
 }
 
@@ -65,8 +67,10 @@ class _ScreenSkyDataState extends ConsumerState<ScreenSkyData> {
                 Row(
                   children: [
                     TextButton(
-                      onPressed: () => setState(() =>
-                          selected.addAll(available.map((p) => p.id))),
+                      onPressed: available.every((p) => selected.contains(p.id))
+                          ? null
+                          : () => setState(() =>
+                              selected.addAll(available.map((p) => p.id))),
                       child: const Text('Select all'),
                     ),
                     TextButton(
