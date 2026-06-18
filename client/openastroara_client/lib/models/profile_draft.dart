@@ -170,10 +170,11 @@ class FileSavingSettings {
 enum ImageFormat { fits, xisf }
 
 class ImagingDefaults {
+  // Screen 14's subset. Nullable so a blank/untouched field keeps the base on
+  // Save. Gain/offset/bin + cooling are collected on the Camera screen (5) and
+  // mapped from `d.camera`, so they're intentionally not duplicated here.
   Duration? exposure;
-  int? gain;
-  int? offset;
-  FrameType frameType = FrameType.light;
+  FrameType? frameType;
 }
 
 enum FrameType { light, dark, bias, flat }

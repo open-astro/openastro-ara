@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/profile_draft.dart'
     hide ImagingDefaults, PlateSolveSettings, AutofocusSettings;
 import 'package:openastroara/screens/wizard/wizard_save.dart';
+import 'package:openastroara/state/imaging/exposure_state.dart' show FrameKind;
 import 'package:openastroara/state/settings/autofocus_settings_state.dart';
 import 'package:openastroara/state/settings/imaging_defaults_state.dart';
 import 'package:openastroara/state/settings/optics_settings_state.dart';
@@ -66,6 +67,25 @@ void main() {
       expect(out.defaultOffset, 30);
       expect(out.defaultBin, 2);
       expect(out.warmupAtSessionEnd, isTrue);
+    });
+
+    test('applyDraftToImaging maps screen-14 exposure + frame kind', () {
+      final d = ProfileDraft();
+      d.imagingDefaults
+        ..exposure = const Duration(seconds: 90)
+        ..frameType = FrameType.flat;
+      final out = applyDraftToImaging(const ImagingDefaults(), d);
+      expect(out.defaultExposure, const Duration(seconds: 90));
+      expect(out.defaultFrameKind, FrameKind.flat);
+    });
+
+    test('applyDraftToImaging keeps base exposure/frame kind on a blank draft', () {
+      final base = const ImagingDefaults().copyWith(
+          defaultExposure: const Duration(seconds: 300),
+          defaultFrameKind: FrameKind.dark);
+      final out = applyDraftToImaging(base, ProfileDraft());
+      expect(out.defaultExposure, const Duration(seconds: 300));
+      expect(out.defaultFrameKind, FrameKind.dark);
     });
 
     test('applyDraftToImaging maps warmup "off" to false', () {

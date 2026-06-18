@@ -281,3 +281,71 @@ class _ScreenFileSavingState extends ConsumerState<ScreenFileSaving> {
     );
   }
 }
+
+// ── Screen 14 — Imaging defaults ────────────────────────────────────────────
+
+/// §37.4 — the default capture parameters a new exposure starts from. Binds to
+/// the draft's [ImagingDefaults] bag (exposure + frame kind); gain / offset /
+/// binning + cooling come from the Camera screen (5). The wizard Save folds both
+/// into the profile's imaging-defaults section.
+class ScreenImagingDefaults extends ConsumerStatefulWidget {
+  const ScreenImagingDefaults({super.key});
+  @override
+  ConsumerState<ScreenImagingDefaults> createState() =>
+      _ScreenImagingDefaultsState();
+}
+
+class _ScreenImagingDefaultsState
+    extends ConsumerState<ScreenImagingDefaults> {
+  late final ImagingDefaults _img = _draftOf(ref).imagingDefaults;
+  String? _exposureError;
+
+  @override
+  Widget build(BuildContext context) {
+    return WizardScreenScaffold(
+      step: 14,
+      intro: 'The default capture parameters a new exposure starts from. Gain, '
+          'offset, binning and cooling come from your camera setup (screen 5).',
+      children: [
+        WizardTextField(
+          label: 'Default exposure (s)',
+          initialValue: _img.exposure?.inSeconds.toString(),
+          hint: 'e.g. 120',
+          helperText: 'Leave blank to keep the profile default.',
+          errorText: _exposureError,
+          keyboardType: const TextInputType.numberWithOptions(decimal: false),
+          inputFormatters: WizardInput.unsignedInt,
+          onChanged: (v) {
+            final t = v.trim();
+            if (t.isEmpty) {
+              setState(() => _exposureError = null);
+              _img.exposure = null;
+              return;
+            }
+            final n = int.tryParse(t);
+            if (n != null && n > 0) {
+              setState(() => _exposureError = null);
+              _img.exposure = Duration(seconds: n);
+            } else {
+              setState(() =>
+                  _exposureError = 'Enter a whole number of seconds greater than 0.');
+            }
+          },
+        ),
+        WizardDropdown<FrameType?>(
+          label: 'Default frame type',
+          value: _img.frameType,
+          helperText: 'What a fresh capture defaults to — usually Light.',
+          entries: const [
+            DropdownMenuEntry(value: null, label: 'Keep profile default'),
+            DropdownMenuEntry(value: FrameType.light, label: 'Light'),
+            DropdownMenuEntry(value: FrameType.dark, label: 'Dark'),
+            DropdownMenuEntry(value: FrameType.flat, label: 'Flat'),
+            DropdownMenuEntry(value: FrameType.bias, label: 'Bias'),
+          ],
+          onChanged: (v) => setState(() => _img.frameType = v),
+        ),
+      ],
+    );
+  }
+}
