@@ -126,8 +126,10 @@ void main() {
           isNull);
     });
 
-    testWidgets('Clear is disabled until something is selected', (tester) async {
-      await pump(tester, build: () async => const [pkgA, pkgB]);
+    testWidgets('Clear is disabled until selected, then empties the draft',
+        (tester) async {
+      final container =
+          await pump(tester, build: () async => const [pkgA, pkgB]);
       await tester.pumpAndSettle();
       TextButton clearButton() => tester.widget<TextButton>(find.ancestor(
           of: find.text('Clear'), matching: find.byType(TextButton)));
@@ -135,6 +137,25 @@ void main() {
       await tester.tap(find.text('Select all'));
       await tester.pump();
       expect(clearButton().onPressed, isNotNull);
+      await tester.tap(find.text('Clear'));
+      await tester.pump();
+      expect(container.read(wizardControllerProvider).draft.skyDataDownloadIds,
+          isEmpty);
+      expect(clearButton().onPressed, isNull);
+    });
+
+    testWidgets('unticking a package removes its id from the draft',
+        (tester) async {
+      final container =
+          await pump(tester, build: () async => const [pkgA, pkgB]);
+      await tester.pumpAndSettle();
+      final ids = container.read(wizardControllerProvider).draft.skyDataDownloadIds;
+      await tester.tap(find.text('Tycho-2 catalog'));
+      await tester.pump();
+      expect(ids, contains('a'));
+      await tester.tap(find.text('Tycho-2 catalog'));
+      await tester.pump();
+      expect(ids, isNot(contains('a')));
     });
   });
 }
