@@ -1,5 +1,7 @@
 import 'package:dio/dio.dart';
 
+import '../models/sequence/nina_sequence_parser.dart';
+import '../models/sequence/sequence_node.dart';
 import '../models/sequence/sequence_summary.dart';
 import '../models/server.dart';
 
@@ -17,6 +19,11 @@ abstract interface class SequenceClient {
   /// silently truncated; [limit] caps the page size. Paging further with
   /// nextCursor is a later slice.
   Future<SequencePage> list({int limit});
+
+  /// Fetch a sequence's full detail and parse its body into the editor tree.
+  /// Returns the root [SequenceNode] (an empty named root if the body has no
+  /// recognizable tree). Throws on transport failure / unknown id (404).
+  Future<SequenceNode> getSequence(String id);
 
   /// Live run state of a sequence, or null when there's no active run (the
   /// daemon answers 404). Polled by the run controls / status line.
@@ -76,6 +83,29 @@ class SequenceApi implements SequenceClient {
       items: items,
       hasMore: data['has_more'] == true,
       nextCursor: nextCursor is String ? nextCursor : null,
+    );
+  }
+
+  @override
+  Future<SequenceNode> getSequence(String id) async {
+    if (id.isEmpty) {
+      throw ArgumentError.value(id, 'id', 'sequence id must not be empty');
+    }
+    final res =
+        await _dio.get<dynamic>('/api/v1/sequences/${Uri.encodeComponent(id)}');
+    final data = res.data;
+    if (data is! Map<String, dynamic>) {
+      throw FormatException(
+          'sequence detail returned an unexpected body (${data.runtimeType})');
+    }
+    final body = data['body'];
+    if (body is Map<String, dynamic>) return parseNinaSequenceBody(body);
+    // A detail with no usable body object → an empty root named from the DTO.
+    final name = data['name'];
+    return SequenceNode(
+      id: 'root',
+      kind: SequenceNodeKind.root,
+      displayName: name is String && name.trim().isNotEmpty ? name : 'Sequence',
     );
   }
 
