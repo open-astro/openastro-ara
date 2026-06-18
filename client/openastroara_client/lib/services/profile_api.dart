@@ -44,20 +44,21 @@ class ProfileApi {
 
   /// §37 multi-profile — rename a profile (`PUT /api/v1/profiles/{id}`).
   Future<void> renameProfile(String id, String name) async {
-    await _dio.put<void>('/api/v1/profiles/$id', data: {'name': name});
+    await _dio.put<void>('/api/v1/profiles/${Uri.encodeComponent(id)}',
+        data: {'name': name});
   }
 
   /// §37 multi-profile — make a profile active (`POST /api/v1/profiles/{id}/select`),
   /// loading its settings into the live store.
   Future<void> selectProfile(String id) async {
-    await _dio.post<void>('/api/v1/profiles/$id/select');
+    await _dio.post<void>('/api/v1/profiles/${Uri.encodeComponent(id)}/select');
   }
 
   /// §37 multi-profile — delete a profile (`DELETE /api/v1/profiles/{id}`). The
   /// daemon refuses to delete the active or last-remaining profile (409); the
   /// caller surfaces that to the user.
   Future<void> deleteProfile(String id) async {
-    await _dio.delete<void>('/api/v1/profiles/$id');
+    await _dio.delete<void>('/api/v1/profiles/${Uri.encodeComponent(id)}');
   }
 
   /// §37 multi-profile — create a new profile and make it active. The daemon

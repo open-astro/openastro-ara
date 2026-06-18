@@ -138,6 +138,8 @@ class _ProfileListView extends ConsumerWidget {
 
 Future<String?> _promptName(BuildContext context, {required String initial}) {
   final controller = TextEditingController(text: initial);
+  // Dispose the controller once the dialog future settles — controllers hold
+  // resources Flutter won't reclaim automatically.
   return showDialog<String>(
     context: context,
     builder: (ctx) => AlertDialog(
@@ -159,7 +161,7 @@ Future<String?> _promptName(BuildContext context, {required String initial}) {
         ),
       ],
     ),
-  );
+  ).whenComplete(controller.dispose);
 }
 
 Future<bool> _confirmDelete(BuildContext context, String name) async {
