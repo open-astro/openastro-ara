@@ -31,10 +31,23 @@ enum SequenceRunState {
     return null;
   }
 
-  /// True while a run is active (running or starting) — the toolbar uses this to
-  /// gate Pause/Abort vs Start.
-  bool get isActive =>
-      this == SequenceRunState.running || this == SequenceRunState.starting;
+  /// True while a run is in progress — i.e. NOT idle and NOT in a terminal
+  /// state. The toolbar uses this to gate Start (enabled only when inactive) vs
+  /// Pause/Abort (only when active). Exhaustive switch so a newly-added state
+  /// can't silently fall through to one side (e.g. `aborting` must count as
+  /// active, or Start would wrongly appear enabled mid-abort).
+  bool get isActive => switch (this) {
+        SequenceRunState.idle ||
+        SequenceRunState.completed ||
+        SequenceRunState.stopped ||
+        SequenceRunState.failed =>
+          false,
+        SequenceRunState.starting ||
+        SequenceRunState.running ||
+        SequenceRunState.paused ||
+        SequenceRunState.aborting =>
+          true,
+      };
 }
 
 /// One row in the sequence list — daemon's `SequenceListItemDto`.

@@ -50,11 +50,24 @@ void main() {
       expect(SequenceRunState.fromWire(42), isNull);
     });
 
-    test('isActive is true only while running/starting', () {
-      expect(SequenceRunState.running.isActive, isTrue);
-      expect(SequenceRunState.starting.isActive, isTrue);
-      expect(SequenceRunState.paused.isActive, isFalse);
-      expect(SequenceRunState.idle.isActive, isFalse);
+    test('isActive is true for every in-progress state, false when idle/terminal',
+        () {
+      for (final s in [
+        SequenceRunState.starting,
+        SequenceRunState.running,
+        SequenceRunState.paused,
+        SequenceRunState.aborting,
+      ]) {
+        expect(s.isActive, isTrue, reason: '$s should be active');
+      }
+      for (final s in [
+        SequenceRunState.idle,
+        SequenceRunState.completed,
+        SequenceRunState.stopped,
+        SequenceRunState.failed,
+      ]) {
+        expect(s.isActive, isFalse, reason: '$s should be inactive');
+      }
     });
   });
 
