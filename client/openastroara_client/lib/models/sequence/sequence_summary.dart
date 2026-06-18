@@ -64,6 +64,23 @@ class SequencePage {
     this.hasMore = false,
     this.nextCursor,
   });
+
+  @override
+  bool operator ==(Object other) {
+    if (other is! SequencePage ||
+        other.hasMore != hasMore ||
+        other.nextCursor != nextCursor ||
+        other.items.length != items.length) {
+      return false;
+    }
+    for (var i = 0; i < items.length; i++) {
+      if (other.items[i] != items[i]) return false;
+    }
+    return true;
+  }
+
+  @override
+  int get hashCode => Object.hash(hasMore, nextCursor, Object.hashAll(items));
 }
 
 /// One row in the sequence list — daemon's `SequenceListItemDto`.

@@ -31,13 +31,16 @@ abstract interface class SequenceClient {
 class SequenceApi implements SequenceClient {
   final Dio _dio;
 
-  SequenceApi(AraServer server, {Dio? dio})
+  /// [receiveTimeout] is widenable by callers without forking the class — the
+  /// list endpoint can be slow on a cold daemon / NFS-backed storage.
+  SequenceApi(AraServer server,
+      {Dio? dio, Duration receiveTimeout = const Duration(seconds: 12)})
       : _dio = dio ??
             Dio(BaseOptions(
               baseUrl: server.baseUrl,
               connectTimeout: const Duration(seconds: 3),
               sendTimeout: const Duration(seconds: 5),
-              receiveTimeout: const Duration(seconds: 12),
+              receiveTimeout: receiveTimeout,
             ));
 
   @override
@@ -72,6 +75,11 @@ class SequenceApi implements SequenceClient {
 
   @override
   Future<String> start(String id) => _lifecycle(id, 'start', body: const {
+        // TODO(sequencer-ui-slice): promote dry_run / continue_on_recoverable_errors
+        // (and start_from_instruction_index) to start() params on SequenceClient
+        // when the toolbar needs a dry-run / continue-on-error / resume-from mode —
+        // extend the interface rather than having callers build the request body.
+        //
         // start_from_instruction_index is omitted, not sent as null: the daemon's
         // SequenceStartRequestDto field is `int?`, so a missing key deserializes
         // to null ("start from the beginning") — the intent here — without
