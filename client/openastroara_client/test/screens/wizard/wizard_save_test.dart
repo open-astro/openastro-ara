@@ -10,6 +10,7 @@ import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
 import 'package:openastroara/state/settings/plate_solve_settings_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
+import 'package:openastroara/state/settings/storage_settings_state.dart';
 
 void main() {
   group('wizard draft → section mappers', () {
@@ -142,6 +143,33 @@ void main() {
       expect(out.exposureSeconds, 11);
       expect(out.steps, 5);
       expect(out.runAfterFilterChange, isFalse);
+    });
+
+    test('applyDraftToStorage maps dir/template + format/compress enums', () {
+      final d = ProfileDraft();
+      d.fileSaving
+        ..saveDirectory = '/media/usb/astro'
+        ..filenameTemplate = r'$$DATETIME$$'
+        ..format = ImageFormat.xisf
+        ..compress = false;
+      final out = applyDraftToStorage(const StorageSettings(), d);
+      expect(out.saveDirectory, '/media/usb/astro');
+      expect(out.filenameTemplate, r'$$DATETIME$$');
+      expect(out.fileFormat, StorageFileFormat.xisf);
+      expect(out.compression, StorageCompression.off);
+    });
+
+    test('applyDraftToStorage maps compress=true to Rice and keeps base on blank',
+        () {
+      final yes = ProfileDraft()..fileSaving.compress = true;
+      expect(applyDraftToStorage(const StorageSettings(), yes).compression,
+          StorageCompression.rice);
+      // Blank draft preserves base (here: the section default save directory).
+      final base = const StorageSettings().copyWith(saveDirectory: '/keep/dir');
+      final out = applyDraftToStorage(base, ProfileDraft());
+      expect(out.saveDirectory, '/keep/dir');
+      expect(out.fileFormat, base.fileFormat);
+      expect(out.compression, base.compression);
     });
 
     test('applyDraftToPhd2 sets forceCalibrationEachSession for each-session', () {

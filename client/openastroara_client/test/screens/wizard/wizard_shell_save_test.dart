@@ -14,6 +14,7 @@ import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
 import 'package:openastroara/state/settings/plate_solve_settings_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
+import 'package:openastroara/state/settings/storage_settings_state.dart';
 
 /// In-memory ProfileApi double whose create call can be held in-flight (so the
 /// blocking spinner is observable) and which records how many times the profile
@@ -60,6 +61,10 @@ class _FakeProfileApi extends ProfileApi {
       const AutofocusSettings();
   @override
   Future<AutofocusSettings> putAutofocusSettings(AutofocusSettings v) async => v;
+  @override
+  Future<StorageSettings> getStorageSettings() async => const StorageSettings();
+  @override
+  Future<StorageSettings> putStorageSettings(StorageSettings v) async => v;
 }
 
 Widget _host(_FakeProfileApi api, {required void Function() onComplete}) {

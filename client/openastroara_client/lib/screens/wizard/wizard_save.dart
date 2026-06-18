@@ -13,6 +13,7 @@ import '../../state/settings/optics_settings_state.dart';
 import '../../state/settings/phd2_settings_state.dart';
 import '../../state/settings/plate_solve_settings_state.dart';
 import '../../state/settings/site_settings_state.dart';
+import '../../state/settings/storage_settings_state.dart';
 
 /// §37 wizard Save. Maps the wizard's [ProfileDraft] onto the daemon's profile
 /// sections and persists it as a new active profile.
@@ -128,6 +129,28 @@ AutofocusSettings applyDraftToAutofocus(AutofocusSettings base, ProfileDraft d) 
   );
 }
 
+/// §37.4 screen 13 — map the draft's file-saving choices onto the profile's
+/// storage section. The screen stores trimmed-or-null strings (null keeps base);
+/// the format/compression enums translate from the draft's wizard model
+/// (compress true → Rice, false → Off; gzip stays a Settings-only choice).
+StorageSettings applyDraftToStorage(StorageSettings base, ProfileDraft d) {
+  final f = d.fileSaving;
+  return base.copyWith(
+    saveDirectory: f.saveDirectory,
+    filenameTemplate: f.filenameTemplate,
+    fileFormat: switch (f.format) {
+      ImageFormat.fits => StorageFileFormat.fits,
+      ImageFormat.xisf => StorageFileFormat.xisf,
+      null => null,
+    },
+    compression: switch (f.compress) {
+      true => StorageCompression.rice,
+      false => StorageCompression.off,
+      null => null,
+    },
+  );
+}
+
 /// Create a new active profile from the wizard draft and layer the configured
 /// sections on top. Throws on transport failure — the caller surfaces it.
 ///
@@ -166,6 +189,8 @@ Future<void> saveWizardProfile(ProfileApi api, ProfileDraft d) async {
         applyDraftToPlateSolve(await api.getPlateSolveSettings(), d))),
     _trySave(() async => api.putAutofocusSettings(
         applyDraftToAutofocus(await api.getAutofocusSettings(), d))),
+    _trySave(() async => api.putStorageSettings(
+        applyDraftToStorage(await api.getStorageSettings(), d))),
   ]))
       .whereType<Object>()
       .toList();
