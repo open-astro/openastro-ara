@@ -38,7 +38,9 @@ class _SequenceNewDialogState extends ConsumerState<SequenceNewDialog> {
   void _select(SequenceTemplate t) {
     setState(() => _selectedTemplate = t.name);
     // Pre-fill the name from the template only when the user hasn't typed one,
-    // so picking a template doesn't clobber a name they already entered.
+    // so picking a template doesn't clobber a name they already entered. Setting
+    // the controller text doesn't fire onChanged, but the setState above already
+    // triggers the rebuild that re-evaluates canCreate, so Create enables.
     if (_nameController.text.trim().isEmpty) {
       _nameController.text = t.name;
     }
@@ -58,7 +60,11 @@ class _SequenceNewDialogState extends ConsumerState<SequenceNewDialog> {
     try {
       final id = await createSequenceFromTemplate(context, ref,
           templateName: templateName, newName: newName);
-      if (id != null && navigator.mounted) {
+      // Gate on this State's `mounted`, not navigator.mounted: the dialog is
+      // barrierDismissible, so it can be tapped away mid-create. Once the dialog
+      // route is disposed `mounted` is false, but the parent navigator is still
+      // alive — popping it here would pop the wrong route (the screen beneath).
+      if (id != null && mounted) {
         navigator.pop(id);
         created = true;
       }
