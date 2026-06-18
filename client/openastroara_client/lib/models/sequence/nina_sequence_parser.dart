@@ -17,6 +17,10 @@ SequenceNode parseNinaSequenceBody(Map<String, dynamic> body) {
   var counter = 0;
   String nextId() => 'n${counter++}';
 
+  // Cap recursion so a pathologically deep / corrupted body can't overflow the
+  // stack. Real NINA sequences nest ~5 levels; below the cap nothing changes.
+  const maxDepth = 64;
+
   // ObservableCollection serializes as { $type, $values: [...] }; a plain array
   // is also accepted. Anything else → no children.
   List<dynamic> values(dynamic v) {
@@ -73,7 +77,20 @@ SequenceNode parseNinaSequenceBody(Map<String, dynamic> body) {
     }
   }
 
-  SequenceNode? node(dynamic raw) {
+  // Short $type names of a Conditions/Triggers collection — kept so a container's
+  // loop conditions ("run 5×") / dither triggers aren't lost (the wiring slice
+  // renders them as badges). Stored in params rather than on the model to avoid
+  // a SequenceNode schema change.
+  List<String> typeSummaries(dynamic collection) => values(collection)
+      .whereType<Map>()
+      .map((e) => shortType(e[r'$type']))
+      .where((s) => s.isNotEmpty)
+      .toList(growable: false);
+
+  // Parses one node. [forceRoot] makes the top object a root regardless of its
+  // $type, with the sequence-name fallbacks. Returns null for a $ref placeholder
+  // or a non-object.
+  SequenceNode? node(dynamic raw, int depth, {bool forceRoot = false}) {
     if (raw is! Map) return null;
     // A Json.NET back-reference ({ $ref: "N" }) is a pointer to an already-seen
     // object (e.g. Parent / shared filter), not a real child — skip it.
@@ -81,9 +98,11 @@ SequenceNode parseNinaSequenceBody(Map<String, dynamic> body) {
 
     final type = shortType(raw[r'$type']);
     final children = <SequenceNode>[];
-    for (final c in values(raw['Items'])) {
-      final n = node(c);
-      if (n != null) children.add(n);
+    if (depth < maxDepth) {
+      for (final c in values(raw['Items'])) {
+        final n = node(c, depth + 1);
+        if (n != null) children.add(n);
+      }
     }
 
     // Scalar fields → display params (skip structural/metadata + $-prefixed keys).
@@ -96,31 +115,33 @@ SequenceNode parseNinaSequenceBody(Map<String, dynamic> body) {
         params[key] = value;
       }
     });
+    final conditions = typeSummaries(raw['Conditions']);
+    final triggers = typeSummaries(raw['Triggers']);
+    if (conditions.isNotEmpty) params['conditionTypes'] = conditions;
+    if (triggers.isNotEmpty) params['triggerTypes'] = triggers;
 
     return SequenceNode(
       id: raw[r'$id'] is String ? 'nina-${raw[r'$id']}' : nextId(),
-      kind: kindFor(type, children.isNotEmpty),
-      displayName: trimmedName(raw['Name']) ??
-          (type.isEmpty ? 'Item' : humanize(type)),
-      instructionType: type.isEmpty ? null : type,
+      kind: forceRoot
+          ? SequenceNodeKind.root
+          : kindFor(type, children.isNotEmpty),
+      displayName: forceRoot
+          ? (trimmedName(raw['Name']) ??
+              trimmedName(raw['name']) ??
+              trimmedName(raw['target']) ??
+              'Sequence')
+          : (trimmedName(raw['Name']) ??
+              (type.isEmpty ? 'Item' : humanize(type))),
+      // The root is a display container, not an instruction.
+      instructionType: forceRoot || type.isEmpty ? null : type,
       params: params,
       children: children,
     );
   }
 
-  // The top level is always the root; its children come from the body's Items.
-  final rootChildren = <SequenceNode>[];
-  for (final c in values(body['Items'])) {
-    final n = node(c);
-    if (n != null) rootChildren.add(n);
-  }
-  return SequenceNode(
-    id: trimmedName(body[r'$id']) != null ? 'nina-${body[r'$id']}' : 'root',
-    kind: SequenceNodeKind.root,
-    displayName: trimmedName(body['Name']) ??
-        trimmedName(body['name']) ??
-        trimmedName(body['target']) ??
-        'Sequence',
-    children: rootChildren,
-  );
+  return node(body, 0, forceRoot: true) ??
+      SequenceNode(
+          id: 'root',
+          kind: SequenceNodeKind.root,
+          displayName: 'Sequence');
 }

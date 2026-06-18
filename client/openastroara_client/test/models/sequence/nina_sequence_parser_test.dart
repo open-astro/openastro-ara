@@ -34,8 +34,8 @@ const _ninaBody = r'''
                 "$id": "5",
                 "$type": "NINA.Sequencer.Container.SequentialContainer, NINA.Sequencer",
                 "Name": "Sequential Instruction Set",
-                "Conditions": { "$values": [ { "$type": "...LoopCondition..." } ] },
-                "Triggers": { "$values": [ { "$type": "...DitherAfterExposures..." } ] },
+                "Conditions": { "$values": [ { "$type": "NINA.Sequencer.Conditions.LoopCondition, NINA.Sequencer" } ] },
+                "Triggers": { "$values": [ { "$type": "NINA.Sequencer.Trigger.Guider.DitherAfterExposures, NINA.Sequencer" } ] },
                 "Items": { "$values": [
                   {
                     "$id": "6",
@@ -112,10 +112,46 @@ void main() {
       expect(take.params.containsKey('Items'), isFalse);
     });
 
-    test('Conditions/Triggers are metadata, not tree children', () {
+    test('Conditions/Triggers are captured as params, not tree children', () {
       final seq = root.children[1].children.single.children[0];
-      // Only the SmartExposure is a child — not the condition/trigger blocks.
+      // Only the SmartExposure is a child — not the condition/trigger blocks...
       expect(seq.children.length, 1);
+      // ...but their type summaries are preserved on the node for later display.
+      expect(seq.params['conditionTypes'], contains('LoopCondition'));
+      expect(seq.params['triggerTypes'], contains('DitherAfterExposures'));
+    });
+
+    test('caps recursion on pathologically deep input (no stack overflow)', () {
+      Map<String, dynamic> chain(int n) {
+        var node = <String, dynamic>{
+          r'$type': 'X.SequentialContainer',
+          'Name': 'leaf'
+        };
+        for (var i = 0; i < n; i++) {
+          node = <String, dynamic>{
+            r'$type': 'X.SequentialContainer',
+            'Name': 'c$i',
+            'Items': {
+              r'$values': [node]
+            },
+          };
+        }
+        return node;
+      }
+
+      final body = <String, dynamic>{
+        r'$type':
+            'NINA.Sequencer.Container.SequenceRootContainer, NINA.Sequencer',
+        'Name': 'deep',
+        'Items': {
+          r'$values': [chain(300)]
+        },
+      };
+      final root = parseNinaSequenceBody(body); // must not stack-overflow
+      int depthOf(SequenceNode n) => n.children.isEmpty
+          ? 0
+          : 1 + n.children.map(depthOf).reduce((a, b) => a > b ? a : b);
+      expect(depthOf(root), lessThanOrEqualTo(66)); // ~maxDepth, bounded
     });
 
     test('a flat/non-tree body degrades to an empty named root', () {
