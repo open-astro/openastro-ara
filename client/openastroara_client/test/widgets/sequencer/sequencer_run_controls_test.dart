@@ -9,8 +9,9 @@ import 'package:openastroara/widgets/sequencer/sequencer_toolbar.dart';
 /// Connected client; getRunState returns whatever's configured. Lifecycle calls
 /// record which action fired so the gating wiring can be asserted.
 class _FakeClient implements SequenceClient {
-  _FakeClient({this.runState});
+  _FakeClient({this.runState, this.throwOnStart = false});
   final SequenceRunStateInfo? runState;
+  final bool throwOnStart;
   final List<String> calls = [];
 
   @override
@@ -18,7 +19,13 @@ class _FakeClient implements SequenceClient {
   @override
   Future<SequencePage> list({int limit = 50}) async => const SequencePage(items: []);
   @override
-  Future<String> start(String id) async => (calls..add('start')).last;
+  Future<String> start(String id) async {
+    calls.add('start');
+    if (throwOnStart) {
+      throw const FormatException('start accepted but no operation_id');
+    }
+    return 'op';
+  }
   @override
   Future<String> pause(String id) async => (calls..add('pause')).last;
   @override
@@ -118,6 +125,26 @@ void main() {
       await tester.pumpAndSettle();
       final fake = container.read(sequenceApiProvider) as _FakeClient;
       expect(fake.calls, contains('start'));
+    });
+
+    testWidgets('a non-Dio lifecycle failure surfaces a SnackBar, not a crash',
+        (tester) async {
+      final container = ProviderContainer(overrides: [
+        sequenceApiProvider.overrideWithValue(_FakeClient(throwOnStart: true)),
+        sequenceRunStateProvider.overrideWith(() => _FakeRunNotifier(null)),
+      ]);
+      addTearDown(container.dispose);
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: SequencerToolbar())),
+      ));
+      container.read(selectedSequenceIdProvider.notifier).select('seq-1');
+      await tester.pumpAndSettle();
+      btn(tester, 'Run').onPressed!(); // start() throws FormatException
+      await tester.pump(); // flush the async handler's microtasks
+      await tester.pump(const Duration(milliseconds: 400)); // SnackBar entrance
+      expect(find.text('Sequence command failed.'), findsOneWidget);
+      expect(tester.takeException(), isNull);
     });
   });
 }

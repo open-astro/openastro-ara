@@ -132,7 +132,7 @@ Future<void> _lifecycle(
   final id = ref.read(selectedSequenceIdProvider);
   final api = ref.read(sequenceApiProvider);
   if (id == null || api == null) return;
-  final messenger = ScaffoldMessenger.of(context);
+  final messenger = ScaffoldMessenger.of(context); // captured before the await
   try {
     await op(api, id);
   } on DioException catch (e) {
@@ -142,7 +142,17 @@ Future<void> _lifecycle(
           'Sequence command failed (${e.response?.statusCode ?? e.message ?? 'network error'}).'),
       backgroundColor: AraColors.accentError,
     ));
+  } catch (e) {
+    // e.g. a FormatException if the 202 lacked an operation_id — still surface it
+    // rather than let it propagate as an unhandled exception.
+    messenger.showSnackBar(const SnackBar(
+      content: Text('Sequence command failed.'),
+      backgroundColor: AraColors.accentError,
+    ));
   }
+  // Guard ref use across the async gap — the widget may have been disposed (the
+  // user navigated away mid-call), where ref.read would throw.
+  if (!context.mounted) return;
   // Re-read run state regardless — the daemon may have advanced it even on error.
   await ref.read(sequenceRunStateProvider.notifier).refresh();
 }
