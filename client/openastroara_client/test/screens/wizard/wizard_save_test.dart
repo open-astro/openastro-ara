@@ -1,11 +1,13 @@
 import 'package:flutter_test/flutter_test.dart';
 // Hide the draft's ImagingDefaults; the section model of the same name comes from
 // imaging_defaults_state below.
-import 'package:openastroara/models/profile_draft.dart' hide ImagingDefaults;
+import 'package:openastroara/models/profile_draft.dart'
+    hide ImagingDefaults, PlateSolveSettings;
 import 'package:openastroara/screens/wizard/wizard_save.dart';
 import 'package:openastroara/state/settings/imaging_defaults_state.dart';
 import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
+import 'package:openastroara/state/settings/plate_solve_settings_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 
 void main() {
@@ -86,6 +88,27 @@ void main() {
       expect(out.settlePixels, 1.2);
       expect(out.settleTimeSec, 12);
       expect(out.forceCalibrationEachSession, isFalse);
+    });
+
+    test('applyDraftToPlateSolve maps ASTAP paths + search tuning', () {
+      final d = ProfileDraft();
+      d.plateSolve
+        ..astapBinaryPath = '/usr/local/bin/astap'
+        ..starDatabasePath = '/opt/astap/d50'
+        ..searchRadiusDeg = 15
+        ..downsampleFactor = 4;
+      final out = applyDraftToPlateSolve(const PlateSolveSettings(), d);
+      expect(out.pathOrEndpoint, '/usr/local/bin/astap');
+      expect(out.indexDownloadPath, '/opt/astap/d50');
+      expect(out.searchRadiusDeg, 15);
+      expect(out.downsampleFactor, 4);
+    });
+
+    test('applyDraftToPlateSolve preserves base paths when draft paths blank', () {
+      final base =
+          const PlateSolveSettings().copyWith(pathOrEndpoint: '/keep/astap');
+      final out = applyDraftToPlateSolve(base, ProfileDraft());
+      expect(out.pathOrEndpoint, '/keep/astap'); // blank draft → keep base
     });
 
     test('applyDraftToPhd2 sets forceCalibrationEachSession for each-session', () {

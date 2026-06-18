@@ -1,12 +1,14 @@
 import 'package:flutter/foundation.dart';
 
-// The draft declares its own `ImagingDefaults` (Stage-4 bag); we map onto the profile
-// *section* ImagingDefaults from imaging_defaults_state, so hide the draft's to disambiguate.
-import '../../models/profile_draft.dart' hide ImagingDefaults;
+// The draft declares its own `ImagingDefaults` + `PlateSolveSettings` bags; we map
+// onto the profile *section* types from the settings-state files, so hide the
+// draft's to disambiguate (the draft sub-objects are still reached via `d.<field>`).
+import '../../models/profile_draft.dart' hide ImagingDefaults, PlateSolveSettings;
 import '../../services/profile_api.dart';
 import '../../state/settings/imaging_defaults_state.dart';
 import '../../state/settings/optics_settings_state.dart';
 import '../../state/settings/phd2_settings_state.dart';
+import '../../state/settings/plate_solve_settings_state.dart';
 import '../../state/settings/site_settings_state.dart';
 
 /// §37 wizard Save. Maps the wizard's [ProfileDraft] onto the daemon's profile
@@ -96,6 +98,23 @@ Phd2Settings applyDraftToPhd2(Phd2Settings base, ProfileDraft d) {
   );
 }
 
+/// §37.4 screen 11 — map the draft's ASTAP paths + search tuning onto the
+/// plate-solve section. Paths are trimmed/empty→null so a blank field preserves
+/// the base (copyWith treats null as "keep"); the numeric tuning always carries.
+PlateSolveSettings applyDraftToPlateSolve(PlateSolveSettings base, ProfileDraft d) {
+  final ps = d.plateSolve;
+  return base.copyWith(
+    pathOrEndpoint: (ps.astapBinaryPath?.trim().isNotEmpty ?? false)
+        ? ps.astapBinaryPath!.trim()
+        : null,
+    indexDownloadPath: (ps.starDatabasePath?.trim().isNotEmpty ?? false)
+        ? ps.starDatabasePath!.trim()
+        : null,
+    searchRadiusDeg: ps.searchRadiusDeg,
+    downsampleFactor: ps.downsampleFactor,
+  );
+}
+
 /// Create a new active profile from the wizard draft and layer the configured
 /// sections on top. Throws on transport failure — the caller surfaces it.
 ///
@@ -130,6 +149,8 @@ Future<void> saveWizardProfile(ProfileApi api, ProfileDraft d) async {
     _trySave(() async =>
         api.putImagingDefaults(applyDraftToImaging(await api.getImagingDefaults(), d))),
     _trySave(() async => api.putPhd2Settings(applyDraftToPhd2(await api.getPhd2Settings(), d))),
+    _trySave(() async => api.putPlateSolveSettings(
+        applyDraftToPlateSolve(await api.getPlateSolveSettings(), d))),
   ]))
       .whereType<Object>()
       .toList();

@@ -3,13 +3,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../state/wizard_state.dart';
 import '../../theme/ara_colors.dart';
+import 'screens/screen_capture_setup.dart';
 import 'screens/screen_device_setup.dart';
 import 'screens/screen_equipment_discovery.dart';
 import 'screens/screen_profile_basics.dart';
 
-/// Step → screen builder. Steps 1-10 (the §37.1–37.3 "gear setup" screens)
-/// are real forms bound to [ProfileDraft]; steps 11-18 (imaging tools, safety,
-/// sky data, review) are still placeholders pending follow-up work.
+/// Step → screen builder. Steps 1-11 (the §37.1–37.4 "gear setup" + plate-solve
+/// screens) are real forms bound to [ProfileDraft]; steps 12-18 (autofocus, file
+/// saving, imaging, safety, sky data, review) are still placeholders pending
+/// follow-up work.
 ///
 /// To wire a remaining screen: add a real ConsumerStatefulWidget under
 /// `screens/` that reads `ref.read(wizardControllerProvider).draft` and
@@ -29,8 +31,9 @@ final Map<int, WizardScreenBuilder> wizardScreenBuilders =
   8: (_) => const ScreenMount(),
   9: (_) => const ScreenRotator(),
   10: (_) => const ScreenGuider(),
-  // Steps 11-18 remain placeholders until their forms land.
-  for (int step = 11; step <= ProfileWizard.totalSteps; step++)
+  11: (_) => const ScreenPlateSolve(),
+  // Steps 12-18 remain placeholders until their forms land.
+  for (int step = 12; step <= ProfileWizard.totalSteps; step++)
     step: (ctx) => _PlaceholderScreen(step: step),
 };
 
@@ -118,8 +121,6 @@ class _PlaceholderScreen extends ConsumerWidget {
             '(pulled from Alpaca SlewSettleTime). (§37.3)',
       9 => 'Rotator min/max angle + step size + reverse direction toggle. (§37.3)',
       10 => 'PHD2 host:port + dither pixels + settle threshold + calibration cadence. (§37.3)',
-      11 => 'ASTAP binary path + star database path + search radius + downsample factor + '
-            'Solve a test image. (§37.4)',
       12 => 'Autofocus exposure + step size + max retries + auto-discover filter offsets toggle. '
             '(§37.4)',
       13 => 'Save directory (USB recommended per §29) + format (FITS/XISF) + compression + '
