@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import '../../models/profile_draft.dart'
     hide ImagingDefaults, PlateSolveSettings, AutofocusSettings;
 import '../../services/profile_api.dart';
+import '../../state/imaging/exposure_state.dart' show FrameKind;
 import '../../state/settings/autofocus_settings_state.dart';
 import '../../state/settings/imaging_defaults_state.dart';
 import '../../state/settings/optics_settings_state.dart';
@@ -48,6 +49,7 @@ OpticsSettings applyDraftToOptics(OpticsSettings base, ProfileDraft d) {
 
 ImagingDefaults applyDraftToImaging(ImagingDefaults base, ProfileDraft d) {
   final c = d.camera;
+  final i = d.imagingDefaults; // screen 14
   return base.copyWith(
     coolerTargetC: c.coolingTargetC,
     coolerRampRatePerMin: c.coolerRampRateCPerMin,
@@ -56,6 +58,15 @@ ImagingDefaults applyDraftToImaging(ImagingDefaults base, ProfileDraft d) {
     defaultGain: c.defaultGain,
     defaultOffset: c.defaultOffset,
     defaultBin: c.defaultBin,
+    // Screen 14 — default exposure + frame kind (null keeps the base).
+    defaultExposure: i.exposure,
+    defaultFrameKind: switch (i.frameType) {
+      FrameType.light => FrameKind.light,
+      FrameType.dark => FrameKind.dark,
+      FrameType.bias => FrameKind.bias,
+      FrameType.flat => FrameKind.flat,
+      null => null,
+    },
   );
 }
 

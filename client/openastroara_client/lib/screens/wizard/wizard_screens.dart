@@ -8,10 +8,10 @@ import 'screens/screen_device_setup.dart';
 import 'screens/screen_equipment_discovery.dart';
 import 'screens/screen_profile_basics.dart';
 
-/// Step → screen builder. Steps 1-13 (the §37.1–37.4 gear setup + plate-solve +
-/// autofocus + file-saving screens) are real forms bound to [ProfileDraft]; steps
-/// 14-18 (imaging, safety, sky data, review) are still placeholders pending
-/// follow-up work.
+/// Step → screen builder. Steps 1-14 (the §37.1–37.4 gear setup + plate-solve +
+/// autofocus + file-saving + imaging-defaults screens) are real forms bound to
+/// [ProfileDraft]; steps 15-18 (safety, site, sky data, review) are still
+/// placeholders pending follow-up work.
 ///
 /// To wire a remaining screen: add a real ConsumerStatefulWidget under
 /// `screens/` that reads `ref.read(wizardControllerProvider).draft` and
@@ -34,8 +34,9 @@ final Map<int, WizardScreenBuilder> wizardScreenBuilders =
   11: (_) => const ScreenPlateSolve(),
   12: (_) => const ScreenAutofocus(),
   13: (_) => const ScreenFileSaving(),
-  // Steps 14-18 remain placeholders until their forms land.
-  for (int step = 14; step <= ProfileWizard.totalSteps; step++)
+  14: (_) => const ScreenImagingDefaults(),
+  // Steps 15-18 remain placeholders until their forms land.
+  for (int step = 15; step <= ProfileWizard.totalSteps; step++)
     step: (ctx) => _PlaceholderScreen(step: step),
 };
 
@@ -123,8 +124,6 @@ class _PlaceholderScreen extends ConsumerWidget {
             '(pulled from Alpaca SlewSettleTime). (§37.3)',
       9 => 'Rotator min/max angle + step size + reverse direction toggle. (§37.3)',
       10 => 'PHD2 host:port + dither pixels + settle threshold + calibration cadence. (§37.3)',
-      14 => 'Default exposure + gain/offset + frame type. Cooling target inherited from Screen 5. '
-            '(§37.4)',
       15 => 'Compact safety policies: clouds/wind/rain → Pause / Abort+Park / Ignore + WILMA-'
             'offline auto-abort + alarm sound/vibrate. Full editor in Settings → Safety. (§37.5)',
       16 => 'Hard min altitude + soft warning altitude + twilight margins + max sequence runtime. '
