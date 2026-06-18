@@ -178,6 +178,11 @@ void main() {
       final api = _api((_) => const {});
       expect(() => api.getRunState(''), throwsA(isA<ArgumentError>()));
     });
+
+    test('throws on a non-object 200 body', () async {
+      final api = _api((_) => [1, 2, 3]); // array, not the state object
+      expect(api.getRunState('seq-1'), throwsA(isA<FormatException>()));
+    });
   });
 
   group('SequenceApi lifecycle', () {

@@ -120,6 +120,35 @@ class SequenceRunStateInfo {
       currentInstructionDescription: _str(json['current_instruction_description']),
     );
   }
+
+  // Value equality so a poll that returns identical state doesn't churn rebuilds
+  // (the run controls/status line watch this) — matches the other models here.
+  @override
+  bool operator ==(Object other) =>
+      other is SequenceRunStateInfo &&
+      other.sequenceId == sequenceId &&
+      other.runId == runId &&
+      other.state == state &&
+      other.currentInstructionIndex == currentInstructionIndex &&
+      other.currentTargetName == currentTargetName &&
+      other.startedUtc == startedUtc &&
+      other.completedUtc == completedUtc &&
+      other.framesCompleted == framesCompleted &&
+      other.framesTotal == framesTotal &&
+      other.currentInstructionDescription == currentInstructionDescription;
+
+  @override
+  int get hashCode => Object.hash(
+      sequenceId,
+      runId,
+      state,
+      currentInstructionIndex,
+      currentTargetName,
+      startedUtc,
+      completedUtc,
+      framesCompleted,
+      framesTotal,
+      currentInstructionDescription);
 }
 
 /// One row in the sequence list — daemon's `SequenceListItemDto`.
