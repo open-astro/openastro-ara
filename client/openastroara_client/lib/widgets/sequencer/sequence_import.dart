@@ -41,13 +41,15 @@ class NinaFileReadResult {
 /// object-shape check) without touching the UI, so the size/non-object paths
 /// are unit-testable. The caller maps [NinaFileReadResult.error] to a message.
 Future<NinaFileReadResult> readNinaSequenceFile(String path) async {
-  final file = File(path);
-  // NINA sequences are KBs; cap before reading so an accidental huge file
-  // can't spike memory in jsonDecode.
-  if (await file.length() > _maxSequenceFileBytes) {
-    return const NinaFileReadResult.failure(NinaFileError.tooLarge);
-  }
   try {
+    final file = File(path);
+    // NINA sequences are KBs; cap before reading so an accidental huge file
+    // can't spike memory in jsonDecode. Inside the try so an unreadable file
+    // (revoked permission, unplugged drive) degrades to a SnackBar rather than
+    // escaping as an unhandled async exception.
+    if (await file.length() > _maxSequenceFileBytes) {
+      return const NinaFileReadResult.failure(NinaFileError.tooLarge);
+    }
     final decoded = jsonDecode(await file.readAsString());
     if (decoded is! Map<String, dynamic>) {
       return const NinaFileReadResult.failure(NinaFileError.notJson);
@@ -73,7 +75,6 @@ Future<NinaFileReadResult> readNinaSequenceFile(String path) async {
 /// Returns true only when a sequence was actually imported, so the caller can
 /// keep the Load dialog open on a cancel/error (and close it only on success).
 Future<bool> pickAndImportSequence(BuildContext context, WidgetRef ref) async {
-  final messenger = ScaffoldMessenger.of(context);
   final picked = await FilePicker.pickFiles(
     type: FileType.custom,
     allowedExtensions: ['json'],
@@ -86,8 +87,10 @@ Future<bool> pickAndImportSequence(BuildContext context, WidgetRef ref) async {
 
   final read = await readNinaSequenceFile(path);
   if (!read.ok) {
+    // Resolve the messenger only after confirming the context is still mounted
+    // (it survived the picker await), so we never reach for a disposed Scaffold.
     if (context.mounted) {
-      messenger.showSnackBar(SnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(read.error == NinaFileError.tooLarge
             ? 'That sequence file is too large to import (32 MiB limit).'
             : "That file isn't a valid sequence JSON."),

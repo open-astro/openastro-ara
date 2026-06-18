@@ -167,6 +167,15 @@ void main() {
       expect(r.error, NinaFileError.notJson);
     });
 
+    test('a missing/unreadable file degrades to notJson, does not throw',
+        () async {
+      // length()/readAsString() on a nonexistent path throws FileSystemException;
+      // it must be caught (not escape as an unhandled async error).
+      final r = await readNinaSequenceFile('${tmp.path}/does-not-exist.json');
+      expect(r.ok, isFalse);
+      expect(r.error, NinaFileError.notJson);
+    });
+
     test('an over-limit file → tooLarge (distinct from notJson)', () async {
       // Padding == the cap, plus the JSON wrapper, so total bytes exceed it and
       // only the size check (not a parse error) can trip.

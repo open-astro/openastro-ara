@@ -104,14 +104,18 @@ class _ImportNinaButtonState extends ConsumerState<_ImportNinaButton> {
   Future<void> _run() async {
     final navigator = Navigator.of(context);
     setState(() => _busy = true);
+    var popped = false;
     try {
       final imported = await pickAndImportSequence(context, ref);
       if (imported && navigator.mounted) {
         navigator.pop();
-        return; // popped — don't touch state on the now-defunct dialog
+        popped = true;
       }
     } finally {
-      if (mounted) setState(() => _busy = false);
+      // Only clear the busy flag when we kept the dialog open; if we popped, the
+      // dialog is gone and there's no state to reset (explicit flag rather than
+      // relying on `mounted` flipping as a side-effect of pop()).
+      if (!popped && mounted) setState(() => _busy = false);
     }
   }
 
