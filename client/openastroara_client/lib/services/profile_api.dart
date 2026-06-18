@@ -1,5 +1,7 @@
 import 'package:dio/dio.dart';
 
+import '../models/profile_list.dart';
+import '../models/profile_meta.dart';
 import '../models/server.dart';
 import '../state/imaging/exposure_state.dart' show FrameKind;
 import '../state/settings/autofocus_settings_state.dart';
@@ -25,12 +27,58 @@ import '../state/settings/storage_settings_state.dart';
 class ProfileApi {
   final Dio _dio;
 
-  ProfileApi(AraServer server)
-      : _dio = Dio(BaseOptions(
-          baseUrl: server.baseUrl,
-          connectTimeout: const Duration(seconds: 3),
-          receiveTimeout: const Duration(seconds: 5),
-        ));
+  ProfileApi(AraServer server, {Dio? dio})
+      : _dio = dio ??
+            Dio(BaseOptions(
+              baseUrl: server.baseUrl,
+              connectTimeout: const Duration(seconds: 3),
+              receiveTimeout: const Duration(seconds: 5),
+            ));
+
+  /// §37 multi-profile — list the known profiles + which one is active
+  /// (`GET /api/v1/profiles`).
+  Future<ProfileList> listProfiles() async {
+    final res = await _dio.get<Map<String, dynamic>>('/api/v1/profiles');
+    return ProfileList.fromJson(res.data ?? const <String, dynamic>{});
+  }
+
+  /// §37 multi-profile — rename a profile (`PUT /api/v1/profiles/{id}`).
+  Future<void> renameProfile(String id, String name) async {
+    await _dio.put<void>('/api/v1/profiles/${Uri.encodeComponent(id)}',
+        data: {'name': name});
+  }
+
+  /// §37 multi-profile — make a profile active (`POST /api/v1/profiles/{id}/select`),
+  /// loading its settings into the live store.
+  Future<void> selectProfile(String id) async {
+    await _dio.post<void>('/api/v1/profiles/${Uri.encodeComponent(id)}/select');
+  }
+
+  /// §37 multi-profile — delete a profile (`DELETE /api/v1/profiles/{id}`). The
+  /// daemon refuses to delete the active or last-remaining profile (409); the
+  /// caller surfaces that to the user.
+  Future<void> deleteProfile(String id) async {
+    await _dio.delete<void>('/api/v1/profiles/${Uri.encodeComponent(id)}');
+  }
+
+  /// §37 multi-profile — create a new profile and make it active. The daemon
+  /// clones the current active profile's settings as the starting point (the
+  /// wizard then PUTs the sections the user configured on top). Returns the
+  /// new profile's metadata.
+  Future<ProfileMeta> createProfile(String name) async {
+    final res = await _dio.post<Map<String, dynamic>>(
+      '/api/v1/profiles',
+      data: {'name': name},
+    );
+    final meta = ProfileMeta.fromJson(res.data ?? const <String, dynamic>{});
+    if (meta.id.isEmpty) {
+      // A 2xx with no usable id (empty/garbled body) — fail loudly with the
+      // status code rather than returning a profile whose id we can't address.
+      throw StateError(
+          'createProfile got HTTP ${res.statusCode} with no profile id in the response body');
+    }
+    return meta;
+  }
 
   /// GET the active profile's imaging-defaults section.
   Future<ImagingDefaults> getImagingDefaults() async {

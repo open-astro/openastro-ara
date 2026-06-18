@@ -86,7 +86,9 @@ public sealed record ProfileShareDto(
     string ProfileName,
     System.Text.Json.JsonElement Manifest,
     long PayloadBytes,
-    Uri DownloadUrl);
+    // Null in v0.0.1: the share JSON is returned inline in Manifest (the client
+    // writes it straight to the chosen file), so there is no payload route to GET.
+    Uri? DownloadUrl);
 
 public sealed record ProfileShareImportPreviewDto(
     Guid ImportToken,
@@ -94,3 +96,8 @@ public sealed record ProfileShareImportPreviewDto(
     IReadOnlyList<string> Warnings,
     IReadOnlyList<string> DroppedFields,
     DateTimeOffset ExpiresUtc);
+
+// Token travels in the request body (not the query string) so it can't leak into
+// web-server / proxy access logs — it authorizes profile creation within its TTL.
+public sealed record ProfileShareImportCommitRequest(
+    Guid ImportToken);

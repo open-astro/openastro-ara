@@ -44,6 +44,11 @@ class ProfileDraft {
   // Per-screen "skipped" flags so the profile knows to surface "Default —
   // please review in Settings" markers per §37.8.
   final Set<int> skippedScreens = <int>{};
+
+  // Server id of the profile this draft was persisted as, set on the first
+  // successful create during Save. A retry after a mid-save failure re-uses it
+  // (re-applying the sections) instead of orphaning a new profile each attempt.
+  String? savedProfileId;
 }
 
 class EquipmentSlots {

@@ -108,7 +108,9 @@ public interface IBackupService {
 
 /// <summary>Profile sharing (§70).</summary>
 public interface IProfileShareService {
-    Task<ProfileShareDto> ExportAsync(Guid profileId, CancellationToken ct);
+    /// <summary>Render the §70.2 <c>profile-share-v1</c> manifest for a profile, or
+    /// <c>null</c> if no profile has that id (the endpoint maps null → 404).</summary>
+    Task<ProfileShareDto?> ExportAsync(Guid profileId, CancellationToken ct);
     Task<ProfileShareImportPreviewDto> ImportPreviewAsync(System.Text.Json.JsonElement manifest, CancellationToken ct);
     Task<Guid> ImportCommitAsync(Guid importToken, CancellationToken ct);
 }

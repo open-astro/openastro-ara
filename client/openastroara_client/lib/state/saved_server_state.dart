@@ -38,3 +38,19 @@ class SavedServersNotifier extends AsyncNotifier<List<AraServer>> {
 final savedServersProvider =
     AsyncNotifierProvider<SavedServersNotifier, List<AraServer>>(
         SavedServersNotifier.new);
+
+/// The de-facto **active** server, or null if none is saved yet.
+///
+/// ARA talks to one server at a time (§30.8); the most-recently-saved/connected
+/// entry is treated as active — the convention used across the app where call
+/// sites historically reached for `savedServersProvider…last` directly. This
+/// names that rule in one place so it's explicit and can evolve (e.g. into an
+/// explicit "default-on-launch" selection) without hunting down `.last` usages.
+final activeServerProvider = Provider<AraServer?>((ref) {
+  // asData?.value is null while the saved-servers list is still loading (initial
+  // async storage read) or on error, and the list once it's data — so a null
+  // here means "no active server yet", whether not-yet-loaded or genuinely empty.
+  // Both collapse to the same safe, retryable outcome at the call site.
+  final servers = ref.watch(savedServersProvider).asData?.value;
+  return (servers == null || servers.isEmpty) ? null : servers.last;
+});

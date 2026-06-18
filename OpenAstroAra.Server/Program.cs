@@ -175,7 +175,10 @@ public partial class Program {
         // testable end-to-end without the §28 catalog wired.
         // §36 IDataManagerService is registered below, after profileDir is resolved (the real
         // DataManagerService is disk-backed under {profileDir}/sky-data).
-        builder.Services.AddSingleton<IProfileShareService, PlaceholderProfileShareService>();
+        // §70 export renders the real profile-share-v1 template (strips equipment /
+        // calibration / secrets / paths); import preview+commit remain placeholder
+        // until the import sub-PR. Depends on IProfileRepository (registered below).
+        builder.Services.AddSingleton<IProfileShareService, ProfileShareService>();
         builder.Services.AddSingleton<IBackupStreamService, PlaceholderBackupStreamService>();
         // §43 IBackupService is registered below, after profileDir is resolved (the real BackupService is
         // disk-backed: snapshots live under {profileDir}/backups).

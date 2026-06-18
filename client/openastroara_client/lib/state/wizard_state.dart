@@ -43,7 +43,11 @@ class WizardController extends Notifier<WizardState> {
   /// Save & Exit per §37 — the caller persists the partial draft to the
   /// profile store. The state stays put; the wizard host pops back to the
   /// previous screen.
-  ProfileDraft snapshot() => state.draft;
+  ///
+  /// Returns the **live** draft object (not a copy): `saveWizardProfile` stamps
+  /// `savedProfileId` onto it so a retry after a partial save re-uses the same
+  /// profile. The name makes that contract explicit at the call site.
+  ProfileDraft liveDraft() => state.draft;
 }
 
 class WizardState {
