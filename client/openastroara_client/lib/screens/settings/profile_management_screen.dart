@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -85,7 +87,8 @@ class _ProfileListView extends ConsumerWidget {
               ? const Text('Active', style: TextStyle(color: AraColors.accentConnected))
               : null,
           trailing: PopupMenuButton<String>(
-            onSelected: (action) => _onAction(context, ref, action, p, isActive),
+            onSelected: (action) =>
+                unawaited(_onAction(context, ref, action, p, isActive)),
             itemBuilder: (_) => [
               if (!isActive)
                 const PopupMenuItem(value: 'select', child: Text('Make active')),

@@ -19,9 +19,12 @@ final profileApiProvider = Provider<ProfileApi?>((ref) {
 /// and membership stay in sync. Errors (e.g. the daemon's 409 when deleting the
 /// active or last-remaining profile) propagate to the caller to surface.
 class ProfileManagementNotifier extends AsyncNotifier<ProfileList> {
-  /// The active server's ProfileApi, captured each [build]. Mutations snapshot
-  /// this locally so a server switch mid-operation can't redirect their refresh.
-  late ProfileApi _api;
+  /// The active server's ProfileApi, captured each [build], or null when no
+  /// server is connected (build() then surfaces AsyncError). Nullable so
+  /// refresh()/mutations can't hit a LateInitializationError if invoked from the
+  /// no-server error state (e.g. the Retry button). Mutations snapshot this
+  /// locally so a server switch mid-operation can't redirect their refresh.
+  ProfileApi? _api;
 
   /// Guards against overlapping mutations: a slow network + a rapid second
   /// action would otherwise race two refreshes, and the later HTTP response
@@ -38,6 +41,7 @@ class ProfileManagementNotifier extends AsyncNotifier<ProfileList> {
     // (rather than escaping a later guard and spinning on AsyncLoading forever).
     final api = ref.watch(profileApiProvider);
     if (api == null) {
+      _api = null; // don't leave a stale api from a previously-connected server
       throw StateError('No active server — connect to a daemon to manage profiles.');
     }
     _api = api;
@@ -48,7 +52,9 @@ class ProfileManagementNotifier extends AsyncNotifier<ProfileList> {
   /// the current list visible during the fetch (no AsyncLoading flash) — the
   /// initial load already shows a spinner via build()'s pending state.
   Future<void> refresh() async {
-    state = await AsyncValue.guard(() => _api.listProfiles());
+    final api = _api;
+    if (api == null) return; // no server (e.g. Retry from the error state) — no-op
+    state = await AsyncValue.guard(() => api.listProfiles());
   }
 
   /// Run a mutation then refresh, under the [_busy] guard. The ProfileApi is
@@ -62,6 +68,7 @@ class ProfileManagementNotifier extends AsyncNotifier<ProfileList> {
       throw StateError('Another profile action is still in progress.');
     }
     final api = _api; // snapshot — the finally refreshes against this instance
+    if (api == null) return; // no active server; the UI is in the error state
     _busy = true;
     try {
       await op(api);
