@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -136,5 +138,43 @@ void main() {
     await tester.pumpAndSettle();
     expect(client.lastName, 'M42');
     expect(client.lastBody, const {'Name': 'M42'});
+  });
+
+  group('readNinaSequenceFile', () {
+    late Directory tmp;
+    setUp(() async => tmp = await Directory.systemTemp.createTemp('nina_import_'));
+    tearDown(() async => tmp.delete(recursive: true));
+
+    test('parses a valid object and derives the name from the file', () async {
+      final f = File('${tmp.path}/M42 Wide.json')
+        ..writeAsStringSync('{"Name":"M42"}');
+      final r = await readNinaSequenceFile(f.path);
+      expect(r.ok, isTrue);
+      expect(r.nina, const {'Name': 'M42'});
+      expect(r.name, 'M42 Wide'); // basename minus .json
+    });
+
+    test('a non-object JSON body → notJson', () async {
+      final f = File('${tmp.path}/arr.json')..writeAsStringSync('[1,2,3]');
+      final r = await readNinaSequenceFile(f.path);
+      expect(r.ok, isFalse);
+      expect(r.error, NinaFileError.notJson);
+    });
+
+    test('unparseable content → notJson', () async {
+      final f = File('${tmp.path}/junk.json')..writeAsStringSync('not json');
+      final r = await readNinaSequenceFile(f.path);
+      expect(r.error, NinaFileError.notJson);
+    });
+
+    test('an over-limit file → tooLarge (distinct from notJson)', () async {
+      // One byte past the cap, valid-JSON-shaped padding so only size trips it.
+      final f = File('${tmp.path}/huge.json');
+      final padding = 'x' * (32 * 1024 * 1024); // == _maxSequenceFileBytes
+      f.writeAsStringSync('{"Name":"$padding"}');
+      final r = await readNinaSequenceFile(f.path);
+      expect(r.ok, isFalse);
+      expect(r.error, NinaFileError.tooLarge);
+    });
   });
 }

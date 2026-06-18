@@ -13,9 +13,56 @@ import '../../theme/ara_colors.dart';
 /// far above any plausible sequence while still bounding memory before decode.
 const int _maxSequenceFileBytes = 32 * 1024 * 1024;
 
+/// Why reading a picked sequence file failed — drives a specific user message
+/// (a too-large file and an unparseable one need different wording).
+enum NinaFileError { tooLarge, notJson }
+
+/// Outcome of [readNinaSequenceFile]: on success [nina] + [name] are set and
+/// [error] is null; on failure [error] says which message to show.
+class NinaFileReadResult {
+  const NinaFileReadResult.success(this.nina, this.name) : error = null;
+  const NinaFileReadResult.failure(this.error)
+      : nina = null,
+        name = null;
+
+  final Map<String, dynamic>? nina;
+
+  /// The sequence name to fall back to — the file's basename without `.json`.
+  final String? name;
+  final NinaFileError? error;
+
+  bool get ok => error == null;
+}
+
+/// Read + validate a picked sequence file off disk (size cap → JSON decode →
+/// object-shape check) without touching the UI, so the size/non-object paths
+/// are unit-testable. The caller maps [NinaFileReadResult.error] to a message.
+Future<NinaFileReadResult> readNinaSequenceFile(String path) async {
+  final file = File(path);
+  // NINA sequences are KBs; cap before reading so an accidental huge file
+  // can't spike memory in jsonDecode.
+  if (await file.length() > _maxSequenceFileBytes) {
+    return const NinaFileReadResult.failure(NinaFileError.tooLarge);
+  }
+  try {
+    final decoded = jsonDecode(await file.readAsString());
+    if (decoded is! Map<String, dynamic>) {
+      return const NinaFileReadResult.failure(NinaFileError.notJson);
+    }
+    final base = path.split(Platform.pathSeparator).last;
+    final name = base.toLowerCase().endsWith('.json')
+        ? base.substring(0, base.length - 5)
+        : base;
+    return NinaFileReadResult.success(decoded, name);
+  } catch (e, st) {
+    debugPrint('[sequencer] NINA file read/parse failed: $e\n$st');
+    return const NinaFileReadResult.failure(NinaFileError.notJson);
+  }
+}
+
 /// §38.4 — let the user pick a NINA sequence `.json` and import it. A cancelled
-/// pick is a no-op; an unreadable / non-JSON file surfaces a SnackBar. On a valid
-/// file it delegates to [importSequenceFromJson].
+/// pick is a no-op; an oversized / unreadable / non-JSON file surfaces a
+/// specific SnackBar. On a valid file it delegates to [importSequenceFromJson].
 ///
 /// Returns true only when a sequence was actually imported, so the caller can
 /// keep the Load dialog open on a cancel/error (and close it only on success).
@@ -31,29 +78,13 @@ Future<bool> pickAndImportSequence(BuildContext context, WidgetRef ref) async {
   final path = picked?.files.single.path;
   if (path == null) return false; // cancelled
 
-  Map<String, dynamic> nina;
-  String fileName;
-  try {
-    final file = File(path);
-    // NINA sequences are KBs; cap before reading so an accidental huge file
-    // can't spike memory in jsonDecode.
-    if (await file.length() > _maxSequenceFileBytes) {
-      throw const FormatException('sequence file is too large');
-    }
-    final decoded = jsonDecode(await file.readAsString());
-    if (decoded is! Map<String, dynamic>) {
-      throw const FormatException('sequence file is not a JSON object');
-    }
-    nina = decoded;
-    final base = path.split(Platform.pathSeparator).last;
-    fileName = base.toLowerCase().endsWith('.json')
-        ? base.substring(0, base.length - 5)
-        : base;
-  } catch (e, st) {
-    debugPrint('[sequencer] NINA file read/parse failed: $e\n$st');
+  final read = await readNinaSequenceFile(path);
+  if (!read.ok) {
     if (context.mounted) {
-      messenger.showSnackBar(const SnackBar(
-        content: Text("That file isn't a valid sequence JSON."),
+      messenger.showSnackBar(SnackBar(
+        content: Text(read.error == NinaFileError.tooLarge
+            ? 'That sequence file is too large to import (32 MiB limit).'
+            : "That file isn't a valid sequence JSON."),
         backgroundColor: AraColors.accentError,
       ));
     }
@@ -61,11 +92,12 @@ Future<bool> pickAndImportSequence(BuildContext context, WidgetRef ref) async {
   }
 
   if (!context.mounted) return false;
+  final nina = read.nina!;
   // Prefer the NINA root's own name; fall back to the file name.
   final rootName = nina['Name'];
   final name = (rootName is String && rootName.trim().isNotEmpty)
       ? rootName.trim()
-      : fileName;
+      : read.name!;
   final id = await importSequenceFromJson(context, ref, name: name, ninaJson: nina);
   return id != null;
 }
