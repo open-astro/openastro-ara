@@ -1,10 +1,13 @@
 import 'package:flutter/foundation.dart';
 
-// The draft declares its own `ImagingDefaults` + `PlateSolveSettings` bags; we map
-// onto the profile *section* types from the settings-state files, so hide the
-// draft's to disambiguate (the draft sub-objects are still reached via `d.<field>`).
-import '../../models/profile_draft.dart' hide ImagingDefaults, PlateSolveSettings;
+// The draft declares its own `ImagingDefaults` / `PlateSolveSettings` /
+// `AutofocusSettings` bags; we map onto the profile *section* types from the
+// settings-state files, so hide the draft's to disambiguate (the draft
+// sub-objects are still reached via `d.<field>`).
+import '../../models/profile_draft.dart'
+    hide ImagingDefaults, PlateSolveSettings, AutofocusSettings;
 import '../../services/profile_api.dart';
+import '../../state/settings/autofocus_settings_state.dart';
 import '../../state/settings/imaging_defaults_state.dart';
 import '../../state/settings/optics_settings_state.dart';
 import '../../state/settings/phd2_settings_state.dart';
@@ -112,6 +115,19 @@ PlateSolveSettings applyDraftToPlateSolve(PlateSolveSettings base, ProfileDraft 
   );
 }
 
+/// §37.4 screen 12 — map the draft's autofocus subset onto the profile's
+/// autofocus section. Every field is nullable, so copyWith's `??` keeps the base
+/// for anything the user left blank/untouched.
+AutofocusSettings applyDraftToAutofocus(AutofocusSettings base, ProfileDraft d) {
+  final af = d.autofocus;
+  return base.copyWith(
+    exposureSeconds: af.exposureSeconds,
+    steps: af.steps,
+    stepSize: af.stepSize,
+    runAfterFilterChange: af.runAfterFilterChange,
+  );
+}
+
 /// Create a new active profile from the wizard draft and layer the configured
 /// sections on top. Throws on transport failure — the caller surfaces it.
 ///
@@ -148,6 +164,8 @@ Future<void> saveWizardProfile(ProfileApi api, ProfileDraft d) async {
     _trySave(() async => api.putPhd2Settings(applyDraftToPhd2(await api.getPhd2Settings(), d))),
     _trySave(() async => api.putPlateSolveSettings(
         applyDraftToPlateSolve(await api.getPlateSolveSettings(), d))),
+    _trySave(() async => api.putAutofocusSettings(
+        applyDraftToAutofocus(await api.getAutofocusSettings(), d))),
   ]))
       .whereType<Object>()
       .toList();

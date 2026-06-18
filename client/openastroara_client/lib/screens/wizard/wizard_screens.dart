@@ -8,8 +8,8 @@ import 'screens/screen_device_setup.dart';
 import 'screens/screen_equipment_discovery.dart';
 import 'screens/screen_profile_basics.dart';
 
-/// Step → screen builder. Steps 1-11 (the §37.1–37.4 "gear setup" + plate-solve
-/// screens) are real forms bound to [ProfileDraft]; steps 12-18 (autofocus, file
+/// Step → screen builder. Steps 1-12 (the §37.1–37.4 gear setup + plate-solve +
+/// autofocus screens) are real forms bound to [ProfileDraft]; steps 13-18 (file
 /// saving, imaging, safety, sky data, review) are still placeholders pending
 /// follow-up work.
 ///
@@ -32,8 +32,9 @@ final Map<int, WizardScreenBuilder> wizardScreenBuilders =
   9: (_) => const ScreenRotator(),
   10: (_) => const ScreenGuider(),
   11: (_) => const ScreenPlateSolve(),
-  // Steps 12-18 remain placeholders until their forms land.
-  for (int step = 12; step <= ProfileWizard.totalSteps; step++)
+  12: (_) => const ScreenAutofocus(),
+  // Steps 13-18 remain placeholders until their forms land.
+  for (int step = 13; step <= ProfileWizard.totalSteps; step++)
     step: (ctx) => _PlaceholderScreen(step: step),
 };
 
@@ -121,8 +122,6 @@ class _PlaceholderScreen extends ConsumerWidget {
             '(pulled from Alpaca SlewSettleTime). (§37.3)',
       9 => 'Rotator min/max angle + step size + reverse direction toggle. (§37.3)',
       10 => 'PHD2 host:port + dither pixels + settle threshold + calibration cadence. (§37.3)',
-      12 => 'Autofocus exposure + step size + max retries + auto-discover filter offsets toggle. '
-            '(§37.4)',
       13 => 'Save directory (USB recommended per §29) + format (FITS/XISF) + compression + '
             'filename template (default per §37.4). (§37.4)',
       14 => 'Default exposure + gain/offset + frame type. Cooling target inherited from Screen 5. '

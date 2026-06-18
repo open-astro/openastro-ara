@@ -83,6 +83,44 @@ void main() {
     expect(find.textContaining('Must be greater than'), findsNothing);
   });
 
+  testWidgets('Screen 12 rejects a non-positive autofocus exposure',
+      (tester) async {
+    final container = await pump(tester, const ScreenAutofocus());
+    final af = container.read(wizardControllerProvider).draft.autofocus;
+    final exposure = find.byType(TextField).first; // exposure is the first field
+
+    await tester.enterText(exposure, '0'); // must be >= 1
+    await tester.pump();
+    expect(af.exposureSeconds, isNull, reason: 'invalid value is not written');
+    expect(find.textContaining('at least 1'), findsOneWidget);
+
+    await tester.enterText(exposure, '8');
+    await tester.pump();
+    expect(af.exposureSeconds, 8);
+    expect(find.textContaining('at least 1'), findsNothing);
+  });
+
+  testWidgets('Screen 12 enforces the steps V-curve bounds (3–31)',
+      (tester) async {
+    final container = await pump(tester, const ScreenAutofocus());
+    final af = container.read(wizardControllerProvider).draft.autofocus;
+    final steps = find.byType(TextField).at(1); // steps is the second field
+
+    await tester.enterText(steps, '2'); // below the 3-point minimum
+    await tester.pump();
+    expect(af.steps, isNull);
+    expect(find.textContaining('between 3 and 31'), findsOneWidget);
+
+    await tester.enterText(steps, '32'); // above the cap
+    await tester.pump();
+    expect(af.steps, isNull);
+
+    await tester.enterText(steps, '9'); // in range
+    await tester.pump();
+    expect(af.steps, 9);
+    expect(find.textContaining('between 3 and 31'), findsNothing);
+  });
+
   testWidgets('signed field keeps prior value on a partial "-" keystroke',
       (tester) async {
     final container = await pump(tester, const ScreenRotator());
