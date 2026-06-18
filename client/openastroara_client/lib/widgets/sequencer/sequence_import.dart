@@ -9,6 +9,10 @@ import '../../models/sequence/sequence_summary.dart';
 import '../../state/sequencer/sequence_list_state.dart';
 import '../../theme/ara_colors.dart';
 
+/// Upper bound on a picked NINA sequence file. Real exports are KBs; 32 MiB is
+/// far above any plausible sequence while still bounding memory before decode.
+const int _maxSequenceFileBytes = 32 * 1024 * 1024;
+
 /// §38.4 — let the user pick a NINA sequence `.json` and import it. A cancelled
 /// pick is a no-op; an unreadable / non-JSON file surfaces a SnackBar. On a valid
 /// file it delegates to [importSequenceFromJson].
@@ -21,13 +25,22 @@ Future<bool> pickAndImportSequence(BuildContext context, WidgetRef ref) async {
     type: FileType.custom,
     allowedExtensions: ['json'],
   );
+  // `path` is populated on desktop/mobile (ARA's targets); Flutter Web surfaces
+  // file content via `bytes` instead, so a `bytes` path would be needed before
+  // web is supported (a null path here reads as a cancel).
   final path = picked?.files.single.path;
   if (path == null) return false; // cancelled
 
   Map<String, dynamic> nina;
   String fileName;
   try {
-    final decoded = jsonDecode(await File(path).readAsString());
+    final file = File(path);
+    // NINA sequences are KBs; cap before reading so an accidental huge file
+    // can't spike memory in jsonDecode.
+    if (await file.length() > _maxSequenceFileBytes) {
+      throw const FormatException('sequence file is too large');
+    }
+    final decoded = jsonDecode(await file.readAsString());
     if (decoded is! Map<String, dynamic>) {
       throw const FormatException('sequence file is not a JSON object');
     }
@@ -94,10 +107,21 @@ Future<String?> importSequenceFromJson(
     ref.read(selectedSequenceIdProvider.notifier).select(id);
   }
 
-  if (!context.mounted) return id;
-  if (result.lossyTranslation ||
+  final hasWarnings = result.lossyTranslation ||
       result.warnings.isNotEmpty ||
-      result.droppedInstructionTypes.isNotEmpty) {
+      result.droppedInstructionTypes.isNotEmpty;
+  if (!context.mounted) {
+    // The widget went away before we could surface the warnings dialog. Don't
+    // let a lossy translation vanish silently — at least record it (a lossy
+    // NINA import can change what the rig actually does).
+    if (hasWarnings) {
+      debugPrint('[sequencer] import warnings not shown (context unmounted): '
+          'lossy=${result.lossyTranslation} '
+          'dropped=${result.droppedInstructionTypes} warnings=${result.warnings}');
+    }
+    return id;
+  }
+  if (hasWarnings) {
     await _showImportWarnings(context, result, name);
   } else {
     messenger.showSnackBar(SnackBar(
