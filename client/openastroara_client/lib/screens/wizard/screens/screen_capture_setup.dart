@@ -119,8 +119,9 @@ class _ScreenAutofocusState extends ConsumerState<ScreenAutofocus> {
   // Per-field validation messages (advisory: an invalid value is never written).
   final Map<String, String?> _errors = {};
 
-  /// A positive-integer field: blank → null (keep base), a valid `> 0` value is
-  /// written, and anything else surfaces an inline error without writing.
+  /// A bounded-integer field: blank → null (keep base); a value in [[min], [max]]
+  /// is written; anything else surfaces an inline error without writing (so an
+  /// out-of-range value never reaches the daemon). [max] null = no upper bound.
   Widget _posIntField({
     required String key,
     required String label,
@@ -128,7 +129,12 @@ class _ScreenAutofocusState extends ConsumerState<ScreenAutofocus> {
     required String helper,
     required int? value,
     required void Function(int?) set,
+    int min = 1,
+    int? max,
   }) {
+    final rangeError = max == null
+        ? 'Enter a whole number of at least $min.'
+        : 'Enter a whole number between $min and $max.';
     return WizardTextField(
       label: label,
       initialValue: value?.toString(),
@@ -145,11 +151,11 @@ class _ScreenAutofocusState extends ConsumerState<ScreenAutofocus> {
           return;
         }
         final n = int.tryParse(t);
-        if (n != null && n > 0) {
+        if (n != null && n >= min && (max == null || n <= max)) {
           setState(() => _errors[key] = null);
           set(n);
         } else {
-          setState(() => _errors[key] = 'Enter a whole number greater than 0.');
+          setState(() => _errors[key] = rangeError);
         }
       },
     );
@@ -175,7 +181,11 @@ class _ScreenAutofocusState extends ConsumerState<ScreenAutofocus> {
           key: 'steps',
           label: 'Steps',
           hint: 'default 7',
-          helper: 'How many focus points to sample across the V-curve.',
+          // Bounds match AutofocusSettingsNotifier.setSteps — the V-curve fit
+          // needs at least 3 points, and the routine caps at 31.
+          min: 3,
+          max: 31,
+          helper: 'How many focus points to sample across the V-curve (3–31).',
           value: _af.steps,
           set: (n) => _af.steps = n,
         ),
