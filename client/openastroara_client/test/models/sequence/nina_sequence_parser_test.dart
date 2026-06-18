@@ -76,6 +76,8 @@ void main() {
       expect(root.children.map((c) => c.displayName), ['Start', 'Targets', 'End']);
       expect(root.children.map((c) => c.kind),
           everyElement(SequenceNodeKind.area));
+      // The §38.1 envelope field is not a display param.
+      expect(root.params.containsKey('schemaVersion'), isFalse);
     });
 
     test('maps the target + container + instruction kinds', () {
@@ -116,9 +118,11 @@ void main() {
       final seq = root.children[1].children.single.children[0];
       // Only the SmartExposure is a child — not the condition/trigger blocks...
       expect(seq.children.length, 1);
-      // ...but their type summaries are preserved on the node for later display.
-      expect(seq.params['conditionTypes'], contains('LoopCondition'));
-      expect(seq.params['triggerTypes'], contains('DitherAfterExposures'));
+      // ...but their type summaries are preserved on the node for later display,
+      // readable via the frozen-list-safe listParam helper.
+      expect(seq.listParam('conditionTypes'), contains('LoopCondition'));
+      expect(seq.listParam('triggerTypes'), contains('DitherAfterExposures'));
+      expect(seq.listParam('missing'), isEmpty);
     });
 
     test('caps recursion on pathologically deep input (no stack overflow)', () {

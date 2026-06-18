@@ -53,6 +53,7 @@ SequenceNode parseNinaSequenceBody(Map<String, dynamic> body) {
     'Name',
     'Strategy',
     'IsExpanded',
+    'schemaVersion', // the §38.1 envelope field, not a display param
   };
 
   SequenceNodeKind kindFor(String type, bool hasChildren) {
@@ -96,13 +97,18 @@ SequenceNode parseNinaSequenceBody(Map<String, dynamic> body) {
   // or a non-object.
   SequenceNode? node(dynamic raw, int depth, {bool forceRoot = false}) {
     if (raw is! Map) return null;
-    // A Json.NET back-reference is a pure { "$ref": "N" } object that points at an
-    // already-seen node (e.g. Parent / a shared filter) — it never carries $type,
-    // so this dual condition skips refs while keeping real nodes.
-    if (raw[r'$ref'] != null && raw[r'$type'] == null) return null;
+    // A $ref is a Json.NET back-reference (Parent / a shared filter object) — skip
+    // it for tree purposes. A real tree node carries $id+$type, never $ref, so
+    // skipping on $ref alone is both correct and robust if PreserveReferencesHandling
+    // ever emits $ref alongside $type.
+    if (raw[r'$ref'] != null) return null;
 
     final type = shortType(raw[r'$type']);
     final children = <SequenceNode>[];
+    // At the depth cap, children are left empty — so an *unknown* container type
+    // sitting exactly at the limit is classified as an instruction (the default
+    // branch keys off hasChildren). Named container types are unaffected; this
+    // only bites adversarially-deep input, which we're capping anyway.
     if (depth < ninaParseMaxDepth) {
       for (final c in values(raw['Items'])) {
         final n = node(c, depth + 1);
