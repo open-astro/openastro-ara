@@ -66,6 +66,19 @@ void main() {
       expect(list.active, isNull);
     });
 
+    test('active is null when active_id matches no listed profile', () {
+      // A stale/unknown active_id must not crash or mis-resolve — `active` does a
+      // membership check, so it returns null rather than a wrong profile.
+      final list = ProfileList.fromJson({
+        'active_id': 'ghost',
+        'profiles': [
+          {'id': 'id-1', 'name': 'Rig A'},
+        ],
+      });
+      expect(list.activeId, 'ghost');
+      expect(list.active, isNull);
+    });
+
     test('coerces a non-String-keyed profile map (the fromJson Map branch)', () {
       // A JSON decoder can hand back Map<dynamic, dynamic> for nested objects;
       // fromJson copies those into Map<String, dynamic> rather than dropping them.
