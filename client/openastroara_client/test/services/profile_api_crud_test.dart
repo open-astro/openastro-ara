@@ -65,6 +65,19 @@ void main() {
       expect(list.profiles, isEmpty);
       expect(list.active, isNull);
     });
+
+    test('coerces a non-String-keyed profile map (the fromJson Map branch)', () {
+      // A JSON decoder can hand back Map<dynamic, dynamic> for nested objects;
+      // fromJson copies those into Map<String, dynamic> rather than dropping them.
+      final list = ProfileList.fromJson({
+        'active_id': 'id-1',
+        'profiles': <dynamic>[
+          <dynamic, dynamic>{'id': 'id-1', 'name': 'Coerced'},
+        ],
+      });
+      expect(list.profiles, hasLength(1));
+      expect(list.active?.name, 'Coerced');
+    });
   });
 
   group('ProfileApi multi-profile CRUD', () {
