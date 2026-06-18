@@ -220,9 +220,13 @@ public static class SystemEndpoints {
                 async ([FromBody] System.Text.Json.JsonElement manifest, IProfileShareService svc, CancellationToken ct) => {
                     try {
                         return Results.Ok(await svc.ImportPreviewAsync(manifest, ct));
-                    } catch (InvalidProfileShareException ex) {
+                    } catch (InvalidProfileShareException) {
                         // Not a recognized share file (bad JSON / wrong schema / no settings).
-                        return Results.Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
+                        // Fixed wire detail — the exception message stays internal so it
+                        // isn't pinned into the public API contract.
+                        return Results.Problem(
+                            detail: "The uploaded file is not a recognized profile share (expected a profile-share-v1 file).",
+                            statusCode: StatusCodes.Status422UnprocessableEntity);
                     }
                 })
             .Accepts<System.Text.Json.JsonElement>("application/json")
@@ -235,9 +239,12 @@ public static class SystemEndpoints {
                     try {
                         var newProfileId = await svc.ImportCommitAsync(importToken, ct);
                         return Results.Created($"/api/v1/profiles/{newProfileId}", value: newProfileId);
-                    } catch (ProfileShareImportTokenException ex) {
-                        // Unknown / expired / already-committed token.
-                        return Results.Problem(ex.Message, statusCode: StatusCodes.Status404NotFound);
+                    } catch (ProfileShareImportTokenException) {
+                        // Unknown / expired / already-committed token. Fixed wire detail
+                        // (exception message stays internal, off the public API contract).
+                        return Results.Problem(
+                            detail: "Import token is unknown or expired — preview the share file again.",
+                            statusCode: StatusCodes.Status404NotFound);
                     }
                 })
             .Produces<Guid>(StatusCodes.Status201Created)

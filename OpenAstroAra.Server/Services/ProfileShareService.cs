@@ -257,6 +257,11 @@ public sealed class ProfileShareService : IProfileShareService {
         return Task.FromResult(meta.Id);
     }
 
+    // Donor attribution (§70.3) is opt-in, and the current export always omits the
+    // donor block (Donor: null), so today this falls through to the neutral default.
+    // The DisplayName branch is reserved for a future opt-in export mode (or a
+    // hand-authored manifest) that carries the donor's chosen label — it is not yet
+    // reachable via the shipped export path.
     private static string ImportedName(ProfileShareManifest m) =>
         m.Donor?.DisplayName is { Length: > 0 } name ? name : "Imported profile";
 
