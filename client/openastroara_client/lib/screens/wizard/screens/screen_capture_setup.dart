@@ -447,3 +447,73 @@ class _ScreenSafetyState extends ConsumerState<ScreenSafety> {
     );
   }
 }
+
+// ── Screen 16 — Site & altitude ─────────────────────────────────────────────
+
+/// §37.5 — the horizon floor below which targets aren't observed, and how dark
+/// it must be to image. Binds to the draft's [SitePreferences] bag; the wizard
+/// Save folds it into the profile's site section (location is from screen 1).
+class ScreenSiteAltitude extends ConsumerStatefulWidget {
+  const ScreenSiteAltitude({super.key});
+  @override
+  ConsumerState<ScreenSiteAltitude> createState() =>
+      _ScreenSiteAltitudeState();
+}
+
+class _ScreenSiteAltitudeState extends ConsumerState<ScreenSiteAltitude> {
+  late final SitePreferences _site = _draftOf(ref).site;
+  String? _horizonError;
+
+  @override
+  Widget build(BuildContext context) {
+    return WizardScreenScaffold(
+      step: 16,
+      intro: 'How low ARA will image and how dark it waits for. Targets below '
+          'the horizon altitude are skipped.',
+      children: [
+        WizardTextField(
+          label: 'Horizon altitude (°)',
+          initialValue: _site.hardMinAltitudeDeg?.toString(),
+          hint: 'default 20',
+          helperText: 'Minimum altitude (0–90°) a target must clear to be '
+              'imaged. Leave blank to keep the profile default.',
+          errorText: _horizonError,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          inputFormatters: WizardInput.unsignedDecimal,
+          onChanged: (v) {
+            final t = v.trim();
+            if (t.isEmpty) {
+              setState(() => _horizonError = null);
+              _site.hardMinAltitudeDeg = null;
+              return;
+            }
+            final d = double.tryParse(t);
+            if (d != null && d >= 0 && d <= 90) {
+              setState(() => _horizonError = null);
+              _site.hardMinAltitudeDeg = d;
+            } else {
+              setState(() => _horizonError = 'Enter a value between 0 and 90°.');
+            }
+          },
+        ),
+        WizardDropdown<TwilightOption?>(
+          label: 'Start/end imaging at',
+          value: _site.twilight,
+          helperText: 'How dark it must be before imaging — astronomical is '
+              'darkest (best for deep-sky).',
+          entries: const [
+            DropdownMenuEntry(value: null, label: 'Keep profile default'),
+            DropdownMenuEntry(
+                value: TwilightOption.civil, label: 'Civil twilight'),
+            DropdownMenuEntry(
+                value: TwilightOption.nautical, label: 'Nautical twilight'),
+            DropdownMenuEntry(
+                value: TwilightOption.astronomical,
+                label: 'Astronomical twilight'),
+          ],
+          onChanged: (v) => setState(() => _site.twilight = v),
+        ),
+      ],
+    );
+  }
+}

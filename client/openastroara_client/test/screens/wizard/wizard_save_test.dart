@@ -34,6 +34,25 @@ void main() {
       expect(out.bortleClass, 4, reason: 'unset-by-wizard fields keep their base value');
     });
 
+    test('applyDraftToSite maps screen-16 horizon + twilight', () {
+      final d = ProfileDraft();
+      d.site
+        ..hardMinAltitudeDeg = 25
+        ..twilight = TwilightOption.nautical;
+      final out = applyDraftToSite(const SiteSettings(), d);
+      expect(out.defaultHorizonAltitudeDeg, 25);
+      expect(out.twilightDefinition, TwilightDefinition.nautical);
+    });
+
+    test('applyDraftToSite keeps base horizon/twilight on a blank draft', () {
+      final base = const SiteSettings().copyWith(
+          defaultHorizonAltitudeDeg: 35,
+          twilightDefinition: TwilightDefinition.civil);
+      final out = applyDraftToSite(base, ProfileDraft());
+      expect(out.defaultHorizonAltitudeDeg, 35);
+      expect(out.twilightDefinition, TwilightDefinition.civil);
+    });
+
     test('applyDraftToSite leaves base untouched when the draft is empty', () {
       const base = SiteSettings(siteName: 'Existing', latitudeDeg: 12.0);
       final out = applyDraftToSite(base, ProfileDraft());
