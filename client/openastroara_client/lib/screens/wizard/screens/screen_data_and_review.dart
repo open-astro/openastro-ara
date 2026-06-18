@@ -216,8 +216,13 @@ class ScreenReview extends ConsumerWidget {
               : '${draft.altitudeMeters} m'),
           ('Time zone', reviewValue(draft.timezone)),
         ]),
-        _ReviewSection(title: 'Equipment', step: 3, onEdit: edit, rows: [
+        // AlpacaBridge address is set on step 2 (connect); device assignment on
+        // step 3 — keep them as separate Edit targets so each jumps to its own
+        // screen.
+        _ReviewSection(title: 'Connection', step: 2, onEdit: edit, rows: [
           ('AlpacaBridge', reviewValue(draft.alpacaBridgeAddress)),
+        ]),
+        _ReviewSection(title: 'Equipment', step: 3, onEdit: edit, rows: [
           ('Assigned', assignedEquipment(draft.equipment)),
         ]),
         _ReviewSection(title: 'Telescope', step: 4, onEdit: edit, rows: [
@@ -309,7 +314,7 @@ class ScreenReview extends ConsumerWidget {
             ImageFormat.xisf => 'XISF',
             null => _notSet,
           }),
-          ('Compress', fs.compress == null ? _notSet : reviewValue(fs.compress)),
+          ('Compress', reviewValue(fs.compress)),
           ('Filename template', reviewValue(fs.filenameTemplate)),
         ]),
         _ReviewSection(title: 'Imaging defaults', step: 14, onEdit: edit, rows: [
@@ -330,8 +335,7 @@ class ScreenReview extends ConsumerWidget {
             UnsafeConditionAction.ignore => 'Ignore',
             null => _notSet,
           }),
-          ('Auto-resume when safe',
-              sf.autoResumeWhenSafe == null ? _notSet : reviewValue(sf.autoResumeWhenSafe)),
+          ('Auto-resume when safe', reviewValue(sf.autoResumeWhenSafe)),
           ('Resume delay', sf.resumeDelayMin == null
               ? _notSet
               : '${sf.resumeDelayMin} min'),

@@ -84,6 +84,20 @@ void main() {
       expect(container.read(wizardControllerProvider).step, 1);
     });
 
+    testWidgets('AlpacaBridge Edit jumps to step 2, not the assign step',
+        (tester) async {
+      final container = await pump(tester, seed: (d) {
+        d.alpacaBridgeAddress = '192.168.1.50:11111';
+      });
+      await tester.pumpAndSettle();
+      // Section order: Profile basics(1), Connection(2), Equipment(3)… — the
+      // Connection section owns the AlpacaBridge row and must edit step 2.
+      expect(find.text('192.168.1.50:11111'), findsOneWidget);
+      await tester.tap(find.text('Edit').at(1));
+      await tester.pump();
+      expect(container.read(wizardControllerProvider).step, 2);
+    });
+
     testWidgets('unset fields read as "Not set"', (tester) async {
       await pump(tester);
       await tester.pumpAndSettle();
