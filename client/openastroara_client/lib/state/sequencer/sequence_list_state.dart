@@ -163,11 +163,12 @@ class SequenceRunStateNotifier extends AsyncNotifier<SequenceRunStateInfo?> {
   void _applyWsEvent(WsEvent event, String? selectedId) {
     if (selectedId == null) return;
     if (!event.type.startsWith(SequenceWsEvents.prefix)) return;
-    // Skip only while there's no value at all — the initial REST read still in
-    // flight. Once there's ever been a value (incl. a null "no active run", or a
-    // refresh error that kept its previous value), keep applying so live
-    // tracking survives a transient REST failure.
-    if (!state.hasValue) return;
+    // Apply only when settled on a value (AsyncData). This skips both the
+    // initial in-flight read AND the AsyncLoading-with-previous-value window
+    // when build() re-runs on a selection change — applying then could flash the
+    // outgoing sequence's data. A refresh failure deliberately keeps the prior
+    // AsyncData (see refresh()), so live tracking still survives a REST hiccup.
+    if (state is! AsyncData) return;
     // Require the frame to name the selected sequence. The daemon stamps
     // sequence_id on every sequence.* event, so a missing/non-String id is
     // treated as "not for us" and dropped — defensive against ever applying a

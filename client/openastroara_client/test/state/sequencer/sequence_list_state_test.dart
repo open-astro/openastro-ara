@@ -32,9 +32,9 @@ class _FakeSeqClient implements SequenceClient {
   @override
   Future<SequenceRunStateInfo?> getRunState(String id) async {
     if (throwOnRead) throw Exception('transient');
-    final gated = runStateGate != null ? await runStateGate!.future : null;
-    if (runStateById != null) return runStateById![id];
-    return runStateGate != null ? gated : runState;
+    // The gate only holds the read in flight; its completion value is unused.
+    if (runStateGate != null) await runStateGate!.future;
+    return runStateById != null ? runStateById![id] : runState;
   }
   @override
   Future<SequenceImportResult> importNina(String n, Map<String, dynamic> f, {bool treatWarningsAsErrors = false}) async => const SequenceImportResult(createdSequenceId: 'new');
