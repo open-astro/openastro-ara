@@ -53,6 +53,14 @@ class SequenceNode {
 
   bool get isContainer => kind != SequenceNodeKind.instruction;
 
+  /// Reads a list-valued [params] entry as `List<String>`. Params are deep-frozen
+  /// to `List<Object?>`, so `params[key] as List<String>` throws — callers should
+  /// use this (returns `const []` when the key is absent or not a list).
+  List<String> listParam(String key) {
+    final value = params[key];
+    return value is List ? value.cast<String>() : const <String>[];
+  }
+
   // Deep-freeze `params` so callers can't mutate nested List/Map values
   // after construction. Without this the round-2 deep-equality switch
   // would let two structurally-identical nodes silently diverge in
