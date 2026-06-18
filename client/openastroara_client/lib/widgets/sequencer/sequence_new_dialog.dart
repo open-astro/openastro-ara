@@ -113,7 +113,9 @@ class _SequenceNewDialogState extends ConsumerState<SequenceNewDialog> {
                       if (t != null) _select(t);
                     },
                     child: ListView.builder(
-                      shrinkWrap: true,
+                      // No shrinkWrap: the ConstrainedBox bounds the viewport, so
+                      // the builder lazily builds only visible rows (matches the
+                      // Load dialog).
                       itemCount: templates.length,
                       itemBuilder: (context, i) {
                         final t = templates[i];
@@ -195,10 +197,13 @@ Future<String?> createSequenceFromTemplate(
     return null;
   }
   final messenger = ScaffoldMessenger.of(context);
+  // Trim once here so the confirmation matches what the daemon stores (the API
+  // also trims) regardless of how the caller passed the name.
+  final name = newName.trim();
 
   String id;
   try {
-    id = await api.instantiateTemplate(templateName, newName);
+    id = await api.instantiateTemplate(templateName, name);
   } catch (e, st) {
     debugPrint('[sequencer] template instantiate failed: $e\n$st');
     if (context.mounted) {
@@ -218,7 +223,7 @@ Future<String?> createSequenceFromTemplate(
   if (!context.mounted) return null;
   ref.invalidate(sequenceListProvider);
   ref.read(selectedSequenceIdProvider.notifier).select(id);
-  messenger.showSnackBar(SnackBar(content: Text('Created "${newName.trim()}".')));
+  messenger.showSnackBar(SnackBar(content: Text('Created "$name".')));
   return id;
 }
 

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -155,5 +156,58 @@ void main() {
     expect(client.lastTemplate, 'Deep-sky LRGB');
     expect(client.lastName, 'Deep-sky LRGB'); // prefilled name
     expect(container.read(selectedSequenceIdProvider), 'seq-7');
+  });
+
+  // Pump the dialog directly with an overridden templates create fn so the
+  // loading / error / no-server states can be asserted in isolation.
+  Future<void> pumpDialog(WidgetTester tester,
+      FutureOr<List<SequenceTemplate>?> Function(Ref ref) create) async {
+    final container = ProviderContainer(overrides: [
+      sequenceTemplatesProvider.overrideWith(create),
+    ]);
+    addTearDown(container.dispose);
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: Scaffold(body: SequenceNewDialog())),
+    ));
+  }
+
+  testWidgets('shows a spinner while templates are loading', (tester) async {
+    await pumpDialog(tester,
+        (ref) => Completer<List<SequenceTemplate>?>().future); // never completes
+    await tester.pump();
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+  });
+
+  testWidgets('shows an error message when the templates load fails',
+      (tester) async {
+    await pumpDialog(
+        tester, (ref) => Future<List<SequenceTemplate>?>.error('x'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining("Couldn't load templates"), findsOneWidget);
+  });
+
+  testWidgets('prompts to connect when there is no server', (tester) async {
+    await pumpDialog(tester, (ref) async => null); // null = disconnected
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Connect to a daemon'), findsOneWidget);
+  });
+
+  testWidgets('picking a template does not clobber a name the user typed',
+      (tester) async {
+    await pumpDialog(
+        tester,
+        (ref) async =>
+            const [SequenceTemplate(name: 'Deep-sky LRGB', category: 'Deep sky')]);
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField), 'My own name');
+    await tester.pump();
+    await tester.tap(find.text('Deep-sky LRGB'));
+    await tester.pumpAndSettle();
+
+    // The typed name is preserved (only an empty field is pre-filled).
+    expect(find.text('My own name'), findsOneWidget);
+    expect(find.text('Deep-sky LRGB'), findsOneWidget); // the radio row, not the field
   });
 }
