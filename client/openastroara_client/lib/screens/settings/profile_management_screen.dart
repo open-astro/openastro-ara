@@ -220,7 +220,11 @@ class _ProfileListView extends ConsumerWidget {
               if (!isActive)
                 const PopupMenuItem(value: 'select', child: Text('Make active')),
               const PopupMenuItem(value: 'rename', child: Text('Rename')),
-              const PopupMenuItem(value: 'export', child: Text('Export…')),
+              // Export writes via FilePicker.saveFile(bytes:), which is only
+              // reliable on the desktop targets — hide it elsewhere rather than
+              // offer an action that would silently no-op.
+              if (Platform.isMacOS || Platform.isLinux || Platform.isWindows)
+                const PopupMenuItem(value: 'export', child: Text('Export…')),
               PopupMenuItem(
                 value: 'delete',
                 // The daemon refuses deleting the active or last-remaining

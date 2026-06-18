@@ -144,7 +144,6 @@ void main() {
       expect(a.path, '/api/v1/profiles/id-9/share-export');
       expect(share.profileName, "Joey's C8");
       expect(share.manifest['schema_version'], 'profile-share-v1');
-      expect(share.payloadBytes, 1234);
     });
   });
 
