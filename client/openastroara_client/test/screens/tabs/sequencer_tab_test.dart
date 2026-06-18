@@ -122,6 +122,35 @@ void main() {
     expect(container.read(sequenceControllerProvider).displayName, 'Loaded seq-2');
   });
 
+  testWidgets('a stale load FAILURE shows no SnackBar and keeps the selection',
+      (tester) async {
+    final client = _ControllableClient();
+    final container = ProviderContainer(overrides: [
+      sequenceApiProvider.overrideWithValue(client),
+    ]);
+    addTearDown(container.dispose);
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: Scaffold(body: SequencerTab())),
+    ));
+
+    container.read(selectedSequenceIdProvider.notifier).select('seq-1');
+    await tester.pump();
+    container.read(selectedSequenceIdProvider.notifier).select('seq-2');
+    await tester.pump();
+
+    // seq-2 loads fine; the superseded seq-1 then *fails*.
+    client.calls['seq-2']!.complete(_root('Loaded seq-2'));
+    await tester.pumpAndSettle();
+    client.calls['seq-1']!.completeError(Exception('late failure'));
+    await tester.pumpAndSettle();
+
+    // The stale failure must not nag the user or drop their (valid) selection.
+    expect(find.textContaining("Couldn't load the sequence"), findsNothing);
+    expect(container.read(selectedSequenceIdProvider), 'seq-2');
+    expect(container.read(sequenceControllerProvider).displayName, 'Loaded seq-2');
+  });
+
   testWidgets('loads a sequence already selected when the tab mounts',
       (tester) async {
     final container = ProviderContainer(overrides: [

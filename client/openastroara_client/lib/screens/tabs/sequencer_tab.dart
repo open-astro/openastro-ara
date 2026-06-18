@@ -65,16 +65,18 @@ class _SequencerTabState extends ConsumerState<SequencerTab> {
 
   void _onLoadFailed(String id) {
     if (!mounted) return;
-    if (_loadedId == id) {
-      _loadedId = null;
-      // Clear the selection too: nothing actually loaded, so the selection
-      // shouldn't claim a sequence. This also makes retry work — re-picking the
-      // same sequence in the Load dialog then emits a fresh change (null → id),
-      // which a same-value `select(id)` alone would not (Riverpod skips equal
-      // values). Guarded on `_loadedId == id` so a superseded load can't clear a
-      // newer valid selection.
-      ref.read(selectedSequenceIdProvider.notifier).select(null);
-    }
+    // Ignore a superseded load entirely: if `id` is no longer the one we last
+    // kicked off, the user has already moved to another sequence (which may have
+    // loaded fine), so neither clear their selection nor nag them with an error.
+    // (The success path uses the provider value for the same race; here the field
+    // is authoritative because a failed load never reaches the provider read.)
+    if (_loadedId != id) return;
+    _loadedId = null;
+    // Clear the selection: nothing actually loaded, so it shouldn't claim a
+    // sequence. This also makes retry work — re-picking the same sequence then
+    // emits a fresh change (null → id), which a same-value `select(id)` alone
+    // would not (Riverpod skips equal values).
+    ref.read(selectedSequenceIdProvider.notifier).select(null);
     ScaffoldMessenger.maybeOf(context)?.showSnackBar(const SnackBar(
       content: Text(
           "Couldn't load the sequence. Check the connection and try again."),
