@@ -3,8 +3,25 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/sequence/sequence_summary.dart';
 import '../../models/server.dart';
+import '../../models/ws_event.dart';
 import '../../services/sequence_api.dart';
 import '../saved_server_state.dart';
+import '../ws/ws_providers.dart';
+
+/// §28.12 `sequence.*` WS event-type tokens the run-state notifier consumes to
+/// track a run live (mirrors `WsEventCatalog` on the server). Routing is by the
+/// shared `sequence.` prefix; the specific tokens are listed for reference.
+abstract final class SequenceWsEvents {
+  static const prefix = 'sequence.';
+  static const started = 'sequence.started';
+  static const progress = 'sequence.progress';
+  static const paused = 'sequence.paused';
+  static const resumed = 'sequence.resumed';
+  static const aborted = 'sequence.aborted';
+  static const stopped = 'sequence.stopped';
+  static const complete = 'sequence.complete';
+  static const failed = 'sequence.failed';
+}
 
 /// Builds a [SequenceClient] for a server. Overridable in tests.
 final sequenceApiFactoryProvider =
@@ -123,9 +140,32 @@ class SequenceRunStateNotifier extends AsyncNotifier<SequenceRunStateInfo?> {
   @override
   Future<SequenceRunStateInfo?> build() {
     // watch (not read) so a selection/server change rebuilds the run state.
-    ref.watch(selectedSequenceIdProvider);
+    final selectedId = ref.watch(selectedSequenceIdProvider);
     ref.watch(sequenceApiProvider);
+
+    // Live updates: fold `sequence.*` WS frames for the selected sequence onto
+    // the current run state so the toolbar/status line track a run in real time
+    // (previously the state only refreshed on selection or a lifecycle action).
+    ref.listen(wsEventsProvider, (prev, next) {
+      final event = next.asData?.value;
+      if (event != null) _applyWsEvent(event, selectedId);
+    });
+
     return _read();
+  }
+
+  /// Fold one WS frame into [state] when it's a `sequence.*` event for the
+  /// selected sequence. Synchronous (called from a ref.listen callback while the
+  /// notifier is alive), so writing `state` here is safe without a mounted guard.
+  void _applyWsEvent(WsEvent event, String? selectedId) {
+    if (selectedId == null) return;
+    if (!event.type.startsWith(SequenceWsEvents.prefix)) return;
+    // Ignore a frame that names a different sequence; apply when it matches or
+    // carries no id (best-effort).
+    final payloadId = event.payload['sequence_id'];
+    if (payloadId is String && payloadId != selectedId) return;
+    final current = state.asData?.value ?? const SequenceRunStateInfo();
+    state = AsyncData(current.applyWsProgress(event.payload));
   }
 
   /// Re-read the run state (after a lifecycle transition). Surfaces transport

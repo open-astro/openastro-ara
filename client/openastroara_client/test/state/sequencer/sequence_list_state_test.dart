@@ -4,8 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/sequence/sequence_node.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
+import 'package:openastroara/models/ws_event.dart';
 import 'package:openastroara/services/sequence_api.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
+import 'package:openastroara/state/ws/ws_providers.dart';
 
 /// Fake whose `list()` returns a future the test completes by hand, so the
 /// refresh-race ordering is fully controllable. Lifecycle ops are unused here.
@@ -19,8 +21,9 @@ class _FakeSeqClient implements SequenceClient {
     return c.future;
   }
 
+  SequenceRunStateInfo? runState;
   @override
-  Future<SequenceRunStateInfo?> getRunState(String id) async => null;
+  Future<SequenceRunStateInfo?> getRunState(String id) async => runState;
   @override
   Future<SequenceImportResult> importNina(String n, Map<String, dynamic> f, {bool treatWarningsAsErrors = false}) async => const SequenceImportResult(createdSequenceId: 'new');
   @override
@@ -73,5 +76,69 @@ void main() {
 
     // The older response must NOT have clobbered the newer one.
     expect(container.read(sequenceListProvider).value, [_item('newer')]);
+  });
+
+  group('sequenceRunStateProvider live WS updates', () {
+    WsEvent event(String type, Map<String, dynamic> payload) =>
+        WsEvent(type: type, ts: DateTime.utc(2026), seq: 1, payload: payload);
+
+    Future<(ProviderContainer, StreamController<WsEvent>)> setup(
+        String selectId) async {
+      final controller = StreamController<WsEvent>.broadcast();
+      addTearDown(controller.close);
+      final container = ProviderContainer(overrides: [
+        sequenceApiProvider.overrideWithValue(_FakeSeqClient()),
+        wsEventsProvider.overrideWith((ref) => controller.stream),
+      ]);
+      addTearDown(container.dispose);
+      container.read(selectedSequenceIdProvider.notifier).select(selectId);
+      final sub = container.listen(sequenceRunStateProvider, (_, _) {});
+      addTearDown(sub.close);
+      await container.read(sequenceRunStateProvider.future); // initial (null)
+      return (container, controller);
+    }
+
+    test('a sequence.progress frame for the selected sequence updates run state',
+        () async {
+      final (container, controller) = await setup('seq-1');
+      controller.add(event(SequenceWsEvents.progress, const {
+        'sequence_id': 'seq-1',
+        'run_id': 'run-9',
+        'state': 'running',
+        'current_instruction_index': 3,
+        'frames_completed': 12,
+        'frames_total': 60,
+      }));
+      await Future<void>.delayed(Duration.zero); // let the stream deliver
+
+      final info = container.read(sequenceRunStateProvider).value;
+      expect(info?.state, SequenceRunState.running);
+      expect(info?.framesCompleted, 12);
+      expect(info?.framesTotal, 60);
+      expect(info?.currentInstructionIndex, 3);
+    });
+
+    test('a frame naming a different sequence is ignored', () async {
+      final (container, controller) = await setup('seq-1');
+      controller.add(event(SequenceWsEvents.progress, const {
+        'sequence_id': 'other',
+        'state': 'running',
+        'frames_completed': 7,
+      }));
+      await Future<void>.delayed(Duration.zero);
+
+      expect(container.read(sequenceRunStateProvider).value, isNull);
+    });
+
+    test('a non-sequence event is ignored', () async {
+      final (container, controller) = await setup('seq-1');
+      controller.add(event('diagnostics.issue_detected', const {
+        'sequence_id': 'seq-1',
+        'state': 'running',
+      }));
+      await Future<void>.delayed(Duration.zero);
+
+      expect(container.read(sequenceRunStateProvider).value, isNull);
+    });
   });
 }
