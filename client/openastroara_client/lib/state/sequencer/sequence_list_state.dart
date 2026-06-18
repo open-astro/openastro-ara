@@ -108,3 +108,32 @@ class SelectedSequenceIdNotifier extends Notifier<String?> {
 final selectedSequenceIdProvider =
     NotifierProvider<SelectedSequenceIdNotifier, String?>(
         SelectedSequenceIdNotifier.new);
+
+/// Live run state of the currently-selected sequence (null = nothing selected,
+/// no server, or no active run for it). Rebuilds when the selection or server
+/// changes; [refresh] re-reads after a lifecycle action (start/pause/abort).
+class SequenceRunStateNotifier extends AsyncNotifier<SequenceRunStateInfo?> {
+  Future<SequenceRunStateInfo?> _read() {
+    final id = ref.read(selectedSequenceIdProvider);
+    final api = ref.read(sequenceApiProvider);
+    if (id == null || api == null) return Future.value(null);
+    return api.getRunState(id);
+  }
+
+  @override
+  Future<SequenceRunStateInfo?> build() {
+    // watch (not read) so a selection/server change rebuilds the run state.
+    ref.watch(selectedSequenceIdProvider);
+    ref.watch(sequenceApiProvider);
+    return _read();
+  }
+
+  /// Re-read the run state (after a lifecycle transition). Surfaces transport
+  /// errors as an AsyncError rather than leaving stale state.
+  Future<void> refresh() async {
+    state = await AsyncValue.guard(_read);
+  }
+}
+
+final sequenceRunStateProvider = AsyncNotifierProvider.autoDispose<
+    SequenceRunStateNotifier, SequenceRunStateInfo?>(SequenceRunStateNotifier.new);
