@@ -194,9 +194,7 @@ class SafetyPolicies {
 /// do when the safety monitor reports conditions are unsafe.
 enum UnsafeConditionAction { pauseAndPark, parkOnly, abortAndPark, ignore }
 
-enum WeatherAction { pause, abortAndPark, ignore }
 
-enum AlarmUnansweredAction { continueAlarm, escalate, stop }
 
 class SitePreferences {
   double hardMinAltitudeDeg = 5;

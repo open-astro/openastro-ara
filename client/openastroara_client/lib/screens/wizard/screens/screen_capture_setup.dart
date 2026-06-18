@@ -391,45 +391,58 @@ class _ScreenSafetyState extends ConsumerState<ScreenSafety> {
             DropdownMenuEntry(
                 value: UnsafeConditionAction.ignore, label: 'Ignore'),
           ],
-          onChanged: (v) => setState(() => _sp.onUnsafe = v),
-        ),
-        WizardDropdown<bool?>(
-          label: 'Auto-resume when safe again',
-          value: _sp.autoResumeWhenSafe,
-          helperText: 'Resume a paused sequence once conditions clear.',
-          entries: const [
-            DropdownMenuEntry(value: null, label: 'Keep profile default'),
-            DropdownMenuEntry(value: true, label: 'Yes'),
-            DropdownMenuEntry(value: false, label: 'No'),
-          ],
-          onChanged: (v) => setState(() => _sp.autoResumeWhenSafe = v),
-        ),
-        WizardTextField(
-          label: 'Resume delay (minutes)',
-          initialValue: _sp.resumeDelayMin?.toString(),
-          hint: 'default 10',
-          helperText: 'Wait this long after conditions clear before resuming. '
-              'Leave blank to keep the profile default.',
-          errorText: _delayError,
-          keyboardType: const TextInputType.numberWithOptions(decimal: false),
-          inputFormatters: WizardInput.unsignedInt,
-          onChanged: (v) {
-            final t = v.trim();
-            if (t.isEmpty) {
-              setState(() => _delayError = null);
+          onChanged: (v) => setState(() {
+            _sp.onUnsafe = v;
+            // Auto-resume + delay are meaningless when ignoring unsafe conditions
+            // (nothing pauses), so clear them when Ignore is picked — the fields
+            // hide below, and we don't want stale values reaching Save.
+            if (v == UnsafeConditionAction.ignore) {
+              _sp.autoResumeWhenSafe = null;
               _sp.resumeDelayMin = null;
-              return;
+              _delayError = null;
             }
-            final n = int.tryParse(t);
-            // 0 is valid (resume immediately); only a non-parse fails here.
-            if (n != null && n >= 0) {
-              setState(() => _delayError = null);
-              _sp.resumeDelayMin = n;
-            } else {
-              setState(() => _delayError = 'Enter a whole number of minutes.');
-            }
-          },
+          }),
         ),
+        // Hidden under Ignore — there's nothing to resume.
+        if (_sp.onUnsafe != UnsafeConditionAction.ignore) ...[
+          WizardDropdown<bool?>(
+            label: 'Auto-resume when safe again',
+            value: _sp.autoResumeWhenSafe,
+            helperText: 'Resume a paused sequence once conditions clear.',
+            entries: const [
+              DropdownMenuEntry(value: null, label: 'Keep profile default'),
+              DropdownMenuEntry(value: true, label: 'Yes'),
+              DropdownMenuEntry(value: false, label: 'No'),
+            ],
+            onChanged: (v) => setState(() => _sp.autoResumeWhenSafe = v),
+          ),
+          WizardTextField(
+            label: 'Resume delay (minutes)',
+            initialValue: _sp.resumeDelayMin?.toString(),
+            hint: 'default 10',
+            helperText: 'Wait this long after conditions clear before resuming. '
+                'Leave blank to keep the profile default.',
+            errorText: _delayError,
+            keyboardType: const TextInputType.numberWithOptions(decimal: false),
+            inputFormatters: WizardInput.unsignedInt,
+            onChanged: (v) {
+              final t = v.trim();
+              if (t.isEmpty) {
+                setState(() => _delayError = null);
+                _sp.resumeDelayMin = null;
+                return;
+              }
+              final n = int.tryParse(t);
+              // 0 is valid (resume immediately); only a non-parse fails here.
+              if (n != null && n >= 0) {
+                setState(() => _delayError = null);
+                _sp.resumeDelayMin = n;
+              } else {
+                setState(() => _delayError = 'Enter a whole number of minutes.');
+              }
+            },
+          ),
+        ],
       ],
     );
   }
