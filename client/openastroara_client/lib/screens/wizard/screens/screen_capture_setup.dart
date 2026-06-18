@@ -70,7 +70,10 @@ class _ScreenPlateSolveState extends ConsumerState<ScreenPlateSolve> {
             if (d != null && d > 0 && d <= 180) {
               setState(() => _radiusError = null);
               _ps.searchRadiusDeg = d;
-            } else if (d != null) {
+            } else {
+              // Out of range OR unparseable (e.g. a lone "1." the formatter lets
+              // through): surface the hint and don't write, so no invalid/stale
+              // value reaches Save without feedback.
               setState(() => _radiusError = 'Enter a value between 0 and 180°.');
             }
           },
