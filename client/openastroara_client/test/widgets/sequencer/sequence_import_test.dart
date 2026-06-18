@@ -178,11 +178,14 @@ void main() {
     });
 
     test('an over-limit file → tooLarge (distinct from notJson)', () async {
-      // Padding == the cap, plus the JSON wrapper, so total bytes exceed it and
-      // only the size check (not a parse error) can trip.
+      // Make the file one byte past the 32 MiB cap WITHOUT allocating a 32 MiB
+      // string: seek past the cap and write a single byte (the length check
+      // returns tooLarge before any content is read, so the bytes don't matter).
       final f = File('${tmp.path}/huge.json');
-      final padding = 'x' * (32 * 1024 * 1024); // == _maxSequenceFileBytes
-      f.writeAsStringSync('{"Name":"$padding"}');
+      final raf = await f.open(mode: FileMode.write);
+      await raf.setPosition(32 * 1024 * 1024); // == _maxSequenceFileBytes
+      await raf.writeByte(0x20); // → length is cap + 1
+      await raf.close();
       final r = await readNinaSequenceFile(f.path);
       expect(r.ok, isFalse);
       expect(r.error, NinaFileError.tooLarge);

@@ -116,6 +116,11 @@ class _ImportNinaButtonState extends ConsumerState<_ImportNinaButton> {
         navigator.pop();
         popped = true;
       }
+    } catch (e, st) {
+      // The inner flow already shows a SnackBar for expected failures; this is a
+      // backstop so an unexpected error (e.g. a platform file-picker exception)
+      // is logged rather than vanishing into Flutter's global handler.
+      debugPrint('[sequencer] import error: $e\n$st');
     } finally {
       // Only clear the busy flag when we kept the dialog open; if we popped, the
       // dialog is gone and there's no state to reset (explicit flag rather than

@@ -153,23 +153,18 @@ Future<String?> importSequenceFromJson(
     return null;
   }
 
-  // Surface the new sequence: invalidate the list so it re-fetches (and shows the
-  // import) next time it's watched, and select it so the tab loads it now.
-  // invalidate (not notifier.refresh) so this works even when the autoDispose
-  // list provider currently has no listeners.
-  ref.invalidate(sequenceListProvider);
   final id = result.createdSequenceId;
-  if (id != null && id.isNotEmpty) {
-    ref.read(selectedSequenceIdProvider.notifier).select(id);
-  }
-
   final hasWarnings = result.lossyTranslation ||
       result.warnings.isNotEmpty ||
       result.droppedInstructionTypes.isNotEmpty;
+
+  // Check mounted BEFORE touching `ref`: the import succeeded server-side, but
+  // if the widget was disposed during the await, `ref.invalidate`/`ref.read`
+  // would throw a StateError on a defunct Ref.
   if (!context.mounted) {
-    // The widget went away before we could surface the warnings dialog. Don't
-    // let a lossy translation vanish silently — at least record it (a lossy
-    // NINA import can change what the rig actually does).
+    // The widget went away before we could surface the new sequence. Don't let
+    // a lossy translation vanish silently — at least record it (a lossy NINA
+    // import can change what the rig actually does).
     if (hasWarnings) {
       debugPrint('[sequencer] import warnings not shown (context unmounted): '
           'lossy=${result.lossyTranslation} '
@@ -177,6 +172,16 @@ Future<String?> importSequenceFromJson(
     }
     return id;
   }
+
+  // Surface the new sequence: invalidate the list so it re-fetches (and shows the
+  // import) next time it's watched, and select it so the tab loads it now.
+  // invalidate (not notifier.refresh) so this works even when the autoDispose
+  // list provider currently has no listeners.
+  ref.invalidate(sequenceListProvider);
+  if (id != null && id.isNotEmpty) {
+    ref.read(selectedSequenceIdProvider.notifier).select(id);
+  }
+
   if (hasWarnings) {
     await _showImportWarnings(context, result, name);
   } else {
