@@ -225,6 +225,8 @@ void main() {
     test('instantiateTemplate rejects empty template name / new name', () async {
       final api = _api((_) => const {});
       expect(() => api.instantiateTemplate('', 'x'), throwsA(isA<ArgumentError>()));
+      expect(() => api.instantiateTemplate('   ', 'x'), // whitespace-only name
+          throwsA(isA<ArgumentError>()));
       expect(() => api.instantiateTemplate('t', '   '),
           throwsA(isA<ArgumentError>()));
     });

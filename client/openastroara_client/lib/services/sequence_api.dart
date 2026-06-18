@@ -147,7 +147,7 @@ class SequenceApi implements SequenceClient {
 
   @override
   Future<String> instantiateTemplate(String templateName, String newName) async {
-    if (templateName.isEmpty) {
+    if (templateName.trim().isEmpty) {
       throw ArgumentError.value(
           templateName, 'templateName', 'template name must not be empty');
     }
