@@ -77,3 +77,16 @@ class SequenceListNotifier extends AsyncNotifier<List<SequenceListItem>?> {
 
 final sequenceListProvider = AsyncNotifierProvider.autoDispose<
     SequenceListNotifier, List<SequenceListItem>?>(SequenceListNotifier.new);
+
+/// Id of the sequence the user picked in the Load dialog (null = none loaded).
+/// The tab's tree/run controls key off this. Riverpod 3.x removed
+/// `StateProvider`, so this is a thin Notifier (matching [selectedNodeIdProvider]).
+class SelectedSequenceIdNotifier extends Notifier<String?> {
+  @override
+  String? build() => null;
+  void select(String? id) => state = id;
+}
+
+final selectedSequenceIdProvider =
+    NotifierProvider<SelectedSequenceIdNotifier, String?>(
+        SelectedSequenceIdNotifier.new);
