@@ -151,7 +151,8 @@ void main() {
       int depthOf(SequenceNode n) => n.children.isEmpty
           ? 0
           : 1 + n.children.map(depthOf).reduce((a, b) => a > b ? a : b);
-      expect(depthOf(root), lessThanOrEqualTo(66)); // ~maxDepth, bounded
+      // Tied to the exported cap, so reducing ninaParseMaxDepth keeps this honest.
+      expect(depthOf(root), lessThanOrEqualTo(ninaParseMaxDepth + 2));
     });
 
     test('a flat/non-tree body degrades to an empty named root', () {

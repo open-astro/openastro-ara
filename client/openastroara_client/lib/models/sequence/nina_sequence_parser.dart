@@ -1,5 +1,10 @@
 import 'sequence_node.dart';
 
+/// Recursion cap for [parseNinaSequenceBody] — a corrupted/adversarial deep body
+/// can't overflow the stack. Real NINA sequences nest ~5 levels. Exposed so the
+/// test can assert the cap mechanically rather than against a hand-picked number.
+const int ninaParseMaxDepth = 64;
+
 /// Parses a §38.1 sequence body (`openastroara-sequence-v1`) into the client's
 /// display [SequenceNode] tree.
 ///
@@ -16,10 +21,6 @@ import 'sequence_node.dart';
 SequenceNode parseNinaSequenceBody(Map<String, dynamic> body) {
   var counter = 0;
   String nextId() => 'n${counter++}';
-
-  // Cap recursion so a pathologically deep / corrupted body can't overflow the
-  // stack. Real NINA sequences nest ~5 levels; below the cap nothing changes.
-  const maxDepth = 64;
 
   // ObservableCollection serializes as { $type, $values: [...] }; a plain array
   // is also accepted. Anything else → no children.
@@ -80,8 +81,11 @@ SequenceNode parseNinaSequenceBody(Map<String, dynamic> body) {
   // Short $type names of a Conditions/Triggers collection — kept so a container's
   // loop conditions ("run 5×") / dither triggers aren't lost (the wiring slice
   // renders them as badges). Stored in params rather than on the model to avoid
-  // a SequenceNode schema change.
-  List<String> typeSummaries(dynamic collection) => values(collection)
+  // a SequenceNode schema change. Returns List<Object?> deliberately: the model's
+  // deep-freeze turns any stored List into List<Object?>, so consumers must read
+  // `params['conditionTypes'] as List` and `.cast<String>()` (never `as
+  // List<String>`, which would throw on the frozen value).
+  List<Object?> typeSummaries(dynamic collection) => values(collection)
       .whereType<Map>()
       .map((e) => shortType(e[r'$type']))
       .where((s) => s.isNotEmpty)
@@ -92,13 +96,14 @@ SequenceNode parseNinaSequenceBody(Map<String, dynamic> body) {
   // or a non-object.
   SequenceNode? node(dynamic raw, int depth, {bool forceRoot = false}) {
     if (raw is! Map) return null;
-    // A Json.NET back-reference ({ $ref: "N" }) is a pointer to an already-seen
-    // object (e.g. Parent / shared filter), not a real child — skip it.
+    // A Json.NET back-reference is a pure { "$ref": "N" } object that points at an
+    // already-seen node (e.g. Parent / a shared filter) — it never carries $type,
+    // so this dual condition skips refs while keeping real nodes.
     if (raw[r'$ref'] != null && raw[r'$type'] == null) return null;
 
     final type = shortType(raw[r'$type']);
     final children = <SequenceNode>[];
-    if (depth < maxDepth) {
+    if (depth < ninaParseMaxDepth) {
       for (final c in values(raw['Items'])) {
         final n = node(c, depth + 1);
         if (n != null) children.add(n);
