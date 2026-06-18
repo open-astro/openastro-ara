@@ -129,4 +129,69 @@ void main() {
       expect(a.path, '/api/v1/profiles/id-9');
     });
   });
+
+  group('ProfileApi §70 share import', () {
+    test('importPreview POSTs the manifest and parses the preview', () async {
+      final a = _RecordingAdapter(body: {
+        'import_token': 'tok-1',
+        'profile_name': 'Imported profile',
+        'warnings': ['This is a template, not a complete profile'],
+        'dropped_fields': ['Site location', 'PHD2 host / port / profile'],
+        'expires_utc': '2026-06-18T04:00:00Z',
+      });
+      final manifest = {'schema_version': 'profile-share-v1', 'settings': {}};
+      final preview = await _api(a).importPreview(manifest);
+      expect(a.method, 'POST');
+      expect(a.path, '/api/v1/profiles/share-import');
+      // The raw manifest is the request body.
+      expect((a.requestData as Map)['schema_version'], 'profile-share-v1');
+      expect(preview.importToken, 'tok-1');
+      expect(preview.profileName, 'Imported profile');
+      expect(preview.droppedFields, hasLength(2));
+      expect(preview.expiresUtc, isNotNull);
+    });
+
+    test('importPreview throws if the preview response has no import token',
+        () async {
+      // A version-mismatch / unexpected DTO without import_token must fail loudly
+      // rather than carry an empty token to commit (which would 404 misleadingly).
+      final a = _RecordingAdapter(body: {'profile_name': 'X'});
+      // await expectLater: the matcher is async (the callback returns a Future),
+      // so a bare expect() would let the test exit before the assertion resolves
+      // and pass vacuously.
+      await expectLater(
+        () => _api(a).importPreview({'schema_version': 'profile-share-v1'}),
+        throwsA(isA<FormatException>()),
+      );
+    });
+
+    test('importCommit POSTs the token in the body and returns the new id',
+        () async {
+      // The daemon returns the new Guid as a bare JSON string (201 Created).
+      final a = _RecordingAdapter(body: 'new-profile-id');
+      final id = await _api(a).importCommit('tok-1');
+      expect(a.method, 'POST');
+      expect(a.path, '/api/v1/profiles/share-import/commit');
+      expect((a.requestData as Map)['import_token'], 'tok-1');
+      expect(id, 'new-profile-id');
+    });
+
+    test('importCommit throws if the response carries no profile id', () async {
+      // Empty/garbled 2xx body — fail loudly rather than return an unaddressable id.
+      final a = _RecordingAdapter(body: '');
+      await expectLater(
+        () => _api(a).importCommit('tok-1'),
+        throwsA(isA<StateError>()),
+      );
+    });
+
+    test('importCommit throws if the body is a non-string JSON value', () async {
+      // A Map/int body (version skew) must not toString() into a bogus id.
+      final a = _RecordingAdapter(body: {'unexpected': 'shape'});
+      await expectLater(
+        () => _api(a).importCommit('tok-1'),
+        throwsA(isA<StateError>()),
+      );
+    });
+  });
 }
