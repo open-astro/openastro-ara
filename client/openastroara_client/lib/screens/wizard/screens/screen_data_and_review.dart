@@ -8,8 +8,10 @@ import '../wizard_form_kit.dart';
 
 /// Human-readable size for a package (`1.2 GB`, `340.0 MB`, `1.5 KB`). One
 /// decimal place for every scaled unit (KB/MB/GB) so sizes round consistently —
-/// raw bytes stay whole.
+/// raw bytes stay whole. A non-positive size (a malformed/absent server value)
+/// floors to `0 B` rather than rendering a nonsensical negative.
 String formatBytes(int bytes) {
+  if (bytes <= 0) return '0 B';
   if (bytes >= 1 << 30) return '${(bytes / (1 << 30)).toStringAsFixed(1)} GB';
   if (bytes >= 1 << 20) return '${(bytes / (1 << 20)).toStringAsFixed(1)} MB';
   if (bytes >= 1 << 10) return '${(bytes / (1 << 10)).toStringAsFixed(1)} KB';

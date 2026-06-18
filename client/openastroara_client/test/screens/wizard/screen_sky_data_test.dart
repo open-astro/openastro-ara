@@ -19,8 +19,9 @@ class _FakePackages extends DataManagerPackagesNotifier {
 
 void main() {
   group('formatBytes', () {
-    test('formats zero bytes', () {
+    test('floors zero and negative sizes to 0 B', () {
       expect(formatBytes(0), '0 B');
+      expect(formatBytes(-1), '0 B');
     });
 
     test('scales to B / KB / MB / GB with one decimal on scaled units', () {
