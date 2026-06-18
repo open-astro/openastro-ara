@@ -41,6 +41,9 @@ public sealed class ProfileShareService : IProfileShareService {
     /// Parsed manifests awaiting a commit, keyed by the preview's import token.
     /// In-memory + short-lived (§70.7): a preview the user never commits expires.
     private readonly ConcurrentDictionary<Guid, PendingImport> _pending = new();
+    // Serializes prune + cap-check + insert so two concurrent previews can't both
+    // pass the cap and overfill the store (the check and insert aren't otherwise atomic).
+    private readonly object _previewGate = new();
     private static readonly TimeSpan ImportTtl = TimeSpan.FromMinutes(15);
 
     /// Cap on un-committed previews held at once. The store is pruned on every
@@ -210,8 +213,13 @@ public sealed class ProfileShareService : IProfileShareService {
         "Notification tokens",
     };
 
+    // Returns Task.FromException (never throws synchronously) so every exit — including
+    // validation/throttle failures — surfaces through the returned Task, honouring the
+    // async contract for any non-awaiting caller (.Result, .ContinueWith, …).
     public Task<ProfileShareImportPreviewDto> ImportPreviewAsync(JsonElement manifest, CancellationToken ct) {
-        ct.ThrowIfCancellationRequested();
+        if (ct.IsCancellationRequested) {
+            return Task.FromCanceled<ProfileShareImportPreviewDto>(ct);
+        }
         ProfileShareManifest? parsed;
         try {
             parsed = manifest.Deserialize(AraJsonSerializerContext.Default.ProfileShareManifest);
@@ -226,20 +234,23 @@ public sealed class ProfileShareService : IProfileShareService {
             parsed.SchemaVersion != ProfileShareManifest.CurrentSchemaVersion ||
             parsed.Settings is null ||
             parsed.RigDescription is null) {
-            throw new InvalidProfileShareException(
-                $"Not a recognized profile share file (expected schema_version '{ProfileShareManifest.CurrentSchemaVersion}').");
+            return Task.FromException<ProfileShareImportPreviewDto>(new InvalidProfileShareException(
+                $"Not a recognized profile share file (expected schema_version '{ProfileShareManifest.CurrentSchemaVersion}')."));
         }
 
-        PruneExpired();
-        // Cap the un-committed set (after pruning, so expired entries don't count)
-        // to bound memory against a preview flood that never commits.
-        if (_pending.Count >= MaxPendingImports) {
-            throw new ProfileShareImportThrottledException(
-                "Too many pending profile-share imports — commit or wait for one to expire, then retry.");
-        }
         var token = Guid.NewGuid();
         var expires = _clock.GetUtcNow().Add(ImportTtl);
-        _pending[token] = new PendingImport(parsed, expires);
+        // Prune + cap-check + insert under one gate so concurrent previews can't both
+        // pass the cap and overfill the store. Pruning first means expired entries
+        // don't count against the cap.
+        lock (_previewGate) {
+            PruneExpired();
+            if (_pending.Count >= MaxPendingImports) {
+                return Task.FromException<ProfileShareImportPreviewDto>(new ProfileShareImportThrottledException(
+                    "Too many pending profile-share imports — commit or wait for one to expire, then retry."));
+            }
+            _pending[token] = new PendingImport(parsed, expires);
+        }
 
         var rig = parsed.RigDescription;
         var warnings = new List<string> {
@@ -256,15 +267,18 @@ public sealed class ProfileShareService : IProfileShareService {
             ExpiresUtc: expires));
     }
 
+    // Likewise returns Task.FromException rather than throwing synchronously.
     public Task<Guid> ImportCommitAsync(Guid importToken, CancellationToken ct) {
-        ct.ThrowIfCancellationRequested();
+        if (ct.IsCancellationRequested) {
+            return Task.FromCanceled<Guid>(ct);
+        }
         // Single-use: TryRemove atomically claims the token (only one caller wins).
         // Expiry is enforced here on the claimed entry — not via PruneExpired — so an
         // expired token is rejected deterministically rather than racing the sweep.
         if (!_pending.TryRemove(importToken, out var pending) ||
             pending.ExpiresUtc < _clock.GetUtcNow()) {
-            throw new ProfileShareImportTokenException(
-                "Import token is unknown or expired — preview the share file again.");
+            return Task.FromException<Guid>(new ProfileShareImportTokenException(
+                "Import token is unknown or expired — preview the share file again."));
         }
         // Create as a NON-active profile from the template's (already-stripped)
         // settings; the recipient selects it and wizards their own equipment in.
