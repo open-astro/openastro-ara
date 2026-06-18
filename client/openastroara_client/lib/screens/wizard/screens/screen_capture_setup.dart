@@ -23,6 +23,9 @@ class ScreenPlateSolve extends ConsumerStatefulWidget {
 
 class _ScreenPlateSolveState extends ConsumerState<ScreenPlateSolve> {
   late final PlateSolveSettings _ps = _draftOf(ref).plateSolve;
+  // Advisory display only: an invalid radius is never written to the draft, so
+  // Save is safe even if the user advances with the error showing. The wizard
+  // shell has no per-screen validity gate yet (tracked in design/PORT_TODO.md).
   String? _radiusError;
 
   @override
@@ -74,7 +77,8 @@ class _ScreenPlateSolveState extends ConsumerState<ScreenPlateSolve> {
               // Out of range OR unparseable (e.g. a lone "1." the formatter lets
               // through): surface the hint and don't write, so no invalid/stale
               // value reaches Save without feedback.
-              setState(() => _radiusError = 'Enter a value between 0 and 180°.');
+              setState(() =>
+                  _radiusError = 'Must be greater than 0 and at most 180°.');
             }
           },
         ),

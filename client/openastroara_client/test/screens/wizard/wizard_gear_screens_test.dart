@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/screens/wizard/screens/screen_capture_setup.dart';
 import 'package:openastroara/screens/wizard/screens/screen_device_setup.dart';
 import 'package:openastroara/screens/wizard/screens/screen_profile_basics.dart';
 import 'package:openastroara/screens/wizard/wizard_screens.dart';
@@ -62,6 +63,24 @@ void main() {
     // 206.265 * 3.76 / 714 ≈ 1.09 arcsec/pixel.
     expect(find.textContaining('arcsec/pixel'), findsOneWidget);
     expect(find.textContaining('1.09'), findsOneWidget);
+  });
+
+  testWidgets('Screen 11 rejects an out-of-range radius and shows the error',
+      (tester) async {
+    final container = await pump(tester, const ScreenPlateSolve());
+    final ps = container.read(wizardControllerProvider).draft.plateSolve;
+    // Fields: ASTAP path (0), star DB (1), search radius (2).
+    final radius = find.byType(TextField).at(2);
+
+    await tester.enterText(radius, '999'); // out of range
+    await tester.pump();
+    expect(ps.searchRadiusDeg, isNull, reason: 'invalid value is not written');
+    expect(find.textContaining('Must be greater than'), findsOneWidget);
+
+    await tester.enterText(radius, '45'); // back in range
+    await tester.pump();
+    expect(ps.searchRadiusDeg, 45);
+    expect(find.textContaining('Must be greater than'), findsNothing);
   });
 
   testWidgets('signed field keeps prior value on a partial "-" keystroke',
