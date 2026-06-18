@@ -36,6 +36,14 @@ SiteSettings applyDraftToSite(SiteSettings base, ProfileDraft d) {
     longitudeDeg: d.longitudeDeg,
     elevationM: d.altitudeMeters,
     timeZone: (d.timezone?.trim().isNotEmpty ?? false) ? d.timezone!.trim() : null,
+    // Screen 16 — horizon floor + twilight (null keeps the base).
+    defaultHorizonAltitudeDeg: d.site.hardMinAltitudeDeg,
+    twilightDefinition: switch (d.site.twilight) {
+      TwilightOption.civil => TwilightDefinition.civil,
+      TwilightOption.nautical => TwilightDefinition.nautical,
+      TwilightOption.astronomical => TwilightDefinition.astronomical,
+      null => null,
+    },
   );
 }
 
