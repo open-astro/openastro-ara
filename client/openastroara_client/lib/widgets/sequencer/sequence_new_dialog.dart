@@ -1,3 +1,4 @@
+import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -106,7 +107,10 @@ class _SequenceNewDialogState extends ConsumerState<SequenceNewDialog> {
                     // already shows a spinner).
                     onChanged: (name) {
                       if (_busy || name == null) return;
-                      _select(templates.firstWhere((t) => t.name == name));
+                      // firstWhereOrNull (not firstWhere): the list could have
+                      // refreshed between render and tap, leaving `name` absent.
+                      final t = templates.firstWhereOrNull((t) => t.name == name);
+                      if (t != null) _select(t);
                     },
                     child: ListView.builder(
                       shrinkWrap: true,
@@ -175,7 +179,8 @@ class _SequenceNewDialogState extends ConsumerState<SequenceNewDialog> {
 /// Create a new sequence from [templateName] named [newName]: instantiate it on
 /// the daemon, refresh the list so it appears, and select it (→ the tab loads it
 /// into the tree). Returns the created id, or null on failure (a SnackBar is
-/// shown). Mirrors the import flow's mounted/ref ordering.
+/// shown) or if the widget was disposed before the result could be surfaced.
+/// Mirrors the import flow's mounted/ref ordering.
 Future<String?> createSequenceFromTemplate(
   BuildContext context,
   WidgetRef ref, {
@@ -189,7 +194,8 @@ Future<String?> createSequenceFromTemplate(
   String id;
   try {
     id = await api.instantiateTemplate(templateName, newName);
-  } catch (_) {
+  } catch (e, st) {
+    debugPrint('[sequencer] template instantiate failed: $e\n$st');
     if (context.mounted) {
       messenger.showSnackBar(const SnackBar(
         content: Text(
@@ -202,8 +208,9 @@ Future<String?> createSequenceFromTemplate(
 
   // Check mounted BEFORE touching ref: the sequence exists server-side now, but
   // if the widget was disposed during the await, ref.invalidate/ref.read would
-  // throw on a defunct Ref.
-  if (!context.mounted) return id;
+  // throw on a defunct Ref. Return null (not the id): nothing was surfaced or
+  // selected, so the caller shouldn't treat it as a success to pop on.
+  if (!context.mounted) return null;
   ref.invalidate(sequenceListProvider);
   ref.read(selectedSequenceIdProvider.notifier).select(id);
   messenger.showSnackBar(SnackBar(content: Text('Created "${newName.trim()}".')));
