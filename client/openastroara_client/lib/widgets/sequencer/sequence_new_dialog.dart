@@ -45,6 +45,10 @@ class _SequenceNewDialogState extends ConsumerState<SequenceNewDialog> {
   }
 
   Future<void> _create() async {
+    // Re-entrancy guard: the Create button is already disabled while busy
+    // (canCreate excludes _busy), but guard here too so a create can never fire
+    // twice and instantiate a duplicate sequence.
+    if (_busy) return;
     final templateName = _selectedTemplate;
     final newName = _nameController.text.trim();
     if (templateName == null || newName.isEmpty) return;

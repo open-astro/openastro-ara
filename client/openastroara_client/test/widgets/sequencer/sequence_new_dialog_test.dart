@@ -156,6 +156,8 @@ void main() {
     expect(client.lastTemplate, 'Deep-sky LRGB');
     expect(client.lastName, 'Deep-sky LRGB'); // prefilled name
     expect(container.read(selectedSequenceIdProvider), 'seq-7');
+    // The dialog dismisses itself on a successful create.
+    expect(find.byType(SequenceNewDialog), findsNothing);
   });
 
   // Pump the dialog directly with an overridden templates create fn so the
