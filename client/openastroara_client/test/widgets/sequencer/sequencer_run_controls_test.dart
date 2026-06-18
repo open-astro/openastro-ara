@@ -117,6 +117,16 @@ void main() {
       expect(btn(tester, 'Abort').onPressed, isNotNull);
     });
 
+    testWidgets('a command in flight disables the controls', (tester) async {
+      final container = await pump(tester, run: null);
+      // Run is enabled at rest...
+      expect(btn(tester, 'Run').onPressed, isNotNull);
+      // ...but disabled while a command is busy (the in-flight guard).
+      container.read(sequenceCommandBusyProvider.notifier).setBusy(true);
+      await tester.pump();
+      expect(btn(tester, 'Run').onPressed, isNull);
+    });
+
     testWidgets('pressing Run starts the sequence', (tester) async {
       final container = await pump(tester, run: null);
       // Invoke the handler directly (the button is in a horizontal scroll view

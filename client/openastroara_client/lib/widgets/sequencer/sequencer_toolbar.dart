@@ -37,7 +37,10 @@ class SequencerToolbar extends ConsumerWidget {
       }
     }
 
-    final hasSelection = connected && selectedId != null;
+    // A command in flight disables all controls so a double-tap can't fire two
+    // concurrent lifecycle calls.
+    final busy = ref.watch(sequenceCommandBusyProvider);
+    final hasSelection = connected && selectedId != null && !busy;
     final isRunning = runState == SequenceRunState.running;
     final isPaused = runState == SequenceRunState.paused;
     final isActive = runState?.isActive ?? false;
@@ -129,17 +132,27 @@ Future<void> _lifecycle(
   WidgetRef ref,
   Future<String> Function(SequenceClient api, String id) op,
 ) async {
+  // Re-entrancy guard: ignore a second command while one is already running.
+  if (ref.read(sequenceCommandBusyProvider)) return;
   final id = ref.read(selectedSequenceIdProvider);
   final api = ref.read(sequenceApiProvider);
   if (id == null || api == null) return;
-  final messenger = ScaffoldMessenger.of(context); // captured before the await
+  // Capture refs/messenger before the await — usable even if the widget unmounts.
+  final messenger = ScaffoldMessenger.of(context);
+  final busy = ref.read(sequenceCommandBusyProvider.notifier);
+  final runState = ref.read(sequenceRunStateProvider.notifier);
+
+  busy.setBusy(true);
   try {
     await op(api, id);
   } on DioException catch (e) {
-    // 409 = illegal transition for the current state; others = transport.
+    final code = e.response?.statusCode;
+    // 409 is an expected business error (the run already moved past this action),
+    // so give it a clearer message than a raw status code.
     messenger.showSnackBar(SnackBar(
-      content: Text(
-          'Sequence command failed (${e.response?.statusCode ?? e.message ?? 'network error'}).'),
+      content: Text(code == 409
+          ? "Command not valid in the sequence's current state."
+          : 'Sequence command failed (${code ?? e.message ?? 'network error'}).'),
       backgroundColor: AraColors.accentError,
     ));
   } catch (e) {
@@ -149,12 +162,11 @@ Future<void> _lifecycle(
       content: Text('Sequence command failed.'),
       backgroundColor: AraColors.accentError,
     ));
+  } finally {
+    busy.setBusy(false);
   }
-  // Guard ref use across the async gap — the widget may have been disposed (the
-  // user navigated away mid-call), where ref.read would throw.
-  if (!context.mounted) return;
   // Re-read run state regardless — the daemon may have advanced it even on error.
-  await ref.read(sequenceRunStateProvider.notifier).refresh();
+  await runState.refresh();
 }
 
 String _statusLine(bool connected, String? selectedId, String? selectedName,

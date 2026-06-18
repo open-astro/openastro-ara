@@ -131,9 +131,26 @@ class SequenceRunStateNotifier extends AsyncNotifier<SequenceRunStateInfo?> {
   /// Re-read the run state (after a lifecycle transition). Surfaces transport
   /// errors as an AsyncError rather than leaving stale state.
   Future<void> refresh() async {
-    state = await AsyncValue.guard(_read);
+    final next = await AsyncValue.guard(_read);
+    // Guard against disposal during the await (autoDispose + tab switch): writing
+    // `state` after the notifier is gone throws StateError.
+    if (ref.mounted) state = next;
   }
 }
 
 final sequenceRunStateProvider = AsyncNotifierProvider.autoDispose<
     SequenceRunStateNotifier, SequenceRunStateInfo?>(SequenceRunStateNotifier.new);
+
+/// True while a sequence lifecycle command (start/pause/resume/abort) is
+/// in-flight, so the toolbar can disable the controls and a rapid double-tap
+/// can't fire two concurrent commands. Keep-alive (the toolbar always watches
+/// it while the tab is open).
+class SequenceCommandBusyNotifier extends Notifier<bool> {
+  @override
+  bool build() => false;
+  void setBusy(bool value) => state = value;
+}
+
+final sequenceCommandBusyProvider =
+    NotifierProvider<SequenceCommandBusyNotifier, bool>(
+        SequenceCommandBusyNotifier.new);
