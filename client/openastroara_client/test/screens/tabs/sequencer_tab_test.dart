@@ -142,4 +142,19 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400)); // SnackBar entrance
     expect(find.textContaining("Couldn't load the sequence"), findsOneWidget);
   });
+
+  testWidgets('no client (disconnected) shows the SnackBar too', (tester) async {
+    final container = ProviderContainer(overrides: [
+      sequenceApiProvider.overrideWithValue(null),
+    ]);
+    addTearDown(container.dispose);
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: Scaffold(body: SequencerTab())),
+    ));
+    container.read(selectedSequenceIdProvider.notifier).select('seq-x');
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.textContaining("Couldn't load the sequence"), findsOneWidget);
+  });
 }

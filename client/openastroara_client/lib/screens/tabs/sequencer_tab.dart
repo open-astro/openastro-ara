@@ -21,7 +21,8 @@ class SequencerTab extends ConsumerStatefulWidget {
 class _SequencerTabState extends ConsumerState<SequencerTab> {
   // The sequence id whose body is currently loaded into the tree — guards
   // against re-fetching the same sequence on rebuilds and lets us detect an
-  // already-selected sequence on (re)mount.
+  // already-selected sequence on (re)mount. Reset to null on a failed load so
+  // the same sequence can be retried.
   String? _loadedId;
 
   @override
@@ -35,7 +36,40 @@ class _SequencerTabState extends ConsumerState<SequencerTab> {
 
   void _load(String id) {
     _loadedId = id;
-    _loadSelectedBody(ref, id);
+    _loadSelectedBody(id);
+  }
+
+  /// Fetch the sequence's body and load the parsed tree. Best-effort: a missing
+  /// client / transport / parse failure surfaces a SnackBar, leaves the current
+  /// tree in place, and clears [_loadedId] so the sequence can be retried.
+  Future<void> _loadSelectedBody(String id) async {
+    final api = ref.read(sequenceApiProvider);
+    if (api == null) {
+      _onLoadFailed(id);
+      return;
+    }
+    try {
+      final root = await api.getSequence(id);
+      if (!mounted) return;
+      // Drop a stale response: a newer selection landed while this was in flight,
+      // so loading now would clobber the tree with the wrong (older) sequence.
+      if (ref.read(selectedSequenceIdProvider) != id) return;
+      ref.read(sequenceControllerProvider.notifier).load(root);
+    } catch (e) {
+      debugPrint('[sequencer] failed to load sequence body for $id: $e');
+      _onLoadFailed(id);
+    }
+  }
+
+  void _onLoadFailed(String id) {
+    if (!mounted) return;
+    // Clear the guard so re-selecting this sequence reloads it (network recovery).
+    if (_loadedId == id) _loadedId = null;
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(const SnackBar(
+      content: Text(
+          "Couldn't load the sequence. Check the connection and try again."),
+      backgroundColor: AraColors.accentError,
+    ));
   }
 
   @override
@@ -70,29 +104,5 @@ class _SequencerTabState extends ConsumerState<SequencerTab> {
         ),
       ],
     );
-  }
-}
-
-/// Fetch the selected sequence's body and load the parsed tree into the editor.
-/// Best-effort: a transport/parse failure leaves the current tree in place and
-/// surfaces a SnackBar rather than throwing.
-Future<void> _loadSelectedBody(WidgetRef ref, String id) async {
-  final api = ref.read(sequenceApiProvider);
-  if (api == null) return;
-  try {
-    final root = await api.getSequence(id);
-    if (!ref.context.mounted) return;
-    // Drop a stale response: a newer selection was made while this was in flight,
-    // so loading now would clobber the tree with the wrong (older) sequence.
-    if (ref.read(selectedSequenceIdProvider) != id) return;
-    ref.read(sequenceControllerProvider.notifier).load(root);
-  } catch (e) {
-    debugPrint('[sequencer] failed to load sequence body for $id: $e');
-    if (!ref.context.mounted) return;
-    ScaffoldMessenger.maybeOf(ref.context)?.showSnackBar(const SnackBar(
-      content: Text(
-          "Couldn't load the sequence. Check the connection and try again."),
-      backgroundColor: AraColors.accentError,
-    ));
   }
 }
