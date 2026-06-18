@@ -10,8 +10,9 @@ import 'package:openastroara/services/sequence_api.dart';
 /// Routes canned 200 bodies by request path so list + lifecycle calls can be
 /// exercised without a live server.
 class _StubAdapter implements HttpClientAdapter {
-  _StubAdapter(this.bodyFor);
+  _StubAdapter(this.bodyFor, {this.statusCode = 200});
   final Object? Function(RequestOptions options) bodyFor;
+  final int statusCode;
 
   @override
   void close({bool force = false}) {}
@@ -24,7 +25,7 @@ class _StubAdapter implements HttpClientAdapter {
   ) async {
     return ResponseBody.fromString(
       jsonEncode(bodyFor(options)),
-      200,
+      statusCode,
       headers: {
         Headers.contentTypeHeader: [Headers.jsonContentType],
       },
@@ -32,8 +33,10 @@ class _StubAdapter implements HttpClientAdapter {
   }
 }
 
-SequenceApi _api(Object? Function(RequestOptions) bodyFor) {
-  final dio = Dio()..httpClientAdapter = _StubAdapter(bodyFor);
+SequenceApi _api(Object? Function(RequestOptions) bodyFor,
+    {int statusCode = 200}) {
+  final dio = Dio()
+    ..httpClientAdapter = _StubAdapter(bodyFor, statusCode: statusCode);
   return SequenceApi(const AraServer(hostname: 'x', port: 80), dio: dio);
 }
 
@@ -135,6 +138,16 @@ void main() {
     test('abort throws when no operation_id comes back', () async {
       final api = _api((_) => {'unexpected': true});
       expect(api.abort('seq-1'), throwsA(isA<FormatException>()));
+    });
+
+    test('a 409 (illegal transition) propagates as DioException', () async {
+      final api = _api((_) => {'error': 'not running'}, statusCode: 409);
+      expect(api.pause('seq-1'), throwsA(isA<DioException>()));
+    });
+
+    test('an empty id is rejected before any request', () async {
+      final api = _api((_) => {'operation_id': 'op'});
+      expect(() => api.start(''), throwsA(isA<ArgumentError>()));
     });
   });
 }

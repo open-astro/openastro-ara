@@ -90,7 +90,12 @@ class SequenceApi implements SequenceClient {
   /// the caller surfaces.
   Future<String> _lifecycle(String id, String action,
       {Map<String, dynamic>? body}) async {
-    assert(id.isNotEmpty, 'sequence id must not be empty');
+    // Hard guard (not assert): an empty id would POST to `/api/v1/sequences//$action`
+    // — a malformed path that 404s or hits the wrong route. asserts are stripped
+    // in release, so a direct caller with an empty id must fail loudly here.
+    if (id.isEmpty) {
+      throw ArgumentError.value(id, 'id', 'sequence id must not be empty');
+    }
     final res = await _dio.post<dynamic>(
       '/api/v1/sequences/${Uri.encodeComponent(id)}/$action',
       data: body,
