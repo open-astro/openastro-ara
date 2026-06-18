@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -36,7 +38,7 @@ class _SequencerTabState extends ConsumerState<SequencerTab> {
 
   void _load(String id) {
     _loadedId = id;
-    _loadSelectedBody(id);
+    unawaited(_loadSelectedBody(id));
   }
 
   /// Fetch the sequence's body and load the parsed tree. Best-effort: a missing
@@ -63,8 +65,16 @@ class _SequencerTabState extends ConsumerState<SequencerTab> {
 
   void _onLoadFailed(String id) {
     if (!mounted) return;
-    // Clear the guard so re-selecting this sequence reloads it (network recovery).
-    if (_loadedId == id) _loadedId = null;
+    if (_loadedId == id) {
+      _loadedId = null;
+      // Clear the selection too: nothing actually loaded, so the selection
+      // shouldn't claim a sequence. This also makes retry work — re-picking the
+      // same sequence in the Load dialog then emits a fresh change (null → id),
+      // which a same-value `select(id)` alone would not (Riverpod skips equal
+      // values). Guarded on `_loadedId == id` so a superseded load can't clear a
+      // newer valid selection.
+      ref.read(selectedSequenceIdProvider.notifier).select(null);
+    }
     ScaffoldMessenger.maybeOf(context)?.showSnackBar(const SnackBar(
       content: Text(
           "Couldn't load the sequence. Check the connection and try again."),

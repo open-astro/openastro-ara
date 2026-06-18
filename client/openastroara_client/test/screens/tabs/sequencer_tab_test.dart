@@ -56,6 +56,19 @@ class _ThrowingClient extends _FakeClient {
       throw Exception('boom');
 }
 
+/// Throws on the first call (transient failure), succeeds afterwards — to verify
+/// a failed load can be retried.
+class _FlakyOnceClient extends _FakeClient {
+  int calls = 0;
+  @override
+  Future<SequenceNode> getSequence(String id) async {
+    calls++;
+    if (calls == 1) throw Exception('transient');
+    return SequenceNode(
+        id: 'root', kind: SequenceNodeKind.root, displayName: 'Loaded $id (retry)');
+  }
+}
+
 SequenceNode _root(String name) =>
     SequenceNode(id: 'root', kind: SequenceNodeKind.root, displayName: name);
 
@@ -139,7 +152,7 @@ void main() {
     ));
     container.read(selectedSequenceIdProvider.notifier).select('seq-x');
     await tester.pump(); // run the async load + catch
-    await tester.pump(const Duration(milliseconds: 400)); // SnackBar entrance
+    await tester.pumpAndSettle();
     expect(find.textContaining("Couldn't load the sequence"), findsOneWidget);
   });
 
@@ -154,7 +167,30 @@ void main() {
     ));
     container.read(selectedSequenceIdProvider.notifier).select('seq-x');
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
     expect(find.textContaining("Couldn't load the sequence"), findsOneWidget);
+  });
+
+  testWidgets('a failed load can be retried by re-selecting the sequence',
+      (tester) async {
+    final container = ProviderContainer(overrides: [
+      sequenceApiProvider.overrideWithValue(_FlakyOnceClient()),
+    ]);
+    addTearDown(container.dispose);
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: Scaffold(body: SequencerTab())),
+    ));
+
+    // First pick fails → selection is cleared so a re-pick re-emits.
+    container.read(selectedSequenceIdProvider.notifier).select('seq-r');
+    await tester.pumpAndSettle();
+    expect(container.read(selectedSequenceIdProvider), isNull);
+
+    // Re-pick the same sequence → reloads, this time succeeding.
+    container.read(selectedSequenceIdProvider.notifier).select('seq-r');
+    await tester.pumpAndSettle();
+    expect(container.read(sequenceControllerProvider).displayName,
+        'Loaded seq-r (retry)');
   });
 }
