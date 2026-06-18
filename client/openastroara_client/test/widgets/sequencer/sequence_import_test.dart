@@ -168,7 +168,8 @@ void main() {
     });
 
     test('an over-limit file → tooLarge (distinct from notJson)', () async {
-      // One byte past the cap, valid-JSON-shaped padding so only size trips it.
+      // Padding == the cap, plus the JSON wrapper, so total bytes exceed it and
+      // only the size check (not a parse error) can trip.
       final f = File('${tmp.path}/huge.json');
       final padding = 'x' * (32 * 1024 * 1024); // == _maxSequenceFileBytes
       f.writeAsStringSync('{"Name":"$padding"}');

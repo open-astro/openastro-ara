@@ -1,4 +1,7 @@
 import 'dart:convert';
+// TODO(web): dart:io (File/Platform) won't compile for a web target. ARA ships
+// desktop/mobile only today; add a conditional-import split for readNinaSequenceFile
+// (file bytes via file_picker's `bytes`) if web is ever supported.
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -49,7 +52,10 @@ Future<NinaFileReadResult> readNinaSequenceFile(String path) async {
     if (decoded is! Map<String, dynamic>) {
       return const NinaFileReadResult.failure(NinaFileError.notJson);
     }
-    final base = path.split(Platform.pathSeparator).last;
+    // Split on either separator so a path is handled the same on every host
+    // (a Windows path can carry '\', a posix one '/') — more robust than
+    // Platform.pathSeparator, which only matches the current OS.
+    final base = path.split(RegExp(r'[/\\]')).last;
     final name = base.toLowerCase().endsWith('.json')
         ? base.substring(0, base.length - 5)
         : base;

@@ -75,23 +75,58 @@ class SequenceLoadDialog extends ConsumerWidget {
       ),
       actions: [
         // Import a NINA sequence file; on success it selects the new sequence
-        // (loaded into the tree), so close this picker afterwards. On a
-        // cancel/error keep the dialog open so the user can retry or pick from
-        // the list.
-        TextButton.icon(
-          icon: const Icon(Icons.upload_file, size: 18),
-          label: const Text('Import NINA…'),
-          onPressed: () async {
-            final navigator = Navigator.of(context);
-            final imported = await pickAndImportSequence(context, ref);
-            if (imported && navigator.mounted) navigator.pop();
-          },
-        ),
+        // (loaded into the tree) and closes this picker. On a cancel/error the
+        // dialog stays open so the user can retry or pick from the list.
+        const _ImportNinaButton(),
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Cancel'),
         ),
       ],
+    );
+  }
+}
+
+/// The "Import NINA…" action. Stateful so it can disable itself for the whole
+/// async flow (picker → upload → warnings dialog) — without the busy guard a
+/// second tap on a slow connection would open a second picker and fire a second
+/// concurrent import. On a successful import it pops the Load dialog.
+class _ImportNinaButton extends ConsumerStatefulWidget {
+  const _ImportNinaButton();
+
+  @override
+  ConsumerState<_ImportNinaButton> createState() => _ImportNinaButtonState();
+}
+
+class _ImportNinaButtonState extends ConsumerState<_ImportNinaButton> {
+  bool _busy = false;
+
+  Future<void> _run() async {
+    final navigator = Navigator.of(context);
+    setState(() => _busy = true);
+    try {
+      final imported = await pickAndImportSequence(context, ref);
+      if (imported && navigator.mounted) {
+        navigator.pop();
+        return; // popped — don't touch state on the now-defunct dialog
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return TextButton.icon(
+      icon: _busy
+          ? const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.upload_file, size: 18),
+      label: const Text('Import NINA…'),
+      onPressed: _busy ? null : _run,
     );
   }
 }
