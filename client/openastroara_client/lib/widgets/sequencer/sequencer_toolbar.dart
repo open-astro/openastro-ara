@@ -47,9 +47,11 @@ class SequencerToolbar extends ConsumerWidget {
     // Run = start when there's no active run; resume when paused. Disabled only
     // while running/starting/aborting. Pause only while running; Abort while any
     // run is active. A null run state (no active run / unknown) → Run only.
+    final isAborting = runState == SequenceRunState.aborting;
     final canRunOrResume = hasSelection && (!isActive || isPaused);
     final canPause = hasSelection && isRunning;
-    final canAbort = hasSelection && isActive;
+    // Abort while a run is active, but not when it's already aborting.
+    final canAbort = hasSelection && isActive && !isAborting;
 
     return Container(
       height: 44,
@@ -144,29 +146,33 @@ Future<void> _lifecycle(
 
   busy.setBusy(true);
   try {
-    await op(api, id);
-  } on DioException catch (e) {
-    final code = e.response?.statusCode;
-    // 409 is an expected business error (the run already moved past this action),
-    // so give it a clearer message than a raw status code.
-    messenger.showSnackBar(SnackBar(
-      content: Text(code == 409
-          ? "Command not valid in the sequence's current state."
-          : 'Sequence command failed (${code ?? e.message ?? 'network error'}).'),
-      backgroundColor: AraColors.accentError,
-    ));
-  } catch (e) {
-    // e.g. a FormatException if the 202 lacked an operation_id — still surface it
-    // rather than let it propagate as an unhandled exception.
-    messenger.showSnackBar(const SnackBar(
-      content: Text('Sequence command failed.'),
-      backgroundColor: AraColors.accentError,
-    ));
+    try {
+      await op(api, id);
+    } on DioException catch (e) {
+      final code = e.response?.statusCode;
+      // 409 is an expected business error (the run already moved past this
+      // action), so give it a clearer message than a raw status code.
+      messenger.showSnackBar(SnackBar(
+        content: Text(code == 409
+            ? "Command not valid in the sequence's current state."
+            : 'Sequence command failed (${code ?? e.message ?? 'network error'}).'),
+        backgroundColor: AraColors.accentError,
+      ));
+    } catch (e) {
+      // e.g. a FormatException if the 202 lacked an operation_id — still surface
+      // it rather than let it propagate as an unhandled exception.
+      messenger.showSnackBar(const SnackBar(
+        content: Text('Sequence command failed.'),
+        backgroundColor: AraColors.accentError,
+      ));
+    }
+    // Re-read run state BEFORE re-enabling the controls (the busy flag drops in
+    // the finally below), so a fast re-click can't act on the stale pre-command
+    // state. refresh() swallows its own errors, so this won't throw.
+    await runState.refresh();
   } finally {
     busy.setBusy(false);
   }
-  // Re-read run state regardless — the daemon may have advanced it even on error.
-  await runState.refresh();
 }
 
 String _statusLine(bool connected, String? selectedId, String? selectedName,

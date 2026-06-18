@@ -117,6 +117,26 @@ void main() {
       expect(btn(tester, 'Abort').onPressed, isNotNull);
     });
 
+    testWidgets('starting → Run + Pause disabled, Abort enabled', (tester) async {
+      await pump(tester, run: _info(SequenceRunState.starting));
+      expect(btn(tester, 'Run').onPressed, isNull);
+      expect(btn(tester, 'Pause').onPressed, isNull);
+      expect(btn(tester, 'Abort').onPressed, isNotNull);
+    });
+
+    testWidgets('aborting → Abort disabled (already aborting)', (tester) async {
+      await pump(tester, run: _info(SequenceRunState.aborting));
+      expect(btn(tester, 'Abort').onPressed, isNull);
+      expect(btn(tester, 'Run').onPressed, isNull);
+    });
+
+    testWidgets('completed → Run re-enabled (re-run)', (tester) async {
+      await pump(tester, run: _info(SequenceRunState.completed));
+      expect(btn(tester, 'Run').onPressed, isNotNull);
+      expect(btn(tester, 'Pause').onPressed, isNull);
+      expect(btn(tester, 'Abort').onPressed, isNull);
+    });
+
     testWidgets('a command in flight disables the controls', (tester) async {
       final container = await pump(tester, run: null);
       // Run is enabled at rest...

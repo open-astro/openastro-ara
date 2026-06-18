@@ -143,8 +143,10 @@ final sequenceRunStateProvider = AsyncNotifierProvider.autoDispose<
 
 /// True while a sequence lifecycle command (start/pause/resume/abort) is
 /// in-flight, so the toolbar can disable the controls and a rapid double-tap
-/// can't fire two concurrent commands. Keep-alive (the toolbar always watches
-/// it while the tab is open).
+/// can't fire two concurrent commands. Intentionally keep-alive (NOT autoDispose
+/// like [sequenceRunStateProvider]): the busy flag must survive the brief windows
+/// where the run-state notifier rebuilds; the autoDispose run-state provider
+/// instead guards its post-await writes with `ref.mounted` in [refresh].
 class SequenceCommandBusyNotifier extends Notifier<bool> {
   @override
   bool build() => false;
