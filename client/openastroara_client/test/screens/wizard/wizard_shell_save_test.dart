@@ -11,6 +11,7 @@ import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/settings/imaging_defaults_state.dart';
 import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
+import 'package:openastroara/state/settings/plate_solve_settings_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 
 /// In-memory ProfileApi double whose create call can be held in-flight (so the
@@ -47,6 +48,12 @@ class _FakeProfileApi extends ProfileApi {
   Future<Phd2Settings> getPhd2Settings() async => const Phd2Settings();
   @override
   Future<Phd2Settings> putPhd2Settings(Phd2Settings v) async => v;
+  @override
+  Future<PlateSolveSettings> getPlateSolveSettings() async =>
+      const PlateSolveSettings();
+  @override
+  Future<PlateSolveSettings> putPlateSolveSettings(PlateSolveSettings v) async =>
+      v;
 }
 
 Widget _host(_FakeProfileApi api, {required void Function() onComplete}) {
