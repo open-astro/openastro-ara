@@ -2,11 +2,12 @@ import 'package:flutter_test/flutter_test.dart';
 // Hide the draft's ImagingDefaults; the section model of the same name comes from
 // imaging_defaults_state.
 import 'package:openastroara/models/profile_draft.dart'
-    hide ImagingDefaults, PlateSolveSettings;
+    hide ImagingDefaults, PlateSolveSettings, AutofocusSettings;
 import 'package:openastroara/models/profile_meta.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/screens/wizard/wizard_save.dart';
 import 'package:openastroara/services/profile_api.dart';
+import 'package:openastroara/state/settings/autofocus_settings_state.dart';
 import 'package:openastroara/state/settings/imaging_defaults_state.dart';
 import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
@@ -58,6 +59,12 @@ class _FakeProfileApi extends ProfileApi {
   @override
   Future<PlateSolveSettings> putPlateSolveSettings(PlateSolveSettings v) =>
       _put('platesolve', v);
+  @override
+  Future<AutofocusSettings> getAutofocusSettings() async =>
+      const AutofocusSettings();
+  @override
+  Future<AutofocusSettings> putAutofocusSettings(AutofocusSettings v) =>
+      _put('autofocus', v);
 }
 
 void main() {
@@ -68,8 +75,10 @@ void main() {
       await saveWizardProfile(api, draft);
 
       expect(api.createCalls, 1);
-      expect(api.putCalls,
-          containsAll(['site', 'optics', 'imaging', 'phd2', 'platesolve']));
+      expect(
+          api.putCalls,
+          containsAll(
+              ['site', 'optics', 'imaging', 'phd2', 'platesolve', 'autofocus']));
       expect(draft.savedProfileId, 'profile-1');
     });
 

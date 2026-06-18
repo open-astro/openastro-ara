@@ -102,3 +102,106 @@ class _ScreenPlateSolveState extends ConsumerState<ScreenPlateSolve> {
     );
   }
 }
+
+// ── Screen 12 — Autofocus ───────────────────────────────────────────────────
+
+/// §37.4 — the routine ARA runs to refocus. Binds to the draft's
+/// [AutofocusSettings] bag; the wizard Save maps it onto the profile's autofocus
+/// section. All fields are optional (blank/untouched preserves the base).
+class ScreenAutofocus extends ConsumerStatefulWidget {
+  const ScreenAutofocus({super.key});
+  @override
+  ConsumerState<ScreenAutofocus> createState() => _ScreenAutofocusState();
+}
+
+class _ScreenAutofocusState extends ConsumerState<ScreenAutofocus> {
+  late final AutofocusSettings _af = _draftOf(ref).autofocus;
+  // Per-field validation messages (advisory: an invalid value is never written).
+  final Map<String, String?> _errors = {};
+
+  /// A positive-integer field: blank → null (keep base), a valid `> 0` value is
+  /// written, and anything else surfaces an inline error without writing.
+  Widget _posIntField({
+    required String key,
+    required String label,
+    required String hint,
+    required String helper,
+    required int? value,
+    required void Function(int?) set,
+  }) {
+    return WizardTextField(
+      label: label,
+      initialValue: value?.toString(),
+      hint: hint,
+      helperText: helper,
+      errorText: _errors[key],
+      keyboardType: const TextInputType.numberWithOptions(decimal: false),
+      inputFormatters: WizardInput.unsignedInt,
+      onChanged: (v) {
+        final t = v.trim();
+        if (t.isEmpty) {
+          setState(() => _errors[key] = null);
+          set(null);
+          return;
+        }
+        final n = int.tryParse(t);
+        if (n != null && n > 0) {
+          setState(() => _errors[key] = null);
+          set(n);
+        } else {
+          setState(() => _errors[key] = 'Enter a whole number greater than 0.');
+        }
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return WizardScreenScaffold(
+      step: 12,
+      intro: 'How ARA refocuses — the exposure it takes at each step, how many '
+          'steps it samples, and the focuser travel between them.',
+      children: [
+        _posIntField(
+          key: 'exposure',
+          label: 'Autofocus exposure (s)',
+          hint: 'default 5',
+          helper: 'Exposure for each autofocus sample. Leave blank to keep the '
+              'profile default.',
+          value: _af.exposureSeconds,
+          set: (n) => _af.exposureSeconds = n,
+        ),
+        _posIntField(
+          key: 'steps',
+          label: 'Steps',
+          hint: 'default 7',
+          helper: 'How many focus points to sample across the V-curve.',
+          value: _af.steps,
+          set: (n) => _af.steps = n,
+        ),
+        _posIntField(
+          key: 'stepSize',
+          label: 'Step size (focuser steps)',
+          hint: 'default 50',
+          helper: 'Focuser travel between each autofocus point.',
+          value: _af.stepSize,
+          set: (n) => _af.stepSize = n,
+        ),
+        // Nullable so "Keep profile default" preserves the base (same pattern as
+        // the downsample dropdown); Yes/No override.
+        WizardDropdown<bool?>(
+          label: 'Re-run autofocus after a filter change',
+          value: _af.runAfterFilterChange,
+          helperText: 'Refocus when the sequence switches filters '
+              '(focus shifts between filters).',
+          entries: const [
+            DropdownMenuEntry(value: null, label: 'Keep profile default'),
+            DropdownMenuEntry(value: true, label: 'Yes'),
+            DropdownMenuEntry(value: false, label: 'No'),
+          ],
+          onChanged: (v) => setState(() => _af.runAfterFilterChange = v),
+        ),
+      ],
+    );
+  }
+}

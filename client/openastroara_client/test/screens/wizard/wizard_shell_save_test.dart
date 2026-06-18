@@ -8,6 +8,7 @@ import 'package:openastroara/models/server.dart';
 import 'package:openastroara/screens/wizard/wizard_shell.dart';
 import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/state/saved_server_state.dart';
+import 'package:openastroara/state/settings/autofocus_settings_state.dart';
 import 'package:openastroara/state/settings/imaging_defaults_state.dart';
 import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
@@ -54,6 +55,11 @@ class _FakeProfileApi extends ProfileApi {
   @override
   Future<PlateSolveSettings> putPlateSolveSettings(PlateSolveSettings v) async =>
       v;
+  @override
+  Future<AutofocusSettings> getAutofocusSettings() async =>
+      const AutofocusSettings();
+  @override
+  Future<AutofocusSettings> putAutofocusSettings(AutofocusSettings v) async => v;
 }
 
 Widget _host(_FakeProfileApi api, {required void Function() onComplete}) {

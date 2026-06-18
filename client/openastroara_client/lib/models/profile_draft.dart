@@ -145,10 +145,14 @@ class PlateSolveSettings {
 }
 
 class AutofocusSettings {
-  Duration exposure = const Duration(seconds: 5);
-  double? stepSizeMicrons;
-  int maxRetries = 3;
-  bool autoDiscoverFilterOffsets = true;
+  // Wizard-collected subset of the profile's autofocus section. All nullable so a
+  // blank/untouched field preserves the base profile's value on Save (null =
+  // "not set by the user"), matching the other §37.4 screens. These map 1:1 onto
+  // the AutofocusSettings *section* DTO (see wizard_save.applyDraftToAutofocus).
+  int? exposureSeconds;
+  int? steps;
+  int? stepSize;
+  bool? runAfterFilterChange;
 }
 
 class FileSavingSettings {

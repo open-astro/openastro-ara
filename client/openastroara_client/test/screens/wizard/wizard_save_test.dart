@@ -2,8 +2,9 @@ import 'package:flutter_test/flutter_test.dart';
 // Hide the draft's ImagingDefaults; the section model of the same name comes from
 // imaging_defaults_state below.
 import 'package:openastroara/models/profile_draft.dart'
-    hide ImagingDefaults, PlateSolveSettings;
+    hide ImagingDefaults, PlateSolveSettings, AutofocusSettings;
 import 'package:openastroara/screens/wizard/wizard_save.dart';
+import 'package:openastroara/state/settings/autofocus_settings_state.dart';
 import 'package:openastroara/state/settings/imaging_defaults_state.dart';
 import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
@@ -118,6 +119,29 @@ void main() {
       expect(out.indexDownloadPath, '/keep/db');
       expect(out.searchRadiusDeg, 12);
       expect(out.downsampleFactor, 4);
+    });
+
+    test('applyDraftToAutofocus maps the wizard subset', () {
+      final d = ProfileDraft();
+      d.autofocus
+        ..exposureSeconds = 8
+        ..steps = 9
+        ..stepSize = 40
+        ..runAfterFilterChange = false;
+      final out = applyDraftToAutofocus(const AutofocusSettings(), d);
+      expect(out.exposureSeconds, 8);
+      expect(out.steps, 9);
+      expect(out.stepSize, 40);
+      expect(out.runAfterFilterChange, isFalse);
+    });
+
+    test('applyDraftToAutofocus preserves base on a blank draft', () {
+      final base = const AutofocusSettings()
+          .copyWith(exposureSeconds: 11, steps: 5, runAfterFilterChange: false);
+      final out = applyDraftToAutofocus(base, ProfileDraft());
+      expect(out.exposureSeconds, 11);
+      expect(out.steps, 5);
+      expect(out.runAfterFilterChange, isFalse);
     });
 
     test('applyDraftToPhd2 sets forceCalibrationEachSession for each-session', () {

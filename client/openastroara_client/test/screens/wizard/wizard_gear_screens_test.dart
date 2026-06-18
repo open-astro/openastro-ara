@@ -83,6 +83,23 @@ void main() {
     expect(find.textContaining('Must be greater than'), findsNothing);
   });
 
+  testWidgets('Screen 12 rejects a non-positive autofocus exposure',
+      (tester) async {
+    final container = await pump(tester, const ScreenAutofocus());
+    final af = container.read(wizardControllerProvider).draft.autofocus;
+    final exposure = find.byType(TextField).first; // exposure is the first field
+
+    await tester.enterText(exposure, '0'); // must be > 0
+    await tester.pump();
+    expect(af.exposureSeconds, isNull, reason: 'invalid value is not written');
+    expect(find.textContaining('greater than 0'), findsOneWidget);
+
+    await tester.enterText(exposure, '8');
+    await tester.pump();
+    expect(af.exposureSeconds, 8);
+    expect(find.textContaining('greater than 0'), findsNothing);
+  });
+
   testWidgets('signed field keeps prior value on a partial "-" keystroke',
       (tester) async {
     final container = await pump(tester, const ScreenRotator());
