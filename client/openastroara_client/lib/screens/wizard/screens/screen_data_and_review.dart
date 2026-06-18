@@ -90,7 +90,11 @@ class _ScreenSkyDataState extends ConsumerState<ScreenSkyData> {
                           : selected.remove(p.id)),
                       title: Text(p.name),
                       subtitle: Text(
-                        '${p.description}  ·  ${formatBytes(p.sizeBytes)}',
+                        // Drop empty parts so a package with no description
+                        // doesn't render a dangling "  ·  1.0 MB" separator.
+                        [p.description, formatBytes(p.sizeBytes)]
+                            .where((s) => s.isNotEmpty)
+                            .join('  ·  '),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(color: AraColors.textSecondary),

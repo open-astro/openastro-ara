@@ -99,6 +99,15 @@ void main() {
       expect(find.text('Already here'), findsNothing);
     });
 
+    testWidgets('a blank description renders no dangling separator',
+        (tester) async {
+      const noDesc = DataPackage(id: 'd', name: 'No-desc pack', sizeBytes: 1 << 20);
+      await pump(tester, build: () async => const [noDesc]);
+      await tester.pumpAndSettle();
+      expect(find.text('1.0 MB'), findsOneWidget); // size only, no leading "·"
+      expect(find.textContaining('·'), findsNothing);
+    });
+
     testWidgets('ticking a package adds its id to the draft', (tester) async {
       final container =
           await pump(tester, build: () async => const [pkgA, pkgB]);
