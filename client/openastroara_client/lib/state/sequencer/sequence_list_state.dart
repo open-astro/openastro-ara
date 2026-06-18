@@ -98,6 +98,16 @@ class SequenceListNotifier extends AsyncNotifier<List<SequenceListItem>?> {
 final sequenceListProvider = AsyncNotifierProvider.autoDispose<
     SequenceListNotifier, List<SequenceListItem>?>(SequenceListNotifier.new);
 
+/// The daemon's starting-point sequence templates for the "New" dialog. Null
+/// when no server is connected (distinct from an empty list — a connected daemon
+/// with no templates). autoDispose: only alive while the New dialog watches it.
+final sequenceTemplatesProvider =
+    FutureProvider.autoDispose<List<SequenceTemplate>?>((ref) async {
+  final api = ref.watch(sequenceApiProvider);
+  if (api == null) return null;
+  return api.listTemplates();
+});
+
 /// Id of the sequence the user picked in the Load dialog (null = none loaded).
 /// The tab's tree/run controls key off this. Riverpod 3.x removed
 /// `StateProvider`, so this is a thin Notifier (matching [selectedNodeIdProvider]).
