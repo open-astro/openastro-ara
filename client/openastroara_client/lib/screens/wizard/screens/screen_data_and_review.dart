@@ -275,7 +275,9 @@ class ScreenReview extends ConsumerWidget {
           ('Settle time', formatDuration(m.settleTimeAfterSlew)),
         ]),
         _ReviewSection(title: 'Rotator', step: 9, onEdit: edit, rows: [
-          ('Range', (r.minAngleDeg == null && r.maxAngleDeg == null)
+          // A range needs both ends — if either is unset, fall back to "Not set"
+          // rather than rendering a half-filled "Not set – 45.0°".
+          ('Range', (r.minAngleDeg == null || r.maxAngleDeg == null)
               ? _notSet
               : '${_deg(r.minAngleDeg)} – ${_deg(r.maxAngleDeg)}'),
           ('Step', _deg(r.stepDeg)),

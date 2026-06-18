@@ -51,7 +51,10 @@ void main() {
     }) async {
       final container = ProviderContainer();
       addTearDown(container.dispose);
-      // Seed the shared draft before the first build so values render.
+      // Intentional: mutate the live (mutable) ProfileDraft in place before the
+      // first pump so seeded values appear on the initial build. ProfileDraft is
+      // a mutable bag by design (see profile_draft.dart) — if it ever becomes
+      // immutable this seeding must switch to overriding the controller.
       seed?.call(container.read(wizardControllerProvider).draft);
       await tester.pumpWidget(UncontrolledProviderScope(
         container: container,
@@ -96,6 +99,15 @@ void main() {
       await tester.tap(find.text('Edit').at(1));
       await tester.pump();
       expect(container.read(wizardControllerProvider).step, 2);
+    });
+
+    testWidgets('a half-set rotator range reads as "Not set"', (tester) async {
+      await pump(tester, seed: (d) {
+        d.rotator.minAngleDeg = 0; // max left unset
+      });
+      await tester.pumpAndSettle();
+      // Range needs both ends — a partial entry must not render "Not set – …".
+      expect(find.textContaining('–'), findsNothing);
     });
 
     testWidgets('unset fields read as "Not set"', (tester) async {
