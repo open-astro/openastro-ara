@@ -1,0 +1,48 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../models/sequence/sequence_summary.dart';
+import '../../models/server.dart';
+import '../../services/sequence_api.dart';
+import '../saved_server_state.dart';
+
+/// Builds a [SequenceClient] for a server. Overridable in tests.
+final sequenceApiFactoryProvider =
+    Provider<SequenceClient Function(AraServer)>((ref) => SequenceApi.new);
+
+/// [SequenceClient] bound to the active server (`savedServers.last`), or `null`
+/// when no server is saved. Closes the old Dio on a server change.
+final sequenceApiProvider = Provider<SequenceClient?>((ref) {
+  final server = ref.watch(savedServersProvider.select((async) => async.maybeWhen(
+        data: (list) => list.isEmpty ? null : list.last,
+        orElse: () => null,
+      )));
+  if (server == null) return null;
+  final api = ref.watch(sequenceApiFactoryProvider)(server);
+  ref.onDispose(api.close);
+  return api;
+});
+
+/// The active server's saved sequences (newest-first). `null` data means no
+/// server is bound; an empty list means a connected server with no sequences yet.
+class SequenceListNotifier extends AsyncNotifier<List<SequenceListItem>?> {
+  @override
+  Future<List<SequenceListItem>?> build() async {
+    final api = ref.watch(sequenceApiProvider);
+    if (api == null) return null;
+    return api.list();
+  }
+
+  /// Re-read the list (after a create/delete, or a manual refresh). Surfaces
+  /// transport errors as an AsyncError state rather than leaving stale data.
+  Future<void> refresh() async {
+    final api = ref.read(sequenceApiProvider);
+    state = await AsyncValue.guard<List<SequenceListItem>?>(() async {
+      if (api == null) return null;
+      return api.list();
+    });
+  }
+}
+
+final sequenceListProvider =
+    AsyncNotifierProvider<SequenceListNotifier, List<SequenceListItem>?>(
+        SequenceListNotifier.new);
