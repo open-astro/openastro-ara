@@ -180,19 +180,21 @@ class ImagingDefaults {
 enum FrameType { light, dark, bias, flat }
 
 class SafetyPolicies {
-  WeatherAction cloudsAction = WeatherAction.pause;
-  WeatherAction windAction = WeatherAction.pause;
-  double windThresholdKmh = 30;
-  WeatherAction rainAction = WeatherAction.abortAndPark;
-  Duration wilmaOfflineAutoAbortAfter = const Duration(minutes: 5);
-  AlarmUnansweredAction alarmUnanswered = AlarmUnansweredAction.continueAlarm;
-  String alarmSound = 'Default';
-  bool alarmVibrate = true;
+  // Wizard subset that maps onto the profile's safety section: the general
+  // unsafe-conditions reaction + auto-resume behaviour. All nullable (null keeps
+  // base). The §37.5 weather-type-granular actions (separate clouds/wind/rain) +
+  // alarm sound/vibrate aren't backed by the section DTO — they stay a
+  // Settings/§51 concern (tracked in design/PORT_TODO.md).
+  UnsafeConditionAction? onUnsafe;
+  bool? autoResumeWhenSafe;
+  int? resumeDelayMin;
 }
 
-enum WeatherAction { pause, abortAndPark, ignore }
+/// Mirrors the safety section's `UnsafeAction` (mapped in wizard_save) — what to
+/// do when the safety monitor reports conditions are unsafe.
+enum UnsafeConditionAction { pauseAndPark, parkOnly, abortAndPark, ignore }
 
-enum AlarmUnansweredAction { continueAlarm, escalate, stop }
+
 
 class SitePreferences {
   double hardMinAltitudeDeg = 5;

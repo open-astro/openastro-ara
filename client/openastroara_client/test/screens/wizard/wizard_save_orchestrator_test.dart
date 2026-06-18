@@ -2,7 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 // Hide the draft's ImagingDefaults; the section model of the same name comes from
 // imaging_defaults_state.
 import 'package:openastroara/models/profile_draft.dart'
-    hide ImagingDefaults, PlateSolveSettings, AutofocusSettings;
+    hide ImagingDefaults, PlateSolveSettings, AutofocusSettings, SafetyPolicies;
 import 'package:openastroara/models/profile_meta.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/screens/wizard/wizard_save.dart';
@@ -12,6 +12,7 @@ import 'package:openastroara/state/settings/imaging_defaults_state.dart';
 import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
 import 'package:openastroara/state/settings/plate_solve_settings_state.dart';
+import 'package:openastroara/state/settings/safety_policies_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/state/settings/storage_settings_state.dart';
 
@@ -71,6 +72,11 @@ class _FakeProfileApi extends ProfileApi {
   @override
   Future<StorageSettings> putStorageSettings(StorageSettings v) =>
       _put('storage', v);
+  @override
+  Future<SafetyPolicies> getSafetyPolicies() async => const SafetyPolicies();
+  @override
+  Future<SafetyPolicies> putSafetyPolicies(SafetyPolicies v) =>
+      _put('safety', v);
 }
 
 void main() {
@@ -90,7 +96,8 @@ void main() {
             'phd2',
             'platesolve',
             'autofocus',
-            'storage'
+            'storage',
+            'safety'
           ]));
       expect(draft.savedProfileId, 'profile-1');
     });
