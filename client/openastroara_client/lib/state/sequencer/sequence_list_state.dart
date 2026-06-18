@@ -177,14 +177,16 @@ class SequenceRunStateNotifier extends AsyncNotifier<SequenceRunStateInfo?> {
     // AsyncData in place (see refresh()), so this is the last good snapshot.
     final current = state.value ?? const SequenceRunStateInfo();
     state = AsyncData(current.applyWsProgress(event.payload));
-    // A terminal frame carries only the state flip; re-read once to backfill the
-    // REST-only fields it omits (completedUtc, target name, start time). The
-    // daemon retains terminal runs, so getRunState returns the full terminal DTO
-    // (not null) right after completion.
-    if (_isTerminalEvent(event.type)) unawaited(refresh());
+    // A start/terminal frame carries only the state flip; re-read once to
+    // backfill the REST-only fields it omits — startedUtc + target name on
+    // `started` (so an externally-started run shows them), completedUtc on a
+    // terminal event. The daemon keeps active and (retained) terminal runs, so
+    // getRunState returns the full DTO rather than null in both cases.
+    if (_backfillsRestFields(event.type)) unawaited(refresh());
   }
 
-  static bool _isTerminalEvent(String type) =>
+  static bool _backfillsRestFields(String type) =>
+      type == SequenceWsEvents.started ||
       type == SequenceWsEvents.complete ||
       type == SequenceWsEvents.failed ||
       type == SequenceWsEvents.stopped ||
@@ -197,10 +199,15 @@ class SequenceRunStateNotifier extends AsyncNotifier<SequenceRunStateInfo?> {
   /// A real transport failure of the action itself is surfaced by the toolbar's
   /// own SnackBar, not here.
   Future<void> refresh() async {
+    final forId = ref.read(selectedSequenceIdProvider);
     final next = await AsyncValue.guard(_read);
     // Guard against disposal during the await (autoDispose + tab switch): writing
     // `state` after the notifier is gone throws StateError.
     if (!ref.mounted) return;
+    // Drop a stale write: the selection changed while this read was in flight
+    // (the same notifier instance survives a selection change), so applying it
+    // would flash the old sequence's state over the newly-selected one.
+    if (ref.read(selectedSequenceIdProvider) != forId) return;
     if (next.hasError) {
       // developer.log (not debugPrint) so the failure survives release builds —
       // it can be the only signal that e.g. completedUtc never reloaded.

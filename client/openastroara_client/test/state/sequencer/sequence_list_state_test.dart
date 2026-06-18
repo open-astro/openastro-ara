@@ -22,15 +22,19 @@ class _FakeSeqClient implements SequenceClient {
   }
 
   SequenceRunStateInfo? runState;
-  // When set, getRunState awaits this gate so a test can hold the initial REST
-  // read in flight (to exercise the "skip WS while loading" path).
+  // Per-id override (for cross-sequence races); falls back to [runState].
+  Map<String, SequenceRunStateInfo?>? runStateById;
+  // When set, getRunState awaits this gate so a test can hold the read in flight
+  // (to exercise the "skip WS while loading" / stale-write paths).
   Completer<SequenceRunStateInfo?>? runStateGate;
   // When true, getRunState throws — to exercise the refresh-failure path.
   bool throwOnRead = false;
   @override
-  Future<SequenceRunStateInfo?> getRunState(String id) {
-    if (throwOnRead) return Future.error(Exception('transient'));
-    return runStateGate?.future ?? Future.value(runState);
+  Future<SequenceRunStateInfo?> getRunState(String id) async {
+    if (throwOnRead) throw Exception('transient');
+    final gated = runStateGate != null ? await runStateGate!.future : null;
+    if (runStateById != null) return runStateById![id];
+    return runStateGate != null ? gated : runState;
   }
   @override
   Future<SequenceImportResult> importNina(String n, Map<String, dynamic> f, {bool treatWarningsAsErrors = false}) async => const SequenceImportResult(createdSequenceId: 'new');
@@ -213,6 +217,55 @@ void main() {
       // Backfilled by the one-shot refresh, not present on the WS frame.
       expect(info?.completedUtc, DateTime.utc(2026, 6, 18, 10));
       expect(info?.currentTargetName, 'M31');
+    });
+
+    test('a sequence.started frame backfills startedUtc via refresh', () async {
+      final (container, controller, fake) = await setup('seq-1');
+      // An externally-started run: the running DTO the post-event refresh fetches
+      // carries startedUtc/target that the WS frame omits.
+      fake.runState = SequenceRunStateInfo(
+        sequenceId: 'seq-1',
+        runId: 'run-9',
+        state: SequenceRunState.running,
+        currentTargetName: 'M31',
+        startedUtc: DateTime.utc(2026, 6, 18, 9),
+        framesTotal: 60,
+      );
+      controller.add(event(SequenceWsEvents.started, const {
+        'sequence_id': 'seq-1',
+        'state': 'running',
+        'frames_completed': 0,
+        'frames_total': 60,
+      }));
+      await pumpEventQueue();
+
+      final info = container.read(sequenceRunStateProvider).value;
+      expect(info?.state, SequenceRunState.running);
+      expect(info?.startedUtc, DateTime.utc(2026, 6, 18, 9)); // backfilled
+      expect(info?.currentTargetName, 'M31');
+    });
+
+    test('a refresh in flight does not write back after the selection changes',
+        () async {
+      final (container, controller, fake) = await setup('seq-1');
+      // The refresh's read hangs; seq-1 would resolve to a terminal DTO, seq-2 to
+      // a fresh (null) state.
+      final terminal = SequenceRunStateInfo(
+          sequenceId: 'seq-1', state: SequenceRunState.completed);
+      fake
+        ..runStateById = {'seq-1': terminal, 'seq-2': null}
+        ..runStateGate = Completer<SequenceRunStateInfo?>();
+
+      // Start a refresh for seq-1 (read hangs), then switch to seq-2.
+      final pending = container.read(sequenceRunStateProvider.notifier).refresh();
+      container.read(selectedSequenceIdProvider.notifier).select('seq-2');
+      fake.runStateGate!.complete(null); // release both in-flight reads
+      await pending;
+      await pumpEventQueue();
+
+      // seq-1's terminal state must NOT have landed on seq-2 (the guard dropped
+      // the stale write); seq-2 shows its own (null) state.
+      expect(container.read(sequenceRunStateProvider).value, isNull);
     });
 
     test('a refresh() failure does not freeze live WS tracking', () async {
