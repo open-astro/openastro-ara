@@ -214,25 +214,34 @@ public static class SystemEndpoints {
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("ExportProfileShare");
 
-        // §70.4 import (preview + commit) is not implemented yet — it lands in a
-        // follow-up sub-PR. Return a clean 501 rather than wiring the not-yet-built
-        // service (whose methods throw, which would surface as an unhandled 500 since
-        // there's no global exception handler) — a caller gets an unambiguous "not
-        // implemented" instead of a fake success or an opaque 500.
-        profiles.MapPost("/share-import", () =>
-                Results.Problem(
-                    statusCode: StatusCodes.Status501NotImplemented,
-                    title: "Profile share import is not available yet",
-                    detail: "Importing a shared profile isn't supported in this version."))
-            .Produces(StatusCodes.Status501NotImplemented)
+        // §70.4 import — preview parses + validates the uploaded profile-share-v1
+        // file and returns a short-lived token; commit creates the profile from it.
+        profiles.MapPost("/share-import",
+                async ([FromBody] System.Text.Json.JsonElement manifest, IProfileShareService svc, CancellationToken ct) => {
+                    try {
+                        return Results.Ok(await svc.ImportPreviewAsync(manifest, ct));
+                    } catch (InvalidProfileShareException ex) {
+                        // Not a recognized share file (bad JSON / wrong schema / no settings).
+                        return Results.Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
+                    }
+                })
+            .Accepts<System.Text.Json.JsonElement>("application/json")
+            .Produces<ProfileShareImportPreviewDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
             .WithName("PreviewProfileShareImport");
 
-        profiles.MapPost("/share-import/commit", () =>
-                Results.Problem(
-                    statusCode: StatusCodes.Status501NotImplemented,
-                    title: "Profile share import is not available yet",
-                    detail: "Importing a shared profile isn't supported in this version."))
-            .Produces(StatusCodes.Status501NotImplemented)
+        profiles.MapPost("/share-import/commit",
+                async (Guid importToken, IProfileShareService svc, CancellationToken ct) => {
+                    try {
+                        var newProfileId = await svc.ImportCommitAsync(importToken, ct);
+                        return Results.Created($"/api/v1/profiles/{newProfileId}", value: newProfileId);
+                    } catch (ProfileShareImportTokenException ex) {
+                        // Unknown / expired / already-committed token.
+                        return Results.Problem(ex.Message, statusCode: StatusCodes.Status404NotFound);
+                    }
+                })
+            .Produces<Guid>(StatusCodes.Status201Created)
+            .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("CommitProfileShareImport");
 
         // Phase 13.16 — sky-data-recommendations wired to IDataManagerService.
