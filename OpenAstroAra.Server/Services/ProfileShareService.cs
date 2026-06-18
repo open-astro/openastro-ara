@@ -50,7 +50,7 @@ public sealed class ProfileShareService : IProfileShareService {
     /// preview, but a caller that floods previews without committing could still
     /// grow it unboundedly within the TTL window — this bounds the blast radius
     /// (e.g. if the daemon is ever exposed to the LAN without auth).
-    private const int MaxPendingImports = 32;
+    internal const int MaxPendingImports = 32;
 
     private sealed record PendingImport(ProfileShareManifest Manifest, DateTimeOffset ExpiresUtc);
 

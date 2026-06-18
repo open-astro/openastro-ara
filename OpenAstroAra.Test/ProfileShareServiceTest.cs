@@ -284,11 +284,45 @@ public class ProfileShareServiceTest {
         using var repo = new FakeRepo(DonorSnapshot());
         var svc = new ProfileShareService(repo);
         var share = await svc.ExportAsync(ProfileId, CancellationToken.None);
-        for (var i = 0; i < 32; i++) {
+        // Reference the constant (not a literal 32) so the test tracks the cap.
+        for (var i = 0; i < ProfileShareService.MaxPendingImports; i++) {
             await svc.ImportPreviewAsync(share!.Manifest, CancellationToken.None);
         }
         Assert.ThrowsAsync<ProfileShareImportThrottledException>(
             () => svc.ImportPreviewAsync(share!.Manifest, CancellationToken.None));
+    }
+
+    [Test]
+    public async Task Dropped_fields_advisory_matches_what_the_export_actually_strips() {
+        // Self-enforcing guard against drift: every category the import advertises as
+        // "you must re-enter this" must correspond to a field the export really emptied.
+        // If the export ever stops stripping one of these, this fails rather than
+        // silently showing the recipient a misleading list. (The reverse direction —
+        // a newly-stripped field nobody added to the advisory — is tracked in PORT_TODO.)
+        using var repo = new FakeRepo(DonorSnapshot());
+        var svc = new ProfileShareService(repo);
+        var share = await svc.ExportAsync(ProfileId, CancellationToken.None);
+        var preview = await svc.ImportPreviewAsync(share!.Manifest, CancellationToken.None);
+        var settings = share.Manifest.GetProperty("settings");
+
+        var categories = new (string advisoryKeyword, Func<bool> stripped)[] {
+            ("Save directory", () =>
+                settings.GetProperty("storage").GetProperty("save_directory").GetString()!.Length == 0),
+            ("ASTAP", () =>
+                settings.GetProperty("plate_solve").GetProperty("path_or_endpoint").GetString()!.Length == 0),
+            ("Site location", () =>
+                settings.GetProperty("site").GetProperty("latitude_deg").GetDouble() == 0),
+            ("PHD2", () =>
+                settings.GetProperty("phd2").GetProperty("host").GetString()!.Length == 0),
+            ("Notification", () =>
+                settings.GetProperty("notifications").GetProperty("pushover_token").GetString()!.Length == 0),
+        };
+        foreach (var (keyword, stripped) in categories) {
+            preview.DroppedFields.Should().Contain(
+                s => s.Contains(keyword, StringComparison.OrdinalIgnoreCase),
+                $"the dropped-fields advisory should name the stripped '{keyword}' category");
+            stripped().Should().BeTrue($"the export must actually strip '{keyword}'");
+        }
     }
 
     [Test]
