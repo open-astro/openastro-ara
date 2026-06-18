@@ -30,6 +30,15 @@ abstract interface class SequenceClient {
     bool treatWarningsAsErrors = false,
   });
 
+  /// List the daemon's starting-point sequence templates (§38.6/§38.7). Throws
+  /// on transport failure / unexpected body.
+  Future<List<SequenceTemplate>> listTemplates();
+
+  /// Create a new sequence from the template [templateName] (§38.7), named
+  /// [newName]. Returns the created sequence's id. Throws on transport failure
+  /// or an unknown template (the daemon answers 404 → DioException here).
+  Future<String> instantiateTemplate(String templateName, String newName);
+
   /// Fetch a sequence's full detail and parse its body into the editor tree.
   /// Returns the root [SequenceNode] (an empty named root if the body has no
   /// recognizable tree). Throws on transport failure / unknown id (404).
@@ -116,6 +125,47 @@ class SequenceApi implements SequenceClient {
           'sequence import returned an unexpected body (${data.runtimeType})');
     }
     return SequenceImportResult.fromJson(data);
+  }
+
+  @override
+  Future<List<SequenceTemplate>> listTemplates() async {
+    final res = await _dio.get<dynamic>('/api/v1/sequences/templates');
+    final data = res.data;
+    // The endpoint returns a JSON array of templates; a 2xx with a different
+    // shape means the wire contract changed — throw rather than silently empty.
+    if (data is! List) {
+      throw FormatException(
+          'sequence templates returned an unexpected body (${data.runtimeType})');
+    }
+    return data
+        .whereType<Map<String, dynamic>>()
+        .map(SequenceTemplate.fromJson)
+        // Drop a name-less template — the name is the instantiate path segment.
+        .where((t) => t.name.isNotEmpty)
+        .toList(growable: false);
+  }
+
+  @override
+  Future<String> instantiateTemplate(String templateName, String newName) async {
+    if (templateName.trim().isEmpty) {
+      throw ArgumentError.value(
+          templateName, 'templateName', 'template name must not be empty');
+    }
+    if (newName.trim().isEmpty) {
+      throw ArgumentError.value(
+          newName, 'newName', 'new sequence name must not be empty');
+    }
+    final res = await _dio.post<dynamic>(
+      '/api/v1/sequences/templates/${Uri.encodeComponent(templateName.trim())}/instantiate',
+      data: <String, dynamic>{'new_sequence_name': newName.trim()},
+    );
+    final data = res.data;
+    final id = data is Map<String, dynamic> ? data['id'] : null;
+    if (id is! String || id.isEmpty) {
+      throw FormatException(
+          'template instantiate returned no sequence id (${data.runtimeType})');
+    }
+    return id;
   }
 
   @override

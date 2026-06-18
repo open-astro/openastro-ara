@@ -126,6 +126,43 @@ class SequenceImportResult {
       Object.hashAll(warnings), Object.hashAll(droppedInstructionTypes));
 }
 
+/// A starting-point sequence template (`GET /api/v1/sequences/templates`) —
+/// daemon's `SequenceTemplateDto` (§38.6/§38.7). The full template body (the
+/// NINA DOM) isn't carried here; "New" instantiates by [name] server-side, which
+/// returns the created sequence. Snake_case wire; defensive parse.
+class SequenceTemplate {
+  final String name;
+  final String category;
+  final String? description;
+  final bool isBuiltIn;
+
+  const SequenceTemplate({
+    required this.name,
+    this.category = '',
+    this.description,
+    this.isBuiltIn = false,
+  });
+
+  factory SequenceTemplate.fromJson(Map<String, dynamic> json) =>
+      SequenceTemplate(
+        name: _str(json['name']) ?? '',
+        category: _str(json['category']) ?? '',
+        description: _str(json['description']),
+        isBuiltIn: json['is_built_in'] == true,
+      );
+
+  @override
+  bool operator ==(Object other) =>
+      other is SequenceTemplate &&
+      other.name == name &&
+      other.category == category &&
+      other.description == description &&
+      other.isBuiltIn == isBuiltIn;
+
+  @override
+  int get hashCode => Object.hash(name, category, description, isBuiltIn);
+}
+
 /// Live run state of an active sequence — daemon's `SequenceRunStateDto`
 /// (`GET /api/v1/sequences/{id}/state`). null from the API means no active run.
 class SequenceRunStateInfo {

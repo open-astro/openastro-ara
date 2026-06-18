@@ -186,6 +186,77 @@ void main() {
     });
   });
 
+  group('SequenceApi templates', () {
+    test('listTemplates parses the array and drops name-less rows', () async {
+      final api = _api((_) => [
+            {
+              'name': 'Deep-sky LRGB',
+              'category': 'Deep sky',
+              'description': 'L/R/G/B with dithering',
+              'is_built_in': true,
+            },
+            {'name': '', 'category': 'broken'}, // dropped — no name
+            {'name': 'Quick test', 'category': 'Utility'},
+          ]);
+      final templates = await api.listTemplates();
+      expect(templates.map((t) => t.name), ['Deep-sky LRGB', 'Quick test']);
+      expect(templates.first.isBuiltIn, isTrue);
+      expect(templates.first.description, 'L/R/G/B with dithering');
+    });
+
+    test('listTemplates throws on a non-array body', () async {
+      final api = _api((_) => {'not': 'an array'});
+      expect(api.listTemplates(), throwsA(isA<FormatException>()));
+    });
+
+    test('instantiateTemplate posts the new name and returns the created id',
+        () async {
+      RequestOptions? captured;
+      final api = _api((opts) {
+        captured = opts;
+        return {'id': 'seq-new', 'name': 'My LRGB'};
+      });
+      final id = await api.instantiateTemplate('  Deep-sky LRGB  ', '  My LRGB  ');
+      expect(id, 'seq-new');
+      // Both the path name and the body name are trimmed before sending.
+      expect(captured!.path, contains('/templates/Deep-sky%20LRGB/instantiate'));
+      expect((captured!.data as Map)['new_sequence_name'], 'My LRGB');
+    });
+
+    test('instantiateTemplate rejects empty template name / new name', () async {
+      final api = _api((_) => const {});
+      expect(() => api.instantiateTemplate('', 'x'), throwsA(isA<ArgumentError>()));
+      expect(() => api.instantiateTemplate('   ', 'x'), // whitespace-only name
+          throwsA(isA<ArgumentError>()));
+      expect(() => api.instantiateTemplate('t', '   '),
+          throwsA(isA<ArgumentError>()));
+    });
+
+    test('instantiateTemplate throws when no id comes back', () async {
+      final api = _api((_) => {'name': 'no id here'});
+      expect(api.instantiateTemplate('t', 'n'), throwsA(isA<FormatException>()));
+    });
+
+    test('an unknown template (404) propagates as DioException', () async {
+      final api = _api((_) => {'error': 'no such template'}, statusCode: 404);
+      await expectLater(
+        api.instantiateTemplate('nope', 'n'),
+        throwsA(isA<DioException>()
+            .having((e) => e.response?.statusCode, 'statusCode', 404)),
+      );
+    });
+  });
+
+  group('SequenceTemplate.fromJson', () {
+    test('degrades missing/wrong-typed fields', () {
+      final t = SequenceTemplate.fromJson({'name': 'T'});
+      expect(t.name, 'T');
+      expect(t.category, '');
+      expect(t.description, isNull);
+      expect(t.isBuiltIn, isFalse);
+    });
+  });
+
   group('SequenceApi.getSequence', () {
     test('parses the NINA body into a tree', () async {
       final api = _api((_) => {

@@ -41,6 +41,10 @@ class _FakeClient implements SequenceClient {
   @override
   Future<String> stop(String id) async => 'op';
   @override
+  Future<List<SequenceTemplate>> listTemplates() async => const [];
+  @override
+  Future<String> instantiateTemplate(String t, String n) async => 'new-seq';
+  @override
   void close() {}
 }
 
