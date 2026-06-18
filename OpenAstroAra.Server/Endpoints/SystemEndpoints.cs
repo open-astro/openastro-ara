@@ -227,17 +227,25 @@ public static class SystemEndpoints {
                         return Results.Problem(
                             detail: "The uploaded file is not a recognized profile share (expected a profile-share-v1 file).",
                             statusCode: StatusCodes.Status422UnprocessableEntity);
+                    } catch (ProfileShareImportThrottledException) {
+                        // Pending-import cap hit — ask the caller to back off.
+                        return Results.Problem(
+                            detail: "Too many pending profile-share imports — commit or wait for one to expire, then retry.",
+                            statusCode: StatusCodes.Status429TooManyRequests);
                     }
                 })
             .Accepts<System.Text.Json.JsonElement>("application/json")
             .Produces<ProfileShareImportPreviewDto>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+            .ProducesProblem(StatusCodes.Status429TooManyRequests)
             .WithName("PreviewProfileShareImport");
 
+        // Token travels in the request body (not the query string) so it never lands
+        // in web-server / proxy access logs — it authorizes profile creation in-TTL.
         profiles.MapPost("/share-import/commit",
-                async ([FromQuery] Guid importToken, IProfileShareService svc, CancellationToken ct) => {
+                async ([FromBody] ProfileShareImportCommitRequest req, IProfileShareService svc, CancellationToken ct) => {
                     try {
-                        var newProfileId = await svc.ImportCommitAsync(importToken, ct);
+                        var newProfileId = await svc.ImportCommitAsync(req.ImportToken, ct);
                         return Results.Created($"/api/v1/profiles/{newProfileId}", value: newProfileId);
                     } catch (ProfileShareImportTokenException) {
                         // Unknown / expired / already-committed token. Fixed wire detail
@@ -247,6 +255,7 @@ public static class SystemEndpoints {
                             statusCode: StatusCodes.Status404NotFound);
                     }
                 })
+            .Accepts<ProfileShareImportCommitRequest>("application/json")
             .Produces<Guid>(StatusCodes.Status201Created)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("CommitProfileShareImport");

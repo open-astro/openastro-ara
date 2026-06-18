@@ -36,15 +36,25 @@ namespace OpenAstroAra.Server.Services;
 /// </summary>
 public sealed class ProfileShareService : IProfileShareService {
     private readonly IProfileRepository _repo;
+    private readonly TimeProvider _clock;
 
     /// Parsed manifests awaiting a commit, keyed by the preview's import token.
     /// In-memory + short-lived (§70.7): a preview the user never commits expires.
     private readonly ConcurrentDictionary<Guid, PendingImport> _pending = new();
     private static readonly TimeSpan ImportTtl = TimeSpan.FromMinutes(15);
 
+    /// Cap on un-committed previews held at once. The store is pruned on every
+    /// preview, but a caller that floods previews without committing could still
+    /// grow it unboundedly within the TTL window — this bounds the blast radius
+    /// (e.g. if the daemon is ever exposed to the LAN without auth).
+    private const int MaxPendingImports = 32;
+
     private sealed record PendingImport(ProfileShareManifest Manifest, DateTimeOffset ExpiresUtc);
 
-    public ProfileShareService(IProfileRepository repo) => _repo = repo;
+    public ProfileShareService(IProfileRepository repo, TimeProvider? clock = null) {
+        _repo = repo;
+        _clock = clock ?? TimeProvider.System;
+    }
 
     public Task<ProfileShareDto?> ExportAsync(Guid profileId, CancellationToken ct) {
         // GetProfile is synchronous today (in-memory under a lock), so there is
@@ -221,8 +231,14 @@ public sealed class ProfileShareService : IProfileShareService {
         }
 
         PruneExpired();
+        // Cap the un-committed set (after pruning, so expired entries don't count)
+        // to bound memory against a preview flood that never commits.
+        if (_pending.Count >= MaxPendingImports) {
+            throw new ProfileShareImportThrottledException(
+                "Too many pending profile-share imports — commit or wait for one to expire, then retry.");
+        }
         var token = Guid.NewGuid();
-        var expires = DateTimeOffset.UtcNow.Add(ImportTtl);
+        var expires = _clock.GetUtcNow().Add(ImportTtl);
         _pending[token] = new PendingImport(parsed, expires);
 
         var rig = parsed.RigDescription;
@@ -242,12 +258,11 @@ public sealed class ProfileShareService : IProfileShareService {
 
     public Task<Guid> ImportCommitAsync(Guid importToken, CancellationToken ct) {
         ct.ThrowIfCancellationRequested();
-        PruneExpired();
-        // Single-use: remove on commit so a token can't create duplicates. Re-check
-        // expiry on the removed entry — PruneExpired() and TryRemove aren't atomic,
-        // so a token whose TTL lapses between them would otherwise commit stale.
+        // Single-use: TryRemove atomically claims the token (only one caller wins).
+        // Expiry is enforced here on the claimed entry — not via PruneExpired — so an
+        // expired token is rejected deterministically rather than racing the sweep.
         if (!_pending.TryRemove(importToken, out var pending) ||
-            pending.ExpiresUtc < DateTimeOffset.UtcNow) {
+            pending.ExpiresUtc < _clock.GetUtcNow()) {
             throw new ProfileShareImportTokenException(
                 "Import token is unknown or expired — preview the share file again.");
         }
@@ -266,7 +281,7 @@ public sealed class ProfileShareService : IProfileShareService {
         m.Donor?.DisplayName is { Length: > 0 } name ? name : "Imported profile";
 
     private void PruneExpired() {
-        var now = DateTimeOffset.UtcNow;
+        var now = _clock.GetUtcNow();
         foreach (var kv in _pending) {
             if (kv.Value.ExpiresUtc < now) _pending.TryRemove(kv.Key, out _);
         }
@@ -287,4 +302,12 @@ public sealed class ProfileShareImportTokenException : Exception {
     public ProfileShareImportTokenException() { }
     public ProfileShareImportTokenException(string message) : base(message) { }
     public ProfileShareImportTokenException(string message, Exception innerException) : base(message, innerException) { }
+}
+
+/// <summary>Too many un-committed previews are held at once (the pending-import
+/// cap) — maps to 429 so the caller backs off rather than growing the store.</summary>
+public sealed class ProfileShareImportThrottledException : Exception {
+    public ProfileShareImportThrottledException() { }
+    public ProfileShareImportThrottledException(string message) : base(message) { }
+    public ProfileShareImportThrottledException(string message, Exception innerException) : base(message, innerException) { }
 }

@@ -262,6 +262,36 @@ public class ProfileShareServiceTest {
     }
 
     [Test]
+    public async Task Import_commit_rejects_a_token_past_its_ttl() {
+        // Drive the clock so the 15-min TTL deterministically lapses between preview
+        // and commit — exercises the expiry guard in ImportCommitAsync (not the
+        // prune sweep), so a flipped `<`/`>` in that comparison would fail here.
+        var clock = new MutableTimeProvider(DateTimeOffset.UnixEpoch);
+        using var repo = new FakeRepo(DonorSnapshot());
+        var svc = new ProfileShareService(repo, clock);
+        var share = await svc.ExportAsync(ProfileId, CancellationToken.None);
+        var preview = await svc.ImportPreviewAsync(share!.Manifest, CancellationToken.None);
+
+        clock.Advance(TimeSpan.FromMinutes(16)); // past the 15-min window
+        Assert.ThrowsAsync<ProfileShareImportTokenException>(
+            () => svc.ImportCommitAsync(preview.ImportToken, CancellationToken.None));
+    }
+
+    [Test]
+    public async Task Import_preview_caps_the_pending_set() {
+        // A caller that floods preview without committing is capped so the in-memory
+        // store can't grow unboundedly — the (cap+1)th preview is refused.
+        using var repo = new FakeRepo(DonorSnapshot());
+        var svc = new ProfileShareService(repo);
+        var share = await svc.ExportAsync(ProfileId, CancellationToken.None);
+        for (var i = 0; i < 32; i++) {
+            await svc.ImportPreviewAsync(share!.Manifest, CancellationToken.None);
+        }
+        Assert.ThrowsAsync<ProfileShareImportThrottledException>(
+            () => svc.ImportPreviewAsync(share!.Manifest, CancellationToken.None));
+    }
+
+    [Test]
     public async Task Export_unknown_profile_returns_null() {
         using var repo = new FakeRepo(null);
         var share = await new ProfileShareService(repo).ExportAsync(ProfileId, CancellationToken.None);
@@ -274,6 +304,15 @@ public class ProfileShareServiceTest {
         var share = await new ProfileShareService(repo).ExportAsync(ProfileId, CancellationToken.None);
         share!.ProfileName.Should().Be("Joey's C8 Setup");
         share.PayloadBytes.Should().BeGreaterThan(0);
+    }
+
+    /// A TimeProvider whose clock only moves when the test advances it — lets the
+    /// import-expiry test step past the TTL deterministically.
+    private sealed class MutableTimeProvider : TimeProvider {
+        private DateTimeOffset _now;
+        public MutableTimeProvider(DateTimeOffset start) => _now = start;
+        public override DateTimeOffset GetUtcNow() => _now;
+        public void Advance(TimeSpan by) => _now += by;
     }
 
     /// Minimal IProfileRepository double — GetProfile feeds export; Create records
