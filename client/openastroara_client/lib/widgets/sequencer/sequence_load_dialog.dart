@@ -29,8 +29,13 @@ class SequenceLoadDialog extends ConsumerWidget {
             height: 120,
             child: Center(child: CircularProgressIndicator()),
           ),
-          error: (e, _) => const _Message(
-              'Couldn\'t load sequences from the server. Check the connection and try again.'),
+          error: (e, st) {
+            // Keep the raw error in the logs (diagnosable in dev); show the user
+            // a clean, actionable message.
+            debugPrint('[sequencer] sequence list load failed: $e\n$st');
+            return const _Message(
+                'Couldn\'t load sequences from the server. Check the connection and try again.');
+          },
           data: (list) {
             if (list == null) {
               return const _Message('Connect to a daemon to load saved sequences.');
@@ -43,7 +48,8 @@ class SequenceLoadDialog extends ConsumerWidget {
             return ConstrainedBox(
               constraints: const BoxConstraints(maxHeight: 360),
               child: ListView.builder(
-              shrinkWrap: true,
+              // No shrinkWrap: the ConstrainedBox bounds the viewport, so the
+              // builder can lazily build only visible rows.
               itemCount: list.length,
               itemBuilder: (context, i) {
                 final s = list[i];

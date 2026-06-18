@@ -15,6 +15,20 @@ class SequencerToolbar extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final connected = ref.watch(sequenceApiProvider) != null;
     final selectedId = ref.watch(selectedSequenceIdProvider);
+    // Resolve the picked sequence's name from the loaded list so the status line
+    // can confirm WHICH sequence is selected (not just "one is").
+    String? selectedName;
+    if (selectedId != null) {
+      final list = ref.watch(sequenceListProvider).asData?.value;
+      if (list != null) {
+        for (final s in list) {
+          if (s.id == selectedId) {
+            selectedName = s.name.isEmpty ? '(untitled)' : s.name;
+            break;
+          }
+        }
+      }
+    }
 
     return Container(
       height: 44,
@@ -62,7 +76,7 @@ class SequencerToolbar extends ConsumerWidget {
               !connected
                   ? 'Idle — connect to a server to load saved sequences'
                   : selectedId != null
-                      ? 'Loaded sequence selected'
+                      ? 'Selected: ${selectedName ?? selectedId}'
                       : 'Idle — Load a saved sequence',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: AraColors.textDisabled,

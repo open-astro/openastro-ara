@@ -139,5 +139,22 @@ void main() {
       await pumpToolbar(tester, connected: true);
       expect(loadButton(tester).onPressed, isNotNull);
     });
+
+    testWidgets('status line names the selected sequence', (tester) async {
+      final container = ProviderContainer(overrides: [
+        sequenceApiProvider.overrideWithValue(_FakeClient()),
+        sequenceListProvider.overrideWith(
+            () => _FakeListNotifier(() async => [_item('s9', 'Veil Nebula')])),
+      ]);
+      addTearDown(container.dispose);
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: SequencerToolbar())),
+      ));
+      container.read(selectedSequenceIdProvider.notifier).select('s9');
+      // pumpAndSettle so the now-watched (async) list provider resolves.
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Veil Nebula'), findsOneWidget);
+    });
   });
 }
