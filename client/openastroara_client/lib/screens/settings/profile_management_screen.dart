@@ -1,11 +1,14 @@
 import 'dart:async';
 
 import 'package:dio/dio.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/profile_list.dart';
 import '../../models/profile_meta.dart';
+import '../../models/profile_share_import_preview.dart';
+import '../../services/profile_share_file.dart';
 import '../../state/profile_management_state.dart';
 import '../../theme/ara_colors.dart';
 import '../wizard/wizard_shell.dart';
@@ -24,6 +27,11 @@ class ProfileManagementScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Profiles'),
         actions: [
+          TextButton.icon(
+            onPressed: () => unawaited(_importProfile(context, ref)),
+            icon: const Icon(Icons.file_download_outlined, size: 18),
+            label: const Text('Import'),
+          ),
           TextButton.icon(
             onPressed: () => _addProfile(context, ref),
             icon: const Icon(Icons.add, size: 18),
@@ -53,6 +61,63 @@ class ProfileManagementScreen extends ConsumerWidget {
     );
     if (created && context.mounted) {
       await ref.read(profileManagementProvider.notifier).refresh();
+    }
+  }
+
+  /// §70 import — pick a shared profile-share file, preview what it'll create +
+  /// what the recipient must re-enter, and on confirm commit it into a new
+  /// (non-active) profile. The imported profile is a template: the user makes it
+  /// active and fills in their own equipment via the wizard afterward.
+  Future<void> _importProfile(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final api = ref.read(profileApiProvider);
+    if (api == null) {
+      messenger.showSnackBar(const SnackBar(
+          content: Text('Connect to a daemon first to import a profile.')));
+      return;
+    }
+
+    final picked = await FilePicker.pickFiles(
+      withData: true, // read bytes in-memory so this works the same on every desktop
+      type: FileType.any,
+      dialogTitle: 'Choose a shared profile file',
+    );
+    if (picked == null || picked.files.isEmpty) return; // user cancelled
+    final bytes = picked.files.single.bytes;
+    if (bytes == null) {
+      messenger.showSnackBar(const SnackBar(
+          content: Text("Couldn't read the selected file.")));
+      return;
+    }
+
+    ProfileShareImportPreview preview;
+    try {
+      preview = await api.importPreview(parseShareManifest(bytes));
+    } on FormatException catch (e) {
+      messenger.showSnackBar(SnackBar(
+          content: Text(e.message), backgroundColor: AraColors.accentError));
+      return;
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(
+          content: Text(_friendly(e, fallback: "Couldn't read that share file")),
+          backgroundColor: AraColors.accentError));
+      return;
+    }
+
+    if (!context.mounted) return;
+    final confirmed = await _confirmImport(context, preview);
+    if (!confirmed) return;
+
+    try {
+      await api.importCommit(preview.importToken);
+      await ref.read(profileManagementProvider.notifier).refresh();
+      messenger.showSnackBar(SnackBar(
+          content: Text('Imported "${preview.profileName}" — make it active, '
+              'then set up your equipment in the wizard.')));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(
+          content: Text(_friendly(e, fallback: "Couldn't import that profile")),
+          backgroundColor: AraColors.accentError));
     }
   }
 }
@@ -174,6 +239,48 @@ Future<String?> _promptName(BuildContext context, {required String initial}) {
       ],
     ),
   ).whenComplete(controller.dispose);
+}
+
+Future<bool> _confirmImport(
+    BuildContext context, ProfileShareImportPreview preview) async {
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text('Import "${preview.profileName}"?'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (final w in preview.warnings) ...[
+              Text(w),
+              const SizedBox(height: 8),
+            ],
+            if (preview.droppedFields.isNotEmpty) ...[
+              const Text("You'll set these up yourself after importing:",
+                  style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 4),
+              for (final d in preview.droppedFields)
+                Padding(
+                  padding: const EdgeInsets.only(left: 8, top: 2),
+                  child: Text('• $d',
+                      style: const TextStyle(color: AraColors.textSecondary)),
+                ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel')),
+        FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Import')),
+      ],
+    ),
+  );
+  return ok ?? false;
 }
 
 Future<bool> _confirmDelete(BuildContext context, String name) async {
