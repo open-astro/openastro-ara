@@ -9,11 +9,11 @@ import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 /// Fake whose `list()` returns a future the test completes by hand, so the
 /// refresh-race ordering is fully controllable. Lifecycle ops are unused here.
 class _FakeSeqClient implements SequenceClient {
-  final List<Completer<List<SequenceListItem>>> calls = [];
+  final List<Completer<SequencePage>> calls = [];
 
   @override
-  Future<List<SequenceListItem>> list({int limit = 50}) {
-    final c = Completer<List<SequenceListItem>>();
+  Future<SequencePage> list({int limit = 50}) {
+    final c = Completer<SequencePage>();
     calls.add(c);
     return c.future;
   }
@@ -48,7 +48,7 @@ void main() {
     final sub = container.listen(sequenceListProvider, (_, _) {});
     addTearDown(sub.close);
     expect(fake.calls.length, 1);
-    fake.calls[0].complete([_item('initial')]);
+    fake.calls[0].complete(SequencePage(items: [_item('initial')]));
     await container.read(sequenceListProvider.future);
 
     final notifier = container.read(sequenceListProvider.notifier);
@@ -59,8 +59,8 @@ void main() {
     expect(fake.calls.length, 3);
 
     // Newer completes first, then the older (slower) one resolves afterwards.
-    fake.calls[2].complete([_item('newer')]);
-    fake.calls[1].complete([_item('older')]);
+    fake.calls[2].complete(SequencePage(items: [_item('newer')]));
+    fake.calls[1].complete(SequencePage(items: [_item('older')]));
     await Future.wait([older, newer]);
 
     // The older response must NOT have clobbered the newer one.

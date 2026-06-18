@@ -116,9 +116,25 @@ void main() {
             'next_cursor': null,
             'has_more': false,
           });
-      final list = await api.list();
-      expect(list.map((s) => s.id), ['s1', 's2']);
-      expect(list[1].currentRunState, SequenceRunState.paused);
+      final page = await api.list();
+      expect(page.items.map((s) => s.id), ['s1', 's2']);
+      expect(page.items[1].currentRunState, SequenceRunState.paused);
+      expect(page.hasMore, isFalse);
+      expect(page.nextCursor, isNull);
+    });
+
+    test('surfaces has_more + next_cursor so a long list is not truncated',
+        () async {
+      final api = _api((_) => {
+            'items': [
+              {'id': 's1', 'name': 'One'},
+            ],
+            'next_cursor': 'eyJvIjoxfQ==',
+            'has_more': true,
+          });
+      final page = await api.list();
+      expect(page.hasMore, isTrue);
+      expect(page.nextCursor, 'eyJvIjoxfQ==');
     });
 
     test('throws on a non-envelope 200 body', () async {

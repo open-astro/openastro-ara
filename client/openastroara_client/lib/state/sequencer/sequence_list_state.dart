@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/sequence/sequence_summary.dart';
@@ -41,7 +42,7 @@ class SequenceListNotifier extends AsyncNotifier<List<SequenceListItem>?> {
     _refreshGen++;
     final api = ref.watch(sequenceApiProvider);
     if (api == null) return null;
-    return api.list();
+    return _loadFirstPage(api);
   }
 
   /// Re-read the list (after a create/delete, or a manual refresh). Surfaces
@@ -54,10 +55,23 @@ class SequenceListNotifier extends AsyncNotifier<List<SequenceListItem>?> {
     final api = ref.read(sequenceApiProvider);
     final next = await AsyncValue.guard<List<SequenceListItem>?>(() async {
       if (api == null) return null;
-      return api.list();
+      return _loadFirstPage(api);
     });
     // Drop a stale write: a newer refresh was issued while this one was in flight.
     if (gen == _refreshGen) state = next;
+  }
+
+  /// Load the first page and return its items. Logs when the daemon reports more
+  /// pages than fit in the default limit — this slice shows only the first page;
+  /// the pagination/"load more" UI (using [SequencePage.nextCursor]) is a later
+  /// slice, and this warning makes the truncation visible until then.
+  Future<List<SequenceListItem>> _loadFirstPage(SequenceClient api) async {
+    final page = await api.list();
+    if (page.hasMore) {
+      debugPrint('[sequencer] sequence list truncated to the first page '
+          '(${page.items.length}); pagination is not wired yet.');
+    }
+    return page.items;
   }
 }
 

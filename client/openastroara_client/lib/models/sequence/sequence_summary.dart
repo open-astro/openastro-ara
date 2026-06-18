@@ -50,6 +50,22 @@ enum SequenceRunState {
       };
 }
 
+/// One page of the sequence list — the daemon's `CursorPage<SequenceListItemDto>`.
+/// Carries [hasMore] / [nextCursor] so a caller can tell "all loaded" from
+/// "first page of many" and page further; dropping them would silently truncate
+/// a long list.
+class SequencePage {
+  final List<SequenceListItem> items;
+  final bool hasMore;
+  final String? nextCursor;
+
+  const SequencePage({
+    required this.items,
+    this.hasMore = false,
+    this.nextCursor,
+  });
+}
+
 /// One row in the sequence list — daemon's `SequenceListItemDto`.
 class SequenceListItem {
   final String id;

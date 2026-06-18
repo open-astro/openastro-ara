@@ -12,9 +12,11 @@ import '../models/server.dart';
 /// `sequence.*` WS stream — so they return the accepted operation id, not a
 /// terminal result.
 abstract interface class SequenceClient {
-  /// First page of the sequence list (newest-first per the daemon). Pagination
-  /// beyond the first page is a later slice; [limit] caps the page size.
-  Future<List<SequenceListItem>> list({int limit});
+  /// First page of the sequence list (newest-first per the daemon). Returns the
+  /// full [SequencePage] (items + hasMore + nextCursor) so a long list isn't
+  /// silently truncated; [limit] caps the page size. Paging further with
+  /// nextCursor is a later slice.
+  Future<SequencePage> list({int limit});
 
   Future<String> start(String id);
   Future<String> pause(String id);
@@ -39,7 +41,7 @@ class SequenceApi implements SequenceClient {
             ));
 
   @override
-  Future<List<SequenceListItem>> list({int limit = 50}) async {
+  Future<SequencePage> list({int limit = 50}) async {
     final res = await _dio.get<dynamic>(
       '/api/v1/sequences',
       queryParameters: <String, dynamic>{'limit': limit},
@@ -53,13 +55,19 @@ class SequenceApi implements SequenceClient {
       throw FormatException(
           'sequences list returned an unexpected body (${data.runtimeType})');
     }
-    return (data['items'] as List)
+    final items = (data['items'] as List)
         .whereType<Map<String, dynamic>>()
         .map(SequenceListItem.fromJson)
         // Drop an id-less (malformed) row — id is the path segment every
         // lifecycle call needs, so an empty one is unusable.
         .where((s) => s.id.isNotEmpty)
         .toList(growable: false);
+    final nextCursor = data['next_cursor'];
+    return SequencePage(
+      items: items,
+      hasMore: data['has_more'] == true,
+      nextCursor: nextCursor is String ? nextCursor : null,
+    );
   }
 
   @override
