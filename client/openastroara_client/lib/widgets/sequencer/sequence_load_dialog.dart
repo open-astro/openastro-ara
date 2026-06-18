@@ -91,11 +91,14 @@ class _RunStateBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = state;
     if (s == null || s == SequenceRunState.idle) return const SizedBox.shrink();
+    // Exhaustive (no wildcard) so a new SequenceRunState forces a compile error
+    // here rather than silently defaulting — matching SequenceRunState.isActive.
     final color = switch (s) {
       SequenceRunState.running || SequenceRunState.starting => AraColors.accentBusy,
       SequenceRunState.paused => AraColors.accentInfo,
       SequenceRunState.failed || SequenceRunState.aborting => AraColors.accentError,
-      _ => AraColors.textSecondary, // stopped / completed
+      SequenceRunState.stopped || SequenceRunState.completed => AraColors.textSecondary,
+      SequenceRunState.idle => AraColors.textSecondary, // unreachable (early-returned above)
     };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
