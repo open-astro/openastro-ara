@@ -139,7 +139,11 @@ class InstructionField {
     this.enumValues,
     this.editable = true,
     this.requiresUserInput = false,
-  });
+  }) : assert(
+          enumLabels == null || enumValues == null,
+          'a field is either an intEnum (enumLabels) or a stringEnum (enumValues), '
+          'never both — setting both is an ambiguous authoring mistake.',
+        );
 }
 
 /// One draggable instruction in the palette.

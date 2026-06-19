@@ -63,6 +63,14 @@ void main() {
       expect(others, isEmpty);
     });
 
+    test('InstructionField rejects setting both enumLabels and enumValues', () {
+      expect(
+        () => InstructionField('k', 'l', InstructionFieldType.intEnum,
+            enumLabels: const {0: 'a'}, enumValues: const ['b']),
+        throwsA(isA<AssertionError>()),
+      );
+    });
+
     test('intEnum/stringEnum fields carry their option set', () {
       for (final def in instructionCatalog) {
         for (final f in def.fields) {
