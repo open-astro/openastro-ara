@@ -127,27 +127,36 @@ class SequenceImportResult {
       Object.hashAll(warnings), Object.hashAll(droppedInstructionTypes));
 }
 
+/// Recursion cap for [_deepUnmodifiable] — a corrupt/adversarial body that nests
+/// past this throws rather than overflowing the stack. Generous (real NINA
+/// sequences nest <~20 JSON levels) but well under the stack limit. Mirrors the
+/// parser's own depth guard ([ninaParseMaxDepth]).
+const int _maxBodyDepth = 512;
+
 /// Recursively wrap a JSON value's maps and lists unmodifiable, so a
 /// [SequenceDetail.body] can't be mutated at ANY depth — making it a true
 /// immutable value rather than a shallow (top-level-only) tripwire.
-Object? _deepUnmodifiable(Object? value) {
+Object? _deepUnmodifiable(Object? value, [int depth = 0]) {
+  if (depth > _maxBodyDepth) {
+    throw const FormatException('sequence body nests too deeply');
+  }
   if (value is Map) {
     // Keep nested maps typed Map<String, dynamic> (JSON keys are always strings)
     // so save-b's editor can `as Map<String, dynamic>` without a runtime cast
     // failure on the frozen nested maps.
     return Map<String, dynamic>.unmodifiable(<String, dynamic>{
-      for (final e in value.entries) '${e.key}': _deepUnmodifiable(e.value),
+      for (final e in value.entries) '${e.key}': _deepUnmodifiable(e.value, depth + 1),
     });
   }
   if (value is List) {
-    return List<dynamic>.unmodifiable(value.map(_deepUnmodifiable));
+    return List<dynamic>.unmodifiable(value.map((v) => _deepUnmodifiable(v, depth + 1)));
   }
   return value;
 }
 
 Map<String, dynamic> _deepUnmodifiableBody(Map<String, dynamic> body) =>
     Map<String, dynamic>.unmodifiable(<String, dynamic>{
-      for (final e in body.entries) e.key: _deepUnmodifiable(e.value),
+      for (final e in body.entries) e.key: _deepUnmodifiable(e.value, 1),
     });
 
 /// Full detail of one saved sequence (`GET /api/v1/sequences/{id}`) — daemon's
@@ -173,8 +182,10 @@ class SequenceDetail {
     this.templateOrigin,
   }) : body = _deepUnmodifiableBody(body);
 
-  // Internal: [body] is already deeply-unmodifiable (e.g. reused from another
-  // instance), so skip re-wrapping it.
+  // Internal fast path. PRECONDITION: [body] MUST already be deeply-unmodifiable
+  // (only ever called from copyWith with a body reused from another instance) —
+  // it skips the deep-wrap, so passing a mutable map would break the class's
+  // immutability invariant.
   SequenceDetail._raw({
     required this.id,
     required this.name,

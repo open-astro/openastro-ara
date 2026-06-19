@@ -428,6 +428,17 @@ void main() {
       expect(d.body['Items'], isA<Map<String, dynamic>>());
       expect(values.first, isA<Map<String, dynamic>>());
     });
+
+    test('a pathologically deep body throws instead of overflowing the stack',
+        () {
+      // Build a > _maxBodyDepth (512) nested chain.
+      Map<String, dynamic> deep = {'leaf': 1};
+      for (var i = 0; i < 600; i++) {
+        deep = {'n': deep};
+      }
+      expect(() => SequenceDetail(id: 's1', body: deep),
+          throwsA(isA<FormatException>()));
+    });
   });
 
   group('SequenceApi.updateSequence', () {
