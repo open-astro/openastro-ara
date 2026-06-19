@@ -131,6 +131,20 @@ void main() {
       expect(node['Inherited'], false);
     });
 
+    test('Cool/Warm Camera ramp a sensor-safe non-zero Duration (double)', () {
+      final cool = instructionForType(
+              'OpenAstroAra.Sequencer.SequenceItem.Camera.CoolCamera, OpenAstroAra.Sequencer')!
+          .build();
+      expect(cool['Duration'], isA<double>());
+      expect(cool['Duration'], greaterThan(0)); // no instant thermal jump
+      expect(cool['Temperature'], isA<double>());
+      final warm = instructionForType(
+              'OpenAstroAra.Sequencer.SequenceItem.Camera.WarmCamera, OpenAstroAra.Sequencer')!
+          .build();
+      expect(warm['Duration'], isA<double>());
+      expect(warm['Duration'], greaterThan(0));
+    });
+
     test('SetTracking default is Sidereal (0)', () {
       final node = instructionForType(
               'OpenAstroAra.Sequencer.SequenceItem.Telescope.SetTracking, OpenAstroAra.Sequencer')!

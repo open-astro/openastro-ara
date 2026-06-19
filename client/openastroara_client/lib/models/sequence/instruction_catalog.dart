@@ -248,7 +248,9 @@ const List<InstructionDef> instructionCatalog = [
     icon: Icons.ac_unit_outlined,
     fields: [
       InstructionField('Temperature', 'Target (°C)', InstructionFieldType.number, defaultValue: 0.0),
-      InstructionField('Duration', 'Duration (min)', InstructionFieldType.number, defaultValue: 0.0),
+      // A 5-minute ramp by default — a 0-min duration tells the daemon to jump
+      // straight to the target, which thermally shocks the sensor.
+      InstructionField('Duration', 'Duration (min)', InstructionFieldType.number, defaultValue: 5.0),
     ],
   ),
   InstructionDef(
@@ -257,7 +259,8 @@ const List<InstructionDef> instructionCatalog = [
     category: InstructionCategory.camera,
     icon: Icons.wb_sunny_outlined,
     fields: [
-      InstructionField('Duration', 'Duration (min)', InstructionFieldType.number, defaultValue: 0.0),
+      // 5-minute ramp by default (gentle warm-up), as with Cool Camera.
+      InstructionField('Duration', 'Duration (min)', InstructionFieldType.number, defaultValue: 5.0),
     ],
   ),
   // ── Filter Wheel ────────────────────────────────────────────────────────────
