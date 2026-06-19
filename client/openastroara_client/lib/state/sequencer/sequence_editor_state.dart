@@ -35,28 +35,37 @@ class SequenceEditorState {
   /// indices from the root (`[]` = the root container itself).
   final NodePath? selectedPath;
 
-  const SequenceEditorState({
+  /// Whether the working [body] differs from the loaded/saved [originalBody].
+  /// Computed ONCE here (not per read) so widget rebuilds that watch the
+  /// provider don't each pay an O(n) deep compare: an identity short-circuit
+  /// makes the freshly-loaded / just-saved case (where the two alias the same
+  /// map) O(1), and only an actually-edited body pays the deep compare — which
+  /// still reports a revert-to-original as not dirty.
+  final bool isDirty;
+
+  SequenceEditorState({
     required this.id,
     required this.body,
     required this.originalBody,
     this.selectedPath,
-  });
-
-  /// True when the working body differs from the loaded/saved original.
-  bool get isDirty => !_bodyEquality.equals(body, originalBody);
+  }) : isDirty = !identical(body, originalBody) &&
+            !_bodyEquality.equals(body, originalBody);
 
   SequenceEditorState _copyWith({
     Map<String, dynamic>? body,
     Map<String, dynamic>? originalBody,
     NodePath? selectedPath,
     bool clearSelection = false,
-  }) =>
-      SequenceEditorState(
-        id: id,
-        body: body ?? this.body,
-        originalBody: originalBody ?? this.originalBody,
-        selectedPath: clearSelection ? null : (selectedPath ?? this.selectedPath),
-      );
+  }) {
+    assert(!(clearSelection && selectedPath != null),
+        'pass either clearSelection or selectedPath, not both');
+    return SequenceEditorState(
+      id: id,
+      body: body ?? this.body,
+      originalBody: originalBody ?? this.originalBody,
+      selectedPath: clearSelection ? null : (selectedPath ?? this.selectedPath),
+    );
+  }
 }
 
 /// Holds the [SequenceEditorState] for the sequence open in the editor, or null
@@ -69,6 +78,12 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
   /// Load [detail] into the editor (discarding any current edits), with nothing
   /// selected. Seeds both [SequenceEditorState.body] and `originalBody` from the
   /// detail's raw body, so a freshly-loaded sequence is not dirty.
+  ///
+  /// `body` and `originalBody` intentionally alias the same map: `detail.body`
+  /// is deeply unmodifiable and a refresh produces a NEW [SequenceDetail] (it
+  /// never mutates an existing body), so there's no aliasing hazard — and the
+  /// shared instance lets [SequenceEditorState.isDirty] short-circuit on
+  /// identity until the first edit replaces `body` with a fresh map.
   void load(SequenceDetail detail) {
     state = SequenceEditorState(
       id: detail.id,
@@ -93,12 +108,14 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
 
   /// Insert a fresh node built from [def] as a child of the container at
   /// [parentPath] at [index] (clamped), and select the new node. No-op if no
-  /// sequence is loaded or [parentPath] doesn't resolve to a container.
+  /// sequence is loaded, or [parentPath] doesn't resolve to a container (a leaf
+  /// instruction can't take children — inserting would graft a spurious `Items`
+  /// wrapper onto it).
   void insertInstruction(NodePath parentPath, int index, InstructionDef def) {
     final s = state;
     if (s == null) return;
     final parent = nodeAt(s.body, parentPath);
-    if (parent == null) return;
+    if (parent == null || !isContainer(parent)) return;
     final landed = index.clamp(0, childrenOf(parent).length);
     final newBody = insertChild(s.body, parentPath, landed, def.build());
     state = s._copyWith(
@@ -118,9 +135,11 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
   }
 
   /// Reorder a child of the container at [parentPath]. [oldIndex]/[newIndex]
-  /// follow `nina_dom.reorderChild`'s Flutter `onReorder` convention. Clears
-  /// selection (sibling paths shift). No-op if [parentPath] is not a container
-  /// or [oldIndex] is out of range.
+  /// follow `nina_dom.reorderChild`'s Flutter `onReorder` convention; [oldIndex]
+  /// is bounds-checked here (no-op when out of range) while [newIndex] is
+  /// clamped downstream by `reorderChild` (so a drop at/after the end appends).
+  /// Clears selection (sibling paths shift). No-op if [parentPath] is not a
+  /// resolvable node.
   void reorder(NodePath parentPath, int oldIndex, int newIndex) {
     final s = state;
     if (s == null) return;

@@ -100,6 +100,15 @@ void main() {
       ctrl().insertInstruction(const [9], 0, takeExposure());
       expect(read()!.body, same(before));
     });
+
+    test('no-op when the parent path resolves to a leaf instruction', () {
+      ctrl().load(sampleDetail());
+      final before = read()!.body;
+      // [0] is the SwitchFilter leaf — can't take children.
+      ctrl().insertInstruction(const [0], 0, takeExposure());
+      expect(read()!.body, same(before));
+      expect(read()!.isDirty, isFalse);
+    });
   });
 
   group('removeNode', () {

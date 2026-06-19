@@ -71,6 +71,18 @@ Map<String, dynamic> withChildren(
   return Map<String, dynamic>.of(node)..['Items'] = wrapper;
 }
 
+/// Whether [node] can hold child instructions (a container) rather than being a
+/// leaf instruction. Containers carry an `Items` collection and/or a
+/// `.Container.` `$type` (true for both the native OpenAstroAra and imported
+/// NINA namespaces); leaf instructions have neither. Used to reject inserting a
+/// child into a leaf, which would otherwise graft a spurious `Items` wrapper
+/// onto an instruction node.
+bool isContainer(Map<String, dynamic> node) {
+  if (node['Items'] != null) return true;
+  final type = node[r'$type'];
+  return type is String && type.contains('.Container.');
+}
+
 /// The node at [path], or null if any index is out of range. [path] `[]` → root.
 Map<String, dynamic>? nodeAt(Map<String, dynamic> root, NodePath path) {
   var node = root;
