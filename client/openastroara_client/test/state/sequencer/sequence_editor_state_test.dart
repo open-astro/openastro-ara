@@ -252,6 +252,41 @@ void main() {
     });
   });
 
+  group('moveNodeTo (drag-and-drop reparent)', () {
+    test('reparents a leaf into a sibling container, clears selection, dirty', () {
+      ctrl().load(sampleDetail()); // root: [SwitchFilter, container([TakeExposure])]
+      ctrl().select(const [0]);
+      ctrl().moveNodeTo(const [0], const [1], 0); // SwitchFilter into the container
+      final s = read()!;
+      expect(childrenOf(s.body), hasLength(1)); // root now just the container
+      final container = nodeAt(s.body, [0])!;
+      expect(childrenOf(container).map((n) => n[r'$type']),
+          ['X.SwitchFilter', 'X.TakeExposure']);
+      expect(s.selectedPath, isNull); // selection cleared (paths shifted)
+      expect(s.isDirty, isTrue);
+    });
+
+    test('reparents a nested leaf out to the root container', () {
+      ctrl().load(sampleDetail());
+      ctrl().moveNodeTo(const [1, 0], const [], 0); // TakeExposure → root[0]
+      final s = read()!;
+      expect(childrenOf(s.body), hasLength(3));
+      expect(childrenOf(s.body)[0][r'$type'], 'X.TakeExposure');
+      expect(childrenOf(nodeAt(s.body, [2])!), isEmpty); // the emptied container
+      expect(s.isDirty, isTrue);
+    });
+
+    test('no-op into a leaf, into self/descendant, or for the root', () {
+      ctrl().load(sampleDetail());
+      final before = read()!.body;
+      ctrl().moveNodeTo(const [1], const [0], 0); // [0] is a leaf → not a container
+      ctrl().moveNodeTo(const [1], const [1], 0); // into self
+      ctrl().moveNodeTo(const [1], const [1, 0], 0); // into descendant
+      ctrl().moveNodeTo(const [], const [1], 0); // moving the root
+      expect(read()!.body, same(before));
+    });
+  });
+
   group('setNodeField', () {
     test('edits a field, keeps selection, goes dirty', () {
       ctrl().load(sampleDetail());

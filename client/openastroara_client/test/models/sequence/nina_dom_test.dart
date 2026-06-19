@@ -385,4 +385,59 @@ void main() {
       expect((wrapper[r'$values'] as List), hasLength(1));
     });
   });
+
+  group('isAncestorOrSelf', () {
+    test('prefix relationships', () {
+      expect(isAncestorOrSelf(const [], const [0, 1]), isTrue); // root ancestors all
+      expect(isAncestorOrSelf(const [1], const [1, 0]), isTrue);
+      expect(isAncestorOrSelf(const [1], const [1]), isTrue); // self
+      expect(isAncestorOrSelf(const [1], const [0]), isFalse);
+      expect(isAncestorOrSelf(const [1, 0], const [1]), isFalse); // longer ≠ ancestor
+    });
+  });
+
+  group('moveSubtree (drag-and-drop reparent)', () {
+    test('moves a leaf into a sibling container, fixing the index shift', () {
+      // Move the SwitchFilter [0] into the nested container [1]. Removing [0]
+      // shifts the container from [1] to [0], which the op must compensate for.
+      final out = moveSubtree(sampleBody(), const [0], const [1], 0);
+      expect(childrenOf(out), hasLength(1)); // root now holds just the container
+      final container = nodeAt(out, [0])!;
+      expect(childrenOf(container), hasLength(2));
+      expect(childrenOf(container)[0][r'$type'], contains('SwitchFilter'));
+      expect(childrenOf(container)[1][r'$type'], contains('TakeExposure'));
+    });
+
+    test('moves a nested leaf out to the root', () {
+      final out = moveSubtree(sampleBody(), const [1, 0], const [], 0);
+      expect(childrenOf(out), hasLength(3));
+      expect(childrenOf(out)[0][r'$type'], contains('TakeExposure'));
+      expect(childrenOf(nodeAt(out, [2])!), isEmpty); // the emptied container
+    });
+
+    test('a same-parent move uses the post-removal index convention', () {
+      // Differs from reorderChild (pre-removal index): after removing [0] the
+      // root list is [container]; inserting at post-removal index 1 puts the
+      // SwitchFilter last → [container, SwitchFilter].
+      final out = moveSubtree(sampleBody(), const [0], const [], 1);
+      expect(childrenOf(out).map((n) => n[r'$type']),
+          ['X.SequentialContainer', 'X.SwitchFilter']);
+    });
+
+    test('does not mutate the source body', () {
+      final src = sampleBody();
+      moveSubtree(src, const [0], const [1], 0);
+      expect(childrenOf(src), hasLength(2)); // untouched
+      expect(childrenOf(nodeAt(src, [1])!), hasLength(1));
+    });
+
+    test('rejects moving the root, into self, or into a descendant', () {
+      expect(() => moveSubtree(sampleBody(), const [], const [1], 0),
+          throwsArgumentError); // root
+      expect(() => moveSubtree(sampleBody(), const [1], const [1], 0),
+          throwsArgumentError); // into self
+      expect(() => moveSubtree(sampleBody(), const [1], const [1, 0], 0),
+          throwsArgumentError); // into descendant
+    });
+  });
 }

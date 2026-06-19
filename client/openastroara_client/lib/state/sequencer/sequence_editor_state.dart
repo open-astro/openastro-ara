@@ -205,6 +205,26 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
     );
   }
 
+  /// Move the subtree at [fromPath] into the container at [toParentPath] at
+  /// [toIndex] (a post-removal index, clamped) — the drag-and-drop reparent.
+  /// Clears selection (paths shift wholesale). No-op if no sequence is loaded,
+  /// [fromPath] is the root or unresolvable, [toParentPath] isn't a container, or
+  /// the destination is the node itself or one of its descendants (which would
+  /// orphan it). Goes through `nina_dom.moveSubtree`.
+  void moveNodeTo(NodePath fromPath, NodePath toParentPath, int toIndex) {
+    final s = state;
+    if (s == null || fromPath.isEmpty) return;
+    if (nodeAt(s.body, fromPath) == null) return;
+    final dest = nodeAt(s.body, toParentPath);
+    if (dest == null || !isContainer(dest)) return;
+    // A leaf can't take children, and a node can't move inside itself.
+    if (isAncestorOrSelf(fromPath, toParentPath)) return;
+    state = s._copyWith(
+      body: moveSubtree(s.body, fromPath, toParentPath, toIndex),
+      clearSelection: true,
+    );
+  }
+
   /// Set scalar field [key] to [value] on the node at [path], keeping selection
   /// (structure is unchanged). No-op for an unresolvable path.
   void setNodeField(NodePath path, String key, Object? value) {

@@ -321,3 +321,61 @@ Map<String, dynamic> reorderChild(Map<String, dynamic> root, NodePath parentPath
       kids.insert(target.clamp(0, kids.length), node);
       return withChildren(parent, kids);
     });
+
+/// Whether [ancestor] is [path] itself or one of its ancestors — i.e. [ancestor]
+/// is a prefix of [path]. Used to reject dropping a subtree into itself or a
+/// descendant in [moveSubtree].
+bool isAncestorOrSelf(NodePath ancestor, NodePath path) {
+  if (ancestor.length > path.length) return false;
+  for (var i = 0; i < ancestor.length; i++) {
+    if (ancestor[i] != path[i]) return false;
+  }
+  return true;
+}
+
+/// Move the subtree at [fromPath] to be a child of the container at
+/// [toParentPath], inserted at [toIndex] (clamped) in that container's child list
+/// **as it exists after the moved node is removed** (a post-removal index — note
+/// this differs from [reorderChild], which takes a *pre-removal* Flutter
+/// `onReorder` index; a UI drop handler that reuses an onReorder index for a
+/// same-container move must convert it). Returns a new root. This is the
+/// drag-and-drop reparent primitive (cross-container move); a same-container move
+/// just reorders.
+///
+/// Throws [ArgumentError] if [fromPath] is empty (the root can't move) or if
+/// [toParentPath] is [fromPath] or a descendant of it (a subtree can't move into
+/// itself — it would orphan the destination or cycle). Throws [RangeError] if
+/// [fromPath] doesn't resolve, or if [toParentPath] is otherwise unresolvable
+/// (propagated from [insertChild] / `_rebuild`) — callers that take a path from
+/// untrusted UI state should pre-validate, as [SequenceEditorController.moveNodeTo]
+/// does.
+///
+/// Removal only mutates the sibling list at [fromPath]'s parent (depth
+/// `p = fromPath.length - 1`), so afterwards exactly one element of
+/// [toParentPath] can have shifted: the one at depth `p`, when it shares
+/// [fromPath]'s parent prefix and sat after the removed index. That single index
+/// is decremented before the insert; deeper indices address lists the removal
+/// never touched.
+Map<String, dynamic> moveSubtree(Map<String, dynamic> root, NodePath fromPath,
+    NodePath toParentPath, int toIndex) {
+  if (fromPath.isEmpty) {
+    throw ArgumentError('moveSubtree cannot move the root (empty fromPath)');
+  }
+  final node = nodeAt(root, fromPath);
+  if (node == null) {
+    throw RangeError('moveSubtree fromPath does not resolve');
+  }
+  if (isAncestorOrSelf(fromPath, toParentPath)) {
+    throw ArgumentError(
+        'moveSubtree cannot move a node into itself or one of its descendants');
+  }
+  final removed = removeAt(root, fromPath);
+  final p = fromPath.length - 1;
+  final adjustedParent = List<int>.of(toParentPath);
+  if (adjustedParent.length > p &&
+      isAncestorOrSelf(fromPath.sublist(0, p), adjustedParent) &&
+      adjustedParent[p] > fromPath[p]) {
+    adjustedParent[p] -= 1;
+  }
+  return insertChild(removed, adjustedParent, toIndex, node);
+}
