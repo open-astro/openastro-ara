@@ -32,39 +32,79 @@ class SequenceFieldEditor extends ConsumerWidget {
 
     final type = node[r'$type'];
     final def = type is String ? instructionForType(type) : null;
-    // Null when the node isn't catalogued; only read in the `def != null` arm.
-    final fields = def?.fields.where((f) => f.editable).toList();
+    final editable = def?.fields.where((f) => f.editable).toList() ?? const [];
+    // Containers are user-named; their Name is edited here (leaves never carry
+    // one). isContainer recognises both catalogued and imported container types.
+    final container = isContainer(node);
+    final notifier = ref.read(sequenceEditorProvider.notifier);
 
-    return ListView(
-      padding: const EdgeInsets.all(12),
-      children: [
-        Text(
-          nodeLabel(node),
-          style: const TextStyle(
-              color: AraColors.textPrimary, fontSize: 14, fontWeight: FontWeight.w600),
+    final children = <Widget>[
+      Text(
+        nodeLabel(node),
+        style: const TextStyle(
+            color: AraColors.textPrimary, fontSize: 14, fontWeight: FontWeight.w600),
+      ),
+      const SizedBox(height: 12),
+      if (container) ...[
+        _NameEditor(
+          // Fresh control when the selection changes (re-seeds initialValue).
+          key: ValueKey('${selectedPath.join(".")}/__name'),
+          name: node['Name'] is String ? node['Name'] as String : '',
+          onChanged: (v) => notifier.setNodeField(selectedPath, 'Name', v),
         ),
         const SizedBox(height: 12),
-        if (def == null)
-          const _Placeholder('This instruction has no editable fields here.')
-        else if (fields!.isEmpty)
-          const _Placeholder('No settings — this instruction runs as-is.')
-        else
-          for (final field in fields)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: _FieldControl(
-                // Fresh control when the selection or field changes.
-                key: ValueKey('${selectedPath.join(".")}/${field.key}'),
-                field: field,
-                value: node[field.key],
-                onChanged: (v) => ref
-                    .read(sequenceEditorProvider.notifier)
-                    .setNodeField(selectedPath, field.key, v),
-              ),
-            ),
       ],
-    );
+      for (final field in editable)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: _FieldControl(
+            // Fresh control when the selection or field changes.
+            key: ValueKey('${selectedPath.join(".")}/${field.key}'),
+            field: field,
+            value: node[field.key],
+            onChanged: (v) => notifier.setNodeField(selectedPath, field.key, v),
+          ),
+        ),
+    ];
+
+    // A placeholder only when there's nothing else to show — never for a
+    // container (its Name editor is the setting).
+    if (editable.isEmpty && !container) {
+      children.add(_Placeholder(def == null
+          ? 'This instruction has no editable fields here.'
+          : 'No settings — this instruction runs as-is.'));
+    }
+
+    return ListView(padding: const EdgeInsets.all(12), children: children);
   }
+}
+
+/// A container's `Name` editor — a labelled free-text field. Keyed by the
+/// selected path so selecting a different container re-seeds it; commits every
+/// keystroke straight to the raw body's `Name` (an empty name is allowed — the
+/// tree falls back to the catalog label for it).
+class _NameEditor extends StatelessWidget {
+  const _NameEditor({super.key, required this.name, required this.onChanged});
+
+  final String name;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Name',
+              style: TextStyle(color: AraColors.textSecondary, fontSize: 12)),
+          const SizedBox(height: 4),
+          TextFormField(
+            initialValue: name,
+            style: const TextStyle(color: AraColors.textPrimary, fontSize: 13),
+            decoration:
+                const InputDecoration(isDense: true, border: OutlineInputBorder()),
+            onChanged: onChanged,
+          ),
+        ],
+      );
 }
 
 class _FieldControl extends StatelessWidget {

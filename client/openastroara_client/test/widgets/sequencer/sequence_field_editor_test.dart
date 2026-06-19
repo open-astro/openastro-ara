@@ -334,4 +334,31 @@ void main() {
     ));
     expect(field.controller!.text, '1'); // displayed text corrected (no divergence)
   });
+
+  group('container Name editor', () {
+    testWidgets('a selected container shows a Name field, no "No settings" line',
+        (tester) async {
+      // The root SequentialContainer (named "root") is selected.
+      await _pump(tester, detail: sampleDetail(), select: const []);
+      expect(find.text('Name'), findsOneWidget); // the field label
+      // A container has no other editable fields, so it's the only text field.
+      expect(find.byType(TextFormField), findsOneWidget);
+      expect(find.text('No settings — this instruction runs as-is.'), findsNothing);
+    });
+
+    testWidgets('editing the Name writes it back to the container and goes dirty',
+        (tester) async {
+      final c = await _pump(tester, detail: sampleDetail(), select: const []);
+      await tester.enterText(find.byType(TextFormField), 'Lights');
+      await tester.pump();
+      expect(_nodeAt(c, const [])['Name'], 'Lights');
+      expect(c.read(sequenceEditorProvider)!.isDirty, isTrue);
+    });
+
+    testWidgets('a leaf instruction has no Name editor', (tester) async {
+      // StartGuiding (index 1) is a leaf with a boolean field, not a Name.
+      await _pump(tester, detail: sampleDetail(), select: const [1]);
+      expect(find.text('Name'), findsNothing);
+    });
+  });
 }
