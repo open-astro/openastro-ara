@@ -398,6 +398,8 @@ void main() {
       expect(renamed.name, 'B');
       expect(renamed.description, 'desc'); // kept
       expect(renamed.body, {'x': 1}); // kept
+      // Body unchanged → reuse the same already-unmodifiable map (no re-wrap).
+      expect(identical(renamed.body, base.body), isTrue);
       expect(renamed.id, 's1'); // not copyable
       expect(renamed.templateOrigin, 'T');
       // null description does NOT clear it (documented limitation).

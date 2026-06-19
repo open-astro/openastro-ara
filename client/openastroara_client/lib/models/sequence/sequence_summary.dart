@@ -170,6 +170,16 @@ class SequenceDetail {
     this.templateOrigin,
   }) : body = _deepUnmodifiableBody(body);
 
+  // Internal: [body] is already deeply-unmodifiable (e.g. reused from another
+  // instance), so skip re-wrapping it.
+  SequenceDetail._raw({
+    required this.id,
+    required this.name,
+    required this.description,
+    required this.body,
+    required this.templateOrigin,
+  });
+
   factory SequenceDetail.fromJson(Map<String, dynamic> json) => SequenceDetail(
         id: _str(json['id']) ?? '',
         name: _str(json['name']) ?? '',
@@ -184,13 +194,23 @@ class SequenceDetail {
   // way to CLEAR description back to null here. Fine for the create/rename flows;
   // if save-b's editor needs to blank a description, add a clear sentinel.
   SequenceDetail copyWith({String? name, String? description, Map<String, dynamic>? body}) =>
-      SequenceDetail(
-        id: id,
-        name: name ?? this.name,
-        description: description ?? this.description,
-        body: body ?? this.body,
-        templateOrigin: templateOrigin,
-      );
+      body == null
+          // Body unchanged → reuse the already-unmodifiable map (no re-wrap),
+          // the common path for a metadata-only edit like rename.
+          ? SequenceDetail._raw(
+              id: id,
+              name: name ?? this.name,
+              description: description ?? this.description,
+              body: this.body,
+              templateOrigin: templateOrigin,
+            )
+          : SequenceDetail(
+              id: id,
+              name: name ?? this.name,
+              description: description ?? this.description,
+              body: body,
+              templateOrigin: templateOrigin,
+            );
 
   // DeepCollectionEquality (not mapEquals): the NINA body is deeply nested JSON,
   // and mapEquals compares nested-Map values by identity — so two fresh parses
