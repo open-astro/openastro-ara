@@ -70,6 +70,18 @@ public static class SequenceEndpoints {
            .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
            .WithName("CreateSequence");
 
+        // §38.5 dry-run validation: run a raw body through the schema validator
+        // without persisting. Always 200 — the body reports valid/reason, so the
+        // editor can surface a problem before the user saves or runs.
+        seq.MapPost("/validate",
+                (SequenceValidateRequestDto request) => {
+                    var (valid, reason) = SequenceSchemaValidator.Validate(request.Body);
+                    return Results.Ok(new SequenceValidationResultDto(valid, reason));
+                })
+           .Accepts<SequenceValidateRequestDto>("application/json")
+           .Produces<SequenceValidationResultDto>(StatusCodes.Status200OK)
+           .WithName("ValidateSequence");
+
         seq.MapPatch("/{id:guid}",
                 async (Guid id, [FromBody] SequenceUpdateRequestDto request, ISequenceService svc, CancellationToken ct) => {
                     // §38.5: only validate Body if it's being updated (PATCH semantics —

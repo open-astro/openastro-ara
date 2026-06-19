@@ -122,6 +122,17 @@ public sealed record TemplateInstantiateRequestDto(
     string NewSequenceName,
     System.Text.Json.JsonElement? Parameters);
 
+/// <summary>POST /api/v1/sequences/validate body (§38.5). Dry-run a raw body
+/// through the schema validator without persisting anything.</summary>
+public sealed record SequenceValidateRequestDto(
+    System.Text.Json.JsonElement Body);
+
+/// <summary>Result of POST /api/v1/sequences/validate. <c>Reason</c> is the
+/// first schema problem when <c>Valid</c> is false, else null.</summary>
+public sealed record SequenceValidationResultDto(
+    bool Valid,
+    string? Reason);
+
 /// <summary>POST /api/v1/sequences/import body per §38.4.</summary>
 public sealed record SequenceImportRequestDto(
     string NewName,

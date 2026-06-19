@@ -31,6 +31,9 @@ Map<String, dynamic> _bodyFor(String id) => {
 
 class _FakeClient implements SequenceClient {
   @override
+  Future<SequenceValidationResult> validate(Map<String, dynamic> body) async =>
+      const SequenceValidationResult(valid: true);
+  @override
   Future<SequenceImportResult> importNina(String n, Map<String, dynamic> f,
           {bool treatWarningsAsErrors = false}) async =>
       const SequenceImportResult(createdSequenceId: 'new');

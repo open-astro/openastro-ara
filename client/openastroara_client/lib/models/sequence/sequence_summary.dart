@@ -127,6 +127,30 @@ class SequenceImportResult {
       Object.hashAll(warnings), Object.hashAll(droppedInstructionTypes));
 }
 
+/// Result of `POST /api/v1/sequences/validate` (§38.5): whether the body passes
+/// the daemon's schema validator, and the first problem [reason] when not.
+class SequenceValidationResult {
+  final bool valid;
+  final String? reason;
+
+  const SequenceValidationResult({required this.valid, this.reason});
+
+  factory SequenceValidationResult.fromJson(Map<String, dynamic> json) =>
+      SequenceValidationResult(
+        valid: json['valid'] == true,
+        reason: _str(json['reason']),
+      );
+
+  @override
+  bool operator ==(Object other) =>
+      other is SequenceValidationResult &&
+      other.valid == valid &&
+      other.reason == reason;
+
+  @override
+  int get hashCode => Object.hash(valid, reason);
+}
+
 /// Recursion cap for [_deepUnmodifiable] — a corrupt/adversarial body that nests
 /// past this throws rather than overflowing the stack. Generous (real NINA
 /// sequences nest <~20 JSON levels) but well under the stack limit. Mirrors the

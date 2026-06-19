@@ -48,6 +48,9 @@ class SequencerToolbar extends ConsumerWidget {
     // Save is enabled only when the open sequence has unsaved edits.
     final dirty = ref.watch(sequenceEditorProvider.select((s) => s?.isDirty ?? false));
     final canSave = hasSelection && dirty;
+    // Validate works on whatever's loaded in the editor (even if not dirty).
+    final editorLoaded = ref.watch(sequenceEditorProvider.select((s) => s != null));
+    final canValidate = connected && editorLoaded && !busy;
     final isRunning = runState == SequenceRunState.running;
     final isPaused = runState == SequenceRunState.paused;
     final isActive = runState?.isActive ?? false;
@@ -117,10 +120,14 @@ class SequencerToolbar extends ConsumerWidget {
                           id: selectedId, name: selectedName ?? selectedId)
                       : null,
                 ),
-                const _ToolButton(
-                    icon: Icons.fact_check_outlined,
-                    label: 'Validate',
-                    onPressed: null),
+                _ToolButton(
+                  icon: Icons.fact_check_outlined,
+                  label: 'Validate',
+                  // Dry-run the working body through the daemon's schema
+                  // validator and report valid / the first problem.
+                  onPressed:
+                      canValidate ? () => _validate(context, ref) : null,
+                ),
                 const VerticalDivider(width: 16, indent: 8, endIndent: 8),
                 _ToolButton(
                   icon: Icons.play_arrow,
@@ -248,6 +255,38 @@ Future<void> _save(BuildContext context, WidgetRef ref) async {
     debugPrint('[sequencer] unexpected save error: $e');
     messenger.showSnackBar(const SnackBar(
       content: Text("Couldn't save the sequence. Check the connection and try again."),
+      backgroundColor: AraColors.accentError,
+    ));
+  } finally {
+    busy.setBusy(false);
+  }
+}
+
+/// Dry-run the editor's working body through the daemon's schema validator
+/// (`POST /validate`) and report the result in a SnackBar — green when valid,
+/// red with the first problem reason otherwise. Bracketed by the busy fence like
+/// [_save]; validation never persists, so it's safe regardless of run state.
+Future<void> _validate(BuildContext context, WidgetRef ref) async {
+  if (ref.read(sequenceCommandBusyProvider)) return;
+  final editor = ref.read(sequenceEditorProvider);
+  final api = ref.read(sequenceApiProvider);
+  if (editor == null || api == null) return;
+  final messenger = ScaffoldMessenger.of(context);
+  final busy = ref.read(sequenceCommandBusyProvider.notifier);
+  busy.setBusy(true);
+  try {
+    final result = await api.validate(editor.body);
+    messenger.showSnackBar(SnackBar(
+      content: Text(result.valid
+          ? 'Sequence is valid.'
+          : 'Invalid: ${result.reason ?? 'failed schema validation.'}'),
+      backgroundColor:
+          result.valid ? AraColors.accentConnected : AraColors.accentError,
+    ));
+  } catch (e) {
+    debugPrint('[sequencer] validate error: $e');
+    messenger.showSnackBar(const SnackBar(
+      content: Text("Couldn't validate the sequence. Check the connection and try again."),
       backgroundColor: AraColors.accentError,
     ));
   } finally {
