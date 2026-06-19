@@ -82,8 +82,10 @@ Map<String, dynamic> setField(
         Map<String, dynamic> root, NodePath path, String key, Object? value) =>
     _rebuild(root, path, (n) => Map<String, dynamic>.of(n)..[key] = value);
 
-/// Insert [newNode] as a child of the container at [parentPath] at [index]
-/// (clamped to the child count); returns a new root.
+/// Insert [newNode] as a child of the container at [parentPath] at [index];
+/// returns a new root. [index] is a *destination* slot, so it's clamped to
+/// `0..childCount` (a buggy out-of-range index lands at the nearest end rather
+/// than throwing) — consistent with [reorderChild]'s `newIndex`.
 Map<String, dynamic> insertChild(Map<String, dynamic> root, NodePath parentPath,
         int index, Map<String, dynamic> newNode) =>
     _rebuild(root, parentPath, (parent) {
@@ -112,6 +114,12 @@ Map<String, dynamic> removeAt(Map<String, dynamic> root, NodePath path) {
 
 /// Reorder a child of the container at [parentPath] from [oldIndex] to
 /// [newIndex] (the common drag-to-reorder case); returns a new root.
+///
+/// The two indices play different roles, so they're checked differently:
+/// [oldIndex] *selects an existing child* and throws [RangeError] when out of
+/// range, whereas [newIndex] is a *destination* slot clamped to `0..N` where
+/// `N` is the post-removal child count (so dragging to the end lands last) —
+/// matching [insertChild]'s clamp contract.
 Map<String, dynamic> reorderChild(Map<String, dynamic> root, NodePath parentPath,
         int oldIndex, int newIndex) =>
     _rebuild(root, parentPath, (parent) {

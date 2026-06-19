@@ -46,6 +46,29 @@ void main() {
     });
   });
 
+  group('withChildren', () {
+    test('preserves an imported body\'s existing wrapper \$type', () {
+      const ninaWrapper =
+          'System.Collections.ObjectModel.ObservableCollection`1[[NINA.Sequencer.SequenceItem.ISequenceItem, NINA.Sequencer]], System.ObjectModel';
+      final node = <String, dynamic>{
+        r'$type': 'NINA.Sequencer.Container.SequentialContainer, NINA.Sequencer',
+        'Items': {r'$type': ninaWrapper, r'$values': []},
+      };
+      final out = withChildren(node, [
+        {r'$type': 'X.Wait'}
+      ]);
+      expect((out['Items'] as Map)[r'$type'], ninaWrapper);
+      expect(childrenOf(out).single[r'$type'], 'X.Wait');
+    });
+
+    test('falls back to itemsWrapperType when the node has no wrapper', () {
+      final out = withChildren({r'$type': 'X.SequentialContainer'}, [
+        {r'$type': 'X.Wait'}
+      ]);
+      expect((out['Items'] as Map)[r'$type'], itemsWrapperType);
+    });
+  });
+
   group('nodeAt', () {
     test('addresses by child-index path', () {
       final b = sampleBody();
@@ -96,6 +119,14 @@ void main() {
 
     test('removeAt rejects the root', () {
       expect(() => removeAt(sampleBody(), []), throwsArgumentError);
+    });
+
+    test('removeAt with an out-of-range terminal index throws RangeError', () {
+      expect(() => removeAt(sampleBody(), [9]), throwsRangeError);
+    });
+
+    test('reorderChild with an out-of-range oldIndex throws RangeError', () {
+      expect(() => reorderChild(sampleBody(), [], 9, 0), throwsRangeError);
     });
 
     test('reorderChild moves a sibling', () {
