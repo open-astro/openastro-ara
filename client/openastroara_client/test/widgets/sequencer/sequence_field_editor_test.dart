@@ -6,6 +6,7 @@ import 'package:openastroara/models/sequence/instruction_catalog.dart';
 import 'package:openastroara/models/sequence/nina_dom.dart';
 import 'package:openastroara/models/sequence/trigger_catalog.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
+import 'package:openastroara/state/settings/filter_wheel_labels_state.dart';
 import 'package:openastroara/state/sequencer/sequence_editor_state.dart';
 import 'package:openastroara/widgets/sequencer/sequence_field_editor.dart';
 
@@ -20,6 +21,8 @@ const _takeExposure =
     'OpenAstroAra.Sequencer.SequenceItem.Imaging.TakeExposure, OpenAstroAra.Sequencer';
 const _slew =
     'OpenAstroAra.Sequencer.SequenceItem.Telescope.SlewScopeToRaDec, OpenAstroAra.Sequencer';
+const _switchFilter =
+    'OpenAstroAra.Sequencer.SequenceItem.FilterWheel.SwitchFilter, OpenAstroAra.Sequencer';
 
 SequenceDetail _detailWith(String type) => SequenceDetail(
       id: 's',
@@ -500,6 +503,72 @@ void main() {
       await tester.tap(find.text('Mount').last);
       await tester.pumpAndSettle();
       expect(triggersOf(_nodeAt(c, const [])).single['SelectedDevice'], 'Mount');
+    });
+  });
+
+  group('filter picker (SwitchFilter)', () {
+    // Default filter-wheel labels: L R G B Hα OIII SII (+ one empty slot).
+    testWidgets('shows the hint when unset and lists the configured filters',
+        (tester) async {
+      await _pump(tester, detail: _detailWith(_switchFilter), select: const [0]);
+      expect(find.text('Select a filter'), findsOneWidget); // null Filter → hint
+      await tester.tap(find.byType(DropdownButton<String>));
+      await tester.pumpAndSettle();
+      expect(find.text('Hα').last, findsOneWidget); // a configured slot label
+      expect(find.text('OIII').last, findsOneWidget);
+    });
+
+    testWidgets('picking a filter writes a minimal FilterInfo (name + position)',
+        (tester) async {
+      final c = await _pump(tester, detail: _detailWith(_switchFilter), select: const [0]);
+      await tester.tap(find.byType(DropdownButton<String>));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('OIII').last);
+      await tester.pumpAndSettle();
+      final filter = _nodeAt(c, [0])['Filter'] as Map;
+      expect(filter['_name'], 'OIII');
+      expect(filter['_position'], 5); // 0-based slot index (6th slot)
+      expect(filter[r'$type'], contains('FilterInfo'));
+    });
+
+    testWidgets('an unknown stored filter stays visible rather than blanking',
+        (tester) async {
+      final detail = SequenceDetail(
+        id: 's',
+        body: {
+          r'$type':
+              'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
+          'Name': 'root',
+          'Items': {
+            r'$type': itemsWrapperType,
+            r'$values': [
+              {
+                ..._node(_switchFilter),
+                'Filter': {
+                  r'$type': 'OpenAstroAra.Core.Model.Equipment.FilterInfo, OpenAstroAra.Core',
+                  '_name': 'Clear',
+                  '_position': 0,
+                },
+              },
+            ],
+          },
+        },
+      );
+      await _pump(tester, detail: detail, select: const [0]);
+      // 'Clear' isn't a configured slot but is shown as the selected value.
+      expect(find.text('Clear'), findsOneWidget);
+      expect(find.text('Select a filter'), findsNothing);
+    });
+
+    testWidgets('prompts to configure filters when no slots are labelled',
+        (tester) async {
+      final c = await _pump(tester, detail: _detailWith(_switchFilter), select: const [0]);
+      final n = c.read(filterWheelLabelsProvider.notifier);
+      for (var s = 1; s <= c.read(filterWheelLabelsProvider).slotCount; s++) {
+        n.setLabel(s, '');
+      }
+      await tester.pump();
+      expect(find.textContaining('No filters configured'), findsOneWidget);
     });
   });
 }

@@ -2,8 +2,8 @@
 /// currently selected in the tree. Each control is driven by the instruction
 /// catalog's [InstructionField] schema and writes straight back to the RAW body
 /// via [SequenceEditorController.setNodeField]. Binning has an inline `X × Y`
-/// editor; the remaining complex fields (coordinates/filter) still get a
-/// placeholder row pending their dedicated editors.
+/// editor, coordinates an RA/Dec editor, and the filter field a picker over the
+/// configured filter-wheel slot labels.
 ///
 /// For a selected container, the panel also edits its `Name`, its loop
 /// **Conditions**, and its **Triggers** (add/remove/edit) via the controller's
@@ -19,6 +19,7 @@ import '../../models/sequence/instruction_catalog.dart';
 import '../../models/sequence/nina_dom.dart';
 import '../../models/sequence/node_display.dart' show nodeLabel, shortTypeName;
 import '../../models/sequence/trigger_catalog.dart';
+import '../../state/settings/filter_wheel_labels_state.dart';
 import '../../state/sequencer/sequence_editor_state.dart';
 import '../../theme/ara_colors.dart';
 
@@ -505,12 +506,7 @@ class _FieldControl extends StatelessWidget {
       case InstructionFieldType.coordinates:
         return _labelled(_coordinatesEditor());
       case InstructionFieldType.filter:
-        return _labelled(
-          Text(
-            value == null ? '(not set — edited in a later slice)' : '(advanced field)',
-            style: const TextStyle(color: AraColors.textDisabled, fontSize: 12),
-          ),
-        );
+        return _labelled(_FilterEditor(value: value, onChanged: onChanged));
     }
   }
 
@@ -675,6 +671,77 @@ class _FieldControl extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [_label(), const SizedBox(height: 4), control],
       );
+}
+
+/// `SwitchFilter.Filter` picker. Sources the filter names from the configured
+/// filter-wheel slot labels ([filterWheelLabelsProvider]) — the user's filter
+/// set from Settings → Filter Wheel — and writes a minimal `FilterInfo`
+/// (`{$type, _name, _position}`) on pick. The daemon's `SwitchFilter.MatchFilter`
+/// re-resolves the stored filter to the active profile's full `FilterInfo` by
+/// name (then position), so only the identifying fields need to be written.
+///
+/// A stored filter whose name isn't among the configured slots (e.g. a body
+/// imported from another rig) is still shown as an extra option so it isn't
+/// silently dropped. When no slots are labelled, an instruction to configure
+/// them is shown instead of an empty dropdown.
+class _FilterEditor extends ConsumerWidget {
+  const _FilterEditor({required this.value, required this.onChanged});
+
+  final Object? value;
+  final ValueChanged<Object?> onChanged;
+
+  static const String _filterInfoType =
+      'OpenAstroAra.Core.Model.Equipment.FilterInfo, OpenAstroAra.Core';
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final labels = ref.watch(filterWheelLabelsProvider);
+    // Configured slots → (name, 0-based position) for the dropdown + write-back.
+    final slots = <({String name, int position})>[];
+    for (var slot = 1; slot <= labels.slotCount; slot++) {
+      final name = labels.labelAt(slot);
+      if (name.isNotEmpty) slots.add((name: name, position: slot - 1));
+    }
+    final stored = value is Map ? (value as Map)['_name'] : null;
+    final storedName = stored is String && stored.isNotEmpty ? stored : null;
+
+    if (slots.isEmpty && storedName == null) {
+      return const Text(
+        'No filters configured — set filter names in Settings → Filter Wheel.',
+        style: TextStyle(color: AraColors.textDisabled, fontSize: 12),
+      );
+    }
+
+    final names = slots.map((s) => s.name).toList();
+    // Keep an unknown stored filter visible rather than blanking the field.
+    final items = [
+      if (storedName != null && !names.contains(storedName)) storedName,
+      ...names,
+    ];
+
+    return DropdownButton<String>(
+      value: storedName,
+      isExpanded: true,
+      hint: const Text('Select a filter',
+          style: TextStyle(color: AraColors.textSecondary, fontSize: 13)),
+      dropdownColor: AraColors.bgPanel,
+      items: [
+        for (final name in items)
+          DropdownMenuItem(value: name, child: Text(name)),
+      ],
+      onChanged: (name) {
+        // Ignore a pick of the (already-selected) unknown stored filter — there's
+        // no slot to resolve a position from, and the existing value stands.
+        final slot = slots.where((s) => s.name == name);
+        if (slot.isEmpty) return;
+        onChanged(<String, dynamic>{
+          r'$type': _filterInfoType,
+          '_name': slot.first.name,
+          '_position': slot.first.position,
+        });
+      },
+    );
+  }
 }
 
 class _Placeholder extends StatelessWidget {
