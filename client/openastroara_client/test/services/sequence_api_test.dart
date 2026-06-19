@@ -386,6 +386,25 @@ void main() {
       final api = _api((_) => const {});
       expect(() => api.getSequenceDetail(''), throwsA(isA<ArgumentError>()));
     });
+
+    test('copyWith updates supplied fields, keeps the rest (null = keep)', () {
+      const base = SequenceDetail(
+          id: 's1',
+          name: 'A',
+          description: 'desc',
+          body: {'x': 1},
+          templateOrigin: 'T');
+      final renamed = base.copyWith(name: 'B');
+      expect(renamed.name, 'B');
+      expect(renamed.description, 'desc'); // kept
+      expect(renamed.body, {'x': 1}); // kept
+      expect(renamed.id, 's1'); // not copyable
+      expect(renamed.templateOrigin, 'T');
+      // null description does NOT clear it (documented limitation).
+      expect(base.copyWith(description: null).description, 'desc');
+      // a supplied body replaces.
+      expect(base.copyWith(body: const {'y': 2}).body, const {'y': 2});
+    });
   });
 
   group('SequenceApi.updateSequence', () {
