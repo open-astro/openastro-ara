@@ -22,6 +22,9 @@ class _FakeListNotifier extends SequenceListNotifier {
 /// tests without a live server.
 class _FakeClient implements SequenceClient {
   @override
+  Future<SequenceValidationResult> validate(Map<String, dynamic> body) async =>
+      const SequenceValidationResult(valid: true);
+  @override
   Future<SequencePage> list({int limit = 50}) async => const SequencePage(items: []);
   @override
   Future<SequenceRunStateInfo?> getRunState(String id) async => null;

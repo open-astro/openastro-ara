@@ -10,6 +10,9 @@ import 'package:openastroara/widgets/sequencer/sequence_new_dialog.dart';
 
 /// instantiateTemplate returns a configured id (or throws); records what was sent.
 class _NewClient implements SequenceClient {
+  @override
+  Future<SequenceValidationResult> validate(Map<String, dynamic> body) async =>
+      const SequenceValidationResult(valid: true);
   _NewClient(
       {this.id = 'tmpl-1',
       this.throwOnInstantiate = false,

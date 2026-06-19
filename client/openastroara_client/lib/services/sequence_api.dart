@@ -60,6 +60,12 @@ abstract interface class SequenceClient {
     Map<String, dynamic>? body,
   });
 
+  /// Dry-run the raw [body] through the daemon's schema validator (§38.5)
+  /// without persisting — `POST /validate`. Returns whether it's valid and the
+  /// first problem reason when not. Throws on transport failure / unexpected
+  /// body.
+  Future<SequenceValidationResult> validate(Map<String, dynamic> body);
+
   /// Live run state of a sequence, or null when there's no active run (the
   /// daemon answers 404). Polled by the run controls / status line.
   Future<SequenceRunStateInfo?> getRunState(String id);
@@ -141,6 +147,20 @@ class SequenceApi implements SequenceClient {
           'sequence import returned an unexpected body (${data.runtimeType})');
     }
     return SequenceImportResult.fromJson(data);
+  }
+
+  @override
+  Future<SequenceValidationResult> validate(Map<String, dynamic> body) async {
+    final res = await _dio.post<dynamic>(
+      '/api/v1/sequences/validate',
+      data: <String, dynamic>{'body': body},
+    );
+    final data = res.data;
+    if (data is! Map<String, dynamic>) {
+      throw FormatException(
+          'sequence validate returned an unexpected body (${data.runtimeType})');
+    }
+    return SequenceValidationResult.fromJson(data);
   }
 
   @override

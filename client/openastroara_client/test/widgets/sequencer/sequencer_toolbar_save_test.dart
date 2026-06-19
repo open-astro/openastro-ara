@@ -32,10 +32,23 @@ SequenceDetail _detail(String id) => SequenceDetail(
 class _SaveClient implements SequenceClient {
   Map<String, dynamic>? savedBody;
   int saveCalls = 0;
+  Map<String, dynamic>? validatedBody;
   final int? throwStatus;
   final Object? throwData;
   final bool throwGeneric;
-  _SaveClient({this.throwStatus, this.throwData, this.throwGeneric = false});
+  final SequenceValidationResult validateResult;
+  _SaveClient({
+    this.throwStatus,
+    this.throwData,
+    this.throwGeneric = false,
+    this.validateResult = const SequenceValidationResult(valid: true),
+  });
+
+  @override
+  Future<SequenceValidationResult> validate(Map<String, dynamic> body) async {
+    validatedBody = body;
+    return validateResult;
+  }
 
   @override
   Future<SequenceDetail> updateSequence(String id,
@@ -139,6 +152,27 @@ void main() {
       find.ancestor(of: find.text('Import'), matching: find.byType(TextButton)),
     );
     expect(importBtn.onPressed, isNull); // no server → can't import
+  });
+
+  testWidgets('Validate reports a valid sequence', (tester) async {
+    final client = _SaveClient();
+    await _pump(tester, client, dirty: false);
+    await tester.ensureVisible(find.text('Validate'));
+    await tester.tap(find.text('Validate'));
+    await tester.pumpAndSettle();
+    expect(client.validatedBody, isNotNull); // the editor body was sent
+    expect(find.text('Sequence is valid.'), findsOneWidget);
+  });
+
+  testWidgets('Validate surfaces the validator reason when invalid', (tester) async {
+    final client = _SaveClient(
+        validateResult: const SequenceValidationResult(
+            valid: false, reason: 'needs a capturable instruction'));
+    await _pump(tester, client, dirty: false);
+    await tester.ensureVisible(find.text('Validate'));
+    await tester.tap(find.text('Validate'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('needs a capturable instruction'), findsOneWidget);
   });
 
   testWidgets('Save PATCHes the body, rebaselines dirty, and confirms',

@@ -10,6 +10,9 @@ import 'package:openastroara/widgets/sequencer/sequencer_toolbar.dart';
 /// Connected client; getRunState returns whatever's configured. Lifecycle calls
 /// record which action fired so the gating wiring can be asserted.
 class _FakeClient implements SequenceClient {
+  @override
+  Future<SequenceValidationResult> validate(Map<String, dynamic> body) async =>
+      const SequenceValidationResult(valid: true);
   _FakeClient({this.runState, this.throwOnStart = false});
   final SequenceRunStateInfo? runState;
   final bool throwOnStart;
