@@ -22,11 +22,11 @@ const String itemsWrapperType =
 /// or a missing/!map `Items` (a leaf instruction) → empty list. The returned
 /// list is a fresh, growable copy.
 ///
-/// Non-`Map` `$values` entries (e.g. a bare `$ref` string in a body that still
-/// carries Json.NET reference handles) are silently dropped via [Iterable.whereType] —
-/// the editor only addresses real child nodes, and the daemon's own templates
-/// emit fully-inlined values, so a stray scalar here is malformed input rather
-/// than something to surface. Index addressing stays within the surviving maps.
+/// [Iterable.whereType] keeps only `Map` entries. Real Json.NET output never
+/// puts a bare scalar in `$values` (a reference is emitted as the *object*
+/// `{"$ref":"5"}`, which is a `Map` and passes through untouched), so in
+/// practice nothing is dropped — the filter only guards against malformed input
+/// and keeps index addressing within real child maps.
 List<Map<String, dynamic>> childrenOf(Map<String, dynamic> node) {
   final items = node['Items'];
   final List raw;
@@ -41,20 +41,21 @@ List<Map<String, dynamic>> childrenOf(Map<String, dynamic> node) {
 }
 
 /// A copy of [node] whose `Items` holds [children] in the ObservableCollection
-/// wrapper shape. Preserves the node's existing wrapper `$type` (so a NINA-
-/// namespaced imported body keeps its namespace) and falls back to
-/// [itemsWrapperType] for a node that had no wrapper.
+/// wrapper shape. The existing wrapper map is shallow-copied and only its
+/// `$values` is replaced, so the wrapper's `$type` (keeping a NINA-namespaced
+/// imported body's namespace) AND any other Json.NET metadata it carried —
+/// e.g. a `$id` reference handle on the collection — survive the round-trip.
+/// A node with no map wrapper (a leaf, or a plain-array `Items`) gets a fresh
+/// wrapper typed [itemsWrapperType].
 Map<String, dynamic> withChildren(
     Map<String, dynamic> node, List<Map<String, dynamic>> children) {
   final existing = node['Items'];
-  final wrapperType = existing is Map && existing[r'$type'] is String
-      ? existing[r'$type'] as String
-      : itemsWrapperType;
-  return Map<String, dynamic>.of(node)
-    ..['Items'] = <String, dynamic>{
-      r'$type': wrapperType,
-      r'$values': children,
-    };
+  final wrapper = existing is Map
+      ? Map<String, dynamic>.from(existing.cast<String, dynamic>())
+      : <String, dynamic>{};
+  wrapper[r'$values'] = children;
+  wrapper.putIfAbsent(r'$type', () => itemsWrapperType);
+  return Map<String, dynamic>.of(node)..['Items'] = wrapper;
 }
 
 /// The node at [path], or null if any index is out of range. [path] `[]` → root.
@@ -124,20 +125,13 @@ Map<String, dynamic> removeAt(Map<String, dynamic> root, NodePath path) {
 /// Reorder a child of the container at [parentPath] from [oldIndex] to
 /// [newIndex] (the common drag-to-reorder case); returns a new root.
 ///
-/// The two indices play different roles, so they're checked differently:
-/// [oldIndex] *selects an existing child* and throws [RangeError] when out of
-/// range, whereas [newIndex] is a *destination* slot in the **post-removal**
-/// list, clamped to `0..N` where `N` is the child count after [oldIndex] is
-/// removed (so dragging to the end lands last) — matching [insertChild]'s
-/// clamp contract.
-///
-/// IMPORTANT for the drag-and-drop UI: Flutter's `ReorderableListView.onReorder`
-/// delivers `newIndex` as a **pre-removal** slot, which is one greater than this
-/// function expects whenever `oldIndex < newIndex`. Callers wiring `onReorder`
-/// straight through MUST decrement first:
-/// `reorderChild(root, path, oldIndex, oldIndex < newIndex ? newIndex - 1 : newIndex)`.
-/// Passing the raw `onReorder` index mis-places the dragged item by one
-/// (and the clamp hides it only at the very end of the list).
+/// [newIndex] follows Flutter's `ReorderableListView.onReorder` **pre-removal**
+/// convention — the slot in the *original* list the item is dropped before — so
+/// the UI can wire `onReorder` straight through with no off-by-one adjustment.
+/// The standard `if (oldIndex < newIndex) newIndex--` normalisation is absorbed
+/// here, then [newIndex] is clamped to `0..N` (post-removal count), so a drop at
+/// the end lands last. [oldIndex] *selects an existing child* and throws
+/// [RangeError] when out of range.
 Map<String, dynamic> reorderChild(Map<String, dynamic> root, NodePath parentPath,
         int oldIndex, int newIndex) =>
     _rebuild(root, parentPath, (parent) {
@@ -145,7 +139,10 @@ Map<String, dynamic> reorderChild(Map<String, dynamic> root, NodePath parentPath
       if (oldIndex < 0 || oldIndex >= kids.length) {
         throw RangeError('reorderChild oldIndex $oldIndex out of range');
       }
+      // Flutter delivers newIndex against the pre-removal list; once oldIndex is
+      // pulled out, every slot after it shifts down by one.
+      final target = oldIndex < newIndex ? newIndex - 1 : newIndex;
       final node = kids.removeAt(oldIndex);
-      kids.insert(newIndex.clamp(0, kids.length), node);
+      kids.insert(target.clamp(0, kids.length), node);
       return withChildren(parent, kids);
     });

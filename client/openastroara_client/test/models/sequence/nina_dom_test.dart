@@ -67,6 +67,17 @@ void main() {
       ]);
       expect((out['Items'] as Map)[r'$type'], itemsWrapperType);
     });
+
+    test('preserves non-\$type wrapper metadata (e.g. \$id)', () {
+      final node = <String, dynamic>{
+        'Items': {r'$type': itemsWrapperType, r'$id': '7', r'$values': []},
+      };
+      final out = withChildren(node, [
+        {r'$type': 'X.Wait'}
+      ]);
+      expect((out['Items'] as Map)[r'$id'], '7'); // reference handle survives
+      expect((out['Items'] as Map)[r'$type'], itemsWrapperType);
+    });
   });
 
   group('nodeAt', () {
@@ -110,6 +121,13 @@ void main() {
       expect(childrenOf(nodeAt(out, [1])!).first[r'$type'], 'X.Wait');
     });
 
+    test('insertChild clamps an out-of-range index instead of throwing', () {
+      final big = insertChild(sampleBody(), [], 99, {r'$type': 'X.End'});
+      expect(childrenOf(big).last[r'$type'], 'X.End'); // clamped to the end
+      final neg = insertChild(sampleBody(), [], -5, {r'$type': 'X.Start'});
+      expect(childrenOf(neg).first[r'$type'], 'X.Start'); // clamped to the front
+    });
+
     test('removeAt drops the addressed node', () {
       final out = removeAt(sampleBody(), [0]);
       final kids = childrenOf(out);
@@ -129,15 +147,16 @@ void main() {
       expect(() => reorderChild(sampleBody(), [], 9, 0), throwsRangeError);
     });
 
-    test('reorderChild moves a sibling', () {
-      final out = reorderChild(sampleBody(), [], 0, 1);
+    test('reorderChild moves a sibling (Flutter onReorder convention)', () {
+      // Drag child 0 to the end of a 2-item list: Flutter delivers newIndex=2.
+      final out = reorderChild(sampleBody(), [], 0, 2);
       expect(childrenOf(out).map((n) => n[r'$type']),
           ['X.SequentialContainer', 'X.SwitchFilter']);
     });
 
-    test('reorderChild newIndex is the post-removal slot', () {
-      // [A, B, C] → drag A to sit between B and C. Flutter onReorder would say
-      // (0, 2) pre-removal; the engine wants the post-removal slot 1 → [B, A, C].
+    test('reorderChild absorbs Flutter\'s pre-removal newIndex', () {
+      // [A, B, C] → drag A to sit between B and C. Flutter onReorder delivers
+      // (0, 2) pre-removal; reorderChild normalises it internally → [B, A, C].
       final body = {
         'Items': {
           r'$type': itemsWrapperType,
@@ -148,8 +167,11 @@ void main() {
           ],
         },
       };
-      final out = reorderChild(body, [], 0, 1);
+      final out = reorderChild(body, [], 0, 2);
       expect(childrenOf(out).map((n) => n[r'$type']), ['B', 'A', 'C']);
+      // Dragging backward (no shift): C (index 2) → front, newIndex=0.
+      final back = reorderChild(body, [], 2, 0);
+      expect(childrenOf(back).map((n) => n[r'$type']), ['C', 'A', 'B']);
     });
 
     test('_rebuild handles deep nesting after the sublist→index refactor', () {
