@@ -82,6 +82,14 @@ void main() {
       }
     });
 
+    test('no built node emits Name/Description (matches daemon templates)', () {
+      for (final def in instructionCatalog) {
+        final node = def.build();
+        expect(node.containsKey('Name'), isFalse, reason: def.label);
+        expect(node.containsKey('Description'), isFalse, reason: def.label);
+      }
+    });
+
     test('TakeExposure builds a runnable, capturable node', () {
       final def = instructionForType(
           'OpenAstroAra.Sequencer.SequenceItem.Imaging.TakeExposure, OpenAstroAra.Sequencer')!;

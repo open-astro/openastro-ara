@@ -173,6 +173,12 @@ class InstructionDef {
   /// carries (`Parent`/`ErrorBehavior`/`Attempts`) in the shape the daemon's
   /// templates use. The result is fully mutable and shares nothing with the
   /// catalog, so the editor can mutate it via `nina_dom` freely.
+  ///
+  /// `Name`/`Description` are deliberately NOT emitted: the base `SequenceItem`
+  /// exposes them but instruction nodes in the daemon's own templates omit them
+  /// (a template `TakeExposure` is exactly `$type` + its fields + `Parent` +
+  /// `ErrorBehavior` + `Attempts`), so adding them would diverge from the
+  /// runnable shape. Only containers carry `Name`.
   Map<String, dynamic> build() {
     final node = <String, dynamic>{r'$type': type};
     for (final f in fields) {
@@ -324,6 +330,9 @@ const List<InstructionDef> instructionCatalog = [
     category: InstructionCategory.guider,
     icon: Icons.stop_circle_outlined,
   ),
+  // Dither carries no serialized fields of its own (its C# class declares no
+  // `[JsonProperty]`); the "after N exposures" / settle parameters live on the
+  // dither *trigger*, not this instruction.
   InstructionDef(
     type: 'OpenAstroAra.Sequencer.SequenceItem.Guider.Dither, OpenAstroAra.Sequencer',
     label: 'Dither',
@@ -337,6 +346,8 @@ const List<InstructionDef> instructionCatalog = [
     category: InstructionCategory.utility,
     icon: Icons.hourglass_empty_outlined,
     fields: [
+      // `Time` is a plain `double` of seconds in the C# class (not a
+      // TimeSpan-serialized string), so a bare number is the correct shape.
       InstructionField('Time', 'Seconds', InstructionFieldType.number, defaultValue: 1.0),
     ],
   ),
