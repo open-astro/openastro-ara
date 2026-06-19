@@ -177,7 +177,8 @@ class _FieldControl extends StatelessWidget {
         SizedBox(
           width: 56,
           child: _BinAxisField(
-            key: const Key('binning_x'),
+            // Scoped to the field so two binning fields couldn't collide.
+            key: Key('${field.key}_x'),
             value: x,
             onChanged: (v) => onChanged(withAxis(newX: v)),
           ),
@@ -189,7 +190,7 @@ class _FieldControl extends StatelessWidget {
         SizedBox(
           width: 56,
           child: _BinAxisField(
-            key: const Key('binning_y'),
+            key: Key('${field.key}_y'),
             value: y,
             onChanged: (v) => onChanged(withAxis(newY: v)),
           ),
