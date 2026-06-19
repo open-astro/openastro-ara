@@ -103,7 +103,8 @@ class _SequencerTabState extends ConsumerState<SequencerTab> {
             children: [
               _pane(flex: 2, child: const SequencerPalette()),
               _pane(flex: 3, child: const SequenceEditorTree()),
-              const Expanded(flex: 2, child: SequenceFieldEditor()),
+              // Rightmost pane: same bg as the others, no trailing divider.
+              _pane(flex: 2, border: false, child: const SequenceFieldEditor()),
             ],
           ),
         ),
@@ -111,13 +112,17 @@ class _SequencerTabState extends ConsumerState<SequencerTab> {
     );
   }
 
-  // A left/middle pane with a divider before the next pane.
-  Widget _pane({required int flex, required Widget child}) => Expanded(
+  // An editor pane: shared bg, with a trailing divider before the next pane
+  // ([border]) for all but the rightmost.
+  Widget _pane({required int flex, required Widget child, bool border = true}) =>
+      Expanded(
         flex: flex,
         child: Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             color: AraColors.bgPrimary,
-            border: Border(right: BorderSide(color: AraColors.border)),
+            border: border
+                ? const Border(right: BorderSide(color: AraColors.border))
+                : null,
           ),
           child: child,
         ),

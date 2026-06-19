@@ -21,8 +21,9 @@ Map<String, dynamic> _bodyFor(String id) => {
       'Items': {
         r'$type': itemsWrapperType,
         r'$values': [
-          instructionForType(
-                  'OpenAstroAra.Sequencer.SequenceItem.Imaging.TakeExposure, OpenAstroAra.Sequencer')!
+          (instructionForType(
+                      'OpenAstroAra.Sequencer.SequenceItem.Imaging.TakeExposure, OpenAstroAra.Sequencer') ??
+                  (throw StateError('TakeExposure missing from the catalog')))
               .build(),
         ],
       },
