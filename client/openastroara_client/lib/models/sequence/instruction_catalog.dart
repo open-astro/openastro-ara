@@ -247,6 +247,10 @@ class InstructionDef {
   Map<String, dynamic> _buildContainer() => <String, dynamic>{
         r'$type': type,
         'Strategy': <String, dynamic>{r'$type': strategyType},
+        // The two current containers reuse their palette label as the NINA
+        // default Name. If a future container's NINA default name diverges from
+        // its palette label, set `defaultName` explicitly so the right name
+        // round-trips into NINA.
         'Name': defaultName ?? label,
         'Conditions': <String, dynamic>{
           r'$type': conditionsWrapperType,
