@@ -460,5 +460,22 @@ void main() {
       await tester.pump();
       expect(triggersOf(_nodeAt(c, const [])), isEmpty);
     });
+
+    testWidgets('a Reconnect Device trigger edits its device via the dropdown',
+        (tester) async {
+      final c = await _pump(tester, detail: sampleDetail(), select: const []);
+      c.read(sequenceEditorProvider.notifier).addTriggerTo(
+          const [],
+          triggerForType(
+              'OpenAstroAra.Sequencer.Trigger.Connect.ReconnectTrigger, OpenAstroAra.Sequencer')!);
+      await tester.pump();
+      expect(triggersOf(_nodeAt(c, const [])).single['SelectedDevice'], 'Camera');
+      // The trigger card renders the SelectedDevice stringEnum as a dropdown.
+      await tester.tap(find.text('Camera'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Mount').last);
+      await tester.pumpAndSettle();
+      expect(triggersOf(_nodeAt(c, const [])).single['SelectedDevice'], 'Mount');
+    });
   });
 }

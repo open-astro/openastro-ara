@@ -6,6 +6,8 @@ import 'package:openastroara/models/sequence/trigger_catalog.dart';
 
 const _meridianFlip =
     'OpenAstroAra.Sequencer.Trigger.MeridianFlip.MeridianFlipTrigger, OpenAstroAra.Sequencer';
+const _reconnect =
+    'OpenAstroAra.Sequencer.Trigger.Connect.ReconnectTrigger, OpenAstroAra.Sequencer';
 
 void main() {
   group('catalog integrity', () {
@@ -65,6 +67,22 @@ void main() {
       expect(identical(a['TriggerRunner'], b['TriggerRunner']), isFalse);
       expect(childrenOf(a['TriggerRunner'] as Map<String, dynamic>), isEmpty);
       expect(childrenOf(b['TriggerRunner'] as Map<String, dynamic>), isEmpty);
+    });
+
+    test('ReconnectTrigger builds with a SelectedDevice from the device set', () {
+      final def = triggerForType(_reconnect)!;
+      // SelectedDevice is a stringEnum over the grounded device names.
+      final field = def.fields.single;
+      expect(field.key, 'SelectedDevice');
+      expect(field.type, InstructionFieldType.stringEnum);
+      expect(field.enumValues, reconnectDeviceNames);
+      expect(field.enumValues, contains(field.defaultValue)); // default is valid
+      final node = def.build();
+      expect(node['SelectedDevice'], 'Camera'); // C# constructor default
+      expect(node.keys.toSet(), {r'$type', 'SelectedDevice', 'Parent', 'TriggerRunner'});
+      // "Mount" replaced the legacy "Telescope" name; "Telescope" must be absent.
+      expect(reconnectDeviceNames, contains('Mount'));
+      expect(reconnectDeviceNames, isNot(contains('Telescope')));
     });
 
     test('build() throws if a field key collides with a reserved base key', () {

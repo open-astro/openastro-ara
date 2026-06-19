@@ -11,11 +11,11 @@
 /// `TriggerRunner` container (reused from the instruction catalog so its shape
 /// stays identical to a hand-added container).
 ///
-/// Only `MeridianFlipTrigger` is listed for now — it carries no serialized
-/// fields of its own (its flip parameters are read from the profile, not the
-/// sequence). `ReconnectTrigger` needs its `SelectedDevice` device-name set
-/// grounded, so it's deferred to its own slice (tracked in design/PORT_TODO.md)
-/// rather than guessed.
+/// `MeridianFlipTrigger` carries no serialized fields of its own (its flip
+/// parameters are read from the profile, not the sequence). `ReconnectTrigger`
+/// carries a `SelectedDevice` string — one of the device names enumerated in the
+/// C# `ConnectEquipment` instruction ([reconnectDeviceNames]; "Telescope" was
+/// renamed "Mount").
 library;
 
 import 'package:flutter/material.dart';
@@ -23,10 +23,28 @@ import 'package:flutter/material.dart';
 import 'instruction_catalog.dart'
     show
         InstructionField,
+        InstructionFieldType,
         checkNoReservedFieldKeys,
         deepCloneJson,
         instructionForType,
         sequentialContainerType;
+
+/// The device names `ReconnectTrigger.SelectedDevice` accepts, grounded against
+/// `OpenAstroAra.Sequencer/SequenceItem/Connect/ConnectEquipment.cs` (exact
+/// casing/spelling). The daemon migrates a legacy "Telescope" value to "Mount".
+const List<String> reconnectDeviceNames = [
+  'Camera',
+  'Filter Wheel',
+  'Focuser',
+  'Rotator',
+  'Mount',
+  'Guider',
+  'Switch',
+  'Flat Panel',
+  'Weather',
+  'Dome',
+  'Safety Monitor',
+];
 
 /// One trigger in the container's "add trigger" picker.
 @immutable
@@ -88,6 +106,17 @@ const List<TriggerDef> triggerCatalog = [
     type: 'OpenAstroAra.Sequencer.Trigger.MeridianFlip.MeridianFlipTrigger, OpenAstroAra.Sequencer',
     label: 'Meridian Flip',
     icon: Icons.flip_camera_android_outlined,
+  ),
+  // Re-connect a device if it drops mid-run. SelectedDevice is one of the
+  // ConnectEquipment device names; default "Camera" (the C# constructor default).
+  TriggerDef(
+    type: 'OpenAstroAra.Sequencer.Trigger.Connect.ReconnectTrigger, OpenAstroAra.Sequencer',
+    label: 'Reconnect Device',
+    icon: Icons.cable_outlined,
+    fields: [
+      InstructionField('SelectedDevice', 'Device', InstructionFieldType.stringEnum,
+          defaultValue: 'Camera', enumValues: reconnectDeviceNames),
+    ],
   ),
 ];
 
