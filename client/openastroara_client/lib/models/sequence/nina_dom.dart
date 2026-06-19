@@ -335,14 +335,20 @@ bool isAncestorOrSelf(NodePath ancestor, NodePath path) {
 
 /// Move the subtree at [fromPath] to be a child of the container at
 /// [toParentPath], inserted at [toIndex] (clamped) in that container's child list
-/// **as it exists after the moved node is removed** (a post-removal index).
-/// Returns a new root. This is the drag-and-drop reparent primitive (cross-
-/// container move); a same-container move just reorders.
+/// **as it exists after the moved node is removed** (a post-removal index — note
+/// this differs from [reorderChild], which takes a *pre-removal* Flutter
+/// `onReorder` index; a UI drop handler that reuses an onReorder index for a
+/// same-container move must convert it). Returns a new root. This is the
+/// drag-and-drop reparent primitive (cross-container move); a same-container move
+/// just reorders.
 ///
 /// Throws [ArgumentError] if [fromPath] is empty (the root can't move) or if
 /// [toParentPath] is [fromPath] or a descendant of it (a subtree can't move into
 /// itself — it would orphan the destination or cycle). Throws [RangeError] if
-/// [fromPath] doesn't resolve.
+/// [fromPath] doesn't resolve, or if [toParentPath] is otherwise unresolvable
+/// (propagated from [insertChild] / `_rebuild`) — callers that take a path from
+/// untrusted UI state should pre-validate, as [SequenceEditorController.moveNodeTo]
+/// does.
 ///
 /// Removal only mutates the sibling list at [fromPath]'s parent (depth
 /// `p = fromPath.length - 1`), so afterwards exactly one element of

@@ -415,6 +415,15 @@ void main() {
       expect(childrenOf(nodeAt(out, [2])!), isEmpty); // the emptied container
     });
 
+    test('a same-parent move uses the post-removal index convention', () {
+      // Differs from reorderChild (pre-removal index): after removing [0] the
+      // root list is [container]; inserting at post-removal index 1 puts the
+      // SwitchFilter last → [container, SwitchFilter].
+      final out = moveSubtree(sampleBody(), const [0], const [], 1);
+      expect(childrenOf(out).map((n) => n[r'$type']),
+          ['X.SequentialContainer', 'X.SwitchFilter']);
+    });
+
     test('does not mutate the source body', () {
       final src = sampleBody();
       moveSubtree(src, const [0], const [1], 0);
