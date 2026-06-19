@@ -17,6 +17,18 @@ void main() {
       expect(types.toSet(), hasLength(types.length));
     });
 
+    test('no instruction has duplicate field keys', () {
+      for (final def in instructionCatalog) {
+        final keys = def.fields.map((f) => f.key).toList();
+        expect(keys.toSet(), hasLength(keys.length), reason: def.label);
+      }
+    });
+
+    test('the outer category map is unmodifiable too', () {
+      expect(() => instructionCatalogByCategory[InstructionCategory.camera] = const [],
+          throwsUnsupportedError);
+    });
+
     test('grouping preserves declaration order and drops nothing', () {
       final flattened =
           instructionCatalogByCategory.values.expand((e) => e).toList();
@@ -137,6 +149,8 @@ void main() {
     });
 
     test('build() asserts on a non-String-keyed map default (debug)', () {
+      // `flutter test` runs in debug mode, where asserts are live; in a release
+      // build the assert is stripped and a TypeError would surface at the cast.
       const bad = InstructionDef(
         type: 'X.Bad, X',
         label: 'bad',

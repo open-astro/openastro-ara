@@ -180,6 +180,11 @@ class InstructionDef {
   /// `ErrorBehavior` + `Attempts`), so adding them would diverge from the
   /// runnable shape. Only containers carry `Name`.
   Map<String, dynamic> build() {
+    assert(
+      fields.map((f) => f.key).toSet().length == fields.length,
+      'InstructionDef($label) has duplicate field keys — one would silently '
+      'overwrite the other in the built node.',
+    );
     final node = <String, dynamic>{r'$type': type};
     for (final f in fields) {
       node[f.key] = _deepCloneJson(f.defaultValue);
