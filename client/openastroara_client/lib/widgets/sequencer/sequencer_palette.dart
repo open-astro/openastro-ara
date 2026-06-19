@@ -17,7 +17,9 @@ class SequencerPalette extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final loaded = ref.watch(sequenceEditorProvider) != null;
+    // Only the loaded/not-loaded transition matters here, so select on that to
+    // avoid rebuilding the (static) tile list on every selection/field edit.
+    final loaded = ref.watch(sequenceEditorProvider.select((s) => s != null));
 
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 8),

@@ -143,7 +143,10 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
     if (node != null && isContainer(node)) {
       insertInstruction(sel, childrenOf(node).length, def);
     } else {
-      // Leaf (or stale selection): drop it after the selected node in its parent.
+      // Selected leaf → insert right after it in its parent. (A structurally
+      // stale selection can't normally occur — structural edits clear it — but
+      // if it did, insertInstruction's parent/clamp guards keep this safe: it
+      // either lands in the still-valid parent or no-ops.)
       insertInstruction(sel.sublist(0, sel.length - 1), sel.last + 1, def);
     }
   }
