@@ -405,6 +405,12 @@ void main() {
       // a supplied body replaces.
       expect(base.copyWith(body: const {'y': 2}).body, const {'y': 2});
     });
+
+    test('body is unmodifiable — mutation throws (keeps the hash memo sound)',
+        () {
+      final d = SequenceDetail(id: 's1', body: {'x': 1});
+      expect(() => d.body['x'] = 2, throwsUnsupportedError);
+    });
   });
 
   group('SequenceApi.updateSequence', () {

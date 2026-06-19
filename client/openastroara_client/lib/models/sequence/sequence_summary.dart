@@ -139,14 +139,17 @@ class SequenceDetail {
   final Map<String, dynamic> body;
   final String? templateOrigin;
 
-  // Not const: hashCode memoizes the deep body hash (see [hashCode]).
+  // Not const: hashCode memoizes the deep body hash (see [hashCode]). [body] is
+  // wrapped unmodifiable so it can't be mutated in place — which keeps the memo
+  // sound and matches the value-type contract (edits produce a NEW body via
+  // copyWith, they never mutate the existing one).
   SequenceDetail({
     required this.id,
     this.name = '',
     this.description,
-    this.body = const <String, dynamic>{},
+    Map<String, dynamic> body = const <String, dynamic>{},
     this.templateOrigin,
-  });
+  }) : body = Map<String, dynamic>.unmodifiable(body);
 
   factory SequenceDetail.fromJson(Map<String, dynamic> json) => SequenceDetail(
         id: _str(json['id']) ?? '',
