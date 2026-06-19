@@ -27,6 +27,13 @@ const String itemsWrapperType =
 /// `{"$ref":"5"}`, which is a `Map` and passes through untouched), so in
 /// practice nothing is dropped — the filter only guards against malformed input
 /// and keeps index addressing within real child maps.
+///
+/// A `{"$ref":...}` handle inline in a container's `$values` would be addressed
+/// as if it were a real node (and [setField] would write fields onto the handle,
+/// producing invalid Json.NET). Tree-shaped NINA sequences never do this —
+/// reference handles live on the referenced node as `$id`, not inline in a
+/// child list — so a debug-only [assert] catches the assumption breaking early
+/// without any release-build cost.
 List<Map<String, dynamic>> childrenOf(Map<String, dynamic> node) {
   final items = node['Items'];
   final List raw;
@@ -37,6 +44,12 @@ List<Map<String, dynamic>> childrenOf(Map<String, dynamic> node) {
   } else {
     return <Map<String, dynamic>>[];
   }
+  assert(
+    raw.every((e) => e is! Map || !e.containsKey(r'$ref')),
+    'childrenOf: a container\'s \$values holds a {"\$ref":...} reference handle; '
+    'tree-shaped NINA sequences inline their nodes, so addressing this as a real '
+    'child node would corrupt the body on edit.',
+  );
   return raw.whereType<Map<String, dynamic>>().toList();
 }
 

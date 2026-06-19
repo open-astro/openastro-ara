@@ -44,6 +44,20 @@ void main() {
       });
       expect(kids, hasLength(1));
     });
+
+    test('asserts against an inline \$ref handle (debug builds)', () {
+      expect(
+        () => childrenOf({
+          'Items': {
+            r'$type': itemsWrapperType,
+            r'$values': [
+              {r'$ref': '5'}
+            ],
+          },
+        }),
+        throwsA(isA<AssertionError>()),
+      );
+    });
   });
 
   group('withChildren', () {
