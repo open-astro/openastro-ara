@@ -166,7 +166,17 @@ class InstructionField {
         assert((min == null && max == null) ||
             type == InstructionFieldType.number ||
             type == InstructionFieldType.integer,
-            'min/max only apply to a number or integer field');
+            'min/max only apply to a number or integer field'),
+        // The numeric text formatters reject "-", so a negative min would trap
+        // the user at 0. Tombstone until the formatters allow a leading minus.
+        assert(min == null || min >= 0,
+            'negative min unsupported — the numeric field formatters reject "-"'),
+        // A const default must already be in range (the field only snaps on the
+        // first edit, so an out-of-range default would open invalid).
+        assert(defaultValue is! num || min == null || defaultValue >= min,
+            'defaultValue must be >= min'),
+        assert(defaultValue is! num || max == null || defaultValue <= max,
+            'defaultValue must be <= max');
 }
 
 /// One draggable instruction in the palette.

@@ -88,6 +88,30 @@ void main() {
           throwsA(isA<AssertionError>()));
     });
 
+    test('InstructionField asserts min/max invariants', () {
+      // min > max
+      expect(
+          () => InstructionField('k', 'l', InstructionFieldType.integer, min: 5, max: 1),
+          throwsA(isA<AssertionError>()));
+      // bounds on a non-numeric type
+      expect(
+          () => InstructionField('k', 'l', InstructionFieldType.text, min: 0),
+          throwsA(isA<AssertionError>()));
+      // negative min (formatters reject "-")
+      expect(
+          () => InstructionField('k', 'l', InstructionFieldType.integer, min: -5),
+          throwsA(isA<AssertionError>()));
+      // default out of [min, max]
+      expect(
+          () => InstructionField('k', 'l', InstructionFieldType.integer,
+              defaultValue: 0, min: 1),
+          throwsA(isA<AssertionError>()));
+      expect(
+          () => InstructionField('k', 'l', InstructionFieldType.integer,
+              defaultValue: 99, max: 59),
+          throwsA(isA<AssertionError>()));
+    });
+
     test('intEnum/stringEnum fields carry their option set', () {
       for (final def in instructionCatalog) {
         for (final f in def.fields) {
