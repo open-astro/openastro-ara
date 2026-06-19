@@ -73,6 +73,35 @@ bool canReparentInto(Map<String, dynamic> body, NodePath dragged, NodePath targe
   return true;
 }
 
+/// Resolve a "drop [dragged] just BEFORE the row at [beforePath]" gesture (an
+/// insert-between-rows gap) to the `(parent, index)` for
+/// [SequenceEditorController.moveNodeTo] — i.e. drop it into `beforePath`'s
+/// parent at `beforePath`'s slot — or null when invalid or a no-op. [index] is
+/// the post-removal index `moveNodeTo` expects. Pure, so the gap policy is
+/// unit-tested without a gesture harness.
+@visibleForTesting
+({NodePath parent, int index})? resolveDropBefore(
+    Map<String, dynamic> body, NodePath dragged, NodePath beforePath) {
+  // The root isn't movable, and there's no gap "before the root".
+  if (dragged.isEmpty || beforePath.isEmpty) return null;
+  // Can't drop a subtree before itself or before a row inside it (orphan/cycle).
+  if (isAncestorOrSelf(dragged, beforePath)) return null;
+  final parent = beforePath.sublist(0, beforePath.length - 1);
+  if (isAncestorOrSelf(dragged, parent)) return null;
+  final draggedParent = dragged.sublist(0, dragged.length - 1);
+  var index = beforePath.last; // pre-removal slot of the target row
+  if (listEquals(draggedParent, parent)) {
+    // Same-parent reorder: dropping before itself, or before the row that
+    // immediately follows it, lands it where it already is → no-op.
+    if (beforePath.last == dragged.last || beforePath.last == dragged.last + 1) {
+      return null;
+    }
+    // Pulling the node out shifts every later sibling (incl. the target) down one.
+    if (dragged.last < beforePath.last) index -= 1;
+  }
+  return (parent: parent, index: index);
+}
+
 void _flatten(Map<String, dynamic> node, NodePath path, int depth, List<_Row> out) {
   out.add(_Row(path, node, depth));
   // Stop recursing past the same adversarial-depth cap the parser uses, so a
@@ -136,7 +165,7 @@ class SequenceEditorTree extends ConsumerWidget {
         );
         // Every row (root included) is a drop target — dropping a dragged node
         // onto a container moves it inside; only non-root rows are drag sources.
-        return DragTarget<NodePath>(
+        final rowTarget = DragTarget<NodePath>(
           onWillAcceptWithDetails: (d) =>
               canReparentInto(editor.body, d.data, row.path),
           onAcceptWithDetails: (d) {
@@ -178,6 +207,61 @@ class SequenceEditorTree extends ConsumerWidget {
               ),
             );
           },
+        );
+        // A thin "insert before this row" gap above each non-root row, so a drag
+        // can drop BETWEEN rows to position precisely (the row target above only
+        // appends into a container). Indented to the row's depth.
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (row.path.isNotEmpty)
+              _GapTarget(
+                key: ValueKey('gap_before_${row.path.join(".")}'),
+                beforePath: row.path,
+                indent: 8 + row.depth * 20.0,
+              ),
+            rowTarget,
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// A thin drop zone between two rows: dropping a dragged node here inserts it
+/// just before [beforePath] in that row's parent (an insert-between reorder),
+/// via [resolveDropBefore]. Shows a highlight line while a valid drop hovers.
+class _GapTarget extends ConsumerWidget {
+  const _GapTarget({super.key, required this.beforePath, required this.indent});
+
+  final NodePath beforePath;
+  final double indent;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    bool resolves(NodePath dragged) {
+      final body = ref.read(sequenceEditorProvider)?.body;
+      return body != null && resolveDropBefore(body, dragged, beforePath) != null;
+    }
+
+    return DragTarget<NodePath>(
+      onWillAcceptWithDetails: (d) => resolves(d.data),
+      onAcceptWithDetails: (d) {
+        final body = ref.read(sequenceEditorProvider)?.body;
+        if (body == null) return;
+        final r = resolveDropBefore(body, d.data, beforePath);
+        if (r == null) return;
+        ref.read(sequenceEditorProvider.notifier).moveNodeTo(d.data, r.parent, r.index);
+      },
+      builder: (context, candidate, rejected) {
+        final hovering = candidate.isNotEmpty;
+        return Container(
+          height: hovering ? 8 : 6,
+          padding: EdgeInsets.only(left: indent, right: 8),
+          alignment: Alignment.center,
+          child: hovering
+              ? Container(height: 2, color: AraColors.accentInfo)
+              : const SizedBox.shrink(),
         );
       },
     );

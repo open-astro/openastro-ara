@@ -271,4 +271,77 @@ void main() {
     expect(childrenOf(inner), hasLength(2)); // Innermost + the moved Take Exposure
     expect(childrenOf(inner).last[r'$type'], contains('TakeExposure'));
   });
+
+  // A flat root container with three leaves [a, b, c] for the index-shift cases.
+  SequenceDetail flat3() => SequenceDetail(
+        id: 'f3',
+        body: {
+          r'$type':
+              'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
+          'Name': 'root',
+          'Items': {
+            r'$type': itemsWrapperType,
+            r'$values': [
+              {r'$type': 'X.A'},
+              {r'$type': 'X.B'},
+              {r'$type': 'X.C'},
+            ],
+          },
+        },
+      );
+
+  group('resolveDropBefore (gap drop policy)', () {
+    final nested = nestedDetail().body;
+    final flat = flat3().body;
+
+    test('reorder up: drop a later sibling before an earlier one', () {
+      final r = resolveDropBefore(nested, const [1], const [0]); // Inner before TakeExposure
+      expect(r, isNotNull);
+      expect(r!.parent, isEmpty);
+      expect(r.index, 0);
+    });
+
+    test('no-op: drop before self or before the immediately-following row', () {
+      expect(resolveDropBefore(flat, const [1], const [1]), isNull); // before self
+      expect(resolveDropBefore(flat, const [0], const [1]), isNull); // [0] already before [1]
+    });
+
+    test('reorder down applies the post-removal index shift', () {
+      // Move A([0]) to just before C([2]) → after removing A, insert at index 1.
+      final r = resolveDropBefore(flat, const [0], const [2]);
+      expect(r!.index, 1);
+      expect(r.parent, isEmpty);
+    });
+
+    test('cross-parent insert before a deep row keeps the pre-removal index', () {
+      // TakeExposure([0]) before SwitchFilter([1,0,0]) → into Innermost at 0.
+      final r = resolveDropBefore(nested, const [0], const [1, 0, 0]);
+      expect(r!.parent, [1, 0]);
+      expect(r.index, 0);
+    });
+
+    test('rejects the root, the gap-above-root, and dropping before a descendant', () {
+      expect(resolveDropBefore(nested, const [], const [0]), isNull); // root not movable
+      expect(resolveDropBefore(nested, const [0], const []), isNull); // no gap above root
+      expect(resolveDropBefore(nested, const [1], const [1, 0]), isNull); // before own child
+    });
+  });
+
+  testWidgets('dragging a row onto a gap reorders it', (tester) async {
+    final c = await _pump(tester, detail: flat3());
+    // Long-press the C row (unknown type → labelled "C") and drop on the gap
+    // above A (the first child) → [C, A, B].
+    final cRow = tester.getCenter(find.text('C'));
+    final gapBeforeA = tester.getCenter(find.byKey(const ValueKey('gap_before_0')));
+    final g = await tester.startGesture(cRow);
+    await tester.pump(const Duration(milliseconds: 600)); // past long-press
+    await g.moveTo(gapBeforeA);
+    await tester.pump();
+    await g.up();
+    await tester.pumpAndSettle();
+    expect(
+      childrenOf(c.read(sequenceEditorProvider)!.body).map((n) => n[r'$type']),
+      ['X.C', 'X.A', 'X.B'],
+    );
+  });
 }
