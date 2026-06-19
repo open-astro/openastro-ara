@@ -26,6 +26,30 @@ void main() {
           containsAllInOrder(['Take Exposure', 'Cool Camera', 'Warm Camera']));
     });
 
+    test('grouped inner lists are unmodifiable (singleton can\'t be corrupted)', () {
+      final camera = instructionCatalogByCategory[InstructionCategory.camera]!;
+      expect(() => camera.add(camera.first), throwsUnsupportedError);
+    });
+
+    test('instructionForType is consistent with the catalog list', () {
+      for (final def in instructionCatalog) {
+        expect(identical(instructionForType(def.type), def), isTrue);
+      }
+      expect(instructionForType('Nope.Not.A.Type, Whatever'), isNull);
+    });
+
+    test('SwitchFilter.Filter is flagged requiresUserInput', () {
+      final def = instructionForType(
+          'OpenAstroAra.Sequencer.SequenceItem.FilterWheel.SwitchFilter, OpenAstroAra.Sequencer')!;
+      final filter = def.fields.singleWhere((f) => f.key == 'Filter');
+      expect(filter.requiresUserInput, isTrue);
+      // No other catalogued field demands user input by default.
+      final others = instructionCatalog
+          .expand((d) => d.fields)
+          .where((f) => f.requiresUserInput && f.key != 'Filter');
+      expect(others, isEmpty);
+    });
+
     test('intEnum/stringEnum fields carry their option set', () {
       for (final def in instructionCatalog) {
         for (final f in def.fields) {

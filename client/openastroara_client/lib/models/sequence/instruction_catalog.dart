@@ -123,6 +123,13 @@ class InstructionField {
   /// `ExposureCount`) are emitted with their default but hidden from the editor.
   final bool editable;
 
+  /// Whether the field's default is a placeholder the user MUST replace before
+  /// the node is runnable (e.g. `SwitchFilter.Filter` defaults to `null` and is
+  /// resolved from the connected wheel). The Phase 3 save path gates on this so
+  /// an un-filled instruction can't be saved into a sequence the daemon would
+  /// reject or silently skip.
+  final bool requiresUserInput;
+
   const InstructionField(
     this.key,
     this.label,
@@ -131,6 +138,7 @@ class InstructionField {
     this.enumLabels,
     this.enumValues,
     this.editable = true,
+    this.requiresUserInput = false,
   });
 }
 
@@ -237,8 +245,10 @@ const List<InstructionDef> instructionCatalog = [
     category: InstructionCategory.filterWheel,
     icon: Icons.filter_b_and_w_outlined,
     fields: [
-      // FilterInfo, resolved from the connected wheel in the editor (Phase 2).
-      InstructionField('Filter', 'Filter', InstructionFieldType.filter, defaultValue: null),
+      // FilterInfo, resolved from the connected wheel in the editor (Phase 2);
+      // `null` is a placeholder the user must replace before save (Phase 3).
+      InstructionField('Filter', 'Filter', InstructionFieldType.filter,
+          defaultValue: null, requiresUserInput: true),
     ],
   ),
   // ── Focuser ────────────────────────────────────────────────────────────────
@@ -351,20 +361,24 @@ const List<InstructionDef> instructionCatalog = [
 ];
 
 /// The catalog grouped by category, preserving declaration order, with empty
-/// categories omitted. Built once for the palette UI.
+/// categories omitted. Built once for the palette UI. Both the outer map and
+/// each inner list are unmodifiable so the singleton can't be corrupted.
 final Map<InstructionCategory, List<InstructionDef>> instructionCatalogByCategory = () {
   final grouped = <InstructionCategory, List<InstructionDef>>{};
   for (final def in instructionCatalog) {
     (grouped[def.category] ??= <InstructionDef>[]).add(def);
   }
-  return Map<InstructionCategory, List<InstructionDef>>.unmodifiable(grouped);
+  return Map<InstructionCategory, List<InstructionDef>>.unmodifiable(
+    grouped.map((k, v) => MapEntry(k, List<InstructionDef>.unmodifiable(v))),
+  );
 }();
+
+/// `$type` → [InstructionDef] index, so [instructionForType] is O(1) even if
+/// called per render frame in the palette/tree.
+final Map<String, InstructionDef> _instructionsByType = Map.unmodifiable(
+  {for (final def in instructionCatalog) def.type: def},
+);
 
 /// The [InstructionDef] whose `$type` equals [type], or null if not catalogued
 /// (e.g. an instruction the editor can display but not yet construct).
-InstructionDef? instructionForType(String type) {
-  for (final def in instructionCatalog) {
-    if (def.type == type) return def;
-  }
-  return null;
-}
+InstructionDef? instructionForType(String type) => _instructionsByType[type];
