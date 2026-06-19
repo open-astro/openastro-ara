@@ -207,4 +207,65 @@ void main() {
     await tester.pump();
     expect(container.read(sequenceEditorProvider)!.selectedPath, [1]);
   });
+
+  // root container 'My Sequence' with: [0] Take Exposure (leaf), [1] 'Inner'
+  // container holding [1,0] 'Innermost' container holding [1,0,0] Switch Filter.
+  SequenceDetail nestedDetail() {
+    Map<String, dynamic> container(String name, List<Map<String, dynamic>> items) => {
+          r'$type':
+              'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
+          'Name': name,
+          'Items': {r'$type': itemsWrapperType, r'$values': items},
+        };
+    return SequenceDetail(
+      id: 'n',
+      body: container('My Sequence', [
+        _def(_takeExposure).build(),
+        container('Inner', [
+          container('Innermost', [_def(_switchFilter).build()]),
+        ]),
+      ]),
+    );
+  }
+
+  group('canReparentInto (drag-drop policy)', () {
+    final body = nestedDetail().body;
+    test('accepts a leaf dropped into a sibling container', () {
+      expect(canReparentInto(body, const [0], const [1]), isTrue);
+    });
+    test('rejects a drop onto a leaf (not a container)', () {
+      expect(canReparentInto(body, const [1], const [0]), isFalse);
+    });
+    test('rejects a drop onto the node itself', () {
+      expect(canReparentInto(body, const [1], const [1]), isFalse);
+    });
+    test('rejects a container dropped into its own descendant', () {
+      expect(canReparentInto(body, const [1], const [1, 0]), isFalse);
+    });
+    test('rejects the no-op: already the last child of the target', () {
+      expect(canReparentInto(body, const [1, 0, 0], const [1, 0]), isFalse);
+    });
+    test('accepts a non-last child dropped back into its parent (reorder to end)', () {
+      expect(canReparentInto(body, const [0], const []), isTrue);
+    });
+  });
+
+  testWidgets('long-press dragging a leaf onto a container moves it inside',
+      (tester) async {
+    final c = await _pump(tester, detail: nestedDetail());
+    final from = tester.getCenter(find.text('Take Exposure'));
+    final to = tester.getCenter(find.text('Inner'));
+    final gesture = await tester.startGesture(from);
+    await tester.pump(const Duration(milliseconds: 600)); // past long-press
+    await gesture.moveTo(to);
+    await tester.pump();
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    final body = c.read(sequenceEditorProvider)!.body;
+    expect(childrenOf(body), hasLength(1)); // root now holds just the Inner container
+    final inner = childrenOf(body).single;
+    expect(childrenOf(inner), hasLength(2)); // Innermost + the moved Take Exposure
+    expect(childrenOf(inner).last[r'$type'], contains('TakeExposure'));
+  });
 }
