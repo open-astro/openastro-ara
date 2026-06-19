@@ -125,14 +125,23 @@ void main() {
   testWidgets('editing binning X writes the whole BinningMode map back',
       (tester) async {
     final c = await _pump(tester, detail: sampleDetail(), select: const [3]);
-    // TakeExposure's text fields in order: ExposureTime, Gain, Offset, then the
-    // binning X (index 3) and Y (4). Default build is 1×1.
-    final xField = find.byType(TextField).at(3);
-    await tester.enterText(xField, '2');
+    await tester.enterText(find.byKey(const Key('binning_x')), '2');
     await tester.pump();
     final binning = _nodeAt(c, [3])['Binning'] as Map;
     expect(binning['X'], 2);
     expect(binning['Y'], 1); // other axis preserved
     expect(binning[r'$type'], contains('BinningMode')); // $type preserved
+  });
+
+  testWidgets('binning 0 snaps to 1 in both model and field', (tester) async {
+    final c = await _pump(tester, detail: sampleDetail(), select: const [3]);
+    await tester.enterText(find.byKey(const Key('binning_x')), '0');
+    await tester.pump();
+    expect((_nodeAt(c, [3])['Binning'] as Map)['X'], 1); // model clamped
+    final field = tester.widget<TextField>(find.descendant(
+      of: find.byKey(const Key('binning_x')),
+      matching: find.byType(TextField),
+    ));
+    expect(field.controller!.text, '1'); // displayed text corrected (no divergence)
   });
 }

@@ -7,6 +7,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/sequence/instruction_catalog.dart';
@@ -173,26 +174,29 @@ class _FieldControl extends StatelessWidget {
         };
     return Row(
       children: [
-        SizedBox(width: 56, child: _binAxisField(x, (v) => onChanged(withAxis(newX: v)))),
+        SizedBox(
+          width: 56,
+          child: _BinAxisField(
+            key: const Key('binning_x'),
+            value: x,
+            onChanged: (v) => onChanged(withAxis(newX: v)),
+          ),
+        ),
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 8),
           child: Text('×', style: TextStyle(color: AraColors.textSecondary)),
         ),
-        SizedBox(width: 56, child: _binAxisField(y, (v) => onChanged(withAxis(newY: v)))),
+        SizedBox(
+          width: 56,
+          child: _BinAxisField(
+            key: const Key('binning_y'),
+            value: y,
+            onChanged: (v) => onChanged(withAxis(newY: v)),
+          ),
+        ),
       ],
     );
   }
-
-  Widget _binAxisField(int initial, ValueChanged<int> onInt) => TextFormField(
-        initialValue: '$initial',
-        keyboardType: const TextInputType.numberWithOptions(signed: false),
-        style: const TextStyle(color: AraColors.textPrimary, fontSize: 13),
-        decoration: const InputDecoration(isDense: true, border: OutlineInputBorder()),
-        onChanged: (s) {
-          final v = int.tryParse(s);
-          if (v != null && v >= 1) onInt(v); // binning factor is ≥ 1
-        },
-      );
 
   Widget _textField({
     required String initial,
@@ -229,5 +233,64 @@ class _Placeholder extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         child: Text(text,
             style: const TextStyle(color: AraColors.textSecondary, fontSize: 13)),
+      );
+}
+
+/// One binning-axis integer field (a controlled `TextField`, digits-only). A
+/// committed value is always ≥ 1: typing `0` snaps to `1` and the displayed
+/// text is corrected, so the field can never diverge from the model. An empty
+/// field is transient (mid-edit) and commits nothing until a digit is typed.
+class _BinAxisField extends StatefulWidget {
+  const _BinAxisField({super.key, required this.value, required this.onChanged});
+  final int value;
+  final ValueChanged<int> onChanged;
+
+  @override
+  State<_BinAxisField> createState() => _BinAxisFieldState();
+}
+
+class _BinAxisFieldState extends State<_BinAxisField> {
+  late final TextEditingController _controller =
+      TextEditingController(text: '${widget.value}');
+
+  @override
+  void didUpdateWidget(_BinAxisField old) {
+    super.didUpdateWidget(old);
+    // Resync if the model value changed from outside (and the user isn't mid-edit
+    // on a different value).
+    if (widget.value != old.value && _controller.text != '${widget.value}') {
+      _controller.text = '${widget.value}';
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onChanged(String s) {
+    final v = int.tryParse(s);
+    if (v == null) return; // transient empty — keep the model, allow retyping
+    if (v < 1) {
+      // 0 isn't a valid factor → correct the field to 1 and commit 1.
+      _controller.value = const TextEditingValue(
+        text: '1',
+        selection: TextSelection.collapsed(offset: 1),
+      );
+      widget.onChanged(1);
+    } else {
+      widget.onChanged(v);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => TextField(
+        controller: _controller,
+        keyboardType: const TextInputType.numberWithOptions(signed: false),
+        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+        style: const TextStyle(color: AraColors.textPrimary, fontSize: 13),
+        decoration: const InputDecoration(isDense: true, border: OutlineInputBorder()),
+        onChanged: _onChanged,
       );
 }
