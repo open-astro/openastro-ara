@@ -271,4 +271,171 @@ void main() {
     expect(childrenOf(inner), hasLength(2)); // Innermost + the moved Take Exposure
     expect(childrenOf(inner).last[r'$type'], contains('TakeExposure'));
   });
+
+  // A flat root container with three leaves [a, b, c] for the index-shift cases.
+  SequenceDetail flat3() => SequenceDetail(
+        id: 'f3',
+        body: {
+          r'$type':
+              'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
+          'Name': 'root',
+          'Items': {
+            r'$type': itemsWrapperType,
+            r'$values': [
+              {r'$type': 'X.A'},
+              {r'$type': 'X.B'},
+              {r'$type': 'X.C'},
+            ],
+          },
+        },
+      );
+
+  group('resolveDropBefore (gap drop policy)', () {
+    final nested = nestedDetail().body;
+    final flat = flat3().body;
+
+    test('reorder up: drop a later sibling before an earlier one', () {
+      final r = resolveDropBefore(nested, const [1], const [0]); // Inner before TakeExposure
+      expect(r, isNotNull);
+      expect(r!.parent, isEmpty);
+      expect(r.index, 0);
+    });
+
+    test('no-op: drop before self or before the immediately-following row', () {
+      expect(resolveDropBefore(flat, const [1], const [1]), isNull); // before self
+      expect(resolveDropBefore(flat, const [0], const [1]), isNull); // [0] already before [1]
+    });
+
+    test('reorder down applies the post-removal index shift', () {
+      // Move A([0]) to just before C([2]) → after removing A, insert at index 1.
+      final r = resolveDropBefore(flat, const [0], const [2]);
+      expect(r!.index, 1);
+      expect(r.parent, isEmpty);
+    });
+
+    test('cross-parent insert before a deep row keeps the pre-removal index', () {
+      // TakeExposure([0]) before SwitchFilter([1,0,0]) → into Innermost at 0.
+      final r = resolveDropBefore(nested, const [0], const [1, 0, 0]);
+      expect(r!.parent, [1, 0]);
+      expect(r.index, 0);
+    });
+
+    test('rejects the root, the gap-above-root, and dropping before a descendant', () {
+      expect(resolveDropBefore(nested, const [], const [0]), isNull); // root not movable
+      expect(resolveDropBefore(nested, const [0], const []), isNull); // no gap above root
+      expect(resolveDropBefore(nested, const [1], const [1, 0]), isNull); // before own child
+    });
+  });
+
+  group('resolveDropInto (append-gap drop policy)', () {
+    final nested = nestedDetail().body;
+    final flat = flat3().body;
+
+    test('appends a non-last sibling to the end of its own parent', () {
+      // A([0]) appended to root → post-removal [B, C], insert at 2.
+      final r = resolveDropInto(flat, const [0], const []);
+      expect(r, isNotNull);
+      expect(r!.parent, isEmpty);
+      expect(r.index, 2);
+    });
+
+    test('cross-parent append uses the pre-removal child count', () {
+      // TakeExposure([0]) appended into Innermost([1,0], 1 child) → index 1.
+      final r = resolveDropInto(nested, const [0], const [1, 0]);
+      expect(r!.parent, [1, 0]);
+      expect(r.index, 1);
+    });
+
+    test('rejects the already-last-child no-op and non-containers', () {
+      expect(resolveDropInto(nested, const [1, 0, 0], const [1, 0]), isNull); // already last
+      expect(resolveDropInto(nested, const [1], const [0]), isNull); // [0] is a leaf
+    });
+  });
+
+  group('appendGapContainers (trailing-gap layout)', () {
+    final nested = nestedDetail().body;
+
+    test('the last leaf closes every enclosing container, deepest first', () {
+      // Below SwitchFilter([1,0,0]) — the last row — Innermost then Inner close.
+      expect(appendGapContainers(nested, const [1, 0, 0], null), [
+        [1, 0],
+        [1],
+      ]);
+    });
+
+    test('a leaf followed by a sibling closes nothing', () {
+      expect(appendGapContainers(nested, const [0], const [1]), isEmpty);
+    });
+
+    test('a container whose subtree continues to the next row closes nothing', () {
+      expect(appendGapContainers(nested, const [1], const [1, 0]), isEmpty);
+    });
+
+    test('the root is never returned (append-to-root is the root row drop)', () {
+      expect(appendGapContainers(nested, const [], const [0]), isEmpty);
+    });
+
+    test('an empty container contributes a gap at its own row', () {
+      final body = {
+        r'$type':
+            'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
+        'Name': 'root',
+        'Items': {
+          r'$type': itemsWrapperType,
+          r'$values': [
+            {
+              r'$type':
+                  'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
+              'Name': 'empty',
+              'Items': {r'$type': itemsWrapperType, r'$values': <Map<String, dynamic>>[]},
+            },
+            {r'$type': 'X.Leaf'},
+          ],
+        },
+      };
+      expect(appendGapContainers(body, const [0], const [1]), [
+        [0],
+      ]);
+    });
+  });
+
+  testWidgets('dragging a row onto a trailing append gap moves it to the end',
+      (tester) async {
+    final c = await _pump(tester, detail: nestedDetail());
+    // Drop TakeExposure([0]) onto the "append into Inner" gap below the last row
+    // → root holds just Inner; Inner = [Innermost, Take Exposure].
+    final teRow = tester.getCenter(find.text('Take Exposure'));
+    final appendInner =
+        tester.getCenter(find.byKey(ValueKey(gapAppendKey(const [1]))));
+    final g = await tester.startGesture(teRow);
+    await tester.pump(const Duration(milliseconds: 600)); // past long-press
+    await g.moveTo(appendInner);
+    await tester.pump();
+    await g.up();
+    await tester.pumpAndSettle();
+
+    final body = c.read(sequenceEditorProvider)!.body;
+    expect(childrenOf(body), hasLength(1)); // root now holds just Inner
+    final inner = childrenOf(body).single;
+    expect(childrenOf(inner), hasLength(2));
+    expect(childrenOf(inner).last[r'$type'], contains('TakeExposure'));
+  });
+
+  testWidgets('dragging a row onto a gap reorders it', (tester) async {
+    final c = await _pump(tester, detail: flat3());
+    // Long-press the C row (unknown type → labelled "C") and drop on the gap
+    // above A (the first child) → [C, A, B].
+    final cRow = tester.getCenter(find.text('C'));
+    final gapBeforeA = tester.getCenter(find.byKey(ValueKey(gapBeforeKey(const [0]))));
+    final g = await tester.startGesture(cRow);
+    await tester.pump(const Duration(milliseconds: 600)); // past long-press
+    await g.moveTo(gapBeforeA);
+    await tester.pump();
+    await g.up();
+    await tester.pumpAndSettle();
+    expect(
+      childrenOf(c.read(sequenceEditorProvider)!.body).map((n) => n[r'$type']),
+      ['X.C', 'X.A', 'X.B'],
+    );
+  });
 }
