@@ -8,6 +8,7 @@ import '../../state/sequencer/sequence_editor_state.dart';
 import '../../state/sequencer/sequence_list_state.dart';
 import '../../theme/ara_colors.dart';
 import 'sequence_export.dart';
+import 'sequence_import.dart';
 import 'sequence_load_dialog.dart';
 import 'sequence_new_dialog.dart';
 
@@ -88,6 +89,17 @@ class SequencerToolbar extends ConsumerWidget {
                   // Enabled once a server is connected; opens the picker.
                   onPressed:
                       connected ? () => SequenceLoadDialog.show(context) : null,
+                ),
+                _ToolButton(
+                  icon: Icons.file_download_outlined,
+                  label: 'Import',
+                  // Browse to a NINA-exported .json and import it via the §38
+                  // import path (file pick → read → POST /sequences/import). The
+                  // helper handles errors, lossy-translation warnings, and
+                  // selecting the imported sequence.
+                  onPressed: connected
+                      ? () => pickAndImportSequence(context, ref)
+                      : null,
                 ),
                 _ToolButton(
                   icon: Icons.save_outlined,

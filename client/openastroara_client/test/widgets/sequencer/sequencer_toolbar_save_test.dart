@@ -117,6 +117,14 @@ void main() {
     expect(_saveButton(tester).onPressed, isNull);
   });
 
+  testWidgets('Import (NINA) is present and enabled while connected', (tester) async {
+    await _pump(tester, _SaveClient(), dirty: false);
+    final importBtn = tester.widget<TextButton>(
+      find.ancestor(of: find.text('Import'), matching: find.byType(TextButton)),
+    );
+    expect(importBtn.onPressed, isNotNull); // connected → can browse + import
+  });
+
   testWidgets('Save PATCHes the body, rebaselines dirty, and confirms',
       (tester) async {
     final client = _SaveClient();
@@ -124,6 +132,7 @@ void main() {
     expect(_saveButton(tester).onPressed, isNotNull); // enabled while dirty
     expect(container.read(sequenceEditorProvider)!.isDirty, isTrue);
 
+    await tester.ensureVisible(find.text('Save'));
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
 
@@ -140,6 +149,7 @@ void main() {
         throwStatus: 422, throwData: {'detail': 'needs a capturable instruction'});
     final container = await _pump(tester, client, dirty: true);
 
+    await tester.ensureVisible(find.text('Save'));
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
 
@@ -153,6 +163,7 @@ void main() {
     final client = _SaveClient(throwStatus: 500);
     final container = await _pump(tester, client, dirty: true);
 
+    await tester.ensureVisible(find.text('Save'));
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
 
@@ -165,6 +176,7 @@ void main() {
     final client = _SaveClient(throwGeneric: true);
     final container = await _pump(tester, client, dirty: true);
 
+    await tester.ensureVisible(find.text('Save'));
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
 
