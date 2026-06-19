@@ -162,9 +162,9 @@ void main() {
       // With the container selected, addInstruction nests inside it.
       ctrl().addInstruction(takeExposure());
       final s = read()!;
-      final container = nodeAt(s.body, addedPath)!;
-      expect(childrenOf(container), hasLength(1));
-      expect(childrenOf(container).single[r'$type'], contains('TakeExposure'));
+      final seqNode = nodeAt(s.body, addedPath)!;
+      expect(childrenOf(seqNode), hasLength(1));
+      expect(childrenOf(seqNode).single[r'$type'], contains('TakeExposure'));
       expect(s.selectedPath, [...addedPath, 0]);
     });
 

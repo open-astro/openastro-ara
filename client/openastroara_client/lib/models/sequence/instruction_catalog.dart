@@ -218,6 +218,14 @@ class InstructionDef {
     if (keys.length != fields.length) {
       throw StateError('InstructionDef($label) has duplicate field keys');
     }
+    // The const-ctor assert catches this for the static catalog at construction;
+    // re-check in release too (matching the duplicate-key guard above) so a
+    // dynamically-built def with a defaultName but no strategyType — whose name
+    // _buildContainer would otherwise silently drop on a leaf — fails fast.
+    if (strategyType == null && defaultName != null) {
+      throw StateError(
+          'InstructionDef($label) sets defaultName without strategyType (only containers carry a Name)');
+    }
     if (isContainer) return _buildContainer();
     final node = <String, dynamic>{r'$type': type};
     for (final f in fields) {

@@ -192,6 +192,22 @@ void main() {
           isEmpty);
     });
 
+    test('a defaultName without strategyType is rejected (assert in debug)', () {
+      // A leaf def can't carry a Name (_buildContainer would drop it silently).
+      // In debug (test) the const-ctor assert fires at construction; build()
+      // re-throws the same invariant in release, where asserts are stripped.
+      expect(
+        () => InstructionDef(
+          type: 'X.Leaf, X',
+          label: 'leaf',
+          category: InstructionCategory.utility,
+          icon: Icons.error,
+          defaultName: 'oops', // no strategyType
+        ),
+        throwsA(isA<AssertionError>()),
+      );
+    });
+
     test('build() throws on duplicate field keys (enforced in release too)', () {
       const dup = InstructionDef(
         type: 'X.Dup, X',
