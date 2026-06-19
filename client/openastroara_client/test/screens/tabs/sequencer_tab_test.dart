@@ -18,6 +18,13 @@ class _FakeClient implements SequenceClient {
           {bool treatWarningsAsErrors = false}) async =>
       const SequenceImportResult(createdSequenceId: 'new');
   @override
+  Future<SequenceDetail> getSequenceDetail(String id) async =>
+      SequenceDetail(id: id, name: id, body: const {});
+  @override
+  Future<SequenceDetail> updateSequence(String id,
+          {String? name, String? description, Map<String, dynamic>? body}) async =>
+      SequenceDetail(id: id, name: name ?? id, description: description, body: body ?? const {});
+  @override
   Future<SequenceNode> getSequence(String id) async => SequenceNode(
         id: 'root',
         kind: SequenceNodeKind.root,

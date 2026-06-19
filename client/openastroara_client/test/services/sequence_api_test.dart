@@ -336,6 +336,77 @@ void main() {
     });
   });
 
+  group('SequenceApi.getSequenceDetail', () {
+    test('parses id/name/description/body/template_origin', () async {
+      final api = _api((_) => {
+            'id': 's1',
+            'name': 'M42',
+            'description': 'Orion',
+            'body': {r'$type': 'NINA...Root', 'Name': 'M42'},
+            'template_origin': 'Deep-sky LRGB',
+          });
+      final d = await api.getSequenceDetail('s1');
+      expect(d.id, 's1');
+      expect(d.name, 'M42');
+      expect(d.description, 'Orion');
+      expect(d.body['Name'], 'M42'); // raw body kept verbatim
+      expect(d.templateOrigin, 'Deep-sky LRGB');
+    });
+
+    test('a detail with no body object → empty body map', () async {
+      final api = _api((_) => {'id': 's1', 'name': 'Bare'});
+      final d = await api.getSequenceDetail('s1');
+      expect(d.body, isEmpty);
+    });
+
+    test('rejects an empty id before any request', () async {
+      final api = _api((_) => const {});
+      expect(() => api.getSequenceDetail(''), throwsA(isA<ArgumentError>()));
+    });
+  });
+
+  group('SequenceApi.updateSequence', () {
+    test('PATCHes only the supplied fields and returns the updated detail',
+        () async {
+      RequestOptions? captured;
+      final api = _api((opts) {
+        captured = opts;
+        return {'id': 's1', 'name': 'Renamed', 'body': {'Name': 'Renamed'}};
+      });
+      final d = await api.updateSequence('s1',
+          name: 'Renamed', body: {'Name': 'Renamed'});
+      expect(d.name, 'Renamed');
+      expect(captured!.method, 'PATCH');
+      final sent = captured!.data as Map;
+      expect(sent['name'], 'Renamed');
+      expect((sent['body'] as Map)['Name'], 'Renamed');
+      expect(sent.containsKey('description'), isFalse); // omitted, not null
+    });
+
+    test('rejects an empty id and an empty change set', () async {
+      final api = _api((_) => const {});
+      expect(() => api.updateSequence('', name: 'x'),
+          throwsA(isA<ArgumentError>()));
+      expect(() => api.updateSequence('s1'), throwsA(isA<ArgumentError>()));
+    });
+
+    test('a 422 (schema-invalid body) propagates as DioException(422)',
+        () async {
+      final api = _api((_) => {'error': 'bad body'}, statusCode: 422);
+      await expectLater(
+        api.updateSequence('s1', body: const {'bad': true}),
+        throwsA(isA<DioException>()
+            .having((e) => e.response?.statusCode, 'statusCode', 422)),
+      );
+    });
+
+    test('an unknown id (404) propagates as DioException', () async {
+      final api = _api((_) => {'error': 'no seq'}, statusCode: 404);
+      expect(api.updateSequence('s1', name: 'x'),
+          throwsA(isA<DioException>()));
+    });
+  });
+
   group('SequenceApi.getRunState', () {
     test('parses an active run state', () async {
       final api = _api((_) => {

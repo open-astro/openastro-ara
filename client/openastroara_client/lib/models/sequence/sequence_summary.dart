@@ -4,7 +4,7 @@
 /// §38.1 JSON DOM) is fetched separately and parsed by the tree layer.
 library;
 
-import 'package:flutter/foundation.dart' show listEquals;
+import 'package:flutter/foundation.dart' show listEquals, mapEquals;
 
 String? _str(dynamic v) => v is String ? v : null;
 int _int(dynamic v) => v is int ? v : (v is num ? v.toInt() : 0);
@@ -124,6 +124,59 @@ class SequenceImportResult {
   @override
   int get hashCode => Object.hash(createdSequenceId, name, lossyTranslation,
       Object.hashAll(warnings), Object.hashAll(droppedInstructionTypes));
+}
+
+/// Full detail of one saved sequence (`GET /api/v1/sequences/{id}`) — daemon's
+/// `SequenceDto`. [body] is the raw §38.1 / NINA JSON DOM the daemon stores
+/// VERBATIM; it is the source of truth the client keeps so Save (`PATCH`) and
+/// Export round-trip faithfully (no lossy reconstruction from the display tree).
+/// The display tree is derived from [body] via `parseNinaSequenceBody`.
+class SequenceDetail {
+  final String id;
+  final String name;
+  final String? description;
+  final Map<String, dynamic> body;
+  final String? templateOrigin;
+
+  const SequenceDetail({
+    required this.id,
+    this.name = '',
+    this.description,
+    this.body = const <String, dynamic>{},
+    this.templateOrigin,
+  });
+
+  factory SequenceDetail.fromJson(Map<String, dynamic> json) => SequenceDetail(
+        id: _str(json['id']) ?? '',
+        name: _str(json['name']) ?? '',
+        description: _str(json['description']),
+        body: json['body'] is Map<String, dynamic>
+            ? json['body'] as Map<String, dynamic>
+            : const <String, dynamic>{},
+        templateOrigin: _str(json['template_origin']),
+      );
+
+  SequenceDetail copyWith({String? name, String? description, Map<String, dynamic>? body}) =>
+      SequenceDetail(
+        id: id,
+        name: name ?? this.name,
+        description: description ?? this.description,
+        body: body ?? this.body,
+        templateOrigin: templateOrigin,
+      );
+
+  @override
+  bool operator ==(Object other) =>
+      other is SequenceDetail &&
+      other.id == id &&
+      other.name == name &&
+      other.description == description &&
+      other.templateOrigin == templateOrigin &&
+      mapEquals(other.body, body);
+
+  @override
+  int get hashCode =>
+      Object.hash(id, name, description, templateOrigin, body.length);
 }
 
 /// A starting-point sequence template (`GET /api/v1/sequences/templates`) —
