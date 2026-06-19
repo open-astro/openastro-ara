@@ -57,6 +57,7 @@ List<Widget> _rowActions(WidgetRef ref, Map<String, dynamic> body, NodePath path
 /// itself, isn't inside [dragged] (would orphan the subtree), and the move isn't
 /// a pure no-op (dropping a node onto its own parent when it's already the last
 /// child). Pure so the drag policy is unit-tested without a gesture harness.
+@visibleForTesting
 bool canReparentInto(Map<String, dynamic> body, NodePath dragged, NodePath target) {
   final targetNode = nodeAt(body, target);
   if (targetNode == null || !isContainer(targetNode)) return false;
@@ -138,11 +139,12 @@ class SequenceEditorTree extends ConsumerWidget {
           onWillAcceptWithDetails: (d) =>
               canReparentInto(editor.body, d.data, row.path),
           onAcceptWithDetails: (d) {
-            final target = nodeAt(editor.body, row.path);
-            final toIndex = target == null ? 0 : childrenOf(target).length;
+            // onWillAccept (canReparentInto) already guaranteed row.path resolves
+            // to a container, so the node and its child count are non-null.
+            final target = nodeAt(editor.body, row.path)!;
             ref
                 .read(sequenceEditorProvider.notifier)
-                .moveNodeTo(d.data, row.path, toIndex);
+                .moveNodeTo(d.data, row.path, childrenOf(target).length);
           },
           builder: (context, candidate, rejected) {
             final hovering = candidate.isNotEmpty;
