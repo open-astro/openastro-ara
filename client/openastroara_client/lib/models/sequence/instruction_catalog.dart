@@ -227,6 +227,10 @@ class InstructionDef {
           'InstructionDef($label) sets defaultName without strategyType (only containers carry a Name)');
     }
     if (isContainer) return _buildContainer();
+    // A field may not reuse a base key build() writes itself (it would be
+    // silently clobbered). Shared with the condition/trigger catalogs.
+    checkNoReservedFieldKeys('InstructionDef($label)', fields,
+        const {r'$type', 'Parent', 'ErrorBehavior', 'Attempts'});
     final node = <String, dynamic>{r'$type': type};
     for (final f in fields) {
       node[f.key] = deepCloneJson(f.defaultValue);
@@ -271,6 +275,19 @@ class InstructionDef {
       };
 }
 
+/// Throws a [StateError] if any of [fields] uses a key in [reserved] — a base
+/// key the caller's `build()` writes itself, which a field would silently
+/// clobber. Shared by the instruction / condition / trigger catalogs so all
+/// three guard their reserved base keys identically. [owner] labels the throw.
+void checkNoReservedFieldKeys(
+    String owner, List<InstructionField> fields, Set<String> reserved) {
+  for (final f in fields) {
+    if (reserved.contains(f.key)) {
+      throw StateError('$owner field "${f.key}" collides with a reserved base key');
+    }
+  }
+}
+
 /// Recursively copy a JSON value so a built node shares no mutable sub-object
 /// (maps/lists) with the const catalog defaults. Scalars and `null` are
 /// immutable and returned as-is. Shared by [ConditionDef.build] (condition
@@ -296,6 +313,12 @@ Object? deepCloneJson(Object? value) {
 }
 
 /// The full instruction palette, in display order within each category.
+/// The assembly-qualified `$type` of the general-purpose sequential container —
+/// the single source of truth for this string (also reused by the trigger
+/// catalog for a trigger's `TriggerRunner`).
+const String sequentialContainerType =
+    'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer';
+
 const List<InstructionDef> instructionCatalog = [
   // ── Camera ────────────────────────────────────────────────────────────────
   InstructionDef(
@@ -470,7 +493,7 @@ const List<InstructionDef> instructionCatalog = [
   // ARA-built sequence reads identically when opened in NINA. Appended last so
   // the palette's existing instruction rows keep their positions.
   InstructionDef(
-    type: 'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
+    type: sequentialContainerType,
     label: 'Sequential Instruction Set',
     category: InstructionCategory.container,
     icon: Icons.account_tree_outlined,

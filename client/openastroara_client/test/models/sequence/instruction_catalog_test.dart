@@ -208,6 +208,20 @@ void main() {
       );
     });
 
+    test('build() throws if a field key collides with a reserved base key', () {
+      const bad = InstructionDef(
+        type: 'X.Bad, X',
+        label: 'bad',
+        category: InstructionCategory.utility,
+        icon: Icons.error,
+        fields: [
+          InstructionField('ErrorBehavior', 'oops', InstructionFieldType.integer,
+              defaultValue: 0),
+        ],
+      );
+      expect(() => bad.build(), throwsStateError);
+    });
+
     test('build() throws on duplicate field keys (enforced in release too)', () {
       const dup = InstructionDef(
         type: 'X.Dup, X',

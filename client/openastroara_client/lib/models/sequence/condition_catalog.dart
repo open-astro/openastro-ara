@@ -19,7 +19,8 @@ library;
 
 import 'package:flutter/material.dart';
 
-import 'instruction_catalog.dart' show InstructionField, InstructionFieldType, deepCloneJson;
+import 'instruction_catalog.dart'
+    show InstructionField, InstructionFieldType, checkNoReservedFieldKeys, deepCloneJson;
 
 /// One loop condition in the container's "add condition" picker.
 @immutable
@@ -59,6 +60,8 @@ class ConditionDef {
     if (keys.length != fields.length) {
       throw StateError('ConditionDef($label) has duplicate field keys');
     }
+    // A field may not reuse a base key build() writes itself.
+    checkNoReservedFieldKeys('ConditionDef($label)', fields, const {r'$type', 'Parent'});
     final node = <String, dynamic>{r'$type': type};
     for (final f in fields) {
       node[f.key] = deepCloneJson(f.defaultValue);
