@@ -139,11 +139,15 @@ class InstructionField {
     this.enumValues,
     this.editable = true,
     this.requiresUserInput = false,
-  }) : assert(
+  })  : assert(
           enumLabels == null || enumValues == null,
           'a field is either an intEnum (enumLabels) or a stringEnum (enumValues), '
           'never both — setting both is an ambiguous authoring mistake.',
-        );
+        ),
+        assert(type != InstructionFieldType.intEnum || enumLabels != null,
+            'an intEnum field must provide enumLabels'),
+        assert(type != InstructionFieldType.stringEnum || enumValues != null,
+            'a stringEnum field must provide enumValues');
 }
 
 /// One draggable instruction in the palette.

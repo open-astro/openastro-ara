@@ -9,9 +9,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../models/sequence/instruction_catalog.dart';
 import '../../models/sequence/nina_dom.dart';
 import '../../models/sequence/nina_sequence_parser.dart' show ninaParseMaxDepth;
+import '../../models/sequence/node_display.dart';
 import '../../state/sequencer/sequence_editor_state.dart';
 import '../../theme/ara_colors.dart';
 
@@ -21,42 +21,6 @@ class _Row {
   final Map<String, dynamic> node;
   final int depth;
   const _Row(this.path, this.node, this.depth);
-}
-
-/// The label to show for [node]: the catalog instruction label when known,
-/// else a container's `Name` (or short type), else the short `$type`.
-String nodeLabel(Map<String, dynamic> node) {
-  final type = node[r'$type'];
-  if (type is String) {
-    final def = instructionForType(type);
-    if (def != null) return def.label;
-  }
-  if (isContainer(node)) {
-    final name = node['Name'];
-    if (name is String && name.isNotEmpty) return name;
-  }
-  return _shortType(type) ?? 'Unknown';
-}
-
-/// The icon for [node]: the catalog icon when known, a folder for an unknown
-/// container, else a generic instruction glyph.
-IconData nodeIcon(Map<String, dynamic> node) {
-  final type = node[r'$type'];
-  if (type is String) {
-    final def = instructionForType(type);
-    if (def != null) return def.icon;
-  }
-  return isContainer(node) ? Icons.account_tree_outlined : Icons.help_outline;
-}
-
-/// `'A.B.C, Asm'` → `'C'`; null/non-string/degenerate (empty or trailing-dot
-/// like `'A., Asm'`) → null, so `nodeLabel` falls through to `'Unknown'`.
-String? _shortType(Object? type) {
-  if (type is! String || type.isEmpty) return null;
-  final beforeComma = type.split(',').first.trim();
-  final lastDot = beforeComma.lastIndexOf('.');
-  final short = lastDot >= 0 ? beforeComma.substring(lastDot + 1) : beforeComma;
-  return short.isEmpty ? null : short;
 }
 
 void _flatten(Map<String, dynamic> node, NodePath path, int depth, List<_Row> out) {
