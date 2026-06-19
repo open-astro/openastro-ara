@@ -248,6 +248,9 @@ void main() {
     test('accepts a non-last child dropped back into its parent (reorder to end)', () {
       expect(canReparentInto(body, const [0], const []), isTrue);
     });
+    test('rejects an empty dragged path (the root) without throwing', () {
+      expect(canReparentInto(body, const [], const [1]), isFalse);
+    });
   });
 
   testWidgets('long-press dragging a leaf onto a container moves it inside',
