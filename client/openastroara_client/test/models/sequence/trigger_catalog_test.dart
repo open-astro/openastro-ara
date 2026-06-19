@@ -1,4 +1,6 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/models/sequence/instruction_catalog.dart';
 import 'package:openastroara/models/sequence/nina_dom.dart';
 import 'package:openastroara/models/sequence/trigger_catalog.dart';
 
@@ -57,13 +59,25 @@ void main() {
     test('two builds share no TriggerRunner instance (fresh each time)', () {
       final a = triggerForType(_meridianFlip)!.build();
       final b = triggerForType(_meridianFlip)!.build();
-      final runnerA = a['TriggerRunner'] as Map<String, dynamic>;
-      // Mutating one runner's Items must not touch the other.
-      final mutated = withChildren(runnerA, [
-        {r'$type': 'X.TakeExposure'}
-      ]);
-      a['TriggerRunner'] = mutated;
+      // Mutate a's runner Items list IN PLACE — proves no shared nested list,
+      // not just that the top-level maps differ.
+      final itemsA = (a['TriggerRunner'] as Map<String, dynamic>)['Items']
+          as Map<String, dynamic>;
+      (itemsA[r'$values'] as List).add({r'$type': 'X.TakeExposure'});
       expect(childrenOf(b['TriggerRunner'] as Map<String, dynamic>), isEmpty);
+    });
+
+    test('build() throws if a field key collides with a reserved base key', () {
+      const bad = TriggerDef(
+        type: 'X.Bad, X',
+        label: 'bad',
+        icon: Icons.error,
+        fields: [
+          InstructionField('TriggerRunner', 'oops', InstructionFieldType.text,
+              defaultValue: ''),
+        ],
+      );
+      expect(() => bad.build(), throwsStateError);
     });
   });
 }

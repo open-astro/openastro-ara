@@ -52,21 +52,35 @@ class TriggerDef {
     this.fields = const [],
   });
 
-  /// A fresh raw-body trigger node: `$type`, each field at its default, the base
-  /// `Parent: null`, and a fresh empty `TriggerRunner` (`SequentialContainer`).
-  /// The runner is built from the instruction catalog so it shares nothing with
-  /// the catalog and is shaped exactly like a user-added container.
+  /// Base keys `build` writes itself — a field may not reuse one (it would be
+  /// silently clobbered below).
+  static const Set<String> _reservedKeys = {'Parent', 'TriggerRunner'};
+
+  /// A fresh raw-body trigger node: `$type`, each field at its (deep-cloned)
+  /// default, the base `Parent: null`, and a fresh empty `TriggerRunner`
+  /// (`SequentialContainer`). The runner is built from the instruction catalog
+  /// so it shares nothing with the catalog and is shaped exactly like a
+  /// user-added container.
   Map<String, dynamic> build() {
     final keys = fields.map((f) => f.key).toSet();
     if (keys.length != fields.length) {
       throw StateError('TriggerDef($label) has duplicate field keys');
     }
+    for (final f in fields) {
+      if (_reservedKeys.contains(f.key)) {
+        throw StateError(
+            'TriggerDef($label) field "${f.key}" collides with a reserved base key');
+      }
+    }
+    final containerDef = instructionForType(_sequentialContainerType) ??
+        (throw StateError(
+            'TriggerDef: SequentialContainer not found in the instruction catalog'));
     final node = <String, dynamic>{r'$type': type};
     for (final f in fields) {
       node[f.key] = deepCloneJson(f.defaultValue);
     }
     node['Parent'] = null;
-    node['TriggerRunner'] = instructionForType(_sequentialContainerType)!.build();
+    node['TriggerRunner'] = containerDef.build();
     return node;
   }
 }
