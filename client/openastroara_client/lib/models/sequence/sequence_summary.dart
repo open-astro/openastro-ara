@@ -244,7 +244,9 @@ class SequenceDetail {
 
   // Memoize the deep body hash on first access (O(1) on repeat). Sound now that
   // [body] is DEEPLY unmodifiable — nothing can mutate it at any depth, so the
-  // cached value can never go stale.
+  // cached value can never go stale. (The cache is per-instance, so two `==`
+  // instances compute identical hashes — they just do so lazily; that's fine
+  // for HashMap/HashSet, which hash on demand.)
   int? _bodyHashCache;
 
   @override

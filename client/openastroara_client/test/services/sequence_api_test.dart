@@ -481,6 +481,12 @@ void main() {
       expect(api.updateSequence('s1', name: 'x'),
           throwsA(isA<DioException>()));
     });
+
+    test('throws on a non-object 200 body', () async {
+      final api = _api((_) => [1, 2, 3]); // array, not the updated detail
+      expect(api.updateSequence('s1', name: 'x'),
+          throwsA(isA<FormatException>()));
+    });
   });
 
   group('SequenceApi.getRunState', () {
