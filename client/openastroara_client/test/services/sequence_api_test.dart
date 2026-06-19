@@ -336,6 +336,159 @@ void main() {
     });
   });
 
+  group('SequenceApi.getSequenceDetail', () {
+    test('parses id/name/description/body/template_origin', () async {
+      final api = _api((_) => {
+            'id': 's1',
+            'name': 'M42',
+            'description': 'Orion',
+            'body': {r'$type': 'NINA...Root', 'Name': 'M42'},
+            'template_origin': 'Deep-sky LRGB',
+          });
+      final d = await api.getSequenceDetail('s1');
+      expect(d.id, 's1');
+      expect(d.name, 'M42');
+      expect(d.description, 'Orion');
+      expect(d.body['Name'], 'M42'); // raw body kept verbatim
+      expect(d.templateOrigin, 'Deep-sky LRGB');
+    });
+
+    test('a detail with no body object → empty body map', () async {
+      final api = _api((_) => {'id': 's1', 'name': 'Bare'});
+      final d = await api.getSequenceDetail('s1');
+      expect(d.body, isEmpty);
+    });
+
+    test('value equality is deep — two parses of the same nested body are ==',
+        () {
+      Map<String, dynamic> json() => {
+            'id': 's1',
+            'name': 'M42',
+            'body': {
+              r'$type': 'Root',
+              'Items': {
+                r'$values': [
+                  {'Name': 'Start', 'Exposure': 60}
+                ]
+              }
+            },
+          };
+      final a = SequenceDetail.fromJson(json());
+      final b = SequenceDetail.fromJson(json());
+      expect(a, b); // deep — distinct nested-Map instances, equal content
+      expect(a.hashCode, b.hashCode);
+      // A nested change breaks equality.
+      final changed = json()..['body']['Items']['\$values'][0]['Exposure'] = 120;
+      expect(SequenceDetail.fromJson(changed), isNot(a));
+    });
+
+    test('rejects an empty id before any request', () async {
+      final api = _api((_) => const {});
+      expect(() => api.getSequenceDetail(''), throwsA(isA<ArgumentError>()));
+    });
+
+    test('copyWith updates supplied fields, keeps the rest (null = keep)', () {
+      final base = SequenceDetail(
+          id: 's1',
+          name: 'A',
+          description: 'desc',
+          body: const {'x': 1},
+          templateOrigin: 'T');
+      final renamed = base.copyWith(name: 'B');
+      expect(renamed.name, 'B');
+      expect(renamed.description, 'desc'); // kept
+      expect(renamed.body, {'x': 1}); // kept
+      // Body unchanged → reuse the same already-unmodifiable map (no re-wrap).
+      expect(identical(renamed.body, base.body), isTrue);
+      expect(renamed.id, 's1'); // not copyable
+      expect(renamed.templateOrigin, 'T');
+      // null description does NOT clear it (documented limitation).
+      expect(base.copyWith(description: null).description, 'desc');
+      // a supplied body replaces.
+      expect(base.copyWith(body: const {'y': 2}).body, const {'y': 2});
+    });
+
+    test('body is DEEPLY unmodifiable — mutation throws at any depth', () {
+      final d = SequenceDetail(id: 's1', body: {
+        'x': 1,
+        'Items': {
+          r'$values': [
+            {'Exposure': 60}
+          ]
+        }
+      });
+      expect(() => d.body['x'] = 2, throwsUnsupportedError); // top level
+      expect(() => (d.body['Items'] as Map)['k'] = 'v',
+          throwsUnsupportedError); // nested map
+      final values = (d.body['Items'] as Map)[r'$values'] as List;
+      expect(() => values.add({}), throwsUnsupportedError); // nested list
+      expect(() => (values.first as Map)['Exposure'] = 120,
+          throwsUnsupportedError); // map inside list
+      // Nested maps stay Map<String, dynamic> so save-b can cast without throwing.
+      expect(d.body['Items'], isA<Map<String, dynamic>>());
+      expect(values.first, isA<Map<String, dynamic>>());
+    });
+
+    test('a pathologically deep body throws instead of overflowing the stack',
+        () {
+      // Build a > _maxBodyDepth (512) nested chain.
+      Map<String, dynamic> deep = {'leaf': 1};
+      for (var i = 0; i < 600; i++) {
+        deep = {'n': deep};
+      }
+      expect(() => SequenceDetail(id: 's1', body: deep),
+          throwsA(isA<FormatException>()));
+    });
+  });
+
+  group('SequenceApi.updateSequence', () {
+    test('PATCHes only the supplied fields and returns the updated detail',
+        () async {
+      RequestOptions? captured;
+      final api = _api((opts) {
+        captured = opts;
+        return {'id': 's1', 'name': 'Renamed', 'body': {'Name': 'Renamed'}};
+      });
+      final d = await api.updateSequence('s1',
+          name: 'Renamed', body: {'Name': 'Renamed'});
+      expect(d.name, 'Renamed');
+      expect(captured!.method, 'PATCH');
+      final sent = captured!.data as Map;
+      expect(sent['name'], 'Renamed');
+      expect((sent['body'] as Map)['Name'], 'Renamed');
+      expect(sent.containsKey('description'), isFalse); // omitted, not null
+    });
+
+    test('rejects an empty id and an empty change set', () async {
+      final api = _api((_) => const {});
+      expect(() => api.updateSequence('', name: 'x'),
+          throwsA(isA<ArgumentError>()));
+      expect(() => api.updateSequence('s1'), throwsA(isA<ArgumentError>()));
+    });
+
+    test('a 422 (schema-invalid body) propagates as DioException(422)',
+        () async {
+      final api = _api((_) => {'error': 'bad body'}, statusCode: 422);
+      await expectLater(
+        api.updateSequence('s1', body: const {'bad': true}),
+        throwsA(isA<DioException>()
+            .having((e) => e.response?.statusCode, 'statusCode', 422)),
+      );
+    });
+
+    test('an unknown id (404) propagates as DioException', () async {
+      final api = _api((_) => {'error': 'no seq'}, statusCode: 404);
+      expect(api.updateSequence('s1', name: 'x'),
+          throwsA(isA<DioException>()));
+    });
+
+    test('throws on a non-object 200 body', () async {
+      final api = _api((_) => [1, 2, 3]); // array, not the updated detail
+      expect(api.updateSequence('s1', name: 'x'),
+          throwsA(isA<FormatException>()));
+    });
+  });
+
   group('SequenceApi.getRunState', () {
     test('parses an active run state', () async {
       final api = _api((_) => {

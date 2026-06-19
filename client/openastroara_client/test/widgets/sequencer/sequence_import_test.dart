@@ -30,6 +30,13 @@ class _ImportClient implements SequenceClient {
   @override
   Future<SequencePage> list({int limit = 50}) async => const SequencePage(items: []);
   @override
+  Future<SequenceDetail> getSequenceDetail(String id) async =>
+      SequenceDetail(id: id, name: id, body: const {});
+  @override
+  Future<SequenceDetail> updateSequence(String id,
+          {String? name, String? description, Map<String, dynamic>? body}) async =>
+      SequenceDetail(id: id, name: name ?? id, description: description, body: body ?? const {});
+  @override
   Future<SequenceNode> getSequence(String id) async =>
       SequenceNode(id: 'root', kind: SequenceNodeKind.root, displayName: id);
   @override

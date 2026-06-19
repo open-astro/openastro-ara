@@ -4,6 +4,7 @@
 /// §38.1 JSON DOM) is fetched separately and parsed by the tree layer.
 library;
 
+import 'package:collection/collection.dart' show DeepCollectionEquality;
 import 'package:flutter/foundation.dart' show listEquals;
 
 String? _str(dynamic v) => v is String ? v : null;
@@ -124,6 +125,133 @@ class SequenceImportResult {
   @override
   int get hashCode => Object.hash(createdSequenceId, name, lossyTranslation,
       Object.hashAll(warnings), Object.hashAll(droppedInstructionTypes));
+}
+
+/// Recursion cap for [_deepUnmodifiable] — a corrupt/adversarial body that nests
+/// past this throws rather than overflowing the stack. Generous (real NINA
+/// sequences nest <~20 JSON levels) but well under the stack limit. Mirrors the
+/// parser's own depth guard ([ninaParseMaxDepth]).
+const int _maxBodyDepth = 512;
+
+/// Recursively wrap a JSON value's maps and lists unmodifiable, so a
+/// [SequenceDetail.body] can't be mutated at ANY depth — making it a true
+/// immutable value rather than a shallow (top-level-only) tripwire.
+Object? _deepUnmodifiable(Object? value, [int depth = 0]) {
+  if (depth > _maxBodyDepth) {
+    throw const FormatException('sequence body nests too deeply');
+  }
+  if (value is Map) {
+    // Keep nested maps typed Map<String, dynamic> (JSON keys are always strings)
+    // so save-b's editor can `as Map<String, dynamic>` without a runtime cast
+    // failure on the frozen nested maps.
+    return Map<String, dynamic>.unmodifiable(<String, dynamic>{
+      for (final e in value.entries) '${e.key}': _deepUnmodifiable(e.value, depth + 1),
+    });
+  }
+  if (value is List) {
+    return List<dynamic>.unmodifiable(value.map((v) => _deepUnmodifiable(v, depth + 1)));
+  }
+  return value;
+}
+
+Map<String, dynamic> _deepUnmodifiableBody(Map<String, dynamic> body) =>
+    Map<String, dynamic>.unmodifiable(<String, dynamic>{
+      for (final e in body.entries) e.key: _deepUnmodifiable(e.value, 1),
+    });
+
+/// Full detail of one saved sequence (`GET /api/v1/sequences/{id}`) — daemon's
+/// `SequenceDto`. [body] is the raw §38.1 / NINA JSON DOM the daemon stores
+/// VERBATIM; it is the source of truth the client keeps so Save (`PATCH`) and
+/// Export round-trip faithfully (no lossy reconstruction from the display tree).
+/// The display tree is derived from [body] via `parseNinaSequenceBody`.
+class SequenceDetail {
+  final String id;
+  final String name;
+  final String? description;
+  final Map<String, dynamic> body;
+  final String? templateOrigin;
+
+  // [body] is wrapped DEEPLY unmodifiable so it can't be mutated at any depth —
+  // it's a true immutable value (edits produce a NEW body via copyWith). Not
+  // const because the wrap isn't a const expression.
+  SequenceDetail({
+    required this.id,
+    this.name = '',
+    this.description,
+    Map<String, dynamic> body = const <String, dynamic>{},
+    this.templateOrigin,
+  }) : body = _deepUnmodifiableBody(body);
+
+  // Internal fast path. PRECONDITION: [body] MUST already be deeply-unmodifiable
+  // (only ever called from copyWith with a body reused from another instance) —
+  // it skips the deep-wrap, so passing a mutable map would break the class's
+  // immutability invariant.
+  SequenceDetail._raw({
+    required this.id,
+    required this.name,
+    required this.description,
+    required this.body,
+    required this.templateOrigin,
+  });
+
+  factory SequenceDetail.fromJson(Map<String, dynamic> json) => SequenceDetail(
+        id: _str(json['id']) ?? '',
+        name: _str(json['name']) ?? '',
+        description: _str(json['description']),
+        body: json['body'] is Map<String, dynamic>
+            ? json['body'] as Map<String, dynamic>
+            : const <String, dynamic>{},
+        templateOrigin: _str(json['template_origin']),
+      );
+
+  // NOTE: like the PATCH payload, a null arg means "keep current" — there's no
+  // way to CLEAR description back to null here. Fine for the create/rename flows;
+  // if save-b's editor needs to blank a description, add a clear sentinel.
+  SequenceDetail copyWith({String? name, String? description, Map<String, dynamic>? body}) =>
+      body == null
+          // Body unchanged → reuse the already-unmodifiable map (no re-wrap),
+          // the common path for a metadata-only edit like rename.
+          ? SequenceDetail._raw(
+              id: id,
+              name: name ?? this.name,
+              description: description ?? this.description,
+              body: this.body,
+              templateOrigin: templateOrigin,
+            )
+          : SequenceDetail(
+              id: id,
+              name: name ?? this.name,
+              description: description ?? this.description,
+              body: body,
+              templateOrigin: templateOrigin,
+            );
+
+  // DeepCollectionEquality (not mapEquals): the NINA body is deeply nested JSON,
+  // and mapEquals compares nested-Map values by identity — so two fresh parses
+  // of the same body would never be ==, breaking save-b's "did the body change?"
+  // check. Deep equality is also order-independent, matching the deep hash below.
+  static const _bodyEq = DeepCollectionEquality();
+
+  @override
+  bool operator ==(Object other) =>
+      other is SequenceDetail &&
+      other.id == id &&
+      other.name == name &&
+      other.description == description &&
+      other.templateOrigin == templateOrigin &&
+      // Cheap scalar fields short-circuit before the deep body compare.
+      _bodyEq.equals(other.body, body);
+
+  // Memoize the deep body hash on first access (O(1) on repeat). Sound now that
+  // [body] is DEEPLY unmodifiable — nothing can mutate it at any depth, so the
+  // cached value can never go stale. (The cache is per-instance, so two `==`
+  // instances compute identical hashes — they just do so lazily; that's fine
+  // for HashMap/HashSet, which hash on demand.)
+  int? _bodyHashCache;
+
+  @override
+  int get hashCode => Object.hash(id, name, description, templateOrigin,
+      _bodyHashCache ??= _bodyEq.hash(body));
 }
 
 /// A starting-point sequence template (`GET /api/v1/sequences/templates`) —

@@ -44,6 +44,22 @@ abstract interface class SequenceClient {
   /// recognizable tree). Throws on transport failure / unknown id (404).
   Future<SequenceNode> getSequence(String id);
 
+  /// Fetch a sequence's full detail INCLUDING the raw body JSON — the source of
+  /// truth kept for Save/Export (so they round-trip faithfully). Throws on
+  /// transport failure / unknown id (404).
+  Future<SequenceDetail> getSequenceDetail(String id);
+
+  /// Update a saved sequence (`PATCH /{id}`, §38.5) — only the supplied fields
+  /// change. Pass [body] (the raw NINA/§38.1 DOM) to persist edits; the daemon
+  /// schema-validates it and answers 422 (a DioException here) when invalid.
+  /// Returns the updated detail. Throws on unknown id (404) or no fields given.
+  Future<SequenceDetail> updateSequence(
+    String id, {
+    String? name,
+    String? description,
+    Map<String, dynamic>? body,
+  });
+
   /// Live run state of a sequence, or null when there's no active run (the
   /// daemon answers 404). Polled by the run controls / status line.
   Future<SequenceRunStateInfo?> getRunState(String id);
@@ -189,6 +205,53 @@ class SequenceApi implements SequenceClient {
       kind: SequenceNodeKind.root,
       displayName: name is String && name.trim().isNotEmpty ? name : 'Sequence',
     );
+  }
+
+  @override
+  Future<SequenceDetail> getSequenceDetail(String id) async {
+    if (id.isEmpty) {
+      throw ArgumentError.value(id, 'id', 'sequence id must not be empty');
+    }
+    final res =
+        await _dio.get<dynamic>('/api/v1/sequences/${Uri.encodeComponent(id)}');
+    final data = res.data;
+    if (data is! Map<String, dynamic>) {
+      throw FormatException(
+          'sequence detail returned an unexpected body (${data.runtimeType})');
+    }
+    return SequenceDetail.fromJson(data);
+  }
+
+  @override
+  Future<SequenceDetail> updateSequence(
+    String id, {
+    String? name,
+    String? description,
+    Map<String, dynamic>? body,
+  }) async {
+    if (id.isEmpty) {
+      throw ArgumentError.value(id, 'id', 'sequence id must not be empty');
+    }
+    // Null-aware entries: a field omitted (null) isn't sent, so PATCH leaves it
+    // unchanged — distinct from sending an explicit null.
+    final payload = <String, dynamic>{
+      'name': ?name,
+      'description': ?description,
+      'body': ?body,
+    };
+    if (payload.isEmpty) {
+      throw ArgumentError('updateSequence needs at least one field to change');
+    }
+    final res = await _dio.patch<dynamic>(
+      '/api/v1/sequences/${Uri.encodeComponent(id)}',
+      data: payload,
+    );
+    final data = res.data;
+    if (data is! Map<String, dynamic>) {
+      throw FormatException(
+          'sequence update returned an unexpected body (${data.runtimeType})');
+    }
+    return SequenceDetail.fromJson(data);
   }
 
   @override
