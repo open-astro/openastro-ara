@@ -11,9 +11,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/sequence/instruction_catalog.dart';
 import '../../models/sequence/nina_dom.dart';
+import '../../models/sequence/node_display.dart' show nodeLabel;
 import '../../state/sequencer/sequence_editor_state.dart';
 import '../../theme/ara_colors.dart';
-import 'sequence_editor_tree.dart' show nodeLabel;
 
 class SequenceFieldEditor extends ConsumerWidget {
   const SequenceFieldEditor({super.key});
@@ -92,13 +92,17 @@ class _FieldControl extends StatelessWidget {
           ],
         );
       case InstructionFieldType.intEnum:
+        final labels = field.enumLabels ?? const <int, String>{};
+        final intVal = value is int ? value as int : null;
         return _labelled(
           DropdownButton<int>(
-            value: value is int ? value as int : null,
+            // Null unless the stored value is a known variant, else Flutter
+            // asserts "exactly one item with the DropdownButton's value".
+            value: labels.containsKey(intVal) ? intVal : null,
             isExpanded: true,
             dropdownColor: AraColors.bgPanel,
             items: [
-              for (final e in field.enumLabels!.entries)
+              for (final e in labels.entries)
                 DropdownMenuItem(value: e.key, child: Text(e.value)),
             ],
             onChanged: (v) {
@@ -107,13 +111,15 @@ class _FieldControl extends StatelessWidget {
           ),
         );
       case InstructionFieldType.stringEnum:
+        final values = field.enumValues ?? const <String>[];
+        final strVal = value is String ? value as String : null;
         return _labelled(
           DropdownButton<String>(
-            value: value is String ? value as String : null,
+            value: values.contains(strVal) ? strVal : null,
             isExpanded: true,
             dropdownColor: AraColors.bgPanel,
             items: [
-              for (final v in field.enumValues!)
+              for (final v in values)
                 DropdownMenuItem(value: v, child: Text(v)),
             ],
             onChanged: (v) {

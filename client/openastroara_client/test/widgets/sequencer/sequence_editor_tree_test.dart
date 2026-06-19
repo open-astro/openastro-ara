@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/sequence/instruction_catalog.dart';
 import 'package:openastroara/models/sequence/nina_dom.dart';
+import 'package:openastroara/models/sequence/node_display.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/state/sequencer/sequence_editor_state.dart';
 import 'package:openastroara/widgets/sequencer/sequence_editor_tree.dart';

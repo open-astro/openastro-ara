@@ -91,6 +91,27 @@ void main() {
     expect(_nodeAt(c, [2])['TrackingMode'], 1); // Lunar
   });
 
+  testWidgets('an out-of-range enum value clamps to null (no Flutter assertion)',
+      (tester) async {
+    // A body saved with a now-removed TrackingMode variant (99).
+    final detail = SequenceDetail(
+      id: 's',
+      body: {
+        r'$type':
+            'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
+        'Name': 'root',
+        'Items': {
+          r'$type': itemsWrapperType,
+          r'$values': [
+            {..._node(_setTracking), 'TrackingMode': 99},
+          ],
+        },
+      },
+    );
+    await _pump(tester, detail: detail, select: const [0]);
+    expect(tester.takeException(), isNull); // would assert if value not clamped
+  });
+
   testWidgets('renders a string-enum dropdown + complex-field placeholder',
       (tester) async {
     await _pump(tester, detail: sampleDetail(), select: const [3]); // TakeExposure

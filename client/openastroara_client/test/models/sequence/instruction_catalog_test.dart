@@ -71,6 +71,15 @@ void main() {
       );
     });
 
+    test('InstructionField asserts an intEnum has labels / stringEnum has values', () {
+      expect(
+          () => InstructionField('k', 'l', InstructionFieldType.intEnum),
+          throwsA(isA<AssertionError>()));
+      expect(
+          () => InstructionField('k', 'l', InstructionFieldType.stringEnum),
+          throwsA(isA<AssertionError>()));
+    });
+
     test('intEnum/stringEnum fields carry their option set', () {
       for (final def in instructionCatalog) {
         for (final f in def.fields) {
