@@ -139,10 +139,9 @@ class SequenceDetail {
   final Map<String, dynamic> body;
   final String? templateOrigin;
 
-  // Not const: hashCode memoizes the deep body hash (see [hashCode]). [body] is
-  // wrapped unmodifiable so it can't be mutated in place — which keeps the memo
-  // sound and matches the value-type contract (edits produce a NEW body via
-  // copyWith, they never mutate the existing one).
+  // Top-level [body] is wrapped unmodifiable as a tripwire against accidental
+  // mutation — it's a value type (edits produce a NEW body via copyWith). Not
+  // const because Map.unmodifiable isn't a const expression.
   SequenceDetail({
     required this.id,
     this.name = '',
@@ -189,14 +188,13 @@ class SequenceDetail {
       // Cheap scalar fields short-circuit before the deep body compare.
       _bodyEq.equals(other.body, body);
 
-  // Memoize the deep body hash on first access so repeated hashCode reads (Set /
-  // Map-key use) are O(1) instead of re-hashing the whole nested body each time.
-  // Safe because [body] is never mutated in place.
-  int? _bodyHashCache;
-
+  // Recompute the deep body hash each call (NOT memoized): a cache could go
+  // stale if a nested map were ever mutated in place, and SequenceDetail isn't a
+  // hash-hot object — it's held in a provider and compared via `==` (which
+  // short-circuits the scalars), not used as a Set/Map key in a hot path.
   @override
-  int get hashCode => Object.hash(id, name, description, templateOrigin,
-      _bodyHashCache ??= _bodyEq.hash(body));
+  int get hashCode =>
+      Object.hash(id, name, description, templateOrigin, _bodyEq.hash(body));
 }
 
 /// A starting-point sequence template (`GET /api/v1/sequences/templates`) —
