@@ -3,8 +3,10 @@
 /// indented, selectable list. Tapping a row selects that node (by [NodePath]),
 /// which the field editor + palette react to; the selected row gets move-up /
 /// move-down / delete actions. Rows are also drag sources (long-press) that drop
-/// **onto a container** to move (reparent) into it; within-parent ordering stays
-/// on the move-up/down buttons.
+/// **onto a container** to move (reparent) into it, or into a thin gap **between
+/// rows** to position at a precise index — including a trailing gap below a
+/// container's last child to append at its end; the move-up/down buttons remain
+/// for within-parent ordering.
 library;
 
 import 'package:flutter/foundation.dart';
@@ -85,9 +87,11 @@ bool canReparentInto(Map<String, dynamic> body, NodePath dragged, NodePath targe
   // The root isn't movable, and there's no gap "before the root".
   if (dragged.isEmpty || beforePath.isEmpty) return null;
   // Can't drop a subtree before itself or before a row inside it (orphan/cycle).
+  // This also covers the gap's parent: `parent` is a strict prefix of
+  // `beforePath`, so a `dragged` that contains `parent` contains `beforePath`
+  // too and is already rejected here.
   if (isAncestorOrSelf(dragged, beforePath)) return null;
   final parent = beforePath.sublist(0, beforePath.length - 1);
-  if (isAncestorOrSelf(dragged, parent)) return null;
   final draggedParent = dragged.sublist(0, dragged.length - 1);
   var index = beforePath.last; // pre-removal slot of the target row
   if (listEquals(draggedParent, parent)) {
@@ -101,6 +105,56 @@ bool canReparentInto(Map<String, dynamic> body, NodePath dragged, NodePath targe
   }
   return (parent: parent, index: index);
 }
+
+/// Resolve a "drop [dragged] at the END of the container at [container]" gesture
+/// (a trailing append gap below a container's last child) to the
+/// `(parent, index)` for [SequenceEditorController.moveNodeTo], or null when
+/// invalid/no-op. Reuses [canReparentInto] for the validity rules (container,
+/// not self/descendant, not an already-last-child no-op); [index] is the
+/// post-removal append slot. Pure, for unit testing without a gesture harness.
+@visibleForTesting
+({NodePath parent, int index})? resolveDropInto(
+    Map<String, dynamic> body, NodePath dragged, NodePath container) {
+  if (!canReparentInto(body, dragged, container)) return null;
+  final node = nodeAt(body, container)!; // canReparentInto proved it's a container
+  final draggedParent = dragged.sublist(0, dragged.length - 1);
+  // Pulling a same-parent source out first shrinks the child list by one, so the
+  // append slot is one less than the current count.
+  final sameParent = listEquals(draggedParent, container);
+  final index = childrenOf(node).length - (sameParent ? 1 : 0);
+  return (parent: container, index: index);
+}
+
+/// The (non-root) container paths whose subtree ENDS at the flattened row
+/// [rowPath] — i.e. the next flattened row [nextPath] (or null at the list end)
+/// is outside them. Each yields a trailing "append into this container" gap
+/// below [rowPath], deepest-first so the gaps step out to match the indent. A
+/// container with children contributes its gap at its last descendant, not at
+/// its own row; an empty container contributes at its own row. Pure, for unit
+/// testing. The root ([]) is never returned (append-to-root is the root row's
+/// own drop target).
+@visibleForTesting
+List<NodePath> appendGapContainers(
+    Map<String, dynamic> body, NodePath rowPath, NodePath? nextPath) {
+  final out = <NodePath>[];
+  for (var len = rowPath.length; len >= 1; len--) {
+    final p = rowPath.sublist(0, len);
+    // Once the next row is inside p, it's inside every shallower ancestor too —
+    // none of them close here, so stop.
+    if (nextPath != null && isAncestorOrSelf(p, nextPath)) break;
+    final node = nodeAt(body, p);
+    if (node != null && isContainer(node)) out.add(p);
+  }
+  return out;
+}
+
+/// Stable widget key for the "insert before [path]" gap (also the test handle).
+@visibleForTesting
+String gapBeforeKey(NodePath path) => 'gap_before_${path.join(".")}';
+
+/// Stable widget key for the "append into [container]" trailing gap.
+@visibleForTesting
+String gapAppendKey(NodePath container) => 'gap_append_${container.join(".")}';
 
 void _flatten(Map<String, dynamic> node, NodePath path, int depth, List<_Row> out) {
   out.add(_Row(path, node, depth));
@@ -210,17 +264,30 @@ class SequenceEditorTree extends ConsumerWidget {
         );
         // A thin "insert before this row" gap above each non-root row, so a drag
         // can drop BETWEEN rows to position precisely (the row target above only
-        // appends into a container). Indented to the row's depth.
+        // appends into a container). Indented to the row's depth. Below the row,
+        // a trailing "append into" gap for every container whose subtree ends
+        // here (so a drag can reach the end of a container without the
+        // drop-onto-container gesture), indented one level past each container.
+        final nextPath = i + 1 < rows.length ? rows[i + 1].path : null;
+        final appendContainers =
+            appendGapContainers(editor.body, row.path, nextPath);
         return Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             if (row.path.isNotEmpty)
               _GapTarget(
-                key: ValueKey('gap_before_${row.path.join(".")}'),
-                beforePath: row.path,
+                key: ValueKey(gapBeforeKey(row.path)),
+                resolve: (body, dragged) =>
+                    resolveDropBefore(body, dragged, row.path),
                 indent: 8 + row.depth * 20.0,
               ),
             rowTarget,
+            for (final c in appendContainers)
+              _GapTarget(
+                key: ValueKey(gapAppendKey(c)),
+                resolve: (body, dragged) => resolveDropInto(body, dragged, c),
+                indent: 8 + (c.length + 1) * 20.0,
+              ),
           ],
         );
       },
@@ -228,20 +295,28 @@ class SequenceEditorTree extends ConsumerWidget {
   }
 }
 
-/// A thin drop zone between two rows: dropping a dragged node here inserts it
-/// just before [beforePath] in that row's parent (an insert-between reorder),
-/// via [resolveDropBefore]. Shows a highlight line while a valid drop hovers.
-class _GapTarget extends ConsumerWidget {
-  const _GapTarget({super.key, required this.beforePath, required this.indent});
+/// Resolves a drop of [dragged] against the live body to the `(parent, index)`
+/// for [SequenceEditorController.moveNodeTo], or null when invalid/no-op.
+typedef _GapResolver = ({NodePath parent, int index})? Function(
+    Map<String, dynamic> body, NodePath dragged);
 
-  final NodePath beforePath;
+/// A thin drop zone between/after rows: dropping a dragged node here moves it to
+/// the slot [resolve] yields against the live body — an insert-between reorder
+/// ([resolveDropBefore]) or an append into a container ([resolveDropInto]).
+/// Shows a highlight line while a valid drop hovers. The box height is fixed so
+/// a hover never reflows the list (which could bounce the pointer in/out of the
+/// gap); only the highlight line toggles.
+class _GapTarget extends ConsumerWidget {
+  const _GapTarget({super.key, required this.resolve, required this.indent});
+
+  final _GapResolver resolve;
   final double indent;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     bool resolves(NodePath dragged) {
       final body = ref.read(sequenceEditorProvider)?.body;
-      return body != null && resolveDropBefore(body, dragged, beforePath) != null;
+      return body != null && resolve(body, dragged) != null;
     }
 
     return DragTarget<NodePath>(
@@ -249,14 +324,14 @@ class _GapTarget extends ConsumerWidget {
       onAcceptWithDetails: (d) {
         final body = ref.read(sequenceEditorProvider)?.body;
         if (body == null) return;
-        final r = resolveDropBefore(body, d.data, beforePath);
+        final r = resolve(body, d.data);
         if (r == null) return;
         ref.read(sequenceEditorProvider.notifier).moveNodeTo(d.data, r.parent, r.index);
       },
       builder: (context, candidate, rejected) {
         final hovering = candidate.isNotEmpty;
         return Container(
-          height: hovering ? 8 : 6,
+          height: 8,
           padding: EdgeInsets.only(left: indent, right: 8),
           alignment: Alignment.center,
           child: hovering
