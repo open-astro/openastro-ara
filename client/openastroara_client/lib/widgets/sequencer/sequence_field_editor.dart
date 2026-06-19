@@ -463,6 +463,9 @@ class _FieldControl extends StatelessWidget {
       case InstructionFieldType.number:
         if (field.min != null || field.max != null) {
           return _labelled(_NumField(
+            // A non-num (missing/corrupt) stored value falls back to the lower
+            // bound (or 0) so the control still renders; the model is corrected
+            // on the first edit (_NumField clamps + corrects the display).
             value: value is num ? value as num : (field.min ?? 0),
             isInt: false,
             min: field.min,
@@ -478,6 +481,7 @@ class _FieldControl extends StatelessWidget {
       case InstructionFieldType.integer:
         if (field.min != null || field.max != null) {
           return _labelled(_NumField(
+            // Same defensive fallback as the number case above.
             value: value is num ? value as num : (field.min ?? 0),
             isInt: true,
             min: field.min,
