@@ -16,6 +16,21 @@ const _setTracking =
     'OpenAstroAra.Sequencer.SequenceItem.Telescope.SetTracking, OpenAstroAra.Sequencer';
 const _takeExposure =
     'OpenAstroAra.Sequencer.SequenceItem.Imaging.TakeExposure, OpenAstroAra.Sequencer';
+const _slew =
+    'OpenAstroAra.Sequencer.SequenceItem.Telescope.SlewScopeToRaDec, OpenAstroAra.Sequencer';
+
+SequenceDetail _detailWith(String type) => SequenceDetail(
+      id: 's',
+      body: {
+        r'$type':
+            'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
+        'Name': 'root',
+        'Items': {
+          r'$type': itemsWrapperType,
+          r'$values': [_node(type)],
+        },
+      },
+    );
 
 // root → [WaitForTimeSpan, StartGuiding, SetTracking, TakeExposure]
 SequenceDetail sampleDetail() => SequenceDetail(
@@ -140,6 +155,172 @@ void main() {
     final binning = _nodeAt(c, [3])['Binning'] as Map;
     expect(binning['Y'], 3);
     expect(binning['X'], 1); // X axis untouched
+  });
+
+  group('coordinates editor (Slew RA/Dec)', () {
+    testWidgets('edits RA hours and a Dec seconds (int + double) in place',
+        (tester) async {
+      final c = await _pump(tester, detail: _detailWith(_slew), select: const [0]);
+      expect(find.text('RA'), findsOneWidget);
+      expect(find.text('Dec'), findsOneWidget);
+
+      await tester.enterText(find.byKey(const Key('Coordinates_ra_h')), '12');
+      await tester.pump();
+      await tester.enterText(find.byKey(const Key('Coordinates_dec_s')), '30.5');
+      await tester.pump();
+
+      final coords = _nodeAt(c, [0])['Coordinates'] as Map;
+      expect(coords['RAHours'], 12);
+      expect(coords['DecSeconds'], 30.5);
+      expect(coords['RAMinutes'], 0); // untouched components preserved
+      expect(coords[r'$type'], contains('InputCoordinates'));
+    });
+
+    testWidgets('RA hours clamps to 23 and corrects the field', (tester) async {
+      final c = await _pump(tester, detail: _detailWith(_slew), select: const [0]);
+      await tester.enterText(find.byKey(const Key('Coordinates_ra_h')), '99');
+      await tester.pump();
+      expect((_nodeAt(c, [0])['Coordinates'] as Map)['RAHours'], 23);
+      final f = tester.widget<TextField>(find.descendant(
+          of: find.byKey(const Key('Coordinates_ra_h')), matching: find.byType(TextField)));
+      expect(f.controller!.text, '23');
+    });
+
+    testWidgets('Dec at 90° forces minutes/seconds to 0 (pole boundary)',
+        (tester) async {
+      // Start at 89°30' so the cross-field rule has something to zero.
+      final detail = SequenceDetail(
+        id: 's',
+        body: {
+          r'$type':
+              'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
+          'Name': 'root',
+          'Items': {
+            r'$type': itemsWrapperType,
+            r'$values': [
+              {..._node(_slew), 'Coordinates': {
+                ...?(_node(_slew)['Coordinates'] as Map?)?.cast<String, dynamic>(),
+                'DecDegrees': 89, 'DecMinutes': 30,
+              }},
+            ],
+          },
+        },
+      );
+      final c = await _pump(tester, detail: detail, select: const [0]);
+      await tester.enterText(find.byKey(const Key('Coordinates_dec_d')), '90');
+      await tester.pump();
+      final coords = _nodeAt(c, [0])['Coordinates'] as Map;
+      expect(coords['DecDegrees'], 90);
+      expect(coords['DecMinutes'], 0); // zeroed at the pole
+      expect(coords['DecSeconds'], 0.0);
+      // ...and the minutes/seconds fields are now disabled to show the constraint.
+      final decM = tester.widget<TextField>(find.descendant(
+          of: find.byKey(const Key('Coordinates_dec_m')), matching: find.byType(TextField)));
+      expect(decM.enabled, isFalse);
+    });
+
+    testWidgets('a second decimal point is rejected, not blanked', (tester) async {
+      final c = await _pump(tester, detail: _detailWith(_slew), select: const [0]);
+      final dec = find.byKey(const Key('Coordinates_dec_s'));
+      await tester.enterText(dec, '30.5'); // valid
+      await tester.pump();
+      expect((_nodeAt(c, [0])['Coordinates'] as Map)['DecSeconds'], 30.5);
+      // A would-be second dot is rejected: the field keeps '30.5', not blank.
+      await tester.enterText(dec, '30.5.');
+      await tester.pump();
+      final f = tester.widget<TextField>(
+          find.descendant(of: dec, matching: find.byType(TextField)));
+      expect(f.controller!.text, '30.5');
+    });
+
+    testWidgets('a trailing decimal point does not snap the field mid-edit',
+        (tester) async {
+      final c = await _pump(tester, detail: _detailWith(_slew), select: const [0]);
+      final dec = find.byKey(const Key('Coordinates_dec_s'));
+      await tester.enterText(dec, '30.5');
+      await tester.pump();
+      // Backspace to '30.' (mid-edit) — must NOT commit 30.0 or rewrite to '30'.
+      await tester.enterText(dec, '30.');
+      await tester.pump();
+      final f = tester.widget<TextField>(
+          find.descendant(of: dec, matching: find.byType(TextField)));
+      expect(f.controller!.text, '30.'); // field left as-is
+      expect((_nodeAt(c, [0])['Coordinates'] as Map)['DecSeconds'], 30.5); // model unchanged
+    });
+
+    testWidgets('an out-of-range loaded seconds value displays clamped (not 60)',
+        (tester) async {
+      // A server body with 59.9995 must NOT display as a rounded-up "60".
+      final detail = SequenceDetail(
+        id: 's',
+        body: {
+          r'$type':
+              'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
+          'Name': 'root',
+          'Items': {
+            r'$type': itemsWrapperType,
+            r'$values': [
+              {..._node(_slew), 'Coordinates': {
+                ...?(_node(_slew)['Coordinates'] as Map?)?.cast<String, dynamic>(),
+                'DecSeconds': 59.9995,
+              }},
+            ],
+          },
+        },
+      );
+      final c = await _pump(tester, detail: detail, select: const [0]);
+      final f = tester.widget<TextField>(find.descendant(
+          of: find.byKey(const Key('Coordinates_dec_s')), matching: find.byType(TextField)));
+      expect(f.controller!.text, '59.999'); // displayed in range
+      // The model stays verbatim until the user actually edits it.
+      expect((_nodeAt(c, [0])['Coordinates'] as Map)['DecSeconds'], 59.9995);
+    });
+
+    testWidgets('an ordinary decimal (30.3) is not corrupted by truncation',
+        (tester) async {
+      // 30.3 is stored as 30.2999…; a naive *1000-floor would show '30.299'.
+      final c = await _pump(tester, detail: _detailWith(_slew), select: const [0]);
+      final dec = find.byKey(const Key('Coordinates_dec_s'));
+      await tester.enterText(dec, '30.3');
+      await tester.pump(); // commit → rebuild → didUpdateWidget reformats
+      final f = tester.widget<TextField>(
+          find.descendant(of: dec, matching: find.byType(TextField)));
+      expect(f.controller!.text, '30.3'); // not '30.299'
+      expect((_nodeAt(c, [0])['Coordinates'] as Map)['DecSeconds'], 30.3);
+    });
+
+    testWidgets('an in-range value truncates (not rounds) on display', (tester) async {
+      // 29.9995 must show '29.999', not a rounded-up '30'.
+      final detail = SequenceDetail(
+        id: 's',
+        body: {
+          r'$type':
+              'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
+          'Name': 'root',
+          'Items': {
+            r'$type': itemsWrapperType,
+            r'$values': [
+              {..._node(_slew), 'Coordinates': {
+                ...?(_node(_slew)['Coordinates'] as Map?)?.cast<String, dynamic>(),
+                'DecSeconds': 29.9995,
+              }},
+            ],
+          },
+        },
+      );
+      await _pump(tester, detail: detail, select: const [0]);
+      final f = tester.widget<TextField>(find.descendant(
+          of: find.byKey(const Key('Coordinates_dec_s')), matching: find.byType(TextField)));
+      expect(f.controller!.text, '29.999');
+    });
+
+    testWidgets('the ± toggle flips NegativeDec', (tester) async {
+      final c = await _pump(tester, detail: _detailWith(_slew), select: const [0]);
+      expect((_nodeAt(c, [0])['Coordinates'] as Map)['NegativeDec'], false);
+      await tester.tap(find.text('+')); // currently positive
+      await tester.pump();
+      expect((_nodeAt(c, [0])['Coordinates'] as Map)['NegativeDec'], true);
+    });
   });
 
   testWidgets('binning 0 snaps to 1 in both model and field', (tester) async {

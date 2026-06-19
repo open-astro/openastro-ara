@@ -149,6 +149,7 @@ class _FieldControl extends StatelessWidget {
       case InstructionFieldType.binning:
         return _labelled(_binningEditor());
       case InstructionFieldType.coordinates:
+        return _labelled(_coordinatesEditor());
       case InstructionFieldType.filter:
         return _labelled(
           Text(
@@ -158,6 +159,99 @@ class _FieldControl extends StatelessWidget {
         );
     }
   }
+
+  /// RA (H : M : S) / Dec (± D : M : S) editor over the nested `InputCoordinates`
+  /// object. Each change rebuilds the whole map (preserving `$type`) and writes
+  /// it back via [onChanged]. Components are range-clamped (RA h 0–23, d/m 0–59,
+  /// Dec deg 0–90, seconds capped at 59.999 — the 3-decimal display precision,
+  /// sub-arcsec); the int/double split matches the C# field types. ±90° forces
+  /// the Dec minutes/seconds to 0.
+  Widget _coordinatesEditor() {
+    final c = value is Map ? value as Map : const {};
+    final type = c[r'$type'] is String ? c[r'$type'] as String : defaultCoordinates[r'$type'];
+    int ri(String k) => c[k] is num ? (c[k] as num).toInt() : 0;
+    double rd(String k) => c[k] is num ? (c[k] as num).toDouble() : 0.0;
+    final neg = c['NegativeDec'] == true;
+    Map<String, dynamic> coord({
+      int? raH, int? raM, double? raS, bool? negDec, int? decD, int? decM, double? decS,
+    }) {
+      var dd = decD ?? ri('DecDegrees');
+      var dm = decM ?? ri('DecMinutes');
+      var ds = decS ?? rd('DecSeconds');
+      // ±90° is the declination pole — minutes/seconds must be 0 there
+      // (90:30:00 is invalid). Enforce the cross-field boundary that the
+      // per-component clamps can't.
+      if (dd >= 90) {
+        dd = 90;
+        dm = 0;
+        ds = 0.0;
+      }
+      return <String, dynamic>{
+        r'$type': type,
+        'RAHours': raH ?? ri('RAHours'),
+        'RAMinutes': raM ?? ri('RAMinutes'),
+        'RASeconds': raS ?? rd('RASeconds'),
+        'NegativeDec': negDec ?? neg,
+        'DecDegrees': dd,
+        'DecMinutes': dm,
+        'DecSeconds': ds,
+      };
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _axisRow('RA', [
+          _NumField(key: Key('${field.key}_ra_h'), value: ri('RAHours'), isInt: true, min: 0, max: 23,
+              onChanged: (v) => onChanged(coord(raH: v.toInt()))),
+          _NumField(key: Key('${field.key}_ra_m'), value: ri('RAMinutes'), isInt: true, min: 0, max: 59,
+              onChanged: (v) => onChanged(coord(raM: v.toInt()))),
+          _NumField(key: Key('${field.key}_ra_s'), value: rd('RASeconds'), isInt: false, min: 0, max: 59.999,
+              onChanged: (v) => onChanged(coord(raS: v.toDouble()))),
+        ]),
+        const SizedBox(height: 6),
+        _axisRow('Dec', [
+          _SignToggle(
+            negative: neg,
+            onChanged: (n) => onChanged(coord(negDec: n)),
+          ),
+          _NumField(key: Key('${field.key}_dec_d'), value: ri('DecDegrees'), isInt: true, min: 0, max: 90,
+              onChanged: (v) => onChanged(coord(decD: v.toInt()))),
+          // At the ±90° pole, minutes/seconds must be 0 — disable them so the
+          // constraint is visible (rather than silently snapping back on edit).
+          _NumField(key: Key('${field.key}_dec_m'), value: ri('DecMinutes'), isInt: true, min: 0, max: 59,
+              enabled: ri('DecDegrees') < 90,
+              onChanged: (v) => onChanged(coord(decM: v.toInt()))),
+          _NumField(key: Key('${field.key}_dec_s'), value: rd('DecSeconds'), isInt: false, min: 0, max: 59.999,
+              enabled: ri('DecDegrees') < 90,
+              onChanged: (v) => onChanged(coord(decS: v.toDouble()))),
+        ]),
+      ],
+    );
+  }
+
+  Widget _axisRow(String label, List<Widget> fields) => Row(
+        children: [
+          SizedBox(
+            width: 32,
+            child: Text(label, style: const TextStyle(color: AraColors.textSecondary, fontSize: 12)),
+          ),
+          // Scroll the H/M/S group horizontally so the (wider) Dec row with its
+          // sign toggle can't overflow a narrow side pane.
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  for (var i = 0; i < fields.length; i++) ...[
+                    if (i > 0) const SizedBox(width: 4),
+                    SizedBox(width: 44, child: fields[i]),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ],
+      );
 
   /// `X × Y` integer editor over the nested `BinningMode` object. Each change
   /// rebuilds the whole map (preserving its `$type` and the other axis) and
@@ -176,11 +270,13 @@ class _FieldControl extends StatelessWidget {
       children: [
         SizedBox(
           width: 56,
-          child: _BinAxisField(
+          child: _NumField(
             // Scoped to the field so two binning fields couldn't collide.
             key: Key('${field.key}_x'),
             value: x,
-            onChanged: (v) => onChanged(withAxis(newX: v)),
+            isInt: true,
+            min: 1,
+            onChanged: (v) => onChanged(withAxis(newX: v.toInt())),
           ),
         ),
         const Padding(
@@ -189,10 +285,12 @@ class _FieldControl extends StatelessWidget {
         ),
         SizedBox(
           width: 56,
-          child: _BinAxisField(
+          child: _NumField(
             key: Key('${field.key}_y'),
             value: y,
-            onChanged: (v) => onChanged(withAxis(newY: v)),
+            isInt: true,
+            min: 1,
+            onChanged: (v) => onChanged(withAxis(newY: v.toInt())),
           ),
         ),
       ],
@@ -237,30 +335,63 @@ class _Placeholder extends StatelessWidget {
       );
 }
 
-/// One binning-axis integer field (a controlled `TextField`, digits-only). A
-/// committed value is always ≥ 1: typing `0` snaps to `1` and the displayed
-/// text is corrected, so the field can never diverge from the model. An empty
-/// field is transient (mid-edit) and commits nothing until a digit is typed.
-class _BinAxisField extends StatefulWidget {
-  const _BinAxisField({super.key, required this.value, required this.onChanged});
-  final int value;
-  final ValueChanged<int> onChanged;
+/// A controlled non-negative numeric field (int or double) clamped to an
+/// optional `[min, max]`. A committed value is always in range: an out-of-range
+/// entry snaps to the bound AND the displayed text is corrected, so the field
+/// can never diverge from the model. An empty/partial entry is transient
+/// (mid-edit) and commits nothing until it parses.
+class _NumField extends StatefulWidget {
+  const _NumField({
+    super.key,
+    required this.value,
+    required this.onChanged,
+    required this.isInt,
+    this.min,
+    this.max,
+    this.enabled = true,
+  });
+  final num value;
+  final ValueChanged<num> onChanged;
+  final bool isInt;
+  final num? min;
+  final num? max;
+  final bool enabled;
 
   @override
-  State<_BinAxisField> createState() => _BinAxisFieldState();
+  State<_NumField> createState() => _NumFieldState();
 }
 
-class _BinAxisFieldState extends State<_BinAxisField> {
-  late final TextEditingController _controller =
-      TextEditingController(text: '${widget.value}');
+class _NumFieldState extends State<_NumField> {
+  late final TextEditingController _controller = TextEditingController(text: _fmt(widget.value));
+
+  String _fmt(num v) {
+    // Display the in-range value (same clamp as on commit), so an out-of-range
+    // model value — e.g. a server-supplied 59.9995 — shows as 59.999, never a
+    // rounded-up 60. The model stays verbatim until the user actually edits.
+    final c = _clamp(v);
+    if (widget.isInt) return '${c.toInt()}';
+    final d = c.toDouble();
+    if (d == d.truncateToDouble()) return '${d.toInt()}';
+    // TRUNCATE (not round) to ≤3 decimals + strip trailing zeros: a float
+    // artifact like 30.300000000000004 shows 30.3, and an in-range 29.9995 shows
+    // 29.999 (rounding would flip it to '30' while the model still holds 29.9995).
+    // The 1e-9 nudge absorbs IEEE-754 representation noise (30.3 is stored as
+    // 30.29999…, so a bare floor would truncate to 30.299); it's far below the
+    // 3-decimal resolution, so a genuine 59.9995 still floors to 59.999.
+    final t = (d * 1000 + 1e-9).floorToDouble() / 1000;
+    if (t == t.truncateToDouble()) return '${t.toInt()}';
+    return t
+        .toStringAsFixed(3)
+        .replaceFirst(RegExp(r'0+$'), '')
+        .replaceFirst(RegExp(r'\.$'), '');
+  }
 
   @override
-  void didUpdateWidget(_BinAxisField old) {
+  void didUpdateWidget(_NumField old) {
     super.didUpdateWidget(old);
-    // Resync if the model value changed from outside (and the user isn't mid-edit
-    // on a different value).
-    if (widget.value != old.value && _controller.text != '${widget.value}') {
-      _controller.text = '${widget.value}';
+    final formatted = _fmt(widget.value);
+    if (widget.value != old.value && _controller.text != formatted) {
+      _controller.text = formatted;
     }
   }
 
@@ -270,28 +401,81 @@ class _BinAxisFieldState extends State<_BinAxisField> {
     super.dispose();
   }
 
+  num _clamp(num v) {
+    if (widget.min != null && v < widget.min!) return widget.min!;
+    if (widget.max != null && v > widget.max!) return widget.max!;
+    return v;
+  }
+
   void _onChanged(String s) {
-    final v = int.tryParse(s);
-    if (v == null) return; // transient empty — keep the model, allow retyping
-    if (v < 1) {
-      // 0 isn't a valid factor → correct the field to 1 and commit 1.
-      _controller.value = const TextEditingValue(
-        text: '1',
-        selection: TextSelection.collapsed(offset: 1),
+    final v = widget.isInt ? int.tryParse(s) : double.tryParse(s);
+    if (v == null) return; // transient — keep the model, allow retyping
+    // A trailing '.' parses (30. → 30.0) but the user is mid-typing the
+    // fraction; committing would snap '30.' back to '30' on the next rebuild.
+    if (!widget.isInt && s.endsWith('.')) return;
+    final clamped = _clamp(v);
+    if (clamped != v) {
+      final t = _fmt(clamped);
+      _controller.value = TextEditingValue(
+        text: t,
+        selection: TextSelection.collapsed(offset: t.length),
       );
-      widget.onChanged(1);
-    } else {
-      widget.onChanged(v);
     }
+    // Skip a no-op write (e.g. retyping the current value) to avoid a redundant
+    // setNodeField + rebuild.
+    if (clamped == widget.value) return;
+    widget.onChanged(clamped);
   }
 
   @override
   Widget build(BuildContext context) => TextField(
         controller: _controller,
-        keyboardType: const TextInputType.numberWithOptions(signed: false),
-        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+        enabled: widget.enabled,
+        keyboardType: TextInputType.numberWithOptions(decimal: !widget.isInt),
+        inputFormatters: [
+          widget.isInt
+              ? FilteringTextInputFormatter.digitsOnly
+              // Digits with at most one decimal point — rejects the keystroke
+              // that would add a second `.` (keeping the field, not blanking it).
+              : const _SingleDecimalFormatter(),
+        ],
         style: const TextStyle(color: AraColors.textPrimary, fontSize: 13),
         decoration: const InputDecoration(isDense: true, border: OutlineInputBorder()),
         onChanged: _onChanged,
+      );
+}
+
+/// Allows a non-negative decimal with at most one `.`. Rejects the edit
+/// (keeping the prior text) when the result wouldn't parse — so a stray second
+/// `.` is ignored rather than blanking the field, which an anchored
+/// `FilteringTextInputFormatter.allow` regex would do.
+class _SingleDecimalFormatter extends TextInputFormatter {
+  const _SingleDecimalFormatter();
+  static final RegExp _ok = RegExp(r'^\d*\.?\d*$');
+
+  @override
+  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) =>
+      _ok.hasMatch(newValue.text) ? newValue : oldValue;
+}
+
+/// A compact `+ / −` toggle for the declination sign.
+class _SignToggle extends StatelessWidget {
+  const _SignToggle({required this.negative, required this.onChanged});
+  final bool negative;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) => OutlinedButton(
+        onPressed: () => onChanged(!negative),
+        style: OutlinedButton.styleFrom(
+          padding: EdgeInsets.zero,
+          // shrinkWrap drops the default ~48px of hidden touch padding that would
+          // overlap the adjacent field; the explicit 36² minimum keeps it large
+          // enough to tap reliably while staying inside its 44px row slot.
+          minimumSize: const Size(36, 36),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          foregroundColor: AraColors.textPrimary,
+        ),
+        child: Text(negative ? '−' : '+', style: const TextStyle(fontSize: 16)),
       );
 }
