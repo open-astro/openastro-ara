@@ -344,6 +344,18 @@ void main() {
       ctrl().removeTriggerFrom(const [1], 0);
       expect(triggersOf(nodeAt(read()!.body, [1])!), isEmpty);
     });
+
+    test('setTriggerFieldOn edits a trigger in place, guards no-ops', () {
+      ctrl().load(sampleDetail());
+      ctrl().addTriggerTo(const [1], meridianFlip());
+      ctrl().setTriggerFieldOn(const [1], 0, 'Parent', 'x');
+      expect(triggersOf(nodeAt(read()!.body, [1])!).single['Parent'], 'x');
+      final before = read()!.body;
+      ctrl().setTriggerFieldOn(const [1], 9, 'Parent', 'y'); // out of range → no-op
+      expect(read()!.body, same(before));
+      ctrl().setTriggerFieldOn(const [0], 0, 'Parent', 'y'); // leaf → no triggers → no-op
+      expect(read()!.body, same(before));
+    });
   });
 
   group('select', () {
