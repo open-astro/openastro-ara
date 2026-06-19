@@ -790,9 +790,13 @@ class _WaitLoopDataEditor extends StatelessWidget {
   Widget build(BuildContext context) {
     final data = value is Map ? (value as Map).cast<String, dynamic>() : const <String, dynamic>{};
     final type = data[r'$type'] is String ? data[r'$type'] as String : waitLoopDataType;
-    // GreaterThan (3) is the safe fallback — WaitLoopData.Comparator coerces any
-    // unselectable value to it on the daemon.
-    final comparator = data['Comparator'] is int ? data['Comparator'] as int : 3;
+    // Coerce to a selectable comparator (GreaterThan/3 fallback). A stored value
+    // outside the allow-list — missing, or a stale persisted *OrEqual — would
+    // otherwise make DropdownButton assert (no matching item). This mirrors the
+    // daemon's own WaitLoopData.Comparator coercion; the corrected value is
+    // written back on the next edit.
+    final rawComparator = data['Comparator'] is int ? data['Comparator'] as int : 3;
+    final comparator = altitudeComparators.containsKey(rawComparator) ? rawComparator : 3;
     final offset = data['Offset'] is num ? (data['Offset'] as num).toDouble() : 0.0;
     final coords = data['Coordinates'];
 
@@ -812,7 +816,7 @@ class _WaitLoopDataEditor extends StatelessWidget {
         const SizedBox(height: 4),
         DropdownButton<int>(
           key: Key('${fieldKey}_comparator'),
-          value: altitudeComparators.containsKey(comparator) ? comparator : null,
+          value: comparator,
           isExpanded: true,
           dropdownColor: AraColors.bgPanel,
           items: [
@@ -827,17 +831,14 @@ class _WaitLoopDataEditor extends StatelessWidget {
         const Text('Offset (°)',
             style: TextStyle(color: AraColors.textSecondary, fontSize: 12)),
         const SizedBox(height: 4),
-        TextFormField(
+        // Controlled (like the coordinates fields) so the display tracks an
+        // external state change; signed because a horizon offset may be negative.
+        _NumField(
           key: Key('${fieldKey}_offset'),
-          initialValue: _fmtOffset(offset),
-          keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
-          style: const TextStyle(color: AraColors.textPrimary, fontSize: 13),
-          decoration: const InputDecoration(isDense: true, border: OutlineInputBorder()),
-          onChanged: (s) {
-            final parsed = double.tryParse(s);
-            // Ignore an in-progress entry ('' / '-' / '3.'); commit a valid number.
-            if (parsed != null && !s.endsWith('.')) onChanged(withData(newOffset: parsed));
-          },
+          value: offset,
+          isInt: false,
+          signed: true,
+          onChanged: (v) => onChanged(withData(newOffset: v.toDouble())),
         ),
         const SizedBox(height: 8),
         const Text('Coordinates',
@@ -851,10 +852,6 @@ class _WaitLoopDataEditor extends StatelessWidget {
       ],
     );
   }
-
-  /// An integer offset shows without a trailing `.0` (30, not 30.0); a
-  /// fractional one keeps its decimals.
-  static String _fmtOffset(double v) => v == v.truncateToDouble() ? '${v.toInt()}' : '$v';
 }
 
 class _Placeholder extends StatelessWidget {
@@ -883,6 +880,7 @@ class _NumField extends StatefulWidget {
     this.min,
     this.max,
     this.enabled = true,
+    this.signed = false,
   });
   final num value;
   final ValueChanged<num> onChanged;
@@ -890,6 +888,10 @@ class _NumField extends StatefulWidget {
   final num? min;
   final num? max;
   final bool enabled;
+
+  /// Allow a leading minus (e.g. an altitude/horizon offset that may be
+  /// negative). Off by default — most fields are non-negative.
+  final bool signed;
 
   @override
   State<_NumField> createState() => _NumFieldState();
@@ -965,13 +967,15 @@ class _NumFieldState extends State<_NumField> {
   Widget build(BuildContext context) => TextField(
         controller: _controller,
         enabled: widget.enabled,
-        keyboardType: TextInputType.numberWithOptions(decimal: !widget.isInt),
+        keyboardType:
+            TextInputType.numberWithOptions(decimal: !widget.isInt, signed: widget.signed),
         inputFormatters: [
-          widget.isInt
+          widget.isInt && !widget.signed
               ? FilteringTextInputFormatter.digitsOnly
-              // Digits with at most one decimal point — rejects the keystroke
-              // that would add a second `.` (keeping the field, not blanking it).
-              : const _SingleDecimalFormatter(),
+              // Digits with at most one decimal point (and an optional leading
+              // minus when signed) — rejects the keystroke that would add a
+              // second `.`/`-` (keeping the field, not blanking it).
+              : _SingleDecimalFormatter(isInt: widget.isInt, signed: widget.signed),
         ],
         style: const TextStyle(color: AraColors.textPrimary, fontSize: 13),
         decoration: const InputDecoration(isDense: true, border: OutlineInputBorder()),
@@ -979,17 +983,21 @@ class _NumFieldState extends State<_NumField> {
       );
 }
 
-/// Allows a non-negative decimal with at most one `.`. Rejects the edit
-/// (keeping the prior text) when the result wouldn't parse — so a stray second
-/// `.` is ignored rather than blanking the field, which an anchored
-/// `FilteringTextInputFormatter.allow` regex would do.
+/// Allows a number with at most one `.` (omitted when [isInt]) and an optional
+/// leading `-` (only when [signed]). Rejects the edit (keeping the prior text)
+/// when the result wouldn't match — so a stray second `.`/`-` is ignored rather
+/// than blanking the field, which an anchored `FilteringTextInputFormatter.allow`
+/// regex would do.
 class _SingleDecimalFormatter extends TextInputFormatter {
-  const _SingleDecimalFormatter();
-  static final RegExp _ok = RegExp(r'^\d*\.?\d*$');
+  const _SingleDecimalFormatter({this.isInt = false, this.signed = false});
+  final bool isInt;
+  final bool signed;
 
   @override
-  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) =>
-      _ok.hasMatch(newValue.text) ? newValue : oldValue;
+  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
+    final pattern = RegExp('^${signed ? '-?' : ''}\\d*${isInt ? '' : r'\.?\d*'}\$');
+    return pattern.hasMatch(newValue.text) ? newValue : oldValue;
+  }
 }
 
 /// A compact `+ / −` toggle for the declination sign.

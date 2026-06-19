@@ -487,9 +487,45 @@ void main() {
 
     testWidgets('editing the offset writes Data.Offset (signed)', (tester) async {
       final c = await pumpAltitude(tester);
-      await tester.enterText(find.byKey(const Key('Data_offset')), '-12.5');
+      await tester.enterText(
+        find.descendant(
+          of: find.byKey(const Key('Data_offset')),
+          matching: find.byType(TextField),
+        ),
+        '-12.5',
+      );
       await tester.pump();
       expect(data(c)['Offset'], -12.5);
+    });
+
+    testWidgets('a stored comparator outside the allow-list coerces (no assert)',
+        (tester) async {
+      // A body persisted with GreaterThanOrEqual (4) — not user-selectable.
+      final detail = SequenceDetail(
+        id: 's',
+        body: {
+          r'$type':
+              'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
+          'Name': 'root',
+          'Items': {r'$type': itemsWrapperType, r'$values': <Map<String, dynamic>>[]},
+          'Conditions': {
+            r'$type': conditionsWrapperType,
+            r'$values': [
+              {
+                ...conditionForType(_altitude)!.build(),
+                'Data': {
+                  ...conditionForType(_altitude)!.build()['Data'] as Map<String, dynamic>,
+                  'Comparator': 4,
+                },
+              },
+            ],
+          },
+        },
+      );
+      await _pump(tester, detail: detail, select: const []);
+      expect(tester.takeException(), isNull); // no DropdownButton assert
+      // The dropdown shows the coerced GreaterThan label, not a blank.
+      expect(find.text('Greater than (>)'), findsOneWidget);
     });
 
     testWidgets('editing the target coordinates writes Data.Coordinates', (tester) async {
