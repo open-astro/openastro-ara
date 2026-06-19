@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/sequence/condition_catalog.dart';
 import 'package:openastroara/models/sequence/instruction_catalog.dart';
 import 'package:openastroara/models/sequence/nina_dom.dart';
+import 'package:openastroara/models/sequence/trigger_catalog.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/state/sequencer/sequence_editor_state.dart';
 
@@ -308,6 +309,40 @@ void main() {
       expect(read()!.body, same(afterAdd));
       ctrl().removeConditionFrom(const [1], 0);
       expect(conditionsOf(nodeAt(read()!.body, [1])!), isEmpty);
+    });
+  });
+
+  group('triggers on a container', () {
+    TriggerDef meridianFlip() => triggerForType(
+        'OpenAstroAra.Sequencer.Trigger.MeridianFlip.MeridianFlipTrigger, OpenAstroAra.Sequencer')!;
+
+    test('addTriggerTo appends to a container, keeps selection, goes dirty', () {
+      ctrl().load(sampleDetail());
+      ctrl().select(const [1]); // the nested container
+      ctrl().addTriggerTo(const [1], meridianFlip());
+      final s = read()!;
+      final container = nodeAt(s.body, [1])!;
+      expect(triggersOf(container), hasLength(1));
+      expect(triggersOf(container).single['TriggerRunner'], isA<Map>());
+      expect(s.selectedPath, [1]); // container stays selected
+      expect(s.isDirty, isTrue);
+    });
+
+    test('addTriggerTo is a no-op on a leaf (no spurious Triggers wrapper)', () {
+      ctrl().load(sampleDetail());
+      final before = read()!.body;
+      ctrl().addTriggerTo(const [0], meridianFlip()); // [0] is a leaf
+      expect(read()!.body, same(before));
+    });
+
+    test('removeTriggerFrom drops one and bounds-checks (no-op out of range)', () {
+      ctrl().load(sampleDetail());
+      ctrl().addTriggerTo(const [1], meridianFlip());
+      final afterAdd = read()!.body;
+      ctrl().removeTriggerFrom(const [1], 9); // out of range → no-op
+      expect(read()!.body, same(afterAdd));
+      ctrl().removeTriggerFrom(const [1], 0);
+      expect(triggersOf(nodeAt(read()!.body, [1])!), isEmpty);
     });
   });
 

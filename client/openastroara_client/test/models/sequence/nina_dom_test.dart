@@ -323,4 +323,66 @@ void main() {
       expect((wrapper[r'$values'] as List), hasLength(1));
     });
   });
+
+  group('triggers (triggersOf / withTriggers / add / remove / setField)', () {
+    Map<String, dynamic> flip() => {
+          r'$type':
+              'OpenAstroAra.Sequencer.Trigger.MeridianFlip.MeridianFlipTrigger, OpenAstroAra.Sequencer',
+          'Parent': null,
+        };
+
+    test('triggersOf reads the wrapped \$values, empty when absent', () {
+      expect(triggersOf(sampleBody()), isEmpty);
+      final withOne = <String, dynamic>{
+        'Triggers': {
+          r'$type': triggersWrapperType,
+          r'$values': [flip()],
+        },
+      };
+      expect(triggersOf(withOne), hasLength(1));
+      expect(triggersOf(withOne).single[r'$type'], contains('MeridianFlipTrigger'));
+    });
+
+    test('addTrigger appends in the wrapper shape without mutating the source', () {
+      final root = sampleBody();
+      final out = addTrigger(root, const [], flip());
+      expect(triggersOf(out), hasLength(1));
+      expect((out['Triggers'] as Map<String, dynamic>)[r'$type'], triggersWrapperType);
+      expect(triggersOf(root), isEmpty); // source untouched
+      expect(childrenOf(out), hasLength(childrenOf(root).length)); // Items untouched
+    });
+
+    test('addTrigger targets a nested container by path', () {
+      final out = addTrigger(sampleBody(), const [1], flip());
+      expect(triggersOf(nodeAt(out, [1])!), hasLength(1));
+      expect(triggersOf(nodeAt(out, [])!), isEmpty); // root unaffected
+    });
+
+    test('removeTriggerAt drops one and bounds-checks', () {
+      var root = addTrigger(sampleBody(), const [], flip());
+      root = addTrigger(root, const [], flip());
+      final out = removeTriggerAt(root, const [], 0);
+      expect(triggersOf(out), hasLength(1));
+      expect(() => removeTriggerAt(out, const [], 5), throwsRangeError);
+    });
+
+    test('setTriggerField edits one trigger in place', () {
+      final root = addTrigger(sampleBody(), const [], flip());
+      final out = setTriggerField(root, const [], 0, 'Parent', 'x');
+      expect(triggersOf(out).single['Parent'], 'x');
+      expect(triggersOf(root).single['Parent'], isNull); // source untouched
+      expect(() => setTriggerField(out, const [], 9, 'Parent', 1), throwsRangeError);
+    });
+
+    test('withTriggers preserves an existing wrapper \$type / \$id', () {
+      final node = <String, dynamic>{
+        'Triggers': {r'$type': 'Custom.Wrapper', r'$id': '7', r'$values': []},
+      };
+      final out = withTriggers(node, [flip()]);
+      final wrapper = out['Triggers'] as Map<String, dynamic>;
+      expect(wrapper[r'$type'], 'Custom.Wrapper');
+      expect(wrapper[r'$id'], '7');
+      expect((wrapper[r'$values'] as List), hasLength(1));
+    });
+  });
 }
