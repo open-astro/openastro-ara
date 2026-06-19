@@ -179,6 +179,30 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
     );
   }
 
+  /// Move the node at [path] one slot up or down among its siblings, keeping it
+  /// selected (selection follows the node to its new position). No-op at a
+  /// boundary (already first when [up], already last when not), for the root, or
+  /// an unresolvable path. The reorder goes through `nina_dom.reorderChild`,
+  /// whose Flutter `onReorder` (pre-removal) convention is handled here.
+  void moveNode(NodePath path, {required bool up}) {
+    final s = state;
+    if (s == null || path.isEmpty) return;
+    final parentPath = path.sublist(0, path.length - 1);
+    final parent = nodeAt(s.body, parentPath);
+    if (parent == null) return;
+    final i = path.last;
+    final count = childrenOf(parent).length;
+    if (up ? i <= 0 : i >= count - 1) return; // already at the boundary
+    final newIndex = up ? i - 1 : i + 1; // destination sibling index
+    // reorderChild takes a pre-removal newIndex: moving down, the slot is one
+    // past the destination; moving up it's the destination itself.
+    final preRemoval = up ? newIndex : newIndex + 1;
+    state = s._copyWith(
+      body: reorderChild(s.body, parentPath, i, preRemoval),
+      selectedPath: <int>[...parentPath, newIndex],
+    );
+  }
+
   /// Set scalar field [key] to [value] on the node at [path], keeping selection
   /// (structure is unchanged). No-op for an unresolvable path.
   void setNodeField(NodePath path, String key, Object? value) {

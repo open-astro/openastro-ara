@@ -1,8 +1,8 @@
 /// §38 sequence-editor tree view — renders the RAW NINA body held by
 /// [sequenceEditorProvider] (not the lossy `SequenceNode` preview) as a flat,
 /// indented, selectable list. Tapping a row selects that node (by [NodePath]),
-/// which the field editor + palette react to. Drag-to-reorder and the palette
-/// drop target land in following slices; this slice is render + select.
+/// which the field editor + palette react to; the selected row gets move-up /
+/// move-down / delete actions. Drag-to-reorder is a following slice.
 library;
 
 import 'package:flutter/foundation.dart';
@@ -21,6 +21,33 @@ class _Row {
   final Map<String, dynamic> node;
   final int depth;
   const _Row(this.path, this.node, this.depth);
+}
+
+/// The move-up / move-down / delete buttons for the selected non-root [path].
+/// Up/down disable at the sibling boundaries.
+List<Widget> _rowActions(WidgetRef ref, Map<String, dynamic> body, NodePath path) {
+  final index = path.last;
+  final parent = nodeAt(body, path.sublist(0, path.length - 1));
+  final siblingCount = parent == null ? 0 : childrenOf(parent).length;
+  final notifier = ref.read(sequenceEditorProvider.notifier);
+  return [
+    _RowIcon(
+      icon: Icons.arrow_upward,
+      tooltip: 'Move up',
+      onPressed: index > 0 ? () => notifier.moveNode(path, up: true) : null,
+    ),
+    _RowIcon(
+      icon: Icons.arrow_downward,
+      tooltip: 'Move down',
+      onPressed:
+          index < siblingCount - 1 ? () => notifier.moveNode(path, up: false) : null,
+    ),
+    _RowIcon(
+      icon: Icons.delete_outline,
+      tooltip: 'Delete',
+      onPressed: () => notifier.removeNode(path),
+    ),
+  ];
 }
 
 void _flatten(Map<String, dynamic> node, NodePath path, int depth, List<_Row> out) {
@@ -86,18 +113,11 @@ class SequenceEditorTree extends ConsumerWidget {
                           color: AraColors.textPrimary, fontSize: 13),
                     ),
                   ),
-                  // Delete affordance on the selected row — never the root, which
-                  // can't be removed (it's the sequence container itself).
+                  // Reorder + delete affordances on the selected row — never the
+                  // root, which can't move or be removed (it's the sequence
+                  // container itself).
                   if (isSelected && row.path.isNotEmpty)
-                    IconButton(
-                      icon: const Icon(Icons.delete_outline, size: 16),
-                      color: AraColors.textSecondary,
-                      visualDensity: VisualDensity.compact,
-                      tooltip: 'Delete',
-                      onPressed: () => ref
-                          .read(sequenceEditorProvider.notifier)
-                          .removeNode(row.path),
-                    ),
+                    ..._rowActions(ref, editor.body, row.path),
                 ],
               ),
             ),
@@ -106,4 +126,25 @@ class SequenceEditorTree extends ConsumerWidget {
       },
     );
   }
+}
+
+/// A compact icon button for the selected-row actions; greyed when [onPressed]
+/// is null (boundary).
+class _RowIcon extends StatelessWidget {
+  const _RowIcon({required this.icon, required this.tooltip, required this.onPressed});
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) => IconButton(
+        icon: Icon(icon, size: 16),
+        color: AraColors.textSecondary,
+        disabledColor: AraColors.textDisabled,
+        visualDensity: VisualDensity.compact,
+        padding: EdgeInsets.zero,
+        constraints: const BoxConstraints.tightFor(width: 28, height: 28),
+        tooltip: tooltip,
+        onPressed: onPressed,
+      );
 }

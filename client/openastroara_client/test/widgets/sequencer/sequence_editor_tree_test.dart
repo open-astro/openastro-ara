@@ -159,6 +159,29 @@ void main() {
     await tester.tap(find.text('My Sequence')); // root row
     await tester.pump();
     expect(find.byIcon(Icons.delete_outline), findsNothing);
+    expect(find.byIcon(Icons.arrow_upward), findsNothing);
+  });
+
+  testWidgets('move-down reorders the selected row and follows it', (tester) async {
+    final c = await _pump(tester, detail: sampleDetail());
+    await tester.tap(find.text('Take Exposure')); // index 0
+    await tester.pump();
+    await tester.tap(find.byIcon(Icons.arrow_downward));
+    await tester.pump();
+    // Now second child; selection followed it (delete still shown on its row).
+    final kids = childrenOf(c.read(sequenceEditorProvider)!.body);
+    expect(kids[1][r'$type'], contains('TakeExposure'));
+    expect(c.read(sequenceEditorProvider)!.selectedPath, [1]);
+  });
+
+  testWidgets('move-up is disabled on the first child', (tester) async {
+    await _pump(tester, detail: sampleDetail());
+    await tester.tap(find.text('Take Exposure')); // index 0 (first)
+    await tester.pump();
+    final up = tester.widget<IconButton>(
+      find.ancestor(of: find.byIcon(Icons.arrow_upward), matching: find.byType(IconButton)),
+    );
+    expect(up.onPressed, isNull); // can't move the first child up
   });
 
   testWidgets('tapping a row selects that node by path', (tester) async {
