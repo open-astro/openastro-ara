@@ -788,14 +788,18 @@ class _WaitLoopDataEditor extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final data = value is Map ? (value as Map).cast<String, dynamic>() : const <String, dynamic>{};
+    // Eager copy (not a lazy .cast view) so an off-spec stored value throws at
+    // the copy, not at some later element access with an opaque stack trace.
+    final data = value is Map
+        ? Map<String, dynamic>.from(value as Map)
+        : const <String, dynamic>{};
     final type = data[r'$type'] is String ? data[r'$type'] as String : waitLoopDataType;
-    // Coerce to a selectable comparator (GreaterThan/3 fallback). A stored value
-    // outside the allow-list — missing, or a stale persisted *OrEqual — would
-    // otherwise make DropdownButton assert (no matching item). This mirrors the
-    // daemon's own WaitLoopData.Comparator coercion; the corrected value is
-    // written back on the next edit.
     final rawComparator = data['Comparator'] is int ? data['Comparator'] as int : 3;
+    // For DISPLAY only: coerce an out-of-allow-list comparator (missing, or a
+    // stale persisted *OrEqual) to a selectable value so DropdownButton can't
+    // assert "no matching item". The RAW value is preserved on write-back below,
+    // so touching an unrelated field never silently flips the comparator — only
+    // an explicit pick changes it.
     final comparator = altitudeComparators.containsKey(rawComparator) ? rawComparator : 3;
     final offset = data['Offset'] is num ? (data['Offset'] as num).toDouble() : 0.0;
     final coords = data['Coordinates'];
@@ -805,7 +809,8 @@ class _WaitLoopDataEditor extends StatelessWidget {
           r'$type': type,
           'Coordinates': newCoords ?? coords ?? defaultCoordinates,
           'Offset': newOffset ?? offset,
-          'Comparator': newComparator ?? comparator,
+          // Preserve the stored comparator unless the user explicitly picks one.
+          'Comparator': newComparator ?? rawComparator,
         };
 
     return Column(
@@ -993,11 +998,19 @@ class _SingleDecimalFormatter extends TextInputFormatter {
   final bool isInt;
   final bool signed;
 
+  // Compiled once each (not per keystroke); one per (isInt, signed) combination.
+  static final RegExp _intUnsigned = RegExp(r'^\d*$');
+  static final RegExp _intSigned = RegExp(r'^-?\d*$');
+  static final RegExp _decUnsigned = RegExp(r'^\d*\.?\d*$');
+  static final RegExp _decSigned = RegExp(r'^-?\d*\.?\d*$');
+
+  RegExp get _pattern => isInt
+      ? (signed ? _intSigned : _intUnsigned)
+      : (signed ? _decSigned : _decUnsigned);
+
   @override
-  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
-    final pattern = RegExp('^${signed ? '-?' : ''}\\d*${isInt ? '' : r'\.?\d*'}\$');
-    return pattern.hasMatch(newValue.text) ? newValue : oldValue;
-  }
+  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) =>
+      _pattern.hasMatch(newValue.text) ? newValue : oldValue;
 }
 
 /// A compact `+ / −` toggle for the declination sign.

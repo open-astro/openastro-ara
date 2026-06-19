@@ -522,10 +522,24 @@ void main() {
           },
         },
       );
-      await _pump(tester, detail: detail, select: const []);
+      final c = await _pump(tester, detail: detail, select: const []);
       expect(tester.takeException(), isNull); // no DropdownButton assert
       // The dropdown shows the coerced GreaterThan label, not a blank.
       expect(find.text('Greater than (>)'), findsOneWidget);
+      // Editing an UNRELATED field preserves the raw stored comparator (4) —
+      // coercion is display-only and never silently flips the loop direction.
+      await tester.enterText(
+        find.descendant(
+          of: find.byKey(const Key('Data_offset')),
+          matching: find.byType(TextField),
+        ),
+        '15',
+      );
+      await tester.pump();
+      expect(
+        (conditionsOf(_nodeAt(c, const [])).single['Data'] as Map)['Comparator'],
+        4,
+      );
     });
 
     testWidgets('editing the target coordinates writes Data.Coordinates', (tester) async {
