@@ -112,12 +112,27 @@ void main() {
     expect(tester.takeException(), isNull); // would assert if value not clamped
   });
 
-  testWidgets('renders a string-enum dropdown + complex-field placeholder',
+  testWidgets('renders a string-enum dropdown + the binning X×Y editor',
       (tester) async {
     await _pump(tester, detail: sampleDetail(), select: const [3]); // TakeExposure
     expect(find.text('Take Exposure'), findsOneWidget);
     expect(find.text('LIGHT'), findsOneWidget); // ImageType dropdown value
-    // Binning is a complex field → placeholder, not an editable control.
-    expect(find.textContaining('advanced field'), findsOneWidget);
+    // Binning now has an inline X × Y editor (no placeholder).
+    expect(find.text('×'), findsOneWidget);
+    expect(find.textContaining('advanced field'), findsNothing);
+  });
+
+  testWidgets('editing binning X writes the whole BinningMode map back',
+      (tester) async {
+    final c = await _pump(tester, detail: sampleDetail(), select: const [3]);
+    // TakeExposure's text fields in order: ExposureTime, Gain, Offset, then the
+    // binning X (index 3) and Y (4). Default build is 1×1.
+    final xField = find.byType(TextField).at(3);
+    await tester.enterText(xField, '2');
+    await tester.pump();
+    final binning = _nodeAt(c, [3])['Binning'] as Map;
+    expect(binning['X'], 2);
+    expect(binning['Y'], 1); // other axis preserved
+    expect(binning[r'$type'], contains('BinningMode')); // $type preserved
   });
 }

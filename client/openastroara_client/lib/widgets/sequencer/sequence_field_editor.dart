@@ -1,9 +1,9 @@
 /// §38 sequence-editor field panel — edits the scalar fields of the node
 /// currently selected in the tree. Each control is driven by the instruction
 /// catalog's [InstructionField] schema and writes straight back to the RAW body
-/// via [SequenceEditorController.setNodeField]. Complex fields
-/// (binning/coordinates/filter) get a placeholder row here; their dedicated
-/// editors land in following slices.
+/// via [SequenceEditorController.setNodeField]. Binning has an inline `X × Y`
+/// editor; the remaining complex fields (coordinates/filter) still get a
+/// placeholder row pending their dedicated editors.
 library;
 
 import 'package:flutter/material.dart';
@@ -146,6 +146,7 @@ class _FieldControl extends StatelessWidget {
           parse: (s) => s,
         ));
       case InstructionFieldType.binning:
+        return _labelled(_binningEditor());
       case InstructionFieldType.coordinates:
       case InstructionFieldType.filter:
         return _labelled(
@@ -156,6 +157,42 @@ class _FieldControl extends StatelessWidget {
         );
     }
   }
+
+  /// `X × Y` integer editor over the nested `BinningMode` object. Each change
+  /// rebuilds the whole map (preserving its `$type` and the other axis) and
+  /// writes it back via [onChanged]. Binning factors must be ≥ 1.
+  Widget _binningEditor() {
+    final bin = value is Map ? value as Map : const {};
+    final x = bin['X'] is int ? bin['X'] as int : 1;
+    final y = bin['Y'] is int ? bin['Y'] as int : 1;
+    final type = bin[r'$type'] is String ? bin[r'$type'] as String : defaultBinning[r'$type'];
+    Map<String, dynamic> withAxis({int? newX, int? newY}) => <String, dynamic>{
+          r'$type': type,
+          'X': newX ?? x,
+          'Y': newY ?? y,
+        };
+    return Row(
+      children: [
+        SizedBox(width: 56, child: _binAxisField(x, (v) => onChanged(withAxis(newX: v)))),
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 8),
+          child: Text('×', style: TextStyle(color: AraColors.textSecondary)),
+        ),
+        SizedBox(width: 56, child: _binAxisField(y, (v) => onChanged(withAxis(newY: v)))),
+      ],
+    );
+  }
+
+  Widget _binAxisField(int initial, ValueChanged<int> onInt) => TextFormField(
+        initialValue: '$initial',
+        keyboardType: const TextInputType.numberWithOptions(signed: false),
+        style: const TextStyle(color: AraColors.textPrimary, fontSize: 13),
+        decoration: const InputDecoration(isDense: true, border: OutlineInputBorder()),
+        onChanged: (s) {
+          final v = int.tryParse(s);
+          if (v != null && v >= 1) onInt(v); // binning factor is ≥ 1
+        },
+      );
 
   Widget _textField({
     required String initial,
