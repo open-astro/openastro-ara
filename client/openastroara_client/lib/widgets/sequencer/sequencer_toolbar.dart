@@ -6,6 +6,7 @@ import '../../models/sequence/sequence_summary.dart';
 import '../../services/sequence_api.dart';
 import '../../state/sequencer/sequence_list_state.dart';
 import '../../theme/ara_colors.dart';
+import 'sequence_export.dart';
 import 'sequence_load_dialog.dart';
 import 'sequence_new_dialog.dart';
 
@@ -86,6 +87,17 @@ class SequencerToolbar extends ConsumerWidget {
                 ),
                 const _ToolButton(
                     icon: Icons.save_outlined, label: 'Save', onPressed: null),
+                _ToolButton(
+                  icon: Icons.ios_share,
+                  label: 'Export',
+                  // Export the selected sequence to a NINA-compatible .json.
+                  // Enabled whenever a sequence is selected (independent of run
+                  // state — exporting is read-only).
+                  onPressed: (connected && selectedId != null)
+                      ? () => exportSequence(context, ref,
+                          id: selectedId, name: selectedName ?? selectedId)
+                      : null,
+                ),
                 const _ToolButton(
                     icon: Icons.fact_check_outlined,
                     label: 'Validate',
