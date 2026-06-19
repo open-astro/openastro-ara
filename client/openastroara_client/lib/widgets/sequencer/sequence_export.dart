@@ -13,15 +13,23 @@ import '../../theme/ara_colors.dart';
 /// NINA itself doesn't write it). Pure — unit-testable without the file picker.
 String prepareNinaExportJson(Map<String, dynamic> body) {
   // Shallow copy so the source (a deeply-unmodifiable SequenceDetail.body) isn't
-  // touched; schemaVersion is a top-level key, so a shallow copy is enough.
+  // touched. Only the TOP-LEVEL schemaVersion is stripped — that's the only
+  // place the daemon backfills it; NINA never nests a schemaVersion deeper, so a
+  // shallow copy is correct.
   final out = Map<String, dynamic>.of(body)..remove('schemaVersion');
   return const JsonEncoder.withIndent('  ').convert(out);
 }
 
 /// A filesystem-safe `<name>.json` for the export's default filename.
 String sequenceExportFileName(String name) {
-  final base = name.trim().isEmpty ? 'sequence' : name.trim();
-  final safe = base.replaceAll(RegExp(r'[^A-Za-z0-9 _.-]'), '_');
+  var base = name.trim();
+  // Drop a trailing .json (case-insensitive) so a sequence already named
+  // "M42.json" doesn't export as "M42.json.json".
+  if (base.toLowerCase().endsWith('.json')) {
+    base = base.substring(0, base.length - 5);
+  }
+  if (base.trim().isEmpty) base = 'sequence';
+  final safe = base.trim().replaceAll(RegExp(r'[^A-Za-z0-9 _.-]'), '_');
   return '$safe.json';
 }
 
@@ -81,7 +89,11 @@ Future<void> exportSequence(
   }
   if (saved == null || !context.mounted) return; // cancelled / unmounted
 
-  // Show where it landed so the user can find the file (it opens in NINA).
+  // Confirm with the saved filename (the user chose the folder, so the basename
+  // is enough and avoids a very long path overflowing the SnackBar).
+  final fileName = saved.split(RegExp(r'[/\\]')).last;
   messenger.showSnackBar(SnackBar(
-      content: Text('Exported "$exportName" to $saved')));
+    content: Text('Exported "$exportName" → $fileName'),
+    duration: const Duration(seconds: 4),
+  ));
 }

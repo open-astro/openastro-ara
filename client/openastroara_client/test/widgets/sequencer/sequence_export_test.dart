@@ -43,5 +43,11 @@ void main() {
     test('falls back to "sequence" for a blank name', () {
       expect(sequenceExportFileName('   '), 'sequence.json');
     });
+
+    test('does not double the .json suffix (case-insensitive)', () {
+      expect(sequenceExportFileName('M42.json'), 'M42.json');
+      expect(sequenceExportFileName('M42.JSON'), 'M42.json');
+      expect(sequenceExportFileName('.json'), 'sequence.json'); // only suffix
+    });
   });
 }
