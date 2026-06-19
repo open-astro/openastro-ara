@@ -67,6 +67,25 @@ void main() {
       expect(node['Seconds'], 0);
     });
 
+    test('TimeSpanCondition minutes/seconds clamp to 0..59, hours to >= 0', () {
+      final def = conditionForType(_timeSpan)!;
+      for (final key in ['Minutes', 'Seconds']) {
+        final f = def.fields.firstWhere((f) => f.key == key);
+        expect(f.min, 0, reason: key);
+        expect(f.max, 59, reason: key);
+      }
+      final hours = def.fields.firstWhere((f) => f.key == 'Hours');
+      expect(hours.min, 0);
+      expect(hours.max, isNull);
+    });
+
+    test('LoopCondition iterations are bounded to >= 1', () {
+      final iter =
+          conditionForType(_loop)!.fields.firstWhere((f) => f.key == 'Iterations');
+      expect(iter.min, 1);
+      expect(iter.max, isNull);
+    });
+
     test('two builds share no map instance (fresh node each time)', () {
       final a = conditionForType(_loop)!.build();
       final b = conditionForType(_loop)!.build();

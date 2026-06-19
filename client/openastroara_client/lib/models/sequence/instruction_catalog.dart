@@ -134,6 +134,13 @@ class InstructionField {
   /// reject or silently skip.
   final bool requiresUserInput;
 
+  /// Optional inclusive bounds for a `number`/`integer` field. When either is
+  /// set, the editor renders a clamped controlled field (the entry snaps into
+  /// range and the displayed text is corrected) instead of a free text field —
+  /// so e.g. a `TimeSpanCondition`'s minutes can't be set above 59 or negative.
+  final num? min;
+  final num? max;
+
   const InstructionField(
     this.key,
     this.label,
@@ -143,6 +150,8 @@ class InstructionField {
     this.enumValues,
     this.editable = true,
     this.requiresUserInput = false,
+    this.min,
+    this.max,
   })  : assert(
           enumLabels == null || enumValues == null,
           'a field is either an intEnum (enumLabels) or a stringEnum (enumValues), '
@@ -151,7 +160,13 @@ class InstructionField {
         assert(type != InstructionFieldType.intEnum || enumLabels != null,
             'an intEnum field must provide enumLabels'),
         assert(type != InstructionFieldType.stringEnum || enumValues != null,
-            'a stringEnum field must provide enumValues');
+            'a stringEnum field must provide enumValues'),
+        assert(min == null || max == null || min <= max,
+            'a field\'s min must be <= its max'),
+        assert((min == null && max == null) ||
+            type == InstructionFieldType.number ||
+            type == InstructionFieldType.integer,
+            'min/max only apply to a number or integer field');
 }
 
 /// One draggable instruction in the palette.

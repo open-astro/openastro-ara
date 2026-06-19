@@ -461,12 +461,30 @@ class _FieldControl extends StatelessWidget {
           ),
         );
       case InstructionFieldType.number:
+        if (field.min != null || field.max != null) {
+          return _labelled(_NumField(
+            value: value is num ? value as num : (field.min ?? 0),
+            isInt: false,
+            min: field.min,
+            max: field.max,
+            onChanged: (v) => onChanged(v.toDouble()),
+          ));
+        }
         return _labelled(_textField(
           initial: value == null ? '' : '$value',
           keyboard: const TextInputType.numberWithOptions(decimal: true, signed: true),
           parse: (s) => double.tryParse(s),
         ));
       case InstructionFieldType.integer:
+        if (field.min != null || field.max != null) {
+          return _labelled(_NumField(
+            value: value is num ? value as num : (field.min ?? 0),
+            isInt: true,
+            min: field.min,
+            max: field.max,
+            onChanged: (v) => onChanged(v.toInt()),
+          ));
+        }
         return _labelled(_textField(
           initial: value == null ? '' : '$value',
           keyboard: const TextInputType.numberWithOptions(signed: true),

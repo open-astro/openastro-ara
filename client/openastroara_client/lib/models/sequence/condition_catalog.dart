@@ -81,7 +81,8 @@ const List<ConditionDef> conditionCatalog = [
     label: 'Loop (iterations)',
     icon: Icons.repeat,
     fields: [
-      InstructionField('Iterations', 'Iterations', InstructionFieldType.integer, defaultValue: 2),
+      InstructionField('Iterations', 'Iterations', InstructionFieldType.integer,
+          defaultValue: 2, min: 1),
       InstructionField('CompletedIterations', 'Completed', InstructionFieldType.integer,
           defaultValue: 0, editable: false),
     ],
@@ -93,9 +94,11 @@ const List<ConditionDef> conditionCatalog = [
     label: 'For a duration',
     icon: Icons.timelapse_outlined,
     fields: [
-      InstructionField('Hours', 'Hours', InstructionFieldType.integer, defaultValue: 0),
-      InstructionField('Minutes', 'Minutes', InstructionFieldType.integer, defaultValue: 1),
-      InstructionField('Seconds', 'Seconds', InstructionFieldType.integer, defaultValue: 0),
+      InstructionField('Hours', 'Hours', InstructionFieldType.integer, defaultValue: 0, min: 0),
+      InstructionField('Minutes', 'Minutes', InstructionFieldType.integer,
+          defaultValue: 1, min: 0, max: 59),
+      InstructionField('Seconds', 'Seconds', InstructionFieldType.integer,
+          defaultValue: 0, min: 0, max: 59),
     ],
   ),
 ];

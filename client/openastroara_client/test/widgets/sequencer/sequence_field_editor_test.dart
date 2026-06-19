@@ -405,11 +405,35 @@ void main() {
           conditionForType(
               'OpenAstroAra.Sequencer.Conditions.LoopCondition, OpenAstroAra.Sequencer')!);
       await tester.pump();
-      // The only TextFormField in the panel is the condition's Iterations field
-      // (the container Name is a plain TextField).
-      await tester.enterText(find.byType(TextFormField), '15');
+      // Iterations is a bounded (min 1) field → a clamped _NumField (TextField).
+      await tester.enterText(
+        find.descendant(
+          of: find.byKey(const ValueKey('/cond/0/Iterations')),
+          matching: find.byType(TextField),
+        ),
+        '15',
+      );
       await tester.pump();
       expect(conditionsOf(_nodeAt(c, const [])).single['Iterations'], 15);
+    });
+
+    testWidgets('a bounded condition field clamps the entry (Minutes max 59)',
+        (tester) async {
+      final c = await _pump(tester, detail: sampleDetail(), select: const []);
+      c.read(sequenceEditorProvider.notifier).addConditionTo(
+          const [],
+          conditionForType(
+              'OpenAstroAra.Sequencer.Conditions.TimeSpanCondition, OpenAstroAra.Sequencer')!);
+      await tester.pump();
+      final minutes = find.descendant(
+        of: find.byKey(const ValueKey('/cond/0/Minutes')),
+        matching: find.byType(TextField),
+      );
+      await tester.enterText(minutes, '99');
+      await tester.pump();
+      expect(conditionsOf(_nodeAt(c, const [])).single['Minutes'], 59); // clamped
+      // and the displayed text was corrected to the clamped value
+      expect(tester.widget<TextField>(minutes).controller!.text, '59');
     });
 
     testWidgets('removing a condition deletes it from the body', (tester) async {
