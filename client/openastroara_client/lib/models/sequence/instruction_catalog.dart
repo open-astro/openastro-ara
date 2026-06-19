@@ -229,7 +229,7 @@ class InstructionDef {
     if (isContainer) return _buildContainer();
     final node = <String, dynamic>{r'$type': type};
     for (final f in fields) {
-      node[f.key] = _deepCloneJson(f.defaultValue);
+      node[f.key] = deepCloneJson(f.defaultValue);
     }
     node['Parent'] = null;
     node['ErrorBehavior'] = 0;
@@ -273,8 +273,9 @@ class InstructionDef {
 
 /// Recursively copy a JSON value so a built node shares no mutable sub-object
 /// (maps/lists) with the const catalog defaults. Scalars and `null` are
-/// immutable and returned as-is.
-Object? _deepCloneJson(Object? value) {
+/// immutable and returned as-is. Shared by [ConditionDef.build] (condition
+/// catalog) so both build paths clone defaults the same way.
+Object? deepCloneJson(Object? value) {
   if (value is Map) {
     // JSON object keys are strings by construction (these defaults are body
     // fragments). The debug assert makes that invariant self-catching: a future
@@ -285,11 +286,11 @@ Object? _deepCloneJson(Object? value) {
       'instruction default maps must be String-keyed JSON fragments; got ${value.runtimeType}',
     );
     return <String, dynamic>{
-      for (final entry in value.entries) entry.key as String: _deepCloneJson(entry.value),
+      for (final entry in value.entries) entry.key as String: deepCloneJson(entry.value),
     };
   }
   if (value is List) {
-    return <dynamic>[for (final element in value) _deepCloneJson(element)];
+    return <dynamic>[for (final element in value) deepCloneJson(element)];
   }
   return value;
 }

@@ -87,16 +87,22 @@ void main() {
       expect(() => dup.build(), throwsStateError);
     });
 
-    test('build() asserts on a non-scalar default (debug)', () {
-      const bad = ConditionDef(
-        type: 'X.Bad, X',
-        label: 'bad',
+    test('build() deep-clones an object-valued default (no shared mutable state)', () {
+      // Conditions are all scalar today, but build() clones unconditionally
+      // (like InstructionDef) so a future object-valued default is safe.
+      const def = ConditionDef(
+        type: 'X.Obj, X',
+        label: 'obj',
         icon: Icons.error,
         fields: [
-          InstructionField('K', 'k', InstructionFieldType.binning, defaultValue: {'X': 1}),
+          InstructionField('Data', 'data', InstructionFieldType.binning,
+              defaultValue: {'X': 1}),
         ],
       );
-      expect(() => bad.build(), throwsA(isA<AssertionError>()));
+      final a = def.build();
+      final b = def.build();
+      (a['Data'] as Map)['X'] = 99;
+      expect((b['Data'] as Map)['X'], 1); // second build unaffected
     });
   });
 }

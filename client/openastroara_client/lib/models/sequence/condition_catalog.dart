@@ -19,7 +19,7 @@ library;
 
 import 'package:flutter/material.dart';
 
-import 'instruction_catalog.dart' show InstructionField, InstructionFieldType;
+import 'instruction_catalog.dart' show InstructionField, InstructionFieldType, deepCloneJson;
 
 /// One loop condition in the container's "add condition" picker.
 @immutable
@@ -45,14 +45,15 @@ class ConditionDef {
     this.fields = const [],
   });
 
-  /// A fresh raw-body condition node: `$type`, each field at its default, plus
-  /// the base `Parent: null`. Fully mutable and sharing nothing with the catalog
-  /// so the editor can mutate it freely.
+  /// A fresh raw-body condition node: `$type`, each field at its (deep-cloned)
+  /// default, plus the base `Parent: null`. Fully mutable and sharing nothing
+  /// with the catalog so the editor can mutate it freely.
   ///
-  /// All catalogued condition fields are immutable scalars (ints), so the
-  /// defaults are assigned directly; the assert guards a future nested-object
-  /// default (which would need deep-cloning, as the instruction catalog does) so
-  /// it can't silently share mutable state across built nodes.
+  /// Defaults are deep-cloned via [deepCloneJson] — the same helper
+  /// [InstructionDef.build] uses — so a future object-valued condition default
+  /// (e.g. a `TimeCondition` provider) can't silently share mutable state across
+  /// built nodes. (Today's conditions are all scalar ints, where the clone is a
+  /// no-op, but cloning unconditionally keeps the two build paths identical.)
   Map<String, dynamic> build() {
     final keys = fields.map((f) => f.key).toSet();
     if (keys.length != fields.length) {
@@ -60,12 +61,7 @@ class ConditionDef {
     }
     final node = <String, dynamic>{r'$type': type};
     for (final f in fields) {
-      assert(
-        f.defaultValue is! Map && f.defaultValue is! List,
-        'ConditionDef($label).${f.key} has a non-scalar default; add deep-cloning '
-        'before cataloguing an object-valued condition field.',
-      );
-      node[f.key] = f.defaultValue;
+      node[f.key] = deepCloneJson(f.defaultValue);
     }
     node['Parent'] = null;
     return node;
