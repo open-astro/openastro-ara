@@ -296,6 +296,12 @@ Object? deepCloneJson(Object? value) {
 }
 
 /// The full instruction palette, in display order within each category.
+/// The assembly-qualified `$type` of the general-purpose sequential container —
+/// the single source of truth for this string (also reused by the trigger
+/// catalog for a trigger's `TriggerRunner`).
+const String sequentialContainerType =
+    'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer';
+
 const List<InstructionDef> instructionCatalog = [
   // ── Camera ────────────────────────────────────────────────────────────────
   InstructionDef(
@@ -470,7 +476,7 @@ const List<InstructionDef> instructionCatalog = [
   // ARA-built sequence reads identically when opened in NINA. Appended last so
   // the palette's existing instruction rows keep their positions.
   InstructionDef(
-    type: 'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
+    type: sequentialContainerType,
     label: 'Sequential Instruction Set',
     category: InstructionCategory.container,
     icon: Icons.account_tree_outlined,

@@ -21,13 +21,7 @@ library;
 import 'package:flutter/material.dart';
 
 import 'instruction_catalog.dart'
-    show InstructionField, deepCloneJson, instructionForType;
-
-/// The `$type` of the `SequentialContainer` used for a trigger's `TriggerRunner`
-/// — built via the instruction catalog so the runner is shaped exactly like any
-/// other container the editor produces.
-const String _sequentialContainerType =
-    'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer';
+    show InstructionField, deepCloneJson, instructionForType, sequentialContainerType;
 
 /// One trigger in the container's "add trigger" picker.
 @immutable
@@ -73,7 +67,7 @@ class TriggerDef {
             'TriggerDef($label) field "${f.key}" collides with a reserved base key');
       }
     }
-    final containerDef = instructionForType(_sequentialContainerType) ??
+    final containerDef = instructionForType(sequentialContainerType) ??
         (throw StateError(
             'TriggerDef: SequentialContainer not found in the instruction catalog'));
     final node = <String, dynamic>{r'$type': type};
