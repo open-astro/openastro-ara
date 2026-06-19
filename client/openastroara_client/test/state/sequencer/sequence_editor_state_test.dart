@@ -36,6 +36,9 @@ SequenceDetail sampleDetail() => SequenceDetail(
 InstructionDef takeExposure() => instructionForType(
     'OpenAstroAra.Sequencer.SequenceItem.Imaging.TakeExposure, OpenAstroAra.Sequencer')!;
 
+InstructionDef sequentialContainer() => instructionForType(
+    'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer')!;
+
 void main() {
   late ProviderContainer container;
   SequenceEditorController ctrl() =>
@@ -142,6 +145,37 @@ void main() {
     test('no-op when nothing is loaded', () {
       ctrl().addInstruction(takeExposure());
       expect(read(), isNull);
+    });
+  });
+
+  group('containers (built from the catalog) nest like any container', () {
+    test('a freshly-added container accepts children appended inside it', () {
+      ctrl().load(sampleDetail());
+      // Add a Sequential container at the root, then drop an exposure into it.
+      ctrl().addInstruction(sequentialContainer());
+      final addedPath = read()!.selectedPath!; // the new container, selected
+      expect(childrenOf(read()!.body), hasLength(3));
+      final added = nodeAt(read()!.body, addedPath)!;
+      expect(isContainer(added), isTrue);
+      expect(childrenOf(added), isEmpty); // starts empty
+
+      // With the container selected, addInstruction nests inside it.
+      ctrl().addInstruction(takeExposure());
+      final s = read()!;
+      final container = nodeAt(s.body, addedPath)!;
+      expect(childrenOf(container), hasLength(1));
+      expect(childrenOf(container).single[r'$type'], contains('TakeExposure'));
+      expect(s.selectedPath, [...addedPath, 0]);
+    });
+
+    test('the built container round-trips its full template shape', () {
+      ctrl().load(sampleDetail());
+      ctrl().addInstruction(sequentialContainer());
+      final node = nodeAt(read()!.body, read()!.selectedPath!)!;
+      expect(node['Name'], 'Sequential Instruction Set');
+      expect((node['Strategy'] as Map)[r'$type'], contains('SequentialStrategy'));
+      expect(node['Triggers'], isA<Map>());
+      expect(node['Conditions'], isA<Map>());
     });
   });
 

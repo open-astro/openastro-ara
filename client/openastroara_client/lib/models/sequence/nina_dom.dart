@@ -17,6 +17,17 @@ typedef NodePath = List<int>;
 const String itemsWrapperType =
     'System.Collections.ObjectModel.ObservableCollection`1[[OpenAstroAra.Sequencer.SequenceItem.ISequenceItem, OpenAstroAra.Sequencer]], System.ObjectModel';
 
+/// The ObservableCollection wrapper `$type` for a container's `Conditions`
+/// (loop/time/altitude conditions). Mirrors [itemsWrapperType] for the
+/// `ISequenceCondition` element type the daemon's templates emit.
+const String conditionsWrapperType =
+    'System.Collections.ObjectModel.ObservableCollection`1[[OpenAstroAra.Sequencer.Conditions.ISequenceCondition, OpenAstroAra.Sequencer]], System.ObjectModel';
+
+/// The ObservableCollection wrapper `$type` for a container's `Triggers`
+/// (meridian flip, reconnect, …), for the `ISequenceTrigger` element type.
+const String triggersWrapperType =
+    'System.Collections.ObjectModel.ObservableCollection`1[[OpenAstroAra.Sequencer.Trigger.ISequenceTrigger, OpenAstroAra.Sequencer]], System.ObjectModel';
+
 /// The child nodes of [node] — the daemon wraps `Items` as
 /// `{ $type: ObservableCollection, $values: [...] }`, but tolerate a plain array
 /// or a missing/!map `Items` (a leaf instruction) → empty list. The returned

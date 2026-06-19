@@ -9,17 +9,19 @@ import 'package:flutter/material.dart' show IconData, Icons;
 import 'instruction_catalog.dart';
 import 'nina_dom.dart';
 
-/// The label to show for [node]: the catalog instruction label when known,
-/// else a container's `Name` (or short type), else the short `$type`.
+/// The label to show for [node]: a container's user-given `Name` first (so
+/// "Ha x20" shows, not the generic "Sequential Instruction Set" catalog label),
+/// then the catalog instruction label when known, else the short `$type`.
 String nodeLabel(Map<String, dynamic> node) {
   final type = node[r'$type'];
-  if (type is String) {
-    final def = instructionForType(type);
-    if (def != null) return def.label;
-  }
+  // A container is user-named — its own Name wins over the catalog label.
   if (isContainer(node)) {
     final name = node['Name'];
     if (name is String && name.isNotEmpty) return name;
+  }
+  if (type is String) {
+    final def = instructionForType(type);
+    if (def != null) return def.label;
   }
   return shortTypeName(type) ?? 'Unknown';
 }
