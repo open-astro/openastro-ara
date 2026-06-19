@@ -34,12 +34,14 @@ class _SaveClient implements SequenceClient {
   int saveCalls = 0;
   final int? throwStatus;
   final Object? throwData;
-  _SaveClient({this.throwStatus, this.throwData});
+  final bool throwGeneric;
+  _SaveClient({this.throwStatus, this.throwData, this.throwGeneric = false});
 
   @override
   Future<SequenceDetail> updateSequence(String id,
       {String? name, String? description, Map<String, dynamic>? body}) async {
     saveCalls++;
+    if (throwGeneric) throw StateError('unexpected response shape');
     if (throwStatus != null) {
       throw DioException(
         requestOptions: RequestOptions(path: '/sequences/$id'),
@@ -149,6 +151,18 @@ void main() {
   testWidgets('a non-422 failure shows a generic error and keeps edits dirty',
       (tester) async {
     final client = _SaveClient(throwStatus: 500);
+    final container = await _pump(tester, client, dirty: true);
+
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining("Couldn't save the sequence"), findsOneWidget);
+    expect(container.read(sequenceEditorProvider)!.isDirty, isTrue);
+  });
+
+  testWidgets('a non-Dio exception is caught (generic error, edits kept)',
+      (tester) async {
+    final client = _SaveClient(throwGeneric: true);
     final container = await _pump(tester, client, dirty: true);
 
     await tester.tap(find.text('Save'));

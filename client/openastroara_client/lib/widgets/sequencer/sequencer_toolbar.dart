@@ -207,6 +207,9 @@ Future<void> _save(BuildContext context, WidgetRef ref) async {
   if (ref.read(sequenceCommandBusyProvider)) return;
   final editor = ref.read(sequenceEditorProvider);
   final api = ref.read(sequenceApiProvider);
+  // editor == null is reachable (state could clear between tap and read); the
+  // api == null half is the required null-safety check for api.updateSequence
+  // below (canSave already implies a non-null api when Save is tappable).
   if (editor == null || api == null) return;
   // Capture before the await — usable even if the widget unmounts.
   final messenger = ScaffoldMessenger.of(context);
