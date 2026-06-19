@@ -63,7 +63,10 @@ Future<void> exportSequence(
     saved = await FilePicker.saveFile(
       dialogTitle: 'Export sequence for NINA',
       fileName: sequenceExportFileName(exportName),
-      type: FileType.any,
+      // Enforce the .json extension at the dialog so the user can't accidentally
+      // save a name NINA won't load.
+      type: FileType.custom,
+      allowedExtensions: const ['json'],
       bytes: bytes,
     );
   } catch (e, st) {
@@ -78,6 +81,7 @@ Future<void> exportSequence(
   }
   if (saved == null || !context.mounted) return; // cancelled / unmounted
 
+  // Show where it landed so the user can find the file (it opens in NINA).
   messenger.showSnackBar(SnackBar(
-      content: Text('Exported "$exportName" — opens in NINA.')));
+      content: Text('Exported "$exportName" to $saved')));
 }
