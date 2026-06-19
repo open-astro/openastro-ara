@@ -96,10 +96,10 @@ class SequencerToolbar extends ConsumerWidget {
                   // Browse to a NINA-exported .json and import it via the §38
                   // import path (file pick → read → POST /sequences/import). The
                   // helper handles errors, lossy-translation warnings, and
-                  // selecting the imported sequence.
-                  onPressed: connected
-                      ? () => pickAndImportSequence(context, ref)
-                      : null,
+                  // selecting the imported sequence. Disabled while another
+                  // command is in-flight, and brackets the busy fence like Save.
+                  onPressed:
+                      (connected && !busy) ? () => _import(context, ref) : null,
                 ),
                 _ToolButton(
                   icon: Icons.save_outlined,
@@ -250,6 +250,21 @@ Future<void> _save(BuildContext context, WidgetRef ref) async {
       content: Text("Couldn't save the sequence. Check the connection and try again."),
       backgroundColor: AraColors.accentError,
     ));
+  } finally {
+    busy.setBusy(false);
+  }
+}
+
+/// Browse to a NINA `.json` and import it, bracketing the shared busy fence so
+/// the toolbar's other commands disable while the file picker / import is in
+/// flight (mirrors [_save]). `pickAndImportSequence` owns the file pick, decode,
+/// `POST /sequences/import`, lossy-warning dialog, and selecting the result.
+Future<void> _import(BuildContext context, WidgetRef ref) async {
+  if (ref.read(sequenceCommandBusyProvider)) return;
+  final busy = ref.read(sequenceCommandBusyProvider.notifier);
+  busy.setBusy(true);
+  try {
+    await pickAndImportSequence(context, ref);
   } finally {
     busy.setBusy(false);
   }

@@ -125,6 +125,22 @@ void main() {
     expect(importBtn.onPressed, isNotNull); // connected → can browse + import
   });
 
+  testWidgets('Import is disabled when disconnected', (tester) async {
+    final container = ProviderContainer(overrides: [
+      sequenceApiProvider.overrideWithValue(null),
+    ]);
+    addTearDown(container.dispose);
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: Scaffold(body: SequencerToolbar())),
+    ));
+    await tester.pump();
+    final importBtn = tester.widget<TextButton>(
+      find.ancestor(of: find.text('Import'), matching: find.byType(TextButton)),
+    );
+    expect(importBtn.onPressed, isNull); // no server → can't import
+  });
+
   testWidgets('Save PATCHes the body, rebaselines dirty, and confirms',
       (tester) async {
     final client = _SaveClient();
