@@ -186,6 +186,35 @@ void main() {
       expect(f.controller!.text, '23');
     });
 
+    testWidgets('Dec at 90° forces minutes/seconds to 0 (pole boundary)',
+        (tester) async {
+      // Start at 89°30' so the cross-field rule has something to zero.
+      final detail = SequenceDetail(
+        id: 's',
+        body: {
+          r'$type':
+              'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
+          'Name': 'root',
+          'Items': {
+            r'$type': itemsWrapperType,
+            r'$values': [
+              {..._node(_slew), 'Coordinates': {
+                ...?(_node(_slew)['Coordinates'] as Map?)?.cast<String, dynamic>(),
+                'DecDegrees': 89, 'DecMinutes': 30,
+              }},
+            ],
+          },
+        },
+      );
+      final c = await _pump(tester, detail: detail, select: const [0]);
+      await tester.enterText(find.byKey(const Key('Coordinates_dec_d')), '90');
+      await tester.pump();
+      final coords = _nodeAt(c, [0])['Coordinates'] as Map;
+      expect(coords['DecDegrees'], 90);
+      expect(coords['DecMinutes'], 0); // zeroed at the pole
+      expect(coords['DecSeconds'], 0.0);
+    });
+
     testWidgets('the ± toggle flips NegativeDec', (tester) async {
       final c = await _pump(tester, detail: _detailWith(_slew), select: const [0]);
       expect((_nodeAt(c, [0])['Coordinates'] as Map)['NegativeDec'], false);

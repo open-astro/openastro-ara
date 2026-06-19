@@ -163,7 +163,9 @@ class _FieldControl extends StatelessWidget {
   /// RA (H : M : S) / Dec (± D : M : S) editor over the nested `InputCoordinates`
   /// object. Each change rebuilds the whole map (preserving `$type`) and writes
   /// it back via [onChanged]. Components are range-clamped (RA h 0–23, d/m 0–59,
-  /// Dec deg 0–90); the int/double split matches the C# field types.
+  /// Dec deg 0–90, seconds capped at 59.999 — the 3-decimal display precision,
+  /// sub-arcsec); the int/double split matches the C# field types. ±90° forces
+  /// the Dec minutes/seconds to 0.
   Widget _coordinatesEditor() {
     final c = value is Map ? value as Map : const {};
     final type = c[r'$type'] is String ? c[r'$type'] as String : defaultCoordinates[r'$type'];
@@ -172,16 +174,29 @@ class _FieldControl extends StatelessWidget {
     final neg = c['NegativeDec'] == true;
     Map<String, dynamic> coord({
       int? raH, int? raM, double? raS, bool? negDec, int? decD, int? decM, double? decS,
-    }) => <String, dynamic>{
-          r'$type': type,
-          'RAHours': raH ?? ri('RAHours'),
-          'RAMinutes': raM ?? ri('RAMinutes'),
-          'RASeconds': raS ?? rd('RASeconds'),
-          'NegativeDec': negDec ?? neg,
-          'DecDegrees': decD ?? ri('DecDegrees'),
-          'DecMinutes': decM ?? ri('DecMinutes'),
-          'DecSeconds': decS ?? rd('DecSeconds'),
-        };
+    }) {
+      var dd = decD ?? ri('DecDegrees');
+      var dm = decM ?? ri('DecMinutes');
+      var ds = decS ?? rd('DecSeconds');
+      // ±90° is the declination pole — minutes/seconds must be 0 there
+      // (90:30:00 is invalid). Enforce the cross-field boundary that the
+      // per-component clamps can't.
+      if (dd >= 90) {
+        dd = 90;
+        dm = 0;
+        ds = 0.0;
+      }
+      return <String, dynamic>{
+        r'$type': type,
+        'RAHours': raH ?? ri('RAHours'),
+        'RAMinutes': raM ?? ri('RAMinutes'),
+        'RASeconds': raS ?? rd('RASeconds'),
+        'NegativeDec': negDec ?? neg,
+        'DecDegrees': dd,
+        'DecMinutes': dm,
+        'DecSeconds': ds,
+      };
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
