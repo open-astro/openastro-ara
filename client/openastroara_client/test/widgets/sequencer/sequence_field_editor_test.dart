@@ -1,0 +1,102 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/models/sequence/instruction_catalog.dart';
+import 'package:openastroara/models/sequence/nina_dom.dart';
+import 'package:openastroara/models/sequence/sequence_summary.dart';
+import 'package:openastroara/state/sequencer/sequence_editor_state.dart';
+import 'package:openastroara/widgets/sequencer/sequence_field_editor.dart';
+
+Map<String, dynamic> _node(String type) => instructionForType(type)!.build();
+const _waitSpan =
+    'OpenAstroAra.Sequencer.SequenceItem.Utility.WaitForTimeSpan, OpenAstroAra.Sequencer';
+const _startGuiding =
+    'OpenAstroAra.Sequencer.SequenceItem.Guider.StartGuiding, OpenAstroAra.Sequencer';
+const _setTracking =
+    'OpenAstroAra.Sequencer.SequenceItem.Telescope.SetTracking, OpenAstroAra.Sequencer';
+const _takeExposure =
+    'OpenAstroAra.Sequencer.SequenceItem.Imaging.TakeExposure, OpenAstroAra.Sequencer';
+
+// root → [WaitForTimeSpan, StartGuiding, SetTracking, TakeExposure]
+SequenceDetail sampleDetail() => SequenceDetail(
+      id: 's',
+      body: {
+        r'$type':
+            'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
+        'Name': 'root',
+        'Items': {
+          r'$type': itemsWrapperType,
+          r'$values': [
+            _node(_waitSpan),
+            _node(_startGuiding),
+            _node(_setTracking),
+            _node(_takeExposure),
+          ],
+        },
+      },
+    );
+
+Future<ProviderContainer> _pump(WidgetTester tester,
+    {SequenceDetail? detail, NodePath? select}) async {
+  final container = ProviderContainer();
+  addTearDown(container.dispose);
+  if (detail != null) {
+    container.read(sequenceEditorProvider.notifier).load(detail);
+    if (select != null) {
+      container.read(sequenceEditorProvider.notifier).select(select);
+    }
+  }
+  await tester.pumpWidget(
+    UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: Scaffold(body: SequenceFieldEditor())),
+    ),
+  );
+  return container;
+}
+
+Map<String, dynamic> _nodeAt(ProviderContainer c, NodePath p) =>
+    nodeAt(c.read(sequenceEditorProvider)!.body, p)!;
+
+void main() {
+  testWidgets('placeholder when nothing is selected', (tester) async {
+    await _pump(tester, detail: sampleDetail());
+    expect(find.text('Select an instruction to edit its settings.'), findsOneWidget);
+  });
+
+  testWidgets('edits a number field back into the body', (tester) async {
+    // WaitForTimeSpan has exactly one editable field (Time, number).
+    final c = await _pump(tester, detail: sampleDetail(), select: const [0]);
+    expect(find.text('Wait (duration)'), findsOneWidget);
+    await tester.enterText(find.byType(TextField), '45');
+    await tester.pump();
+    expect(_nodeAt(c, [0])['Time'], 45.0);
+  });
+
+  testWidgets('toggles a boolean field', (tester) async {
+    final c = await _pump(tester, detail: sampleDetail(), select: const [1]);
+    expect(_nodeAt(c, [1])['ForceCalibration'], false);
+    await tester.tap(find.byType(Switch));
+    await tester.pump();
+    expect(_nodeAt(c, [1])['ForceCalibration'], true);
+  });
+
+  testWidgets('changes an int-enum dropdown', (tester) async {
+    final c = await _pump(tester, detail: sampleDetail(), select: const [2]);
+    expect(_nodeAt(c, [2])['TrackingMode'], 0); // Sidereal
+    await tester.tap(find.text('Sidereal'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Lunar').last);
+    await tester.pumpAndSettle();
+    expect(_nodeAt(c, [2])['TrackingMode'], 1); // Lunar
+  });
+
+  testWidgets('renders a string-enum dropdown + complex-field placeholder',
+      (tester) async {
+    await _pump(tester, detail: sampleDetail(), select: const [3]); // TakeExposure
+    expect(find.text('Take Exposure'), findsOneWidget);
+    expect(find.text('LIGHT'), findsOneWidget); // ImageType dropdown value
+    // Binning is a complex field → placeholder, not an editable control.
+    expect(find.textContaining('advanced field'), findsOneWidget);
+  });
+}
