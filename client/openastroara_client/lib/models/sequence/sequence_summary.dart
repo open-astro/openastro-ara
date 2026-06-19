@@ -156,6 +156,9 @@ class SequenceDetail {
         templateOrigin: _str(json['template_origin']),
       );
 
+  // NOTE: like the PATCH payload, a null arg means "keep current" — there's no
+  // way to CLEAR description back to null here. Fine for the create/rename flows;
+  // if save-b's editor needs to blank a description, add a clear sentinel.
   SequenceDetail copyWith({String? name, String? description, Map<String, dynamic>? body}) =>
       SequenceDetail(
         id: id,
@@ -174,9 +177,12 @@ class SequenceDetail {
       other.templateOrigin == templateOrigin &&
       mapEquals(other.body, body);
 
+  // Shallow body proxy (keys, insertion-order-stable) rather than body.length —
+  // keeps hashCode consistent with the deep `mapEquals` in `==` (equal bodies
+  // share keys) without deep-hashing nested JSON on every call.
   @override
-  int get hashCode =>
-      Object.hash(id, name, description, templateOrigin, body.length);
+  int get hashCode => Object.hash(
+      id, name, description, templateOrigin, Object.hashAll(body.keys));
 }
 
 /// A starting-point sequence template (`GET /api/v1/sequences/templates`) —
