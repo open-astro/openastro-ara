@@ -236,6 +236,7 @@ const List<InstructionDef> instructionCatalog = [
     icon: Icons.camera_alt_outlined,
     fields: [
       InstructionField('ExposureTime', 'Exposure (s)', InstructionFieldType.number, defaultValue: 1.0),
+      // -1 is the NINA sentinel for "use the camera's profile default" (not 0).
       InstructionField('Gain', 'Gain', InstructionFieldType.integer, defaultValue: -1),
       InstructionField('Offset', 'Offset', InstructionFieldType.integer, defaultValue: -1),
       InstructionField('Binning', 'Binning', InstructionFieldType.binning, defaultValue: defaultBinning),
@@ -410,10 +411,19 @@ final Map<InstructionCategory, List<InstructionDef>> instructionCatalogByCategor
 }();
 
 /// `$type` → [InstructionDef] index, so [instructionForType] is O(1) even if
-/// called per render frame in the palette/tree.
-final Map<String, InstructionDef> _instructionsByType = Map.unmodifiable(
-  {for (final def in instructionCatalog) def.type: def},
-);
+/// called per render frame in the palette/tree. Throws (in release too) on a
+/// duplicate `$type` rather than last-wins-shadowing it — fail-fast for a future
+/// dynamically-built catalog, matching [InstructionDef.build]'s key guard.
+final Map<String, InstructionDef> _instructionsByType = () {
+  final byType = <String, InstructionDef>{};
+  for (final def in instructionCatalog) {
+    if (byType.containsKey(def.type)) {
+      throw StateError('duplicate InstructionDef \$type: ${def.type}');
+    }
+    byType[def.type] = def;
+  }
+  return Map<String, InstructionDef>.unmodifiable(byType);
+}();
 
 /// The [InstructionDef] whose `$type` equals [type], or null if not catalogued
 /// (e.g. an instruction the editor can display but not yet construct).
