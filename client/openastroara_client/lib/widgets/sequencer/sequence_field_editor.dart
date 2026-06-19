@@ -794,7 +794,11 @@ class _WaitLoopDataEditor extends StatelessWidget {
         ? Map<String, dynamic>.from(value as Map)
         : const <String, dynamic>{};
     final type = data[r'$type'] is String ? data[r'$type'] as String : waitLoopDataType;
-    final rawComparator = data['Comparator'] is int ? data['Comparator'] as int : 3;
+    // `is num` (not `is int`), matching the Offset/coordinate reads — a JSON
+    // serializer may emit the enum as `1.0`, which `is int` would miss and
+    // silently default to 3 (a semantic reversal for AltitudeCondition).
+    final rawComparator =
+        data['Comparator'] is num ? (data['Comparator'] as num).toInt() : 3;
     // For DISPLAY only: coerce an out-of-allow-list comparator (missing, or a
     // stale persisted *OrEqual) to a selectable value so DropdownButton can't
     // assert "no matching item". The RAW value is preserved on write-back below,

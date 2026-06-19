@@ -485,6 +485,35 @@ void main() {
       expect(data(c)['Comparator'], 3);
     });
 
+    testWidgets('a double-typed comparator (1.0) is read, not defaulted to 3',
+        (tester) async {
+      // A serializer that emits the enum as 1.0 must still read as LessThan (1),
+      // not silently coerce to GreaterThan (an `is int` check would miss it).
+      final detail = SequenceDetail(
+        id: 's',
+        body: {
+          r'$type':
+              'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
+          'Name': 'root',
+          'Items': {r'$type': itemsWrapperType, r'$values': <Map<String, dynamic>>[]},
+          'Conditions': {
+            r'$type': conditionsWrapperType,
+            r'$values': [
+              {
+                ...conditionForType(_altitude)!.build(),
+                'Data': {
+                  ...conditionForType(_altitude)!.build()['Data'] as Map<String, dynamic>,
+                  'Comparator': 1.0,
+                },
+              },
+            ],
+          },
+        },
+      );
+      await _pump(tester, detail: detail, select: const []);
+      expect(find.text('Less than (<)'), findsOneWidget); // read as 1, not 3
+    });
+
     testWidgets('editing the offset writes Data.Offset (signed)', (tester) async {
       final c = await pumpAltitude(tester);
       await tester.enterText(
